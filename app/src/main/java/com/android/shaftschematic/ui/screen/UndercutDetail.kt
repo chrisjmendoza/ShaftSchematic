@@ -81,11 +81,11 @@ import com.android.shaftschematic.geom.clampUndercutSpan
 import com.android.shaftschematic.geom.effectiveUndercutReference
 import com.android.shaftschematic.geom.isUndercutStaleOverrun
 import com.android.shaftschematic.geom.maxOuterDiaOver
-import com.android.shaftschematic.geom.minOuterDiaOver
 import com.android.shaftschematic.geom.nearestSetReference
 import com.android.shaftschematic.geom.outerDiaAt
 import com.android.shaftschematic.geom.pickUndercutAt
 import com.android.shaftschematic.geom.planDiaCallouts
+import com.android.shaftschematic.geom.resolveUndercutFloors
 import com.android.shaftschematic.geom.undercutCanonicalForNewLength
 import com.android.shaftschematic.geom.undercutOverlapIssue
 import com.android.shaftschematic.geom.undercutPreviewDrawRange
@@ -1123,8 +1123,9 @@ internal const val MIN_UNDERCUT_DRAFT_LENGTH_MM = 0.1f
 /**
  * The blocking reason a draft cannot be confirmed, or `null` when it can: the shaft-bounds check
  * ([undercutSpanIssue]) first, then the adjacency check ([undercutOverlapIssue]) against every
- * OTHER cut on the sheet. Both are confirm-time gates on new values only — nothing already stored
- * is retroactively rejected.
+ * OTHER cut on the sheet — which passes a cut sitting fully INSIDE another (a nested relief) or
+ * fully clear of it, and blocks only a partial intrusion. Both are confirm-time gates on new
+ * values only — nothing already stored is retroactively rejected.
  */
 internal fun undercutConfirmIssue(
     draft: UndercutDraft,
@@ -1243,11 +1244,20 @@ private fun UndercutDraftCard(
     // previewing. Neither rewrites anything: the canvas renders the clamped span, and an
     // implausible Ø is a measurement — golden rule, never adjusted.
     val staleOverrun = isUndercutStaleOverrun(draft.startFromAftMm, draft.lengthMm, oalMm)
-    val clamped = clampUndercutSpan(draft.startFromAftMm, draft.lengthMm, oalMm)
-    val minSurfaceDiaMm =
-        if (clamped.isEmpty) 0f else minOuterDiaOver(segs, clamped.startMm, clamped.endMm)
+    // The Ø the draft is cut against: the shaft's own surface for a top-level cut, and the
+    // SURROUNDING cut's floor for one nested inside another — a nested cut removes material from
+    // its parent's floor, so measuring it against the shaft surface would let a Ø that reaches
+    // the relief floor (and draws nothing) pass unremarked. The exaggeration is irrelevant to
+    // both terms, so the resolution runs at true scale.
+    val draftFloors = remember(sheetUndercuts, draft, segs, oalMm) {
+        resolveUndercutFloors(
+            applyUndercutDraft(sheetUndercuts, draft), segs, oalMm, exaggerationFrac = 0f,
+        ).firstOrNull { it.span.id == draft.id }
+    }
+    val surfaceDiaMm = draftFloors?.surfaceDiaMm ?: 0f
+    val draftIsNested = draftFloors?.nesting?.parentId != null
     val diaAtOrAboveSurface =
-        draft.diaMm > 0f && minSurfaceDiaMm > 0f && draft.diaMm >= minSurfaceDiaMm
+        draft.diaMm > 0f && surfaceDiaMm > 0f && draft.diaMm >= surfaceDiaMm
 
     // Every OTHER cut on the sheet — not just this strip's: a liner strip's pad shows neighbouring
     // stock, and a cut can be typed straight into it.
@@ -1285,7 +1295,10 @@ private fun UndercutDraftCard(
                 UndercutWarning("Extends past shaft end — re-measure")
             }
             if (diaAtOrAboveSurface) {
-                UndercutWarning("Ø meets or exceeds shaft surface here")
+                UndercutWarning(
+                    if (draftIsNested) "Ø meets or exceeds the surrounding cut's floor here"
+                    else "Ø meets or exceeds shaft surface here",
+                )
             }
 
             // "Measure From" — which datum the Distance value is authored against, the wear

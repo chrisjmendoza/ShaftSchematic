@@ -6,19 +6,16 @@ import com.android.shaftschematic.geom.SurfaceSeg
 import com.android.shaftschematic.geom.UndercutLinerSpan
 import com.android.shaftschematic.geom.UndercutSpanMm
 import com.android.shaftschematic.geom.UndercutStrip
+import com.android.shaftschematic.geom.buildUndercutNotches
 import com.android.shaftschematic.geom.buildUndercutStrips
 import com.android.shaftschematic.geom.clampUndercutSpan
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
-import com.android.shaftschematic.geom.deepestUndercutDepthMm
-import com.android.shaftschematic.geom.effectiveNotchDiaMm
 import com.android.shaftschematic.geom.linerStripFor
 import com.android.shaftschematic.geom.maxOuterDiaOver
-import com.android.shaftschematic.geom.minOuterDiaOver
-import com.android.shaftschematic.geom.normalizedNotchFloorDiaMm
-import com.android.shaftschematic.geom.notchProfiles
 import com.android.shaftschematic.geom.outerDiaAt
 import com.android.shaftschematic.geom.planDiaCallouts
+import com.android.shaftschematic.geom.undercutNestingForest
 import com.android.shaftschematic.model.Body
 import com.android.shaftschematic.model.Liner
 import com.android.shaftschematic.model.LinerAnchor
@@ -139,6 +136,48 @@ class UndercutStripSvgPreviewTest {
         Undercut(id = "b2", startFromAftMm = 340f, lengthMm = 40f, diaMm = 172f),
     )
 
+    /**
+     * A wide relief in the liner with a smaller, deeper cut machined INSIDE it — the nested
+     * case. The child must draw as a second step down from the parent's floor, and be
+     * dimensioned on its own rail row anchored at the parent's edges.
+     */
+    private fun nestedLinerUndercuts() = listOf(
+        Undercut(id = "relief", startFromAftMm = 700f, lengthMm = 200f, diaMm = 205f),
+        Undercut(id = "inner", startFromAftMm = 790f, lengthMm = 60f, diaMm = 196f),
+    )
+
+    /**
+     * The shop's own case: a 4"-long relief cut 1" deep, with a 1"-long more-corroded section
+     * inside it taken to 1-1/4". [aftFlush] puts that section right on the relief's AFT
+     * shoulder — legal nesting, and it must print as one continuous face there, exactly as two
+     * separately-authored adjacent sections would. Otherwise it sits mid-span, so the relief
+     * reads as three sections: parent floor, deeper floor, parent floor.
+     */
+    private fun reliefWithDeeperSection(aftFlush: Boolean): List<Undercut> {
+        val reliefStartMm = 700f
+        val reliefLenMm = 4f * 25.4f
+        val sectionLenMm = 25.4f
+        return listOf(
+            Undercut(
+                id = "relief", startFromAftMm = reliefStartMm, lengthMm = reliefLenMm,
+                diaMm = linerOdMm - 2f * 25.4f,          // 1" deep on the radius
+            ),
+            Undercut(
+                id = "deeper",
+                startFromAftMm = if (aftFlush) reliefStartMm else reliefStartMm + 2f * 25.4f,
+                lengthMm = sectionLenMm,
+                diaMm = linerOdMm - 2f * 1.25f * 25.4f,  // 1-1/4" deep on the radius
+            ),
+        )
+    }
+
+    /** A bare-shaft relief with a nested cut and a level-2 cut inside THAT — the staircase. */
+    private fun nestedBareShaftUndercuts() = listOf(
+        Undercut(id = "n0", startFromAftMm = 200f, lengthMm = 240f, diaMm = 172f),
+        Undercut(id = "n1", startFromAftMm = 250f, lengthMm = 140f, diaMm = 166f),
+        Undercut(id = "n2", startFromAftMm = 290f, lengthMm = 60f, diaMm = 161f),
+    )
+
     // ── Minimal SVG writer ────────────────────────────────────────────────────
 
     private class Svg {
@@ -254,6 +293,16 @@ class UndercutStripSvgPreviewTest {
          * liner (grey liner, white cut sections); the blank write-in template shades nothing.
          */
         val linerFills: Int,
+        /** Extra chain rows the strip's nested cuts claimed (`buildNestedUndercutRailRows`). */
+        val nestedRailRows: Int,
+        /** Every notch's drawn floor Ø by id, parents before children — the staircase. */
+        val drawnFloorById: Map<String, Float>,
+        /**
+         * Per notch, the Ø its AFT and FWD section faces rise to — the first and last surface
+         * point of its single region. A face sharing the parent's shoulder reaches the outer
+         * surface; an inboard face steps off the parent's drawn floor.
+         */
+        val nestedSurfaceEndDias: Map<String, List<Float>>,
     )
 
     private fun renderStrip(
@@ -269,8 +318,10 @@ class UndercutStripSvgPreviewTest {
             val s = clampedById.getValue(u.id)
             if (s.isEmpty) null else UndercutSpanMm(u.id, s.startMm, s.endMm)
         }
-        // Normalization reference, computed ONCE per sheet exactly as the composer does.
-        val deepestDepthMm = deepestUndercutDepthMm(undercuts, segs, oalMm)
+        // Every notch from the ONE shared builder the composer and the canvas overlay run:
+        // clamped spans, the containment forest, true floors, and the per-sheet drawn-depth
+        // normalization — so a nested cut arrives already cut against its parent's floor.
+        val sheetNotches = buildUndercutNotches(undercuts, segs, oalMm, exaggerationFrac)
         val strips = buildUndercutStrips(liveSpans, linerSpans, oalMm)
         // Nothing recorded ⇒ the STARTED-strip page: one `linerStripFor` per drawable liner,
         // drawn to scale but dimensioned nowhere, for the machinist to sketch into.
@@ -303,13 +354,23 @@ class UndercutStripSvgPreviewTest {
         val plan = if (stations.isEmpty()) null else planDiaCallouts(stations, stripLeft + 2f, stripRight - 2f, minGap)
         val diaBand = plan?.let { it.labelsHeightPt(textH, rowGap) + 2f } ?: 0f
 
+        // Nesting decides what the level-0 chain carries; nested levels get their own rows,
+        // anchored at their parent's edges — the composer's split, exactly.
+        val nestingById = undercutNestingForest(spans).associateBy { it.id }
+        val topSpans = spans.filter { (nestingById[it.id]?.level ?: 0) == 0 }
         val railSpans = if (started) emptyList()
-        else buildUndercutRailSpans(strip.chainStartMm, strip.chainEndMm, spans, unit)
-        val totalSpan = if (started) null else buildUndercutTotalSpan(spans, unit)
+        else buildUndercutRailSpans(strip.chainStartMm, strip.chainEndMm, topSpans, unit)
+        val totalSpan = if (started) null else buildUndercutTotalSpan(topSpans, unit)
+        val nestedRows = if (started) emptyList() else buildNestedUndercutRailRows(spans, unit)
         // Chain before the vertical split, composer order: the split reserves the rows used,
         // on the side of the line the plan puts them.
         val chain = layoutWearStripRail(railSpans, xAtStripMm = ::xAt, labelWidthPt = { labelW(it.inline()) })
-        val railPlan = planUndercutRailRows(chain, started, hasTotalRail = totalSpan != null)
+        val nestedChains = nestedRows.map {
+            layoutWearStripRail(it, xAtStripMm = ::xAt, labelWidthPt = { l -> labelW(l.inline()) })
+        }
+        val railPlan = planUndercutRailRows(
+            chain, started, hasTotalRail = totalSpan != null, nestedLayouts = nestedChains,
+        )
         val inner = computeUndercutStripInnerLayout(
             stripTop, stripBottom, titleHeightPt = titleH, hasTotalRail = totalSpan != null, diaBandPt = diaBand,
             maxLabelRows = railPlan.belowRows,
@@ -393,18 +454,14 @@ class UndercutStripSvgPreviewTest {
 
         // Notches — white void from surface to floor, mirrored (mouth stays OPEN — no lid),
         // then the step-section outline: a full-height face at each region end where the
-        // surface stands above the floor, and the floor lines. Regions come from the TRUE
-        // floor; the drawn floor is depth-exaggerated against the sheet's deepest cut and
-        // the void overdraws the surface stroke, all mirroring the composer.
-        spans.forEach { s ->
-            val u = undercuts.first { it.id == s.id }
-            val minSurface = minOuterDiaOver(segs, s.startMm, s.endMm)
-            val floorDia = effectiveNotchDiaMm(u.diaMm, minSurface)
-            val rFloor = rAt(
-                normalizedNotchFloorDiaMm(u.diaMm, minSurface, deepestDepthMm, exaggerationFrac),
-            )
+        // surface stands above the floor, and the floor lines. Everything geometric comes from
+        // the shared builder, in its parents-before-children order, so a nested cut simply
+        // paints over the relief around it and reads as the next step down.
+        val stripNotches = sheetNotches.filter { it.id in strip.undercutIds }
+        stripNotches.forEach { n ->
             val od = 0.8f
-            notchProfiles(segs, s.startMm, s.endMm, floorDia).forEach { np ->
+            n.profiles.forEach { np ->
+                val rFloor = rAt(np.floorDiaMm)
                 listOf(-1f, 1f).forEach { sign ->
                     val pts = np.surface.map { sp -> xAt(sp.xMm) to cy + sign * (rAt(sp.diaMm) + od) } +
                         listOf(xAt(np.endMm) to cy + sign * rFloor, xAt(np.startMm) to cy + sign * rFloor)
@@ -430,16 +487,10 @@ class UndercutStripSvgPreviewTest {
             }
         }
 
-        // Ø callouts: leader from each notch floor down to the value.
+        // Ø callouts: leader from each notch floor down to the value — the notch's OWN drawn
+        // floor, nested cuts included, never a re-derived one.
         if (plan != null) {
-            val floorBottomY = undercuts.associate { u ->
-                val s = clampedById.getValue(u.id)
-                val floor = if (s.isEmpty) 0f else normalizedNotchFloorDiaMm(
-                    u.diaMm, minOuterDiaOver(segs, s.startMm, s.endMm),
-                    deepestDepthMm, exaggerationFrac,
-                )
-                u.id to cy + rAt(floor)
-            }
+            val floorBottomY = sheetNotches.associate { n -> n.id to cy + rAt(n.floorDiaMm) }
             val placed = plan.finish(
                 row0Top = inner.cylBottom + WEAR_STRIP_LABEL_HEADROOM_PT,
                 labelTextHeight = textH,
@@ -464,6 +515,16 @@ class UndercutStripSvgPreviewTest {
             }
         }
         chain.forEach { svg.railSpan(it, inner.cylTop - 3f, inner.chainRailY, labelAbove = railPlan.aboveRows > 0) }
+        // One extra chain row per nesting level, stacked UNDER the level-0 chain, each anchored
+        // at its parent's edges — the composer's stepping, off the same row-height metric.
+        var nestedRowY = inner.chainRailY +
+            (inner.railLabelRows - railPlan.nestedRows).coerceAtLeast(0) * UNDERCUT_RAIL_ROW_HEIGHT_PT
+        nestedChains.forEach { lay ->
+            nestedRowY += UNDERCUT_RAIL_ROW_HEIGHT_PT
+            val y = minOf(nestedRowY, inner.cylTop - 3f)
+            lay.forEach { svg.railSpan(it, inner.cylTop - 3f, y, labelAbove = false) }
+            nestedRowY += undercutRailFallbackRows(lay) * UNDERCUT_RAIL_ROW_HEIGHT_PT
+        }
         totalSpan?.let { ts ->
             layoutWearStripRail(listOf(ts), xAtStripMm = ::xAt, labelWidthPt = { labelW(it.inline()) })
                 .forEach { svg.railSpan(it, inner.chainRailY, inner.totalRailY, labelAbove = true) }
@@ -524,6 +585,14 @@ class UndercutStripSvgPreviewTest {
             ),
             surfaceLinesAtLinerMid = surfaceLinesAtLinerMid,
             linerFills = linerFills,
+            nestedRailRows = nestedRows.size,
+            drawnFloorById = stripNotches.associate { it.id to it.floorDiaMm },
+            nestedSurfaceEndDias = stripNotches
+                .filter { it.profiles.isNotEmpty() }
+                .associate { n ->
+                    val p = n.profiles.first()
+                    n.id to listOf(p.surface.first().diaMm, p.surface.last().diaMm)
+                },
         )
     }
 
@@ -630,7 +699,60 @@ class UndercutStripSvgPreviewTest {
         assertTrue("the narrow pad's value must stack above the line", f.fallbackRowsAbove >= 1)
         assertEquals("fallbacks under a total rail stay below", 0, a.fallbackRowsAbove)
 
+        // G) NESTED: a 60 mm cut machined inside a 200 mm relief in the liner. The child draws
+        //    as a second step down from the relief's floor, and is dimensioned on its own rail
+        //    row anchored at the relief's edges — the top chain carries the relief alone.
+        val g = renderStrip(nestedLinerUndercuts())
+        File(outDir, "g-liner-strip-nested-pair.svg").writeText(g.svg)
+        assertEquals("one nesting level ⇒ one extra rail row", 1, g.nestedRailRows)
+        assertFalse("a lone relief prints no total span", g.hasTotal)
+        assertTrue(
+            "the nested cut must draw below the relief's floor",
+            g.drawnFloorById.getValue("inner") < g.drawnFloorById.getValue("relief"),
+        )
+
+        // H) A level-2 staircase on bare stock: relief → cut → cut. Each level gets its own
+        //    rail row, and every floor steps further down.
+        val h = renderStrip(
+            nestedBareShaftUndercuts(),
+            stripLeft = 407f, stripRight = 756f, stripTop = BAND_TOP, stripBottom = BAND_BOTTOM,
+        )
+        File(outDir, "h-bareshaft-nested-staircase.svg").writeText(h.svg)
+        assertEquals("two nesting levels ⇒ two extra rail rows", 2, h.nestedRailRows)
+        assertTrue(h.drawnFloorById.getValue("n1") < h.drawnFloorById.getValue("n0"))
+        assertTrue(h.drawnFloorById.getValue("n2") < h.drawnFloorById.getValue("n1"))
+        assertTrue("every step keeps a drawable core", h.drawnFloorById.getValue("n2") > 0f)
+
+        // I) THE SHOP'S CASE: a 4" relief with a 1" more-corroded section machined deeper in the
+        //    MIDDLE of it. The strip must read as three sections — relief floor, deeper floor,
+        //    relief floor — with the deeper section dimensioned on its own row against the
+        //    relief's edges.
+        val i = renderStrip(reliefWithDeeperSection(aftFlush = false))
+        File(outDir, "i-relief-with-deeper-section.svg").writeText(i.svg)
+        assertEquals(1, i.nestedRailRows)
+        assertTrue(i.drawnFloorById.getValue("deeper") < i.drawnFloorById.getValue("relief"))
+        // Mid-span: both of the deeper section's faces step off the relief's own floor.
+        assertTrue(
+            "a mid-span section's faces start at the relief floor",
+            i.nestedSurfaceEndDias.getValue("deeper")
+                .all { kotlin.math.abs(it - i.drawnFloorById.getValue("relief")) < 1e-3f },
+        )
+
+        // J) The same relief with the deeper section at its AFT boundary — legal nesting, and
+        //    the face there must run from the SURFACE straight down to the deeper floor, exactly
+        //    as two separately-authored adjacent sections would print.
+        val j = renderStrip(reliefWithDeeperSection(aftFlush = true))
+        File(outDir, "j-relief-deeper-section-flush.svg").writeText(j.svg)
+        assertEquals(1, j.nestedRailRows)
+        assertTrue(j.drawnFloorById.getValue("deeper") < j.drawnFloorById.getValue("relief"))
+        val flushEnds = j.nestedSurfaceEndDias.getValue("deeper")
+        assertEquals("the shared AFT face rises to the liner's own OD", linerOdMm, flushEnds.first(), 1e-3f)
+        assertEquals(
+            "the inboard FWD face still steps off the relief floor",
+            j.drawnFloorById.getValue("relief"), flushEnds.last(), 1e-3f,
+        )
+
         assertNotNull(outDir.listFiles())
-        assertEquals(6, outDir.listFiles()!!.count { it.name.endsWith(".svg") })
+        assertEquals(10, outDir.listFiles()!!.count { it.name.endsWith(".svg") })
     }
 }

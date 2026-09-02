@@ -10,23 +10,21 @@ import android.graphics.pdf.PdfDocument
 import com.android.shaftschematic.geom.ClampedUndercutSpanMm
 import com.android.shaftschematic.geom.SurfaceSeg
 import com.android.shaftschematic.geom.UndercutLinerSpan
+import com.android.shaftschematic.geom.UndercutNotch
 import com.android.shaftschematic.geom.UndercutSpanMm
 import com.android.shaftschematic.geom.UndercutStrip
+import com.android.shaftschematic.geom.buildUndercutNotches
 import com.android.shaftschematic.geom.buildUndercutStrips
 import com.android.shaftschematic.geom.clampUndercutSpan
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
-import com.android.shaftschematic.geom.deepestUndercutDepthMm
-import com.android.shaftschematic.geom.effectiveNotchDiaMm
 import com.android.shaftschematic.geom.linerStripFor
 import com.android.shaftschematic.geom.NOTCH_FACE_MIN_STEP_PX
 import com.android.shaftschematic.geom.UNDERCUT_SECTION_FILL_ALPHA
 import com.android.shaftschematic.geom.maxOuterDiaOver
-import com.android.shaftschematic.geom.minOuterDiaOver
-import com.android.shaftschematic.geom.normalizedNotchFloorDiaMm
-import com.android.shaftschematic.geom.notchProfiles
 import com.android.shaftschematic.geom.outerDiaAt
 import com.android.shaftschematic.geom.planDiaCallouts
+import com.android.shaftschematic.geom.undercutNestingForest
 import com.android.shaftschematic.model.*
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
@@ -34,6 +32,7 @@ import com.android.shaftschematic.ui.resolved.bodyBlends
 import com.android.shaftschematic.ui.resolved.linerSurfaceSegs
 import com.android.shaftschematic.ui.resolved.surfaceSegsFrom
 import com.android.shaftschematic.util.DisplayUnits
+import com.android.shaftschematic.util.DualLabel
 import com.android.shaftschematic.util.VerboseLog
 import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.drawDualLabelCentered
@@ -114,12 +113,14 @@ const val UNDERCUT_DOC_TITLE = "UNDERCUT RECORD"
  * cluster window; `geom/UndercutMath.kt`'s `buildUndercutStrips` decides which is which.
  *
  * Undercuts are a **reference-only** feature: nothing here feeds geometry back into the
- * model. Every notch on both draw sites (this composer and the canvas overlay) comes from
- * the one shared pipeline — `clampUndercutSpan` → `effectiveNotchDiaMm(dia,
- * minOuterDiaOver(segs, …))` → `notchProfiles(surfaceSegsFrom(resolved), …)` — so the
- * printed sheet and the screen cannot disagree about where material was removed. The floor is
- * then re-scaled for DRAWING only, once per sheet, by `normalizedNotchFloorDiaMm` against
- * `deepestUndercutDepthMm` and the record's `exaggerationFrac`.
+ * model. Every notch on both draw sites (this composer and the canvas overlay) comes from the
+ * ONE shared builder, `geom/UndercutOverlayMath.kt`'s `buildUndercutNotches` over
+ * `surfaceSegsFrom(resolved)` — clamped spans, the containment forest, region topology at the
+ * TRUE floor, and the drawn floors re-scaled for DRAWING only (once per sheet, against
+ * `deepestUndercutDepthMm` and the record's `exaggerationFrac`). This file maps those notches
+ * to points and draws them; it derives no geometry of its own, which is what keeps the printed
+ * sheet and the screen from disagreeing about where material was removed — nested cuts, drawn
+ * as a staircase off each parent's floor, included.
  *
  * Same public contract as `composeWearPdf`/`composeRunoutPdf`: landscape US Letter page
  * already started by the caller; `resolvedComponents`, when provided, replace `spec.bodies`
@@ -246,12 +247,15 @@ fun composeUndercutPdf(
         val s = clampedById[u.id] ?: return@mapNotNull null
         if (s.isEmpty) null else UndercutSpanMm(u.id, s.startMm, s.endMm)
     }
-    // Drawn-depth normalization reference, computed ONCE per sheet: the deepest measured cut
-    // draws at `exaggerationFrac` of its local surface Ø and every shallower cut scales
-    // relative to it, so the profile and every strip agree. Blank mode's empty record simply
-    // yields 0 here, which the placeholder branch of `normalizedNotchFloorDiaMm` handles.
-    val deepestDepthMm = deepestUndercutDepthMm(effectiveRecord.undercuts, surfaceSegs, shaftExtentMm)
-    val exaggerationFrac = effectiveRecord.exaggerationFrac
+    // Every notch on the sheet, from the ONE shared builder the canvas overlay runs
+    // (`geom/UndercutOverlayMath.kt`): clamped spans, the containment forest, true floors, and
+    // the per-sheet drawn-depth normalization — resolved once, so the printed sheet and the
+    // screen cannot disagree about where material was removed OR how deep it draws. Nested cuts
+    // come back cut against their parent's floor, parents before children.
+    val sheetNotches = buildUndercutNotches(
+        effectiveRecord.undercuts, surfaceSegs, shaftExtentMm,
+        exaggerationFrac = effectiveRecord.exaggerationFrac,
+    )
     // Strip source: a cut overlapping a liner joins that liner's strip (whole liner drawn,
     // wear-style); the leftovers cluster into padded bare-shaft windows. Degenerate liners
     // (no length or no OD) would only produce a blank cell, so they are not offered — the
@@ -368,11 +372,7 @@ fun composeUndercutPdf(
         // construction the strips draw zoomed, so nothing is a separate "marker style". Only
         // reachable with an empty record, so in practice this draws nothing; it stays because
         // the form is a *fallback*, not a separate drawing.
-        drawUndercutNotches(
-            c, surfaceSegs,
-            liveSpans.map { s -> NotchCut(s.startMm, s.endMm, undercutById[s.id]?.diaMm ?: 0f) },
-            shaftCy, ::xAt, ::rPx, outline, voidFill, deepestDepthMm, exaggerationFrac,
-        )
+        drawUndercutNotches(c, sheetNotches, shaftCy, ::xAt, ::rPx, outline, voidFill)
         drawUndercutDirectionRow(
             c, text, contentLeft, contentRight,
             (shaftCy + rPx(maxDiaMm) + text.textSize + 12f).coerceAtMost(profileBottom - 2f),
@@ -432,8 +432,9 @@ fun composeUndercutPdf(
             // Edges-only is the write-in TEMPLATE's look alone: an export of an empty record is
             // still a record of this shaft, so it keeps the liner fully drawn.
             linerSpanBlank = startedPage && blankValues,
-            deepestDepthMm = deepestDepthMm,
-            exaggerationFrac = exaggerationFrac,
+            // This strip's slice of the sheet's notches, in the builder's parents-before-children
+            // order — never rebuilt here, so a strip's staircase is the sheet's staircase.
+            notches = sheetNotches.filter { it.id in strip.undercutIds },
             dual = displayUnits.dual,
             dualStacked = dualStacked,
         )
@@ -546,74 +547,49 @@ private fun surfaceSegsFromSpec(spec: ShaftSpec): List<SurfaceSeg> = buildList {
 // Notches — the void cut into the surface, drawn identically at every scale
 // ──────────────────────────────────────────────────────────────────────────────
 
-/** One undercut reduced to what a notch needs: its render-clamped span and its recorded Ø. */
-private data class NotchCut(val startMm: Float, val endMm: Float, val diaMm: Float)
-
 /**
- * The Ø a notch's floor is cut to — the shared pipeline both draw sites run: a recorded Ø
- * verbatim, or the symbolic shallow floor `effectiveNotchDiaMm` substitutes for a
- * placed-but-unmeasured undercut, referenced to the smallest local surface Ø over the span.
- * A symbolic floor keeps the section visible and dimensioned on the sheet; it never becomes
- * a printed Ø value (see `buildUndercutDiaStations`).
- */
-private fun notchFloorDiaMm(segs: List<SurfaceSeg>, cut: NotchCut): Float =
-    effectiveNotchDiaMm(cut.diaMm, minOuterDiaOver(segs, cut.startMm, cut.endMm))
-
-/**
- * Draws every notch in [cuts] against the local outer surface [segs] as a **step in the
- * silhouette** — the hand-sketch convention: the removed material is painted out in the
- * page colour from the surface polyline down to the floor (mirrored about the centreline,
- * erasing the component's surface stroke across the mouth — the cut is OPEN at the
- * surface, never closed by a lid), a full-height **section face** at each end (one
- * vertical from top surface to bottom surface, like any machined diameter step), and the
- * floor lines across the span. Each undercut thereby reads as its own reduced-Ø rectangle
- * section seated between two faces — only the undercut section exists over that span
- * (on-device report: a lid along the surface plus the surviving liner outline read as a
- * white box pasted ON the liner instead of material removed FROM it). A face draws only
- * where there is a real step (surface meaningfully above the floor); a taper that has run
- * down to the floor leaves no face. Portions where the surface is already at or below the
- * floor yield no region and draw nothing — `notchProfiles` owns that rule, so a cut
- * running off a liner onto smaller stock simply stops at the liner edge.
+ * Draws every notch in [notches] as a **step in the silhouette** — the hand-sketch
+ * convention: the removed material is painted out in the page colour from the surface
+ * polyline down to the floor (mirrored about the centreline, erasing the component's surface
+ * stroke across the mouth — the cut is OPEN at the surface, never closed by a lid), a
+ * full-height **section face** at each end (one vertical from top surface to bottom surface,
+ * like any machined diameter step), and the floor lines across the span. Each undercut
+ * thereby reads as its own reduced-Ø rectangle section seated between two faces — only the
+ * undercut section exists over that span (on-device report: a lid along the surface plus the
+ * surviving liner outline read as a white box pasted ON the liner instead of material removed
+ * FROM it). A face draws only where there is a real step (surface meaningfully above the
+ * floor); a taper that has run down to the floor leaves no face. Portions where the surface
+ * is already at or below the floor yield no region and draw nothing, so a cut running off a
+ * liner onto smaller stock simply stops at the liner edge.
  *
- * [deepestDepthMm]/[exaggerationFrac] carry the sheet's drawn-depth normalization
- * (`normalizedNotchFloorDiaMm`): the deepest measured cut draws at [exaggerationFrac] of its
- * local surface Ø, shallower cuts scale relative to it, and a 1/16"-deep cut still reads as a
- * cut (the hand-drawn convention — depth exaggerated, the printed Ø carrying the real
- * number). Only the floor line, shoulders, and Ø-leader anchors move; region topology stays
- * on the TRUE floor.
+ * This function is pt-mapping and Canvas work ONLY. Spans, region topology, the local surface
+ * a cut is taken against, and the drawn (depth-exaggerated) floors all come from
+ * `geom/UndercutOverlayMath.kt`'s `buildUndercutNotches` — the same builder the canvas overlay
+ * runs, which is what keeps the two draw sites identical and gives this composer nested cuts
+ * with no code of its own: a child notch simply arrives with its parent's DRAWN floor as its
+ * surface, paints over the relief around it, and reads as the next step down the staircase.
  */
 private fun drawUndercutNotches(
     c: Canvas,
-    segs: List<SurfaceSeg>,
-    cuts: List<NotchCut>,
+    notches: List<UndercutNotch>,
     cy: Float,
     xAt: (Float) -> Float,
     rAt: (Float) -> Float,
     outline: Paint,
     voidFill: Paint,
-    deepestDepthMm: Float,
-    exaggerationFrac: Float,
 ) {
-    if (cuts.isEmpty() || segs.isEmpty()) return
+    if (notches.isEmpty()) return
     // One step LIGHTER than the liner shade (half its 40/255 alpha): the section's core is
     // erased to the page colour first, so this is its absolute tone, not a darkening overlay.
     val sectionFill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
         color = Color.argb((UNDERCUT_SECTION_FILL_ALPHA * 255f).roundToInt(), 0, 0, 0)
     }
-    cuts.forEach { cut ->
-        val floorDia = notchFloorDiaMm(segs, cut)
-        if (floorDia <= 0f) return@forEach
-        // Regions come from the TRUE floor (a cut that never reached the neighboring
-        // stock must not draw into it); the floor line itself is drawn depth-exaggerated.
-        val rFloor = rAt(
-            normalizedNotchFloorDiaMm(
-                cut.diaMm, minOuterDiaOver(segs, cut.startMm, cut.endMm),
-                deepestDepthMm, exaggerationFrac,
-            )
-        )
-        notchProfiles(segs, cut.startMm, cut.endMm, floorDia).forEach { np ->
+    notches.forEach { notch ->
+        if (notch.floorDiaMm <= 0f) return@forEach
+        notch.profiles.forEach { np ->
             if (np.surface.size < 2) return@forEach
+            val rFloor = rAt(np.floorDiaMm)
             val xStart = xAt(np.startMm)
             val xEnd = xAt(np.endMm)
 
@@ -731,8 +707,12 @@ private fun drawUndercutDetailStrip(
     blankValues: Boolean,
     startedStrip: Boolean,
     linerSpanBlank: Boolean,
-    deepestDepthMm: Float,
-    exaggerationFrac: Float,
+    /**
+     * This strip's notches, already resolved by the shared builder (`buildUndercutNotches`) and
+     * ordered parents before children. The strip only maps them to points — it never re-derives
+     * a floor, so its staircase and the sheet's Ø-leader anchors read the same numbers.
+     */
+    notches: List<UndercutNotch>,
     /** [unit] is already this strip's resolved unit (liner override, else the document unit);
      *  this only carries the sheet-wide dual (inline "primary [secondary]") flag through. */
     dual: Boolean = false,
@@ -780,19 +760,36 @@ private fun drawUndercutDetailStrip(
 
     // A started strip dimensions nothing: with no cuts the chain would degenerate to a single
     // liner-length span, which is a figure the machinist has not measured and did not ask for.
+    //
+    // Nesting decides what the level-0 chain carries: a cut machined INSIDE another one is
+    // dimensioned on its own row against its PARENT's edges ([buildNestedUndercutRailRows]),
+    // never in the top chain's forward-cursor walk — where a fully nested cut collapses to zero
+    // width and vanishes from the chain entirely.
+    val nestingById = undercutNestingForest(spans).associateBy { it.id }
+    val topSpans = spans.filter { (nestingById[it.id]?.level ?: 0) == 0 }
     val railSpans = if (startedStrip) emptyList()
-    else buildUndercutRailSpans(strip.chainStartMm, strip.chainEndMm, spans, unit, dual)
-    val totalSpan = if (startedStrip) null else buildUndercutTotalSpan(spans, unit, dual)
+    else buildUndercutRailSpans(strip.chainStartMm, strip.chainEndMm, topSpans, unit, dual)
+    // The total is the run across the TOP-LEVEL cuts: a lone parent holding one child would
+    // otherwise re-state its own length, which the chain below already carries.
+    val totalSpan = if (startedStrip) null else buildUndercutTotalSpan(topSpans, unit, dual)
+    val nestedRailRows = if (startedStrip) emptyList() else buildNestedUndercutRailRows(spans, unit, dual)
 
     // Chain resolved before the vertical split (it is pure horizontal geometry), so the split
     // reserves only the fallback rows these labels actually use, on the side of the line the
-    // plan puts them — see `planUndercutRailRows`.
+    // plan puts them — see `planUndercutRailRows`. The nested rows are resolved with it, since
+    // they claim reserved rows of their own beneath the chain.
+    val labelWidth = { s: DualLabel -> dimText.measureDualLabel(s, dualStacked) }
     val railLayout = layoutWearStripRail(
         railSpans,
         xAtStripMm = { mm -> xAtStrip(mm) },
-        labelWidthPt = { s -> dimText.measureDualLabel(s, dualStacked) },
+        labelWidthPt = labelWidth,
     )
-    val railPlan = planUndercutRailRows(railLayout, startedStrip, hasTotalRail = totalSpan != null)
+    val nestedLayouts = nestedRailRows.map { row ->
+        layoutWearStripRail(row, xAtStripMm = { mm -> xAtStrip(mm) }, labelWidthPt = labelWidth)
+    }
+    val railPlan = planUndercutRailRows(
+        railLayout, startedStrip, hasTotalRail = totalSpan != null, nestedLayouts = nestedLayouts,
+    )
     val inner = computeUndercutStripInnerLayout(
         stripTop, stripBottom,
         titleHeightPt = titleText.textSize,
@@ -848,23 +845,13 @@ private fun drawUndercutDetailStrip(
     drawUndercutWindowEnd(c, segs, drawStartMm, cy, ::xAtStrip, ::rStrip, outline, shaftExtentMm, eyeAtTop = true)
     drawUndercutWindowEnd(c, segs, drawEndMm, cy, ::xAtStrip, ::rStrip, outline, shaftExtentMm, eyeAtTop = false)
 
-    drawUndercutNotches(
-        c, segs,
-        spans.map { s -> NotchCut(s.startMm, s.endMm, undercuts.first { it.id == s.id }.diaMm) },
-        cy, ::xAtStrip, ::rStrip, outline, voidFill, deepestDepthMm, exaggerationFrac,
-    )
+    drawUndercutNotches(c, notches, cy, ::xAtStrip, ::rStrip, outline, voidFill)
 
     // ── Measured-Ø callouts: leader from each notch floor down to the printed value ──
     if (diaPlan != null) {
-        val floorBottomYByKey = undercuts.associate { u ->
-            val s = clampedById[u.id]
-            // The leader must land on the DRAWN floor, so it uses the same normalized Ø the
-            // notch was cut to rather than the true floor.
-            val floorDia = if (s == null || s.isEmpty) 0f else normalizedNotchFloorDiaMm(
-                u.diaMm, minOuterDiaOver(segs, s.startMm, s.endMm), deepestDepthMm, exaggerationFrac,
-            )
-            u.id to (cy + rStrip(floorDia))
-        }
+        // The leader must land on the DRAWN floor, so it reads the notch's own floor — the
+        // builder's, nested cuts included — rather than re-deriving one.
+        val floorBottomYByKey = notches.associate { n -> n.id to (cy + rStrip(n.floorDiaMm)) }
         val placed = diaPlan.finish(
             row0Top = inner.cylBottom + WEAR_STRIP_LABEL_HEADROOM_PT,
             labelTextHeight = diaText.textSize,
@@ -881,7 +868,7 @@ private fun drawUndercutDetailStrip(
         }
     }
 
-    // ── Rails: the chain, then the total on its own line above it ──
+    // ── Rails: the chain, the nested levels under it, then the total above it ──
     if (startedStrip) {
         // Datum bars only — the liner's own edges extended up into the empty band, so a
         // hand-drawn chain has something real to measure from. No dimension line, no arrows:
@@ -895,11 +882,40 @@ private fun drawUndercutDetailStrip(
         c, dim, dimText, railLayout,
         witnessBottomY = inner.cylTop - UC_RAIL_WITNESS_GAP_PT,
         railY = inner.chainRailY,
-        maxLabelRows = if (railPlan.aboveRows > 0) railPlan.aboveRows else inner.railLabelRows,
+        // The chain's own label rows stop where the nested rows begin: the rest of the reserved
+        // band belongs to the levels stacked under it.
+        maxLabelRows = if (railPlan.aboveRows > 0) railPlan.aboveRows
+        else (inner.railLabelRows - railPlan.nestedRows).coerceAtLeast(1),
         drawLabels = !blankValues,
         fallbackLabelAbove = railPlan.aboveRows > 0,
         dualStacked = dualStacked,
     )
+    // One extra chain row per nesting level, stacked UNDER the level-0 chain — chained
+    // dimensions run most-detailed nearest the part, and a nested cut is located against its
+    // PARENT's edges, not the strip's datums. Parents at one level are disjoint, so a level
+    // always lays out on a single row. Rows step by the ONE row-height metric the reserved
+    // band was budgeted with (`planUndercutRailRows`), each line clearing the fallback labels
+    // of the row above it.
+    if (nestedLayouts.isNotEmpty()) {
+        val rowStepPt = undercutRailRowHeightPt(dimText, dualStacked)
+        // Rows the chain's own labels occupy, off what the strip actually granted — a short band
+        // clamps `railLabelRows` below the plan, and the nested rows follow it down.
+        val chainBelowRows = (inner.railLabelRows - railPlan.nestedRows).coerceAtLeast(0)
+        var rowY = inner.chainRailY + chainBelowRows * rowStepPt
+        nestedLayouts.forEach { lay ->
+            rowY += rowStepPt
+            drawUndercutRail(
+                c, dim, dimText, lay,
+                witnessBottomY = inner.cylTop - UC_RAIL_WITNESS_GAP_PT,
+                railY = rowY.coerceAtMost(inner.cylTop - UC_RAIL_WITNESS_GAP_PT),
+                maxLabelRows = WEAR_RAIL_MAX_LABEL_ROWS,
+                drawLabels = !blankValues,
+                fallbackLabelAbove = false,
+                dualStacked = dualStacked,
+            )
+            rowY += undercutRailFallbackRows(lay) * rowStepPt
+        }
+    }
     if (totalSpan != null) {
         val totalLayout = layoutWearStripRail(
             listOf(totalSpan),

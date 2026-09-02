@@ -6,6 +6,203 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-09-01
+
+### feat(ui): Standalone taper calculator
+
+"A taper calculator where I can find the taper rate by entering known values without having
+to create an entire shaft output." The ruling (`docs/DESIGN_INTENT.md` §3.8): a shop
+calculation must not require building a document, and a calculator never writes into the open
+one.
+
+- **New dialog** `ui/screen/TaperCalcDialog.kt` (`testTag("taper_calc_dialog")`), the same
+  tool posture as the keyway calculator and the unit converter — reads nothing from the
+  shaft, stores nothing (blank every open), marks nothing dirty, prints on no sheet, and
+  recomputes live per keystroke. Four fields — **Large end Ø (L.E.T.)**, **Small end Ø
+  (S.E.T.)**, **Length**, **Taper rate** — plus the shared `in | mm` entry-unit chips, which
+  reinterpret rather than convert. The rate field takes "1:12", "1/12", or a bare decimal
+  through the existing `parseTaperRateText` (bare "1" stays blocked as ambiguous) and carries
+  no unit suffix: a ratio is the same number on either drawing.
+- **Any three give the fourth.** Rate from the three geometry values is the headline case;
+  the inverses (rate + length + one Ø → the other Ø, rate + both Øs → length) fall out of the
+  same slope identity. Enter all four and the sheet is *checked* instead: the exact rate is
+  shown with a warning line when the typed rate misses the geometry by more than the 3%
+  common-rate tolerance. A mismatch is information, never an error state, and nothing is ever
+  written back into a typed field — results are displayed for the user to read and use.
+- **Rate display** leads with the exact `1:N` and names the common taper it snaps to beside
+  it, when they differ. In inch entry mode a shop-notation line follows — `12 / N` inches per
+  foot, set fraction-smart (`LengthFormat.formatInchesSmart`), which is the general form of
+  the footer's hand-written 1:12 → 1"/ft and 1:16 → 3/4"/ft. Metric entry shows no per-foot
+  line. Computed lengths and diameters print in the entry unit, fraction-smart in inches.
+- **Nothing about the rate convention is restated.** The snap tolerance, the common-rate list
+  and the bore tie-break stay in `util/TaperRateAuto.kt`; the new pure solve
+  `util/TaperCalcMath.kt` delegates every naming decision to `autoTaperRate`, so the
+  calculator and a taper card can never disagree about what a geometry is called.
+  `DEFAULT_SLOPE_ERROR_TOLERANCE` and `formatOneToN` are promoted from private to `internal`
+  for that reuse rather than copied.
+- **Entry point.** "Taper calculator" joins the editor sidebar's tools group between the
+  keyway calculator and the unit converter, so the two calculators are adjacent
+  (Keyway calculator · Taper calculator · Unit converter · Help & FAQ · Settings). Icon
+  `Icons.Filled.SquareFoot`. `onTaperCalculator` threads through `ShaftEditorRoute`, which
+  owns the open-state boolean and emits the dialog beside the other two.
+- **Invalid entries read wrong at the field**, not only in the results block: non-positive
+  length or Ø, a non-positive rate, a small end at or above the large end (equal ends are a
+  straight shaft, which has no rate), and a rate that over its length would consume the whole
+  large end. Fewer than three values is a quiet "Enter any three values." hint — never an
+  error on a blank field.
+- **Tests** — `TaperCalcMathTest` (28): every solve direction, the snap and its absence, the
+  all-four agree/disagree boundary pinned against the shared tolerance constant, the invalid
+  geometries, incomplete input, the inches-per-foot derivation, and delegation of the
+  common-rate decision to `autoTaperRate`. `EditorSidebarHelpTest` now pins the five-item
+  tools order. No dialog UI test: `AlertDialog` + `OutlinedTextField` exhausts the heap under
+  this Robolectric harness for the *existing* calculators too, so pure-math coverage is the
+  bar, as it already is for the keyway calculator.
+
+### feat(ui): Print is the primary output action
+
+The shop works from paper and prints straight from the device; a PDF file is the backup or
+archive copy, not the daily route. The UI said the opposite nearly everywhere — Export was the
+only filled button on four tabs and the only labelled one in the preview chrome. The ruling
+(`docs/DESIGN_INTENT.md` §3.4): wherever Print and Export both appear, Print leads and takes
+the primary treatment; Export takes the secondary one.
+
+- **One shared trio.** The Runout, Wear, Undercut and Consolidated Output tabs each inlined
+  the same three buttons; they now render `ui/screen/DocumentActionButtons.kt` — filled
+  **Print &lt;doc&gt;** leading, then outlined **Preview &lt;doc&gt;** and **Export &lt;doc&gt; PDF**, all
+  full width. Print leads and is the only filled button; Preview follows as the inspection
+  step; Export trails. The three labels are built from the one document name a route passes,
+  so a tab cannot label one action differently from its siblings. Each route's callbacks,
+  export gate and disabled-gate message are unchanged — the gate's wording stays with the
+  route. Test tags `doc_action_print` / `doc_action_preview` / `doc_action_export`.
+- **Preview chrome.** `PdfPreviewOverlay` (the four document tabs) and the schematic's
+  `PdfPreviewScreen` swap prominence: Print is now a labelled `FilledTonalButton`, Export a
+  `PictureAsPdf` icon ("Export PDF"). Action order is unchanged — Tune, [Reset zoom,] Print,
+  Export.
+- **Schematic toolbar.** The `PictureAsPdf` icon opens the PDF preview rather than exporting
+  anything, so it is labelled for what it does: content description "PDF preview", test tag
+  `toolbar_pdf_preview` (was `toolbar_export_pdf`). Same icon, same destination.
+- **Export all** keeps its behavior and treatment: the Android print framework runs one
+  interactive job at a time, so a batch-print variant is not planned.
+- **Tests** — `DocumentActionButtonsTest`, the first coverage for any of these buttons: the
+  labels a document name produces, Print above Preview above Export by measured position,
+  each callback firing on its own button, and a closed export gate disabling all three.
+
+### feat(ui): Help & FAQ in the side menu, and a Glossary section
+
+Help was reachable from exactly one place — a row at the bottom of Settings — which is not
+where anyone looks for it mid-job ("so hidden I don't even know where to find it"). The
+ruling (`docs/DESIGN_INTENT.md` §3.7): reference content a user reaches for while working
+gets a top-level entry point; Settings is for changing things, not for finding explanations.
+
+- **Editor side menu.** "Help & FAQ" joins the sidebar's bottom utility group, directly
+  above Settings (Keyway calculator · Unit converter · Help & FAQ · Settings). It is a tool,
+  not a document view, so it is never dimmed by the "built" gate. `onHelp` threads through
+  `ShaftEditorRoute` to the existing `help` route, mirroring `onOpenSettings`.
+- **Start screen.** A "Help & FAQ" button sits under Settings, ahead of Send Feedback
+  (`testTag("start_help_button")`). The Settings entry stays where it was — this adds
+  entry points rather than moving one.
+- **Glossary.** A new Help section, placed second so a term can be looked up without
+  reading past the how-to guides. One expandable topic per term, alphabetical: AFT / FWD,
+  Blank draft, Body S-break, Coupling face, Dual units, L.E.T. / S.E.T., Liner compression,
+  Measurement reference, OAL, Runout station / bubble, Shade in Components, Shaft height,
+  TIR, Trace depth exaggeration. The AFT/FWD and S-break figures are reused from the
+  sections that already carry them. Where a term names an exaggerated drawing (S-break,
+  shaft height, trace depth) the entry keeps the load-bearing caveat: printed values are
+  always the true, typed numbers.
+- **Tests** — first coverage for either surface. `EditorSidebarHelpTest` pins the tools
+  group's contents, that Help sits between the converter and Settings, and that tapping it
+  fires `onHelp` and closes the sidebar; `HelpGlossaryTest` renders `HelpRoute` and pins
+  that Glossary follows Getting Started and that a term expands to its definition.
+
+### feat(undercut): nested undercuts
+
+A machinist cuts a wide relief section — say 4" long at 1" depth — and later machines a
+more-corroded 1" section *inside* it deeper still, to 1-1/4". That was blocked at draft-confirm
+as an overlap, and stored nested data rendered as one flat cut. Containment is now legal and
+draws as a recursive staircase, identically on the canvas and on the printed sheet: the relief
+reads as three sections — relief floor, deeper floor, relief floor.
+
+- **Containment forest** — `undercutNestingForest` / `undercutSpanContains`
+  (`geom/UndercutMath.kt`): each span's nesting level and the id of the smallest span
+  containing it. Containment is **eps-inclusive** — a child may run right up to the parent's
+  own shoulder, which is how the shop authors it — and excludes only the SAME span (one cut
+  entered twice). Ties between equal-width containers, which shared edges can produce, break to
+  the first in record order so the forest is deterministic. Partial overlaps are TOLERATED,
+  never repaired: neither span contains the other, both stay top-level, and older records keep
+  rendering exactly as they did.
+- **Validation** — `undercutOverlapIssue` now passes a draft that sits fully inside another
+  cut or fully around one, shared edges included, and blocks only a partial intrusion or a
+  duplicate span. One wording, `UNDERCUT_PARTIAL_OVERLAP_MSG`, because the fix is the same
+  either way. Confirm-time gate on new values only; nothing stored is retroactively rejected.
+- **A shared edge prints as ONE continuous face** — surface straight down to the deeper floor,
+  exactly the silhouette two separately-authored adjacent sections give. The builder emits a
+  zero-width **step point** at that end (`nestedSurfacePoints`, `SurfaceProfileMath`'s
+  duplicated-x convention, carried recursively so a cut flush through two levels still reaches
+  the shaft surface). Both draw sites already read a region's face height from its first/last
+  surface point and draw faces after the void, so the child's own full-height face covers the
+  stroke-width sliver its void erased off the parent's — no draw-site change, both sites
+  identical, and no fill area moves.
+- **Drawn floors stack.** `deepestUndercutDepthMm` now measures **top-level cuts only** — a
+  child's depth is relative to its parent's floor, so pooling it from the base surface would
+  hand the sheet a reference no cut draws against. A child's true floor comes from
+  `effectiveNotchDiaMm` against the PARENT's floor, and its drawn floor from the new
+  `nestedNotchFloorDiaMm`: the exaggerated depth is computed relative to the parent's true
+  floor and then subtracted from the parent's DRAWN floor. Two invariants fall out — the stair
+  is visible at **every** slider value (the min-share clamp can no longer flatten two
+  shallow-from-the-base cuts into one step) and a child is never drawn shallower than true.
+  Capped at `UNDERCUT_NESTED_MAX_DEPTH_FRAC` (75%) of the parent's drawn floor unless the true
+  relative depth demands deeper — truth beats prettiness. Recursive: level 2 reads level 1's
+  results.
+- **One notch builder behind both draw sites.** `buildUndercutNotches`
+  (`geom/UndercutOverlayMath.kt`, now over a shared `resolveUndercutFloors`) cuts a nested
+  notch against a one-segment local surface at its parent's TRUE floor — so faces top out
+  there and a child at or above that floor yields no region — then swaps the profiles for
+  drawing: floor to the child's drawn floor, every surface point to the parent's DRAWN floor.
+  Results come back **parents before children**, so paint-over correctness no longer depends
+  on start-coordinate luck. `pdf/UndercutPdfComposer.kt` was refactored onto that builder for
+  both its call sites (whole-shaft fallback + per strip), dropping its private `NotchCut`
+  re-derivation and its second `normalizedNotchFloorDiaMm` call for the Ø-callout leaders;
+  `drawUndercutNotches` there is now pt-mapping and Canvas work only. The canvas overlay,
+  which already used the builder, gained nesting with **zero** draw-site changes.
+- **Dimension rail.** The level-0 chain is fed **top-level spans only**: `buildUndercutRailSpans`
+  walks a forward cursor, which collapses a fully nested cut to zero width and drops it
+  silently (its absorb rule for legacy partial overlaps is unchanged). Each nesting level k ≥ 1
+  instead gets **one extra chain row** — `buildNestedUndercutRailRows` — anchored at the
+  PARENT's edges: `parentStart → c1, c1, c1 → c2, …, cn → parentEnd`. Parents at one level are
+  disjoint, so a level always lays out on one row; a child flush with a parent's shoulder simply
+  omits that zero-length gap span, the chain's existing rule. The rows stack UNDER the level-0 chain
+  (chained dimensions run most-detailed nearest the part) through the existing rail drawing and
+  the ONE `undercutRailRowHeightPt` metric; `planUndercutRailRows` reserves a row for each
+  level's line plus its own fallback labels (`UndercutRailRowPlan.nestedRows`), so the strip
+  budgets the height instead of drawing into the cylinder. A lone relief holding one child no
+  longer prints a total rail that just restates its own length.
+- **Authoring.** The card's non-blocking implausible-Ø warning compares a nested draft against
+  the **surrounding cut's floor** ("Ø meets or exceeds the surrounding cut's floor here");
+  top-level drafts keep the base-surface wording. `pickUndercutAt` prefers the **innermost**
+  span when several contain the tap — a child is the smaller target and the one drawn on top.
+- **Golden rule untouched**: stored Ø, start and length are never rewritten. Clamping and every
+  exaggeration here are draw-only, and printed Ø callouts stay the typed numbers.
+- **Tests** — `UndercutMathTest` gains the containment matrix (nested both ways and shared-edge
+  nesting OK; partial overlap and identical spans blocked; touching still legal), forest
+  construction (levels, parents, smallest-container, flush children, coincident-span siblings,
+  the equal-width tie-break, partial-overlap tolerance), the drawn-floor stacking
+  (visible step at 0%/5%/max where the min-share clamp used to collapse it, never-shallower,
+  the cap and its truth override, level-2 recursion, placeholder child), the top-level-only
+  depth pool and the innermost hit-test. New `UndercutNotchBuildTest` gives
+  `buildUndercutNotches` its first coverage — base single cut pinned, nested child on the
+  parent's drawn floor, a child at the parent floor drawing nothing, parents-first ordering,
+  level 2, and the shared-edge face at each end (AFT-flush, FWD-flush, mid-span, and flush
+  through two levels). `UndercutStripLayoutTest` pins the nested rail rows (parent-anchored, two
+  children in sequence, one row per level, the flush child's omitted zero-length gap, the
+  reserved-row plan) and documents the absorb rule that makes the top-level filter necessary;
+  the legacy partial-overlap test is unchanged. `UndercutStripSvgPreviewTest` now drives the
+  shared notch builder and writes four more human-review sheets into
+  `app/build/reports/undercut-preview/` — `g-liner-strip-nested-pair.svg`,
+  `h-bareshaft-nested-staircase.svg` (level 2), and the shop's own case as
+  `i-relief-with-deeper-section.svg` (mid-span) and `j-relief-deeper-section-flush.svg` (at the
+  relief's AFT boundary). `UndercutDraftTest` pins that a contained draft — flush included —
+  confirms while a partial overlap still blocks.
+
 ## 2026-08-29
 
 ### chore(test): full-suite spec audit — tests that can fail for the right reason

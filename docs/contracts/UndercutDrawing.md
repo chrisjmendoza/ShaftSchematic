@@ -154,11 +154,25 @@ data class UndercutRecord(val undercuts: List<Undercut> = emptyList())
   span validator: a measurement is sacred (golden rule); an implausible Ø is a non-blocking
   card warning instead.
 - **Blocking confirm validation** `undercutOverlapIssue(canonicalStartMm, lengthMm, otherSpans)`:
-  a draft may not intrude into another cut's bounds (two overlapping undercuts are physically one
-  cut, and would double-dimension the chain rail). Checked only when **confirming** a drafted card
-  (see "Undercut cards" below), against the clamped spans of every OTHER cut on the sheet;
-  touching edge-to-edge is legal. Confirm-time only, so nothing already stored is retroactively
-  rejected — the `isUndercutStaleOverrun` posture.
+  a draft must be either fully **clear** of every other cut (disjoint; touching edge-to-edge is
+  legal) or fully **nested** with it — inside another cut, or containing one. A *partial*
+  intrusion is blocked: two partially overlapping undercuts are physically one cut and would
+  double-dimension the chain rail. So is a span **identical** to another's (within ε) — that is
+  one cut entered twice, not a cut inside a cut. One wording for both,
+  `UNDERCUT_PARTIAL_OVERLAP_MSG`, because the fix is the same. Checked only when **confirming**
+  a drafted card (see "Undercut cards" below), against the clamped spans of every OTHER cut on
+  the sheet. Confirm-time only, so nothing already stored is retroactively rejected —
+  the `isUndercutStaleOverrun` posture; stored partial overlaps keep rendering as they always did.
+- **Containment forest** `undercutNestingForest(spans)` → per span, its nesting `level` and the
+  id of the smallest span containing it (`parentId`). Containment = `undercutSpanContains`: the
+  child inside **both** parent edges within ε, and the two not the same span. A **shared edge is
+  legal nesting** — the shop machines the original relief and then deepens a corroded section of
+  it that may run right up to the relief's own shoulder (on-device intent), and that must print
+  exactly as separately-authored adjacent sections would. Ties (equal-width containers, which
+  shared edges can produce) break to the FIRST in record order, so the forest is deterministic.
+  Partial overlaps are TOLERATED, not repaired — neither span contains the other, so both stay
+  top-level siblings. The forest drives the nested notch build, the drawn-floor stacking, the
+  extra rail rows, and which cuts the deepest-depth pool counts.
 - **Stale classifier** `isUndercutStaleOverrun(startFromAftMm, lengthMm, oalMm)` — non-blocking;
   reuses `undercutSpanIssue` to detect a previously-valid record that no longer fits (OAL
   shrank). Card shows "Extends past shaft end — re-measure"; render clamps via
@@ -175,7 +189,9 @@ data class UndercutRecord(val undercuts: List<Undercut> = emptyList())
      decisions agree by construction.
 - **Hit-tests**: `pickUndercutWindowAt(xMm, windows)` (which window a tap landed in) and
   `pickUndercutAt(xMm, spans, padMm)` (which undercut inside an open window — inside-span
-  candidates win over pad-only candidates; remaining ties break to the nearer span edge).
+  candidates win over pad-only candidates; among several containing the tap the **innermost**
+  (narrowest) wins, since a nested cut is the smaller target and the one drawn on top; remaining
+  ties, and every pad-only hit, break to the nearer span edge).
 - **Placeholder Ø** `effectiveNotchDiaMm(diaMm, minSurfaceDiaMm)`: a real Ø (`> 0`) is used
   verbatim; a placed-but-empty undercut (`diaMm == 0`) gets a symbolic shallow floor at
   `UNDERCUT_PLACEHOLDER_DEPTH_FRAC` (0.85) of the smallest local surface Ø over the span, so the
@@ -192,8 +208,10 @@ data class UndercutRecord(val undercuts: List<Undercut> = emptyList())
   document keeps the look it was authored with).
 
   The model is **normalized to the sheet's deepest cut**, computed once per compose by
-  `deepestUndercutDepthMm(undercuts, segs, oalMm)` (Ø-reduction of the deepest **measured**
-  cut; placeholders and cuts that removed nothing contribute 0):
+  `deepestUndercutDepthMm(undercuts, segs, oalMm)` (Ø-reduction of the deepest **measured,
+  top-level** cut; placeholders, cuts that removed nothing, and NESTED cuts contribute 0 — a
+  child's depth is relative to its parent's floor, so pooling it from the base surface would
+  hand the sheet a reference no cut draws against):
 
   ```
   share      = max(√(trueDepth / deepestDepthMm), UNDERCUT_MIN_SHARE_OF_EXAGGERATION)
@@ -214,9 +232,35 @@ data class UndercutRecord(val undercuts: List<Undercut> = emptyList())
   `UNDERCUT_PLACEHOLDER_MIN_DRAWN_FRAC` (0.04) visibility floor, and is excluded from the
   deepest-depth reference so an unmeasured cut can't squash the real ones.
 
+  **Nested cuts stack.** A cut machined inside another is cut against its **parent's floor**,
+  not the shaft surface: true floor `effectiveNotchDiaMm(childDia, parentTrueFloor)`, drawn floor
+  `nestedNotchFloorDiaMm(childDia, parentTrueFloor, parentDrawnFloor, deepestDepthMm,
+  exaggerationFrac)` — the exaggerated depth is computed RELATIVE to the parent's true floor and
+  then subtracted from the parent's DRAWN floor. Two invariants: the stair is visible at **every**
+  slider value (measuring relative to the parent floor is what stops
+  `UNDERCUT_MIN_SHARE_OF_EXAGGERATION` flattening two shallow-from-the-base cuts into one step),
+  and a child never draws shallower than true (`parentDrawn ≤ parentTrue` and
+  `relDrawn ≥ relTrue`). Capped at `UNDERCUT_NESTED_MAX_DEPTH_FRAC` (0.75) of the parent's drawn
+  floor unless the true relative depth demands deeper — truth beats prettiness — and floored above
+  zero so every step has a floor line. Recursive: level 2 reads level 1's results.
+
   Region topology still comes from `notchProfiles` at the TRUE floor — a cut that never
   touched the neighboring stock must not draw into it; only the floor line and faces
-  deepen. Ø callout leaders anchor on the drawn floor; labels print the stored value.
+  deepen. For a nested cut the topology runs against a one-segment local surface at the
+  PARENT's true floor, so a child at or above that floor yields **no region at all** (nothing
+  drawn; the card's non-blocking Ø warning is what says so).
+
+  **A shared edge prints as ONE face.** Where a nested cut runs right up to its parent's own
+  shoulder there is no material at the parent's floor at that station, so the face must run from
+  the outer surface straight down to the child's floor — the exact silhouette two
+  separately-authored adjacent sections give (relief floor / deeper floor / relief floor for a
+  mid-span section; face / deeper floor / step / relief floor for a flush one). The builder does
+  it with a **zero-width step point** at that end (`nestedSurfacePoints`, `SurfaceProfileMath`'s
+  duplicated-x convention, carried recursively so a cut flush through two levels still reaches
+  the shaft surface). Both draw sites already take a region's face height from its first/last
+  surface point and draw faces AFTER the void, so the child's own full-height face covers the
+  stroke-width sliver its void erased off the parent's face — no draw-site change, and the two
+  sites stay identical. The step has zero axial width, so no fill area changes. Ø callout leaders anchor on the drawn floor; labels print the stored value.
   Display-only: canonical values and printed Ø are untouched (golden rule). Each notch region
   draws as a **step in the silhouette** — the hand-sketch convention: the void erases
   everything from the surface down to the floor (the void fill overdraws the *component's*
@@ -324,8 +368,9 @@ bound to one component.
   liner edge shows the taller shoulder on the liner side rather than a single averaged slope.
   Where the surface is at or below the floor (the undercut Ø is too large, or the span runs off
   a liner onto smaller bare stock), that portion yields **no region** — nothing is drawn there,
-  and the caller surfaces it as a non-blocking warning ("Ø meets or exceeds shaft surface here"
-  in the card), never a block or a rewritten value.
+  and the caller surfaces it as a non-blocking warning in the card ("Ø meets or exceeds shaft
+  surface here", or "…the surrounding cut's floor here" for a nested cut, whose local surface IS
+  its parent's floor), never a block or a rewritten value.
 
 ### `ui/resolved/SurfaceSegs.kt`
 
@@ -525,7 +570,12 @@ Each card:
   discards that page.
 - **Warnings** (non-blocking, both can show together): "Extends past shaft end — re-measure"
   (`isUndercutStaleOverrun`) and "Ø meets or exceeds shaft surface here" (`diaMm > 0` and `diaMm
-  >= minOuterDiaOver` over the clamped span).
+  >=` the local surface Ø). For a draft that is **nested** inside another cut, the comparison is
+  against the **surrounding cut's floor** and the wording becomes "Ø meets or exceeds the
+  surrounding cut's floor here" — a nested cut removes material from its parent's floor, so the
+  shaft surface is not the figure it can reach. Both terms come from `resolveUndercutFloors`
+  (`surfaceDiaMm`, `nesting.parentId`), so the card and the notch build agree on what the cut is
+  taken against.
 
 ### Overlay "Add undercut…"
 Between the canvas and the carousel: **"Add undercut in this liner"** on a `LinerStrip`
@@ -742,11 +792,23 @@ strips minus a 22 pt orientation row, so a lone full-width strip owns ≈ 414 pt
     `LinerStrip` the chain range is the liner's own edges (extended only by overhang), so the
     rail's outer witness lines land on a real datum and the **pad between it and the break edge
     is deliberately left undimensioned** — an arbitrary zoom margin is not a figure worth
-    printing. Zero-length spans are omitted (never drawn as degenerate zero-width dims);
+    printing. Zero-length spans are omitted (never drawn as degenerate zero-width dims). Fed the
+    strip's **TOP-LEVEL spans only**: the forward cursor pulls an overlapping span's start up to
+    itself, which collapses a fully NESTED cut to zero width and drops it silently. (That absorb
+    rule stays — it is what keeps a legacy partially-overlapping pair from double-counting;)
+  - **one extra chain row per nesting level ≥ 1**, stacked UNDER the level-0 chain
+    (`buildNestedUndercutRailRows`) — chained dimensions run most-detailed nearest the part. Each
+    level-k cut is chained against its **parent's own edges**: `parentStart → child`, `child`,
+    `child → parentEnd`, with several children of one parent in sequence. Parents at one level are
+    disjoint, so a level always lays out on ONE row. `planUndercutRailRows` reserves a row for each
+    level's line plus that line's fallback labels (`UndercutRailRowPlan.nestedRows`, stepped by the
+    one `undercutRailRowHeightPt` metric), so the strip budgets the height rather than drawing into
+    the cylinder; the chain's own label rows stop where the nested rows begin;
   - **a second rail line above the chain — the strip total** (`buildUndercutTotalSpan`, first
-    shoulder → last shoulder). **Returns `null` (nothing drawn, no reserved band) for a strip
-    with fewer than two drawable undercuts** — with exactly one undercut, a total span would
-    just restate that undercut's own length, already dimensioned on the chain below;
+    shoulder → last shoulder, over the TOP-LEVEL spans). **Returns `null` (nothing drawn, no
+    reserved band) for a strip with fewer than two drawable top-level undercuts** — with exactly
+    one, a total span would just restate that undercut's own length, already dimensioned on the
+    chain below (a lone relief holding a nested cut included);
   - **Ø callouts below** via `planDiaCallouts`/`buildUndercutDiaStations` (leader to notch floor,
     `formatDiaWithUnit`, **no "Ø" prefix**); an undercut with `diaMm <= 0` is **skipped
     entirely** on the printed callouts (no placeholder for an unrecorded value) — its notch
@@ -810,9 +872,13 @@ strips minus a 22 pt orientation row, so a lone full-width strip owns ≈ 414 pt
 - **Draw-both-sites, in lockstep**: the notch (void fill + boxed outline — surface-polyline top
   edge, shoulders, floor — cut against the
   local outer-surface envelope) renders identically in `UndercutRoute`/
-  `UndercutWindowDetailOverlay` (canvas) and `UndercutPdfComposer` (PDF), from the one shared
-  pure pipeline: `clampUndercutSpan` → `effectiveNotchDiaMm(diaMm, minOuterDiaOver(segs, …))` →
-  `notchProfiles(surfaceSegsFrom(resolved), …)`. `buildUndercutStrips` (liner strips for cuts
+  `UndercutWindowDetailOverlay` (canvas) and `UndercutPdfComposer` (PDF), from the ONE shared
+  builder `buildUndercutNotches` (`geom/UndercutOverlayMath.kt`, over `resolveUndercutFloors`):
+  `clampUndercutSpan` → containment forest → `effectiveNotchDiaMm` against the local surface (the
+  outer envelope, or a PARENT's true floor for a nested cut) → `notchProfiles` → drawn floors
+  swapped in. Both draw sites are pt-mapping and Canvas/DrawScope work only, so neither carries
+  nesting logic; notches come back **parents before children**, which is what makes paint-over
+  correct without depending on start coordinates. `buildUndercutStrips` (liner strips for cuts
   overlapping a liner, `clusterUndercuts`-derived free windows for the rest) is the single
   source of truth for "what's one zoomed view" consumed by the overview affordances, the detail
   overlay, and the PDF strips — all three agree by construction.
@@ -824,8 +890,15 @@ strips minus a 22 pt orientation row, so a lone full-width strip owns ≈ 414 pt
   overlay/canvas draw site but is skipped by `buildUndercutDiaStations` on the PDF — same rule
   as `WearDiaReading.diaMm == 0`.
 - **Single-undercut strips print no total span** — `buildUndercutTotalSpan` requires ≥ 2
-  drawable undercuts, so a lone section's chained-rail length is never redundantly restated on
-  a second rail line.
+  drawable top-level undercuts, so a lone section's chained-rail length is never redundantly
+  restated on a second rail line (a lone relief holding a nested cut counts as one).
+- **Nested cuts are legal; partial overlaps and duplicate spans are not** — containment is
+  eps-inclusive (a shared edge nests; identical spans do not), and a nested cut is drawn against
+  its parent's floor, dimensioned on its own parent-anchored rail row, and excluded from the
+  deepest-depth pool. A shared edge prints as one continuous face. The level-0 chain must never
+  be fed a nested span (the cursor walk absorbs it), and the notch list must stay
+  parents-before-children — which is why the order is level-first, never by start coordinate: a
+  child sharing its parent's start would otherwise sort ambiguously.
 - **`referenceLinerId` is display metadata, never a geometry key** — the notch, the strip
   assignment (`assignUndercutLiner`), and the chain range are all decided by the undercut's
   actual shaft-space span versus the liner's actual span; the stored reference liner only

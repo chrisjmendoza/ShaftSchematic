@@ -23,7 +23,7 @@ import kotlin.math.sqrt
  */
 
 /** Epsilon for undercut bounds checks — same tolerance convention as `LinerWearMath`. */
-private const val UNDERCUT_SPAN_EPS_MM = 1e-3f
+internal const val UNDERCUT_SPAN_EPS_MM = 1e-3f
 
 /**
  * Undercuts whose clamped spans are separated by a gap of at most this many mm share one
@@ -181,13 +181,20 @@ fun undercutSpanIssue(canonicalStartMm: Float, lengthMm: Float, oalMm: Float): S
 }
 
 /**
- * Blocking draft-confirm validation: a cut's span may not intrude into another cut's
- * bounds — two overlapping undercuts are physically one cut and would double-dimension
- * the chain rail. Checked when CONFIRMING a drafted card (see `UndercutDetail`'s
- * draft/confirm flow), against the clamped spans of every OTHER cut on the sheet;
- * touching edge-to-edge is legal (epsilon [UNDERCUT_SPAN_EPS_MM]). Returns a short
- * message or `null`. Stored data is never retroactively rejected — like
- * [isUndercutStaleOverrun], anything already in the record keeps rendering.
+ * Blocking draft-confirm validation: a cut's span must be either fully CLEAR of every other
+ * cut (disjoint, touching edge-to-edge included) or fully NESTED with it — inside another cut,
+ * or containing one ([undercutSpanContains]). A **partial** overlap is physically one cut and
+ * would double-dimension the chain rail, so it stays blocked; so does a span identical to
+ * another, which is one cut entered twice rather than a cut inside a cut.
+ *
+ * Nested cuts are legal — a machinist cuts a wide relief and then deepens a corroded section
+ * of it, which may run right up to the relief's own shoulder — and draw as a staircase
+ * (`geom/UndercutOverlayMath.kt`'s `buildUndercutNotches`).
+ *
+ * Checked when CONFIRMING a drafted card (see `UndercutDetail`'s draft/confirm flow), against
+ * the clamped spans of every OTHER cut on the sheet. Returns a short message or `null`. Stored
+ * data is never retroactively rejected — like [isUndercutStaleOverrun], anything already in the
+ * record keeps rendering, partial overlaps from older records included.
  */
 fun undercutOverlapIssue(
     canonicalStartMm: Float,
@@ -195,11 +202,20 @@ fun undercutOverlapIssue(
     otherSpans: List<UndercutSpanMm>,
 ): String? {
     val eps = UNDERCUT_SPAN_EPS_MM
-    val s = canonicalStartMm
-    val e = canonicalStartMm + lengthMm
-    val hit = otherSpans.firstOrNull { it.endMm > s + eps && it.startMm < e - eps }
-    return if (hit != null) "Overlaps an adjacent undercut" else null
+    val draft = UndercutSpanMm("", canonicalStartMm, canonicalStartMm + lengthMm)
+    val hit = otherSpans.firstOrNull { o ->
+        val clear = o.endMm <= draft.startMm + eps || o.startMm >= draft.endMm - eps
+        !clear && !undercutSpanContains(draft, o) && !undercutSpanContains(o, draft)
+    }
+    return if (hit != null) UNDERCUT_PARTIAL_OVERLAP_MSG else null
 }
+
+/**
+ * The one blocked-overlap wording: a partial intrusion and a duplicate span read the same,
+ * because the fix is the same — move the cut fully inside its neighbour or fully clear of it.
+ */
+const val UNDERCUT_PARTIAL_OVERLAP_MSG =
+    "Overlaps an adjacent undercut — a cut must sit fully inside or fully clear of another"
 
 /**
  * True when a **previously recorded** undercut no longer fits within the shaft's current
@@ -233,6 +249,86 @@ fun clampUndercutSpan(startFromAftMm: Float, lengthMm: Float, oalMm: Float): Cla
 
 /** An undercut's clamped axial span in shaft-space mm, the clustering/hit-test input. */
 data class UndercutSpanMm(val id: String, val startMm: Float, val endMm: Float)
+
+// ── Containment forest (nested cuts) ──
+
+/**
+ * One span's place in the containment forest ([undercutNestingForest]): [parentId] is the
+ * smallest cut strictly containing it (`null` at the top level) and [level] counts the
+ * containments above it — 0 = cut into the shaft's own surface, 1 = cut into a level-0 cut's
+ * floor, and so on.
+ */
+data class UndercutNesting(val id: String, val level: Int, val parentId: String?)
+
+/**
+ * True when [outer] contains [inner] — the inner span inside both outer edges within [epsMm],
+ * and the two not the SAME span (both edges coincident within [epsMm]).
+ *
+ * A shared edge IS containment: the shop machines the original relief and then deepens a
+ * corroded section of it that may run right up to the relief's own shoulder (on-device
+ * intent), and that must print exactly as separately-authored adjacent sections would — one
+ * face running from the surface down to the deeper floor. Two spans that coincide are not
+ * nesting at all but one cut entered twice, so they stay blocked ([undercutOverlapIssue]).
+ */
+fun undercutSpanContains(
+    outer: UndercutSpanMm,
+    inner: UndercutSpanMm,
+    epsMm: Float = UNDERCUT_SPAN_EPS_MM,
+): Boolean {
+    val within = inner.startMm >= outer.startMm - epsMm && inner.endMm <= outer.endMm + epsMm
+    val sameSpan = abs(inner.startMm - outer.startMm) <= epsMm &&
+        abs(inner.endMm - outer.endMm) <= epsMm
+    return within && !sameSpan
+}
+
+/**
+ * The containment forest over [spans], in input order: each span's nesting level and the id of
+ * the smallest span strictly containing it. A machinist cuts a wide relief section and then a
+ * smaller, deeper undercut inside it; the forest is what lets the drawn floors stack
+ * ([nestedNotchFloorDiaMm]), the notch build cut a child against its parent's floor, and the
+ * rail give each level its own chain row.
+ *
+ * PARTIAL overlaps are TOLERATED, not repaired: neither span contains the other, so both stay
+ * at the level their own containment gives them and they render exactly as they always have.
+ * Only new entry is gated ([undercutOverlapIssue]) — stored data is never retroactively
+ * rejected, so an older record keeps drawing.
+ *
+ * Ties break to the FIRST in input order (two equal-width spans both containing one cut, which
+ * spans sharing edges can produce), so the forest is deterministic for a given record order.
+ * Containment stays antisymmetric — mutual containment would mean the same span within epsilon,
+ * which [undercutSpanContains] excludes — so the parent chains are always finite.
+ */
+fun undercutNestingForest(spans: List<UndercutSpanMm>): List<UndercutNesting> {
+    val n = spans.size
+    if (n == 0) return emptyList()
+    fun width(i: Int) = spans[i].endMm - spans[i].startMm
+
+    val parent = IntArray(n) { -1 }
+    for (i in 0 until n) {
+        var best = -1
+        for (j in 0 until n) {
+            if (j == i || !undercutSpanContains(spans[j], spans[i])) continue
+            if (best < 0 || width(j) < width(best)) best = j
+        }
+        parent[i] = best
+    }
+
+    val level = IntArray(n) { -1 }
+    fun levelOf(i: Int, guard: Int): Int {
+        if (level[i] >= 0) return level[i]
+        val p = parent[i]
+        val v = if (p < 0 || guard <= 0) 0 else levelOf(p, guard - 1) + 1
+        level[i] = v
+        return v
+    }
+    return spans.indices.map { i ->
+        UndercutNesting(
+            id = spans[i].id,
+            level = levelOf(i, n),
+            parentId = parent[i].takeIf { it >= 0 }?.let { spans[it].id },
+        )
+    }
+}
 
 /**
  * A zoomed detail window covering one cluster of undercuts, in shaft-space mm.
@@ -310,14 +406,25 @@ fun pickUndercutWindowAt(xMm: Float, windows: List<UndercutWindow>): UndercutWin
 /**
  * Pick the id of the undercut whose span (inflated by [padMm] for an easy touch target)
  * contains [xMm], or `null` when the tap lands on none. A tap inside a span always beats
- * a tap merely within another span's pad; remaining ties break to the nearer span edge —
- * the `pickLinerIdAtMm` convention.
+ * a tap merely within another span's pad.
+ *
+ * Several spans can contain the tap — a nested cut sits entirely inside its parent — and the
+ * **innermost** (narrowest) one wins: the child is the smaller target and the one drawn on
+ * top, so a tap on it must never select the relief around it. Equal widths, and every pad-only
+ * hit, break to the nearer span edge — the `pickLinerIdAtMm` convention.
  */
 fun pickUndercutAt(xMm: Float, spans: List<UndercutSpanMm>, padMm: Float): String? {
     val inside = spans.filter { xMm >= it.startMm && xMm <= it.endMm }
-    val candidates = inside.ifEmpty {
-        spans.filter { xMm >= it.startMm - padMm && xMm <= it.endMm + padMm }
+    if (inside.isNotEmpty()) {
+        if (inside.size == 1) return inside[0].id
+        return inside.minWithOrNull(
+            compareBy(
+                { it.endMm - it.startMm },
+                { min(abs(xMm - it.startMm), abs(xMm - it.endMm)) },
+            ),
+        )?.id
     }
+    val candidates = spans.filter { xMm >= it.startMm - padMm && xMm <= it.endMm + padMm }
     if (candidates.isEmpty()) return null
     if (candidates.size == 1) return candidates[0].id
     return candidates.minByOrNull { s -> min(abs(xMm - s.startMm), abs(xMm - s.endMm)) }?.id
@@ -514,22 +621,36 @@ const val UNDERCUT_MIN_SHARE_OF_EXAGGERATION = 0.25f
 const val UNDERCUT_PLACEHOLDER_MIN_DRAWN_FRAC = 0.04f
 
 /**
- * Depth of the sheet's deepest **measured** cut, in Ø-reduction mm — the normalization
- * reference for [normalizedNotchFloorDiaMm]. Placeholder cuts (Ø 0) and cuts whose Ø
- * meets/exceeds their local surface (warning case, no material removed) contribute
+ * Depth of the sheet's deepest **measured, TOP-LEVEL** cut, in Ø-reduction mm — the
+ * normalization reference for [normalizedNotchFloorDiaMm]. Placeholder cuts (Ø 0) and cuts
+ * whose Ø meets/exceeds their local surface (warning case, no material removed) contribute
  * nothing. One shared implementation so every draw site normalizes identically.
+ *
+ * NESTED cuts are excluded: a child's depth is relative to its parent's floor
+ * ([nestedNotchFloorDiaMm]), so measuring it from the base surface would hand the sheet a
+ * reference no cut is drawn against and squash every top-level cut toward the minimum share.
  */
 fun deepestUndercutDepthMm(
     undercuts: List<Undercut>,
     segs: List<SurfaceSeg>,
     oalMm: Float,
-): Float = undercuts.maxOfOrNull { u ->
-    if (u.diaMm <= 0f) 0f else {
-        val c = clampUndercutSpan(u.startFromAftMm, u.lengthMm, oalMm)
-        if (c.isEmpty) 0f
-        else (minOuterDiaOver(segs, c.startMm, c.endMm) - u.diaMm).coerceAtLeast(0f)
+): Float {
+    val clampedById = undercuts.associate { u ->
+        u.id to clampUndercutSpan(u.startFromAftMm, u.lengthMm, oalMm)
     }
-} ?: 0f
+    val spans = undercuts.mapNotNull { u ->
+        val c = clampedById[u.id] ?: return@mapNotNull null
+        if (c.isEmpty) null else UndercutSpanMm(u.id, c.startMm, c.endMm)
+    }
+    val topLevelIds = undercutNestingForest(spans)
+        .filter { it.level == 0 }
+        .mapTo(HashSet()) { it.id }
+    return undercuts.maxOfOrNull { u ->
+        val c = clampedById[u.id]
+        if (u.diaMm <= 0f || c == null || c.isEmpty || u.id !in topLevelIds) 0f
+        else (minOuterDiaOver(segs, c.startMm, c.endMm) - u.diaMm).coerceAtLeast(0f)
+    } ?: 0f
+}
 
 /**
  * Display-only drawn floor Ø for one cut, normalized to the sheet's deepest cut:
@@ -571,4 +692,56 @@ fun normalizedNotchFloorDiaMm(
         max(trueDepth, minSurfaceDiaMm * ex * share)
     }
     return minSurfaceDiaMm - drawnDepth
+}
+
+/**
+ * Deepest a NESTED cut's drawn floor may sit below its parent's DRAWN floor, as a share of
+ * that floor's Ø — so a staircase always keeps a visible core inside the innermost step. The
+ * true relative depth overrides it (truth beats prettiness); nothing else does.
+ */
+const val UNDERCUT_NESTED_MAX_DEPTH_FRAC = 0.75f
+
+/**
+ * Display-only drawn floor Ø for a cut machined INSIDE another cut: the child's exaggerated
+ * depth is computed **relative to its parent's floor** ([normalizedNotchFloorDiaMm] with the
+ * parent's TRUE floor standing in as the local surface, against the sheet's top-level
+ * normalization pool) and then subtracted from the parent's DRAWN floor. Recursive by
+ * construction — at level ≥ 2 the "parent" values are the level-above results.
+ *
+ * Two invariants this construction guarantees:
+ * - **The stair is always visible.** A child that is truly deeper than its parent draws a
+ *   strictly smaller floor Ø than the parent's, at every slider value: the relative depth is
+ *   measured against the parent floor, so [UNDERCUT_MIN_SHARE_OF_EXAGGERATION] can no longer
+ *   flatten a shallow-from-the-base pair into one step.
+ * - **Never shallower than true.** `childDrawn = parentDrawn − relDrawn ≤ parentTrue − relTrue
+ *   = childTrue`, since the parent's drawn floor is never above its true floor and the
+ *   relative drawn depth is never below the relative true depth.
+ *
+ * [childDiaMm] is the stored Ø, `0` for a placed-but-unmeasured cut (which takes the symbolic
+ * [UNDERCUT_PLACEHOLDER_DEPTH_FRAC] fraction of the PARENT's floor, [effectiveNotchDiaMm]'s
+ * rule applied one level in). The drawn depth is capped at [UNDERCUT_NESTED_MAX_DEPTH_FRAC] of
+ * the parent's drawn floor unless the true relative depth demands deeper, and the result is
+ * floored above zero so a step always has a floor line to draw. Stored/printed Ø values are
+ * untouched — golden rule.
+ */
+fun nestedNotchFloorDiaMm(
+    childDiaMm: Float,
+    parentTrueFloorDiaMm: Float,
+    parentDrawnFloorDiaMm: Float,
+    deepestDepthMm: Float,
+    exaggerationFrac: Float,
+): Float {
+    if (parentTrueFloorDiaMm <= 0f || parentDrawnFloorDiaMm <= 0f) return childDiaMm
+    val relDrawnDepth = parentTrueFloorDiaMm - normalizedNotchFloorDiaMm(
+        diaMm = childDiaMm,
+        minSurfaceDiaMm = parentTrueFloorDiaMm,
+        deepestDepthMm = deepestDepthMm,
+        exaggerationFrac = exaggerationFrac,
+    )
+    val trueRelDepth =
+        (parentTrueFloorDiaMm - effectiveNotchDiaMm(childDiaMm, parentTrueFloorDiaMm))
+            .coerceAtLeast(0f)
+    val cap = max(parentDrawnFloorDiaMm * UNDERCUT_NESTED_MAX_DEPTH_FRAC, trueRelDepth)
+    val drawnDepth = min(relDrawnDepth.coerceAtLeast(0f), cap)
+    return (parentDrawnFloorDiaMm - drawnDepth).coerceAtLeast(UNDERCUT_SPAN_EPS_MM)
 }

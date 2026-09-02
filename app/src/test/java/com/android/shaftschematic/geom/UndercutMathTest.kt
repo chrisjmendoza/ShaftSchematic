@@ -217,12 +217,126 @@ class UndercutMathTest {
     @Test
     fun `overlap check blocks intrusion into an adjacent cut and allows touching edges`() {
         val others = listOf(UndercutSpanMm("other", 200f, 260f))
+        // Partial intrusion from either side — the containment cases are legal and live in
+        // their own tests below.
         assertNotNull(undercutOverlapIssue(canonicalStartMm = 250f, lengthMm = 40f, otherSpans = others))
-        assertNotNull(undercutOverlapIssue(canonicalStartMm = 180f, lengthMm = 100f, otherSpans = others))
+        assertNotNull(undercutOverlapIssue(canonicalStartMm = 180f, lengthMm = 50f, otherSpans = others))
         // Edge-to-edge is legal, as is clear separation and an empty sheet.
         assertNull(undercutOverlapIssue(canonicalStartMm = 260f, lengthMm = 40f, otherSpans = others))
         assertNull(undercutOverlapIssue(canonicalStartMm = 100f, lengthMm = 100f, otherSpans = others))
         assertNull(undercutOverlapIssue(canonicalStartMm = 250f, lengthMm = 40f, otherSpans = emptyList()))
+    }
+
+    @Test
+    fun `containment is legal in both directions and partial overlap stays blocked`() {
+        val others = listOf(UndercutSpanMm("other", 200f, 300f))
+        // A cut machined INSIDE the other one, and one machined AROUND it — both legal.
+        assertNull(undercutOverlapIssue(canonicalStartMm = 220f, lengthMm = 40f, otherSpans = others))
+        assertNull(undercutOverlapIssue(canonicalStartMm = 150f, lengthMm = 200f, otherSpans = others))
+        // Partial intrusion from either side is still one physical cut, double-dimensioned.
+        assertNotNull(undercutOverlapIssue(canonicalStartMm = 250f, lengthMm = 100f, otherSpans = others))
+        assertNotNull(undercutOverlapIssue(canonicalStartMm = 150f, lengthMm = 100f, otherSpans = others))
+    }
+
+    @Test
+    fun `a nested cut may run up to its parent's own shoulder`() {
+        val others = listOf(UndercutSpanMm("other", 200f, 300f))
+        // Flush with the surrounding cut's AFT shoulder, then its FWD one: the shop deepens a
+        // corroded section that reaches the original relief's boundary.
+        assertNull(undercutOverlapIssue(canonicalStartMm = 200f, lengthMm = 40f, otherSpans = others))
+        assertNull(undercutOverlapIssue(canonicalStartMm = 260f, lengthMm = 40f, otherSpans = others))
+        // The same the other way round: a new relief machined around an existing cut, flush at
+        // one end.
+        assertNull(undercutOverlapIssue(canonicalStartMm = 200f, lengthMm = 200f, otherSpans = others))
+    }
+
+    @Test
+    fun `an identical span is blocked and touching edge-to-edge stays legal`() {
+        val others = listOf(UndercutSpanMm("other", 200f, 300f))
+        // Two coincident spans are one cut entered twice, not a cut inside a cut.
+        assertNotNull(undercutOverlapIssue(canonicalStartMm = 200f, lengthMm = 100f, otherSpans = others))
+        assertNull(undercutOverlapIssue(canonicalStartMm = 300f, lengthMm = 40f, otherSpans = others))
+        assertNull(undercutOverlapIssue(canonicalStartMm = 160f, lengthMm = 40f, otherSpans = others))
+    }
+
+    // ── Containment forest ──
+
+    @Test
+    fun `forest levels a nested pair and names its parent`() {
+        val spans = listOf(
+            UndercutSpanMm("child", 250f, 280f),
+            UndercutSpanMm("parent", 200f, 400f),
+            UndercutSpanMm("far", 600f, 650f),
+        )
+        val forest = undercutNestingForest(spans).associateBy { it.id }
+        assertEquals(0, forest.getValue("parent").level)
+        assertNull(forest.getValue("parent").parentId)
+        assertEquals(1, forest.getValue("child").level)
+        assertEquals("parent", forest.getValue("child").parentId)
+        assertEquals(0, forest.getValue("far").level)
+        assertNull(forest.getValue("far").parentId)
+    }
+
+    @Test
+    fun `forest takes the SMALLEST containing span and reaches level 2`() {
+        val spans = listOf(
+            UndercutSpanMm("outer", 0f, 1000f),
+            UndercutSpanMm("mid", 100f, 500f),
+            UndercutSpanMm("inner", 200f, 300f),
+        )
+        val forest = undercutNestingForest(spans).associateBy { it.id }
+        assertEquals("mid", forest.getValue("inner").parentId)
+        assertEquals(2, forest.getValue("inner").level)
+        assertEquals("outer", forest.getValue("mid").parentId)
+        assertEquals(1, forest.getValue("mid").level)
+        assertEquals(0, forest.getValue("outer").level)
+    }
+
+    @Test
+    fun `forest tolerates a partial overlap as two siblings`() {
+        // Stored data from before the containment gate: neither span contains the other, so both
+        // stay top-level and render exactly as they always did.
+        val forest = undercutNestingForest(
+            listOf(UndercutSpanMm("a", 100f, 300f), UndercutSpanMm("b", 200f, 400f)),
+        )
+        assertTrue(forest.all { it.level == 0 && it.parentId == null })
+    }
+
+    @Test
+    fun `a cut flush with its parent's shoulder still nests`() {
+        val forest = undercutNestingForest(
+            listOf(
+                UndercutSpanMm("p", 100f, 300f),
+                UndercutSpanMm("aftFlush", 100f, 160f),
+                UndercutSpanMm("fwdFlush", 240f, 300f),
+            ),
+        ).associateBy { it.id }
+        assertEquals("p", forest.getValue("aftFlush").parentId)
+        assertEquals(1, forest.getValue("aftFlush").level)
+        assertEquals("p", forest.getValue("fwdFlush").parentId)
+        assertEquals(0, forest.getValue("p").level)
+    }
+
+    @Test
+    fun `coincident spans are siblings, never each other's parent`() {
+        val forest = undercutNestingForest(
+            listOf(UndercutSpanMm("a", 100f, 200f), UndercutSpanMm("b", 100f, 200f)),
+        )
+        assertTrue(forest.all { it.level == 0 && it.parentId == null })
+    }
+
+    @Test
+    fun `equal-width candidate parents break the tie to the first in input order`() {
+        // Spans sharing edges can leave two equally small containers; the choice must be
+        // deterministic for a given record order rather than map-iteration luck.
+        val forest = undercutNestingForest(
+            listOf(
+                UndercutSpanMm("first", 100f, 300f),
+                UndercutSpanMm("second", 100f, 300f),
+                UndercutSpanMm("child", 120f, 200f),
+            ),
+        ).associateBy { it.id }
+        assertEquals("first", forest.getValue("child").parentId)
     }
 
     @Test
@@ -333,6 +447,18 @@ class UndercutMathTest {
             UndercutSpanMm("padded", 205f, 300f),
         )
         assertEquals("inside", pickUndercutAt(199f, spans, padPx(10f)))
+    }
+
+    @Test
+    fun `undercut pick takes the innermost span when cuts are nested`() {
+        val spans = listOf(
+            UndercutSpanMm("parent", 100f, 400f),
+            UndercutSpanMm("child", 200f, 260f),
+        )
+        // Inside the child: the smaller, on-top target wins over the relief around it.
+        assertEquals("child", pickUndercutAt(230f, spans, padPx(10f)))
+        // Inside the parent only.
+        assertEquals("parent", pickUndercutAt(150f, spans, padPx(10f)))
     }
 
     @Test
@@ -580,6 +706,98 @@ class UndercutMathTest {
         assertEquals(114.3f, normalizedNotchFloorDiaMm(120f, 114.3f, 10f, 0.25f), 1e-4f)
         // An empty sheet has no reference depth at all.
         assertEquals(0f, deepestUndercutDepthMm(emptyList(), stockSegs(114.3f), EX_OAL_MM), 1e-4f)
+    }
+
+    // ── Nested cuts: the drawn floors stack ──
+
+    @Test
+    fun `the deepest-cut reference ignores nested children`() {
+        // A child's depth is relative to its parent's floor, so measuring it from the base
+        // surface would hand the sheet a reference no cut is drawn against — and squash every
+        // top-level cut toward the minimum share.
+        val surface = 200f
+        val parent = Undercut(id = "p", startFromAftMm = 200f, lengthMm = 200f, diaMm = 190f)
+        val child = Undercut(id = "c", startFromAftMm = 250f, lengthMm = 60f, diaMm = 100f)
+        assertEquals(
+            10f,
+            deepestUndercutDepthMm(listOf(parent, child), stockSegs(surface), EX_OAL_MM),
+            1e-3f,
+        )
+    }
+
+    @Test
+    fun `a nested cut always draws a visible step below its parent floor`() {
+        // The collapse case: both cuts are shallow from the BASE surface, so the min-share clamp
+        // would give them the same drawn depth and flatten the stair. Measuring the child against
+        // the parent's floor keeps the step at every slider value, true scale included.
+        val surface = 200f
+        val parentDia = 199f
+        val childDia = 198.5f
+        val deepest = 1f
+        listOf(0f, 0.05f, UNDERCUT_EXAGGERATION_MAX_FRAC).forEach { ex ->
+            val parentDrawn = normalizedNotchFloorDiaMm(parentDia, surface, deepest, ex)
+            val childDrawn = nestedNotchFloorDiaMm(childDia, parentDia, parentDrawn, deepest, ex)
+            assertTrue("ex=$ex must keep a visible step", childDrawn < parentDrawn - 1e-4f)
+            assertTrue("ex=$ex must never draw shallower than true", childDrawn <= childDia + 1e-3f)
+        }
+    }
+
+    @Test
+    fun `the nested depth cap bites only when the parent floor is already deep`() {
+        // Parent drawn at Ø 20 (heavily exaggerated) out of a true floor of 100: the child's
+        // exaggerated relative depth of 25 would punch through it, so the cap holds it to 75% of
+        // the parent's DRAWN floor.
+        assertEquals(
+            5f,
+            nestedNotchFloorDiaMm(
+                childDiaMm = 99f, parentTrueFloorDiaMm = 100f, parentDrawnFloorDiaMm = 20f,
+                deepestDepthMm = 1f, exaggerationFrac = 0.25f,
+            ),
+            1e-3f,
+        )
+    }
+
+    @Test
+    fun `a truly deeper nested cut overrides the depth cap`() {
+        // True relative depth 18 > the cap's 15: truth beats prettiness, and the child draws at
+        // exactly its true relative depth rather than the capped 5.
+        assertEquals(
+            2f,
+            nestedNotchFloorDiaMm(
+                childDiaMm = 82f, parentTrueFloorDiaMm = 100f, parentDrawnFloorDiaMm = 20f,
+                deepestDepthMm = 25f, exaggerationFrac = 0.25f,
+            ),
+            1e-3f,
+        )
+    }
+
+    @Test
+    fun `nesting stacks recursively at level 2`() {
+        val surface = 200f
+        val ex = UNDERCUT_EXAGGERATION_MAX_FRAC
+        val deepest = 10f
+        val l0Dia = 190f
+        val l1Dia = 186f
+        val l2Dia = 183f
+        val l0 = normalizedNotchFloorDiaMm(l0Dia, surface, deepest, ex)
+        val l1 = nestedNotchFloorDiaMm(l1Dia, l0Dia, l0, deepest, ex)
+        val l2 = nestedNotchFloorDiaMm(l2Dia, l1Dia, l1, deepest, ex)
+        assertTrue("level 1 must step below level 0", l1 < l0 - 1e-4f)
+        assertTrue("level 2 must step below level 1", l2 < l1 - 1e-4f)
+        assertTrue("every step stays on the shaft", l2 > 0f)
+        assertTrue("never shallower than true", l2 <= l2Dia + 1e-3f)
+    }
+
+    @Test
+    fun `a placeholder child still draws a step inside its parent`() {
+        // Ø 0 — placed but not measured: the symbolic floor is taken off the PARENT's floor, so
+        // the cut is visible and tappable inside the relief rather than at the shaft surface.
+        val drawn = nestedNotchFloorDiaMm(
+            childDiaMm = 0f, parentTrueFloorDiaMm = 100f, parentDrawnFloorDiaMm = 100f,
+            deepestDepthMm = 1f, exaggerationFrac = 0.25f,
+        )
+        assertTrue(drawn < 100f - 1e-4f)
+        assertTrue(drawn > 0f)
     }
 
     // ── Placeholder Ø ──

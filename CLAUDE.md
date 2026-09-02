@@ -341,7 +341,30 @@ and `UndercutPdfComposer` (PDF) — from the shared pure pipeline `geom/SurfaceP
 + `geom/UndercutOverlayMath.kt` (reference resolution, `buildUndercutNotches`, S.E.T.
 positions) with `ui/resolved/SurfaceSegs.kt` as the single resolved→surface mapping; the two
 canvas sites additionally share `ui/screen/UndercutSharedDraw.kt`, which holds what `geom/`
-cannot — the `DrawScope` notch pass and the resolved→liner-span mapping. See
+cannot — the `DrawScope` notch pass and the resolved→liner-span mapping.
+**Nested cuts are legal** — a wide relief with a smaller, deeper cut inside it (the shop
+deepens a corroded section of the original) — and are the reason `buildUndercutNotches` is the
+ONE builder behind both draw sites (the PDF composer consumes it; neither draw site carries
+nesting logic). Containment is **eps-INCLUSIVE** (`undercutSpanContains`: the child inside both
+parent edges within eps, and not the SAME span): a child may run right up to the parent's own
+shoulder, and that **shared edge must print as ONE continuous face** from the surface down to
+the child's floor — the silhouette two separately-authored adjacent sections would give
+(`nestedSurfacePoints` gives the child a zero-width step point at the outer surface there, so
+its own face redraws the sliver its void erased off the parent's; do not "fix" this in a draw
+site). `undercutNestingForest` parents each span to the smallest span containing it (ties to the
+first in record order), and `undercutOverlapIssue` blocks only a PARTIAL overlap or a DUPLICATE
+span at confirm (stored partial overlaps are tolerated as siblings and keep rendering; nothing
+is retroactively rejected). A child is cut
+against its **parent's floor**, not the shaft surface: true floor via `effectiveNotchDiaMm` on
+that floor, drawn floor via `nestedNotchFloorDiaMm` — the exaggerated depth is RELATIVE to the
+parent's true floor and stacks below the parent's DRAWN floor, so the stair is visible at every
+slider value and never shallower than true (cap `UNDERCUT_NESTED_MAX_DEPTH_FRAC`, overridden by
+true depth). `deepestUndercutDepthMm` pools **top-level cuts only** — a child's depth is
+relative and would squash the sheet. Notches return parents-before-children so the child paints
+on top. On the rail, the level-0 chain takes **top-level spans only** (the forward cursor in
+`buildUndercutRailSpans` absorbs a nested cut to zero width — that absorb rule stays for legacy
+data), and each level ≥ 1 gets ONE extra chain row anchored at its **parent's edges**
+(`buildNestedUndercutRailRows`), reserved through the same `undercutRailRowHeightPt` metric. See
 `docs/archive/UndercutDrawing_PLAN.md`.
 
 ### Paper sheets are theme-independent
