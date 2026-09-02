@@ -400,7 +400,7 @@ fun ShaftScreen(
 
                     Box(
                         modifier = Modifier
-                            .testTag("toolbar_export_pdf_container")
+                            .testTag("toolbar_pdf_preview_container")
                             .then(
                                 if (!exportPdfEnabled) {
                                     Modifier.pointerInput(Unit) {
@@ -415,12 +415,14 @@ fun ShaftScreen(
                                 }
                             )
                     ) {
+                        // Opens the PDF preview, where Print and Export both live; it is not
+                        // itself an export action.
                         IconButton(
                             onClick = onExportPdf,
                             enabled = exportPdfEnabled,
-                            modifier = Modifier.testTag("toolbar_export_pdf")
+                            modifier = Modifier.testTag("toolbar_pdf_preview")
                         ) {
-                            Icon(Icons.Outlined.PictureAsPdf, contentDescription = "Export PDF")
+                            Icon(Icons.Outlined.PictureAsPdf, contentDescription = "PDF preview")
                         }
                     }
 

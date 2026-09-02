@@ -644,14 +644,30 @@ Threads carry no shade flag — they hatch.
 **Direct print** (`util/PdfPrint.kt`, `printShaftPdfPage`) wraps the same composers in a
 `PrintDocumentAdapter` (US Letter landscape, 1 page) and hands them to the Android print
 framework. A print and an export of the same document are composed by the same call and are
-therefore identical. Every PDF preview surface now offers it from **two** places that share
-one action: the tab-body Print button, and a compact Print icon in `PdfPreviewOverlay`'s top
-bar (`onPrint`, left of Export — an icon rather than a labelled button, since the bar is
-already tight in portrait with Close/title/Tune/Export). Each route factors its print action
+therefore identical. Every PDF preview surface offers it from **two** places that share
+one action: the tab-body Print button, and the Print action in `PdfPreviewOverlay`'s top
+bar (`onPrint`, left of Export). Each route factors its print action
 into one local function — `printClassicRunout` (RunoutRoute), `printWearDocument`
 (WearRoute), `printUndercutDrawing` (UndercutRoute), `printConsolidated` (OutputRoute) — used
-by both call sites, so they cannot drift; the schematic preview's top bar already had its own
-Print button and is unaffected.
+by both call sites, so they cannot drift; the schematic preview's top bar has its own
+Print action built the same way.
+
+**Print is the primary action** (DESIGN_INTENT §3.4): the shop works from paper and prints
+straight from the device, so a PDF file is the backup/archive copy rather than the daily
+route. Wherever both appear, Print leads and takes the primary treatment:
+
+- **Tab bodies** (Runout, Wear, Undercut, Consolidated Output) render one shared trio,
+  `ui/screen/DocumentActionButtons.kt` — top to bottom a filled **Print &lt;doc&gt;**, an outlined
+  **Preview &lt;doc&gt;**, an outlined **Export &lt;doc&gt; PDF**, all full width and all gated by the
+  route's export gate (whose disabled MESSAGE stays with the route, which words its own).
+  Test tags `doc_action_print` / `doc_action_preview` / `doc_action_export`.
+- **Preview chrome** — `PdfPreviewOverlay` and the schematic's `PdfPreviewScreen` both carry a
+  labelled `FilledTonalButton` **Print** followed by an Export **icon** (`PictureAsPdf`,
+  "Export PDF"). Action order is unchanged: Tune, [Reset zoom,] Print, Export.
+- **Export all** on the Output tab stays export-only and keeps its own treatment: the Android
+  print framework runs one interactive job at a time, so a batch-print variant is not planned.
+- The Schematic tab's toolbar `PictureAsPdf` icon opens the PDF **preview** (where both
+  actions live) and is labelled accordingly — "PDF preview", tag `toolbar_pdf_preview`.
 
 ---
 

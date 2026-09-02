@@ -28,12 +28,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material.icons.outlined.PictureAsPdf
-import androidx.compose.material.icons.outlined.Preview
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -41,7 +38,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -790,38 +786,14 @@ fun RunoutRoute(
                 )
             }
 
-            // ── Preview button ────────────────────────────────────────────────
-            OutlinedButton(
-                onClick = { showPreview = true },
+            // ── Print / Preview / Export ──────────────────────────────────────
+            DocumentActionButtons(
+                documentName = "Runout Sheet",
+                onPrint = { printClassicRunout() },
+                onPreview = { showPreview = true },
+                onExport = { launcher.launch(outputFilename) },
                 enabled = gate.enabled,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Icon(Icons.Outlined.Preview, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Preview Runout Sheet")
-            }
-
-            // ── Print button ──────────────────────────────────────────────────
-            OutlinedButton(
-                onClick = { printClassicRunout() },
-                enabled = gate.enabled,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Icon(Icons.Filled.Print, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Print Runout Sheet")
-            }
-
-            // ── Export button ─────────────────────────────────────────────────
-            Button(
-                onClick = { launcher.launch(outputFilename) },
-                enabled = gate.enabled,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Icon(Icons.Outlined.PictureAsPdf, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Export Runout Sheet PDF")
-            }
+            )
 
             Spacer(Modifier.height(4.dp))
             HorizontalDivider()

@@ -25,17 +25,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Save
-import androidx.compose.material.icons.outlined.PictureAsPdf
-import androidx.compose.material.icons.outlined.Preview
-import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -493,36 +488,14 @@ fun WearRoute(
                 )
             }
 
-            OutlinedButton(
-                onClick = { showPreview = true },
+            // ── Print / Preview / Export ──────────────────────────────────────
+            DocumentActionButtons(
+                documentName = "Wear Document",
+                onPrint = { printWearDocument() },
+                onPreview = { showPreview = true },
+                onExport = { launcher.launch(buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.WEAR, blankDraft)) },
                 enabled = gate.enabled,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Icon(Icons.Outlined.Preview, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Preview Wear Document")
-            }
-
-            // ── Print button ──────────────────────────────────────────────────
-            OutlinedButton(
-                onClick = { printWearDocument() },
-                enabled = gate.enabled,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Icon(Icons.Filled.Print, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Print Wear Document")
-            }
-
-            Button(
-                onClick = { launcher.launch(buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.WEAR, blankDraft)) },
-                enabled = gate.enabled,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Icon(Icons.Outlined.PictureAsPdf, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Export Wear Document PDF")
-            }
+            )
 
             HorizontalDivider()
 

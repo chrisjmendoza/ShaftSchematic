@@ -134,19 +134,20 @@ internal fun openRunoutPdf(context: Context, uri: Uri) {
  *
  * Displayed while [loading] is true shows a spinner. Once the [bitmap] is ready
  * it fills the overlay with pinch-to-zoom support via a standard Image composable.
- * The "Export" button in the top bar lets the user proceed to the SAF file picker
- * after verifying the layout looks correct.
+ * The top bar's actions let the user print — the primary path — or proceed to the SAF file
+ * picker after verifying the layout looks correct.
  *
  * @param bitmap        The rendered PDF page (null while rendering or on error).
  * @param loading       Whether the bitmap is still being generated.
  * @param title         Title shown in the top bar of the overlay.
  * @param onClose       Called when the user taps × or navigates back.
- * @param onExport      Called when the user taps the Export button.
+ * @param onExport      Called when the user taps the Export icon. A compact icon: paper is
+ *                      the daily output and a PDF file is the backup copy, so Export takes
+ *                      the secondary treatment here as it does on the tab bodies.
  * @param onPrint       Sends THIS document to the platform print dialog. Each route passes
  *                      the same snapshot-and-compose action its tab-body Print button runs,
  *                      from one local function, so the two entry points cannot drift. Null
- *                      hides the icon. A compact icon rather than a labelled button: the bar
- *                      already carries Close, the title, Tune and Export in portrait.
+ *                      hides the action. Labelled and filled — the primary output action.
  * @param optionsSheet  Optional composable content shown in a bottom sheet when the user
  *                      taps the Tune icon. When null, no Tune icon is shown.
  * @param sheetTunesPage Whether [optionsSheet] reshapes THIS page live. When true the open
@@ -251,15 +252,15 @@ internal fun PdfPreviewOverlay(
                     }
                 }
                 if (onPrint != null) {
-                    IconButton(onClick = onPrint) {
-                        Icon(Icons.Filled.Print, contentDescription = "Print",
-                            tint = MaterialTheme.colorScheme.onSurface)
+                    FilledTonalButton(onClick = onPrint) {
+                        Icon(Icons.Filled.Print, contentDescription = null)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Print")
                     }
                 }
-                FilledTonalButton(onClick = onExport, modifier = Modifier.padding(end = 8.dp)) {
-                    Icon(Icons.Outlined.PictureAsPdf, contentDescription = null)
-                    Spacer(Modifier.width(6.dp))
-                    Text("Export")
+                IconButton(onClick = onExport, modifier = Modifier.padding(end = 4.dp)) {
+                    Icon(Icons.Outlined.PictureAsPdf, contentDescription = "Export PDF",
+                        tint = MaterialTheme.colorScheme.onSurface)
                 }
             }
 

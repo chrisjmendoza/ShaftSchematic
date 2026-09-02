@@ -40,6 +40,7 @@ import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -376,7 +377,9 @@ fun PdfPreviewScreen(
                             contentDescription = "Reset zoom"
                         )
                     }
-                    IconButton(onClick = {
+                    // Print leads Export in weight: paper is the daily output, a PDF file
+                    // the backup copy. Same treatment as the document tabs' preview overlay.
+                    FilledTonalButton(onClick = {
                         val baseName = DocumentNaming.suggestedBaseName(
                             jobNumber = jobNumber,
                             customer = customer,
@@ -414,10 +417,9 @@ fun PdfPreviewScreen(
                             )
                         }
                     }) {
-                        Icon(
-                            imageVector = Icons.Filled.Print,
-                            contentDescription = "Print"
-                        )
+                        Icon(imageVector = Icons.Filled.Print, contentDescription = null)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Print")
                     }
                     IconButton(onClick = onExport) {
                         Icon(

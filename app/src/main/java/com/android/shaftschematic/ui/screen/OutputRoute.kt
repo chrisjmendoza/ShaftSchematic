@@ -24,10 +24,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.outlined.PictureAsPdf
-import androidx.compose.material.icons.outlined.Preview
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -607,7 +605,7 @@ fun OutputRoute(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
-            // ── Blank draft + Preview / Print / Export — right under the election ──
+            // ── Blank draft + Print / Preview / Export — right under the election ──
             // The output actions are the tab's first go-to (on-device report: "everything
             // else is tweaking the output"), so the group sits directly under the content
             // election it acts on; the sliders, station rows and worn sections follow.
@@ -633,35 +631,13 @@ fun OutputRoute(
                 )
             }
 
-            OutlinedButton(
-                onClick = { showPreview = true },
+            DocumentActionButtons(
+                documentName = "Consolidated Sheet",
+                onPrint = { printConsolidated() },
+                onPreview = { showPreview = true },
+                onExport = { launcher.launch(outputFilename) },
                 enabled = gate.enabled,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Icon(Icons.Outlined.Preview, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Preview Consolidated Sheet")
-            }
-
-            OutlinedButton(
-                onClick = { printConsolidated() },
-                enabled = gate.enabled,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Icon(Icons.Filled.Print, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Print Consolidated Sheet")
-            }
-
-            Button(
-                onClick = { launcher.launch(outputFilename) },
-                enabled = gate.enabled,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Icon(Icons.Outlined.PictureAsPdf, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Export Consolidated Sheet PDF")
-            }
+            )
 
             HorizontalDivider()
 

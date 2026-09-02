@@ -373,6 +373,13 @@ rather than duplicated here. Summary of the boundaries, which follow the same ru
 - The Wear tab is the **authoring surface** for wear data; the single flag
   `WEAR_TAB_ENABLED` (`ui/screen/EditorTab.kt`, currently `true`) hides the tab in one line
   when a future full consolidation retires it, without touching the wear code paths.
+- **Output actions** — every document tab (these two, Undercut, and Consolidated Output)
+  renders the ONE shared trio `ui/screen/DocumentActionButtons.kt`: a filled
+  **Print &lt;doc&gt;** leading, then outlined **Preview &lt;doc&gt;** and **Export &lt;doc&gt; PDF**.
+  Print is the primary output action (DESIGN_INTENT §3.4) — the shop prints from the
+  device and a PDF file is the backup copy. All three share the route's export gate; the
+  gate's disabled message stays with the route. The preview chrome mirrors the weighting:
+  a labelled Print button with an Export icon beside it. See `docs/PDF_EXPORT.md` §5.5.
 
 ---
 
