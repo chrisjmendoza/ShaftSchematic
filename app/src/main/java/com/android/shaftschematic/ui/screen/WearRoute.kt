@@ -97,6 +97,7 @@ import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.InkBand
 import com.android.shaftschematic.util.buildOpenPdfIntent
 import com.android.shaftschematic.util.inkBand
+import com.android.shaftschematic.util.launchPicker
 import com.android.shaftschematic.util.printShaftPdfPage
 import com.android.shaftschematic.util.renderPdfPageBitmap
 import com.android.shaftschematic.util.writeShaftPdfToUri
@@ -493,7 +494,12 @@ fun WearRoute(
                 documentName = "Wear Document",
                 onPrint = { printWearDocument() },
                 onPreview = { showPreview = true },
-                onExport = { launcher.launch(buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.WEAR, blankDraft)) },
+                onExport = {
+                    launcher.launchPicker(
+                        buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.WEAR, blankDraft),
+                        what = "wear export",
+                    )
+                },
                 enabled = gate.enabled,
             )
 
@@ -562,7 +568,10 @@ fun WearRoute(
             onClose = { showPreview = false },
             onExport = {
                 showPreview = false
-                launcher.launch(buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.WEAR, blankDraft))
+                launcher.launchPicker(
+                    buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.WEAR, blankDraft),
+                    what = "wear export",
+                )
             },
             // The tab body's Print action, unchanged — one function behind both.
             onPrint = { printWearDocument() },

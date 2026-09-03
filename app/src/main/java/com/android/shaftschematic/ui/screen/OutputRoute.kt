@@ -92,6 +92,7 @@ import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.FractionStyle
 import com.android.shaftschematic.util.InkBand
+import com.android.shaftschematic.util.launchPicker
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.createPdfInTree
 import com.android.shaftschematic.util.inkBand
@@ -635,7 +636,7 @@ fun OutputRoute(
                 documentName = "Consolidated Sheet",
                 onPrint = { printConsolidated() },
                 onPreview = { showPreview = true },
-                onExport = { launcher.launch(outputFilename) },
+                onExport = { launcher.launchPicker(outputFilename, what = "output export") },
                 enabled = gate.enabled,
             )
 
@@ -773,7 +774,7 @@ fun OutputRoute(
             }
 
             Button(
-                onClick = { batchResult = null; batchLauncher.launch(null) },
+                onClick = { batchResult = null; batchLauncher.launchPicker(null, what = "export-all folder") },
                 enabled = gate.enabled && batchChecked.any { it },
                 modifier = Modifier.fillMaxWidth(),
             ) {
@@ -828,7 +829,7 @@ fun OutputRoute(
             onClose = { showPreview = false },
             onExport = {
                 showPreview = false
-                launcher.launch(outputFilename)
+                launcher.launchPicker(outputFilename, what = "output export")
             },
             // The tab body's Print action, unchanged — one function behind both.
             onPrint = { printConsolidated() },

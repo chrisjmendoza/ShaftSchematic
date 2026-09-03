@@ -28,6 +28,7 @@ import com.android.shaftschematic.ui.viewmodel.unlockAchievement
 import com.android.shaftschematic.util.Achievements
 import com.android.shaftschematic.util.DocumentNaming
 import com.android.shaftschematic.util.buildOpenPdfIntent
+import com.android.shaftschematic.util.launchPicker
 import com.android.shaftschematic.util.PDF_PAGE_HEIGHT_PT
 import com.android.shaftschematic.util.PDF_PAGE_WIDTH_PT
 import com.android.shaftschematic.util.VerboseLog
@@ -139,14 +140,15 @@ fun PdfExportRoute(
             if (error != null) {
                 blockingErrorMessage = error
             } else {
-                launcher.launch(
+                launcher.launchPicker(
                     defaultFilename(
                         jobNumber = jobNumber,
                         customer = customer,
                         vessel = vessel,
                         shaftPosition = shaftPosition,
                         blankDraft = pdfBlankDraft
-                    )
+                    ),
+                    what = "schematic export",
                 )
             }
         }

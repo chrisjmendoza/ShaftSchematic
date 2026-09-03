@@ -109,6 +109,7 @@ import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.FractionStyle
 import com.android.shaftschematic.util.InkBand
+import com.android.shaftschematic.util.launchPicker
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.inkBand
 import com.android.shaftschematic.ui.util.exportPdfGate
@@ -791,7 +792,7 @@ fun RunoutRoute(
                 documentName = "Runout Sheet",
                 onPrint = { printClassicRunout() },
                 onPreview = { showPreview = true },
-                onExport = { launcher.launch(outputFilename) },
+                onExport = { launcher.launchPicker(outputFilename, what = "runout export") },
                 enabled = gate.enabled,
             )
 
@@ -837,7 +838,7 @@ fun RunoutRoute(
             onClose = { showPreview = false },
             onExport = {
                 showPreview = false
-                launcher.launch(outputFilename)
+                launcher.launchPicker(outputFilename, what = "runout export")
             },
             // The tab body's Print action, unchanged — one function behind both.
             onPrint = { printClassicRunout() },

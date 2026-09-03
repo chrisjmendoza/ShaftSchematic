@@ -22,6 +22,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import com.android.shaftschematic.data.SettingsStore
 import com.android.shaftschematic.io.BackupMirror
+import com.android.shaftschematic.util.launchPicker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -113,7 +114,7 @@ internal fun BackupMirrorSection(modifier: Modifier = Modifier) {
         modifier = modifier
             .fillMaxWidth()
             .testTag("backup_mirror_row")
-            .clickable { picker.launch(null) },
+            .clickable { picker.launchPicker(null, what = "mirror folder") },
     )
 
     // The catch-up. Only reachable once a folder is picked — there is nothing to catch up to

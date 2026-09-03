@@ -101,6 +101,7 @@ import com.android.shaftschematic.ui.viewmodel.setUndercutExaggeration
 import com.android.shaftschematic.ui.viewmodel.updateUndercut
 import com.android.shaftschematic.ui.viewmodel.updateUndercutReference
 import com.android.shaftschematic.util.DisplayUnits
+import com.android.shaftschematic.util.launchPicker
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.buildLinerTitleById
 import com.android.shaftschematic.util.buildOpenPdfIntent
@@ -649,7 +650,12 @@ fun UndercutRoute(
                 documentName = "Undercut Drawing",
                 onPrint = { printUndercutDrawing() },
                 onPreview = { showPreview = true },
-                onExport = { launcher.launch(buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.UNDERCUT, blankDraft)) },
+                onExport = {
+                    launcher.launchPicker(
+                        buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.UNDERCUT, blankDraft),
+                        what = "undercut export",
+                    )
+                },
                 enabled = gate.enabled,
             )
         }
@@ -664,7 +670,10 @@ fun UndercutRoute(
             onClose = { showPreview = false },
             onExport = {
                 showPreview = false
-                launcher.launch(buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.UNDERCUT, blankDraft))
+                launcher.launchPicker(
+                    buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.UNDERCUT, blankDraft),
+                    what = "undercut export",
+                )
             },
             // The tab body's Print action, unchanged — one function behind both.
             onPrint = { printUndercutDrawing() },

@@ -49,6 +49,8 @@ import com.android.shaftschematic.util.AppLog
 import com.android.shaftschematic.util.FeedbackIntentFactory
 import com.android.shaftschematic.util.Achievements
 import com.android.shaftschematic.util.DocumentNaming
+import com.android.shaftschematic.util.launchPicker
+import com.android.shaftschematic.util.NO_PICKER_MESSAGE
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -315,7 +317,11 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
                 title = { Text("Open drawing") },
                 actions = {
                     TextButton(
-                        onClick = { importLauncher.launch(arrayOf("*/*")) }
+                        onClick = {
+                            importLauncher.launchPicker(arrayOf("*/*"), what = "import") {
+                                scope.launch { snackbarHostState.showSnackbar(NO_PICKER_MESSAGE) }
+                            }
+                        }
                     ) { Text("Import") }
                     TextButton(
                         onClick = {
@@ -531,7 +537,14 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
                                                     val file = File(dir, name)
                                                     val out = mutableListOf<android.net.Uri>()
                                                     if (file.exists()) {
-                                                        out += FeedbackIntentFactory.uriForFile(ctx, file)
+                                                        // A URI that cannot be built costs the
+                                                        // attachment, never the report: FileProvider
+                                                        // throws for a file outside its configured
+                                                        // roots, and this runs in a coroutine where a
+                                                        // throw would reach the app's crash handler.
+                                                        runCatching {
+                                                            FeedbackIntentFactory.uriForFile(ctx, file)
+                                                        }.getOrNull()?.let { out += it }
                                                     }
                                                     out
                                                 }
@@ -779,7 +792,9 @@ fun SaveLocalDocumentRoute(               // ← renamed (no clash with SAF)
 
             OutlinedButton(onClick = {
                 val base = stripShaftDocExtension(name.text.trim()).ifBlank { "Shaft" }
-                saveCopyLauncher.launch(base + SHAFT_DOT_EXT)
+                saveCopyLauncher.launchPicker(base + SHAFT_DOT_EXT, what = "save a copy") {
+                    scope.launch { snackbarHostState.showSnackbar(NO_PICKER_MESSAGE) }
+                }
             }) { Text("Save a copy to device…") }
 
             OutlinedButton(
