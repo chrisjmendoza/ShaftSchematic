@@ -1,7 +1,7 @@
 # ShaftSchematic TODO
 
 **Version: v0.5.x Development Queue**
-**Last updated: 2026-08-27**
+**Last updated: 2026-09-02**
 
 ## What belongs here
 
@@ -72,6 +72,18 @@ at most a pointer from here.
 - **Multi-shaft per job number** (requested 2026-07-26) — two shafts sometimes share a job
   number. Plan in `docs/MultiShaftJob_Plan_2026-07-26.md` (recommends derived job grouping over
   single-shaft files; no file-format change). **Awaiting answers to its 6 product questions.**
+- **Shop deployment — users, manager lock, audit trail, shop oversight** (requested 2026-09-02,
+  revised 2026-09-03 from the foreman's seat). Nothing exists today: no identity, no timestamps,
+  hard delete, filename-only search, silent mirror failures, debug-signed distribution. Plan in
+  `docs/ShopDeployment_PLAN.md` — device-local users/roles, manager PIN gating only the
+  IRREVERSIBLE set (purge, restore-over-library, roster/policy) plus a per-document **Released**
+  flag behind ONE `Guard`, trash instead of hard delete (mirror deletes only on purge), envelope
+  stamps (`doc_id`, revision, created/modified by, device), a **footer print stamp** (rev /
+  printed by / device), Open-screen search over Customer/Vessel/Job/Item, mirror-health warning
+  on Start, a durable `AuditLog` separate from `AppLog`, security cut to PIN hash + rate limit.
+  Phase 0 = release signing key + tester group (§4.4); Phase 1 = provenance + trash + footer
+  stamp + search + mirror health (no login). **Awaiting answers to its 12 product questions**
+  (each carries a recommended answer).
 - **Coupler-slot hit-test.** The preview hit-test covers Body/Taper/Thread/Liner but not
   `ResolvedCouplerBoltSlot`, so tapping a slot selects the body underneath and the slot's card is
   unreachable by tap. Plausibly deliberate — a slot always overlies something, and letting it win
