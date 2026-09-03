@@ -49,6 +49,25 @@ data class RenderOptions(
     val threadFillColor: Int = 0x22000000,
 
     // ──────────────────────────────
+    // PDF-shade mirror
+    // ──────────────────────────────
+    /**
+     * Ids of the components that will print SHADED on the PDF — the same effective decision
+     * the composers make (kind checkboxes + per-component `shadeOnDrawing`, resolved by the
+     * `unshaded*Ids` builders). Each id's fill gets [shadeOverlayColor] drawn over it, so the
+     * editor preview answers "what prints shaded" without opening the PDF preview
+     * (on-device report: a card's checked Shade toggle changed nothing in the preview box).
+     * Empty (the default) draws exactly as before the mirror existed.
+     */
+    val shadedComponentIds: Set<String> = emptySet(),
+    /**
+     * ARGB overlay for [shadedComponentIds]. The default is the PDF `shadeFill` grey
+     * (40-alpha black); themed callers pass an onSurface-derived tint so the marker stays
+     * visible on a dark canvas — this is a marker for the print decision, not print fidelity.
+     */
+    val shadeOverlayColor: Int = 0x28000000,
+
+    // ──────────────────────────────
     // Highlighting
     // ──────────────────────────────
     /**

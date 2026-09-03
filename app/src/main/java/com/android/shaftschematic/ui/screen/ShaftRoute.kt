@@ -17,6 +17,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
 import com.android.shaftschematic.data.SettingsStore
 import com.android.shaftschematic.ui.order.ComponentKind
+import com.android.shaftschematic.ui.resolved.shadedComponentIds
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.UiEvent
 import com.android.shaftschematic.ui.viewmodel.addBodyAt
@@ -173,6 +174,21 @@ fun ShaftRoute(
     val pdfShadedBodies by vm.pdfShadedBodies.collectAsState()
     val pdfShadedTapers by vm.pdfShadedTapers.collectAsState()
     val pdfShadedLiners by vm.pdfShadedLiners.collectAsState()
+    val pdfShadeExplicitBodiesOnly by vm.pdfShadeExplicitBodiesOnly.collectAsState()
+    // PDF-shade mirror for the preview box: the same effective decision the composers make,
+    // so the box shows what will print shaded the moment a card toggle or checkbox changes.
+    val previewShadedIds = remember(
+        spec, resolvedComponents,
+        pdfShadedBodies, pdfShadedTapers, pdfShadedLiners, pdfShadeExplicitBodiesOnly,
+    ) {
+        shadedComponentIds(
+            spec, resolvedComponents,
+            shadedBodies = pdfShadedBodies,
+            shadedTapers = pdfShadedTapers,
+            shadedLiners = pdfShadedLiners,
+            shadeExplicitBodiesOnly = pdfShadeExplicitBodiesOnly,
+        )
+    }
 
     val devOptionsEnabled by vm.devOptionsEnabled.collectAsState()
     val editorResetNonce by vm.editorResetNonce.collectAsState()
@@ -233,6 +249,7 @@ fun ShaftRoute(
         showDimDebugOverlay = showDimDebugOverlay,
         pdfTieringMode = pdfTieringMode,
         componentTitlesDefault = pdfShowComponentTitles,
+        shadedComponentIds = previewShadedIds,
         componentShadeDefaults = ComponentShadeDefaults(
             bodies = pdfShadedBodies, tapers = pdfShadedTapers, liners = pdfShadedLiners,
         ),
