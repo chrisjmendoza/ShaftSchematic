@@ -1,6 +1,7 @@
 package com.android.shaftschematic.util
 
 import android.content.ClipData
+import android.content.ClipDescription
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -166,10 +167,20 @@ object FeedbackIntentFactory {
         }
     }
 
+    /**
+     * Carries the attachments in the clip as well as the extras, so the grant flag reaches
+     * whichever app the chooser picks.
+     *
+     * The mime types come from the intent itself and NEVER from a [ClipData.newUri] lookup:
+     * that helper dereferences its `ContentResolver` for every `content://` URI, so a null
+     * resolver there is an NPE on exactly the attachments this ships — FileProvider URIs are
+     * always `content://`. The explicit-description construction below is the one AOSP's own
+     * `Intent.migrateExtraStreamToClipData` uses.
+     */
     private fun Intent.setClipDataForUris(uris: List<Uri>) {
         if (uris.isEmpty()) return
-        val first = uris.first()
-        val clip = ClipData.newUri(null, "attachment", first)
+        val mimeTypes = arrayOf(type ?: ClipDescription.MIMETYPE_TEXT_URILIST)
+        val clip = ClipData("attachment", mimeTypes, ClipData.Item(uris.first()))
         uris.drop(1).forEach { clip.addItem(ClipData.Item(it)) }
         clipData = clip
     }

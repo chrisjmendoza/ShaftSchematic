@@ -82,6 +82,8 @@ import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_DEFAULT
 import com.android.shaftschematic.settings.PDF_WEAR_JOIN_GAP_DEFAULT_MM
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.util.AppLog
+import com.android.shaftschematic.util.launchPicker
+import com.android.shaftschematic.util.NO_PICKER_MESSAGE
 import com.android.shaftschematic.util.FeedbackIntentFactory
 import com.android.shaftschematic.util.PreviewColorPreset
 import com.android.shaftschematic.util.PreviewColorRole
@@ -580,9 +582,12 @@ fun SettingsRoute(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
-                                backupLauncher.launch(
-                                    ShaftBackup.defaultBackupFilename(System.currentTimeMillis())
-                                )
+                                backupLauncher.launchPicker(
+                                    ShaftBackup.defaultBackupFilename(System.currentTimeMillis()),
+                                    what = "backup",
+                                ) {
+                                    scope.launch { snackbarHostState.showSnackbar(NO_PICKER_MESSAGE) }
+                                }
                             }
                     )
                     ListItem(
@@ -591,13 +596,16 @@ fun SettingsRoute(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
-                                restoreLauncher.launch(
+                                restoreLauncher.launchPicker(
                                     arrayOf(
                                         "application/zip",
                                         "application/x-zip-compressed",
                                         "application/octet-stream",
-                                    )
-                                )
+                                    ),
+                                    what = "restore",
+                                ) {
+                                    scope.launch { snackbarHostState.showSnackbar(NO_PICKER_MESSAGE) }
+                                }
                             }
                     )
                     BackupMirrorSection()
@@ -630,15 +638,24 @@ fun SettingsRoute(
                                     uris.isEmpty() ->
                                         scope.launch { snackbarHostState.showSnackbar("Could not attach the logs.") }
                                     else -> {
-                                        val intent = FeedbackIntentFactory.createDiagnostics(
-                                            context = ctx,
-                                            attachedFileNames = logs.map { it.name },
-                                            attachments = uris,
-                                        )
                                         try {
+                                            val intent = FeedbackIntentFactory.createDiagnostics(
+                                                context = ctx,
+                                                attachedFileNames = logs.map { it.name },
+                                                attachments = uris,
+                                            )
                                             ctx.startActivity(Intent.createChooser(intent, "Share diagnostic logs"))
                                         } catch (_: ActivityNotFoundException) {
                                             scope.launch { snackbarHostState.showSnackbar("No email app found.") }
+                                        } catch (t: Throwable) {
+                                            // AppLog's own posture, applied to the button that ships it:
+                                            // the diagnostics path exists to explain a failure and may
+                                            // never become one. A throw here would take the app down on
+                                            // the one screen a stuck tester was sent to.
+                                            AppLog.e("Settings", "share diagnostic logs failed", t)
+                                            scope.launch {
+                                                snackbarHostState.showSnackbar("Could not share the logs.")
+                                            }
                                         }
                                     }
                                 }
