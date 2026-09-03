@@ -6,6 +6,93 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-09-03
+
+### fix(diagnostics): "Share diagnostic logs" no longer crashes the app
+
+On-device report: tapping Settings → Data → "Share diagnostic logs" killed the app, twice, and
+clearing the cache changed nothing — which correctly ruled out the log files themselves. The
+crash was in building the intent, before any chooser could appear.
+
+- **Root cause**: `FeedbackIntentFactory` attached the logs through
+  `ClipData.newUri(null, "attachment", uri)`. That helper calls `resolver.getType(uri)` for
+  every `content://` URI, so a `null` resolver is an immediate `NullPointerException` — and a
+  FileProvider attachment is *always* `content://`. Every tap of the button hit it. The plain
+  Feedback path escaped only because it usually has no attachment and takes the `mailto:`
+  branch instead.
+- **Fix**: build the clip from the **intent's own** mime type, the construction AOSP's
+  `Intent.migrateExtraStreamToClipData` uses — no resolver, and the clip still carries every
+  attachment so `FLAG_GRANT_READ_URI_PERMISSION` reaches whichever app the chooser picks.
+- **Hardened the tap**: the handler now also catches `Throwable`, leaving a breadcrumb and a
+  "Could not share the logs." snackbar. This is `AppLog`'s own posture — logging exists to
+  explain a failure and may never become one — applied to the button that ships it. It is the
+  screen a stuck tester is sent to, so a crash here destroys the evidence rather than mailing it.
+- **`FeedbackIntentFactoryTest`** (new, Robolectric) pins the intent, the clip, and the grant
+  flag; against the old call it fails with exactly the reported NPE.
+- **The same NPE was live on a second button**: Open drawing → ⋮ → "Send Feedback" attaches the
+  `.shaft` file, so it took the identical attachment branch and died the same way. The shared fix
+  covers it; it now has its own pin. Its `uriForFile` call is also wrapped — it runs inside a
+  coroutine, where a throw reaches the crash handler — so a URI that cannot be built costs the
+  attachment rather than the report.
+
+### fix(settings): a corrupt preferences file no longer bricks the app
+
+Audit of the rest of the Settings surface for the same class of failure — an unguarded platform
+call in a tap handler — turned up two more, neither yet reported on-device.
+
+- **`Context.settingsDataStore` had no corruption handler.** Every preference in the app lives in
+  one `settings.preferences_pb`, and DataStore's unhandled answer to a truncated file is to throw
+  `CorruptionException` from *every* read. Several of those reads run during startup, so the
+  failure would not have been "settings went back to default" — it would have been a permanent
+  crash on launch, recoverable only by clearing app data, which takes the drawings too. A tablet
+  yanked off power mid-write is all it takes, and shop-floor devices get yanked off power. Now
+  built with `ReplaceFileCorruptionHandler { emptyPreferences() }`: the preferences are lost, the
+  app and the saved shafts are not. `SettingsStoreCorruptionTest` drives both halves against a
+  throwaway file and confirms the unguarded store really does throw.
+- **Every SAF picker launch was unguarded** (16 call sites — backup, restore, mirror folder,
+  import, save-a-copy, and all five export routes). `launch` throws `ActivityNotFoundException`
+  when nothing handles the intent; DocumentsUI is always there on a normal phone and *not*
+  guaranteed on enterprise-locked or stripped rugged tablets, where each of those buttons would
+  kill the app. All sixteen now go through one `util/SafPickerLaunch.launchPicker`, which
+  breadcrumbs and — where a snackbar exists — says so on screen. The breadcrumb label is fixed at
+  the call site, never the picker input, which carries customer and job text.
+
+### fix(persistence): the crash-safety sweep the settings audit implied
+
+A pass over the rest of the app for the same shape — an unguarded call that escapes into a
+coroutine with nothing catching above it. Four findings, one of them worse than the settings bug
+that started this.
+
+- **The autosave DataStore had no corruption handler either, and it is the more exposed of the
+  two.** `autosave_datastore` is rewritten every 1.5 s of editing, so it is by far the likeliest
+  file to be caught mid-write by a power cut — and `AutosaveManager.loadDrafts` runs from the
+  ViewModel's `init`, inside a `viewModelScope.launch`. There is no `CoroutineExceptionHandler`
+  anywhere in the app, so a `CorruptionException` there would have reached the process crash
+  handler: a hard crash on every launch, on the store most likely to break. Now handled, and
+  `AutosaveManager` additionally never throws at all — reads degrade to an empty ring, writes to
+  a breadcrumb, which is what its own KDoc already promised for decode failures. Two of its
+  callers (`init`, `discardDraft`) were unguarded and are now covered by construction.
+- **Settings reads and writes now go through one guarded seam each** (`Context.settingsPrefs` /
+  `Context.editSettings`, 129 call sites routed). The corruption handler repairs a broken file
+  once; these keep a read or write failing for any *other* reason — I/O error, full disk — from
+  propagating into a Compose collector or out of one of the many bare `scope.launch { setX(…) }`
+  in the UI. `CancellationException` is rethrown, never swallowed.
+- **The backup zip's size guard never fired.** `readZip` skipped entries via
+  `entry.size > MAX_ENTRY_BYTES`, but `ZipEntry.size` is `-1` for any entry written as a stream —
+  which is how `ZipOutputStream` writes them, so it is `-1` even for this app's own backups — and
+  `-1 > cap` is false. Measured: a 40 KB zip expands to 40 MB in memory with the guard reporting
+  `false`. The cap now applies to the bytes actually read, with whole-archive byte and entry
+  budgets beside it, and an oversize entry is skipped rather than fatal so one bad member cannot
+  cost the user the documents beside it.
+- **Checked and found already sound**, worth recording so the next sweep can skip them: every
+  document decode path (`ShaftDocCodec.decode` callers all guard, with the one apparent exception
+  pre-validating the same string moments earlier); `BackupMirror` end to end; `PdfRaster`
+  (`runCatching` catches the `OutOfMemoryError` a large raster can throw); all five "Open PDF"
+  paths; every `contentResolver` call; and all 23 non-null assertions in `main`, each of which is
+  structurally guarded by a preceding size, count or nullability check.
+
+---
+
 ## 2026-09-01
 
 ### fix(undercut): Ø callouts anchor on the cut's visible shelf

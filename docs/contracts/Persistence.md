@@ -47,6 +47,86 @@ Do Nots
 
 ---
 
+## The two DataStores (`data/SettingsStore.kt`, `data/AutosaveManager.kt`)
+
+The app keeps **two** preference stores, deliberately separate so a preferences problem and a
+draft problem cannot take each other down:
+
+| Store | Holds | Written |
+|---|---|---|
+| `settings` (`Context.settingsDataStore`) | units, theme, the whole drawing look, the mirror folder, migration/seeding flags | on each preference change |
+| `autosave_datastore` (`AutosaveManager`) | the draft ring | **every 1.5 s of editing** |
+
+Invariants
+- **Both delegates carry a `ReplaceFileCorruptionHandler`, and it is load-bearing.** DataStore's
+  unhandled answer to a truncated or garbage file is to throw `CorruptionException` from *every*
+  read. Settings reads and `AutosaveManager.loadDrafts` both run during startup — the latter from
+  the ViewModel's `init`, inside a `viewModelScope.launch` with **no handler above it** — so the
+  failure mode is not "preferences went back to default" but the app crashing on launch,
+  permanently, recoverable only by clearing app data, which takes the drawings with it. A tablet
+  yanked off power mid-write is all it takes, and shop-floor devices get yanked off power. The
+  autosave store is the more exposed of the two precisely because it is rewritten constantly.
+  Replacing a file costs preferences or drafts and nothing else: saved shafts are files in
+  `filesDir/shafts`.
+- **Every settings read and write goes through one guarded seam** — `Context.settingsPrefs`
+  (a `Flow` with `.catch { emit(emptyPreferences()) }`) and `Context.editSettings`. The
+  corruption handler repairs a broken file once; these keep a read or write that fails for any
+  *other* reason (I/O error, full disk) from propagating. Reads feed Compose collectors and
+  writes are fired from `scope.launch` all over the UI with nothing catching above them, so an
+  unguarded throw on either side is a crash. `CancellationException` is rethrown, never
+  swallowed.
+- **`AutosaveManager` never throws**, by the same rule `AppLog` follows: a draft is a safety net,
+  and a safety net that crashes the app is worse than none. Every store access goes through its
+  private `guarded` helper — reads degrade to an empty ring, writes to a breadcrumb — which is
+  what its KDoc already promised for decode failures, now true at the store level too. It
+  rethrows `CancellationException` because the autosave observer is a `collectLatest` that
+  cancels the in-flight write on every newer snapshot.
+- Same posture `decodeDrawingProfiles` takes one level up — a corrupt value may cost the presets,
+  never the screen. `DataStoreCorruptionTest` pins both halves against a throwaway file (the real
+  stores are process-wide singletons keyed by file, so a test that corrupted one would leak into
+  every other test in the JVM worker).
+- A store is a **singleton per file, not per `Context`**: tests must assert their own writes
+  rather than an absolute default, or they depend on execution order.
+
+---
+
+## Backup zip reading (`io/ShaftBackup.kt`)
+
+Invariants
+- **Entry paths are reduced to their basename** before anything else, so an entry name from a
+  foreign zip can never influence where a file lands (zip-slip).
+- **Size caps are enforced on the bytes actually read, never on `ZipEntry.size`.** That field is
+  `-1` for any entry written as a stream — which is how `ZipOutputStream` writes them, so it is
+  `-1` even for this app's own backups — and `-1 > MAX_ENTRY_BYTES` is false. A declared-size
+  check therefore rejects nothing at all: a 40 KB zip of compressible data expanded to 40 MB in
+  memory, on a tablet, unchecked. `readEntryCapped` stops reading at the cap instead, and
+  `MAX_TOTAL_BYTES` / `MAX_ENTRIES` bound the archive as a whole so many small entries cannot add
+  up to the same problem. `ShaftBackupTest` pins it with a zip that is small on disk and huge
+  decompressed.
+- **An oversize or unreadable entry is skipped, not fatal**: one bad member of an otherwise good
+  backup must not cost the user the documents beside it.
+
+---
+
+## SAF pickers (`util/SafPickerLaunch.kt`)
+
+Every `ActivityResultLauncher.launch` in the app goes through `launchPicker`.
+
+Invariants
+- **A missing picker is a message, never a crash.** `launch` ends in
+  `startActivityForResult`, so it throws `ActivityNotFoundException` when nothing handles the
+  intent. DocumentsUI is always present on a normal phone and *not* guaranteed on the hardware
+  this app targets — enterprise-locked and stripped rugged tablets ship without it or with it
+  disabled — where the unguarded call turns every export and backup button into an app kill.
+- The breadcrumb's `what` is a **fixed label chosen at the call site** ("backup", "export", …),
+  never the picker input: those inputs carry customer, vessel and job text, and `AppLog` records
+  events, never document content (see `docs/contracts/Diagnostics.md`).
+- Surfaces with a snackbar pass `onUnavailable` and show `NO_PICKER_MESSAGE`; the export routes
+  have no snackbar host and leave the breadcrumb alone, which is still the difference between a
+  silent button and a mystery.
+
+---
+
 ## Backup auto-mirror (`io/BackupMirror.kt`, `io/BackupMirrorPlan.kt`)
 
 One SAF folder, picked once in Settings → Data ("Mirror saves to folder", persisted tree URI
