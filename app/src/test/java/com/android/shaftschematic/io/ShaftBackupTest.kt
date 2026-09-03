@@ -28,6 +28,47 @@ class ShaftBackupTest {
     // Restore validation stand-in; production passes a ShaftDocCodec check.
     private val acceptJsonish: (String) -> Boolean = { it.trim().startsWith("{") }
 
+    /**
+     * The entry cap has to be enforced on the bytes read, not on `ZipEntry.size`.
+     *
+     * That field is -1 for every entry written as a stream — which is how `ZipOutputStream`
+     * writes them, so it is -1 even for this app's own backups — and `-1 > MAX_ENTRY_BYTES` is
+     * false. A declared-size check therefore never rejected anything: a 40 KB zip of
+     * compressible data expanded to 40 MB in memory on a tablet, unchecked.
+     */
+    @Test
+    fun `an entry that balloons past the cap is skipped, not read into memory`() {
+        val bytes = ByteArrayOutputStream().also { out ->
+            ZipOutputStream(out).use { zip ->
+                zip.putNextEntry(ZipEntry("shafts/bomb.shaft"))
+                val chunk = ByteArray(1024 * 1024) // zeros: ~40 MB in, ~40 KB on disk
+                repeat(40) { zip.write(chunk) }
+                zip.closeEntry()
+                zip.putNextEntry(ZipEntry("shafts/Good.shaft"))
+                zip.write("""{"ok":1}""".toByteArray())
+                zip.closeEntry()
+            }
+        }.toByteArray()
+
+        // The zip really is tiny — the cost is all on the decompressed side.
+        assertTrue("zip stays small: ${bytes.size}", bytes.size < 1024 * 1024)
+
+        val contents = ShaftBackup.readZip(ByteArrayInputStream(bytes))
+
+        // The oversize entry is dropped and the good document beside it still restores: one bad
+        // member must not cost the user the rest of the backup.
+        assertEquals(listOf("Good.shaft" to """{"ok":1}"""), contents.docs)
+    }
+
+    /** An ordinary backup is unaffected by the cap — the common path must not regress. */
+    @Test
+    fun `normal sized documents still round-trip under the cap`() {
+        val docs = listOf("Big.shaft" to ("{" + "\"pad\":\"" + "x".repeat(200_000) + "\"}"))
+        val contents = ShaftBackup.readZip(ByteArrayInputStream(zipBytes(docs)))
+
+        assertEquals(docs, contents.docs)
+    }
+
     @Test
     fun `writeZip readZip round-trips docs and manifest`() {
         val docs = listOf(
