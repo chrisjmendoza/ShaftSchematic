@@ -3,8 +3,11 @@ package com.android.shaftschematic.ui.screen
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -25,6 +28,10 @@ import org.robolectric.annotation.Config
  * The expanders exist to keep the sliders above the fold, so "collapsed until tapped" is the
  * behaviour worth pinning; a sub-option that stayed tappable while its parent was off would
  * commit a preference that draws nothing.
+ *
+ * The scope caption is pinned here too: a sheet's rows are remote controls for the one
+ * app-wide pref, and the caption is the only thing on the sheet that says so — a sheet with
+ * no per-job control must not point at captions it does not carry.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], qualifiers = "w400dp-h800dp")
@@ -99,6 +106,32 @@ class PdfOptionsSectionsTest {
         rule.onNodeWithText("Auto (closest end)").assertExists()
         rule.onNodeWithText("AFT").assertExists()
         rule.onNodeWithText("FWD").assertExists()
+    }
+
+    private fun hostScopeNote(hasJobControls: Boolean) {
+        rule.setContent {
+            MaterialTheme { OptionsScopeNote(hasJobControls = hasJobControls) }
+        }
+    }
+
+    @Test
+    fun `the scope note names the app-wide scope and points at the per-job captions`() {
+        hostScopeNote(hasJobControls = true)
+
+        rule.onNodeWithTag(OPTIONS_SCOPE_NOTE_TAG)
+            .assertTextContains("app-wide", substring = true, ignoreCase = true)
+        rule.onNodeWithTag(OPTIONS_SCOPE_NOTE_TAG)
+            .assertTextContains("saved with this job", substring = true, ignoreCase = true)
+    }
+
+    @Test
+    fun `a sheet with no per-job control promises no per-job caption`() {
+        hostScopeNote(hasJobControls = false)
+
+        rule.onNodeWithTag(OPTIONS_SCOPE_NOTE_TAG)
+            .assertTextContains("app-wide", substring = true, ignoreCase = true)
+        rule.onNodeWithTag(OPTIONS_SCOPE_NOTE_TAG)
+            .assert(!hasText("saved with this job", substring = true, ignoreCase = true))
     }
 
     @Test

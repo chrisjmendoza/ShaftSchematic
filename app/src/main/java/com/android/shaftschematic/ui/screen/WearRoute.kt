@@ -727,7 +727,7 @@ internal fun WearStripComponentChecks(
         Text("Components", style = MaterialTheme.typography.titleSmall)
         Text(
             "What this sheet draws. Hiding the complete shaft gives its height to the " +
-                "detail strips.",
+                "detail strips. Saved with this job.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

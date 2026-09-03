@@ -1,8 +1,8 @@
 # ShaftSchematic — Design Intent
 
-Status: **DRAFT — answered except Q3.** Q1–Q2 and Q4–Q6 were answered 2026-08-29, Q7–Q10
-on 2026-09-01; all are folded into the body sections below (§1.1, §1.2, §3.1, §3.3–§3.7).
-Q3 has an answer that still needs one clarification (see §6). Started 2026-08-29 as the running
+Status: **DRAFT — all ten questions answered.** Q1–Q2 and Q4–Q6 were answered 2026-08-29,
+Q7–Q10 on 2026-09-01, Q3 on 2026-09-02; all are folded into the body sections below (§1.1,
+§1.2, §3.1, §3.3–§3.8). §6 keeps the ledger. Started 2026-08-29 as the running
 guide for product and UI decisions, so features stop being piece-mealed page by page and
 start following one set of rules. Technical contracts stay where they are (`CLAUDE.md`,
 `docs/contracts/`, `docs/PDF_EXPORT.md`); this document owns the *why* and the *defaults* —
@@ -112,6 +112,32 @@ fallback), so it carries neither the height slider nor the S-break slider.
 - **Ruling 2026-08-29 (Q2): bubble size and drop stay app-wide** (`PdfPrefs`, captured by
   Drawing profiles). Any future move of a styling knob to per-job is decided case by case,
   not by a blanket rule.
+- **Ruling 2026-09-02 (Q3): look controls are single-sourced.** A look control on a
+  document's options sheet is a *remote control* for the ONE app-wide pref — the same
+  `PdfPrefs` value Settings → Drawing keeps — never a per-page copy. Changing it anywhere
+  changes every document; the app stays consistent by construction, and a job's sheets read
+  as one family in the workorder file. There is **no per-document override axis for look
+  prefs and none is planned**: it would fight Drawing profiles (a profile applied over
+  per-page overrides silently changes nothing on the pages carrying them), and it would
+  buy a hypothetical no on-device case has asked for.
+- **"Drawn differently if needed" is served on the per-job axis, one control at a time.**
+  When an on-device case shows one control genuinely needs to differ between jobs, that
+  ONE control is promoted from look to fit: a per-job slot in the envelope that follows the
+  app-wide default until set, plus a "Save as default" path back — exactly as "Trace depth
+  exaggeration" already works (`WearRecord.traceDepthFrac` over
+  `PdfPrefs.wearTraceDepthFrac`). Case by case (the Q2 rule), never a blanket override
+  system.
+- **What earns a sheet row.** A look control gets a row on a document's options sheet when
+  it must be *judged against the page it changes* (line weight, S-break, shading,
+  fractions, arrows, dual-unit layout, the wear sliders, runout bubbles). It stays
+  Settings-only when it is a baseline the sheet's own controls already stand on (the
+  sizing-curve anchors — the per-job Shaft height multiplies them), a capability gate
+  (per-component units, liner shoulders), a default for a document field (dual-units
+  default), or profile management. A control that only means something on one document
+  may live on that document's sheet alone (runout bubble size/height) — still app-wide,
+  still captured by profiles. Legibility rule: a sheet's header says its drawing settings
+  are app-wide, and the per-job controls on it say "saved with this job" in their own
+  caption — the reader never has to guess which kind a row is.
 
 ### 3.4 Output actions
 
@@ -218,35 +244,16 @@ component card.
 - **Q10 — Next design pass.** A standalone taper calculator (→ §3.8); UI/rendering/output
   polish waits on Chris's concrete on-device list (→ §5).
 
-### Awaiting clarification
+### Resolved 2026-09-02 (ruling folded into the body)
 
-**Q3 — What earns a sheet row vs Settings-only.** The options sheets duplicate several
-Settings → Drawing controls so they can be judged against the live page. Should every
-app-wide look control appear in both places, or is there a class that should be
-Settings-only to keep the sheets short?
-
-> A: Let's do a class that keeps settings consistent across the app. The look should be kept consistent across different pages but allow a page to be drawn differently if needed. 
-
-> **Follow-up (needs your pick).** Two readings of "allow a page to be drawn differently
-> if needed", and they're very different amounts of plumbing:
->
-> **(a) Status quo, clarified.** A look control on an options sheet keeps writing the ONE
-> shared app-wide pref (so changing it anywhere changes every page — the app stays
-> consistent by construction), and "drawn differently" is served by the per-job envelope
-> values that already exist (Shaft height, liner compression, strip elections). Under this
-> reading nothing changes today; the ruling just says which controls earn a sheet row.
->
-> **(b) A new per-page override axis.** Look prefs (line weight, S-break, shading, …)
-> gain a per-document override: Settings holds the app-wide default, and a sheet's control
-> writes an override for THAT page only — the tri-state pattern the per-component flags
-> use, but at page level. This is real new plumbing (an override slot per look pref per
-> document in the envelope) and would need its own reset/"follow default" affordance on
-> every sheet row.
->
-> Which one did you mean? If (b), is it every look control or just a short list (which)?
-
-> A:
+- **Q3 — What earns a sheet row vs Settings-only.** Chris: "a class that keeps settings
+  consistent across the app… allow a page to be drawn differently if needed." Two readings
+  were put to him — (a) sheet rows stay remote controls for the one shared app-wide pref,
+  with "drawn differently" served on the existing per-job axis; (b) a new per-document
+  override slot per look pref — and he took the recommendation of (a): consistency by
+  construction, no fight with Drawing profiles, and any real divergence need promotes one
+  control to per-job case by case (the trace-depth precedent). → §3.3.
 
 ### Open
 
-*(none — Q3's follow-up above is the last outstanding item)*
+*(none)*

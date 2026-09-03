@@ -6,6 +6,42 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-09-02
+
+### docs+ui: options sheets say which controls are app-wide and which are saved with the job
+
+`docs/DESIGN_INTENT.md` §3.3 now carries the Q3 ruling: a look control on a document's PDF
+Options sheet is a **remote control for the ONE app-wide `PdfPrefs` value** Settings → Drawing
+keeps — never a per-page copy — and there is no per-document look-override axis (it would fight
+Drawing profiles, and no on-device case has asked for one). Every control already behaved that
+way; what was missing was saying so. No draw path, composer, or stored field changed.
+
+- **Shared scope caption** — one new `OptionsScopeNote` (`ui/screen/ShaftHeightSlider.kt`, test
+  tag `options_scope_note`) sits under the "PDF Options" title on **both** sheets
+  (`PdfOptionsSheet`, `RunoutWearOptionsSheet`): "Drawing settings here are app-wide — the same
+  ones as Settings → Drawing — so every document follows them." The second sentence,
+  "Controls saved with this job say so.", is appended only when the instance actually carries a
+  per-job row, so the undercut sheet (which carries none) never points at a caption it does not
+  show. ONE construction for both sheets — the sentence cannot drift between them.
+- **"Saved with this job" on the per-job captions** — appended to the existing bodySmall lines
+  of Shaft height (both branches), Liner compression (all four), Wear strip size, and the wear
+  Components election. Trace depth, which is a per-job pin over an app default, says the whole
+  thing: "Saved with this job; \"Save as default\" makes it the app-wide setting." App-wide
+  controls gain no wording — the header note covers them and the sheets stay caption-light.
+- **Help** — the topic "Drawing controls that live on the document" opened by claiming
+  everything it listed was saved with the job, while three of its bullets (bubble size/height,
+  dimension arrows, and the "repeats Line thickness…" row) are app-wide prefs. It is now split
+  into a labelled "Saved with this job" group and an "App-wide — one setting, wherever you move
+  it" group, with the note that the two bubble sliders have no Settings row yet are still
+  app-wide and captured by Drawing profiles. New FAQ entry: "Why did a slider on one document's
+  PDF Options change my other documents?"
+- Pinned by two `PdfOptionsSectionsTest` cases hosting the caption directly (with and without
+  per-job controls). `docs/contracts/PdfExport.md` (v1.1) states the ruling and fixes the
+  `arrowSizePt` default in its field table (`3`/Small, not `4`); `docs/PDF_EXPORT.md` §5.6 notes
+  the caption and the per-job wording.
+
+---
+
 ## 2026-09-01
 
 ### fix(undercut): Ø callouts anchor on the cut's visible shelf

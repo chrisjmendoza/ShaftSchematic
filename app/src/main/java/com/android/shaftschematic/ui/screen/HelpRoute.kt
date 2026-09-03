@@ -597,8 +597,10 @@ private val helpSections: List<HelpSection> = listOf(
             ),
             HelpTopic(
                 "Drawing controls that live on the document",
-                "These are saved with the job rather than in Settings, so a reopened document " +
-                    "prints exactly as it did.\n\n" +
+                "Each document's PDF Options sheet mixes two kinds of control, and the sheet " +
+                    "says which is which: its header notes that drawing settings are " +
+                    "app-wide, and the controls saved with the job say so in their caption.\n\n" +
+                    "Saved with this job — a reopened document prints exactly as it did:\n" +
                     "• \"Shaft height\" — on the Consolidated Output tab and in the schematic, " +
                     "runout, and wear PDF Options sheets. Sets the drawn shaft height on paper " +
                     "by value in inches, anywhere from $HEIGHT_FLOOR_LABEL_IN to $HEIGHT_CAP_LABEL_IN — shrink " +
@@ -613,13 +615,16 @@ private val helpSections: List<HelpSection> = listOf(
                     "drawn shaft height.\n" +
                     "• \"Blank draft\" — a Content chip on each document's PDF Options sheet, " +
                     "and a chip over the schematic preview. Prints the drawing with values " +
-                    "blanked for handwriting. Not saved; it resets each session. On the " +
+                    "blanked for handwriting. The one exception in this group — it is " +
+                    "session-only: not saved; it resets each session. On the " +
                     "schematic, \"Ø callouts\" beside it decides whether that blank sheet " +
                     "still carries Ø leaders to fill in.\n" +
                     "• \"Cut depth exaggeration\" — on the Undercut Drawing. Changes only how " +
                     "deep cuts look, never the printed numbers.\n" +
                     "• \"Sheet content\", worn sections, and \"Export all\" — on the " +
-                    "Consolidated Output tab.\n" +
+                    "Consolidated Output tab.\n\n" +
+                    "App-wide — one setting, wherever you move it (also in Settings → " +
+                    "Drawing):\n" +
                     "• Each document's PDF Options sheet repeats Line thickness and Shade in " +
                     "Components, on the schematic and consolidated sheets Measurement " +
                     "reference, and — on the schematic and the runout/consolidated sheets, the " +
@@ -627,10 +632,13 @@ private val helpSections: List<HelpSection> = listOf(
                     "reachable without leaving the drawing.\n" +
                     "• \"Bubble size\" and \"Bubble height\" — on the runout and consolidated " +
                     "sheets. How large the runout bubbles draw and how far they hang below the " +
-                    "shaft; both move the canvas markers and the printed sheet together.\n" +
+                    "shaft; both move the canvas markers and the printed sheet together. " +
+                    "There is no Settings row for these two — they only mean something on the " +
+                    "runout drawings — but they are still app-wide and a Drawing profile " +
+                    "captures them.\n" +
                     "• \"Dimension arrows\" — Small / Medium / Large arrowheads on the " +
                     "dimension rails, on the schematic and consolidated sheets. Heads point " +
-                    "inward unless the span is too narrow to hold both.\n" +
+                    "inward unless the span is too narrow to hold both.\n\n" +
                     "• Drag any of those sliders and the preview updates as you drag — the " +
                     "sheet stops dimming the page and the drawing reshapes under your finger, " +
                     "so there is no need to pick a value, close the sheet, look, and reopen it. " +
@@ -690,6 +698,21 @@ private val helpSections: List<HelpSection> = listOf(
                     "lengths. Settings → Drawing → \"Body S-break\" sets how much squeeze " +
                     "earns the symbol, from Never (compression stays hidden) to Always.",
                 illustration = { SBreakFigure() },
+            ),
+            HelpTopic(
+                "Why did a slider on one document's PDF Options change my other documents?",
+                "Because the drawing controls on those sheets are the same app-wide settings " +
+                    "Settings → Drawing keeps — reached from the page they change so a line " +
+                    "weight or a shade can be judged against the drawing instead of guessed " +
+                    "at from a settings list. One setting, every document, so a job's sheets " +
+                    "always read as one family.\n\n" +
+                    "The values that belong to one job say \"Saved with this job\" in their " +
+                    "caption — Shaft height, liner compression, the coupling face, the wear " +
+                    "strip choices, trace depth — and those never touch another document. " +
+                    "There is deliberately no per-page copy of a look setting. When a control " +
+                    "genuinely needs to differ between jobs it is moved to the job instead, " +
+                    "the way trace depth already works: the slider pins this job, and " +
+                    "\"Save as default\" writes the app-wide setting."
             ),
             HelpTopic(
                 "Why can't this auto-body host a keyway?",

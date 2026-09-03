@@ -578,6 +578,15 @@ per-job `RunoutConfig` pair (a FIT, not a look), theme/preview/undercut styling,
 "Restore Drawing defaults" resets exactly the captured set, so a profile can always be undone.
 Enums are stored by NAME through the tolerant `fromName` helpers; every payload field is
 defaulted — profiles from older builds must keep loading.
+The same rule governs the PDF options sheets (ruling 2026-09-02, `docs/DESIGN_INTENT.md`
+§3.3 Q3): a look control on a document's sheet is a **remote control for the one shared
+`PdfPrefs` value** — there is **no per-document override slot for a look pref and none is
+planned** (it would fight profiles). "Drawn differently" is served by promoting ONE control to
+the per-job envelope case by case, the trace-depth precedent (`WearRecord.traceDepthFrac` over
+`PdfPrefs.wearTraceDepthFrac`, with "Save as default" back). Legibility is part of the contract:
+both sheets carry the shared `OptionsScopeNote` caption ("app-wide") and every per-job control's
+caption ends "Saved with this job" — a new sheet control must land in one of those two classes
+and say so.
 
 ### A keyway's WIDTH rides the diameter scale, its LENGTH the axial map
 A sheet carries two scales: `diaPtPerMm` (the drawn shaft height, what the "Shaft height" slider

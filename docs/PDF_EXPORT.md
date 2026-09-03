@@ -732,6 +732,12 @@ what their composer actually reads:
 Every instance keeps Fractions (ungated — every document here prints lengths) and Shade in
 Components (ungated) at their fixed spots in the order.
 
+**Scope legibility** (DESIGN_INTENT §3.3, ruling Q3): a look row on either sheet is a remote
+control for the ONE app-wide `PdfPrefs` value, never a per-page copy, so both sheets carry the
+shared `OptionsScopeNote` line under their title ("Drawing settings here are app-wide…"; the
+"Controls saved with this job say so." half is dropped on a sheet with no per-job row — the
+undercut instance), and every per-job control's own caption ends with "Saved with this job".
+
 **"Runout bubbles" sliders** (`BubbleSizeSlider` / `BubbleDropSlider`, `ShaftHeightSlider.kt`,
 Runout + Output only): **"Bubble size"** (60–150%, 5% steps, "Standard" reset at 100%) is
 `PdfPrefs.runoutBubbleScale`, a multiplier on the bubble radius both draw sites take
