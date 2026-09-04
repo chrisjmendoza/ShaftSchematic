@@ -645,6 +645,21 @@ a second row via `geom/DiameterCalloutLayout.kt` (pure, unit-tested), the same t
 posture as runout bubbles. PDF-only — no on-screen canvas equivalent, so no draw-both-sites
 rule applies.
 
+**Callouts and component-NAME labels share ONE collision space.** Both hang below the shaft
+and both anchor on a component's CENTER, so a component printing a name and a Ø aimed two
+strings at the same x and set one through the other (on-device report); a per-pass collision
+space is blind exactly where the two meet. The pure `geom/BelowShaftLabelLayout.kt` places
+every name against the callouts as obstacles, in `DimensionRailLayout`'s resolution order:
+**slide the name along its own component's span first** (a name reads as its component's from
+anywhere over it, so a slide costs no vertical room), **drop a row only when no slide fits**.
+The obstacles are measured, never guessed — `DiameterLeaderRenderer.occupancy` returns the
+value boxes AND the leader lines off the same geometry `drawOne` inks, which is why the
+callouts are planned before the labels and drawn after. Callouts never move for a name: the
+leaders are anchored geometry, the names are what move. Rows stop at the footer band and the
+pass shrinks a point at a time (floor 7 pt) rather than collapsing rows onto each other; a name
+that fits nowhere takes the row it overlaps least (`Placement.fitted = false`, breadcrumbed)
+and is never dropped.
+
 Two visibility controls gate the pass, and they compose as an AND:
 - **Per component** — `Body.showDiaOnDrawing` / `Liner.showDiaOnDrawing` (and
   `ShaftSpec.showAutoBodyDia`, ONE flag for every auto span even though per-section Ø

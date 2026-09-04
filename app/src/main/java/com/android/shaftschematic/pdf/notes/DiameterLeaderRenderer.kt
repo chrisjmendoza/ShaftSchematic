@@ -2,6 +2,7 @@ package com.android.shaftschematic.pdf.notes
 
 import android.graphics.Canvas
 import android.graphics.Paint
+import com.android.shaftschematic.geom.BelowShaftLabelLayout
 import com.android.shaftschematic.geom.DiameterCalloutLayout
 import com.android.shaftschematic.pdf.formatDiaWithUnitDualLabel
 import com.android.shaftschematic.util.DualLabel
@@ -48,18 +49,73 @@ class DiameterLeaderRenderer(
                 else textPaint.textSize * 1.4f
 
     fun draw(canvas: Canvas, calls: List<DiaCallout>) {
-        // BELOW callouts share a tiering pass so body and liner labels never overlap.
         val below = calls.filter { it.side == LeaderSide.BELOW }
+        val tiers = belowTiers(below)
+        below.forEachIndexed { i, call -> drawOne(canvas, call, tier = tiers[i]) }
+
+        calls.filter { it.side == LeaderSide.ABOVE }.forEach { drawOne(canvas, it, tier = 0) }
+    }
+
+    /** BELOW callouts share a tiering pass so body and liner labels never overlap. */
+    private fun belowTiers(below: List<DiaCallout>): List<Int> {
         val footprints = below.map { call ->
             val anchorX = pageX(call.xMm)
             val labelLeft = anchorX + leaderDogleg
             val labelRight = labelLeft + labelWidth(call)
             DiameterCalloutLayout.Footprint(left = anchorX, right = labelRight)
         }
-        val tiers = DiameterCalloutLayout.assignTiers(footprints)
-        below.forEachIndexed { i, call -> drawOne(canvas, call, tier = tiers[i]) }
+        return DiameterCalloutLayout.assignTiers(footprints)
+    }
 
-        calls.filter { it.side == LeaderSide.ABOVE }.forEach { drawOne(canvas, it, tier = 0) }
+    /**
+     * The page area this renderer will ink, for anything else that prints below the shaft.
+     *
+     * The component-name labels hang in the same band and anchor on the same component centers,
+     * so they are placed against these boxes as obstacles
+     * ([com.android.shaftschematic.geom.BelowShaftLabelLayout]) rather than in a collision space
+     * of their own. Two boxes per callout: the value's text box, and the leader itself — the
+     * vertical drop is a thin column at the anchor, but a name label crossing it reads as a
+     * struck-through word just the same.
+     *
+     * Measured from the SAME geometry [drawOne] draws from, so the reservation and the ink can
+     * never disagree. BELOW callouts only; the ABOVE side (none produced today) prints clear of
+     * this band entirely.
+     */
+    fun occupancy(calls: List<DiaCallout>): List<BelowShaftLabelLayout.Box> {
+        val below = calls.filter { it.side == LeaderSide.BELOW }
+        if (below.isEmpty()) return emptyList()
+        val tiers = belowTiers(below)
+        val fm = textPaint.fontMetrics
+        val textH = if (dualStacked) textPaint.dualStackMetrics().height else fm.descent - fm.ascent
+        // A stack's box hangs BELOW its first baseline; a single line's box is ascent-to-descent
+        // around it. Either way the top is the first line's ascent above the baseline.
+        val above = -fm.ascent
+
+        return buildList {
+            below.forEachIndexed { i, call ->
+                val x = pageX(call.xMm)
+                val kinkY = shaftBottomY + leaderRise + tiers[i] * tierStep
+                val textY = kinkY + 10f
+                val textLeft = x + leaderDogleg
+                add(
+                    BelowShaftLabelLayout.Box(
+                        left = textLeft,
+                        right = textLeft + labelWidth(call),
+                        top = textY - above,
+                        bottom = textY - above + textH,
+                    )
+                )
+                // Leader: the vertical drop from the shaft plus the horizontal dogleg into the text.
+                add(
+                    BelowShaftLabelLayout.Box(
+                        left = x - LEADER_HALF_W,
+                        right = textLeft,
+                        top = shaftBottomY,
+                        bottom = kinkY + LEADER_HALF_W,
+                    )
+                )
+            }
+        }
     }
 
     /**
@@ -104,3 +160,6 @@ class DiameterLeaderRenderer(
         }
     }
 }
+
+/** Half-width reserved around a leader line, so a neighbouring label clears the stroke itself. */
+private const val LEADER_HALF_W = 1f

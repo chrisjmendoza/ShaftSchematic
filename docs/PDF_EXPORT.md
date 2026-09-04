@@ -1,6 +1,11 @@
 # PDF Export Specification
 Version: v0.5.x
-Last updated: 2026-08-29 — §5.5/§5.6 document the PDF options audit: a Print icon now sits
+Last updated: 2026-09-03 — §5.3/§5.3b: the component-name labels and the Ø callouts now share
+ONE collision space below the shaft (pure `geom/BelowShaftLabelLayout.kt`, obstacles from
+`DiameterLeaderRenderer.occupancy`) — both anchor on a component's center, so a component
+printing a name and a Ø set one string through the other; names slide along their own span
+before dropping a row, rows stop at the footer band, and the pass shrinks a point at a time
+rather than collapsing. 2026-08-29 — §5.5/§5.6 document the PDF options audit: a Print icon now sits
 in every preview overlay's top bar beside Export (each route reuses its own tab-body Print
 action, so the two entry points cannot drift); the schematic and shared options sheets both
 lead with a compact "Content" chip row in place of the old switch rows; both sheets reorder
@@ -365,6 +370,10 @@ they are now all-BELOW, same as liners.
   `geom/DiameterCalloutLayout.kt` (`assignTiers` — greedy left-to-right interval
   coloring, capped at `MAX_TIERS = 2`, `MIN_GAP = 4f` pt clearance); the renderer only
   measures label widths and reads back the tier.
+- **The band is shared with the component-name labels** (§5.3b), which are placed against
+  `DiameterLeaderRenderer.occupancy(calls)` — the value boxes and the leader lines, measured
+  off the same geometry `drawOne` inks. The callouts are planned before the names for that
+  reason and drawn after; they never move for a name.
 - **PDF-only:** there is no on-screen canvas diameter leader, so the "draw identically
   in both sites" rule that applies to coupler bolt slots / wear pits / runout markers
   does not apply here.
@@ -435,6 +444,33 @@ Auto spans are never labelled, so they carry no flag. Hiding a label never renum
 positional fallback names of the remaining components ("Body #2" stays #2). Card-only
 toggles (`*_show_label_toggle`), the same carve-out as "Show Ø on drawing"; draw-only in
 every respect.
+
+## One collision space with the Ø callouts
+
+Names and Ø callouts both hang below the shaft and both anchor on a component's **CENTER**, so
+a component printing a name and a Ø aimed two strings at the same x and set one through the
+other (on-device report). Tracking collisions per pass is blind exactly where the two meet, so
+they share ONE space — the same rule §5.4 states for dimension labels and rail lines.
+
+`geom/BelowShaftLabelLayout.kt` (pure, JVM-tested) places every name at once against the
+callouts' occupancy boxes as obstacles, in §5.4's resolution order:
+
+1. **slide the label horizontally along its own component's span** — the smallest shift from
+   the centered position that clears everything. A name reads as its component's from anywhere
+   over it, so a slide is nearly free and costs no vertical room. The window is the component's
+   span widened to contain the centered position (a short component's name is wider than the
+   component) and clamped to the content rect;
+2. only when no slide fits, **drop to the next row**.
+
+Rows stop at the footer band, so a crowded sheet can never walk labels off the drawing. When a
+label still finds nowhere to go, the whole pass retries one point smaller — narrower text needs
+less room and fits more rows — down to 7 pt, the fit-loop posture §5.4's rails already use. Past
+that a label takes the row it overlaps least (`Placement.fitted = false`, breadcrumbed): a
+least-bad placement, never a dropped name.
+
+The obstacles are the callouts' **value boxes and their leader lines** — a name struck through
+by a leader stem reads no better than one struck through by a value. Callout placement is
+unchanged: the leaders are anchored geometry and the names are what move.
 
 ---
 

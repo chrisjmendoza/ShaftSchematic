@@ -5,6 +5,7 @@ package com.android.shaftschematic.pdf
 
 import android.graphics.*
 import android.graphics.pdf.PdfDocument
+import com.android.shaftschematic.geom.BelowShaftLabelLayout
 import com.android.shaftschematic.geom.DimensionRailLayout
 import com.android.shaftschematic.geom.END_EPS_MM
 import com.android.shaftschematic.geom.PROFILE_TAPER_MIN_FRAC_OF_TRUE
@@ -315,6 +316,33 @@ fun composeShaftPdf(
     drawCouplerBoltSlots(c, spec.couplerBoltSlots, spec, cy, ::xAt, ::rPx, outline, shadeFill(), bodies = bodiesForPdf)
     c.restore()
 
+    // --- Ø callouts below the shaft: one leader per unique body OD and per unique liner OD ---
+    // A blank draft may elect the whole pass out (`blankDiaCallouts`) so the shaft prints
+    // clear for freehand annotation instead of carrying write-in rules.
+    //
+    // Built HERE, drawn further down: the component-name labels hang in the same band and share
+    // ONE collision space with these callouts, so their planner needs the leaders' occupancy
+    // before it places anything.
+    val diaCalls =
+        if (effectiveOptions.showDiaCallouts) {
+            buildBodyOdCallouts(bodiesForPdf, displayUnits) + buildLinerOdCallouts(spec.liners, displayUnits)
+        } else {
+            emptyList()
+        }
+    val diaLeader = if (diaCalls.isEmpty()) null else DiameterLeaderRenderer(
+        pageX = { mm -> xAt(mm.toFloat()) },
+        shaftTopY = yTopOfShaft,
+        shaftBottomY = cy + halfHeightPx,
+        linePaint = dim,
+        textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            textSize = TEXT_PT - 2f
+            color = 0xFF000000.toInt()
+        },
+        blankValues = blank,
+        dualStacked = displayUnits.dual && pdfPrefs.dualUnitLayout == DualUnitLayout.STACKED,
+    )
+
     // The global titles switch is the per-component flags' DEFAULT, not a master gate — an
     // explicitly-shown component prints under a global off (see componentLabelSpans). Only the
     // per-sheet option (template mode) drops the pass whole.
@@ -328,6 +356,7 @@ fun composeShaftPdf(
             halfHeightPx = halfHeightPx,
             xAt = ::xAt,
             textPaint = text,
+            reserved = diaLeader?.occupancy(diaCalls).orEmpty(),
         )
     }
 
@@ -475,29 +504,8 @@ fun composeShaftPdf(
         renderer.drawPlanned(c, oalDimSpan, plan.placements.last(), true)
     }
 
-    // --- Ø callouts below the shaft: one leader per unique body OD and per unique liner OD ---
-    // A blank draft may elect the whole pass out (`blankDiaCallouts`) so the shaft prints
-    // clear for freehand annotation instead of carrying write-in rules.
-    if (effectiveOptions.showDiaCallouts) {
-        val calls = buildBodyOdCallouts(bodiesForPdf, displayUnits) + buildLinerOdCallouts(spec.liners, displayUnits)
-        if (calls.isNotEmpty()) {
-            val leaderText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                style = Paint.Style.FILL
-                textSize = TEXT_PT - 2f
-                color = 0xFF000000.toInt()
-            }
-            val leader = DiameterLeaderRenderer(
-                pageX = { mm -> xAt(mm.toFloat()) },
-                shaftTopY = yTopOfShaft,
-                shaftBottomY = cy + halfHeightPx,
-                linePaint = dim,
-                textPaint = leaderText,
-                blankValues = blank,
-                dualStacked = displayUnits.dual && pdfPrefs.dualUnitLayout == DualUnitLayout.STACKED,
-            )
-            leader.draw(c, calls)
-        }
-    }
+    // The callouts themselves — planned above (the name labels had to see them), inked here.
+    diaLeader?.draw(c, diaCalls)
 
     if (effectiveOptions.showFooter) {
         // Footer "Body:" diameters — authored bodies as actually drawn. Raw spec.bodies
@@ -572,6 +580,10 @@ private const val LANE_GAP_PT = 24f          // spacing between dimension lanes
 
 // Component title labels (PDF only)
 private const val COMPONENT_LABEL_OFFSET_PT = 32f
+/** How far the fit loop may shrink a name label before it accepts a least-bad placement. */
+private const val COMPONENT_LABEL_MIN_TEXT_PT = 7f
+/** Hard stop on stacked label rows, so a pathological sheet cannot plan an unbounded band. */
+private const val COMPONENT_LABEL_MAX_ROWS = 8
 /**
  * Air reserved between the drawing and the footer when the vertical budget is planned — the
  * shaft is placed so at least this much survives once the bottom-anchored footer block is
@@ -631,6 +643,20 @@ internal fun componentLabelSpans(spec: ShaftSpec, titlesDefault: Boolean): List<
         }
 }
 
+/**
+ * Draws the component-name labels in the band under the shaft.
+ *
+ * [reserved] is everything else already printed there — the Ø callouts' values and leaders. Both
+ * passes anchor on a component's CENTER, so a component showing a name and a Ø aimed both strings
+ * at the same x and printed one through the other (on-device report); they share ONE collision
+ * space now ([BelowShaftLabelLayout]), with that engine's resolution order: slide the name along
+ * its own component's span first, drop it to the next row only when no slide fits.
+ *
+ * The rows stop at the footer band, so a crowded sheet cannot walk labels off the drawing. When
+ * even the last row leaves a label with nowhere to go, the whole pass retries a size smaller
+ * (narrower text needs fewer rows) down to [COMPONENT_LABEL_MIN_TEXT_PT] — the fit-loop posture
+ * the dimension rails already use.
+ */
 private fun drawComponentLabelsPdf(
     canvas: Canvas,
     spec: ShaftSpec,
@@ -640,46 +666,95 @@ private fun drawComponentLabelsPdf(
     halfHeightPx: Float,
     xAt: (Float) -> Float,
     textPaint: Paint,
+    reserved: List<BelowShaftLabelLayout.Box> = emptyList(),
 ) {
     val spans = componentLabelSpans(spec, titlesDefault)
     if (spans.isEmpty()) return
 
     val labelPaint = Paint(textPaint).apply {
-        textSize = (textSize - 2f).coerceAtLeast(8f)
+        textSize = (textSize - 2f).coerceAtLeast(COMPONENT_LABEL_MIN_TEXT_PT)
     }
 
     val yBottomOfShaft = cy + halfHeightPx
-    val baseY    = (yBottomOfShaft + COMPONENT_LABEL_OFFSET_PT).coerceAtMost(geomRect.bottom - 6f)
-    val rowStep  = labelPaint.textSize * 1.4f
-    val padX     = 3f  // minimum horizontal gap between adjacent labels on the same row
+    val baseY = (yBottomOfShaft + COMPONENT_LABEL_OFFSET_PT).coerceAtMost(geomRect.bottom - 6f)
 
-    // Place every label as an x-interval + text, then assign rows.
-    data class Entry(val xLeft: Float, val xRight: Float, val text: String)
+    // Shrink until every label finds a clear spot: narrower text both needs less room of its own
+    // and fits more rows above the footer band. The first size that fits wins.
+    var plan = planComponentLabels(spans, labelPaint, geomRect, baseY, xAt, reserved)
+    while (plan.placements.any { !it.fitted } && plan.textSize > COMPONENT_LABEL_MIN_TEXT_PT) {
+        labelPaint.textSize = (plan.textSize - 1f).coerceAtLeast(COMPONENT_LABEL_MIN_TEXT_PT)
+        plan = planComponentLabels(spans, labelPaint, geomRect, baseY, xAt, reserved)
+    }
+    labelPaint.textSize = plan.textSize
 
-    val entries = spans.map { span ->
-        val cx = (xAt(span.startMm) + xAt(span.endMm)) * 0.5f
-        val w  = labelPaint.measureText(span.text)
-        val xL = (cx - w * 0.5f).coerceIn(geomRect.left, geomRect.right - w)
-        Entry(xL, xL + w, span.text)
-    }.sortedBy { it.xLeft }
-
-    // Greedy row assignment: place each label on the first row where it doesn't overlap.
-    val rowOccupied = mutableListOf<MutableList<Pair<Float, Float>>>()
-
-    for (e in entries) {
-        var row = 0
-        while (true) {
-            if (row >= rowOccupied.size) rowOccupied.add(mutableListOf())
-            val free = rowOccupied[row].none { (oL, oR) -> e.xLeft < oR + padX && e.xRight + padX > oL }
-            if (free) {
-                rowOccupied[row].add(e.xLeft to e.xRight)
-                val rowY = (baseY + row * rowStep).coerceAtMost(geomRect.bottom - 4f)
-                canvas.drawText(e.text, e.xLeft, rowY, labelPaint)
-                break
-            }
-            row++
+    val unfitted = plan.placements.count { !it.fitted }
+    if (unfitted > 0) {
+        VerboseLog.d(VerboseLog.Category.PDF, "ShaftPdf") {
+            "component labels: no clear placement for $unfitted of ${plan.placements.size}" +
+                " at ${plan.textSize}pt — least-bad rows used"
         }
     }
+
+    plan.placements.forEachIndexed { i, p ->
+        canvas.drawText(spans[i].text, p.left, baseY + p.row * plan.rowStep, labelPaint)
+    }
+}
+
+/** One trial layout of the component-name labels at a given text size. */
+internal class ComponentLabelPlan(
+    val placements: List<BelowShaftLabelLayout.Placement>,
+    val rowStep: Float,
+    val textSize: Float,
+)
+
+/**
+ * Plans the name labels at [labelPaint]'s current size.
+ *
+ * A label's slide window is its own component's span, widened to contain the centered position
+ * (a short component's name is wider than the component) and clamped to the content rect — a name
+ * still reads as its component's from anywhere over it, which is what makes sliding cheaper than
+ * a row drop. Rows run from [baseY] down to the footer band; row 0 always exists so a sheet with
+ * no vertical room at all still prints its labels where it always did.
+ */
+internal fun planComponentLabels(
+    spans: List<ComponentLabelSpan>,
+    labelPaint: Paint,
+    geomRect: RectF,
+    baseY: Float,
+    xAt: (Float) -> Float,
+    reserved: List<BelowShaftLabelLayout.Box>,
+): ComponentLabelPlan {
+    val fm = labelPaint.fontMetrics
+    val rowStep = labelPaint.textSize * 1.4f
+
+    val rows = buildList {
+        var r = 0
+        while (r == 0 || (baseY + r * rowStep + fm.descent <= geomRect.bottom && r < COMPONENT_LABEL_MAX_ROWS)) {
+            val baseline = baseY + r * rowStep
+            add(BelowShaftLabelLayout.RowBand(top = baseline + fm.ascent, bottom = baseline + fm.descent))
+            r++
+        }
+    }
+
+    val requests = spans.map { span ->
+        val x0 = min(xAt(span.startMm), xAt(span.endMm))
+        val x1 = max(xAt(span.startMm), xAt(span.endMm))
+        val w = labelPaint.measureText(span.text)
+        val centered = (x0 + x1) * 0.5f - w * 0.5f
+        val preferred = centered.coerceIn(geomRect.left, max(geomRect.left, geomRect.right - w))
+        BelowShaftLabelLayout.Request(
+            width = w,
+            preferredLeft = preferred,
+            minLeft = min(x0, preferred).coerceAtLeast(geomRect.left),
+            maxRight = max(x1, preferred + w).coerceAtMost(geomRect.right),
+        )
+    }
+
+    return ComponentLabelPlan(
+        placements = BelowShaftLabelLayout.place(requests, reserved, rows),
+        rowStep = rowStep,
+        textSize = labelPaint.textSize,
+    )
 }
 
 internal fun computeDetailPtPerMm(spec: ShaftSpec, geomWidthPt: Float, geomHeightPt: Float): Float {

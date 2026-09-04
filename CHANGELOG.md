@@ -8,6 +8,34 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-09-03
 
+### fix(pdf): component names no longer print through their own Ø callouts
+
+The schematic hangs two things under the shaft — the component-name labels and the Ø
+callouts — and both anchor on a component's **center**. A component printing a name and a
+diameter therefore aimed two strings at the same x and set one through the other; an
+on-device sheet showed "AFT Liner" struck through by `Ø 7.936"`. Each pass tracked
+collisions only against its own kind, which is blind exactly where the two meet.
+
+They share ONE collision space now, the rule the dimension rails already follow:
+
+- **New pure engine** `geom/BelowShaftLabelLayout.kt` places every name at once against the
+  callouts as obstacles, in the rails' resolution order — **slide the name horizontally along
+  its own component's span** first (a name reads as its component's from anywhere over it, so
+  this costs no vertical room), and only **drop a row** when no slide fits.
+- **The obstacles are measured, not guessed**: `DiameterLeaderRenderer.occupancy(calls)`
+  returns the value boxes and the leader lines off the same geometry the renderer inks, so the
+  reservation and the ink cannot disagree. Callouts are planned before the names and drawn
+  after; a callout never moves for a name.
+- **Rows stop at the footer band**, and a pass that still cannot place a name retries a point
+  smaller (down to 7 pt) rather than collapsing rows onto each other — the fit-loop posture the
+  dimension rails use. A name that fits nowhere takes the row it overlaps least and leaves a
+  breadcrumb; it is never dropped.
+
+Holds across compression: `ComponentLabelCalloutClearanceTest` sweeps the drawing widths a
+compressed x map produces, plus stacked dual values and blank drafts, and fails on any overlap.
+`BelowShaftLabelSvgPreviewTest` writes same-math SVG previews of the band to
+`build/reports/below-shaft-labels/`.
+
 ### fix(diagnostics): "Share diagnostic logs" no longer crashes the app
 
 On-device report: tapping Settings → Data → "Share diagnostic logs" killed the app, twice, and
