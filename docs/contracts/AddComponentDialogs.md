@@ -69,6 +69,10 @@ European keyway is whole millimetres on an otherwise imperial shaft, and typing 
 (`"<componentId>#kw"` in `unit_overrides`), resolved keyway → component → document, so a keyway
 with no choice behaves exactly as it always did.
 
+The same chip also selects which table the **"Standard size…"** picker offers — ANSI B17.1 in
+inches, DIN 6885-1 / ISO 773 in millimetres — since it is already the unit the keyway is typed and
+printed in. An inch keyway on a metric document still wants inch key stock.
+
 **Card-only (a carve-out from the parity rule):** the per-component **"Prints in: in | mm"**
 chip, at the FOOT of the card, shown on the explicit-**Body**, **Taper**, **Thread**, and **Liner** cards when
 Settings → Drawing → *Per-component units* is on. It is the **third** post-hoc display
@@ -100,6 +104,7 @@ still authored in inches on an inch document. That asymmetry is a known follow-u
 | Diameter (Ø) | Always |
 | KW from: AFT \| FWD chips | Always (keyway end-face reference). Default seeded by `ShaftSpec.suggestedBodyKeywayEnd`: opposite the shaft's existing keyway when exactly one side is taken (an aft taper keyway suggests FWD, and vice versa); both/neither → AFT. The SAME seed drives the card's chips for a not-yet-real keyway (parity of behavior, on-device report: a new body keyway defaulting onto the taken side read as a second aft keyway). A seed only — the chips always win, and nothing stored is ever rewritten by it |
 | KW W / KW D / KW L | Always (blank = 0 = no keyway) |
+| "Standard size…" picker | Always, inside the keyway section, directly under the W × D row. A menu of standard key stock (ANSI B17.1 in inches, DIN 6885-1 in mm — the keyway unit chooses; `geom/KeyStockStandards.kt`), the size the standard names for the body's Ø listed first. A pick fills W and D through the same path typing them takes and writes nothing on its own — never on a Ø change, never over an existing W × D |
 | KW Offset from AFT / FWD | Always (label follows chip; 0 = open, > 0 = floating) |
 | Keyway spooned toggle | Always (disabled + "N/A — floating" when offset > 0) |
 | Keyways 180° apart toggle | Only when the shaft will have ≥ 2 keyways (≥ 1 existing **and** this dialog's keyway is fully defined) |
@@ -169,6 +174,7 @@ unit override for that thread; see `docs/DATA_MODEL.md`.
 | Rate mode: Auto \| Manual | Always |
 | Rate | Always (read-only in Auto, editable in Manual) |
 | Keyway fields | Always |
+| "Standard size…" picker | Always, directly under the W × D row — the same menu as `AddBodyDialog`, suggested off the taper's **LARGE** end (a key is specified for the section it seats in) |
 | Keyways 180° apart toggle | Only when the shaft will have ≥ 2 keyways (≥ 1 existing **and** this dialog's keyway is fully defined) |
 | Keyways 90° apart toggle | Same condition as the 180° toggle |
 | CW \| CCW direction chips | Only when the Keyways 90° apart toggle is on |
