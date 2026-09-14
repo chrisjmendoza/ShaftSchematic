@@ -68,6 +68,10 @@ Responsibilities
   inside a `systemBarsPadding()` column and pass nothing. The string comes from the pure
   `editorDocumentTitleText`, so the format is asserted without a Compose harness.
 
+  The strip is also **tappable** — it is the document's naming affordance: a tap names an
+  unsaved document (the Save As screen) or renames a saved one, decided once in `AppNav` and
+  plumbed here as `onTitleClick` exactly as `onSave` is, so all five tabs behave identically.
+
 - **Header Row (TopAppBar):**  
   - Hamburger icon → opens the editor sidebar (Schematic / Runout / Wear tabs)
   - Undo/Redo history menu (`HistoryMenu`) — general session-scoped undo/redo

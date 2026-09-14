@@ -86,6 +86,8 @@ fun ShaftRoute(
     onOpen: () -> Unit,
     onSave: () -> Unit,
     onSaveAs: () -> Unit = {},
+    /** Tap on the document title strip — names an unsaved document, renames a saved one. */
+    onTitleClick: (() -> Unit)? = null,
     /** Open "Duplicate for mate" — writes a sibling document; the session is untouched. */
     onDuplicateForMate: () -> Unit = {},
     /** Close the current document (guarded for unsaved work) and return to Start. */
@@ -237,6 +239,7 @@ fun ShaftRoute(
         spec = spec,
         documentName = currentDocumentName,
         hasUnsavedChanges = hasUnsavedChanges,
+        onTitleClick = onTitleClick,
         resolvedComponents = resolvedComponents,
         unit = unit,
         customer = customer,

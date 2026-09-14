@@ -43,6 +43,12 @@ fun ShaftEditorRoute(
     onOpen: () -> Unit,
     onSave: () -> Unit,
     onSaveAs: () -> Unit = {},
+    /**
+     * Tap on the document title strip. One action for every tab — the decision between naming
+     * an unsaved document and renaming a saved one belongs to the nav layer, which owns both
+     * destinations; a per-tab branch here would let the same strip mean different things.
+     */
+    onTitleClick: (() -> Unit)? = null,
     /** Open "Duplicate for mate" — writes a sibling document; the session is untouched. */
     onDuplicateForMate: () -> Unit = {},
     /** Close the current document (guarded for unsaved work) and return to Start. */
@@ -93,6 +99,7 @@ fun ShaftEditorRoute(
                 onOpen = onOpen,
                 onSave = onSave,
                 onSaveAs = onSaveAs,
+                onTitleClick = onTitleClick,
                 onDuplicateForMate = onDuplicateForMate,
                 onCloseDocument = onCloseDocument,
                 onExportPdf = onExportPdf,
@@ -105,18 +112,21 @@ fun ShaftEditorRoute(
                 vm = vm,
                 onOpenSidebar = { sidebarOpen = true },
                 onSave = onSave,
+                onTitleClick = onTitleClick,
             )
 
             EditorTab.WEAR -> WearRoute(
                 vm = vm,
                 onOpenSidebar = { sidebarOpen = true },
                 onSave = onSave,
+                onTitleClick = onTitleClick,
             )
 
             EditorTab.UNDERCUT -> UndercutRoute(
                 vm = vm,
                 onOpenSidebar = { sidebarOpen = true },
                 onSave = onSave,
+                onTitleClick = onTitleClick,
             )
 
             EditorTab.OUTPUT -> OutputRoute(
@@ -124,6 +134,7 @@ fun ShaftEditorRoute(
                 onOpenSidebar = { sidebarOpen = true },
                 onOpenRunoutTab = { activeTab = EditorTab.RUNOUT },
                 onSave = onSave,
+                onTitleClick = onTitleClick,
             )
         }
 

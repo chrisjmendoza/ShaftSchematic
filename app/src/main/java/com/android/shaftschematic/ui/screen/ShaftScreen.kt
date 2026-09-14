@@ -137,6 +137,8 @@ fun ShaftScreen(
     documentName: String? = null,
     /** True while the session differs from the last saved/loaded state (title-bar asterisk). */
     hasUnsavedChanges: Boolean = false,
+    /** Tap on the document title strip — names an unsaved document, renames a saved one. */
+    onTitleClick: (() -> Unit)? = null,
     resolvedComponents: List<ResolvedComponent> = emptyList(),
     unit: UnitSystem,
     customer: String,
@@ -341,6 +343,7 @@ fun ShaftScreen(
                 documentName = documentName,
                 hasUnsavedChanges = hasUnsavedChanges,
                 modifier = Modifier.windowInsetsPadding(WindowInsets.statusBars),
+                onClick = onTitleClick,
             )
             TopAppBar(
                 // Status-bar inset is consumed by the title strip above; the default TopAppBar

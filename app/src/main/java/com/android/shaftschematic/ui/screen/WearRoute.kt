@@ -137,6 +137,8 @@ fun WearRoute(
     onOpenSidebar: () -> Unit = {},
     /** Quick-save the document (prompts for a name when it has never been saved). */
     onSave: () -> Unit = {},
+    /** Tap on the document title strip — names an unsaved document, renames a saved one. */
+    onTitleClick: (() -> Unit)? = null,
 ) {
     val spec               by vm.spec.collectAsState()
     val currentDocumentName by vm.currentDocumentName.collectAsState()
@@ -352,6 +354,7 @@ fun WearRoute(
         EditorDocumentTitle(
             documentName = currentDocumentName,
             hasUnsavedChanges = hasUnsavedChanges,
+            onClick = onTitleClick,
         )
 
         // ── Toolbar ──────────────────────────────────────────────────────────

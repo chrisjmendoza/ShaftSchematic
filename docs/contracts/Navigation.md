@@ -3,10 +3,11 @@ Navigation Contracts
 
 Files: AppNav.kt, InternalDocRoutes.kt, PdfExportRoute.kt (ui/nav/);
 ShaftEditorRoute.kt, ShaftRoute.kt, StartScreen.kt, RunoutRoute.kt, WearRoute.kt,
-UndercutRoute.kt, HelpRoute.kt (ui/screen/)  
+UndercutRoute.kt, HelpRoute.kt, EditorDocumentTitle.kt, RenameShaftDocumentDialog.kt
+(ui/screen/)  
 Layer: UI → Nav
 
-Version: v0.10 (2026-09-01)
+Version: v0.11 (2026-09-14)
 
 Invariants
 - Routes are stable, typed constants or sealed routes.
@@ -66,10 +67,25 @@ Responsibilities
 - **ShaftEditorRoute.kt:** Editor container — sidebar, tab switch, back handling.
 - **ShaftRoute.kt:** Wire VM ↔ ShaftScreen; own SAF PDF export for the schematic.
 - **StartScreen.kt:** Landing screen — recents, "Unsaved drafts" card (up to 3 entries
-  from `ShaftViewModel.drafts`: name or "Untitled draft", relative age, tap to
+  from `ShaftViewModel.drafts`: row title (see below), relative age, tap to
   `continueDraft(id)`, X icon → "Discard this draft?" confirm → `discardDraft(id)`),
   entry to editor/settings/help. AppNav wires `drafts`/`continueDraft`/`discardDraft`
   from the VM. See `docs/contracts/Persistence.md` (Autosave / draft ring).
+
+Start screen draft names (`StartScreen.kt`, pure `draftRowTitle(entry)`)
+- A draft row's primary text is, in order: the **saved file name** it was opened from
+  (extension stripped), else the name the save screen would suggest —
+  `DocumentNaming.suggestedBaseName(jobNumber, customer, vessel)` off the row's own
+  `SessionSnapshot` — else the literal **"Untitled draft"**. A draft that was never saved
+  still carries the project information the user typed, and three rows reading "Untitled
+  draft" can only be told apart by their age, which is not how a shaft is remembered.
+- When the **suggested** name is used the secondary line reads **"Unsaved draft · \<relative
+  age\>"**, so a row that looks like a saved file is never taken for one; that line also
+  carries the age, and the trailing age column is dropped for those rows so the time does not
+  print twice. The saved-name and "Untitled draft" rows are unchanged — age in the trailing
+  column, no secondary line.
+- This NAMES A ROW and nothing else: no name is written to the draft, the entry stays unsaved
+  and unnamed, and only saving (or the title-strip tap) names the document.
 
 Document title strip (`ui/screen/EditorDocumentTitle.kt`)
 - **Every** editor tab renders `EditorDocumentTitle` directly above its toolbar: the saved
@@ -86,6 +102,30 @@ Document title strip (`ui/screen/EditorDocumentTitle.kt`)
   the asterisk is actionable where it is seen — otherwise the user must navigate back to
   the Schematic to save. `onSave` is plumbed from `AppNav` through `ShaftEditorRoute`; it
   quick-saves a named document and routes to `saveLocal` for an unnamed one.
+- **The strip is TAPPABLE — it is the document's naming affordance.** `EditorDocumentTitle`
+  takes an optional `onClick`; non-null makes the strip `clickable` (Material ripple,
+  `Role.Button`, contentDescription "Document name — tap to rename" — the rendered text is a
+  name plus a bare asterisk and says nothing about what tapping does). A null `onClick` leaves
+  the strip inert with no click semantics.
+- **The tap's meaning is decided in ONE place — `AppNav`**, beside `onSave`/`onSaveAs`:
+  an **untitled** document (`currentDocumentName == null`) navigates to `saveLocal`, the Save
+  As route that already seeds the name from `DocumentNaming.suggestedBaseName`; a **saved**
+  document opens `RenameShaftDocumentDialog` and, on success, `setCurrentDocumentName(toName)`
+  is what makes the strip follow the rename on every tab. `onTitleClick` is plumbed from
+  `AppNav` through `ShaftEditorRoute` to all five tabs exactly as `onSave` is. **Every tab gets
+  the same behaviour** — there is deliberately no "current tab" branch, so one strip can never
+  come to mean different things on different tabs.
+- **Shared rename dialog** (`ui/screen/RenameShaftDocumentDialog.kt`, testTags
+  `rename_doc_field` / `rename_doc_confirm`): used by BOTH the editor's title tap and the Open
+  screen's per-file "Rename" menu item, which is where it came from. It owns the typed name and
+  the storage work — sanitize → `InternalStorage.normalizeShaftDocName` → blank check →
+  same-name check → `exists`-refuses-overwrite → `InternalStorage.rename` — and reports through
+  `onRenamed(toName)` / `onDismiss` / `onError(message)`. The callers own the consequences,
+  which differ: the Open screen refreshes its list and updates the session name when the renamed
+  file was the open one; the editor updates the session name and posts errors to its own
+  `SnackbarHost` (the one `offerRenameAfterQuickSave` uses). `onRenamed` and `onDismiss` are
+  terminal — the caller closes the dialog; `onError` leaves it open over the name to fix.
+  A rename **never overwrites**, the same posture as the post-save rename offer.
 - **Rename offer after a quick-save.** A document saved before its Job # / Customer / Vessel
   existed keeps whatever name it was first given, so after the editor's quick-save AppNav
   compares that name against `DocumentNaming.renameSuggestionBase` (the same suggestion the
