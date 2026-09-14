@@ -37,6 +37,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.data.AutosaveManager
 import com.android.shaftschematic.doc.stripShaftDocExtension
+import com.android.shaftschematic.util.DocumentNaming
 
 /**
  * StartScreen
@@ -119,6 +120,13 @@ fun StartScreen(
                             color = MaterialTheme.colorScheme.outlineVariant,
                             modifier = Modifier.padding(horizontal = 12.dp)
                         )
+                        val title = draftRowTitle(entry)
+                        // A row titled from the draft's own job info looks exactly like a saved
+                        // file's row, so it says outright that it is not one — and carries its
+                        // age on that same line, since the trailing age column would then
+                        // print the time twice.
+                        val titleIsDerived = savedDraftBaseName(entry) == null &&
+                            title != UNTITLED_DRAFT_TITLE
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -127,21 +135,31 @@ fun StartScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = entry.documentName
-                                    ?.let { stripShaftDocExtension(it) }
-                                    ?.takeIf { it.isNotBlank() }
-                                    ?: "Untitled draft",
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.weight(1f),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                text = relativeAge(nowMs, entry.updatedAtEpochMs),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = title,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                if (titleIsDerived) {
+                                    Text(
+                                        text = "Unsaved draft · " +
+                                            relativeAge(nowMs, entry.updatedAtEpochMs),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                            if (!titleIsDerived) {
+                                Text(
+                                    text = relativeAge(nowMs, entry.updatedAtEpochMs),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                             IconButton(onClick = { pendingDiscardId = entry.draftId }) {
                                 Icon(
                                     imageVector = Icons.Filled.Close,
@@ -223,6 +241,36 @@ fun StartScreen(
         OutlinedButton(onClick = onSendFeedback, modifier = Modifier.fillMaxWidth()) { Text("Send Feedback") }
     }
 }
+
+/** Primary text for a draft that carries neither a saved name nor any project information. */
+const val UNTITLED_DRAFT_TITLE = "Untitled draft"
+
+/**
+ * Primary text for one "Unsaved drafts" row.
+ *
+ * A draft the user never saved still holds the job number / customer / vessel they typed, so the
+ * row is named the way the save screen would name the file — three rows reading "Untitled draft"
+ * can only be told apart by their age, which is not how anyone remembers a shaft. The saved name
+ * wins when there is one (the draft was opened from a file), and the literal placeholder is the
+ * last resort for a draft with nothing to say about itself.
+ *
+ * Pure, so the branches are asserted without a Compose harness. This NAMES a row; it never
+ * writes a name anywhere — the draft stays unsaved and unnamed until the user saves it.
+ */
+fun draftRowTitle(entry: AutosaveManager.DraftEntry): String {
+    savedDraftBaseName(entry)?.let { return it }
+
+    val snapshot = entry.snapshot
+    return DocumentNaming.suggestedBaseName(
+        jobNumber = snapshot.jobNumber,
+        customer = snapshot.customer,
+        vessel = snapshot.vessel,
+    ) ?: UNTITLED_DRAFT_TITLE
+}
+
+/** The file name this draft was opened from, extension stripped, or null for a new drawing. */
+private fun savedDraftBaseName(entry: AutosaveManager.DraftEntry): String? =
+    entry.documentName?.let(::stripShaftDocExtension)?.takeIf { it.isNotBlank() }
 
 /** Coarse "time since" for saved files (day granularity is enough for these). */
 private fun relativeDate(nowMs: Long, lastModifiedMs: Long): String {

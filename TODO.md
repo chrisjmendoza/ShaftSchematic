@@ -150,9 +150,6 @@ androidTest) or the Add dialogs; their logic is pure and covered.
 
 ## 3. Backlog (v0.5.x+)
 
-- [ ] Title-strip follow-ups (liked, not yet requested): tappable title → Save As / rename;
-  smarter untitled-draft row names on StartScreen (via `DocumentNaming.suggestedBaseName`);
-  title strip on the Runout/Wear tabs too.
 - [ ] Selection → contextual "Add near selected" defaults.
 - [ ] Inline "Add here" buttons between components in the list.
 - [ ] Preset library (common tapers, common shoulder patterns).

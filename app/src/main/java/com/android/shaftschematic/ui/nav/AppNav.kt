@@ -42,6 +42,7 @@ import com.android.shaftschematic.ui.screen.DeveloperOptionsRoute
 import com.android.shaftschematic.ui.screen.DuplicateForMateDialog
 import com.android.shaftschematic.ui.screen.HelpRoute
 import com.android.shaftschematic.ui.screen.PdfPreviewScreen
+import com.android.shaftschematic.ui.screen.RenameShaftDocumentDialog
 import com.android.shaftschematic.ui.screen.SettingsRoute
 import com.android.shaftschematic.ui.screen.ShaftEditorRoute
 import com.android.shaftschematic.ui.screen.StartScreen
@@ -227,6 +228,11 @@ fun AppNav(vm: ShaftViewModel) {
             var mateDialogOpen by remember { mutableStateOf(false) }
             var mateExistingBases by remember { mutableStateOf(emptyList<String>()) }
 
+            // Rename reached from the title strip. Only a SAVED document has a file to rename;
+            // an unnamed one goes to the save screen instead, so this is never open without a
+            // current name (see onTitleClick).
+            var renameDialogOpen by remember { mutableStateOf(false) }
+
             val goHome: () -> Unit = {
                 nav.navigate("start") {
                     launchSingleTop = true
@@ -266,6 +272,17 @@ fun AppNav(vm: ShaftViewModel) {
                         }
                     },
                     onSaveAs = { nav.navigate("saveLocal") },
+                    // The title strip is the document's naming affordance, and the choice of
+                    // what naming MEANS is made here, once, for all five tabs: a document that
+                    // has never been saved has no file to rename, so it goes to the save screen
+                    // (which already seeds the suggested name); a saved one is renamed in place.
+                    onTitleClick = {
+                        if (currentDocumentName == null) {
+                            nav.navigate("saveLocal")
+                        } else {
+                            renameDialogOpen = true
+                        }
+                    },
                     onDuplicateForMate = {
                         scope.launch {
                             mateExistingBases = withContext(Dispatchers.IO) {
@@ -323,6 +340,24 @@ fun AppNav(vm: ShaftViewModel) {
                             }
                         },
                     )
+                }
+
+                // Updating the session's document name is what makes the title strip follow the
+                // rename — on whichever tab the user tapped it, and on every other one.
+                if (renameDialogOpen) {
+                    currentDocumentName?.let { fromName ->
+                        RenameShaftDocumentDialog(
+                            fromName = fromName,
+                            onDismiss = { renameDialogOpen = false },
+                            onRenamed = { toName ->
+                                renameDialogOpen = false
+                                vm.setCurrentDocumentName(toName)
+                            },
+                            onError = { message ->
+                                scope.launch { editorSnackbarHostState.showSnackbar(message) }
+                            },
+                        )
+                    }
                 }
 
                 // The tabs own their own insets, so the host needs only the navigation bar's.

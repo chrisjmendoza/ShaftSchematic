@@ -8,6 +8,29 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-09-14
 
+### feat(editor): tap the title to name the document; drafts on the Start screen name themselves
+
+The document title strip was a read-only label on all five tabs. It is now the naming
+affordance it already looked like — the desktop-editor gesture of clicking a title to rename
+it — and an unsaved draft on the Start screen says which shaft it is instead of reading
+"Untitled draft" three times over.
+
+- **Tap the title strip on any tab.** A document that has never been saved opens the Save As
+  screen (already seeded with the suggested name); a saved one opens a rename dialog, and the
+  strip follows the new name on every tab. The choice between the two is made once, in
+  `AppNav` — the tabs pass the tap along and have no naming behaviour of their own, so the
+  same strip can never come to mean different things on different tabs.
+- **One rename dialog, two callers.** The Open screen's inline "Rename saved shaft" dialog is
+  now the shared `RenameShaftDocumentDialog`, which owns the typed name and the storage work
+  while each caller owns what a rename means there. Its rules are unchanged and can no longer
+  drift between the two surfaces: a blank name is refused, a name that comes back to the
+  current one just dismisses, and an existing file is **never** overwritten.
+- **Unsaved drafts name themselves.** A draft row is titled with the name the save screen
+  would suggest from the job number / customer / vessel already typed into it, falling back to
+  "Untitled draft" only when the draft carries nothing at all. A row named that way reads
+  "Unsaved draft · <age>" underneath, so a named-looking row is never mistaken for a saved
+  file. The draft stays unsaved and unnamed — this names a ROW, and writes nothing.
+
 ### feat(pdf): Output font — every sheet set in the shop's chosen face
 
 **Settings → Drawing → "Output font"** picks the typeface every exported PDF is set in — dimension
