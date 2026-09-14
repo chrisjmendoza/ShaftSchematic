@@ -29,6 +29,34 @@ standard rather than remembered and typed.
 - Both tables are **provisional**, chosen without shop input — the `LINER_SHOULDER_STD_RADII_IN`
   posture. Nothing derives from them except what the user picks off the menu.
 
+### chore(build): Compose BOM 2024.09.00 → 2026.04.01
+
+`2026.04.01` is the last BOM that builds against compileSdk 36 — the next one (2026.08.00) requires
+37, which the Robolectric chain still blocks — so it moves alone and the compileSdk-37 bump stays
+one coordinated change for later (TODO §"Build tooling").
+
+- **The real change is Material3 1.3.0 → 1.4.0.** UI and Foundation were *already* running 1.9.2:
+  the newer activity/lifecycle/navigation dependencies out-rank a BOM constraint, so the old pin
+  had been overridden upward for some time and only Material3 was actually being held back. The
+  bump takes UI and Foundation 1.9.2 → **1.11.0** and Material3 1.3.0 → **1.4.0**, which is where
+  the visual pass is owed: component defaults live in Material3, and the sliders, bottom sheets,
+  chips, and dialogs are the app's whole tuning surface.
+- **No source changes.** Main, unit-test, and androidTest sources all compile against the new
+  surface untouched; the suite is green at 2219 tests, 0 failures. Nothing in the app leaned on an
+  API the new versions removed.
+- **No build config went stale.** `buildFeatures { compose = true }` with the Kotlin 2.x Compose
+  plugin is still the whole configuration — there is no `composeOptions` block or compiler
+  extension version to drop.
+- **`material-icons-extended` moves 1.7.0 → 1.7.8 only.** The BOM still pins the frozen icon
+  artifacts at their final version, so the icon set is unchanged and the pre-existing
+  `Icons.Filled.Article` → `Icons.AutoMirrored.Filled.Article` deprecation is neither new nor
+  resolved here.
+- **One new deprecation, deliberately not chased**: the `rememberTransformableState` overload whose
+  `onTransformation` lambda takes no centroid, at the four pinch-zoom surfaces (wear detail,
+  undercut detail, runout canvas, PDF preview overlay). Taking the centroid changes where a pinch
+  zooms from — a gesture change, not a rename — so it waits for a pass that can be judged
+  on-device.
+
 ---
 
 ## 2026-09-04
