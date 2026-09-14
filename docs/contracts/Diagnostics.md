@@ -107,6 +107,45 @@ escapes a `launch`, so every such surface has to hold its own.
   the canonical site is `PdfSafExport`'s composer catch (the user sees an error page; the
   throwable behind it goes to AppLog with its stack and to Crashlytics as a non-fatal).
 
+## Developer Options — the switchboard
+
+Unlocked by seven taps on About → App Version; the entry appears in Settings → Support once
+`devOptionsEnabled` is set. Three sections, in the order a problem is worked: what to draw on the
+screen in front of you, what to trace with a cable attached, what to send back afterwards.
+
+- **Debug overlays** — six draw-only switches (OAL debug label, OAL badge in the preview box,
+  component debug labels, render layout overlay, render OAL markers, dimension debug overlay).
+  Each row carries a line saying what it draws; the labels alone name a variable, not a picture.
+- **Verbose logging** — the `VerboseLog` master plus its four categories. The categories are
+  **disabled, not hidden, while the master is off**: `VerboseLog.isEnabled` already ANDs them, so
+  an enabled-looking switch that changes nothing is the lie; a switch that disappears reads as a
+  setting that was lost.
+- **Diagnostics** — build identity (`VERSION_NAME`/`VERSION_CODE`/`GIT_SHA`/`BUILD_TYPE`, so
+  "I'm on the latest" can be checked rather than believed), live crash-reporting state
+  (`CrashReporter.isActive` — whether *this* build got a `google-services.json`), and three
+  actions: record a test non-fatal, view recent breadcrumbs, force a test crash.
+
+**The master switch is a real master switch.** `ShaftRoute` ANDs all six overlay flags with
+`devOptionsEnabled` at one seam, so turning Developer Options off clears the drawing on the spot.
+`SettingsStore.resetDevSubFlagsIfDisabled` still clears the stored flags at the next start, but it
+cannot be the only gate: without the in-session AND, an overlay left on survives on a screen that
+no longer has the switch to turn it off. `ShaftPreviewPanel` therefore carries no gate of its own —
+one flag gated twice and five gated once is how the next one gets missed.
+
+### The three actions
+
+- **Record test non-fatal** — writes a breadcrumb and calls `CrashReporter.recordNonFatal`, then
+  says in the snackbar which of those actually happened. It is the end-to-end check on Firebase
+  wiring that does not cost the process, and it works from the shop floor rather than a console.
+- **View recent breadcrumbs** — `AppLog.tail(300)`, the rotated half first so a tail spanning a
+  rotation still reads in order. "Share diagnostic logs" needs an email app and a person at the
+  other end; a shop tablet has neither, and the question there is usually just how far an export
+  got. Read-only, and like every other path in `AppLog` it swallows its own errors.
+- **Force a test crash** — behind a confirm dialog that says what is lost, and last in the section.
+  It is the only way to exercise the handler chain the contract above turns on: `AppLog`'s handler
+  writes and flushes, then delegates to Crashlytics'. Both halves are invisible until something
+  actually dies.
+
 ## Versions
 
 Firebase BOM 34.18.0, google-services 4.5.0, crashlytics gradle plugin 3.0.8 — chosen against

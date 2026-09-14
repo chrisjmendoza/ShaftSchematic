@@ -458,7 +458,6 @@ fun ShaftScreen(
                 spec = spec,
                 resolvedComponents = resolvedComponents,
                 unit = unit,
-                devOptionsEnabled = devOptionsEnabled,
                 showOalInPreviewBox = showOalInPreviewBox,
                 highlightEnabled = showHighlightSelection,
                 highlightId = selectedComponentId,
