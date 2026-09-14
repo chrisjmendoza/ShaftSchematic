@@ -5,14 +5,14 @@ in every preview overlay's top bar beside Export (each route reuses its own tab-
 action, so the two entry points cannot drift); the schematic and shared options sheets both
 lead with a compact "Content" chip row in place of the old switch rows; both sheets reorder
 around a single unified sequence (Shaft height now leads, ahead of S-break and Line
-thickness; Liner compression and the new "Runout bubbles" size/drop sliders follow; Dimension
+thickness; Liner & taper compression and the new "Runout bubbles" size/drop sliders follow; Dimension
 arrows, Fractions, then the "Measurement reference" and "Shade in Components" sections
 collapse into expandables, with Dual units last); the wear document's MAIN profile band now
 takes the shared per-job "Shaft height" multiplier too (§5.7); and "Shade in PDF" /
 "Dimension tiering reference" are renamed "Shade in Components" / "Measurement reference"
 everywhere, Settings included, with a new "Explicit bodies only" sub-checkbox under Bodies.
 2026-08-12 — §5.6 documents the consolidated preview's Tune sheet gaining
-Blank draft, Shaft height, Liner compression, and Measurement reference (the schematic
+Blank draft, Shaft height, Liner & taper compression, and Measurement reference (the schematic
 Tune sheet's applicable set, minus Component labels and the blank Ø-callouts sub-toggle,
 which the consolidated composer never reads). 2026-08-06 (b) — §5.4/§5.5 gain the one-collision-space rule for dimension
 labels (pure `geom/DimensionRailLayout.kt`: rail lines are obstacles too, slide along the
@@ -605,7 +605,7 @@ row** (`ContentChipRow`/`ContentChip`, `ShaftHeightSlider.kt`) — **Blank draft
 callouts** (enabled only while Blank draft is on, still testTag `pdf_blank_dia_callouts_toggle`),
 **Labels** — replacing the old switch rows; the captions they used to carry moved to Help, since
 three explained rows cost exactly the room the sliders below need. Then, in order: the
-**live-tuning group** — **"Shaft height"**, Body S-break, Line thickness, Liner compression
+**live-tuning group** — **"Shaft height"**, Body S-break, Line thickness, Liner & taper compression
 (the first and last §5.7 — the same per-job `RunoutConfig` values the Consolidated Output tab
 exposes, §5.6; the group leads because these are the controls the page-strip layout exists
 to keep judgeable, and Shaft height leads it — the control reached for most, on-device
@@ -716,14 +716,14 @@ sub-checkbox) — Dual units + layout LAST. This is the fullest instance of the 
 every gated row is on. The other three tabs reuse the same sheet with rows gated off by
 what their composer actually reads:
 - **Runout** (the classic standalone sheet) keeps the Content chips, Shaft height, Body
-  S-break (it draws compression breaks too), Line thickness, Liner compression, and the
+  S-break (it draws compression breaks too), Line thickness, Liner & taper compression, and the
   Runout bubbles sliders (its bubbles are the whole point of the sheet) — off: Dimension
   arrows and Measurement reference, since it draws no dimension rails.
 - **Wear** keeps the Content chip (Blank draft only — no Coupling face row), its own wear
   tuning block (Components election, Strip size, Trace depth, Wear area shade,
   Taper–liner join — `showWearControls`), **and now "Shaft height"** (the wear composer's
   MAIN profile band takes the shared multiplier too, §5.7) plus Line thickness — off:
-  Body S-break, Liner compression, Runout bubbles, Dimension arrows, and Measurement
+  Body S-break, Liner & taper compression, Runout bubbles, Dimension arrows, and Measurement
   reference (the wear composer takes none of them).
 - **Undercut** keeps only the Content chip (Blank draft) and Line thickness — its normal
   form draws no whole-shaft profile, so none of the sizing/compression/bubble controls
@@ -803,7 +803,11 @@ posture as its trace-depth/wear-band controls.
   floor equalizes unequal tapers when both clamp to it — and use a ratio-preserving
   fraction-of-true floor instead (`PROFILE_TAPER_MIN_FRAC_OF_TRUE` = 0.7, λ-fit like
   the liner raises, so the drawn height never yields to it; ratio preservation is
-  structural — both tapers scale by the same factor at every squeeze). The SCHEMATIC
+  structural — both tapers scale by the same factor at every squeeze). That 0.7 is a
+  BASELINE: tapers ride the "Liner & taper compression" request with the liners
+  (`taperMinFracOfTrue` = `max(0.7, linerMinFracOfTrue)`, applied in the one builder
+  `profileFeatureSpans`), so the two measured kinds keep the same fraction of true
+  length — see that control below. The SCHEMATIC
   composer additionally uses lean floors (`SCHEMATIC_MIN_THREAD_PT` 28 /
   `_BODY_RUN_PT` 40 / `_LINER_PT` 56) — its values live on dimension rails and
   callouts, so proportion wins there; the runout/consolidated sheet keeps the writable
@@ -857,26 +861,34 @@ posture as its trace-depth/wear-band controls.
   ~0.29, 1 1/2" on a 2" shaft needs 6 — and the height clamp above means a wide multiplier
   range cannot produce a wide drawing. Commits near the standard height snap to exactly
   100% (`snappedHeightScale`); a "Standard (X″)" button restores the default.
-- **Liner compression (per-job pair, same two surfaces)**: the measured components —
-  tapers and liners — are what the sheets are about, so liners can be held proportional
-  lengthwise. **The drawing height takes precedence; liner compression is secondary**
-  (on-device direction): neither control ever changes the drawn shaft height. Checkbox
-  "Keep liners proportional lengthwise" (`RunoutConfig.linersProportional`): liners hold
-  true-scale width up to what the page affords at the selected height; the slider is
-  disabled while checked. Slider "Liner compression" (`RunoutConfig.linerCompression`,
-  0–100%, default 100%): how far liners may foreshorten below true scale — 100% = down
-  to the 100 pt writable floor (historical behavior), 0% = not at all. Both feed the
+- **Liner & taper compression (per-job pair, same two surfaces)**: the measured
+  components — tapers and liners — are what the sheets are about, so BOTH kinds ride this
+  one request and can be held proportional lengthwise. **The drawing height takes
+  precedence; this control is secondary** (on-device direction): neither part ever changes
+  the drawn shaft height. Checkbox "Keep liners and tapers proportional lengthwise"
+  (`RunoutConfig.linersProportional`): both hold true-scale width up to what the page
+  affords at the selected height; the slider is disabled while checked. Slider "Liner &
+  taper compression" (`RunoutConfig.linerCompression`, 0–100%, default 100%): how far they
+  may foreshorten below true scale — 100% = liners down to the 100 pt writable floor and
+  tapers to their 0.7 baseline (historical behavior), 0% = not at all. Both feed the
   derived `linerMinFracOfTrue` → `ProfileFeatureSpan.minWidthFracOfTrue` (geom,
-  unit-tested): a BEST-EFFORT width floor of `max(100pt, frac × true width)` — the
-  scale solve ignores it entirely, and when the raised floors don't fit at the solved
-  scale they shrink uniformly to fit (`fracFitFactor`); flat floors
+  unit-tested): a BEST-EFFORT width floor of `max(100pt, frac × true width)` for liners
+  and `max(0.7, frac) × true width` for tapers (`taperMinFracOfTrue`) — the scale solve
+  ignores both entirely, and when the raised floors don't fit at the solved scale they
+  shrink uniformly to fit (`fracFitFactor`); flat floors
   and keyway pins are untouched, and only keyway pins may still yield the height.
+  Because the two kinds share one requested fraction and one λ, their kept fractions are
+  EQUAL wherever the request clears the taper baseline — that evenness is the point of the
+  coupling (on-device request: liners walking up to true length beside tapers pinned at
+  70% read uneven). The coupling is one-way upward; under the baseline tapers hold 0.7,
+  since they carry no flat floor to land on.
   Applies to the schematic (`composeShaftPdf(linerMinFracOfTrue)`) and the
   runout/consolidated sheets (from `config`); rides the `.shaft` envelope (additive,
-  legacy default = free compression). The readout under the slider shows LIVE what
-  liners actually keep — "Liners keep at least ~N% of true length. The drawn height
-  never changes." (`estimatedLinerKeptFracOfTrue`, `ShaftHeightSlider.kt`,
-  unit-tested).
+  legacy default = free compression, which prints exactly as it did before the coupling).
+  The readout under the slider shows LIVE what they actually keep — "Liners and tapers
+  keep at least ~N% of true length. The drawn height never changes." — and splits the two
+  numbers only when the request sits under the taper baseline
+  (`estimatedLinerKeptFracOfTrue`, `ShaftHeightSlider.kt`, unit-tested).
 
 ---
 

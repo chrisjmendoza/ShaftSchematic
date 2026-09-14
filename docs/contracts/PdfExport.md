@@ -133,7 +133,7 @@ Full-resolution preview through the shared `util/PdfRaster.renderPdfPageBitmap`
     Both caps keep the sheet clear of the status bar, which would otherwise leave no edge to
     swipe it back down by (on-device report).
 - **Live tuning:** the four tuning sliders — Line thickness, Body S-break, Shaft height,
-  Liner compression — reshape the page **while the finger is still on the track**
+  Liner & taper compression — reshape the page **while the finger is still on the track**
   ("see the differences without choosing, closing menu, opening menu, choosing" —
   on-device request). Each shared control (`ui/screen/ShaftHeightSlider.kt`) carries an
   optional `onDrag: (Float?) -> Unit`: the in-progress value every frame in the SAME units

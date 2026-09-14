@@ -16,12 +16,15 @@ import com.android.shaftschematic.model.keywayAbsSpanMm
  *   (its values live on rails and callouts, so proportion wins), the runout/consolidated
  *   sheet and the estimator keep the writable `PROFILE_MIN_*` floors.
  * - [linerMinFracOfTrue] — the per-job "Liner compression" raise (best-effort, λ-fitted;
- *   the drawn height never yields to it).
+ *   the drawn height never yields to it). It governs the TAPERS too ([taperMinFracOfTrue]),
+ *   so the two measured kinds foreshorten together.
  *
  * Structure shared by every consumer:
  * - Tapers: ratio-preserving fraction-of-true floor, NO flat floor (two very different
  *   taper lengths must never draw equal — on-device direction); the drawn height never
- *   yields to it.
+ *   yields to it. The fraction is the liner request, floored at
+ *   [PROFILE_TAPER_MIN_FRAC_OF_TRUE] — one control, one λ, so tapers and liners keep the
+ *   same fraction of true length wherever the request clears that baseline.
  * - Liners: compress in SIZE only above their flat floor — proportional foreshortening,
  *   never a body-style S-break cutout (on-device clarification).
  * - Threads: flat floor (the hatched stub stays legible).
@@ -37,11 +40,12 @@ fun profileFeatureSpans(
     threadFloorPt: Float,
     linerMinFracOfTrue: Float,
 ): List<ProfileFeatureSpan> = buildList {
+    val taperFrac = taperMinFracOfTrue(linerMinFracOfTrue)
     spec.tapers.forEach {
         add(
             ProfileFeatureSpan(
                 it.startFromAftMm, it.startFromAftMm + it.lengthMm, 0f,
-                minWidthFracOfTrue = PROFILE_TAPER_MIN_FRAC_OF_TRUE,
+                minWidthFracOfTrue = taperFrac,
             )
         )
     }

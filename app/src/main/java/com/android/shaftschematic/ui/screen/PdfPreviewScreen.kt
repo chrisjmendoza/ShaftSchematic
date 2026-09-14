@@ -776,7 +776,7 @@ private fun PdfOptionsSheet(
         HorizontalDivider()
         Spacer(Modifier.height(12.dp))
 
-        // ── Liner compression ────────────────────────────────────────────────
+        // ── Liner & taper compression ────────────────────────────────────────
         // Same per-job pair as the Consolidated Output tab (`RunoutConfig`).
         LinerCompressionControl(
             linersProportional = linersProportional,
