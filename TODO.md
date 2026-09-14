@@ -119,13 +119,6 @@ at most a pointer from here.
 - [ ] **Mixed-unit follow-ups**: carousel numeric *entry* fields still take the document unit
   (the chip governs how a component PRINTS, not how its fields are typed), so a metric keyway is
   typed in inches and stored mm; and standard metric key-stock presets for keyways aren't built.
-- [ ] **Additional output fonts** (requested 2026-08-14) — let a shop pick a look rather than
-  take the platform default. Constraints: the PDF composers draw with `android.graphics.Paint`,
-  so a face must be a real `Typeface` (bundled `.ttf` or a system family); every text metric is
-  measured live from the paint, so a swap is safe by construction *provided* nothing hard-codes a
-  width. Check the fraction stack against a condensed or slab face before shipping —
-  `FractionTextRendererTest` exists to catch exactly that. Same pref posture as
-  `PdfPrefs.fractionStyle`.
 
 ### Tech debt
 

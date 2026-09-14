@@ -5,7 +5,6 @@ import android.graphics.Color
 import android.graphics.DashPathEffect
 import android.graphics.Paint
 import android.graphics.RectF
-import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import com.android.shaftschematic.model.*
 import com.android.shaftschematic.geom.DimensionRailLayout
@@ -61,6 +60,7 @@ import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.VerboseLog
 import com.android.shaftschematic.util.DualLabel
 import com.android.shaftschematic.util.DualUnitLayout
+import com.android.shaftschematic.util.OutputTypography
 import com.android.shaftschematic.util.dualStackMetrics
 import com.android.shaftschematic.util.measureDualLabel
 import com.android.shaftschematic.util.setsStacked
@@ -281,7 +281,7 @@ fun composeRunoutPdf(
     val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
         textSize = TEXT_PT
-        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
+        typeface = OutputTypography.active
         color = Color.BLACK
     }
     // ── Page regions ─────────────────────────────────────────────────────────
@@ -1447,7 +1447,7 @@ private fun drawPlacedBubbles(
         // Printed value sits small inside the (larger) circle, leaving room to hand-write.
         textSize = r * 0.60f
         textAlign = Paint.Align.CENTER
-        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
+        typeface = OutputTypography.active
     }
     val highSpot = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.rgb(198, 40, 40) // red — the high spot, per shop convention

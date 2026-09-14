@@ -166,6 +166,7 @@ fun UndercutRoute(
     val pdfShadedTapers    by vm.pdfShadedTapers.collectAsState()
     val pdfShadedLiners    by vm.pdfShadedLiners.collectAsState()
     val pdfFractionStyle   by vm.pdfFractionStyle.collectAsState()
+    val pdfOutputFont      by vm.pdfOutputFont.collectAsState()
     // Dual-unit layout: this document stacks its dual values like every other
     // (`wantDualStacked`), so its options sheet has to show the stored choice — and the
     // preview has to redraw when it changes.
@@ -320,10 +321,12 @@ fun UndercutRoute(
     // displayUnits snapshot built below, not through any field already keyed above.
     // pdfDualUnitLayout joins them — the composer reads it off the PdfPrefs snapshot, so
     // without the key the sheet's own layout chips would change nothing on the page.
+    // pdfOutputFont is a key for the same reason: the typeface reaches the ink through
+    // OutputTypography.active, which is not snapshot state either.
     LaunchedEffect(showPreview, spec, unit, resolvedComponents,
                    lineThicknessScale, pdfShadedBodies, pdfShadedTapers, pdfShadedLiners,
-                   undercutRecord, blankDraft, pdfFractionStyle, unitOverrides, dualUnits,
-                   pdfDualUnitLayout) {
+                   undercutRecord, blankDraft, pdfFractionStyle, pdfOutputFont, unitOverrides,
+                   dualUnits, pdfDualUnitLayout) {
         if (!showPreview) { previewBitmap = null; return@LaunchedEffect }
         previewLoading = true
         val prefsSnapshot     = vm.currentPdfPrefs

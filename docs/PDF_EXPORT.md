@@ -159,7 +159,13 @@ Top of page, full width.
 - Revision (optional)
 
 ### Font Rules:
-- Sans-serif
+- Sans-serif by default, but the face is user-set: **Settings → Drawing → "Output font"**
+  (`PdfPrefs.outputFont` — Standard / Condensed / Serif / Monospace). Each composer builds its
+  root text `Paint` with `typeface = OutputTypography.active`, the process-wide mirror
+  `SettingsStore.updatePdfPrefs` writes; every other text paint on a sheet is a copy-constructor
+  of that root and inherits the face. App-wide and captured by Drawing profiles, never
+  per-document, and deliberately absent from the PDF options sheets. See
+  `docs/contracts/FractionTypography.md` §6.
 - 10–14 pt depending on field importance
 - Black text only
 

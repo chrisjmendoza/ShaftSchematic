@@ -494,6 +494,25 @@ private val helpSections: List<HelpSection> = listOf(
                     "• Dimension values always print true lengths, whatever the drawing does."
             ),
             HelpTopic(
+                "Drawing — Output font",
+                "Settings → Drawing. The typeface every exported PDF is set in — dimension " +
+                    "values, callouts, component names and the footer alike.\n\n" +
+                    "• \"Standard\" — the default, and the historical look: the device's " +
+                    "regular sans.\n" +
+                    "• \"Condensed\" — a narrower sans. Values take less room, so more of them " +
+                    "seat inside the dimension line instead of above it.\n" +
+                    "• \"Serif\" — for shops whose paperwork is set that way.\n" +
+                    "• \"Monospace\" — fixed pitch, so digits line up in a column.\n\n" +
+                    "App-wide like the other Drawing settings: one choice serves every " +
+                    "document, and a saved Drawing profile captures it along with the rest of " +
+                    "the look. \"Restore Drawing defaults\" puts it back to Standard.\n" +
+                    "Nothing on a sheet collides or shifts when you change it — fractions, " +
+                    "dual-unit stacks and every rail break are measured from the face as it " +
+                    "will actually print, not from a fixed width. A device that does not carry " +
+                    "one of these families simply prints in Standard.\n" +
+                    "App screens are unaffected; this styles the paper only."
+            ),
+            HelpTopic(
                 "Editor Screen",
                 "Presentation of the editor and its preview.\n\n" +
                     "• \"Line Thickness\" — default 100%. Slider from 50% to 200%, a typed % " +

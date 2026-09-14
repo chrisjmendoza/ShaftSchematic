@@ -25,6 +25,7 @@ import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.resolveComponents
 import com.android.shaftschematic.util.AppLog
 import com.android.shaftschematic.util.FractionStyle
+import com.android.shaftschematic.util.OutputFont
 import com.android.shaftschematic.util.PreviewColorSetting
 import com.android.shaftschematic.util.PreviewColorRole
 import com.android.shaftschematic.util.PreviewColorPreset
@@ -326,6 +327,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     // which is not snapshot state.
     internal val _pdfFractionStyle = MutableStateFlow(PdfPrefs().fractionStyle)
     val pdfFractionStyle: StateFlow<FractionStyle> = _pdfFractionStyle.asStateFlow()
+
+    // The typeface every printed sheet is set in. Same posture as the fraction style: the face
+    // reaches the composers via `OutputTypography.active`, which is not snapshot state, so this
+    // flow's only jobs are showing the selection and keying each preview's re-render.
+    internal val _pdfOutputFont = MutableStateFlow(PdfPrefs().outputFont)
+    val pdfOutputFont: StateFlow<OutputFont> = _pdfOutputFont.asStateFlow()
 
     // How a dual value is SET (inline one-liner vs two-line stack). Unlike the fraction style this
     // one moves LAYOUT, so the composers take it as a parameter; the StateFlow is what lets each
@@ -974,6 +981,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             SettingsStore.pdfFractionStyleFlow(getApplication()).collectLatest { persisted ->
                 _pdfFractionStyle.value = persisted
                 SettingsStore.updatePdfPrefs { it.copy(fractionStyle = persisted) }
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.pdfOutputFontFlow(getApplication()).collectLatest { persisted ->
+                _pdfOutputFont.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(outputFont = persisted) }
             }
         }
         viewModelScope.launch {

@@ -4,6 +4,7 @@ import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
 import com.android.shaftschematic.geom.WEAR_TRACE_MIN_DEPTH_FRAC
 import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.FractionStyle
+import com.android.shaftschematic.util.OutputFont
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -53,6 +54,7 @@ class DrawingProfileTest {
             sBreakThresholdFrac = 0.35f,
             arrowSizePt = PDF_ARROW_SIZE_LARGE_PT,
             fractionStyle = FractionStyle.STACKED,
+            outputFont = OutputFont.CONDENSED,
             dualUnitLayout = DualUnitLayout.STACKED,
             wearTraceDepthFrac = 0.11f,
             wearBandShadeFrac = 0.22f,
@@ -76,6 +78,7 @@ class DrawingProfileTest {
                     shadedLiners = true,
                     arrowSizePt = PDF_ARROW_SIZE_MEDIUM_PT,
                     fractionStyle = FractionStyle.STACKED,
+                    outputFont = OutputFont.MONOSPACE,
                     curveHiHeightIn = 1.25f,
                 ),
                 lineThicknessScale = 1.75f,
@@ -89,6 +92,10 @@ class DrawingProfileTest {
             FractionStyle.STACKED,
             decoded.getValue("Customer A").toPdfPrefs().fractionStyle,
         )
+        assertEquals(
+            OutputFont.MONOSPACE,
+            decoded.getValue("Customer A").toPdfPrefs().outputFont,
+        )
     }
 
     @Test
@@ -100,7 +107,7 @@ class DrawingProfileTest {
         listOf(
             "tieringMode", "showComponentTitles", "shadedBodies", "shadedTapers", "shadedLiners",
             "curveLoHeightIn", "curveHiHeightIn", "sBreakThresholdFrac", "arrowSizePt",
-            "fractionStyle", "dualUnitLayout", "wearTraceDepthFrac", "wearBandShadeFrac",
+            "fractionStyle", "outputFont", "dualUnitLayout", "wearTraceDepthFrac", "wearBandShadeFrac",
             "wearJoinGapMaxMm", "lineThicknessScale",
         ).forEach { field ->
             assertTrue("missing field in encoded profile: $field", json.contains("\"$field\""))
@@ -122,6 +129,8 @@ class DrawingProfileTest {
         assertEquals(PdfPrefs().sBreakThresholdFrac, profile.sBreakThresholdFrac, 1e-6f)
         assertEquals(PdfPrefs().wearJoinGapMaxMm, profile.wearJoinGapMaxMm, 1e-6f)
         assertEquals(FractionStyle.Default, profile.toPdfPrefs().fractionStyle)
+        // Added after this payload was written — an old preset still loads, in the shipped face.
+        assertEquals(OutputFont.Default, profile.toPdfPrefs().outputFont)
     }
 
     @Test
@@ -136,11 +145,13 @@ class DrawingProfileTest {
 
     @Test
     fun `an unknown enum name falls back to the shipped look`() {
-        val raw = """{"Odd":{"fractionStyle":"CURSIVE","dualUnitLayout":"DIAGONAL","tieringMode":"SIDEWAYS"}}"""
+        val raw = """{"Odd":{"fractionStyle":"CURSIVE","outputFont":"COPPERPLATE",""" +
+            """"dualUnitLayout":"DIAGONAL","tieringMode":"SIDEWAYS"}}"""
 
         val prefs = decodeDrawingProfiles(raw).getValue("Odd").toPdfPrefs()
 
         assertEquals(FractionStyle.Default, prefs.fractionStyle)
+        assertEquals(OutputFont.Default, prefs.outputFont)
         assertEquals(DualUnitLayout.Default, prefs.dualUnitLayout)
         assertEquals(PdfTieringMode.AUTO, prefs.tieringMode)
     }

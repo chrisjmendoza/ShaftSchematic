@@ -158,6 +158,7 @@ fun SettingsRoute(
     val pdfWearJoinGapMaxMm by vm.pdfWearJoinGapMaxMm.collectAsState()
     val pdfArrowSizePt by vm.pdfArrowSizePt.collectAsState()
     val pdfFractionStyle by vm.pdfFractionStyle.collectAsState()
+    val pdfOutputFont by vm.pdfOutputFont.collectAsState()
     val pdfDualUnitLayout by vm.pdfDualUnitLayout.collectAsState()
 
     // App-wide defaults for mixed per-component units + inline dual-unit display. Not
@@ -372,6 +373,13 @@ fun SettingsRoute(
                     DimensionArrowSizeChips(
                         arrowSizePt = pdfArrowSizePt,
                         onCommit = { vm.setPdfArrowSizePt(it) },
+                    )
+
+                    // Settings-only, unlike the pickers around it: the face is a house style
+                    // a shop sets once, so it stays off the per-document options sheets.
+                    OutputFontChips(
+                        outputFont = pdfOutputFont,
+                        onCommit = { vm.setPdfOutputFont(it) },
                     )
 
                     // Same picker both PDF options sheets carry — one PdfPrefs.fractionStyle.
