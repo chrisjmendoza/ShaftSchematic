@@ -130,6 +130,11 @@ internal fun selectFooterTapers(spec: ShaftSpec): FooterTapers {
  * **Item is optional.** A blank draft always rules a line for it, but a printed sheet omits the
  * line entirely when it is blank — a label with nothing after it is an orphan on a finished
  * drawing. Every other field here is unconditional.
+ *
+ * **Drawing is optional the same way**, keyed off [ProjectInfo.drawingLabel] instead of a
+ * document field: blank prints nothing on either branch (an original-drawing sheet stays
+ * byte-identical), a blank draft rules a line for it only when the label is set (a blank draft
+ * of the original drawing must not grow a line it will never carry a value for).
  */
 internal fun buildFooterMidColumn(
     spec: ShaftSpec,
@@ -140,7 +145,9 @@ internal fun buildFooterMidColumn(
     displayUnits: DisplayUnits = DisplayUnits.single(UnitSystem.INCHES),
 ): List<String> = if (blankValues) {
     buildList {
-        add("Customer:"); add("Vessel:"); add("Job #:"); add("Item:"); add("Date:")
+        add("Customer:"); add("Vessel:"); add("Job #:"); add("Item:")
+        if (project.drawingLabel.isNotBlank()) add("Drawing:")
+        add("Date:")
         if (cfg.bodyDiasMm.isNotEmpty()) add("Body: Ø")
         keywayClockingFooterNote(spec)?.let { add(it) }
         add("Side:")
@@ -151,6 +158,7 @@ internal fun buildFooterMidColumn(
         add("Vessel: ${project.vessel}")
         add("Job #: ${project.jobNumber}")
         if (project.item.isNotBlank()) add("Item: ${project.item}")
+        if (project.drawingLabel.isNotBlank()) add("Drawing: ${project.drawingLabel}")
         add("Date: $date")
         if (cfg.bodyDiasMm.isNotEmpty()) {
             // No single component backs this line (it's the distinct set across every body),
@@ -283,15 +291,25 @@ internal fun drawFooter(
         midLines.forEach { line -> y = drawFooterLine(line, midX, y, midMaxW) }
 
         // The Side badge sits below the job block, set larger — a blank draft writes it in on a
-        // rule instead, which `midLines` already carries as its own label line.
+        // rule instead, which `midLines` already carries as its own label line. A non-blank
+        // drawingLabel is a sibling on the SAME baseline (never its own row — wrappedMaxLines'
+        // Side-badge reservation must still count for exactly one line): to the right of the
+        // Side badge separated by two spaces, or alone at midX when there is no Side badge.
         if (!blankValues) {
-            project.side.printableLabelOrNull()?.let { pos ->
+            val sidePos = project.side.printableLabelOrNull()
+            val label = project.drawingLabel.takeIf { it.isNotBlank() }?.uppercase()
+            if (sidePos != null || label != null) {
                 y += lh * 0.35f
                 val posPaint = Paint(text).apply {
                     textSize = text.textSize * 1.20f
                     isFakeBoldText = true
                 }
-                c.drawText(pos, midX, y, posPaint)
+                val badgeText = when {
+                    sidePos != null && label != null -> "$sidePos  $label"
+                    sidePos != null -> sidePos
+                    else -> label!!
+                }
+                c.drawText(badgeText, midX, y, posPaint)
             }
         }
     }

@@ -240,6 +240,19 @@ fun ShaftViewModel.setPdfBlankDiaCallouts(enabled: Boolean) {
     _pdfBlankDiaCallouts.value = enabled
 }
 
+/**
+ * Elects runout stations onto the FINAL drawing's schematic sheet.
+ *
+ * Session-only and default OFF, the [setPdfBlankDraft] posture: the final drawing is first of
+ * all the welding and machining copy the shop marks liner placements up on (on-device
+ * request), and the bubbles are wanted only for the pre-ship measurement pass. A sticky
+ * election would quietly put stations on every machining sheet after the one time it was
+ * wanted. Consulted only when the surface's target is FINAL.
+ */
+fun ShaftViewModel.setFinalRunoutBubbles(enabled: Boolean) {
+    _finalRunoutBubbles.value = enabled
+}
+
 // ── Appearance (app-wide theme) ──────────────────────────────────────────────
 
 fun ShaftViewModel.setThemeMode(mode: AppThemeMode, persist: Boolean = true) {

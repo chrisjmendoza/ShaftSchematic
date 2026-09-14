@@ -90,6 +90,11 @@ object AutosaveManager {
         // Added (Item project field): optional shaft designation. Absent in older drafts;
         // blank prints nothing anywhere.
         val item: String = "",
+        // Added (final schematic): the document's SECOND geometry — the shaft as it leaves —
+        // or null for "no final drawing yet". Absent in older drafts; null reproduces the
+        // previous behaviour exactly. A whole spec, not a reference mark: a session that has
+        // one and loses it on restore has lost drawing work.
+        val finalSpec: ShaftSpec? = null,
     )
 
     /**
