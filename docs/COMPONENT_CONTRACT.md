@@ -259,6 +259,20 @@ drawn in plan view at all (it appears as footer text, and as the notch depth of 
 secondary). One pure source for both draw sites: `geom/KeywaySlotMath.kt`; see
 `docs/PDF_EXPORT.md` §5.2c.
 
+**Standard key stock.** All four keyway surfaces (Body / Taper cards and their Add dialogs) offer a
+**"Standard size…"** menu under the W × D row, backed by the pure tables in
+`geom/KeyStockStandards.kt`: ANSI B17.1 for a keyway in inches, DIN 6885-1 / ISO 773 for one in
+millimetres, the table chosen by the keyway's own unit (`DisplayUnits.keywayUnitFor`). The depth a
+table offers is the **shaft keyseat depth** — exactly what `keywayDepthMm` means and what the shop
+cuts into the shaft — not the key's overall height: for the ANSI square and rectangular keys that
+is half the key height, and DIN publishes it directly as `t1`. `suggestedKeyStock` names the entry
+whose shaft-Ø range holds the host's Ø (lower bound exclusive, upper inclusive) and the picker
+lists it first; every other size stays reachable, because the shop fits the key it has. Both sets
+are **provisional**, chosen without shop input (the `LINER_SHOULDER_STD_RADII_IN` posture). A pick
+is a user action: it writes W and D through the same commit path typing them takes, and from then
+on the numbers are authored and sacred — the menu never fills a field on its own and never rewrites
+a W × D that is already there.
+
 ### Keyway clocking — 180° / 90° apart
 
 `ShaftSpec.keyways180Apart` states the shaft's keyways are clocked 180° from each other.

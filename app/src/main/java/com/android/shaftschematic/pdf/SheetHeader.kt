@@ -37,12 +37,13 @@ internal val JOB_INFO_BLANK_LABELS =
  */
 internal fun jobInfoHeaderLine(project: ProjectInfo, date: String): String {
     val side = project.side.printableLabelOrNull()?.let { "  $it" } ?: ""
+    val drawing = project.drawingLabel.takeIf { it.isNotBlank() }?.let { "  Drawing: $it" } ?: ""
     return buildString {
         if (project.customer.isNotBlank())  append("Customer: ${project.customer}   ")
         if (project.vessel.isNotBlank())    append("Vessel: ${project.vessel}   ")
         if (project.jobNumber.isNotBlank()) append("Job #: ${project.jobNumber}   ")
         if (project.item.isNotBlank())      append("Item: ${project.item}   ")
-        append("Date: $date$side")
+        append("Date: $date$side$drawing")
     }
 }
 

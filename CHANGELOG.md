@@ -35,9 +35,102 @@ values, callouts, component names and the footer alike. Four system families: **
 - `FractionTextRendererTest`'s stacked and diagonal ink-bounds checks now run in every face, so a
   fraction stack that broke out of the line box in a condensed or slab font fails there.
 
+### feat(editor): standard key-stock sizes for keyways
+
+A **"Standard size…"** menu sits under the KW W × D row on all four keyway surfaces — the Body and
+Taper carousel cards and `AddBodyDialog` / `AddTaperDialog` — so a keyway can be specified off the
+standard rather than remembered and typed.
+
+- **ANSI B17.1 for an inch keyway, DIN 6885-1 / ISO 773 for a metric one.** The "Keyway in: in | mm"
+  chip picks the table, because that chip already decides the unit the keyway is typed and printed
+  in. Both tables live in the pure `geom/KeyStockStandards.kt`.
+- **The entry the standard names for the host Ø is offered first**, checked and captioned
+  "Suggested for Ø …" — the body's Ø on a body, the taper's LARGE end on a taper (a key is specified
+  for the section it seats in). Every other size stays reachable in table order: the shop fits the
+  key it has.
+- **The depth offered is the SHAFT keyseat depth** — what `keywayDepthMm` means and what gets cut —
+  not the key's overall height. For ANSI that is half the key height; DIN publishes it as `t1`.
+- **A pick writes through the typed-value path** (the card's keyway update callback, the dialog's
+  own W/D text state) and the numbers are authored and sacred from then on. The menu never writes
+  on its own: no fill on a Ø change, no rewrite of a W × D that is already there.
+- Both tables are **provisional**, chosen without shop input — the `LINER_SHOULDER_STD_RADII_IN`
+  posture. Nothing derives from them except what the user picks off the menu.
+
+### chore(build): Compose BOM 2024.09.00 → 2026.04.01
+
+`2026.04.01` is the last BOM that builds against compileSdk 36 — the next one (2026.08.00) requires
+37, which the Robolectric chain still blocks — so it moves alone and the compileSdk-37 bump stays
+one coordinated change for later (TODO §"Build tooling").
+
+- **The real change is Material3 1.3.0 → 1.4.0.** UI and Foundation were *already* running 1.9.2:
+  the newer activity/lifecycle/navigation dependencies out-rank a BOM constraint, so the old pin
+  had been overridden upward for some time and only Material3 was actually being held back. The
+  bump takes UI and Foundation 1.9.2 → **1.11.0** and Material3 1.3.0 → **1.4.0**, which is where
+  the visual pass is owed: component defaults live in Material3, and the sliders, bottom sheets,
+  chips, and dialogs are the app's whole tuning surface.
+- **No source changes.** Main, unit-test, and androidTest sources all compile against the new
+  surface untouched; the suite is green at 2219 tests, 0 failures. Nothing in the app leaned on an
+  API the new versions removed.
+- **No build config went stale.** `buildFeatures { compose = true }` with the Kotlin 2.x Compose
+  plugin is still the whole configuration — there is no `composeOptions` block or compiler
+  extension version to drop.
+- **`material-icons-extended` moves 1.7.0 → 1.7.8 only.** The BOM still pins the frozen icon
+  artifacts at their final version, so the icon set is unchanged and the pre-existing
+  `Icons.Filled.Article` → `Icons.AutoMirrored.Filled.Article` deprecation is neither new nor
+  resolved here.
+- **One new deprecation, deliberately not chased**: the `rememberTransformableState` overload whose
+  `onTransformation` lambda takes no centroid, at the four pinch-zoom surfaces (wear detail,
+  undercut detail, runout canvas, PDF preview overlay). Taking the centroid changes where a pinch
+  zooms from — a gesture change, not a rename — so it waits for a pass that can be judged
+  on-device.
+
 ---
 
 ## 2026-09-04
+
+### feat(editor): the Final Schematic — a second drawing for the shaft that ships
+
+A liner's position is decided before the job starts, but once the wear areas are mapped the
+foreman can decide — after an undercut — to extend it, shorten it, or move the whole thing a few
+inches onto sound metal. The drawing the job started from has to survive that decision as the
+historical record, so the document now carries a **second** schematic (on-device request:
+"keep the original for historical purpose, like a before and after").
+
+- **New tab, Final Schematic**, between Undercut Drawing and Consolidated Output (it follows
+  undercuts in the shop process), same built-shaft gate as the other document tabs. With no final
+  yet it explains itself and offers one button, **Start from original schematic**; from then on
+  it is the SAME editor as the Schematic tab — carousel, add dialogs, preview box, collision
+  badges — pointed at the final drawing, under a banner that says the original is untouched and
+  carries Reset to original / Discard (both confirm, both undo).
+- **Model**: `final_spec` in the `.shaft` envelope (`null` = none yet; older files load
+  unchanged). A whole `ShaftSpec`, created as a structural copy with component ids kept — so
+  per-component unit overrides apply to both and a future before/after can line up — and
+  independent from then on: no edit on either drawing reaches the other. Never in a template,
+  never in a mate duplicate, cleared by New. Wear, undercut and runout records stay keyed to the
+  original.
+- **One editor, two targets.** Every geometry mutator takes an explicit
+  `SpecTarget { ORIGINAL, FINAL }` (default ORIGINAL — every existing call site is byte-identical)
+  and writes through one seam; only the two per-component unit setters stay target-free, since
+  unit overrides are keyed by component id and apply to both drawings. The target is a parameter, never a flag on the ViewModel: a
+  "current target" would put the wrong drawing one tab-switch away from every edit. The final
+  rides the undo history and the autosave snapshot like the rest of the document.
+- **Outputs.** The Final tab prints the schematic PDF (preview / export / print) and a blank
+  classic runout sheet from the final geometry — no readings, no pinned stations, no wear: the
+  final measurement sheet to take runouts on before the job ships. The schematic can also carry
+  **runout bubbles** — a "Runout bubbles" election on its PDF options sheet, off by default
+  because the final drawing is primarily the welding and machining copy that gets the liner
+  placements updated (on-device direction); on, it prints as the consolidated Schematic + Runout
+  sheet over the final geometry, still with empty readings. Session-only, like Blank draft.
+  Consolidated Output keeps
+  drawing the original. Every final sheet is marked so it can never pass for the original:
+  `Drawing: Final` in the footer job block and the runout header, a bold FINAL badge beside the
+  Side badge (`ProjectInfo.drawingLabel`, blank everywhere else), and a suffix in the
+  filename — `_Final`, `_Final_Runout` with bubbles elected, `_Final_RunoutSheet` for the
+  banner's blank runout sheet: three documents that never share a name. The bubbled sheet is
+  the consolidated composer's, so the schematic-only Ø-callout election and Template mode do
+  not reach it; the options sheet says so and greys the callout chip.
+- Not yet: "Create a new job from the final" — the natural next step, deliberately left for a
+  later pass.
 
 ### feat(pdf): tapers compress with the liners, on one control
 

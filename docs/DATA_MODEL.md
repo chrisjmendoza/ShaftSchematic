@@ -359,6 +359,7 @@ data class ShaftDocV1(
     val notes: String = "",
     val item: String = "",   // optional shaft designation ("Tail shaft"); blank prints nothing, scrubbed from templates
     val spec: ShaftSpec,
+    val finalSpec: ShaftSpec? = null,                    // @SerialName("final_spec") — the Final schematic; null = none yet
     val runoutConfig: RunoutConfig = RunoutConfig(),     // @SerialName("runout_config")
     val wearRecord: WearRecord = WearRecord(),           // @SerialName("wear_record")
     val runoutReadings: RunoutReadings = RunoutReadings(),// @SerialName("runout_readings")
@@ -368,6 +369,13 @@ data class ShaftDocV1(
     val unitOverrides: Map<String, UnitSystem> = emptyMap(), // @SerialName("unit_overrides")
     val dualUnits: Boolean = false                        // @SerialName("dual_units")
 )
+
+**The Final schematic** (`final_spec`) is the one envelope field that is NOT a reference
+record: a whole second `ShaftSpec` — the drawing the shaft leaves with, after the wear and
+undercut work moved a liner — created as a structural copy of `spec` (component ids included)
+and independent from then on. `null` until "Start from original schematic"; never in a
+template or a mate duplicate; the inspection records below stay keyed to the ORIGINAL. See
+`docs/contracts/FinalSchematic.md`.
 
 **Reference-only inspection records** live in the envelope, never in `ShaftSpec`, so they
 can never affect geometry resolution:

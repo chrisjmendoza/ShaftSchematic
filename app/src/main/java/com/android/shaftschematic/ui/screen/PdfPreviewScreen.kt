@@ -80,9 +80,15 @@ import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.pdf.PdfExportOptions
-import com.android.shaftschematic.pdf.composeShaftPdf
+import com.android.shaftschematic.settings.RunoutConfig
+import com.android.shaftschematic.ui.nav.FINAL_DRAWING_LABEL
+import com.android.shaftschematic.ui.nav.FinalSheetKind
+import com.android.shaftschematic.ui.nav.composeSchematicSheet
+import com.android.shaftschematic.ui.nav.finalDrawingSuffix
+import com.android.shaftschematic.ui.nav.finalSheetKind
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
+import com.android.shaftschematic.ui.viewmodel.SpecTarget
 import com.android.shaftschematic.ui.viewmodel.*
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.DocumentNaming
@@ -125,8 +131,16 @@ fun PdfPreviewScreen(
     vm: ShaftViewModel,
     onBack: () -> Unit,
     onExport: () -> Unit,
+    /**
+     * Which of the document's two drawings is previewed. From the route argument, never a flag
+     * on the ViewModel: the preview, its Print, and the export it hands off to must all be the
+     * same drawing. It rides [SchematicRenderInputs] as a re-render key, since switching target
+     * changes nothing else the loop already watches.
+     */
+    target: SpecTarget = SpecTarget.ORIGINAL,
 ) {
     val ctx = LocalContext.current
+    val isFinal = target == SpecTarget.FINAL
 
     // Unlock rotation for this screen only; restore portrait when leaving.
     val activity = ctx as? Activity
@@ -137,7 +151,11 @@ fun PdfPreviewScreen(
         }
     }
 
-    val spec by vm.spec.collectAsState()
+    // The final drawing is the document's SECOND geometry — its own spec and resolved
+    // components, not a view of the original.
+    val originalSpec by vm.spec.collectAsState()
+    val finalSpec by vm.finalSpec.collectAsState()
+    val spec = if (isFinal) finalSpec ?: ShaftSpec() else originalSpec
     val unit by vm.unit.collectAsState()
     // The per-job "Shaft height" multiplier lives in RunoutConfig — ONE value behind the
     // schematic, the runout sheet, and the consolidated output.
@@ -151,7 +169,9 @@ fun PdfPreviewScreen(
     val jobNumber by vm.jobNumber.collectAsState()
     val item by vm.item.collectAsState()
     val shaftPosition by vm.shaftPosition.collectAsState()
-    val resolvedComponents by vm.resolvedComponents.collectAsState()
+    val originalResolved by vm.resolvedComponents.collectAsState()
+    val finalResolved by vm.finalResolvedComponents.collectAsState()
+    val resolvedComponents = if (isFinal) finalResolved else originalResolved
     val pdfShowComponentTitles by vm.pdfShowComponentTitles.collectAsState()
     val pdfTieringMode by vm.pdfTieringMode.collectAsState()
     val pdfShadedBodies by vm.pdfShadedBodies.collectAsState()
@@ -178,11 +198,17 @@ fun PdfPreviewScreen(
     // ride along as explicit render-loop inputs (same posture as `fractionStyle`).
     val unitOverrides by vm.unitOverrides.collectAsState()
     val dualUnits by vm.dualUnits.collectAsState()
+    // The final drawing's optional runout stations. Session-only and off by default; consulted
+    // only on the FINAL target — see `ShaftViewModel.finalRunoutBubbles`.
+    val finalRunoutBubbles by vm.finalRunoutBubbles.collectAsState()
 
-    val project = remember(customer, vessel, shaftPosition, jobNumber, item) {
+    // A final sheet is marked so it can never be mistaken for the original — the label
+    // prints in the footer job block and as a badge beside the Side badge.
+    val drawingLabel = if (isFinal) FINAL_DRAWING_LABEL else ""
+    val project = remember(customer, vessel, shaftPosition, jobNumber, item, drawingLabel) {
         ProjectInfo(
             customer = customer, vessel = vessel, side = shaftPosition,
-            jobNumber = jobNumber, item = item,
+            jobNumber = jobNumber, item = item, drawingLabel = drawingLabel,
         )
     }
     val options = remember(pdfExportMode, pdfBlankDraft, pdfBlankDiaCallouts) {
@@ -219,6 +245,7 @@ fun PdfPreviewScreen(
                 project = ProjectInfo(
                     customer = customer, vessel = vessel,
                     side = shaftPosition, jobNumber = jobNumber, item = item,
+                    drawingLabel = drawingLabel,
                 ),
                 options = PdfExportOptions(
                     mode = pdfExportMode,
@@ -240,9 +267,10 @@ fun PdfPreviewScreen(
                 dualUnitLayout = pdfDualUnitLayout,
                 curveLoHeightIn = curveLoHeightIn,
                 curveHiHeightIn = curveHiHeightIn,
-                heightScale = config.heightScale,
-                linerMinFracOfTrue = config.linerMinFracOfTrue,
+                runoutConfig = config,
                 displayUnits = DisplayUnits(unit, unitOverrides, dualUnits),
+                target = target,
+                sheetKind = finalSheetKind(target, finalRunoutBubbles),
                 draft = tuning.active,
             )
         }.conflate().collect { inputs ->
@@ -263,8 +291,9 @@ fun PdfPreviewScreen(
                     ctx,
                     renderScale = previewRenderScale(inputs.draft),
                 ) { page ->
-                    composeShaftPdf(
+                    composeSchematicSheet(
                         page = page,
+                        kind = inputs.sheetKind,
                         spec = inputs.spec,
                         unit = inputs.unit,
                         project = inputs.project,
@@ -274,8 +303,7 @@ fun PdfPreviewScreen(
                         options = inputs.options,
                         resolvedComponents = inputs.resolved.takeIf { it.isNotEmpty() },
                         lineThicknessScale = inputs.lineThicknessScale,
-                        heightScale = inputs.heightScale,
-                        linerMinFracOfTrue = inputs.linerMinFracOfTrue,
+                        runoutConfig = inputs.runoutConfig,
                         displayUnits = inputs.displayUnits,
                     )
                 }
@@ -354,7 +382,7 @@ fun PdfPreviewScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("PDF Preview") },
+                title = { Text(if (isFinal) "Final PDF Preview" else "PDF Preview") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
@@ -383,14 +411,20 @@ fun PdfPreviewScreen(
                     // Print leads Export in weight: paper is the daily output, a PDF file
                     // the backup copy. Same treatment as the document tabs' preview overlay.
                     FilledTonalButton(onClick = {
-                        val baseName = DocumentNaming.suggestedBaseName(
+                        val suggested = DocumentNaming.suggestedBaseName(
                             jobNumber = jobNumber,
                             customer = customer,
                             vessel = vessel,
                             suffix = shaftPosition.printableLabelOrNull(),
                         ) ?: "Shaft Schematic"
+                        // The print job carries the drawing's identity too — a job queue full
+                        // of same-named sheets is how a final gets handed out as the original.
+                        val baseName =
+                            if (isFinal) suggested + finalDrawingSuffix(finalRunoutBubbles)
+                            else suggested
                         val jobName = if (pdfBlankDraft) "$baseName (blank draft)" else baseName
                         // Snapshot state on the UI thread; onWrite runs on a binder thread.
+                        val kindSnapshot = finalSheetKind(target, finalRunoutBubbles)
                         val specSnapshot = spec
                         val unitSnapshot = unit
                         val projectSnapshot = project
@@ -398,13 +432,13 @@ fun PdfPreviewScreen(
                         val resolvedSnapshot = resolvedComponents.takeIf { it.isNotEmpty() }
                         val prefsSnapshot = vm.currentPdfPrefs
                         val thicknessSnapshot = lineThicknessScale
-                        val heightSnapshot = runoutConfig.heightScale
-                        val linerFracSnapshot = runoutConfig.linerMinFracOfTrue
+                        val configSnapshot = runoutConfig
                         val displayUnitsSnapshot = vm.currentDisplayUnits()
                         val versionSnapshot = appVersionName(ctx)
                         printShaftPdfPage(ctx, jobName) { page ->
-                            composeShaftPdf(
+                            composeSchematicSheet(
                                 page = page,
+                                kind = kindSnapshot,
                                 spec = specSnapshot,
                                 unit = unitSnapshot,
                                 project = projectSnapshot,
@@ -414,8 +448,7 @@ fun PdfPreviewScreen(
                                 options = optionsSnapshot,
                                 resolvedComponents = resolvedSnapshot,
                                 lineThicknessScale = thicknessSnapshot,
-                                heightScale = heightSnapshot,
-                                linerMinFracOfTrue = linerFracSnapshot,
+                                runoutConfig = configSnapshot,
                                 displayUnits = displayUnitsSnapshot,
                             )
                         }
@@ -585,6 +618,10 @@ fun PdfPreviewScreen(
                 pdfShadeExplicitBodiesOnly = pdfShadeExplicitBodiesOnly,
                 pdfBlankDraft = pdfBlankDraft,
                 pdfBlankDiaCallouts = pdfBlankDiaCallouts,
+                // A FINAL-drawing election only — the original schematic's stations are the
+                // Runout and Consolidated Output tabs' documents.
+                showFinalRunoutBubbles = isFinal,
+                finalRunoutBubbles = finalRunoutBubbles,
                 tuning = tuning,
                 maxHeightDp = maxSheetHeight,
             )
@@ -632,9 +669,26 @@ private data class SchematicRenderInputs(
     val dualUnitLayout: DualUnitLayout,
     val curveLoHeightIn: Float,
     val curveHiHeightIn: Float,
-    val heightScale: Float,
-    val linerMinFracOfTrue: Float,
+    /**
+     * The per-job fit, already tuned by any in-progress slider drag. Held whole rather than as
+     * its two derived terms because the bubbled sheet reads more of it — the coupling-face
+     * election rides here too, and a field the record cannot express is a stale-preview bug.
+     */
+    val runoutConfig: RunoutConfig,
     val displayUnits: DisplayUnits,
+    /**
+     * Which drawing this page is. [spec] and [project] already differ between the two, so it
+     * is a key rather than a composer input — held here because the target is what SELECTS
+     * them, and a record that cannot express it invites a future field being read off the
+     * wrong drawing without the loop noticing.
+     */
+    val target: SpecTarget,
+    /**
+     * Which sheet this page IS — the plain schematic, or the final drawing's Schematic +
+     * Runout variant. A composer input AND a re-render key: the "Runout bubbles" chip changes
+     * nothing else the loop already watches.
+     */
+    val sheetKind: FinalSheetKind,
     /** A tuning slider is mid-drag: raster at draft resolution and hold the spinner back. */
     val draft: Boolean,
 )
@@ -676,6 +730,13 @@ private fun PdfOptionsSheet(
     pdfBlankDraft: Boolean,
     pdfBlankDiaCallouts: Boolean,
     /**
+     * Whether the "Runout bubbles" election is offered at all. True only on the FINAL drawing:
+     * the original schematic's stations already have their own two documents, and a second way
+     * to print them would leave two sheets claiming to be the runout record.
+     */
+    showFinalRunoutBubbles: Boolean = false,
+    finalRunoutBubbles: Boolean = false,
+    /**
      * Live-tuning sink: every slider here reports its in-progress value so the preview
      * behind the sheet reshapes under the finger. Visual only — the commit path is
      * unchanged and nothing persists on a drag frame.
@@ -714,10 +775,12 @@ private fun PdfOptionsSheet(
                 selected = pdfBlankDraft,
                 onClick = { vm.setPdfBlankDraft(!pdfBlankDraft) },
             )
+            // The consolidated composer behind a bubbled final sheet takes no Ø-callout
+            // election (nor Template mode), so the chip is inert there and greys out.
             ContentChip(
                 label = "Ø callouts",
                 selected = pdfBlankDiaCallouts,
-                enabled = pdfBlankDraft,
+                enabled = pdfBlankDraft && !(showFinalRunoutBubbles && finalRunoutBubbles),
                 onClick = { vm.setPdfBlankDiaCallouts(!pdfBlankDiaCallouts) },
                 modifier = Modifier.testTag("pdf_blank_dia_callouts_toggle"),
             )
@@ -727,6 +790,27 @@ private fun PdfOptionsSheet(
                 label = "Labels",
                 selected = pdfShowComponentTitles,
                 onClick = { vm.setPdfShowComponentTitles(!pdfShowComponentTitles) },
+            )
+            // Content, not styling — it decides which sheet this is — so it sits with the
+            // chips rather than at the foot of the sheet with the rarely-used options.
+            if (showFinalRunoutBubbles) {
+                ContentChip(
+                    label = "Runout bubbles",
+                    selected = finalRunoutBubbles,
+                    onClick = { vm.setFinalRunoutBubbles(!finalRunoutBubbles) },
+                    modifier = Modifier.testTag("final_runout_bubbles_toggle"),
+                )
+            }
+        }
+
+        if (showFinalRunoutBubbles) {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Adds runout stations to the final drawing. Off for the welding and machining " +
+                    "copy; on for the pre-ship measurement sheet, which prints as the " +
+                    "consolidated sheet — Ø callouts and Template mode do not apply to it.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
 
