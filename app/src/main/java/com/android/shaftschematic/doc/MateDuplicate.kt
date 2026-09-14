@@ -30,6 +30,9 @@ import com.android.shaftschematic.model.WearRecord
  * present fabricated inspection data as measured — the one failure this transform exists to
  * prevent. The mate is measured on its own.
  *
+ * **Dropped** — the final drawing. It records what was decided about THIS shaft after its wear
+ * was mapped; the mate is its own job and its final is drawn from its own inspection.
+ *
  * Identity ([jobNumber], [customer], [vessel], [position]) comes from the caller, which is
  * what lets the duplicate dialog change the side and job before the copy exists.
  */
@@ -44,6 +47,7 @@ fun mateDuplicate(
     customer = customer,
     vessel = vessel,
     shaftPosition = position,
+    finalSpec = null,
     wearRecord = WearRecord(),
     runoutReadings = RunoutReadings(),
     runoutStationPlacements = RunoutStationPlacements(),
