@@ -93,6 +93,26 @@ object AppLog {
     }
 
     /**
+     * The most recent [maxLines] breadcrumbs, oldest first — what Developer Options shows on
+     * the device itself.
+     *
+     * "Share diagnostic logs" mails the files out, which needs an email app and a person at the
+     * other end; a shop tablet has neither, and the question there is usually just "did the
+     * export get as far as the composer". Reads the rotated half first so a tail spanning a
+     * rotation still reads in order, and swallows its own errors like every other path here.
+     */
+    fun tail(maxLines: Int = 400): List<String> {
+        if (maxLines <= 0) return emptyList()
+        val dir = logDir ?: return emptyList()
+        val lines = mutableListOf<String>()
+        for (name in listOf(PREVIOUS_NAME, CURRENT_NAME)) {
+            val f = File(dir, name)
+            runCatching { if (f.isFile) lines += f.readLines() }
+        }
+        return if (lines.size <= maxLines) lines else lines.subList(lines.size - maxLines, lines.size)
+    }
+
+    /**
      * Blocks until every queued line has been written, up to [timeoutMs].
      *
      * The crash handler needs this: the process is about to die, and a breadcrumb still sitting

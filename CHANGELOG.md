@@ -52,9 +52,76 @@ historical record, so the document now carries a **second** schematic (on-device
 - Not yet: "Create a new job from the final" — the natural next step, deliberately left for a
   later pass.
 
+### feat(pdf): tapers compress with the liners, on one control
+
+The two kinds the sheet is about now foreshorten together. "Liner compression" — renamed **"Liner
+& taper compression"**, with the checkbox now reading "Keep liners and tapers proportional
+lengthwise" — feeds the tapers as well as the liners, so asking for proportional length lengthens
+both and the drawing reads even (on-device request: liners walking up to true length beside tapers
+stuck at their 70% baseline looked lopsided).
+
+- `taperMinFracOfTrue(linerMinFracOfTrue)` = `max(PROFILE_TAPER_MIN_FRAC_OF_TRUE, request)`, applied
+  once in the single span builder `profileFeatureSpans`, so every consumer — the schematic, the
+  runout/consolidated sheet, and the UI's kept-% estimator — gets the same coupling without asking.
+  Sharing one requested fraction and one λ is what makes the kept fractions EQUAL: tapers and liners
+  land on the same proportion of true length at every squeeze.
+- **The coupling is one-way upward.** Below the 0.7 baseline tapers hold it rather than following
+  the liners down: a liner has its flat `PROFILE_MIN_LINER_PT` floor to land on, and a taper has no
+  flat floor by design (a flat floor equalizes unequal tapers), so a taper tracking a bare request
+  would compress like plain bare shaft and vanish on a long drawing.
+- **Sheets that never touch the control print exactly as before.** The stored default is full
+  compression (request 0), which leaves tapers on the baseline they already had; nothing in the
+  scale solve moved, so the drawn shaft height is untouched — the raise is still best-effort and
+  λ-fitted (`fracFitFactor`).
+- The live readout under the slider reports both kinds, and splits the two numbers only where they
+  genuinely differ (a request under the taper baseline). Help topics and the glossary follow the
+  new name.
+
 ---
 
 ## 2026-09-03
+
+### feat(dev): Developer Options gains diagnostics, and its master switch now switches
+
+Audit of every control on the Developer Options screen. All eleven switches are still wired to a
+live consumer — the dimension debug overlay reads the composer's own `mapToLinerDimsForPdf` /
+`tierOriginMmFor`, and all four verbose categories have call sites — so nothing was retired. Three
+things were wrong with the screen around them.
+
+- **The master switch was not a master switch.** Only the preview OAL badge was ANDed with
+  `devOptionsEnabled` at its draw site. `SettingsStore.resetDevSubFlagsIfDisabled` clears the
+  stored sub-flags at the next start, which left the current session drawing debug labels and
+  overlays on a screen that no longer had the switch to turn them off. All six overlay flags are
+  now gated once, in `ShaftRoute`, where they are collected; `ShaftPreviewPanel`'s own copy of the
+  gate is gone, because one flag guarded twice and five guarded once is how the next one is missed.
+- **The four verbose categories now disable while the master is off**, rather than reading as
+  live switches that change nothing (`VerboseLog.isEnabled` already ANDs them). Disabled, not
+  hidden: a control that vanishes reads as a setting that was lost.
+- **Every switch gained a line saying what it does.** "Show Dim Debug Overlay" names a variable;
+  "Tier origin rule and the liner spans the PDF would dimension" names a picture.
+
+New **Diagnostics** section, aimed at the device rather than the desk:
+
+- **Build** — `VERSION_NAME (VERSION_CODE) • GIT_SHA • BUILD_TYPE`. The app-start breadcrumb has
+  always recorded this; nothing showed it, so "I'm on the latest build" could only be believed.
+- **Crash reporting** — live `CrashReporter.isActive`, i.e. whether *this* build shipped with a
+  `google-services.json`. Previously answerable only from the Firebase console.
+- **Record test non-fatal** — breadcrumb + `CrashReporter.recordNonFatal`, with a snackbar saying
+  which of the two actually happened. End-to-end verification of the reporting path that does not
+  cost the process.
+- **View recent breadcrumbs** — `AppLog.tail(300)` in a dialog, rotated half first so a tail
+  spanning a rotation still reads in order. "Share diagnostic logs" needs an email app and a
+  person at the other end; a shop tablet has neither, and the question is usually just how far an
+  export got. `AppLog.tail` is new, read-only, and swallows its own errors like every other path
+  in that file (`AppLogTest`, two new cases).
+- **Force a test crash** — behind a confirm dialog naming what is lost, and last in the section.
+  It is the only way to exercise the handler chain the Diagnostics contract turns on: `AppLog`
+  writes and flushes, then delegates to Crashlytics'. Both halves are invisible until something
+  actually dies.
+
+`docs/contracts/Diagnostics.md` gains a "Developer Options" section covering the layout, the
+single-seam master gate, and the three actions.
+
 
 ### fix(diagnostics): "Share diagnostic logs" no longer crashes the app
 

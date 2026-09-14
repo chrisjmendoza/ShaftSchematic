@@ -175,6 +175,12 @@ fun ShaftRoute(
     val showComponentArrows by vm.showComponentArrows.collectAsState()
     val componentArrowWidthDp by vm.componentArrowWidthDp.collectAsState()
     val showHighlightSelection by vm.showHighlightSelection.collectAsState()
+    // Every debug overlay is ANDed with the master switch HERE, once, so turning Developer
+    // Options off clears the drawing immediately. The stored sub-flags are cleared on the next
+    // start (`resetDevSubFlagsIfDisabled`), which is too late to be the only gate: without this
+    // an overlay left on survives in the current session on a screen that can no longer reach
+    // the switch that turns it off.
+    val devOptionsEnabled by vm.devOptionsEnabled.collectAsState()
     val showOalDebugLabel by vm.showOalDebugLabel.collectAsState()
     val showOalInPreviewBox by vm.showOalInPreviewBox.collectAsState()
     val customer        by vm.customer.collectAsState()
@@ -219,7 +225,6 @@ fun ShaftRoute(
         )
     }
 
-    val devOptionsEnabled by vm.devOptionsEnabled.collectAsState()
     val editorResetNonce by vm.editorResetNonce.collectAsState()
 
     val canUndo by vm.canUndo.collectAsState()
@@ -272,12 +277,12 @@ fun ShaftRoute(
         shaftPosition = shaftPosition,
         notes = notes,
         showGrid = showGrid,
-        showOalDebugLabel = showOalDebugLabel,
-        showOalInPreviewBox = showOalInPreviewBox,
-        showComponentDebugLabels = showComponentDebugLabels,
-        showRenderLayoutDebugOverlay = showRenderLayoutDebugOverlay,
-        showRenderOalMarkers = showRenderOalMarkers,
-        showDimDebugOverlay = showDimDebugOverlay,
+        showOalDebugLabel = devOptionsEnabled && showOalDebugLabel,
+        showOalInPreviewBox = devOptionsEnabled && showOalInPreviewBox,
+        showComponentDebugLabels = devOptionsEnabled && showComponentDebugLabels,
+        showRenderLayoutDebugOverlay = devOptionsEnabled && showRenderLayoutDebugOverlay,
+        showRenderOalMarkers = devOptionsEnabled && showRenderOalMarkers,
+        showDimDebugOverlay = devOptionsEnabled && showDimDebugOverlay,
         pdfTieringMode = pdfTieringMode,
         componentTitlesDefault = pdfShowComponentTitles,
         shadedComponentIds = previewShadedIds,

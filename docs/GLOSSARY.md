@@ -186,12 +186,14 @@ neither end is a multiple of this shaft's own curve height. The floor never rais
 above the sizing curve. The stored multiplier's own bounds (0.25–6.0) are wider than the
 band on purpose: they only have to express it on any diameter.
 
-### Liner compression
+### Liner & taper compression
 The per-job pair (`RunoutConfig.linersProportional` / `linerCompression`) controlling how
-far liners may foreshorten below true length. Feeds a **best-effort** width floor
-(`linerMinFracOfTrue` → `ProfileFeatureSpan.minWidthFracOfTrue`) that the scale solve
-ignores; raised floors that don't fit shrink uniformly (`fracFitFactor`). Drawing height
-takes precedence — neither control ever changes the drawn shaft height.
+far the measured components may foreshorten below true length. Feeds a **best-effort**
+width floor (`linerMinFracOfTrue` → `ProfileFeatureSpan.minWidthFracOfTrue`) that the scale
+solve ignores; raised floors that don't fit shrink uniformly (`fracFitFactor`). Tapers ride
+the same request (`taperMinFracOfTrue`, floored at their 70% baseline), so liners and tapers
+keep the same fraction of true length and the sheet reads even. Drawing height takes
+precedence — neither control ever changes the drawn shaft height.
 
 ---
 

@@ -663,7 +663,7 @@ internal fun RunoutWearOptionsSheet(
         HorizontalDivider()
         Spacer(Modifier.height(12.dp))
 
-        // ── Liner compression ────────────────────────────────────────────────
+        // ── Liner & taper compression ────────────────────────────────────────
         // The other half of the per-job `RunoutConfig` pair, on the two sheets whose
         // composer solves liner floors.
         if (showLinerCompression) {

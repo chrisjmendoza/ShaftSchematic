@@ -90,7 +90,7 @@ fallback), so it carries neither the height slider nor the S-break slider.
 ### 3.2 Placement and order
 
 - **Order of presumed use, top to bottom**: content election first (compact chips), then the
-  page-reshaping sliders (Shaft height, S-break, Line thickness, Liner compression), then
+  page-reshaping sliders (Shaft height, S-break, Line thickness, Liner & taper compression), then
   page-specific controls, then typography (arrows, fractions), then the rarely-touched
   groups as **collapsed expandables** (Measurement reference, Shade in Components), and
   **dual units always last** (standing rule: dual/rarely-used options trail).

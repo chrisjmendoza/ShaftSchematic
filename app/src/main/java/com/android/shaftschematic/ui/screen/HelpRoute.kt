@@ -251,11 +251,14 @@ private val helpSections: List<HelpSection> = listOf(
                     "section distances can be quoted from."
             ),
             HelpTopic(
-                "Liner compression",
-                "The per-job pair beside the Shaft height slider that asks for liners at true " +
-                    "length: check \"Keep liners proportional lengthwise\", or set with the " +
-                    "slider how far they may shorten. The page keeps as much true liner length " +
-                    "as fits; the request never changes the drawn shaft height."
+                "Liner & taper compression",
+                "The per-job pair beside the Shaft height slider that asks for liners and " +
+                    "tapers at true length: check \"Keep liners and tapers proportional " +
+                    "lengthwise\", or set with the slider how far they may shorten. Both kinds " +
+                    "move together, so the measured components stay in proportion with each " +
+                    "other; tapers never shorten past 70% of true length whatever the slider " +
+                    "says. The page keeps as much true length as fits; the request never " +
+                    "changes the drawn shaft height."
             ),
             HelpTopic(
                 "Measurement reference",
@@ -417,11 +420,13 @@ private val helpSections: List<HelpSection> = listOf(
                     "button restores the default size. That default follows a sizing curve " +
                     "you can adjust in Settings → Drawing → Default drawing size: set " +
                     "what a 4 in and an 8 in shaft draw, and sizes in between follow. " +
-                    "Liner compression (next to the height slider) keeps the measured " +
-                    "components readable: check \"Keep liners proportional lengthwise\" to " +
-                    "ask for liners at true scale, or set how far they may shorten with " +
-                    "the slider. The page balances the request — liners keep as much true " +
-                    "length as fits, and the runs between them always keep their relative " +
+                    "Liner & taper compression (next to the height slider) keeps the " +
+                    "measured components readable: check \"Keep liners and tapers " +
+                    "proportional lengthwise\" to ask for them at true scale, or set how " +
+                    "far they may shorten with the slider. Liners and tapers move " +
+                    "together, so they stay in proportion with each other. The page " +
+                    "balances the request — they keep as much true length as fits, and " +
+                    "the runs between them always keep their relative " +
                     "lengths readable. Settings → Drawing → Body S-break sets how far a " +
                     "body run may be shortened before it prints the S-break symbol — set " +
                     "it to Never to hide compression entirely, or higher to mark it sooner."
@@ -619,11 +624,12 @@ private val helpSections: List<HelpSection> = listOf(
                     "\"Standard (…)\" returns to the " +
                     "size the Default drawing size setting picks. One value behind the " +
                     "schematic, runout, consolidated, and wear sheets.\n" +
-                    "• \"Keep liners proportional lengthwise\" and \"Liner compression\" — same " +
-                    "two places. Ask for liners at true length, or set how far they may " +
-                    "shorten when the page needs the room; the line underneath reports how " +
-                    "much true length the page can actually afford. Neither ever changes the " +
-                    "drawn shaft height.\n" +
+                    "• \"Keep liners and tapers proportional lengthwise\" and \"Liner & taper " +
+                    "compression\" — same two places. Ask for liners and tapers at true " +
+                    "length, or set how far they may shorten when the page needs the room; " +
+                    "both kinds move together, and the line underneath reports how much true " +
+                    "length the page can actually afford. Neither ever changes the drawn " +
+                    "shaft height.\n" +
                     "• \"Blank draft\" — a Content chip on each document's PDF Options sheet, " +
                     "and a chip over the schematic preview. Prints the drawing with values " +
                     "blanked for handwriting. Not saved; it resets each session. On the " +
