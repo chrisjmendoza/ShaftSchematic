@@ -46,6 +46,9 @@ Specifically:
   `AddBodyDialog`/`AddTaperDialog` when adding would reach ≥ 2 (≥ 1 existing + this
   dialog's keyway defined). Same condition on both surfaces. 180° and 90° are mutually
   exclusive.
+- **Keyway standard size**: the "Standard size…" picker appears on the Body/Taper cards and in
+  AddBodyDialog/AddTaperDialog under the W × D row; it writes through the typed-value path and
+  never fills on its own.
 - **Taper AFT/FWD reference**: `AddTaperDialog` must show AFT/FWD direction chips.
 - **Coupler bolt slot**: `AddCouplerBoltSlotDialog` and the `ResolvedCouplerBoltSlot`
   carousel card must both expose Measure From (AFT | FWD), hole Ø, count, spacing (only

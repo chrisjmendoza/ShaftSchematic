@@ -6,6 +6,31 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-09-14
+
+### feat(editor): standard key-stock sizes for keyways
+
+A **"Standard size…"** menu sits under the KW W × D row on all four keyway surfaces — the Body and
+Taper carousel cards and `AddBodyDialog` / `AddTaperDialog` — so a keyway can be specified off the
+standard rather than remembered and typed.
+
+- **ANSI B17.1 for an inch keyway, DIN 6885-1 / ISO 773 for a metric one.** The "Keyway in: in | mm"
+  chip picks the table, because that chip already decides the unit the keyway is typed and printed
+  in. Both tables live in the pure `geom/KeyStockStandards.kt`.
+- **The entry the standard names for the host Ø is offered first**, checked and captioned
+  "Suggested for Ø …" — the body's Ø on a body, the taper's LARGE end on a taper (a key is specified
+  for the section it seats in). Every other size stays reachable in table order: the shop fits the
+  key it has.
+- **The depth offered is the SHAFT keyseat depth** — what `keywayDepthMm` means and what gets cut —
+  not the key's overall height. For ANSI that is half the key height; DIN publishes it as `t1`.
+- **A pick writes through the typed-value path** (the card's keyway update callback, the dialog's
+  own W/D text state) and the numbers are authored and sacred from then on. The menu never writes
+  on its own: no fill on a Ø change, no rewrite of a W × D that is already there.
+- Both tables are **provisional**, chosen without shop input — the `LINER_SHOULDER_STD_RADII_IN`
+  posture. Nothing derives from them except what the user picks off the menu.
+
+---
+
 ## 2026-09-04
 
 ### feat(editor): the Final Schematic — a second drawing for the shaft that ships

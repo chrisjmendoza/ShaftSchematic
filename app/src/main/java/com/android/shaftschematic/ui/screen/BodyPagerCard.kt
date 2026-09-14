@@ -451,6 +451,15 @@ internal fun BodyPagerCard(
                     onUpdateBodyKeyway(idx, b.keywayWidthMm, v, b.keywayLengthMm, b.keywayOffsetFromEndMm, kwEnd, b.keywaySpooned)
                 }
             }
+            // Standard key stock for the W × D pair, suggested off the body's own Ø. A pick rides
+            // the same update callback typing the fields does — the values are authored from then
+            // on, and nothing here ever fills a field by itself.
+            KeywayStdSizePicker(
+                unit = kwUnit,
+                hostDiaMm = b.diaMm,
+            ) { w, d ->
+                onUpdateBodyKeyway(idx, w, d, b.keywayLengthMm, b.keywayOffsetFromEndMm, kwEnd, b.keywaySpooned)
+            }
             // KW L / Offset parse in `kwUnit` like KW W/D — the keyway-unit chip governs what
             // EVERY keyway number means; parsing these two in the document unit under a kwUnit
             // label read a metric keyway's length as inches.
