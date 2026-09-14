@@ -14,6 +14,7 @@ Read the relevant doc before editing a subsystem. Key files:
 - `ShaftViewModel.md` — ViewModel responsibilities and state ownership
 - `Model_Conventions.md` — model layer rules
 - `CouplerBoltSlot.md` — coupler bolt slot feature contract (reference-only cutouts)
+- `FinalSchematic.md` — the document's second drawing (`final_spec`), one editor / two targets
 
 ## Comment conventions
 No date stamps and no prior-code narratives in `.kt` comments — comments state current
@@ -370,6 +371,38 @@ on top. On the rail, the level-0 chain takes **top-level spans only** (the forwa
 data), and each level ≥ 1 gets ONE extra chain row anchored at its **parent's edges**
 (`buildNestedUndercutRailRows`), reserved through the same `undercutRailRowHeightPt` metric. See
 `docs/archive/UndercutDrawing_PLAN.md`.
+
+### The Final schematic is a second geometry, never a view of the original
+`final_spec` (`ShaftDocV1.finalSpec: ShaftSpec?`, sibling of `spec` in the envelope — `null` =
+no final drawing yet) is the drawing the shaft LEAVES with, after the wear/undercut work moved,
+lengthened or shortened a liner; the original `spec` is the record of what came IN and the two
+are the before and the after (on-device request). It is **NOT a reference feature**: it is a
+whole `ShaftSpec`, created by "Start from original schematic" as a structural copy — component
+ids INCLUDED, so `unit_overrides` apply to both and a future before/after diff lines up — and
+from then on independent under the same golden rule: no edit on one ever reaches the other,
+and nothing derives one from the other. It lives OUTSIDE `ShaftSpec`; wear, undercut, runout
+readings and station placements stay keyed to the ORIGINAL. Exactly one per document (Reset =
+fresh copy, Discard = `null`, both undoable); never in a template, never in a mate duplicate,
+cleared by `newDocument`. Editing goes through the ONE editor with an EXPLICIT
+`SpecTarget { ORIGINAL, FINAL }` parameter on every mutator (default ORIGINAL — existing call
+sites byte-identical; `updateSpec(target)`/`specValue(target)` are the only seam; FINAL while
+`null` is a no-op) — never a "current target" flag on the ViewModel, which would put the wrong
+drawing one tab-switch away from every edit. `finalSpec` rides `EditState` (one undo history
+for the document) AND the autosave `SessionSnapshot` combine (a field in the builder but not
+the combine is the autosave-incident data-loss gap). Outputs: the Schematic, Runout, Wear,
+Undercut and Consolidated Output tabs draw the ORIGINAL, untouched; the Final tab
+(`EditorTab.FINAL`, after UNDERCUT, same built-shaft gate) draws the FINAL — the schematic PDF
+(plain by default — the welding/machining copy that gets the liner placements updated; with the
+session-only "Runout bubbles" election on its options sheet, the consolidated Schematic + Runout
+sheet over the final geometry, empty readings, ONE compose helper behind preview/print/export)
+and a blank classic runout sheet (no readings/placements/wear, default stations: the final
+measurement sheet before shipping). Every final sheet is MARKED (`ProjectInfo.drawingLabel` =
+"Final": `Drawing: Final` in the footer job block and the runout header, a bold FINAL badge on
+the Side line, and a filename suffix — `_Final`, `_Final_Runout` with bubbles elected,
+`_Final_RunoutSheet` for the banner's blank classic sheet: THREE distinct documents, never
+collapsed onto one name); blank on every other caller, so existing output is
+byte-identical. `PdfPreviewScreen`/`PdfExportRoute` take the target from the NAV ROUTE ARGUMENT
+(`?target=final`), never from ViewModel state. See `docs/contracts/FinalSchematic.md`.
 
 ### Paper sheets are theme-independent
 The app theme (Settings → Appearance: System/Light/Dark + high contrast; default Light =

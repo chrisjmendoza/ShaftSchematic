@@ -256,6 +256,14 @@ OAL/`coverageEndMm`, body resolution, or collision. Seven kinds:
 coupler bolt slots (in `ShaftSpec`), and — in the document envelope — wear spots, wear pits,
 measured-Ø readings, worn sections, runout readings, and undercuts.
 
+### Final Schematic
+The document's second drawing (`final_spec`, a whole `ShaftSpec` beside the original): the
+geometry the shaft leaves with after the wear/undercut work moved, lengthened or shortened a
+liner. Started as a copy of the original (ids kept) and edited independently on the Final
+Schematic tab through the same editor, selected by an explicit `SpecTarget`. The original is
+never touched — the pair is the before and the after. NOT a reference-only feature. Prints its
+own schematic PDF and a blank final runout sheet, both marked `Drawing: Final`.
+
 ### Wear Spot
 A recorded liner wear band (`WearSpot` in `WearRecord.spots`): liner-local start/length from
 the liner's AFT edge, plus a note. Drawn as a hatched band on the wear document; clamped for

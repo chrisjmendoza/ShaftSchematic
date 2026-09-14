@@ -18,7 +18,9 @@ import androidx.compose.ui.platform.LocalContext
 import com.android.shaftschematic.data.SettingsStore
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.resolved.shadedComponentIds
+import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
+import com.android.shaftschematic.ui.viewmodel.SpecTarget
 import com.android.shaftschematic.ui.viewmodel.UiEvent
 import com.android.shaftschematic.ui.viewmodel.addBodyAt
 import com.android.shaftschematic.ui.viewmodel.addCouplerBoltSlotAt
@@ -77,11 +79,25 @@ import kotlinx.coroutines.launch
  * Contract
  * - No I/O or PDF. Pure binding layer.
  * - Model stays mm; UI converts only for display/input.
+ * - ONE editor, two geometries: [target] names which of the document's specs this instance
+ *   reads and writes. The Schematic tab binds the original, the Final Schematic tab the
+ *   final, and every callback below carries the target so an edit can only reach the drawing
+ *   its tab named. Nothing here reads a "current target" from the ViewModel.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ShaftRoute(
     vm: ShaftViewModel,
+    /**
+     * Which of the document's two drawings this editor edits. [SpecTarget.FINAL] is only ever
+     * passed by `FinalRoute`, and only while a final drawing exists — a FINAL write with none
+     * is a ViewModel no-op, so a stray one cannot conjure a second geometry.
+     */
+    target: SpecTarget = SpecTarget.ORIGINAL,
+    /** Top-bar title, so the Final tab names its own drawing. */
+    editorTitle: String = "Shaft Editor",
+    /** Strip under the top bar — the Final tab's standing reminder and its own actions. */
+    banner: (@Composable () -> Unit)? = null,
     onNew: () -> Unit,
     onOpen: () -> Unit,
     onSave: () -> Unit,
@@ -137,7 +153,15 @@ fun ShaftRoute(
     }
 
 
-    val spec            by vm.spec.collectAsState()
+    // The geometry this editor is bound to. `FinalRoute` only renders with a final drawing
+    // present, so the blank fallback is unreachable there; it exists so a null flow can never
+    // crash a composition mid-discard.
+    val originalSpec    by vm.spec.collectAsState()
+    val finalSpec       by vm.finalSpec.collectAsState()
+    val spec = when (target) {
+        SpecTarget.ORIGINAL -> originalSpec
+        SpecTarget.FINAL -> finalSpec ?: ShaftSpec()
+    }
     val unit            by vm.unit.collectAsState()
     val showGrid        by vm.showGrid.collectAsState()
     val previewBlackWhiteOnly by vm.previewBlackWhiteOnly.collectAsState()
@@ -159,7 +183,12 @@ fun ShaftRoute(
     val item            by vm.item.collectAsState()
     val shaftPosition   by vm.shaftPosition.collectAsState()
     val notes           by vm.notes.collectAsState()
-    val resolvedComponents by vm.resolvedComponents.collectAsState()
+    val originalResolved by vm.resolvedComponents.collectAsState()
+    val finalResolved by vm.finalResolvedComponents.collectAsState()
+    val resolvedComponents = when (target) {
+        SpecTarget.ORIGINAL -> originalResolved
+        SpecTarget.FINAL -> finalResolved
+    }
     val selectedComponentId by vm.selectedComponentId.collectAsState()
 
     val showComponentDebugLabels by vm.showComponentDebugLabels.collectAsState()
@@ -229,6 +258,8 @@ fun ShaftRoute(
 
     ShaftScreen(
         resetNonce = editorResetNonce,
+        editorTitle = editorTitle,
+        banner = banner,
         spec = spec,
         documentName = currentDocumentName,
         hasUnsavedChanges = hasUnsavedChanges,
@@ -274,20 +305,23 @@ fun ShaftRoute(
         onSetItem = vm::setItem,
         onSetShaftPosition = vm::setShaftPosition,
         onSetNotes = vm::setNotes,
-        onSetOverallLengthRaw = vm::setOverallLength,
-        onSetOverallLengthMm = vm::onSetOverallLengthMm,
+        // Every mutation below names its [target] explicitly. A callable reference
+        // (`vm::removeBody`) would take the ORIGINAL default and silently edit the wrong
+        // drawing on the Final tab, so each one is a lambda that threads it through.
+        onSetOverallLengthRaw = { raw -> vm.setOverallLength(raw, target) },
+        onSetOverallLengthMm = { mm -> vm.onSetOverallLengthMm(mm, target) },
         onSelectComponentById = vm::selectComponentById,
 
         onAddBody   = { s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSp, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd ->
-            vm.addBodyAt(s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSp, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd)
+            vm.addBodyAt(s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSp, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd, target)
         },
-        onSetAutoSectionDia = vm::setAutoSectionDiaMm,
-        onSetAutoBlend = { s0, s1, end, len, prof, seal -> vm.setAutoBlend(s0, s1, end, len, prof, seal) },
-        onSetShowAutoBodyDia = vm::setShowAutoBodyDia,
+        onSetAutoSectionDia = { s0, s1, d -> vm.setAutoSectionDiaMm(s0, s1, d, target) },
+        onSetAutoBlend = { s0, s1, end, len, prof, seal -> vm.setAutoBlend(s0, s1, end, len, prof, seal, target) },
+        onSetShowAutoBodyDia = { show -> vm.setShowAutoBodyDia(show, target) },
         onAddTaper  = { s, l, sd, ed, rate, ref, kwW, kwD, kwL, kwO, kwS, kwUnit ->
-            vm.addTaperAt(s, l, sd, ed, rate, ref, kwW, kwD, kwL, kwO, kwS, kwUnit)
+            vm.addTaperAt(s, l, sd, ed, rate, ref, kwW, kwD, kwL, kwO, kwS, kwUnit, target)
         },
-        onAddThread = { s, l, maj, p, ex, aft, desig -> vm.addThreadAt(s, l, maj, p, ex, aft, desig) },
+        onAddThread = { s, l, maj, p, ex, aft, desig -> vm.addThreadAt(s, l, maj, p, ex, aft, desig, target) },
         onAddLiner  = { s, l, od, ref, shoulders -> vm.addLinerAt(
             s, l, od, ref,
             shoulderAftLenMm = shoulders.aft?.lenMm ?: 0f,
@@ -296,50 +330,51 @@ fun ShaftRoute(
             shoulderFwdLenMm = shoulders.fwd?.lenMm ?: 0f,
             shoulderFwdOdMm = shoulders.fwd?.odMm ?: 0f,
             shoulderFwdRadiusMm = shoulders.fwd?.radiusMm ?: 0f,
+            target = target,
         ) },
-        onAddCouplerBoltSlot = { s, dia, cnt, sp, thru, dep, ref -> vm.addCouplerBoltSlotAt(s, dia, cnt, sp, thru, dep, ref) },
+        onAddCouplerBoltSlot = { s, dia, cnt, sp, thru, dep, ref -> vm.addCouplerBoltSlotAt(s, dia, cnt, sp, thru, dep, ref, target) },
 
-        onUpdateBody   = { i, s, l, d      -> vm.updateBody(i, s, l, d) },
-        onUpdateBodyShowDia = { i, show    -> vm.updateBodyShowDia(i, show) },
-        onUpdateBodyShowLabel = { i, show  -> vm.updateBodyShowLabel(i, show) },
-        onUpdateBodyShade = { i, shade -> vm.updateBodyShade(i, shade) },
-        onUpdateBodyCompressOnDrawing = { i, on -> vm.updateBodyCompressOnDrawing(i, on) },
-        onUpdateBodyBlend = { i, aft, fwd, p, sAft, sFwd -> vm.updateBodyBlend(i, aft, fwd, p, sAft, sFwd) },
-        onUpdateBodyLabel = { i, label     -> vm.updateBodyLabel(i, label) },
-        onUpdateBodyKeyway = { i, w, d, l, offset, end, spooned -> vm.updateBodyKeyway(i, w, d, l, offset, end, spooned) },
-        onUpdateTaper  = { i, s, l, sd, ed, rate -> vm.updateTaper(i, s, l, sd, ed, rate) },
-        onUpdateTaperLabel = { i, label    -> vm.updateTaperLabel(i, label) },
-        onUpdateTaperShowLabel = { i, show -> vm.updateTaperShowLabel(i, show) },
-        onUpdateTaperShade = { i, shade -> vm.updateTaperShade(i, shade) },
-        onUpdateTaperKeyway = { i, w, d, l, offset, spooned -> vm.updateTaperKeyway(i, w, d, l, offset, spooned) },
-        onUpdateTaperReference = { i, ref -> vm.updateTaperAuthoredReference(i, ref) },
-        onUpdateThread = { i, s, l, maj, p, desig -> vm.updateThread(i, s, l, maj, p, desig) },
-        onUpdateThreadLabel = { i, label   -> vm.updateThreadLabel(i, label) },
-        onUpdateThreadShowLabel = { i, show -> vm.updateThreadShowLabel(i, show) },
-        onUpdateLiner  = { i, s, l, od     -> vm.updateLiner(i, s, l, od) },
-        onUpdateLinerShowDia = { i, show   -> vm.updateLinerShowDia(i, show) },
-        onUpdateLinerShowLabel = { i, show -> vm.updateLinerShowLabel(i, show) },
-        onUpdateLinerShade = { i, shade -> vm.updateLinerShade(i, shade) },
-        onUpdateLinerShoulder = { i, end, len, od, r -> vm.updateLinerShoulder(i, end, len, od, r) },
+        onUpdateBody   = { i, s, l, d      -> vm.updateBody(i, s, l, d, target) },
+        onUpdateBodyShowDia = { i, show    -> vm.updateBodyShowDia(i, show, target) },
+        onUpdateBodyShowLabel = { i, show  -> vm.updateBodyShowLabel(i, show, target) },
+        onUpdateBodyShade = { i, shade -> vm.updateBodyShade(i, shade, target) },
+        onUpdateBodyCompressOnDrawing = { i, on -> vm.updateBodyCompressOnDrawing(i, on, target) },
+        onUpdateBodyBlend = { i, aft, fwd, p, sAft, sFwd -> vm.updateBodyBlend(i, aft, fwd, p, sAft, sFwd, target) },
+        onUpdateBodyLabel = { i, label     -> vm.updateBodyLabel(i, label, target) },
+        onUpdateBodyKeyway = { i, w, d, l, offset, end, spooned -> vm.updateBodyKeyway(i, w, d, l, offset, end, spooned, target) },
+        onUpdateTaper  = { i, s, l, sd, ed, rate -> vm.updateTaper(i, s, l, sd, ed, rate, target) },
+        onUpdateTaperLabel = { i, label    -> vm.updateTaperLabel(i, label, target) },
+        onUpdateTaperShowLabel = { i, show -> vm.updateTaperShowLabel(i, show, target) },
+        onUpdateTaperShade = { i, shade -> vm.updateTaperShade(i, shade, target) },
+        onUpdateTaperKeyway = { i, w, d, l, offset, spooned -> vm.updateTaperKeyway(i, w, d, l, offset, spooned, target) },
+        onUpdateTaperReference = { i, ref -> vm.updateTaperAuthoredReference(i, ref, target) },
+        onUpdateThread = { i, s, l, maj, p, desig -> vm.updateThread(i, s, l, maj, p, desig, target) },
+        onUpdateThreadLabel = { i, label   -> vm.updateThreadLabel(i, label, target) },
+        onUpdateThreadShowLabel = { i, show -> vm.updateThreadShowLabel(i, show, target) },
+        onUpdateLiner  = { i, s, l, od     -> vm.updateLiner(i, s, l, od, target) },
+        onUpdateLinerShowDia = { i, show   -> vm.updateLinerShowDia(i, show, target) },
+        onUpdateLinerShowLabel = { i, show -> vm.updateLinerShowLabel(i, show, target) },
+        onUpdateLinerShade = { i, shade -> vm.updateLinerShade(i, shade, target) },
+        onUpdateLinerShoulder = { i, end, len, od, r -> vm.updateLinerShoulder(i, end, len, od, r, target) },
         linerShouldersEnabled = linerShouldersEnabled,
         dialogUnitConverterEnabled = dialogUnitConverterEnabled,
-        onUpdateLinerLabel = { i, label    -> vm.updateLinerLabel(i, label) },
-        onUpdateLinerReference = { i, ref  -> vm.updateLinerAuthoredReference(i, ref) },
-        onUpdateCouplerBoltSlot = { i, s, dia, cnt, sp, thru, dep -> vm.updateCouplerBoltSlot(i, s, dia, cnt, sp, thru, dep) },
-        onUpdateCouplerBoltSlotReference = { i, ref -> vm.updateCouplerBoltSlotReference(i, ref) },
-        onUpdateCouplerBoltSlotShowRail = { i, show -> vm.updateCouplerBoltSlotShowRail(i, show) },
+        onUpdateLinerLabel = { i, label    -> vm.updateLinerLabel(i, label, target) },
+        onUpdateLinerReference = { i, ref  -> vm.updateLinerAuthoredReference(i, ref, target) },
+        onUpdateCouplerBoltSlot = { i, s, dia, cnt, sp, thru, dep -> vm.updateCouplerBoltSlot(i, s, dia, cnt, sp, thru, dep, target) },
+        onUpdateCouplerBoltSlotReference = { i, ref -> vm.updateCouplerBoltSlotReference(i, ref, target) },
+        onUpdateCouplerBoltSlotShowRail = { i, show -> vm.updateCouplerBoltSlotShowRail(i, show, target) },
 
-        onSetKeyways180Apart = vm::setKeyways180Apart,
-        onSetKeyways90Apart = vm::setKeyways90Apart,
-        onSetKeyways90Cw = vm::setKeyways90Cw,
-        onSetThreadExcludeFromOal = vm::setThreadExcludeFromOal,
-        onSetThreadEndPosition = vm::setThreadEndPosition,
+        onSetKeyways180Apart = { on -> vm.setKeyways180Apart(on, target) },
+        onSetKeyways90Apart = { on -> vm.setKeyways90Apart(on, target) },
+        onSetKeyways90Cw = { cw -> vm.setKeyways90Cw(cw, target) },
+        onSetThreadExcludeFromOal = { id, ex -> vm.setThreadExcludeFromOal(id, ex, target) },
+        onSetThreadEndPosition = { id, isAft -> vm.setThreadEndPosition(id, isAft, target) },
 
-        onRemoveBody   = vm::removeBody,
-        onRemoveTaper  = vm::removeTaper,
-        onRemoveThread = vm::removeThread,
-        onRemoveLiner  = vm::removeLiner,
-        onRemoveCouplerBoltSlot = vm::removeCouplerBoltSlot,
+        onRemoveBody   = { id -> vm.removeBody(id, target) },
+        onRemoveTaper  = { id -> vm.removeTaper(id, target) },
+        onRemoveThread = { id -> vm.removeThread(id, target) },
+        onRemoveLiner  = { id -> vm.removeLiner(id, target) },
+        onRemoveCouplerBoltSlot = { id -> vm.removeCouplerBoltSlot(id, target) },
 
         snackbarHostState = snackbarHostState,
 

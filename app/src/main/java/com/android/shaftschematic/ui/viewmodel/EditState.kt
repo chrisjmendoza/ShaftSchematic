@@ -13,6 +13,9 @@ import com.android.shaftschematic.model.WearRecord
  * The full slice of *drawing-editor* state covered by session undo/redo — everything a
  * single user edit can change and that [SessionHistory] must faithfully restore:
  * - [spec]: the canonical-mm [ShaftSpec] (geometry, keyways, coupler bolt slots, OAL, …).
+ * - [finalSpec]: the document's SECOND geometry — the final drawing — or null when none has
+ *   been started. Held whole, so starting / resetting / discarding it undoes like any other
+ *   drawing edit, and an edit on the final undoes without disturbing the original.
  * - [wearRecord]: reference-only wear spots + pits (rides the same envelope as the spec).
  * - [runoutReadings]: reference-only per-station TIR values + high-spot markers.
  * - [runoutStationPlacements]: reference-only dragged station pins. Undoable because a drag
@@ -38,6 +41,7 @@ import com.android.shaftschematic.model.WearRecord
  */
 data class EditState(
     val spec: ShaftSpec,
+    val finalSpec: ShaftSpec?,
     val wearRecord: WearRecord,
     val runoutReadings: RunoutReadings,
     val runoutStationPlacements: RunoutStationPlacements,
