@@ -45,6 +45,9 @@ Specifically:
   `AddBodyDialog`/`AddTaperDialog` when adding would reach ≥ 2 (≥ 1 existing + this
   dialog's keyway defined). Same condition on both surfaces. 180° and 90° are mutually
   exclusive.
+- **Keyway standard size**: the "Standard size…" picker appears on the Body/Taper cards and in
+  AddBodyDialog/AddTaperDialog under the W × D row; it writes through the typed-value path and
+  never fills on its own.
 - **Taper AFT/FWD reference**: `AddTaperDialog` must show AFT/FWD direction chips.
 - **Coupler bolt slot**: `AddCouplerBoltSlotDialog` and the `ResolvedCouplerBoltSlot`
   carousel card must both expose Measure From (AFT | FWD), hole Ø, count, spacing (only
@@ -355,6 +358,38 @@ canvas sites additionally share `ui/screen/UndercutSharedDraw.kt`, which holds w
 cannot — the `DrawScope` notch pass and the resolved→liner-span mapping. See
 `docs/archive/UndercutDrawing_PLAN.md`.
 
+### The Final schematic is a second geometry, never a view of the original
+`final_spec` (`ShaftDocV1.finalSpec: ShaftSpec?`, sibling of `spec` in the envelope — `null` =
+no final drawing yet) is the drawing the shaft LEAVES with, after the wear/undercut work moved,
+lengthened or shortened a liner; the original `spec` is the record of what came IN and the two
+are the before and the after (on-device request). It is **NOT a reference feature**: it is a
+whole `ShaftSpec`, created by "Start from original schematic" as a structural copy — component
+ids INCLUDED, so `unit_overrides` apply to both and a future before/after diff lines up — and
+from then on independent under the same golden rule: no edit on one ever reaches the other,
+and nothing derives one from the other. It lives OUTSIDE `ShaftSpec`; wear, undercut, runout
+readings and station placements stay keyed to the ORIGINAL. Exactly one per document (Reset =
+fresh copy, Discard = `null`, both undoable); never in a template, never in a mate duplicate,
+cleared by `newDocument`. Editing goes through the ONE editor with an EXPLICIT
+`SpecTarget { ORIGINAL, FINAL }` parameter on every mutator (default ORIGINAL — existing call
+sites byte-identical; `updateSpec(target)`/`specValue(target)` are the only seam; FINAL while
+`null` is a no-op) — never a "current target" flag on the ViewModel, which would put the wrong
+drawing one tab-switch away from every edit. `finalSpec` rides `EditState` (one undo history
+for the document) AND the autosave `SessionSnapshot` combine (a field in the builder but not
+the combine is the autosave-incident data-loss gap). Outputs: the Schematic, Runout, Wear,
+Undercut and Consolidated Output tabs draw the ORIGINAL, untouched; the Final tab
+(`EditorTab.FINAL`, after UNDERCUT, same built-shaft gate) draws the FINAL — the schematic PDF
+(plain by default — the welding/machining copy that gets the liner placements updated; with the
+session-only "Runout bubbles" election on its options sheet, the consolidated Schematic + Runout
+sheet over the final geometry, empty readings, ONE compose helper behind preview/print/export)
+and a blank classic runout sheet (no readings/placements/wear, default stations: the final
+measurement sheet before shipping). Every final sheet is MARKED (`ProjectInfo.drawingLabel` =
+"Final": `Drawing: Final` in the footer job block and the runout header, a bold FINAL badge on
+the Side line, and a filename suffix — `_Final`, `_Final_Runout` with bubbles elected,
+`_Final_RunoutSheet` for the banner's blank classic sheet: THREE distinct documents, never
+collapsed onto one name); blank on every other caller, so existing output is
+byte-identical. `PdfPreviewScreen`/`PdfExportRoute` take the target from the NAV ROUTE ARGUMENT
+(`?target=final`), never from ViewModel state. See `docs/contracts/FinalSchematic.md`.
+
 ### Paper sheets are theme-independent
 The app theme (Settings → Appearance: System/Light/Dark + high contrast; default Light =
 the historical look) styles Compose chrome only. The five white-sheet canvases (undercut
@@ -558,7 +593,8 @@ Named drawing preset profiles (`settings/DrawingProfile.kt`, Settings → Drawin
 capture the drawing LOOK — the whole `PdfPrefs` plus line thickness — as one DataStore JSON
 map. A profile is device preferences and nothing more: **no doc-envelope field, no per-document
 state, no "active profile" tracking** — applying is a one-shot copy through the EXISTING
-setters (so every mirror fires, `FractionTypography` included), and a document never remembers
+setters (so every mirror fires, `FractionTypography` and `OutputTypography` included — the
+captured set includes `outputFont`, the sheets' typeface), and a document never remembers
 which profile drew it. Do not "improve" this by persisting a profile reference anywhere in a
 document. Excluded from capture, deliberately: capability gates (per-component units, liner
 shoulders — they decide which controls exist), the dual-units default (document behavior), the
@@ -732,7 +768,11 @@ process-wide `FractionTypography.active` mirror, whose ONLY writer is
 `SettingsStore.updatePdfPrefs` (the `SettingsStore.pdfPrefs` pattern — threading a uniform
 drawing decision through every composer's private draw functions costs more than it buys). That
 mirror is not snapshot state, so every preview's render-inputs record must carry `fractionStyle`
-as a **re-render key** or that tab keeps drawing the old style. See `docs/contracts/FractionTypography.md`.
+as a **re-render key** or that tab keeps drawing the old style. `OutputTypography.active`
+(`PdfPrefs.outputFont`, Settings → Drawing → "Output font" — the FACE every sheet is set in, and
+the composers' root text paint) is the sibling mirror with the same single writer, the same
+re-render-key rule, and the same tolerant `fromName` fallback; it is Settings-only, never on the
+PDF options sheets. See `docs/contracts/FractionTypography.md`.
 
 ### Mixed units and dual display are a DISPLAY AXIS
 Per-component display units (`unit_overrides` — resolved component id → `UnitSystem`) and

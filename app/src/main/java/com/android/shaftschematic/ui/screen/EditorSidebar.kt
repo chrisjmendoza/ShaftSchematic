@@ -25,6 +25,7 @@ import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.Article
 import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.ContentCut
+import androidx.compose.material.icons.filled.FactCheck
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Schema
@@ -51,8 +52,8 @@ import androidx.compose.ui.unit.dp
  * EditorSidebarOverlay
  *
  * A modal overlay navigation drawer for the shaft editor's document views
- * (Schematic, Runout Sheet, Wear Document, Undercut Drawing, Consolidated Output) plus
- * Home and Settings shortcuts.
+ * (Schematic, Runout Sheet, Wear Document, Undercut Drawing, Final Schematic, Consolidated
+ * Output) plus Home and Settings shortcuts.
  *
  * ## Layout strategy
  * The sidebar does NOT push content. It overlays as a modal:
@@ -70,19 +71,19 @@ import androidx.compose.ui.unit.dp
  *
  * ## Items
  * Top group:  Home · Schematic · Runout Sheet · Wear Document · Undercut Drawing ·
- *             Consolidated Output
+ *             Final Schematic · Consolidated Output
  * Bottom group: Keyway calculator · Taper calculator · Unit converter · Help & FAQ ·
  * Settings — tools, not document views, so they are never dimmed by the "built" gate (no
  * calculator reads anything from the shaft). The two calculators sit adjacent. Help sits with
  * them rather than behind Settings: reference content is reached for mid-job, and Settings is
  * for changing things.
- * Runout, Wear, Undercut, and Consolidated Output are dimmed when [runoutEnabled] is
- * false (shaft not yet built).
+ * Runout, Wear, Undercut, Final Schematic, and Consolidated Output are dimmed when
+ * [runoutEnabled] is false (shaft not yet built).
  *
  * @param open          Whether the sidebar is currently visible.
  * @param selectedTab   Which document tab is active (highlighted).
- * @param runoutEnabled Whether the Runout, Wear, Undercut, and Consolidated Output tabs
- *                      respond to taps.
+ * @param runoutEnabled Whether the Runout, Wear, Undercut, Final Schematic, and Consolidated
+ *                      Output tabs respond to taps.
  * @param onOpen        Called when the user taps the collapsed handle tab.
  * @param onClose       Called when the user taps the scrim or any active nav item.
  * @param onTabSelected Called with the newly selected [EditorTab].
@@ -207,6 +208,17 @@ fun EditorSidebarOverlay(
                             selected = selectedTab == EditorTab.UNDERCUT,
                             enabled = runoutEnabled,
                             onClick = { if (runoutEnabled) { onTabSelected(EditorTab.UNDERCUT); onClose() } },
+                            disabledHint = "Add components first",
+                        )
+                        // The document's second geometry — the shaft as it leaves. It follows
+                        // the Undercut Drawing because the final drawing is decided once the
+                        // wear and undercut work is known.
+                        NavItem(
+                            icon = Icons.Filled.FactCheck,
+                            label = EditorTab.FINAL.label,
+                            selected = selectedTab == EditorTab.FINAL,
+                            enabled = runoutEnabled,
+                            onClick = { if (runoutEnabled) { onTabSelected(EditorTab.FINAL); onClose() } },
                             disabledHint = "Add components first",
                         )
                         NavItem(

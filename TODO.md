@@ -113,19 +113,13 @@ at most a pointer from here.
   hardware; `CHANGELOG.md` is the running record of which.
 - [ ] On-device visual pass of dark and high-contrast chrome (the Appearance schemes have only
   been reasoned about, not looked at). See `docs/contracts/Appearance.md`.
-
-### Rendering / components
-
-- [ ] **Mixed-unit follow-ups**: carousel numeric *entry* fields still take the document unit
-  (the chip governs how a component PRINTS, not how its fields are typed), so a metric keyway is
-  typed in inches and stored mm; and standard metric key-stock presets for keyways aren't built.
-- [ ] **Additional output fonts** (requested 2026-08-14) — let a shop pick a look rather than
-  take the platform default. Constraints: the PDF composers draw with `android.graphics.Paint`,
-  so a face must be a real `Typeface` (bundled `.ttf` or a system family); every text metric is
-  measured live from the paint, so a swap is safe by construction *provided* nothing hard-codes a
-  width. Check the fraction stack against a condensed or slab face before shipping —
-  `FractionTextRendererTest` exists to catch exactly that. Same pref posture as
-  `PdfPrefs.fractionStyle`.
+- [ ] **On-device visual pass after Material3 1.3.0 → 1.4.0** (Compose BOM 2026.04.01): component
+  defaults moved, not APIs. Look at the tuning sliders, the `ModalBottomSheet` page-strip cap
+  (`TUNING_SHEET_CHROME_DP` counts the drag handle + inset chrome; a changed default shifts it),
+  the Square | Blend | Seal chip row (labels above, outlines on ALL chips), AlertDialogs,
+  Switch/Checkbox density, and numeric-field blur commits. Also decide the four pinch-zoom
+  surfaces' `rememberTransformableState` centroid deprecation on-device — taking the centroid
+  changes where a pinch zooms from.
 
 ### Tech debt
 
@@ -140,8 +134,6 @@ at most a pointer from here.
     all require compileSdk 37, but stable Robolectric (4.16.x) certifies only through API 36 —
     and the whole Compose test suite runs on Robolectric. Waits for Robolectric 4.17 stable,
     then moves as ONE coordinated bump.
-  - **Compose BOM 2024.09.00 → 2026.04.01** (the last compileSdk-36-safe BOM): real Compose API
-    surface over ~19 months — its own branch with a compile + visual pass, not a chore.
   - **Kotlin 2.4.0** (K1 drop, annotation-target and warning-promotion changes) — its own branch.
 
 ### Testing

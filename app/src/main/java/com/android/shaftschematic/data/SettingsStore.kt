@@ -43,6 +43,8 @@ import com.android.shaftschematic.util.AppLog
 import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.FractionStyle
 import com.android.shaftschematic.util.FractionTypography
+import com.android.shaftschematic.util.OutputFont
+import com.android.shaftschematic.util.OutputTypography
 import com.android.shaftschematic.util.PreviewColorPreset
 import com.android.shaftschematic.util.PreviewColorRole
 import com.android.shaftschematic.util.PreviewColorSetting
@@ -176,6 +178,7 @@ object SettingsStore {
     private val KEY_PDF_SBREAK_THRESHOLD_FRAC = floatPreferencesKey("pdf_sbreak_threshold_frac")
     private val KEY_PDF_ARROW_SIZE_PT = floatPreferencesKey("pdf_arrow_size_pt")
     private val KEY_PDF_FRACTION_STYLE = stringPreferencesKey("pdf_fraction_style")
+    private val KEY_PDF_OUTPUT_FONT = stringPreferencesKey("pdf_output_font")
     private val KEY_PDF_DUAL_UNIT_LAYOUT = stringPreferencesKey("pdf_dual_unit_layout")
     private val KEY_PDF_WEAR_TRACE_DEPTH_FRAC = floatPreferencesKey("pdf_wear_trace_depth_frac")
     private val KEY_PDF_WEAR_BAND_SHADE_FRAC = floatPreferencesKey("pdf_wear_band_shade_frac")
@@ -362,6 +365,14 @@ object SettingsStore {
         ctx.settingsPrefs.map { p -> FractionStyle.fromName(p[KEY_PDF_FRACTION_STYLE]) }
     suspend fun setPdfFractionStyle(ctx: Context, style: FractionStyle) {
         ctx.editSettings { it[KEY_PDF_FRACTION_STYLE] = style.name }
+    }
+
+    // The typeface every printed sheet is set in. PDFs only — the on-screen sheets are Compose
+    // chrome and keep the app's own type.
+    fun pdfOutputFontFlow(ctx: Context): Flow<OutputFont> =
+        ctx.settingsPrefs.map { p -> OutputFont.fromName(p[KEY_PDF_OUTPUT_FONT]) }
+    suspend fun setPdfOutputFont(ctx: Context, font: OutputFont) {
+        ctx.editSettings { it[KEY_PDF_OUTPUT_FONT] = font.name }
     }
 
     // How a dual value is SET on the drawing: an inline one-liner or a two-line stack. Only ever
@@ -985,5 +996,8 @@ object SettingsStore {
         // `FractionTypography.active` rather than taking the style as a parameter, so this
         // mirror is what makes the Settings choice reach the ink.
         FractionTypography.setStyle(next.fractionStyle)
+        // Same posture for the typeface: the composers build their root text paint from
+        // `OutputTypography.active`, so this mirror is what carries the Settings choice to the ink.
+        OutputTypography.setFont(next.outputFont)
     }
 }

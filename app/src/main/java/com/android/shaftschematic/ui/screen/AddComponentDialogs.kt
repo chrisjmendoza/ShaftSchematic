@@ -326,6 +326,13 @@ fun AddBodyDialog(
                         CommitNumField("KW D (${abbr(kwUnit)})", kwDepth,
                             modifier = Modifier.weight(1f)) { kwDepth = it }
                     }
+                    // Standard key stock, mirroring the body card (parity rule — it writes W and
+                    // D, which are geometry). A pick fills the two fields with exactly the text a
+                    // typed value would show; nothing is written until the user taps an entry.
+                    KeywayStdSizePicker(unit = kwUnit, hostDiaMm = diaMm) { w, d ->
+                        kwWidth = dispKw(w, kwUnit)
+                        kwDepth = dispKw(d, kwUnit)
+                    }
                     Spacer(Modifier.height(8.dp))
                     CommitNumField("KW L (${abbr(kwUnit)})", kwLength) { kwLength = it }
                     Spacer(Modifier.height(8.dp))
@@ -1104,6 +1111,12 @@ fun AddTaperDialog(
                     Text("×", style = MaterialTheme.typography.titleMedium)
                     CommitNumField("KW D (${abbr(kwUnit)})", kwDepth,
                         modifier = Modifier.weight(1f)) { kwDepth = it }
+                }
+                // Standard key stock, mirroring the taper card (parity rule). Sized to the LARGE
+                // end — a key is specified for the section it seats in, and that is the L.E.T.
+                KeywayStdSizePicker(unit = kwUnit, hostDiaMm = max(setMm, letMm)) { w, d ->
+                    kwWidth = dispKw(w, kwUnit)
+                    kwDepth = dispKw(d, kwUnit)
                 }
                 Spacer(Modifier.height(8.dp))
                 CommitNumField("KW L (${abbr(kwUnit)})", kwLength) { kwLength = it }

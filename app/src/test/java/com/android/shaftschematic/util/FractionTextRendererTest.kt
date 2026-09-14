@@ -26,10 +26,12 @@ import org.robolectric.annotation.GraphicsMode
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class FractionTextRendererTest {
 
-    private fun paint(size: Float = 24f) = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        textSize = size
-        color = Color.BLACK
-    }
+    private fun paint(size: Float = 24f, font: OutputFont = OutputFont.Default) =
+        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            textSize = size
+            color = Color.BLACK
+            typeface = font.typeface()
+        }
 
     /**
      * The stacked preset by name, never [FractionTextStyle.Default]: the shipped default is a
@@ -64,30 +66,42 @@ class FractionTextRendererTest {
         assertTrue("w=$w", w > 0f && w < p.measureText("4000"))
     }
 
-    /** Ink must land inside the advance the caller reserved — nothing spills into a neighbour. */
+    /**
+     * Ink must land inside the advance the caller reserved — nothing spills into a neighbour —
+     * and inside the base font's own line box, which is what let every vertical budget in the
+     * app stay untouched.
+     *
+     * Checked in **every** Settings → Drawing → "Output font" face: the digit scale is a ratio of
+     * the base size, but ascent, descent and cap height are the face's own, so a raise that fits
+     * the standard sans could still break out of the line box in a condensed or slab one. Under
+     * Robolectric several of these families may resolve to the same installed font; the loop is
+     * still the right shape, and on a device with the real families it is the alarm.
+     */
     @Test
     fun `stacked ink stays within the measured advance and the font's line box`() {
-        val p = paint(40f)
-        val text = "1 3/16\""
-        val w = p.measureRichText(text, stacked)
-        val fm = p.fontMetrics
+        OutputFont.entries.forEach { font ->
+            val p = paint(40f, font)
+            val text = "1 3/16\""
+            val w = p.measureRichText(text, stacked)
+            val fm = p.fontMetrics
 
-        val padX = 20f
-        val baseline = 100f
-        val bmp = Bitmap.createBitmap((w + padX * 2).toInt() + 2, 200, Bitmap.Config.ARGB_8888)
-        val c = Canvas(bmp)
-        c.drawColor(Color.WHITE)
-        c.drawRichText(text, padX, baseline, p, stacked)
+            val padX = 20f
+            val baseline = 100f
+            val bmp = Bitmap.createBitmap((w + padX * 2).toInt() + 2, 200, Bitmap.Config.ARGB_8888)
+            val c = Canvas(bmp)
+            c.drawColor(Color.WHITE)
+            c.drawRichText(text, padX, baseline, p, stacked)
 
-        val ink = inkBounds(bmp)
-        assertTrue("nothing was drawn", ink != null)
-        val (left, top, right, bottom) = ink!!
+            val ink = inkBounds(bmp)
+            assertTrue("$font: nothing was drawn", ink != null)
+            val (left, top, right, bottom) = ink!!
 
-        // 1 px of slack for antialiasing at the edges.
-        assertTrue("ink left $left < reserved ${padX - 1}", left >= padX - 1)
-        assertTrue("ink right $right > reserved ${padX + w + 1}", right <= padX + w + 1)
-        assertTrue("ink rises above the ascent", top >= baseline + fm.ascent - 1)
-        assertTrue("ink drops below the descent", bottom <= baseline + fm.descent + 1)
+            // 1 px of slack for antialiasing at the edges.
+            assertTrue("$font: ink left $left < reserved ${padX - 1}", left >= padX - 1)
+            assertTrue("$font: ink right $right > reserved ${padX + w + 1}", right <= padX + w + 1)
+            assertTrue("$font: ink rises above the ascent", top >= baseline + fm.ascent - 1)
+            assertTrue("$font: ink drops below the descent", bottom <= baseline + fm.descent + 1)
+        }
     }
 
     /** Centre alignment must centre the whole construction, not just the plain runs. */
@@ -108,22 +122,25 @@ class FractionTextRendererTest {
         assertTrue("drawn centre $drawnCx vs $cx", kotlin.math.abs(drawnCx - cx) <= w * 0.12f)
     }
 
+    /** The shipped construction, in every output face — see the stacked test above. */
     @Test
     fun `diagonal style also fits its measured advance`() {
-        val p = paint(40f)
-        val style = FractionTextStyle(style = FractionStyle.DIAGONAL)
-        val text = "2 7/8\""
-        val w = p.measureRichText(text, style)
+        OutputFont.entries.forEach { font ->
+            val p = paint(40f, font)
+            val style = FractionTextStyle(style = FractionStyle.DIAGONAL)
+            val text = "2 7/8\""
+            val w = p.measureRichText(text, style)
 
-        val padX = 20f
-        val bmp = Bitmap.createBitmap((w + padX * 2).toInt() + 2, 200, Bitmap.Config.ARGB_8888)
-        val c = Canvas(bmp)
-        c.drawColor(Color.WHITE)
-        c.drawRichText(text, padX, 100f, p, style)
+            val padX = 20f
+            val bmp = Bitmap.createBitmap((w + padX * 2).toInt() + 2, 200, Bitmap.Config.ARGB_8888)
+            val c = Canvas(bmp)
+            c.drawColor(Color.WHITE)
+            c.drawRichText(text, padX, 100f, p, style)
 
-        val ink = inkBounds(bmp)!!
-        assertTrue(ink.first >= padX - 1)
-        assertTrue(ink.third <= padX + w + 1)
+            val ink = inkBounds(bmp)!!
+            assertTrue("$font: ink spills left of the advance", ink.first >= padX - 1)
+            assertTrue("$font: ink spills right of the advance", ink.third <= padX + w + 1)
+        }
     }
 
     @Test

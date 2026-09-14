@@ -233,6 +233,17 @@ private val helpSections: List<HelpSection> = listOf(
                     "reading, never a second measurement."
             ),
             HelpTopic(
+                "Final Schematic",
+                "The drawing the shaft leaves with — a second schematic of the same job, " +
+                    "started as a copy of the original and then adjusted: a liner moved, " +
+                    "lengthened, or shortened once the wear and undercut work is known. " +
+                    "Editing it never changes the original, so the two read as the before and " +
+                    "the after. It prints its own schematic — with runout bubbles if you " +
+                    "elect them on its PDF options sheet — and a blank runout sheet to take " +
+                    "the finished shaft's readings on, all marked Final; every other " +
+                    "document keeps drawing the original."
+            ),
+            HelpTopic(
                 "L.E.T. / S.E.T.",
                 "Large End of Taper and Small End of Taper — the two ends of a taper, by " +
                     "diameter rather than by which way they face. Both diameters print in the " +
@@ -392,7 +403,9 @@ private val helpSections: List<HelpSection> = listOf(
                     "directly from its own tab. The preview shows the actual page. Template " +
                     "mode prints the shaft only (no dimensions); Blank draft prints the " +
                     "drawing with empty write-in value slots. PDF styling options (shading, " +
-                    "tiering, titles) live in Settings → PDF Export Options."
+                    "tiering, titles) live in Settings → PDF Export Options. The Final " +
+                    "Schematic tab prints the same two ways from the shaft's finished " +
+                    "geometry, and its sheets are marked Final."
             ),
             HelpTopic(
                 "Consolidated output and Export all",
@@ -492,6 +505,25 @@ private val helpSections: List<HelpSection> = listOf(
                     "runout/consolidated previews, so the threshold can be set against the " +
                     "drawing it changes — one setting, wherever you move it.\n" +
                     "• Dimension values always print true lengths, whatever the drawing does."
+            ),
+            HelpTopic(
+                "Drawing — Output font",
+                "Settings → Drawing. The typeface every exported PDF is set in — dimension " +
+                    "values, callouts, component names and the footer alike.\n\n" +
+                    "• \"Standard\" — the default, and the historical look: the device's " +
+                    "regular sans.\n" +
+                    "• \"Condensed\" — a narrower sans. Values take less room, so more of them " +
+                    "seat inside the dimension line instead of above it.\n" +
+                    "• \"Serif\" — for shops whose paperwork is set that way.\n" +
+                    "• \"Monospace\" — fixed pitch, so digits line up in a column.\n\n" +
+                    "App-wide like the other Drawing settings: one choice serves every " +
+                    "document, and a saved Drawing profile captures it along with the rest of " +
+                    "the look. \"Restore Drawing defaults\" puts it back to Standard.\n" +
+                    "Nothing on a sheet collides or shifts when you change it — fractions, " +
+                    "dual-unit stacks and every rail break are measured from the face as it " +
+                    "will actually print, not from a fixed width. A device that does not carry " +
+                    "one of these families simply prints in Standard.\n" +
+                    "App screens are unaffected; this styles the paper only."
             ),
             HelpTopic(
                 "Editor Screen",

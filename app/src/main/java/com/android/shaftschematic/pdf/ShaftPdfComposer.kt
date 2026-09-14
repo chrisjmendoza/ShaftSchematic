@@ -43,6 +43,7 @@ import com.android.shaftschematic.ui.resolved.unshadedTaperIds
 import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.DualUnitLayout
+import com.android.shaftschematic.util.OutputTypography
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.VerboseLog
 import com.android.shaftschematic.util.buildBodyTitleById
@@ -162,7 +163,7 @@ fun composeShaftPdf(
     }
     val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL; textSize = TEXT_PT
-        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
+        typeface = OutputTypography.active
         color = 0xFF000000.toInt()
     }
 

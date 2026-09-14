@@ -156,6 +156,7 @@ fun WearRoute(
     val pdfShadedTapers    by vm.pdfShadedTapers.collectAsState()
     val pdfShadedLiners    by vm.pdfShadedLiners.collectAsState()
     val pdfFractionStyle   by vm.pdfFractionStyle.collectAsState()
+    val pdfOutputFont      by vm.pdfOutputFont.collectAsState()
     // Dual-unit layout: this document stacks its dual values like every other
     // (`wantDualStacked`), so its options sheet has to show the stored choice — and the
     // preview has to redraw when it changes.
@@ -287,10 +288,12 @@ fun WearRoute(
     // composer reads it off the PdfPrefs snapshot, so without the key the sheet's own layout
     // chips would change nothing on the page they sit over. runoutConfig.heightScale is keyed on
     // its own (the rest of the config draws nothing here): it sizes the main profile band.
+    // pdfOutputFont is a key for the same reason: the typeface reaches the ink through
+    // OutputTypography.active, which is not snapshot state either.
     LaunchedEffect(showPreview, spec, unit, resolvedComponents,
                    lineThicknessScale, pdfShadedBodies, pdfShadedTapers, pdfShadedLiners,
-                   wearRecord, blankDraft, pdfFractionStyle, traceDepthFrac, wearBandShadeFrac,
-                   wearJoinGapMaxMm, unitOverrides, dualUnits, pdfDualUnitLayout,
+                   wearRecord, blankDraft, pdfFractionStyle, pdfOutputFont, traceDepthFrac,
+                   wearBandShadeFrac, wearJoinGapMaxMm, unitOverrides, dualUnits, pdfDualUnitLayout,
                    runoutConfig.heightScale) {
         if (!showPreview) { previewBitmap = null; previewInkBand = null; return@LaunchedEffect }
         previewLoading = true

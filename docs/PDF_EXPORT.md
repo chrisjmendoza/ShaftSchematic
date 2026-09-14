@@ -157,9 +157,23 @@ Top of page, full width.
 - Scale (“1:1”, “2:1”, or “Scale to Fit”)
 - Drawn By (optional)
 - Revision (optional)
+- Drawing label (`ProjectInfo.drawingLabel`, optional) — names WHICH drawing of the document
+  the sheet is. Blank on every ordinary sheet (nothing prints); the Final Schematic tab sets
+  `"Final"`, which prints `Drawing: Final` in the footer job block (after Item, before Date)
+  and in the runout/wear/undercut header line (`jobInfoHeaderLine`), plus a bold **FINAL**
+  badge sharing the Side badge's line. The schematic's title-block header never carries it —
+  the schematic gets the footer line and the badge. In the footer job block a blank draft
+  rules a `Drawing:` line only when the label is set; the header's blank-label set
+  (`JOB_INFO_BLANK_LABELS`) is untouched. See `docs/contracts/FinalSchematic.md`.
 
 ### Font Rules:
-- Sans-serif
+- Sans-serif by default, but the face is user-set: **Settings → Drawing → "Output font"**
+  (`PdfPrefs.outputFont` — Standard / Condensed / Serif / Monospace). Each composer builds its
+  root text `Paint` with `typeface = OutputTypography.active`, the process-wide mirror
+  `SettingsStore.updatePdfPrefs` writes; every other text paint on a sheet is a copy-constructor
+  of that root and inherits the face. App-wide and captured by Drawing profiles, never
+  per-document, and deliberately absent from the PDF options sheets. See
+  `docs/contracts/FractionTypography.md` §6.
 - 10–14 pt depending on field importance
 - Black text only
 
