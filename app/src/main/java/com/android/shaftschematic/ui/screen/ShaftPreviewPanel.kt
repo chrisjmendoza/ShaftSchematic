@@ -43,7 +43,7 @@ internal fun PreviewCard(
     spec: ShaftSpec,
     resolvedComponents: List<ResolvedComponent>,
     unit: UnitSystem,
-    devOptionsEnabled: Boolean,
+    /** Already ANDed with the Developer Options master switch by `ShaftRoute`. */
     showOalInPreviewBox: Boolean,
     // NEW: explicit preview controls
     highlightEnabled: Boolean,
@@ -99,7 +99,7 @@ internal fun PreviewCard(
                 modifier = Modifier.align(Alignment.TopStart).padding(8.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                if (devOptionsEnabled && showOalInPreviewBox) {
+                if (showOalInPreviewBox) {
                     PreviewOalBadge(
                         spec = spec,
                         unit = unit,
