@@ -6,6 +6,35 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-09-04
+
+### feat(pdf): tapers compress with the liners, on one control
+
+The two kinds the sheet is about now foreshorten together. "Liner compression" — renamed **"Liner
+& taper compression"**, with the checkbox now reading "Keep liners and tapers proportional
+lengthwise" — feeds the tapers as well as the liners, so asking for proportional length lengthens
+both and the drawing reads even (on-device request: liners walking up to true length beside tapers
+stuck at their 70% baseline looked lopsided).
+
+- `taperMinFracOfTrue(linerMinFracOfTrue)` = `max(PROFILE_TAPER_MIN_FRAC_OF_TRUE, request)`, applied
+  once in the single span builder `profileFeatureSpans`, so every consumer — the schematic, the
+  runout/consolidated sheet, and the UI's kept-% estimator — gets the same coupling without asking.
+  Sharing one requested fraction and one λ is what makes the kept fractions EQUAL: tapers and liners
+  land on the same proportion of true length at every squeeze.
+- **The coupling is one-way upward.** Below the 0.7 baseline tapers hold it rather than following
+  the liners down: a liner has its flat `PROFILE_MIN_LINER_PT` floor to land on, and a taper has no
+  flat floor by design (a flat floor equalizes unequal tapers), so a taper tracking a bare request
+  would compress like plain bare shaft and vanish on a long drawing.
+- **Sheets that never touch the control print exactly as before.** The stored default is full
+  compression (request 0), which leaves tapers on the baseline they already had; nothing in the
+  scale solve moved, so the drawn shaft height is untouched — the raise is still best-effort and
+  λ-fitted (`fracFitFactor`).
+- The live readout under the slider reports both kinds, and splits the two numbers only where they
+  genuinely differ (a request under the taper baseline). Help topics and the glossary follow the
+  new name.
+
+---
+
 ## 2026-09-03
 
 ### feat(dev): Developer Options gains diagnostics, and its master switch now switches

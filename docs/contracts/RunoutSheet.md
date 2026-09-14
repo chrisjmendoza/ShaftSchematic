@@ -858,8 +858,9 @@ On-device request following the worn-sections review:
     **Tapers may shrink but never equalize**: no flat floor (a flat floor equalizes
     unequal tapers when both clamp to it — on-device report) — a ratio-preserving
     fraction-of-true floor instead (`PROFILE_TAPER_MIN_FRAC_OF_TRUE` 0.7, λ-fit, never
-    lowers the height; relative taper widths always read true). The taper fraction is
-    deliberately the pool's LARGEST — within the shared λ, width flows to spans in
+    lowers the height; relative taper widths always read true) — a BASELINE the "Liner &
+    taper compression" request raises (`taperMinFracOfTrue`, see below). The taper
+    fraction is deliberately the pool's LARGEST constant — within the shared λ, width flows to spans in
     proportion to their fraction, so tapers out-prioritize body runs ("sacrifice a
     little more of the body compression to make the tapers more proportional" —
     on-device request, 2026-08-14; body runs fund it at 0.30 and their relative lengths
@@ -877,11 +878,13 @@ On-device request following the worn-sections review:
     room to write wear values in, see the 2026-08-05 liner clarification below; the
     SCHEMATIC composer instead uses the lean `SCHEMATIC_MIN_*` floors — 28/40/56 —
     because its values live on rails and callouts, not inside spans, so proportion
-    wins there; liners additionally honor the per-job **"Liner compression" pair** —
+    wins there; liners AND tapers honor the per-job **"Liner & taper compression" pair** —
     `RunoutConfig.linersProportional` checkbox holds them at true width and the
     `linerCompression` slider bounds how far they may foreshorten via
-    `ProfileFeatureSpan.minWidthFracOfTrue`, control on the Output tab + schematic Tune
-    sheet — "the key components we are measuring are the tapers and liners"; the
+    `ProfileFeatureSpan.minWidthFracOfTrue` (tapers through `taperMinFracOfTrue`, floored
+    at their baseline), control on the Output tab + schematic Tune
+    sheet — "the key components we are measuring are the tapers and liners", so the two
+    move together and keep the same fraction of true length; the
     **drawing height takes precedence**: the raises are best-effort, ignored by the
     scale solve and λ-fitted to the room the page has at the selected height
     (`fracFitFactor`) — a liner request never lowers the drawn shaft), and **above the
@@ -1958,7 +1961,7 @@ All four routes (Runout, Wear, Undercut, Consolidated Output) pass `RunoutWearOp
 | Shaft height (Slider) | `vm.setRunoutHeightScale()` — only when `showHeightSlider` (Consolidated Output, Runout, **and Wear**) |
 | Body S-break (Slider Never–Always, 5% steps) | `vm.setPdfSBreakThresholdFrac()` — only when `showSBreak` (see below) |
 | Line thickness (Slider 50–200%) | `vm.setLineThicknessScale()` — ungated, every instance |
-| Liner compression (Checkbox + Slider) | `vm.setLinersProportional()` / `vm.setLinerCompression()` — only when `showLinerCompression` (Consolidated Output and Runout) |
+| Liner & taper compression (Checkbox + Slider) | `vm.setLinersProportional()` / `vm.setLinerCompression()` — only when `showLinerCompression` (Consolidated Output and Runout) |
 | Runout bubbles: Bubble size (Slider 60–150%, 5% steps) | `vm.setPdfRunoutBubbleScale()` (`PdfPrefs.runoutBubbleScale`) — only when `showBubbleControls` (Consolidated Output and Runout) |
 | Runout bubbles: Bubble height (Slider 50–200%) | `vm.setPdfRunoutBubbleDropScale()` (`PdfPrefs.runoutBubbleDropScale`) — same gate; caption reads "Experimental" |
 | Dimension arrows (Chips Small/Medium/Large) | `vm.setPdfArrowSizePt()` — only when `showDimensionArrows` (Consolidated Output only) |
@@ -1971,19 +1974,19 @@ All four routes (Runout, Wear, Undercut, Consolidated Output) pass `RunoutWearOp
 
 The **whole sheet follows one unified order** (matching the schematic Tune sheet, §5.5 of
 `PDF_EXPORT.md`): Content chips → the Wear block (Wear only) → Shaft height → Body S-break →
-Line thickness → Liner compression → Runout bubbles → Dimension arrows → Fractions →
+Line thickness → Liner & taper compression → Runout bubbles → Dimension arrows → Fractions →
 Measurement reference → Shade in Components → Dual units + layout LAST. Every instance simply
 skips the rows it doesn't gate in; nothing reorders per caller.
 
-The Consolidated Output **and Runout** instances turn on Liner compression and the Runout
+The Consolidated Output **and Runout** instances turn on Liner & taper compression and the Runout
 bubbles sliders — one composer (`RunoutPdfComposer`) serves both sheets and reads
 `config.linerMinFracOfTrue` / `PdfPrefs.runoutBubbleScale`/`runoutBubbleDropScale` whether or
 not it is drawing the consolidated variant, so hiding them on the Runout sheet would leave the
 classic sheet's liner floors and bubble sizing governed from a different tab.
-**Shaft height is split from Liner compression** (`showHeightSlider` vs.
+**Shaft height is split from Liner & taper compression** (`showHeightSlider` vs.
 `showLinerCompression`) because the **Wear** instance now also turns on Shaft height — the
 wear composer's main profile band takes the shared per-job multiplier too (`PDF_EXPORT.md`
-§5.7) — but has no compression solve to raise liner floors against, so Liner compression would
+§5.7) — but has no compression solve to raise liner floors against, so Liner & taper compression would
 be inert there. Only Consolidated Output adds the Dimension arrows chips and the Measurement
 reference radios — the same set the schematic Tune sheet exposes, minus Component labels and
 the blank Ø-callouts sub-toggle, which the consolidated composer never reads. Only the
@@ -2004,9 +2007,9 @@ Trace depth exaggeration → Wear area shade → Taper–liner join → **Shaft 
 thickness → Fractions → Shade in Components → Dual units + layout; the **Undercut** sheet
 shows Blank draft → Line thickness → Fractions → Shade in Components → Dual units + layout;
 the **Runout** sheet shows Blank draft → Coupling face → Shaft height → Body S-break → Line
-thickness → Liner compression → Runout bubbles → Fractions → Shade in Components → Dual units
+thickness → Liner & taper compression → Runout bubbles → Fractions → Shade in Components → Dual units
 + layout; the **Consolidated Output** sheet (the fullest instance) shows Blank draft →
-Coupling face → Shaft height → Body S-break → Line thickness → Liner compression → Runout
+Coupling face → Shaft height → Body S-break → Line thickness → Liner & taper compression → Runout
 bubbles → Dimension arrows → Fractions → Measurement reference → Shade in Components → Dual
 units + layout. Two ordering rules, both on-device requests: Shaft height leads the live-tuning
 group (the control reached for most), and the dual-units pair sits LAST on every sheet —
@@ -2020,7 +2023,7 @@ pass (there are no draft frames to skip here) and hands it to the overlay.
 
 All of these values are included in the render loop's `RenderInputs` holder so changing any option immediately re-renders the preview bitmap.
 
-**Live tuning (Runout + Consolidated Output).** Both routes pass a `PreviewTuning` (`ui/screen/PreviewTuning.kt`) into the sheet, so the sliders here — Line thickness and Body S-break on both routes, plus Shaft height and Liner compression on the Consolidated Output AND Runout sheets — reshape the page **while the finger is still on the track** ("see the differences without choosing, closing menu, opening menu, choosing" — on-device request). The shared controls report their in-progress value through an optional `onDrag: (Float?) -> Unit` (same units as their commit callback, `null` on release); the route folds it into the render inputs as `override ?: committed`. Three rules hold:
+**Live tuning (Runout + Consolidated Output).** Both routes pass a `PreviewTuning` (`ui/screen/PreviewTuning.kt`) into the sheet, so the sliders here — Line thickness and Body S-break on both routes, plus Shaft height and Liner & taper compression on the Consolidated Output AND Runout sheets — reshape the page **while the finger is still on the track** ("see the differences without choosing, closing menu, opening menu, choosing" — on-device request). The shared controls report their in-progress value through an optional `onDrag: (Float?) -> Unit` (same units as their commit callback, `null` on release); the route folds it into the render inputs as `override ?: committed`. Three rules hold:
 
 - **Visual only.** A drag frame never writes DataStore and never updates `RunoutConfig` — persistence and the per-job dirty mark stay on commit-on-release. The Wear and Undercut routes leave `tuning` at its `null` default and are unaffected.
 - **Draft then sharp.** The loop is `snapshotFlow { RenderInputs(…) }.conflate().collect { … }` — latest-wins, so intermediate drag values are dropped while a render is in flight — and drag frames raster at `renderScale = 1` (¼ the pixels). When the drag ends the overrides go null, the inputs change once more, and that pass restores `PDF_PREVIEW_RENDER_SCALE`. The spinner is held back across drag frames and that release pass so the page never strobes.

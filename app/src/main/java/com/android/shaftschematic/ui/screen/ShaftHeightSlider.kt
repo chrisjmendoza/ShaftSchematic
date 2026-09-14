@@ -54,6 +54,7 @@ import com.android.shaftschematic.geom.PROFILE_TAPER_MIN_FRAC_OF_TRUE
 import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
 import com.android.shaftschematic.geom.WEAR_TRACE_MIN_DEPTH_FRAC
 import com.android.shaftschematic.geom.solveMaxProfileScale
+import com.android.shaftschematic.geom.taperMinFracOfTrue
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.WearRecord
 import com.android.shaftschematic.model.maxOuterDiaMm
@@ -1110,17 +1111,23 @@ internal fun runoutHeightSliderBase(
 }
 
 /**
- * The per-job "Liner compression" control, shared by the same two surfaces as
+ * The per-job "Liner & taper compression" control, shared by the same two surfaces as
  * [ShaftHeightSlider] (one `RunoutConfig` pair behind both). The measured components —
- * tapers and liners — are what the sheet is about, so liners can be held proportional:
+ * tapers and liners — are what the sheet is about, so BOTH kinds ride this one request
+ * ([taperMinFracOfTrue]) and foreshorten together; a slider that raised only the liners
+ * printed one measured kind at true length beside another stuck at its baseline, and the
+ * drawing read uneven (on-device request). Tapers never fall below their
+ * [PROFILE_TAPER_MIN_FRAC_OF_TRUE] baseline, so the low end of the track is a liner-only
+ * move.
  *
- * - Checkbox "Keep liners proportional lengthwise" (`linersProportional`): liners
- *   request full true-scale width. Best-effort — the request never enters the scale
- *   solve, so the drawn height does not yield; the floors λ-shrink instead. While
+ * - Checkbox "Keep liners and tapers proportional lengthwise" (`linersProportional`):
+ *   both kinds request full true-scale width. Best-effort — the request never enters the
+ *   scale solve, so the drawn height does not yield; the floors λ-shrink instead. While
  *   checked the slider is disabled.
- * - Slider "Liner compression" (`linerCompression`, 0–100%): how far liners may
- *   foreshorten when the page needs the room — 100% = down to the writable floor (the
- *   default), 0% = not at all (same drawing as the checkbox).
+ * - Slider "Liner & taper compression" (`linerCompression`, 0–100%): how far they may
+ *   foreshorten when the page needs the room — 100% = liners down to the writable floor
+ *   and tapers to their baseline (the default), 0% = not at all (same drawing as the
+ *   checkbox).
  *
  * The drawing height takes PRECEDENCE (on-device direction): this control never changes
  * the drawn shaft height — liner floors take only the room the page has at the selected
@@ -1128,7 +1135,8 @@ internal fun runoutHeightSliderBase(
  * [estimateKeptFrac] maps a requested width-floor fraction to the fraction liners
  * actually keep at this height — see [estimatedLinerKeptFracOfTrue]; the readout under
  * the slider shows it LIVE during the drag (on-device report: the slider "gives no
- * indication" of its effect).
+ * indication" of its effect), and reports the tapers separately only while the two
+ * differ (a request under the taper baseline).
  *
  * Drag-local value, committed once on release, same posture as the height slider. [onDrag]
  * is the visual-only channel a hosting preview opts into — the raw in-progress compression
@@ -1149,12 +1157,15 @@ internal fun LinerCompressionControl(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox(checked = linersProportional, onCheckedChange = onSetProportional)
             Spacer(Modifier.width(8.dp))
-            Text("Keep liners proportional lengthwise", style = MaterialTheme.typography.bodyLarge)
+            Text(
+                "Keep liners and tapers proportional lengthwise",
+                style = MaterialTheme.typography.bodyLarge,
+            )
         }
         var compressionDrag by remember { mutableStateOf<Float?>(null) }
         val shown = compressionDrag ?: linerCompression
         Text(
-            "Liner compression  ${(shown * 100).roundToInt()}%",
+            "Liner & taper compression  ${(shown * 100).roundToInt()}%",
             style = MaterialTheme.typography.titleSmall,
             color = if (linersProportional) MaterialTheme.colorScheme.onSurfaceVariant
             else MaterialTheme.colorScheme.onSurface,
@@ -1179,21 +1190,35 @@ internal fun LinerCompressionControl(
         val kept = estimateKeptFrac(requested)
         val keptPct = (kept * 100).roundToInt()
         val shortfall = kept < requested - 0.005f
+        // Tapers ride the same request and the same λ, so their kept fraction is the
+        // liners' λ applied to the taper floor — equal to the liners' above the baseline,
+        // higher below it. `kept / requested` IS that λ.
+        val lambda = if (requested > 0.005f) kept / requested else 1f
+        val taperPct = (taperMinFracOfTrue(requested) * lambda * 100).roundToInt()
+        val together = taperPct == keptPct
         Text(
             when {
                 requested <= 0.005f ->
-                    "Liners may compress to the writable floor. The drawn height " +
-                        "never changes."
+                    "Liners may compress to the writable floor; tapers hold their " +
+                        "${(PROFILE_TAPER_MIN_FRAC_OF_TRUE * 100).roundToInt()}% baseline. " +
+                        "The drawn height never changes."
                 !shortfall && requested >= 0.995f ->
-                    "Liners draw fully proportional at this height. The drawn height " +
-                        "never changes."
+                    "Liners and tapers draw fully proportional at this height. The drawn " +
+                        "height never changes."
+                !shortfall && together ->
+                    "Liners and tapers keep at least ~$keptPct% of true length. The drawn " +
+                        "height never changes."
                 !shortfall ->
-                    "Liners keep at least ~$keptPct% of true length. The drawn height " +
-                        "never changes."
+                    "Liners keep at least ~$keptPct% of true length, tapers ~$taperPct%. " +
+                        "The drawn height never changes."
+                together ->
+                    "The page affords liners and tapers ~$keptPct% of true length at this " +
+                        "height (of the ${(requested * 100).roundToInt()}% asked). The " +
+                        "drawn height never changes."
                 else ->
                     "The page affords liners ~$keptPct% of true length at this height " +
-                        "(of the ${(requested * 100).roundToInt()}% asked). The drawn " +
-                        "height never changes."
+                        "(of the ${(requested * 100).roundToInt()}% asked) and tapers " +
+                        "~$taperPct%. The drawn height never changes."
             },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,

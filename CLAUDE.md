@@ -182,9 +182,18 @@ a 19.5" and an 11.5" taper draw identical, on-device report); instead a
 ratio-preserving fraction-of-true floor (`PROFILE_TAPER_MIN_FRAC_OF_TRUE` 0.7, λ-fit
 like the liner raises — ratio preservation is structural: same λ, same K threshold, so
 relative taper widths always read true, and the drawn height never yields to it). The
-taper fraction is deliberately the λ pool's largest: width flows in proportion to the
-fractions, so tapers out-prioritize body runs (on-device request — body compression is
-the give that funds taper proportionality). The
+taper fraction is deliberately the λ pool's largest constant: width flows in proportion to
+the fractions, so tapers out-prioritize body runs (on-device request — body compression is
+the give that funds taper proportionality). It is a BASELINE, not a ceiling: **tapers ride
+the "Liner & taper compression" request with the liners** (`taperMinFracOfTrue` =
+`max(baseline, linerMinFracOfTrue)`, applied in the ONE builder `profileFeatureSpans`), so
+the two measured kinds share one requested fraction and one λ and therefore keep the SAME
+fraction of true length — a control that walked liners up to true length while tapers stayed
+at 70% printed one measured kind at full scale beside another foreshortened, and the sheet
+read uneven (on-device request). The coupling is one-way UPWARD; below the baseline tapers
+hold it, because a liner falling to its flat `PROFILE_MIN_LINER_PT` floor has something to
+land on and a taper (no flat floor, by the equalize rule) would compress like bare shaft and
+vanish. The
 SCHEMATIC composer uses the lean `SCHEMATIC_MIN_*` floors (28/40/56 — its values live
 on rails/callouts, so proportion wins); the runout/consolidated sheet keeps the
 writable `PROFILE_MIN_*` floors.
@@ -233,9 +242,11 @@ spans never opt out — bare shaft is the compression give. Split/merge fragment
 fragment's values; dropping them silently reset authored display choices).
 **Liners compress in SIZE only** (finite `PROFILE_MIN_LINER_PT` floor — proportional
 foreshortening, NEVER a body-style S-break cutout; the S-break glyph is a body-only draw
-path); the per-job **"Liner compression" pair** (`RunoutConfig.linersProportional` +
+path); the per-job **"Liner & taper compression" pair** (`RunoutConfig.linersProportional` +
 `linerCompression` → derived `linerMinFracOfTrue`, fed to
-`ProfileFeatureSpan.minWidthFracOfTrue`) can raise the liner floor toward true width —
+`ProfileFeatureSpan.minWidthFracOfTrue` — and to the TAPERS through `taperMinFracOfTrue`,
+see the taper rule above; the stored field names are the control's, not a limit on which
+kinds read it) can raise the liner floor toward true width —
 **the drawing height takes PRECEDENCE**: the raises are best-effort, never enter the
 scale solve, and λ-fit whatever room the page has at the selected height
 (`fracFitFactor`) — do not let a liner demand lower the drawn shaft; control on the

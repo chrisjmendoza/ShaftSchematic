@@ -111,7 +111,7 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
   the Consolidated tab
 - Coupling face end view — optional outward-keyseat end view on the runout sheets, per-job
   toggle (default off), with its own pilot runout reading
-- Live preview tuning — Line thickness, Body S-break, Shaft height and Liner compression
+- Live preview tuning — Line thickness, Body S-break, Shaft height and Liner & taper compression
   re-render the open preview under a dragging finger (draft raster, commit on release), with the
   sheet shown as a fit-width ink-band page strip so the control never covers the page
 - Dimension arrow size (Small/Medium/Large) and wear-depth exaggeration as user settings

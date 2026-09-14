@@ -32,7 +32,7 @@ Documents
 - Undercut drawing: machined-below-surface cuts as open silhouette steps with liner-anchored detail strips, a per-sheet cut-depth exaggeration slider, and user-selectable shading / line-art styles
 - Consolidated output: one sheet carrying the schematic's rails and footer plus the elected runout and wear information (All three / Schematic + Runout / Schematic + Wear), worn-section values printed inside the profile, a per-job "Shaft height" + liner-compression control, and "Export all" to batch-write the checked documents into one picked folder
 - Paper sizing follows the hand-sheet convention: drawn height comes from true diameter on a proportional sizing curve, long runs foreshorten above per-kind width floors, and a body compressed past your chosen threshold prints the S-break symbol
-- Live tuning: drag Line thickness, Body S-break, Shaft height or Liner compression with a preview open and the page re-renders under your finger — the sheet shows as a fit-width page strip so the control never covers what it is changing
+- Live tuning: drag Line thickness, Body S-break, Shaft height or Liner & taper compression with a preview open and the page re-renders under your finger — the sheet shows as a fit-width page strip so the control never covers what it is changing
 - Every document previews, prints directly, or exports through the file picker; each also has a blank write-in variant for hand-marking on the job
 - All five reachable from the editor sidebar (Schematic / Runout Sheet / Wear Document / Undercut Drawing / Consolidated Output tabs)
 
