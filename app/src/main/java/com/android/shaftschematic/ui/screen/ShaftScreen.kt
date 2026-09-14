@@ -131,6 +131,19 @@ import kotlinx.coroutines.launch
 fun ShaftScreen(
     resetNonce: Int,
 
+    /**
+     * Top-bar title. Defaults to the Schematic tab's; the Final Schematic tab hosts this same
+     * editor over the document's other geometry and names itself here, so which drawing is
+     * being edited is never in doubt.
+     */
+    editorTitle: String = "Shaft Editor",
+    /**
+     * Optional strip drawn directly under the top bar, above the editor content — the Final
+     * Schematic tab's standing reminder that the original is untouched, carrying that
+     * drawing's own actions. Null on the Schematic tab, which draws exactly as before.
+     */
+    banner: (@Composable () -> Unit)? = null,
+
     // State
     spec: ShaftSpec,
     /** Saved file name (with extension) of the current document, or null for an unsaved draft. */
@@ -348,7 +361,7 @@ fun ShaftScreen(
                 windowInsets = WindowInsets(0, 0, 0, 0),
                 title = {
                     Text(
-                        text = "Shaft Editor",
+                        text = editorTitle,
                         style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -439,6 +452,9 @@ fun ShaftScreen(
                     )
                 }
             )
+            // Whose drawing this is — pinned with the bar, so scrolling the editor can
+            // never scroll the reminder off.
+            banner?.invoke()
             }
         },
     ) { inner ->

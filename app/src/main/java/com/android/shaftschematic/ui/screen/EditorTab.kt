@@ -9,10 +9,14 @@ package com.android.shaftschematic.ui.screen
  *
  * Enabling rules:
  * - [SCHEMATIC] is always enabled (you can edit even an empty spec).
- * - [RUNOUT], [WEAR], [UNDERCUT], and [OUTPUT] are disabled until the shaft is "built"
- *   (has at least one component and a non-zero OAL), because a blank spec produces a
- *   meaningless document.
+ * - [RUNOUT], [WEAR], [UNDERCUT], [FINAL], and [OUTPUT] are disabled until the shaft is
+ *   "built" (has at least one component and a non-zero OAL), because a blank spec produces a
+ *   meaningless document — and a final drawing started from a blank original has nothing to
+ *   adjust.
  * - [WEAR] can be hidden via [WEAR_TAB_ENABLED] when full consolidation retires it.
+ *
+ * Enum order is sidebar order. [FINAL] sits between [UNDERCUT] and [OUTPUT] because the
+ * final drawing is decided once the wear and undercut work is known.
  */
 
 /**
@@ -47,6 +51,15 @@ enum class EditorTab(
     UNDERCUT(
         label = "Undercut Drawing",
         contentDescription = "Shaft undercut sections drawing",
+    ),
+    /**
+     * The document's second geometry — the shaft as it leaves, edited in the same editor as
+     * [SCHEMATIC] under `SpecTarget.FINAL`. Its own schematic and blank runout sheet print
+     * marked "Final"; every other tab keeps drawing the original.
+     */
+    FINAL(
+        label = "Final Schematic",
+        contentDescription = "Final schematic editor",
     ),
     OUTPUT(
         label = "Consolidated Output",

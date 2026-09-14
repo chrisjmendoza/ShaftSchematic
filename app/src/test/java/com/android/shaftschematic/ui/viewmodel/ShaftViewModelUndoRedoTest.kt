@@ -28,6 +28,7 @@ class ShaftViewModelUndoRedoTest {
 
     private fun editState(spec: ShaftSpec) = EditState(
         spec = spec,
+        finalSpec = null,
         wearRecord = WearRecord(),
         runoutReadings = RunoutReadings(),
         runoutStationPlacements = RunoutStationPlacements(),

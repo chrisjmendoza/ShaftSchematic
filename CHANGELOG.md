@@ -8,6 +8,50 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-09-04
 
+### feat(editor): the Final Schematic — a second drawing for the shaft that ships
+
+A liner's position is decided before the job starts, but once the wear areas are mapped the
+foreman can decide — after an undercut — to extend it, shorten it, or move the whole thing a few
+inches onto sound metal. The drawing the job started from has to survive that decision as the
+historical record, so the document now carries a **second** schematic (on-device request:
+"keep the original for historical purpose, like a before and after").
+
+- **New tab, Final Schematic**, between Undercut Drawing and Consolidated Output (it follows
+  undercuts in the shop process), same built-shaft gate as the other document tabs. With no final
+  yet it explains itself and offers one button, **Start from original schematic**; from then on
+  it is the SAME editor as the Schematic tab — carousel, add dialogs, preview box, collision
+  badges — pointed at the final drawing, under a banner that says the original is untouched and
+  carries Reset to original / Discard (both confirm, both undo).
+- **Model**: `final_spec` in the `.shaft` envelope (`null` = none yet; older files load
+  unchanged). A whole `ShaftSpec`, created as a structural copy with component ids kept — so
+  per-component unit overrides apply to both and a future before/after can line up — and
+  independent from then on: no edit on either drawing reaches the other. Never in a template,
+  never in a mate duplicate, cleared by New. Wear, undercut and runout records stay keyed to the
+  original.
+- **One editor, two targets.** Every geometry mutator takes an explicit
+  `SpecTarget { ORIGINAL, FINAL }` (default ORIGINAL — every existing call site is byte-identical)
+  and writes through one seam; only the two per-component unit setters stay target-free, since
+  unit overrides are keyed by component id and apply to both drawings. The target is a parameter, never a flag on the ViewModel: a
+  "current target" would put the wrong drawing one tab-switch away from every edit. The final
+  rides the undo history and the autosave snapshot like the rest of the document.
+- **Outputs.** The Final tab prints the schematic PDF (preview / export / print) and a blank
+  classic runout sheet from the final geometry — no readings, no pinned stations, no wear: the
+  final measurement sheet to take runouts on before the job ships. The schematic can also carry
+  **runout bubbles** — a "Runout bubbles" election on its PDF options sheet, off by default
+  because the final drawing is primarily the welding and machining copy that gets the liner
+  placements updated (on-device direction); on, it prints as the consolidated Schematic + Runout
+  sheet over the final geometry, still with empty readings. Session-only, like Blank draft.
+  Consolidated Output keeps
+  drawing the original. Every final sheet is marked so it can never pass for the original:
+  `Drawing: Final` in the footer job block and the runout header, a bold FINAL badge beside the
+  Side badge (`ProjectInfo.drawingLabel`, blank everywhere else), and a suffix in the
+  filename — `_Final`, `_Final_Runout` with bubbles elected, `_Final_RunoutSheet` for the
+  banner's blank runout sheet: three documents that never share a name. The bubbled sheet is
+  the consolidated composer's, so the schematic-only Ø-callout election and Template mode do
+  not reach it; the options sheet says so and greys the callout chip.
+- Not yet: "Create a new job from the final" — the natural next step, deliberately left for a
+  later pass.
+
 ### feat(pdf): tapers compress with the liners, on one control
 
 The two kinds the sheet is about now foreshorten together. "Liner compression" — renamed **"Liner

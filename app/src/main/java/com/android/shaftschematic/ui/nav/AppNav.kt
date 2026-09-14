@@ -30,9 +30,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.android.shaftschematic.ui.screen.AchievementsRoute
 import com.android.shaftschematic.ui.screen.AboutRoute
 import com.android.shaftschematic.doc.stripShaftDocExtension
@@ -284,7 +286,10 @@ fun AppNav(vm: ShaftViewModel) {
                     onOpenHelp = { nav.navigate("help") },
                     onOpenDeveloperOptions = { nav.navigate("developerOptions") },
                     // PDF EXPORT = show preview first, then SAF
-                    onExportPdf = { nav.navigate("pdfPreview") }
+                    onExportPdf = { nav.navigate("pdfPreview") },
+                    // Same preview, over the final drawing — the route argument is what
+                    // decides, so the preview and its export can never disagree.
+                    onExportFinalPdf = { nav.navigate("pdfPreview?target=$TARGET_ARG_FINAL") },
                 )
 
                 if (mateDialogOpen) {
@@ -406,11 +411,21 @@ fun AppNav(vm: ShaftViewModel) {
            Shows a full-resolution raster preview of the PDF page with pinch-to-zoom.
            The "Export PDF" action in the top bar navigates onward to the SAF route.
         */
-        composable("pdfPreview") {
+        composable(
+            "pdfPreview?target={target}",
+            arguments = listOf(navArgument("target") {
+                type = NavType.StringType
+                defaultValue = TARGET_ARG_ORIGINAL
+            }),
+        ) { entry ->
+            val target = specTargetFromArg(entry.arguments?.getString("target"))
             PdfPreviewScreen(
                 vm = vm,
                 onBack = { nav.popBackStack() },
-                onExport = { nav.navigate("exportPdf") }
+                // The preview hands its OWN drawing to the export — the sheet on screen and
+                // the file written must never be two different geometries.
+                onExport = { nav.navigate("exportPdf?target=${targetArg(target)}") },
+                target = target,
             )
         }
 
@@ -418,8 +433,19 @@ fun AppNav(vm: ShaftViewModel) {
            This should remain your SAF-based CreateDocument("application/pdf") route.
            It writes PDF bytes to the chosen external location.
         */
-        composable("exportPdf") {
-            PdfExportRoute(nav = nav, vm = vm) { nav.popBackStack() }
+        composable(
+            "exportPdf?target={target}",
+            arguments = listOf(navArgument("target") {
+                type = NavType.StringType
+                defaultValue = TARGET_ARG_ORIGINAL
+            }),
+        ) { entry ->
+            PdfExportRoute(
+                nav = nav,
+                vm = vm,
+                onFinished = { nav.popBackStack() },
+                target = specTargetFromArg(entry.arguments?.getString("target")),
+            )
         }
     }
 }

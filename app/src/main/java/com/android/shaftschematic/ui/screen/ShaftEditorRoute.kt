@@ -18,8 +18,8 @@ import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
  * ShaftEditorRoute
  *
  * Top-level container for the editor document views:
- * Schematic (shaft editor), Runout Sheet, Wear Document, Undercut Drawing, and
- * Consolidated Output.
+ * Schematic (shaft editor), Runout Sheet, Wear Document, Undercut Drawing, Final Schematic,
+ * and Consolidated Output.
  *
  * ## Navigation model
  * Navigation is handled by [EditorSidebarOverlay], which is a modal overlay drawer.
@@ -30,9 +30,9 @@ import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
  * on phones, especially smaller devices.
  *
  * ## "Built" definition
- * The Runout, Wear, Undercut, and Consolidated Output tabs are enabled once the spec has
- * ≥1 component and a non-zero OAL. If the shaft loses "built" status (all components
- * deleted) the active tab reverts to Schematic automatically.
+ * The Runout, Wear, Undercut, Final Schematic, and Consolidated Output tabs are enabled once
+ * the spec has ≥1 component and a non-zero OAL. If the shaft loses "built" status (all
+ * components deleted) the active tab reverts to Schematic automatically.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -53,6 +53,12 @@ fun ShaftEditorRoute(
     onOpenDeveloperOptions: () -> Unit,
     /** Export the main shaft schematic PDF (goes to existing preview/SAF flow). */
     onExportPdf: () -> Unit,
+    /**
+     * Export the FINAL drawing's schematic PDF — the same preview/SAF flow, with the final
+     * target carried in its route so the sheet previewed and the file written are the same
+     * geometry. Defaulted to a no-op so a host that never reaches the Final tab is unaffected.
+     */
+    onExportFinalPdf: () -> Unit = {},
 ) {
     var activeTab by rememberSaveable { mutableStateOf(EditorTab.SCHEMATIC) }
     var sidebarOpen by rememberSaveable { mutableStateOf(false) }
@@ -117,6 +123,20 @@ fun ShaftEditorRoute(
                 vm = vm,
                 onOpenSidebar = { sidebarOpen = true },
                 onSave = onSave,
+            )
+
+            EditorTab.FINAL -> FinalRoute(
+                vm = vm,
+                onOpenSidebar = { sidebarOpen = true },
+                onSave = onSave,
+                onNew = onNew,
+                onOpen = onOpen,
+                onSaveAs = onSaveAs,
+                onDuplicateForMate = onDuplicateForMate,
+                onCloseDocument = onCloseDocument,
+                onExportFinalPdf = onExportFinalPdf,
+                onOpenSettings = onOpenSettings,
+                onOpenDeveloperOptions = onOpenDeveloperOptions,
             )
 
             EditorTab.OUTPUT -> OutputRoute(

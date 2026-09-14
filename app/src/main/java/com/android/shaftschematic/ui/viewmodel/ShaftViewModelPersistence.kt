@@ -164,6 +164,7 @@ private fun ShaftViewModel.currentEnvelope(): ShaftDocCodec.ShaftDocV1 = ShaftDo
     shaftPosition = _shaftPosition.value,
     notes = _notes.value,
     spec = _spec.value,
+    finalSpec = _finalSpec.value,
     runoutConfig = _runoutConfig.value,
     wearRecord = _wearRecord.value,
     runoutReadings = _runoutReadings.value,
@@ -214,6 +215,10 @@ fun ShaftViewModel.exportMateJson(
  * The unit and unit-lock DO travel: they describe how the geometry is authored, not whose
  * job it is. Per-component unit overrides travel for the same reason (which features are
  * metric is an authoring fact); the per-job dual-display flag does not.
+ *
+ * The final drawing does not travel either: it is what one shaft left as, decided after that
+ * shaft's wear was mapped — a template is the pre-job shape. It is simply never named here, so
+ * the envelope's own default (null) applies.
  */
 fun ShaftViewModel.exportTemplateJson(): String = ShaftDocCodec.encodeV1(
     ShaftDocCodec.ShaftDocV1(
@@ -252,6 +257,10 @@ fun ShaftViewModel.applyTemplate(raw: String) {
     _selectedComponentId.value = null
 
     _spec.value = decoded.spec
+    // A template is the pre-job shape: it never carries a final drawing, and a file that
+    // somehow does (hand-copied, or authored before the write-time scrub) does not get to
+    // start this document with one.
+    _finalSpec.value = null
     seedSessionAddDefaultsFromSpec(decoded.spec)
 
     _unitLocked.value = decoded.unitLocked
@@ -301,6 +310,7 @@ fun ShaftViewModel.importJson(raw: String) {
     // highlight); the carousel's seed effect reselects the last row of this document.
     _selectedComponentId.value = null
     _spec.value = decoded.spec
+    _finalSpec.value = decoded.finalSpec
     seedSessionAddDefaultsFromSpec(decoded.spec)
 
     _unitLocked.value = decoded.unitLocked
@@ -347,6 +357,9 @@ fun ShaftViewModel.newDocument() {
 
     val blankSpec = ShaftSpec()
     _spec.value = blankSpec
+    // A new document has no final drawing; carrying the previous one over would put another
+    // job's geometry behind a blank original.
+    _finalSpec.value = null
 
     // Mirror envelope defaults used by the existing start/new seed path.
     _unitLocked.value = true
