@@ -91,6 +91,7 @@ import com.android.shaftschematic.ui.viewmodel.updateWornSectionReference
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.FractionStyle
+import com.android.shaftschematic.util.OutputFont
 import com.android.shaftschematic.util.InkBand
 import com.android.shaftschematic.util.launchPicker
 import com.android.shaftschematic.util.UnitSystem
@@ -136,6 +137,11 @@ private data class ConsolidatedRenderInputs(
     val arrowSizePt: Float,
     /** Not a composer argument — it reaches the ink via `FractionTypography.active`. Key only. */
     val fractionStyle: FractionStyle,
+    /**
+     * The typeface the sheet is set in. Not a composer argument either — it reaches the ink via
+     * `OutputTypography.active`. Key only.
+     */
+    val outputFont: OutputFont,
     /**
      * A LAYOUT input, not just a key: the composers take it as a parameter, and a sheet whose
      * budget cannot absorb the taller stacked value falls back to inline on its own.
@@ -204,6 +210,7 @@ fun OutputRoute(
     // Fraction style: same posture — it reaches the ink through the renderer's active style,
     // which the loop cannot observe, so it rides along as an input key.
     val pdfFractionStyle   by vm.pdfFractionStyle.collectAsState()
+    val pdfOutputFont      by vm.pdfOutputFont.collectAsState()
     val pdfDualUnitLayout  by vm.pdfDualUnitLayout.collectAsState()
     val pdfTieringMode     by vm.pdfTieringMode.collectAsState()
     val runoutReadings     by vm.runoutReadings.collectAsState()
@@ -494,6 +501,7 @@ fun OutputRoute(
                 runoutBubbleDropScale = pdfRunoutBubbleDropScale,
                 arrowSizePt = pdfArrowSizePt,
                 fractionStyle = pdfFractionStyle,
+                outputFont = pdfOutputFont,
                 dualUnitLayout = pdfDualUnitLayout,
                 curveLoHeightIn = curveLoHeightIn,
                 curveHiHeightIn = curveHiHeightIn,

@@ -121,16 +121,6 @@ at most a pointer from here.
   surfaces' `rememberTransformableState` centroid deprecation on-device — taking the centroid
   changes where a pinch zooms from.
 
-### Rendering / components
-
-- [ ] **Additional output fonts** (requested 2026-08-14) — let a shop pick a look rather than
-  take the platform default. Constraints: the PDF composers draw with `android.graphics.Paint`,
-  so a face must be a real `Typeface` (bundled `.ttf` or a system family); every text metric is
-  measured live from the paint, so a swap is safe by construction *provided* nothing hard-codes a
-  width. Check the fraction stack against a condensed or slab face before shipping —
-  `FractionTextRendererTest` exists to catch exactly that. Same pref posture as
-  `PdfPrefs.fractionStyle`.
-
 ### Tech debt
 
 - [ ] Controller owns all VM-side intents (composables stateless) — design work, not a pure move.

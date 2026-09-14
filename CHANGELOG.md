@@ -8,6 +8,33 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-09-14
 
+### feat(pdf): Output font — every sheet set in the shop's chosen face
+
+**Settings → Drawing → "Output font"** picks the typeface every exported PDF is set in — dimension
+values, callouts, component names and the footer alike. Four system families: **Standard**
+(the platform sans, the historical look and the default), **Condensed**, **Serif** and
+**Monospace**. Each chip is labelled in the face it selects, so the row reads as a specimen sheet.
+
+- **App-wide, like every other drawing pref.** `PdfPrefs.outputFont`, captured by a named Drawing
+  profile and put back by "Restore Drawing defaults". No doc-envelope field and no per-document
+  override — a shop picks a face once and prints every job in it, which is also why the picker
+  stays out of the per-sheet PDF options sheets.
+- **One seam to the ink.** `OutputTypography.active` is the process-wide mirror, written only by
+  `SettingsStore.updatePdfPrefs` — the `FractionTypography` posture exactly. The four composers
+  build their root text `Paint` from it and every other text paint on a sheet is a
+  copy-constructor of that root, so a single line per composer carries the choice to every glyph.
+- **Nothing on a sheet shifts.** Every text metric the layout budgets read — `measureRichText`,
+  `measureDualLabel`, the rail planner's inflated ascent — comes off the live `Paint`, so a wider
+  or narrower face is measured exactly as it will be drawn. A condensed face simply seats more
+  values inside the dimension line instead of above it.
+- **The mirror is not snapshot state**, so each preview's render-inputs record carries the font as
+  a re-render key; without it a tab would keep rasterizing in the face it last drew.
+- **No bundled font files.** A device missing one of these families falls back through
+  `Typeface.create` to its default sans — a legible sheet in the wrong face rather than no sheet —
+  and an unreadable stored name decodes to Standard.
+- `FractionTextRendererTest`'s stacked and diagonal ink-bounds checks now run in every face, so a
+  fraction stack that broke out of the line box in a condensed or slab font fails there.
+
 ### feat(editor): standard key-stock sizes for keyways
 
 A **"Standard size…"** menu sits under the KW W × D row on all four keyway surfaces — the Body and

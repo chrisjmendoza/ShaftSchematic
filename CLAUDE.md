@@ -621,7 +621,8 @@ Named drawing preset profiles (`settings/DrawingProfile.kt`, Settings → Drawin
 capture the drawing LOOK — the whole `PdfPrefs` plus line thickness — as one DataStore JSON
 map. A profile is device preferences and nothing more: **no doc-envelope field, no per-document
 state, no "active profile" tracking** — applying is a one-shot copy through the EXISTING
-setters (so every mirror fires, `FractionTypography` included), and a document never remembers
+setters (so every mirror fires, `FractionTypography` and `OutputTypography` included — the
+captured set includes `outputFont`, the sheets' typeface), and a document never remembers
 which profile drew it. Do not "improve" this by persisting a profile reference anywhere in a
 document. Excluded from capture, deliberately: capability gates (per-component units, liner
 shoulders — they decide which controls exist), the dual-units default (document behavior), the
@@ -795,7 +796,11 @@ process-wide `FractionTypography.active` mirror, whose ONLY writer is
 `SettingsStore.updatePdfPrefs` (the `SettingsStore.pdfPrefs` pattern — threading a uniform
 drawing decision through every composer's private draw functions costs more than it buys). That
 mirror is not snapshot state, so every preview's render-inputs record must carry `fractionStyle`
-as a **re-render key** or that tab keeps drawing the old style. See `docs/contracts/FractionTypography.md`.
+as a **re-render key** or that tab keeps drawing the old style. `OutputTypography.active`
+(`PdfPrefs.outputFont`, Settings → Drawing → "Output font" — the FACE every sheet is set in, and
+the composers' root text paint) is the sibling mirror with the same single writer, the same
+re-render-key rule, and the same tolerant `fromName` fallback; it is Settings-only, never on the
+PDF options sheets. See `docs/contracts/FractionTypography.md`.
 
 ### Mixed units and dual display are a DISPLAY AXIS
 Per-component display units (`unit_overrides` — resolved component id → `UnitSystem`) and

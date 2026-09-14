@@ -24,6 +24,7 @@ import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MIN_IN
 import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.FractionStyle
+import com.android.shaftschematic.util.OutputFont
 import com.android.shaftschematic.util.PreviewColorSetting
 import com.android.shaftschematic.util.UndercutShadeColor
 import com.android.shaftschematic.util.UndercutShadeIntensity
@@ -213,6 +214,21 @@ fun ShaftViewModel.setPdfFractionStyle(style: FractionStyle, persist: Boolean = 
 }
 
 /**
+ * Wired to Settings → Drawing → "Output font" — Settings only, unlike the fraction chips: a shop
+ * picks a face once, so the PDF options sheets stay as they are.
+ *
+ * The `updatePdfPrefs` call is what actually changes the ink — it mirrors the choice into
+ * `OutputTypography.active`, which the four composers build their root text paint from. The
+ * StateFlow exists so the UI can show the selection and so each preview's render inputs change,
+ * forcing a re-raster.
+ */
+fun ShaftViewModel.setPdfOutputFont(font: OutputFont, persist: Boolean = true) {
+    _pdfOutputFont.value = font
+    SettingsStore.updatePdfPrefs { it.copy(outputFont = font) }
+    if (persist) viewModelScope.launch { SettingsStore.setPdfOutputFont(getApplication(), font) }
+}
+
+/**
  * How a dual value is SET on the drawing. A stack is NARROWER but two lines tall, so a sheet whose
  * vertical budget cannot absorb it reverts to inline for that whole sheet — the composers make that
  * call, not this setter.
@@ -343,6 +359,7 @@ fun ShaftViewModel.applyDrawingProfile(profile: DrawingProfile) {
     setPdfSBreakThresholdFrac(prefs.sBreakThresholdFrac)
     setPdfArrowSizePt(prefs.arrowSizePt)
     setPdfFractionStyle(prefs.fractionStyle)
+    setPdfOutputFont(prefs.outputFont)
     setPdfDualUnitLayout(prefs.dualUnitLayout)
     setPdfWearTraceDepthFrac(prefs.wearTraceDepthFrac)
     setPdfWearBandShadeFrac(prefs.wearBandShadeFrac)

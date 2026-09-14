@@ -94,6 +94,7 @@ import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.DocumentNaming
 import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.FractionStyle
+import com.android.shaftschematic.util.OutputFont
 import com.android.shaftschematic.util.InkBand
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.inkBand
@@ -184,6 +185,7 @@ fun PdfPreviewScreen(
     // Fraction style: same posture — a chip tap changes the renderer's active style, which the
     // loop cannot observe, so it rides along as an input key.
     val pdfFractionStyle by vm.pdfFractionStyle.collectAsState()
+    val pdfOutputFont by vm.pdfOutputFont.collectAsState()
     val pdfDualUnitLayout by vm.pdfDualUnitLayout.collectAsState()
     // Sizing-curve anchors: the composer sizes the drawn shaft off them, so a Settings
     // change to "Default drawing size" has to re-render an open preview. Collected here,
@@ -261,6 +263,7 @@ fun PdfPreviewScreen(
                 sBreakThresholdFrac = tuning.sBreakFrac ?: pdfSBreakThresholdFrac,
                 arrowSizePt = pdfArrowSizePt,
                 fractionStyle = pdfFractionStyle,
+                outputFont = pdfOutputFont,
                 dualUnitLayout = pdfDualUnitLayout,
                 curveLoHeightIn = curveLoHeightIn,
                 curveHiHeightIn = curveHiHeightIn,
@@ -654,6 +657,11 @@ private data class SchematicRenderInputs(
     val sBreakThresholdFrac: Float,
     val arrowSizePt: Float,
     val fractionStyle: FractionStyle,
+    /**
+     * The typeface the sheet is set in. Not a composer argument either — it reaches the ink via
+     * `OutputTypography.active`. Key only.
+     */
+    val outputFont: OutputFont,
     /**
      * A LAYOUT input, not just a key: the composers take it as a parameter, and a sheet whose
      * budget cannot absorb the taller stacked value falls back to inline on its own.

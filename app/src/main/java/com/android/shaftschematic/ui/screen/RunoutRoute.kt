@@ -108,6 +108,7 @@ import com.android.shaftschematic.ui.resolved.runoutComponentSpans
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.FractionStyle
+import com.android.shaftschematic.util.OutputFont
 import com.android.shaftschematic.util.InkBand
 import com.android.shaftschematic.util.launchPicker
 import com.android.shaftschematic.util.UnitSystem
@@ -159,6 +160,7 @@ fun RunoutRoute(
     // Fraction style: a chip tap changes the renderer's active style, which the render loop
     // cannot observe, so it rides along as an input key.
     val pdfFractionStyle   by vm.pdfFractionStyle.collectAsState()
+    val pdfOutputFont      by vm.pdfOutputFont.collectAsState()
     val pdfDualUnitLayout  by vm.pdfDualUnitLayout.collectAsState()
     // Sizing-curve anchors: the composer sizes the drawn shaft off them and the preview's
     // "Shaft height" slider states its track in paper inches from the same pair, so a
@@ -338,6 +340,7 @@ fun RunoutRoute(
                 runoutBubbleScale = pdfRunoutBubbleScale,
                 runoutBubbleDropScale = pdfRunoutBubbleDropScale,
                 fractionStyle = pdfFractionStyle,
+                outputFont = pdfOutputFont,
                 dualUnitLayout = pdfDualUnitLayout,
                 curveLoHeightIn = curveLoHeightIn,
                 curveHiHeightIn = curveHiHeightIn,
@@ -933,6 +936,11 @@ private data class RunoutRenderInputs(
     val runoutBubbleDropScale: Float,
     /** Not a composer argument — it reaches the ink via `FractionTypography.active`. Key only. */
     val fractionStyle: FractionStyle,
+    /**
+     * The typeface the sheet is set in. Not a composer argument either — it reaches the ink via
+     * `OutputTypography.active`. Key only.
+     */
+    val outputFont: OutputFont,
     /**
      * A LAYOUT input, not just a key: the composers take it as a parameter, and a sheet whose
      * budget cannot absorb the taller stacked value falls back to inline on its own.

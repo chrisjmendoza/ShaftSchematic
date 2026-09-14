@@ -34,6 +34,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.ExperimentalTextApi
+import androidx.compose.ui.text.font.DeviceFontFamilyName
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.profileFeatureSpans
 import com.android.shaftschematic.geom.computeOalWindow
@@ -80,6 +84,7 @@ import com.android.shaftschematic.ui.viewmodel.setWearTraceDepthFrac
 import com.android.shaftschematic.util.FractionStyle
 import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.LengthFormat
+import com.android.shaftschematic.util.OutputFont
 import com.android.shaftschematic.util.PDF_PAGE_WIDTH_PT
 import com.android.shaftschematic.util.UnitSystem
 import kotlin.math.abs
@@ -524,6 +529,56 @@ internal fun DimensionArrowSizeChips(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
+}
+
+/**
+ * The "Output font" picker — Settings → Drawing only, unlike its fraction neighbour.
+ *
+ * A shop picks a face once and prints every job in it, so this is a house style rather than a
+ * per-sheet decision, and the PDF options sheets stay as they are. A tap IS the commit: the
+ * choice lands in `PdfPrefs.outputFont`, which mirrors into `OutputTypography.active`, and each
+ * open preview re-renders from its own font key.
+ *
+ * Each chip is labelled in the face it selects, so the row reads as a specimen sheet.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun OutputFontChips(
+    outputFont: OutputFont,
+    onCommit: (OutputFont) -> Unit,
+) {
+    Column {
+        Text("Output font", style = MaterialTheme.typography.titleSmall)
+        Spacer(Modifier.height(4.dp))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutputFont.entries.forEach { font ->
+                FilterChip(
+                    selected = outputFont == font,
+                    onClick = { onCommit(font) },
+                    label = { Text(font.uiLabel(), fontFamily = outputFontPreviewFamily(font)) },
+                    modifier = Modifier.testTag("output_font_${font.name}"),
+                )
+            }
+        }
+        Text(
+            "Every printed sheet is set in this face. Standard is the historical look.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/**
+ * The Compose family matching what an [OutputFont] draws with on paper, so a chip is a specimen
+ * of its own choice. A device without the named family falls back to its default sans, exactly
+ * as the printed sheet would.
+ */
+@OptIn(ExperimentalTextApi::class)
+private fun outputFontPreviewFamily(font: OutputFont): FontFamily = when (font) {
+    OutputFont.STANDARD -> FontFamily.SansSerif
+    OutputFont.CONDENSED -> FontFamily(Font(DeviceFontFamilyName("sans-serif-condensed")))
+    OutputFont.SERIF -> FontFamily.Serif
+    OutputFont.MONOSPACE -> FontFamily.Monospace
 }
 
 /**

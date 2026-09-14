@@ -2,6 +2,7 @@ package com.android.shaftschematic.settings
 
 import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.FractionStyle
+import com.android.shaftschematic.util.OutputFont
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
@@ -67,6 +68,7 @@ data class DrawingProfile(
     val sBreakThresholdFrac: Float = SHIPPED_PDF_PREFS.sBreakThresholdFrac,
     val arrowSizePt: Float = SHIPPED_PDF_PREFS.arrowSizePt,
     val fractionStyle: String = SHIPPED_PDF_PREFS.fractionStyle.name,
+    val outputFont: String = SHIPPED_PDF_PREFS.outputFont.name,
     val dualUnitLayout: String = SHIPPED_PDF_PREFS.dualUnitLayout.name,
     val wearTraceDepthFrac: Float = SHIPPED_PDF_PREFS.wearTraceDepthFrac,
     val wearBandShadeFrac: Float = SHIPPED_PDF_PREFS.wearBandShadeFrac,
@@ -92,6 +94,7 @@ data class DrawingProfile(
         sBreakThresholdFrac = sBreakThresholdFrac,
         arrowSizePt = arrowSizePt,
         fractionStyle = FractionStyle.fromName(fractionStyle),
+        outputFont = OutputFont.fromName(outputFont),
         dualUnitLayout = DualUnitLayout.fromName(dualUnitLayout),
         wearTraceDepthFrac = wearTraceDepthFrac,
         wearBandShadeFrac = wearBandShadeFrac,
@@ -118,6 +121,7 @@ data class DrawingProfile(
             sBreakThresholdFrac = prefs.sBreakThresholdFrac,
             arrowSizePt = prefs.arrowSizePt,
             fractionStyle = prefs.fractionStyle.name,
+            outputFont = prefs.outputFont.name,
             dualUnitLayout = prefs.dualUnitLayout.name,
             wearTraceDepthFrac = prefs.wearTraceDepthFrac,
             wearBandShadeFrac = prefs.wearBandShadeFrac,

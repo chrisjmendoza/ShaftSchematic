@@ -4,7 +4,6 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
-import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import com.android.shaftschematic.model.*
 import com.android.shaftschematic.geom.DiaCalloutStation
@@ -35,6 +34,7 @@ import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.PDF_PAGE_WIDTH_PT
 import com.android.shaftschematic.util.VerboseLog
 import com.android.shaftschematic.util.DualUnitLayout
+import com.android.shaftschematic.util.OutputTypography
 import com.android.shaftschematic.util.drawDualLabelCentered
 import com.android.shaftschematic.util.dualStackMetrics
 import com.android.shaftschematic.util.measureDualLabel
@@ -175,7 +175,7 @@ fun composeWearPdf(
     val dim = Paint(outline).apply { strokeWidth = WEAR_DIM_PT * thicknessScale }
     val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL; textSize = WEAR_TEXT_PT
-        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
+        typeface = OutputTypography.active
         color = Color.BLACK
     }
     fun shadeFill() = Paint(Paint.ANTI_ALIAS_FLAG).apply {

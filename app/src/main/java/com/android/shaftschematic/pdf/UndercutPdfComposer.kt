@@ -5,7 +5,6 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
-import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import com.android.shaftschematic.geom.ClampedUndercutSpanMm
 import com.android.shaftschematic.geom.SurfaceSeg
@@ -35,6 +34,7 @@ import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.DualLabel
 import com.android.shaftschematic.util.VerboseLog
 import com.android.shaftschematic.util.DualUnitLayout
+import com.android.shaftschematic.util.OutputTypography
 import com.android.shaftschematic.util.drawDualLabelCentered
 import com.android.shaftschematic.util.dualStackMetrics
 import com.android.shaftschematic.util.measureDualLabel
@@ -179,7 +179,7 @@ fun composeUndercutPdf(
     val dim = Paint(outline).apply { strokeWidth = UC_DIM_PT * thicknessScale }
     val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL; textSize = UC_TEXT_PT
-        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
+        typeface = OutputTypography.active
         color = Color.BLACK
     }
     fun shadeFill() = Paint(Paint.ANTI_ALIAS_FLAG).apply {

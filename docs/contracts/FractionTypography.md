@@ -183,3 +183,45 @@ shop convention and never carried a fraction.
 
 Editable text is deliberately **not** included: `dispKw` and the numeric input fields still show
 plain `1 1/2`, which is what round-trips through `parseFractionOrDecimal`.
+
+## 6. Output font — the sibling mirror
+
+The *face* the app sets its sheets in is a separate user choice from the fraction *glyph*, and it
+is held in exactly the same shape: `PdfPrefs.outputFont` (`util/OutputTypography.kt` —
+`OutputFont.STANDARD` / `CONDENSED` / `SERIF` / `MONOSPACE`, Standard being the historical look and
+the default), **Settings → Drawing → "Output font"**. It is app-wide, captured by a named Drawing
+profile, restored by "Restore Drawing defaults", and deliberately absent from the PDF options
+sheets — a shop picks a face once, so it is a house style rather than a per-sheet decision.
+
+The draw sites take no typeface parameter. Each PDF composer builds its root text `Paint` with
+`typeface = OutputTypography.active`, and every other text paint on that sheet is a
+copy-constructor of the root, so four lines carry the choice to every glyph on the page:
+
+| Composer | Root paint |
+| --- | --- |
+| `pdf/ShaftPdfComposer.kt` | `text` |
+| `pdf/RunoutPdfComposer.kt` | `text`, and the in-profile `valuePaint` |
+| `pdf/WearPdfComposer.kt` | `text` |
+| `pdf/UndercutPdfComposer.kt` | `text` |
+
+The same two consequences as §3.1 apply, unchanged:
+
+- **`SettingsStore.updatePdfPrefs` is the only writer**, right beside the `FractionTypography`
+  mirror it already writes. Set `OutputTypography` anywhere else and the Settings chips and the ink
+  disagree.
+- **A font change is invisible to Compose**, because the mirror is not snapshot state. Every
+  preview's render-inputs record therefore carries `outputFont` purely as a **re-render key**
+  (`SchematicRenderInputs`, `ConsolidatedRenderInputs`, `RunoutRenderInputs`, and the wear /
+  undercut `LaunchedEffect` key lists). Drop it from one and that tab keeps rasterizing in the face
+  it last drew.
+
+Nothing in a layout budget changes with the face. Every metric — `measureRichText`,
+`measureDualLabel`/`dualStackMetrics`, `DimensionRailLayout`'s `TextMetrics` — is taken from the
+live `Paint`, so a narrower or taller face is measured exactly as it is drawn; a condensed face
+simply seats more values in a break. What it *can* disturb is the §3 size contract, since ascent,
+descent and cap height are the face's own: `FractionTextRendererTest` therefore runs its stacked
+and diagonal ink-bounds checks in **every** `OutputFont`.
+
+No font files are bundled; these are system families only. A device that lacks one gets its
+default sans back from `Typeface.create`, and `OutputFont.fromName` decodes an unreadable stored
+name to `OutputFont.Default` — a sheet in the wrong face, never a sheet with no type.
