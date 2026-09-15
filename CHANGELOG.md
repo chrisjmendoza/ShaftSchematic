@@ -1844,7 +1844,7 @@ surface at its edges, and the non-positive / keyway-wider-than-bore cases.
 
 Pure math in `geom/BoreKeywayMath.kt`, pinned by the spec's four test vectors and the
 invariants (equal widths → finished depth; narrower → always less; smaller bore → larger
-correction; unit independence). Plan: `docs/BoreKeywayCalculator_Plan_2026-08-24.md`.
+correction; unit independence). Plan: `docs/archive/BoreKeywayCalculator_Plan_2026-08-24.md`.
 
 ### fix: a taper overlap blocks PDF export, the same as a thread or liner
 

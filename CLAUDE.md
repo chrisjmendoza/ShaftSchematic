@@ -6,7 +6,9 @@ All model values are **canonical millimeters (mm)**. Unit conversion (mm ↔ in)
 only at the UI edge for display and input — never in the model, ViewModel, or renderer.
 
 ## Docs
-Detailed contracts live in `docs/contracts/`.
+Detailed contracts live in `docs/contracts/` (index: `docs/contracts/INDEX.md`). This file is
+the ONE copy of the project rules — `AGENTS.md` and `.github/copilot-instructions.md` are
+pointers to it, never copies; a rule added here needs no mirroring.
 Read the relevant doc before editing a subsystem. Key files:
 - `ShaftScreen.md` — overall screen contract, commit-on-blur rule, unit edge rule
 - `AddComponentDialogs.md` — add-dialog parity rules (mirror carousel cards)
@@ -880,8 +882,9 @@ mutates them except a direct user action. See `docs/contracts/ShaftScreen.md`.
 Tapping a component in the Schematic tab's preview highlights it (`onTapComponentId`); tapping
 bare canvas does **nothing**. The bare-canvas tap used to open an add-component chooser at the
 tapped position — it fired unintentionally far more often than it was wanted and was never used
-deliberately (on-device report). Components are added from the FAB chooser, the single add
-entry point. Do not reintroduce a bare-canvas tap action without asking: the objection was to
+deliberately (on-device report). Components are added from the full-width "+ Add Component"
+button's chooser (`InlineAddChooserDialog` — a `Button` in the scroll column, not a FAB), the
+single add entry point. Do not reintroduce a bare-canvas tap action without asking: the objection was to
 the gesture existing, not to its behavior. See `docs/UI_CONTRACT.md` §3.1.1.
 
 ### Numeric input commit behavior

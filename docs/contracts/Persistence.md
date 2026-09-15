@@ -3,8 +3,9 @@
 Layer: I/O + doc codec  
 Files: `io/InternalStorage.kt`, `doc/ShaftDocCodec.kt`, `data/AutosaveManager.kt`,
 `data/DraftRing.kt`  
-Version: v1.1 (2026-07-25) — adds the draft-ring autosave rewrite (was v1.0,
-2026-07-18, which consolidated the former `InternalStorage.md` and `Units.md`).
+Version: v1.2 (2026-09-15) — documents the `final_spec` envelope field and
+`SessionSnapshot.finalSpec` (was v1.1, 2026-07-25, the draft-ring autosave rewrite; v1.0,
+2026-07-18, consolidated the former `InternalStorage.md` and `Units.md`).
 Backup & restore design lives in `docs/archive/BackupRestore_Strategy.md`
 (implementation: `io/ShaftBackup.kt`).
 
@@ -55,7 +56,7 @@ draft problem cannot take each other down:
 | Store | Holds | Written |
 |---|---|---|
 | `settings` (`Context.settingsDataStore`) | units, theme, the whole drawing look, the mirror folder, migration/seeding flags | on each preference change |
-| `autosave_datastore` (`AutosaveManager`) | the draft ring | **every 1.5 s of editing** |
+| `autosave_datastore` (`AutosaveManager`) | the draft ring — one `SessionSnapshot` per entry, the **whole** session including `finalSpec` (the final drawing) | **every 1.5 s of editing** |
 
 Invariants
 - **Both delegates carry a `ReplaceFileCorruptionHandler`, and it is load-bearing.** DataStore's
@@ -188,6 +189,14 @@ Invariants
     default). It never blocks switching units in the UI — **functionally inert** for
     "can the user change units on this file".
   - Legacy bare spec: current Settings default unit is used; doc treated as unlocked.
+- The final drawing: `final_spec` (`ShaftDocV1.finalSpec: ShaftSpec?`, `@SerialName("final_spec")`)
+  is the document's **second whole `ShaftSpec`** — the shaft as it leaves — sibling of `spec`,
+  not a reference mark inside it. `null` (the default) = this document has no final drawing,
+  which is every older file and every document until one is started, so older files load
+  unchanged and no version bump was needed. Decode-time migration
+  (`freezeLegacyStationCounts`, spec normalization) deliberately reaches the ORIGINAL only:
+  the wear / undercut / runout records are the inspection of the shaft that came in and key to
+  `spec`. Full contract: `docs/contracts/FinalSchematic.md`.
 - Thread pitch/TPI: `decode()` calls `.normalized()` so metric-only (`pitchMm`) and
   imperial-only (`tpi`) saves both end up with both fields populated.
   See `Model_Conventions.md`.
@@ -220,6 +229,15 @@ design: `docs/archive/Autosave_Incident_2026-07-25.md`.
   `DEFAULT_DRAFT_RING_MAX` (3) `DraftEntry(draftId, documentName?, updatedAtEpochMs,
   snapshot)`, newest-first. Replaces the old single-slot key `autosave_last_session`
   (still read once, for migration — see below).
+- **The snapshot is the whole session**, `finalSpec` included (`SessionSnapshot.finalSpec:
+  ShaftSpec?`, `data/AutosaveManager.kt`; absent in older drafts → `null`, which reproduces
+  the previous behaviour exactly). A final drawing is drawing work, not a reference mark: a
+  session that has one and loses it on restore has lost work. **Every field of
+  `SessionSnapshot` must appear in BOTH builders** — `buildCurrentSnapshot()` *and* the
+  `sessionSnapshotFlow` combine in `init` (which `check`s its own arity). A field set by one
+  and missing from the other silently defaults in every written draft (data loss on restore),
+  goes un-dirty-tracked, and leaves the two builders permanently unequal — false-dirty plus a
+  phantom draft on any document that uses it. That is the 2026-07-25 incident's rule.
 - **Per-document identity**: `ShaftViewModel.currentDraftId` (a fresh UUID) is minted
   at construction and re-minted in `newDocument()` and `importJson()`. Working on one
   document's session can only ever upsert *that* document's ring entry — it can never

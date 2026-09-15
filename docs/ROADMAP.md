@@ -35,9 +35,11 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
 - [ ] **Fiberglass body support** — per-body flag with the usual dialog/card parity; styling
   (dark fill vs hatch vs label) is **undecided and blocked on a sketch or photographed sheet**,
   the same way the "indicated wear" squiggle convention is
-- [ ] **Additional output fonts** — a typeface choice for the printed sheets. Safe by
-  construction (every metric is measured live from the `Paint`), but check the fraction stack
-  against a condensed or slab face before shipping one
+- [x] **Additional output fonts** — shipped 2026-09-14 as Settings → Drawing → "Output font"
+  (`util/OutputTypography.kt`): Standard / Condensed / Serif / Monospace, app-wide like every
+  other drawing pref. Safe by construction as predicted — every metric is measured live from
+  the `Paint` — and `FractionTextRendererTest` now runs its ink-bounds checks in every face, so
+  a fraction stack that breaks out of the line box in a condensed or slab font fails there
 - [ ] **Tap-to-place a NEW bubble** — leader clarity itself is resolved (2026-08-25 dogleg-dip
   rework, on top of the 2026-08-16 pointer rework), and long-press-drag covers *moving* a
   station. What remains of the original request is placing a NEW bubble at an arbitrary
@@ -59,6 +61,37 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
   move, and lower priority
 
 **Delivered in v0.5.x so far** (newest first):
+- Taper calculator — Calculate button, answers in the fields (2026-09-14) — the calculator is
+  button-driven: nothing derives until Calculate, the answer appears as an italic preview in its
+  own empty field (a ✓ keeps it as an input for the next question), too-few-values reds exactly
+  the fields that could complete the solve, and any edit drops the result. Display rules are pure
+  (`util/TaperCalcPresentation.kt`), since the dialogs cannot be hosted under Robolectric
+- Tap the title to name the document; Start-screen drafts name themselves (2026-09-14) — the
+  title strip is now the naming affordance it looked like (never-saved → Save As, saved →
+  the shared `RenameShaftDocumentDialog`), decided once in `AppNav` so the strip cannot mean
+  different things on different tabs; a draft row is titled with the name the save screen would
+  suggest, and still writes nothing
+- Output font (2026-09-14) — see the checked "Additional output fonts" item above
+- Standard key-stock sizes for keyways (2026-09-14) — a "Standard size…" menu under the KW W × D
+  row on all four keyway surfaces, ANSI B17.1 for an inch keyway and DIN 6885-1 / ISO 773 for a
+  metric one (`geom/KeyStockStandards.kt`, `ui/screen/KeywayStdSizePicker.kt`), offering the
+  entry the standard names for the host Ø first and the SHAFT keyseat depth. A pick writes
+  through the typed-value path and is sacred from then on; both tables are provisional
+- Compose BOM 2024.09.00 → 2026.04.01 (2026-09-14) — the real change is Material3 1.3.0 → 1.4.0
+  (UI/Foundation were already overridden upward to 1.9.2 → 1.11.0); no source changes, suite
+  green. The compileSdk-37 bump stays a separate coordinated change
+- Final Schematic tab (2026-09-04) — the document carries a SECOND drawing, the shaft as it
+  leaves: a new tab between Undercut Drawing and Consolidated Output hosting the SAME editor
+  pointed at `final_spec` under a banner (Reset to original / Discard, both confirm, both undo).
+  One editor, two targets — every geometry mutator takes an explicit
+  `SpecTarget { ORIGINAL, FINAL }`, never a flag on the ViewModel. Prints the final schematic,
+  optionally as the consolidated Schematic + Runout sheet ("Runout bubbles", session-only), and
+  a blank classic runout sheet; every final sheet is marked `Drawing: Final` with its own
+  filename suffix. Consolidated Output keeps drawing the original
+- Developer Options diagnostics (2026-09-03) — `ui/screen/DeveloperOptionsRoute.kt`: the master
+  switch now actually gates all six overlay flags (once, in `ShaftRoute`), the four verbose
+  categories disable rather than reading as live switches that change nothing, every switch
+  gained a line saying what it does, and a new Diagnostics section aimed at the device
 - Liner shoulders (2026-08-25) — per-end stepped shoulder (length + reduced Ø + standard-list
   edge radius), capability-gated behind Settings → "Liner shoulders", one shared silhouette for
   preview + schematic PDF, radius printed as a footer note only
@@ -171,8 +204,8 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
 - Selection highlight — single thin ring, seeded on file load
 - Warning badge system — yellow per-component chips
 - ShaftScreen.kt carousel extracted to `ComponentCarousel.kt`
-- Sidebar nav (5 tabs: Schematic / Runout Sheet / Wear Document / Undercut Drawing /
-  Consolidated Output)
+- Sidebar nav (6 tabs: Schematic / Runout Sheet / Wear Document / Undercut Drawing /
+  Final Schematic / Consolidated Output)
 - Runout drawing — inline shaft preview, scrollable layout, collision-free alternating bubble placement (shared `geom/RunoutBubbleLayout.kt` engine), TIR direction label
 - Wear document — shaft profile + header + dye-pen PASS/FAIL checkboxes
 - Liner wear areas — tap-to-inspect liners, wear-spot recording (SET/liner-edge
@@ -206,7 +239,7 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
   per-component mixed units, and a **stacked** two-line layout (Settings → Drawing →
   "Dual-unit layout"). The stack turned out to be NARROWER than the inline pair, so it seats
   values back inside the dimension line and largely pays for its own height; see
-  `docs/DualUnitStacking_PLAN.md`.
+  `docs/archive/DualUnitStacking_PLAN.md`.
 
 ---
 

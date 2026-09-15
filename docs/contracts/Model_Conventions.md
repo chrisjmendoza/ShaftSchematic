@@ -4,7 +4,7 @@ Model Conventions
 Layer: Model  
 Purpose: Shared expectations across Body, Taper, ThreadSpec, Liner, CouplerBoltSlot, Segment.
 
-Version: v0.6 (2026-08-24)
+Version: v0.7 (2026-08-29)
 
 Invariants
 - All fields are **Float mm** unless stated otherwise.  

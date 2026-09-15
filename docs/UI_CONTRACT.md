@@ -1,6 +1,7 @@
 # UI Contract
 Version: v0.5.x
-Last updated: 2026-08-05 — the editor now has **five** tabs: §7.6 (Undercut Drawing) and
+Last updated: 2026-09-15 — the editor now has **six** tabs: §7.8 (Final Schematic) added.
+2026-08-05 — §7.6 (Undercut Drawing) and
 §7.7 (Consolidated Output) added, §7.5 notes the `WEAR_TAB_ENABLED` retirement switch, and
 §5.2 points at the app-theme / sheet-ink contract. 2026-07-28 — added §7.5 pointing the Runout Sheet / Wear Document tab
 interactions (incl. the wear overlay's Add X / Remove X / Add Ø tools) at the in-source
@@ -83,8 +84,9 @@ All Add/Edit dialogs follow the same conventions:
 
 ### 3.1.1 Add Entry Points & Implicit (Auto) Bodies
 
-There is ONE path to open an add dialog: the **FAB chooser**
-(`InlineAddChooserDialog`), which computes the default start via `computeAddDefaults()`
+There is ONE path to open an add dialog: the **"+ Add Component" button's chooser**
+(`InlineAddChooserDialog`, opened by the full-width `Button` in the editor's scroll column —
+not a floating action button), which computes the default start via `computeAddDefaults()`
 (see §3.1.2), sets `addStartMm`/`addLengthMm`, and opens the matching `add*Open` dialog state.
 
 It goes through the full dialog — there is **no quick-add bypass** that skips user input.
@@ -247,8 +249,10 @@ geometry recalculation happens in the UI layer. Spatial order stays authoritativ
 UI element `ShaftDrawing` is responsible only for:
 - Drawing grid
 - Drawing axis labels
-- Building `renderOptions` from UI + user preferences (grid toggle, preview colors, black/white override)
-- Passing `layoutResult` and `renderOptions` to `ShaftRenderer`
+- Building a `RenderOptions` (`ui/drawing/render/RenderOptions.kt`) from UI + user preferences
+  (grid toggle, preview colors, black/white override, line thickness, the PDF-shade mirror)
+- Calling `ShaftLayout.compute(...)` for a `ShaftLayout.Result` and passing that result plus the
+  `RenderOptions` to `ShaftRenderer.draw` — one `compute → (grid) → draw` sequence per frame
 
 UI must never:
 - Draw geometry
@@ -354,7 +358,7 @@ No other responsibilities.
 # 7.5 Runout Sheet & Wear Document Tabs
 
 This contract predates the sidebar's document tabs (`EditorTab` — Schematic, Runout Sheet,
-Wear Document, Undercut Drawing, Consolidated Output); their UI behavior is owned by the
+Wear Document, Undercut Drawing, Final Schematic, Consolidated Output); their UI behavior is owned by the
 `docs/contracts/RunoutSheet.md` (authoritative)
 rather than duplicated here. Summary of the boundaries, which follow the same rules as above:
 
@@ -426,6 +430,35 @@ with the export/paper rules in `docs/PDF_EXPORT.md` §5.6–5.7. Boundary summar
   the shared collision export gate; the UI presents the written/failed result only.
 - Like the other document tabs, the preview **rasterizes the real composed PDF** — no
   parallel UI draw path.
+
+---
+
+# 7.8 Final Schematic Tab
+
+`EditorTab.FINAL` / `ui/screen/FinalRoute.kt`. In the sidebar it sits between Undercut
+Drawing and Consolidated Output (enum order is sidebar order); it is numbered last here only
+so the existing section numbers keep their meaning. Behavior owned by
+`docs/contracts/FinalSchematic.md` (authoritative). Boundary summary:
+
+- The tab hosts **the Schematic tab's own editor**, bound to the document's second geometry:
+  `ShaftRoute(target = SpecTarget.FINAL)`. The carousel, add dialogs, preview box, collision
+  badges and warnings need no changes — they are presentational over whatever spec they are
+  handed. **This is the only tab that draws the FINAL spec; every other tab keeps drawing the
+  ORIGINAL**, including Consolidated Output.
+- Two states. With no final drawing yet the tab is prose plus ONE action
+  ("Start from original schematic", `final_start_button`) — a tab offering editing controls
+  over a drawing that does not exist would have to invent one to show them. Once started, the
+  editor appears under a standing **banner** (`final_banner`, "Final drawing — the original
+  schematic is untouched") carrying this drawing's own actions: print/export its blank runout
+  sheet, **Reset to original**, and **Discard final drawing**. The destructive pair sits
+  behind an overflow menu and both confirm (`final_reset_confirm`, `final_discard_confirm`).
+- Same **built-shaft gate** as the other document tabs (`EditorTab.kt`): disabled until the
+  shaft has at least one component and a non-zero OAL — a final drawing started from a blank
+  original has nothing to adjust.
+- Outputs from here are marked `Drawing: Final` and take a `_Final` filename, so a final
+  sheet can never be handed out as the original. The route performs no geometry of its own;
+  which sheet a surface composes is decided in one place (`ui/nav/FinalSheetCompose.kt`), so
+  the preview, Print, and SAF export cannot disagree.
 
 ---
 

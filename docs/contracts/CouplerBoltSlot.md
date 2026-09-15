@@ -92,15 +92,19 @@ through vs blind render identically.
 
 ## ViewModel API (`ShaftViewModel`)
 
-- `addCouplerBoltSlotAt(startMm, holeDiaMm, count, spacingMm, through, depthMm, reference = FWD)`
-  — newest-on-top; remembers session defaults; never touches OAL.
-- `updateCouplerBoltSlot(index, startMm, holeDiaMm, count, spacingMm, through, depthMm)`
-- `updateCouplerBoltSlotReference / updateCouplerBoltSlotShowRail`
+- `addCouplerBoltSlotAt(startMm, holeDiaMm, count, spacingMm, through, depthMm, reference = FWD,
+  target)` — newest-on-top; remembers session defaults; never touches OAL.
+- `updateCouplerBoltSlot(index, startMm, holeDiaMm, count, spacingMm, through, depthMm, target)`
+- `updateCouplerBoltSlotReference(index, reference, target)` /
+  `updateCouplerBoltSlotShowRail(index, show, target)`
   (`updateCouplerBoltSlotLabel` was deleted 2026-07-26 — dead end-to-end; the slot card
   has no title editor. Re-add it together with the card's editable title if slot
   renaming ever ships.)
-- `removeCouplerBoltSlot(id)` — recoverable via the general session `undoEdit()` (see
+- `removeCouplerBoltSlot(id, target)` — recoverable via the general session `undoEdit()` (see
   `ShaftViewModel.md`); no body merge.
+
+Every one of those takes `target: SpecTarget = SpecTarget.ORIGINAL` as its **last** parameter —
+which of the document's two geometries the edit lands on; see `docs/contracts/FinalSchematic.md`.
 
 ---
 

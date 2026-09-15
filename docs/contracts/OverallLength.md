@@ -38,7 +38,10 @@ UI signals errors. Applies to `ShaftViewModel`, `ShaftRoute`, and `ShaftScreen`.
   `resolveComponents` passes `spec.overallLengthMm` straight into `deriveAutoBodies`, whose
   `<= 0f` branches are the genuine 0-OAL guards.
 - The collision/add "falls outside shaft span" warning is gated on `overallLengthMm > 0f`
-  alone (`ui/util/CollisionWarnings.kt`).
+  alone. That gate lives in the ONE bounds predicate, `outsideShaftSpan`
+  (`ui/util/ComponentWarnings.kt`), which the add dialogs' pre-submit warning
+  (`ui/util/CollisionWarnings.kt`, which only calls it) and the carousel cards' past-OAL chip
+  both read — do not fork the comparison back out into either surface.
 
 ---
 

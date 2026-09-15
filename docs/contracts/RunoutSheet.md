@@ -320,7 +320,7 @@ component — bodies and tapers too; see "Wear Pits" below.)
 **Tap hit-testing** inverts the existing `ShaftLayout.Result.xMmFromPx` to get the tap position
 in mm, then calls the pure `pickLinerIdAtMm` (`LinerWearMath.kt`) to pick the liner whose span
 contains it — ties (a tap exactly on a shared boundary) broken by whichever liner has the
-nearer edge. A hit opens `LinerWearDetailOverlay` for that liner's id.
+nearer edge. A hit opens `ComponentWearDetailOverlay` for that liner's id.
 
 **Detail overlay (`LinerWearDetail.kt`)** — a full-screen composable, not a nav destination,
 same shape as `PdfPreviewOverlay`: its own `BackHandler` plus a back-arrow top bar. Its
@@ -378,7 +378,7 @@ model. Conversion (`ui/screen/LinerWearMath.kt`):
 
 `wearStartToCanonicalMm`/`canonicalToWearStartMm` are the pure, exactly-inverse conversion pair.
 AFT/FWD SET positions come from `geom/OalComputations.kt`'s `computeOalWindow` +
-`computeSetPositionsInMeasureSpace` (computed once per overlay open in `LinerWearDetailOverlay`
+`computeSetPositionsInMeasureSpace` (computed once per overlay open in `ComponentWearDetailOverlay`
 and threaded down to each `WearSpotCard`) — its `measureStartMm` is always `0.0`, so the
 returned measure-space X values already are physical shaft-space mm from AFT, the same space as
 `liner.startFromAftMm`. Switching the "Measure From" chip re-projects the *displayed* Start
@@ -734,8 +734,11 @@ Overnight wave (on-device request), three features on the Runout tab:
   own history.
 - **"Shaft height" slider** — `RunoutConfig.heightScale` (per-job, rides the `.shaft`
   envelope like the undercut sheet's exaggeration slider; additive field, legacy files
-  default to 1.0). A multiplier on the sheet's solved profile scale: 50%–300%
-  (`PROFILE_HEIGHT_SCALE_MIN/MAX`), applied AFTER the conventional
+  default to 1.0). A multiplier on the sheet's solved profile scale: 0.25×–6.0×
+  (`PROFILE_HEIGHT_SCALE_MIN`/`PROFILE_HEIGHT_SCALE_MAX`, `geom/ProfileCompression.kt` —
+  deliberately wider than the absolute paper band, since the multiplier only has to be able
+  to EXPRESS that band on any shaft; the height clamp is what bounds the drawing), applied
+  AFTER the conventional
   max(width-fit, visual scale, value-need) solve. The
   `PROFILE_MAX_SHAFT_HEIGHT_PT` = 108 pt ceiling is **absolute** (on-device direction):
   a short shaft whose width-fit would draw taller is capped too — it keeps true
@@ -2043,7 +2046,7 @@ The Consolidated Output tab passes `linerShadeLocked = consolidatedSheetHasInPro
 
 Both routes add `BackHandler(enabled = showPreview) { showPreview = false }` before the `if (showPreview)` block. This intercepts the system back gesture while the overlay is visible, dismissing the overlay instead of propagating to the NavController.
 
-`LinerWearDetailOverlay` hosts its own unconditional `BackHandler` internally (rather than the caller adding a conditional one) since `WearRoute` only composes it while `selectedLinerId != null` — there is nothing to gate.
+`ComponentWearDetailOverlay` (`ui/screen/LinerWearDetail.kt` — it takes any pit-eligible component, not just a liner) hosts its own unconditional `BackHandler` internally (rather than the caller adding a conditional one) since `WearRoute` only composes it while `selectedComponentId != null` — there is nothing to gate.
 
 ---
 

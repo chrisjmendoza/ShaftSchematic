@@ -1,6 +1,11 @@
 # PDF Export Specification
 Version: v0.5.x
-Last updated: 2026-08-29 — §5.5/§5.6 document the PDF options audit: a Print icon now sits
+Last updated: 2026-09-15 — stale-identifier sweep: §6.4's body-compression entry now names the
+real pass (`drawBodyRunsWithBreaks`, `pdf/BodyRunDraw.kt`) instead of the long-gone
+`ShaftPdfComposer.drawBodiesCompressedCenterBreak()`, and §5.4/§5.5 drop `DimSpan.labelBottom`
+(a second rail-label line that was never populated and was deleted as dead in the 2026-07-26
+Wave 2 pass) — component names and S.E.T. markers print from their own below-shaft pass, not
+from a rail. 2026-08-29 — §5.5/§5.6 document the PDF options audit: a Print icon now sits
 in every preview overlay's top bar beside Export (each route reuses its own tab-body Print
 action, so the two entry points cannot drift); the schematic and shared options sheets both
 lead with a compact "Content" chip row in place of the old switch rows; both sheets reorder
@@ -152,7 +157,7 @@ Top of page, full width.
   tier step, the wear Ø callout rows, and the consolidated sheet's rotated in-profile values
   (where the axes swap: a stack costs room ALONG the shaft and needs LESS drawn diameter). A
   sheet whose budget cannot absorb it reverts to INLINE for the whole sheet and logs why —
-  per sheet, never per label. See `docs/DualUnitStacking_PLAN.md`.
+  per sheet, never per label. See `docs/archive/DualUnitStacking_PLAN.md`.
 - Overall Length
 - Scale (“1:1”, “2:1”, or “Scale to Fit”)
 - Drawn By (optional)
@@ -527,8 +532,10 @@ hand-drafting convention `|←—— 237 1/2" ——→|` — instead of floatin
   no extra OAL padding constant (on-device report: the wider gap wasted whitespace). The
   planner's lift is the only thing that widens the gap, and only when the tier below
   floats a label into the lane.
-- **Unchanged:** extension lines, `labelBottom` (SET name below the rail), `drawArrow`,
-  and `canFitInwardArrows`.
+- **Unchanged:** extension lines, `drawArrow`, and `canFitInwardArrows`. (A `DimSpan` carries
+  exactly one label, `span.label`; the never-populated second-line field `labelBottom` was
+  deleted as dead in the 2026-07-26 Wave 2 pass. Component names print from their own
+  below-shaft pass, not from a rail.)
 - **Scope: PDF-only, no canvas twin.** `PdfDimensionRenderer` backs both the exported
   PDF and the on-screen PDF preview — `PdfPreviewScreen` rasterizes the real PDF via
   `composeShaftPdf` → `ShaftPdfComposer` → this same renderer, so there is no separate
@@ -552,8 +559,9 @@ Rules (shared helpers in `pdf/BlankFormText.kt`):
   sized for handwriting a mixed-number dimension on a clipboard), but draw no value text —
   the gap is the write-in spot. Same eligibility/fallback/collision logic as §5.4: the
   planner measures the write-in width instead of the value text, so gaps are reserved — and
-  slid or lifted clear of each other — exactly as printed values are. `labelBottom` (SET
-  names) are identifiers and still print.
+  slid or lifted clear of each other — exactly as printed values are. Component names and the
+  S.E.T. markers are identifiers, not values, so they still print — they come from their own
+  below-shaft pass, never from a rail label.
   - **A short span shrinks its gap rather than losing it**
     (`DimensionRailLayout.blankGapWidth`): a span that cannot host 60 pt plus its pad and
     arrowheads cuts whatever it affords, down to `BLANK_DIM_GAP_MIN_PT` (28 pt, about a
@@ -914,8 +922,9 @@ posture as its trace-depth/wear-band controls.
 2. No multi-page continuation.
 3. No BOM tables.
 4. **Round-stock display compression exists for long bodies** (this replaces an earlier "no
-   display compression" claim, which is no longer true). `ShaftPdfComposer.drawBodiesCompressedCenterBreak()`
-   triggers per-body when that body's on-paper length reaches `COMPRESS_TRIGGER_PT` (220 pt) —
+   display compression" claim, which is no longer true). The ONE body-run pass both composers
+   call — `drawBodyRunsWithBreaks` (`pdf/BodyRunDraw.kt`) — breaks a run when its on-paper
+   length reaches `COMPRESS_TRIGGER_PT` (220 pt) —
    or when the compressed profile x-map squeezes it below a **user-set fraction of its true
    drawn width** (`breakForCompression`, `pdf/BreakSymbol.kt` — ONE predicate, behind the single
    body-run pass both composers call). The fraction is `PdfPrefs.sBreakThresholdFrac`, set in

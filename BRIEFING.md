@@ -1,7 +1,7 @@
 # ShaftSchematic — Project Briefing
 
 **Generated:** 2026-05-03  
-**Last updated:** 2026-08-05 — five editor tabs / five PDF documents (undercut drawing + consolidated output), refreshed the PDF-export and navigation sections, corrected the snap-engine signature  
+**Last updated:** 2026-09-15 — the Final Schematic tab; the editor-tab list and the composer/document inventory now live in `docs/ARCHITECTURE.md` alone  
 **Current Version:** computed at build time from git history — `app/build.gradle.kts` (`versionName = "1.3.<n>"`); no version is hard-coded in the docs  
 **Series:** v0.5.x — runout/wear/undercut docs, consolidated output, line thickness, OAL fix
 
@@ -24,9 +24,10 @@ Target hardware: Android 8.0+ (API 28), Target SDK 36.
 
 The core feature set is **shipped and working**: modeling (bodies with keyways, tapers
 with keyways and auto-rate, threads with OAL exclusion, liners, coupler bolt slots), live preview,
-validation (blocking + warnings), five PDF documents (shaft drawing, classic runout sheet,
-wear document, undercut drawing, consolidated output sheet), internal library with autosave
-and backup/restore, and full settings.
+validation (blocking + warnings), the PDF document set, a second "final" drawing per document,
+internal library with autosave and backup/restore, and full settings. The editor-tab list and
+the composer/document inventory live in **`docs/ARCHITECTURE.md`** (§5 and §"PDF Export"),
+which owns both — they are not restated here.
 
 For the authoritative feature-by-feature status table, see **`TODO.md` §0 — Current
 System State**. For what's next, see **`docs/ROADMAP.md`**.
@@ -54,7 +55,8 @@ User Input → ShaftViewModel → ShaftSpec (mm)
 **Package layout:**
 ```
 model/          ← immutable data classes (all mm)
-geom/           ← pure geometry helpers (OAL, tier assignment, snap)
+geom/           ← pure geometry helpers (OAL, tier assignment, profile compression,
+                  keyway/blend/undercut/wear math) — no positional snapping lives here
 ui/viewmodel/   ← ShaftViewModel + SessionAddDefaults
 ui/drawing/     ← ShaftLayout, ShaftRenderer, GridRenderer, ShaftDrawing
 ui/screen/      ← StartScreen, ShaftScreen, ShaftEditorRoute, dialogs
@@ -109,9 +111,9 @@ Nothing snaps a typed position (golden rule — the tap-to-add gesture and its `
 ### PDF Export
 `pdf/ShaftPdfComposer.kt` — renders to `PdfDocument` with its **own** scale math (`computeDetailPtPerMm`, plus the compressed x-map from `geom/ProfileCompression.kt`) and its **own Canvas drawing functions** (bodies, tapers, threads, liners), not `ShaftLayout`/`ShaftRenderer`. The two rendering paths share the model but not the drawing code — a fix in `ShaftRenderer` does not automatically propagate to the PDF. Includes: component labels (with row-based collision avoidance), centerline rules, dimension tiers, Ø callouts, footer (shaft position, taper KW data). PDFs draw no grid. Auto-open after export is configurable.
 
-The four composers produce five documents: shaft drawing, classic runout sheet, wear
-document, undercut drawing, and the consolidated output sheet
-(`composeRunoutPdf(consolidated = true)`).
+For which composers produce which documents — the consolidated sheet, and the Final Schematic
+tab's sheets through `ui/nav/FinalSheetCompose.kt` — see `docs/ARCHITECTURE.md`
+§"PDF Export", the single source of truth for that inventory.
 
 ---
 
@@ -126,8 +128,7 @@ StartScreen
   │    └─ discard an entry → discardDraft(draftId) → stays on Start
   └─ Settings → SettingsRoute (units, appearance, PDF export, data) / Help / About
 
-ShaftEditorRoute (sidebar hosts 5 tabs)
-  ├─ Schematic · Runout Sheet · Wear Document · Undercut Drawing · Consolidated Output
+ShaftEditorRoute (sidebar hosts the editor tabs — list in docs/ARCHITECTURE.md §5)
   ├─ Component Carousel (swipe/select components)
   ├─ Add Component dialogs (Body / Taper / Threads / Liner / Coupler Bolt Slot)
   ├─ Delete + Undo (snackbar); session undo/redo history menu
