@@ -28,6 +28,7 @@ via SAF, delegating drawing to `composeShaftPdf`.
 | `shadedBodies` | `false` | Fill body sections with light grey |
 | `shadedTapers` | `false` | Fill taper trapezoids with light grey |
 | `shadedLiners` | `false` | Fill liner sections with light grey |
+| `undercutLineArt` | `false` | Line art on the UNDERCUT document: no shade fill anywhere on that sheet — bodies, tapers, liners, the detail strips' otherwise-always-shaded liner span and the notch section core — leaving the notch construction (void, section faces, floor lines) to carry the reading. Decided by the pure `undercutPdfFillPlan` (`pdf/UndercutPdfFillPlan.kt`). Reaches one composer, so it surfaces in Settings → PDF Export and the **undercut** preview's options sheet only. Independent of the screen-side `UndercutStyle` line-art mode, which never reaches a composer |
 | `curveLoHeightIn` | `0.5` | Sizing-curve anchor: drawn height (paper in) of a 4" shaft at 100% (0.25–1.5) |
 | `curveHiHeightIn` | `1.0` | Sizing-curve anchor: drawn height (paper in) of an 8" shaft at 100% (0.25–1.5) |
 | `sBreakThresholdFrac` | `0.5` | Body S-break threshold: a body run breaks once drawn below this fraction of its true length (0–1; `0` = never break on compression) |
@@ -46,7 +47,9 @@ schematic Tune sheet this section otherwise describes. `runoutBubbleScale` /
 `runoutBubbleDropScale` are a third: they govern only the runout bubble draw sites, so — unlike
 every other pref in this table — they have no Settings → Drawing control at all; they surface
 only in the runout/consolidated PDF Options sheets, under a "Runout bubbles" heading, not on
-the schematic or wear/undercut sheets, whose composers never read them.
+the schematic or wear/undercut sheets, whose composers never read them. `undercutLineArt` is
+the fourth, the mirror image of that: it reaches only the undercut composer, so it lives in
+Settings → PDF Export and the **undercut** preview's options sheet and nowhere else.
 
 - **Body S-break** (`sBreakThresholdFrac`): slider in 5% steps, commits on release, with a
   "Default (50%)" reset button — the same posture as Line Thickness, and like Line

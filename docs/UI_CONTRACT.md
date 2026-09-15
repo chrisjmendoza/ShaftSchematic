@@ -280,7 +280,10 @@ canvases (undercut overview/detail, wear overview/detail, runout preview) draw w
 ink from `ui/theme/SheetInk.kt` and must **never** read `MaterialTheme.colorScheme` — dark
 theme's near-white `onSurface` would print invisible ink on a white sheet. The undercut
 sheets' fills are additionally user-styled via `util/UndercutStyle.kt` (still fixed inks,
-never theme roles, and never leaking into the PDF composers).
+never theme roles, and never leaking into the PDF composers). Each of the five canvases also
+carries a `Modifier.semantics { contentDescription = … }` (spoken counts only, built by
+`ui/screen/SheetSemantics.kt`) so a screen reader gets a summary of an otherwise-silent
+`Canvas`; see Accessibility in the authoritative contract below.
 
 Authoritative contract:
 `docs/contracts/Appearance.md`.

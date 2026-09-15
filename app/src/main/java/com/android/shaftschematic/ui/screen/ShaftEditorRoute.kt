@@ -56,6 +56,12 @@ fun ShaftEditorRoute(
     onOpenSettings: () -> Unit,
     /** Open the Help & FAQ screen from the sidebar's tools group. */
     onOpenHelp: () -> Unit = {},
+    /**
+     * Open Help at one topic — the "?" button the Runout, Wear, Undercut and Consolidated
+     * Output tabs carry. The same screen as [onOpenHelp], reached with its `topic` argument
+     * set; a second Help channel would let the two drift apart.
+     */
+    onOpenHelpTopic: (String) -> Unit = {},
     onOpenDeveloperOptions: () -> Unit,
     /** Export the main shaft schematic PDF (goes to existing preview/SAF flow). */
     onExportPdf: () -> Unit,
@@ -119,6 +125,7 @@ fun ShaftEditorRoute(
                 onOpenSidebar = { sidebarOpen = true },
                 onSave = onSave,
                 onTitleClick = onTitleClick,
+                onOpenHelpTopic = onOpenHelpTopic,
             )
 
             EditorTab.WEAR -> WearRoute(
@@ -126,6 +133,7 @@ fun ShaftEditorRoute(
                 onOpenSidebar = { sidebarOpen = true },
                 onSave = onSave,
                 onTitleClick = onTitleClick,
+                onOpenHelpTopic = onOpenHelpTopic,
             )
 
             EditorTab.UNDERCUT -> UndercutRoute(
@@ -133,6 +141,7 @@ fun ShaftEditorRoute(
                 onOpenSidebar = { sidebarOpen = true },
                 onSave = onSave,
                 onTitleClick = onTitleClick,
+                onOpenHelpTopic = onOpenHelpTopic,
             )
 
             EditorTab.FINAL -> FinalRoute(
@@ -155,6 +164,7 @@ fun ShaftEditorRoute(
                 onOpenRunoutTab = { activeTab = EditorTab.RUNOUT },
                 onSave = onSave,
                 onTitleClick = onTitleClick,
+                onOpenHelpTopic = onOpenHelpTopic,
             )
         }
 

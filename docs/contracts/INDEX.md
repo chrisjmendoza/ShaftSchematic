@@ -73,8 +73,10 @@ work ships they move to `docs/archive/`; each is listed under the contract it be
   size/count bucketing, the browser + thumbnail, and why a loaded template starts unnamed
   and dirty. Design plan: `docs/archive/Templates_And_DiaVisibility_PLAN.md`
 - **Navigation.md** — route graph, editor container (sidebar + tabs), screen wiring
-- **Appearance.md** — app theme (System/Light/Dark + high contrast) and the sheet-ink
-  invariant: paper-sheet canvases draw fixed ink, never theme colors
+- **Appearance.md** — app theme (System/Light/Dark + high contrast), the sheet-ink
+  invariant (paper-sheet canvases draw fixed ink, never theme colors), and the accessibility
+  rulings (sheet text is ink; canvases carry spoken summaries). Design plan with the
+  customization/accessibility/Help rulings: `docs/archive/SettingsCustomization_PLAN.md`
 - **Diagnostics.md** — the always-on breadcrumb log (`AppLog`), the one Crashlytics seam
   (`CrashReporter`), what a breadcrumb may never carry, and the Developer Options
   switchboard

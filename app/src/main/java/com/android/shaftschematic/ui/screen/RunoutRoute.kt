@@ -68,6 +68,8 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.drawText
@@ -135,6 +137,8 @@ fun RunoutRoute(
     onSave: () -> Unit = {},
     /** Tap on the document title strip — names an unsaved document, renames a saved one. */
     onTitleClick: (() -> Unit)? = null,
+    /** Open Help at one topic — the toolbar's "?" opens this tab's own guide. */
+    onOpenHelpTopic: (String) -> Unit = {},
 ) {
     val spec               by vm.spec.collectAsState()
     val currentDocumentName by vm.currentDocumentName.collectAsState()
@@ -461,6 +465,7 @@ fun RunoutRoute(
             ) {
                 Icon(Icons.Filled.Save, contentDescription = "Save")
             }
+            TabHelpButton(HELP_TOPIC_RECORD_RUNOUT, onOpenHelpTopic)
         }
 
         HorizontalDivider()
@@ -491,12 +496,31 @@ fun RunoutRoute(
                 // a resize must reach that plan without re-keying the gesture.
                 val bubbleScaleForTap = rememberUpdatedState(pdfRunoutBubbleScale)
                 val bubbleDropForTap = rememberUpdatedState(pdfRunoutBubbleDropScale)
+                // Station count only — the closures resolve mm↔px for the derived-body
+                // even-spread rule, which pixel scale never changes the COUNT of, so an
+                // identity mapping is enough here without hoisting the canvas's real layout
+                // out of its draw scope.
+                val previewStationCount = remember(resolvedComponents, runoutConfig, livePlacements) {
+                    collectRunoutStations(
+                        runoutComponentSpans(resolvedComponents),
+                        runoutConfig.componentOverrides,
+                        xAtMm = { it },
+                        mmAtX = { it },
+                        placements = livePlacements,
+                    ).size
+                }
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(200.dp)
                         .clip(previewShape)
                         .background(Color.White)
+                        .semantics {
+                            contentDescription = SheetSemantics.runoutPreview(
+                                stationCount = previewStationCount,
+                                readingCount = runoutReadings.readings.size,
+                            )
+                        }
                         .transformable(state = previewTransformState)
                         .pointerInput(spec, resolvedComponents, runoutConfig) {
                             detectTapGestures(

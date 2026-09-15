@@ -152,7 +152,7 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
   machined-below-surface cuts: shaft-space spans (a cut may cross a liner edge), the settled
   open-notch convention (silhouette step + full-height section faces, mouth never lidded),
   liner-anchored detail strips, a per-sheet cut-depth exaggeration slider, and user-selectable
-  shading / line-art styles
+  shading / line-art styles on screen and a line-art print option for the PDF
 - Consolidated Output tab — one sheet carrying the schematic's rails and footer plus the
   elected runout/wear content (`ConsolidatedVariant`: All three | Schematic + Runout |
   Schematic + Wear), the worn-section editor (values printed inside the profile over
@@ -166,7 +166,8 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
   "Body S-break"), and even-spread runout bubbles
 - Appearance settings — System/Light/Dark + high contrast for the Compose chrome, with the
   white paper sheets pinned to fixed ink so dark mode can never print invisible drawings
-- Help screen and Achievements screen
+- Help screen (searchable; a "?" on each sheet tab opens that tab's how-to) and Achievements
+  screen; icon-only buttons labelled and every sheet canvas carries a spoken summary
 - Hardened exports — every SAF write goes through `util/PdfSafExport` (a composer throw
   yields a valid error page, never a truncated file) and the collision export gate now
   guards every export surface

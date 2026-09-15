@@ -69,6 +69,8 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.DiaCalloutStation
 import com.android.shaftschematic.geom.SurfaceSeg
@@ -516,6 +518,9 @@ fun UndercutWindowDetailOverlay(
                         .height(canvasHeightDp)
                         .clip(cardShape)
                         .background(Color.White)
+                        .semantics {
+                            contentDescription = SheetSemantics.undercutDetail(spans.size)
+                        }
                         .transformable(zoomTransformState)
                         .pointerInput(strip, spans, winLenMm, maxOdMm) {
                             detectTapGestures { rawTap ->

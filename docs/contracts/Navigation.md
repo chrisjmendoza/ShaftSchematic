@@ -3,11 +3,11 @@ Navigation Contracts
 
 Files: AppNav.kt, InternalDocRoutes.kt, PdfExportRoute.kt (ui/nav/);
 ShaftEditorRoute.kt, ShaftRoute.kt, StartScreen.kt, RunoutRoute.kt, WearRoute.kt,
-UndercutRoute.kt, HelpRoute.kt, EditorDocumentTitle.kt, RenameShaftDocumentDialog.kt
-(ui/screen/)  
+UndercutRoute.kt, OutputRoute.kt, HelpRoute.kt, HelpSearch.kt, EditorDocumentTitle.kt,
+RenameShaftDocumentDialog.kt (ui/screen/)  
 Layer: UI → Nav
 
-Version: v0.11 (2026-09-14)
+Version: v0.12 (2026-09-15)
 
 Invariants
 - Routes are stable, typed constants or sealed routes.
@@ -41,11 +41,46 @@ Route graph (AppNav.kt NavHost)
 - `settings` → SettingsRoute — main page plus two in-screen sub-pages (`SettingsPage`:
   Preview Colors, PDF Export), back-arrow returns to the main page before leaving the route
 - `about` → AboutRoute
-- `help` → HelpRoute — static Help & FAQ content (no ViewModel). **Three entry points**:
-  the editor sidebar's tools group (directly above Settings), the Start screen's button
-  column (under Settings), and the Settings list row. Help is reference content reached for
-  mid-job, so it must keep a top-level entry — Settings alone is the failing state
-  (`docs/DESIGN_INTENT.md` §3.7). Five sections: Getting Started, **Glossary**, How-To
+- `help?topic={topic}` → HelpRoute — static Help & FAQ content (no ViewModel). The `topic`
+  argument is **optional** (`NavType.StringType`, default `""`), so the bare `help` route
+  still matches and lands at the top of the list. **Every caller builds the route through
+  `helpRoute(topicKey: String? = null)`** (AppNav.kt) — the query syntax and the argument
+  name (`HELP_TOPIC_ARG`, pattern `HELP_ROUTE_PATTERN`) are stated once there and nowhere
+  else.
+  **Seven entry points**: the editor sidebar's tools group (directly above Settings), the
+  Start screen's button column (under Settings), the Settings list row, and a `?` icon
+  button on each of the **Runout, Wear, Undercut and Consolidated Output** tabs. Help is
+  reference content reached for mid-job, so it must keep a top-level entry — Settings alone
+  is the failing state (`docs/DESIGN_INTENT.md` §3.7).
+  - **Per-tab `?` buttons** (`TabHelpButton`, HelpRoute.kt, testTag `tab_help`,
+    contentDescription "Help for this tab"): one construction, placed at the **trailing end
+    of each tab's toolbar row** after the Save icon, so it never displaces the Print-primary
+    button in `DocumentActionButtons`. Each opens Help deep-linked to that tab's how-to
+    topic — `record-runout`, `record-wear-readings`, `record-undercut-sections`,
+    `consolidated-output-and-export-all` (the `HELP_TOPIC_*` constants in HelpSearch.kt;
+    `HelpSearchTest` pins each to a topic that still exists). The Schematic tab
+    deliberately carries none — its help is the Getting Started material one sidebar tap
+    away. The callback `onOpenHelpTopic: (String) -> Unit` is plumbed from AppNav through
+    `ShaftEditorRoute` exactly as `onOpenHelp`/`onSave`/`onTitleClick` are; there is no
+    second Help channel.
+  - **Topic keys are derived, never authored** — `helpTopicKey(title)` (HelpSearch.kt, pure)
+    slugifies the title to kebab-case, and `HelpTopic.key` is what the `LazyColumn` item
+    key, the `rememberSaveable` expansion key, and the route argument all use. Titles must
+    therefore stay distinct under slugification (`HelpSearchTest` asserts uniqueness across
+    the real content). A deep link expands its topic on first composition (a **seed** for
+    the saved expansion, so it can still be collapsed) and scrolls the list to it via
+    `helpTopicItemIndex`, which counts items exactly as the list lays them out — one header
+    per section, then its topics. An unknown key is ignored: top of list, nothing expanded.
+  - **Search** — an `OutlinedTextField` pinned above the list inside the Scaffold content
+    (testTag `help_search`, label/placeholder "Search help", a × trailing icon while
+    non-empty). Filtering is the pure `filterHelpSections(sections, query)`: blank or
+    whitespace-only returns the content unchanged, otherwise case-insensitive substring over
+    title OR body, sections with no surviving topic dropped, order preserved. An empty
+    result prints `No topics match "<query>".` **While a query is active its hits render
+    EXPANDED** — a search hit that still needs a tap to read is the failing state — as an
+    `expanded || searching` read at the card, never a write to the saved expansion, so
+    clearing the query restores every card's own state.
+  Five sections: Getting Started, **Glossary**, How-To
   Guides, **Settings Reference**, FAQ. The Glossary sits second so a term can be looked up
   without reading past the guides; it defines shop and app vocabulary (AFT/FWD, blank draft,
   S-break, coupling face, dual units, L.E.T./S.E.T., liner compression, measurement

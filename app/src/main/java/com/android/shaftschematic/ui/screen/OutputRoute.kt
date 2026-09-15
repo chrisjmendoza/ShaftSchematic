@@ -181,6 +181,8 @@ fun OutputRoute(
     onSave: () -> Unit = {},
     /** Tap on the document title strip — names an unsaved document, renames a saved one. */
     onTitleClick: (() -> Unit)? = null,
+    /** Open Help at one topic — the toolbar's "?" opens this tab's own guide. */
+    onOpenHelpTopic: (String) -> Unit = {},
 ) {
     val spec               by vm.spec.collectAsState()
     val currentDocumentName by vm.currentDocumentName.collectAsState()
@@ -583,6 +585,7 @@ fun OutputRoute(
             ) {
                 Icon(Icons.Filled.Save, contentDescription = "Save")
             }
+            TabHelpButton(HELP_TOPIC_CONSOLIDATED_OUTPUT, onOpenHelpTopic)
         }
 
         HorizontalDivider()

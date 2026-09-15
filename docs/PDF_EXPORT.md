@@ -663,6 +663,20 @@ consolidated sheet's in-profile-values liner lock, and the wear/undercut
 `SimpleShaftProfile` one-fill-per-kind pass (the paragraph above; DESIGN_INTENT §5 debt).
 Threads carry no shade flag — they hatch.
 
+**Undercut drawing: line art** (`PdfPrefs.undercutLineArt`, default `false`; Settings → PDF
+Export and the undercut preview's options sheet, at the foot of the shade group, testTag
+`pdf_undercut_line_art`): the UNDERCUT document draws **no shade fill anywhere** — bodies,
+tapers, liners, the detail strips' otherwise-always-shaded liner span, and the undercut
+section's core — so the sheet reads from the notch construction alone (the void erasing the
+surface stroke, the full-height section faces, the floor lines). Outlines, thread hatch, the
+coupler-slot cutout fill, rails, text and the void fill itself are untouched. ONE pure decision,
+`undercutPdfFillPlan` (`pdf/UndercutPdfFillPlan.kt`), feeds the composer's paints and the
+`sectionCoreFill` flag on `drawUndercutNotches`. It reaches that one composer, so the row is
+offered on that one options sheet; it is part of the drawing LOOK and rides Drawing profiles.
+**Independent of the screen-side `util/UndercutStyle.kt` line-art mode** — same meaning, two
+surfaces, neither reading the other, because a preview style never leaks into a composer
+(`docs/contracts/Appearance.md`).
+
 **Direct print** (`util/PdfPrint.kt`, `printShaftPdfPage`) wraps the same composers in a
 `PrintDocumentAdapter` (US Letter landscape, 1 page) and hands them to the Android print
 framework. A print and an export of the same document are composed by the same call and are
@@ -749,7 +763,9 @@ what their composer actually reads:
   reference (the wear composer takes none of them).
 - **Undercut** keeps only the Content chip (Blank draft) and Line thickness — its normal
   form draws no whole-shaft profile, so none of the sizing/compression/bubble controls
-  apply.
+  apply — plus the one row nothing else gets: **"Undercut drawing: line art (no shading)"**
+  (`showUndercutLineArt = true`) at the foot of the shade group, since
+  `PdfPrefs.undercutLineArt` reaches this composer alone.
 
 Every instance keeps Fractions (ungated — every document here prints lengths) and Shade in
 Components (ungated) at their fixed spots in the order.

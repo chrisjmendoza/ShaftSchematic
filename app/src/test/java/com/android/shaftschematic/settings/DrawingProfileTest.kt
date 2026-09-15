@@ -49,6 +49,7 @@ class DrawingProfileTest {
             shadedBodies = true,
             shadedTapers = true,
             shadedLiners = true,
+            undercutLineArt = true,
             curveLoHeightIn = 0.75f,
             curveHiHeightIn = 1.25f,
             sBreakThresholdFrac = 0.35f,
@@ -106,7 +107,7 @@ class DrawingProfileTest {
 
         listOf(
             "tieringMode", "showComponentTitles", "shadedBodies", "shadedTapers", "shadedLiners",
-            "curveLoHeightIn", "curveHiHeightIn", "sBreakThresholdFrac", "arrowSizePt",
+            "undercutLineArt", "curveLoHeightIn", "curveHiHeightIn", "sBreakThresholdFrac", "arrowSizePt",
             "fractionStyle", "outputFont", "dualUnitLayout", "wearTraceDepthFrac", "wearBandShadeFrac",
             "wearJoinGapMaxMm", "lineThicknessScale",
         ).forEach { field ->
@@ -131,6 +132,19 @@ class DrawingProfileTest {
         assertEquals(FractionStyle.Default, profile.toPdfPrefs().fractionStyle)
         // Added after this payload was written — an old preset still loads, in the shipped face.
         assertEquals(OutputFont.Default, profile.toPdfPrefs().outputFont)
+        // Same posture for the undercut sheet's print line art: an older preset keeps shading.
+        assertFalse(profile.toPdfPrefs().undercutLineArt)
+    }
+
+    @Test
+    fun `undercut print line art survives a round trip`() {
+        val profile = DrawingProfile.of(
+            PdfPrefs(undercutLineArt = true),
+            lineThicknessScale = 1f,
+        )
+        val decoded = decodeDrawingProfiles(encodeDrawingProfiles(mapOf("Line art" to profile)))
+
+        assertTrue(decoded.getValue("Line art").toPdfPrefs().undercutLineArt)
     }
 
     @Test

@@ -33,7 +33,7 @@ class PdfOptionsSectionsTest {
     @get:Rule
     val rule = createComposeRule()
 
-    private fun hostShade(shadedBodies: Boolean) {
+    private fun hostShade(shadedBodies: Boolean, showUndercutLineArt: Boolean = false) {
         rule.setContent {
             MaterialTheme {
                 ShadeInPdfChecks(
@@ -45,6 +45,7 @@ class PdfOptionsSectionsTest {
                     onSetShadedTapers = {},
                     onSetShadedLiners = {},
                     onSetShadeExplicitBodiesOnly = {},
+                    showUndercutLineArt = showUndercutLineArt,
                 )
             }
         }
@@ -78,6 +79,26 @@ class PdfOptionsSectionsTest {
         rule.onNodeWithTag("options_shade_expander").performClick()
 
         rule.onNodeWithTag("shade_explicit_bodies_only").assertIsNotEnabled()
+    }
+
+    // `PdfPrefs.undercutLineArt` reaches ONE composer, so the row is offered on the undercut
+    // sheet and hidden everywhere else rather than shown as a checkbox the page ignores.
+
+    @Test
+    fun `undercut line art is offered on the sheet that draws it`() {
+        hostShade(shadedBodies = false, showUndercutLineArt = true)
+        rule.onNodeWithTag("options_shade_expander").performClick()
+
+        rule.onNodeWithTag("pdf_undercut_line_art").assertExists()
+    }
+
+    @Test
+    fun `undercut line art is absent on every other sheet`() {
+        hostShade(shadedBodies = false, showUndercutLineArt = false)
+        rule.onNodeWithTag("options_shade_expander").performClick()
+
+        rule.onNodeWithText("Liners").assertExists()
+        rule.onNodeWithTag("pdf_undercut_line_art").assertDoesNotExist()
     }
 
     @Test

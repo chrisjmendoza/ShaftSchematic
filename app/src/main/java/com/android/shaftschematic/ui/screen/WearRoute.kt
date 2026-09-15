@@ -57,6 +57,8 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.effectiveWearTraceDepthFrac
@@ -139,6 +141,8 @@ fun WearRoute(
     onSave: () -> Unit = {},
     /** Tap on the document title strip — names an unsaved document, renames a saved one. */
     onTitleClick: (() -> Unit)? = null,
+    /** Open Help at one topic — the toolbar's "?" opens this tab's own guide. */
+    onOpenHelpTopic: (String) -> Unit = {},
 ) {
     val spec               by vm.spec.collectAsState()
     val currentDocumentName by vm.currentDocumentName.collectAsState()
@@ -383,6 +387,7 @@ fun WearRoute(
             ) {
                 Icon(Icons.Filled.Save, contentDescription = "Save")
             }
+            TabHelpButton(HELP_TOPIC_RECORD_WEAR, onOpenHelpTopic)
         }
 
         HorizontalDivider()
@@ -410,6 +415,13 @@ fun WearRoute(
                         .height(200.dp)
                         .clip(previewShape)
                         .background(Color.White)
+                        .semantics {
+                            contentDescription = SheetSemantics.wearOverview(
+                                wearAreaCount = wearRecord.spots.size,
+                                pitCount = wearRecord.pits.size,
+                                diaReadingCount = wearRecord.diaReadings.size,
+                            )
+                        }
                         .pointerInput(spec, resolvedComponents) {
                             detectTapGestures { tapOffset ->
                                 val layout = ShaftLayout.compute(

@@ -1,7 +1,7 @@
 # ShaftSchematic TODO
 
 **Version: v0.5.x Development Queue**
-**Last updated: 2026-09-02**
+**Last updated: 2026-09-15**
 
 ## What belongs here
 
@@ -113,6 +113,12 @@ at most a pointer from here.
   hardware; `CHANGELOG.md` is the running record of which.
 - [ ] On-device visual pass of dark and high-contrast chrome (the Appearance schemes have only
   been reasoned about, not looked at). See `docs/contracts/Appearance.md`.
+- [ ] On-device accessibility walk: the app at 200% system font scale (any clipped row —
+  usually a `Modifier.height(x)` that wants `heightIn(min = x)`), and one TalkBack pass over
+  the five sheet tabs to hear the canvas summaries and confirm the list rows are a workable
+  editing path. Rulings in `docs/contracts/Appearance.md` §Accessibility.
+- [ ] On-device: print one undercut sheet with "Line art (no shading)" on and judge whether the
+  notch construction alone reads on paper (the ruling assumed it does, from the screen mode).
 - [ ] **On-device visual pass after Material3 1.3.0 → 1.4.0** (Compose BOM 2026.04.01): component
   defaults moved, not APIs. Look at the tuning sliders, the `ModalBottomSheet` page-strip cap
   (`TUNING_SHEET_CHROME_DP` counts the drag handle + inset chrome; a changed default shifts it),

@@ -62,6 +62,8 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.SurfaceSeg
@@ -151,6 +153,8 @@ fun UndercutRoute(
     onSave: () -> Unit = {},
     /** Tap on the document title strip — names an unsaved document, renames a saved one. */
     onTitleClick: (() -> Unit)? = null,
+    /** Open Help at one topic — the toolbar's "?" opens this tab's own guide. */
+    onOpenHelpTopic: (String) -> Unit = {},
 ) {
     val spec               by vm.spec.collectAsState()
     val currentDocumentName by vm.currentDocumentName.collectAsState()
@@ -167,6 +171,9 @@ fun UndercutRoute(
     val pdfShadedBodies    by vm.pdfShadedBodies.collectAsState()
     val pdfShadedTapers    by vm.pdfShadedTapers.collectAsState()
     val pdfShadedLiners    by vm.pdfShadedLiners.collectAsState()
+    // Print line art for THIS document: it suppresses every fill on the sheet, so it is both an
+    // options-sheet control and a preview re-render key.
+    val pdfUndercutLineArt by vm.pdfUndercutLineArt.collectAsState()
     val pdfFractionStyle   by vm.pdfFractionStyle.collectAsState()
     val pdfOutputFont      by vm.pdfOutputFont.collectAsState()
     // Dual-unit layout: this document stacks its dual values like every other
@@ -327,6 +334,7 @@ fun UndercutRoute(
     // OutputTypography.active, which is not snapshot state either.
     LaunchedEffect(showPreview, spec, unit, resolvedComponents,
                    lineThicknessScale, pdfShadedBodies, pdfShadedTapers, pdfShadedLiners,
+                   pdfUndercutLineArt,
                    undercutRecord, blankDraft, pdfFractionStyle, pdfOutputFont, unitOverrides,
                    dualUnits, pdfDualUnitLayout) {
         if (!showPreview) { previewBitmap = null; return@LaunchedEffect }
@@ -419,6 +427,7 @@ fun UndercutRoute(
             ) {
                 Icon(Icons.Filled.Save, contentDescription = "Save")
             }
+            TabHelpButton(HELP_TOPIC_RECORD_UNDERCUT, onOpenHelpTopic)
         }
 
         HorizontalDivider()
@@ -446,6 +455,10 @@ fun UndercutRoute(
                         .height(200.dp)
                         .clip(previewShape)
                         .background(Color.White)
+                        .semantics {
+                            contentDescription =
+                                SheetSemantics.undercutOverview(undercutRecord.undercuts.size)
+                        }
                         .pointerInput(spec, resolvedComponents, strips, linerSpans) {
                             detectTapGestures { tapOffset ->
                                 val layout = ShaftLayout.compute(
@@ -698,6 +711,10 @@ fun UndercutRoute(
                     // explicit-only pref says, so its row is hidden here rather than shown
                     // as a checkbox the page ignores.
                     showShadeExplicitBodiesOnly = false,
+                    // The one document `PdfPrefs.undercutLineArt` reaches, so the row is offered
+                    // here and nowhere else.
+                    showUndercutLineArt = true,
+                    undercutLineArt = pdfUndercutLineArt,
                     vm = vm,
                     fractionStyle = pdfFractionStyle,
                     blankDraft = blankDraft,

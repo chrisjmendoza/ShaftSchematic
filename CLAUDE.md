@@ -429,7 +429,11 @@ near-white onSurface would print invisible ink on the white sheet. The undercut 
 fills are additionally user-styled via `util/UndercutStyle.kt` (shade color/intensity +
 line-art mode; the Standard/Grey default reproduces the historical fixed shades, and the
 section core stays half the liner alpha at every intensity — `UndercutStyleTest`) — still
-fixed inks, never theme roles, and never leaking into the PDF composers. See
+fixed inks, never theme roles, and never leaking into the PDF composers. The PRINTED undercut
+sheet therefore carries its OWN `PdfPrefs.undercutLineArt` (profile-captured, decided by the
+pure `undercutPdfFillPlan`), which suppresses every fill on that document — the detail strips'
+always-shaded liner and the notch section core included; the two flags are independent by
+design, one meaning on two surfaces, neither reading the other. See
 `docs/contracts/Appearance.md`.
 
 ### Runout stations are per COMPONENT, never per drawn run

@@ -96,6 +96,7 @@ import com.android.shaftschematic.ui.viewmodel.setPdfSBreakThresholdFrac
 import com.android.shaftschematic.ui.viewmodel.setPdfShadeExplicitBodiesOnly
 import com.android.shaftschematic.ui.viewmodel.setPdfShadedBodies
 import com.android.shaftschematic.ui.viewmodel.setPdfShadedLiners
+import com.android.shaftschematic.ui.viewmodel.setPdfUndercutLineArt
 import com.android.shaftschematic.ui.viewmodel.setPdfShadedTapers
 import com.android.shaftschematic.ui.viewmodel.setPdfTieringMode
 import com.android.shaftschematic.ui.viewmodel.setPdfWearBandShadeFrac
@@ -385,6 +386,14 @@ internal fun RunoutWearOptionsSheet(
     showShadeExplicitBodiesOnly: Boolean = true,
     /** Locks the "Liners" shade row — see [ShadeInPdfChecks]. */
     linerShadeLocked: Boolean = false,
+    /**
+     * Shows the "Undercut drawing: line art (no shading)" row at the foot of the shade section.
+     * On only for the UNDERCUT preview — `PdfPrefs.undercutLineArt` reaches one composer, so on
+     * any other sheet the row would be a checkbox the page ignores.
+     */
+    showUndercutLineArt: Boolean = false,
+    /** The app-wide `PdfPrefs.undercutLineArt`; read only when [showUndercutLineArt]. */
+    undercutLineArt: Boolean = false,
     /**
      * Shows the per-job "Coupling face" election. On for the runout and consolidated sheets,
      * the two documents that can draw the end view; off for the wear and undercut sheets,
@@ -752,6 +761,9 @@ internal fun RunoutWearOptionsSheet(
             onSetShadeExplicitBodiesOnly = { vm.setPdfShadeExplicitBodiesOnly(it) },
             linerShadeLocked = linerShadeLocked,
             showExplicitBodiesOnly = showShadeExplicitBodiesOnly,
+            showUndercutLineArt = showUndercutLineArt,
+            undercutLineArt = undercutLineArt,
+            onSetUndercutLineArt = { vm.setPdfUndercutLineArt(it) },
         )
 
         Spacer(Modifier.height(12.dp))

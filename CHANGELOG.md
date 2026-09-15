@@ -6,6 +6,78 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-09-15
+
+### feat(pdf): line art for the printed undercut drawing
+
+The on-screen "Line art (no shading)" undercut style was screen-only; the printed sheet always
+shaded its detail-strip liner and the cut section's core. The print side now has its own switch.
+
+- **Settings → PDF Export → "Undercut drawing: line art (no shading)"**, also at the foot of the
+  Shade-in-Components group on the undercut preview's PDF options sheet (the one document it
+  reaches). Default off, so every existing document prints byte for byte as before.
+- On, the undercut PDF draws **no shade fill anywhere** — bodies, tapers, liners, the detail
+  strips' otherwise-always-shaded liner span, and the section core — and the cut reads from the
+  notch construction alone: the void erasing the surface stroke, the full-height section faces,
+  the floor lines. Outlines, thread hatch, the coupler-slot cutout marker, rails and text are
+  untouched. "Always shades its liner" now reads "always, unless line art".
+- One pure decision, `undercutPdfFillPlan` (`pdf/UndercutPdfFillPlan.kt`, `UndercutPdfFillPlanTest`);
+  the composer builds its paints from it and threads the section-core choice into the notch pass.
+- Part of the drawing look, so **drawing profiles capture it** and "Restore Drawing defaults"
+  resets it (`DrawingProfileTest` round-trips it; an older profile payload still loads).
+- **Independent of the screen style by design** — the `UndercutStyle` line-art flag still never
+  reaches a composer; the two flags mean the same thing on two surfaces and neither reads the
+  other. Contract: `UndercutDrawing.md`, `PDF_EXPORT.md` §5.6, CLAUDE.md sheet-ink invariant.
+
+### feat(help): search, and a "?" on each sheet tab that opens its own guide
+
+The Help screen was a long scroll with no way in but the top. It now has a search field and
+can be opened straight at a topic.
+
+- **Search** is pinned above the list. It narrows the screen to the topics whose title or text
+  contain what was typed (case-insensitive), drops sections with no hits, and **opens every
+  match** — a hit that still needs a tap to read is the failing state. Clearing the box puts
+  each card back exactly as it was: the query never writes a card's saved expansion. An empty
+  result says so by name.
+- **Deep links.** The `help` route takes an optional `topic` argument (`helpRoute(key)` in
+  `AppNav` is the one place the query syntax lives). Topics carry a stable key derived from
+  their title (`helpTopicKey`, pure) — the list key, the saved-expansion key and the route
+  argument are all the same string, so they cannot disagree — and a test asserts the keys are
+  unique across the real content. A deep link opens its topic expanded and scrolls to it; an
+  unknown key lands at the top.
+- **A "?" on the Runout, Wear, Undercut and Consolidated Output tabs**, at the trailing end of
+  each toolbar row after Save, opens Help at that tab's how-to. One construction (`TabHelpButton`)
+  serves all four. The Schematic tab carries none — its help is the Getting Started material one
+  sidebar tap away. Seven entry points in all; the top-level ones stay.
+- Pure logic in `ui/screen/HelpSearch.kt` (`HelpSearchTest`); contract in `Navigation.md`.
+
+### fix(a11y): labelled back buttons and spoken sheet summaries
+
+Four icon-only back buttons (About, Achievements, Developer Options, Settings) announced
+nothing to a screen reader; every other icon-only button already did. They now say "Back".
+
+Each of the five white-sheet canvases (undercut overview and detail, wear overview and detail,
+runout preview) was a silent surface to TalkBack. Each now carries a spoken summary from the pure
+`ui/screen/SheetSemantics.kt` — **counts only** (undercut sections, wear areas, pits, diameter
+readings, stations, readings entered), never a diameter or a length — plus the tab's real
+accessible editing path, since a canvas's placement gesture is not one. `SheetSemanticsTest`
+pins the wording.
+
+Rulings recorded in `docs/contracts/Appearance.md` §Accessibility, closing the audit plan: sheet
+text is drawing ink and does not follow the system font scale (UI chrome must); carousel cards
+are not merged into one node (that would fold their fields together); canvas touch targets are
+not widened; no reduced-motion handling. The 200% font-scale and TalkBack walks are on-device
+items in `TODO.md`.
+
+### docs: settings customization plan closed
+
+`docs/SettingsCustomization_PLAN.md` moves to `docs/archive/` with a rulings table for every
+proposal it still carried: line-art print **yes**, Help search and deep links **yes**, the
+accessibility slice **yes, scoped**; sheet colour customization deferred and not queued; the
+custom RGB picker, Material You, per-document line thickness, touch-target widening,
+reduced-motion handling, Help images / "What's new" / localization all **no**, each with its
+reason.
+
 ## 2026-09-14
 
 ### feat(ui): taper calculator — Calculate button, answers in the fields

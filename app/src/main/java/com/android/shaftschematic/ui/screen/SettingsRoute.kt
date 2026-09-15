@@ -147,6 +147,7 @@ fun SettingsRoute(
     val pdfShadedBodies by vm.pdfShadedBodies.collectAsState()
     val pdfShadedTapers by vm.pdfShadedTapers.collectAsState()
     val pdfShadedLiners by vm.pdfShadedLiners.collectAsState()
+    val pdfUndercutLineArt by vm.pdfUndercutLineArt.collectAsState()
     val pdfShadeExplicitBodiesOnly by vm.pdfShadeExplicitBodiesOnly.collectAsState()
     val pdfExportMode by vm.pdfExportMode.collectAsState()
     val lineThicknessScale by vm.lineThicknessScale.collectAsState()
@@ -213,7 +214,7 @@ fun SettingsRoute(
                             }
                         }
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 }
             )
@@ -908,6 +909,27 @@ fun SettingsRoute(
                         Checkbox(checked = pdfShadedLiners, onCheckedChange = { vm.setPdfShadedLiners(it) })
                         Spacer(Modifier.width(8.dp))
                         Text("Liners")
+                    }
+                    // Trails the kind checkboxes: it governs one document, and it is reached for
+                    // after looking at a printed sheet rather than while setting the shade up.
+                    // Independent of the screen-side Undercut Drawing style, which never reaches
+                    // a composer — two flags, one meaning, two surfaces.
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = pdfUndercutLineArt,
+                            onCheckedChange = { vm.setPdfUndercutLineArt(it) },
+                            modifier = Modifier.testTag("pdf_undercut_line_art"),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Column {
+                            Text("Undercut drawing: line art (no shading)")
+                            Text(
+                                "The printed undercut sheet drops every fill; the cut sections " +
+                                    "read from their faces and floor lines.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
 
                     HorizontalDivider()
