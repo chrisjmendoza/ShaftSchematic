@@ -4,7 +4,7 @@ ShaftViewModel Contract
 Layer: UI → ViewModel  
 Purpose: Owns editable ShaftSpec state, unit selection, grid toggle, and routes all commits from the UI to the model/persistence.
 
-Version: v1.0 (2026-08-29)
+Version: v1.2 (2026-09-15)
 
 Invariants
 - All stored geometry is **canonical millimeters (mm)**.  
@@ -78,9 +78,11 @@ Responsibilities
 - Own **session-scoped undo/redo** — a single `SessionHistory<EditState>`
   (`ui/viewmodel/SessionHistory.kt`) recording every drawing-editor edit, not just
   deletes:
-  - `EditState` (`ui/viewmodel/EditState.kt`) is the undoable slice: `spec`,
+  - `EditState` (`ui/viewmodel/EditState.kt`) is the undoable slice: `spec`, `finalSpec`,
     `wearRecord`, `runoutReadings`, `runoutStationPlacements`, `stationCountOverrides`,
-    `undercutRecord`. Metadata
+    `undercutRecord`. `finalSpec` is held **whole**, so starting / resetting / discarding the
+    final drawing undoes like any other drawing edit, and an edit on the final undoes without
+    disturbing the original. Metadata
     (customer/vessel/job number/notes/shaft position/unit) is deliberately **not**
     undoable, and neither is carousel row order — rows are derived from the spec
     (resolved components in physical order), so restoring the spec restores them.
@@ -93,7 +95,7 @@ Responsibilities
     history cannot flood. `applyEditState` restores only the override slice via
     `_runoutConfig.update { it.copy(componentOverrides = …) }`, never the whole config.
   - A central collector (`combine(spec, wearRecord, runoutReadings, undercutRecord,
-    runoutStationPlacements, runoutConfig)` in `init`) records an
+    runoutStationPlacements, runoutConfig, finalSpec)` in `init`) records an
     `EditState` on every emission via
     `editHistory.record(edit, System.currentTimeMillis())`. `SessionHistory` owns the
     policy: edits within 600 ms of the previous record coalesce into one undo step (a
@@ -113,14 +115,63 @@ Responsibilities
     `deleteHistory`/`redoHistory`, `isRedoing`, `canUndoDeletes`/`canRedoDeletes`,
     `undoLastDelete()`/`redoLastDelete()`, and `clearDeleteHistory()` are all removed;
     the delete snackbar's "Undo" action now calls `undoEdit()` (see `ShaftRoute.kt`).
-    `removeX()` methods are unchanged in effect (body-merge behavior preserved) but no
-    longer push their own per-delete history — recovery goes through the general
-    session history like any other edit.
+    The removers (`removeBody` / `removeTaper` / `removeThread` / `removeLiner` /
+    `removeCouplerBoltSlot`, `ui/viewmodel/ShaftViewModelComponents.kt`) are unchanged in
+    effect (body-merge behavior preserved) but push no per-delete history of their own —
+    recovery goes through the general session history like any other edit.
+
+Two specs, one editor
+- A document has **two** geometries: `spec` (the original schematic — what came in) and the
+  **final drawing** — what the shaft leaves as. Full contract:
+  `docs/contracts/FinalSchematic.md`; this section is only the ViewModel's share of it.
+- `_finalSpec: MutableStateFlow<ShaftSpec?>` / `finalSpec: StateFlow<ShaftSpec?>` — a whole
+  second `ShaftSpec`, not a view of the first. `null` = this document has no final drawing,
+  which is every document until `startFinalSpec()` copies one (component ids included).
+  Lifecycle in `ui/viewmodel/ShaftViewModelFinal.kt`: `startFinalSpec()` (no-op if one
+  exists), `resetFinalSpec()`, `discardFinalSpec()`.
+- `SpecTarget { ORIGINAL, FINAL }` (`ui/viewmodel/SpecTarget.kt`) is the **LAST parameter of
+  every geometry mutator** (`ui/viewmodel/ShaftViewModelComponents.kt`, plus the OAL and
+  auto-section setters), defaulted to `ORIGINAL` so every existing call site is unchanged. It
+  is an explicit parameter, never hidden "current target" state — a mode flag would put the
+  wrong drawing one tab-switch away from every edit.
+- `updateSpec(target) { … }` / `specValue(target)` are the **ONE seam** every mutator reads and
+  writes through, so an edit can only reach the geometry its caller named. A `FINAL` write
+  while `_finalSpec` is `null` is a **no-op** (the editor for it is unreachable then, and
+  conjuring a final drawing out of a stray callback would be worse); a `FINAL` read then
+  yields a blank spec. `selectAdded(id, target)` follows the same rule — a FINAL add that
+  wrote nothing must select nothing.
+- `finalResolvedComponents: StateFlow<List<ResolvedComponent>>` — derived from `finalSpec` by
+  the same `resolveComponents` the original uses, empty while there is no final, so every
+  presentational surface works over either without knowing which.
+- The **unit-override setters are deliberately targetless**: overrides key by component id, and
+  the two geometries share their ids by construction.
+- Session flags (StateFlows, deliberately **not persisted** and **not reset at a document
+  boundary**):
+  - `pdfBlankDraft` — blank-draft (write-in) export/print. A forgotten sticky toggle would
+    silently blank every future export, so it defaults off each session.
+    `pdfBlankDiaCallouts` rides the same posture so the two always reset together.
+  - `finalRunoutBubbles` — whether the FINAL drawing's schematic sheet carries runout
+    stations. OFF by default, the `pdfBlankDraft` posture: the final drawing is primarily the
+    welding and machining copy the shop updates liner placements on, and bubbles belong to the
+    pre-ship measurement pass. Read only when the target is FINAL; the original schematic's
+    bubbles live on the Runout and Consolidated Output tabs as before.
+- `pdfFractionStyle` and `pdfOutputFont` are a pair: both mirror a persisted `PdfPrefs` value
+  that reaches the draw sites through a process-wide `active` mirror
+  (`FractionTypography.active`, `OutputTypography.active`), which is not snapshot state. Their
+  only jobs here are showing the current selection and serving as each preview's
+  **re-render key** — a tab whose render-inputs record omits one keeps drawing the old style
+  or the old typeface.
 
 Add APIs
-- `addLinerAt(startMm, lengthMm, odMm, reference: LinerAuthoredReference = AFT)` — the `reference` parameter records which end the user measured from; stored on `Liner.authoredReference` for the carousel edit card to display correctly. The default is `AFT` for the quick-add path which does not ask for a reference.
-- `addTaperAt(startMm, lengthMm, startDiaMm, endDiaMm, rateText, reference: LinerAuthoredReference = AFT, keyway…)` — `startDiaMm`/`endDiaMm` arrive **x-ordered AFT → FWD** (the Add dialog orders the typed S.E.T./L.E.T. by the taper's physical half, `ui/input/TaperSetLetMapping.kt`); `reference` records the measured-from end and is stored on `Taper.authoredReference` so the carousel card reopens in that frame. Which end is the Small End — used to derive a missing diameter from the rate and to seed the next dialog's SET/LET defaults — comes from `taperSmallEndAtStart` against `spec.overallLengthMm`, the shaft's authored OAL (nothing grows it around an overhanging taper; a 0 OAL has no frame and classifies AFT).
-- `addCouplerBoltSlotAt(startMm, holeDiaMm, count, spacingMm, through = true, depthMm = 0f, reference: SlotAuthoredReference = FWD)` — adds a coupler bolt-slot row. Slots never drive OAL; no body split. Paired with `updateCouplerBoltSlot(index, …)`, `updateCouplerBoltSlotReference/Label/ShowRail`, and `removeCouplerBoltSlot(id)` (recoverable via the general `undoEdit()` session history; no body merge). See `CouplerBoltSlot.md`.
+
+Every `add*At` ends with `target: SpecTarget = SpecTarget.ORIGINAL` (see *Two specs, one
+editor* above); the listings below name the values ahead of it.
+
+- `addLinerAt(startMm, lengthMm, odMm, reference: LinerAuthoredReference = AFT, shoulder…, target)` — the `reference` parameter records which end the user measured from; stored on `Liner.authoredReference` for the carousel edit card to display correctly. The default is `AFT` for the quick-add path which does not ask for a reference. The six shoulder params (per end: length, reduced Ø, edge radius) ride the add under add-dialog parity; all-zero = no shoulder.
+- `addTaperAt(startMm, lengthMm, startDiaMm, endDiaMm, rateText, reference: LinerAuthoredReference = AFT, keyway…, target)` — `startDiaMm`/`endDiaMm` arrive **x-ordered AFT → FWD** (the Add dialog orders the typed S.E.T./L.E.T. by the taper's physical half, `ui/input/TaperSetLetMapping.kt`); `reference` records the measured-from end and is stored on `Taper.authoredReference` so the carousel card reopens in that frame. Which end is the Small End — used to derive a missing diameter from the rate and to seed the next dialog's SET/LET defaults — comes from `taperSmallEndAtStart` against `spec.overallLengthMm`, the shaft's authored OAL (nothing grows it around an overhanging taper; a 0 OAL has no frame and classifies AFT).
+- `addBodyAt(startMm, lengthMm, diaMm, keyway…, blend…, target)` — see `updateBodyBlend` above for the blend params; `docs/contracts/Defaults.md` carries the full parameter order.
+- `addThreadAt(startMm, lengthMm, majorDiaMm, pitchMm, excludeFromOAL = false, isAftEnd = true, metricDesignation = null, target)` — major Ø third, pitch fourth; swapping them yields nonsense TPI.
+- `addCouplerBoltSlotAt(startMm, holeDiaMm, count, spacingMm, through = true, depthMm = 0f, reference: SlotAuthoredReference = FWD, target)` — adds a coupler bolt-slot row. Slots never drive OAL; no body split. Paired with `updateCouplerBoltSlot(index, …, target)`, `updateCouplerBoltSlotReference/ShowRail(index, …, target)`, and `removeCouplerBoltSlot(id, target)` (recoverable via the general `undoEdit()` session history; no body merge). See `CouplerBoltSlot.md`.
 
 Do Nots
 - Do not format values for display (UI edge only).  
@@ -138,6 +189,25 @@ Future Enhancements
 
 Change Log
 ----------
+**v1.2 (2026-09-15)**
+- Stale-identifier sweep, doc-only. The placeholder `removeX()` is replaced by the real remover
+  names; the v0.4 entry's parenthetical no longer points at `ui/viewmodel/SnapUtils.kt` (deleted
+  with tap-to-add) — nothing in the ViewModel snaps a position today, and the surviving
+  `ShaftSpec.snapForwardFrom` is named with its real home, `model/ShaftSpecExtensions.kt`. Every
+  other dead name in this file (`LastDeleted`, `deleteHistory`, `_savedSpec` and siblings,
+  `_hasDraft`, `overallIsManual`, `ensureOverall`, `componentOrder`, `_autoSnap`) sits in a
+  change-log or "was removed" passage and stays as written.
+
+**v1.1 (2026-09-15)**
+- **The final drawing.** New *Two specs, one editor* section: `_finalSpec`/`finalSpec`,
+  `SpecTarget { ORIGINAL, FINAL }` as the LAST parameter of every geometry mutator (default
+  `ORIGINAL`), `updateSpec(target)`/`specValue(target)` as the ONE seam (a FINAL write while
+  `null` is a no-op), `selectAdded(id, target)`, `finalResolvedComponents`, and the
+  session-only `finalRunoutBubbles` / `pdfBlankDraft` flags plus the `pdfOutputFont` /
+  `pdfFractionStyle` re-render-key pair. `EditState` and the undo combine now list
+  `finalSpec`, and the Add APIs show their trailing `target`. Full contract:
+  `docs/contracts/FinalSchematic.md`; envelope + autosave side in `Persistence.md`.
+
 **v1.0 (2026-08-29)**
 - **Auto OAL mode removed** (on-device direction). `_overallIsManual` / `overallIsManual` /
   `setOverallIsManual` are gone from the ViewModel, from `EditState`, and from
@@ -201,7 +271,7 @@ Change Log
 
 **v0.4 (2026-06-19)**
 - `updateBody()`, `updateTaper()`, `updateLiner()`, `updateThread()` — removed `snapForwardFrom()` cascade. Editing a component now mutates only that component; other components' positions are completely untouched.
-- Removed `_autoSnap` StateFlow, `autoSnap` property, and `setAutoSnap()`. (The explicit `snapChainFrom()` / `snapChainFromId()` entry points that briefly replaced auto-snap were themselves later removed unused — snapping lives only in coarse gestures, `ui/viewmodel/SnapUtils.kt`; the model-layer `ShaftSpec.snapForwardFrom` extension remains, exercised by tests.)
+- Removed `_autoSnap` StateFlow, `autoSnap` property, and `setAutoSnap()`. (The explicit `snapChainFrom()` / `snapChainFromId()` entry points that briefly replaced auto-snap were themselves later removed unused. Nothing snaps a position today: the tap-to-add gesture and its whole snap pipeline went with it, so no ViewModel path snaps anything — see `docs/UI_CONTRACT.md` §3.1.1 and `CLAUDE.md` §"Golden rule". The model-layer `ShaftSpec.snapForwardFrom` extension survives in `model/ShaftSpecExtensions.kt`, called by nothing but its tests.)
 
 **v0.3 (2026-06-19)**
 - `updateTaperAuthoredReference()` added — persists the user's AFT/FWD carousel reference toggle on `Taper.authoredReference`.

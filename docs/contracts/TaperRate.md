@@ -9,8 +9,9 @@ geometry, and parse/validate user-entered manual taper rate text.
 Version: v1.1 (2026-09-01)  
 Supersedes: `TaperParser.md`, `TaperParserContract.md` — those documented
 `util/TaperParser.kt`, which was deleted 2026-07-11 alongside this file's introduction.
-The two old docs remain on disk (not deleted per doc-repo policy) but describe code that
-no longer exists; do not use them as a reference for taper rate behavior.
+Both old docs have since been removed from the repo as well; this file is the only taper-rate
+contract. The rate grammar now lives entirely in `util/TaperRateAuto.kt`
+(`parseTaperRateText`).
 
 Invariants
 - **Auto-by-default:** a taper's rate is computed automatically from Length + SET + LET

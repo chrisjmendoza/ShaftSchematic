@@ -113,17 +113,18 @@ import kotlinx.coroutines.launch
  * Responsibilities
  * • Header row (unit selector + grid toggle; unit selector disables when locked)
  * • Preview drawing (white square; optional grid; fixed-height band)
- * • Overall length input (ghost “0”; commits on blur/Done; auto when not manual)
+ * • Overall length input (always user-typed; commits on every parseable keystroke —
+ *   see `docs/contracts/OverallLength.md`)
  * • Project fields (commit-on-blur / IME Done)
  * • Component carousel (edit & remove) — rows in physical order along the shaft
- * • Add-component FAB floating above IME & nav bar
+ * • Full-width "+ Add Component" button in the scroll column — the single add entry point
  *
  * Contract / Invariants
  * • Canonical model units are millimeters (mm) — convert only at UI edge.
  * • Carousel rows follow the resolved components' physical order (auto-bodies interleaved at
  *   their spans); there is no separate cross-type order. See `docs/contracts/ComponentsOrdering.md`.
  * • IME safety: imePadding shrinks the scroll viewport (applied before verticalScroll) so
- *   Compose auto-scrolls to keep the focused field in view; FAB uses ime ∪ navigationBars insets.
+ *   Compose auto-scrolls to keep the focused field in view.
  * • No file I/O or routing here.
  */
 @Composable

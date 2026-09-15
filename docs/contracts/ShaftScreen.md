@@ -169,7 +169,8 @@ Notes
   `positiveLengthErrorMm`) through the standard validator path — the field errors, reverts,
   and does not commit, so a zero length stops at the card. See `VALIDATION_RULES.md` §3.1a.  
 - Persistence, serialization, and other business logic live strictly in the ViewModel.  
-- Scaffold uses system-bar insets only; FAB uses `WindowInsets.ime.union(WindowInsets.navigationBars)`.
+- Scaffold uses system-bar insets only; the scroll column takes `imePadding` so the focused
+  field (and the "+ Add Component" button beneath the carousel) stays above the keyboard.
 - `computeAddDefaults()` lives in `ui/screen/ShaftScreenController.kt`. Shared format
   helpers (`abbr`, `disp`, `formatDisplay`, `toMmOrNull`, `parseFractionOrDecimal`,
   `tpiToPitchMm`) and the dialogs/menus remain in `ShaftScreen.kt`.
@@ -209,7 +210,8 @@ Notes
 - **The preview canvas tap is selection only.** A tap on a component highlights it
   (`onTapComponentId`); a tap on bare canvas does nothing. It used to open an add chooser at
   the tapped position, which fired unintentionally far more often than it was wanted and was
-  never used deliberately (on-device report). Components are added from the FAB chooser,
+  never used deliberately (on-device report). Components are added from the "+ Add Component"
+  button's chooser (a full-width `Button` in the scroll column, not a FAB),
   which is the only add entry point (`docs/UI_CONTRACT.md` §3.1.1).
 
 ---
@@ -239,8 +241,8 @@ Change Log
   chooser fired unintentionally and was never used on purpose (on-device report), so the
   gesture, its pending-position state (`setTapAddPosition`/`clearPendingAddPosition`/
   `pendingAddPositionMm`), and the entire snap pipeline it was the sole consumer of
-  (`ui/viewmodel/SnapUtils.kt`, `snapRawPositionMm`, `gapToNextAnchorMm`) are gone. The FAB
-  chooser is now the only add entry point; its handoff state was renamed off the dead gesture
+  (`ui/viewmodel/SnapUtils.kt`, `snapRawPositionMm`, `gapToNextAnchorMm`) are gone. The
+  "+ Add Component" button's chooser is now the only add entry point; its handoff state was renamed off the dead gesture
   (`tapAdd*` → `add*`).
 
 **v0.14 (2026-08-14)**
