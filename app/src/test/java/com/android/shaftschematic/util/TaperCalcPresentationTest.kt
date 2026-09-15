@@ -54,6 +54,44 @@ class TaperCalcPresentationTest {
     }
 
     @Test
+    fun `every pair reds exactly the other two and names them in field order`() {
+        val typed = mapOf(
+            TaperCalcField.LARGE_DIA to "9.875",
+            TaperCalcField.SMALL_DIA to "8.844",
+            TaperCalcField.LENGTH to "16.5",
+            TaperCalcField.RATE to "1:16",
+        )
+        val fields = TaperCalcField.entries
+        for (i in fields.indices) for (j in i + 1 until fields.size) {
+            val a = fields[i]
+            val b = fields[j]
+            val entries = inch.with(a, typed.getValue(a)).with(b, typed.getValue(b))
+            val missing = fields.filter { it != a && it != b }
+            val p = presentTaperCalc(entries, calculated = true)
+            assertEquals("$a + $b typed", missing.toSet(), p.red())
+            assertEquals(
+                "$a + $b typed",
+                "Enter one more value — ${missing[0].shortName} or ${missing[1].shortName}.",
+                p.message,
+            )
+        }
+    }
+
+    @Test
+    fun `S_E_T and length typed red the rate and the large end`() {
+        val p = presentTaperCalc(inch.copy(smallDia = "8.844", length = "16.5"), calculated = true)
+        assertEquals(setOf(TaperCalcField.LARGE_DIA, TaperCalcField.RATE), p.red())
+        assertEquals("Enter one more value — Large end Ø or Taper rate.", p.message)
+    }
+
+    @Test
+    fun `rate and S_E_T typed red the length and the large end`() {
+        val p = presentTaperCalc(inch.copy(smallDia = "8.844", rate = "1:16"), calculated = true)
+        assertEquals(setOf(TaperCalcField.LARGE_DIA, TaperCalcField.LENGTH), p.red())
+        assertEquals("Enter one more value — Large end Ø or Length.", p.message)
+    }
+
+    @Test
     fun `one value calculated asks for any three`() {
         val p = presentTaperCalc(inch.copy(length = "16.5"), calculated = true)
         assertEquals(
