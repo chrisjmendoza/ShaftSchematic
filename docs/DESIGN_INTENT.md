@@ -161,6 +161,17 @@ taper rate) joins it. Calculators are document-free utilities: they never write 
 open document, and their entry point sits with the other utilities, not inside a
 component card.
 
+**Interaction model (ruled on-device for the taper calculator, the pattern for the rest):**
+a calculator answers when asked, not while the question is being typed — a **Calculate**
+button is the one trigger. The answer appears **in the empty field it belongs to**, as an
+italic preview, never as typed text (the golden rule reaches the calculators: a field holds
+what the user typed and nothing else; a ✓ lets the user *keep* the preview as an input by
+explicit act). When too little has been entered, the fields that could complete the solve
+turn red and the message names them. A result is a snapshot of the entries it came from and
+drops the moment any of them changes, so a stale number is never on screen. Typo feedback
+(text that does not read as a number) stays immediate; feedback about the *set* of values
+waits for the button.
+
 ## 4. Wording conventions
 
 - **"Shade in Components"** — the component shading group (renamed from "Shade in PDF").
