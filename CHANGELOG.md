@@ -8,6 +8,29 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-09-14
 
+### feat(ui): taper calculator — Calculate button, answers in the fields
+
+On-device request: the live result at the bottom read as the calculator answering before it was
+asked, and it did not say what was still missing. The calculator is now button-driven.
+
+- **Calculate** is the one trigger (the keyboard's Done key is the same tap). Nothing is derived
+  until it is pressed; before that only unreadable text is flagged, at its field.
+- **The answer appears in its own field** — an italic preview in the empty field, with the label
+  reading "… — calculated". It is a placeholder, never text: the field still holds only what was
+  typed, so typing over it needs no clearing and nothing is ever filled in behind the user's back.
+  A ✓ beside it **keeps** the value as an input, so one answer can feed the next question (find
+  the rate, keep it, clear the length, find the length for a different small end).
+- **Too few values:** the fields that could complete the solve turn red and the message names
+  them — "Enter one more value — Small end Ø or Taper rate."
+- **A result never goes stale.** The calculated state is a snapshot of the entries it came from;
+  any edit or a unit change drops the preview, the red outlines and the message together.
+- The rate field's supporting line carries the "/ft reading (inch entry only) and the common
+  rate it lands on; the bottom results block is gone. All four typed still checks them, quoting
+  the rate the three geometry values give when the typed one disagrees. **Clear** resets the form.
+- The display rules are pure (`util/TaperCalcPresentation.kt`, `TaperCalcPresentationTest`) —
+  the calculator dialogs cannot be hosted under the Robolectric harness, so the rules live where
+  they can be tested.
+
 ### feat(editor): tap the title to name the document; drafts on the Start screen name themselves
 
 The document title strip was a read-only label on all five tabs. It is now the naming
