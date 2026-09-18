@@ -10,10 +10,41 @@ import java.util.UUID
 enum class SlotAuthoredReference { AFT, FWD }
 
 /**
- * Muff-coupler bolt slot(s): one axial **row** of radial bolt cutouts carved into the shaft
- * at a coupler location. The physical hole sits on the shaft's outer surface — half in the
- * shaft, half in the coupling sleeve — so on the side-view schematic each cutout renders as a
- * circle straddling the shaft outline.
+ * What kind of hole a coupler bolt row is — a DRAWING distinction only. Position, hole Ø,
+ * count, spacing, bounds and the reference-only posture are identical for both.
+ *
+ * - [SEAM]: the muff-coupler cutout — a radial hole on the shaft's outer surface, half in the
+ *   shaft and half in the coupling sleeve. Drawn as a circle straddling the outline, top and
+ *   bottom.
+ * - [CROSS]: a cross-drilled bolt hole straight through the shaft on a diameter — the plain
+ *   coupling end with no taper, just a bolt hole located from the end of the shaft to the
+ *   hole's center (on-device request). Drawn as ONE circle on the shaft centerline, the hole
+ *   as it is seen on the near surface in plan view.
+ */
+enum class BoltHoleStyle { SEAM, CROSS }
+
+/**
+ * Where a cross-drilled hole sits around the shaft relative to the keyway — read ONLY for
+ * [BoltHoleStyle.CROSS]; a seam cutout is on the surface by definition. Drawing + footer
+ * text only, no geometric effect (the keyway-clocking-note posture).
+ *
+ * - [DEG_90]: the hole is 90° from the keyway — the default, because a coupling bolt in line
+ *   with the keyway would pass through the key; this is the configuration reported from the
+ *   floor. The keyway draws face-on, so the hole's axis lies in the page and the bore shows as
+ *   HIDDEN (dashed) lines across the shaft, one hole width apart.
+ * - [IN_LINE]: the hole is on the keyway's own side (or opposite it); its axis faces the
+ *   viewer and it draws as ONE circle on the centerline.
+ */
+enum class BoltHoleClocking { IN_LINE, DEG_90 }
+
+/**
+ * Coupler bolt slot(s): one axial **row** of radial bolt holes at a coupler location. A
+ * [BoltHoleStyle.SEAM] row is the muff-coupler cutout — the physical hole sits on the shaft's
+ * outer surface, half in the shaft, half in the coupling sleeve — so on the side-view
+ * schematic each cutout renders as a circle straddling the shaft outline. A
+ * [BoltHoleStyle.CROSS] row is cross-drilled through the shaft and renders either as one
+ * circle on the centerline or, when [clocking] puts it 90° from the keyway, as a hidden bore.
+ * The style changes the drawing only; every other rule below holds for both.
  *
  * Units: **mm** (millimeters). Geometry is measured AFT → FWD.
  *
@@ -30,6 +61,10 @@ enum class SlotAuthoredReference { AFT, FWD }
  * @property through True = through-hole; false = blind (see [depthMm]).
  * @property depthMm Blind depth; ignored when [through] is true.
  * @property authoredReference AFT or FWD reference used for authoring display (defaults FWD).
+ * @property holeStyle [BoltHoleStyle.SEAM] (default — every row saved before the style
+ *   existed is a seam cutout) or [BoltHoleStyle.CROSS]. Draw-only; see the enum.
+ * @property clocking Angular position of a CROSS hole relative to the keyway (default 90°);
+ *   ignored for SEAM. Draw + footer text only; see [BoltHoleClocking].
  * @property showDimensionRail Opt-in per-card dimension rail (deferred; off by default).
  * @property label Optional user-defined label (not used for geometry).
  */
@@ -44,6 +79,8 @@ data class CouplerBoltSlot(
     val through: Boolean = true,
     val depthMm: Float = 0f,
     val authoredReference: SlotAuthoredReference = SlotAuthoredReference.FWD,
+    val holeStyle: BoltHoleStyle = BoltHoleStyle.SEAM,
+    val clocking: BoltHoleClocking = BoltHoleClocking.DEG_90,
     @JsonNames("showDimensionRail", "showRail")
     val showDimensionRail: Boolean = false,
     val label: String? = null,
@@ -59,6 +96,22 @@ data class CouplerBoltSlot(
 
     /** Center position (from AFT) of cutout [i] (0-based). */
     fun centerMmAt(i: Int): Float = startFromAftMm + i.coerceAtLeast(0) * spacingMm
+
+    /** True when this row draws as a cross-drilled hole whose bore is hidden behind the surface. */
+    val isHiddenCrossBore: Boolean
+        get() = holeStyle == BoltHoleStyle.CROSS && clocking == BoltHoleClocking.DEG_90
+
+    /**
+     * The distance the row was AUTHORED with: from the [authoredReference] face to the nearest
+     * hole center — the fwd-most center measured from the FWD face, or the aft-most from AFT.
+     * The value the card shows and the footer prints; the stored [startFromAftMm] never moves.
+     */
+    fun authoredCenterMm(overallLengthMm: Float): Float =
+        if (authoredReference == SlotAuthoredReference.FWD) {
+            overallLengthMm - centerMmAt(count - 1)
+        } else {
+            startFromAftMm
+        }
 }
 
 /** Basic invariants: non-negative fields, at least one cutout, all centers within the shaft. */

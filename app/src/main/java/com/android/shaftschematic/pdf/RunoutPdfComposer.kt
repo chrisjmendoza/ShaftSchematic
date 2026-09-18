@@ -732,8 +732,9 @@ fun composeRunoutPdf(
     // ── Coupling end view (bottom-right of the bottom lane) ───────────────────
     // Drawn after the profile, marks, bubbles, and the TIR line: it owns its own reserved
     // block, so nothing above it moves and the in-profile "marks first, text last" order
-    // is untouched. The bolt count is the coupling bolt slot's — no slots authored means
-    // the plain two-circle face the hand sketch shows at minimum.
+    // is untouched. The bolt count is the coupling bolt slot's — the first SEAM row, since a
+    // cross-drilled hole is a bolt through the shaft, not a flange bolt on the face — and no
+    // seam row authored means the plain two-circle face the hand sketch shows at minimum.
     if (drawFace) {
         drawCouplingFace(
             c = c,
@@ -741,7 +742,7 @@ fun composeRunoutPdf(
             cy = footerTop - COUPLING_FACE_BOTTOM_PAD_PT - COUPLING_FACE_CAPTION_LANE_PT -
                 COUPLING_FACE_OUTER_R_PT,
             outerR = COUPLING_FACE_OUTER_R_PT,
-            boltCount = spec.couplerBoltSlots.firstOrNull()?.count ?: 0,
+            boltCount = spec.couplerBoltSlots.firstOrNull { it.holeStyle == BoltHoleStyle.SEAM }?.count ?: 0,
             outline = outline,
             dim = dim,
             text = text,

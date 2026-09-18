@@ -222,8 +222,10 @@ Auto taper-rate rules (both surfaces — dialog and carousel card):
 ### AddCouplerBoltSlotDialog
 | Field / control | Condition |
 |-----------------|-----------|
+| Hole: Seam \| Cross-drilled chips | Always (default Seam) — draw-only style, but chosen at add time |
+| From keyway: 90° \| In line chips | Only when Cross-drilled (default 90°) — clocking, draw + footer text only |
 | Measure From: AFT \| FWD chips | Always (default FWD) |
-| First slot from AFT / FWD | Always (label follows chip) |
+| First slot / Hole center from AFT / FWD | Always (label follows both chip rows via `slotStartFieldLabel`) |
 | Hole Ø | Always |
 | Count | Always |
 | Spacing | Only when `count > 1` |

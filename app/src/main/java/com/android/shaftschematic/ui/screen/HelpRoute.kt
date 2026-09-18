@@ -350,13 +350,24 @@ private val helpSections: List<HelpSection> = listOf(
                     "picks which end it hangs off."
             ),
             HelpTopic(
-                "Coupler bolt slots",
-                "A coupler bolt slot is a row of radial cutouts drawn on the shaft. Add one " +
-                    "from the add chooser, then set Measure From (AFT or FWD), the distance to " +
-                    "the first slot, hole Ø, and how many; Spacing appears once the count is " +
-                    "more than one. Through hole is on by default — switch it off and a Depth " +
+                "Coupler bolt slots and holes",
+                "A coupler bolt slot is a row of radial holes drawn on the shaft. Add one " +
+                    "from the add chooser (\"Coupler Bolt Slot / Hole\"), pick the hole kind, " +
+                    "then set Measure From (AFT or FWD), the distance to the nearest hole " +
+                    "center, hole Ø, and how many; Spacing appears once the count is more " +
+                    "than one. Through hole is on by default — switch it off and a Depth " +
                     "field appears for a blind hole. The Add dialog warns if the row would run " +
                     "off either end of the shaft.\n\n" +
+                    "• \"Seam\" — the muff-coupler cutout, half in the shaft and half in the " +
+                    "coupling sleeve; drawn as a circle straddling the outline, top and " +
+                    "bottom.\n" +
+                    "• \"Cross-drilled\" — a bolt hole straight through the shaft, the plain " +
+                    "coupling end with no taper. Enter the hole Ø and the distance from the " +
+                    "end of the shaft to the hole center, and say where it sits against the " +
+                    "keyway: \"90°\" (the usual case — drawn as a hidden, dashed bore across " +
+                    "the shaft, since the keyway faces you) or \"In line\" (drawn as one " +
+                    "circle on the centerline). The footer prints the Ø, the center distance " +
+                    "and the clocking.\n\n" +
                     "Slots are reference features: they are drawn, but they never change the " +
                     "overall length, never split a body, and never collide with anything else. " +
                     "Their card carries a \"show dimension rail\" toggle if you want the row " +

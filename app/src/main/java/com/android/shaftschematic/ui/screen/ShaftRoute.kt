@@ -51,6 +51,8 @@ import com.android.shaftschematic.ui.viewmodel.updateBodyShowLabel
 import com.android.shaftschematic.ui.viewmodel.updateCouplerBoltSlot
 import com.android.shaftschematic.ui.viewmodel.updateCouplerBoltSlotReference
 import com.android.shaftschematic.ui.viewmodel.updateCouplerBoltSlotShowRail
+import com.android.shaftschematic.ui.viewmodel.updateCouplerBoltSlotClocking
+import com.android.shaftschematic.ui.viewmodel.updateCouplerBoltSlotStyle
 import com.android.shaftschematic.ui.viewmodel.updateLiner
 import com.android.shaftschematic.ui.viewmodel.updateLinerAuthoredReference
 import com.android.shaftschematic.ui.viewmodel.updateLinerLabel
@@ -340,7 +342,7 @@ fun ShaftRoute(
             shoulderFwdRadiusMm = shoulders.fwd?.radiusMm ?: 0f,
             target = target,
         ) },
-        onAddCouplerBoltSlot = { s, dia, cnt, sp, thru, dep, ref -> vm.addCouplerBoltSlotAt(s, dia, cnt, sp, thru, dep, ref, target) },
+        onAddCouplerBoltSlot = { s, dia, cnt, sp, thru, dep, ref, style, clocking -> vm.addCouplerBoltSlotAt(s, dia, cnt, sp, thru, dep, ref, style, clocking, target) },
 
         onUpdateBody   = { i, s, l, d      -> vm.updateBody(i, s, l, d, target) },
         onUpdateBodyShowDia = { i, show    -> vm.updateBodyShowDia(i, show, target) },
@@ -370,6 +372,8 @@ fun ShaftRoute(
         onUpdateLinerReference = { i, ref  -> vm.updateLinerAuthoredReference(i, ref, target) },
         onUpdateCouplerBoltSlot = { i, s, dia, cnt, sp, thru, dep -> vm.updateCouplerBoltSlot(i, s, dia, cnt, sp, thru, dep, target) },
         onUpdateCouplerBoltSlotReference = { i, ref -> vm.updateCouplerBoltSlotReference(i, ref, target) },
+        onUpdateCouplerBoltSlotStyle = { i, style -> vm.updateCouplerBoltSlotStyle(i, style, target) },
+        onUpdateCouplerBoltSlotClocking = { i, clocking -> vm.updateCouplerBoltSlotClocking(i, clocking, target) },
         onUpdateCouplerBoltSlotShowRail = { i, show -> vm.updateCouplerBoltSlotShowRail(i, show, target) },
 
         onSetKeyways180Apart = { on -> vm.setKeyways180Apart(on, target) },

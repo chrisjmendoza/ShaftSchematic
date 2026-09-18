@@ -53,9 +53,12 @@ Specifically:
   never fills on its own.
 - **Taper AFT/FWD reference**: `AddTaperDialog` must show AFT/FWD direction chips.
 - **Coupler bolt slot**: `AddCouplerBoltSlotDialog` and the `ResolvedCouplerBoltSlot`
-  carousel card must both expose Measure From (AFT | FWD), hole Ø, count, spacing (only
-  when count > 1), through/blind toggle + depth (only when blind). The card additionally
-  has the deferred "show dimension rail" toggle.
+  carousel card must both expose Hole (Seam | Cross-drilled — `BoltHoleStyle`, chosen at
+  add time because it decides what the row draws as), From keyway (90° | In line —
+  `BoltHoleClocking`, only while Cross-drilled), Measure From (AFT | FWD), hole Ø,
+  count, spacing (only when count > 1), through/blind toggle + depth (only when blind). The
+  position field's label comes from ONE helper (`slotStartFieldLabel`) on both surfaces.
+  The card additionally has the deferred "show dimension rail" toggle.
 
 **Carve-out — post-hoc display toggles are card-only.** A control that only exists to change
 how an *already-drawn* component prints, has a stable default, and is reached for after
@@ -100,7 +103,18 @@ but they **never** affect overall length (`coverageEndMm` ignores them), **never
 bodies, and **never** collide with other components (`collisionGroup() → null`). Do not
 add them to `coverageEndMm`, body-split/merge, or overlap validation.
 They are resolved as `ResolvedCouplerBoltSlot` *after* body resolution so they stay out
-of auto-body/subtraction geometry. See `docs/contracts/CouplerBoltSlot.md`.
+of auto-body/subtraction geometry. A row's `holeStyle` is **draw-only**: SEAM (default —
+every row saved before the field existed) is the muff-coupler cutout, a circle straddling
+the outline top and bottom; CROSS is the cross-drilled coupling-end bolt hole, ONE circle on
+the centerline, located from the end of the shaft to the hole center. Same entry, same
+bounds, same posture; both draw sites (`ShaftRenderer` overlay, `drawCouplerBoltSlots`)
+branch on it identically. A CROSS hole also carries `clocking` — **DEG_90 from the keyway
+(default: a bolt in line with the keyway would pass through the key)** draws the bore HIDDEN
+(dashed walls one hole width apart, entering from the top silhouette, via the ONE pure
+`crossBoreLines` in `geom/BoltHoleMath.kt`), IN_LINE draws the circle. CROSS rows print
+footer lines (Ø, "Hole center from FWD/AFT", and the clocking note ONLY when the shaft has a
+keyway); SEAM rows print nothing, as before. The coupling end view counts bolts from the
+first SEAM row only. See `docs/contracts/CouplerBoltSlot.md`.
 
 ### Wear pits are reference features
 Wear pits (`WearRecord.pits` — a `WearPit` "X" marker per pit/dye-failure, small or large) are

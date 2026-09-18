@@ -7,6 +7,9 @@ import android.graphics.*
 import android.graphics.pdf.PdfDocument
 import com.android.shaftschematic.geom.DimensionRailLayout
 import com.android.shaftschematic.geom.END_EPS_MM
+import com.android.shaftschematic.geom.crossBoreLines
+import com.android.shaftschematic.ui.drawing.render.HIDDEN_DASH_OFF
+import com.android.shaftschematic.ui.drawing.render.HIDDEN_DASH_ON
 import com.android.shaftschematic.geom.PROFILE_TAPER_MIN_FRAC_OF_TRUE
 import com.android.shaftschematic.geom.SCHEMATIC_MIN_BODY_RUN_PT
 import com.android.shaftschematic.geom.SCHEMATIC_MIN_LINER_PT
@@ -914,9 +917,12 @@ internal fun drawThreads(
 }
 
 /**
- * Draw coupler bolt-slot cutouts on the shaft profile. Each cutout is a circle straddling the
- * shaft outline (half in the shaft, half in the coupling), mirrored top and bottom. Reference
- * feature — no dimension rail in v1.
+ * Draw coupler bolt-slot cutouts on the shaft profile. A seam cutout is a circle straddling
+ * the shaft outline (half in the shaft, half in the coupling), mirrored top and bottom; a
+ * cross-drilled hole ([BoltHoleStyle.CROSS]) is ONE circle on the centerline, the hole as
+ * seen on the near surface — or, clocked 90° from the keyway, a HIDDEN bore: dashed walls
+ * from the shared `crossBoreLines`. Must stay identical to the preview's overlay pass in
+ * `ShaftRenderer`. Reference feature — no dimension rail in v1.
  */
 internal fun drawCouplerBoltSlots(
     c: Canvas,
@@ -958,14 +964,34 @@ internal fun drawCouplerBoltSlots(
         return rPx(maxDia)
     }
 
+    val hiddenStroke by lazy {
+        Paint(outline).apply {
+            pathEffect = android.graphics.DashPathEffect(floatArrayOf(HIDDEN_DASH_ON, HIDDEN_DASH_OFF), 0f)
+        }
+    }
+
     slots.forEach { slot ->
         val holeR = rPx(slot.holeDiaMm)
         if (holeR <= 0f || slot.count < 1) return@forEach
         for (i in 0 until slot.count) {
             val cxMm = slot.startFromAftMm + i * slot.spacingMm
             val cx = xAt(cxMm)
-            val rSurface = surfaceRadiusPx(cxMm)
-            floatArrayOf(cy - rSurface, cy + rSurface).forEach { surfY ->
+            if (slot.isHiddenCrossBore) {
+                val bore = crossBoreLines(
+                    cx, holeR, cy, surfaceRadiusPx(cxMm), slot.through, rPx(slot.depthMm * 2f),
+                ) ?: continue
+                c.drawLine(bore.x1, bore.yTop, bore.x1, bore.yBottom, hiddenStroke)
+                c.drawLine(bore.x2, bore.yTop, bore.x2, bore.yBottom, hiddenStroke)
+                if (bore.floor) c.drawLine(bore.x1, bore.yBottom, bore.x2, bore.yBottom, hiddenStroke)
+                continue
+            }
+            val centersY = if (slot.holeStyle == BoltHoleStyle.CROSS) {
+                floatArrayOf(cy)
+            } else {
+                val rSurface = surfaceRadiusPx(cxMm)
+                floatArrayOf(cy - rSurface, cy + rSurface)
+            }
+            centersY.forEach { surfY ->
                 if (fill != null) c.drawCircle(cx, surfY, holeR, fill)
                 c.drawCircle(cx, surfY, holeR, outline)
             }

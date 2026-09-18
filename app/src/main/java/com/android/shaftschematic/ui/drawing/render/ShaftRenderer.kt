@@ -32,6 +32,8 @@ import com.android.shaftschematic.model.secondaryKeywayHostIds
 import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.ResolvedComponentType
+import com.android.shaftschematic.geom.crossBoreLines
+import com.android.shaftschematic.model.BoltHoleStyle
 import com.android.shaftschematic.ui.resolved.ResolvedCouplerBoltSlot
 import com.android.shaftschematic.ui.resolved.maxDiaMm
 import com.android.shaftschematic.ui.resolved.ResolvedLiner
@@ -548,9 +550,32 @@ object ShaftRenderer {
                 for (i in 0 until slot.count) {
                     val cxMm = slot.startFromAftMm + i * slot.spacingMm
                     val cx = L.xPx(cxMm)
-                    val rSurface = surfaceRadiusPx(cxMm)
-                    // One cutout on the top surface, mirrored on the bottom surface.
-                    for (surfY in floatArrayOf(cy - rSurface, cy + rSurface)) {
+                    // Cross-drilled, 90° from the keyway: the bore is hidden behind the surface —
+                    // dashed walls one hole width apart (and a dashed floor when blind), from the
+                    // shared crossBoreLines. Same construction as the PDF's drawCouplerBoltSlots.
+                    if (slot.isHiddenCrossBore) {
+                        val bore = crossBoreLines(
+                            cx, holeR, cy, surfaceRadiusPx(cxMm), slot.through, L.rPx(slot.depthMm * 2f),
+                        ) ?: continue
+                        val dash = PathEffect.dashPathEffect(floatArrayOf(HIDDEN_DASH_ON, HIDDEN_DASH_OFF), 0f)
+                        val boreColor = if (highlighted) hiGlowCol.copy(alpha = hiGlowA) else outline
+                        drawLine(boreColor, Offset(bore.x1, bore.yTop), Offset(bore.x1, bore.yBottom), strokeWidth = outlineW, pathEffect = dash)
+                        drawLine(boreColor, Offset(bore.x2, bore.yTop), Offset(bore.x2, bore.yBottom), strokeWidth = outlineW, pathEffect = dash)
+                        if (bore.floor) {
+                            drawLine(boreColor, Offset(bore.x1, bore.yBottom), Offset(bore.x2, bore.yBottom), strokeWidth = outlineW, pathEffect = dash)
+                        }
+                        continue
+                    }
+                    // Seam cutout: one circle on the top surface, mirrored on the bottom.
+                    // Cross-drilled in line with the keyway: ONE circle on the centerline — the
+                    // hole as seen on the near surface.
+                    val centersY = if (slot.holeStyle == BoltHoleStyle.CROSS) {
+                        floatArrayOf(cy)
+                    } else {
+                        val rSurface = surfaceRadiusPx(cxMm)
+                        floatArrayOf(cy - rSurface, cy + rSurface)
+                    }
+                    for (surfY in centersY) {
                         val center = Offset(cx, surfY)
                         drawCircle(color = slotFill, radius = holeR, center = center)
                         if (highlighted) {
