@@ -117,11 +117,11 @@ the half-open interval `[startMm, endMm)` — draws at that `diaMm`.
   section is authored first. The fwd one lies dormant.
 - **Shaft-space keying, no orphans:** auto spans have no stored row and their ids are
   position-derived, so anchors are stored in shaft space (the `Undercut` / `WornSection`
-  posture). An anchor that lands inside a component, or inside a gap absorbed into an
-  explicit-body run, is **dormant** — not applied, never pruned at decode — and resurrects
-  unchanged if its span reappears.
-- **Draw-only:** never affects OAL/coverage, span positioning, body resolution, collision, or
-  the Free-to-End badge. Written by `ShaftSpec.withAutoSectionDia` (upsert; `≤ 0` clears).
+  posture). An anchor that lands inside a component is **dormant** — not applied, never
+  pruned at decode — and resurrects unchanged if its span reappears. (A gap beside an
+  explicit body survives as its own run, so its anchors stay live while the gap exists.)
+- **Draw-only:** never affects OAL/coverage, span positioning, body resolution, or collision.
+  Written by `ShaftSpec.withAutoSectionDia` (upsert; `≤ 0` clears).
 
 #### Body Split / Merge
 
@@ -155,6 +155,9 @@ data class Body(
     val keywaySpooned: Boolean = false,
     val label: String? = null,  // optional user-defined display label; not used for geometry
     val showDiaOnDrawing: Boolean = false,  // below-shaft Ø callout visibility; OPT-IN for bodies
+    val showNameOnDrawing: Boolean? = null, // schematic name-label; tri-state: null follows the global titles switch, explicit true/false overrides it (all four kinds; retired showLabelOnDrawing key ignored at decode)
+    val shadeOnDrawing: Boolean? = null,    // PDF fill; tri-state: null follows the kind's "Shade in Components" checkbox (auto runs also follow "Explicit bodies only"), explicit overrides (Body/Taper/Liner only)
+    val compressOnDrawing: Boolean = true,  // draw-only; false pins this body's stored span at true scale and suppresses its S-break. Serialization default true (saved documents keep compressing); authoring creates explicit bodies with false
     // Blended faces (draw-only): curve length inward from each face, 0 = square.
     val blendAftMm: Float = 0f,
     val blendFwdMm: Float = 0f,
@@ -212,8 +215,9 @@ position-derived and regenerate on every edit:
 - Aft-most anchor wins **per face**, so one span may carry both an aft and a fwd blend.
 - Dormant under a component or inside an absorbed gap; **never pruned**, resurrects unchanged.
 - Helpers: `List<AutoBlend>.autoBlendFor(startMm, endMm, end)`,
-  `ShaftSpec.withAutoBlend(spanStart, spanEnd, end, lengthMm, profile)` (upsert; `lengthMm` ≤ 0
-  clears that face only).
+  `ShaftSpec.withAutoBlend(spanStartMm, spanEndMm, end, lengthMm, profile = OGEE, seal = false)`
+  (`model/AutoBlend.kt`; upsert — `lengthMm` ≤ 0 clears that face only, and `seal` carries the
+  auto span's seal area the way `Body.blendAftSeal`/`blendFwdSeal` do for an explicit body).
 
 Keyways are features, not standalone components.
 They are hosted on **Tapers** (offset from the SET face) or **Bodies** (offset from the
@@ -279,8 +283,21 @@ data class Liner(
     val odMm: Float = 0f,
     val label: String? = null,  // optional user-defined display label; not used for geometry
     val showDiaOnDrawing: Boolean = true,  // below-shaft Ø callout visibility; defaults true (unlike Body)
+    val showNameOnDrawing: Boolean? = null, // schematic name-label; tri-state, see Body
+    val shadeOnDrawing: Boolean? = null,    // PDF fill; tri-state, see Body
     val authoredReference: LinerAuthoredReference = LinerAuthoredReference.AFT,
     val endMmPhysical: Float = 0f,  // kept in sync with start + length by Liner.normalized()
+    // Shoulders: a machined step cut into the liner's OWN span at an end (the blend posture —
+    // no other component's span moves). An end has a shoulder only when BOTH its length and
+    // reduced OD are > 0; radius is the fillet where the step face meets the liner OD, picked
+    // from a standard list and printed only as a footer note. All stored verbatim (golden
+    // rule); all default 0, so documents that never touch shoulders decode byte-identical.
+    val shoulderAftLenMm: Float = 0f,
+    val shoulderAftOdMm: Float = 0f,
+    val shoulderAftRadiusMm: Float = 0f,
+    val shoulderFwdLenMm: Float = 0f,
+    val shoulderFwdOdMm: Float = 0f,
+    val shoulderFwdRadiusMm: Float = 0f,
 ) : Segment
 `authoredReference` (AFT/FWD) only affects how the UI projects/displays the Start value; the
 canonical `startFromAftMm`/`endMmPhysical` are always physical AFT-referenced geometry.
@@ -340,16 +357,8 @@ These conditions are handled at UI/UX level, not model layer.
 Helpers
 coverageEndMm
 fun ShaftSpec.coverageEndMm(): Float = ...
-freeToEndMm
-freeToEndMm
-fun ShaftSpec.freeToEndMm(): Float =
-    (overallLengthMm - coverageEndMm()).coerceAtLeast(0f)
 maxOuterDiaMm
 Used by layout engine for vertical fit.
-oalIsManualOnLoad
-fun ShaftSpec.oalIsManualOnLoad(): Boolean = ...
-Load-time OAL mode: manual when the stored length reaches past `coverageEndMm()`, or when a
-leading gap precedes the aft-most component. See `docs/contracts/OverallLength.md`.
 
 Serialization & Migration
 Format (the **document envelope**, `doc/ShaftDocCodec.ShaftDocV1` — abridged):
@@ -361,7 +370,9 @@ data class ShaftDocV1(
     val jobNumber: String = "", val customer: String = "", val vessel: String = "",
     val shaftPosition: ShaftPosition = ShaftPosition.OTHER,
     val notes: String = "",
+    val item: String = "",   // optional shaft designation ("Tail shaft"); blank prints nothing, scrubbed from templates
     val spec: ShaftSpec,
+    val finalSpec: ShaftSpec? = null,                    // @SerialName("final_spec") — the Final schematic; null = none yet
     val runoutConfig: RunoutConfig = RunoutConfig(),     // @SerialName("runout_config")
     val wearRecord: WearRecord = WearRecord(),           // @SerialName("wear_record")
     val runoutReadings: RunoutReadings = RunoutReadings(),// @SerialName("runout_readings")
@@ -371,6 +382,13 @@ data class ShaftDocV1(
     val unitOverrides: Map<String, UnitSystem> = emptyMap(), // @SerialName("unit_overrides")
     val dualUnits: Boolean = false                        // @SerialName("dual_units")
 )
+
+**The Final schematic** (`final_spec`) is the one envelope field that is NOT a reference
+record: a whole second `ShaftSpec` — the drawing the shaft leaves with, after the wear and
+undercut work moved a liner — created as a structural copy of `spec` (component ids included)
+and independent from then on. `null` until "Start from original schematic"; never in a
+template or a mate duplicate; the inspection records below stay keyed to the ORIGINAL. See
+`docs/contracts/FinalSchematic.md`.
 
 **Reference-only inspection records** live in the envelope, never in `ShaftSpec`, so they
 can never affect geometry resolution:

@@ -168,6 +168,21 @@ const val WEAR_STRIP_TOP_GAP_BLANK_PT = 8f
 
 const val WEAR_MIN_PROFILE_HEIGHT_PT = 70f
 
+/**
+ * Per-strip growth cap when the profile band donates its slack — the traditional row height a
+ * full page of strips draws at. The base every [wearRowHeightCapPt] answer is built from.
+ */
+const val WEAR_STRIP_HEIGHT_MAX_PT = 170f
+
+/** Smallest per-job strip size ([WearRecord.stripSizeFrac]) — half the traditional row height. */
+const val WEAR_STRIP_SIZE_FRAC_MIN = 0.5f
+
+/** Largest per-job strip size ([WearRecord.stripSizeFrac]) — twice the traditional row height. */
+const val WEAR_STRIP_SIZE_FRAC_MAX = 2f
+
+/** Default per-job strip size: 1 = the height the page's own row budget gives a strip. */
+const val WEAR_STRIP_SIZE_FRAC_DEFAULT = 1f
+
 data class WearVerticalLayout(
     val profileTop: Float,
     val profileBottom: Float,
@@ -238,6 +253,49 @@ fun computeWearVerticalLayout(
     val tops = (0 until stripCount).map { i -> stripsTop + i * (perStripH + stripGapPt) }
     val bottoms = tops.map { it + perStripH }
     return WearVerticalLayout(areaTop, profileBottom, tops, bottoms)
+}
+
+/**
+ * The `maxStripHeightPt` a wear page hands [computeWearVerticalLayout] — ONE rule for both of the
+ * composer's layout paths (single column and packed grid), so the two can never disagree about how
+ * tall a detail strip is allowed to grow.
+ *
+ * [bandHPt] is the height the strips share when the profile is elected out (the mid band less the
+ * overflow note); [rowCount] is how many rows of strips that band carries; [sizeFrac] is this job's
+ * [WearRecord.stripSizeFrac], clamped to [WEAR_STRIP_SIZE_FRAC_MIN]..[WEAR_STRIP_SIZE_FRAC_MAX] and
+ * multiplied onto the base cap LAST, so 1 always means "whatever this page's own budget gives".
+ *
+ * The base cap, by case:
+ * - **Profile shown** — the flat [WEAR_STRIP_HEIGHT_MAX_PT]: the profile band absorbs the slack a
+ *   capped strip gives back (its shaft slack-centered inside it), so a strip has somewhere to
+ *   return height to and needs no band-derived allowance.
+ * - **Profile hidden, two rows or more** — the rows OWN the band, `(bandHPt − gap) / 2` floored at
+ *   the flat cap: a multi-row page splits the whole height between its rows, and capping every
+ *   packed row stranded the bottom half of the page as dead white under two top-pinned rows
+ *   (on-device report).
+ * - **Profile hidden, a lone row** — the height a FULL page of rows would give it,
+ *   `(bandHPt − (WEAR_STRIP_MAX_ROWS_NO_PROFILE − 1)·gap) / WEAR_STRIP_MAX_ROWS_NO_PROFILE`, again
+ *   floored at the flat cap. A lone row must not own the whole band: with the profile hidden, one
+ *   strip stretched to fill the entire page (on-device report). Its leftover height is lifted out
+ *   from under the header by the composer and lands as ordinary bottom margin.
+ */
+fun wearRowHeightCapPt(
+    bandHPt: Float,
+    rowCount: Int,
+    showProfile: Boolean,
+    sizeFrac: Float = WEAR_STRIP_SIZE_FRAC_DEFAULT,
+): Float {
+    val band = bandHPt.coerceAtLeast(0f)
+    val base = when {
+        showProfile -> WEAR_STRIP_HEIGHT_MAX_PT
+        rowCount >= 2 -> maxOf(WEAR_STRIP_HEIGHT_MAX_PT, (band - WEAR_STRIP_GAP_PT) / 2f)
+        else -> {
+            val rows = WEAR_STRIP_MAX_ROWS_NO_PROFILE
+            val full = (band - (rows - 1) * WEAR_STRIP_GAP_PT) / rows
+            maxOf(WEAR_STRIP_HEIGHT_MAX_PT, full)
+        }
+    }
+    return base * sizeFrac.coerceIn(WEAR_STRIP_SIZE_FRAC_MIN, WEAR_STRIP_SIZE_FRAC_MAX)
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

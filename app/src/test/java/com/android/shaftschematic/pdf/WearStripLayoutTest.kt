@@ -1249,7 +1249,7 @@ class WearStripLayoutTest {
         // bottom margin instead of as a white hole at the top.
         val areaTop = 84f
         val areaBottom = 500f
-        val capPt = 170f      // mirrors the composer's private WEAR_STRIP_HEIGHT_MAX_PT
+        val capPt = WEAR_STRIP_HEIGHT_MAX_PT
         val v = computeWearVerticalLayout(
             areaTop, areaBottom, stripCount = 1,
             minProfileHeightPt = 0f, profileToStripsGapPt = 0f, preferredProfileHeightPt = 0f,
@@ -1261,6 +1261,143 @@ class WearStripLayoutTest {
         assertEquals("the row pins to the band top", areaTop, v.stripTops[0] - lift, 1e-3f)
         assertTrue(
             "…so the reclaimed height ends up as bottom margin",
+            (v.stripBottoms[0] - lift) < areaBottom - 1e-3f,
+        )
+    }
+
+    // ── Row height ceiling (wearRowHeightCapPt) ──────────────────────────────
+    //
+    // ONE rule behind both of the composer's layout paths. A page with the profile on it keeps
+    // the flat cap; without the profile the rows own the band — but a LONE row only gets the
+    // share a full page of rows would give it, or one strip fills the whole sheet (on-device
+    // report). The per-job "Strip size" multiplies whatever that base works out to.
+
+    private val roomyBand = 620f   // taller than any base cap below, so every case bites
+
+    @Test
+    fun `a lone row without the profile gets the height a full page of rows would give it`() {
+        val rows = WEAR_STRIP_MAX_ROWS_NO_PROFILE
+        val expected = (roomyBand - (rows - 1) * WEAR_STRIP_GAP_PT) / rows
+        assertEquals(
+            expected,
+            wearRowHeightCapPt(roomyBand, rowCount = 1, showProfile = false),
+            1e-3f,
+        )
+        // Zero rows takes the same branch — nothing is drawn either way, so it must not throw.
+        assertEquals(
+            expected,
+            wearRowHeightCapPt(roomyBand, rowCount = 0, showProfile = false),
+            1e-3f,
+        )
+        assertTrue(
+            "a lone strip must not own the whole band",
+            wearRowHeightCapPt(roomyBand, 1, showProfile = false) < roomyBand,
+        )
+    }
+
+    @Test
+    fun `two or more rows without the profile still own the band`() {
+        // Byte-identical to the packed guard this replaced: capping every packed row stranded the
+        // bottom half of the page under two top-pinned rows.
+        val expected = (roomyBand - WEAR_STRIP_GAP_PT) / 2f
+        listOf(2, 3, 4).forEach { rows ->
+            assertEquals(
+                "rows $rows",
+                expected,
+                wearRowHeightCapPt(roomyBand, rows, showProfile = false),
+                1e-3f,
+            )
+        }
+        assertTrue(
+            "…and that is taller than the lone-row share",
+            wearRowHeightCapPt(roomyBand, 2, showProfile = false) >
+                wearRowHeightCapPt(roomyBand, 1, showProfile = false),
+        )
+    }
+
+    @Test
+    fun `the profile on the page keeps the flat cap at every row count`() {
+        listOf(0, 1, 2, 3).forEach { rows ->
+            assertEquals(
+                "rows $rows",
+                WEAR_STRIP_HEIGHT_MAX_PT,
+                wearRowHeightCapPt(roomyBand, rows, showProfile = true),
+                1e-3f,
+            )
+        }
+    }
+
+    @Test
+    fun `a cramped band never drops the cap below the flat height`() {
+        // The band-derived shares are a FLOOR of the flat cap, not a replacement: a short page
+        // must not shrink the strips below the height they have always drawn at.
+        listOf(0f, 60f, 200f).forEach { band ->
+            listOf(1, 2).forEach { rows ->
+                assertEquals(
+                    "band $band rows $rows",
+                    WEAR_STRIP_HEIGHT_MAX_PT,
+                    wearRowHeightCapPt(band, rows, showProfile = false),
+                    1e-3f,
+                )
+            }
+        }
+        // A negative band is clamped rather than producing a negative cap.
+        assertEquals(
+            WEAR_STRIP_HEIGHT_MAX_PT,
+            wearRowHeightCapPt(-100f, 1, showProfile = false),
+            1e-3f,
+        )
+    }
+
+    @Test
+    fun `strip size multiplies the base cap and clamps at both ends`() {
+        listOf(true, false).forEach { profile ->
+            listOf(1, 2).forEach { rows ->
+                val base = wearRowHeightCapPt(roomyBand, rows, profile, WEAR_STRIP_SIZE_FRAC_DEFAULT)
+                listOf(WEAR_STRIP_SIZE_FRAC_MIN, 0.8f, 1.5f, WEAR_STRIP_SIZE_FRAC_MAX).forEach { f ->
+                    assertEquals(
+                        "profile $profile rows $rows frac $f",
+                        base * f,
+                        wearRowHeightCapPt(roomyBand, rows, profile, f),
+                        1e-3f,
+                    )
+                }
+                // Out of range in either direction settles on the endpoint.
+                assertEquals(
+                    base * WEAR_STRIP_SIZE_FRAC_MIN,
+                    wearRowHeightCapPt(roomyBand, rows, profile, 0.01f),
+                    1e-3f,
+                )
+                assertEquals(
+                    base * WEAR_STRIP_SIZE_FRAC_MAX,
+                    wearRowHeightCapPt(roomyBand, rows, profile, 12f),
+                    1e-3f,
+                )
+            }
+        }
+        assertEquals("100% is the untouched page budget", 1f, WEAR_STRIP_SIZE_FRAC_DEFAULT, 1e-6f)
+    }
+
+    @Test
+    fun `a lone capped strip on a profile-less band leaves the caller its leftover`() {
+        // The composer's COMBINED path with showShaftProfile = false: the helper's cap bounds the
+        // strip, computeWearVerticalLayout parks the remainder above it, and the composer lifts
+        // that out from under the header (landing as ordinary bottom margin).
+        val areaTop = 84f
+        val areaBottom = areaTop + roomyBand
+        val cap = wearRowHeightCapPt(roomyBand, rowCount = 1, showProfile = false)
+        val v = computeWearVerticalLayout(
+            areaTop, areaBottom, stripCount = 1,
+            minProfileHeightPt = 0f, profileToStripsGapPt = 0f, preferredProfileHeightPt = 0f,
+            maxStripHeightPt = cap,
+        )
+        assertEquals("the helper's cap holds", cap, v.stripBottoms[0] - v.stripTops[0], 1e-3f)
+        assertTrue("…and it is a real cap on this band", cap < roomyBand - 1e-3f)
+        val lift = v.stripTops[0] - areaTop
+        assertTrue("uncapped, the row would start at the band top", lift > 1e-3f)
+        assertEquals("lifted, the row pins to the band top", areaTop, v.stripTops[0] - lift, 1e-3f)
+        assertTrue(
+            "…leaving the leftover as bottom margin",
             (v.stripBottoms[0] - lift) < areaBottom - 1e-3f,
         )
     }

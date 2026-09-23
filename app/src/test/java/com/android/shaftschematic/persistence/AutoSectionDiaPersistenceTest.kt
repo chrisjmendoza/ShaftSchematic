@@ -22,7 +22,7 @@ class AutoSectionDiaPersistenceTest {
     private fun docWith(spec: ShaftSpec) = ShaftDocCodec.ShaftDocV1(spec = spec)
 
     private fun autoDiameters(spec: ShaftSpec) =
-        resolveComponents(spec, overallIsManual = true)
+        resolveComponents(spec)
             .filterIsInstance<ResolvedBody>()
             .filter { it.source == ResolvedComponentSource.AUTO }
             .sortedBy { it.startMmPhysical }

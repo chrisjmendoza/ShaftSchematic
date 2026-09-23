@@ -5,6 +5,7 @@ package com.android.shaftschematic.pdf
 
 import android.graphics.*
 import android.graphics.pdf.PdfDocument
+import com.android.shaftschematic.geom.BelowShaftLabelLayout
 import com.android.shaftschematic.geom.DimensionRailLayout
 import com.android.shaftschematic.geom.END_EPS_MM
 import com.android.shaftschematic.geom.PROFILE_TAPER_MIN_FRAC_OF_TRUE
@@ -37,9 +38,13 @@ import com.android.shaftschematic.ui.resolved.bodyDrawEdges
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
 import com.android.shaftschematic.ui.resolved.resolvedBodyBaseId
+import com.android.shaftschematic.ui.resolved.unshadedBodyRunIds
+import com.android.shaftschematic.ui.resolved.unshadedLinerIds
+import com.android.shaftschematic.ui.resolved.unshadedTaperIds
 import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.DualUnitLayout
+import com.android.shaftschematic.util.OutputTypography
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.VerboseLog
 import com.android.shaftschematic.util.buildBodyTitleById
@@ -159,7 +164,7 @@ fun composeShaftPdf(
     }
     val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL; textSize = TEXT_PT
-        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
+        typeface = OutputTypography.active
         color = 0xFF000000.toInt()
     }
 
@@ -265,9 +270,18 @@ fun composeShaftPdf(
         style = Paint.Style.FILL
         color = Color.argb(40, 0, 0, 0)
     }
-    val bodyFill:  Paint? = if (pdfPrefs.shadedBodies)  shadeFill() else null
-    val taperFill: Paint? = if (pdfPrefs.shadedTapers) shadeFill() else null
-    val linerFill: Paint? = if (pdfPrefs.shadedLiners)  shadeFill() else null
+    // The fill paints exist unconditionally; WHICH components use them is one decision per
+    // component, made by the unshaded-id builders. A kind's checkbox turned off simply names
+    // every component of that kind, so the flags stay the default a per-component override
+    // can beat — never a master gate over an authored choice.
+    val bodyFill:  Paint = shadeFill()
+    val taperFill: Paint = shadeFill()
+    val linerFill: Paint = shadeFill()
+    val unfilledBodyIds = unshadedBodyRunIds(
+        spec, resolvedComponents, pdfPrefs.shadedBodies, pdfPrefs.shadeExplicitBodiesOnly,
+    )
+    val unfilledTaperIds = unshadedTaperIds(spec, pdfPrefs.shadedTapers)
+    val unfilledLinerIds = unshadedLinerIds(spec, pdfPrefs.shadedLiners)
 
     // One body path: plain rectangles when a body draws at true scale under the break
     // threshold, the center-break pair when foreshortened by the compressed mapping or
@@ -279,6 +293,7 @@ fun composeShaftPdf(
         breakMinFracOfTrue = pdfPrefs.sBreakThresholdFrac,
         blends = blendsForPdf,
         keywayAvoidSpansMm = bodyKeywayProtectedSpansMm(spec),
+        unfilledBodyIds = unfilledBodyIds,
     )
     // Keyway clocking: the aft-most keyway (measurement datum) always draws face-on; every other
     // host is a secondary. At 180° a secondary renders hidden (dashed, no fill); at 90° it renders
@@ -295,21 +310,54 @@ fun composeShaftPdf(
     drawTapers(
         c, spec.tapers, cy, ::xAt, ::rPx, outline, taperFill,
         hiddenKeywayIds, clocking, secondaryKeywayIds, diaPtPerMm,
+        unfilledIds = unfilledTaperIds,
     )
     drawThreads(c, spec.threads, cy, ::xAt, ::rPx, outline, dim, diaPtPerMm)
-    drawLiners(c, spec.liners, cy, ::xAt, ::rPx, outline, dim, linerFill)
+    drawLiners(c, spec.liners, cy, ::xAt, ::rPx, outline, dim, linerFill, unfilledIds = unfilledLinerIds)
     drawCouplerBoltSlots(c, spec.couplerBoltSlots, spec, cy, ::xAt, ::rPx, outline, shadeFill(), bodies = bodiesForPdf)
     c.restore()
 
-    if (effectiveOptions.showLabels && pdfPrefs.showComponentTitles) {
+    // --- Ø callouts below the shaft: one leader per unique body OD and per unique liner OD ---
+    // A blank draft may elect the whole pass out (`blankDiaCallouts`) so the shaft prints
+    // clear for freehand annotation instead of carrying write-in rules.
+    //
+    // Built HERE, drawn further down: the component-name labels hang in the same band and share
+    // ONE collision space with these callouts, so their planner needs the leaders' occupancy
+    // before it places anything.
+    val diaCalls =
+        if (effectiveOptions.showDiaCallouts) {
+            buildBodyOdCallouts(bodiesForPdf, displayUnits) + buildLinerOdCallouts(spec.liners, displayUnits)
+        } else {
+            emptyList()
+        }
+    val diaLeader = if (diaCalls.isEmpty()) null else DiameterLeaderRenderer(
+        pageX = { mm -> xAt(mm.toFloat()) },
+        shaftTopY = yTopOfShaft,
+        shaftBottomY = cy + halfHeightPx,
+        linePaint = dim,
+        textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            textSize = TEXT_PT - 2f
+            color = 0xFF000000.toInt()
+        },
+        blankValues = blank,
+        dualStacked = displayUnits.dual && pdfPrefs.dualUnitLayout == DualUnitLayout.STACKED,
+    )
+
+    // The global titles switch is the per-component flags' DEFAULT, not a master gate — an
+    // explicitly-shown component prints under a global off (see componentLabelSpans). Only the
+    // per-sheet option (template mode) drops the pass whole.
+    if (effectiveOptions.showLabels) {
         drawComponentLabelsPdf(
             canvas = c,
             spec = spec,
+            titlesDefault = pdfPrefs.showComponentTitles,
             geomRect = geomRect,
             cy = cy,
             halfHeightPx = halfHeightPx,
             xAt = ::xAt,
             textPaint = text,
+            reserved = diaLeader?.occupancy(diaCalls).orEmpty(),
         )
     }
 
@@ -457,29 +505,8 @@ fun composeShaftPdf(
         renderer.drawPlanned(c, oalDimSpan, plan.placements.last(), true)
     }
 
-    // --- Ø callouts below the shaft: one leader per unique body OD and per unique liner OD ---
-    // A blank draft may elect the whole pass out (`blankDiaCallouts`) so the shaft prints
-    // clear for freehand annotation instead of carrying write-in rules.
-    if (effectiveOptions.showDiaCallouts) {
-        val calls = buildBodyOdCallouts(bodiesForPdf, displayUnits) + buildLinerOdCallouts(spec.liners, displayUnits)
-        if (calls.isNotEmpty()) {
-            val leaderText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                style = Paint.Style.FILL
-                textSize = TEXT_PT - 2f
-                color = 0xFF000000.toInt()
-            }
-            val leader = DiameterLeaderRenderer(
-                pageX = { mm -> xAt(mm.toFloat()) },
-                shaftTopY = yTopOfShaft,
-                shaftBottomY = cy + halfHeightPx,
-                linePaint = dim,
-                textPaint = leaderText,
-                blankValues = blank,
-                dualStacked = displayUnits.dual && pdfPrefs.dualUnitLayout == DualUnitLayout.STACKED,
-            )
-            leader.draw(c, calls)
-        }
-    }
+    // The callouts themselves — planned above (the name labels had to see them), inked here.
+    diaLeader?.draw(c, diaCalls)
 
     if (effectiveOptions.showFooter) {
         // Footer "Body:" diameters — authored bodies as actually drawn. Raw spec.bodies
@@ -554,6 +581,10 @@ private const val LANE_GAP_PT = 24f          // spacing between dimension lanes
 
 // Component title labels (PDF only)
 private const val COMPONENT_LABEL_OFFSET_PT = 32f
+/** How far the fit loop may shrink a name label before it accepts a least-bad placement. */
+private const val COMPONENT_LABEL_MIN_TEXT_PT = 7f
+/** Hard stop on stacked label rows, so a pathological sheet cannot plan an unbounded band. */
+private const val COMPONENT_LABEL_MAX_ROWS = 8
 /**
  * Air reserved between the drawing and the footer when the vertical budget is planned — the
  * shaft is placed so at least this much survives once the bottom-anchored footer block is
@@ -561,75 +592,170 @@ private const val COMPONENT_LABEL_OFFSET_PT = 32f
  */
 private const val INFO_GAP_PT = 72f          // exactly 1 inch below geometry
 
+/** One component-name label, as the axial span it centers over. */
+internal data class ComponentLabelSpan(val text: String, val startMm: Float, val endMm: Float)
+
+/**
+ * The component-name labels a sheet prints, AFT→FWD within each kind.
+ *
+ * Per-component visibility (`showNameOnDrawing`) is TRI-STATE: `null` follows
+ * [titlesDefault] — the global
+ * [com.android.shaftschematic.settings.PdfPrefs.showComponentTitles] switch — while an
+ * explicit `true`/`false` overrides it for that one component in either direction. Gating the
+ * whole pass on the global switch made a freshly checked card toggle print nothing under a
+ * global switch turned off long before (on-device report), so the global is a DEFAULT here,
+ * not a master gate; only the per-sheet [PdfExportOptions.showLabels] option (template mode)
+ * still drops the pass whole at the call site.
+ *
+ * A hidden component still takes its place in the fallback numbering ("Body #2" stays #2 when
+ * #1 is hidden), so turning one label off never renumbers the rest.
+ */
+internal fun componentLabelSpans(spec: ShaftSpec, titlesDefault: Boolean): List<ComponentLabelSpan> = buildList {
+    fun emit(shown: Boolean?, label: String, startMm: Float, lengthMm: Float) {
+        if (!(shown ?: titlesDefault)) return
+        val trimmed = label.trim()
+        if (trimmed.isEmpty()) return
+        add(ComponentLabelSpan(trimmed, startMm, startMm + lengthMm))
+    }
+
+    val bodyTitleById = buildBodyTitleById(spec)
+    spec.bodies.sortedWith(compareBy({ it.startFromAftMm }, { it.id }))
+        .forEachIndexed { i, b ->
+            emit(b.showNameOnDrawing, bodyTitleById[b.id] ?: "Body #${i + 1}", b.startFromAftMm, b.lengthMm)
+        }
+
+    val taperTitleById = buildTaperTitleById(spec)
+    spec.tapers.sortedWith(compareBy({ it.startFromAftMm }, { it.id }))
+        .forEachIndexed { i, t ->
+            emit(t.showNameOnDrawing, taperTitleById[t.id] ?: "Taper #${i + 1}", t.startFromAftMm, t.lengthMm)
+        }
+
+    val threadTitleById = buildThreadTitleById(spec)
+    spec.threads.sortedWith(compareBy({ it.startFromAftMm }, { it.id }))
+        .forEachIndexed { i, th ->
+            emit(th.showNameOnDrawing, threadTitleById[th.id] ?: "Thread #${i + 1}", th.startFromAftMm, th.lengthMm)
+        }
+
+    val linerTitleById = buildLinerTitleById(spec)
+    spec.liners.sortedWith(compareBy({ it.startFromAftMm }, { it.id }))
+        .forEachIndexed { i, ln ->
+            val label = ln.label?.trim()?.ifEmpty { null } ?: linerTitleById[ln.id] ?: "Liner ${i + 1}"
+            emit(ln.showNameOnDrawing, label, ln.startFromAftMm, ln.lengthMm)
+        }
+}
+
+/**
+ * Draws the component-name labels in the band under the shaft.
+ *
+ * [reserved] is everything else already printed there — the Ø callouts' values and leaders. Both
+ * passes anchor on a component's CENTER, so a component showing a name and a Ø aimed both strings
+ * at the same x and printed one through the other (on-device report); they share ONE collision
+ * space now ([BelowShaftLabelLayout]), with that engine's resolution order: slide the name along
+ * its own component's span first, drop it to the next row only when no slide fits.
+ *
+ * The rows stop at the footer band, so a crowded sheet cannot walk labels off the drawing. When
+ * even the last row leaves a label with nowhere to go, the whole pass retries a size smaller
+ * (narrower text needs fewer rows) down to [COMPONENT_LABEL_MIN_TEXT_PT] — the fit-loop posture
+ * the dimension rails already use.
+ */
 private fun drawComponentLabelsPdf(
     canvas: Canvas,
     spec: ShaftSpec,
+    titlesDefault: Boolean,
     geomRect: RectF,
     cy: Float,
     halfHeightPx: Float,
     xAt: (Float) -> Float,
     textPaint: Paint,
+    reserved: List<BelowShaftLabelLayout.Box> = emptyList(),
 ) {
-    if (spec.bodies.isEmpty() && spec.tapers.isEmpty() && spec.threads.isEmpty() && spec.liners.isEmpty()) return
+    val spans = componentLabelSpans(spec, titlesDefault)
+    if (spans.isEmpty()) return
 
     val labelPaint = Paint(textPaint).apply {
-        textSize = (textSize - 2f).coerceAtLeast(8f)
+        textSize = (textSize - 2f).coerceAtLeast(COMPONENT_LABEL_MIN_TEXT_PT)
     }
 
     val yBottomOfShaft = cy + halfHeightPx
-    val baseY    = (yBottomOfShaft + COMPONENT_LABEL_OFFSET_PT).coerceAtMost(geomRect.bottom - 6f)
-    val rowStep  = labelPaint.textSize * 1.4f
-    val padX     = 3f  // minimum horizontal gap between adjacent labels on the same row
+    val baseY = (yBottomOfShaft + COMPONENT_LABEL_OFFSET_PT).coerceAtMost(geomRect.bottom - 6f)
 
-    // Collect every label as a placed x-interval + text, then assign rows.
-    data class Entry(val xLeft: Float, val xRight: Float, val text: String)
-
-    fun entry(label: String, startMm: Float, endMm: Float): Entry? {
-        val trimmed = label.trim().ifEmpty { return null }
-        val cx = (xAt(startMm) + xAt(endMm)) * 0.5f
-        val w  = labelPaint.measureText(trimmed)
-        val xL = (cx - w * 0.5f).coerceIn(geomRect.left, geomRect.right - w)
-        return Entry(xL, xL + w, trimmed)
+    // Shrink until every label finds a clear spot: narrower text both needs less room of its own
+    // and fits more rows above the footer band. The first size that fits wins.
+    var plan = planComponentLabels(spans, labelPaint, geomRect, baseY, xAt, reserved)
+    while (plan.placements.any { !it.fitted } && plan.textSize > COMPONENT_LABEL_MIN_TEXT_PT) {
+        labelPaint.textSize = (plan.textSize - 1f).coerceAtLeast(COMPONENT_LABEL_MIN_TEXT_PT)
+        plan = planComponentLabels(spans, labelPaint, geomRect, baseY, xAt, reserved)
     }
+    labelPaint.textSize = plan.textSize
 
-    val entries = buildList {
-        val bodyTitleById = buildBodyTitleById(spec)
-        spec.bodies.sortedWith(compareBy({ it.startFromAftMm }, { it.id }))
-            .forEachIndexed { i, b -> entry(bodyTitleById[b.id] ?: "Body #${i+1}", b.startFromAftMm, b.startFromAftMm + b.lengthMm)?.let(::add) }
-
-        val taperTitleById = buildTaperTitleById(spec)
-        spec.tapers.sortedWith(compareBy({ it.startFromAftMm }, { it.id }))
-            .forEachIndexed { i, t -> entry(taperTitleById[t.id] ?: "Taper #${i+1}", t.startFromAftMm, t.startFromAftMm + t.lengthMm)?.let(::add) }
-
-        val threadTitleById = buildThreadTitleById(spec)
-        spec.threads.sortedWith(compareBy({ it.startFromAftMm }, { it.id }))
-            .forEachIndexed { i, th -> entry(threadTitleById[th.id] ?: "Thread #${i+1}", th.startFromAftMm, th.startFromAftMm + th.lengthMm)?.let(::add) }
-
-        val linerTitleById = buildLinerTitleById(spec)
-        spec.liners.sortedWith(compareBy({ it.startFromAftMm }, { it.id }))
-            .forEachIndexed { i, ln ->
-                val label = ln.label?.trim()?.ifEmpty { null } ?: linerTitleById[ln.id] ?: "Liner ${i+1}"
-                entry(label, ln.startFromAftMm, ln.startFromAftMm + ln.lengthMm)?.let(::add)
-            }
-    }.sortedBy { it.xLeft }
-
-    // Greedy row assignment: place each label on the first row where it doesn't overlap.
-    val rowOccupied = mutableListOf<MutableList<Pair<Float, Float>>>()
-
-    for (e in entries) {
-        var row = 0
-        while (true) {
-            if (row >= rowOccupied.size) rowOccupied.add(mutableListOf())
-            val free = rowOccupied[row].none { (oL, oR) -> e.xLeft < oR + padX && e.xRight + padX > oL }
-            if (free) {
-                rowOccupied[row].add(e.xLeft to e.xRight)
-                val rowY = (baseY + row * rowStep).coerceAtMost(geomRect.bottom - 4f)
-                canvas.drawText(e.text, e.xLeft, rowY, labelPaint)
-                break
-            }
-            row++
+    val unfitted = plan.placements.count { !it.fitted }
+    if (unfitted > 0) {
+        VerboseLog.d(VerboseLog.Category.PDF, "ShaftPdf") {
+            "component labels: no clear placement for $unfitted of ${plan.placements.size}" +
+                " at ${plan.textSize}pt — least-bad rows used"
         }
     }
+
+    plan.placements.forEachIndexed { i, p ->
+        canvas.drawText(spans[i].text, p.left, baseY + p.row * plan.rowStep, labelPaint)
+    }
+}
+
+/** One trial layout of the component-name labels at a given text size. */
+internal class ComponentLabelPlan(
+    val placements: List<BelowShaftLabelLayout.Placement>,
+    val rowStep: Float,
+    val textSize: Float,
+)
+
+/**
+ * Plans the name labels at [labelPaint]'s current size.
+ *
+ * A label's slide window is its own component's span, widened to contain the centered position
+ * (a short component's name is wider than the component) and clamped to the content rect — a name
+ * still reads as its component's from anywhere over it, which is what makes sliding cheaper than
+ * a row drop. Rows run from [baseY] down to the footer band; row 0 always exists so a sheet with
+ * no vertical room at all still prints its labels where it always did.
+ */
+internal fun planComponentLabels(
+    spans: List<ComponentLabelSpan>,
+    labelPaint: Paint,
+    geomRect: RectF,
+    baseY: Float,
+    xAt: (Float) -> Float,
+    reserved: List<BelowShaftLabelLayout.Box>,
+): ComponentLabelPlan {
+    val fm = labelPaint.fontMetrics
+    val rowStep = labelPaint.textSize * 1.4f
+
+    val rows = buildList {
+        var r = 0
+        while (r == 0 || (baseY + r * rowStep + fm.descent <= geomRect.bottom && r < COMPONENT_LABEL_MAX_ROWS)) {
+            val baseline = baseY + r * rowStep
+            add(BelowShaftLabelLayout.RowBand(top = baseline + fm.ascent, bottom = baseline + fm.descent))
+            r++
+        }
+    }
+
+    val requests = spans.map { span ->
+        val x0 = min(xAt(span.startMm), xAt(span.endMm))
+        val x1 = max(xAt(span.startMm), xAt(span.endMm))
+        val w = labelPaint.measureText(span.text)
+        val centered = (x0 + x1) * 0.5f - w * 0.5f
+        val preferred = centered.coerceIn(geomRect.left, max(geomRect.left, geomRect.right - w))
+        BelowShaftLabelLayout.Request(
+            width = w,
+            preferredLeft = preferred,
+            minLeft = min(x0, preferred).coerceAtLeast(geomRect.left),
+            maxRight = max(x1, preferred + w).coerceAtMost(geomRect.right),
+        )
+    }
+
+    return ComponentLabelPlan(
+        placements = BelowShaftLabelLayout.place(requests, reserved, rows),
+        rowStep = rowStep,
+        textSize = labelPaint.textSize,
+    )
 }
 
 internal fun computeDetailPtPerMm(spec: ShaftSpec, geomWidthPt: Float, geomHeightPt: Float): Float {
@@ -793,9 +919,16 @@ private fun drawTapers(
     clocking: KeywayClocking = KeywayClocking.NONE,
     secondaryKeywayIds: Set<String> = emptySet(),
     ptPerMm: Float = 1f,
+    /**
+     * Tapers whose shade is suppressed while the rest of [tapers] keeps [fill]
+     * (`ui/resolved/unshadedTaperIds` — the kind's checkbox with each taper's own tri-state
+     * override applied). Empty fills every taper the same.
+     */
+    unfilledIds: Set<String> = emptySet(),
 ) {
     tapers.forEach { t ->
         if (t.lengthMm <= 0f || (t.startDiaMm <= 0f && t.endDiaMm <= 0f)) return@forEach
+        val taperFill = if (t.id in unfilledIds) null else fill
         val x0 = requireFinite("taper.x0", xAt(t.startFromAftMm))
         val x1 = requireFinite("taper.x1", xAt(t.startFromAftMm + t.lengthMm))
         val r0 = requireFinite("taper.r0", rPx(t.startDiaMm))
@@ -803,11 +936,11 @@ private fun drawTapers(
         val top0 = requireFinite("taper.top0", cy - r0); val bot0 = requireFinite("taper.bot0", cy + r0)
         val top1 = requireFinite("taper.top1", cy - r1); val bot1 = requireFinite("taper.bot1", cy + r1)
 
-        if (fill != null) {
+        if (taperFill != null) {
             val path = Path().apply {
                 moveTo(x0, top0); lineTo(x1, top1); lineTo(x1, bot1); lineTo(x0, bot0); close()
             }
-            c.drawPath(path, fill)
+            c.drawPath(path, taperFill)
         }
         c.drawLine(x0, top0, x1, top1, outline)
         c.drawLine(x0, bot0, x1, bot1, outline)
@@ -924,16 +1057,22 @@ private fun drawLiners(
     outline: Paint,
     dim: Paint,
     fill: Paint? = null,
+    /**
+     * Liners whose shade is suppressed while the rest of [liners] keeps [fill]
+     * (`ui/resolved/unshadedLinerIds`). Empty fills every liner the same.
+     */
+    unfilledIds: Set<String> = emptySet(),
 ) {
     liners.forEach { ln ->
         if (ln.lengthMm <= 0f || ln.odMm <= 0f) return@forEach
+        val linerFill = if (ln.id in unfilledIds) null else fill
         val x0 = xAt(ln.startFromAftMm); val x1 = xAt(ln.startFromAftMm + ln.lengthMm)
         val r = rPx(ln.odMm)
 
         // Shoulder specs, fill and stroke all come from the shared pass
         // (`pdf/LinerShoulderDraw.kt`) the runout/consolidated sheet draws through too.
         val specs = linerShoulderSpecs(ln, x0, x1, r, xAt, rPx)
-        if (fill != null) drawLinerFillPdf(c, cy, x0, x1, r, specs, fill)
+        if (linerFill != null) drawLinerFillPdf(c, cy, x0, x1, r, specs, linerFill)
         drawLinerOutlinePdf(c, cy, x0, x1, r, specs, outline, dim)
     }
 }
@@ -1029,18 +1168,31 @@ internal fun ShaftSpec.withResolvedBodies(resolved: List<ResolvedComponent>?): S
  * them. AUTO spans share the single bare-shaft flag ([ShaftSpec.showAutoBodyDia]), matching
  * the single Ø they already share. A resolved id with no stored match (never expected)
  * follows the model default — hidden, the opt-in posture.
+ *
+ * [Body.compressOnDrawing] rides the same fragment-stripped lookup, so every run of a split
+ * body keeps its author's decision and [drawBodyRunsWithBreaks] can read it off the run it
+ * is drawing. AUTO spans always compress: bare-shaft fill is the give that funds every other
+ * span's proportion, so it is never opted out.
  */
-internal fun ShaftSpec.bodyForPdf(b: ResolvedBody): Body = Body(
-    id = b.id,
-    startFromAftMm = b.startMmPhysical,
-    lengthMm = b.endMmPhysical - b.startMmPhysical,
-    diaMm = b.diaMm,
-    showDiaOnDrawing = if (b.source == ResolvedComponentSource.AUTO) {
-        showAutoBodyDia
+internal fun ShaftSpec.bodyForPdf(b: ResolvedBody): Body {
+    val stored = if (b.source == ResolvedComponentSource.AUTO) {
+        null
     } else {
-        bodies.firstOrNull { it.id == resolvedBodyBaseId(b.id) }?.showDiaOnDrawing ?: false
-    },
-)
+        bodies.firstOrNull { it.id == resolvedBodyBaseId(b.id) }
+    }
+    return Body(
+        id = b.id,
+        startFromAftMm = b.startMmPhysical,
+        lengthMm = b.endMmPhysical - b.startMmPhysical,
+        diaMm = b.diaMm,
+        showDiaOnDrawing = if (b.source == ResolvedComponentSource.AUTO) {
+            showAutoBodyDia
+        } else {
+            stored?.showDiaOnDrawing ?: false
+        },
+        compressOnDrawing = stored?.compressOnDrawing ?: true,
+    )
+}
 
 /**
  * Truncates [text] with an ellipsis so it fits within [maxWidth] points. Footer columns sit

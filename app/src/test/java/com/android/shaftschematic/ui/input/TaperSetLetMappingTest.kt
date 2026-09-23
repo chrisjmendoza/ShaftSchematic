@@ -4,6 +4,12 @@ import com.android.shaftschematic.model.Taper
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
+/**
+ * [taperSetLetMapping] — which face the card labels S.E.T. and which L.E.T.
+ *
+ * The labels swap for a FWD-half taper while the BINDING stays x-ordered (left edits
+ * `startDiaMm`, right edits `endDiaMm`): the stored pair is never reordered to follow a label.
+ */
 class TaperSetLetMappingTest {
 
     @Test

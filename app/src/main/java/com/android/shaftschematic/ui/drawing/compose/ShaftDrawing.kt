@@ -45,6 +45,7 @@ import com.android.shaftschematic.pdf.mapToLinerDimsForPdf
 import com.android.shaftschematic.pdf.tierOriginMmFor
 import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.ui.drawing.dimDebugLines
+import com.android.shaftschematic.ui.drawing.renderSpanSpec
 import com.android.shaftschematic.ui.drawing.render.GridRenderer.drawAdaptiveShaftGrid
 import com.android.shaftschematic.ui.drawing.render.RenderOptions
 import com.android.shaftschematic.ui.drawing.render.ShaftLayout
@@ -113,6 +114,12 @@ fun ShaftDrawing(
     previewThreadFill: PreviewColorSetting = PreviewColorSetting(preset = PreviewColorPreset.TRANSPARENT),
     previewThreadHatch: PreviewColorSetting = PreviewColorSetting(preset = PreviewColorPreset.STEEL),
     lineThicknessScale: Float = 1.0f,
+    /**
+     * PDF-shade mirror: the components the PDF will print shaded (the composers' effective
+     * decision, `shadedComponentIds` in `ui/resolved/ResolvedComponent.kt`). Overlaid on the
+     * preview fills so the box answers "what prints shaded" live; empty draws as before.
+     */
+    shadedComponentIds: Set<String> = emptySet(),
     // Highlight bridge (safe defaults)
     highlightEnabled: Boolean = false,
     highlightId: Any? = null,
@@ -143,11 +150,17 @@ fun ShaftDrawing(
     // RenderOptions (keep most defaults; set only what we actively control here)
     // NOTE: legacy color fields in RenderOptions are ARGB Ints → use toArgb().
     //       highlight colors are Color → pass Color directly.
+    // The shade marker must read on both themes: onSurface at low alpha darkens a light
+    // canvas and lightens a dark one — a print-decision marker, not print fidelity.
+    val shadeOverlayColor =
+        (if (blackWhiteOnly) Color.Black else previewScheme.onSurface).copy(alpha = 0.16f)
+
     val options = remember(
         unit, lineThicknessScale, outlineColor,
         bodyFill, previewBodyFill, linerFill, previewLinerFill,
         taperFill, previewTaperFill, threadFill, previewThreadFill, threadHatch,
         highlightEnabled, highlightId, themeGlow,
+        shadedComponentIds, shadeOverlayColor,
     ) { RenderOptions(
         // Visual tuning
         paddingPx = 16,
@@ -161,6 +174,10 @@ fun ShaftDrawing(
         threadFillColor = threadFill.copy(alpha = fillAlpha(previewThreadFill.preset, fallback = 0.10f)).toArgb(),
         threadHatchColor = threadHatch.toArgb(),
 
+        // PDF-shade mirror
+        shadedComponentIds = shadedComponentIds,
+        shadeOverlayColor = shadeOverlayColor.toArgb(),
+
         // Highlight preset (obvious: colored glow)
         highlightEnabled = highlightEnabled,
         highlightId = highlightId,
@@ -171,15 +188,7 @@ fun ShaftDrawing(
     ) }
 
     // Preview-safe spec: if OAL is zero but parts exist, extend to last occupied end.
-    val safeSpec = remember(spec) {
-        val lastEnd = buildList {
-            spec.bodies.maxOfOrNull { it.startFromAftMm + it.lengthMm }?.let(::add)
-            spec.tapers.maxOfOrNull { it.startFromAftMm + it.lengthMm }?.let(::add)
-            spec.liners.maxOfOrNull { it.startFromAftMm + it.lengthMm }?.let(::add)
-            spec.threads.maxOfOrNull { it.startFromAftMm + it.lengthMm }?.let(::add)
-        }.maxOrNull() ?: 0f
-        if (spec.overallLengthMm <= 0f && lastEnd > 0f) spec.copy(overallLengthMm = lastEnd) else spec
-    }
+    val safeSpec = remember(spec) { spec.renderSpanSpec() }
 
     // ──────────────────────────────
     // Pan / Zoom (UI only)

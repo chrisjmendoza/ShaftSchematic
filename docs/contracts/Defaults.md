@@ -1,4 +1,4 @@
-# Component Defaults (v1.3, 2026-07-26)
+# Component Defaults (v1.4, 2026-09-15)
 
 Central reference for default values used when creating new components.
 
@@ -25,16 +25,33 @@ intent) plus `BODY_DIA_MM` (the auto-body bare-shaft Ø fallback used by
 
 ## Parameter Order (Contract)
 
+Each `add*At` opens with its **core positional values** in a fixed order, followed by optional
+feature params (keyway / blend / shoulder / designation), and ends with
+`target: SpecTarget = SpecTarget.ORIGINAL` — which of the document's two geometries the add
+lands on (`docs/contracts/FinalSchematic.md`). The core order is the load-bearing part: it is
+what the UI passes positionally.
+
 ```text
-addBodyAt(startFromAftMm, lengthMm, diaMm)
-addLinerAt(startFromAftMm, lengthMm, odMm)
-addTaperAt(startFromAftMm, lengthMm, startDiaMm, endDiaMm)
-addThreadAt(startFromAftMm, lengthMm, majorDiaMm, pitchMm, excludeFromOAL, isAftEnd)  ← major Ø third, pitch fourth
+addBodyAt(startMm, lengthMm, diaMm,
+          keywayWidthMm, keywayDepthMm, keywayLengthMm, keywayOffsetFromEndMm,
+          keywayEnd, keywaySpooned, keywayUnit,
+          blendAftMm, blendFwdMm, blendProfile, blendAftSeal, blendFwdSeal, target)
+addLinerAt(startMm, lengthMm, odMm, reference,
+           shoulderAftLenMm, shoulderAftOdMm, shoulderAftRadiusMm,
+           shoulderFwdLenMm, shoulderFwdOdMm, shoulderFwdRadiusMm, target)
+addTaperAt(startMm, lengthMm, startDiaMm, endDiaMm, rateText, reference,
+           keywayWidthMm, keywayDepthMm, keywayLengthMm, keywayOffsetFromSetMm,
+           keywaySpooned, keywayUnit, target)
+addThreadAt(startMm, lengthMm, majorDiaMm, pitchMm,      ← major Ø third, pitch fourth
+            excludeFromOAL, isAftEnd, metricDesignation, target)
+addCouplerBoltSlotAt(startMm, holeDiaMm, count, spacingMm, through, depthMm, reference, target)
 ```
 
-> This order is enforced in UI and assumed by the ViewModel (`ShaftViewModel.addThreadAt`;
-> full signature: `addThreadAt(startMm, lengthMm, majorDiaMm, pitchMm, excludeFromOAL = false, isAftEnd = true)`).
-> Swapping `majorDiaMm`/`pitchMm` will yield incorrect TPI (e.g., ~0.508 TPI).
+> This order is enforced in UI and assumed by the ViewModel
+> (`ui/viewmodel/ShaftViewModelComponents.kt`). Everything after each signature's core values
+> is optional and defaulted, so a call site that sets none of them still reads as the short
+> four- or five-argument form. Swapping `majorDiaMm`/`pitchMm` will yield incorrect TPI
+> (e.g., ~0.508 TPI).
 
 ---
 
@@ -70,6 +87,10 @@ spec above, not derived from a prior segment.
 
 ## Changelog
 
+* **v1.4 (2026-09-15)** — Parameter Order rewritten against the real signatures: each
+  `add*At` is core positional values, then optional feature params (keyway / blend /
+  shoulder / metric designation), then `target: SpecTarget`. The core order — thread major Ø
+  third, pitch fourth — is unchanged and still the load-bearing claim.
 * **v1.3 (2026-07-26)** — Dead-code pass: removed the ten unused `default*Mm(unit)`
   helpers and the `*_MM` twin constants (except the live `BODY_DIA_MM` auto-body
   fallback). Doc now points at `SessionAddDefaults.initial()` as the only defaulting

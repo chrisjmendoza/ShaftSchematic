@@ -36,8 +36,8 @@ enum class UndercutReference { AFT_SET, FWD_SET, LINER_AFT, LINER_FWD }
  *
  * A **pure reference feature**, the same contract class as [WearSpot] / [WearPit] /
  * [WearDiaReading] / [com.android.shaftschematic.model.RunoutReading] /
- * [CouplerBoltSlot]: it never affects `coverageEndMm`, `ensureOverall`, body
- * resolution, collision/overlap validation, or the Free-to-End badge, and it lives
+ * [CouplerBoltSlot]: it never affects `coverageEndMm`, body
+ * resolution, or collision/overlap validation, and it lives
  * outside [ShaftSpec] entirely (in [UndercutRecord], the document envelope).
  *
  * ## Coordinate rule

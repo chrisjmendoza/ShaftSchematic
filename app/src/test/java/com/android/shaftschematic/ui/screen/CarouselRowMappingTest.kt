@@ -46,7 +46,7 @@ class CarouselRowMappingTest {
             ),
             liners = listOf(Liner(id = "liner-1", startFromAftMm = 200f, lengthMm = 200f, odMm = 200f)),
         )
-        val rows = buildCarouselRows(spec, resolveComponents(spec, overallIsManual = false))
+        val rows = buildCarouselRows(spec, resolveComponents(spec))
 
         val fragmentRows = rows.filter { row ->
             val c = row.component
@@ -69,7 +69,7 @@ class CarouselRowMappingTest {
             bodies = listOf(keyedBody("body-1", startMm = 0f, lengthMm = 600f)),
             liners = listOf(Liner(id = "liner-1", startFromAftMm = 200f, lengthMm = 200f, odMm = 200f)),
         )
-        val resolved = resolveComponents(spec, overallIsManual = true)
+        val resolved = resolveComponents(spec)
         val rows = buildCarouselRows(spec, resolved)
 
         assertEquals(resolved.size, rows.size)
@@ -83,7 +83,7 @@ class CarouselRowMappingTest {
             overallLengthMm = 1000f,
             liners = listOf(Liner(id = "liner-1", startFromAftMm = 400f, lengthMm = 200f, odMm = 200f)),
         )
-        val rows = buildCarouselRows(spec, resolveComponents(spec, overallIsManual = true))
+        val rows = buildCarouselRows(spec, resolveComponents(spec))
 
         val autoRows = rows.filter {
             (it.component as? ResolvedBody)?.source == ResolvedComponentSource.AUTO
@@ -102,7 +102,7 @@ class CarouselRowMappingTest {
                 Liner(id = "liner-1", startFromAftMm = 600f, lengthMm = 100f, odMm = 200f),
             ),
         )
-        val rows = buildCarouselRows(spec, resolveComponents(spec, overallIsManual = false))
+        val rows = buildCarouselRows(spec, resolveComponents(spec))
 
         assertEquals(0, rows.first { it.component.id == "taper-1" }.explicitIndex)
         assertEquals(0, rows.first { it.component.id == "liner-0" }.explicitIndex)

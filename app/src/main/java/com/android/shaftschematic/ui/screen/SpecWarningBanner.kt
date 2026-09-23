@@ -13,6 +13,9 @@ package com.android.shaftschematic.ui.screen
  * report) and cheapens the ones that matter — see `specWarningMessages` for the note that was
  * removed on those grounds.
  *
+ * Advisory does not mean blocking: the past-OAL count reports a legal, already-committed state
+ * (`docs/contracts/OverallLength.md`), and nothing here clamps or refuses anything.
+ *
  * Dismissal is keyed to the current warning set ([bannerVisible]/[warningSetKey]): dismissing
  * hides the banner for that exact set of messages only, and a changed set (a new or different
  * warning) re-shows it. The dismissed key is plain Compose view state — never written to the
@@ -52,9 +55,9 @@ internal fun SpecWarningBanner(
     spec: ShaftSpec,
     modifier: Modifier = Modifier,
 ) {
-    val messages = remember(spec.bodies, spec.tapers, spec.liners, spec.threads) {
-        specWarningMessages(spec)
-    }
+    // Keyed on the WHOLE spec, not the component lists: the past-OAL count also depends on
+    // `overallLengthMm`, so a list-only key left the banner stale when the OAL alone moved.
+    val messages = remember(spec) { specWarningMessages(spec) }
     var dismissedKey by rememberSaveable { mutableStateOf<String?>(null) }
 
     if (!bannerVisible(messages, dismissedKey)) return

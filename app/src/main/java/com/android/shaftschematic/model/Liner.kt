@@ -23,6 +23,18 @@ enum class LinerAuthoredReference { AFT, FWD }
  * @property showDiaOnDrawing Whether this liner's OD prints as a below-shaft callout on the
  *   schematic. Draw-only flag — mirrors [com.android.shaftschematic.model.Body.showDiaOnDrawing];
  *   it never rewrites [odMm] and never touches geometry. Defaults true for back-compat.
+ * @property showNameOnDrawing Whether this liner's name prints as a component label under the
+ *   schematic. Tri-state, draw-only — mirrors [com.android.shaftschematic.model.Body.showNameOnDrawing]:
+ *   `null` (default) follows the Settings switch, explicit `true`/`false` overrides it either
+ *   way; never rewrites [label] and never touches geometry.
+ * @property shadeOnDrawing Whether this liner draws with the grey shade fill. Tri-state,
+ *   draw-only — mirrors [com.android.shaftschematic.model.Body.shadeOnDrawing]: `null`
+ *   (default) follows the kind's Settings checkbox (`PdfPrefs.shadedLiners`), an explicit
+ *   `true` shades THIS liner with that checkbox off, an explicit `false` leaves it bare with
+ *   the checkbox on. One case outranks it: on a consolidated sheet printing measured Ø values
+ *   INSIDE the profile, every liner draws unfilled whatever this says — a sheet-white knockout
+ *   halo over grey reads as a pasted box. The wear and undercut documents keep one fill per
+ *   kind and never read it.
  *
  * Shoulders: a machined step at a liner end — the OD drops to a reduced diameter over the
  * outermost [shoulderAftLenMm]/[shoulderFwdLenMm] of the liner's OWN span (cut into the liner,
@@ -47,6 +59,8 @@ data class Liner(
     @JsonNames("endFromAftMm", "endMmPhysical")
     val endMmPhysical: Float = 0f,
     val showDiaOnDrawing: Boolean = true,
+    val showNameOnDrawing: Boolean? = null,
+    val shadeOnDrawing: Boolean? = null,
     val shoulderAftLenMm: Float = 0f,
     val shoulderAftOdMm: Float = 0f,
     val shoulderAftRadiusMm: Float = 0f,

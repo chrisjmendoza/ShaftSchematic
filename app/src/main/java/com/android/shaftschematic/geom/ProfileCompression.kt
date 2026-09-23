@@ -91,14 +91,38 @@ const val PROFILE_MIN_THREAD_PT = 36f   // hatched stub stays legible
 const val PROFILE_MIN_BODY_RUN_PT = 64f // write a diameter, hang runout leaders
 const val PROFILE_MIN_LINER_PT = 100f   // room to write wear values in / read the liner
 
-// Ratio-preserving taper floor: tapers keep at least this fraction of their true drawn
-// width (λ-fit like the liner raises — the drawn height never yields to it). Deliberately
-// the LARGEST fraction in the λ pool: within the shared λ, width flows to spans in
-// proportion to their fraction, so tapers out-prioritize body runs by this ratio
-// (on-device request: "sacrifice a little more of the body compression to make the
-// tapers more proportional — liners get the most proportionality but tapers are
+// Ratio-preserving taper BASELINE floor: tapers keep at least this fraction of their true
+// drawn width (λ-fit like the liner raises — the drawn height never yields to it).
+// Deliberately the LARGEST constant fraction in the λ pool: within the shared λ, width
+// flows to spans in proportion to their fraction, so tapers out-prioritize body runs by
+// this ratio (on-device request: "sacrifice a little more of the body compression to make
+// the tapers more proportional — liners get the most proportionality but tapers are
 // important too").
+//
+// A baseline, not a ceiling — see [taperMinFracOfTrue]: the "Liner compression" control
+// raises tapers with the liners.
 const val PROFILE_TAPER_MIN_FRAC_OF_TRUE = 0.7f
+
+/**
+ * The fraction-of-true floor tapers take, given the per-job "Liner compression" request
+ * ([com.android.shaftschematic.settings.RunoutConfig.linerMinFracOfTrue]): the SAME value
+ * the liners ask for, never below the [PROFILE_TAPER_MIN_FRAC_OF_TRUE] baseline.
+ *
+ * Tapers and liners are the components the sheet is about, so they must foreshorten
+ * TOGETHER — a slider that walked liners up to true length while the tapers stayed pinned
+ * at the baseline printed one measured kind at full scale beside another at 70%, and the
+ * drawing read uneven (on-device request: "tapers should compress at the same value as
+ * liners so they stay proportional with them"). Above the baseline the two kinds share one
+ * requested fraction and one λ, so their kept fractions are equal at every squeeze.
+ *
+ * The coupling is one-way UPWARD. A liner request below the baseline leaves tapers on the
+ * baseline rather than following the liners down: liners have a flat writable floor
+ * ([PROFILE_MIN_LINER_PT]) to fall back on and tapers deliberately have none (a flat floor
+ * equalizes unequal tapers), so a taper that followed the liners to a bare request would
+ * compress like plain bare shaft and vanish on a long drawing.
+ */
+fun taperMinFracOfTrue(linerMinFracOfTrue: Float): Float =
+    maxOf(PROFILE_TAPER_MIN_FRAC_OF_TRUE, linerMinFracOfTrue.coerceIn(0f, 1f))
 
 // Ratio-preserving BODY-RUN floor: body gaps join the same λ pool so liner raises can
 // never consume the whole page (on-device report: with proportional liners the body

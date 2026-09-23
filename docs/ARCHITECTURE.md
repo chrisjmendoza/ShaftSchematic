@@ -1,6 +1,9 @@
 # ShaftSchematic Architecture
 Version: v0.5.x
-Last updated: 2026-08-05 — five editor tabs (Schematic / Runout / Wear / Undercut /
+Last updated: 2026-09-15 — the **Final Schematic** tab: six editor tabs, and this document is
+the ONE owner of the tab list and the composer/document inventory (`BRIEFING.md` and
+`CONTRIBUTING.md` point here rather than restating either).
+2026-08-05 — five editor tabs (Schematic / Runout / Wear / Undercut /
 Consolidated Output) and the five-document PDF layer incl. `UndercutPdfComposer`; envelope
 family extended with `undercut_record` and worn sections; `geom/` list brought current;
 corrected the renderer's stroke fields, the PDF fit function (only `computeDetailPtPerMm`
@@ -70,7 +73,7 @@ never touches geometry resolution, so it lives beside the spec in the document e
   ("Shaft height", liner compression) behind the runout/consolidated sheets and the schematic.
 
 All are additive/defaulted (no envelope version bumps) and share one contract: they never
-affect `coverageEndMm`/OAL, body resolution, collision, or the Free-to-End badge. The
+affect `coverageEndMm`/OAL, body resolution, or collision. The
 authoritative invariants live in `CLAUDE.md` and
 `docs/contracts/RunoutSheet.md`.
 
@@ -96,15 +99,16 @@ Responsibilities:
 - File import/export
 
 Resolved component pipeline (shipped):
-- `ui/resolved/ResolvedComponent.kt` implements `resolveComponents(spec, overallIsManual)`,
+- `ui/resolved/ResolvedComponent.kt` implements `resolveComponents(spec)`,
   which resolves explicit components and calls `deriveAutoBodies()` to fill the gaps.
 - Auto bodies (`ResolvedComponentSource.AUTO`, `ResolvedComponentType.BODY_AUTO`) are **not**
   persisted in `ShaftSpec` — they are regenerated deterministically on every resolve.
 - Auto bodies are downstream of OAL + explicit components and never overlap them
   (`subtractBodiesAgainstNonBodies()` carves body spans around sacred components for rendering).
 - Auto bodies must never define measurement references or snapping anchors.
-- Manual OAL seeds a base auto body spanning 0 → OAL; derived OAL does not
-  (`deriveAutoBodies(overallLengthMm = if (overallIsManual) spec.overallLengthMm else 0f, …)`).
+- An OAL seeds a base auto body spanning 0 → OAL
+  (`deriveAutoBodies(overallLengthMm = spec.overallLengthMm, …)`); a not-yet-set OAL (0)
+  seeds none — `deriveAutoBodies`' `<= 0f` branches are the 0-OAL guard.
 - **Explicit vs auto bodies (reverted 2026-07-21):** both stored `ShaftSpec.bodies` (explicit)
   and derived auto-bodies are fluid base material / fillers. Bodies **do not** collide —
   `collidingIds()` checks only taper/thread/liner pairs (sacred-vs-sacred). There is no
@@ -229,12 +233,20 @@ Responsibilities:
 - Handle text input with commit-on-blur
 - Display validation errors and warnings
 - Persist and expose user preferences (units, grid, preview colors)
-- Host the five editor tabs (`ui/screen/EditorTab.kt`): Schematic / Runout Sheet
-  (`RunoutRoute.kt` — runouts only, the classic standalone sheet) / Wear Document
-  (`WearRoute.kt` — the authoring surface for wear data) / Undercut Drawing
-  (`UndercutRoute.kt`) / Consolidated Output (`OutputRoute.kt` — content-variant election,
-  worn-section editor, "Shaft height" + liner-compression controls, and the "Export all"
-  batch), plus the full-screen
+- Host the **six** editor tabs — this list is the single source of truth; enum order is
+  sidebar order (`ui/screen/EditorTab.kt`), and every tab but Schematic is disabled until the
+  shaft is "built" (≥ 1 component and a non-zero OAL):
+  1. **Schematic** (`ShaftRoute.kt`) — the drawing editor.
+  2. **Runout Sheet** (`RunoutRoute.kt`) — runouts only, the classic standalone sheet.
+  3. **Wear Document** (`WearRoute.kt`) — the authoring surface for wear data.
+  4. **Undercut Drawing** (`UndercutRoute.kt`).
+  5. **Final Schematic** (`FinalRoute.kt`) — the same editor bound to the document's SECOND
+     geometry (`ShaftRoute(target = SpecTarget.FINAL)`) under a standing banner; the only tab
+     that draws the final spec. See `docs/contracts/FinalSchematic.md`.
+  6. **Consolidated Output** (`OutputRoute.kt`) — content-variant election, worn-section
+     editor, "Shaft height" + liner-compression controls, and the "Export all" batch.
+
+  Plus the full-screen
   `ComponentWearDetailOverlay` (tap a component on the wear canvas → broken-out segment
   with explicit tool chips: Add X / Remove X pit markers, Add Ø measured-diameter readings)
 
@@ -244,10 +256,10 @@ UI must NOT:
 - Perform scaling or px-per-mm computation
 - Draw any shaft geometry (except grid/labels)
 
-UI passes:
-spec + layoutResult + renderOptions → ShaftDrawing
-
- 
+UI passes `spec` + `resolvedComponents` + the display flags into `ShaftDrawing`
+(`ui/drawing/compose/ShaftDrawing.kt`); the host calls `ShaftLayout.compute(...)` for a
+`ShaftLayout.Result` and hands it with a `RenderOptions` to `ShaftRenderer` — one
+compute → grid → draw pass per frame.
 
 ---
 
@@ -277,8 +289,21 @@ measured-Ø callout bands are laid out by the pure `pdf/WearStripLayout.kt` +
 shaft-space cuts as open silhouette steps with liner-anchored detail strips
 (`pdf/UndercutStripLayout.kt`). The **consolidated output sheet** is the runout composer in
 its consolidated mode (`composeRunoutPdf(consolidated = true)`), which adds the schematic's
-dimension rails and footer plus the elected wear/runout content — five documents in all from
-four composers. All in-app PDF previews **rasterize the real composed PDF**
+dimension rails and footer plus the elected wear/runout content.
+
+**Inventory (single source of truth):** four base composers — `ShaftPdfComposer`,
+`RunoutPdfComposer`, `WearPdfComposer`, `UndercutPdfComposer` — produce five documents over
+the ORIGINAL geometry: shaft drawing, classic runout sheet, wear document, undercut drawing,
+and the consolidated output sheet. The **Final Schematic** tab adds no composer: it re-runs
+those same ones over the FINAL spec through the ONE seam `ui/nav/FinalSheetCompose.kt`
+(`composeSchematicSheet`, shared by the preview loop, Print, and SAF export so a sheet judged
+on screen is the sheet that prints) — the final schematic (`composeShaftPdf`), optionally the
+consolidated **Schematic + Runout** variant when the session's "Runout bubbles" election is
+on, and a blank classic runout sheet (`composeRunoutPdf(consolidated = false)`) from the tab's
+banner. All three are marked `Drawing: Final` and take a `_Final` filename. See
+`docs/contracts/FinalSchematic.md`.
+
+All in-app PDF previews **rasterize the real composed PDF**
 (there is no separate preview draw path for these documents). Contracts:
 `docs/PDF_EXPORT.md` and
 `docs/contracts/RunoutSheet.md`.
@@ -324,8 +349,9 @@ There is none to maintain: carousel rows are a pure function of the spec.
 ---
 
 ## Thread Safety & State Rules
-- All mutating operations use `_spec.update { … }` for atomic state updates.
-- Ordering mutations (`orderAdd`, `orderRemove`) occur **after** spec updates.
+- All mutating operations use `_spec.update { … }` for atomic state updates, reached through
+  the one seam `updateSpec(target) { … }` so an edit lands on the geometry its caller named
+  (see "Component Ordering System" above: there is no separate order state to mutate).
 - Validators run in ViewModel before state commit.
 
 ---

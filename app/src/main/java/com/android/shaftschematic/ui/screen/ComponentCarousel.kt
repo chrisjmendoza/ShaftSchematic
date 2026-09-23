@@ -14,15 +14,19 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
@@ -33,18 +37,25 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.BlendProfile
@@ -137,6 +148,10 @@ internal fun ComponentCarouselPager(
     showEdgeArrows: Boolean,
     edgeArrowWidthDp: Int,
     showComponentDebugLabels: Boolean,
+    /** The Settings "Show component titles" switch — what an UNSET per-component name toggle follows. */
+    componentTitlesDefault: Boolean = true,
+    /** The kind-level shade checkboxes — what an UNSET per-component shade toggle follows. */
+    componentShadeDefaults: ComponentShadeDefaults = ComponentShadeDefaults(),
     selectedComponentId: String?,
     onAddBody: (Float, Float, Float) -> Unit,
     onSetAutoSectionDia: (spanStartMm: Float, spanEndMm: Float, diaMm: Float) -> Unit,
@@ -144,17 +159,25 @@ internal fun ComponentCarouselPager(
     onSetShowAutoBodyDia: (Boolean) -> Unit,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateBodyShowDia: (Int, Boolean) -> Unit,
+    onUpdateBodyShowLabel: (Int, Boolean) -> Unit,
+    onUpdateBodyShade: (Int, Boolean) -> Unit = { _, _ -> },
+    onUpdateBodyCompressOnDrawing: (Int, Boolean) -> Unit,
     onUpdateBodyBlend: (index: Int, blendAftMm: Float, blendFwdMm: Float, profile: BlendProfile, sealAft: Boolean, sealFwd: Boolean) -> Unit,
     onUpdateBodyLabel: (Int, String?) -> Unit,
     onUpdateBodyKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromEndMm: Float, end: LinerAuthoredReference, spooned: Boolean) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float, String) -> Unit,
     onUpdateTaperLabel: (Int, String?) -> Unit,
+    onUpdateTaperShowLabel: (Int, Boolean) -> Unit,
+    onUpdateTaperShade: (Int, Boolean) -> Unit = { _, _ -> },
     onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromSetMm: Float, spooned: Boolean) -> Unit,
     onUpdateTaperReference: (Int, LinerAuthoredReference) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float, String?) -> Unit,
     onUpdateThreadLabel: (Int, String?) -> Unit,
+    onUpdateThreadShowLabel: (Int, Boolean) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
     onUpdateLinerShowDia: (Int, Boolean) -> Unit,
+    onUpdateLinerShowLabel: (Int, Boolean) -> Unit,
+    onUpdateLinerShade: (Int, Boolean) -> Unit = { _, _ -> },
     onUpdateLinerShoulder: (Int, LinerAuthoredReference, Float, Float, Float) -> Unit = { _, _, _, _, _ -> },
     linerShouldersEnabled: Boolean = false,
     onUpdateLinerLabel: (Int, String?) -> Unit,
@@ -286,23 +309,33 @@ internal fun ComponentCarouselPager(
                     spec = spec, unit = unit, row = row, physicalIndex = page,
                     outerPaddingHorizontal = componentCardPadding,
                     showComponentDebugLabels = showComponentDebugLabels,
+                    componentTitlesDefault = componentTitlesDefault,
+                    componentShadeDefaults = componentShadeDefaults,
                     onAddBody = onAddBody,
                     onSetAutoSectionDia = onSetAutoSectionDia,
                     onSetAutoBlend = onSetAutoBlend,
                     onSetShowAutoBodyDia = onSetShowAutoBodyDia,
                     onUpdateBody = onUpdateBody,
                     onUpdateBodyShowDia = onUpdateBodyShowDia,
+                    onUpdateBodyShowLabel = onUpdateBodyShowLabel,
+                    onUpdateBodyShade = onUpdateBodyShade,
+                    onUpdateBodyCompressOnDrawing = onUpdateBodyCompressOnDrawing,
                     onUpdateBodyBlend = onUpdateBodyBlend,
                     onUpdateBodyLabel = onUpdateBodyLabel,
                     onUpdateBodyKeyway = onUpdateBodyKeyway,
                     onUpdateTaper = onUpdateTaper,
                     onUpdateTaperLabel = onUpdateTaperLabel,
+                    onUpdateTaperShowLabel = onUpdateTaperShowLabel,
+                    onUpdateTaperShade = onUpdateTaperShade,
                     onUpdateTaperKeyway = onUpdateTaperKeyway,
                     onUpdateTaperReference = onUpdateTaperReference,
                     onUpdateThread = onUpdateThread,
                     onUpdateThreadLabel = onUpdateThreadLabel,
+                    onUpdateThreadShowLabel = onUpdateThreadShowLabel,
                     onUpdateLiner = onUpdateLiner,
                     onUpdateLinerShowDia = onUpdateLinerShowDia,
+                    onUpdateLinerShowLabel = onUpdateLinerShowLabel,
+                    onUpdateLinerShade = onUpdateLinerShade,
                     onUpdateLinerShoulder = onUpdateLinerShoulder,
                     linerShouldersEnabled = linerShouldersEnabled,
                     onUpdateLinerLabel = onUpdateLinerLabel,
@@ -543,23 +576,33 @@ internal fun ComponentPagerCard(
     physicalIndex: Int,
     outerPaddingHorizontal: Dp,
     showComponentDebugLabels: Boolean,
+    componentTitlesDefault: Boolean = true,
+    componentShadeDefaults: ComponentShadeDefaults = ComponentShadeDefaults(),
     onAddBody: (Float, Float, Float) -> Unit,
     onSetAutoSectionDia: (spanStartMm: Float, spanEndMm: Float, diaMm: Float) -> Unit,
     onSetAutoBlend: (spanStartMm: Float, spanEndMm: Float, end: LinerAuthoredReference, lengthMm: Float, profile: BlendProfile, seal: Boolean) -> Unit,
     onSetShowAutoBodyDia: (Boolean) -> Unit,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateBodyShowDia: (Int, Boolean) -> Unit,
+    onUpdateBodyShowLabel: (Int, Boolean) -> Unit,
+    onUpdateBodyShade: (Int, Boolean) -> Unit = { _, _ -> },
+    onUpdateBodyCompressOnDrawing: (Int, Boolean) -> Unit,
     onUpdateBodyBlend: (index: Int, blendAftMm: Float, blendFwdMm: Float, profile: BlendProfile, sealAft: Boolean, sealFwd: Boolean) -> Unit,
     onUpdateBodyLabel: (Int, String?) -> Unit,
     onUpdateBodyKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromEndMm: Float, end: LinerAuthoredReference, spooned: Boolean) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float, String) -> Unit,
     onUpdateTaperLabel: (Int, String?) -> Unit,
+    onUpdateTaperShowLabel: (Int, Boolean) -> Unit,
+    onUpdateTaperShade: (Int, Boolean) -> Unit = { _, _ -> },
     onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromSetMm: Float, spooned: Boolean) -> Unit,
     onUpdateTaperReference: (Int, LinerAuthoredReference) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float, String?) -> Unit,
     onUpdateThreadLabel: (Int, String?) -> Unit,
+    onUpdateThreadShowLabel: (Int, Boolean) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
     onUpdateLinerShowDia: (Int, Boolean) -> Unit,
+    onUpdateLinerShowLabel: (Int, Boolean) -> Unit,
+    onUpdateLinerShade: (Int, Boolean) -> Unit = { _, _ -> },
     onUpdateLinerShoulder: (Int, LinerAuthoredReference, Float, Float, Float) -> Unit = { _, _, _, _, _ -> },
     linerShouldersEnabled: Boolean = false,
     onUpdateLinerLabel: (Int, String?) -> Unit,
@@ -611,6 +654,8 @@ internal fun ComponentPagerCard(
             physicalIndex = physicalIndex,
             outerPaddingHorizontal = outerPaddingHorizontal,
             showComponentDebugLabels = showComponentDebugLabels,
+            componentTitlesDefault = componentTitlesDefault,
+            componentShadeDefaults = componentShadeDefaults,
             bodyTitleById = bodyTitleById,
             f1 = ::f1,
             startValidator = ::startValidator,
@@ -620,6 +665,9 @@ internal fun ComponentPagerCard(
             onSetShowAutoBodyDia = onSetShowAutoBodyDia,
             onUpdateBody = onUpdateBody,
             onUpdateBodyShowDia = onUpdateBodyShowDia,
+            onUpdateBodyShowLabel = onUpdateBodyShowLabel,
+            onUpdateBodyShade = onUpdateBodyShade,
+            onUpdateBodyCompressOnDrawing = onUpdateBodyCompressOnDrawing,
             onUpdateBodyBlend = onUpdateBodyBlend,
             onUpdateBodyLabel = onUpdateBodyLabel,
             onUpdateBodyKeyway = onUpdateBodyKeyway,
@@ -643,10 +691,14 @@ internal fun ComponentPagerCard(
             physicalIndex = physicalIndex,
             outerPaddingHorizontal = outerPaddingHorizontal,
             showComponentDebugLabels = showComponentDebugLabels,
+            componentTitlesDefault = componentTitlesDefault,
+            componentShadeDefaults = componentShadeDefaults,
             taperTitleById = taperTitleById,
             f1 = ::f1,
             onUpdateTaper = onUpdateTaper,
             onUpdateTaperLabel = onUpdateTaperLabel,
+            onUpdateTaperShowLabel = onUpdateTaperShowLabel,
+            onUpdateTaperShade = onUpdateTaperShade,
             onUpdateTaperKeyway = onUpdateTaperKeyway,
             onUpdateTaperReference = onUpdateTaperReference,
             onSetKeyways180Apart = onSetKeyways180Apart,
@@ -669,11 +721,13 @@ internal fun ComponentPagerCard(
             physicalIndex = physicalIndex,
             outerPaddingHorizontal = outerPaddingHorizontal,
             showComponentDebugLabels = showComponentDebugLabels,
+            componentTitlesDefault = componentTitlesDefault,
             threadTitleById = threadTitleById,
             f1 = ::f1,
             startValidator = ::startValidator,
             onUpdateThread = onUpdateThread,
             onUpdateThreadLabel = onUpdateThreadLabel,
+            onUpdateThreadShowLabel = onUpdateThreadShowLabel,
             onSetThreadExcludeFromOal = onSetThreadExcludeFromOal,
             onSetThreadEndPosition = onSetThreadEndPosition,
             onRemoveThread = onRemoveThread,
@@ -692,10 +746,14 @@ internal fun ComponentPagerCard(
             physicalIndex = physicalIndex,
             outerPaddingHorizontal = outerPaddingHorizontal,
             showComponentDebugLabels = showComponentDebugLabels,
+            componentTitlesDefault = componentTitlesDefault,
+            componentShadeDefaults = componentShadeDefaults,
             linerTitleById = linerTitleById,
             f1 = ::f1,
             onUpdateLiner = onUpdateLiner,
             onUpdateLinerShowDia = onUpdateLinerShowDia,
+            onUpdateLinerShowLabel = onUpdateLinerShowLabel,
+            onUpdateLinerShade = onUpdateLinerShade,
             onUpdateLinerShoulder = onUpdateLinerShoulder,
             linerShouldersEnabled = linerShouldersEnabled,
             onUpdateLinerLabel = onUpdateLinerLabel,
@@ -725,17 +783,33 @@ internal fun ComponentPagerCard(
 }
 
 /**
- * "Show Ø on drawing" row — the per-component schematic Ø-callout switch, sitting directly
- * under the Ø field it modifies.
+ * Switch row for a per-component schematic display flag — "Show Ø on drawing" (sitting directly
+ * under the Ø field it modifies) and "Show name on drawing".
  *
- * Draw-only: it never touches the stored diameter. Hiding is for a surface whose Ø could not
- * be measured where the callout would land (a body under fiberglass, a sleeved run) — the
- * printed anchor then moves to the longest still-visible component sharing that Ø.
+ * Draw-only: neither switch touches a stored value. Hiding a Ø is for a surface whose diameter
+ * could not be measured where the callout would land (a body under fiberglass, a sleeved run) —
+ * the printed anchor then moves to the longest still-visible component sharing that Ø. Hiding a
+ * name drops that component's label from the schematic's label pass and nothing else.
  *
  * Deliberately card-only, with no Add-dialog counterpart: like the coupler slot's
- * "Show dimension rail" it is a post-hoc display choice made after seeing a printed sheet,
- * not a property of the component being added. See `docs/contracts/AddComponentDialogs.md`.
+ * "Show dimension rail" these are post-hoc display choices made after seeing a printed sheet,
+ * not properties of the component being added. See `docs/contracts/AddComponentDialogs.md`.
  */
+/**
+ * The three kind-level shade checkboxes (Settings → Drawing, mirrored in both PDF options
+ * sheets) as one immutable holder — the DEFAULT each card's unset "Shade on drawing" toggle
+ * displays. Carried together because every card row needs exactly one of them and threading
+ * three loose Booleans through the pager would read as three unrelated flags.
+ *
+ * A body's default is plain `shadedBodies`: `shadeExplicitBodiesOnly` narrows AUTO runs only,
+ * and every card carrying this row is an explicit component.
+ */
+data class ComponentShadeDefaults(
+    val bodies: Boolean = false,
+    val tapers: Boolean = false,
+    val liners: Boolean = false,
+)
+
 @Composable
 internal fun ShowDiaToggleRow(
     label: String,
@@ -758,6 +832,75 @@ internal fun ShowDiaToggleRow(
     }
 }
 
+/**
+ * The card title, renamed in place — the one implementation behind every component card's
+ * [ComponentCard.titleContent].
+ *
+ * Tapping the title swaps it for a text field seeded with the stored [label] (the computed
+ * [title] shows as the placeholder, so clearing the field restores the derived name). The edit
+ * commits the TRIMMED text — blank meaning "no custom label", i.e. `null` — on IME Done and on
+ * focus loss, the latter only once the field has actually held focus: Compose delivers an
+ * initial unfocused callback on attach, and committing on it would write a label with no user
+ * edit (the [com.android.shaftschematic.ui.input.shouldCommitOnBlur] baseline rule).
+ *
+ * The trailing pencil is discoverability only — it opens the same editor as the title tap. Tapping
+ * the title alone was not discoverable (on-device report).
+ */
+@Composable
+internal fun EditableCardTitle(
+    componentId: String,
+    title: String,
+    label: String?,
+    onCommitLabel: (String?) -> Unit,
+) {
+    var editing by rememberSaveable(componentId) { mutableStateOf(false) }
+    val focusRequester = remember { FocusRequester() }
+    var hasFocusedOnce by remember(componentId) { mutableStateOf(false) }
+
+    if (!editing) {
+        Row(
+            modifier = Modifier.fillMaxWidth().clickable { editing = true },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.weight(1f, fill = false),
+                maxLines = 1, overflow = TextOverflow.Ellipsis
+            )
+            Icon(
+                Icons.Filled.Edit,
+                contentDescription = "Rename",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp).testTag("card_title_edit"),
+            )
+        }
+    } else {
+        var text by remember(componentId, label) { mutableStateOf(label.orEmpty()) }
+        LaunchedEffect(componentId) { focusRequester.requestFocus() }
+        OutlinedTextField(
+            value = text,
+            onValueChange = { text = it },
+            singleLine = true,
+            placeholder = { Text(title) },
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = {
+                onCommitLabel(text.trim().takeIf { it.isNotEmpty() })
+                editing = false
+            }),
+            modifier = Modifier.fillMaxWidth().focusRequester(focusRequester)
+                .onFocusChanged { f ->
+                    if (f.isFocused) hasFocusedOnce = true
+                    if (hasFocusedOnce && !f.isFocused) {
+                        onCommitLabel(text.trim().takeIf { it.isNotEmpty() })
+                        editing = false
+                    }
+                }
+        )
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // ComponentCard — shared card chrome for all component editors
 // ─────────────────────────────────────────────────────────────────────────────
@@ -775,6 +918,9 @@ internal fun ComponentCard(
     onRemove: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    // One dirty registry per card identity — a page swipe or a card recycled onto a different
+    // component starts clean rather than inheriting the previous component's pending edits.
+    val dirtyState = remember(componentId ?: title) { CardDirtyState() }
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = outerPaddingHorizontal),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -785,8 +931,27 @@ internal fun ComponentCard(
                 modifier = Modifier.align(Alignment.TopStart).padding(16.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                if (titleContent != null) titleContent()
-                else Text(title, style = MaterialTheme.typography.titleMedium)
+                // The Remove button lives IN the title row so it scrolls with the card —
+                // floated over the Box it would sit transparently on top of whatever the
+                // card content scrolled beneath it (on-device report).
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.weight(1f)) {
+                        if (titleContent != null) titleContent()
+                        else Text(title, style = MaterialTheme.typography.titleMedium)
+                    }
+                    if (onRemove != null) {
+                        IconButton(
+                            onClick = onRemove,
+                            modifier = Modifier.testTag("card_remove_button")
+                        ) {
+                            Icon(
+                                Icons.Filled.Delete,
+                                contentDescription = "Remove",
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+                }
 
                 if (debugText != null) {
                     Text(debugText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -803,44 +968,59 @@ internal fun ComponentCard(
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
                     }
                 }
-                content()
-
-                // Explicit commit affordance for the card's numeric fields. Fields commit on
-                // blur and on IME Done, but chips, toggles, and checkboxes never TAKE focus —
-                // so a value typed and followed by a chip tap sits uncommitted in a still-
-                // focused field with nothing visible wrong (on-device report: a body keyway
-                // length that never landed). Save force-clears focus, which drives the one
-                // existing commit path (`shouldCommitOnBlur`); it adds no second commit
-                // pipeline, and with nothing focused it is a no-op. Card-only by design —
-                // the Add dialogs commit through their own Add button.
-                run {
-                    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        androidx.compose.material3.TextButton(
-                            onClick = { focusManager.clearFocus(force = true) },
-                            modifier = Modifier.testTag("card_save_button"),
-                        ) { Text("Save") }
-                    }
+                // The card's numeric fields register their uncommitted state here, which is
+                // what the Save button below reads. Only `content` is wrapped: the title row's
+                // rename editor is a bespoke field with its own commit, outside this registry.
+                CompositionLocalProvider(LocalCardDirtyState provides dirtyState) {
+                    content()
                 }
+
+                CardSaveButton(dirtyState)
             }
 
-            if (onRemove != null) {
-                IconButton(
-                    onClick = onRemove,
-                    modifier = Modifier.align(Alignment.TopEnd).padding(top = 8.dp, end = 8.dp)
-                ) {
-                    Icon(Icons.Filled.Delete, contentDescription = "Remove", tint = MaterialTheme.colorScheme.error)
-                }
-            }
         }
     }
+}
+
+/**
+ * Explicit commit affordance for the card's numeric fields.
+ *
+ * Fields commit on blur and on IME Done, but chips, toggles, and checkboxes never TAKE focus —
+ * so a value typed and followed by a chip tap sits uncommitted in a still-focused field with
+ * nothing visible wrong (on-device report: a body keyway length that never landed). Save
+ * force-clears focus, which drives the one existing commit path (`shouldCommitOnBlur`); it
+ * adds no second commit pipeline. Card-only by design — the Add dialogs commit through their
+ * own Add button.
+ *
+ * It is **disabled while nothing is pending** (on-device request), so a greyed-out Save reads
+ * as "everything on this card is saved" and a filled one is the visible thing to press. The
+ * accepted trade: with nothing pending it is no longer a tap-anywhere way to dismiss the
+ * keyboard — IME back and Done still do that.
+ *
+ * Read inside its own composable so that flipping enabled recomposes the button rather than
+ * the whole card.
+ */
+@Composable
+private fun CardSaveButton(dirtyState: CardDirtyState) {
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    androidx.compose.material3.Button(
+        onClick = { focusManager.clearFocus(force = true) },
+        enabled = dirtyState.hasPendingEdits,
+        modifier = Modifier.fillMaxWidth().testTag("card_save_button"),
+    ) { Text("Save") }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Carousel-private helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Numeric input field with commit-on-blur, fraction support, and optional inline validator. */
+/**
+ * Numeric input field with commit-on-blur, fraction support, and optional inline validator.
+ *
+ * Registers itself with the enclosing card's [CardDirtyState] (if any) so the card's Save
+ * button lights up while this field holds an uncommitted edit — no per-call-site wiring, so a
+ * newly added field cannot forget to report.
+ */
 @Composable
 internal fun CommitNum(
     label: String,
@@ -856,6 +1036,13 @@ internal fun CommitNum(
     validator: ((String) -> String?)? = null,
     onCommit: (String) -> Unit
 ) {
+    val dirtyState = LocalCardDirtyState.current
+    // Identity token, not a name: one per field instance, stable across recomposition, and
+    // unique without any call site having to invent a key.
+    val fieldToken = remember { Any() }
+    DisposableEffect(dirtyState, fieldToken) {
+        onDispose { dirtyState?.forget(fieldToken) }
+    }
     NumericInputField(
         label = label,
         initialText = initialDisplay,
@@ -868,6 +1055,7 @@ internal fun CommitNum(
         showValidationErrors = showValidationErrors,
         keyboardType = keyboardType,
         validator = validator,
+        onDirtyChange = { dirty -> dirtyState?.setDirty(fieldToken, dirty) },
         parseValid = parseValid,
         onCommit = onCommit
     )
@@ -878,6 +1066,9 @@ internal fun CommitNum(
  * Unlike [CommitNum] this does not filter input to numeric characters — a designation
  * carries a leading "M" and a "×"/"x" separator — so it commits the raw typed text
  * verbatim and lets the caller parse it (`ThreadDesignation.parse`).
+ *
+ * Reports to the card's [CardDirtyState] like [CommitNum] — it is the same commit-on-blur
+ * shape, so a half-typed designation must light Save up too.
  */
 @Composable
 internal fun CommitDesignationField(
@@ -887,6 +1078,17 @@ internal fun CommitDesignationField(
 ) {
     var text by remember(initialText) { mutableStateOf(initialText) }
     var textWhenFocused by remember(initialText) { mutableStateOf<String?>(null) }
+    // The text a walk-away would leave behind. The caller drops a designation that does not
+    // parse, so the model may not move on commit; tracking the settled text here keeps the
+    // field from reporting itself dirty forever after one.
+    var settledText by remember(initialText) { mutableStateOf(initialText) }
+    val dirtyState = LocalCardDirtyState.current
+    val fieldToken = remember { Any() }
+    DisposableEffect(dirtyState, fieldToken) {
+        onDispose { dirtyState?.forget(fieldToken) }
+    }
+    val isDirty = text != settledText
+    LaunchedEffect(isDirty) { dirtyState?.setDirty(fieldToken, isDirty) }
     val isValid = ThreadDesignation.parse(text) != null
     OutlinedTextField(
         value = text,
@@ -900,6 +1102,7 @@ internal fun CommitDesignationField(
                 if (f.isFocused) {
                     textWhenFocused = text
                 } else if (shouldCommitOnBlur(textWhenFocused, text)) {
+                    settledText = text
                     onCommit(text)
                     textWhenFocused = null
                 }

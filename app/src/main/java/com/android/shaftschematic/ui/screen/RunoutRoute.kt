@@ -13,6 +13,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -28,12 +29,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material.icons.outlined.PictureAsPdf
-import androidx.compose.material.icons.outlined.Preview
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -41,7 +39,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -72,6 +69,8 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.drawText
@@ -100,6 +99,9 @@ import com.android.shaftschematic.pdf.composeRunoutPdf
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.settings.RunoutConfig
 import com.android.shaftschematic.settings.TirDirection
+import com.android.shaftschematic.ui.adaptive.LocalSidebarPermanent
+import com.android.shaftschematic.ui.adaptive.WindowWidthClass
+import com.android.shaftschematic.ui.adaptive.currentWindowWidthClass
 import com.android.shaftschematic.ui.drawing.render.RenderOptions
 import com.android.shaftschematic.ui.drawing.render.ShaftLayout
 import com.android.shaftschematic.ui.drawing.render.ShaftRenderer
@@ -112,7 +114,9 @@ import com.android.shaftschematic.ui.resolved.runoutComponentSpans
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.FractionStyle
+import com.android.shaftschematic.util.OutputFont
 import com.android.shaftschematic.util.InkBand
+import com.android.shaftschematic.util.launchPicker
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.inkBand
 import com.android.shaftschematic.ui.util.exportPdfGate
@@ -135,6 +139,10 @@ fun RunoutRoute(
     onOpenSidebar: () -> Unit = {},
     /** Quick-save the document (prompts for a name when it has never been saved). */
     onSave: () -> Unit = {},
+    /** Tap on the document title strip — names an unsaved document, renames a saved one. */
+    onTitleClick: (() -> Unit)? = null,
+    /** Open Help at one topic — the toolbar's "?" opens this tab's own guide. */
+    onOpenHelpTopic: (String) -> Unit = {},
 ) {
     val spec               by vm.spec.collectAsState()
     val currentDocumentName by vm.currentDocumentName.collectAsState()
@@ -145,6 +153,7 @@ fun RunoutRoute(
     val customer           by vm.customer.collectAsState()
     val vessel             by vm.vessel.collectAsState()
     val jobNumber          by vm.jobNumber.collectAsState()
+    val item               by vm.item.collectAsState()
     val shaftPosition      by vm.shaftPosition.collectAsState()
     val openAfterExport    by vm.openPdfAfterExport.collectAsState()
     val lineThicknessScale by vm.lineThicknessScale.collectAsState()
@@ -152,9 +161,16 @@ fun RunoutRoute(
     val pdfShadedTapers    by vm.pdfShadedTapers.collectAsState()
     val pdfShadedLiners    by vm.pdfShadedLiners.collectAsState()
     val pdfSBreakThresholdFrac by vm.pdfSBreakThresholdFrac.collectAsState()
+    val pdfShadeExplicitBodiesOnly by vm.pdfShadeExplicitBodiesOnly.collectAsState()
+    // Bubble size and drop: canvas inputs AND render-loop keys. The canvas below plans its own
+    // geometry from them; the composed sheet reads them off the `PdfPrefs` snapshot, which the
+    // loop cannot observe.
+    val pdfRunoutBubbleScale by vm.pdfRunoutBubbleScale.collectAsState()
+    val pdfRunoutBubbleDropScale by vm.pdfRunoutBubbleDropScale.collectAsState()
     // Fraction style: a chip tap changes the renderer's active style, which the render loop
     // cannot observe, so it rides along as an input key.
     val pdfFractionStyle   by vm.pdfFractionStyle.collectAsState()
+    val pdfOutputFont      by vm.pdfOutputFont.collectAsState()
     val pdfDualUnitLayout  by vm.pdfDualUnitLayout.collectAsState()
     // Sizing-curve anchors: the composer sizes the drawn shaft off them and the preview's
     // "Shaft height" slider states its track in paper inches from the same pair, so a
@@ -221,7 +237,8 @@ fun RunoutRoute(
     val collidingIds = remember(spec) { spec.collidingIds() }
     val gate = remember(spec, collidingIds) { exportPdfGate(spec, collidingIds) }
 
-    val outputFilename = buildOutputFilename(customer, vessel, jobNumber, OutputDoc.RUNOUT, blankDraft)
+    val outputFilename =
+        buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.RUNOUT, blankDraft)
 
     // "Shaft height" / "Liner compression" slider inputs. The classic sheet honors both
     // (`config.heightScale`, `config.linerMinFracOfTrue`) exactly as the consolidated one
@@ -258,6 +275,36 @@ fun RunoutRoute(
         consolidated = false,
     )
 
+    /**
+     * Sends the classic runout sheet to the platform print dialog. ONE action behind the tab
+     * body's Print button and the preview overlay's Print icon, so the two entry points
+     * cannot drift. Every value is snapshotted here on the UI thread — `onWrite` runs on a
+     * binder thread.
+     */
+    fun printClassicRunout() {
+        val jobName = outputFilename.removeSuffix(".pdf")
+        val specSnapshot = spec
+        val configSnapshot = runoutConfig
+        val projectSnapshot = ProjectInfo(customer = customer, vessel = vessel,
+            jobNumber = jobNumber, side = shaftPosition, item = item)
+        val unitSnapshot = unit
+        val prefsSnapshot = vm.currentPdfPrefs
+        val resolvedSnapshot = resolvedComponents
+        val thicknessSnapshot = lineThicknessScale
+        val readingsSnapshot = runoutReadings
+        val placementsSnapshot = stationPlacements
+        val blankSnapshot = blankDraft
+        val displayUnitsSnapshot = vm.currentDisplayUnits()
+        printShaftPdfPage(ctx, jobName) { page ->
+            composeClassicRunout(
+                page, specSnapshot, configSnapshot, projectSnapshot,
+                unitSnapshot, prefsSnapshot, resolvedSnapshot,
+                thicknessSnapshot, readingsSnapshot, placementsSnapshot,
+                blankSnapshot, displayUnitsSnapshot,
+            )
+        }
+    }
+
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/pdf")
     ) { uri ->
@@ -268,7 +315,7 @@ fun RunoutRoute(
                 composeClassicRunout(
                     page, spec, runoutConfig,
                     ProjectInfo(customer = customer, vessel = vessel,
-                        jobNumber = jobNumber, side = shaftPosition),
+                        jobNumber = jobNumber, side = shaftPosition, item = item),
                     unit, vm.currentPdfPrefs, resolvedComponents,
                     lineThicknessScale, runoutReadings, stationPlacements, blankDraft,
                     vm.currentDisplayUnits(),
@@ -291,7 +338,7 @@ fun RunoutRoute(
                 spec = spec,
                 config = tunedRunoutConfig(runoutConfig, tuning.heightScale, tuning.linerCompression),
                 project = ProjectInfo(customer = customer, vessel = vessel,
-                    jobNumber = jobNumber, side = shaftPosition),
+                    jobNumber = jobNumber, side = shaftPosition, item = item),
                 unit = unit,
                 resolved = resolvedComponents,
                 lineThicknessScale = tuning.lineThickness ?: lineThicknessScale,
@@ -299,7 +346,11 @@ fun RunoutRoute(
                 shadedTapers = pdfShadedTapers,
                 shadedLiners = pdfShadedLiners,
                 sBreakThresholdFrac = tuning.sBreakFrac ?: pdfSBreakThresholdFrac,
+                shadeExplicitBodiesOnly = pdfShadeExplicitBodiesOnly,
+                runoutBubbleScale = pdfRunoutBubbleScale,
+                runoutBubbleDropScale = pdfRunoutBubbleDropScale,
                 fractionStyle = pdfFractionStyle,
+                outputFont = pdfOutputFont,
                 dualUnitLayout = pdfDualUnitLayout,
                 curveLoHeightIn = curveLoHeightIn,
                 curveHiHeightIn = curveHiHeightIn,
@@ -383,6 +434,375 @@ fun RunoutRoute(
         previewOffset += panChange
     }
 
+    // ── Window width ──────────────────────────────────────────────────────────
+    // One skeleton decision for the whole tab; every block below is composed once and
+    // called from both branches, so a phone and a tablet cannot drift apart.
+    val widthClass = currentWindowWidthClass()
+    val canvasModifier = sheetCanvasModifier(widthClass)
+
+    // ── The drawing, with its gestures and its one-line hint ──────────────────
+    // Pinned out of the scroll region at every width: the whole point of the bubble-count
+    // editor is watching the profile change, so the preview must stay on screen while the
+    // stations are reached (on-device request). Keep this block to the preview and its hint —
+    // anything added here costs the scroll region height on a phone.
+    val previewBlock: @Composable ColumnScope.() -> Unit = {
+        // Pinch to zoom, tap a bubble to edit its reading, press-and-hold one to drag
+        // it along its component.
+        //
+        // Read live inside the (non-restarting) gesture pointerInputs without
+        // re-keying them: a re-key mid-gesture would abandon the drag.
+        val scaleForTap  = rememberUpdatedState(previewScale)
+        val offsetForTap = rememberUpdatedState(previewOffset)
+        val placementsForDrag = rememberUpdatedState(stationPlacements)
+        // Same reason: the gesture handlers re-plan the bubble field to hit-test it, and
+        // a resize must reach that plan without re-keying the gesture.
+        val bubbleScaleForTap = rememberUpdatedState(pdfRunoutBubbleScale)
+        val bubbleDropForTap = rememberUpdatedState(pdfRunoutBubbleDropScale)
+        // Station count only — the closures resolve mm↔px for the derived-body
+        // even-spread rule, which pixel scale never changes the COUNT of, so an
+        // identity mapping is enough here without hoisting the canvas's real layout
+        // out of its draw scope.
+        val previewStationCount = remember(resolvedComponents, runoutConfig, livePlacements) {
+            collectRunoutStations(
+                runoutComponentSpans(resolvedComponents),
+                runoutConfig.componentOverrides,
+                xAtMm = { it },
+                mmAtX = { it },
+                placements = livePlacements,
+            ).size
+        }
+        Box(
+            modifier = canvasModifier
+                .clip(previewShape)
+                .background(Color.White)
+                .semantics {
+                    contentDescription = SheetSemantics.runoutPreview(
+                        stationCount = previewStationCount,
+                        readingCount = runoutReadings.readings.size,
+                    )
+                }
+                .transformable(state = previewTransformState)
+                .pointerInput(spec, resolvedComponents, runoutConfig) {
+                    detectTapGestures(
+                        // A fresh press: whatever the previous gesture was, this one
+                        // starts as a candidate tap again.
+                        onPress = { suppressBubbleTap = false },
+                        onTap = { tap ->
+                            if (suppressBubbleTap) return@detectTapGestures
+                            val preview = computeRunoutPreview(
+                                size.width.toFloat(), size.height.toFloat(),
+                                spec, resolvedComponents,
+                                runoutConfig.componentOverrides, placementsForDrag.value,
+                                bubbleScaleForTap.value, bubbleDropForTap.value,
+                            )
+                            val p = toPlanSpace(
+                                tap, size.width.toFloat(), size.height.toFloat(),
+                                scaleForTap.value, offsetForTap.value,
+                            )
+                            pickBubbleAt(
+                                preview.bubbles, preview.geom.radius, p.x, p.y,
+                                tolerance = preview.geom.radius * 2f,
+                            )?.let { b ->
+                                editingBubble = EditingRunoutBubble(
+                                    componentId = b.componentId,
+                                    stationIndex = b.stationIndex,
+                                    title = runoutBubbleTitle(b, entries),
+                                )
+                            }
+                        },
+                    )
+                }
+                // Declared after the tap detector so it takes the main pass first and
+                // its consumed changes keep `transformable` from panning the canvas
+                // out from under the finger.
+                .pointerInput(spec, resolvedComponents, runoutConfig) {
+                    detectDragGesturesAfterLongPress(
+                        onDragStart = { raw ->
+                            val preview = computeRunoutPreview(
+                                size.width.toFloat(), size.height.toFloat(),
+                                spec, resolvedComponents,
+                                runoutConfig.componentOverrides, placementsForDrag.value,
+                                bubbleScaleForTap.value, bubbleDropForTap.value,
+                            )
+                            val p = toPlanSpace(
+                                raw, size.width.toFloat(), size.height.toFloat(),
+                                scaleForTap.value, offsetForTap.value,
+                            )
+                            val hit = pickBubbleAt(
+                                preview.bubbles, preview.geom.radius, p.x, p.y,
+                                tolerance = preview.geom.radius * 2f,
+                            )
+                            if (hit != null) {
+                                // The full current set is only the CLAMP fence — the
+                                // neighbours the drag may not cross. Nothing but the
+                                // station under the finger gets stored; its siblings
+                                // stay derived and keep behaving automatically.
+                                val positions = currentStationPositions(
+                                    hit.componentId, preview.bubbles,
+                                    resolvedComponents, placementsForDrag.value,
+                                )
+                                if (hit.stationIndex in positions.indices) {
+                                    suppressBubbleTap = true
+                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    draggingStation = DraggingRunoutStation(
+                                        componentId = hit.componentId,
+                                        stationIndex = hit.stationIndex,
+                                        positionsMm = positions,
+                                        originalPositionsMm = positions,
+                                        previousPinMm = placementsForDrag.value
+                                            .position(hit.componentId, hit.stationIndex),
+                                    )
+                                }
+                            }
+                        },
+                        onDrag = { change, _ ->
+                            val drag = draggingStation ?: return@detectDragGesturesAfterLongPress
+                            change.consume()
+                            // Plan against the in-progress set itself rather than a
+                            // recomposition-lagged copy, so the mm the finger maps to
+                            // is read off the layout actually on screen.
+                            val preview = computeRunoutPreview(
+                                size.width.toFloat(), size.height.toFloat(),
+                                spec, resolvedComponents, runoutConfig.componentOverrides,
+                                placementsForDrag.value.withPosition(
+                                    drag.componentId, drag.stationIndex,
+                                    drag.positionsMm[drag.stationIndex],
+                                ),
+                                bubbleScaleForTap.value, bubbleDropForTap.value,
+                            )
+                            val p = toPlanSpace(
+                                change.position, size.width.toFloat(), size.height.toFloat(),
+                                scaleForTap.value, offsetForTap.value,
+                            )
+                            val runs = runoutComponentSpans(resolvedComponents)
+                                .filter { it.id == drag.componentId }
+                            // Follow the finger in mm, then clamp inside the component
+                            // and off its neighbours — station order never changes, so
+                            // a typed TIR always stays on its own bubble.
+                            val targetLocalMm = preview.layout.xMmFromPx(p.x) -
+                                runoutComponentOriginMm(runs)
+                            val clamped = clampDraggedStationMm(
+                                positionsMm = drag.positionsMm,
+                                index = drag.stationIndex,
+                                targetMm = targetLocalMm,
+                                spanMm = runoutComponentSpanMm(runs),
+                            )
+                            draggingStation = drag.copy(
+                                positionsMm = drag.positionsMm.toMutableList()
+                                    .also { it[drag.stationIndex] = clamped },
+                            )
+                        },
+                        onDragEnd = {
+                            // The one write of the whole gesture — see the
+                            // commit-on-release note on `draggingStation`. A pickup
+                            // that never moved commits nothing at all, and only the
+                            // station that moved is pinned.
+                            draggingStation?.let {
+                                if (it.positionsMm != it.originalPositionsMm) {
+                                    vm.setRunoutStationPosition(
+                                        it.componentId, it.stationIndex,
+                                        it.positionsMm[it.stationIndex],
+                                    )
+                                    lastBubbleMove = LastBubbleMove(
+                                        componentId = it.componentId,
+                                        stationIndex = it.stationIndex,
+                                        previousMm = it.previousPinMm,
+                                    )
+                                }
+                            }
+                            draggingStation = null
+                        },
+                        onDragCancel = { draggingStation = null },
+                    )
+                },
+        ) {
+            Canvas(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer(
+                        scaleX       = previewScale,
+                        scaleY       = previewScale,
+                        translationX = previewOffset.x,
+                        translationY = previewOffset.y,
+                    ),
+            ) {
+                val preview = computeRunoutPreview(
+                    size.width, size.height,
+                    spec, resolvedComponents, runoutConfig.componentOverrides,
+                    livePlacements,
+                    pdfRunoutBubbleScale, pdfRunoutBubbleDropScale,
+                )
+                with(ShaftRenderer) {
+                    draw(spec, preview.layout, previewOpts, resolvedComponents)
+                }
+                // Runouts only on this canvas: the tab is the runout authoring
+                // surface, so the profile carries just the bubbles. The wear
+                // marks/worn sections/in-profile values render on the Consolidated
+                // Output tab's preview (the rasterized real PDF).
+                drawRunoutMarkers(
+                    preview.bubbles, preview.geom, runoutReadings, unit, textMeasurer,
+                    dragging = draggingStation,
+                )
+            }
+
+            // Compact reset control (top-right) — mirrors the schematic preview.
+            IconButton(
+                onClick = {
+                    previewScale  = 1f
+                    previewOffset = Offset.Zero
+                },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(6.dp)
+                    .size(40.dp)
+                    .background(Color.White.copy(alpha = 0.6f), CircleShape),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Refresh,
+                    contentDescription = "Reset view",
+                    tint = Color.Black.copy(alpha = 0.8f),
+                )
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "Tap a bubble to enter its TIR reading and high spot. " +
+                    "Press and hold one to drag it along its component.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            // Appears only after a committed drag: one tap puts the moved bubble back
+            // where it was (a first drag undoes to derived, un-pinning just that
+            // station — no other bubble is touched).
+            lastBubbleMove?.let { move ->
+                TextButton(
+                    onClick = {
+                        if (move.previousMm == null) {
+                            vm.clearRunoutStationPosition(
+                                move.componentId, move.stationIndex,
+                            )
+                        } else {
+                            vm.setRunoutStationPosition(
+                                move.componentId, move.stationIndex, move.previousMm,
+                            )
+                        }
+                        lastBubbleMove = null
+                    },
+                    modifier = Modifier.testTag("runout_undo_move"),
+                ) {
+                    Text("Undo move")
+                }
+            }
+        }
+    }
+
+    // ── TIR orientation selector ──────────────────────────────────────────────
+    val tirSection: @Composable ColumnScope.() -> Unit = {
+        Text("TIR orientation", style = MaterialTheme.typography.titleSmall)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TirButton("Looking AFT",     runoutConfig.tirDirection == TirDirection.AFT)     { vm.setTirDirection(TirDirection.AFT) }
+            TirButton("Looking FORWARD", runoutConfig.tirDirection == TirDirection.FORWARD) { vm.setTirDirection(TirDirection.FORWARD) }
+            TirButton("Not set",         runoutConfig.tirDirection == TirDirection.UNSET)   { vm.setTirDirection(TirDirection.UNSET) }
+        }
+    }
+
+    // ── Coupling face + its pilot runout ──────────────────────────────────────
+    // Same per-job field the PDF options sheets elect (one field, three surfaces —
+    // they cannot drift). The pilot runout opens the ordinary bubble editor: the
+    // reading rides the readings list under the reserved coupling-pilot id, so the
+    // face's value and a station's value are authored identically.
+    val couplingSection: @Composable ColumnScope.() -> Unit = {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(
+                checked = runoutConfig.showCouplingFace,
+                onCheckedChange = { vm.setShowCouplingFace(it) },
+            )
+            Spacer(Modifier.width(8.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Coupling face", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "End view drawn bottom-right, taken looking forward.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            TextButton(
+                enabled = runoutConfig.showCouplingFace,
+                onClick = {
+                    editingBubble = EditingRunoutBubble(
+                        componentId = COUPLING_PILOT_COMPONENT_ID,
+                        stationIndex = 0,
+                        title = "Coupling pilot",
+                    )
+                },
+            ) { Text("Pilot runout…") }
+        }
+    }
+
+    // ── Blank draft, export gate, Print / Preview / Export ────────────────────
+    // The "look at the sheet and print it" group: it sits with the drawing in a two-pane
+    // layout, and in the phone's one column it keeps its historical place.
+    val printGroup: @Composable ColumnScope.() -> Unit = {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Switch(checked = blankDraft, onCheckedChange = { blankDraft = it })
+            Spacer(Modifier.width(12.dp))
+            Column {
+                Text("Blank draft (write-in)", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "Job info, OAL, and TIR values are blanked for handwriting.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
+        if (!gate.enabled) {
+            Text(
+                gate.disabledMessage,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+
+        DocumentActionButtons(
+            documentName = "Runout Sheet",
+            onPrint = { printClassicRunout() },
+            onPreview = { showPreview = true },
+            onExport = { launcher.launchPicker(outputFilename, what = "runout export") },
+            enabled = gate.enabled,
+        )
+    }
+
+    // ── Measurement station selector ──────────────────────────────────────────
+    // Last on the page: adjusting bubble counts is the exception, not the routine path,
+    // and the pinned preview shows the effect live.
+    val stationSection: @Composable ColumnScope.() -> Unit = {
+        RunoutStationCountEditor(
+            entries = entries,
+            overrides = runoutConfig.componentOverrides,
+            placements = stationPlacements,
+            onIncrement = { entry, count -> vm.addRunoutStation(entry.id, count) },
+            onDecrement = { entry, count -> vm.removeRunoutStation(entry.id, count) },
+            // Resets also drop the "Undo move" chip: undoing a drag onto a component the
+            // user just returned to derived would silently re-author it.
+            onResetPositions = { id ->
+                vm.resetRunoutStationPositions(id)
+                if (lastBubbleMove?.componentId == id) lastBubbleMove = null
+            },
+            onResetAllPositions = {
+                vm.resetAllRunoutStationPositions()
+                lastBubbleMove = null
+            },
+        )
+
+        // (Worn-section authoring and the consolidated variant picker live on the
+        // Consolidated Output tab — this tab is the runout authoring surface and
+        // produces the classic runout sheet. The per-job "Shaft height" / "Liner
+        // compression" pair reaches this document from the preview's Tune menu, where
+        // the drawing they reshape is on screen while they move.)
+    }
+
     // ── Screen ────────────────────────────────────────────────────────────────
     Column(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
 
@@ -392,6 +812,7 @@ fun RunoutRoute(
         EditorDocumentTitle(
             documentName = currentDocumentName,
             hasUnsavedChanges = hasUnsavedChanges,
+            onClick = onTitleClick,
         )
 
         // ── Toolbar ──────────────────────────────────────────────────────────
@@ -402,8 +823,11 @@ fun RunoutRoute(
                 .padding(horizontal = 4.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = onOpenSidebar) {
-                Icon(Icons.Filled.Menu, contentDescription = "Open navigation")
+            // Nothing to open when the sidebar is already laid out beside the tabs.
+            if (!LocalSidebarPermanent.current) {
+                IconButton(onClick = onOpenSidebar) {
+                    Icon(Icons.Filled.Menu, contentDescription = "Open navigation")
+                }
             }
             Text(
                 text = "Runout Sheet",
@@ -417,415 +841,68 @@ fun RunoutRoute(
             ) {
                 Icon(Icons.Filled.Save, contentDescription = "Save")
             }
+            TabHelpButton(HELP_TOPIC_RECORD_RUNOUT, onOpenHelpTopic)
         }
 
         HorizontalDivider()
 
-        // ── Pinned live preview ───────────────────────────────────────────────
-        // Deliberately OUTSIDE the scroll region: the whole point of the bubble-count
-        // editor below is watching the profile change, so the preview must stay on
-        // screen while the stations are scrolled to (on-device request). Anything added
-        // here costs the scroll region height on a phone — keep this block to the
-        // preview and its one-line hint.
-        // The guard wraps the divider and padding too, so an OAL-less spec leaves no
-        // orphan rule or gap above the controls.
-        if (spec.overallLengthMm > 0f) {
-            Column(
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                // ── Live shaft + bubble preview ───────────────────────────────
-                // Pinch to zoom, tap a bubble to edit its reading, press-and-hold one to drag
-                // it along its component.
-                //
-                // Read live inside the (non-restarting) gesture pointerInputs without
-                // re-keying them: a re-key mid-gesture would abandon the drag.
-                val scaleForTap  = rememberUpdatedState(previewScale)
-                val offsetForTap = rememberUpdatedState(previewOffset)
-                val placementsForDrag = rememberUpdatedState(stationPlacements)
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(200.dp)
-                        .clip(previewShape)
-                        .background(Color.White)
-                        .transformable(state = previewTransformState)
-                        .pointerInput(spec, resolvedComponents, runoutConfig) {
-                            detectTapGestures(
-                                // A fresh press: whatever the previous gesture was, this one
-                                // starts as a candidate tap again.
-                                onPress = { suppressBubbleTap = false },
-                                onTap = { tap ->
-                                    if (suppressBubbleTap) return@detectTapGestures
-                                    val preview = computeRunoutPreview(
-                                        size.width.toFloat(), size.height.toFloat(),
-                                        spec, resolvedComponents,
-                                        runoutConfig.componentOverrides, placementsForDrag.value,
-                                    )
-                                    val p = toPlanSpace(
-                                        tap, size.width.toFloat(), size.height.toFloat(),
-                                        scaleForTap.value, offsetForTap.value,
-                                    )
-                                    pickBubbleAt(
-                                        preview.bubbles, preview.geom.radius, p.x, p.y,
-                                        tolerance = preview.geom.radius * 2f,
-                                    )?.let { b ->
-                                        editingBubble = EditingRunoutBubble(
-                                            componentId = b.componentId,
-                                            stationIndex = b.stationIndex,
-                                            title = runoutBubbleTitle(b, entries),
-                                        )
-                                    }
-                                },
-                            )
-                        }
-                        // Declared after the tap detector so it takes the main pass first and
-                        // its consumed changes keep `transformable` from panning the canvas
-                        // out from under the finger.
-                        .pointerInput(spec, resolvedComponents, runoutConfig) {
-                            detectDragGesturesAfterLongPress(
-                                onDragStart = { raw ->
-                                    val preview = computeRunoutPreview(
-                                        size.width.toFloat(), size.height.toFloat(),
-                                        spec, resolvedComponents,
-                                        runoutConfig.componentOverrides, placementsForDrag.value,
-                                    )
-                                    val p = toPlanSpace(
-                                        raw, size.width.toFloat(), size.height.toFloat(),
-                                        scaleForTap.value, offsetForTap.value,
-                                    )
-                                    val hit = pickBubbleAt(
-                                        preview.bubbles, preview.geom.radius, p.x, p.y,
-                                        tolerance = preview.geom.radius * 2f,
-                                    )
-                                    if (hit != null) {
-                                        // The full current set is only the CLAMP fence — the
-                                        // neighbours the drag may not cross. Nothing but the
-                                        // station under the finger gets stored; its siblings
-                                        // stay derived and keep behaving automatically.
-                                        val positions = currentStationPositions(
-                                            hit.componentId, preview.bubbles,
-                                            resolvedComponents, placementsForDrag.value,
-                                        )
-                                        if (hit.stationIndex in positions.indices) {
-                                            suppressBubbleTap = true
-                                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            draggingStation = DraggingRunoutStation(
-                                                componentId = hit.componentId,
-                                                stationIndex = hit.stationIndex,
-                                                positionsMm = positions,
-                                                originalPositionsMm = positions,
-                                                previousPinMm = placementsForDrag.value
-                                                    .position(hit.componentId, hit.stationIndex),
-                                            )
-                                        }
-                                    }
-                                },
-                                onDrag = { change, _ ->
-                                    val drag = draggingStation ?: return@detectDragGesturesAfterLongPress
-                                    change.consume()
-                                    // Plan against the in-progress set itself rather than a
-                                    // recomposition-lagged copy, so the mm the finger maps to
-                                    // is read off the layout actually on screen.
-                                    val preview = computeRunoutPreview(
-                                        size.width.toFloat(), size.height.toFloat(),
-                                        spec, resolvedComponents, runoutConfig.componentOverrides,
-                                        placementsForDrag.value.withPosition(
-                                            drag.componentId, drag.stationIndex,
-                                            drag.positionsMm[drag.stationIndex],
-                                        ),
-                                    )
-                                    val p = toPlanSpace(
-                                        change.position, size.width.toFloat(), size.height.toFloat(),
-                                        scaleForTap.value, offsetForTap.value,
-                                    )
-                                    val runs = runoutComponentSpans(resolvedComponents)
-                                        .filter { it.id == drag.componentId }
-                                    // Follow the finger in mm, then clamp inside the component
-                                    // and off its neighbours — station order never changes, so
-                                    // a typed TIR always stays on its own bubble.
-                                    val targetLocalMm = preview.layout.xMmFromPx(p.x) -
-                                        runoutComponentOriginMm(runs)
-                                    val clamped = clampDraggedStationMm(
-                                        positionsMm = drag.positionsMm,
-                                        index = drag.stationIndex,
-                                        targetMm = targetLocalMm,
-                                        spanMm = runoutComponentSpanMm(runs),
-                                    )
-                                    draggingStation = drag.copy(
-                                        positionsMm = drag.positionsMm.toMutableList()
-                                            .also { it[drag.stationIndex] = clamped },
-                                    )
-                                },
-                                onDragEnd = {
-                                    // The one write of the whole gesture — see the
-                                    // commit-on-release note on `draggingStation`. A pickup
-                                    // that never moved commits nothing at all, and only the
-                                    // station that moved is pinned.
-                                    draggingStation?.let {
-                                        if (it.positionsMm != it.originalPositionsMm) {
-                                            vm.setRunoutStationPosition(
-                                                it.componentId, it.stationIndex,
-                                                it.positionsMm[it.stationIndex],
-                                            )
-                                            lastBubbleMove = LastBubbleMove(
-                                                componentId = it.componentId,
-                                                stationIndex = it.stationIndex,
-                                                previousMm = it.previousPinMm,
-                                            )
-                                        }
-                                    }
-                                    draggingStation = null
-                                },
-                                onDragCancel = { draggingStation = null },
-                            )
-                        },
-                ) {
-                    Canvas(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .graphicsLayer(
-                                scaleX       = previewScale,
-                                scaleY       = previewScale,
-                                translationX = previewOffset.x,
-                                translationY = previewOffset.y,
-                            ),
-                    ) {
-                        val preview = computeRunoutPreview(
-                            size.width, size.height,
-                            spec, resolvedComponents, runoutConfig.componentOverrides,
-                            livePlacements,
-                        )
-                        with(ShaftRenderer) {
-                            draw(spec, preview.layout, previewOpts, resolvedComponents)
-                        }
-                        // Runouts only on this canvas: the tab is the runout authoring
-                        // surface, so the profile carries just the bubbles. The wear
-                        // marks/worn sections/in-profile values render on the Consolidated
-                        // Output tab's preview (the rasterized real PDF).
-                        drawRunoutMarkers(
-                            preview.bubbles, preview.geom, runoutReadings, unit, textMeasurer,
-                            dragging = draggingStation,
-                        )
-                    }
-
-                    // Compact reset control (top-right) — mirrors the schematic preview.
-                    IconButton(
-                        onClick = {
-                            previewScale  = 1f
-                            previewOffset = Offset.Zero
-                        },
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(6.dp)
-                            .size(40.dp)
-                            .background(Color.White.copy(alpha = 0.6f), CircleShape),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Refresh,
-                            contentDescription = "Reset view",
-                            tint = Color.Black.copy(alpha = 0.8f),
-                        )
-                    }
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "Tap a bubble to enter its TIR reading and high spot. " +
-                            "Press and hold one to drag it along its component.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.weight(1f),
-                    )
-                    // Appears only after a committed drag: one tap puts the moved bubble back
-                    // where it was (a first drag undoes to derived, un-pinning just that
-                    // station — no other bubble is touched).
-                    lastBubbleMove?.let { move ->
-                        TextButton(
-                            onClick = {
-                                if (move.previousMm == null) {
-                                    vm.clearRunoutStationPosition(
-                                        move.componentId, move.stationIndex,
-                                    )
-                                } else {
-                                    vm.setRunoutStationPosition(
-                                        move.componentId, move.stationIndex, move.previousMm,
-                                    )
-                                }
-                                lastBubbleMove = null
-                            },
-                            modifier = Modifier.testTag("runout_undo_move"),
-                        ) {
-                            Text("Undo move")
-                        }
-                    }
-                }
-            }
-
-            HorizontalDivider()
-        }
-
-        // ── Scrollable content ────────────────────────────────────────────────
-        // Order is deliberate: the document controls (TIR orientation, then the whole
-        // export group) sit at the top so producing a sheet needs no scrolling, and the
-        // measurement-station editor goes last — it is only reached when the document
-        // actually needs adjusting, and it is the one section whose length grows with
-        // the shaft (on-device request).
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-
-            // ── TIR orientation selector ──────────────────────────────────────
-            Text("TIR orientation", style = MaterialTheme.typography.titleSmall)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TirButton("Looking AFT",     runoutConfig.tirDirection == TirDirection.AFT)     { vm.setTirDirection(TirDirection.AFT) }
-                TirButton("Looking FORWARD", runoutConfig.tirDirection == TirDirection.FORWARD) { vm.setTirDirection(TirDirection.FORWARD) }
-                TirButton("Not set",         runoutConfig.tirDirection == TirDirection.UNSET)   { vm.setTirDirection(TirDirection.UNSET) }
-            }
-
-            // ── Coupling face + its pilot runout ──────────────────────────────
-            // Same per-job field the PDF options sheets elect (one field, three surfaces —
-            // they cannot drift). The pilot runout opens the ordinary bubble editor: the
-            // reading rides the readings list under the reserved coupling-pilot id, so the
-            // face's value and a station's value are authored identically.
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(
-                    checked = runoutConfig.showCouplingFace,
-                    onCheckedChange = { vm.setShowCouplingFace(it) },
-                )
-                Spacer(Modifier.width(8.dp))
-                Column(Modifier.weight(1f)) {
-                    Text("Coupling face", style = MaterialTheme.typography.bodyLarge)
-                    Text(
-                        "End view drawn bottom-right, taken looking forward.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                TextButton(
-                    enabled = runoutConfig.showCouplingFace,
-                    onClick = {
-                        editingBubble = EditingRunoutBubble(
-                            componentId = COUPLING_PILOT_COMPONENT_ID,
-                            stationIndex = 0,
-                            title = "Coupling pilot",
-                        )
-                    },
-                ) { Text("Pilot runout…") }
-            }
-
-            // ── Blank draft toggle ────────────────────────────────────────────
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Switch(checked = blankDraft, onCheckedChange = { blankDraft = it })
-                Spacer(Modifier.width(12.dp))
-                Column {
-                    Text("Blank draft (write-in)", style = MaterialTheme.typography.bodyLarge)
-                    Text(
-                        "Job info, OAL, and TIR values are blanked for handwriting.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-
-            // ── Export gate ───────────────────────────────────────────────────
-            if (!gate.enabled) {
-                Text(
-                    gate.disabledMessage,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-
-            // ── Preview button ────────────────────────────────────────────────
-            OutlinedButton(
-                onClick = { showPreview = true },
-                enabled = gate.enabled,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Icon(Icons.Outlined.Preview, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Preview Runout Sheet")
-            }
-
-            // ── Print button ──────────────────────────────────────────────────
-            OutlinedButton(
-                onClick = {
-                    val jobName = outputFilename.removeSuffix(".pdf")
-                    // Snapshot state on the UI thread; onWrite runs on a binder thread.
-                    val specSnapshot = spec
-                    val configSnapshot = runoutConfig
-                    val projectSnapshot = ProjectInfo(customer = customer, vessel = vessel,
-                        jobNumber = jobNumber, side = shaftPosition)
-                    val unitSnapshot = unit
-                    val prefsSnapshot = vm.currentPdfPrefs
-                    val resolvedSnapshot = resolvedComponents
-                    val thicknessSnapshot = lineThicknessScale
-                    val readingsSnapshot = runoutReadings
-                    val placementsSnapshot = stationPlacements
-                    val blankSnapshot = blankDraft
-                    val displayUnitsSnapshot = vm.currentDisplayUnits()
-                    printShaftPdfPage(ctx, jobName) { page ->
-                        composeClassicRunout(
-                            page, specSnapshot, configSnapshot, projectSnapshot,
-                            unitSnapshot, prefsSnapshot, resolvedSnapshot,
-                            thicknessSnapshot, readingsSnapshot, placementsSnapshot,
-                            blankSnapshot, displayUnitsSnapshot,
-                        )
-                    }
-                },
-                enabled = gate.enabled,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Icon(Icons.Filled.Print, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Print Runout Sheet")
-            }
-
-            // ── Export button ─────────────────────────────────────────────────
-            Button(
-                onClick = { launcher.launch(outputFilename) },
-                enabled = gate.enabled,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Icon(Icons.Outlined.PictureAsPdf, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Export Runout Sheet PDF")
-            }
-
-            Spacer(Modifier.height(4.dp))
-            HorizontalDivider()
-
-            // ── Measurement station selector ──────────────────────────────────
-            // Last on the page: adjusting bubble counts is the exception, not the
-            // routine path, and the pinned preview above shows the effect live.
-            RunoutStationCountEditor(
-                entries = entries,
-                overrides = runoutConfig.componentOverrides,
-                placements = stationPlacements,
-                onIncrement = { entry, count -> vm.addRunoutStation(entry.id, count) },
-                onDecrement = { entry, count -> vm.removeRunoutStation(entry.id, count) },
-                // Resets also drop the "Undo move" chip: undoing a drag onto a component the
-                // user just returned to derived would silently re-author it.
-                onResetPositions = { id ->
-                    vm.resetRunoutStationPositions(id)
-                    if (lastBubbleMove?.componentId == id) lastBubbleMove = null
-                },
-                onResetAllPositions = {
-                    vm.resetAllRunoutStationPositions()
-                    lastBubbleMove = null
+        // ── Tab body ──────────────────────────────────────────────────────────
+        // One column on a phone or a MEDIUM window; two panes on an EXPANDED one. The
+        // blocks are the same composables either way (see their declarations above), so
+        // the two skeletons can never drift apart.
+        if (widthClass == WindowWidthClass.EXPANDED) {
+            SheetTwoPane(
+                // The drawing and the actions that print it.
+                pinnedCanvas = { if (spec.overallLengthMm > 0f) previewBlock() },
+                canvasPaneScrolling = { printGroup() },
+                // Everything that shapes the sheet.
+                controlsPane = {
+                    tirSection()
+                    couplingSection()
+                    HorizontalDivider()
+                    stationSection()
                 },
             )
+        } else {
+            // ── Pinned live preview ───────────────────────────────────────────
+            // Deliberately OUTSIDE the scroll region: the whole point of the bubble-count
+            // editor below is watching the profile change, so the preview must stay on
+            // screen while the stations are scrolled to (on-device request).
+            // The guard wraps the divider and padding too, so an OAL-less spec leaves no
+            // orphan rule or gap above the controls.
+            if (spec.overallLengthMm > 0f) {
+                Column(
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    content = previewBlock,
+                )
 
-            // (Worn-section authoring and the consolidated variant picker live on the
-            // Consolidated Output tab — this tab is the runout authoring surface and
-            // produces the classic runout sheet. The per-job "Shaft height" / "Liner
-            // compression" pair reaches this document from the preview's Tune menu, where
-            // the drawing they reshape is on screen while they move.)
+                HorizontalDivider()
+            }
+
+            // ── Scrollable content ────────────────────────────────────────────
+            // Order is deliberate: the document controls (TIR orientation, then the whole
+            // export group) sit at the top so producing a sheet needs no scrolling, and the
+            // measurement-station editor goes last — it is only reached when the document
+            // actually needs adjusting, and it is the one section whose length grows with
+            // the shaft (on-device request).
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                tirSection()
+                couplingSection()
+                printGroup()
+
+                Spacer(Modifier.height(4.dp))
+                HorizontalDivider()
+
+                stationSection()
+            }
         }
     }
 
@@ -839,14 +916,17 @@ fun RunoutRoute(
             onClose = { showPreview = false },
             onExport = {
                 showPreview = false
-                launcher.launch(outputFilename)
+                launcher.launchPicker(outputFilename, what = "runout export")
             },
+            // The tab body's Print action, unchanged — one function behind both.
+            onPrint = { printClassicRunout() },
             optionsSheet = {
                 RunoutWearOptionsSheet(
                     lineThicknessScale = lineThicknessScale,
                     pdfShadedBodies = pdfShadedBodies,
                     pdfShadedTapers = pdfShadedTapers,
                     pdfShadedLiners = pdfShadedLiners,
+                    shadeExplicitBodiesOnly = pdfShadeExplicitBodiesOnly,
                     vm = vm,
                     showCouplingFaceRow = true,
                     couplingFaceOn = runoutConfig.showCouplingFace,
@@ -864,15 +944,21 @@ fun RunoutRoute(
                     // The classic sheet's drawn height and liner floors come off the same
                     // `RunoutConfig` fields as the consolidated sheet's, so the sheet being
                     // looked at can be tuned against itself here too.
-                    showHeightControls = true,
+                    showHeightSlider = true,
                     heightScale = runoutConfig.heightScale,
                     heightSliderBase = heightSliderBase,
                     heightSliderMaxDiaMm = heightSliderDiaMm,
+                    showLinerCompression = true,
                     linersProportional = runoutConfig.linersProportional,
                     linerCompression = runoutConfig.linerCompression,
                     estimateKeptFrac = { frac ->
                         estimatedLinerKeptFracOfTrue(spec, heightSliderBase, runoutConfig.heightScale, frac)
                     },
+                    // This sheet's bubbles are the document, so their size and drop are
+                    // tuned here as well as from Settings.
+                    showBubbleControls = true,
+                    runoutBubbleScale = pdfRunoutBubbleScale,
+                    runoutBubbleDropScale = pdfRunoutBubbleDropScale,
                 )
             },
             sheetTunesPage = true,
@@ -918,8 +1004,18 @@ private data class RunoutRenderInputs(
     val shadedTapers: Boolean,
     val shadedLiners: Boolean,
     val sBreakThresholdFrac: Float,
+    val shadeExplicitBodiesOnly: Boolean,
+    /** Bubble size and drop. Keys only — both travel to the composer inside the `PdfPrefs`
+     *  snapshot, and both also feed the canvas preview's own plan. */
+    val runoutBubbleScale: Float,
+    val runoutBubbleDropScale: Float,
     /** Not a composer argument — it reaches the ink via `FractionTypography.active`. Key only. */
     val fractionStyle: FractionStyle,
+    /**
+     * The typeface the sheet is set in. Not a composer argument either — it reaches the ink via
+     * `OutputTypography.active`. Key only.
+     */
+    val outputFont: OutputFont,
     /**
      * A LAYOUT input, not just a key: the composers take it as a parameter, and a sheet whose
      * budget cannot absorb the taller stacked value falls back to inline on its own.
@@ -1071,12 +1167,19 @@ private fun Density.computeRunoutPreview(
     resolvedComponents: List<ResolvedComponent>,
     overrides: Map<String, Int>,
     placements: RunoutStationPlacements = RunoutStationPlacements(),
+    /** `PdfPrefs.runoutBubbleScale` — the same multiplier the sheet applies to its radius. */
+    bubbleScale: Float = 1f,
+    /** `PdfPrefs.runoutBubbleDropScale` — the same multiplier the sheet applies to its drop. */
+    bubbleDropScale: Float = 1f,
 ): RunoutPreview {
     val marginPx = 12.dp.toPx()
+    // The two user-set bubble multipliers, applied exactly as the composer applies them
+    // (`pdf/RunoutPdfComposer.kt`): radius and drop scale, `minGap` stays a fixed clearance
+    // floor. Canvas and sheet must agree — the bubbles are one drawing in two renderings.
     val bubbleGeom = RunoutBubbleGeometry(
-        radius = 7.dp.toPx(),
+        radius = 7.dp.toPx() * bubbleScale,
         minGap = 5.dp.toPx(),
-        shortLeader = 5.dp.toPx(),
+        shortLeader = 5.dp.toPx() * bubbleDropScale,
         contentLeft = 0f,
         contentRight = widthPx,
     )

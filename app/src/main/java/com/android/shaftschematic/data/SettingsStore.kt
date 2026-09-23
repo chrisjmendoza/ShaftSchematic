@@ -1,8 +1,10 @@
 
 package com.android.shaftschematic.data
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
+import androidx.datastore.preferences.core.emptyPreferences
+import androidx.datastore.preferences.core.MutablePreferences
 import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.pdf.PdfExportMode
-
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -30,17 +32,26 @@ import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_MAX
 import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_MIN
 import com.android.shaftschematic.settings.PDF_WEAR_JOIN_GAP_MAX_MM
 import com.android.shaftschematic.settings.PDF_WEAR_JOIN_GAP_MIN_MM
+import com.android.shaftschematic.settings.PDF_RUNOUT_BUBBLE_DROP_SCALE_MAX
+import com.android.shaftschematic.settings.PDF_RUNOUT_BUBBLE_DROP_SCALE_MIN
+import com.android.shaftschematic.settings.PDF_RUNOUT_BUBBLE_SCALE_MAX
+import com.android.shaftschematic.settings.PDF_RUNOUT_BUBBLE_SCALE_MIN
 import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MAX_IN
 import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MIN_IN
 import com.android.shaftschematic.settings.PdfPrefs
+import com.android.shaftschematic.util.AppLog
 import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.FractionStyle
 import com.android.shaftschematic.util.FractionTypography
+import com.android.shaftschematic.util.OutputFont
+import com.android.shaftschematic.util.OutputTypography
 import com.android.shaftschematic.util.PreviewColorPreset
 import com.android.shaftschematic.util.PreviewColorRole
 import com.android.shaftschematic.util.PreviewColorSetting
 import com.android.shaftschematic.util.UndercutShadeColor
 import com.android.shaftschematic.util.UndercutShadeIntensity
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -48,7 +59,57 @@ import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 
-val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
+/**
+ * Every preference in the app lives in this one file — units, theme, the whole drawing look, the
+ * backup-mirror folder, and the migration/seeding flags read during startup.
+ *
+ * The corruption handler is load-bearing, not boilerplate. A truncated `settings.preferences_pb`
+ * is what a tablet yanked off power mid-write leaves behind, and DataStore's unhandled answer to
+ * one is to throw `CorruptionException` from **every** read — so the failure would not be
+ * "settings went back to default" but the app crashing on launch, permanently, recoverable only
+ * by clearing app data (which takes the drawings with it). Replacing the file costs the user
+ * their preferences and nothing else; the saved shafts live in `filesDir/shafts`.
+ *
+ * Same posture `decodeDrawingProfiles` already takes one level up: a corrupt value may cost the
+ * presets, never the screen. `SettingsStoreCorruptionTest` pins both halves.
+ */
+val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(
+    name = "settings",
+    corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
+)
+
+/**
+ * The read seam. Every preference read in the app comes through this flow.
+ *
+ * The `catch` is the running-cost counterpart to the delegate's corruption handler: that repairs
+ * a broken file once, this keeps a read that fails for any other reason (an I/O error, a device
+ * that has run out of disk) from propagating into a Compose collector, where it would take down
+ * whatever screen happened to be reading a preference. A preference that answers with its default
+ * is a cosmetic problem; a crash is not.
+ */
+private val Context.settingsPrefs: Flow<Preferences>
+    get() = settingsDataStore.data.catch { t ->
+        AppLog.e("Settings", "preference read failed", t)
+        emit(emptyPreferences())
+    }
+
+/**
+ * The write seam, with the same reasoning: preference writes are fired from `scope.launch` all
+ * over the UI with nothing catching above them, so a full disk would turn a toggle into a crash.
+ * A write that could not land leaves the toggle where it was — visible, and recoverable.
+ *
+ * `CancellationException` is rethrown rather than swallowed, so structured concurrency still
+ * works for callers that race writes.
+ */
+private suspend fun Context.editSettings(block: suspend (MutablePreferences) -> Unit) {
+    try {
+        settingsDataStore.edit(block)
+    } catch (c: CancellationException) {
+        throw c
+    } catch (t: Throwable) {
+        AppLog.e("Settings", "preference write failed", t)
+    }
+}
 
 object SettingsStore {
     private val KEY_DEFAULT_UNIT = intPreferencesKey("default_unit") // 0=MM, 1=IN
@@ -60,7 +121,6 @@ object SettingsStore {
     // Developer options (hidden behind About taps)
     private val KEY_DEV_OPTIONS_ENABLED = booleanPreferencesKey("dev_options_enabled")
     private val KEY_SHOW_OAL_DEBUG_LABEL = booleanPreferencesKey("show_oal_debug_label")
-    private val KEY_SHOW_OAL_HELPER_LINE = booleanPreferencesKey("show_oal_helper_line")
     private val KEY_SHOW_OAL_IN_PREVIEW_BOX = booleanPreferencesKey("show_oal_in_preview_box")
 
     // Developer options (debug tooling)
@@ -113,37 +173,47 @@ object SettingsStore {
     private val KEY_PDF_SHADED_BODIES  = booleanPreferencesKey("pdf_shaded_bodies")
     private val KEY_PDF_SHADED_TAPERS  = booleanPreferencesKey("pdf_shaded_tapers")
     private val KEY_PDF_SHADED_LINERS  = booleanPreferencesKey("pdf_shaded_liners")
+    // Line art on the PRINTED undercut drawing: no shade fill anywhere on that sheet, the
+    // strips' always-shaded liner and the section core included. Independent of the screen-side
+    // UndercutStyle line-art mode, which never reaches a composer.
+    private val KEY_PDF_UNDERCUT_LINE_ART = booleanPreferencesKey("pdf_undercut_line_art")
     private val KEY_PDF_CURVE_LO_HEIGHT_IN = floatPreferencesKey("pdf_curve_lo_height_in")
     private val KEY_PDF_CURVE_HI_HEIGHT_IN = floatPreferencesKey("pdf_curve_hi_height_in")
     private val KEY_PDF_SBREAK_THRESHOLD_FRAC = floatPreferencesKey("pdf_sbreak_threshold_frac")
     private val KEY_PDF_ARROW_SIZE_PT = floatPreferencesKey("pdf_arrow_size_pt")
     private val KEY_PDF_FRACTION_STYLE = stringPreferencesKey("pdf_fraction_style")
+    private val KEY_PDF_OUTPUT_FONT = stringPreferencesKey("pdf_output_font")
     private val KEY_PDF_DUAL_UNIT_LAYOUT = stringPreferencesKey("pdf_dual_unit_layout")
     private val KEY_PDF_WEAR_TRACE_DEPTH_FRAC = floatPreferencesKey("pdf_wear_trace_depth_frac")
     private val KEY_PDF_WEAR_BAND_SHADE_FRAC = floatPreferencesKey("pdf_wear_band_shade_frac")
     private val KEY_PDF_WEAR_JOIN_GAP_MAX_MM = floatPreferencesKey("pdf_wear_join_gap_max_mm")
+    private val KEY_PDF_SHADE_EXPLICIT_BODIES_ONLY =
+        booleanPreferencesKey("pdf_shade_explicit_bodies_only")
+    private val KEY_PDF_RUNOUT_BUBBLE_SCALE = floatPreferencesKey("pdf_runout_bubble_scale")
+    private val KEY_PDF_RUNOUT_BUBBLE_DROP_SCALE =
+        floatPreferencesKey("pdf_runout_bubble_drop_scale")
 
     // Drawing line thickness (applies to both preview and PDF)
     private val KEY_LINE_THICKNESS_SCALE = floatPreferencesKey("line_thickness_scale")
     fun pdfTieringModeFlow(ctx: Context): Flow<PdfTieringMode> =
-        ctx.settingsDataStore.data.map { p -> PdfTieringMode.fromName(p[KEY_PDF_TIERING_MODE]) }
+        ctx.settingsPrefs.map { p -> PdfTieringMode.fromName(p[KEY_PDF_TIERING_MODE]) }
 
     suspend fun setPdfTieringMode(ctx: Context, mode: PdfTieringMode) {
-        ctx.settingsDataStore.edit { it[KEY_PDF_TIERING_MODE] = mode.name }
+        ctx.editSettings { it[KEY_PDF_TIERING_MODE] = mode.name }
     }
 
     fun pdfShowComponentTitlesFlow(ctx: Context): Flow<Boolean> =
-        ctx.settingsDataStore.data.map { p -> p[KEY_PDF_SHOW_COMPONENT_TITLES] ?: true }
+        ctx.settingsPrefs.map { p -> p[KEY_PDF_SHOW_COMPONENT_TITLES] ?: true }
 
     suspend fun setPdfShowComponentTitles(ctx: Context, show: Boolean) {
-        ctx.settingsDataStore.edit { it[KEY_PDF_SHOW_COMPONENT_TITLES] = show }
+        ctx.editSettings { it[KEY_PDF_SHOW_COMPONENT_TITLES] = show }
     }
 
     /** Capability: show a per-component in/mm chip in the carousel cards and Add dialogs. */
     fun perComponentUnitsFlow(ctx: Context): Flow<Boolean> =
-        ctx.settingsDataStore.data.map { p -> p[KEY_PER_COMPONENT_UNITS] ?: false }
+        ctx.settingsPrefs.map { p -> p[KEY_PER_COMPONENT_UNITS] ?: false }
     suspend fun setPerComponentUnits(ctx: Context, v: Boolean) {
-        ctx.settingsDataStore.edit { it[KEY_PER_COMPONENT_UNITS] = v }
+        ctx.editSettings { it[KEY_PER_COMPONENT_UNITS] = v }
     }
 
     /**
@@ -152,9 +222,9 @@ object SettingsStore {
      * comment.
      */
     fun linerShouldersEnabledFlow(ctx: Context): Flow<Boolean> =
-        ctx.settingsDataStore.data.map { p -> p[KEY_LINER_SHOULDERS_ENABLED] ?: false }
+        ctx.settingsPrefs.map { p -> p[KEY_LINER_SHOULDERS_ENABLED] ?: false }
     suspend fun setLinerShouldersEnabled(ctx: Context, v: Boolean) {
-        ctx.settingsDataStore.edit { it[KEY_LINER_SHOULDERS_ENABLED] = v }
+        ctx.editSettings { it[KEY_LINER_SHOULDERS_ENABLED] = v }
     }
 
     /**
@@ -162,49 +232,56 @@ object SettingsStore {
      * dialogs. The sidebar Tools entry stays available regardless of this flag.
      */
     fun dialogUnitConverterEnabledFlow(ctx: Context): Flow<Boolean> =
-        ctx.settingsDataStore.data.map { p -> p[KEY_DIALOG_UNIT_CONVERTER_ENABLED] ?: false }
+        ctx.settingsPrefs.map { p -> p[KEY_DIALOG_UNIT_CONVERTER_ENABLED] ?: false }
     suspend fun setDialogUnitConverterEnabled(ctx: Context, v: Boolean) {
-        ctx.settingsDataStore.edit { it[KEY_DIALOG_UNIT_CONVERTER_ENABLED] = v }
+        ctx.editSettings { it[KEY_DIALOG_UNIT_CONVERTER_ENABLED] = v }
     }
 
     /** Global default for new documents' inline dual-unit display. */
     fun dualUnitsDefaultFlow(ctx: Context): Flow<Boolean> =
-        ctx.settingsDataStore.data.map { p -> p[KEY_DUAL_UNITS_DEFAULT] ?: false }
+        ctx.settingsPrefs.map { p -> p[KEY_DUAL_UNITS_DEFAULT] ?: false }
     suspend fun setDualUnitsDefault(ctx: Context, v: Boolean) {
-        ctx.settingsDataStore.edit { it[KEY_DUAL_UNITS_DEFAULT] = v }
+        ctx.editSettings { it[KEY_DUAL_UNITS_DEFAULT] = v }
     }
 
     fun pdfShadedBodiesFlow(ctx: Context): Flow<Boolean> =
-        ctx.settingsDataStore.data.map { p -> p[KEY_PDF_SHADED_BODIES] ?: false }
+        ctx.settingsPrefs.map { p -> p[KEY_PDF_SHADED_BODIES] ?: false }
     suspend fun setPdfShadedBodies(ctx: Context, v: Boolean) {
-        ctx.settingsDataStore.edit { it[KEY_PDF_SHADED_BODIES] = v }
+        ctx.editSettings { it[KEY_PDF_SHADED_BODIES] = v }
     }
 
     fun pdfShadedTapersFlow(ctx: Context): Flow<Boolean> =
-        ctx.settingsDataStore.data.map { p -> p[KEY_PDF_SHADED_TAPERS] ?: false }
+        ctx.settingsPrefs.map { p -> p[KEY_PDF_SHADED_TAPERS] ?: false }
     suspend fun setPdfShadedTapers(ctx: Context, v: Boolean) {
-        ctx.settingsDataStore.edit { it[KEY_PDF_SHADED_TAPERS] = v }
+        ctx.editSettings { it[KEY_PDF_SHADED_TAPERS] = v }
     }
 
     fun pdfShadedLinersFlow(ctx: Context): Flow<Boolean> =
-        ctx.settingsDataStore.data.map { p -> p[KEY_PDF_SHADED_LINERS] ?: false }
+        ctx.settingsPrefs.map { p -> p[KEY_PDF_SHADED_LINERS] ?: false }
     suspend fun setPdfShadedLiners(ctx: Context, v: Boolean) {
-        ctx.settingsDataStore.edit { it[KEY_PDF_SHADED_LINERS] = v }
+        ctx.editSettings { it[KEY_PDF_SHADED_LINERS] = v }
+    }
+
+    /** Print-side line art for the undercut document — see the key's comment. */
+    fun pdfUndercutLineArtFlow(ctx: Context): Flow<Boolean> =
+        ctx.settingsPrefs.map { p -> p[KEY_PDF_UNDERCUT_LINE_ART] ?: false }
+    suspend fun setPdfUndercutLineArt(ctx: Context, v: Boolean) {
+        ctx.editSettings { it[KEY_PDF_UNDERCUT_LINE_ART] = v }
     }
 
     // Sizing-curve anchor heights (paper inches): what a 4" / 8" shaft draws by default.
     fun pdfCurveLoHeightInFlow(ctx: Context): Flow<Float> =
-        ctx.settingsDataStore.data.map { p -> p[KEY_PDF_CURVE_LO_HEIGHT_IN] ?: PdfPrefs().curveLoHeightIn }
+        ctx.settingsPrefs.map { p -> p[KEY_PDF_CURVE_LO_HEIGHT_IN] ?: PdfPrefs().curveLoHeightIn }
     suspend fun setPdfCurveLoHeightIn(ctx: Context, v: Float) {
-        ctx.settingsDataStore.edit {
+        ctx.editSettings {
             it[KEY_PDF_CURVE_LO_HEIGHT_IN] = v.coerceIn(PDF_CURVE_HEIGHT_MIN_IN, PDF_CURVE_HEIGHT_MAX_IN)
         }
     }
 
     fun pdfCurveHiHeightInFlow(ctx: Context): Flow<Float> =
-        ctx.settingsDataStore.data.map { p -> p[KEY_PDF_CURVE_HI_HEIGHT_IN] ?: PdfPrefs().curveHiHeightIn }
+        ctx.settingsPrefs.map { p -> p[KEY_PDF_CURVE_HI_HEIGHT_IN] ?: PdfPrefs().curveHiHeightIn }
     suspend fun setPdfCurveHiHeightIn(ctx: Context, v: Float) {
-        ctx.settingsDataStore.edit {
+        ctx.editSettings {
             it[KEY_PDF_CURVE_HI_HEIGHT_IN] = v.coerceIn(PDF_CURVE_HEIGHT_MIN_IN, PDF_CURVE_HEIGHT_MAX_IN)
         }
     }
@@ -212,20 +289,20 @@ object SettingsStore {
     // Body S-break threshold: fraction of true width below which a compressed body run
     // shows the S-break pair. 0 = never break on compression.
     fun pdfSBreakThresholdFracFlow(ctx: Context): Flow<Float> =
-        ctx.settingsDataStore.data.map { p -> p[KEY_PDF_SBREAK_THRESHOLD_FRAC] ?: PdfPrefs().sBreakThresholdFrac }
+        ctx.settingsPrefs.map { p -> p[KEY_PDF_SBREAK_THRESHOLD_FRAC] ?: PdfPrefs().sBreakThresholdFrac }
     suspend fun setPdfSBreakThresholdFrac(ctx: Context, v: Float) {
-        ctx.settingsDataStore.edit { it[KEY_PDF_SBREAK_THRESHOLD_FRAC] = v.coerceIn(0f, 1f) }
+        ctx.editSettings { it[KEY_PDF_SBREAK_THRESHOLD_FRAC] = v.coerceIn(0f, 1f) }
     }
 
     // Default worn-profile trace exaggeration: how deep the deepest liner reading draws, as a
     // fraction of the drawn radius. A job may pin its own value (WearRecord.traceDepthFrac).
     fun pdfWearTraceDepthFracFlow(ctx: Context): Flow<Float> =
-        ctx.settingsDataStore.data.map { p ->
+        ctx.settingsPrefs.map { p ->
             (p[KEY_PDF_WEAR_TRACE_DEPTH_FRAC] ?: PdfPrefs().wearTraceDepthFrac)
                 .coerceIn(WEAR_TRACE_MIN_DEPTH_FRAC, WEAR_TRACE_MAX_DEPTH_FRAC)
         }
     suspend fun setPdfWearTraceDepthFrac(ctx: Context, v: Float) {
-        ctx.settingsDataStore.edit {
+        ctx.editSettings {
             it[KEY_PDF_WEAR_TRACE_DEPTH_FRAC] = v.coerceIn(WEAR_TRACE_MIN_DEPTH_FRAC, WEAR_TRACE_MAX_DEPTH_FRAC)
         }
     }
@@ -233,12 +310,12 @@ object SettingsStore {
     // Grey of a wear area's fill in the wear document's detail strips, as a fraction of full
     // black. App-wide (no per-job override); the cap keeps pit "X"s legible over the band.
     fun pdfWearBandShadeFracFlow(ctx: Context): Flow<Float> =
-        ctx.settingsDataStore.data.map { p ->
+        ctx.settingsPrefs.map { p ->
             (p[KEY_PDF_WEAR_BAND_SHADE_FRAC] ?: PdfPrefs().wearBandShadeFrac)
                 .coerceIn(PDF_WEAR_BAND_SHADE_MIN, PDF_WEAR_BAND_SHADE_MAX)
         }
     suspend fun setPdfWearBandShadeFrac(ctx: Context, v: Float) {
-        ctx.settingsDataStore.edit {
+        ctx.editSettings {
             it[KEY_PDF_WEAR_BAND_SHADE_FRAC] = v.coerceIn(PDF_WEAR_BAND_SHADE_MIN, PDF_WEAR_BAND_SHADE_MAX)
         }
     }
@@ -246,13 +323,49 @@ object SettingsStore {
     // How much bare shaft may sit between two components in one wear detail strip before the run
     // compresses to an S-break. Canonical mm; the UI converts for display only. App-wide.
     fun pdfWearJoinGapMaxMmFlow(ctx: Context): Flow<Float> =
-        ctx.settingsDataStore.data.map { p ->
+        ctx.settingsPrefs.map { p ->
             (p[KEY_PDF_WEAR_JOIN_GAP_MAX_MM] ?: PdfPrefs().wearJoinGapMaxMm)
                 .coerceIn(PDF_WEAR_JOIN_GAP_MIN_MM, PDF_WEAR_JOIN_GAP_MAX_MM)
         }
     suspend fun setPdfWearJoinGapMaxMm(ctx: Context, v: Float) {
-        ctx.settingsDataStore.edit {
+        ctx.editSettings {
             it[KEY_PDF_WEAR_JOIN_GAP_MAX_MM] = v.coerceIn(PDF_WEAR_JOIN_GAP_MIN_MM, PDF_WEAR_JOIN_GAP_MAX_MM)
+        }
+    }
+
+    // Narrows the body shade to authored sections: with pdf_shaded_bodies on, auto (bare-shaft)
+    // runs draw unfilled. Subtractive — meaningless on its own.
+    fun pdfShadeExplicitBodiesOnlyFlow(ctx: Context): Flow<Boolean> =
+        ctx.settingsPrefs.map { p ->
+            p[KEY_PDF_SHADE_EXPLICIT_BODIES_ONLY] ?: PdfPrefs().shadeExplicitBodiesOnly
+        }
+    suspend fun setPdfShadeExplicitBodiesOnly(ctx: Context, v: Boolean) {
+        ctx.editSettings { it[KEY_PDF_SHADE_EXPLICIT_BODIES_ONLY] = v }
+    }
+
+    // Runout bubble radius multiplier — both draw sites (sheet and canvas preview) read it.
+    fun pdfRunoutBubbleScaleFlow(ctx: Context): Flow<Float> =
+        ctx.settingsPrefs.map { p ->
+            (p[KEY_PDF_RUNOUT_BUBBLE_SCALE] ?: PdfPrefs().runoutBubbleScale)
+                .coerceIn(PDF_RUNOUT_BUBBLE_SCALE_MIN, PDF_RUNOUT_BUBBLE_SCALE_MAX)
+        }
+    suspend fun setPdfRunoutBubbleScale(ctx: Context, v: Float) {
+        ctx.editSettings {
+            it[KEY_PDF_RUNOUT_BUBBLE_SCALE] =
+                v.coerceIn(PDF_RUNOUT_BUBBLE_SCALE_MIN, PDF_RUNOUT_BUBBLE_SCALE_MAX)
+        }
+    }
+
+    // How far the first bubble row hangs below the shaft, as a multiplier on the shipped drop.
+    fun pdfRunoutBubbleDropScaleFlow(ctx: Context): Flow<Float> =
+        ctx.settingsPrefs.map { p ->
+            (p[KEY_PDF_RUNOUT_BUBBLE_DROP_SCALE] ?: PdfPrefs().runoutBubbleDropScale)
+                .coerceIn(PDF_RUNOUT_BUBBLE_DROP_SCALE_MIN, PDF_RUNOUT_BUBBLE_DROP_SCALE_MAX)
+        }
+    suspend fun setPdfRunoutBubbleDropScale(ctx: Context, v: Float) {
+        ctx.editSettings {
+            it[KEY_PDF_RUNOUT_BUBBLE_DROP_SCALE] =
+                v.coerceIn(PDF_RUNOUT_BUBBLE_DROP_SCALE_MIN, PDF_RUNOUT_BUBBLE_DROP_SCALE_MAX)
         }
     }
 
@@ -260,45 +373,53 @@ object SettingsStore {
     // How a fraction is SET wherever the app draws one — previews included, since both draw
     // families go through the one renderer.
     fun pdfFractionStyleFlow(ctx: Context): Flow<FractionStyle> =
-        ctx.settingsDataStore.data.map { p -> FractionStyle.fromName(p[KEY_PDF_FRACTION_STYLE]) }
+        ctx.settingsPrefs.map { p -> FractionStyle.fromName(p[KEY_PDF_FRACTION_STYLE]) }
     suspend fun setPdfFractionStyle(ctx: Context, style: FractionStyle) {
-        ctx.settingsDataStore.edit { it[KEY_PDF_FRACTION_STYLE] = style.name }
+        ctx.editSettings { it[KEY_PDF_FRACTION_STYLE] = style.name }
+    }
+
+    // The typeface every printed sheet is set in. PDFs only — the on-screen sheets are Compose
+    // chrome and keep the app's own type.
+    fun pdfOutputFontFlow(ctx: Context): Flow<OutputFont> =
+        ctx.settingsPrefs.map { p -> OutputFont.fromName(p[KEY_PDF_OUTPUT_FONT]) }
+    suspend fun setPdfOutputFont(ctx: Context, font: OutputFont) {
+        ctx.editSettings { it[KEY_PDF_OUTPUT_FONT] = font.name }
     }
 
     // How a dual value is SET on the drawing: an inline one-liner or a two-line stack. Only ever
     // visible on a document with dual units switched on.
     fun pdfDualUnitLayoutFlow(ctx: Context): Flow<DualUnitLayout> =
-        ctx.settingsDataStore.data.map { p -> DualUnitLayout.fromName(p[KEY_PDF_DUAL_UNIT_LAYOUT]) }
+        ctx.settingsPrefs.map { p -> DualUnitLayout.fromName(p[KEY_PDF_DUAL_UNIT_LAYOUT]) }
     suspend fun setPdfDualUnitLayout(ctx: Context, layout: DualUnitLayout) {
-        ctx.settingsDataStore.edit { it[KEY_PDF_DUAL_UNIT_LAYOUT] = layout.name }
+        ctx.editSettings { it[KEY_PDF_DUAL_UNIT_LAYOUT] = layout.name }
     }
 
     fun pdfArrowSizePtFlow(ctx: Context): Flow<Float> =
-        ctx.settingsDataStore.data.map { p -> p[KEY_PDF_ARROW_SIZE_PT] ?: PdfPrefs().arrowSizePt }
+        ctx.settingsPrefs.map { p -> p[KEY_PDF_ARROW_SIZE_PT] ?: PdfPrefs().arrowSizePt }
     suspend fun setPdfArrowSizePt(ctx: Context, v: Float) {
-        ctx.settingsDataStore.edit {
+        ctx.editSettings {
             it[KEY_PDF_ARROW_SIZE_PT] = v.coerceIn(PDF_ARROW_SIZE_SMALL_PT, PDF_ARROW_SIZE_LARGE_PT)
         }
     }
 
     fun pdfExportModeFlow(ctx: Context): Flow<PdfExportMode> =
-        ctx.settingsDataStore.data.map { p ->
+        ctx.settingsPrefs.map { p ->
             runCatching { PdfExportMode.valueOf(p[KEY_PDF_EXPORT_MODE] ?: "Standard") }
                 .getOrDefault(PdfExportMode.Standard)
         }
 
     suspend fun setPdfExportMode(ctx: Context, mode: PdfExportMode) {
-        ctx.settingsDataStore.edit { it[KEY_PDF_EXPORT_MODE] = mode.name }
+        ctx.editSettings { it[KEY_PDF_EXPORT_MODE] = mode.name }
     }
 
 
     fun lineThicknessScaleFlow(ctx: Context): Flow<Float> =
-        ctx.settingsDataStore.data.map { p ->
+        ctx.settingsPrefs.map { p ->
             p[KEY_LINE_THICKNESS_SCALE] ?: DRAWING_LINE_THICKNESS_DEFAULT
         }
 
     suspend fun setLineThicknessScale(ctx: Context, scale: Float) {
-        ctx.settingsDataStore.edit {
+        ctx.editSettings {
             it[KEY_LINE_THICKNESS_SCALE] =
                 scale.coerceIn(DRAWING_LINE_THICKNESS_MIN, DRAWING_LINE_THICKNESS_MAX)
         }
@@ -313,10 +434,10 @@ object SettingsStore {
     private val KEY_DRAWING_PROFILES = stringPreferencesKey("drawing_profiles")
 
     fun drawingProfilesFlow(ctx: Context): Flow<Map<String, DrawingProfile>> =
-        ctx.settingsDataStore.data.map { p -> decodeDrawingProfiles(p[KEY_DRAWING_PROFILES]) }
+        ctx.settingsPrefs.map { p -> decodeDrawingProfiles(p[KEY_DRAWING_PROFILES]) }
 
     suspend fun getDrawingProfiles(ctx: Context): Map<String, DrawingProfile> =
-        decodeDrawingProfiles(ctx.settingsDataStore.data.first()[KEY_DRAWING_PROFILES])
+        decodeDrawingProfiles(ctx.settingsPrefs.first()[KEY_DRAWING_PROFILES])
 
     /**
      * Saves [profile] under [name], replacing any profile already stored under it. Returns false
@@ -326,9 +447,9 @@ object SettingsStore {
     suspend fun saveDrawingProfile(ctx: Context, name: String, profile: DrawingProfile): Boolean {
         val key = normalizeDrawingProfileName(name) ?: return false
         var saved = false
-        ctx.settingsDataStore.edit { prefs ->
+        ctx.editSettings { prefs ->
             val current = decodeDrawingProfiles(prefs[KEY_DRAWING_PROFILES])
-            if (!current.containsKey(key) && current.size >= DRAWING_PROFILE_MAX_COUNT) return@edit
+            if (!current.containsKey(key) && current.size >= DRAWING_PROFILE_MAX_COUNT) return@editSettings
             prefs[KEY_DRAWING_PROFILES] = encodeDrawingProfiles(current + (key to profile))
             saved = true
         }
@@ -336,9 +457,9 @@ object SettingsStore {
     }
 
     suspend fun deleteDrawingProfile(ctx: Context, name: String) {
-        ctx.settingsDataStore.edit { prefs ->
+        ctx.editSettings { prefs ->
             val current = decodeDrawingProfiles(prefs[KEY_DRAWING_PROFILES])
-            if (!current.containsKey(name)) return@edit
+            if (!current.containsKey(name)) return@editSettings
             prefs[KEY_DRAWING_PROFILES] = encodeDrawingProfiles(current - name)
         }
     }
@@ -347,10 +468,10 @@ object SettingsStore {
     suspend fun renameDrawingProfile(ctx: Context, from: String, to: String): Boolean {
         val target = normalizeDrawingProfileName(to) ?: return false
         var renamed = false
-        ctx.settingsDataStore.edit { prefs ->
+        ctx.editSettings { prefs ->
             val current = decodeDrawingProfiles(prefs[KEY_DRAWING_PROFILES])
-            val profile = current[from] ?: return@edit
-            if (target != from && current.containsKey(target)) return@edit
+            val profile = current[from] ?: return@editSettings
+            if (target != from && current.containsKey(target)) return@editSettings
             prefs[KEY_DRAWING_PROFILES] =
                 encodeDrawingProfiles(current - from + (target to profile))
             renamed = true
@@ -369,14 +490,14 @@ object SettingsStore {
     private val KEY_BACKUP_MIRROR_TREE_URI = stringPreferencesKey("backup_mirror_tree_uri")
 
     fun backupMirrorFolderUriFlow(ctx: Context): Flow<String?> =
-        ctx.settingsDataStore.data.map { p -> p[KEY_BACKUP_MIRROR_TREE_URI]?.takeIf { it.isNotBlank() } }
+        ctx.settingsPrefs.map { p -> p[KEY_BACKUP_MIRROR_TREE_URI]?.takeIf { it.isNotBlank() } }
 
     suspend fun getBackupMirrorFolderUri(ctx: Context): String? =
-        ctx.settingsDataStore.data.first()[KEY_BACKUP_MIRROR_TREE_URI]?.takeIf { it.isNotBlank() }
+        ctx.settingsPrefs.first()[KEY_BACKUP_MIRROR_TREE_URI]?.takeIf { it.isNotBlank() }
 
     /** Passing null (or a blank string) stops mirroring. */
     suspend fun setBackupMirrorFolderUri(ctx: Context, uri: String?) {
-        ctx.settingsDataStore.edit { prefs ->
+        ctx.editSettings { prefs ->
             if (uri.isNullOrBlank()) prefs.remove(KEY_BACKUP_MIRROR_TREE_URI)
             else prefs[KEY_BACKUP_MIRROR_TREE_URI] = uri
         }
@@ -419,112 +540,109 @@ object SettingsStore {
     enum class UnitPref { MILLIMETERS, INCHES }
 
     fun defaultUnitFlow(ctx: Context): Flow<UnitPref> =
-        ctx.settingsDataStore.data.map { p ->
+        ctx.settingsPrefs.map { p ->
             when (p[KEY_DEFAULT_UNIT] ?: 0) { 1 -> UnitPref.INCHES; else -> UnitPref.MILLIMETERS }
         }
 
     fun showGridFlow(ctx: Context): Flow<Boolean> =
-        ctx.settingsDataStore.data.map { p -> p[KEY_SHOW_GRID] ?: false }
+        ctx.settingsPrefs.map { p -> p[KEY_SHOW_GRID] ?: false }
 
     fun showComponentArrowsFlow(ctx: Context): Flow<Boolean> =
-        ctx.settingsDataStore.data.map { p -> p[KEY_SHOW_COMPONENT_ARROWS] ?: false }
+        ctx.settingsPrefs.map { p -> p[KEY_SHOW_COMPONENT_ARROWS] ?: false }
 
     fun showHighlightSelectionFlow(ctx: Context): Flow<Boolean> =
-        ctx.settingsDataStore.data.map { p -> p[KEY_SHOW_HIGHLIGHT_SELECTION] ?: true }
+        ctx.settingsPrefs.map { p -> p[KEY_SHOW_HIGHLIGHT_SELECTION] ?: true }
 
     fun componentArrowWidthDpFlow(ctx: Context): Flow<Int> =
-        ctx.settingsDataStore.data.map { p -> p[KEY_COMPONENT_ARROW_WIDTH_DP] ?: 40 }
+        ctx.settingsPrefs.map { p -> p[KEY_COMPONENT_ARROW_WIDTH_DP] ?: 40 }
     fun devOptionsEnabledFlow(ctx: Context): Flow<Boolean> =
-        ctx.settingsDataStore.data.map { p -> p[KEY_DEV_OPTIONS_ENABLED] ?: false }
+        ctx.settingsPrefs.map { p -> p[KEY_DEV_OPTIONS_ENABLED] ?: false }
 
     fun showOalDebugLabelFlow(ctx: Context): Flow<Boolean> =
-        ctx.settingsDataStore.data.map { p -> p[KEY_SHOW_OAL_DEBUG_LABEL] ?: false }
-
-    fun showOalHelperLineFlow(ctx: Context): Flow<Boolean> =
-        ctx.settingsDataStore.data.map { p -> p[KEY_SHOW_OAL_HELPER_LINE] ?: false }
+        ctx.settingsPrefs.map { p -> p[KEY_SHOW_OAL_DEBUG_LABEL] ?: false }
 
     fun showOalInPreviewBoxFlow(ctx: Context): Flow<Boolean> =
-        ctx.settingsDataStore.data.map { p -> p[KEY_SHOW_OAL_IN_PREVIEW_BOX] ?: false }
+        ctx.settingsPrefs.map { p -> p[KEY_SHOW_OAL_IN_PREVIEW_BOX] ?: false }
 
     fun showComponentDebugLabelsFlow(ctx: Context): Flow<Boolean> =
-        ctx.settingsDataStore.data.map { p -> p[KEY_SHOW_COMPONENT_DEBUG_LABELS] ?: false }
+        ctx.settingsPrefs.map { p -> p[KEY_SHOW_COMPONENT_DEBUG_LABELS] ?: false }
 
     fun showRenderLayoutDebugOverlayFlow(ctx: Context): Flow<Boolean> =
-        ctx.settingsDataStore.data.map { p -> p[KEY_SHOW_RENDER_LAYOUT_DEBUG_OVERLAY] ?: false }
+        ctx.settingsPrefs.map { p -> p[KEY_SHOW_RENDER_LAYOUT_DEBUG_OVERLAY] ?: false }
 
     fun showRenderOalMarkersFlow(ctx: Context): Flow<Boolean> =
-        ctx.settingsDataStore.data.map { p -> p[KEY_SHOW_RENDER_OAL_MARKERS] ?: false }
+        ctx.settingsPrefs.map { p -> p[KEY_SHOW_RENDER_OAL_MARKERS] ?: false }
 
     fun showDimDebugOverlayFlow(ctx: Context): Flow<Boolean> =
-        ctx.settingsDataStore.data.map { p -> p[KEY_SHOW_DIM_DEBUG_OVERLAY] ?: false }
+        ctx.settingsPrefs.map { p -> p[KEY_SHOW_DIM_DEBUG_OVERLAY] ?: false }
 
     fun verboseLoggingEnabledFlow(ctx: Context): Flow<Boolean> =
-        ctx.settingsDataStore.data.map { p -> p[KEY_VERBOSE_LOGGING_ENABLED] ?: false }
+        ctx.settingsPrefs.map { p -> p[KEY_VERBOSE_LOGGING_ENABLED] ?: false }
 
     fun verboseLoggingRenderFlow(ctx: Context): Flow<Boolean> =
-        ctx.settingsDataStore.data.map { p -> p[KEY_VERBOSE_LOGGING_RENDER] ?: false }
+        ctx.settingsPrefs.map { p -> p[KEY_VERBOSE_LOGGING_RENDER] ?: false }
 
     fun verboseLoggingOalFlow(ctx: Context): Flow<Boolean> =
-        ctx.settingsDataStore.data.map { p -> p[KEY_VERBOSE_LOGGING_OAL] ?: false }
+        ctx.settingsPrefs.map { p -> p[KEY_VERBOSE_LOGGING_OAL] ?: false }
 
     fun verboseLoggingPdfFlow(ctx: Context): Flow<Boolean> =
-        ctx.settingsDataStore.data.map { p -> p[KEY_VERBOSE_LOGGING_PDF] ?: false }
+        ctx.settingsPrefs.map { p -> p[KEY_VERBOSE_LOGGING_PDF] ?: false }
 
     fun verboseLoggingIoFlow(ctx: Context): Flow<Boolean> =
-        ctx.settingsDataStore.data.map { p -> p[KEY_VERBOSE_LOGGING_IO] ?: false }
+        ctx.settingsPrefs.map { p -> p[KEY_VERBOSE_LOGGING_IO] ?: false }
 
     fun achievementsEnabledFlow(ctx: Context): Flow<Boolean> =
-        ctx.settingsDataStore.data.map { p -> p[KEY_ACHIEVEMENTS_ENABLED] ?: false }
+        ctx.settingsPrefs.map { p -> p[KEY_ACHIEVEMENTS_ENABLED] ?: false }
 
     fun unlockedAchievementIdsFlow(ctx: Context): Flow<Set<String>> =
-        ctx.settingsDataStore.data.map { p -> p[KEY_UNLOCKED_ACHIEVEMENT_IDS] ?: emptySet() }
+        ctx.settingsPrefs.map { p -> p[KEY_UNLOCKED_ACHIEVEMENT_IDS] ?: emptySet() }
 
     fun previewBlackWhiteOnlyFlow(ctx: Context): Flow<Boolean> =
-        ctx.settingsDataStore.data.map { p -> p[KEY_PREVIEW_BW_ONLY] ?: false }
+        ctx.settingsPrefs.map { p -> p[KEY_PREVIEW_BW_ONLY] ?: false }
 
     fun themeModeFlow(ctx: Context): Flow<AppThemeMode> =
-        ctx.settingsDataStore.data.map { p -> AppThemeMode.fromName(p[KEY_THEME_MODE]) }
+        ctx.settingsPrefs.map { p -> AppThemeMode.fromName(p[KEY_THEME_MODE]) }
 
     suspend fun setThemeMode(ctx: Context, mode: AppThemeMode) {
-        ctx.settingsDataStore.edit { it[KEY_THEME_MODE] = mode.name }
+        ctx.editSettings { it[KEY_THEME_MODE] = mode.name }
     }
 
     fun highContrastFlow(ctx: Context): Flow<Boolean> =
-        ctx.settingsDataStore.data.map { p -> p[KEY_HIGH_CONTRAST] ?: false }
+        ctx.settingsPrefs.map { p -> p[KEY_HIGH_CONTRAST] ?: false }
 
     suspend fun setHighContrast(ctx: Context, enabled: Boolean) {
-        ctx.settingsDataStore.edit { it[KEY_HIGH_CONTRAST] = enabled }
+        ctx.editSettings { it[KEY_HIGH_CONTRAST] = enabled }
     }
 
     fun undercutLineArtFlow(ctx: Context): Flow<Boolean> =
-        ctx.settingsDataStore.data.map { p -> p[KEY_UNDERCUT_LINE_ART] ?: false }
+        ctx.settingsPrefs.map { p -> p[KEY_UNDERCUT_LINE_ART] ?: false }
 
     suspend fun setUndercutLineArt(ctx: Context, enabled: Boolean) {
-        ctx.settingsDataStore.edit { it[KEY_UNDERCUT_LINE_ART] = enabled }
+        ctx.editSettings { it[KEY_UNDERCUT_LINE_ART] = enabled }
     }
 
     fun undercutShadeColorFlow(ctx: Context): Flow<UndercutShadeColor> =
-        ctx.settingsDataStore.data.map { p -> UndercutShadeColor.fromName(p[KEY_UNDERCUT_SHADE_COLOR]) }
+        ctx.settingsPrefs.map { p -> UndercutShadeColor.fromName(p[KEY_UNDERCUT_SHADE_COLOR]) }
 
     suspend fun setUndercutShadeColor(ctx: Context, color: UndercutShadeColor) {
-        ctx.settingsDataStore.edit { it[KEY_UNDERCUT_SHADE_COLOR] = color.name }
+        ctx.editSettings { it[KEY_UNDERCUT_SHADE_COLOR] = color.name }
     }
 
     fun undercutShadeIntensityFlow(ctx: Context): Flow<UndercutShadeIntensity> =
-        ctx.settingsDataStore.data.map { p -> UndercutShadeIntensity.fromName(p[KEY_UNDERCUT_SHADE_INTENSITY]) }
+        ctx.settingsPrefs.map { p -> UndercutShadeIntensity.fromName(p[KEY_UNDERCUT_SHADE_INTENSITY]) }
 
     suspend fun setUndercutShadeIntensity(ctx: Context, intensity: UndercutShadeIntensity) {
-        ctx.settingsDataStore.edit { it[KEY_UNDERCUT_SHADE_INTENSITY] = intensity.name }
+        ctx.editSettings { it[KEY_UNDERCUT_SHADE_INTENSITY] = intensity.name }
     }
 
     fun openPdfAfterExportFlow(ctx: Context): Flow<Boolean> =
-        ctx.settingsDataStore.data.map { p -> p[KEY_OPEN_PDF_AFTER_EXPORT] ?: false }
+        ctx.settingsPrefs.map { p -> p[KEY_OPEN_PDF_AFTER_EXPORT] ?: false }
 
     suspend fun internalDocsMigratedToShaft(ctx: Context): Boolean =
-        ctx.settingsDataStore.data.first()[KEY_MIGRATED_INTERNAL_DOCS_TO_SHAFT] ?: false
+        ctx.settingsPrefs.first()[KEY_MIGRATED_INTERNAL_DOCS_TO_SHAFT] ?: false
 
     suspend fun setInternalDocsMigratedToShaft(ctx: Context, migrated: Boolean) {
-        ctx.settingsDataStore.edit { it[KEY_MIGRATED_INTERNAL_DOCS_TO_SHAFT] = migrated }
+        ctx.editSettings { it[KEY_MIGRATED_INTERNAL_DOCS_TO_SHAFT] = migrated }
     }
 
     /**
@@ -538,19 +656,19 @@ object SettingsStore {
     private val KEY_STARTER_TEMPLATES_SEEDED = booleanPreferencesKey("starter_templates_seeded")
 
     suspend fun starterTemplatesSeeded(ctx: Context): Boolean =
-        ctx.settingsDataStore.data.first()[KEY_STARTER_TEMPLATES_SEEDED] ?: false
+        ctx.settingsPrefs.first()[KEY_STARTER_TEMPLATES_SEEDED] ?: false
 
     suspend fun setStarterTemplatesSeeded(ctx: Context, seeded: Boolean) {
-        ctx.settingsDataStore.edit { it[KEY_STARTER_TEMPLATES_SEEDED] = seeded }
+        ctx.editSettings { it[KEY_STARTER_TEMPLATES_SEEDED] = seeded }
     }
 
     fun currentSampleSeedVersion(): Int = CURRENT_SAMPLE_SEED_VERSION
 
     suspend fun getSampleSeedVersion(ctx: Context): Int =
-        ctx.settingsDataStore.data.first()[KEY_SAMPLE_SEED_VERSION] ?: 0
+        ctx.settingsPrefs.first()[KEY_SAMPLE_SEED_VERSION] ?: 0
 
     suspend fun setSampleSeedVersion(ctx: Context, v: Int) {
-        ctx.settingsDataStore.edit { it[KEY_SAMPLE_SEED_VERSION] = v }
+        ctx.editSettings { it[KEY_SAMPLE_SEED_VERSION] = v }
     }
 
     // ── Seeded-sample ledger (filename → SHA-256 of seeded content) ──────────
@@ -561,14 +679,14 @@ object SettingsStore {
     private val seededHashesSerializer = MapSerializer(String.serializer(), String.serializer())
 
     suspend fun getSeededSampleHashes(ctx: Context): Map<String, String> {
-        val raw = ctx.settingsDataStore.data.first()[KEY_SEEDED_SAMPLE_HASHES] ?: return emptyMap()
+        val raw = ctx.settingsPrefs.first()[KEY_SEEDED_SAMPLE_HASHES] ?: return emptyMap()
         return runCatching {
             Json.decodeFromString(seededHashesSerializer, raw)
         }.getOrDefault(emptyMap())
     }
 
     suspend fun setSeededSampleHashes(ctx: Context, hashes: Map<String, String>) {
-        ctx.settingsDataStore.edit {
+        ctx.editSettings {
             it[KEY_SEEDED_SAMPLE_HASHES] = Json.encodeToString(seededHashesSerializer, hashes)
         }
     }
@@ -578,10 +696,10 @@ object SettingsStore {
     private val KEY_LAST_SNAPSHOT_VERSION_CODE = intPreferencesKey("last_snapshot_version_code")
 
     suspend fun getLastSnapshotVersionCode(ctx: Context): Int =
-        ctx.settingsDataStore.data.first()[KEY_LAST_SNAPSHOT_VERSION_CODE] ?: 0
+        ctx.settingsPrefs.first()[KEY_LAST_SNAPSHOT_VERSION_CODE] ?: 0
 
     suspend fun setLastSnapshotVersionCode(ctx: Context, v: Int) {
-        ctx.settingsDataStore.edit { it[KEY_LAST_SNAPSHOT_VERSION_CODE] = v }
+        ctx.editSettings { it[KEY_LAST_SNAPSHOT_VERSION_CODE] = v }
     }
 
     private fun parseRole(raw: String?, fallback: PreviewColorRole): PreviewColorRole {
@@ -656,7 +774,7 @@ object SettingsStore {
         )
 
     fun previewOutlineSettingFlow(ctx: Context): Flow<PreviewColorSetting> =
-        ctx.settingsDataStore.data.map { p ->
+        ctx.settingsPrefs.map { p ->
             parseSetting(
                 presetRaw = p[KEY_PREVIEW_OUTLINE_PRESET],
                 customRoleRaw = p[KEY_PREVIEW_OUTLINE_CUSTOM_ROLE],
@@ -667,7 +785,7 @@ object SettingsStore {
         }
 
     fun previewBodyFillSettingFlow(ctx: Context): Flow<PreviewColorSetting> =
-        ctx.settingsDataStore.data.map { p ->
+        ctx.settingsPrefs.map { p ->
             parseSetting(
                 presetRaw = p[KEY_PREVIEW_BODY_FILL_PRESET],
                 customRoleRaw = p[KEY_PREVIEW_BODY_FILL_CUSTOM_ROLE],
@@ -678,7 +796,7 @@ object SettingsStore {
         }
 
     fun previewTaperFillSettingFlow(ctx: Context): Flow<PreviewColorSetting> =
-        ctx.settingsDataStore.data.map { p ->
+        ctx.settingsPrefs.map { p ->
             parseSetting(
                 presetRaw = p[KEY_PREVIEW_TAPER_FILL_PRESET],
                 customRoleRaw = p[KEY_PREVIEW_TAPER_FILL_CUSTOM_ROLE],
@@ -689,7 +807,7 @@ object SettingsStore {
         }
 
     fun previewLinerFillSettingFlow(ctx: Context): Flow<PreviewColorSetting> =
-        ctx.settingsDataStore.data.map { p ->
+        ctx.settingsPrefs.map { p ->
             parseSetting(
                 presetRaw = p[KEY_PREVIEW_LINER_FILL_PRESET],
                 customRoleRaw = p[KEY_PREVIEW_LINER_FILL_CUSTOM_ROLE],
@@ -700,7 +818,7 @@ object SettingsStore {
         }
 
     fun previewThreadFillSettingFlow(ctx: Context): Flow<PreviewColorSetting> =
-        ctx.settingsDataStore.data.map { p ->
+        ctx.settingsPrefs.map { p ->
             parseSetting(
                 presetRaw = p[KEY_PREVIEW_THREAD_FILL_PRESET],
                 customRoleRaw = p[KEY_PREVIEW_THREAD_FILL_CUSTOM_ROLE],
@@ -711,7 +829,7 @@ object SettingsStore {
         }
 
     fun previewThreadHatchSettingFlow(ctx: Context): Flow<PreviewColorSetting> =
-        ctx.settingsDataStore.data.map { p ->
+        ctx.settingsPrefs.map { p ->
             parseSetting(
                 presetRaw = p[KEY_PREVIEW_THREAD_HATCH_PRESET],
                 customRoleRaw = p[KEY_PREVIEW_THREAD_HATCH_CUSTOM_ROLE],
@@ -722,78 +840,74 @@ object SettingsStore {
         }
 
     suspend fun setDefaultUnit(ctx: Context, unit: UnitPref) {
-        ctx.settingsDataStore.edit { it[KEY_DEFAULT_UNIT] = if (unit == UnitPref.INCHES) 1 else 0 }
+        ctx.editSettings { it[KEY_DEFAULT_UNIT] = if (unit == UnitPref.INCHES) 1 else 0 }
     }
 
     suspend fun setShowGrid(ctx: Context, show: Boolean) {
-        ctx.settingsDataStore.edit { it[KEY_SHOW_GRID] = show }
+        ctx.editSettings { it[KEY_SHOW_GRID] = show }
     }
 
     suspend fun setShowComponentArrows(ctx: Context, show: Boolean) {
-        ctx.settingsDataStore.edit { it[KEY_SHOW_COMPONENT_ARROWS] = show }
+        ctx.editSettings { it[KEY_SHOW_COMPONENT_ARROWS] = show }
     }
 
     suspend fun setShowHighlightSelection(ctx: Context, show: Boolean) {
-        ctx.settingsDataStore.edit { it[KEY_SHOW_HIGHLIGHT_SELECTION] = show }
+        ctx.editSettings { it[KEY_SHOW_HIGHLIGHT_SELECTION] = show }
     }
 
     suspend fun setOpenPdfAfterExport(ctx: Context, enabled: Boolean) {
-        ctx.settingsDataStore.edit { it[KEY_OPEN_PDF_AFTER_EXPORT] = enabled }
+        ctx.editSettings { it[KEY_OPEN_PDF_AFTER_EXPORT] = enabled }
     }
 
     suspend fun setComponentArrowWidthDp(ctx: Context, widthDp: Int) {
-        ctx.settingsDataStore.edit { it[KEY_COMPONENT_ARROW_WIDTH_DP] = widthDp }
+        ctx.editSettings { it[KEY_COMPONENT_ARROW_WIDTH_DP] = widthDp }
     }
     suspend fun setDevOptionsEnabled(ctx: Context, enabled: Boolean) {
-        ctx.settingsDataStore.edit { it[KEY_DEV_OPTIONS_ENABLED] = enabled }
+        ctx.editSettings { it[KEY_DEV_OPTIONS_ENABLED] = enabled }
     }
 
     suspend fun setShowOalDebugLabel(ctx: Context, show: Boolean) {
-        ctx.settingsDataStore.edit { it[KEY_SHOW_OAL_DEBUG_LABEL] = show }
-    }
-
-    suspend fun setShowOalHelperLine(ctx: Context, show: Boolean) {
-        ctx.settingsDataStore.edit { it[KEY_SHOW_OAL_HELPER_LINE] = show }
+        ctx.editSettings { it[KEY_SHOW_OAL_DEBUG_LABEL] = show }
     }
 
     suspend fun setShowOalInPreviewBox(ctx: Context, show: Boolean) {
-        ctx.settingsDataStore.edit { it[KEY_SHOW_OAL_IN_PREVIEW_BOX] = show }
+        ctx.editSettings { it[KEY_SHOW_OAL_IN_PREVIEW_BOX] = show }
     }
 
     suspend fun setShowComponentDebugLabels(ctx: Context, show: Boolean) {
-        ctx.settingsDataStore.edit { it[KEY_SHOW_COMPONENT_DEBUG_LABELS] = show }
+        ctx.editSettings { it[KEY_SHOW_COMPONENT_DEBUG_LABELS] = show }
     }
 
     suspend fun setShowRenderLayoutDebugOverlay(ctx: Context, show: Boolean) {
-        ctx.settingsDataStore.edit { it[KEY_SHOW_RENDER_LAYOUT_DEBUG_OVERLAY] = show }
+        ctx.editSettings { it[KEY_SHOW_RENDER_LAYOUT_DEBUG_OVERLAY] = show }
     }
 
     suspend fun setShowRenderOalMarkers(ctx: Context, show: Boolean) {
-        ctx.settingsDataStore.edit { it[KEY_SHOW_RENDER_OAL_MARKERS] = show }
+        ctx.editSettings { it[KEY_SHOW_RENDER_OAL_MARKERS] = show }
     }
 
     suspend fun setShowDimDebugOverlay(ctx: Context, show: Boolean) {
-        ctx.settingsDataStore.edit { it[KEY_SHOW_DIM_DEBUG_OVERLAY] = show }
+        ctx.editSettings { it[KEY_SHOW_DIM_DEBUG_OVERLAY] = show }
     }
 
     suspend fun setVerboseLoggingEnabled(ctx: Context, enabled: Boolean) {
-        ctx.settingsDataStore.edit { it[KEY_VERBOSE_LOGGING_ENABLED] = enabled }
+        ctx.editSettings { it[KEY_VERBOSE_LOGGING_ENABLED] = enabled }
     }
 
     suspend fun setVerboseLoggingRender(ctx: Context, enabled: Boolean) {
-        ctx.settingsDataStore.edit { it[KEY_VERBOSE_LOGGING_RENDER] = enabled }
+        ctx.editSettings { it[KEY_VERBOSE_LOGGING_RENDER] = enabled }
     }
 
     suspend fun setVerboseLoggingOal(ctx: Context, enabled: Boolean) {
-        ctx.settingsDataStore.edit { it[KEY_VERBOSE_LOGGING_OAL] = enabled }
+        ctx.editSettings { it[KEY_VERBOSE_LOGGING_OAL] = enabled }
     }
 
     suspend fun setVerboseLoggingPdf(ctx: Context, enabled: Boolean) {
-        ctx.settingsDataStore.edit { it[KEY_VERBOSE_LOGGING_PDF] = enabled }
+        ctx.editSettings { it[KEY_VERBOSE_LOGGING_PDF] = enabled }
     }
 
     suspend fun setVerboseLoggingIo(ctx: Context, enabled: Boolean) {
-        ctx.settingsDataStore.edit { it[KEY_VERBOSE_LOGGING_IO] = enabled }
+        ctx.editSettings { it[KEY_VERBOSE_LOGGING_IO] = enabled }
     }
 
     // Clears all dev sub-flags when dev options master toggle is off. Safe to call on every
@@ -801,9 +915,8 @@ object SettingsStore {
     suspend fun resetDevSubFlagsIfDisabled(ctx: Context) {
         val devEnabled = devOptionsEnabledFlow(ctx).first()
         if (devEnabled) return
-        ctx.settingsDataStore.edit { prefs ->
+        ctx.editSettings { prefs ->
             prefs[KEY_SHOW_OAL_DEBUG_LABEL] = false
-            prefs[KEY_SHOW_OAL_HELPER_LINE] = false
             prefs[KEY_SHOW_OAL_IN_PREVIEW_BOX] = false
             prefs[KEY_SHOW_COMPONENT_DEBUG_LABELS] = false
             prefs[KEY_SHOW_RENDER_LAYOUT_DEBUG_OVERLAY] = false
@@ -818,13 +931,13 @@ object SettingsStore {
     }
 
     suspend fun setAchievementsEnabled(ctx: Context, enabled: Boolean) {
-        ctx.settingsDataStore.edit { it[KEY_ACHIEVEMENTS_ENABLED] = enabled }
+        ctx.editSettings { it[KEY_ACHIEVEMENTS_ENABLED] = enabled }
     }
 
     /** Returns true if the achievement was newly unlocked by this call. */
     suspend fun unlockAchievement(ctx: Context, id: String): Boolean {
         var added = false
-        ctx.settingsDataStore.edit { prefs ->
+        ctx.editSettings { prefs ->
             val current = prefs[KEY_UNLOCKED_ACHIEVEMENT_IDS]?.toMutableSet() ?: mutableSetOf()
             added = current.add(id)
             prefs[KEY_UNLOCKED_ACHIEVEMENT_IDS] = current
@@ -833,49 +946,49 @@ object SettingsStore {
     }
 
     suspend fun setPreviewOutlineSetting(ctx: Context, setting: PreviewColorSetting) {
-        ctx.settingsDataStore.edit {
+        ctx.editSettings {
             it[KEY_PREVIEW_OUTLINE_PRESET] = setting.preset.name
             it[KEY_PREVIEW_OUTLINE_CUSTOM_ROLE] = setting.customRole.name
         }
     }
 
     suspend fun setPreviewBodyFillSetting(ctx: Context, setting: PreviewColorSetting) {
-        ctx.settingsDataStore.edit {
+        ctx.editSettings {
             it[KEY_PREVIEW_BODY_FILL_PRESET] = setting.preset.name
             it[KEY_PREVIEW_BODY_FILL_CUSTOM_ROLE] = setting.customRole.name
         }
     }
 
     suspend fun setPreviewTaperFillSetting(ctx: Context, setting: PreviewColorSetting) {
-        ctx.settingsDataStore.edit {
+        ctx.editSettings {
             it[KEY_PREVIEW_TAPER_FILL_PRESET] = setting.preset.name
             it[KEY_PREVIEW_TAPER_FILL_CUSTOM_ROLE] = setting.customRole.name
         }
     }
 
     suspend fun setPreviewLinerFillSetting(ctx: Context, setting: PreviewColorSetting) {
-        ctx.settingsDataStore.edit {
+        ctx.editSettings {
             it[KEY_PREVIEW_LINER_FILL_PRESET] = setting.preset.name
             it[KEY_PREVIEW_LINER_FILL_CUSTOM_ROLE] = setting.customRole.name
         }
     }
 
     suspend fun setPreviewThreadFillSetting(ctx: Context, setting: PreviewColorSetting) {
-        ctx.settingsDataStore.edit {
+        ctx.editSettings {
             it[KEY_PREVIEW_THREAD_FILL_PRESET] = setting.preset.name
             it[KEY_PREVIEW_THREAD_FILL_CUSTOM_ROLE] = setting.customRole.name
         }
     }
 
     suspend fun setPreviewThreadHatchSetting(ctx: Context, setting: PreviewColorSetting) {
-        ctx.settingsDataStore.edit {
+        ctx.editSettings {
             it[KEY_PREVIEW_THREAD_HATCH_PRESET] = setting.preset.name
             it[KEY_PREVIEW_THREAD_HATCH_CUSTOM_ROLE] = setting.customRole.name
         }
     }
 
     suspend fun setPreviewBlackWhiteOnly(ctx: Context, enabled: Boolean) {
-        ctx.settingsDataStore.edit { it[KEY_PREVIEW_BW_ONLY] = enabled }
+        ctx.editSettings { it[KEY_PREVIEW_BW_ONLY] = enabled }
     }
 
     // --- PDF section ---
@@ -894,5 +1007,8 @@ object SettingsStore {
         // `FractionTypography.active` rather than taking the style as a parameter, so this
         // mirror is what makes the Settings choice reach the ink.
         FractionTypography.setStyle(next.fractionStyle)
+        // Same posture for the typeface: the composers build their root text paint from
+        // `OutputTypography.active`, so this mirror is what carries the Settings choice to the ink.
+        OutputTypography.setFont(next.outputFont)
     }
 }

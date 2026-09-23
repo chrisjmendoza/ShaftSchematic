@@ -36,7 +36,6 @@ class AutosaveDraftSerializationTest {
         notes = "",
         runoutConfig = RunoutConfig(),
         unitLocked = true,
-        overallIsManual = false,
         wearRecord = WearRecord(
             spots = listOf(WearSpot(id = "s1", linerId = "ln1", startMm = 12f, lengthMm = 30f, minDiaMm = 90f))
         ),

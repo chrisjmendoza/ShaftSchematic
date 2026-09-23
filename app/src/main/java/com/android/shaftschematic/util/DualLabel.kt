@@ -11,7 +11,7 @@ package com.android.shaftschematic.util
  *
  * Stacked is NARROWER (its width is `max(primary, secondary)`, not their sum plus brackets), so
  * it seats in a dimension line's break far more often — which is what pays for its extra height.
- * See `docs/DualUnitStacking_PLAN.md`.
+ * See `docs/archive/DualUnitStacking_PLAN.md`.
  *
  * The two terms therefore have to survive as separate strings all the way to the draw site: a
  * pre-joined `String` cannot be stacked. Formatting stays in `pdf/UnitFormat.kt`; this type only

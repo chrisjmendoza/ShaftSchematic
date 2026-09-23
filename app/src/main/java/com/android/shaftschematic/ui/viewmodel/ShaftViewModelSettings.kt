@@ -14,12 +14,17 @@ import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_MAX
 import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_MIN
 import com.android.shaftschematic.settings.PDF_WEAR_JOIN_GAP_MAX_MM
 import com.android.shaftschematic.settings.PDF_WEAR_JOIN_GAP_MIN_MM
+import com.android.shaftschematic.settings.PDF_RUNOUT_BUBBLE_DROP_SCALE_MAX
+import com.android.shaftschematic.settings.PDF_RUNOUT_BUBBLE_DROP_SCALE_MIN
+import com.android.shaftschematic.settings.PDF_RUNOUT_BUBBLE_SCALE_MAX
+import com.android.shaftschematic.settings.PDF_RUNOUT_BUBBLE_SCALE_MIN
 import com.android.shaftschematic.settings.PDF_ARROW_SIZE_SMALL_PT
 import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MAX_IN
 import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MIN_IN
 import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.FractionStyle
+import com.android.shaftschematic.util.OutputFont
 import com.android.shaftschematic.util.PreviewColorSetting
 import com.android.shaftschematic.util.UndercutShadeColor
 import com.android.shaftschematic.util.UndercutShadeIntensity
@@ -88,6 +93,56 @@ fun ShaftViewModel.setPdfShadedLiners(v: Boolean, persist: Boolean = true) {
     _pdfShadedLiners.value = v
     SettingsStore.updatePdfPrefs { it.copy(shadedLiners = v) }
     if (persist) viewModelScope.launch { SettingsStore.setPdfShadedLiners(getApplication(), v) }
+}
+
+/**
+ * Wired to the "Undercut drawing: line art" row in Settings → PDF Export and on the undercut
+ * preview's options sheet. Print-side only: it suppresses every shade fill on the undercut
+ * document, the detail strips' always-shaded liner and the section core included. Independent of
+ * the screen-side `UndercutStyle` line-art mode, which never reaches a composer.
+ */
+fun ShaftViewModel.setPdfUndercutLineArt(v: Boolean, persist: Boolean = true) {
+    _pdfUndercutLineArt.value = v
+    SettingsStore.updatePdfPrefs { it.copy(undercutLineArt = v) }
+    if (persist) viewModelScope.launch { SettingsStore.setPdfUndercutLineArt(getApplication(), v) }
+}
+
+/**
+ * Wired to the "Shade in Components" block in Settings and both PDF options sheets — narrows
+ * the body shade to authored sections, leaving auto (bare-shaft) runs unfilled. Subtractive:
+ * it changes nothing while [setPdfShadedBodies] is off.
+ */
+fun ShaftViewModel.setPdfShadeExplicitBodiesOnly(v: Boolean, persist: Boolean = true) {
+    _pdfShadeExplicitBodiesOnly.value = v
+    SettingsStore.updatePdfPrefs { it.copy(shadeExplicitBodiesOnly = v) }
+    if (persist) {
+        viewModelScope.launch { SettingsStore.setPdfShadeExplicitBodiesOnly(getApplication(), v) }
+    }
+}
+
+/**
+ * Wired to the runout/output options sheets' "Bubble size" slider — a multiplier on the runout
+ * bubble radius. Both bubble draw sites read it off `PdfPrefs`, so the canvas preview and the
+ * printed sheet resize together.
+ */
+fun ShaftViewModel.setPdfRunoutBubbleScale(v: Float, persist: Boolean = true) {
+    val clamped = v.coerceIn(PDF_RUNOUT_BUBBLE_SCALE_MIN, PDF_RUNOUT_BUBBLE_SCALE_MAX)
+    _pdfRunoutBubbleScale.value = clamped
+    SettingsStore.updatePdfPrefs { it.copy(runoutBubbleScale = clamped) }
+    if (persist) viewModelScope.launch { SettingsStore.setPdfRunoutBubbleScale(getApplication(), clamped) }
+}
+
+/**
+ * Wired to the runout/output options sheets' "Bubble height" slider — how far the first bubble
+ * row hangs below the shaft, which is what moves where the leader lines land.
+ */
+fun ShaftViewModel.setPdfRunoutBubbleDropScale(v: Float, persist: Boolean = true) {
+    val clamped = v.coerceIn(PDF_RUNOUT_BUBBLE_DROP_SCALE_MIN, PDF_RUNOUT_BUBBLE_DROP_SCALE_MAX)
+    _pdfRunoutBubbleDropScale.value = clamped
+    SettingsStore.updatePdfPrefs { it.copy(runoutBubbleDropScale = clamped) }
+    if (persist) {
+        viewModelScope.launch { SettingsStore.setPdfRunoutBubbleDropScale(getApplication(), clamped) }
+    }
 }
 
 fun ShaftViewModel.setPdfCurveLoHeightIn(v: Float, persist: Boolean = true) {
@@ -171,6 +226,21 @@ fun ShaftViewModel.setPdfFractionStyle(style: FractionStyle, persist: Boolean = 
 }
 
 /**
+ * Wired to Settings → Drawing → "Output font" — Settings only, unlike the fraction chips: a shop
+ * picks a face once, so the PDF options sheets stay as they are.
+ *
+ * The `updatePdfPrefs` call is what actually changes the ink — it mirrors the choice into
+ * `OutputTypography.active`, which the four composers build their root text paint from. The
+ * StateFlow exists so the UI can show the selection and so each preview's render inputs change,
+ * forcing a re-raster.
+ */
+fun ShaftViewModel.setPdfOutputFont(font: OutputFont, persist: Boolean = true) {
+    _pdfOutputFont.value = font
+    SettingsStore.updatePdfPrefs { it.copy(outputFont = font) }
+    if (persist) viewModelScope.launch { SettingsStore.setPdfOutputFont(getApplication(), font) }
+}
+
+/**
  * How a dual value is SET on the drawing. A stack is NARROWER but two lines tall, so a sheet whose
  * vertical budget cannot absorb it reverts to inline for that whole sheet — the composers make that
  * call, not this setter.
@@ -196,6 +266,19 @@ fun ShaftViewModel.setPdfBlankDraft(enabled: Boolean) {
 /** Session-only, like [setPdfBlankDraft]. Only affects sheets exported in blank mode. */
 fun ShaftViewModel.setPdfBlankDiaCallouts(enabled: Boolean) {
     _pdfBlankDiaCallouts.value = enabled
+}
+
+/**
+ * Elects runout stations onto the FINAL drawing's schematic sheet.
+ *
+ * Session-only and default OFF, the [setPdfBlankDraft] posture: the final drawing is first of
+ * all the welding and machining copy the shop marks liner placements up on (on-device
+ * request), and the bubbles are wanted only for the pre-ship measurement pass. A sticky
+ * election would quietly put stations on every machining sheet after the one time it was
+ * wanted. Consulted only when the surface's target is FINAL.
+ */
+fun ShaftViewModel.setFinalRunoutBubbles(enabled: Boolean) {
+    _finalRunoutBubbles.value = enabled
 }
 
 // ── Appearance (app-wide theme) ──────────────────────────────────────────────
@@ -282,15 +365,20 @@ fun ShaftViewModel.applyDrawingProfile(profile: DrawingProfile) {
     setPdfShadedBodies(prefs.shadedBodies)
     setPdfShadedTapers(prefs.shadedTapers)
     setPdfShadedLiners(prefs.shadedLiners)
+    setPdfShadeExplicitBodiesOnly(prefs.shadeExplicitBodiesOnly)
+    setPdfUndercutLineArt(prefs.undercutLineArt)
     setPdfCurveLoHeightIn(prefs.curveLoHeightIn)
     setPdfCurveHiHeightIn(prefs.curveHiHeightIn)
     setPdfSBreakThresholdFrac(prefs.sBreakThresholdFrac)
     setPdfArrowSizePt(prefs.arrowSizePt)
     setPdfFractionStyle(prefs.fractionStyle)
+    setPdfOutputFont(prefs.outputFont)
     setPdfDualUnitLayout(prefs.dualUnitLayout)
     setPdfWearTraceDepthFrac(prefs.wearTraceDepthFrac)
     setPdfWearBandShadeFrac(prefs.wearBandShadeFrac)
     setPdfWearJoinGapMaxMm(prefs.wearJoinGapMaxMm)
+    setPdfRunoutBubbleScale(prefs.runoutBubbleScale)
+    setPdfRunoutBubbleDropScale(prefs.runoutBubbleDropScale)
     setLineThicknessScale(profile.clampedLineThicknessScale)
 }
 
@@ -385,13 +473,6 @@ fun ShaftViewModel.setShowOalDebugLabel(show: Boolean, persist: Boolean = true) 
     _showOalDebugLabel.value = show
     if (persist) {
         viewModelScope.launch { SettingsStore.setShowOalDebugLabel(getApplication(), show) }
-    }
-}
-
-fun ShaftViewModel.setShowOalHelperLine(show: Boolean, persist: Boolean = true) {
-    _showOalHelperLine.value = show
-    if (persist) {
-        viewModelScope.launch { SettingsStore.setShowOalHelperLine(getApplication(), show) }
     }
 }
 

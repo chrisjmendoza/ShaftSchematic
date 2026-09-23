@@ -5,6 +5,7 @@ import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
 import com.android.shaftschematic.geom.WEAR_TRACE_MIN_DEPTH_FRAC
 import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.FractionStyle
+import com.android.shaftschematic.util.OutputFont
 
 /**
  * Controls how liner dimension rails are anchored in the PDF export.
@@ -66,6 +67,30 @@ const val PDF_WEAR_JOIN_GAP_MIN_MM = 0f
 const val PDF_WEAR_JOIN_GAP_MAX_MM = 304.8f      // 12"
 
 /**
+ * Runout bubble size: the multiplier on the sheet's bubble radius and the canvas preview's
+ * (`PdfPrefs.runoutBubbleScale`). The default draws the shipped circle exactly.
+ *
+ * The stored bounds are wider than the control's own range on purpose — they are a defensive
+ * clamp on a hand-edited or older-build value, not the UI's span. Every derived spacing in
+ * `geom/RunoutBubbleLayout.kt` (row pitches, row step, spread cap) is a function of the radius,
+ * so scaling it re-proportions the whole bubble field rather than just the circles.
+ */
+const val PDF_RUNOUT_BUBBLE_SCALE_DEFAULT = 1f
+const val PDF_RUNOUT_BUBBLE_SCALE_MIN = 0.5f
+const val PDF_RUNOUT_BUBBLE_SCALE_MAX = 2f
+
+/**
+ * Runout bubble drop: the multiplier on how far the first bubble row hangs below the shaft
+ * (`PdfPrefs.runoutBubbleDropScale`, the `shortLeader` term of `RunoutBubbleGeometry`).
+ *
+ * Experimental — it exists to find the depth at which the pointer lines land most legibly
+ * (on-device request) and may be retired. The default reproduces the shipped drop.
+ */
+const val PDF_RUNOUT_BUBBLE_DROP_SCALE_DEFAULT = 1f
+const val PDF_RUNOUT_BUBBLE_DROP_SCALE_MIN = 0.5f
+const val PDF_RUNOUT_BUBBLE_DROP_SCALE_MAX = 2f
+
+/**
  * Dimension-rail arrowhead sizes (pt, length along the line — the barb spread is half of it).
  * Three fixed choices, not a range: an arrowhead reads correct or it doesn't. Small is the
  * shipped size; Large restores the historical head.
@@ -93,6 +118,40 @@ data class PdfPrefs(
     val shadedBodies: Boolean = false,
     val shadedTapers: Boolean = false,
     val shadedLiners: Boolean = false,
+    /**
+     * Narrows the body shade to AUTHORED sections: with [shadedBodies] on, an explicit body
+     * takes the fill and every auto (bare-shaft) run draws unfilled. Off on its own — the
+     * flag only ever subtracts from what [shadedBodies] already asked for, so a sheet with
+     * bodies unshaded is unaffected either way.
+     *
+     * Reaches the ink through the resolved SOURCE, not the drawable body: `bodyForPdf` maps a
+     * `ResolvedBody` to a plain `Body` and drops the source, so the schematic and the
+     * runout/consolidated composers pass the unshaded run ids alongside the fill
+     * (`unshadedBodyRunIds`) and the one shared body pass suppresses those in place. It
+     * narrows AUTO runs only — an explicit body's own `shadeOnDrawing` override is what
+     * decides that body, with [shadedBodies] as its default.
+     *
+     * The wear and undercut documents are untouched: their profile goes through
+     * `pdf/SimpleShaftProfile.kt`, whose body pass takes one fill for every run — the
+     * narrowing never reaches it, which is why those two sheets hide the checkbox
+     * (`showShadeExplicitBodiesOnly`) instead of offering one the page would ignore.
+     */
+    val shadeExplicitBodiesOnly: Boolean = false,
+    /**
+     * Line art on the PRINTED undercut drawing: that sheet draws NO shade fill anywhere —
+     * bodies, tapers, liners, the detail strips' otherwise-always-shaded liner span and the
+     * undercut section's core all come out unfilled, leaving the notch construction (the void
+     * erasing the surface stroke, the full-height section faces, the floor lines) to carry the
+     * reading on its own. Settings → PDF Export and the undercut preview's PDF options sheet.
+     *
+     * The undercut document only — the schematic, wear and runout composers never read it.
+     *
+     * Deliberately INDEPENDENT of the screen-side `util/UndercutStyle.kt` line-art mode: that
+     * style never reaches a composer (`docs/contracts/Appearance.md`), so the printed sheet
+     * carries its own flag with the same meaning rather than borrowing one. Off by default, so
+     * an untouched install prints the shipped sheet byte for byte.
+     */
+    val undercutLineArt: Boolean = false,
     /**
      * Default sizing-curve anchor heights (paper inches of drawn height at 100% on the
      * "Shaft height" slider): a 4" shaft draws [curveLoHeightIn] tall, an 8" shaft
@@ -133,6 +192,14 @@ data class PdfPrefs(
      */
     val fractionStyle: FractionStyle = FractionStyle.Default,
     /**
+     * The typeface every printed sheet is set in — Settings → Drawing → "Output font".
+     *
+     * The sibling of [fractionStyle], and mirrored the same way: `SettingsStore.updatePdfPrefs`
+     * writes `OutputTypography.active`, which is what the four composers build their root text
+     * paint from. Deliberately absent from the PDF options sheets — a shop picks a face once.
+     */
+    val outputFont: OutputFont = OutputFont.Default,
+    /**
      * How a DUAL value is set on the drawing — Settings → Drawing → "Dual-unit layout" and both
      * PDF options sheets. Only ever visible on a sheet whose document has `dual_units` on.
      *
@@ -172,6 +239,26 @@ data class PdfPrefs(
      * App-wide, the same posture as the body S-break threshold: a document never pins its own.
      */
     val wearJoinGapMaxMm: Float = PDF_WEAR_JOIN_GAP_DEFAULT_MM,
+    /**
+     * Multiplier on the runout bubble radius, [PDF_RUNOUT_BUBBLE_SCALE_MIN]..
+     * [PDF_RUNOUT_BUBBLE_SCALE_MAX]. Read by BOTH bubble draw sites — the sheet
+     * (`pdf/RunoutPdfComposer.kt`) and the Runout tab's canvas (`ui/screen/RunoutRoute.kt`) —
+     * so a resized bubble looks the same in the preview and in print.
+     *
+     * Only the radius scales; the minimum gap between circles does not. That gap is a
+     * clearance floor rather than part of the bubble's size, and the layout engine already
+     * derives every pitch from radius + gap.
+     */
+    val runoutBubbleScale: Float = PDF_RUNOUT_BUBBLE_SCALE_DEFAULT,
+    /**
+     * Multiplier on the drop from the shaft surface to the first bubble row
+     * (`RunoutBubbleGeometry.shortLeader`), [PDF_RUNOUT_BUBBLE_DROP_SCALE_MIN]..
+     * [PDF_RUNOUT_BUBBLE_DROP_SCALE_MAX]. Same two draw sites as [runoutBubbleScale].
+     *
+     * Experimental: it moves where the leader lines land, which is the readability question it
+     * was added to explore.
+     */
+    val runoutBubbleDropScale: Float = PDF_RUNOUT_BUBBLE_DROP_SCALE_DEFAULT,
 ) {
     /** The anchor heights in PDF points (72 pt per paper inch) — what the geometry consumes. */
     val curveLoHeightPt: Float get() = curveLoHeightIn * 72f
@@ -189,5 +276,9 @@ data class PdfPrefs(
                 .coerceIn(PDF_WEAR_BAND_SHADE_MIN, PDF_WEAR_BAND_SHADE_MAX),
             wearJoinGapMaxMm = wearJoinGapMaxMm
                 .coerceIn(PDF_WEAR_JOIN_GAP_MIN_MM, PDF_WEAR_JOIN_GAP_MAX_MM),
+            runoutBubbleScale = runoutBubbleScale
+                .coerceIn(PDF_RUNOUT_BUBBLE_SCALE_MIN, PDF_RUNOUT_BUBBLE_SCALE_MAX),
+            runoutBubbleDropScale = runoutBubbleDropScale
+                .coerceIn(PDF_RUNOUT_BUBBLE_DROP_SCALE_MIN, PDF_RUNOUT_BUBBLE_DROP_SCALE_MAX),
         )
 }

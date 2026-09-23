@@ -2,22 +2,17 @@ package com.android.shaftschematic.ui.screen
 
 import android.util.Log
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -25,20 +20,17 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.ui.input.taperPhysStartForNewLength
 import com.android.shaftschematic.ui.input.taperSetLetMapping
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.resolved.ResolvedTaper
+import com.android.shaftschematic.ui.util.positiveLengthErrorMm
 import com.android.shaftschematic.ui.util.startOverlapErrorMm
 import com.android.shaftschematic.ui.util.taperWarningMessages
 import com.android.shaftschematic.util.DisplayUnits
@@ -48,6 +40,7 @@ import com.android.shaftschematic.util.manualTaperRateBlockingMessage
 import com.android.shaftschematic.util.manualTaperRateWarning
 import com.android.shaftschematic.util.parseTaperRateText
 import com.android.shaftschematic.util.toMmOrNull
+import kotlin.math.max
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TaperPagerCard — the `ResolvedTaper` arm of [ComponentPagerCard]
@@ -60,7 +53,8 @@ import com.android.shaftschematic.util.toMmOrNull
  * Rate mode is user-owned state seeded once per taper — it must not be re-derived from the
  * stored text, which would discard an explicit Auto/Manual choice. Every control that changes
  * geometry, position, or a value is mirrored in `AddTaperDialog` by the add-dialog-parity
- * invariant; the "Prints in: in | mm" chip at the card's foot is the documented carve-out.
+ * invariant; "Show name on drawing" and the "Prints in: in | mm" chip at the card's foot are the
+ * documented carve-outs.
  *
  * [f1] is supplied by [ComponentPagerCard] because every card's debug line uses it.
  */
@@ -73,10 +67,14 @@ internal fun TaperPagerCard(
     physicalIndex: Int,
     outerPaddingHorizontal: Dp,
     showComponentDebugLabels: Boolean,
+    componentTitlesDefault: Boolean = true,
+    componentShadeDefaults: ComponentShadeDefaults = ComponentShadeDefaults(),
     taperTitleById: Map<String, String>,
     f1: (Float) -> String,
     onUpdateTaper: (Int, Float, Float, Float, Float, String) -> Unit,
     onUpdateTaperLabel: (Int, String?) -> Unit,
+    onUpdateTaperShowLabel: (Int, Boolean) -> Unit,
+    onUpdateTaperShade: (Int, Boolean) -> Unit = { _, _ -> },
     onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromSetMm: Float, spooned: Boolean) -> Unit,
     onUpdateTaperReference: (Int, LinerAuthoredReference) -> Unit,
     onSetKeyways180Apart: (Boolean) -> Unit,
@@ -99,42 +97,15 @@ internal fun TaperPagerCard(
         t.startFromAftMm
     }
     val computedTaperTitle = taperTitleById[t.id] ?: "Taper"
-    var editingTaperTitle by rememberSaveable(t.id) { mutableStateOf(false) }
-    val taperFocusRequester = remember { FocusRequester() }
-    var taperHasFocusedOnce by remember(t.id) { mutableStateOf(false) }
     ComponentCard(
         title = computedTaperTitle,
         titleContent = {
-            if (!editingTaperTitle) {
-                Text(
-                    computedTaperTitle,
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.fillMaxWidth().clickable { editingTaperTitle = true },
-                    maxLines = 1, overflow = TextOverflow.Ellipsis
-                )
-            } else {
-                var text by remember(t.id, t.label) { mutableStateOf(t.label.orEmpty()) }
-                LaunchedEffect(t.id) { taperFocusRequester.requestFocus() }
-                OutlinedTextField(
-                    value = text,
-                    onValueChange = { text = it },
-                    singleLine = true,
-                    placeholder = { Text(computedTaperTitle) },
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = {
-                        onUpdateTaperLabel(idx, text.trim().takeIf { it.isNotEmpty() })
-                        editingTaperTitle = false
-                    }),
-                    modifier = Modifier.fillMaxWidth().focusRequester(taperFocusRequester)
-                        .onFocusChanged { f ->
-                            if (f.isFocused) taperHasFocusedOnce = true
-                            if (taperHasFocusedOnce && !f.isFocused) {
-                                onUpdateTaperLabel(idx, text.trim().takeIf { it.isNotEmpty() })
-                                editingTaperTitle = false
-                            }
-                        }
-                )
-            }
+            EditableCardTitle(
+                componentId = t.id,
+                title = computedTaperTitle,
+                label = t.label,
+                onCommitLabel = { onUpdateTaperLabel(idx, it) },
+            )
         },
         debugText = if (showComponentDebugLabels) "id=${t.id} • startMm=${f1(t.startFromAftMm)} • endMm=${f1(t.startFromAftMm + t.lengthMm)}" else null,
         errorMessage = if (t.id in collidingComponentIds) "Overlaps another component" else null,
@@ -222,14 +193,12 @@ internal fun TaperPagerCard(
             val physStart = if (isFwdRef) spec.overallLengthMm - authoredMm - t.lengthMm else authoredMm
             onUpdateTaper(idx, physStart, t.lengthMm, t.startDiaMm, t.endDiaMm, nextRateText(t.lengthMm, t.startDiaMm, t.endDiaMm))
         }
-        CommitNum("Length (${abbr(unit)})", disp(t.lengthMm, unit)) { s ->
+        CommitNum(
+            "Length (${abbr(unit)})", disp(t.lengthMm, unit),
+            validator = { raw -> positiveLengthErrorMm(toMmOrNull(raw, unit)) },
+        ) { s ->
             val newLen = toMmOrNull(s, unit) ?: return@CommitNum
-            val physStart = if (isFwdRef) {
-                val authored = spec.overallLengthMm - t.startFromAftMm - t.lengthMm
-                spec.overallLengthMm - authored - newLen
-            } else {
-                t.startFromAftMm
-            }
+            val physStart = taperPhysStartForNewLength(t, newLen, spec.overallLengthMm)
             onUpdateTaper(idx, physStart, newLen, t.startDiaMm, t.endDiaMm, nextRateText(newLen, t.startDiaMm, t.endDiaMm))
         }
         CommitNum("${endMap.leftCode} Ø (${abbr(unit)})", disp(t.startDiaMm, unit)) { s ->
@@ -295,6 +264,15 @@ internal fun TaperPagerCard(
                 onUpdateTaperKeyway(idx, t.keywayWidthMm, v, t.keywayLengthMm, t.keywayOffsetFromSetMm, t.keywaySpooned)
             }
         }
+        // Standard key stock for the W × D pair. The keyway is sized to the taper's LARGE end —
+        // a key is specified for the section it seats in, and that is the L.E.T. A pick rides the
+        // same update callback typing the fields does, so the values are authored from then on.
+        KeywayStdSizePicker(
+            unit = kwUnit,
+            hostDiaMm = max(t.startDiaMm, t.endDiaMm),
+        ) { w, d ->
+            onUpdateTaperKeyway(idx, w, d, t.keywayLengthMm, t.keywayOffsetFromSetMm, t.keywaySpooned)
+        }
         // KW L / Offset parse in `kwUnit` like KW W/D — the keyway-unit chip governs what
         // EVERY keyway number means; parsing these two in the document unit under a kwUnit
         // label read a metric keyway's length as inches.
@@ -332,6 +310,21 @@ internal fun TaperPagerCard(
         }
 
         KeywayClockingSection(spec, onSetKeyways180Apart, onSetKeyways90Apart, onSetKeyways90Cw)
+
+        ShowDiaToggleRow(
+            label = "Show name on drawing",
+            checked = t.showNameOnDrawing ?: componentTitlesDefault,
+            testTag = "taper_show_label_toggle",
+            onCheckedChange = { onUpdateTaperShowLabel(idx, it) },
+        )
+
+        // Unset follows the kind's Settings checkbox; an explicit value overrides it either way.
+        ShowDiaToggleRow(
+            label = "Shade on drawing",
+            checked = t.shadeOnDrawing ?: componentShadeDefaults.tapers,
+            testTag = "taper_shade_toggle",
+            onCheckedChange = { onUpdateTaperShade(idx, it) },
+        )
 
         if (perComponentUnitsEnabled) {
             ComponentUnitChip(t.id, unit, unitOverrides, onSetComponentUnit)

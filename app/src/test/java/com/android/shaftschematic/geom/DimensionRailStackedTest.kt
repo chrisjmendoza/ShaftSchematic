@@ -12,7 +12,7 @@ import org.junit.Test
  *    band, the per-rail lifts, the collision boxes — follows from it with no other change.
  * 2. **Extension lines are obstacles.** A rail's extension lines run from the object up to that
  *    rail, so they cross the band of every rail below it, which is exactly where those rails park
- *    a floating value (`docs/DualUnitStacking_PLAN.md` §1b — an extension line printed straight
+ *    a floating value (`docs/archive/DualUnitStacking_PLAN.md` §1b — an extension line printed straight
  *    through the tail of a dual label on a real sheet).
  */
 class DimensionRailStackedTest {

@@ -20,7 +20,7 @@ Editing Workflow
 - Component carousel with edit cards; Add dialogs mirror the carousel cards control-for-control
 - Templates: save the current drawing as a template, then start from it in a browser that buckets by liner size and count (geometry only — job metadata is scrubbed on write)
 - Unit switching (mm / inch) at the UI edge only — the model is always canonical millimeters
-- Validation: blocking errors (dialogs, badges, export gate) and non-blocking warnings (overlaps among sacred components, free-to-end badge). Bodies are fillers and never collide
+- Validation: blocking errors (dialogs, badges, export gate) and non-blocking warnings (overlaps among sacred components). Bodies are fillers and never collide
 - Delete with multi-step Undo; undo/redo history menu
 - Per-component "Show Ø on drawing" toggle — keep a measured diameter off the part of the schematic where it could not have been measured
 
@@ -30,11 +30,12 @@ Documents
 - Runout sheet: inline shaft preview with collision-free runout bubbles — one station per 20" of component length, overridable per component — straight leaders that aim at their own station, tap-to-record TIR value + high-spot clock marker, and an optional coupling end view with its pilot reading
 - Wear document: shaft profile + detail strips for liners and elected tapers/bodies, tap-to-record wear bands, pit "X" markers, measured-Ø readings (value callouts with leaders) and a worn-profile trace that dips through them; PASS/FAIL dye-pen checkboxes and field notes; blank write-in variants
 - Undercut drawing: machined-below-surface cuts as open silhouette steps with liner-anchored detail strips, a per-sheet cut-depth exaggeration slider, and user-selectable shading / line-art styles
+- Final schematic: a second drawing for the shaft that ships — start it as a copy of the original, move/extend/shorten liners after the wear and undercut work in the same editor, and print its own schematic PDF plus a blank final runout sheet, every page marked Final; the original stays untouched as the before to its after
 - Consolidated output: one sheet carrying the schematic's rails and footer plus the elected runout and wear information (All three / Schematic + Runout / Schematic + Wear), worn-section values printed inside the profile, a per-job "Shaft height" + liner-compression control, and "Export all" to batch-write the checked documents into one picked folder
 - Paper sizing follows the hand-sheet convention: drawn height comes from true diameter on a proportional sizing curve, long runs foreshorten above per-kind width floors, and a body compressed past your chosen threshold prints the S-break symbol
-- Live tuning: drag Line thickness, Body S-break, Shaft height or Liner compression with a preview open and the page re-renders under your finger — the sheet shows as a fit-width page strip so the control never covers what it is changing
+- Live tuning: drag Line thickness, Body S-break, Shaft height or Liner & taper compression with a preview open and the page re-renders under your finger — the sheet shows as a fit-width page strip so the control never covers what it is changing
 - Every document previews, prints directly, or exports through the file picker; each also has a blank write-in variant for hand-marking on the job
-- All five reachable from the editor sidebar (Schematic / Runout Sheet / Wear Document / Undercut Drawing / Consolidated Output tabs)
+- All six reachable from the editor sidebar (Schematic / Runout Sheet / Wear Document / Undercut Drawing / Final Schematic / Consolidated Output tabs)
 
 Persistence & Data Safety
 

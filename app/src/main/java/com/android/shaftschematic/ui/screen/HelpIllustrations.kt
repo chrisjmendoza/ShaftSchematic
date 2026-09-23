@@ -209,7 +209,7 @@ internal fun SpoonedKeywayFigure() = SheetFigure(
         val kwLetX = x0 + (x1 - x0) * 0.62f
         val letArcCx = kwLetX - halfW
         val arcBox = Size(halfW * 2f, halfW * 2f)
-        val bowl = if (spooned) keywaySpoonBowl(kwLetX, dir = 1f, halfW = halfW) else null
+        val bowl = if (spooned) keywaySpoonBowl(kwLetX, dir = 1f, halfW = halfW, halfH = halfW) else null
 
         // Void first (the slot erases the surface it cuts), then the outline strokes.
         drawRect(
@@ -221,7 +221,13 @@ internal fun SpoonedKeywayFigure() = SheetFigure(
             Color.White, startAngle = 270f, sweepAngle = 180f, useCenter = false,
             topLeft = Offset(letArcCx - halfW, cy - halfW), size = arcBox,
         )
-        bowl?.let { drawCircle(Color.White, radius = it.radius, center = Offset(it.cx, cy)) }
+        bowl?.let {
+            drawOval(
+                Color.White,
+                topLeft = Offset(it.cx - it.radius, cy - it.ry),
+                size = Size(it.radius * 2f, it.ry * 2f),
+            )
+        }
 
         drawLine(SheetInk.Outline, Offset(kwSetX, cy - halfW), Offset(letArcCx, cy - halfW), strokeWidth = w)
         drawLine(SheetInk.Outline, Offset(kwSetX, cy + halfW), Offset(letArcCx, cy + halfW), strokeWidth = w)
@@ -234,8 +240,8 @@ internal fun SpoonedKeywayFigure() = SheetFigure(
             drawArc(
                 SheetInk.Outline,
                 startAngle = it.arcStartDeg, sweepAngle = it.arcSweepDeg, useCenter = false,
-                topLeft = Offset(it.cx - it.radius, cy - it.radius),
-                size = Size(it.radius * 2f, it.radius * 2f),
+                topLeft = Offset(it.cx - it.radius, cy - it.ry),
+                size = Size(it.radius * 2f, it.ry * 2f),
                 style = Stroke(width = w),
             )
         }

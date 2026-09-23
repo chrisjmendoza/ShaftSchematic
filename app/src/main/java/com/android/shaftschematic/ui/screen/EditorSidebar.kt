@@ -21,13 +21,16 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.Article
 import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.ContentCut
+import androidx.compose.material.icons.filled.FactCheck
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Schema
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SquareFoot
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.TrackChanges
 import androidx.compose.material3.HorizontalDivider
@@ -49,8 +52,8 @@ import androidx.compose.ui.unit.dp
  * EditorSidebarOverlay
  *
  * A modal overlay navigation drawer for the shaft editor's document views
- * (Schematic, Runout Sheet, Wear Document, Undercut Drawing, Consolidated Output) plus
- * Home and Settings shortcuts.
+ * (Schematic, Runout Sheet, Wear Document, Undercut Drawing, Final Schematic, Consolidated
+ * Output) plus Home and Settings shortcuts.
  *
  * ## Layout strategy
  * The sidebar does NOT push content. It overlays as a modal:
@@ -60,7 +63,9 @@ import androidx.compose.ui.unit.dp
  *    slides in from the left (200 dp wide). Tapping the scrim calls [onClose].
  *
  * This pattern avoids the content-squishing problem of a persistent side rail on phones,
- * especially on smaller devices.
+ * especially on smaller devices. An EXPANDED window has the room, and there
+ * `ShaftEditorRoute` lays [EditorSidebarPanel] out beside the content instead — the same
+ * panel, so the two placements can never offer different destinations.
  *
  * ## Status bar
  * [statusBarsPadding] is applied inside the sidebar so the top icon never crashes into
@@ -68,23 +73,28 @@ import androidx.compose.ui.unit.dp
  *
  * ## Items
  * Top group:  Home · Schematic · Runout Sheet · Wear Document · Undercut Drawing ·
- *             Consolidated Output
- * Bottom group: Keyway calculator · Unit converter · Settings — tools, not document views, so
- * they are never dimmed by the "built" gate (neither calculator reads anything from the shaft).
- * Runout, Wear, Undercut, and Consolidated Output are dimmed when [runoutEnabled] is
- * false (shaft not yet built).
+ *             Final Schematic · Consolidated Output
+ * Bottom group: Keyway calculator · Taper calculator · Unit converter · Help & FAQ ·
+ * Settings — tools, not document views, so they are never dimmed by the "built" gate (no
+ * calculator reads anything from the shaft). The two calculators sit adjacent. Help sits with
+ * them rather than behind Settings: reference content is reached for mid-job, and Settings is
+ * for changing things.
+ * Runout, Wear, Undercut, Final Schematic, and Consolidated Output are dimmed when
+ * [runoutEnabled] is false (shaft not yet built).
  *
  * @param open          Whether the sidebar is currently visible.
  * @param selectedTab   Which document tab is active (highlighted).
- * @param runoutEnabled Whether the Runout, Wear, Undercut, and Consolidated Output tabs
- *                      respond to taps.
+ * @param runoutEnabled Whether the Runout, Wear, Undercut, Final Schematic, and Consolidated
+ *                      Output tabs respond to taps.
  * @param onOpen        Called when the user taps the collapsed handle tab.
  * @param onClose       Called when the user taps the scrim or any active nav item.
  * @param onTabSelected Called with the newly selected [EditorTab].
  * @param onHome        Called when the user taps the Home item.
  * @param onSettings    Called when the user taps the Settings item.
  * @param onKeywayCalculator Called when the user taps the Keyway calculator tool item.
+ * @param onTaperCalculator Called when the user taps the Taper calculator tool item.
  * @param onUnitConverter Called when the user taps the Unit converter tool item.
+ * @param onHelp        Called when the user taps the Help & FAQ item.
  */
 @Composable
 fun EditorSidebarOverlay(
@@ -97,7 +107,9 @@ fun EditorSidebarOverlay(
     onHome: () -> Unit,
     onSettings: () -> Unit,
     onKeywayCalculator: () -> Unit = {},
+    onTaperCalculator: () -> Unit = {},
     onUnitConverter: () -> Unit = {},
+    onHelp: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Box(modifier.fillMaxSize()) {
@@ -130,120 +142,188 @@ fun EditorSidebarOverlay(
                     shadowElevation = 8.dp,
                     shape = RoundedCornerShape(topEnd = 16.dp, bottomEnd = 16.dp),
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .statusBarsPadding()        // keeps top icon below status bar
-                            .navigationBarsPadding()    // keeps Settings above system nav bar
-                            .padding(vertical = 8.dp),
-                    ) {
-                        // ── App title ────────────────────────────────────────
-                        Text(
-                            text = "ShaftSchematic",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                        )
-
-                        HorizontalDivider(modifier = Modifier.padding(horizontal = 8.dp))
-
-                        Spacer(Modifier.size(4.dp))
-
-                        // ── Home ─────────────────────────────────────────────
-                        NavItem(
-                            icon = Icons.Filled.Home,
-                            label = "Home",
-                            selected = false,
-                            enabled = true,
-                            onClick = { onHome(); onClose() },
-                        )
-
-                        Spacer(Modifier.size(4.dp))
-                        HorizontalDivider(modifier = Modifier.padding(horizontal = 8.dp))
-                        Spacer(Modifier.size(4.dp))
-
-                        // ── Document tabs ─────────────────────────────────────
-                        NavItem(
-                            icon = Icons.Filled.Schema,
-                            label = EditorTab.SCHEMATIC.label,
-                            selected = selectedTab == EditorTab.SCHEMATIC,
-                            enabled = true,
-                            onClick = { onTabSelected(EditorTab.SCHEMATIC); onClose() },
-                        )
-                        NavItem(
-                            icon = Icons.Filled.TrackChanges,
-                            label = EditorTab.RUNOUT.label,
-                            selected = selectedTab == EditorTab.RUNOUT,
-                            enabled = runoutEnabled,
-                            onClick = { if (runoutEnabled) { onTabSelected(EditorTab.RUNOUT); onClose() } },
-                            disabledHint = "Add components first",
-                        )
-                        // The Wear page is the authoring surface for wear data; the
-                        // Consolidated Output tab features that data on its sheet.
-                        // WEAR_TAB_ENABLED (EditorTab.kt) can retire this entry when full
-                        // consolidation lands.
-                        if (WEAR_TAB_ENABLED) {
-                            NavItem(
-                                icon = Icons.Filled.Article,
-                                label = EditorTab.WEAR.label,
-                                selected = selectedTab == EditorTab.WEAR,
-                                enabled = runoutEnabled,
-                                onClick = { if (runoutEnabled) { onTabSelected(EditorTab.WEAR); onClose() } },
-                                disabledHint = "Add components first",
-                            )
-                        }
-                        NavItem(
-                            icon = Icons.Filled.ContentCut,
-                            label = EditorTab.UNDERCUT.label,
-                            selected = selectedTab == EditorTab.UNDERCUT,
-                            enabled = runoutEnabled,
-                            onClick = { if (runoutEnabled) { onTabSelected(EditorTab.UNDERCUT); onClose() } },
-                            disabledHint = "Add components first",
-                        )
-                        NavItem(
-                            icon = Icons.Filled.PictureAsPdf,
-                            label = EditorTab.OUTPUT.label,
-                            selected = selectedTab == EditorTab.OUTPUT,
-                            enabled = runoutEnabled,
-                            onClick = { if (runoutEnabled) { onTabSelected(EditorTab.OUTPUT); onClose() } },
-                            disabledHint = "Add components first",
-                        )
-
-                        Spacer(Modifier.weight(1f))
-
-                        HorizontalDivider(modifier = Modifier.padding(horizontal = 8.dp))
-                        Spacer(Modifier.size(4.dp))
-
-                        // ── Tools ─────────────────────────────────────────────
-                        NavItem(
-                            icon = Icons.Filled.Calculate,
-                            label = "Keyway calculator",
-                            selected = false,
-                            enabled = true,
-                            onClick = { onKeywayCalculator(); onClose() },
-                        )
-                        NavItem(
-                            icon = Icons.Filled.SwapHoriz,
-                            label = "Unit converter",
-                            selected = false,
-                            enabled = true,
-                            onClick = { onUnitConverter(); onClose() },
-                        )
-
-                        // ── Settings ──────────────────────────────────────────
-                        NavItem(
-                            icon = Icons.Filled.Settings,
-                            label = "Settings",
-                            selected = false,
-                            enabled = true,
-                            onClick = { onSettings(); onClose() },
-                        )
-                    }
+                    EditorSidebarPanel(
+                        selectedTab = selectedTab,
+                        runoutEnabled = runoutEnabled,
+                        onTabSelected = onTabSelected,
+                        onHome = onHome,
+                        onSettings = onSettings,
+                        onKeywayCalculator = onKeywayCalculator,
+                        onTaperCalculator = onTaperCalculator,
+                        onUnitConverter = onUnitConverter,
+                        onHelp = onHelp,
+                        onNavigated = onClose,
+                    )
                 }
             }
         }
     }
 }
+
+/**
+ * The sidebar's CONTENT — Home, the document tabs, the tools group, Help and Settings — with
+ * no surface, scrim or open/close state of its own.
+ *
+ * Both placements render this one composable: the phone's slide-in [EditorSidebarOverlay] and
+ * the permanent column an EXPANDED window lays out beside the tab content. A second list would
+ * be free to grow a destination the other one lacks, which is the failure this prevents.
+ *
+ * [onNavigated] fires after every item's action. The overlay closes itself with it; a permanent
+ * panel has nothing to close and passes a no-op.
+ */
+@Composable
+fun EditorSidebarPanel(
+    selectedTab: EditorTab,
+    runoutEnabled: Boolean,
+    onTabSelected: (EditorTab) -> Unit,
+    onHome: () -> Unit,
+    onSettings: () -> Unit,
+    onKeywayCalculator: () -> Unit = {},
+    onTaperCalculator: () -> Unit = {},
+    onUnitConverter: () -> Unit = {},
+    onHelp: () -> Unit = {},
+    onNavigated: () -> Unit = {},
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxHeight()
+            .statusBarsPadding()        // keeps top icon below status bar
+            .navigationBarsPadding()    // keeps Settings above system nav bar
+            .padding(vertical = 8.dp),
+    ) {
+        // ── App title ────────────────────────────────────────
+        Text(
+            text = "ShaftSchematic",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        )
+
+        HorizontalDivider(modifier = Modifier.padding(horizontal = 8.dp))
+
+        Spacer(Modifier.size(4.dp))
+
+        // ── Home ─────────────────────────────────────────────
+        NavItem(
+            icon = Icons.Filled.Home,
+            label = "Home",
+            selected = false,
+            enabled = true,
+            onClick = { onHome(); onNavigated() },
+        )
+
+        Spacer(Modifier.size(4.dp))
+        HorizontalDivider(modifier = Modifier.padding(horizontal = 8.dp))
+        Spacer(Modifier.size(4.dp))
+
+        // ── Document tabs ─────────────────────────────────────
+        NavItem(
+            icon = Icons.Filled.Schema,
+            label = EditorTab.SCHEMATIC.label,
+            selected = selectedTab == EditorTab.SCHEMATIC,
+            enabled = true,
+            onClick = { onTabSelected(EditorTab.SCHEMATIC); onNavigated() },
+        )
+        NavItem(
+            icon = Icons.Filled.TrackChanges,
+            label = EditorTab.RUNOUT.label,
+            selected = selectedTab == EditorTab.RUNOUT,
+            enabled = runoutEnabled,
+            onClick = { if (runoutEnabled) { onTabSelected(EditorTab.RUNOUT); onNavigated() } },
+            disabledHint = "Add components first",
+        )
+        // The Wear page is the authoring surface for wear data; the
+        // Consolidated Output tab features that data on its sheet.
+        // WEAR_TAB_ENABLED (EditorTab.kt) can retire this entry when full
+        // consolidation lands.
+        if (WEAR_TAB_ENABLED) {
+            NavItem(
+                icon = Icons.Filled.Article,
+                label = EditorTab.WEAR.label,
+                selected = selectedTab == EditorTab.WEAR,
+                enabled = runoutEnabled,
+                onClick = { if (runoutEnabled) { onTabSelected(EditorTab.WEAR); onNavigated() } },
+                disabledHint = "Add components first",
+            )
+        }
+        NavItem(
+            icon = Icons.Filled.ContentCut,
+            label = EditorTab.UNDERCUT.label,
+            selected = selectedTab == EditorTab.UNDERCUT,
+            enabled = runoutEnabled,
+            onClick = { if (runoutEnabled) { onTabSelected(EditorTab.UNDERCUT); onNavigated() } },
+            disabledHint = "Add components first",
+        )
+        // The document's second geometry — the shaft as it leaves. It follows
+        // the Undercut Drawing because the final drawing is decided once the
+        // wear and undercut work is known.
+        NavItem(
+            icon = Icons.Filled.FactCheck,
+            label = EditorTab.FINAL.label,
+            selected = selectedTab == EditorTab.FINAL,
+            enabled = runoutEnabled,
+            onClick = { if (runoutEnabled) { onTabSelected(EditorTab.FINAL); onNavigated() } },
+            disabledHint = "Add components first",
+        )
+        NavItem(
+            icon = Icons.Filled.PictureAsPdf,
+            label = EditorTab.OUTPUT.label,
+            selected = selectedTab == EditorTab.OUTPUT,
+            enabled = runoutEnabled,
+            onClick = { if (runoutEnabled) { onTabSelected(EditorTab.OUTPUT); onNavigated() } },
+            disabledHint = "Add components first",
+        )
+
+        Spacer(Modifier.weight(1f))
+
+        HorizontalDivider(modifier = Modifier.padding(horizontal = 8.dp))
+        Spacer(Modifier.size(4.dp))
+
+        // ── Tools ─────────────────────────────────────────────
+        NavItem(
+            icon = Icons.Filled.Calculate,
+            label = "Keyway calculator",
+            selected = false,
+            enabled = true,
+            onClick = { onKeywayCalculator(); onNavigated() },
+        )
+        NavItem(
+            icon = Icons.Filled.SquareFoot,
+            label = "Taper calculator",
+            selected = false,
+            enabled = true,
+            onClick = { onTaperCalculator(); onNavigated() },
+        )
+        NavItem(
+            icon = Icons.Filled.SwapHoriz,
+            label = "Unit converter",
+            selected = false,
+            enabled = true,
+            onClick = { onUnitConverter(); onNavigated() },
+        )
+
+        NavItem(
+            icon = Icons.AutoMirrored.Filled.HelpOutline,
+            label = "Help & FAQ",
+            selected = false,
+            enabled = true,
+            onClick = { onHelp(); onNavigated() },
+        )
+
+        // ── Settings ──────────────────────────────────────────
+        NavItem(
+            icon = Icons.Filled.Settings,
+            label = "Settings",
+            selected = false,
+            enabled = true,
+            onClick = { onSettings(); onNavigated() },
+        )
+    }
+}
+
+/** The permanent sidebar's width — narrow enough that the editor keeps a usable two-pane split. */
+val EDITOR_SIDEBAR_PERMANENT_WIDTH = 240.dp
 
 /**
  * A single navigation item row inside the sidebar.

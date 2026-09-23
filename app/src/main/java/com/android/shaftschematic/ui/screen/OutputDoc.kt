@@ -1,5 +1,7 @@
 package com.android.shaftschematic.ui.screen
 
+import com.android.shaftschematic.model.ShaftPosition
+
 /**
  * Document identities for the Consolidated Output tab (`EditorTab.OUTPUT`) — the surface
  * that previews/prints/exports the consolidated sheet and batch-exports the full document
@@ -43,18 +45,31 @@ enum class ConsolidatedVariant(
 }
 
 /**
- * Export filename for a document: `{customer_vessel_job | fallback}_{suffix}
- * [_BlankDraft].pdf` — the same shape every document's own tab has always produced.
+ * Export filename for a document:
+ * `{customer_vessel_job[_SIDE] | fallback}_{suffix}[_BlankDraft].pdf`.
+ *
+ * [shaftPosition] is required, not defaulted: a twin-screw job runs two shafts under ONE job
+ * number, so without the side both mates propose the same filename and the second export
+ * silently replaces the first. It follows the schematic's naming
+ * (`DocumentNaming.suggestedBaseName` + `ShaftPosition.printableLabelOrNull`): last part of
+ * the base, dropped entirely for a side that prints nothing, and never a filename on its own —
+ * with nothing else to go on the document's [OutputDoc.fallbackBase] still wins.
  */
 internal fun buildOutputFilename(
     customer: String,
     vessel: String,
     jobNumber: String,
+    shaftPosition: ShaftPosition,
     doc: OutputDoc,
     blankDraft: Boolean = false,
 ): String {
     val parts = listOf(customer, vessel, jobNumber).filter { it.isNotBlank() }
-    val base = if (parts.isNotEmpty()) parts.joinToString("_") else doc.fallbackBase
+    val side = shaftPosition.printableLabelOrNull()
+    val base = if (parts.isNotEmpty()) {
+        (parts + listOfNotNull(side)).joinToString("_")
+    } else {
+        doc.fallbackBase
+    }
     val blankSuffix = if (blankDraft) "_BlankDraft" else ""
     return "${base}_${doc.filenameSuffix}$blankSuffix.pdf"
 }

@@ -5,7 +5,6 @@ import android.graphics.Color
 import android.graphics.DashPathEffect
 import android.graphics.Paint
 import android.graphics.RectF
-import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import com.android.shaftschematic.model.*
 import com.android.shaftschematic.geom.DimensionRailLayout
@@ -54,10 +53,14 @@ import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
 import com.android.shaftschematic.ui.resolved.bodyBlends
 import com.android.shaftschematic.ui.resolved.bodyDrawEdges
 import com.android.shaftschematic.ui.resolved.resolvedBodyBaseId
+import com.android.shaftschematic.ui.resolved.unshadedBodyRunIds
+import com.android.shaftschematic.ui.resolved.unshadedLinerIds
+import com.android.shaftschematic.ui.resolved.unshadedTaperIds
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.VerboseLog
 import com.android.shaftschematic.util.DualLabel
 import com.android.shaftschematic.util.DualUnitLayout
+import com.android.shaftschematic.util.OutputTypography
 import com.android.shaftschematic.util.dualStackMetrics
 import com.android.shaftschematic.util.measureDualLabel
 import com.android.shaftschematic.util.setsStacked
@@ -246,8 +249,15 @@ fun composeRunoutPdf(
         style = Paint.Style.FILL
         color = Color.argb(40, 0, 0, 0)
     }
-    val bodyFill : Paint? = if (pdfPrefs.shadedBodies) shadeFill() else null
-    val taperFill: Paint? = if (pdfPrefs.shadedTapers) shadeFill() else null
+    // The fill paints exist unconditionally; WHICH components use them is one decision per
+    // component, made by the unshaded-id builders — a kind's checkbox turned off simply names
+    // every component of that kind, leaving room for a per-component override to beat it.
+    val bodyFill : Paint = shadeFill()
+    val taperFill: Paint = shadeFill()
+    val unfilledBodyIds = unshadedBodyRunIds(
+        spec, resolvedComponents, pdfPrefs.shadedBodies, pdfPrefs.shadeExplicitBodiesOnly,
+    )
+    val unfilledTaperIds = unshadedTaperIds(spec, pdfPrefs.shadedTapers)
     // Liners follow `shadedLiners` like bodies and tapers, EXCEPT on a sheet that prints
     // measured Ø values INSIDE the profile: those values sit on sheet-white knockout halos,
     // and shading the liner under them would turn every halo into a pasted white box
@@ -260,11 +270,18 @@ fun composeRunoutPdf(
         includeWearInfo = drawWear,
         blankValues = blankValues,
     )
-    val linerFill: Paint? = if (pdfPrefs.shadedLiners && !inProfileValues) shadeFill() else null
+    val linerFill: Paint = shadeFill()
+    // The in-profile-values rule outranks every per-liner override: it names EVERY liner, so
+    // an explicit `shadeOnDrawing = true` cannot put grey back under a knockout halo.
+    val unfilledLinerIds = if (inProfileValues) {
+        spec.liners.map { it.id }.toSet()
+    } else {
+        unshadedLinerIds(spec, pdfPrefs.shadedLiners)
+    }
     val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
         textSize = TEXT_PT
-        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
+        typeface = OutputTypography.active
         color = Color.BLACK
     }
     // ── Page regions ─────────────────────────────────────────────────────────
@@ -303,10 +320,15 @@ fun composeRunoutPdf(
             docSpec.liners.forEach { add(RunoutComponentSpan(it.id, RunoutComponentKind.LINER, it.startFromAftMm, it.lengthMm)) }
         }
     }
+    // User-set bubble size and drop. Both bubble draw sites scale from the same two prefs, so
+    // the canvas preview and the printed sheet stay identical. `minGap` is deliberately NOT
+    // scaled: it is the clearance floor between circles, not part of a bubble's size, and every
+    // pitch the layout engine derives already grows with the radius.
+    val bubbleRadiusPt = BUBBLE_RADIUS_PT * pdfPrefs.runoutBubbleScale
     val bubbleGeom = RunoutBubbleGeometry(
-        radius = BUBBLE_RADIUS_PT,
+        radius = bubbleRadiusPt,
         minGap = BUBBLE_MIN_GAP_PT,
-        shortLeader = SHORT_LEADER_PT,
+        shortLeader = SHORT_LEADER_PT * pdfPrefs.runoutBubbleDropScale,
         contentLeft = contentLeft,
         contentRight = contentRight,
     )
@@ -645,7 +667,10 @@ fun composeRunoutPdf(
         bodyFill = bodyFill, taperFill = taperFill, linerFill = linerFill,
         ptPerMm = diaPtPerMm, truePtPerMm = diaPtPerMm,
         breakMinFracOfTrue = pdfPrefs.sBreakThresholdFrac,
-        blends = bodyBlendsForSheet)
+        blends = bodyBlendsForSheet,
+        unfilledBodyIds = unfilledBodyIds,
+        unfilledTaperIds = unfilledTaperIds,
+        unfilledLinerIds = unfilledLinerIds)
 
     // ── Wear marks + worn sections + in-profile values (consolidated sheet) ───
     // Z-order (on-device request): marks first — wear-area bands and pit X's — then the
@@ -690,7 +715,7 @@ fun composeRunoutPdf(
     )
     // Blank drafts keep the bubbles (they ARE the write-in circles) but drop recorded values.
     val effectiveReadings = if (blankValues) RunoutReadings() else runoutReadings
-    drawPlacedBubbles(c, bubbleResult.bubbles, outline, effectiveReadings, unit)
+    drawPlacedBubbles(c, bubbleResult.bubbles, outline, effectiveReadings, unit, bubbleRadiusPt)
 
     // ── Draw TIR direction line (directly above the footer block) ─────────────
     // Runout content only — elected out with the bubbles on a Schematic + Wear sheet.
@@ -1105,7 +1130,9 @@ internal fun drawDiaReadingsInProfile(
 /**
  * Draw the job-info header strip at the top of the classic runout page.
  *
- * Format (single line):  Customer: ___  |  Vessel: ___  |  Job #: ___  |  Date  |  STBD/PORT
+ * The line's TEXT comes from the shared [jobInfoHeaderLine] / [JOB_INFO_BLANK_LABELS] pair, so
+ * this sheet and the wear/undercut header carry the same fields; only the LAYOUT is local
+ * (left-aligned, no title line, default rule width).
  * (The OAL is drawn separately by the OAL span line, not in this header.)
  */
 private fun drawRunoutHeader(
@@ -1124,19 +1151,12 @@ private fun drawRunoutHeader(
         // Blank draft: every job-info label prints with a writing rule, regardless of what
         // the current document holds — the draft may be used on a different shaft.
         var x = left
-        listOf("Customer:", "Vessel:", "Job #:", "Date:", "Side:").forEach { label ->
+        JOB_INFO_BLANK_LABELS.forEach { label ->
             x = drawLabelWithRule(c, label, x, y, text, maxRight = right)
         }
     } else {
         val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-        val side = project.side.printableLabelOrNull()?.let { "  $it" } ?: ""
-
-        val headerText = buildString {
-            if (project.customer.isNotBlank()) append("Customer: ${project.customer}   ")
-            if (project.vessel.isNotBlank())   append("Vessel: ${project.vessel}   ")
-            if (project.jobNumber.isNotBlank()) append("Job #: ${project.jobNumber}   ")
-            append("Date: $date$side")
-        }
+        val headerText = jobInfoHeaderLine(project, date)
         c.drawText(ellipsizeToWidth(headerText, text, right - left), left, y, text)
     }
 
@@ -1260,6 +1280,20 @@ internal fun drawShaftProfile(
      * cap stands at the neighbouring diameter. Empty without a resolve pass (square faces).
      */
     blends: List<BodyBlend> = emptyList(),
+    /**
+     * Body runs whose shade is suppressed while the rest keep [bodyFill] — the kind's
+     * checkbox, the "explicit bodies only" narrowing, and each authored body's own tri-state
+     * override, all resolved by `unshadedBodyRunIds`. Empty draws every run the same.
+     */
+    unfilledBodyIds: Set<String> = emptySet(),
+    /** Taper mirror of [unfilledBodyIds] (`unshadedTaperIds`). */
+    unfilledTaperIds: Set<String> = emptySet(),
+    /**
+     * Liner mirror of [unfilledBodyIds] (`unshadedLinerIds`). A sheet printing measured Ø
+     * values inside the profile names every liner here — grey under a sheet-white knockout
+     * halo reads as a pasted box, so that rule outranks any per-liner override.
+     */
+    unfilledLinerIds: Set<String> = emptySet(),
 ) {
     // ── Shade fills first (drawn under all outlines) ──────────────────────
     // Body fill is drawn inside `drawBodiesForRunout` — a blended face shades under its
@@ -1267,6 +1301,7 @@ internal fun drawShaftProfile(
     taperFill?.let { f ->
         spec.tapers.forEach { t ->
             if (t.lengthMm <= 0f || (t.startDiaMm <= 0f && t.endDiaMm <= 0f)) return@forEach
+            if (t.id in unfilledTaperIds) return@forEach
             val path = android.graphics.Path().apply {
                 moveTo(xAt(t.startFromAftMm), cy - rPx(t.startDiaMm))
                 lineTo(xAt(t.startFromAftMm + t.lengthMm), cy - rPx(t.endDiaMm))
@@ -1282,6 +1317,7 @@ internal fun drawShaftProfile(
     linerFill?.let { f ->
         spec.liners.forEach { ln ->
             if (ln.lengthMm <= 0f || ln.odMm <= 0f) return@forEach
+            if (ln.id in unfilledLinerIds) return@forEach
             val x0 = xAt(ln.startFromAftMm); val x1 = xAt(ln.startFromAftMm + ln.lengthMm)
             val r = rPx(ln.odMm)
             drawLinerFillPdf(c, cy, x0, x1, r, linerShoulderSpecs(ln, x0, x1, r, xAt, rPx), f)
@@ -1295,6 +1331,7 @@ internal fun drawShaftProfile(
         breakMinFracOfTrue = breakMinFracOfTrue,
         blends = blends,
         keywayAvoidSpansMm = bodyKeywayProtectedSpansMm(authoredSpec),
+        unfilledBodyIds = unfilledBodyIds,
     )
     // Body keyways, from the SAME pass the schematic draws (`drawBodyKeywaysPdf`) so a slot
     // cannot print on one sheet and vanish from the other. Read off [authoredSpec]: [spec]
@@ -1397,15 +1434,20 @@ private fun drawPlacedBubbles(
     outline: Paint,
     readings: RunoutReadings,
     unit: UnitSystem,
+    /**
+     * The radius the plan was built with ([BUBBLE_RADIUS_PT] × `PdfPrefs.runoutBubbleScale`).
+     * Taken as a parameter rather than re-read from the constant: circles drawn at a radius the
+     * planner did not space for would overlap each other and their leaders.
+     */
+    r: Float,
 ) {
-    val r = BUBBLE_RADIUS_PT
     val valuePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
         color = Color.BLACK
         // Printed value sits small inside the (larger) circle, leaving room to hand-write.
         textSize = r * 0.60f
         textAlign = Paint.Align.CENTER
-        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
+        typeface = OutputTypography.active
     }
     val highSpot = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.rgb(198, 40, 40) // red — the high spot, per shop convention
@@ -1661,11 +1703,16 @@ private const val HEADER_HEIGHT_PT = 22f    // Compact single-line header
 private const val OAL_GAP_PT       = 6f     // Gap from header rule to OAL line
 private const val OAL_LINE_SPACE_PT = 90f   // OAL line height above shaft top (≈1.25 in — raised so the dimension doesn't crowd the profile)
 
-// Bubble geometry — sized to hold hand-written decimal readings (e.g. .016)
+// Bubble geometry — sized to hold hand-written decimal readings (e.g. .016).
 // Row spacing and leader routing are derived from these by geom/RunoutBubbleLayout.kt.
-private const val BUBBLE_RADIUS_PT      = 23f  // 46 pt ≈ 0.64 inch diameter (roomy to hand-write a value in)
-private const val BUBBLE_MIN_GAP_PT     = 5f   // Minimum clear distance between circle edges
-private const val SHORT_LEADER_PT       = 18f  // Deepest shaft surface → top of bubble row 0
+//
+// The radius and the leader are BASE values: `PdfPrefs.runoutBubbleScale` and
+// `runoutBubbleDropScale` multiply them, and at their defaults the sheet draws exactly these.
+// Internal so a test can pin that pair. The gap is a fixed clearance floor — it is what keeps
+// circles apart, not part of a bubble's size, so no pref scales it.
+internal const val BUBBLE_RADIUS_PT      = 23f  // 46 pt ≈ 0.64 inch diameter (roomy to hand-write a value in)
+internal const val BUBBLE_MIN_GAP_PT     = 5f   // Minimum clear distance between circle edges
+internal const val SHORT_LEADER_PT       = 18f  // Deepest shaft surface → top of bubble row 0
 
 // Extra space below the last bubble row
 private const val BUBBLE_GAP_PT         = 8f

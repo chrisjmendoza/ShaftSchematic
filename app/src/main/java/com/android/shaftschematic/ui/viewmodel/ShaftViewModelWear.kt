@@ -12,6 +12,8 @@ import com.android.shaftschematic.model.WearRecord
 import com.android.shaftschematic.model.WearSpot
 import com.android.shaftschematic.model.WearSpotReference
 import com.android.shaftschematic.model.WornSection
+import com.android.shaftschematic.pdf.WEAR_STRIP_SIZE_FRAC_MAX
+import com.android.shaftschematic.pdf.WEAR_STRIP_SIZE_FRAC_MIN
 import kotlinx.coroutines.flow.update
 import kotlin.math.max
 import kotlin.math.min
@@ -210,6 +212,21 @@ fun ShaftViewModel.setWearShowShaftProfile(show: Boolean) {
 fun ShaftViewModel.setWearCompactStrips(compact: Boolean) {
     _wearRecord.update { rec ->
         if (rec.compactStrips == compact) rec else rec.copy(compactStrips = compact)
+    }
+}
+
+/**
+ * Scale the wear sheet's detail strips ([WearRecord.stripSizeFrac]), clamped to
+ * [WEAR_STRIP_SIZE_FRAC_MIN]..[WEAR_STRIP_SIZE_FRAC_MAX]; 1 is the height the page's own row
+ * budget gives a strip (`wearRowHeightCapPt`).
+ *
+ * Display-only, per document: it moves the strips' height ceiling and nothing else — no stored
+ * or printed measurement changes.
+ */
+fun ShaftViewModel.setWearStripSizeFrac(frac: Float) {
+    val clamped = frac.coerceIn(WEAR_STRIP_SIZE_FRAC_MIN, WEAR_STRIP_SIZE_FRAC_MAX)
+    _wearRecord.update { rec ->
+        if (rec.stripSizeFrac == clamped) rec else rec.copy(stripSizeFrac = clamped)
     }
 }
 

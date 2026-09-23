@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -33,6 +34,7 @@ import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.NoteAdd
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FolderOpen
@@ -62,6 +64,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -97,6 +100,10 @@ import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.collidingIds
 import com.android.shaftschematic.settings.PdfTieringMode
+import com.android.shaftschematic.ui.adaptive.LocalSidebarPermanent
+import com.android.shaftschematic.ui.adaptive.WindowWidthClass
+import com.android.shaftschematic.ui.adaptive.currentWindowWidthClass
+import com.android.shaftschematic.ui.adaptive.twoPane
 import com.android.shaftschematic.ui.dialog.InlineAddChooserDialog
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.util.exportPdfGate
@@ -112,18 +119,21 @@ import kotlinx.coroutines.launch
  * Responsibilities
  * • Header row (unit selector + grid toggle; unit selector disables when locked)
  * • Preview drawing (white square; optional grid; fixed-height band)
- * • Free-to-End badge overlay (top-start of preview; red on oversize)
- * • Overall length input (ghost “0”; commits on blur/Done; auto when not manual)
+ * • Overall length input (always user-typed; commits on every parseable keystroke —
+ *   see `docs/contracts/OverallLength.md`)
  * • Project fields (commit-on-blur / IME Done)
  * • Component carousel (edit & remove) — rows in physical order along the shaft
- * • Add-component FAB floating above IME & nav bar
+ * • Full-width "+ Add Component" button in the scroll column — the single add entry point
  *
  * Contract / Invariants
  * • Canonical model units are millimeters (mm) — convert only at UI edge.
  * • Carousel rows follow the resolved components' physical order (auto-bodies interleaved at
  *   their spans); there is no separate cross-type order. See `docs/contracts/ComponentsOrdering.md`.
  * • IME safety: imePadding shrinks the scroll viewport (applied before verticalScroll) so
- *   Compose auto-scrolls to keep the focused field in view; FAB uses ime ∪ navigationBars insets.
+ *   Compose auto-scrolls to keep the focused field in view.
+ * • Window width is the ONE adaptive axis: COMPACT is the phone column, MEDIUM raises only the
+ *   preview card's height cap, EXPANDED splits into two panes. Every branch draws the SAME
+ *   content blocks, declared once below. See `docs/contracts/Adaptive.md`.
  * • No file I/O or routing here.
  */
 @Composable
@@ -131,29 +141,47 @@ import kotlinx.coroutines.launch
 fun ShaftScreen(
     resetNonce: Int,
 
+    /**
+     * Top-bar title. Defaults to the Schematic tab's; the Final Schematic tab hosts this same
+     * editor over the document's other geometry and names itself here, so which drawing is
+     * being edited is never in doubt.
+     */
+    editorTitle: String = "Shaft Editor",
+    /**
+     * Optional strip drawn directly under the top bar, above the editor content — the Final
+     * Schematic tab's standing reminder that the original is untouched, carrying that
+     * drawing's own actions. Null on the Schematic tab, which draws exactly as before.
+     */
+    banner: (@Composable () -> Unit)? = null,
+
     // State
     spec: ShaftSpec,
     /** Saved file name (with extension) of the current document, or null for an unsaved draft. */
     documentName: String? = null,
     /** True while the session differs from the last saved/loaded state (title-bar asterisk). */
     hasUnsavedChanges: Boolean = false,
+    /** Tap on the document title strip — names an unsaved document, renames a saved one. */
+    onTitleClick: (() -> Unit)? = null,
     resolvedComponents: List<ResolvedComponent> = emptyList(),
     unit: UnitSystem,
-    overallIsManual: Boolean,
     customer: String,
     vessel: String,
     jobNumber: String,
+    item: String,
     shaftPosition: ShaftPosition,
     notes: String,
     showGrid: Boolean,
     showOalDebugLabel: Boolean,
-    showOalHelperLine: Boolean,
     showOalInPreviewBox: Boolean,
     showComponentDebugLabels: Boolean,
     showRenderLayoutDebugOverlay: Boolean,
     showRenderOalMarkers: Boolean,
     showDimDebugOverlay: Boolean = false,
     pdfTieringMode: PdfTieringMode = PdfTieringMode.AUTO,
+    /** The Settings "Show component titles" switch — the default a card's unset name toggle follows. */
+    componentTitlesDefault: Boolean = true,
+    /** The kind-level shade checkboxes — the default a card's unset shade toggle follows. */
+    componentShadeDefaults: ComponentShadeDefaults = ComponentShadeDefaults(),
     showComponentArrows: Boolean,
     componentArrowWidthDp: Int,
     showHighlightSelection: Boolean = true,
@@ -167,6 +195,8 @@ fun ShaftScreen(
     previewThreadHatch: PreviewColorSetting,
     previewBlackWhiteOnly: Boolean,
     lineThicknessScale: Float = 1.0f,
+    /** PDF-shade mirror for the preview box — components the PDF will print shaded. */
+    shadedComponentIds: Set<String> = emptySet(),
 
     sessionAddDefaults: SessionAddDefaults,
 
@@ -183,11 +213,11 @@ fun ShaftScreen(
     onSetCustomer: (String) -> Unit,
     onSetVessel: (String) -> Unit,
     onSetJobNumber: (String) -> Unit,
+    onSetItem: (String) -> Unit,
     onSetShaftPosition: (ShaftPosition) -> Unit,
     onSetNotes: (String) -> Unit,
     onSetOverallLengthRaw: (String) -> Unit,
     onSetOverallLengthMm: (Float) -> Unit,
-    onSetOverallIsManual: (Boolean) -> Unit,
     onSelectComponentById: (String?) -> Unit,
 
     // Adds (all mm)
@@ -213,17 +243,25 @@ fun ShaftScreen(
     // Updates (all mm)
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateBodyShowDia: (Int, Boolean) -> Unit,
+    onUpdateBodyShowLabel: (Int, Boolean) -> Unit,
+    onUpdateBodyShade: (Int, Boolean) -> Unit = { _, _ -> },
+    onUpdateBodyCompressOnDrawing: (Int, Boolean) -> Unit,
     onUpdateBodyBlend: (index: Int, blendAftMm: Float, blendFwdMm: Float, profile: BlendProfile, sealAft: Boolean, sealFwd: Boolean) -> Unit,
     onUpdateBodyLabel: (Int, String?) -> Unit,
     onUpdateBodyKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromEndMm: Float, end: LinerAuthoredReference, spooned: Boolean) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float, String) -> Unit,
     onUpdateTaperLabel: (Int, String?) -> Unit,
+    onUpdateTaperShowLabel: (Int, Boolean) -> Unit,
+    onUpdateTaperShade: (Int, Boolean) -> Unit = { _, _ -> },
     onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromSetMm: Float, spooned: Boolean) -> Unit,
     onUpdateTaperReference: (Int, LinerAuthoredReference) -> Unit,
     onUpdateThread: (Int, Float, Float, Float, Float, String?) -> Unit,
     onUpdateThreadLabel: (Int, String?) -> Unit,
+    onUpdateThreadShowLabel: (Int, Boolean) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
     onUpdateLinerShowDia: (Int, Boolean) -> Unit,
+    onUpdateLinerShowLabel: (Int, Boolean) -> Unit,
+    onUpdateLinerShade: (Int, Boolean) -> Unit = { _, _ -> },
     onUpdateLinerShoulder: (Int, LinerAuthoredReference, Float, Float, Float) -> Unit = { _, _, _, _, _ -> },
     linerShouldersEnabled: Boolean = false,
     /** Settings → Drawing → "Unit converter in Add dialogs": gates the calculator icon on the five Add dialogs. */
@@ -260,6 +298,8 @@ fun ShaftScreen(
     onOpen: () -> Unit,
     onSave: () -> Unit,
     onSaveAs: () -> Unit = {},
+    /** Open "Duplicate for mate" — writes a sibling document; the session is untouched. */
+    onDuplicateForMate: () -> Unit = {},
     /** Close the current document (guarded for unsaved work) and return to Start. */
     onCloseDocument: () -> Unit = {},
     onExportPdf: () -> Unit,
@@ -310,14 +350,6 @@ fun ShaftScreen(
     // edit. Snapping belongs to coarse gestures (tap-to-add) only; typed values are exact.
     // See the golden rule (user inputs are sacred) in CLAUDE.md.
 
-    // Auto-sync overall when not manual
-    LaunchedEffect(overallIsManual, spec.bodies, spec.tapers, spec.threads, spec.liners) {
-        if (!overallIsManual) {
-            val end = lastOccupiedEndMm(spec)
-            if (end != spec.overallLengthMm) onSetOverallLengthMm(end)
-        }
-    }
-
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         contentWindowInsets = WindowInsets.systemBars.only(
@@ -334,6 +366,7 @@ fun ShaftScreen(
                 documentName = documentName,
                 hasUnsavedChanges = hasUnsavedChanges,
                 modifier = Modifier.windowInsetsPadding(WindowInsets.statusBars),
+                onClick = onTitleClick,
             )
             TopAppBar(
                 // Status-bar inset is consumed by the title strip above; the default TopAppBar
@@ -341,7 +374,7 @@ fun ShaftScreen(
                 windowInsets = WindowInsets(0, 0, 0, 0),
                 title = {
                     Text(
-                        text = "Shaft Editor",
+                        text = editorTitle,
                         style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -350,11 +383,15 @@ fun ShaftScreen(
                 navigationIcon = {
                     // Hamburger opens the sidebar nav drawer.
                     // Home lives inside the sidebar — not duplicated here.
-                    IconButton(
-                        onClick = onOpenSidebar,
-                        modifier = Modifier.testTag("toolbar_menu")
-                    ) {
-                        Icon(Icons.Filled.Menu, contentDescription = "Open navigation")
+                    // Where the sidebar is laid out beside the content there is nothing to
+                    // open, and a button whose panel is already on screen reads as broken.
+                    if (!LocalSidebarPermanent.current) {
+                        IconButton(
+                            onClick = onOpenSidebar,
+                            modifier = Modifier.testTag("toolbar_menu")
+                        ) {
+                            Icon(Icons.Filled.Menu, contentDescription = "Open navigation")
+                        }
                     }
                 },
                 actions = {
@@ -395,7 +432,7 @@ fun ShaftScreen(
 
                     Box(
                         modifier = Modifier
-                            .testTag("toolbar_export_pdf_container")
+                            .testTag("toolbar_pdf_preview_container")
                             .then(
                                 if (!exportPdfEnabled) {
                                     Modifier.pointerInput(Unit) {
@@ -410,17 +447,20 @@ fun ShaftScreen(
                                 }
                             )
                     ) {
+                        // Opens the PDF preview, where Print and Export both live; it is not
+                        // itself an export action.
                         IconButton(
                             onClick = onExportPdf,
                             enabled = exportPdfEnabled,
-                            modifier = Modifier.testTag("toolbar_export_pdf")
+                            modifier = Modifier.testTag("toolbar_pdf_preview")
                         ) {
-                            Icon(Icons.Outlined.PictureAsPdf, contentDescription = "Export PDF")
+                            Icon(Icons.Outlined.PictureAsPdf, contentDescription = "PDF preview")
                         }
                     }
 
                     OverflowMenu(
                         onSaveAs = onSaveAs,
+                        onDuplicateForMate = onDuplicateForMate,
                         onCloseDocument = onCloseDocument,
                         onOpenSettings = onOpenSettings,
                         onSendFeedback = onSendFeedback,
@@ -429,27 +469,26 @@ fun ShaftScreen(
                     )
                 }
             )
+            // Whose drawing this is — pinned with the bar, so scrolling the editor can
+            // never scroll the reminder off.
+            banner?.invoke()
             }
         },
     ) { inner ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(inner)
-                .padding(start = 16.dp, end = 16.dp, top = 0.dp, bottom = 16.dp)
-        ) {
-            // Separator (matches the divider below the preview)
-            HorizontalDivider()
-            Spacer(Modifier.height(8.dp))
+        val widthClass = currentWindowWidthClass()
+        val previewScroll = rememberScrollState()
 
-            // Preview
+        // The editor's content blocks are declared ONCE here and invoked by whichever width
+        // branch lays out, so the phone column and the tablet two-pane cannot drift apart.
+        // They are composable lambdas rather than private composables because each would
+        // otherwise have to restate this screen's parameter list — the carousel alone takes
+        // fifty callbacks — and a signature copied twice is the drift this exists to prevent.
+        val previewBlock: @Composable (Dp) -> Unit = { previewMaxHeight ->
             PreviewCard(
                 showGrid = showGrid,
                 spec = spec,
                 resolvedComponents = resolvedComponents,
                 unit = unit,
-                overallIsManual = overallIsManual,
-                devOptionsEnabled = devOptionsEnabled,
                 showOalInPreviewBox = showOalInPreviewBox,
                 highlightEnabled = showHighlightSelection,
                 highlightId = selectedComponentId,
@@ -466,439 +505,438 @@ fun ShaftScreen(
                 previewThreadHatch = previewThreadHatch,
                 previewBlackWhiteOnly = previewBlackWhiteOnly,
                 lineThicknessScale = lineThicknessScale,
+                shadedComponentIds = shadedComponentIds,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 120.dp, max = 200.dp)
+                    .heightIn(min = 120.dp, max = previewMaxHeight)
                     .aspectRatio(3.0f)
             )
             // NOTE: Highlight state is threaded into ShaftDrawing via PreviewCard.
+        }
 
-            Spacer(Modifier.height(12.dp))
-            HorizontalDivider()
-            Spacer(Modifier.height(12.dp))
+        // Overall length entry and its two read-only companion labels.
+        val oalBlock: @Composable () -> Unit = {
+            OverallLengthField(
+                spec = spec,
+                unit = unit,
+                onSetOverallLengthMm = onSetOverallLengthMm,
+                onSetOverallLengthRaw = onSetOverallLengthRaw,
+            )
 
-            // Scrollable editor content
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .imePadding()
-                    .verticalScroll(scroll)
-                    .windowInsetsPadding(
-                        WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)
-                    ),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+            // Read-only: computed OAL in measurement space (less excluded end threads)
+            val win = remember(spec.overallLengthMm, spec.threads, spec.tapers) { computeOalWindow(spec) }
+            val physicalOalMm = spec.overallLengthMm.toDouble()
+            val effectiveOalWindowMm = win.oalMm
+            val excluded = kotlin.math.abs(effectiveOalWindowMm - physicalOalMm) > OAL_EPS_MM
+
+            // Only meaningful when an excluded end thread makes the dimensioned span
+            // differ from the physical length.
+            if (excluded) {
+                Text(
+                    text = "Dimensioned OAL: ${formatDisplay(effectiveOalWindowMm.toFloat(), unit)} ${abbr(unit)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+
+            if (showOalDebugLabel) {
+                val coveredEndMm = lastOccupiedEndMm(spec)
+                Text(
+                    text = "OAL debug • physical=${formatDisplay(spec.overallLengthMm, unit)} ${abbr(unit)} • effective=${formatDisplay(effectiveOalWindowMm.toFloat(), unit)} ${abbr(unit)} • covered=${formatDisplay(coveredEndMm, unit)} ${abbr(unit)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+        }
+
+        // The components side: heading, the single add entry point, and the carousel, with
+        // the add dialogs it raises. A dialog takes no layout space, so it rides with the
+        // control that opens it in either branch.
+        //
+        // [warningSlot] is emitted between the add button and the carousel — where the spec
+        // warnings sit in one column. With two panes they move across to the preview, beside
+        // the drawing and the overall length they are about, and this slot stays empty.
+        val componentsBlock: @Composable (warningSlot: @Composable () -> Unit) -> Unit = { warningSlot ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Overall Length (auto vs manual — always show a value)
-                var hasLenFocus by remember { mutableStateOf(false) }
-                var lenTextOnFocus by remember { mutableStateOf<String?>(null) }
+                Text(
+                    "Components",
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    "Swipe to select",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
 
-                val effectiveOalDisplayMm = remember(spec.overallLengthMm, spec.threads, spec.tapers) { computeOalWindow(spec).oalMm.toFloat() }
-                val displayMm = if (overallIsManual) spec.overallLengthMm else effectiveOalDisplayMm
-                var lengthText by remember(unit, displayMm, overallIsManual) {
-                    mutableStateOf(formatDisplay(displayMm, unit))
-                }
-
-                val isOversized = spec.overallLengthMm < lastOccupiedEndMm(spec)
-
-                Row(
+            Surface(
+                tonalElevation = 2.dp,
+                shape = MaterialTheme.shapes.large
+            ) {
+                Button(
+                    onClick = { chooserOpen = true },
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    OutlinedTextField(
-                        value = lengthText,
-                        onValueChange = { input ->
-                            // Default to Auto until the user types.
-                            if (!overallIsManual && input != lengthText) {
-                                onSetOverallIsManual(true)
-                            }
-
-                            lengthText = input
-                            if (overallIsManual) {
-                                toMmOrNull(input, unit)?.let { mm ->
-                                    onSetOverallLengthMm(mm)
-                                }
-                            }
-                        },
-                        label = { Text("Overall Length (${abbr(unit)})") },
-                        singleLine = true,
-                        enabled = true,
-                        isError = isOversized,
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Decimal,
-                            imeAction = ImeAction.Done
-                        ),
-                        keyboardActions = KeyboardActions(onDone = {
-                            val t = lengthText.trim()
-                            if (t.isEmpty()) {
-                                onSetOverallIsManual(false)
-                                val end = lastOccupiedEndMm(spec)
-                                onSetOverallLengthMm(end)
-                                val effective = computeOalWindow(spec.copy(overallLengthMm = end)).oalMm.toFloat()
-                                lengthText = formatDisplay(effective, unit)
-                            } else {
-                                toMmOrNull(t, unit)?.let { mm ->
-                                    onSetOverallLengthMm(mm)
-                                    onSetOverallIsManual(true)
-                                    onSetOverallLengthRaw(t) // keep user’s display text
-                                }
-                            }
-                        }),
-                        modifier = Modifier
-                            .weight(1f)
-                            .onFocusChanged { f ->
-                                val wasFocused = hasLenFocus
-                                hasLenFocus = f.isFocused
-
-                                if (!wasFocused && f.isFocused) {
-                                    // Capture initial text so tapping the field in Auto doesn't
-                                    // accidentally flip us into Manual when the user didn't edit.
-                                    lenTextOnFocus = lengthText
-                                    // Clear "0" so the user can type without a leading zero.
-                                    if (lengthText.trim() == "0") lengthText = ""
-                                }
-
-                                if (wasFocused && !f.isFocused) {
-                                    val baseline = lenTextOnFocus
-                                    lenTextOnFocus = null
-                                    val t = lengthText.trim()
-
-                                    // If we were in Auto and the user didn't change anything,
-                                    // don't flip into Manual.
-                                    if (!overallIsManual && baseline != null && lengthText == baseline) {
-                                        return@onFocusChanged
-                                    }
-
-                                    if (t.isEmpty()) {
-                                        onSetOverallIsManual(false)
-                                        val end = lastOccupiedEndMm(spec)
-                                        onSetOverallLengthMm(end)
-                                        val effective = computeOalWindow(spec.copy(overallLengthMm = end)).oalMm.toFloat()
-                                        lengthText = formatDisplay(effective, unit)
-                                    } else {
-                                        toMmOrNull(t, unit)?.let { mm ->
-                                            onSetOverallLengthMm(mm)
-                                            onSetOverallIsManual(true)
-                                            onSetOverallLengthRaw(t)
-                                        }
-                                    }
-                                }
-                            }
-                    )
-
-                    Spacer(Modifier.width(12.dp))
-
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        FilterChip(
-                            selected = !overallIsManual,
-                            onClick = {
-                                if (overallIsManual) {
-                                    onSetOverallIsManual(false)
-                                    val end = lastOccupiedEndMm(spec)
-                                    onSetOverallLengthMm(end)
-                                    val effective = computeOalWindow(spec.copy(overallLengthMm = end)).oalMm.toFloat()
-                                    lengthText = formatDisplay(effective, unit)
-                                }
-                            },
-                            label = { Text("Auto") }
-                        )
-                        FilterChip(
-                            selected = overallIsManual,
-                            onClick = {
-                                if (!overallIsManual) {
-                                    onSetOverallIsManual(true)
-                                }
-                            },
-                            label = { Text("Manual") }
-                        )
-                    }
-                }
-
-                // Read-only: computed OAL in measurement space (less excluded end threads)
-                val win = remember(spec.overallLengthMm, spec.threads, spec.tapers) { computeOalWindow(spec) }
-                val physicalOalMm = spec.overallLengthMm.toDouble()
-                val effectiveOalWindowMm = win.oalMm
-                val excluded = kotlin.math.abs(effectiveOalWindowMm - physicalOalMm) > OAL_EPS_MM
-
-                // Normally only show in Manual mode; Auto already displays effective OAL.
-                // Developer option can force it on for debugging.
-                if (excluded && (overallIsManual || showOalHelperLine)) {
-                    Text(
-                        text = "Dimensioned OAL: ${formatDisplay(effectiveOalWindowMm.toFloat(), unit)} ${abbr(unit)}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-                }
-
-                if (showOalDebugLabel) {
-                    val coveredEndMm = lastOccupiedEndMm(spec)
-                    Text(
-                        text = "OAL debug • physical=${formatDisplay(spec.overallLengthMm, unit)} ${abbr(unit)} • effective=${formatDisplay(effectiveOalWindowMm.toFloat(), unit)} ${abbr(unit)} • covered=${formatDisplay(coveredEndMm, unit)} ${abbr(unit)}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        "Components",
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                    Spacer(Modifier.width(10.dp))
-                    Text(
-                        "Swipe to select",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                Surface(
-                    tonalElevation = 2.dp,
                     shape = MaterialTheme.shapes.large
                 ) {
-                    Button(
-                        onClick = { chooserOpen = true },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = MaterialTheme.shapes.large
-                    ) {
-                        Text("+ Add Component")
-                    }
+                    Text("+ Add Component")
                 }
+            }
 
-                SpecWarningBanner(spec = spec)
+            warningSlot()
 
-                ComponentCarouselPager(
-                    spec = spec,
-                    resolvedComponents = resolvedComponents,
+            ComponentCarouselPager(
+                spec = spec,
+                resolvedComponents = resolvedComponents,
+                unit = unit,
+                showEdgeArrows = showComponentArrows,
+                edgeArrowWidthDp = componentArrowWidthDp,
+                showComponentDebugLabels = showComponentDebugLabels,
+                componentTitlesDefault = componentTitlesDefault,
+                componentShadeDefaults = componentShadeDefaults,
+                selectedComponentId = selectedComponentId,
+                // Auto-body promotion adds a plain body; keyways and blends are added
+                // later via the promoted card's own fields.
+                onAddBody = { s, l, d ->
+                    onAddBody(
+                        s, l, d, 0f, 0f, 0f, 0f, LinerAuthoredReference.AFT, false, null,
+                        0f, 0f, BlendProfile.OGEE, false, false,
+                    )
+                },
+                onSetAutoSectionDia = onSetAutoSectionDia,
+                onSetAutoBlend = onSetAutoBlend,
+                onSetShowAutoBodyDia = onSetShowAutoBodyDia,
+                onUpdateBody = onUpdateBody,
+                onUpdateBodyShowDia = onUpdateBodyShowDia,
+                onUpdateBodyShowLabel = onUpdateBodyShowLabel,
+                onUpdateBodyShade = onUpdateBodyShade,
+                onUpdateBodyCompressOnDrawing = onUpdateBodyCompressOnDrawing,
+                onUpdateBodyBlend = onUpdateBodyBlend,
+                onUpdateBodyLabel = onUpdateBodyLabel,
+                onUpdateBodyKeyway = onUpdateBodyKeyway,
+                onUpdateTaper = onUpdateTaper,
+                onUpdateTaperLabel = onUpdateTaperLabel,
+                onUpdateTaperShowLabel = onUpdateTaperShowLabel,
+                onUpdateTaperShade = onUpdateTaperShade,
+                onUpdateTaperKeyway = onUpdateTaperKeyway,
+                onUpdateTaperReference = onUpdateTaperReference,
+                onUpdateThread = onUpdateThread,
+                onUpdateThreadLabel = onUpdateThreadLabel,
+                onUpdateThreadShowLabel = onUpdateThreadShowLabel,
+                onUpdateLiner = onUpdateLiner,
+                onUpdateLinerShowDia = onUpdateLinerShowDia,
+                onUpdateLinerShowLabel = onUpdateLinerShowLabel,
+                onUpdateLinerShade = onUpdateLinerShade,
+                onUpdateLinerShoulder = onUpdateLinerShoulder,
+                linerShouldersEnabled = linerShouldersEnabled,
+                onUpdateLinerLabel = onUpdateLinerLabel,
+                onUpdateLinerReference = onUpdateLinerReference,
+                onUpdateCouplerBoltSlot = onUpdateCouplerBoltSlot,
+                onUpdateCouplerBoltSlotReference = onUpdateCouplerBoltSlotReference,
+                onUpdateCouplerBoltSlotShowRail = onUpdateCouplerBoltSlotShowRail,
+                onSetKeyways180Apart = onSetKeyways180Apart,
+                onSetKeyways90Apart = onSetKeyways90Apart,
+                onSetKeyways90Cw = onSetKeyways90Cw,
+
+                onSetThreadExcludeFromOal = onSetThreadExcludeFromOal,
+                onSetThreadEndPosition = onSetThreadEndPosition,
+
+                onRemoveBody = onRemoveBody,
+                onRemoveTaper = onRemoveTaper,
+                onRemoveThread = onRemoveThread,
+                onRemoveLiner = onRemoveLiner,
+                onRemoveCouplerBoltSlot = onRemoveCouplerBoltSlot,
+                onSelectComponentById = onSelectComponentById,
+                collidingComponentIds = collidingComponentIds,
+                perComponentUnitsEnabled = perComponentUnitsEnabled,
+                unitOverrides = unitOverrides,
+                onSetComponentUnit = onSetComponentUnit,
+                onSetKeywayUnit = onSetKeywayUnit,
+            )
+
+            if (chooserOpen) {
+                val d = computeAddDefaults(spec)
+
+                InlineAddChooserDialog(
+                    onDismiss = { chooserOpen = false },
+                    onAddBody = {
+                        chooserOpen = false
+                        addStartMm = d.startMm
+                        addLengthMm = if (spec.overallLengthMm > d.startMm) {
+                            spec.overallLengthMm - d.startMm
+                        } else {
+                            sessionAddDefaults.bodyLenMm
+                        }
+                        addBodyOpen = true
+                    },
+                    onAddLiner = {
+                        chooserOpen = false
+                        addStartMm = d.startMm
+                        addLengthMm = sessionAddDefaults.linerLenMm
+                        addLinerOpen = true
+                    },
+                    onAddThread = {
+                        chooserOpen = false
+                        addThreadStartMm = d.startMm
+                        addThreadOpen = true
+                    },
+                    onAddTaper = {
+                        chooserOpen = false
+                        addStartMm = d.startMm
+                        addLengthMm = sessionAddDefaults.taperLenMm
+                        addTaperOpen = true
+                    },
+                    onAddCouplerBoltSlot = {
+                        chooserOpen = false
+                        addSlotStartMm = d.startMm
+                        addSlotOpen = true
+                    }
+                )
+            }
+
+            if (addThreadOpen) {
+                AddThreadDialog(
                     unit = unit,
-                    showEdgeArrows = showComponentArrows,
-                    edgeArrowWidthDp = componentArrowWidthDp,
-                    showComponentDebugLabels = showComponentDebugLabels,
-                    selectedComponentId = selectedComponentId,
-                    // Auto-body promotion adds a plain body; keyways and blends are added
-                    // later via the promoted card's own fields.
-                    onAddBody = { s, l, d ->
-                        onAddBody(
-                            s, l, d, 0f, 0f, 0f, 0f, LinerAuthoredReference.AFT, false, null,
-                            0f, 0f, BlendProfile.OGEE, false, false,
+                    spec = spec,
+                    initialStartMm = addThreadStartMm,
+                    initialLengthMm = sessionAddDefaults.threadLenMm,
+                    initialMajorDiaMm = sessionAddDefaults.threadMajorDiaMm,
+                    initialPitchMm = sessionAddDefaults.threadPitchMm,
+                    dialogUnitConverterEnabled = dialogUnitConverterEnabled,
+                    onSubmit = { startMm, lengthMm, majorDiaMm, pitchMm, excludeFromOAL, isAftEnd, metricDesignation ->
+                        addThreadOpen = false
+                        // IMPORTANT: argument order is start, length, majorDia, pitch, excludeFromOAL,
+                        // isAftEnd, metricDesignation. The dialog already converts TPI to pitch (or
+                        // reads pitch straight off a metric designation) so this call never re-derives
+                        // it. Keep this aligned with `ShaftRoute`/`ShaftViewModel.addThreadAt`.
+                        onAddThread(
+                            startMm,
+                            lengthMm,
+                            majorDiaMm,
+                            pitchMm,
+                            excludeFromOAL,
+                            isAftEnd,
+                            metricDesignation
                         )
                     },
-                    onSetAutoSectionDia = onSetAutoSectionDia,
-                    onSetAutoBlend = onSetAutoBlend,
-                    onSetShowAutoBodyDia = onSetShowAutoBodyDia,
-                    onUpdateBody = onUpdateBody,
-                    onUpdateBodyShowDia = onUpdateBodyShowDia,
-                    onUpdateBodyBlend = onUpdateBodyBlend,
-                    onUpdateBodyLabel = onUpdateBodyLabel,
-                    onUpdateBodyKeyway = onUpdateBodyKeyway,
-                    onUpdateTaper = onUpdateTaper,
-                    onUpdateTaperLabel = onUpdateTaperLabel,
-                    onUpdateTaperKeyway = onUpdateTaperKeyway,
-                    onUpdateTaperReference = onUpdateTaperReference,
-                    onUpdateThread = onUpdateThread,
-                    onUpdateThreadLabel = onUpdateThreadLabel,
-                    onUpdateLiner = onUpdateLiner,
-                    onUpdateLinerShowDia = onUpdateLinerShowDia,
-                    onUpdateLinerShoulder = onUpdateLinerShoulder,
-                    linerShouldersEnabled = linerShouldersEnabled,
-                    onUpdateLinerLabel = onUpdateLinerLabel,
-                    onUpdateLinerReference = onUpdateLinerReference,
-                    onUpdateCouplerBoltSlot = onUpdateCouplerBoltSlot,
-                    onUpdateCouplerBoltSlotReference = onUpdateCouplerBoltSlotReference,
-                    onUpdateCouplerBoltSlotShowRail = onUpdateCouplerBoltSlotShowRail,
-                    onSetKeyways180Apart = onSetKeyways180Apart,
-                    onSetKeyways90Apart = onSetKeyways90Apart,
-                    onSetKeyways90Cw = onSetKeyways90Cw,
+                    onCancel = { addThreadOpen = false }
+                )
+            }
 
-                    onSetThreadExcludeFromOal = onSetThreadExcludeFromOal,
-                    onSetThreadEndPosition = onSetThreadEndPosition,
+            if (addSlotOpen) {
+                AddCouplerBoltSlotDialog(
+                    unit = unit,
+                    spec = spec,
+                    initialStartMm = addSlotStartMm,
+                    initialHoleDiaMm = sessionAddDefaults.slotHoleDiaMm,
+                    initialCount = sessionAddDefaults.slotCount,
+                    initialSpacingMm = sessionAddDefaults.slotSpacingMm,
+                    initialDepthMm = sessionAddDefaults.slotDepthMm,
+                    dialogUnitConverterEnabled = dialogUnitConverterEnabled,
+                    onSubmit = { startMm, holeDiaMm, count, spacingMm, through, depthMm, ref ->
+                        addSlotOpen = false
+                        onAddCouplerBoltSlot(startMm, holeDiaMm, count, spacingMm, through, depthMm, ref)
+                    },
+                    onCancel = { addSlotOpen = false }
+                )
+            }
 
-                    onRemoveBody = onRemoveBody,
-                    onRemoveTaper = onRemoveTaper,
-                    onRemoveThread = onRemoveThread,
-                    onRemoveLiner = onRemoveLiner,
-                    onRemoveCouplerBoltSlot = onRemoveCouplerBoltSlot,
-                    onSelectComponentById = onSelectComponentById,
-                    collidingComponentIds = collidingComponentIds,
+            if (addBodyOpen) {
+                AddBodyDialog(
+                    unit = unit,
+                    spec = spec,
+                    initialStartMm = addStartMm,
+                    initialLengthMm = addLengthMm,
                     perComponentUnitsEnabled = perComponentUnitsEnabled,
-                    unitOverrides = unitOverrides,
-                    onSetComponentUnit = onSetComponentUnit,
-                    onSetKeywayUnit = onSetKeywayUnit,
+                    dialogUnitConverterEnabled = dialogUnitConverterEnabled,
+                    onSubmit = { s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSpooned, k180, k90, cw90, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd ->
+                        addBodyOpen = false
+                        onAddBody(s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSpooned, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd)
+                        onSetKeyways180Apart(k180)
+                        onSetKeyways90Apart(k90)
+                        if (k90) onSetKeyways90Cw(cw90)
+                    },
+                    onCancel = { addBodyOpen = false }
+                )
+            }
+
+            if (addLinerOpen) {
+                AddLinerDialog(
+                    unit = unit,
+                    spec = spec,
+                    initialStartMm = addStartMm,
+                    initialLengthMm = addLengthMm,
+                    linerShouldersEnabled = linerShouldersEnabled,
+                    dialogUnitConverterEnabled = dialogUnitConverterEnabled,
+                    onSubmit = { s, l, od, ref, shoulders ->
+                        addLinerOpen = false
+                        onAddLiner(s, l, od, ref, shoulders)
+                    },
+                    onCancel = { addLinerOpen = false }
+                )
+            }
+
+            if (addTaperOpen) {
+                AddTaperDialog(
+                    unit = unit,
+                    spec = spec,
+                    initialStartMm = addStartMm,
+                    initialLengthMm = addLengthMm,
+                    perComponentUnitsEnabled = perComponentUnitsEnabled,
+                    dialogUnitConverterEnabled = dialogUnitConverterEnabled,
+                    onSubmit = { s, l, startDia, endDia, rate, ref, kwW, kwD, kwL, kwO, kwSpooned, k180, k90, cw90, kwUnit ->
+                        addTaperOpen = false
+                        onAddTaper(s, l, startDia, endDia, rate, ref, kwW, kwD, kwL, kwO, kwSpooned, kwUnit)
+                        onSetKeyways180Apart(k180)
+                        onSetKeyways90Apart(k90)
+                        if (k90) onSetKeyways90Cw(cw90)
+                    },
+                    onCancel = { addTaperOpen = false }
+                )
+            }
+        }
+
+        if (projectInfoOpen) {
+            // Raised from the toolbar, so it belongs to the screen rather than to either pane.
+            ProjectInfoBottomSheet(
+                customer = customer,
+                vessel = vessel,
+                jobNumber = jobNumber,
+                item = item,
+                shaftPosition = shaftPosition,
+                notes = notes,
+                onSetCustomer = onSetCustomer,
+                onSetVessel = onSetVessel,
+                onSetJobNumber = onSetJobNumber,
+                onSetItem = onSetItem,
+                onSetShaftPosition = onSetShaftPosition,
+                onSetNotes = onSetNotes,
+                onDismiss = { projectInfoOpen = false }
+            )
+        }
+
+        if (widthClass.twoPane) {
+            // Two panes: the drawing and the length it is measured against on the left, the
+            // components being edited on the right. Each pane scrolls on its own, so a long
+            // warning banner can never push the preview off the screen and the carousel can
+            // never scroll the shaft out of sight while a card is being edited.
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(inner)
+            ) {
+                HorizontalDivider()
+                Row(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                    Column(
+                        modifier = Modifier
+                            .weight(EXPANDED_PREVIEW_PANE_WEIGHT)
+                            .fillMaxHeight()
+                            .testTag(EDITOR_PANE_PREVIEW_TAG)
+                            .padding(horizontal = 16.dp)
+                            .verticalScroll(previewScroll)
+                            .padding(top = 8.dp, bottom = 16.dp)
+                            .windowInsetsPadding(
+                                WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)
+                            ),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        previewBlock(EXPANDED_PREVIEW_MAX_HEIGHT)
+                        HorizontalDivider()
+                        oalBlock()
+                        SpecWarningBanner(spec = spec)
+                    }
+
+                    VerticalDivider(modifier = Modifier.fillMaxHeight())
+
+                    Column(
+                        modifier = Modifier
+                            .weight(EXPANDED_COMPONENTS_PANE_WEIGHT)
+                            .fillMaxHeight()
+                            .testTag(EDITOR_PANE_COMPONENTS_TAG)
+                            .padding(horizontal = 16.dp)
+                            // IME padding shrinks the scroll viewport, so it stays BEFORE
+                            // verticalScroll — see the Do Nots in `ShaftScreen.md`.
+                            .imePadding()
+                            .verticalScroll(scroll)
+                            .padding(top = 8.dp, bottom = 16.dp)
+                            .windowInsetsPadding(
+                                WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)
+                            ),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        componentsBlock {}
+                    }
+                }
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(inner)
+                    .padding(start = 16.dp, end = 16.dp, top = 0.dp, bottom = 16.dp)
+            ) {
+                // Separator (matches the divider below the preview)
+                HorizontalDivider()
+                Spacer(Modifier.height(8.dp))
+
+                // Preview. A MEDIUM window is wide enough that the phone's cap would draw the
+                // shaft as a flat strip, so only the ceiling moves — ratio and floor stand.
+                previewBlock(
+                    if (widthClass == WindowWidthClass.MEDIUM) MEDIUM_PREVIEW_MAX_HEIGHT
+                    else COMPACT_PREVIEW_MAX_HEIGHT
                 )
 
-                if (chooserOpen) {
-                    val d = computeAddDefaults(spec)
+                Spacer(Modifier.height(12.dp))
+                HorizontalDivider()
+                Spacer(Modifier.height(12.dp))
 
-                    InlineAddChooserDialog(
-                        onDismiss = { chooserOpen = false },
-                        onAddBody = {
-                            chooserOpen = false
-                            addStartMm = d.startMm
-                            addLengthMm = if (overallIsManual && spec.overallLengthMm > d.startMm) {
-                                spec.overallLengthMm - d.startMm
-                            } else {
-                                sessionAddDefaults.bodyLenMm
-                            }
-                            addBodyOpen = true
-                        },
-                        onAddLiner = {
-                            chooserOpen = false
-                            addStartMm = d.startMm
-                            addLengthMm = sessionAddDefaults.linerLenMm
-                            addLinerOpen = true
-                        },
-                        onAddThread = {
-                            chooserOpen = false
-                            addThreadStartMm = d.startMm
-                            addThreadOpen = true
-                        },
-                        onAddTaper = {
-                            chooserOpen = false
-                            addStartMm = d.startMm
-                            addLengthMm = sessionAddDefaults.taperLenMm
-                            addTaperOpen = true
-                        },
-                        onAddCouplerBoltSlot = {
-                            chooserOpen = false
-                            addSlotStartMm = d.startMm
-                            addSlotOpen = true
-                        }
-                    )
-                }
-
-                if (addThreadOpen) {
-                    AddThreadDialog(
-                        unit = unit,
-                        spec = spec,
-                        overallIsManual = overallIsManual,
-                        initialStartMm = addThreadStartMm,
-                        initialLengthMm = sessionAddDefaults.threadLenMm,
-                        initialMajorDiaMm = sessionAddDefaults.threadMajorDiaMm,
-                        initialPitchMm = sessionAddDefaults.threadPitchMm,
-                        dialogUnitConverterEnabled = dialogUnitConverterEnabled,
-                        onSubmit = { startMm, lengthMm, majorDiaMm, pitchMm, excludeFromOAL, isAftEnd, metricDesignation ->
-                            addThreadOpen = false
-                            // IMPORTANT: argument order is start, length, majorDia, pitch, excludeFromOAL,
-                            // isAftEnd, metricDesignation. The dialog already converts TPI to pitch (or
-                            // reads pitch straight off a metric designation) so this call never re-derives
-                            // it. Keep this aligned with `ShaftRoute`/`ShaftViewModel.addThreadAt`.
-                            onAddThread(
-                                startMm,
-                                lengthMm,
-                                majorDiaMm,
-                                pitchMm,
-                                excludeFromOAL,
-                                isAftEnd,
-                                metricDesignation
-                            )
-                        },
-                        onCancel = { addThreadOpen = false }
-                    )
-                }
-
-                if (addSlotOpen) {
-                    AddCouplerBoltSlotDialog(
-                        unit = unit,
-                        spec = spec,
-                        initialStartMm = addSlotStartMm,
-                        initialHoleDiaMm = sessionAddDefaults.slotHoleDiaMm,
-                        initialCount = sessionAddDefaults.slotCount,
-                        initialSpacingMm = sessionAddDefaults.slotSpacingMm,
-                        initialDepthMm = sessionAddDefaults.slotDepthMm,
-                        dialogUnitConverterEnabled = dialogUnitConverterEnabled,
-                        onSubmit = { startMm, holeDiaMm, count, spacingMm, through, depthMm, ref ->
-                            addSlotOpen = false
-                            onAddCouplerBoltSlot(startMm, holeDiaMm, count, spacingMm, through, depthMm, ref)
-                        },
-                        onCancel = { addSlotOpen = false }
-                    )
-                }
-
-                if (addBodyOpen) {
-                    AddBodyDialog(
-                        unit = unit,
-                        spec = spec,
-                        initialStartMm = addStartMm,
-                        initialLengthMm = addLengthMm,
-                        perComponentUnitsEnabled = perComponentUnitsEnabled,
-                        dialogUnitConverterEnabled = dialogUnitConverterEnabled,
-                        onSubmit = { s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSpooned, k180, k90, cw90, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd ->
-                            addBodyOpen = false
-                            onAddBody(s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSpooned, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd)
-                            onSetKeyways180Apart(k180)
-                            onSetKeyways90Apart(k90)
-                            if (k90) onSetKeyways90Cw(cw90)
-                        },
-                        onCancel = { addBodyOpen = false }
-                    )
-                }
-
-                if (addLinerOpen) {
-                    AddLinerDialog(
-                        unit = unit,
-                        spec = spec,
-                        overallIsManual = overallIsManual,
-                        initialStartMm = addStartMm,
-                        initialLengthMm = addLengthMm,
-                        linerShouldersEnabled = linerShouldersEnabled,
-                        dialogUnitConverterEnabled = dialogUnitConverterEnabled,
-                        onSubmit = { s, l, od, ref, shoulders ->
-                            addLinerOpen = false
-                            onAddLiner(s, l, od, ref, shoulders)
-                        },
-                        onCancel = { addLinerOpen = false }
-                    )
-                }
-
-                if (addTaperOpen) {
-                    AddTaperDialog(
-                        unit = unit,
-                        spec = spec,
-                        overallIsManual = overallIsManual,
-                        initialStartMm = addStartMm,
-                        initialLengthMm = addLengthMm,
-                        perComponentUnitsEnabled = perComponentUnitsEnabled,
-                        dialogUnitConverterEnabled = dialogUnitConverterEnabled,
-                        onSubmit = { s, l, startDia, endDia, rate, ref, kwW, kwD, kwL, kwO, kwSpooned, k180, k90, cw90, kwUnit ->
-                            addTaperOpen = false
-                            onAddTaper(s, l, startDia, endDia, rate, ref, kwW, kwD, kwL, kwO, kwSpooned, kwUnit)
-                            onSetKeyways180Apart(k180)
-                            onSetKeyways90Apart(k90)
-                            if (k90) onSetKeyways90Cw(cw90)
-                        },
-                        onCancel = { addTaperOpen = false }
-                    )
-                }
-
-                if (projectInfoOpen) {
-                    ProjectInfoBottomSheet(
-                        customer = customer,
-                        vessel = vessel,
-                        jobNumber = jobNumber,
-                        shaftPosition = shaftPosition,
-                        notes = notes,
-                        onSetCustomer = onSetCustomer,
-                        onSetVessel = onSetVessel,
-                        onSetJobNumber = onSetJobNumber,
-                        onSetShaftPosition = onSetShaftPosition,
-                        onSetNotes = onSetNotes,
-                        onDismiss = { projectInfoOpen = false }
-                    )
+                // Scrollable editor content
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .imePadding()
+                        .verticalScroll(scroll)
+                        .windowInsetsPadding(
+                            WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)
+                        ),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    oalBlock()
+                    componentsBlock { SpecWarningBanner(spec = spec) }
                 }
             }
         }
     }
     }
 }
+
+/** The preview card's height ceiling on a phone — the historical cap. */
+private val COMPACT_PREVIEW_MAX_HEIGHT = 200.dp
+
+/** The preview card's height ceiling in a MEDIUM window (portrait tablet, phone landscape). */
+private val MEDIUM_PREVIEW_MAX_HEIGHT = 280.dp
+
+/** The preview card's height ceiling inside the two-pane left column. */
+private val EXPANDED_PREVIEW_MAX_HEIGHT = 320.dp
+
+// The drawing is the reference being read while the cards on the right are edited, so it
+// takes the larger share; the carousel cards are a phone-width design and need no more than
+// the remainder at any tablet size.
+private const val EXPANDED_PREVIEW_PANE_WEIGHT = 0.55f
+private const val EXPANDED_COMPONENTS_PANE_WEIGHT = 0.45f
+
+/** Two-pane left column — preview, overall length, warnings. */
+internal const val EDITOR_PANE_PREVIEW_TAG = "editor_pane_preview"
+
+/** Two-pane right column — the Components heading, the add button, and the carousel. */
+internal const val EDITOR_PANE_COMPONENTS_TAG = "editor_pane_components"
 
 @Composable
 private fun HistoryMenu(
@@ -951,6 +989,7 @@ private fun HistoryMenu(
 @Composable
 private fun OverflowMenu(
     onSaveAs: () -> Unit,
+    onDuplicateForMate: () -> Unit,
     onCloseDocument: () -> Unit,
     onOpenSettings: () -> Unit,
     onSendFeedback: () -> Unit,
@@ -978,6 +1017,15 @@ private fun OverflowMenu(
                 onClick = {
                     expanded = false
                     onSaveAs()
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("Duplicate for mate…") },
+                leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
+                modifier = Modifier.testTag("overflow_duplicate_for_mate"),
+                onClick = {
+                    expanded = false
+                    onDuplicateForMate()
                 }
             )
             DropdownMenuItem(
@@ -1023,7 +1071,7 @@ private fun OverflowMenu(
 }
 
 @Composable
-private fun ShaftPositionDropdown(
+internal fun ShaftPositionDropdown(
     selected: ShaftPosition,
     onSelected: (ShaftPosition) -> Unit,
     modifier: Modifier = Modifier
@@ -1077,11 +1125,13 @@ internal fun ProjectInfoBottomSheet(
     customer: String,
     vessel: String,
     jobNumber: String,
+    item: String,
     shaftPosition: ShaftPosition,
     notes: String,
     onSetCustomer: (String) -> Unit,
     onSetVessel: (String) -> Unit,
     onSetJobNumber: (String) -> Unit,
+    onSetItem: (String) -> Unit,
     onSetShaftPosition: (ShaftPosition) -> Unit,
     onSetNotes: (String) -> Unit,
     onDismiss: () -> Unit,
@@ -1092,6 +1142,7 @@ internal fun ProjectInfoBottomSheet(
     var draftJobNumber by rememberSaveable { mutableStateOf(jobNumber) }
     var draftCustomer by rememberSaveable { mutableStateOf(customer) }
     var draftVessel by rememberSaveable { mutableStateOf(vessel) }
+    var draftItem by rememberSaveable { mutableStateOf(item) }
     var draftPosition by rememberSaveable { mutableStateOf(shaftPosition) }
     var draftNotes by rememberSaveable { mutableStateOf(notes) }
 
@@ -1100,6 +1151,7 @@ internal fun ProjectInfoBottomSheet(
     val dirty = draftJobNumber != jobNumber ||
         draftCustomer != customer ||
         draftVessel != vessel ||
+        draftItem != item ||
         draftPosition != shaftPosition ||
         draftNotes != notes
     // The sheet state is created once, so its gate must read the LIVE dirty flag rather
@@ -1129,6 +1181,7 @@ internal fun ProjectInfoBottomSheet(
         if (draftJobNumber != jobNumber) onSetJobNumber(draftJobNumber)
         if (draftCustomer != customer) onSetCustomer(draftCustomer)
         if (draftVessel != vessel) onSetVessel(draftVessel)
+        if (draftItem != item) onSetItem(draftItem)
         if (draftPosition != shaftPosition) onSetShaftPosition(draftPosition)
         if (draftNotes != notes) onSetNotes(draftNotes)
         onDismiss()
@@ -1173,6 +1226,13 @@ internal fun ProjectInfoBottomSheet(
                 value = draftVessel,
                 onValueChange = { draftVessel = it },
                 modifier = Modifier.fillMaxWidth().testTag("project_info_vessel")
+            )
+            // Optional shaft designation ("Tail shaft", "Line shaft"); blank prints nothing.
+            DraftTextField(
+                label = "Item (optional)",
+                value = draftItem,
+                onValueChange = { draftItem = it },
+                modifier = Modifier.fillMaxWidth().testTag("project_info_item")
             )
             ShaftPositionDropdown(
                 selected = draftPosition,
@@ -1305,6 +1365,117 @@ internal fun formatDisplay(valueMm: Float, unit: UnitSystem, d: Int = 3): String
 internal fun disp(mm: Float, unit: UnitSystem, d: Int = 3): String =
     formatDisplay(mm, unit, d)
 
+
+/**
+ * The shaft's Overall Length entry field.
+ *
+ * Three behaviours it owns, each deliberate:
+ *  • **Per-keystroke commit.** Every parseable keystroke reaches [onSetOverallLengthMm] so the
+ *    preview grows as the user types — the documented exception to the commit-on-blur rule
+ *    (`docs/contracts/ShaftScreen.md`).
+ *  • **An empty field commits nothing.** Blur or IME Done on empty text restores the stored
+ *    length instead of zeroing the shaft, so clearing the field to retype cannot wipe the OAL.
+ *  • **Oversize is an error STYLE, not a rejection.** A component past the authored length is a
+ *    legal, advisory state; the field is only tinted. A not-yet-typed length (0) is not
+ *    oversize — the renderer draws to the coverage end until a length is authored.
+ *
+ * The text echoes what the user typed ("150 3/4" stays a fraction) and only re-derives from the
+ * model while unfocused and no longer explaining the stored value — an undo, an edit from
+ * elsewhere, or a reverted empty commit.
+ */
+@Composable
+internal fun OverallLengthField(
+    spec: ShaftSpec,
+    unit: UnitSystem,
+    onSetOverallLengthMm: (Float) -> Unit,
+    onSetOverallLengthRaw: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var hasLenFocus by remember { mutableStateOf(false) }
+    var lenTextOnFocus by remember { mutableStateOf<String?>(null) }
+
+    val displayMm = spec.overallLengthMm
+    var lengthText by remember(unit) {
+        mutableStateOf(formatDisplay(displayMm, unit))
+    }
+    LaunchedEffect(displayMm, unit, hasLenFocus) {
+        if (!hasLenFocus) {
+            val parsed = toMmOrNull(lengthText, unit)
+            if (parsed == null || kotlin.math.abs(parsed - displayMm) > 0.01f) {
+                lengthText = formatDisplay(displayMm, unit)
+            }
+        }
+    }
+
+    val isOversized = spec.overallLengthMm > 0f &&
+        spec.overallLengthMm < lastOccupiedEndMm(spec)
+
+    OutlinedTextField(
+        value = lengthText,
+        onValueChange = { input ->
+            lengthText = input
+            toMmOrNull(input, unit)?.let { mm ->
+                onSetOverallLengthMm(mm)
+            }
+        },
+        label = { Text("Overall Length (${abbr(unit)})") },
+        singleLine = true,
+        enabled = true,
+        isError = isOversized,
+        keyboardOptions = KeyboardOptions(
+            keyboardType = KeyboardType.Decimal,
+            imeAction = ImeAction.Done
+        ),
+        keyboardActions = KeyboardActions(onDone = {
+            val t = lengthText.trim()
+            if (t.isEmpty()) {
+                lengthText = formatDisplay(spec.overallLengthMm, unit)
+            } else {
+                toMmOrNull(t, unit)?.let { mm ->
+                    onSetOverallLengthMm(mm)
+                    onSetOverallLengthRaw(t) // keep user’s display text
+                }
+            }
+        }),
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag(OAL_FIELD_TAG)
+            .onFocusChanged { f ->
+                val wasFocused = hasLenFocus
+                hasLenFocus = f.isFocused
+
+                if (!wasFocused && f.isFocused) {
+                    // Baseline for the commit-on-change rule.
+                    lenTextOnFocus = lengthText
+                    // A not-yet-set length reads "0"; clear it so the user can
+                    // type without a leading zero. Leaving without typing reverts.
+                    if (lengthText.trim() == "0") lengthText = ""
+                }
+
+                if (wasFocused && !f.isFocused) {
+                    val baseline = lenTextOnFocus
+                    lenTextOnFocus = null
+                    val t = lengthText.trim()
+
+                    // Commit only what changed since focus (BlurCommitPolicy).
+                    if (baseline != null && lengthText == baseline) {
+                        return@onFocusChanged
+                    }
+
+                    if (t.isEmpty()) {
+                        lengthText = formatDisplay(spec.overallLengthMm, unit)
+                    } else {
+                        toMmOrNull(t, unit)?.let { mm ->
+                            onSetOverallLengthMm(mm)
+                            onSetOverallLengthRaw(t)
+                        }
+                    }
+                }
+            }
+    )
+}
+
+internal const val OAL_FIELD_TAG = "overall_length_field"
 
 private const val OAL_EPS_MM: Double = 1e-3
 

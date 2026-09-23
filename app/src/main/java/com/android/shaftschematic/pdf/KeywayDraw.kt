@@ -263,18 +263,18 @@ private fun drawKeywaySlotPdf(
         minWidthPx = MIN_KEYWAY_WIDTH_PT,
         strokeWidthPx = outline.strokeWidth,
     )
-    // Vertical stretch that turns each circular construction into its ellipse. `drawArc` sweeps a
-    // parametric angle, so every angle the bowl math derives survives it untouched.
-    val yScale      = if (halfW > 0f) halfH / halfW else 1f
     val isOpen      = offsetMm < 0.01f
     val kwSetX      = refX + dir * offsetMm * axialPtPerMm
     val kwLetX      = kwSetX + dir * maxOf(lengthMm * axialPtPerMm, minKeywaySlotLenPx(halfW, isOpen))
 
     // Spooned (open keyways only): keep the normal keyway (full-length walls + mill semicircle) and
-    // ADD an enlarged circle around the closed (LET) end — the mill end stays as an inner reference
-    // line inside the bowl. Floating keyways ignore the flag. Mirrors the canvas renderer.
-    val bowl        = if (spooned && isOpen && halfW > 0f) keywaySpoonBowl(kwLetX, dir, halfW) else null
-    val bowlRy      = bowl?.radius?.times(yScale) ?: 0f
+    // ADD an enlarged bowl around the closed (LET) end — the mill end stays as an inner reference
+    // line inside the bowl. The bowl's y-semi comes from the math itself (uniform drawn
+    // clearance), never from stretching its x-radius by the sheet's scale ratio — that drew a
+    // tall bowl on every compressed sheet (on-device report). Floating keyways ignore the flag.
+    // Mirrors the canvas renderer.
+    val bowl        = if (spooned && isOpen && halfW > 0f) keywaySpoonBowl(kwLetX, dir, halfW, halfH) else null
+    val bowlRy      = bowl?.ry ?: 0f
 
     val letArcCx    = kwLetX - dir * halfW
     val letArcStart = if (dir > 0) 270f else 90f

@@ -24,9 +24,10 @@ import com.android.shaftschematic.util.UnitSystem
  *
  * Included, deliberately: [preferredUnit] and [unitLocked] describe how the geometry was authored,
  * not whose job it is, and [unitOverrides] the same way — which features are metric is a fact about
- * the shaft. Excluded, deliberately: job number, customer, vessel, shaft position, notes, the
- * per-job `RunoutConfig` sheet tuning, the dual-display flag, and every measurement record (wear,
- * runout readings, station placements, undercuts).
+ * the shaft. Excluded, deliberately: job number, customer, vessel, item, shaft position, notes,
+ * the per-job `RunoutConfig` sheet tuning, the dual-display flag, every measurement record (wear,
+ * runout readings, station placements, undercuts), and the final drawing (`finalSpec` — what one
+ * shaft left as, where a template is the pre-job shape).
  *
  * `station_interval_version` is not passed: [ShaftDocCodec.encodeV1] stamps it on every write.
  */

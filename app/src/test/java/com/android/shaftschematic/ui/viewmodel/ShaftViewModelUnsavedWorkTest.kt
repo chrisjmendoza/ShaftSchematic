@@ -20,9 +20,9 @@ import org.junit.Test
  * runout readings — count as unsaved work. Comparing only spec + metadata would leave those
  * edits unguarded.
  *
- * `ShaftViewModel` is an `AndroidViewModel` and is not instantiated in this JVM suite (same
- * convention as `ShaftViewModelWearSpotTest`); this mirrors `hasUnsavedWork()`'s exact body
- * and exercises the real [shouldWriteDraft] predicate + real snapshots.
+ * This class mirrors `hasUnsavedWork()`'s exact body so it can drive the real [shouldWriteDraft]
+ * predicate over real snapshots — the predicate and the snapshot comparison are what it is
+ * about, not the ViewModel plumbing around them.
  */
 class ShaftViewModelUnsavedWorkTest {
 

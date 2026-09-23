@@ -12,35 +12,51 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.HelpOutline
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.android.shaftschematic.ui.adaptive.readableWidth
 
 /**
- * HelpRoute — in-app how-to guides and FAQ (Settings → Help & FAQ).
+ * HelpRoute — in-app glossary, how-to guides, and FAQ. Reached from the editor sidebar's
+ * tools group, the Start screen, the Settings list, and the "?" button on each of the
+ * Runout, Wear, Undercut and Consolidated Output tabs: reference content is looked for
+ * mid-job, so it keeps a top-level entry rather than living only behind Settings.
  *
  * Purpose
  * Static reference content only: no ViewModel, no state beyond which cards are expanded.
  * Topics describe CURRENT app behavior — when a behavior changes, the topic must change in
  * the same PR (same posture as the contract docs; this screen is the user-facing summary
  * of them).
+ *
+ * The "Glossary" section sits second, right after Getting Started, so a term can be looked
+ * up without reading past the guides; its entries define shop and app vocabulary in the
+ * wording the controls themselves use.
  *
  * The "Settings Reference" section carries that obligation control by control: every
  * user-visible control on every Settings page (main, Preview Colors, PDF Export) has an
@@ -49,10 +65,30 @@ import androidx.compose.ui.unit.dp
  * change. Per-job controls that live on a document rather than in Settings (Shaft height,
  * liner compression, blank draft, cut-depth exaggeration) are covered by the last topic in
  * that section, so a reader who goes looking in Settings for them is told where they are.
+ *
+ * Search and deep links
+ * The search field is pinned above the list, so a query is always reachable however far the
+ * reader has scrolled. While a query is active its hits render EXPANDED — a hit that still
+ * needs a tap to read is the failing state — but the query never WRITES a card's saved
+ * expansion, so clearing it returns every card to the state the reader left it in.
+ * [initialTopicKey] is the `topic` query argument of the `help` route: the document tabs'
+ * "?" buttons open this screen on their own how-to topic, expanded and scrolled to. An
+ * unknown key is ignored rather than guessed at.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HelpRoute(onBack: () -> Unit) {
+fun HelpRoute(onBack: () -> Unit, initialTopicKey: String? = null) {
+    var query by rememberSaveable { mutableStateOf("") }
+    val searching = query.isNotBlank()
+    val shown = remember(query) { filterHelpSections(helpSections, query) }
+    val listState = rememberLazyListState()
+
+    // The deep link is honoured once per key, against the UNFILTERED list — the screen opens
+    // with an empty query, so the two indices agree.
+    LaunchedEffect(initialTopicKey) {
+        helpTopicItemIndex(helpSections, initialTopicKey)?.let { listState.scrollToItem(it) }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -65,26 +101,94 @@ fun HelpRoute(onBack: () -> Unit) {
             )
         }
     ) { pad ->
-        LazyColumn(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(pad),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+                .padding(pad)
+                // Search field and list share the one readable column, so both stop at the
+                // same width on a tablet and the field never runs wider than the cards.
+                .readableWidth(),
         ) {
-            helpSections.forEach { section ->
-                item(key = "header_${section.title}") {
-                    Text(
-                        section.title,
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
-                    )
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                singleLine = true,
+                label = { Text("Search help") },
+                placeholder = { Text("Search help") },
+                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                trailingIcon = {
+                    if (query.isNotEmpty()) {
+                        IconButton(onClick = { query = "" }) {
+                            Icon(Icons.Filled.Close, contentDescription = "Clear search")
+                        }
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .testTag(HELP_SEARCH_TAG),
+            )
+
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (shown.isEmpty()) {
+                    item(key = "no_matches") {
+                        Text(
+                            "No topics match \"${query.trim()}\".",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
-                items(section.topics, key = { it.title }) { topic ->
-                    HelpTopicCard(topic)
+                shown.forEach { section ->
+                    item(key = "header_${section.title}") {
+                        Text(
+                            section.title,
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+                        )
+                    }
+                    items(section.topics, key = { it.key }) { topic ->
+                        HelpTopicCard(
+                            topic = topic,
+                            searching = searching,
+                            openOnFirstShow = topic.key == initialTopicKey,
+                        )
+                    }
                 }
             }
         }
+    }
+}
+
+/** Test tag for the search field pinned above the topic list. */
+const val HELP_SEARCH_TAG = "help_search"
+
+/** Test tag for a document tab's "?" button, stable across every hosting tab. */
+const val TAB_HELP_TAG = "tab_help"
+
+/**
+ * The "?" a document tab carries at the trailing edge of its toolbar, opening Help on
+ * [topicKey] — that tab's own how-to guide.
+ *
+ * It sits in the toolbar rather than with the output actions so it never displaces the
+ * Print-primary button, and one construction serves all four tabs so the icon and its
+ * description cannot drift between them.
+ */
+@Composable
+internal fun TabHelpButton(topicKey: String, onOpenHelpTopic: (String) -> Unit) {
+    IconButton(
+        onClick = { onOpenHelpTopic(topicKey) },
+        modifier = Modifier.testTag(TAB_HELP_TAG),
+    ) {
+        Icon(
+            Icons.AutoMirrored.Outlined.HelpOutline,
+            contentDescription = "Help for this tab",
+        )
     }
 }
 
@@ -92,18 +196,35 @@ fun HelpRoute(onBack: () -> Unit) {
  * One expandable card. [illustration] is an optional figure drawn under the body text —
  * see `HelpIllustrations.kt`. Figures elaborate; the body text must explain the topic on
  * its own, since a figure is skipped by a screen reader beyond its caption.
+ *
+ * [key] is the slug every reference to this topic uses — list item key, saved-expansion key,
+ * and the `help` route's `topic` argument. It is derived from [title] rather than authored,
+ * so the two can never disagree.
  */
-private data class HelpTopic(
+internal data class HelpTopic(
     val title: String,
     val body: String,
     val illustration: (@Composable () -> Unit)? = null,
-)
+) {
+    val key: String = helpTopicKey(title)
+}
 
-private data class HelpSection(val title: String, val topics: List<HelpTopic>)
+internal data class HelpSection(val title: String, val topics: List<HelpTopic>)
 
+/**
+ * @param searching       a query is active: the body shows without touching the saved
+ *                        expansion, so clearing the query restores the card's own state.
+ * @param openOnFirstShow this card is the deep link's target — it SEEDS the saved expansion
+ *                        rather than forcing it, so the reader can still collapse it.
+ */
 @Composable
-private fun HelpTopicCard(topic: HelpTopic) {
-    var expanded by rememberSaveable(topic.title) { mutableStateOf(false) }
+private fun HelpTopicCard(
+    topic: HelpTopic,
+    searching: Boolean = false,
+    openOnFirstShow: Boolean = false,
+) {
+    var expanded by rememberSaveable(topic.key) { mutableStateOf(openOnFirstShow) }
+    val showBody = expanded || searching
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -126,11 +247,11 @@ private fun HelpTopicCard(topic: HelpTopic) {
                     modifier = Modifier.weight(1f),
                 )
                 Icon(
-                    if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                    contentDescription = if (expanded) "Collapse" else "Expand",
+                    if (showBody) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                    contentDescription = if (showBody) "Collapse" else "Expand",
                 )
             }
-            if (expanded) {
+            if (showBody) {
                 Text(
                     topic.body,
                     style = MaterialTheme.typography.bodyMedium,
@@ -147,14 +268,14 @@ private fun HelpTopicCard(topic: HelpTopic) {
 // Content
 // ─────────────────────────────────────────────────────────────────────────────
 
-private val helpSections: List<HelpSection> = listOf(
+internal val helpSections: List<HelpSection> = listOf(
     HelpSection(
         "Getting Started",
         listOf(
             HelpTopic(
                 "Create your first shaft",
-                "From the home screen tap New. Set the overall length (OAL) or leave it in " +
-                    "auto mode and let it follow the components you add. Add tapers, threads, " +
+                "From the home screen tap New. Type the overall length (OAL) — the preview " +
+                    "follows it as you type. Add tapers, threads, " +
                     "liners, and bodies with the add buttons; each component becomes a card in " +
                     "the carousel where you edit its dimensions. Any span you don't cover is " +
                     "filled automatically with bare shaft (an \"auto-body\"), so the drawing " +
@@ -184,6 +305,126 @@ private val helpSections: List<HelpSection> = listOf(
                     "character at a time. History covers the shaft itself — components, " +
                     "lengths, keyways — and lasts for the editing session; it is not saved " +
                     "with the file and starts fresh when you open a document."
+            ),
+        )
+    ),
+    HelpSection(
+        "Glossary",
+        listOf(
+            HelpTopic(
+                "AFT / FWD",
+                "The two ends of the shaft. AFT is always the left end of the drawing, FWD the " +
+                    "right. \"Measure From\" chips on a component pick which end its distance is " +
+                    "quoted from — the same component, described from either side.",
+                illustration = { AftFwdFigure() },
+            ),
+            HelpTopic(
+                "Blank draft",
+                "The write-in mode: the drawing prints with its dimension lines but the values " +
+                    "left empty, so measurements can be filled in by hand on the job. It is a " +
+                    "per-sheet choice that resets each session, and it never changes the data."
+            ),
+            HelpTopic(
+                "Body S-break",
+                "The pair of curved breaks drawn through a body run, the drafting symbol for " +
+                    "\"length removed here\". It appears when a run had to be shortened on paper " +
+                    "so the whole shaft fits at a readable height; Settings → Drawing → \"Body " +
+                    "S-break\" sets how much squeeze earns it. Dimension values always print the " +
+                    "true lengths.",
+                illustration = { SBreakFigure() },
+            ),
+            HelpTopic(
+                "Coupling face",
+                "The end view shops hand-sketch on a runout sheet, taken looking forward: the " +
+                    "coupling OD, the pilot bore with its keyseat, and the bolt circle with its " +
+                    "holes. Elect it onto the runout and consolidated sheets from their options; " +
+                    "the pilot runout is recorded inside the bore like any other reading."
+            ),
+            HelpTopic(
+                "Dual units",
+                "Prints every dimension in both units — the primary value with the converted one " +
+                    "beside it or stacked under it (Settings → Drawing → \"Dual-unit layout\"). " +
+                    "Both terms always carry their unit, and the converted one is a courtesy " +
+                    "reading, never a second measurement."
+            ),
+            HelpTopic(
+                "Final Schematic",
+                "The drawing the shaft leaves with — a second schematic of the same job, " +
+                    "started as a copy of the original and then adjusted: a liner moved, " +
+                    "lengthened, or shortened once the wear and undercut work is known. " +
+                    "Editing it never changes the original, so the two read as the before and " +
+                    "the after. It prints its own schematic — with runout bubbles if you " +
+                    "elect them on its PDF options sheet — and a blank runout sheet to take " +
+                    "the finished shaft's readings on, all marked Final; every other " +
+                    "document keeps drawing the original."
+            ),
+            HelpTopic(
+                "L.E.T. / S.E.T.",
+                "Large End of Taper and Small End of Taper — the two ends of a taper, by " +
+                    "diameter rather than by which way they face. Both diameters print in the " +
+                    "footer for each taper, and the S.E.T. datums are what undercut and worn " +
+                    "section distances can be quoted from."
+            ),
+            HelpTopic(
+                "Liner & taper compression",
+                "The per-job pair beside the Shaft height slider that asks for liners and " +
+                    "tapers at true length: check \"Keep liners and tapers proportional " +
+                    "lengthwise\", or set with the slider how far they may shorten. Both kinds " +
+                    "move together, so the measured components stay in proportion with each " +
+                    "other; tapers never shorten past 70% of true length whatever the slider " +
+                    "says. The page keeps as much true length as fits; the request never " +
+                    "changes the drawn shaft height."
+            ),
+            HelpTopic(
+                "Measurement reference",
+                "Which end printed dimensions measure from — \"Auto (closest end)\" (the " +
+                    "default, anchoring each dimension to whichever end is nearer), \"AFT (force " +
+                    "AFT SET)\", or \"FWD (force FWD SET)\". Same name in Settings → PDF Export " +
+                    "Options and on the schematic and consolidated PDF Options sheets."
+            ),
+            HelpTopic(
+                "OAL (overall length)",
+                "The shaft's overall length, end to end, and the span every drawing is laid out " +
+                    "against. Any part of it you don't cover with a component is filled with " +
+                    "bare shaft (an auto-body), so the drawing is always continuous."
+            ),
+            HelpTopic(
+                "Runout station / bubble",
+                "A station is one dial-indicator position on a component; its bubble is the " +
+                    "numbered circle drawn under the shaft where the reading is written. " +
+                    "Stations are per component, not per drawn run, so a body split by liners " +
+                    "still numbers straight through AFT to FWD."
+            ),
+            HelpTopic(
+                "Shade in Components",
+                "The PDF option group that fills bodies, tapers, or liners with light grey " +
+                    "instead of leaving them outlined. It is the default for each kind; a " +
+                    "component card's \"Shade on drawing\" toggle overrides it for that one " +
+                    "component, in either direction."
+            ),
+            HelpTopic(
+                "Shaft height",
+                "The per-job slider that sets how tall the shaft draws on paper, in inches, " +
+                    "from $HEIGHT_FLOOR_LABEL_IN to $HEIGHT_CAP_LABEL_IN — shrink a long shaft to uncramp the sheet, " +
+                    "or grow it for room to write in. It is a drawing size only: no diameter, " +
+                    "length, or printed value changes with it, and \"Standard (…)\" returns to " +
+                    "the size the Default drawing size setting picks."
+            ),
+            HelpTopic(
+                "TIR (total indicator reading)",
+                "The full sweep an indicator shows at one station — the difference between its " +
+                    "high and low readings as the shaft is turned. It is typed into that " +
+                    "station's bubble, with the high spot marked as a clock position; the sheet " +
+                    "prints which way the indicator was read (\"TIR's taken looking AFT / " +
+                    "FORWARD\")."
+            ),
+            HelpTopic(
+                "Trace depth exaggeration",
+                "Wear measured on a liner dips the drawn surface line through the measured " +
+                    "diameters. Real wear is far too shallow to see at drawing scale, so the dip " +
+                    "is drawn deeper than true (never shallower) — set the amount per job on the " +
+                    "Wear sheet, or its default in Settings → Drawing. The printed Ø values are " +
+                    "always the measured numbers you typed."
             ),
         )
     ),
@@ -258,7 +499,7 @@ private val helpSections: List<HelpSection> = listOf(
                     "bottom, so the shop knows how to read the high-spot arrows.\n\n" +
                     "The preview stays put at the top of the tab while you scroll, so you can " +
                     "watch the bubbles move as you change a component's station count. The " +
-                    "orientation setting and the Preview / Print / Export buttons sit directly " +
+                    "orientation setting and the Print / Preview / Export buttons sit directly " +
                     "under it; the station editor is at the bottom, since it is only needed " +
                     "when the sheet needs adjusting."
             ),
@@ -277,7 +518,9 @@ private val helpSections: List<HelpSection> = listOf(
                     "directly from its own tab. The preview shows the actual page. Template " +
                     "mode prints the shaft only (no dimensions); Blank draft prints the " +
                     "drawing with empty write-in value slots. PDF styling options (shading, " +
-                    "tiering, titles) live in Settings → PDF Export Options."
+                    "tiering, titles) live in Settings → PDF Export Options. The Final " +
+                    "Schematic tab prints the same two ways from the shaft's finished " +
+                    "geometry, and its sheets are marked Final."
             ),
             HelpTopic(
                 "Consolidated output and Export all",
@@ -292,11 +535,13 @@ private val helpSections: List<HelpSection> = listOf(
                     "button restores the default size. That default follows a sizing curve " +
                     "you can adjust in Settings → Drawing → Default drawing size: set " +
                     "what a 4 in and an 8 in shaft draw, and sizes in between follow. " +
-                    "Liner compression (next to the height slider) keeps the measured " +
-                    "components readable: check \"Keep liners proportional lengthwise\" to " +
-                    "ask for liners at true scale, or set how far they may shorten with " +
-                    "the slider. The page balances the request — liners keep as much true " +
-                    "length as fits, and the runs between them always keep their relative " +
+                    "Liner & taper compression (next to the height slider) keeps the " +
+                    "measured components readable: check \"Keep liners and tapers " +
+                    "proportional lengthwise\" to ask for them at true scale, or set how " +
+                    "far they may shorten with the slider. Liners and tapers move " +
+                    "together, so they stay in proportion with each other. The page " +
+                    "balances the request — they keep as much true length as fits, and " +
+                    "the runs between them always keep their relative " +
                     "lengths readable. Settings → Drawing → Body S-break sets how far a " +
                     "body run may be shortened before it prints the S-break symbol — set " +
                     "it to Never to hide compression entirely, or higher to mark it sooner."
@@ -377,6 +622,25 @@ private val helpSections: List<HelpSection> = listOf(
                     "• Dimension values always print true lengths, whatever the drawing does."
             ),
             HelpTopic(
+                "Drawing — Output font",
+                "Settings → Drawing. The typeface every exported PDF is set in — dimension " +
+                    "values, callouts, component names and the footer alike.\n\n" +
+                    "• \"Standard\" — the default, and the historical look: the device's " +
+                    "regular sans.\n" +
+                    "• \"Condensed\" — a narrower sans. Values take less room, so more of them " +
+                    "seat inside the dimension line instead of above it.\n" +
+                    "• \"Serif\" — for shops whose paperwork is set that way.\n" +
+                    "• \"Monospace\" — fixed pitch, so digits line up in a column.\n\n" +
+                    "App-wide like the other Drawing settings: one choice serves every " +
+                    "document, and a saved Drawing profile captures it along with the rest of " +
+                    "the look. \"Restore Drawing defaults\" puts it back to Standard.\n" +
+                    "Nothing on a sheet collides or shifts when you change it — fractions, " +
+                    "dual-unit stacks and every rail break are measured from the face as it " +
+                    "will actually print, not from a fixed width. A device that does not carry " +
+                    "one of these families simply prints in Standard.\n" +
+                    "App screens are unaffected; this styles the paper only."
+            ),
+            HelpTopic(
                 "Editor Screen",
                 "Presentation of the editor and its preview.\n\n" +
                     "• \"Line Thickness\" — default 100%. Slider from 50% to 200%, a typed % " +
@@ -419,7 +683,9 @@ private val helpSections: List<HelpSection> = listOf(
                     "• \"Shade color\" — Grey (default), Bronze, or Blue.\n" +
                     "• \"Shade intensity\" — Light, Standard (default), or Dark. The undercut " +
                     "section's core always shades one step lighter than the liner, at every " +
-                    "intensity."
+                    "intensity.\n\n" +
+                    "The printed sheet has its own separate line-art setting in Settings → PDF " +
+                    "Export; turning line art on here changes the screen only."
             ),
             HelpTopic(
                 "PDF Export — printing and shading",
@@ -427,15 +693,26 @@ private val helpSections: List<HelpSection> = listOf(
                     "print.\n\n" +
                     "• \"Open PDF after export\" — default off. Hands the finished file to your " +
                     "PDF viewer as soon as it is written.\n" +
-                    "• \"Show component titles in PDF\" — default on. Prints the component " +
-                    "names above the drawing.\n" +
-                    "• \"Shade in PDF\": \"Bodies\", \"Tapers\", \"Liners\" — all off by " +
+                    "• \"Show component titles in PDF\" — default on. The DEFAULT for " +
+                    "component names on the schematic: components you haven't decided about " +
+                    "follow it. Each card's \"Show name on drawing\" toggle overrides it for " +
+                    "that one component, in either direction — a name switched on there " +
+                    "prints even with this off, and one switched off stays hidden even with " +
+                    "this on.\n" +
+                    "• \"Shade in Components\": \"Bodies\", \"Tapers\", \"Liners\" — all off by " +
                     "default. Fills those sections with light grey instead of leaving them " +
-                    "outlined. The same three checkboxes appear in each document's PDF Options " +
-                    "sheet. On a consolidated sheet that prints Ø values inside the profile, " +
+                    "outlined. \"Explicit bodies only\", under \"Bodies\", narrows the fill to " +
+                    "sections you added: auto (bare-shaft) runs stay unshaded. The same group " +
+                    "appears in each document's PDF Options sheet, folded behind its heading. " +
+                    "On a consolidated sheet that prints Ø values inside the profile, " +
                     "that sheet shows its Liners box unchecked and greyed — the values sit on " +
                     "white halos a fill would fight — and your setting comes straight back on " +
-                    "every other document."
+                    "every other document.\n" +
+                    "• \"Undercut drawing: line art (no shading)\" — default off. The printed " +
+                    "undercut sheet drops every fill, including the detail strips' grey liner, " +
+                    "and the cut sections read from their faces and floor lines. It changes " +
+                    "that one document, and it is separate from the on-screen Undercut Drawing " +
+                    "line-art style in Preview Colors."
             ),
             HelpTopic(
                 "PDF Export — Template mode and dimension reference",
@@ -443,11 +720,11 @@ private val helpSections: List<HelpSection> = listOf(
                     "dimensions, for marking up by hand. (Blank draft, the other write-in " +
                     "mode, keeps the dimension lines and empties the values; it lives on each " +
                     "document's preview, not here.)\n" +
-                    "• \"Dimension tiering reference\" — \"Auto (closest end)\" (default), " +
+                    "• \"Measurement reference\" — \"Auto (closest end)\" (default), " +
                     "\"AFT (force AFT SET)\", or \"FWD (force FWD SET)\". Picks which end " +
                     "printed dimensions measure from. Auto anchors each dimension to whichever " +
-                    "end is closer. The same choice appears as \"Measurement reference\" in the " +
-                    "schematic's PDF Options sheet."
+                    "end is closer. The same choice appears under that name in the schematic " +
+                    "and consolidated PDF Options sheets."
             ),
             HelpTopic(
                 "Achievements",
@@ -467,7 +744,11 @@ private val helpSections: List<HelpSection> = listOf(
             ),
             HelpTopic(
                 "Help, About, and Developer Options",
-                "• \"Help & FAQ\" — this screen.\n" +
+                "• \"Help & FAQ\" — this screen. Search at the top narrows it to the topics " +
+                    "whose title or text contain what you type, and every match opens as you " +
+                    "search; clearing the box puts the list back as it was. The Runout, Wear, " +
+                    "Undercut, and Consolidated Output tabs each carry a \"?\" button that " +
+                    "opens this screen straight at that tab's guide.\n" +
                     "• \"About ShaftSchematic\" — app version and build, plus the note that all " +
                     "geometry is stored in millimeters. Tapping App Version seven times there " +
                     "unlocks Developer Options.\n" +
@@ -481,29 +762,36 @@ private val helpSections: List<HelpSection> = listOf(
                 "Drawing controls that live on the document",
                 "These are saved with the job rather than in Settings, so a reopened document " +
                     "prints exactly as it did.\n\n" +
-                    "• \"Shaft height\" — on the Consolidated Output tab and in the " +
-                    "schematic's PDF Options sheet. Sets the drawn shaft height on paper by " +
-                    "value in inches, anywhere from $HEIGHT_FLOOR_LABEL_IN to $HEIGHT_CAP_LABEL_IN — shrink " +
+                    "• \"Shaft height\" — on the Consolidated Output tab and in the schematic, " +
+                    "runout, and wear PDF Options sheets. Sets the drawn shaft height on paper " +
+                    "by value in inches, anywhere from $HEIGHT_FLOOR_LABEL_IN to $HEIGHT_CAP_LABEL_IN — shrink " +
                     "a long shaft to uncramp the sheet, or grow it for room to write in; " +
                     "\"Standard (…)\" returns to the " +
                     "size the Default drawing size setting picks. One value behind the " +
-                    "schematic, runout, and consolidated sheets.\n" +
-                    "• \"Keep liners proportional lengthwise\" and \"Liner compression\" — same " +
-                    "two places. Ask for liners at true length, or set how far they may " +
-                    "shorten when the page needs the room; the line underneath reports how " +
-                    "much true length the page can actually afford. Neither ever changes the " +
-                    "drawn shaft height.\n" +
-                    "• \"Blank draft (write-in)\" — on each document's preview and on the " +
-                    "Output tab. Prints the drawing with values blanked for handwriting. Not " +
-                    "saved; it resets each session.\n" +
+                    "schematic, runout, consolidated, and wear sheets.\n" +
+                    "• \"Keep liners and tapers proportional lengthwise\" and \"Liner & taper " +
+                    "compression\" — same two places. Ask for liners and tapers at true " +
+                    "length, or set how far they may shorten when the page needs the room; " +
+                    "both kinds move together, and the line underneath reports how much true " +
+                    "length the page can actually afford. Neither ever changes the drawn " +
+                    "shaft height.\n" +
+                    "• \"Blank draft\" — a Content chip on each document's PDF Options sheet, " +
+                    "and a chip over the schematic preview. Prints the drawing with values " +
+                    "blanked for handwriting. Not saved; it resets each session. On the " +
+                    "schematic, \"Ø callouts\" beside it decides whether that blank sheet " +
+                    "still carries Ø leaders to fill in.\n" +
                     "• \"Cut depth exaggeration\" — on the Undercut Drawing. Changes only how " +
                     "deep cuts look, never the printed numbers.\n" +
                     "• \"Sheet content\", worn sections, and \"Export all\" — on the " +
                     "Consolidated Output tab.\n" +
-                    "• Each document's PDF Options sheet repeats Line thickness, Shade in PDF, " +
-                    "(on the schematic) Measurement reference, and — on the schematic and the " +
-                    "runout/consolidated sheets, the drawings that can break — Body S-break: " +
-                    "the same app-wide settings, reachable without leaving the drawing.\n" +
+                    "• Each document's PDF Options sheet repeats Line thickness and Shade in " +
+                    "Components, on the schematic and consolidated sheets Measurement " +
+                    "reference, and — on the schematic and the runout/consolidated sheets, the " +
+                    "drawings that can break — Body S-break: the same app-wide settings, " +
+                    "reachable without leaving the drawing.\n" +
+                    "• \"Bubble size\" and \"Bubble height\" — on the runout and consolidated " +
+                    "sheets. How large the runout bubbles draw and how far they hang below the " +
+                    "shaft; both move the canvas markers and the printed sheet together.\n" +
                     "• \"Dimension arrows\" — Small / Medium / Large arrowheads on the " +
                     "dimension rails, on the schematic and consolidated sheets. Heads point " +
                     "inward unless the span is too narrow to hold both.\n" +
@@ -528,13 +816,7 @@ private val helpSections: List<HelpSection> = listOf(
                 "By design. A value you type is never rounded, snapped, or \"helpfully\" " +
                     "adjusted — down to .001. Components sit exactly where you put them, and " +
                     "the automatic bare-shaft spans absorb the consequences. Only derived " +
-                    "values (auto OAL, auto-body spans, auto taper rate text) move on their own."
-            ),
-            HelpTopic(
-                "Why is the Free-to-End badge missing?",
-                "The badge hides when the shaft has no precision components (tapers, liners, " +
-                    "counted threads) and isn't oversized. With only bodies, the auto-fill " +
-                    "always runs to the end, so a free-to-end number would be meaningless."
+                    "values (auto-body spans, auto taper rate text) move on their own."
             ),
             HelpTopic(
                 "Why don't wear marks, runout readings, or undercuts change my shaft?",

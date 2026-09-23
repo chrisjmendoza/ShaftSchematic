@@ -2,6 +2,7 @@ package com.android.shaftschematic.settings
 
 import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.FractionStyle
+import com.android.shaftschematic.util.OutputFont
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
@@ -59,11 +60,16 @@ data class DrawingProfile(
     val shadedBodies: Boolean = SHIPPED_PDF_PREFS.shadedBodies,
     val shadedTapers: Boolean = SHIPPED_PDF_PREFS.shadedTapers,
     val shadedLiners: Boolean = SHIPPED_PDF_PREFS.shadedLiners,
+    val shadeExplicitBodiesOnly: Boolean = SHIPPED_PDF_PREFS.shadeExplicitBodiesOnly,
+    val undercutLineArt: Boolean = SHIPPED_PDF_PREFS.undercutLineArt,
+    val runoutBubbleScale: Float = SHIPPED_PDF_PREFS.runoutBubbleScale,
+    val runoutBubbleDropScale: Float = SHIPPED_PDF_PREFS.runoutBubbleDropScale,
     val curveLoHeightIn: Float = SHIPPED_PDF_PREFS.curveLoHeightIn,
     val curveHiHeightIn: Float = SHIPPED_PDF_PREFS.curveHiHeightIn,
     val sBreakThresholdFrac: Float = SHIPPED_PDF_PREFS.sBreakThresholdFrac,
     val arrowSizePt: Float = SHIPPED_PDF_PREFS.arrowSizePt,
     val fractionStyle: String = SHIPPED_PDF_PREFS.fractionStyle.name,
+    val outputFont: String = SHIPPED_PDF_PREFS.outputFont.name,
     val dualUnitLayout: String = SHIPPED_PDF_PREFS.dualUnitLayout.name,
     val wearTraceDepthFrac: Float = SHIPPED_PDF_PREFS.wearTraceDepthFrac,
     val wearBandShadeFrac: Float = SHIPPED_PDF_PREFS.wearBandShadeFrac,
@@ -81,11 +87,16 @@ data class DrawingProfile(
         shadedBodies = shadedBodies,
         shadedTapers = shadedTapers,
         shadedLiners = shadedLiners,
+        shadeExplicitBodiesOnly = shadeExplicitBodiesOnly,
+        undercutLineArt = undercutLineArt,
+        runoutBubbleScale = runoutBubbleScale,
+        runoutBubbleDropScale = runoutBubbleDropScale,
         curveLoHeightIn = curveLoHeightIn,
         curveHiHeightIn = curveHiHeightIn,
         sBreakThresholdFrac = sBreakThresholdFrac,
         arrowSizePt = arrowSizePt,
         fractionStyle = FractionStyle.fromName(fractionStyle),
+        outputFont = OutputFont.fromName(outputFont),
         dualUnitLayout = DualUnitLayout.fromName(dualUnitLayout),
         wearTraceDepthFrac = wearTraceDepthFrac,
         wearBandShadeFrac = wearBandShadeFrac,
@@ -104,11 +115,16 @@ data class DrawingProfile(
             shadedBodies = prefs.shadedBodies,
             shadedTapers = prefs.shadedTapers,
             shadedLiners = prefs.shadedLiners,
+            shadeExplicitBodiesOnly = prefs.shadeExplicitBodiesOnly,
+            undercutLineArt = prefs.undercutLineArt,
+            runoutBubbleScale = prefs.runoutBubbleScale,
+            runoutBubbleDropScale = prefs.runoutBubbleDropScale,
             curveLoHeightIn = prefs.curveLoHeightIn,
             curveHiHeightIn = prefs.curveHiHeightIn,
             sBreakThresholdFrac = prefs.sBreakThresholdFrac,
             arrowSizePt = prefs.arrowSizePt,
             fractionStyle = prefs.fractionStyle.name,
+            outputFont = prefs.outputFont.name,
             dualUnitLayout = prefs.dualUnitLayout.name,
             wearTraceDepthFrac = prefs.wearTraceDepthFrac,
             wearBandShadeFrac = prefs.wearBandShadeFrac,

@@ -41,19 +41,20 @@ import kotlinx.serialization.Serializable
  *   page budget (`exaggeratedProfileScale`). Per-job (rides the .shaft envelope) so a
  *   reopened document reprints identically — same posture as the undercut sheet's
  *   exaggeration slider.
- * @param linersProportional "Keep liners proportional lengthwise" — liners hold their
- *   true-scale drawn width up to what the page affords AT the selected drawn height.
- *   The height takes PRECEDENCE (on-device direction): this never lowers the drawn
- *   shaft; when the full request doesn't fit, the liner floors shrink uniformly instead
+ * @param linersProportional "Keep liners and tapers proportional lengthwise" — liners and
+ *   tapers hold their true-scale drawn width up to what the page affords AT the selected
+ *   drawn height. The height takes PRECEDENCE (on-device direction): this never lowers the
+ *   drawn shaft; when the full request doesn't fit, the floors shrink uniformly instead
  *   (`fracFitFactor`). Only keyway-pinned bodies may yield the height. Overrides
  *   [linerCompression] while checked.
- * @param linerCompression "Liner compression" slider — how far liners may foreshorten
- *   below true scale when the page needs the room. 1.0 = fully (down to the
- *   `PROFILE_MIN_LINER_PT` writable floor — the default), 0.0 = not at all
- *   (equivalent to [linersProportional]). Applied as a best-effort per-liner width
- *   floor of (1 − value) × true width; the geometry consumes [linerMinFracOfTrue] and
- *   never trades drawn height for it. Per-job, on the runout/consolidated sheets AND
- *   the schematic, like [heightScale].
+ * @param linerCompression "Liner & taper compression" slider — how far the two measured
+ *   kinds may foreshorten below true scale when the page needs the room. 1.0 = fully
+ *   (liners down to the `PROFILE_MIN_LINER_PT` writable floor, tapers to their
+ *   `PROFILE_TAPER_MIN_FRAC_OF_TRUE` baseline — the default), 0.0 = not at all
+ *   (equivalent to [linersProportional]). Applied as a best-effort width floor of
+ *   (1 − value) × true width; the geometry consumes [linerMinFracOfTrue] and never trades
+ *   drawn height for it. Per-job, on the runout/consolidated sheets AND the schematic,
+ *   like [heightScale].
  * @param showCouplingFace Draw the **coupling end view** (outer OD circle, pilot/register
  *   bore with its outward keyseat, bolt circle) in the bottom-right of the runout and
  *   consolidated sheets, captioned "looking fwd" — the hand-sketched face the shops draw.
@@ -73,10 +74,14 @@ data class RunoutConfig(
     val showCouplingFace: Boolean = false,
 ) {
     /**
-     * The liner width floor as a fraction of true drawn width — what the composers hand
-     * to `ProfileFeatureSpan.minWidthFracOfTrue`. 0 = compress freely (floor only),
-     * 1 = request full true width (best-effort; λ-fitted, never lowers the drawn
-     * height).
+     * The measured-component width floor as a fraction of true drawn width — what the
+     * composers hand to `ProfileFeatureSpan.minWidthFracOfTrue`. 0 = compress freely
+     * (floor only), 1 = request full true width (best-effort; λ-fitted, never lowers the
+     * drawn height).
+     *
+     * Liners take it verbatim; TAPERS take it too, floored at their own baseline
+     * (`taperMinFracOfTrue`), so the two kinds foreshorten together and the sheet reads
+     * even. The name is the control's, not a limit on which kinds read it.
      */
     val linerMinFracOfTrue: Float
         get() = if (linersProportional) 1f else (1f - linerCompression).coerceIn(0f, 1f)

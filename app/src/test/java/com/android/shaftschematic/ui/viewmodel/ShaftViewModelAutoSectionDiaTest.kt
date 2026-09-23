@@ -13,8 +13,8 @@ import org.junit.Test
  * delegates to (`setAutoSectionDiaMm` is a one-line `_spec.update { … }` wrapper around
  * [withAutoSectionDia]).
  *
- * [ShaftViewModel] is an `AndroidViewModel` and isn't instantiated in this JVM suite — the same
- * convention as `ShaftViewModelKeywayClockingTest` and `ShaftViewModelUndercutTest`.
+ * The setter carries no logic of its own, so this class exercises [withAutoSectionDia] directly
+ * rather than instantiating the AndroidViewModel around it.
  */
 class ShaftViewModelAutoSectionDiaTest {
 

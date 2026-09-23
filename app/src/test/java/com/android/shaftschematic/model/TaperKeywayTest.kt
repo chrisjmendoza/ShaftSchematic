@@ -4,6 +4,10 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+/**
+ * A taper's keyway predicates: when the stored W × D × L counts as a keyway at all, and when the
+ * draw-only spoon flag applies (an open keyway only — a floating one has no closed end to spoon).
+ */
 class TaperKeywayTest {
 
     private fun taper(

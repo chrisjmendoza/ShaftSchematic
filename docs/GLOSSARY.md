@@ -38,9 +38,6 @@ Total envelope of the shaft; bounds all components.
 ### coverageEndMm
 Farthest end point of any component.
 
-### freeToEndMm
-Remaining length from coverageEnd to overallLength.
-
 ---
 
 # 2. Component Terms
@@ -189,12 +186,14 @@ neither end is a multiple of this shaft's own curve height. The floor never rais
 above the sizing curve. The stored multiplier's own bounds (0.25–6.0) are wider than the
 band on purpose: they only have to express it on any diameter.
 
-### Liner compression
+### Liner & taper compression
 The per-job pair (`RunoutConfig.linersProportional` / `linerCompression`) controlling how
-far liners may foreshorten below true length. Feeds a **best-effort** width floor
-(`linerMinFracOfTrue` → `ProfileFeatureSpan.minWidthFracOfTrue`) that the scale solve
-ignores; raised floors that don't fit shrink uniformly (`fracFitFactor`). Drawing height
-takes precedence — neither control ever changes the drawn shaft height.
+far the measured components may foreshorten below true length. Feeds a **best-effort**
+width floor (`linerMinFracOfTrue` → `ProfileFeatureSpan.minWidthFracOfTrue`) that the scale
+solve ignores; raised floors that don't fit shrink uniformly (`fracFitFactor`). Tapers ride
+the same request (`taperMinFracOfTrue`, floored at their 70% baseline), so liners and tapers
+keep the same fraction of true length and the sheet reads even. Drawing height takes
+precedence — neither control ever changes the drawn shaft height.
 
 ---
 
@@ -255,9 +254,17 @@ collision warnings on normal drafts.)
 
 ### Reference-only feature
 A record that is drawn on the shaft but never participates in geometry: it does not affect
-OAL/`coverageEndMm`, body resolution, collision, or the Free-to-End badge. Seven kinds:
+OAL/`coverageEndMm`, body resolution, or collision. Seven kinds:
 coupler bolt slots (in `ShaftSpec`), and — in the document envelope — wear spots, wear pits,
 measured-Ø readings, worn sections, runout readings, and undercuts.
+
+### Final Schematic
+The document's second drawing (`final_spec`, a whole `ShaftSpec` beside the original): the
+geometry the shaft leaves with after the wear/undercut work moved, lengthened or shortened a
+liner. Started as a copy of the original (ids kept) and edited independently on the Final
+Schematic tab through the same editor, selected by an explicit `SpecTarget`. The original is
+never touched — the pair is the before and the after. NOT a reference-only feature. Prints its
+own schematic PDF and a blank final runout sheet, both marked `Drawing: Final`.
 
 ### Wear Spot
 A recorded liner wear band (`WearSpot` in `WearRecord.spots`): liner-local start/length from

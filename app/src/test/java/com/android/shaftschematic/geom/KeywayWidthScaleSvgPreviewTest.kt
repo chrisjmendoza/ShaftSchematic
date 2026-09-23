@@ -120,17 +120,16 @@ class KeywayWidthScaleSvgPreviewTest {
             minWidthPx = MIN_KEYWAY_WIDTH_PT,
             strokeWidthPx = strokePt,
         )
-        val yScale = if (halfW > 0f) halfH / halfW else 1f
         val isOpen = offsetMm < 0.01f
         val setX = refX + dir * offsetMm * axialPtPerMm
         val letX = setX + dir * maxOf(lengthMm * axialPtPerMm, minKeywaySlotLenPx(halfW, isOpen))
         val letArcCx = letX - dir * halfW
         val lineLeft = minOf(setX, letArcCx)
         val lineRight = maxOf(setX, letArcCx)
-        val bowl = if (spooned && isOpen && halfW > 0f) keywaySpoonBowl(letX, dir, halfW) else null
+        val bowl = if (spooned && isOpen && halfW > 0f) keywaySpoonBowl(letX, dir, halfW, halfH) else null
 
         rect(lineLeft, cy - halfH, lineRight, cy + halfH, "white")
-        if (bowl != null) ellipse(bowl.cx, cy, bowl.radius, bowl.radius * yScale, fill = "white")
+        if (bowl != null) ellipse(bowl.cx, cy, bowl.radius, bowl.ry, fill = "white")
         line(lineLeft, cy - halfH, lineRight, cy - halfH, w = strokePt, color = color)
         line(lineLeft, cy + halfH, lineRight, cy + halfH, w = strokePt, color = color)
         // Mill arc at the closed (LET) end — the half on the LET side of its centre.
@@ -139,7 +138,7 @@ class KeywayWidthScaleSvgPreviewTest {
             sweep = if (dir > 0f) 1 else 0, w = strokePt, color = color,
         )
         if (bowl != null) {
-            ellipse(bowl.cx, cy, bowl.radius, bowl.radius * yScale, stroke = color, w = strokePt)
+            ellipse(bowl.cx, cy, bowl.radius, bowl.ry, stroke = color, w = strokePt)
         }
         return halfH
     }
@@ -194,7 +193,8 @@ class KeywayWidthScaleSvgPreviewTest {
         )
 
         val frac = taperHalf * 2f / L.shaftHeightPt
-        val bowlRadius = keywaySpoonBowl(tx0, 1f, taper.keywayWidthMm * taperAxial / 2f).radius
+        val bowlHalfW = taper.keywayWidthMm * taperAxial / 2f
+        val bowlRadius = keywaySpoonBowl(tx0, 1f, bowlHalfW, bowlHalfW).radius
         text(contentLeft, cy - L.shaftHeightPt / 2f - 14f, title, size = 12f)
         text(
             contentLeft, cy + L.shaftHeightPt / 2f + 16f,

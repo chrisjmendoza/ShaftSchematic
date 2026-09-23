@@ -16,7 +16,7 @@ import org.junit.Test
 class AutoBodyDiaOverrideTest {
 
     private fun autoBodies(spec: ShaftSpec) =
-        resolveComponents(spec, overallIsManual = true)
+        resolveComponents(spec)
             .filterIsInstance<ResolvedBody>()
             .filter { it.source == ResolvedComponentSource.AUTO }
 
@@ -74,6 +74,7 @@ class AutoBodyDiaOverrideTest {
 
         val legacy = json.decodeFromString<ShaftSpec>("""{"overallLengthMm":500.0}""")
         assertEquals(0f, legacy.autoBodyDiaMm)
-        assertTrue(autoBodies(legacy).all { it.diaMm > 0f }) // still derives a drawable Ø
+        assertEquals(1, autoBodies(legacy).size)                // an empty list would pass vacuously
+        assertTrue(autoBodies(legacy).all { it.diaMm > 0f })    // still derives a drawable Ø
     }
 }

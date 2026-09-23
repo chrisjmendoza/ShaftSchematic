@@ -81,9 +81,9 @@ class SuggestedBodyKeywayEndTest {
         assertEquals(LinerAuthoredReference.AFT, spec.suggestedBodyKeywayEnd())
     }
 
-    /** Auto OAL: sides classify against the content end when no manual OAL is set. */
+    /** OAL 0 means "not typed yet", so the AFT/FWD split is judged against `coverageEndMm()`. */
     @Test
-    fun `auto OAL uses the content end`() {
+    fun `a not-yet-typed OAL classifies against the content end`() {
         val spec = ShaftSpec(
             overallLengthMm = 0f,
             bodies = listOf(

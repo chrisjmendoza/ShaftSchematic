@@ -91,10 +91,10 @@ data class ResolvedCouplerBoltSlot(
     val depthMm: Float,
 ) : ResolvedComponent()
 
-fun resolveComponents(spec: ShaftSpec, overallIsManual: Boolean): List<ResolvedComponent> {
+fun resolveComponents(spec: ShaftSpec): List<ResolvedComponent> {
     val explicit = resolveExplicitComponents(spec)
     val autoBodies = deriveAutoBodies(
-        overallLengthMm = if (overallIsManual) spec.overallLengthMm else 0f,
+        overallLengthMm = spec.overallLengthMm,
         explicitComponents = explicit,
         overrideDiaMm = spec.autoBodyDiaMm,
         sectionOverrides = spec.autoDiaOverrides
@@ -232,7 +232,9 @@ fun deriveAutoBodies(
         if (gapEnd > gapStart) spans.add(Span(gapStart, gapEnd))
     }
 
-    // Leading/trailing spans only when OAL is manually specified (overallLengthMm > 0)
+    // Leading/trailing spans exist only against an authored shaft span: with no positive OAL
+    // there is no leading edge and no trailing edge to fill to, so only the gaps BETWEEN
+    // explicit components resolve.
     if (overallLengthMm > 0f) {
         val first = explicit.first()
         val last = explicit.last()
@@ -333,6 +335,97 @@ private const val BODY_FRAGMENT_ID_SEPARATOR = '#'
  * Anything that looks a fragment id back up in the spec must strip the suffix first.
  */
 fun resolvedBodyBaseId(id: String): String = id.substringBefore(BODY_FRAGMENT_ID_SEPARATOR)
+
+/**
+ * Ids of the body runs that must draw UNFILLED — the composers' whole shade decision for
+ * bodies, resolved to a set of run ids.
+ *
+ * Per run: an AUTO span (bare shaft) follows the kind's checkbox narrowed by
+ * `PdfPrefs.shadeExplicitBodiesOnly`, which bares AUTO runs and nothing else; an EXPLICIT run
+ * follows its stored body's tri-state [com.android.shaftschematic.model.Body.shadeOnDrawing]
+ * — `null` takes [shadedBodies], an explicit value overrides it either way (a named section
+ * can shade with the kind off, or stay bare with it on). Fragments of a split body look their
+ * author's choice up through [resolvedBodyBaseId], so every run of one body agrees.
+ *
+ * The composers' drawable bodies come from `ShaftSpec.bodyForPdf`, which keeps the RESOLVED id
+ * (fragments included) and drops the source and the flags, so the decision has to be made here
+ * and handed to the one body pass as ids. Suppressing per run inside that single pass, rather
+ * than splitting the run list into a filled and an unfilled pass, is what keeps the
+ * fill-then-outline z-order each run already has — which is why the composers build the fill
+ * paint unconditionally and let this set decide: a kind switched off simply names every run.
+ *
+ * Without a resolve pass ([resolved] null) the drawn bodies are the stored ones, so the same
+ * rule runs over [spec]'s own list, keyed by stored id.
+ */
+fun unshadedBodyRunIds(
+    spec: ShaftSpec,
+    resolved: List<ResolvedComponent>?,
+    shadedBodies: Boolean,
+    shadeExplicitBodiesOnly: Boolean,
+): Set<String> {
+    if (resolved == null) {
+        return spec.bodies.filterNot { it.shadeOnDrawing ?: shadedBodies }.map { it.id }.toSet()
+    }
+    return resolved
+        .filterIsInstance<ResolvedBody>()
+        .filterNot { run ->
+            if (run.source == ResolvedComponentSource.AUTO) {
+                shadedBodies && !shadeExplicitBodiesOnly
+            } else {
+                spec.bodies.firstOrNull { it.id == resolvedBodyBaseId(run.id) }?.shadeOnDrawing
+                    ?: shadedBodies
+            }
+        }
+        .map { it.id }
+        .toSet()
+}
+
+/**
+ * Taper mirror of [unshadedBodyRunIds]: ids of the tapers that must draw unfilled, each
+ * following its own tri-state [com.android.shaftschematic.model.Taper.shadeOnDrawing] with
+ * [shadedTapers] as the default. Tapers never fragment, so a stored id IS the drawn id and
+ * there is no resolved list to consult.
+ */
+fun unshadedTaperIds(spec: ShaftSpec, shadedTapers: Boolean): Set<String> =
+    spec.tapers.filterNot { it.shadeOnDrawing ?: shadedTapers }.map { it.id }.toSet()
+
+/**
+ * Liner mirror of [unshadedBodyRunIds], same stored-id rule as [unshadedTaperIds].
+ *
+ * A consolidated sheet printing measured Ø values inside the profile outranks every value
+ * here — the composer drops the liner fill whole on such a sheet, because a sheet-white
+ * knockout halo over grey reads as a pasted box.
+ */
+fun unshadedLinerIds(spec: ShaftSpec, shadedLiners: Boolean): Set<String> =
+    spec.liners.filterNot { it.shadeOnDrawing ?: shadedLiners }.map { it.id }.toSet()
+
+/**
+ * The components a sheet will print SHADED — the positive complement of
+ * [unshadedBodyRunIds]/[unshadedTaperIds]/[unshadedLinerIds] over the ids a sheet actually
+ * draws (resolved body runs, stored tapers/liners). The editor preview's PDF-shade mirror
+ * consumes this, so the preview box and the composers can never disagree about what shades.
+ * (The consolidated sheet's in-profile-values liner lock is per-SHEET and deliberately not
+ * folded in here — the mirror answers for the schematic.)
+ */
+fun shadedComponentIds(
+    spec: ShaftSpec,
+    resolved: List<ResolvedComponent>?,
+    shadedBodies: Boolean,
+    shadedTapers: Boolean,
+    shadedLiners: Boolean,
+    shadeExplicitBodiesOnly: Boolean,
+): Set<String> {
+    val bodyIds = resolved?.filterIsInstance<ResolvedBody>()?.map { it.id }
+        ?: spec.bodies.map { it.id }
+    val unshadedBodies = unshadedBodyRunIds(spec, resolved, shadedBodies, shadeExplicitBodiesOnly)
+    val unshadedTapers = unshadedTaperIds(spec, shadedTapers)
+    val unshadedLiners = unshadedLinerIds(spec, shadedLiners)
+    return buildSet {
+        bodyIds.filterNotTo(this) { it in unshadedBodies }
+        spec.tapers.mapNotNullTo(this) { t -> t.id.takeUnless { it in unshadedTapers } }
+        spec.liners.mapNotNullTo(this) { ln -> ln.id.takeUnless { it in unshadedLiners } }
+    }
+}
 
 private fun subtractBodiesAgainstNonBodies(components: List<ResolvedComponent>): List<ResolvedComponent> {
     if (components.isEmpty()) return components
@@ -443,8 +536,9 @@ private fun normalizeBodies(
             result.add(it.toResolved())
             // A section-authored auto run states one section's Ø, so it seeds no continuity:
             // the next auto run falls back to the shaft-wide Ø or neighbor derivation rather
-            // than inheriting a value that was only ever true of the run before it. A run that
-            // absorbed an explicit body carries that body's Ø forward as before.
+            // than inheriting a value that was only ever true of the run before it. An
+            // explicit body's run seeds continuity, so the auto fill beyond it keeps
+            // drawing at the body's Ø.
             lastMergedDia = if (it.sectionAuthored && !it.hasExplicit) null else it.diaMm
             current = null
         }
@@ -456,23 +550,22 @@ private fun normalizeBodies(
                 if (current == null) {
                     current = startAccum(comp)
                 } else if (
-                    comp.source == ResolvedComponentSource.EXPLICIT && current!!.hasExplicit
+                    comp.source == ResolvedComponentSource.EXPLICIT || current!!.hasExplicit
                 ) {
-                    // Two explicit bodies never fuse. Absorbing one into a run that already
-                    // carries an explicit body would drop its Ø and its carousel card — a
-                    // stepped shaft built from abutting bodies would draw as a single run at
-                    // the aft-most diameter. Merging is for auto spans flowing into an
-                    // explicit body, not for two authored bodies meeting.
+                    // An explicit body's span is AUTHORED: it never fuses with another
+                    // explicit body and never absorbs neighbouring auto fill in either
+                    // direction. Absorbing the adjacent gap would make a shortened explicit
+                    // body span the whole run again — the typed length would have no visible
+                    // effect, its selection highlight would cover the merged run, and the
+                    // remainder's auto card would vanish (on-device report). Only auto
+                    // spans merge with each other; an auto run that follows an explicit
+                    // body still inherits its Ø via [lastMergedDia], so a same-Ø neighbour
+                    // draws at the same diameter with only the component face line between.
                     flush()
                     current = startAccum(comp)
                 } else if (comp.startMmPhysical <= current!!.end + eps) {
                     current!!.start = kotlin.math.min(current!!.start, comp.startMmPhysical)
                     current!!.end = kotlin.math.max(current!!.end, comp.endMmPhysical)
-                    if (comp.source == ResolvedComponentSource.EXPLICIT && !current!!.hasExplicit) {
-                        current!!.hasExplicit = true
-                        current!!.explicitId = comp.id
-                        current!!.diaMm = comp.diaMm
-                    }
                 } else {
                     flush()
                     current = startAccum(comp)

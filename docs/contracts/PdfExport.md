@@ -28,18 +28,28 @@ via SAF, delegating drawing to `composeShaftPdf`.
 | `shadedBodies` | `false` | Fill body sections with light grey |
 | `shadedTapers` | `false` | Fill taper trapezoids with light grey |
 | `shadedLiners` | `false` | Fill liner sections with light grey |
+| `undercutLineArt` | `false` | Line art on the UNDERCUT document: no shade fill anywhere on that sheet — bodies, tapers, liners, the detail strips' otherwise-always-shaded liner span and the notch section core — leaving the notch construction (void, section faces, floor lines) to carry the reading. Decided by the pure `undercutPdfFillPlan` (`pdf/UndercutPdfFillPlan.kt`). Reaches one composer, so it surfaces in Settings → PDF Export and the **undercut** preview's options sheet only. Independent of the screen-side `UndercutStyle` line-art mode, which never reaches a composer |
 | `curveLoHeightIn` | `0.5` | Sizing-curve anchor: drawn height (paper in) of a 4" shaft at 100% (0.25–1.5) |
 | `curveHiHeightIn` | `1.0` | Sizing-curve anchor: drawn height (paper in) of an 8" shaft at 100% (0.25–1.5) |
 | `sBreakThresholdFrac` | `0.5` | Body S-break threshold: a body run breaks once drawn below this fraction of its true length (0–1; `0` = never break on compression) |
 | `arrowSizePt` | `4` | Dimension-rail arrowhead length (pt): Small `3` / Medium `4` / Large `5` |
 | `wearJoinGapMaxMm` | `76.2` (3") | Taper–liner join threshold: bare shaft between two components in one wear detail strip that still draws true, in canonical mm (0–304.8; `0` = break on any gap) |
+| `runoutBubbleScale` | `1.0` | Multiplier on the runout bubble radius (`BUBBLE_RADIUS_PT`), read by both bubble draw sites — the sheet composer and the Runout tab's canvas preview. Stored clamp 0.5–2.0 (defensive, wider than the UI); UI range 60–150%, 5% steps |
+| `runoutBubbleDropScale` | `1.0` | Multiplier on the drop from the shaft surface to the first bubble row (`SHORT_LEADER_PT` / `RunoutBubbleGeometry.shortLeader`), same two draw sites as `runoutBubbleScale`. Stored clamp 0.5–2.0; UI range 50–200%. Experimental — exists to find where the pointer lines land best and may be retired |
+| `shadeExplicitBodiesOnly` | `false` | With `shadedBodies` on, narrows the body fill to explicit bodies only — auto (bare-shaft) runs draw unfilled. Consumed by the single `drawBodyRunsWithBreaks` pass (schematic + runout/consolidated); never reaches the wear/undercut documents (their `SimpleShaftProfile` body pass takes one fill for every run), so those two sheets hide the sub-checkbox (`showShadeExplicitBodiesOnly = false`). The kind checkboxes and this narrowing are additionally the DEFAULT for the per-component tri-state `shadeOnDrawing` card toggles (explicit `Body`/`Taper`/`Liner`), which override them per component in either direction — resolved by the pure `unshaded*Ids` builders, same wear/undercut boundary |
 
 All fields are also reachable in the preview screen's Tune sheet, except the sizing-curve
 anchors, which live only in Settings → Drawing (app-level defaults) under "Default
 drawing size"; the per-job "Shaft height" slider multiplies on top of the sizing curve.
 `wearJoinGapMaxMm` is a second exception: it governs only the wear document's strips, so it
 lives in Settings → Drawing and the **wear** preview's own PDF Options sheet, not the
-schematic Tune sheet this section otherwise describes.
+schematic Tune sheet this section otherwise describes. `runoutBubbleScale` /
+`runoutBubbleDropScale` are a third: they govern only the runout bubble draw sites, so — unlike
+every other pref in this table — they have no Settings → Drawing control at all; they surface
+only in the runout/consolidated PDF Options sheets, under a "Runout bubbles" heading, not on
+the schematic or wear/undercut sheets, whose composers never read them. `undercutLineArt` is
+the fourth, the mirror image of that: it reaches only the undercut composer, so it lives in
+Settings → PDF Export and the **undercut** preview's options sheet and nowhere else.
 
 - **Body S-break** (`sBreakThresholdFrac`): slider in 5% steps, commits on release, with a
   "Default (50%)" reset button — the same posture as Line Thickness, and like Line
@@ -89,12 +99,14 @@ schematic Tune sheet this section otherwise describes.
 Full-resolution preview through the shared `util/PdfRaster.renderPdfPageBitmap`
 (`PdfDocument` + `PdfRenderer`, 2× raster), pinch-to-zoom 0.5×–8×, double-tap reset.
 
-- **Options sheet (Tune icon):** blank draft (write-in) toggle + Ø-callouts sub-switch,
-  component labels, then the live-tuning slider group at the head — line thickness
-  (50–200%), "Body S-break" threshold, "Shaft height" slider, liner compression control —
-  then "Dimension arrows" size, fractions, measurement reference (Auto/AFT/FWD), shade
-  bodies/tapers/liners, and dual units + layout LAST (rarely used options trail, on-device
-  request) — bound to
+- **Options sheet (Tune icon):** a leading "Content" chip row — **Blank draft**, **Ø
+  callouts** (enabled only while Blank draft is on), **Labels** — then the live-tuning
+  slider group at the head — **"Shaft height"** slider, "Body S-break" threshold, line
+  thickness (50–200%), liner compression control — then "Dimension arrows" size, fractions,
+  an expandable "Measurement reference" section (Auto/AFT/FWD), an expandable "Shade in
+  Components" section (bodies/tapers/liners + an "Explicit bodies only" sub-checkbox under
+  Bodies), and dual units + layout LAST (rarely used options trail, on-device request) —
+  bound to
   `PdfPrefs` (or, for the
   height/liner-compression pair, the per-job `RunoutConfig`) via VM setters, persisted,
   applied live (each option is a `LaunchedEffect` key). Blank draft is session-scoped, not
@@ -106,10 +118,15 @@ Full-resolution preview through the shared `util/PdfRaster.renderPdfPageBitmap`
     pixel (on-device report). The Settings → Editor Screen control keeps its own layout
     (it adds a typed % field, which is never snapped) but shares the detent and button.
   - Shade bodies/tapers/liners is the shared `ShadeInPdfChecks` (`ShaftHeightSlider.kt`) —
-    heading, three checkbox rows, and the `linerShadeLocked` display-only lock the
-    consolidated sheet uses — the same block as the runout/wear options sheet. Settings →
-    PDF Export keeps its own copy (its rows live in a `spacedBy(12.dp)` column with a
-    padded heading); the prefs and setters are identical.
+    an expandable "Shade in Components" section (renamed from "Shade in PDF"; header testTag
+    `options_shade_expander`) wrapping the three checkbox rows, an indented "Explicit bodies
+    only" sub-checkbox under Bodies (`PdfPrefs.shadeExplicitBodiesOnly`, testTag
+    `shade_explicit_bodies_only`, enabled only while Bodies is checked), and the
+    `linerShadeLocked` display-only lock the consolidated sheet uses — the same block as the
+    runout/wear options sheet. Settings → PDF Export keeps its own copy under the same
+    "Shade in Components" heading, with the same sub-checkbox (its rows live in a
+    `spacedBy(12.dp)` column with a padded heading, not the expander); the prefs and setters
+    are identical.
   - The sheet's content is taller than a phone screen, so it carries its own
     `verticalScroll` plus `navigationBarsPadding()` — without them the bottom rows clip
     mid-checkbox behind the navigation bar. Its height cap arrives as a `maxHeightDp`
@@ -119,7 +136,7 @@ Full-resolution preview through the shared `util/PdfRaster.renderPdfPageBitmap`
     Both caps keep the sheet clear of the status bar, which would otherwise leave no edge to
     swipe it back down by (on-device report).
 - **Live tuning:** the four tuning sliders — Line thickness, Body S-break, Shaft height,
-  Liner compression — reshape the page **while the finger is still on the track**
+  Liner & taper compression — reshape the page **while the finger is still on the track**
   ("see the differences without choosing, closing menu, opening menu, choosing" —
   on-device request). Each shared control (`ui/screen/ShaftHeightSlider.kt`) carries an
   optional `onDrag: (Float?) -> Unit`: the in-progress value every frame in the SAME units
@@ -195,8 +212,12 @@ Full-resolution preview through the shared `util/PdfRaster.renderPdfPageBitmap`
     transparent scrim still handles tap-outside-to-dismiss, unchanged.
   - The blank-draft chip overlaid on the preview is **hidden while the sheet is open** — it
     would sit on the page strip, and the sheet's own first row is that same switch.
-- **Orientation:** `DisposableEffect` unlocks rotation on entry and restores the
-  portrait lock on dispose — every other screen stays portrait-only.
+- **Orientation:** `DisposableEffect` unlocks rotation on entry (`unlockRotation`) and
+  restores the device's BASE orientation on dispose (`restoreBaseOrientation`,
+  `ui/adaptive/Orientation.kt` — the one `R.integer.activity_orientation` the manifest
+  declares: portrait on a phone, free rotation on a tablet). Restoring a hard-coded portrait
+  here would lock a tablet to portrait the first time a preview closed. See
+  `docs/contracts/Adaptive.md`.
 - **Pipeline:** `snapshotFlow { SchematicRenderInputs(…) }.conflate().collect { … }` →
   snapshot `vm.currentPdfPrefs` on main thread → `Dispatchers.IO` →
   `renderPdfPageBitmap` (temp PDF via the `composeShaftPdf` lambda → rasterize page 0) →

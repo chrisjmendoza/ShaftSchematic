@@ -11,7 +11,8 @@ import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
-import android.content.pm.ActivityInfo
+import com.android.shaftschematic.ui.adaptive.restoreBaseOrientation
+import com.android.shaftschematic.ui.adaptive.unlockRotation
 import android.net.Uri
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -37,10 +38,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material3.BottomSheetDefaults
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
@@ -49,7 +50,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -76,7 +76,10 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
+import com.android.shaftschematic.pdf.WEAR_STRIP_SIZE_FRAC_DEFAULT
 import com.android.shaftschematic.settings.PDF_ARROW_SIZE_DEFAULT_PT
+import com.android.shaftschematic.settings.PDF_RUNOUT_BUBBLE_DROP_SCALE_DEFAULT
+import com.android.shaftschematic.settings.PDF_RUNOUT_BUBBLE_SCALE_DEFAULT
 import com.android.shaftschematic.settings.PDF_SBREAK_THRESHOLD_DEFAULT
 import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_DEFAULT
 import com.android.shaftschematic.settings.PDF_WEAR_JOIN_GAP_DEFAULT_MM
@@ -88,9 +91,13 @@ import com.android.shaftschematic.ui.viewmodel.setLinersProportional
 import com.android.shaftschematic.ui.viewmodel.setPdfArrowSizePt
 import com.android.shaftschematic.ui.viewmodel.setPdfDualUnitLayout
 import com.android.shaftschematic.ui.viewmodel.setPdfFractionStyle
+import com.android.shaftschematic.ui.viewmodel.setPdfRunoutBubbleDropScale
+import com.android.shaftschematic.ui.viewmodel.setPdfRunoutBubbleScale
 import com.android.shaftschematic.ui.viewmodel.setPdfSBreakThresholdFrac
+import com.android.shaftschematic.ui.viewmodel.setPdfShadeExplicitBodiesOnly
 import com.android.shaftschematic.ui.viewmodel.setPdfShadedBodies
 import com.android.shaftschematic.ui.viewmodel.setPdfShadedLiners
+import com.android.shaftschematic.ui.viewmodel.setPdfUndercutLineArt
 import com.android.shaftschematic.ui.viewmodel.setPdfShadedTapers
 import com.android.shaftschematic.ui.viewmodel.setPdfTieringMode
 import com.android.shaftschematic.ui.viewmodel.setPdfWearBandShadeFrac
@@ -100,6 +107,7 @@ import com.android.shaftschematic.ui.viewmodel.setShowCouplingFace
 import com.android.shaftschematic.ui.viewmodel.setWearCompactStrips
 import com.android.shaftschematic.ui.viewmodel.setWearShowShaftProfile
 import com.android.shaftschematic.ui.viewmodel.setWearStripComponents
+import com.android.shaftschematic.ui.viewmodel.setWearStripSizeFrac
 import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.FractionStyle
 import com.android.shaftschematic.util.InkBand
@@ -128,14 +136,20 @@ internal fun openRunoutPdf(context: Context, uri: Uri) {
  *
  * Displayed while [loading] is true shows a spinner. Once the [bitmap] is ready
  * it fills the overlay with pinch-to-zoom support via a standard Image composable.
- * The "Export" button in the top bar lets the user proceed to the SAF file picker
- * after verifying the layout looks correct.
+ * The top bar's actions let the user print — the primary path — or proceed to the SAF file
+ * picker after verifying the layout looks correct.
  *
  * @param bitmap        The rendered PDF page (null while rendering or on error).
  * @param loading       Whether the bitmap is still being generated.
  * @param title         Title shown in the top bar of the overlay.
  * @param onClose       Called when the user taps × or navigates back.
- * @param onExport      Called when the user taps the Export button.
+ * @param onExport      Called when the user taps the Export icon. A compact icon: paper is
+ *                      the daily output and a PDF file is the backup copy, so Export takes
+ *                      the secondary treatment here as it does on the tab bodies.
+ * @param onPrint       Sends THIS document to the platform print dialog. Each route passes
+ *                      the same snapshot-and-compose action its tab-body Print button runs,
+ *                      from one local function, so the two entry points cannot drift. Null
+ *                      hides the action. Labelled and filled — the primary output action.
  * @param optionsSheet  Optional composable content shown in a bottom sheet when the user
  *                      taps the Tune icon. When null, no Tune icon is shown.
  * @param sheetTunesPage Whether [optionsSheet] reshapes THIS page live. When true the open
@@ -162,6 +176,7 @@ internal fun PdfPreviewOverlay(
     title: String,
     onClose: () -> Unit,
     onExport: () -> Unit,
+    onPrint: (() -> Unit)? = null,
     optionsSheet: (@Composable () -> Unit)? = null,
     sheetTunesPage: Boolean = false,
     inkBand: InkBand? = null,
@@ -197,14 +212,13 @@ internal fun PdfPreviewOverlay(
     }
 
     // Unlock device rotation while the preview is open so the landscape sheet can be viewed in
-    // landscape (the app is otherwise locked to portrait); restore portrait on dismiss. Same
-    // pattern as the schematic `PdfPreviewScreen`.
+    // landscape (phones are otherwise locked to portrait); restore the device's BASE
+    // orientation on dismiss — portrait on a phone, free rotation on a tablet. Same pattern as
+    // the schematic `PdfPreviewScreen`.
     val activity = LocalContext.current as? Activity
     DisposableEffect(Unit) {
-        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-        onDispose {
-            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-        }
+        activity?.unlockRotation()
+        onDispose { activity?.restoreBaseOrientation() }
     }
 
     Surface(
@@ -238,10 +252,16 @@ internal fun PdfPreviewOverlay(
                             tint = MaterialTheme.colorScheme.onSurface)
                     }
                 }
-                FilledTonalButton(onClick = onExport, modifier = Modifier.padding(end = 8.dp)) {
-                    Icon(Icons.Outlined.PictureAsPdf, contentDescription = null)
-                    Spacer(Modifier.width(6.dp))
-                    Text("Export")
+                if (onPrint != null) {
+                    FilledTonalButton(onClick = onPrint) {
+                        Icon(Icons.Filled.Print, contentDescription = null)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Print")
+                    }
+                }
+                IconButton(onClick = onExport, modifier = Modifier.padding(end = 4.dp)) {
+                    Icon(Icons.Outlined.PictureAsPdf, contentDescription = "Export PDF",
+                        tint = MaterialTheme.colorScheme.onSurface)
                 }
             }
 
@@ -356,8 +376,24 @@ internal fun RunoutWearOptionsSheet(
     pdfShadedTapers: Boolean,
     pdfShadedLiners: Boolean,
     vm: ShaftViewModel,
+    /** The app-wide `PdfPrefs.shadeExplicitBodiesOnly` — see [ShadeInPdfChecks]. */
+    shadeExplicitBodiesOnly: Boolean = false,
+    /**
+     * Shows the "Explicit bodies only" row inside the shade section. Off for the wear and
+     * undercut sheets: their `SimpleShaftProfile` pass shades every body run whatever that
+     * pref says, so the row would be a checkbox the page visibly ignores.
+     */
+    showShadeExplicitBodiesOnly: Boolean = true,
     /** Locks the "Liners" shade row — see [ShadeInPdfChecks]. */
     linerShadeLocked: Boolean = false,
+    /**
+     * Shows the "Undercut drawing: line art (no shading)" row at the foot of the shade section.
+     * On only for the UNDERCUT preview — `PdfPrefs.undercutLineArt` reaches one composer, so on
+     * any other sheet the row would be a checkbox the page ignores.
+     */
+    showUndercutLineArt: Boolean = false,
+    /** The app-wide `PdfPrefs.undercutLineArt`; read only when [showUndercutLineArt]. */
+    undercutLineArt: Boolean = false,
     /**
      * Shows the per-job "Coupling face" election. On for the runout and consolidated sheets,
      * the two documents that can draw the end view; off for the wear and undercut sheets,
@@ -377,9 +413,9 @@ internal fun RunoutWearOptionsSheet(
     /** The app-wide `PdfPrefs.sBreakThresholdFrac`; read only when [showSBreak]. */
     sBreakThresholdFrac: Float = PDF_SBREAK_THRESHOLD_DEFAULT,
     /**
-     * Shows the wear-document tuning block: the Components election, the "Trace depth
-     * exaggeration" row (the Wear tab's own control, shared construction), the "Wear area shade"
-     * slider, and the "Taper–liner join" threshold. On only for the wear
+     * Shows the wear-document tuning block: the Components election, the "Strip size" slider, the
+     * "Trace depth exaggeration" row (the Wear tab's own control, shared construction), the
+     * "Wear area shade" slider, and the "Taper–liner join" threshold. On only for the wear
      * preview — the sheet exists so the drawing being looked at can be tuned against itself
      * (on-device request) — and inert on every other document, which draws no wear strips.
      */
@@ -412,6 +448,8 @@ internal fun RunoutWearOptionsSheet(
     wearShowShaftProfile: Boolean = true,
     /** This job's `WearRecord.compactStrips`; read only when [showWearControls]. */
     wearCompactStrips: Boolean = false,
+    /** This job's `WearRecord.stripSizeFrac` — the strips' height ceiling multiplier. */
+    wearStripSizeFrac: Float = WEAR_STRIP_SIZE_FRAC_DEFAULT,
     /**
      * Shows the shared "Dimension arrows" size picker. On for the consolidated sheet, the only
      * document here that draws dimension rails; the classic runout/wear/undercut sheets draw
@@ -444,19 +482,37 @@ internal fun RunoutWearOptionsSheet(
     blankDraft: Boolean = false,
     onSetBlankDraft: ((Boolean) -> Unit)? = null,
     /**
-     * Shows the per-job "Shaft height" + "Liner compression" pair (`RunoutConfig`). On for
-     * both documents `composeRunoutPdf` produces — the classic runout sheet and the
-     * consolidated one — since one composer means one drawn height and one liner floor; off
-     * for the wear and undercut documents, whose composers take neither, so the pair would
-     * be inert noise there.
+     * Shows the per-job "Shaft height" slider (`RunoutConfig.heightScale`). On for every
+     * document whose composer takes the multiplier — the classic runout sheet, the
+     * consolidated one, and the wear document; off for the undercut drawing, which draws no
+     * whole-shaft profile in its normal form, so the slider would be inert there.
+     *
+     * Split from [showLinerCompression] because the wear composer sizes its profile band by
+     * height but has no compression solve to raise liner floors against.
      */
-    showHeightControls: Boolean = false,
+    showHeightSlider: Boolean = false,
     heightScale: Float = 1f,
     heightSliderBase: Float = 1f,
     heightSliderMaxDiaMm: Float = 10f,
+    /**
+     * Shows the per-job "Liner compression" pair (`RunoutConfig.linersProportional` +
+     * `linerCompression`). On for the two documents `composeRunoutPdf` produces — one
+     * composer, one liner floor — and off everywhere else, whose composers take neither.
+     */
+    showLinerCompression: Boolean = false,
     linersProportional: Boolean = false,
     linerCompression: Float = 0f,
     estimateKeptFrac: (Float) -> Float = { it },
+    /**
+     * Shows the "Runout bubbles" heading with the "Bubble size" and "Bubble height" sliders
+     * (`PdfPrefs.runoutBubbleScale` / `runoutBubbleDropScale`). On for the runout and
+     * consolidated sheets, the two documents that draw bubbles at all.
+     */
+    showBubbleControls: Boolean = false,
+    /** The app-wide `PdfPrefs.runoutBubbleScale`; read only when [showBubbleControls]. */
+    runoutBubbleScale: Float = PDF_RUNOUT_BUBBLE_SCALE_DEFAULT,
+    /** The app-wide `PdfPrefs.runoutBubbleDropScale`; read only when [showBubbleControls]. */
+    runoutBubbleDropScale: Float = PDF_RUNOUT_BUBBLE_DROP_SCALE_DEFAULT,
     /**
      * Shows the "Measurement reference" radios. On only for the consolidated sheet: its
      * dimension rails honor `PdfPrefs.tieringMode`, while the classic runout/wear/undercut
@@ -479,20 +535,25 @@ internal fun RunoutWearOptionsSheet(
         Text("PDF Options", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(12.dp))
 
-        // ── Blank draft (write-in) ───────────────────────────────────────────
-        if (onSetBlankDraft != null) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Switch(
-                    checked = blankDraft,
-                    onCheckedChange = onSetBlankDraft,
-                )
-                Spacer(Modifier.width(12.dp))
-                Column {
-                    Text("Blank draft (write-in)", style = MaterialTheme.typography.bodyLarge)
-                    Text(
-                        "Job info, dimensions, and recorded values are blanked for handwriting.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        // ── Content ──────────────────────────────────────────────────────────
+        // What this sheet CARRIES, as chips: the write-in draft and — on the two documents
+        // that can draw the end view — the coupling face. Both are per-sheet elections, so
+        // they lead; the coupling face is per-JOB (it rides the envelope's RunoutConfig, not
+        // PdfPrefs — one job may measure the coupling and the next not).
+        if (onSetBlankDraft != null || showCouplingFaceRow) {
+            ContentChipRow {
+                if (onSetBlankDraft != null) {
+                    ContentChip(
+                        label = "Blank draft",
+                        selected = blankDraft,
+                        onClick = { onSetBlankDraft(!blankDraft) },
+                    )
+                }
+                if (showCouplingFaceRow) {
+                    ContentChip(
+                        label = "Coupling face",
+                        selected = couplingFaceOn,
+                        onClick = { vm.setShowCouplingFace(!couplingFaceOn) },
                     )
                 }
             }
@@ -501,48 +562,11 @@ internal fun RunoutWearOptionsSheet(
             HorizontalDivider()
             Spacer(Modifier.height(12.dp))
         }
-
-        // ── Coupling face (runout + consolidated sheets) ─────────────────────
-        // A content election, so it sits with the other "what does this sheet carry"
-        // controls rather than the styling sliders. Per-job: it rides the envelope's
-        // RunoutConfig, not PdfPrefs — one job may measure the coupling and the next not.
-        if (showCouplingFaceRow) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(
-                    checked = couplingFaceOn,
-                    onCheckedChange = { vm.setShowCouplingFace(it) },
-                )
-                Spacer(Modifier.width(12.dp))
-                Column {
-                    Text("Coupling face", style = MaterialTheme.typography.bodyLarge)
-                    Text(
-                        "End view in the bottom-right: coupling OD, pilot bore, bolt circle.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(12.dp))
-            HorizontalDivider()
-            Spacer(Modifier.height(12.dp))
-        }
-
-        // ── Line thickness ───────────────────────────────────────────────────
-        LineThicknessSlider(
-            scale = lineThicknessScale,
-            onCommit = { vm.setLineThicknessScale(it) },
-            onDrag = { tuning?.lineThickness = it },
-        )
-
-        Spacer(Modifier.height(12.dp))
-        HorizontalDivider()
-        Spacer(Modifier.height(12.dp))
 
         // ── Wear drawing (wear document only) ────────────────────────────────
-        // The same controls the Wear tab and Settings → Drawing carry — here so the trace
-        // depth, the band's grey, and the join threshold can be judged against the sheet
-        // they print on.
+        // The same controls the Wear tab and Settings → Drawing carry — here so the strip
+        // height, the trace depth, the band's grey, and the join threshold can be judged
+        // against the sheet they print on.
         // Commit-on-release, like every slider on this sheet; the wear preview re-renders
         // from its own keys rather than a live tuning channel.
         if (showWearControls) {
@@ -559,6 +583,15 @@ internal fun RunoutWearOptionsSheet(
                 // Nullable: the "Default (all liners)" quick action clears the election so the
                 // sheet follows the shaft again.
                 onSetSelection = { vm.setWearStripComponents(it) },
+            )
+
+            Spacer(Modifier.height(12.dp))
+
+            // A primary layout control — how tall the elected strips draw — so it sits with the
+            // election rather than with the restyling sliders below.
+            WearStripSizeSlider(
+                frac = wearStripSizeFrac,
+                onCommit = { vm.setWearStripSizeFrac(it) },
             )
 
             Spacer(Modifier.height(12.dp))
@@ -593,6 +626,26 @@ internal fun RunoutWearOptionsSheet(
             Spacer(Modifier.height(12.dp))
         }
 
+        // ── Shaft height ─────────────────────────────────────────────────────
+        // The per-job `RunoutConfig.heightScale` — ONE value behind every drawing. It leads
+        // the styling controls because it is the one reached for most (on-device direction),
+        // and because it is a live-tuning slider: the page strip above this sheet exists to
+        // keep exactly this group in view, and a slider parked below the typography rows on
+        // a sheet that scrolls reads as absent (on-device report).
+        if (showHeightSlider) {
+            ShaftHeightSlider(
+                heightScale = heightScale,
+                baseScale = heightSliderBase,
+                maxDiaMm = heightSliderMaxDiaMm,
+                onCommit = { vm.setRunoutHeightScale(it) },
+                onDrag = { tuning?.heightScale = it },
+            )
+
+            Spacer(Modifier.height(12.dp))
+            HorizontalDivider()
+            Spacer(Modifier.height(12.dp))
+        }
+
         // ── Body S-break ─────────────────────────────────────────────────────
         // The same app-wide `PdfPrefs.sBreakThresholdFrac` Settings → Drawing sets —
         // here so the threshold can be judged against the drawing it changes.
@@ -608,26 +661,21 @@ internal fun RunoutWearOptionsSheet(
             Spacer(Modifier.height(12.dp))
         }
 
-        // ── Shaft height / Liner compression ────────────────────────────────
-        // Same per-job pair as the Consolidated Output tab (`RunoutConfig`), and they sit
-        // with Line thickness and Body S-break: those are the sliders that reshape the page
-        // under a finger, the live-tuning group the page strip above this sheet exists to
-        // keep in view. The sheet is taller than its cap and scrolls, so a tuning slider
-        // parked below the typography rows reads as absent (on-device report). Same order as
-        // the schematic's `PdfOptionsSheet`.
-        if (showHeightControls) {
-            ShaftHeightSlider(
-                heightScale = heightScale,
-                baseScale = heightSliderBase,
-                maxDiaMm = heightSliderMaxDiaMm,
-                onCommit = { vm.setRunoutHeightScale(it) },
-                onDrag = { tuning?.heightScale = it },
-            )
+        // ── Line thickness ───────────────────────────────────────────────────
+        LineThicknessSlider(
+            scale = lineThicknessScale,
+            onCommit = { vm.setLineThicknessScale(it) },
+            onDrag = { tuning?.lineThickness = it },
+        )
 
-            Spacer(Modifier.height(12.dp))
-            HorizontalDivider()
-            Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(12.dp))
+        HorizontalDivider()
+        Spacer(Modifier.height(12.dp))
 
+        // ── Liner & taper compression ────────────────────────────────────────
+        // The other half of the per-job `RunoutConfig` pair, on the two sheets whose
+        // composer solves liner floors.
+        if (showLinerCompression) {
             LinerCompressionControl(
                 linersProportional = linersProportional,
                 linerCompression = linerCompression,
@@ -635,6 +683,30 @@ internal fun RunoutWearOptionsSheet(
                 onSetProportional = { vm.setLinersProportional(it) },
                 onSetCompression = { vm.setLinerCompression(it) },
                 onDrag = { tuning?.linerCompression = it },
+            )
+
+            Spacer(Modifier.height(12.dp))
+            HorizontalDivider()
+            Spacer(Modifier.height(12.dp))
+        }
+
+        // ── Runout bubbles ───────────────────────────────────────────────────
+        // App-wide `PdfPrefs`, so the same pair sizes the Runout tab's canvas markers and
+        // the printed sheet's — one radius and one drop behind both draw sites.
+        if (showBubbleControls) {
+            Text("Runout bubbles", style = MaterialTheme.typography.titleSmall)
+            Spacer(Modifier.height(4.dp))
+
+            BubbleSizeSlider(
+                scale = runoutBubbleScale,
+                onCommit = { vm.setPdfRunoutBubbleScale(it) },
+            )
+
+            Spacer(Modifier.height(12.dp))
+
+            BubbleDropSlider(
+                scale = runoutBubbleDropScale,
+                onCommit = { vm.setPdfRunoutBubbleDropScale(it) },
             )
 
             Spacer(Modifier.height(12.dp))
@@ -667,37 +739,31 @@ internal fun RunoutWearOptionsSheet(
 
         // ── Measurement reference ────────────────────────────────────────────
         if (showMeasurementReference) {
-            Text("Measurement reference", style = MaterialTheme.typography.titleSmall)
-            Spacer(Modifier.height(4.dp))
-            listOf(
-                PdfTieringMode.AUTO to "Auto (closest end)",
-                PdfTieringMode.AFT  to "AFT",
-                PdfTieringMode.FWD  to "FWD",
-            ).forEach { (mode, label) ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(
-                        selected = pdfTieringMode == mode,
-                        onClick = { vm.setPdfTieringMode(mode) },
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(label, style = MaterialTheme.typography.bodyLarge)
-                }
-            }
+            MeasurementReferenceSection(
+                pdfTieringMode = pdfTieringMode,
+                onCommit = { vm.setPdfTieringMode(it) },
+            )
 
             Spacer(Modifier.height(12.dp))
             HorizontalDivider()
             Spacer(Modifier.height(12.dp))
         }
 
-        // ── Shade in PDF ─────────────────────────────────────────────────────
+        // ── Shade in Components ──────────────────────────────────────────────
         ShadeInPdfChecks(
             pdfShadedBodies = pdfShadedBodies,
             pdfShadedTapers = pdfShadedTapers,
             pdfShadedLiners = pdfShadedLiners,
+            shadeExplicitBodiesOnly = shadeExplicitBodiesOnly,
             onSetShadedBodies = { vm.setPdfShadedBodies(it) },
             onSetShadedTapers = { vm.setPdfShadedTapers(it) },
             onSetShadedLiners = { vm.setPdfShadedLiners(it) },
+            onSetShadeExplicitBodiesOnly = { vm.setPdfShadeExplicitBodiesOnly(it) },
             linerShadeLocked = linerShadeLocked,
+            showExplicitBodiesOnly = showShadeExplicitBodiesOnly,
+            showUndercutLineArt = showUndercutLineArt,
+            undercutLineArt = undercutLineArt,
+            onSetUndercutLineArt = { vm.setPdfUndercutLineArt(it) },
         )
 
         Spacer(Modifier.height(12.dp))

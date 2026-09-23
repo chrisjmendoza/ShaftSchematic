@@ -4,7 +4,10 @@ ShaftScreen Contract
 Layer: UI → Screens  
 Purpose: Present the shaft editor surface and bind ViewModel state to user controls.
 
-Version: v0.15 (2026-08-17)
+Version: v0.18 (2026-09-16 — window width becomes the editor's adaptive axis: MEDIUM raises the
+preview card's height ceiling, EXPANDED splits the screen into a preview pane and a components
+pane and hides the hamburger. See "Window width".
+v0.17 2026-08-29)
 
 ---
 
@@ -33,8 +36,13 @@ Invariants
 - Component carousel shows the **resolved** component list (auto-bodies included) in
   **physical position order** along the shaft. See `ComponentsOrdering.md` (v1.2).  
 - Text fields **commit on blur** or IME “Done”; no live ViewModel writes while typing.
-  **Exception:** the OAL field commits on every keystroke in manual mode (intentional —
-  the preview updates live; see CLAUDE.md).  
+  **Exception:** the OAL field commits on every keystroke (intentional — the preview
+  updates live; see CLAUDE.md). The OAL field's **display never rewrites the
+  user's own text**: a typed `150 3/4` stays a fraction rather than echoing back as
+  `150.75` (on-device report). The text re-derives from the model only when the field is
+  unfocused AND no longer parses to the model value (undo, an edit from elsewhere, a
+  reverted empty commit). An **empty** field on Done/blur commits nothing and reverts to
+  the stored value — it never zeroes the shaft. See `OverallLength.md`.  
 - IME padding is applied **only to the scrollable region**, not the entire screen, and is
   chained **before** `verticalScroll` so it shrinks the scroll viewport (not just the
   content) — this lets Compose's focused-child-in-view behavior auto-scroll a focused
@@ -60,12 +68,16 @@ Responsibilities
   inside a `systemBarsPadding()` column and pass nothing. The string comes from the pure
   `editorDocumentTitleText`, so the format is asserted without a Compose harness.
 
+  The strip is also **tappable** — it is the document's naming affordance: a tap names an
+  unsaved document (the Save As screen) or renames a saved one, decided once in `AppNav` and
+  plumbed here as `onTitleClick` exactly as `onSave` is, so all five tabs behave identically.
+
 - **Header Row (TopAppBar):**  
   - Hamburger icon → opens the editor sidebar (Schematic / Runout / Wear tabs)
   - Undo/Redo history menu (`HistoryMenu`) — general session-scoped undo/redo
     (`ShaftViewModel.undoEdit`/`redoEdit`, `canUndo`/`canRedo`), not delete-only;
-    covers every drawing edit (spec, wear, runout readings, component order, OAL
-    mode). See `ShaftViewModel.md`.
+    covers every drawing edit (spec, wear, runout readings, component order). See
+    `ShaftViewModel.md`.
   - Project-Info icon
   - New / Open / Save / Export-PDF action icons. Export-PDF is gated by
     `ui/util/ExportPdfGate.kt` (pure, JVM-tested in `ExportPdfGateTest`): enabled only
@@ -75,14 +87,12 @@ Responsibilities
     `overflow_close_document`; clean → closes to Start, dirty → shared unsaved-changes
     guard — see `Navigation.md`), Settings, Clear All, etc.
 
-- **Preview Card:** (`PreviewCard`, `PreviewOalBadge`, `FreeToEndBadge` — all in
+- **Preview Card:** (`PreviewCard`, `PreviewOalBadge` — both in
   `ui/screen/ShaftPreviewPanel.kt`, extracted from `ShaftScreen.kt` 2026-07-24, pure
   code move, no behavior change)
   - Fixed preview area rendering the shaft via `ShaftDrawing(...)`  
   - Optional grid overlay (user setting)  
   - Transparent or theme-color background (user selectable)  
-  - “Free to end” badge aligned **TopStart**, shown only in manual OAL mode
-    (see `FreeToEndBadge.md`)
   - Style (`PreviewCard`): `RectangleShape`, transparent container and inner Box —
     the preview draws on the screen background; colors come from preview color
     settings, not the card. Sizing: `heightIn(120–200 dp)`, `aspectRatio(3.0)`.
@@ -98,9 +108,11 @@ Responsibilities
   - Black/White Only mode (forces black outlines and disables fills in Preview)
 
 - **Scrollable Form Area:**  
-  - Overall length field (unit-aware; commits per keystroke in manual mode)  
-  - Project information sheet (Job Number, Customer, Vessel, Shaft Position, Notes) —
-    opened from the toolbar, **Save/Cancel**, not commit-on-blur (see Notes)  
+  - Overall length field (`OverallLengthField`, unit-aware; commits per keystroke)  
+  - Project information sheet (Job Number, Customer, Vessel, Item, Shaft Position, Notes) —
+    opened from the toolbar, **Save/Cancel**, not commit-on-blur (see Notes). **Item** is an
+    optional shaft designation ("Tail shaft", "Line shaft"); blank is the default and prints
+    nothing anywhere.  
   - Component carousel for **Body**, **Taper**, **Thread**, **Liner**, and
     **Coupler Bolt Slot** (see `ComponentCarousel.kt`)
 
@@ -112,6 +124,50 @@ Responsibilities
 - **Add Component button:**  
   - Full-width “+ Add Component” button inside the scrollable column (not a FAB)  
   - Opens the Add-Chooser dialog for new components
+
+---
+
+Window width
+------------
+Window width is the editor's **one** adaptive axis (`ui/adaptive/WindowSize.kt`,
+`currentWindowWidthClass()`); the policy for the app as a whole lives in `Adaptive.md`. Height
+is never a class here. The Final Schematic tab hosts this same screen through
+`ShaftRoute(target = FINAL)`, so it inherits every branch below.
+
+- **COMPACT** (< 600 dp) — the phone layout, unchanged: one column with the preview card pinned
+  under the app bar (`heightIn(min 120, max 200.dp)`, `aspectRatio(3f)`) above a single
+  scrolling column holding the OAL field, the dimensioned-OAL / debug labels, the Components
+  heading, the "+ Add Component" button, `SpecWarningBanner`, and the carousel.
+- **MEDIUM** (600–839 dp: a portrait tablet, a phone in landscape) — the same single column,
+  with **only** the preview card's height ceiling raised to **280 dp**. The 3:1 ratio and the
+  120 dp floor stand, so a wide window stops drawing the shaft as a flat strip. Nothing else
+  moves: splitting a MEDIUM window would leave both halves narrower than a phone.
+- **EXPANDED** (≥ 840 dp: a landscape tablet) — **two panes** in a `Row`, divided by a
+  `VerticalDivider`:
+  - Left, weight 0.55, `testTag("editor_pane_preview")`: the preview card (pane width,
+    `aspectRatio(3f)`, ceiling **320 dp**), the OAL field and its labels, then
+    `SpecWarningBanner`. The warnings move here because they are about the drawing and the
+    length beside them.
+  - Right, weight 0.45, `testTag("editor_pane_components")`: the Components heading and hint,
+    the "+ Add Component" button, and the carousel at its usual `CAROUSEL_HEIGHT`.
+  - Each pane scrolls **independently**, so a long warning banner can never push the preview
+    off the screen and swiping the carousel can never scroll the shaft out of sight. Only the
+    components pane carries `imePadding()` — it is the one that holds text fields.
+  - Panes keep the editor's existing 16 dp horizontal padding; the carousel pager has no peek
+    or `contentPadding`, so one card fills whatever width the pane offers with no change.
+
+**Both branches emit the SAME content blocks.** `ShaftScreen` declares them once
+(`previewBlock`, `oalBlock`, `componentsBlock`) and each branch only decides where they go —
+composable lambdas rather than private composables because a private one would have to restate
+the screen's parameter list (the carousel alone takes fifty callbacks), and a signature copied
+twice is exactly the drift this prevents. `componentsBlock` takes a `warningSlot` emitted
+between the add button and the carousel: the single column fills it with `SpecWarningBanner`,
+the two-pane branch leaves it empty because the banner has moved left. Every `testTag` survives
+in both branches.
+
+The toolbar's hamburger (`testTag("toolbar_menu")`) is **hidden** when
+`LocalSidebarPermanent.current` is true — in an EXPANDED window the sidebar is already laid out
+beside the content, so the button would open a panel that is on screen. See `Navigation.md`.
 
 ---
 
@@ -129,18 +185,36 @@ Do Nots
 
 Notes
 ------
-- `spec.freeToEndMm()` provides mm; `formatDisplay(mm, unit)` converts and formats it once for display.  
-- `formatDisplay()` always expects mm input.  
-- Free-to-End badge text includes the unit abbreviation (e.g. “Free to end: 100 in” or “2540 mm”).  
+- `formatDisplay(mm, unit)` converts and formats a value once for display; it always expects
+  mm input.  
 - `ComponentCard` handles its own remove button; callers simply supply `onRemove = { … }`.  
-- `ComponentCard` also ends every card with a **Save** button (`card_save_button`). Fields
-  commit on blur and IME Done, but chips/toggles/checkboxes never TAKE focus, so a typed
-  value followed by a chip tap sat uncommitted (on-device report). Save force-clears focus,
-  driving the one existing commit-on-blur path — no second commit pipeline, and a no-op
-  when nothing is focused or nothing changed. Card-only: the Add dialogs commit through
-  their own Add button. See `NumberField.md`.  
+- `ComponentCard` also ends every card with a **Save** button (`card_save_button`) — a
+  full-width, centered, filled `Button`. Fields commit on blur and IME Done, but
+  chips/toggles/checkboxes never TAKE focus, so a typed value followed by a chip tap sat
+  uncommitted (on-device report). Save force-clears focus, driving the one existing
+  commit-on-blur path — no second commit pipeline. Card-only: the Add dialogs commit through
+  their own Add button.
+  **It is DISABLED while nothing is pending** (on-device request): greyed out is a solid
+  statement that every field on this card is saved, and filled is the visible thing to press.
+  The state is the aggregate of the fields' own `onDirtyChange` reports, collected by the
+  card's `CardDirtyState` through the `LocalCardDirtyState` composition local — fields
+  register themselves, there is no per-call-site key list to keep in sync. Commit-on-blur is
+  otherwise **completely unchanged**; the button only reflects and flushes it. Accepted
+  trade-off: with nothing pending it is no longer a tap-anywhere keyboard dismissal — IME
+  back and Done still are. See `NumberField.md`.  
+- **Card fields carry two card-level validations, and neither rewrites a stored value.**
+  A card whose component runs past `spec.overallLengthMm` shows the amber advisory chip
+  "Extends past shaft length (OAL *n* mm)" — the SAME `outsideShaftSpan` predicate the add
+  dialogs' bounds warning uses (`ui/util/ComponentWarnings.kt`; excluded threads skipped,
+  bodies included). It is advisory, not the error chip: oversize is legal (`OverallLength.md`),
+  the edit still commits verbatim, and neither `collidingIds()`, the export gate, nor the OAL
+  field's own red state is touched. Above the carousel, `SpecWarningBanner` adds a count line
+  for the same condition. Separately, the **Length** field rejects `≤ 0` ("Must be > 0",
+  `positiveLengthErrorMm`) through the standard validator path — the field errors, reverts,
+  and does not commit, so a zero length stops at the card. See `VALIDATION_RULES.md` §3.1a.  
 - Persistence, serialization, and other business logic live strictly in the ViewModel.  
-- Scaffold uses system-bar insets only; FAB uses `WindowInsets.ime.union(WindowInsets.navigationBars)`.
+- Scaffold uses system-bar insets only; the scroll column takes `imePadding` so the focused
+  field (and the "+ Add Component" button beneath the carousel) stays above the keyboard.
 - `computeAddDefaults()` lives in `ui/screen/ShaftScreenController.kt`. Shared format
   helpers (`abbr`, `disp`, `formatDisplay`, `toMmOrNull`, `parseFractionOrDecimal`,
   `tpiToPitchMm`) and the dialogs/menus remain in `ShaftScreen.kt`.
@@ -180,7 +254,8 @@ Notes
 - **The preview canvas tap is selection only.** A tap on a component highlights it
   (`onTapComponentId`); a tap on bare canvas does nothing. It used to open an add chooser at
   the tapped position, which fired unintentionally far more often than it was wanted and was
-  never used deliberately (on-device report). Components are added from the FAB chooser,
+  never used deliberately (on-device report). Components are added from the "+ Add Component"
+  button's chooser (a full-width `Button` in the scroll column, not a FAB),
   which is the only add entry point (`docs/UI_CONTRACT.md` §3.1.1).
 
 ---
@@ -197,13 +272,30 @@ Future Enhancements
 
 Change Log
 -----------
+**v0.18 (2026-09-16)**
+- **Window width branches added.** COMPACT is byte-identical to before. MEDIUM raises only the
+  preview card's height ceiling to 280 dp. EXPANDED lays the editor out as two scrolling panes
+  — preview / OAL / warnings on the left (`editor_pane_preview`), components on the right
+  (`editor_pane_components`) — and drops the toolbar hamburger, since `ShaftEditorRoute` places
+  the sidebar permanently beside the content there. The content blocks are declared once and
+  invoked by both branches, so the phone and tablet layouts cannot drift. Pinned by
+  `ShaftScreenTwoPaneTest`. See "Window width" and `Adaptive.md`.
+
+**v0.16 (2026-08-29)**
+- **Free-to-End badge removed.** The preview overlay is gone, along with
+  `ui/util/FreeToEndBadgeMath.kt`, `ShaftSpec.freeToEndMm()` and the `FreeToEndBadge.md`
+  contract (on-device direction: auto-bodies fill the gap to the OAL, so the number
+  misleads). The preview card now carries only the OAL badge. Oversize is signalled by the
+  OAL field's error state and the add-dialog "falls outside shaft span" warning — both
+  unchanged. See `OverallLength.md` (v2.1).
+
 **v0.15 (2026-08-17)**
 - **Tap-to-add removed.** The preview canvas tap is selection only. The add-at-tapped-position
   chooser fired unintentionally and was never used on purpose (on-device report), so the
   gesture, its pending-position state (`setTapAddPosition`/`clearPendingAddPosition`/
   `pendingAddPositionMm`), and the entire snap pipeline it was the sole consumer of
-  (`ui/viewmodel/SnapUtils.kt`, `snapRawPositionMm`, `gapToNextAnchorMm`) are gone. The FAB
-  chooser is now the only add entry point; its handoff state was renamed off the dead gesture
+  (`ui/viewmodel/SnapUtils.kt`, `snapRawPositionMm`, `gapToNextAnchorMm`) are gone. The
+  "+ Add Component" button's chooser is now the only add entry point; its handoff state was renamed off the dead gesture
   (`tapAdd*` → `add*`).
 
 **v0.14 (2026-08-14)**

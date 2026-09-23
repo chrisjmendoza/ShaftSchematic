@@ -95,6 +95,49 @@ region reads, top to bottom:
    (`WearTraceDepthControlRow`), the dye-pen PASS/FAIL chips, and the Components election
    (`WearStripComponentChecks`).
 
+### Window width
+
+Both tabs key their skeleton on `currentWindowWidthClass()`; the policy behind the classes is
+`docs/contracts/Adaptive.md`. Everything above describes the COMPACT layout, which is unchanged.
+
+- **COMPACT** — as described above.
+- **MEDIUM** — the same single column, with the canvas box taller (a 600–840 dp column draws the
+  shaft nearly twice as wide as a phone's, and at the phone's height the profile flattens into a
+  rule). Nothing else moves.
+- **EXPANDED** — two panes in a `Row` under the toolbar divider, with a `VerticalDivider`
+  between and each pane scrolling independently:
+  - **left**, `testTag "sheet_pane_canvas"` — the canvas, then the tab's explanatory line, the
+    blank-draft switch, the export-gate message and `DocumentActionButtons`: the "look at the
+    sheet and print it" group.
+  - **right**, `testTag "sheet_pane_controls"` — everything that shapes what the sheet draws.
+    Runout: TIR orientation, coupling face, the station editor. Wear: trace depth, the dye-pen
+    chips, the Components election.
+
+  The canvas is **pinned** out of the left pane's scroll at EXPANDED — the same rule
+  RunoutRoute's canvas already follows at every width, and for the same reason: the controls
+  opposite it reshape what it draws. The rest of the left pane scrolls under it. The canvas
+  sizes by PROPORTION there rather than by a fixed height, since the pane's width is the free
+  variable.
+
+The skeleton is the ONLY thing the width class changes. Each tab composes its blocks **once**
+(`previewBlock` / `canvasBlock`, `printGroup`, and the control sections) and both branches call
+the same values, so a phone layout and a tablet layout cannot drift; `sheetCanvasModifier` and
+`SheetTwoPane` (`ui/screen/SheetPaneLayout.kt`) are shared by all three sheet tabs. Every
+`testTag` and every gesture modifier on the canvases survives unchanged.
+
+Each tab's hamburger `IconButton` is omitted when `LocalSidebarPermanent.current` is true —
+there is nothing to open when the sidebar is already laid out beside the tabs.
+
+### Consolidated Output tab — window width
+
+`OutputRoute` carries no canvas and reads as ONE ordered workflow: elect the sheet's content,
+produce it, tune and author what it prints, then batch-export — each block acting on the one
+above it ("Export all" names the content selection above it explicitly). Splitting that into
+panes would separate steps that read in sequence, so it takes the **readable column** instead
+(`Modifier.readableWidth()`, see `docs/UI_CONTRACT.md`) at every width: the scroll gutter still
+spans the window, the content stops at a legible width. Its hamburger follows the same
+`LocalSidebarPermanent` rule.
+
 ---
 
 ## Measurement stations (counts, fragments, identity)
@@ -172,8 +215,7 @@ is an authored value in the golden-rule sense: no derivation may move it again.
 
 `RunoutStationPlacements` rides the envelope as `runout_stations` (additive + defaulted;
 absent → every station derives as before). **Pure reference feature**, same posture as runout
-readings: never touches `coverageEndMm`/OAL, body resolution, collision, or the Free-to-End
-badge.
+readings: never touches `coverageEndMm`/OAL, body resolution, or collision.
 
 - **`axialMm` is component-local**, from the AFT edge of the component's aft-most run — the
   `WearPit.axialMm` convention. Not px, not drawn-x: the canvas maps mm linearly while the sheet
@@ -321,7 +363,7 @@ component — bodies and tapers too; see "Wear Pits" below.)
 **Tap hit-testing** inverts the existing `ShaftLayout.Result.xMmFromPx` to get the tap position
 in mm, then calls the pure `pickLinerIdAtMm` (`LinerWearMath.kt`) to pick the liner whose span
 contains it — ties (a tap exactly on a shared boundary) broken by whichever liner has the
-nearer edge. A hit opens `LinerWearDetailOverlay` for that liner's id.
+nearer edge. A hit opens `ComponentWearDetailOverlay` for that liner's id.
 
 **Detail overlay (`LinerWearDetail.kt`)** — a full-screen composable, not a nav destination,
 same shape as `PdfPreviewOverlay`: its own `BackHandler` plus a back-arrow top bar. Its
@@ -379,7 +421,7 @@ model. Conversion (`ui/screen/LinerWearMath.kt`):
 
 `wearStartToCanonicalMm`/`canonicalToWearStartMm` are the pure, exactly-inverse conversion pair.
 AFT/FWD SET positions come from `geom/OalComputations.kt`'s `computeOalWindow` +
-`computeSetPositionsInMeasureSpace` (computed once per overlay open in `LinerWearDetailOverlay`
+`computeSetPositionsInMeasureSpace` (computed once per overlay open in `ComponentWearDetailOverlay`
 and threaded down to each `WearSpotCard`) — its `measureStartMm` is always `0.0`, so the
 returned measure-space X values already are physical shaft-space mm from AFT, the same space as
 `liner.startFromAftMm`. Switching the "Measure From" chip re-projects the *displayed* Start
@@ -735,8 +777,11 @@ Overnight wave (on-device request), three features on the Runout tab:
   own history.
 - **"Shaft height" slider** — `RunoutConfig.heightScale` (per-job, rides the `.shaft`
   envelope like the undercut sheet's exaggeration slider; additive field, legacy files
-  default to 1.0). A multiplier on the sheet's solved profile scale: 50%–300%
-  (`PROFILE_HEIGHT_SCALE_MIN/MAX`), applied AFTER the conventional
+  default to 1.0). A multiplier on the sheet's solved profile scale: 0.25×–6.0×
+  (`PROFILE_HEIGHT_SCALE_MIN`/`PROFILE_HEIGHT_SCALE_MAX`, `geom/ProfileCompression.kt` —
+  deliberately wider than the absolute paper band, since the multiplier only has to be able
+  to EXPRESS that band on any shaft; the height clamp is what bounds the drawing), applied
+  AFTER the conventional
   max(width-fit, visual scale, value-need) solve. The
   `PROFILE_MAX_SHAFT_HEIGHT_PT` = 108 pt ceiling is **absolute** (on-device direction):
   a short shaft whose width-fit would draw taller is capped too — it keeps true
@@ -851,12 +896,17 @@ On-device request following the worn-sections review:
     from the resolved runs: `ResolvedBody` has no keyway fields and `bodyForPdf` builds
     none, so a filter over resolved bodies matches nothing and the pin quietly dies.
     Same rule for the keyway DRAW (see "Keyways on the profile" below) — the span that
-    pins is exactly the span the slot draws in.
+    pins is exactly the span the slot draws in. A second pin source shares the builder:
+    an explicit body opted out of compression (`Body.compressOnDrawing` false,
+    `compressOptOutBodySpans` — the whole stored span, no S-break, long-span trigger
+    included; new explicit bodies are created opted-out, saved documents keep
+    compressing until the card's checkbox is unticked).
     **Tapers may shrink but never equalize**: no flat floor (a flat floor equalizes
     unequal tapers when both clamp to it — on-device report) — a ratio-preserving
     fraction-of-true floor instead (`PROFILE_TAPER_MIN_FRAC_OF_TRUE` 0.7, λ-fit, never
-    lowers the height; relative taper widths always read true). The taper fraction is
-    deliberately the pool's LARGEST — within the shared λ, width flows to spans in
+    lowers the height; relative taper widths always read true) — a BASELINE the "Liner &
+    taper compression" request raises (`taperMinFracOfTrue`, see below). The taper
+    fraction is deliberately the pool's LARGEST constant — within the shared λ, width flows to spans in
     proportion to their fraction, so tapers out-prioritize body runs ("sacrifice a
     little more of the body compression to make the tapers more proportional" —
     on-device request, 2026-08-14; body runs fund it at 0.30 and their relative lengths
@@ -874,11 +924,13 @@ On-device request following the worn-sections review:
     room to write wear values in, see the 2026-08-05 liner clarification below; the
     SCHEMATIC composer instead uses the lean `SCHEMATIC_MIN_*` floors — 28/40/56 —
     because its values live on rails and callouts, not inside spans, so proportion
-    wins there; liners additionally honor the per-job **"Liner compression" pair** —
+    wins there; liners AND tapers honor the per-job **"Liner & taper compression" pair** —
     `RunoutConfig.linersProportional` checkbox holds them at true width and the
     `linerCompression` slider bounds how far they may foreshorten via
-    `ProfileFeatureSpan.minWidthFracOfTrue`, control on the Output tab + schematic Tune
-    sheet — "the key components we are measuring are the tapers and liners"; the
+    `ProfileFeatureSpan.minWidthFracOfTrue` (tapers through `taperMinFracOfTrue`, floored
+    at their baseline), control on the Output tab + schematic Tune
+    sheet — "the key components we are measuring are the tapers and liners", so the two
+    move together and keep the same fraction of true length; the
     **drawing height takes precedence**: the raises are best-effort, ignored by the
     scale solve and λ-fitted to the room the page has at the selected height
     (`fracFitFactor`) — a liner request never lowers the drawn shaft), and **above the
@@ -1052,6 +1104,20 @@ the decimal (`0.010 → .010`, `-0.003 → -.003`) so the value fits and reads l
 Keep the radius and the `0.60` text ratio identical in both draw sites (`RunoutRoute.drawRunoutMarkers`
 ⇔ `RunoutPdfComposer.drawPlacedBubbles`).
 
+`BUBBLE_RADIUS_PT` and the row-0 drop (`SHORT_LEADER_PT` on the sheet, the canvas's own
+`shortLeader`) are now **base** values — the app-wide `PdfPrefs.runoutBubbleScale` /
+`runoutBubbleDropScale` (Settings-free; each surfaces only as a "Bubble size" / "Bubble
+height" slider on the runout and consolidated PDF options sheets, under a "Runout bubbles"
+heading) multiply them at BOTH draw sites, so a bubble drawn at the default 100%/100% is
+byte-identical to before either pref existed. `RunoutBubbleGeometry` is radius-agnostic —
+every pitch, `rowStep`, and leader lane it derives already scales off `radius` +
+`shortLeader`, so the two prefs re-proportion the whole bubble field rather than only the
+circles. `minGap` stays **unscaled** at every setting — it is a collision clearance floor, not
+a size, and scaling it would let a small-radius sheet crowd bubbles closer than the drawn
+circles need. Both sliders commit on release (no live-tuning channel) and ride Drawing
+profiles like every other `PdfPrefs` field; "Bubble height" is explicitly **experimental** —
+its caption says so — kept to find where the pointer lines read best and may be retired.
+
 ---
 
 ## Coupling Face (end view, 2026-08-15)
@@ -1073,7 +1139,7 @@ in the bore, and the note that it was taken *looking forward*. That sketch is no
   component-keyed prune pass anywhere in the app), and the render layer only *skips* what it
   cannot place. Same posture as wear pits and dia readings.
 - **Reference-only**, like every other mark on this sheet: the face never touches
-  `coverageEndMm`/OAL, body resolution, collision, or the Free-to-End badge.
+  `coverageEndMm`/OAL, body resolution, or collision.
 - **Visibility is a per-job election** — `RunoutConfig.showCouplingFace`, additive and defaulted
   **`false`** (on-device request: not every inspection measures the coupling, and a document
   written before the field existed reprints byte-identically until the face is elected).
@@ -1931,55 +1997,79 @@ All four routes (Runout, Wear, Undercut, Consolidated Output) pass `RunoutWearOp
 
 | Control | Bound to |
 |---|---|
-| Blank draft (write-in) (Switch) | the hosting tab's session-only blank-draft state, via `onSetBlankDraft` — row renders only when that callback is non-null (Consolidated Output, Wear, Undercut) |
-| Line thickness (Slider 50–200%) | `vm.setLineThicknessScale()` |
-| Trace depth exaggeration (Slider + "Save as default") | `vm.setWearTraceDepthFrac()` / `vm.setPdfWearTraceDepthFrac()` — only when `showWearControls` (Wear only) |
-| Wear area shade (Slider 5–35%, 1% steps) | `vm.setPdfWearBandShadeFrac()` — only when `showWearControls` (Wear only) |
-| Components (Checkboxes + Default / All / None) | `vm.setWearShowShaftProfile()` / `vm.setWearStripComponents()` — only when `showWearControls` (Wear only); the selection callback is nullable, and `null` is the "Default (all liners)" action. The **Wear tab body** hosts the same section, same bindings (see "Selection & pagination") |
-| Taper–liner join (Slider 0–12", 1/2" steps; 10 mm in metric) | `vm.setPdfWearJoinGapMaxMm()` — only when `showWearControls` (Wear only); canonical mm, displayed in the session's unit |
+| Content chips: Blank draft (Chip) | the hosting tab's session-only blank-draft state, via `onSetBlankDraft` — chip renders only when that callback is non-null (all four instances have a write-in mode) |
+| Content chips: Coupling face (Chip) | `vm.setShowCouplingFace()` — only when `showCouplingFaceRow` (Consolidated Output and Runout) |
+| Wear block: Components (Checkboxes + Default / All / None) | `vm.setWearShowShaftProfile()` / `vm.setWearStripComponents()` — only when `showWearControls` (Wear only); the selection callback is nullable, and `null` is the "Default (all liners)" action. The **Wear tab body** hosts the same section, same bindings (see "Selection & pagination") |
+| Wear block: Strip size (Slider) | `vm.setWearStripSizeFrac()` — only when `showWearControls` (Wear only) |
+| Wear block: Trace depth exaggeration (Slider + "Save as default") | `vm.setWearTraceDepthFrac()` / `vm.setPdfWearTraceDepthFrac()` — only when `showWearControls` (Wear only) |
+| Wear block: Wear area shade (Slider 5–35%, 1% steps) | `vm.setPdfWearBandShadeFrac()` — only when `showWearControls` (Wear only) |
+| Wear block: Taper–liner join (Slider 0–12", 1/2" steps; 10 mm in metric) | `vm.setPdfWearJoinGapMaxMm()` — only when `showWearControls` (Wear only); canonical mm, displayed in the session's unit |
+| Shaft height (Slider) | `vm.setRunoutHeightScale()` — only when `showHeightSlider` (Consolidated Output, Runout, **and Wear**) |
 | Body S-break (Slider Never–Always, 5% steps) | `vm.setPdfSBreakThresholdFrac()` — only when `showSBreak` (see below) |
-| Shaft height (Slider) | `vm.setRunoutHeightScale()` — only when `showHeightControls` (Consolidated Output **and Runout**) |
-| Liner compression (Checkbox + Slider) | `vm.setLinersProportional()` / `vm.setLinerCompression()` — only when `showHeightControls` (Consolidated Output **and Runout**) |
-| Measurement reference (Radio: Auto / AFT / FWD) | `vm.setPdfTieringMode()` — only when `showMeasurementReference` (Consolidated Output only) |
-| Shade Bodies (Checkbox) | `vm.setPdfShadedBodies()` |
-| Shade Tapers (Checkbox) | `vm.setPdfShadedTapers()` |
+| Line thickness (Slider 50–200%) | `vm.setLineThicknessScale()` — ungated, every instance |
+| Liner & taper compression (Checkbox + Slider) | `vm.setLinersProportional()` / `vm.setLinerCompression()` — only when `showLinerCompression` (Consolidated Output and Runout) |
+| Runout bubbles: Bubble size (Slider 60–150%, 5% steps) | `vm.setPdfRunoutBubbleScale()` (`PdfPrefs.runoutBubbleScale`) — only when `showBubbleControls` (Consolidated Output and Runout) |
+| Runout bubbles: Bubble height (Slider 50–200%) | `vm.setPdfRunoutBubbleDropScale()` (`PdfPrefs.runoutBubbleDropScale`) — same gate; caption reads "Experimental" |
+| Dimension arrows (Chips Small/Medium/Large) | `vm.setPdfArrowSizePt()` — only when `showDimensionArrows` (Consolidated Output only) |
+| Fractions (Chips Stacked/Diagonal/Plain) | `vm.setPdfFractionStyle()` — ungated, every instance |
+| Measurement reference (Radio: Auto / AFT / FWD, expandable) | `vm.setPdfTieringMode()` — only when `showMeasurementReference` (Consolidated Output only) |
+| Shade Bodies (Checkbox, in expandable "Shade in Components") | `vm.setPdfShadedBodies()` — ungated, every instance |
+| Shade Bodies → Explicit bodies only (indented sub-checkbox) | `vm.setPdfShadeExplicitBodiesOnly()` (`PdfPrefs.shadeExplicitBodiesOnly`) — enabled only while Shade Bodies is checked; HIDDEN on the Wear and Undercut sheets (`showShadeExplicitBodiesOnly = false` — the narrowing never reaches their `SimpleShaftProfile` body pass) |
+| Shade Tapers (Checkbox) | `vm.setPdfShadedTapers()` — ungated, every instance |
 | Shade Liners (Checkbox) | `vm.setPdfShadedLiners()` — locked (disabled, shown unchecked) when the document prints Ø values inside the profile; display-only, the pref is never rewritten |
 
-The Consolidated Output **and Runout** instances turn on the Shaft height / Liner compression
-pair — one composer serves both sheets and reads `config.heightScale` /
-`config.linerMinFracOfTrue` whether or not it is drawing the consolidated variant, so hiding
-the pair on the Runout sheet left the classic sheet's drawn height governed from a different
-tab. Only Consolidated Output adds the Measurement reference radios — the same set the
-schematic Tune sheet exposes
-(`PdfPreviewScreen.kt`'s `PdfOptionsSheet`), minus Component labels and the blank Ø-callouts
-sub-toggle: the consolidated composer never reads either of those two prefs, so they would be
-inert controls on this sheet. Only the **Wear** instance turns on `showWearControls`, the block
-that tunes the wear strips; the other three documents draw no wear strips.
+The **whole sheet follows one unified order** (matching the schematic Tune sheet, §5.5 of
+`PDF_EXPORT.md`): Content chips → the Wear block (Wear only) → Shaft height → Body S-break →
+Line thickness → Liner & taper compression → Runout bubbles → Dimension arrows → Fractions →
+Measurement reference → Shade in Components → Dual units + layout LAST. Every instance simply
+skips the rows it doesn't gate in; nothing reorders per caller.
 
-The **blank-draft row** is on for every instance — Consolidated Output, Wear, Undercut, and
-Runout all have a write-in mode. Wear and Undercut pass the SAME state their tab-body switch
-owns (`blankDraft` + `onSetBlankDraft = { blankDraft = it }`), so the two surfaces always agree
-and either one re-renders the preview through the route's existing `blankDraft` render key.
+The Consolidated Output **and Runout** instances turn on Liner & taper compression and the Runout
+bubbles sliders — one composer (`RunoutPdfComposer`) serves both sheets and reads
+`config.linerMinFracOfTrue` / `PdfPrefs.runoutBubbleScale`/`runoutBubbleDropScale` whether or
+not it is drawing the consolidated variant, so hiding them on the Runout sheet would leave the
+classic sheet's liner floors and bubble sizing governed from a different tab.
+**Shaft height is split from Liner & taper compression** (`showHeightSlider` vs.
+`showLinerCompression`) because the **Wear** instance now also turns on Shaft height — the
+wear composer's main profile band takes the shared per-job multiplier too (`PDF_EXPORT.md`
+§5.7) — but has no compression solve to raise liner floors against, so Liner & taper compression would
+be inert there. Only Consolidated Output adds the Dimension arrows chips and the Measurement
+reference radios — the same set the schematic Tune sheet exposes, minus Component labels and
+the blank Ø-callouts sub-toggle, which the consolidated composer never reads. Only the
+**Wear** instance turns on `showWearControls`, the block that tunes the wear strips; the other
+three documents draw no wear strips. Fractions, Shade in Components, and Dual units are
+ungated everywhere.
 
-So, top to bottom: the **Wear** sheet shows Blank draft → Line thickness → Components (complete
-shaft + Compact strips + per-component checkboxes + the Default/All/None quick actions) → Trace depth
-exaggeration → Wear area shade → Taper–liner join → Fractions → Shade in PDF → Dual units +
-layout; the **Undercut** sheet shows Blank draft → Line thickness → Fractions → Shade in PDF →
-Dual units + layout; the **Runout** sheet Blank draft → Coupling face → Line thickness →
-Body S-break → Shaft height → Liner compression → Fractions → Shade in PDF → Dual units +
-layout. Two ordering rules, both on-device requests: the live-tuning sliders LEAD (matching
-the schematic Tune sheet's group), and the dual-units pair sits LAST on every sheet —
-drawing- and output-specific controls first, rarely used options at the foot. The wear sliders are commit-on-release like every other
-slider here, so the Wear preview is **not** a live-drag surface (`tuning` stays null): the
-release commit re-renders the whole page through the route's render keys. It does pass
-`sheetTunesPage = true` all the same — a commit that redraws the page is worthless if the sheet
-covers it (the wear sheet hid the preview outright, on-device report) — so the Wear route
-measures the ink band on every render pass (there are no draft frames to skip here) and hands it
-to the overlay.
+The **Content chip row** is on for every instance — Consolidated Output, Wear, Undercut, and
+Runout all have a write-in mode, so Blank draft always renders; Coupling face only joins it on
+Consolidated Output and Runout, the two documents that can draw the end view. Wear and
+Undercut pass the SAME blank-draft state their tab-body switch owns (`blankDraft` +
+`onSetBlankDraft = { blankDraft = it }`), so the two surfaces always agree and either one
+re-renders the preview through the route's existing `blankDraft` render key.
+
+So, top to bottom: the **Wear** sheet shows Blank draft → Components (complete shaft +
+Compact strips + per-component checkboxes + the Default/All/None quick actions) → Strip size →
+Trace depth exaggeration → Wear area shade → Taper–liner join → **Shaft height** → Line
+thickness → Fractions → Shade in Components → Dual units + layout; the **Undercut** sheet
+shows Blank draft → Line thickness → Fractions → Shade in Components → Dual units + layout;
+the **Runout** sheet shows Blank draft → Coupling face → Shaft height → Body S-break → Line
+thickness → Liner & taper compression → Runout bubbles → Fractions → Shade in Components → Dual units
++ layout; the **Consolidated Output** sheet (the fullest instance) shows Blank draft →
+Coupling face → Shaft height → Body S-break → Line thickness → Liner & taper compression → Runout
+bubbles → Dimension arrows → Fractions → Measurement reference → Shade in Components → Dual
+units + layout. Two ordering rules, both on-device requests: Shaft height leads the live-tuning
+group (the control reached for most), and the dual-units pair sits LAST on every sheet —
+drawing- and output-specific controls first, rarely used options at the foot. The wear sliders
+are commit-on-release like every other slider here, so the Wear preview is **not** a live-drag
+surface (`tuning` stays null): the release commit re-renders the whole page through the route's
+render keys, `heightScale` included. It does pass `sheetTunesPage = true` all the same — a
+commit that redraws the page is worthless if the sheet covers it (the wear sheet hid the
+preview outright, on-device report) — so the Wear route measures the ink band on every render
+pass (there are no draft frames to skip here) and hands it to the overlay.
 
 All of these values are included in the render loop's `RenderInputs` holder so changing any option immediately re-renders the preview bitmap.
 
-**Live tuning (Runout + Consolidated Output).** Both routes pass a `PreviewTuning` (`ui/screen/PreviewTuning.kt`) into the sheet, so the sliders here — Line thickness and Body S-break on both routes, plus Shaft height and Liner compression on the Consolidated Output AND Runout sheets — reshape the page **while the finger is still on the track** ("see the differences without choosing, closing menu, opening menu, choosing" — on-device request). The shared controls report their in-progress value through an optional `onDrag: (Float?) -> Unit` (same units as their commit callback, `null` on release); the route folds it into the render inputs as `override ?: committed`. Three rules hold:
+**Live tuning (Runout + Consolidated Output).** Both routes pass a `PreviewTuning` (`ui/screen/PreviewTuning.kt`) into the sheet, so the sliders here — Line thickness and Body S-break on both routes, plus Shaft height and Liner & taper compression on the Consolidated Output AND Runout sheets — reshape the page **while the finger is still on the track** ("see the differences without choosing, closing menu, opening menu, choosing" — on-device request). The shared controls report their in-progress value through an optional `onDrag: (Float?) -> Unit` (same units as their commit callback, `null` on release); the route folds it into the render inputs as `override ?: committed`. Three rules hold:
 
 - **Visual only.** A drag frame never writes DataStore and never updates `RunoutConfig` — persistence and the per-job dirty mark stay on commit-on-release. The Wear and Undercut routes leave `tuning` at its `null` default and are unaffected.
 - **Draft then sharp.** The loop is `snapshotFlow { RenderInputs(…) }.conflate().collect { … }` — latest-wins, so intermediate drag values are dropped while a render is in flight — and drag frames raster at `renderScale = 1` (¼ the pixels). When the drag ends the overrides go null, the inputs change once more, and that pass restores `PDF_PREVIEW_RENDER_SCALE`. The spinner is held back across drag frames and that release pass so the page never strobes.
@@ -1987,7 +2077,7 @@ All of these values are included in the render loop's `RenderInputs` holder so c
 - **Sheet capped below the strip — by the overlay.** `PdfPreviewOverlay` wraps `optionsSheet()` in a `Box(heightIn(max = …))`: `tuningSheetMaxHeightDp(screenHeight, strip, sheetChrome)` = screen height − strip − `PREVIEW_TOP_CHROME_DP` (88 dp of status bar + toolbar) − the sheet's own chrome, clamped to `[TUNING_SHEET_MIN_FRAC 40%, PREVIEW_SHEET_MAX_FRAC 78%]` of the screen. **Sheet chrome** is `TUNING_SHEET_CHROME_DP` (48 dp: M3's drag handle) plus the measured `WindowInsets.navigationBars` bottom — both stack OUTSIDE a content-column cap, so ignoring them left the sheet overlapping the strip and swallowing the drawing's lowest callouts and footer (on-device report). On a 393 × 851 dp phone with a 48 dp nav bar: a 303.7 dp strip over a 363.3 dp sheet. The clamp order is **sheet floor first, strip takes the remainder** (`tuningPageStripHeightDp`, computed first so the cap derives from it) — on a short/wide screen the page fits to the shrunken strip, because it is zoomable once the sheet closes and crushed sliders are not usable at all. The sheet already scrolls internally, so the cap never loses content. `RunoutWearOptionsSheet` itself carries **no** cap: only the overlay knows the strip. The **Wear** preview carries no LIVE-tuning channel — its own controls commit on release and re-render the whole page — but it takes `sheetTunesPage = true` anyway, because the page it redraws has to stay visible while the sheet that redrew it is open. Only the **Undercut** preview keeps `sheetTunesPage = false` and the plain `PREVIEW_SHEET_MAX_FRAC` (78%) cap with the full-size centered preview: its sheet changes nothing about the page's shape.
 - **Undimmed scrim.** `ModalBottomSheet`'s scrim is one **full-window** rect — it covers the page strip too and cannot be restricted to the gap below it — so a tuning sheet passes `Color.Transparent` for the whole time it is open, not just during a drag. The overlay's black surround already reads as separation between strip and sheet. (The schematic's `PdfPreviewScreen`, which has no black surround, paints the strip-to-sheet gap itself and drops that during a drag.) Tap-outside-to-dismiss is unaffected: the transparent scrim still takes the tap.
 
-The option blocks are shared composables in `ui/screen/ShaftHeightSlider.kt` — `LineThicknessSlider`, `SBreakThresholdSlider`, `WearTraceDepthControlRow`, `WearBandShadeSlider`, `WearJoinGapSlider`, and `ShadeInPdfChecks` (heading + the three checkboxes + the `linerShadeLocked` behavior) — used by this sheet and by the schematic preview's `PdfOptionsSheet`, so an added option lands on both surfaces at once. The wear controls have further hosts: `WearTraceDepthControlRow` is also the Wear tab body's row, and `WearBandShadeSlider` / `WearJoinGapSlider` also sit in Settings → Drawing (wrapped there with a Default reset and a caption), so no surface can drift from another. Settings → PDF Export keeps its own copy of the checkbox rows: they sit in a `spacedBy(12.dp)` column with a padded heading, and adopting the sheets' tighter block would restyle that page. Same prefs, same setters. `SBreakThresholdSlider` is additionally the Settings → Drawing control (that page adds only its explanatory caption), so the threshold reads and writes the one app-wide pref from every surface.
+The option blocks are shared composables in `ui/screen/ShaftHeightSlider.kt` — `ContentChipRow`/`ContentChip`, `OptionsExpander`, `ShaftHeightSlider`, `LineThicknessSlider`, `SBreakThresholdSlider`, `LinerCompressionControl`, `BubbleSizeSlider`, `BubbleDropSlider`, `DimensionArrowSizeChips`, `FractionStyleChips`, `MeasurementReferenceSection`, `WearTraceDepthControlRow`, `WearBandShadeSlider`, `WearJoinGapSlider`, `WearStripSizeSlider`, and `ShadeInPdfChecks` (an `OptionsExpander` wrapping the three checkboxes, the "Explicit bodies only" sub-checkbox, and the `linerShadeLocked` behavior) — used by this sheet and by the schematic preview's `PdfOptionsSheet`, so an added option lands on both surfaces at once. The wear controls have further hosts: `WearTraceDepthControlRow` is also the Wear tab body's row, and `WearBandShadeSlider` / `WearJoinGapSlider` also sit in Settings → Drawing (wrapped there with a Default reset and a caption), so no surface can drift from another. Settings → PDF Export keeps its own copy of the checkbox rows (heading "Shade in Components", same sub-checkbox): they sit in a `spacedBy(12.dp)` column with a padded heading rather than an expander, and adopting the sheets' tighter block would restyle that page. Same prefs, same setters. `SBreakThresholdSlider` is additionally the Settings → Drawing control (that page adds only its explanatory caption), so the threshold reads and writes the one app-wide pref from every surface. `BubbleSizeSlider` / `BubbleDropSlider` have no Settings → Drawing host at all — see the field-table note in `docs/contracts/PdfExport.md`.
 
 **`showSBreak` is asymmetric across the four callers.** The Runout and Consolidated Output routes pass `showSBreak = true` with their collected `pdfSBreakThresholdFrac`; the Wear and Undercut routes leave it at its `false` default, because those documents never draw compression breaks and the control would be inert noise there. The schematic's `PdfOptionsSheet` shows it unconditionally.
 
@@ -1999,7 +2089,7 @@ The Consolidated Output tab passes `linerShadeLocked = consolidatedSheetHasInPro
 
 Both routes add `BackHandler(enabled = showPreview) { showPreview = false }` before the `if (showPreview)` block. This intercepts the system back gesture while the overlay is visible, dismissing the overlay instead of propagating to the NavController.
 
-`LinerWearDetailOverlay` hosts its own unconditional `BackHandler` internally (rather than the caller adding a conditional one) since `WearRoute` only composes it while `selectedLinerId != null` — there is nothing to gate.
+`ComponentWearDetailOverlay` (`ui/screen/LinerWearDetail.kt` — it takes any pit-eligible component, not just a liner) hosts its own unconditional `BackHandler` internally (rather than the caller adding a conditional one) since `WearRoute` only composes it while `selectedComponentId != null` — there is nothing to gate.
 
 ---
 
@@ -2014,7 +2104,7 @@ Both routes add `BackHandler(enabled = showPreview) { showPreview = false }` bef
   leader that starts at the station's x on the shaft surface and ends on the bubble's rim —
   nothing suppresses or shortens a leader because the bubble happens to sit near its station.
 - Keyway reference cutout — an **open-topped keyway slot** at 12-o'clock (the top arc is broken across the slot mouth; two walls descend into the circle with a bottom connector), replacing the older protruding square notch. Nothing extends past the rim. Drawn identically in BOTH the PDF (`drawRunoutBubbleRingPdf`) and the canvas preview (`drawRunoutBubbleRing`).
-- **Runout readings are reference-only** (like coupler bolt slots / wear spots): a per-station TIR value + high-spot marker that never affect OAL/`coverageEndMm`, body resolution, collision, or the Free-to-End badge. Both are optional and independent; a sheet exports fine with neither. See "Runout Bubble Editor".
+- **Runout readings are reference-only** (like coupler bolt slots / wear spots): a per-station TIR value + high-spot marker that never affect OAL/`coverageEndMm`, body resolution, or collision. Both are optional and independent; a sheet exports fine with neither. See "Runout Bubble Editor".
 - Any recorded value/marker is drawn identically in BOTH draw sites (the two must stay in lockstep — `RunoutRoute.drawRunoutMarkers` ⇔ `RunoutPdfComposer.drawPlacedBubbles`).
 - OAL arrows bracket the SET-to-SET span, not the full `overallLengthMm`.
 - Every tab's preview bitmap comes from the ONE shared raster helper

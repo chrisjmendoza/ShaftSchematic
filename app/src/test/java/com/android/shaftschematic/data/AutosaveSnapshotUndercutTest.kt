@@ -40,7 +40,6 @@ class AutosaveSnapshotUndercutTest {
             notes = "",
             runoutConfig = RunoutConfig(),
             unitLocked = true,
-            overallIsManual = false,
             undercutRecord = UndercutRecord(
                 undercuts = listOf(
                     Undercut(id = "u1", startFromAftMm = 120f, lengthMm = 25.4f, diaMm = 247.5f)
@@ -73,7 +72,6 @@ class AutosaveSnapshotUndercutTest {
             notes = "",
             runoutConfig = RunoutConfig(),
             unitLocked = true,
-            overallIsManual = false,
             undercutRecord = UndercutRecord(
                 undercuts = listOf(
                     Undercut(

@@ -16,16 +16,20 @@ import com.android.shaftschematic.model.keywayAbsSpanMm
  *   (its values live on rails and callouts, so proportion wins), the runout/consolidated
  *   sheet and the estimator keep the writable `PROFILE_MIN_*` floors.
  * - [linerMinFracOfTrue] — the per-job "Liner compression" raise (best-effort, λ-fitted;
- *   the drawn height never yields to it).
+ *   the drawn height never yields to it). It governs the TAPERS too ([taperMinFracOfTrue]),
+ *   so the two measured kinds foreshorten together.
  *
  * Structure shared by every consumer:
  * - Tapers: ratio-preserving fraction-of-true floor, NO flat floor (two very different
  *   taper lengths must never draw equal — on-device direction); the drawn height never
- *   yields to it.
+ *   yields to it. The fraction is the liner request, floored at
+ *   [PROFILE_TAPER_MIN_FRAC_OF_TRUE] — one control, one λ, so tapers and liners keep the
+ *   same fraction of true length wherever the request clears that baseline.
  * - Liners: compress in SIZE only above their flat floor — proportional foreshortening,
  *   never a body-style S-break cutout (on-device clarification).
  * - Threads: flat floor (the hatched stub stays legible).
  * - Body-keyway windows pin at true scale ([keywayPinnedBodySpans]).
+ * - Bodies that opted out of compression pin whole ([compressOptOutBodySpans]).
  *
  * Tapers/liners/threads read the same from a stored spec and a `withResolvedBodies` copy
  * (only bodies are replaced), so callers may pass either.
@@ -36,11 +40,12 @@ fun profileFeatureSpans(
     threadFloorPt: Float,
     linerMinFracOfTrue: Float,
 ): List<ProfileFeatureSpan> = buildList {
+    val taperFrac = taperMinFracOfTrue(linerMinFracOfTrue)
     spec.tapers.forEach {
         add(
             ProfileFeatureSpan(
                 it.startFromAftMm, it.startFromAftMm + it.lengthMm, 0f,
-                minWidthFracOfTrue = PROFILE_TAPER_MIN_FRAC_OF_TRUE,
+                minWidthFracOfTrue = taperFrac,
             )
         )
     }
@@ -56,7 +61,31 @@ fun profileFeatureSpans(
         add(ProfileFeatureSpan(it.startFromAftMm, it.startFromAftMm + it.lengthMm, threadFloorPt))
     }
     addAll(keywayPinnedBodySpans(spec))
+    addAll(compressOptOutBodySpans(spec))
 }
+
+/**
+ * True-width pins for every stored body whose author turned compression off
+ * ([com.android.shaftschematic.model.Body.compressOnDrawing] false — the default a newly
+ * authored explicit body is created with). Unlike a keyway pin, which protects only the
+ * slot's padded window, this pins the body's **whole** stored span: the point is that a
+ * named section reads at its true proportion end to end.
+ *
+ * The consequence is the pin protocol's, and it is the reason the card carries a
+ * "Compress on drawing" checkbox: a pinned span demands full width at the solved scale, so
+ * the drawn HEIGHT yields around it ([solveMaxProfileScale]). Opting a very long body out
+ * on a long shaft therefore shrinks the whole drawing, and re-ticking the box is the escape
+ * hatch. AUTO fill spans are never opted out — bare shaft is the give that funds every
+ * other span's proportion — and they carry no stored body to read here anyway.
+ *
+ * Reads **STORED** bodies, like [keywayPinnedBodySpans]: this must be one of the spans the
+ * single builder above contributes, or the UI's kept-% estimator drifts from the sheets.
+ */
+fun compressOptOutBodySpans(spec: ShaftSpec): List<ProfileFeatureSpan> =
+    spec.bodies.mapNotNull { b ->
+        if (b.compressOnDrawing || b.lengthMm <= 0f) return@mapNotNull null
+        ProfileFeatureSpan(b.startFromAftMm, b.startFromAftMm + b.lengthMm, Float.MAX_VALUE)
+    }
 
 /**
  * The protected axial window around each body keyway: the slot's own span

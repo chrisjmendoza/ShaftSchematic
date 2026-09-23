@@ -133,6 +133,7 @@ fun BoreKeywayCalcDialog(
                         CalcField(
                             finalDepth, { finalDepth = it }, "Keyway depth", unit, "bore_kw_calc_d",
                             isError = finalDepth.isNotBlank() && (dep == null || dep <= 0.0),
+                            placeholder = "e.g. 29/32",
                         )
                     }
                 }
@@ -265,14 +266,19 @@ private fun CutterResult(
  */
 private fun fmt(v: Double): String = String.format(Locale.US, "%.3f", v)
 
+/**
+ * One entry-unit numeric field, shared by the standalone calculators ([TaperCalcDialog] uses
+ * the identical control) rather than duplicated — the same promotion [UnitChipRow] got.
+ */
 @Composable
-private fun CalcField(
+internal fun CalcField(
     value: String,
     onChange: (String) -> Unit,
     label: String,
     unit: UnitSystem,
     tag: String,
     isError: Boolean = false,
+    placeholder: String = "",
 ) {
     OutlinedTextField(
         value = value,
@@ -280,7 +286,7 @@ private fun CalcField(
         label = { Text(label) },
         isError = isError,
         suffix = { Text(if (unit == UnitSystem.INCHES) "in" else "mm") },
-        placeholder = { Text(if (label.contains("depth")) "e.g. 29/32" else "") },
+        placeholder = { Text(placeholder) },
         singleLine = true,
         // Text keyboard, not decimal: fraction entry ("19/32", "1 1/2") needs '/' and space.
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),

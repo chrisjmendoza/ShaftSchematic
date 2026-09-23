@@ -106,6 +106,34 @@ class AppLogTest {
     }
 
     @Test
+    fun `the tail reads across a rotation, oldest line first`() {
+        val dir = tmp.newFolder("logs")
+        AppLog.init(dir, maxFileBytes = 200L)
+
+        repeat(20) { AppLog.i("Ring", "line $it") }
+        AppLog.flushBlocking()
+
+        val tail = AppLog.tail()
+        val rotated = File(dir, AppLog.PREVIOUS_NAME).readLines()
+        assertTrue("the rotated half leads", tail.take(rotated.size) == rotated)
+        assertTrue(tail.last(), tail.last().endsWith("line 19"))
+    }
+
+    @Test
+    fun `the tail caps at the line count asked for and never throws when empty`() {
+        assertTrue("nothing to show before init", AppLog.tail().isEmpty())
+
+        val dir = tmp.newFolder("logs")
+        AppLog.init(dir)
+        repeat(10) { AppLog.i("Tail", "line $it") }
+        AppLog.flushBlocking()
+
+        assertEquals(3, AppLog.tail(maxLines = 3).size)
+        assertTrue(AppLog.tail(maxLines = 3).last().endsWith("line 9"))
+        assertTrue("a zero cap asks for nothing", AppLog.tail(maxLines = 0).isEmpty())
+    }
+
+    @Test
     fun `a formatted line leads with a sortable timestamp`() {
         val line = AppLog.formatLine(atMs = 0L, level = "I", tag = "Tag", msg = "message")
 

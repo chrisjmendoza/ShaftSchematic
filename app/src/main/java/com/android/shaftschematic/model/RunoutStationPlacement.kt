@@ -12,8 +12,8 @@ import kotlinx.serialization.Serializable
  * rule). A placement is the stored form of that drag.
  *
  * **Pure reference feature** — same contract class as [RunoutReading]/[WearSpot]: it never
- * affects `coverageEndMm`/OAL, body resolution, collision/overlap validation, or the
- * Free-to-End badge. It lives outside [ShaftSpec], in [RunoutStationPlacements], beside
+ * affects `coverageEndMm`/OAL, body resolution, or collision/overlap validation.
+ * It lives outside [ShaftSpec], in [RunoutStationPlacements], beside
  * `RunoutConfig`/[RunoutReadings] in the document envelope.
  *
  * ## Storage space

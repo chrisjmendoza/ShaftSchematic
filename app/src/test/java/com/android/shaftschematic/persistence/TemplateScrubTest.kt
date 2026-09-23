@@ -15,6 +15,7 @@ import com.android.shaftschematic.settings.RunoutConfig
 import com.android.shaftschematic.util.UnitSystem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -46,6 +47,7 @@ class TemplateScrubTest {
         jobNumber = "814201",
         customer = "NorthSound Marine",
         vessel = "FV Tern Point",
+        item = "Tail shaft",
         shaftPosition = ShaftPosition.PORT,
         notes = "Cut liner off at the aft end.",
         spec = spec,
@@ -54,6 +56,7 @@ class TemplateScrubTest {
         runoutReadings = RunoutReadings(listOf(RunoutReading(componentId = "b1", stationIndex = 0, valueMm = 0.05f))),
         undercutRecord = UndercutRecord(),
         unitOverrides = mapOf("l1" to UnitSystem.MILLIMETERS),
+        finalSpec = spec.copy(overallLengthMm = 2410f),
     )
 
     /**
@@ -75,6 +78,8 @@ class TemplateScrubTest {
         assertEquals("", decoded.jobNumber)
         assertEquals("", decoded.customer)
         assertEquals("", decoded.vessel)
+        // Item designates THIS shaft on THIS job, not the shaft family the template describes.
+        assertEquals("", decoded.item)
         assertEquals("", decoded.notes)
         assertEquals(ShaftPosition.OTHER, decoded.shaftPosition)
     }
@@ -89,6 +94,15 @@ class TemplateScrubTest {
         assertTrue(decoded.wearRecord.wornSections.isEmpty())
         assertTrue(decoded.runoutReadings.readings.isEmpty())
         assertTrue(decoded.undercutRecord.undercuts.isEmpty())
+    }
+
+    @Test
+    fun `a saved template carries no final drawing`() {
+        // The final drawing is what one shaft left as after its wear work; a template is the
+        // pre-job shape, so nothing of the after-state may seed the next job.
+        val decoded = ShaftDocCodec.decode(exportTemplateJson(fullJobDoc()))
+
+        assertNull(decoded.finalSpec)
     }
 
     @Test
@@ -110,10 +124,13 @@ class TemplateScrubTest {
         assertTrue(decoded.unitLocked)
     }
 
+    /**
+     * Per-component unit overrides travel with the geometry: which feature is metric is an
+     * authoring fact about the shaft family, not about whose job it is. (The per-job dual-display
+     * flag, by contrast, does not.)
+     */
     @Test
-    fun `per-component unit overrides travel with the geometry`() {
-        // Which features are metric is an authoring fact about the shaft, not about the job —
-        // and it is exactly the field the old hand-copied mirror of this envelope omitted.
+    fun `per-component unit overrides travel with a template`() {
         val decoded = ShaftDocCodec.decode(exportTemplateJson(fullJobDoc()))
 
         assertEquals(mapOf("l1" to UnitSystem.MILLIMETERS), decoded.unitOverrides)

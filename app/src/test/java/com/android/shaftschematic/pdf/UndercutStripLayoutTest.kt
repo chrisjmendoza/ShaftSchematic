@@ -81,6 +81,116 @@ class UndercutStripLayoutTest {
         assertTrue(rail.any { kotlin.math.abs(it.startMm - 120f) < 1e-3f && kotlin.math.abs(it.endMm - 140f) < 1e-3f })
     }
 
+    // ── Nested cuts: level-0 chain excludes them, each level gets its own row ─
+
+    @Test
+    fun `a fully nested cut is absorbed by the cursor walk, so the chain takes top-level spans`() {
+        val parent = span("p", 100f, 300f)
+        val child = span("c", 150f, 200f)
+        // Fed both, the forward cursor is already past the child's start and its end is inside
+        // the parent, so the child contributes nothing and silently vanishes — which is exactly
+        // why the composer filters this chain to top-level spans.
+        val naive = buildUndercutRailSpans(0f, 400f, listOf(parent, child), mm)
+        assertTrue(naive.none { kotlin.math.abs(it.startMm - 150f) < 1e-3f })
+
+        val chain = buildUndercutRailSpans(0f, 400f, listOf(parent), mm)
+        assertEquals(3, chain.size)   // pad, relief, pad
+        assertEquals(400f, chain.totalLengthMm(), 1e-3f)
+    }
+
+    @Test
+    fun `a nested cut gets its own row chained on its parent's edges`() {
+        val rows = buildNestedUndercutRailRows(listOf(span("p", 100f, 300f), span("c", 150f, 200f)), mm)
+        val row = rows.single()
+        assertEquals(3, row.size)   // parent start → cut, cut, cut → parent end
+        assertEquals(100f, row.first().startMm, 1e-3f)
+        assertEquals(300f, row.last().endMm, 1e-3f)
+        assertEquals("the row covers the PARENT's span", 200f, row.totalLengthMm(), 1e-3f)
+        row.zipWithNext().forEach { (a, b) -> assertEquals(a.endMm, b.startMm, 1e-3f) }
+    }
+
+    @Test
+    fun `two children of one parent chain in sequence across it`() {
+        val rows = buildNestedUndercutRailRows(
+            listOf(span("p", 100f, 400f), span("c2", 250f, 300f), span("c1", 150f, 200f)), mm,
+        )
+        val row = rows.single()
+        assertEquals(5, row.size)   // gap, c1, gap, c2, gap
+        assertEquals(300f, row.totalLengthMm(), 1e-3f)
+        assertEquals(100f, row.first().startMm, 1e-3f)
+        assertEquals(400f, row.last().endMm, 1e-3f)
+        row.zipWithNext().forEach { (a, b) -> assertEquals(a.endMm, b.startMm, 1e-3f) }
+    }
+
+    @Test
+    fun `one row per nesting level, with disjoint parents sharing a row`() {
+        val rows = buildNestedUndercutRailRows(
+            listOf(
+                span("p1", 100f, 300f), span("c1", 150f, 250f),
+                span("p2", 500f, 700f), span("c2", 550f, 600f),
+                span("g", 180f, 220f),   // level 2, inside c1
+            ),
+            mm,
+        )
+        assertEquals(2, rows.size)
+        // Level 1 carries both parents' chains, aft → fwd.
+        assertEquals(100f, rows[0].first().startMm, 1e-3f)
+        assertEquals(700f, rows[0].last().endMm, 1e-3f)
+        // Level 2 chains inside c1 only.
+        assertEquals(150f, rows[1].first().startMm, 1e-3f)
+        assertEquals(250f, rows[1].last().endMm, 1e-3f)
+    }
+
+    @Test
+    fun `a child flush with its parent's shoulder omits the zero-length gap`() {
+        // The shop's case: a 4" relief with a 1" deeper section at its AFT boundary. The chain
+        // reads cut, then remainder — no degenerate zero-width dimension where they meet.
+        val row = buildNestedUndercutRailRows(
+            listOf(span("p", 100f, 201.6f), span("c", 100f, 125.4f)), mm,
+        ).single()
+        assertEquals(2, row.size)
+        assertEquals(100f, row.first().startMm, 1e-3f)
+        assertEquals(125.4f, row.first().endMm, 1e-3f)
+        assertEquals(201.6f, row.last().endMm, 1e-3f)
+        assertEquals(101.6f, row.totalLengthMm(), 1e-3f)
+
+        // …and flush at the FWD shoulder instead: remainder, then cut.
+        val fwd = buildNestedUndercutRailRows(
+            listOf(span("p", 100f, 201.6f), span("c", 176.2f, 201.6f)), mm,
+        ).single()
+        assertEquals(2, fwd.size)
+        assertEquals(101.6f, fwd.totalLengthMm(), 1e-3f)
+    }
+
+    @Test
+    fun `disjoint cuts produce no nested rows at all`() {
+        assertTrue(
+            buildNestedUndercutRailRows(listOf(span("a", 100f, 200f), span("b", 300f, 400f)), mm)
+                .isEmpty(),
+        )
+    }
+
+    @Test
+    fun `the row plan reserves a row for every nested chain`() {
+        val xAt = { m: Float -> m }
+        // Every label seats in its own break, so no fallback rows muddy the count.
+        val width = { _: DualLabel -> 1f }
+        val chain = layoutWearStripRail(
+            buildUndercutRailSpans(0f, 400f, listOf(span("p", 100f, 300f)), mm), xAt, width,
+        )
+        val nested = buildNestedUndercutRailRows(
+            listOf(span("p", 100f, 300f), span("c", 150f, 200f)), mm,
+        ).map { layoutWearStripRail(it, xAt, width) }
+
+        val plain = planUndercutRailRows(chain, startedStrip = false, hasTotalRail = true)
+        val withNested = planUndercutRailRows(
+            chain, startedStrip = false, hasTotalRail = true, nestedLayouts = nested,
+        )
+        assertEquals(1, withNested.nestedRows)
+        assertEquals(plain.belowRows + 1, withNested.belowRows)
+        assertEquals(0, plain.nestedRows)
+    }
+
     @Test
     fun `a cluster with no drawable spans still dimensions the whole window`() {
         val rail = buildUndercutRailSpans(10f, 90f, emptyList(), mm)
@@ -657,5 +767,38 @@ class UndercutStripLayoutTest {
             xAtMm = { it }, unit = mm, labelWidthPt = { 10f },
         )
         assertTrue(stations.isEmpty())
+    }
+
+    @Test
+    fun `nested cuts anchor their stations on their own visible shelves`() {
+        // Concentric staircase: midpoint anchoring stacked all three leaders on one stem.
+        val ids = listOf("n0" to (200f to 440f), "n1" to (250f to 390f), "n2" to (290f to 350f))
+        val undercuts = ids.map { (id, span) ->
+            Undercut(id = id, startFromAftMm = span.first, lengthMm = span.second - span.first, diaMm = 200f)
+        }
+        val clamped = ids.associate { (id, span) -> id to ClampedUndercutSpanMm(span.first, span.second) }
+        val byKey = buildUndercutDiaStations(
+            undercuts, clamped, xAtMm = { it }, unit = mm, labelWidthPt = { 10f },
+        ).associate { it.key to it.stationX }
+        assertEquals(225f, byKey.getValue("n0"), 1e-3f)
+        assertEquals(270f, byKey.getValue("n1"), 1e-3f)
+        assertEquals(320f, byKey.getValue("n2"), 1e-3f)
+    }
+
+    @Test
+    fun `an unmeasured child still moves its parent's station off its floor`() {
+        // The child prints no Ø of its own, but it still replaces the parent's floor over its
+        // span — so the parent's leader may not anchor there.
+        val parent = Undercut(id = "p", startFromAftMm = 0f, lengthMm = 300f, diaMm = 200f)
+        val child = Undercut(id = "c", startFromAftMm = 60f, lengthMm = 40f, diaMm = 0f)
+        val clamped = mapOf(
+            "p" to ClampedUndercutSpanMm(0f, 300f),
+            "c" to ClampedUndercutSpanMm(60f, 100f),
+        )
+        val stations = buildUndercutDiaStations(
+            listOf(parent, child), clamped, xAtMm = { it }, unit = mm, labelWidthPt = { 10f },
+        )
+        assertEquals(1, stations.size)
+        assertEquals(200f, stations[0].stationX, 1e-3f)
     }
 }

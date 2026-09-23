@@ -69,10 +69,32 @@ object ShaftDocCodec {
         val jobNumber: String = "",
         val customer: String = "",
         val vessel: String = "",
+        /**
+         * Optional shaft designation ("Tail shaft", "Line shaft", …). Absent in older files →
+         * blank, which prints nothing anywhere. Additive + defaulted: no version bump needed.
+         */
+        @SerialName("item")
+        val item: String = "",
         @SerialName("shaft_position")
         val shaftPosition: ShaftPosition = ShaftPosition.OTHER,
         val notes: String = "",
         val spec: ShaftSpec,
+        /**
+         * The FINAL drawing — the shaft as it leaves — as a whole second [ShaftSpec], or null
+         * (every older file, and every document until one is started) for "no final drawing
+         * yet". Additive + defaulted: no version bump needed.
+         *
+         * NOT a reference feature: this is a second geometry, independent of [spec] under the
+         * same golden rule — nothing typed into either is ever rewritten, and no edit on one
+         * reaches the other. It is seeded as a structural copy of [spec] with the component ids
+         * INCLUDED, which is what lets [unitOverrides] (keyed by resolved id) and a future
+         * before/after comparison line the two drawings up component for component. Decode-time
+         * migration reaches the ORIGINAL only ([freezeLegacyStationCounts], spec normalization):
+         * the wear/undercut/runout records are the inspection of the shaft that came in, and
+         * they key to [spec]. See `docs/archive/FinalSchematic_PLAN.md` §2.
+         */
+        @SerialName("final_spec")
+        val finalSpec: ShaftSpec? = null,
         /** Runout-sheet preferences. Absent in older files → default empty config. */
         @SerialName("runout_config")
         val runoutConfig: RunoutConfig = RunoutConfig(),
@@ -143,9 +165,12 @@ object ShaftDocCodec {
         val jobNumber: String,
         val customer: String,
         val vessel: String,
+        val item: String,
         val shaftPosition: ShaftPosition,
         val notes: String,
         val spec: ShaftSpec,
+        /** The final drawing, or null when the document has none. See [ShaftDocV1.finalSpec]. */
+        val finalSpec: ShaftSpec?,
         val runoutConfig: RunoutConfig,
         val wearRecord: WearRecord,
         val runoutReadings: RunoutReadings,
@@ -232,6 +257,43 @@ object ShaftDocCodec {
         return config.copy(componentOverrides = config.componentOverrides + frozen)
     }
 
+    /**
+     * Decodes a stored document back into the **envelope** it was written from.
+     *
+     * The seam for whole-document work that never opens a session — duplicating a document
+     * for its mate, inspecting one on the Open screen. [decode] answers "what does the editor
+     * load?" and flattens the envelope into [Decoded] on the way; this answers "what is in the
+     * file?", in the one shape [encodeV1] takes back.
+     *
+     * Built on [decode], so a duplicate inherits the same normalization and orphan policy an
+     * open does (thread normalization, legacy station-count freeze, wear spots pruned against
+     * the spec's liners), and a legacy spec-only file arrives as an envelope carrying just
+     * its spec. [stationIntervalVersion] is stamped by [encodeV1] on the way out.
+     */
+    fun decodeEnvelope(raw: String): ShaftDocV1 {
+        val d = decode(raw)
+        return ShaftDocV1(
+            preferredUnit = d.preferredUnit ?: UnitSystem.INCHES,
+            unitLocked = d.unitLocked,
+            jobNumber = d.jobNumber,
+            customer = d.customer,
+            vessel = d.vessel,
+            item = d.item,
+            shaftPosition = d.shaftPosition,
+            notes = d.notes,
+            spec = d.spec,
+            finalSpec = d.finalSpec,
+            runoutConfig = d.runoutConfig,
+            wearRecord = d.wearRecord,
+            runoutReadings = d.runoutReadings,
+            runoutStationPlacements = d.runoutStationPlacements,
+            undercutRecord = d.undercutRecord,
+            stationIntervalVersion = CURRENT_STATION_INTERVAL_VERSION,
+            unitOverrides = d.unitOverrides,
+            dualUnits = d.dualUnits,
+        )
+    }
+
     fun decode(raw: String): Decoded {
         // Try envelope first.
         runCatching { json.decodeFromString(ShaftDocV1.serializer(), raw) }
@@ -247,9 +309,15 @@ object ShaftDocCodec {
                     jobNumber = doc.jobNumber,
                     customer = doc.customer,
                     vessel = doc.vessel,
+                    item = doc.item,
                     shaftPosition = doc.shaftPosition,
                     notes = doc.notes,
                     spec = normalizedSpec,
+                    // The final drawing is its own geometry and carries no measurement
+                    // records, so nothing here migrates it: the legacy station-count freeze
+                    // is about readings keyed to the ORIGINAL, and a final drawing can only
+                    // exist in a file written by a build that already has both.
+                    finalSpec = doc.finalSpec,
                     runoutConfig = freezeLegacyStationCounts(
                         spec = normalizedSpec,
                         config = doc.runoutConfig,
@@ -296,9 +364,12 @@ object ShaftDocCodec {
             jobNumber = "",
             customer = "",
             vessel = "",
+            item = "",
             shaftPosition = ShaftPosition.OTHER,
             notes = "",
             spec = legacy,
+            // A spec-only file predates the final drawing entirely.
+            finalSpec = null,
             runoutConfig = RunoutConfig(),
             wearRecord = WearRecord(),
             runoutReadings = RunoutReadings(),

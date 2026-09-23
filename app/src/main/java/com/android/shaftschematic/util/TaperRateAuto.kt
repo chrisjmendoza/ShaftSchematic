@@ -4,7 +4,13 @@ import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.max
 
-private const val DEFAULT_SLOPE_ERROR_TOLERANCE = 0.03f
+/**
+ * Relative slope error a geometry may carry and still be called a common rate — a confirmed
+ * product decision, not a tuning knob. `internal` because the standalone taper calculator
+ * checks a typed rate against typed geometry with the SAME tolerance; a second literal 3%
+ * would be a second decision to keep in step.
+ */
+internal const val DEFAULT_SLOPE_ERROR_TOLERANCE = 0.03f
 
 /** 6 in expressed in canonical mm; unit conversion stays out of this layer. */
 private const val BORE_BREAK_MM = 152.4f
@@ -196,7 +202,8 @@ private fun preferredCommonOneToN(referenceDiaMm: Float, commonOneToN: List<Floa
     return preferred.filter { it in commonOneToN } + commonOneToN.filterNot { it in preferred }
 }
 
-private fun formatOneToN(value: Float, decimals: Int, trimTrailingZeros: Boolean): String {
+/** `internal` so the standalone taper calculator sets its `1:N` values the one way. */
+internal fun formatOneToN(value: Float, decimals: Int, trimTrailingZeros: Boolean): String {
     val fmt = "%.${decimals}f"
     val out = String.format(Locale.US, fmt, value.toDouble())
     // Only strip zeros in the fractional part; trimming an integer like "20"

@@ -90,7 +90,6 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.android.shaftschematic.data.SettingsStore
 import com.android.shaftschematic.doc.ShaftDocCodec
 import com.android.shaftschematic.io.TemplateStorage
-import com.android.shaftschematic.model.oalIsManualOnLoad
 import com.android.shaftschematic.template.TemplateSortColumn
 import com.android.shaftschematic.template.TemplateSortDir
 import com.android.shaftschematic.template.filterAndSortTemplates
@@ -106,6 +105,7 @@ import com.android.shaftschematic.util.relativeOpenDate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.android.shaftschematic.ui.adaptive.readableWidth
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -305,7 +305,9 @@ fun TemplatesRoute(
             }
         }
 
-        Column(Modifier.padding(pad).fillMaxSize()) {
+        // The cap sits on the page column, so the search header, the flat results and the
+        // accordion all share one readable width on a tablet.
+        Column(Modifier.padding(pad).fillMaxSize().readableWidth()) {
             // The header is hidden while there is nothing to search: a filter over an empty
             // store is furniture, and the empty-state message is the whole screen's message.
             if (!loading && summaries.isNotEmpty()) {
@@ -643,12 +645,9 @@ private fun TemplateCard(
     onDelete: () -> Unit,
 ) {
     // Resolved once per card — the same pure resolve the editor runs, so the preview shows
-    // auto-body fill and subtracted bodies exactly as the drawing will. The manual-OAL decision
-    // comes from the shared [oalIsManualOnLoad] so it cannot drift from applyTemplate's: a
-    // predicate of its own here previews auto-fill spans that appear or vanish when the
-    // template is used.
+    // auto-body fill and subtracted bodies exactly as the drawing will.
     val resolved = remember(summary.filename, summary.spec) {
-        resolveComponents(summary.spec, overallIsManual = summary.spec.oalIsManualOnLoad())
+        resolveComponents(summary.spec)
     }
     var menuOpen by remember { mutableStateOf(false) }
 

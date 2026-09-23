@@ -7,6 +7,9 @@ import com.android.shaftschematic.geom.ClampedUndercutSpanMm
 import com.android.shaftschematic.geom.DiaCalloutStation
 import com.android.shaftschematic.geom.UndercutSpanMm
 import com.android.shaftschematic.geom.nearestSetReference
+import com.android.shaftschematic.geom.undercutCalloutAnchorMm
+import com.android.shaftschematic.geom.undercutCalloutAnchorsMm
+import com.android.shaftschematic.geom.undercutNestingForest
 import com.android.shaftschematic.model.LinerAnchor
 import com.android.shaftschematic.model.Undercut
 import com.android.shaftschematic.model.UndercutReference
@@ -308,11 +311,25 @@ data class UndercutStripInnerLayout(
  * `fallbackLabelAbove` flag ([aboveRows] > 0).
  */
 data class UndercutRailRowPlan(
-    /** Rows reserved between the rail line and the cylinder top (never 0 — clear air). */
+    /** Rows reserved between the rail line and the cylinder top (never 0 — clear air), the
+     *  nested chain rows ([nestedRows]) included. */
     val belowRows: Int,
     /** Fallback rows stacked ABOVE the rail line; 0 when fallbacks tuck below instead. */
     val aboveRows: Int,
+    /** How many of [belowRows] belong to the nested chain rows ([buildNestedUndercutRailRows]) —
+     *  one for each level's rail line plus that line's own fallback label rows. The composer
+     *  subtracts these to find where the chain's own rows end and the first nested line goes. */
+    val nestedRows: Int = 0,
 )
+
+/**
+ * Fallback label rows one resolved rail uses — only spans whose value does NOT seat in the
+ * line's break need a row. Shared by [planUndercutRailRows]'s reservation and the composer's
+ * nested-row stepping, so the budgeted rows and the drawn rows cannot drift apart.
+ */
+fun undercutRailFallbackRows(layout: List<WearRailSpanLayout>): Int =
+    (layout.filter { !it.seatsInBreak }.maxOfOrNull { it.labelRow + 1 } ?: 0)
+        .coerceAtMost(WEAR_RAIL_MAX_LABEL_ROWS)
 
 /**
  * Plans the chained rail's fallback-label rows. Since [layoutWearStripRail] is pure horizontal
@@ -331,17 +348,28 @@ data class UndercutRailRowPlan(
  *   keeps just the 1-row clear air off the shaft.
  * - **Started strip** → no chain at all; the full [WEAR_RAIL_MAX_LABEL_ROWS] budget stays below,
  *   the machinist's band to hand-draw a chain into.
+ *
+ * [nestedLayouts] are the resolved nested chain rows ([buildNestedUndercutRailRows], one per
+ * nesting level) that stack UNDER the level-0 chain. Each claims a row for its own rail line
+ * plus the rows its fallback labels land on, so the strip reserves the height the extra
+ * physical rails actually need instead of drawing them into the cylinder.
  */
 fun planUndercutRailRows(
     chainLayout: List<WearRailSpanLayout>,
     startedStrip: Boolean,
     hasTotalRail: Boolean,
+    nestedLayouts: List<List<WearRailSpanLayout>> = emptyList(),
 ): UndercutRailRowPlan {
     if (startedStrip) return UndercutRailRowPlan(belowRows = WEAR_RAIL_MAX_LABEL_ROWS, aboveRows = 0)
-    val used = (chainLayout.filter { !it.seatsInBreak }.maxOfOrNull { it.labelRow + 1 } ?: 0)
-        .coerceAtMost(WEAR_RAIL_MAX_LABEL_ROWS)
-    return if (hasTotalRail) UndercutRailRowPlan(belowRows = used.coerceAtLeast(1), aboveRows = 0)
-    else UndercutRailRowPlan(belowRows = 1, aboveRows = used)
+    val used = undercutRailFallbackRows(chainLayout)
+    val nestedRows = nestedLayouts.sumOf { 1 + undercutRailFallbackRows(it) }
+    return if (hasTotalRail) {
+        UndercutRailRowPlan(
+            belowRows = used.coerceAtLeast(1) + nestedRows, aboveRows = 0, nestedRows = nestedRows,
+        )
+    } else {
+        UndercutRailRowPlan(belowRows = 1 + nestedRows, aboveRows = used, nestedRows = nestedRows)
+    }
 }
 
 /**
@@ -474,9 +502,14 @@ private const val UNDERCUT_RAIL_SPAN_EPS_MM = 1e-3f
  * omitted span had zero mm to contribute — so the returned spans' lengths always sum to the
  * chain length.
  *
- * An undercut whose span starts at or before the cursor (overlapping cuts — legal, since
- * only the in-shaft bounds check is enforced at entry) has its effective start pulled
- * forward to the cursor, so the chain never runs backward or double-counts the overlap.
+ * An undercut whose span starts at or before the cursor (a PARTIALLY overlapping pair, which
+ * the confirm gate blocks for new entry but older records may still carry) has its effective
+ * start pulled forward to the cursor, so the chain never runs backward or double-counts the
+ * overlap.
+ *
+ * [spans] must be the strip's **TOP-LEVEL** spans: a fully nested cut would be absorbed by that
+ * same cursor rule and vanish from the chain, so nested levels get their own rows instead
+ * ([buildNestedUndercutRailRows], anchored on the parent's edges).
  */
 fun buildUndercutRailSpans(
     chainStartMm: Float,
@@ -508,6 +541,72 @@ fun buildUndercutRailSpans(
 }
 
 /**
+ * The extra chain rows a strip's NESTED cuts need — one per nesting level ≥ 1, in ascending
+ * level order, each a complete chain over the parents at the level above.
+ *
+ * A cut machined inside another is located against **its parent's own edges**, not the strip's
+ * datums: for every level-k cut the row carries `[parent start → child start]`, `[child span]`,
+ * `[child end → parent end]`, and several children of one parent chain in sequence
+ * (`parentStart → c1, c1, c1 → c2, c2, …, cn → parentEnd`). Parents at one level are disjoint by
+ * construction, so a level always lays out on ONE row.
+ *
+ * This is why [buildUndercutRailSpans] must be fed the TOP-LEVEL spans only: its forward cursor
+ * walks aft → fwd and pulls an overlapping span's start up to the cursor, which collapses a fully
+ * nested cut to zero width — it silently vanishes from the chain. That absorb rule is deliberate
+ * for LEGACY partially-overlapping data and is unchanged; it simply never sees a nested cut now.
+ *
+ * [spans] are the strip's render-clamped spans (any order — the forest and the chains sort for
+ * themselves). Zero-length spans are omitted exactly as the level-0 chain omits them, so each
+ * parent's row still sums to that parent's span length.
+ */
+fun buildNestedUndercutRailRows(
+    spans: List<UndercutSpanMm>,
+    unit: UnitSystem,
+    /** The strip's resolved unit is already picked by the caller; this carries the dual flag. */
+    dual: Boolean = false,
+): List<List<WearRailSpan>> {
+    val nestingById = undercutNestingForest(spans).associateBy { it.id }
+    val byId = spans.associateBy { it.id }
+    val maxLevel = nestingById.values.maxOfOrNull { it.level } ?: 0
+    if (maxLevel < 1) return emptyList()
+
+    return (1..maxLevel).mapNotNull { level ->
+        val childrenByParent = spans
+            .filter { nestingById[it.id]?.level == level }
+            .groupBy { nestingById.getValue(it.id).parentId }
+        val out = mutableListOf<WearRailSpan>()
+        childrenByParent.entries
+            .sortedBy { (parentId, _) -> byId[parentId]?.startMm ?: 0f }
+            .forEach { (parentId, children) ->
+                val parent = byId[parentId] ?: return@forEach
+                var cursor = parent.startMm
+                children.sortedBy { it.startMm }.forEach { child ->
+                    val start = maxOf(child.startMm, cursor)
+                    if (start - cursor > UNDERCUT_RAIL_SPAN_EPS_MM) {
+                        out += WearRailSpan(
+                            cursor, start, formatLenDimDualLabel((start - cursor).toDouble(), unit, dual),
+                        )
+                    }
+                    val end = maxOf(child.endMm, start)
+                    if (end - start > UNDERCUT_RAIL_SPAN_EPS_MM) {
+                        out += WearRailSpan(
+                            start, end, formatLenDimDualLabel((end - start).toDouble(), unit, dual),
+                        )
+                    }
+                    cursor = maxOf(cursor, end)
+                }
+                if (parent.endMm - cursor > UNDERCUT_RAIL_SPAN_EPS_MM) {
+                    out += WearRailSpan(
+                        cursor, parent.endMm,
+                        formatLenDimDualLabel((parent.endMm - cursor).toDouble(), unit, dual),
+                    )
+                }
+            }
+        out.takeIf { it.isNotEmpty() }
+    }
+}
+
+/**
  * The strip's **total** span — first shoulder → last shoulder, drawn on a second rail
  * line above the chain (the sketch's overall figure across all the sections).
  *
@@ -530,9 +629,10 @@ fun buildUndercutTotalSpan(spans: List<UndercutSpanMm>, unit: UnitSystem, dual: 
 // ──────────────────────────────────────────────────────────────────────────────
 
 /**
- * Measured-Ø callout stations for one strip: one per undercut, positioned at its clamped
- * span's axial centre, labelled with [formatDiaWithUnit] (no "Ø" prefix — the footer/
- * callout convention).
+ * Measured-Ø callout stations for one strip: one per undercut, positioned on the largest
+ * visible shelf of its own floor ([undercutCalloutAnchorMm], the clamped span's centre for a
+ * cut with nothing machined inside it), labelled with [formatDiaWithUnit] (no "Ø" prefix — the
+ * footer/callout convention).
  *
  * An undercut with no entered Ø (`diaMm == 0` — placed but not yet measured) is SKIPPED:
  * the printed sheet never carries a placeholder for a value nobody recorded, the same rule
@@ -552,17 +652,26 @@ fun buildUndercutDiaStations(
     unit: UnitSystem,
     labelWidthPt: (DualLabel) -> Float,
     dual: Boolean = false,
-): List<DiaCalloutStation> = undercuts.mapNotNull { u ->
-    if (u.diaMm <= 0f) return@mapNotNull null
-    val span = clampedById[u.id] ?: return@mapNotNull null
-    if (span.isEmpty) return@mapNotNull null
-    val label = formatDiaWithUnitDualLabel(u.diaMm.toDouble(), unit, dual)
-    DiaCalloutStation(
-        key = u.id,
-        stationX = xAtMm((span.startMm + span.endMm) * 0.5f),
-        label = label,
-        labelWidth = labelWidthPt(label),
-    )
+): List<DiaCalloutStation> {
+    // The anchors are derived from EVERY drawable cut on the strip, not just the ones carrying a
+    // Ø: an unmeasured child still replaces its parent's floor over its own span, so it still has
+    // to be subtracted or the parent's leader lands on it.
+    val spans = undercuts.mapNotNull { u ->
+        val s = clampedById[u.id] ?: return@mapNotNull null
+        if (s.isEmpty) null else UndercutSpanMm(u.id, s.startMm, s.endMm)
+    }
+    val anchorById = undercutCalloutAnchorsMm(spans)
+    return undercuts.mapNotNull { u ->
+        if (u.diaMm <= 0f) return@mapNotNull null
+        val anchorMm = anchorById[u.id] ?: return@mapNotNull null
+        val label = formatDiaWithUnitDualLabel(u.diaMm.toDouble(), unit, dual)
+        DiaCalloutStation(
+            key = u.id,
+            stationX = xAtMm(anchorMm),
+            label = label,
+            labelWidth = labelWidthPt(label),
+        )
+    }
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

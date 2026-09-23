@@ -1,15 +1,28 @@
 package com.android.shaftschematic.ui.screen
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -21,6 +34,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.ExperimentalTextApi
+import androidx.compose.ui.text.font.DeviceFontFamilyName
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.profileFeatureSpans
 import com.android.shaftschematic.geom.computeOalWindow
@@ -41,13 +58,22 @@ import com.android.shaftschematic.geom.PROFILE_TAPER_MIN_FRAC_OF_TRUE
 import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
 import com.android.shaftschematic.geom.WEAR_TRACE_MIN_DEPTH_FRAC
 import com.android.shaftschematic.geom.solveMaxProfileScale
+import com.android.shaftschematic.geom.taperMinFracOfTrue
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.WearRecord
 import com.android.shaftschematic.model.maxOuterDiaMm
+import com.android.shaftschematic.pdf.WEAR_STRIP_SIZE_FRAC_MAX
+import com.android.shaftschematic.pdf.WEAR_STRIP_SIZE_FRAC_MIN
 import com.android.shaftschematic.settings.PDF_ARROW_SIZES_PT
 import com.android.shaftschematic.settings.PDF_ARROW_SIZE_LARGE_PT
 import com.android.shaftschematic.settings.PDF_ARROW_SIZE_MEDIUM_PT
 import com.android.shaftschematic.settings.PDF_ARROW_SIZE_SMALL_PT
+import com.android.shaftschematic.settings.PDF_RUNOUT_BUBBLE_DROP_SCALE_DEFAULT
+import com.android.shaftschematic.settings.PDF_RUNOUT_BUBBLE_DROP_SCALE_MAX
+import com.android.shaftschematic.settings.PDF_RUNOUT_BUBBLE_DROP_SCALE_MIN
+import com.android.shaftschematic.settings.PDF_RUNOUT_BUBBLE_SCALE_DEFAULT
 import com.android.shaftschematic.settings.PDF_SBREAK_THRESHOLD_DEFAULT
+import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_MAX
 import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_MIN
 import com.android.shaftschematic.settings.PDF_WEAR_JOIN_GAP_MAX_MM
@@ -58,6 +84,7 @@ import com.android.shaftschematic.ui.viewmodel.setWearTraceDepthFrac
 import com.android.shaftschematic.util.FractionStyle
 import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.LengthFormat
+import com.android.shaftschematic.util.OutputFont
 import com.android.shaftschematic.util.PDF_PAGE_WIDTH_PT
 import com.android.shaftschematic.util.UnitSystem
 import kotlin.math.abs
@@ -344,6 +371,55 @@ internal fun WearBandShadeSlider(
 }
 
 /**
+ * The wear document's "Strip size" slider — this job's [WearRecord.stripSizeFrac], a multiplier on
+ * the height ceiling the page's own row budget gives a detail strip (`wearRowHeightCapPt`).
+ *
+ * [WEAR_STRIP_SIZE_FRAC_MIN]..[WEAR_STRIP_SIZE_FRAC_MAX] in 10% steps, 100% = the traditional
+ * full-page row height. Layout-only: it changes how tall a strip draws, never a printed value.
+ * Drag is tracked locally and committed once on release — the wear sheet has no live-tuning
+ * channel, so the page re-renders from the committed record.
+ */
+@Composable
+internal fun WearStripSizeSlider(
+    frac: Float,
+    onCommit: (Float) -> Unit,
+) {
+    var sizeDrag by remember { mutableStateOf<Float?>(null) }
+    val shown = (sizeDrag ?: frac).coerceIn(WEAR_STRIP_SIZE_FRAC_MIN, WEAR_STRIP_SIZE_FRAC_MAX)
+    // 10% steps across the range, minus the two endpoints Slider places itself.
+    val steps = ((WEAR_STRIP_SIZE_FRAC_MAX - WEAR_STRIP_SIZE_FRAC_MIN) / 0.1f).roundToInt() - 1
+    Column {
+        Text(
+            "Strip size  ${fmtWholePct(shown)}",
+            style = MaterialTheme.typography.titleSmall,
+        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(fmtWholePct(WEAR_STRIP_SIZE_FRAC_MIN), style = MaterialTheme.typography.bodySmall)
+            Slider(
+                value = shown,
+                onValueChange = { sizeDrag = it },
+                onValueChangeFinished = {
+                    sizeDrag?.let(onCommit)
+                    sizeDrag = null
+                },
+                valueRange = WEAR_STRIP_SIZE_FRAC_MIN..WEAR_STRIP_SIZE_FRAC_MAX,
+                steps = steps.coerceAtLeast(0),
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 8.dp)
+                    .testTag("wear_strip_size_slider"),
+            )
+            Text(fmtWholePct(WEAR_STRIP_SIZE_FRAC_MAX), style = MaterialTheme.typography.bodySmall)
+        }
+        Text(
+            "How tall the detail strips draw. 100% is the height a full page of strips gives one.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/**
  * Step the "Taper–liner join" slider snaps to, in canonical mm: 1/2" in inches mode, 10 mm in
  * millimetres mode. Display granularity only — the stored value stays mm either way.
  */
@@ -453,6 +529,56 @@ internal fun DimensionArrowSizeChips(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
+}
+
+/**
+ * The "Output font" picker — Settings → Drawing only, unlike its fraction neighbour.
+ *
+ * A shop picks a face once and prints every job in it, so this is a house style rather than a
+ * per-sheet decision, and the PDF options sheets stay as they are. A tap IS the commit: the
+ * choice lands in `PdfPrefs.outputFont`, which mirrors into `OutputTypography.active`, and each
+ * open preview re-renders from its own font key.
+ *
+ * Each chip is labelled in the face it selects, so the row reads as a specimen sheet.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun OutputFontChips(
+    outputFont: OutputFont,
+    onCommit: (OutputFont) -> Unit,
+) {
+    Column {
+        Text("Output font", style = MaterialTheme.typography.titleSmall)
+        Spacer(Modifier.height(4.dp))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutputFont.entries.forEach { font ->
+                FilterChip(
+                    selected = outputFont == font,
+                    onClick = { onCommit(font) },
+                    label = { Text(font.uiLabel(), fontFamily = outputFontPreviewFamily(font)) },
+                    modifier = Modifier.testTag("output_font_${font.name}"),
+                )
+            }
+        }
+        Text(
+            "Every printed sheet is set in this face. Standard is the historical look.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/**
+ * The Compose family matching what an [OutputFont] draws with on paper, so a chip is a specimen
+ * of its own choice. A device without the named family falls back to its default sans, exactly
+ * as the printed sheet would.
+ */
+@OptIn(ExperimentalTextApi::class)
+private fun outputFontPreviewFamily(font: OutputFont): FontFamily = when (font) {
+    OutputFont.STANDARD -> FontFamily.SansSerif
+    OutputFont.CONDENSED -> FontFamily(Font(DeviceFontFamilyName("sans-serif-condensed")))
+    OutputFont.SERIF -> FontFamily.Serif
+    OutputFont.MONOSPACE -> FontFamily.Monospace
 }
 
 /**
@@ -571,36 +697,191 @@ internal fun fmtSBreakThreshold(v: Float): String =
     if (v <= 0f) "Never" else "below ${(v * 100).roundToInt()}%"
 
 /**
- * The "Shade in PDF" heading + Bodies / Tapers / Liners checkbox group shared by the two
- * PDF options sheets (`PdfOptionsSheet` on the schematic preview, `RunoutWearOptionsSheet`
- * on the runout / wear / undercut / consolidated tabs). Settings → PDF Export keeps its own
- * copy: its rows sit in a `spacedBy(12.dp)` column with a padded heading, so sharing this
- * block there would retighten that page's spacing.
+ * A collapsed-by-default section on a PDF options sheet: a clickable header row (chevron +
+ * title) over content that composes only while open.
+ *
+ * Both sheets are taller than the cap the page strip leaves them and scroll, so a control
+ * parked below the fold reads as absent. Sections reached for once a job — the measurement
+ * end, the shade set — fold away so the rows tuned against the drawing stay in view; opening
+ * one costs a tap. Open state is composition-local by design: the sheet is dismissed far
+ * more often than a section is reopened, so remembering it would only give the sheet a shape
+ * nobody asked for.
+ */
+@Composable
+internal fun OptionsExpander(
+    title: String,
+    testTag: String,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Column {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { expanded = !expanded }
+                .testTag(testTag),
+        ) {
+            Icon(
+                if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                contentDescription = if (expanded) "Collapse" else "Expand",
+            )
+            Spacer(Modifier.width(4.dp))
+            Text(title, style = MaterialTheme.typography.titleSmall)
+        }
+        if (expanded) {
+            Spacer(Modifier.height(4.dp))
+            Column(Modifier.padding(start = 8.dp), content = content)
+        }
+    }
+}
+
+/**
+ * The "Content" heading + wrapping chip row both PDF options sheets lead with: what this
+ * sheet PRINTS, as chips rather than switch-plus-caption rows.
+ *
+ * The captions moved to Help. On a sheet capped below the page strip, three explained switch
+ * rows cost exactly the room the sliders under them need, and the elections they carry —
+ * blank draft, Ø callouts, labels, coupling face — are each a single word once the drawing
+ * is on screen beside them.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun ContentChipRow(content: @Composable () -> Unit) {
+    Column {
+        Text("Content", style = MaterialTheme.typography.titleSmall)
+        Spacer(Modifier.height(4.dp))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { content() }
+    }
+}
+
+/** One [ContentChipRow] election: a filter chip that grows a check mark once it is on. */
+@Composable
+internal fun ContentChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    modifier: Modifier = Modifier,
+) {
+    FilterChip(
+        selected = selected,
+        enabled = enabled,
+        onClick = onClick,
+        label = { Text(label) },
+        leadingIcon = if (selected) {
+            {
+                Icon(
+                    Icons.Filled.Check,
+                    contentDescription = null,
+                    modifier = Modifier.size(FilterChipDefaults.IconSize),
+                )
+            }
+        } else null,
+        modifier = modifier,
+    )
+}
+
+/**
+ * The "Measurement reference" radios — `PdfPrefs.tieringMode`, the end a dimension rail
+ * measures from — as both PDF options sheets show them: ONE expandable section and one label
+ * set, so the schematic sheet and the consolidated one can never offer different wording for
+ * the same preference. Settings → PDF Export names it the same and keeps its own wider rows.
+ */
+@Composable
+internal fun MeasurementReferenceSection(
+    pdfTieringMode: PdfTieringMode,
+    onCommit: (PdfTieringMode) -> Unit,
+) {
+    OptionsExpander("Measurement reference", "options_measure_ref_expander") {
+        listOf(
+            PdfTieringMode.AUTO to "Auto (closest end)",
+            PdfTieringMode.AFT  to "AFT",
+            PdfTieringMode.FWD  to "FWD",
+        ).forEach { (mode, label) ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                RadioButton(
+                    selected = pdfTieringMode == mode,
+                    onClick = { onCommit(mode) },
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(label, style = MaterialTheme.typography.bodyLarge)
+            }
+        }
+    }
+}
+
+/**
+ * The "Shade in Components" expandable section — Bodies (with its "Explicit bodies only"
+ * sub-checkbox) / Tapers / Liners — shared by the two PDF options sheets (`PdfOptionsSheet`
+ * on the schematic preview, `RunoutWearOptionsSheet` on the runout / wear / undercut /
+ * consolidated tabs). Settings → PDF Export keeps its own copy: its rows sit in a
+ * `spacedBy(12.dp)` column with a padded heading, so sharing this block there would
+ * retighten that page's spacing.
+ *
+ * [shadeExplicitBodiesOnly] narrows the body fill to authored sections, leaving auto
+ * (bare-shaft) runs unfilled. It only bites while Bodies is checked, so the sub-checkbox is
+ * disabled without it. [showExplicitBodiesOnly] hides the row entirely on the wear and
+ * undercut sheets: their `SimpleShaftProfile` pass shades every body run whatever the pref
+ * says, and a checkbox the page visibly ignores is worse than a missing one.
  *
  * [linerShadeLocked] locks the "Liners" row on a document that prints measured Ø values
  * inside the profile: their halos are sheet-white, so the composer draws liners unfilled
  * there (`consolidatedSheetHasInProfileValues`). The row then reads unchecked and disabled
  * — **display only**; the stored pref is never rewritten, so the user's choice returns as
  * soon as the document stops printing in-profile values.
+ *
+ * [showUndercutLineArt] adds the undercut document's print line-art row at the FOOT of the group
+ * — the rarely-reached option trails, and it is shown only on the sheet it governs, so the other
+ * documents are not offered a control their composers ignore.
  */
 @Composable
 internal fun ShadeInPdfChecks(
     pdfShadedBodies: Boolean,
     pdfShadedTapers: Boolean,
     pdfShadedLiners: Boolean,
+    shadeExplicitBodiesOnly: Boolean,
     onSetShadedBodies: (Boolean) -> Unit,
     onSetShadedTapers: (Boolean) -> Unit,
     onSetShadedLiners: (Boolean) -> Unit,
+    onSetShadeExplicitBodiesOnly: (Boolean) -> Unit,
     linerShadeLocked: Boolean = false,
+    showExplicitBodiesOnly: Boolean = true,
+    showUndercutLineArt: Boolean = false,
+    /** The app-wide `PdfPrefs.undercutLineArt`; read only when [showUndercutLineArt]. */
+    undercutLineArt: Boolean = false,
+    onSetUndercutLineArt: (Boolean) -> Unit = {},
 ) {
-    Column {
-        Text("Shade in PDF", style = MaterialTheme.typography.titleSmall)
-        Spacer(Modifier.height(4.dp))
-
+    OptionsExpander("Shade in Components", "options_shade_expander") {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox(checked = pdfShadedBodies, onCheckedChange = onSetShadedBodies)
             Spacer(Modifier.width(8.dp))
             Text("Bodies", style = MaterialTheme.typography.bodyLarge)
+        }
+        if (showExplicitBodiesOnly) Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = 24.dp),
+        ) {
+            Checkbox(
+                checked = shadeExplicitBodiesOnly,
+                enabled = pdfShadedBodies,
+                onCheckedChange = onSetShadeExplicitBodiesOnly,
+                modifier = Modifier.testTag("shade_explicit_bodies_only"),
+            )
+            Spacer(Modifier.width(8.dp))
+            Column {
+                Text(
+                    "Explicit bodies only",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (pdfShadedBodies) MaterialTheme.colorScheme.onSurface
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    "Auto (bare-shaft) sections stay unshaded.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox(checked = pdfShadedTapers, onCheckedChange = onSetShadedTapers)
@@ -625,6 +906,146 @@ internal fun ShadeInPdfChecks(
                 }
             }
         }
+        if (showUndercutLineArt) Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(
+                checked = undercutLineArt,
+                onCheckedChange = onSetUndercutLineArt,
+                modifier = Modifier.testTag("pdf_undercut_line_art"),
+            )
+            Spacer(Modifier.width(8.dp))
+            Column {
+                Text("Undercut drawing: line art (no shading)", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "The printed undercut sheet drops every fill; the cut sections read from " +
+                        "their faces and floor lines.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * The runout bubble SIZE range this control offers: 60–150% of the shipped circle.
+ * Deliberately narrower than the stored bounds (`PDF_RUNOUT_BUBBLE_SCALE_MIN`..`_MAX`), which
+ * are a defensive clamp on a hand-edited or older-build value rather than a span to offer.
+ */
+private const val BUBBLE_SIZE_UI_MIN = 0.6f
+private const val BUBBLE_SIZE_UI_MAX = 1.5f
+
+/** Slider steps for a 0..1-style multiplier range in 5% increments, endpoints excluded. */
+private fun pctSteps(min: Float, max: Float): Int =
+    (((max - min) / 0.05f).roundToInt() - 1).coerceAtLeast(0)
+
+/**
+ * The "Bubble size" slider on the runout and consolidated options sheets — the app-wide
+ * `PdfPrefs.runoutBubbleScale`, the multiplier on the bubble radius both draw sites take.
+ *
+ * Every derived spacing in `geom/RunoutBubbleLayout.kt` is a function of that radius, so this
+ * re-proportions the whole bubble field rather than only the circles. A tap on the track
+ * commits once on release — the bubble prefs have no live-tuning channel; the preview
+ * re-renders from the stored value, which rides its render-inputs record.
+ */
+@Composable
+internal fun BubbleSizeSlider(
+    scale: Float,
+    onCommit: (Float) -> Unit,
+) {
+    var sizeDrag by remember { mutableStateOf<Float?>(null) }
+    val shown = (sizeDrag ?: scale).coerceIn(BUBBLE_SIZE_UI_MIN, BUBBLE_SIZE_UI_MAX)
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "Bubble size  ${fmtWholePct(shown)}",
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(
+                onClick = { sizeDrag = null; onCommit(PDF_RUNOUT_BUBBLE_SCALE_DEFAULT) },
+                enabled = scale != PDF_RUNOUT_BUBBLE_SCALE_DEFAULT || sizeDrag != null,
+            ) { Text("Standard (${fmtWholePct(PDF_RUNOUT_BUBBLE_SCALE_DEFAULT)})") }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(fmtWholePct(BUBBLE_SIZE_UI_MIN), style = MaterialTheme.typography.bodySmall)
+            Slider(
+                value = shown,
+                onValueChange = { sizeDrag = it },
+                onValueChangeFinished = {
+                    sizeDrag?.let(onCommit)
+                    sizeDrag = null
+                },
+                valueRange = BUBBLE_SIZE_UI_MIN..BUBBLE_SIZE_UI_MAX,
+                steps = pctSteps(BUBBLE_SIZE_UI_MIN, BUBBLE_SIZE_UI_MAX),
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 8.dp)
+                    .testTag("bubble_size_slider"),
+            )
+            Text(fmtWholePct(BUBBLE_SIZE_UI_MAX), style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+/**
+ * The "Bubble height" slider on the runout and consolidated options sheets — the app-wide
+ * `PdfPrefs.runoutBubbleDropScale`, the multiplier on how far the first bubble row hangs
+ * below the shaft.
+ *
+ * Experimental: it exists to find the depth at which the pointer lines land most legibly, so
+ * the caption says as much rather than promising a settled behaviour. Commit-on-release, the
+ * same posture as [BubbleSizeSlider].
+ */
+@Composable
+internal fun BubbleDropSlider(
+    scale: Float,
+    onCommit: (Float) -> Unit,
+) {
+    var dropDrag by remember { mutableStateOf<Float?>(null) }
+    val shown = (dropDrag ?: scale)
+        .coerceIn(PDF_RUNOUT_BUBBLE_DROP_SCALE_MIN, PDF_RUNOUT_BUBBLE_DROP_SCALE_MAX)
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "Bubble height  ${fmtWholePct(shown)}",
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(
+                onClick = { dropDrag = null; onCommit(PDF_RUNOUT_BUBBLE_DROP_SCALE_DEFAULT) },
+                enabled = scale != PDF_RUNOUT_BUBBLE_DROP_SCALE_DEFAULT || dropDrag != null,
+            ) { Text("Standard (${fmtWholePct(PDF_RUNOUT_BUBBLE_DROP_SCALE_DEFAULT)})") }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                fmtWholePct(PDF_RUNOUT_BUBBLE_DROP_SCALE_MIN),
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Slider(
+                value = shown,
+                onValueChange = { dropDrag = it },
+                onValueChangeFinished = {
+                    dropDrag?.let(onCommit)
+                    dropDrag = null
+                },
+                valueRange = PDF_RUNOUT_BUBBLE_DROP_SCALE_MIN..PDF_RUNOUT_BUBBLE_DROP_SCALE_MAX,
+                steps = pctSteps(PDF_RUNOUT_BUBBLE_DROP_SCALE_MIN, PDF_RUNOUT_BUBBLE_DROP_SCALE_MAX),
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 8.dp)
+                    .testTag("bubble_drop_slider"),
+            )
+            Text(
+                fmtWholePct(PDF_RUNOUT_BUBBLE_DROP_SCALE_MAX),
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        Text(
+            "Experimental — how far the bubbles hang below the shaft; moves where the " +
+                "pointer lines land.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -770,17 +1191,23 @@ internal fun runoutHeightSliderBase(
 }
 
 /**
- * The per-job "Liner compression" control, shared by the same two surfaces as
+ * The per-job "Liner & taper compression" control, shared by the same two surfaces as
  * [ShaftHeightSlider] (one `RunoutConfig` pair behind both). The measured components —
- * tapers and liners — are what the sheet is about, so liners can be held proportional:
+ * tapers and liners — are what the sheet is about, so BOTH kinds ride this one request
+ * ([taperMinFracOfTrue]) and foreshorten together; a slider that raised only the liners
+ * printed one measured kind at true length beside another stuck at its baseline, and the
+ * drawing read uneven (on-device request). Tapers never fall below their
+ * [PROFILE_TAPER_MIN_FRAC_OF_TRUE] baseline, so the low end of the track is a liner-only
+ * move.
  *
- * - Checkbox "Keep liners proportional lengthwise" (`linersProportional`): liners
- *   request full true-scale width. Best-effort — the request never enters the scale
- *   solve, so the drawn height does not yield; the floors λ-shrink instead. While
+ * - Checkbox "Keep liners and tapers proportional lengthwise" (`linersProportional`):
+ *   both kinds request full true-scale width. Best-effort — the request never enters the
+ *   scale solve, so the drawn height does not yield; the floors λ-shrink instead. While
  *   checked the slider is disabled.
- * - Slider "Liner compression" (`linerCompression`, 0–100%): how far liners may
- *   foreshorten when the page needs the room — 100% = down to the writable floor (the
- *   default), 0% = not at all (same drawing as the checkbox).
+ * - Slider "Liner & taper compression" (`linerCompression`, 0–100%): how far they may
+ *   foreshorten when the page needs the room — 100% = liners down to the writable floor
+ *   and tapers to their baseline (the default), 0% = not at all (same drawing as the
+ *   checkbox).
  *
  * The drawing height takes PRECEDENCE (on-device direction): this control never changes
  * the drawn shaft height — liner floors take only the room the page has at the selected
@@ -788,7 +1215,8 @@ internal fun runoutHeightSliderBase(
  * [estimateKeptFrac] maps a requested width-floor fraction to the fraction liners
  * actually keep at this height — see [estimatedLinerKeptFracOfTrue]; the readout under
  * the slider shows it LIVE during the drag (on-device report: the slider "gives no
- * indication" of its effect).
+ * indication" of its effect), and reports the tapers separately only while the two
+ * differ (a request under the taper baseline).
  *
  * Drag-local value, committed once on release, same posture as the height slider. [onDrag]
  * is the visual-only channel a hosting preview opts into — the raw in-progress compression
@@ -809,12 +1237,15 @@ internal fun LinerCompressionControl(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox(checked = linersProportional, onCheckedChange = onSetProportional)
             Spacer(Modifier.width(8.dp))
-            Text("Keep liners proportional lengthwise", style = MaterialTheme.typography.bodyLarge)
+            Text(
+                "Keep liners and tapers proportional lengthwise",
+                style = MaterialTheme.typography.bodyLarge,
+            )
         }
         var compressionDrag by remember { mutableStateOf<Float?>(null) }
         val shown = compressionDrag ?: linerCompression
         Text(
-            "Liner compression  ${(shown * 100).roundToInt()}%",
+            "Liner & taper compression  ${(shown * 100).roundToInt()}%",
             style = MaterialTheme.typography.titleSmall,
             color = if (linersProportional) MaterialTheme.colorScheme.onSurfaceVariant
             else MaterialTheme.colorScheme.onSurface,
@@ -839,21 +1270,35 @@ internal fun LinerCompressionControl(
         val kept = estimateKeptFrac(requested)
         val keptPct = (kept * 100).roundToInt()
         val shortfall = kept < requested - 0.005f
+        // Tapers ride the same request and the same λ, so their kept fraction is the
+        // liners' λ applied to the taper floor — equal to the liners' above the baseline,
+        // higher below it. `kept / requested` IS that λ.
+        val lambda = if (requested > 0.005f) kept / requested else 1f
+        val taperPct = (taperMinFracOfTrue(requested) * lambda * 100).roundToInt()
+        val together = taperPct == keptPct
         Text(
             when {
                 requested <= 0.005f ->
-                    "Liners may compress to the writable floor. The drawn height " +
-                        "never changes."
+                    "Liners may compress to the writable floor; tapers hold their " +
+                        "${(PROFILE_TAPER_MIN_FRAC_OF_TRUE * 100).roundToInt()}% baseline. " +
+                        "The drawn height never changes."
                 !shortfall && requested >= 0.995f ->
-                    "Liners draw fully proportional at this height. The drawn height " +
-                        "never changes."
+                    "Liners and tapers draw fully proportional at this height. The drawn " +
+                        "height never changes."
+                !shortfall && together ->
+                    "Liners and tapers keep at least ~$keptPct% of true length. The drawn " +
+                        "height never changes."
                 !shortfall ->
-                    "Liners keep at least ~$keptPct% of true length. The drawn height " +
-                        "never changes."
+                    "Liners keep at least ~$keptPct% of true length, tapers ~$taperPct%. " +
+                        "The drawn height never changes."
+                together ->
+                    "The page affords liners and tapers ~$keptPct% of true length at this " +
+                        "height (of the ${(requested * 100).roundToInt()}% asked). The " +
+                        "drawn height never changes."
                 else ->
                     "The page affords liners ~$keptPct% of true length at this height " +
-                        "(of the ${(requested * 100).roundToInt()}% asked). The drawn " +
-                        "height never changes."
+                        "(of the ${(requested * 100).roundToInt()}% asked) and tapers " +
+                        "~$taperPct%. The drawn height never changes."
             },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -867,7 +1312,7 @@ internal fun LinerCompressionControl(
  * (the solve ignores the liner raises entirely, so the drawn height never moves with
  * this control). Same feature construction the composers use, over an approximate
  * window (0..OAL, standard content width): tapers/threads/liners at their kind floors,
- * keyway-bearing bodies pinned. An estimate — the composers' exact windows differ by
+ * keyway windows and compression-opted-out bodies pinned. An estimate — the composers' exact windows differ by
  * hairs — but it moves exactly when the page starts shorting the request, which is what
  * the readout is for.
  */

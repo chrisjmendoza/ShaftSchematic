@@ -24,10 +24,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.outlined.PictureAsPdf
-import androidx.compose.material.icons.outlined.Preview
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -75,6 +73,8 @@ import com.android.shaftschematic.pdf.consolidatedSheetHasInProfileValues
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.settings.RunoutConfig
+import com.android.shaftschematic.ui.adaptive.LocalSidebarPermanent
+import com.android.shaftschematic.ui.adaptive.readableWidth
 import com.android.shaftschematic.ui.nav.appVersionFromContext
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.util.exportPdfGate
@@ -93,7 +93,9 @@ import com.android.shaftschematic.ui.viewmodel.updateWornSectionReference
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.FractionStyle
+import com.android.shaftschematic.util.OutputFont
 import com.android.shaftschematic.util.InkBand
+import com.android.shaftschematic.util.launchPicker
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.createPdfInTree
 import com.android.shaftschematic.util.inkBand
@@ -130,9 +132,18 @@ private data class ConsolidatedRenderInputs(
     val shadedTapers: Boolean,
     val shadedLiners: Boolean,
     val sBreakThresholdFrac: Float,
+    val shadeExplicitBodiesOnly: Boolean,
+    /** Bubble size and drop — keys only; both travel inside the `PdfPrefs` snapshot. */
+    val runoutBubbleScale: Float,
+    val runoutBubbleDropScale: Float,
     val arrowSizePt: Float,
     /** Not a composer argument — it reaches the ink via `FractionTypography.active`. Key only. */
     val fractionStyle: FractionStyle,
+    /**
+     * The typeface the sheet is set in. Not a composer argument either — it reaches the ink via
+     * `OutputTypography.active`. Key only.
+     */
+    val outputFont: OutputFont,
     /**
      * A LAYOUT input, not just a key: the composers take it as a parameter, and a sheet whose
      * budget cannot absorb the taller stacked value falls back to inline on its own.
@@ -170,6 +181,10 @@ fun OutputRoute(
     onOpenRunoutTab: () -> Unit = {},
     /** Quick-save the document (prompts for a name when it has never been saved). */
     onSave: () -> Unit = {},
+    /** Tap on the document title strip — names an unsaved document, renames a saved one. */
+    onTitleClick: (() -> Unit)? = null,
+    /** Open Help at one topic — the toolbar's "?" opens this tab's own guide. */
+    onOpenHelpTopic: (String) -> Unit = {},
 ) {
     val spec               by vm.spec.collectAsState()
     val currentDocumentName by vm.currentDocumentName.collectAsState()
@@ -180,6 +195,7 @@ fun OutputRoute(
     val customer           by vm.customer.collectAsState()
     val vessel             by vm.vessel.collectAsState()
     val jobNumber          by vm.jobNumber.collectAsState()
+    val item               by vm.item.collectAsState()
     val shaftPosition      by vm.shaftPosition.collectAsState()
     val openAfterExport    by vm.openPdfAfterExport.collectAsState()
     val lineThicknessScale by vm.lineThicknessScale.collectAsState()
@@ -189,12 +205,18 @@ fun OutputRoute(
     val curveLoHeightIn    by vm.pdfCurveLoHeightIn.collectAsState()
     val curveHiHeightIn    by vm.pdfCurveHiHeightIn.collectAsState()
     val pdfSBreakThresholdFrac by vm.pdfSBreakThresholdFrac.collectAsState()
+    val pdfShadeExplicitBodiesOnly by vm.pdfShadeExplicitBodiesOnly.collectAsState()
+    // Bubble size and drop: the composer reads them off the `PdfPrefs` snapshot, so the loop
+    // needs them as keys or a resize never reaches this preview.
+    val pdfRunoutBubbleScale by vm.pdfRunoutBubbleScale.collectAsState()
+    val pdfRunoutBubbleDropScale by vm.pdfRunoutBubbleDropScale.collectAsState()
     // Dimension-rail arrowhead size: a chip tap commits straight to PdfPrefs, so the render
     // loop needs it as an input key or the sheet would keep the old heads.
     val pdfArrowSizePt     by vm.pdfArrowSizePt.collectAsState()
     // Fraction style: same posture — it reaches the ink through the renderer's active style,
     // which the loop cannot observe, so it rides along as an input key.
     val pdfFractionStyle   by vm.pdfFractionStyle.collectAsState()
+    val pdfOutputFont      by vm.pdfOutputFont.collectAsState()
     val pdfDualUnitLayout  by vm.pdfDualUnitLayout.collectAsState()
     val pdfTieringMode     by vm.pdfTieringMode.collectAsState()
     val runoutReadings     by vm.runoutReadings.collectAsState()
@@ -278,7 +300,8 @@ fun OutputRoute(
         )
     }
 
-    val outputFilename = buildOutputFilename(customer, vessel, jobNumber, OutputDoc.CONSOLIDATED, blankDraft)
+    val outputFilename =
+        buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.CONSOLIDATED, blankDraft)
 
     /**
      * The consolidated sheet with the elected content. Everything arrives as a parameter
@@ -316,6 +339,38 @@ fun OutputRoute(
         includeWearInfo = variantSnap.includeWearInfo,
     )
 
+    /**
+     * Sends the consolidated sheet to the platform print dialog. ONE action behind the tab
+     * body's Print button and the preview overlay's Print icon, so the two entry points
+     * cannot drift. Every value is snapshotted here on the UI thread — `onWrite` runs on a
+     * binder thread.
+     */
+    fun printConsolidated() {
+        val jobName = outputFilename.removeSuffix(".pdf")
+        val variantSnapshot = variant
+        val specSnapshot = spec
+        val configSnapshot = runoutConfig
+        val projectSnapshot = ProjectInfo(customer = customer, vessel = vessel,
+            jobNumber = jobNumber, side = shaftPosition, item = item)
+        val unitSnapshot = unit
+        val prefsSnapshot = vm.currentPdfPrefs
+        val resolvedSnapshot = resolvedComponents
+        val thicknessSnapshot = lineThicknessScale
+        val readingsSnapshot = runoutReadings
+        val placementsSnapshot = stationPlacements
+        val wearSnapshot = wearRecord
+        val blankSnapshot = blankDraft
+        val displayUnitsSnapshot = vm.currentDisplayUnits()
+        printShaftPdfPage(ctx, jobName) { page ->
+            composeConsolidated(
+                page, variantSnapshot, specSnapshot, configSnapshot,
+                projectSnapshot, unitSnapshot, prefsSnapshot, resolvedSnapshot,
+                thicknessSnapshot, readingsSnapshot, placementsSnapshot,
+                wearSnapshot, blankSnapshot, displayUnitsSnapshot,
+            )
+        }
+    }
+
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/pdf")
     ) { uri ->
@@ -326,7 +381,7 @@ fun OutputRoute(
                 composeConsolidated(
                     page, variant, spec, runoutConfig,
                     ProjectInfo(customer = customer, vessel = vessel,
-                        jobNumber = jobNumber, side = shaftPosition),
+                        jobNumber = jobNumber, side = shaftPosition, item = item),
                     unit, vm.currentPdfPrefs, resolvedComponents,
                     lineThicknessScale, runoutReadings, stationPlacements, wearRecord, blankDraft,
                     vm.currentDisplayUnits(),
@@ -347,7 +402,7 @@ fun OutputRoute(
     ) { treeUri ->
         if (treeUri != null) {
             val project = ProjectInfo(customer = customer, vessel = vessel,
-                jobNumber = jobNumber, side = shaftPosition)
+                jobNumber = jobNumber, side = shaftPosition, item = item)
             val prefs = vm.currentPdfPrefs
             val displayUnits = vm.currentDisplayUnits()
             var attempted = 0
@@ -355,7 +410,7 @@ fun OutputRoute(
             OutputDoc.entries.forEachIndexed { i, doc ->
                 if (!batchChecked.getOrElse(i) { true }) return@forEachIndexed
                 attempted++
-                val name = buildOutputFilename(customer, vessel, jobNumber, doc, blankDraft)
+                val name = buildOutputFilename(customer, vessel, jobNumber, shaftPosition, doc, blankDraft)
                 // A null uri means the provider refused to create the file — counted as a
                 // failure, but there is no document to carry an error page.
                 val docUri = createPdfInTree(ctx, treeUri, name) ?: return@forEachIndexed
@@ -401,6 +456,7 @@ fun OutputRoute(
                             traceDepthFrac = effectiveWearTraceDepthFrac(
                                 wearRecord.traceDepthFrac, prefs.wearTraceDepthFrac,
                             ),
+                            heightScale = runoutConfig.heightScale,
                         )
                         OutputDoc.UNDERCUT -> composeUndercutPdf(
                             page = page, spec = spec, project = project, unit = unit,
@@ -438,7 +494,7 @@ fun OutputRoute(
                 spec = spec,
                 config = tunedRunoutConfig(runoutConfig, tuning.heightScale, tuning.linerCompression),
                 project = ProjectInfo(customer = customer, vessel = vessel,
-                    jobNumber = jobNumber, side = shaftPosition),
+                    jobNumber = jobNumber, side = shaftPosition, item = item),
                 unit = unit,
                 resolved = resolvedComponents,
                 lineThicknessScale = tuning.lineThickness ?: lineThicknessScale,
@@ -446,8 +502,12 @@ fun OutputRoute(
                 shadedTapers = pdfShadedTapers,
                 shadedLiners = pdfShadedLiners,
                 sBreakThresholdFrac = tuning.sBreakFrac ?: pdfSBreakThresholdFrac,
+                shadeExplicitBodiesOnly = pdfShadeExplicitBodiesOnly,
+                runoutBubbleScale = pdfRunoutBubbleScale,
+                runoutBubbleDropScale = pdfRunoutBubbleDropScale,
                 arrowSizePt = pdfArrowSizePt,
                 fractionStyle = pdfFractionStyle,
+                outputFont = pdfOutputFont,
                 dualUnitLayout = pdfDualUnitLayout,
                 curveLoHeightIn = curveLoHeightIn,
                 curveHiHeightIn = curveHiHeightIn,
@@ -502,6 +562,7 @@ fun OutputRoute(
         EditorDocumentTitle(
             documentName = currentDocumentName,
             hasUnsavedChanges = hasUnsavedChanges,
+            onClick = onTitleClick,
         )
 
         Row(
@@ -511,8 +572,11 @@ fun OutputRoute(
                 .padding(horizontal = 4.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = onOpenSidebar) {
-                Icon(Icons.Filled.Menu, contentDescription = "Open navigation")
+            // Nothing to open when the sidebar is already laid out beside the tabs.
+            if (!LocalSidebarPermanent.current) {
+                IconButton(onClick = onOpenSidebar) {
+                    Icon(Icons.Filled.Menu, contentDescription = "Open navigation")
+                }
             }
             Text(
                 text = "Consolidated Output",
@@ -526,14 +590,22 @@ fun OutputRoute(
             ) {
                 Icon(Icons.Filled.Save, contentDescription = "Save")
             }
+            TabHelpButton(HELP_TOPIC_CONSOLIDATED_OUTPUT, onOpenHelpTopic)
         }
 
         HorizontalDivider()
 
+        // This tab carries no canvas and reads as ONE ordered workflow — elect the sheet's
+        // content, produce it, then tune and author what it prints, then batch-export —
+        // where each block acts on the one above it ("Export all" names the content
+        // selection above it explicitly). Splitting that into panes would separate steps
+        // that read in sequence, so a tablet gets the readable column instead: the scroll
+        // gutter still spans the window, the content stops at a legible width.
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
+                .readableWidth()
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
@@ -560,7 +632,7 @@ fun OutputRoute(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
-            // ── Blank draft + Preview / Print / Export — right under the election ──
+            // ── Blank draft + Print / Preview / Export — right under the election ──
             // The output actions are the tab's first go-to (on-device report: "everything
             // else is tweaking the output"), so the group sits directly under the content
             // election it acts on; the sliders, station rows and worn sections follow.
@@ -586,60 +658,13 @@ fun OutputRoute(
                 )
             }
 
-            OutlinedButton(
-                onClick = { showPreview = true },
+            DocumentActionButtons(
+                documentName = "Consolidated Sheet",
+                onPrint = { printConsolidated() },
+                onPreview = { showPreview = true },
+                onExport = { launcher.launchPicker(outputFilename, what = "output export") },
                 enabled = gate.enabled,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Icon(Icons.Outlined.Preview, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Preview Consolidated Sheet")
-            }
-
-            OutlinedButton(
-                onClick = {
-                    val jobName = outputFilename.removeSuffix(".pdf")
-                    // Snapshot state on the UI thread; onWrite runs on a binder thread.
-                    val variantSnapshot = variant
-                    val specSnapshot = spec
-                    val configSnapshot = runoutConfig
-                    val projectSnapshot = ProjectInfo(customer = customer, vessel = vessel,
-                        jobNumber = jobNumber, side = shaftPosition)
-                    val unitSnapshot = unit
-                    val prefsSnapshot = vm.currentPdfPrefs
-                    val resolvedSnapshot = resolvedComponents
-                    val thicknessSnapshot = lineThicknessScale
-                    val readingsSnapshot = runoutReadings
-                    val placementsSnapshot = stationPlacements
-                    val wearSnapshot = wearRecord
-                    val blankSnapshot = blankDraft
-                    val displayUnitsSnapshot = vm.currentDisplayUnits()
-                    printShaftPdfPage(ctx, jobName) { page ->
-                        composeConsolidated(
-                            page, variantSnapshot, specSnapshot, configSnapshot,
-                            projectSnapshot, unitSnapshot, prefsSnapshot, resolvedSnapshot,
-                            thicknessSnapshot, readingsSnapshot, placementsSnapshot,
-                            wearSnapshot, blankSnapshot, displayUnitsSnapshot,
-                        )
-                    }
-                },
-                enabled = gate.enabled,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Icon(Icons.Filled.Print, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Print Consolidated Sheet")
-            }
-
-            Button(
-                onClick = { launcher.launch(outputFilename) },
-                enabled = gate.enabled,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Icon(Icons.Outlined.PictureAsPdf, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Export Consolidated Sheet PDF")
-            }
+            )
 
             HorizontalDivider()
 
@@ -775,7 +800,7 @@ fun OutputRoute(
             }
 
             Button(
-                onClick = { batchResult = null; batchLauncher.launch(null) },
+                onClick = { batchResult = null; batchLauncher.launchPicker(null, what = "export-all folder") },
                 enabled = gate.enabled && batchChecked.any { it },
                 modifier = Modifier.fillMaxWidth(),
             ) {
@@ -830,14 +855,17 @@ fun OutputRoute(
             onClose = { showPreview = false },
             onExport = {
                 showPreview = false
-                launcher.launch(outputFilename)
+                launcher.launchPicker(outputFilename, what = "output export")
             },
+            // The tab body's Print action, unchanged — one function behind both.
+            onPrint = { printConsolidated() },
             optionsSheet = {
                 RunoutWearOptionsSheet(
                     lineThicknessScale = lineThicknessScale,
                     pdfShadedBodies = pdfShadedBodies,
                     pdfShadedTapers = pdfShadedTapers,
                     pdfShadedLiners = pdfShadedLiners,
+                    shadeExplicitBodiesOnly = pdfShadeExplicitBodiesOnly,
                     vm = vm,
                     linerShadeLocked = linerShadeLocked,
                     showCouplingFaceRow = true,
@@ -853,15 +881,21 @@ fun OutputRoute(
                     tuning = tuning,
                     blankDraft = blankDraft,
                     onSetBlankDraft = { blankDraft = it },
-                    showHeightControls = true,
+                    showHeightSlider = true,
                     heightScale = runoutConfig.heightScale,
                     heightSliderBase = heightSliderBase,
                     heightSliderMaxDiaMm = heightSliderDiaMm,
+                    showLinerCompression = true,
                     linersProportional = runoutConfig.linersProportional,
                     linerCompression = runoutConfig.linerCompression,
                     estimateKeptFrac = { frac ->
                         estimatedLinerKeptFracOfTrue(spec, heightSliderBase, runoutConfig.heightScale, frac)
                     },
+                    // Bubbles print on this sheet whenever the variant includes them, so
+                    // their size and drop are tuned here as on the Runout tab.
+                    showBubbleControls = true,
+                    runoutBubbleScale = pdfRunoutBubbleScale,
+                    runoutBubbleDropScale = pdfRunoutBubbleDropScale,
                     showMeasurementReference = true,
                     pdfTieringMode = pdfTieringMode,
                 )

@@ -7,6 +7,7 @@ import com.android.shaftschematic.BuildConfig
 import com.android.shaftschematic.data.SettingsStore
 import com.android.shaftschematic.doc.ShaftDocCodec
 import com.android.shaftschematic.doc.encodeTemplateJson
+import com.android.shaftschematic.doc.mateDuplicate
 import com.android.shaftschematic.io.InternalStorage
 import com.android.shaftschematic.io.ShaftBackup
 import com.android.shaftschematic.model.RunoutReadings
@@ -15,7 +16,6 @@ import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.UndercutRecord
 import com.android.shaftschematic.model.WearRecord
-import com.android.shaftschematic.model.oalIsManualOnLoad
 import com.android.shaftschematic.settings.RunoutConfig
 import com.android.shaftschematic.util.AppLog
 import com.android.shaftschematic.util.UnitSystem
@@ -150,25 +150,55 @@ fun ShaftViewModel.restoreShaftsFromBackup(uri: Uri) {
     }
 }
 
+/**
+ * The current session as a document envelope — the ONE place the live state is mapped onto
+ * [ShaftDocCodec.ShaftDocV1]. Both writers below build on it, so a field added to the envelope
+ * cannot reach the save path while silently missing from the mate copy.
+ */
+private fun ShaftViewModel.currentEnvelope(): ShaftDocCodec.ShaftDocV1 = ShaftDocCodec.ShaftDocV1(
+    preferredUnit = _unit.value,
+    unitLocked = _unitLocked.value,
+    jobNumber = _jobNumber.value,
+    customer = _customer.value,
+    vessel = _vessel.value,
+    item = _item.value,
+    shaftPosition = _shaftPosition.value,
+    notes = _notes.value,
+    spec = _spec.value,
+    finalSpec = _finalSpec.value,
+    runoutConfig = _runoutConfig.value,
+    wearRecord = _wearRecord.value,
+    runoutReadings = _runoutReadings.value,
+    runoutStationPlacements = _runoutStationPlacements.value,
+    undercutRecord = _undercutRecord.value,
+    unitOverrides = _unitOverrides.value,
+    dualUnits = _dualUnits.value,
+    // station_interval_version is stamped by encodeV1 itself — see its KDoc.
+)
+
 /** Export the current state as a JSON string (mm spec + unit metadata + runout config). */
-fun ShaftViewModel.exportJson(): String = ShaftDocCodec.encodeV1(
-    ShaftDocCodec.ShaftDocV1(
-        preferredUnit = _unit.value,
-        unitLocked = _unitLocked.value,
-        jobNumber = _jobNumber.value,
-        customer = _customer.value,
-        vessel = _vessel.value,
-        shaftPosition = _shaftPosition.value,
-        notes = _notes.value,
-        spec = _spec.value,
-        runoutConfig = _runoutConfig.value,
-        wearRecord = _wearRecord.value,
-        runoutReadings = _runoutReadings.value,
-        runoutStationPlacements = _runoutStationPlacements.value,
-        undercutRecord = _undercutRecord.value,
-        unitOverrides = _unitOverrides.value,
-        dualUnits = _dualUnits.value,
-        // station_interval_version is stamped by encodeV1 itself — see its KDoc.
+fun ShaftViewModel.exportJson(): String = ShaftDocCodec.encodeV1(currentEnvelope())
+
+/**
+ * Encode the current drawing as its **mate's** document: this shaft's geometry and drawing
+ * decisions under a new identity, with every measurement record reset. See [mateDuplicate] for
+ * what travels and why the records do not.
+ *
+ * Read-only on the session — the caller writes the returned JSON to a new file; the open
+ * document keeps its own name, identity and dirty state.
+ */
+fun ShaftViewModel.exportMateJson(
+    jobNumber: String,
+    customer: String,
+    vessel: String,
+    position: ShaftPosition,
+): String = ShaftDocCodec.encodeV1(
+    mateDuplicate(
+        source = currentEnvelope(),
+        jobNumber = jobNumber,
+        customer = customer,
+        vessel = vessel,
+        position = position,
     )
 )
 
@@ -176,16 +206,20 @@ fun ShaftViewModel.exportJson(): String = ShaftDocCodec.encodeV1(
  * Encode the current drawing as a reusable **template**: geometry only.
  *
  * Everything that identifies a job or records a measurement is dropped here, at WRITE
- * time, so the stored file itself is clean — job number, customer, vessel, shaft position,
- * notes, and the wear / runout / undercut records. Scrubbing only on load would leave a
- * customer's name sitting in the template file, to be carried into every drawing built
- * from it (and into any copy of that file). The per-job sheet tuning in [RunoutConfig]
+ * time, so the stored file itself is clean — job number, customer, vessel, item, shaft
+ * position, notes, and the wear / runout / undercut records. Scrubbing only on load would
+ * leave a customer's name sitting in the template file, to be carried into every drawing
+ * built from it (and into any copy of that file). The per-job sheet tuning in [RunoutConfig]
  * (shaft height, liner compression) resets too — it is tuned per document, not per shaft
  * family.
  *
  * The unit and unit-lock DO travel: they describe how the geometry is authored, not whose
  * job it is. Per-component unit overrides travel for the same reason (which features are
  * metric is an authoring fact); the per-job dual-display flag does not.
+ *
+ * The final drawing does not travel either: it is what one shaft left as, decided after that
+ * shaft's wear was mapped — a template is the pre-job shape. It is simply never named here, so
+ * the envelope's own default (null) applies.
  *
  * The envelope itself lives in [encodeTemplateJson] (`doc/TemplateEnvelope.kt`) so the scrub
  * test can call the real construction instead of hand-copying it — a mirrored envelope stays
@@ -226,6 +260,10 @@ fun ShaftViewModel.applyTemplate(raw: String) {
     _selectedComponentId.value = null
 
     _spec.value = decoded.spec
+    // A template is the pre-job shape: it never carries a final drawing, and a file that
+    // somehow does (hand-copied, or authored before the write-time scrub) does not get to
+    // start this document with one.
+    _finalSpec.value = null
     seedSessionAddDefaultsFromSpec(decoded.spec)
 
     _unitLocked.value = decoded.unitLocked
@@ -235,6 +273,7 @@ fun ShaftViewModel.applyTemplate(raw: String) {
     _jobNumber.value = ""
     _customer.value = ""
     _vessel.value = ""
+    _item.value = ""
     _shaftPosition.value = ShaftPosition.OTHER
     _notes.value = ""
     _runoutConfig.value = RunoutConfig()
@@ -245,8 +284,6 @@ fun ShaftViewModel.applyTemplate(raw: String) {
     // Overrides describe authoring and travel with the template; dual is per-job.
     _unitOverrides.value = decoded.unitOverrides
     _dualUnits.value = false
-
-    _overallIsManual.value = decoded.spec.oalIsManualOnLoad()
 
     // Deliberately NOT markDocumentSaved() — see the KDoc. The baseline stays where it
     // was, so the session reads as unsaved work and autosave keeps a draft of it.
@@ -276,6 +313,7 @@ fun ShaftViewModel.importJson(raw: String) {
     // highlight); the carousel's seed effect reselects the last row of this document.
     _selectedComponentId.value = null
     _spec.value = decoded.spec
+    _finalSpec.value = decoded.finalSpec
     seedSessionAddDefaultsFromSpec(decoded.spec)
 
     _unitLocked.value = decoded.unitLocked
@@ -284,6 +322,7 @@ fun ShaftViewModel.importJson(raw: String) {
     _jobNumber.value = decoded.jobNumber
     _customer.value = decoded.customer
     _vessel.value = decoded.vessel
+    _item.value = decoded.item
     _shaftPosition.value = decoded.shaftPosition
     _notes.value = decoded.notes
     _runoutConfig.value = decoded.runoutConfig
@@ -294,12 +333,6 @@ fun ShaftViewModel.importJson(raw: String) {
     _undercutRecord.value = decoded.undercutRecord
     _unitOverrides.value = decoded.unitOverrides
     _dualUnits.value = decoded.dualUnits
-
-    // Derive OAL mode from the document instead of leaking the previous session's
-    // flag: an authored OAL must be treated as manual, or the auto path would snap it
-    // back down to the content end on open — and with it drop a leading auto span.
-    // See [oalIsManualOnLoad] for the two signals.
-    _overallIsManual.value = decoded.spec.oalIsManualOnLoad()
 
     markDocumentSaved()
 }
@@ -327,6 +360,9 @@ fun ShaftViewModel.newDocument() {
 
     val blankSpec = ShaftSpec()
     _spec.value = blankSpec
+    // A new document has no final drawing; carrying the previous one over would put another
+    // job's geometry behind a blank original.
+    _finalSpec.value = null
 
     // Mirror envelope defaults used by the existing start/new seed path.
     _unitLocked.value = true
@@ -335,6 +371,7 @@ fun ShaftViewModel.newDocument() {
     _jobNumber.value = ""
     _customer.value = ""
     _vessel.value = ""
+    _item.value = ""
     _shaftPosition.value = ShaftPosition.OTHER
     _runoutConfig.value = RunoutConfig()
     _wearRecord.value = WearRecord()
@@ -344,7 +381,6 @@ fun ShaftViewModel.newDocument() {
     _unitOverrides.value = emptyMap()
     _dualUnits.value = false
     _notes.value = ""
-    _overallIsManual.value = false
 
     _currentDocumentName.value = null
     markDocumentSaved()

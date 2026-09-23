@@ -166,6 +166,20 @@ class UndercutDraftTest {
     }
 
     @Test
+    fun `confirm passes a cut drafted fully inside another and still blocks a partial overlap`() {
+        val others = listOf(UndercutSpanMm("relief", 200f, 400f))
+        // A smaller, deeper cut inside the relief — the nested case, now legal.
+        assertNull(undercutConfirmIssue(draftOf("x", 250f, 100f), 1000f, others))
+        // …a draft machined AROUND the relief, and one running right up to its AFT shoulder
+        // (the shop's case: deepening a corroded section that reaches the relief's boundary).
+        assertNull(undercutConfirmIssue(draftOf("x", 150f, 300f), 1000f, others))
+        assertNull(undercutConfirmIssue(draftOf("x", 200f, 100f), 1000f, others))
+        // Partial intrusion stays blocked, as does a span identical to the relief's.
+        assertNotNull(undercutConfirmIssue(draftOf("x", 350f, 100f), 1000f, others))
+        assertNotNull(undercutConfirmIssue(draftOf("x", 200f, 200f), 1000f, others))
+    }
+
+    @Test
     fun `the adjacency pool excludes the draft's own cut and any degenerate span`() {
         val sheet = listOf(cut("a", 100f), cut("b", 400f), cut("c", 700f, lengthMm = 0f))
         val pool = undercutOtherSpans(sheet, excludeId = "a", oalMm = 1000f)

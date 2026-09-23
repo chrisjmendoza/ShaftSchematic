@@ -30,6 +30,40 @@ import java.util.UUID
  *   callouts are opt-in per card, so the schematic stays clean unless a Ø is deliberately
  *   shown — the footer's "Body:" list still always carries every Ø. When several shown
  *   bodies share a Ø, the callout anchors at the longest of them.
+ * @property showNameOnDrawing Whether this body's name prints as a component label under the
+ *   schematic. Tri-state, draw-only (never rewrites [label]): `null` — the default — follows
+ *   the Settings switch ("Show component titles in PDF"), so a document saved before the flag
+ *   existed prints exactly as its setting says; an explicit `true` prints THIS name even with
+ *   that switch off (on-device report: a freshly checked card toggle did nothing under a
+ *   global switch turned off long before); an explicit `false` hides this name even with it
+ *   on. The per-sheet export option (template mode) still gates the whole pass. The field
+ *   name is deliberately fresh (`showNameOnDrawing`; the retired `showLabelOnDrawing` key is
+ *   ignored at decode): the flag's first build blanket-serialized `true` under the old key on
+ *   every component of every saved document, and honoring those stamps as authored overrides
+ *   made one checked toggle appear to turn every label on (on-device report). A stored value
+ *   under THIS key is always an authored choice.
+ * @property shadeOnDrawing Whether this body draws with the grey shade fill. Tri-state,
+ *   draw-only (no geometry, no value rewrite): `null` — the default — follows the kind's
+ *   Settings checkbox (`PdfPrefs.shadedBodies`, narrowed by `shadeExplicitBodiesOnly`, which
+ *   only ever bares AUTO runs); an explicit `true` shades THIS body even with the kind's
+ *   checkbox off (on-device request: shade one named section without shading the whole
+ *   drawing); an explicit `false` leaves it bare even with the kind on. Nullable from the
+ *   start on purpose — a non-null default would serialize an authored-looking stamp onto
+ *   every component of every saved document, which is what forced the name-label flag's key
+ *   rename. The wear and undercut documents deliberately do not read it: their
+ *   `SimpleShaftProfile` takes one fill per kind, the same boundary `shadeExplicitBodiesOnly`
+ *   already has.
+ * @property compressOnDrawing Whether this body may foreshorten on a sheet. Draw-only: it
+ *   changes nothing in the model, resolve, OAL, collision, or footer geometry, and never
+ *   rewrites a stored span. `false` pins the body's stored span at true scale in the
+ *   compression solve — the keyway-window posture, so the drawn HEIGHT yields around it —
+ *   and suppresses its S-break, the long-span trigger included. The **serialization**
+ *   default is `true`: a document saved before this flag existed keeps compressing exactly
+ *   as it does today, since re-pinning a saved long shaft could leave it unrenderable.
+ *   Authoring surfaces create explicit bodies with `false` — an authored section reads at
+ *   true proportion unless its author re-enables compression (on-device request), and the
+ *   card's "Compress on drawing" checkbox is that escape hatch for a body big enough that
+ *   pinning it would starve the rest of the shaft.
  * @property blendAftMm Axial length of a machined **blend** cut into this body's AFT face
  *   (0 = a square face). The blend runs INWARD from the face, easing from the neighbouring
  *   component's diameter at the face to [diaMm] this far in, so it is machined entirely out
@@ -57,6 +91,9 @@ data class Body(
     val keywayEnd: LinerAuthoredReference = LinerAuthoredReference.AFT,
     val keywaySpooned: Boolean = false,
     val showDiaOnDrawing: Boolean = false,
+    val showNameOnDrawing: Boolean? = null,
+    val shadeOnDrawing: Boolean? = null,
+    val compressOnDrawing: Boolean = true,
     val blendAftMm: Float = 0f,
     val blendFwdMm: Float = 0f,
     val blendAftSeal: Boolean = false,

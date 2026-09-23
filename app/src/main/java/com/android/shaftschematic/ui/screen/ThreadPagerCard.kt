@@ -2,40 +2,26 @@ package com.android.shaftschematic.ui.screen
 
 import android.util.Log
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.resolved.ResolvedThread
+import com.android.shaftschematic.ui.util.positiveLengthErrorMm
 import com.android.shaftschematic.ui.util.startOverlapErrorMm
 import com.android.shaftschematic.ui.util.threadWarningMessages
 import com.android.shaftschematic.util.parseFractionOrDecimal
@@ -53,7 +39,8 @@ import com.android.shaftschematic.util.UnitSystem
  *
  * The `!includeInOal` block is the one `AddThreadDialog` must mirror by the add-dialog-parity
  * invariant — an excluded thread swaps its Start field for the "Thread end: AFT | FWD" chips,
- * and the dialog has to do the same.
+ * and the dialog has to do the same. "Show name on drawing" and the "Prints in: in | mm" chip at
+ * the card's foot are the documented card-only carve-outs.
  *
  * [f1] and [startValidator] are supplied by [ComponentPagerCard] because the body card shares
  * them; [startValidator] closes over the spec and document unit that validate an overlap.
@@ -67,11 +54,13 @@ internal fun ThreadPagerCard(
     physicalIndex: Int,
     outerPaddingHorizontal: Dp,
     showComponentDebugLabels: Boolean,
+    componentTitlesDefault: Boolean = true,
     threadTitleById: Map<String, String>,
     f1: (Float) -> String,
     startValidator: (String, ComponentKind, Float) -> (String) -> String?,
     onUpdateThread: (Int, Float, Float, Float, Float, String?) -> Unit,
     onUpdateThreadLabel: (Int, String?) -> Unit,
+    onUpdateThreadShowLabel: (Int, Boolean) -> Unit,
     onSetThreadExcludeFromOal: (id: String, excludeFromOAL: Boolean) -> Unit,
     onSetThreadEndPosition: (id: String, isAft: Boolean) -> Unit,
     onRemoveThread: (String) -> Unit,
@@ -84,49 +73,22 @@ internal fun ThreadPagerCard(
     val th         = spec.threads.getOrNull(idx) ?: return
     val tpiDisplay = pitchMmToTpi(th.pitchMm).fmtTrim(3)
     val computedThreadTitle = threadTitleById[th.id] ?: "Thread"
-    var editingThreadTitle by rememberSaveable(th.id) { mutableStateOf(false) }
-    val threadFocusRequester = remember { FocusRequester() }
-    var threadHasFocusedOnce by remember(th.id) { mutableStateOf(false) }
     ComponentCard(
         title = computedThreadTitle,
         titleContent = {
-            if (!editingThreadTitle) {
-                Text(
-                    computedThreadTitle,
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.fillMaxWidth().clickable { editingThreadTitle = true },
-                    maxLines = 1, overflow = TextOverflow.Ellipsis
-                )
-            } else {
-                var text by remember(th.id, th.label) { mutableStateOf(th.label.orEmpty()) }
-                LaunchedEffect(th.id) { threadFocusRequester.requestFocus() }
-                OutlinedTextField(
-                    value = text,
-                    onValueChange = { text = it },
-                    singleLine = true,
-                    placeholder = { Text(computedThreadTitle) },
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = {
-                        onUpdateThreadLabel(idx, text.trim().takeIf { it.isNotEmpty() })
-                        editingThreadTitle = false
-                    }),
-                    modifier = Modifier.fillMaxWidth().focusRequester(threadFocusRequester)
-                        .onFocusChanged { f ->
-                            if (f.isFocused) threadHasFocusedOnce = true
-                            if (threadHasFocusedOnce && !f.isFocused) {
-                                onUpdateThreadLabel(idx, text.trim().takeIf { it.isNotEmpty() })
-                                editingThreadTitle = false
-                            }
-                        }
-                )
-            }
+            EditableCardTitle(
+                componentId = th.id,
+                title = computedThreadTitle,
+                label = th.label,
+                onCommitLabel = { onUpdateThreadLabel(idx, it) },
+            )
         },
         debugText = if (showComponentDebugLabels) "id=${th.id} • startMm=${f1(th.startFromAftMm)} • endMm=${f1(th.startFromAftMm + th.lengthMm)}" else null,
         errorMessage = if (th.excludeFromOAL) null else (
             startOverlapErrorMm(spec, th.id, ComponentKind.THREAD, th.lengthMm, th.startFromAftMm)
                 ?: if (th.id in collidingComponentIds) "Overlaps another component" else null
         ),
-        warningMessage = threadWarningMessages(th).joinToString("; ").ifEmpty { null },
+        warningMessage = threadWarningMessages(spec, th).joinToString("; ").ifEmpty { null },
         componentId = th.id, componentKind = ComponentKind.THREAD,
         outerPaddingHorizontal = outerPaddingHorizontal,
         onRemove = {
@@ -197,9 +159,19 @@ internal fun ThreadPagerCard(
                 }
             }
         }
-        CommitNum("Length (${abbr(unit)})", disp(th.lengthMm, unit)) { s ->
+        CommitNum(
+            "Length (${abbr(unit)})", disp(th.lengthMm, unit),
+            validator = { raw -> positiveLengthErrorMm(toMmOrNull(raw, unit)) },
+        ) { s ->
             toMmOrNull(s, unit)?.let { onUpdateThread(idx, th.startFromAftMm, it, th.majorDiaMm, th.pitchMm, th.metricDesignation) }
         }
+
+        ShowDiaToggleRow(
+            label = "Show name on drawing",
+            checked = th.showNameOnDrawing ?: componentTitlesDefault,
+            testTag = "thread_show_label_toggle",
+            onCheckedChange = { onUpdateThreadShowLabel(idx, it) },
+        )
 
         if (perComponentUnitsEnabled) {
             ComponentUnitChip(th.id, unit, unitOverrides, onSetComponentUnit)

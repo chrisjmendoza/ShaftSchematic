@@ -14,11 +14,10 @@ import org.junit.Test
  * docs/archive/LinerWearAreas_Proposal.md §5, plus the post-review spec: the
  * tiny-liner default-length clamp and the separate "Measure from" reference setter).
  *
- * These mirror what each function does inside `_wearRecord.update {}` — plain list
- * operations on [WearRecord], with no geometry side effects — so they stay fast JVM
- * unit tests with no Android dependencies (`ShaftViewModel` is an `AndroidViewModel`
- * and isn't instantiated directly in this test suite; see `ShaftViewModelUpdateTest`
- * and `ShaftViewModelRemoveTest` for the same convention on other component types).
+ * These mirror what each function does inside `_wearRecord.update {}` — plain list operations on
+ * [WearRecord] with no geometry side effects — so this class drives the record transforms
+ * directly rather than instantiating the AndroidViewModel; Robolectric-based siblings exercise
+ * the ViewModel itself.
  */
 class ShaftViewModelWearSpotTest {
 

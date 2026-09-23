@@ -40,7 +40,6 @@ class AutosaveSnapshotWearRecordTest {
             notes = "",
             runoutConfig = RunoutConfig(),
             unitLocked = true,
-            overallIsManual = false,
             wearRecord = WearRecord(
                 spots = listOf(WearSpot(id = "s1", linerId = "ln1", startMm = 12f, lengthMm = 30f, minDiaMm = 90f))
             ),
@@ -71,7 +70,6 @@ class AutosaveSnapshotWearRecordTest {
             notes = "",
             runoutConfig = RunoutConfig(),
             unitLocked = true,
-            overallIsManual = false,
             wearRecord = WearRecord(
                 spots = listOf(
                     WearSpot(
@@ -100,7 +98,6 @@ class AutosaveSnapshotWearRecordTest {
             notes = "",
             runoutConfig = RunoutConfig(),
             unitLocked = true,
-            overallIsManual = false,
             wearRecord = WearRecord(
                 stripComponentIds = listOf("ln1", "auto_body_0.000_100.000"),
                 showShaftProfile = false,
@@ -126,7 +123,6 @@ class AutosaveSnapshotWearRecordTest {
             notes = "",
             runoutConfig = RunoutConfig(),
             unitLocked = true,
-            overallIsManual = false,
             wearRecord = WearRecord(stripComponentIds = emptyList()),
         )
 

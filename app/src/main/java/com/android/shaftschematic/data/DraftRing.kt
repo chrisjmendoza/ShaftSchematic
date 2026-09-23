@@ -63,6 +63,10 @@ fun shouldWriteDraft(
  * draft, so the autosave observer must never persist one: a settings restore alone (e.g. a
  * unit-preference flip at launch) can dirty the baseline, which would otherwise write a
  * phantom blank "Untitled draft" to the StartScreen.
+ *
+ * A started final drawing is authored content, not a restored preference, so a session
+ * carrying one is never "default" — classifying it that way would suppress its draft and let
+ * the second drawing die with the process.
  */
 fun AutosaveManager.SessionSnapshot.isDefaultSession(): Boolean {
     val specEmpty =
@@ -74,9 +78,11 @@ fun AutosaveManager.SessionSnapshot.isDefaultSession(): Boolean {
         shaftSpec.couplerBoltSlots.isEmpty()
 
     return specEmpty &&
+        finalSpec == null &&
         shaftPosition == com.android.shaftschematic.model.ShaftPosition.OTHER &&
         customer.isBlank() &&
         vessel.isBlank() &&
         jobNumber.isBlank() &&
+        item.isBlank() &&
         notes.isBlank()
 }

@@ -25,6 +25,7 @@ import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.resolveComponents
 import com.android.shaftschematic.util.AppLog
 import com.android.shaftschematic.util.FractionStyle
+import com.android.shaftschematic.util.OutputFont
 import com.android.shaftschematic.util.PreviewColorSetting
 import com.android.shaftschematic.util.PreviewColorRole
 import com.android.shaftschematic.util.PreviewColorPreset
@@ -56,7 +57,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.UUID
-import kotlin.math.max
 
 /**
  * File: ShaftViewModel.kt
@@ -100,15 +100,16 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     private fun buildCurrentSnapshot(): AutosaveManager.SessionSnapshot =
         AutosaveManager.SessionSnapshot(
             shaftSpec = _spec.value,
+            finalSpec = _finalSpec.value,
             unitSystem = _unit.value,
             shaftPosition = _shaftPosition.value,
             customer = _customer.value,
             vessel = _vessel.value,
             jobNumber = _jobNumber.value,
+            item = _item.value,
             notes = _notes.value,
             runoutConfig = _runoutConfig.value,
             unitLocked = _unitLocked.value,
-            overallIsManual = _overallIsManual.value,
             wearRecord = _wearRecord.value,
             runoutReadings = _runoutReadings.value,
             undercutRecord = _undercutRecord.value,
@@ -202,7 +203,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     /**
      * Whether the session differs from the last saved/loaded state. Uses the SAME full-snapshot
      * comparison as the autosave dirty gate ([shouldWriteDraft]) so *every* tracked field —
-     * spec, metadata, position, unit-lock, OAL mode, wear record, runout readings/config —
+     * spec, metadata, position, unit-lock, wear record, runout readings/config —
      * counts as unsaved work; a partial comparison risks missing wear/runout edits and letting
      * unsaved work slip past the dirty gate. See docs/archive/Autosave_Incident_2026-07-25.md.
      */
@@ -217,6 +218,52 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     internal val _spec = MutableStateFlow(ShaftSpec())
     val spec: StateFlow<ShaftSpec> = _spec.asStateFlow()
+
+    // ── The final drawing ──────────────────────────────────────────────────────
+    // A SECOND, independent geometry (envelope field `final_spec`): the shaft as it leaves,
+    // seeded as a structural copy of _spec — component ids included — by startFinalSpec().
+    // null = this document has no final drawing yet, which is every document until one is
+    // started. Not derived from the original, and never written by an ORIGINAL-target edit;
+    // the wear/undercut/runout records stay keyed to the original, which is the inspection of
+    // the shaft that came in. See docs/archive/FinalSchematic_PLAN.md §2.
+    internal val _finalSpec = MutableStateFlow<ShaftSpec?>(null)
+    val finalSpec: StateFlow<ShaftSpec?> = _finalSpec.asStateFlow()
+
+    /** The spec [target] names — a FINAL read with no final drawing yields a blank spec. */
+    internal fun specValue(target: SpecTarget): ShaftSpec = when (target) {
+        SpecTarget.ORIGINAL -> _spec.value
+        SpecTarget.FINAL -> _finalSpec.value ?: ShaftSpec()
+    }
+
+    /**
+     * The ONE seam every spec mutator writes through, so an edit can only reach the geometry
+     * its caller named. A FINAL write while no final drawing exists is a no-op: the editor for
+     * it is not reachable then, and creating one here would conjure a final drawing out of a
+     * stray callback.
+     */
+    internal fun updateSpec(target: SpecTarget, transform: (ShaftSpec) -> ShaftSpec) {
+        when (target) {
+            SpecTarget.ORIGINAL -> _spec.update(transform)
+            SpecTarget.FINAL -> _finalSpec.update { cur -> if (cur == null) null else transform(cur) }
+        }
+    }
+
+    /**
+     * Selects a component an `add*At` mutator just wrote under [target]. A FINAL add with no
+     * final drawing writes nothing (see [updateSpec]), so it must select nothing either — a
+     * selection pointing at an id that exists in neither geometry would be a stray
+     * callback's only visible trace.
+     */
+    internal fun selectAdded(id: String, target: SpecTarget) {
+        if (target == SpecTarget.FINAL && _finalSpec.value == null) return
+        _selectedComponentId.value = id
+    }
+
+    // Resolved components of the final drawing — derived from [finalSpec] exactly as
+    // [resolvedComponents] is derived from [spec], and empty while there is no final.
+    internal val _finalResolvedComponents = MutableStateFlow<List<ResolvedComponent>>(emptyList())
+    val finalResolvedComponents: StateFlow<List<ResolvedComponent>> =
+        _finalResolvedComponents.asStateFlow()
 
     internal val _unit = MutableStateFlow(UnitSystem.MILLIMETERS)
     val unit: StateFlow<UnitSystem> = _unit.asStateFlow()
@@ -272,6 +319,26 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     internal val _pdfShadedLiners = MutableStateFlow(false)
     val pdfShadedLiners: StateFlow<Boolean> = _pdfShadedLiners.asStateFlow()
 
+    // Line art on the printed undercut drawing: that sheet draws no shade fill at all. Also a
+    // preview re-render key on the Undercut tab, which rasterizes with the current PdfPrefs.
+    internal val _pdfUndercutLineArt = MutableStateFlow(PdfPrefs().undercutLineArt)
+    val pdfUndercutLineArt: StateFlow<Boolean> = _pdfUndercutLineArt.asStateFlow()
+
+    // Narrows the body shade to authored sections (auto/bare-shaft runs draw unfilled). Also a
+    // preview re-render key on every tab that rasterizes with the current PdfPrefs.
+    internal val _pdfShadeExplicitBodiesOnly = MutableStateFlow(PdfPrefs().shadeExplicitBodiesOnly)
+    val pdfShadeExplicitBodiesOnly: StateFlow<Boolean> = _pdfShadeExplicitBodiesOnly.asStateFlow()
+
+    // Runout bubble radius multiplier. Read by the sheet composer AND the Runout tab's canvas,
+    // so it is both a canvas input and a preview re-render key.
+    internal val _pdfRunoutBubbleScale = MutableStateFlow(PdfPrefs().runoutBubbleScale)
+    val pdfRunoutBubbleScale: StateFlow<Float> = _pdfRunoutBubbleScale.asStateFlow()
+
+    // How far the first bubble row hangs below the shaft, as a multiplier. Same two consumers
+    // as the radius above.
+    internal val _pdfRunoutBubbleDropScale = MutableStateFlow(PdfPrefs().runoutBubbleDropScale)
+    val pdfRunoutBubbleDropScale: StateFlow<Float> = _pdfRunoutBubbleDropScale.asStateFlow()
+
     // Sizing-curve anchor heights (paper inches): what a 4" / 8" shaft draws by default.
     internal val _pdfCurveLoHeightIn = MutableStateFlow(PdfPrefs().curveLoHeightIn)
     val pdfCurveLoHeightIn: StateFlow<Float> = _pdfCurveLoHeightIn.asStateFlow()
@@ -313,6 +380,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     internal val _pdfFractionStyle = MutableStateFlow(PdfPrefs().fractionStyle)
     val pdfFractionStyle: StateFlow<FractionStyle> = _pdfFractionStyle.asStateFlow()
 
+    // The typeface every printed sheet is set in. Same posture as the fraction style: the face
+    // reaches the composers via `OutputTypography.active`, which is not snapshot state, so this
+    // flow's only jobs are showing the selection and keying each preview's re-render.
+    internal val _pdfOutputFont = MutableStateFlow(PdfPrefs().outputFont)
+    val pdfOutputFont: StateFlow<OutputFont> = _pdfOutputFont.asStateFlow()
+
     // How a dual value is SET (inline one-liner vs two-line stack). Unlike the fraction style this
     // one moves LAYOUT, so the composers take it as a parameter; the StateFlow is what lets each
     // preview name it as a re-render key.
@@ -332,6 +405,15 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     // for the same reason as _pdfBlankDraft, and so the two always reset together.
     internal val _pdfBlankDiaCallouts = MutableStateFlow(true)
     val pdfBlankDiaCallouts: StateFlow<Boolean> = _pdfBlankDiaCallouts.asStateFlow()
+
+    // Whether the FINAL drawing's schematic sheet carries runout stations. OFF by default and
+    // session-only, the _pdfBlankDraft posture: the final drawing is primarily the welding and
+    // machining copy the shop updates liner placements on (on-device request), and bubbles
+    // belong to the pre-ship measurement pass — a sticky election would put stations on every
+    // machining sheet from then on. Read only when the target is FINAL; the original
+    // schematic's bubbles live on the Runout and Consolidated Output tabs as before.
+    internal val _finalRunoutBubbles = MutableStateFlow(false)
+    val finalRunoutBubbles: StateFlow<Boolean> = _finalRunoutBubbles.asStateFlow()
 
     internal val _previewBlackWhiteOnly = MutableStateFlow(false)
     val previewBlackWhiteOnly: StateFlow<Boolean> = _previewBlackWhiteOnly.asStateFlow()
@@ -389,9 +471,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     internal val _showOalDebugLabel = MutableStateFlow(false)
     val showOalDebugLabel: StateFlow<Boolean> = _showOalDebugLabel.asStateFlow()
 
-    internal val _showOalHelperLine = MutableStateFlow(false)
-    val showOalHelperLine: StateFlow<Boolean> = _showOalHelperLine.asStateFlow()
-
     internal val _showOalInPreviewBox = MutableStateFlow(false)
     val showOalInPreviewBox: StateFlow<Boolean> = _showOalInPreviewBox.asStateFlow()
 
@@ -437,15 +516,15 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     internal val _jobNumber = MutableStateFlow("")
     val jobNumber: StateFlow<String> = _jobNumber.asStateFlow()
 
+    /** Optional shaft designation ("Tail shaft", "Line shaft", …). Blank prints nothing. */
+    internal val _item = MutableStateFlow("")
+    val item: StateFlow<String> = _item.asStateFlow()
+
     internal val _notes = MutableStateFlow("")
     val notes: StateFlow<String> = _notes.asStateFlow()
 
     internal val _shaftPosition = MutableStateFlow(ShaftPosition.OTHER)
     val shaftPosition: StateFlow<ShaftPosition> = _shaftPosition.asStateFlow()
-
-    internal val _overallIsManual = MutableStateFlow(false)
-    val overallIsManual: StateFlow<Boolean> = _overallIsManual.asStateFlow()
-    fun setOverallIsManual(v: Boolean) { _overallIsManual.value = v }
 
     // Session-scoped "last used" add defaults (mm). Reset on new/open/import.
     private val _sessionAddDefaults = MutableStateFlow(SessionAddDefaults.initial())
@@ -481,14 +560,14 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     // ── Liner wear inspection record ──────────────────────────────────────────
     // Persisted alongside the spec in the .shaft file, same as runoutConfig above.
     // Reference-only data: plain state updates, no geometry side effects, no
-    // ensureOverall/auto-body interaction. See docs/archive/LinerWearAreas_Proposal.md §5, §7.
+    // auto-body interaction. See docs/archive/LinerWearAreas_Proposal.md §5, §7.
 
     internal val _wearRecord = MutableStateFlow(WearRecord())
     val wearRecord: StateFlow<WearRecord> = _wearRecord.asStateFlow()
 
     // ── Undercut drawing record ────────────────────────────────────────────────
     // Reference-only data, same posture as _wearRecord/_runoutReadings above: plain state
-    // updates, no geometry side effects, no ensureOverall/auto-body interaction. Undercuts
+    // updates, no geometry side effects, no auto-body interaction. Undercuts
     // have no component key, so there is no orphan concept here. See
     // docs/archive/UndercutDrawing_PLAN.md §2, §6.
 
@@ -511,8 +590,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     // ────────────────────────────────────────────────────────────────────────────
     // Session-scoped Undo / Redo (v2) — covers ALL drawing-state edits, not just deletes.
     //
-    // A single [SessionHistory] over [EditState] snapshots (spec + wear + runout + undercuts +
-    // OAL mode). Snapshots are recorded centrally by a collector over those flows (see init),
+    // A single [SessionHistory] over [EditState] snapshots (spec + wear + runout + undercuts).
+    // Snapshots are recorded centrally by a collector over those flows (see init),
     // with time-based coalescing living in SessionHistory (a typing burst = one undo step).
     // Undo/redo apply a restored EditState back onto the flows; the collector's re-emission
     // is a no-op because SessionHistory.record ignores states equal to its current head
@@ -536,12 +615,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     /** Snapshot the current undoable slice of editor state. */
     private fun currentEditState(): EditState = EditState(
         spec = _spec.value,
+        finalSpec = _finalSpec.value,
         wearRecord = _wearRecord.value,
         runoutReadings = _runoutReadings.value,
         runoutStationPlacements = _runoutStationPlacements.value,
         stationCountOverrides = _runoutConfig.value.componentOverrides,
         undercutRecord = _undercutRecord.value,
-        overallIsManual = _overallIsManual.value,
     )
 
     private fun updateHistoryFlags() {
@@ -560,6 +639,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         isRestoringHistory = true
         try {
             _spec.value = e.spec
+            // Starting, resetting and discarding the final drawing all undo like any other
+            // edit, so the whole nullable value restores — including back to "no final".
+            _finalSpec.value = e.finalSpec
             _wearRecord.value = e.wearRecord
             _runoutReadings.value = e.runoutReadings
             _runoutStationPlacements.value = e.runoutStationPlacements
@@ -567,13 +649,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             // undoable state and keep whatever the user last set them to.
             _runoutConfig.update { it.copy(componentOverrides = e.stationCountOverrides) }
             _undercutRecord.value = e.undercutRecord
-            _overallIsManual.value = e.overallIsManual
         } finally {
             isRestoringHistory = false
         }
     }
 
-    /** Undo the most recent edit step (spec / wear / runout / undercuts / OAL mode). */
+    /** Undo the most recent edit step (spec / wear / runout / undercuts). */
     fun undoEdit() {
         val restored = editHistory.undo(currentEditState()) ?: return
         applyEditState(restored)
@@ -633,10 +714,10 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         // the field). unit_overrides/dual_units were exactly that gap (on-device era report).
         val sessionSnapshotFlow = combine(
             spec, unit, shaftPosition, customer, vessel, jobNumber, notes,
-            runoutConfig, unitLocked, overallIsManual, wearRecord, runoutReadings, undercutRecord,
-            runoutStationPlacements, unitOverrides, dualUnits
+            runoutConfig, unitLocked, wearRecord, runoutReadings, undercutRecord,
+            runoutStationPlacements, unitOverrides, dualUnits, item, finalSpec
         ) { values: Array<Any?> ->
-            check(values.size == 16) { "Autosave combine expected 16 values, got ${values.size}" }
+            check(values.size == 17) { "Autosave combine expected 17 values, got ${values.size}" }
 
             val s = values[0] as ShaftSpec
             val u = values[1] as UnitSystem
@@ -647,26 +728,28 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             val n = values[6] as String
             val runout = values[7] as RunoutConfig
             val locked = values[8] as Boolean
-            val manual = values[9] as Boolean
-            val wear = values[10] as WearRecord
-            val readings = values[11] as RunoutReadings
-            val undercuts = values[12] as UndercutRecord
-            val stationPlacements = values[13] as RunoutStationPlacements
+            val wear = values[9] as WearRecord
+            val readings = values[10] as RunoutReadings
+            val undercuts = values[11] as UndercutRecord
+            val stationPlacements = values[12] as RunoutStationPlacements
             @Suppress("UNCHECKED_CAST")
-            val overrides = values[14] as Map<String, UnitSystem>
-            val dual = values[15] as Boolean
+            val overrides = values[13] as Map<String, UnitSystem>
+            val dual = values[14] as Boolean
+            val itm = values[15] as String
+            val finalS = values[16] as ShaftSpec?
 
             AutosaveManager.SessionSnapshot(
                 shaftSpec = s,
+                finalSpec = finalS,
                 unitSystem = u,
                 shaftPosition = pos,
                 customer = cust,
                 vessel = ves,
                 jobNumber = job,
+                item = itm,
                 notes = n,
                 runoutConfig = runout,
                 unitLocked = locked,
-                overallIsManual = manual,
                 wearRecord = wear,
                 runoutReadings = readings,
                 undercutRecord = undercuts,
@@ -729,11 +812,16 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         viewModelScope.launch {
-            combine(spec, overallIsManual) { s, isManual ->
-                resolveComponents(s, isManual)
-            }.collectLatest { resolved ->
+            spec.map { s -> resolveComponents(s) }.collectLatest { resolved ->
                 _resolvedComponents.value = resolved
             }
+        }
+
+        // The final drawing resolves exactly like the original — same resolver, same auto-body
+        // fill — so every presentational surface works over either without knowing which.
+        viewModelScope.launch {
+            finalSpec.map { s -> s?.let { resolveComponents(it) } ?: emptyList() }
+                .collectLatest { resolved -> _finalResolvedComponents.value = resolved }
         }
 
         // --- SESSION UNDO/REDO RECORDER ---
@@ -748,18 +836,18 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         // produces an identical snapshot, and SessionHistory.record no-ops it.
         viewModelScope.launch {
             combine(
-                spec, wearRecord, runoutReadings, undercutRecord, overallIsManual,
-                runoutStationPlacements, runoutConfig
+                spec, wearRecord, runoutReadings, undercutRecord,
+                runoutStationPlacements, runoutConfig, finalSpec
             ) { values: Array<Any?> ->
                 check(values.size == 7) { "Undo combine expected 7 values, got ${values.size}" }
                 EditState(
                     spec = values[0] as ShaftSpec,
+                    finalSpec = values[6] as ShaftSpec?,
                     wearRecord = values[1] as WearRecord,
                     runoutReadings = values[2] as RunoutReadings,
-                    runoutStationPlacements = values[5] as RunoutStationPlacements,
-                    stationCountOverrides = (values[6] as RunoutConfig).componentOverrides,
+                    runoutStationPlacements = values[4] as RunoutStationPlacements,
+                    stationCountOverrides = (values[5] as RunoutConfig).componentOverrides,
                     undercutRecord = values[3] as UndercutRecord,
-                    overallIsManual = values[4] as Boolean,
                 )
             }.collect { edit ->
                 if (isRestoringHistory) return@collect
@@ -905,6 +993,30 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         viewModelScope.launch {
+            SettingsStore.pdfUndercutLineArtFlow(getApplication()).collectLatest { persisted ->
+                _pdfUndercutLineArt.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(undercutLineArt = persisted) }
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.pdfShadeExplicitBodiesOnlyFlow(getApplication()).collectLatest { persisted ->
+                _pdfShadeExplicitBodiesOnly.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(shadeExplicitBodiesOnly = persisted) }
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.pdfRunoutBubbleScaleFlow(getApplication()).collectLatest { persisted ->
+                _pdfRunoutBubbleScale.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(runoutBubbleScale = persisted) }
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.pdfRunoutBubbleDropScaleFlow(getApplication()).collectLatest { persisted ->
+                _pdfRunoutBubbleDropScale.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(runoutBubbleDropScale = persisted) }
+            }
+        }
+        viewModelScope.launch {
             SettingsStore.pdfCurveLoHeightInFlow(getApplication()).collectLatest { persisted ->
                 _pdfCurveLoHeightIn.value = persisted
                 SettingsStore.updatePdfPrefs { it.copy(curveLoHeightIn = persisted) }
@@ -950,6 +1062,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             SettingsStore.pdfFractionStyleFlow(getApplication()).collectLatest { persisted ->
                 _pdfFractionStyle.value = persisted
                 SettingsStore.updatePdfPrefs { it.copy(fractionStyle = persisted) }
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.pdfOutputFontFlow(getApplication()).collectLatest { persisted ->
+                _pdfOutputFont.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(outputFont = persisted) }
             }
         }
         viewModelScope.launch {
@@ -1065,11 +1183,6 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         viewModelScope.launch {
-            SettingsStore.showOalHelperLineFlow(getApplication()).collectLatest { persisted ->
-                _showOalHelperLine.value = persisted
-            }
-        }
-        viewModelScope.launch {
             SettingsStore.showOalInPreviewBoxFlow(getApplication()).collectLatest { persisted ->
                 _showOalInPreviewBox.value = persisted
             }
@@ -1148,11 +1261,13 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         // orphaned id — no highlight. Clearing lets the carousel's seed effect reselect.
         _selectedComponentId.value = null
         _spec.value = snapshot.shaftSpec
+        _finalSpec.value = snapshot.finalSpec
         _unit.value = snapshot.unitSystem
         _shaftPosition.value = snapshot.shaftPosition
         _customer.value = snapshot.customer
         _vessel.value = snapshot.vessel
         _jobNumber.value = snapshot.jobNumber
+        _item.value = snapshot.item
         _notes.value = snapshot.notes
         _runoutConfig.value = snapshot.runoutConfig
         _wearRecord.value = snapshot.wearRecord
@@ -1162,9 +1277,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _unitOverrides.value = snapshot.unitOverrides
         _dualUnits.value = snapshot.dualUnits
         // Restore unitLocked before any defaultUnitFlow emission can overwrite the
-        // draft's unit, and overallIsManual so a manually-set OAL isn't auto-resized.
+        // draft's unit.
         _unitLocked.value = snapshot.unitLocked
-        _overallIsManual.value = snapshot.overallIsManual
         // Same courtesy as importJson/applyTemplate: the Add dialogs pre-fill from the
         // restored drawing's dimensions, not a previous session's leftovers.
         seedSessionAddDefaultsFromSpec(snapshot.shaftSpec)
@@ -1200,6 +1314,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     fun setCustomer(value: String) { _customer.value = value.trim() }
     fun setVessel(value: String)   { _vessel.value = value.trim() }
     fun setJobNumber(value: String){ _jobNumber.value = value.trim() }
+    fun setItem(value: String)     { _item.value = value.trim() }
     fun setNotes(value: String)    { _notes.value = value }
     fun setShaftPosition(value: ShaftPosition) { _shaftPosition.value = value }
 
@@ -1207,26 +1322,15 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     // Overall length (mm)
     // ────────────────────────────────────────────────────────────────────────────
 
-    /** Set shaft overall length (mm). Clamped to ≥ 0. */
-    fun onSetOverallLengthMm(valueMm: Float) {
-        _spec.update { it.withNewOal(valueMm) }
+    /** Set shaft overall length (mm) on [target]'s drawing. Clamped to ≥ 0. */
+    fun onSetOverallLengthMm(valueMm: Float, target: SpecTarget = SpecTarget.ORIGINAL) {
+        updateSpec(target) { it.withNewOal(valueMm) }
     }
 
     /** Parses text in current UI units and forwards to [onSetOverallLengthMm]. */
-    fun setOverallLength(raw: String) {
+    fun setOverallLength(raw: String, target: SpecTarget = SpecTarget.ORIGINAL) {
         val mm = parseToMm(raw, _unit.value).toFloat()
-        onSetOverallLengthMm(mm)
-    }
-
-    /**
-     * Ensure overall length covers all components (plus optional free space).
-     * No-op when user has explicitly set overall (manual mode).
-     */
-    fun ensureOverall(minFreeMm: Float = 0f) = _spec.update { s ->
-        if (_overallIsManual.value) return@update s
-        val end = s.coverageEndMm()
-        val minOverall = end + max(0f, minFreeMm)
-        if (s.overallLengthMm < minOverall) s.withNewOal(minOverall) else s
+        onSetOverallLengthMm(mm, target)
     }
 
     /**
@@ -1235,8 +1339,13 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
      * Ø and then to neighbor derivation; overrides anchored elsewhere are untouched, and
      * auto-span positioning is unaffected. See [withAutoSectionDia].
      */
-    fun setAutoSectionDiaMm(spanStartMm: Float, spanEndMm: Float, valueMm: Float) {
-        _spec.update { it.withAutoSectionDia(spanStartMm, spanEndMm, valueMm) }
+    fun setAutoSectionDiaMm(
+        spanStartMm: Float,
+        spanEndMm: Float,
+        valueMm: Float,
+        target: SpecTarget = SpecTarget.ORIGINAL,
+    ) {
+        updateSpec(target) { it.withAutoSectionDia(spanStartMm, spanEndMm, valueMm) }
     }
 
     // ────────────────────────────────────────────────────────────────────────────

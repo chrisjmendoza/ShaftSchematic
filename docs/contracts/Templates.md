@@ -30,6 +30,13 @@ drawing built from it, and into any copy of that file. `applyTemplate` clears th
 fields again on load as a second line of defence for any file authored before this rule or
 hand-copied into the folder.
 
+**The final drawing never travels in a template.** A template is the pre-job shape; a final
+drawing is what one particular shaft left as, decided after that shaft's wear was mapped.
+`exportTemplateJson` simply never names `final_spec`, so the envelope's own default (`null`)
+applies, and `applyTemplate` sets `_finalSpec` back to `null` on load — the same belt-and-braces
+second line of defence the job fields get, for a file hand-copied into the folder or authored
+before the write-time scrub. A decision, not an oversight: see `docs/contracts/FinalSchematic.md`.
+
 **Buckets are derived, never stored.** `templateSizeBucket` / `templateLinerCount` read the
 spec at scan time. There is no index file, so nothing can fall out of sync and an edited
 template re-files itself. Adding a stored bucket key would reintroduce exactly that class of

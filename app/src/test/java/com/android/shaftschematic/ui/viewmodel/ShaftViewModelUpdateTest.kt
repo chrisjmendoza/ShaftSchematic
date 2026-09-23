@@ -1,341 +1,340 @@
 package com.android.shaftschematic.ui.viewmodel
 
-import com.android.shaftschematic.model.Body
-import com.android.shaftschematic.model.Liner
+import android.app.Application
+import androidx.test.core.app.ApplicationProvider
 import com.android.shaftschematic.model.LinerAuthoredReference
-import com.android.shaftschematic.model.ShaftSpec
-import com.android.shaftschematic.model.Taper
-import com.android.shaftschematic.model.Threads
-import com.android.shaftschematic.model.withPhysical
+import com.android.shaftschematic.ui.input.taperPhysStartForNewLength
 import org.junit.Assert.assertEquals
 import org.junit.Test
-import kotlin.math.max
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /**
- * Tests that component update operations mutate ONLY the targeted component.
+ * Component updates move ONLY the component they target.
  *
- * Component positions are sacred — they must never be changed by anything other
- * than an explicit user action targeting that specific component.  These tests
- * document the invariant: updating component A must not move component B.
+ * A stored position is a user input, so nothing may shift it but an explicit edit aimed at it:
+ * no snap to a neighbour's face, no forward cascade, no re-derivation of the shaft around it.
+ * These drive the REAL `updateBody` / `updateTaper` / `updateThread` / `updateLiner` on a
+ * Robolectric-hosted [ShaftViewModel] and read the resulting `spec` — a mirror of the update
+ * arithmetic would pass whatever a reintroduced cascade did to the ViewModel.
  *
- * The tests mirror what each updateX() function does inside _spec.update{}, so they
- * remain fast JVM unit tests with no Android dependencies while still pinning the
- * behaviour to the ViewModel contract.
+ * Every case pins three things: the edited component's values land **verbatim**, every other
+ * component's span is byte-identical, and the shaft's own `overallLengthMm` is untouched —
+ * nothing an edit does to a component grows or shrinks the shaft around it.
  */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class ShaftViewModelUpdateTest {
+
+    private fun vm(oalMm: Float) =
+        ShaftViewModel(ApplicationProvider.getApplicationContext<Application>())
+            .also { it.onSetOverallLengthMm(oalMm) }
+
+    private fun linerIndexAt(vm: ShaftViewModel, startMm: Float) =
+        vm.spec.value.liners.indexOfFirst { kotlin.math.abs(it.startFromAftMm - startMm) < 0.001f }
+
+    private fun assertOal(expected: Float, vm: ShaftViewModel) =
+        assertEquals("an update must never move the shaft's own length",
+            expected, vm.spec.value.overallLengthMm, 0.001f)
 
     // ── Liner ────────────────────────────────────────────────────────────────
 
     @Test
     fun `updating liner start does not move subsequent body`() {
-        val liner = Liner(id = "ln1", startFromAftMm = 0f, lengthMm = 100f, odMm = 50f, endMmPhysical = 100f)
-        val body  = Body(id  = "b1",  startFromAftMm = 100f, lengthMm = 200f, diaMm = 50f)
-        val spec  = ShaftSpec(bodies = listOf(body), liners = listOf(liner), overallLengthMm = 300f)
+        val vm = vm(300f)
+        vm.addBodyAt(startMm = 100f, lengthMm = 200f, diaMm = 50f)
+        vm.addLinerAt(startMm = 0f, lengthMm = 100f, odMm = 50f)
 
-        // Simulate updateLiner: move liner start to 10mm, shorten to 80mm
-        val newStart = 10f
-        val newLen   = 80f
-        val result = spec.copy(
-            liners = spec.liners.toMutableList().also { l ->
-                l[0] = liner.withPhysical(startMmPhysical = newStart, lengthMm = newLen, odMm = liner.odMm)
-            }
-        )
+        vm.updateLiner(0, startMm = 10f, lengthMm = 80f, odMm = 50f)
 
-        assertEquals("body start must not change", 100f, result.bodies[0].startFromAftMm, 0.001f)
-        assertEquals("body length must not change", 200f, result.bodies[0].lengthMm,       0.001f)
-        assertEquals("liner start updated",          10f,  result.liners[0].startFromAftMm, 0.001f)
-        assertEquals("liner length updated",         80f,  result.liners[0].lengthMm,       0.001f)
+        val s = vm.spec.value
+        assertEquals("body start must not change", 100f, s.bodies[0].startFromAftMm, 0.001f)
+        assertEquals("body length must not change", 200f, s.bodies[0].lengthMm, 0.001f)
+        assertEquals("liner start updated", 10f, s.liners[0].startFromAftMm, 0.001f)
+        assertEquals("liner length updated", 80f, s.liners[0].lengthMm, 0.001f)
+        assertOal(300f, vm)
     }
 
     @Test
     fun `updating liner length does not move preceding body`() {
-        val body  = Body(id  = "b1",  startFromAftMm = 0f,   lengthMm = 100f, diaMm = 50f)
-        val liner = Liner(id = "ln1", startFromAftMm = 100f, lengthMm = 50f,  odMm  = 50f, endMmPhysical = 150f)
-        val spec  = ShaftSpec(bodies = listOf(body), liners = listOf(liner), overallLengthMm = 200f)
+        val vm = vm(200f)
+        vm.addBodyAt(startMm = 0f, lengthMm = 100f, diaMm = 50f)
+        vm.addLinerAt(startMm = 100f, lengthMm = 50f, odMm = 50f)
 
-        val result = spec.copy(
-            liners = spec.liners.toMutableList().also { l ->
-                l[0] = liner.withPhysical(startMmPhysical = liner.startFromAftMm, lengthMm = 80f, odMm = liner.odMm)
-            }
-        )
+        vm.updateLiner(0, startMm = 100f, lengthMm = 80f, odMm = 50f)
 
-        assertEquals("body start must not change",  0f,   result.bodies[0].startFromAftMm, 0.001f)
-        assertEquals("body length must not change", 100f, result.bodies[0].lengthMm,        0.001f)
-        assertEquals("liner length updated",        80f,  result.liners[0].lengthMm,        0.001f)
+        val s = vm.spec.value
+        assertEquals("body start must not change", 0f, s.bodies[0].startFromAftMm, 0.001f)
+        assertEquals("body length must not change", 100f, s.bodies[0].lengthMm, 0.001f)
+        assertEquals("liner length updated", 80f, s.liners[0].lengthMm, 0.001f)
+        assertOal(200f, vm)
     }
 
     @Test
     fun `updating liner does not move a taper fwd of it`() {
-        val liner = Liner(id = "ln1", startFromAftMm = 0f,   lengthMm = 100f, odMm = 50f, endMmPhysical = 100f)
-        val taper = Taper(id = "t1",  startFromAftMm = 150f, lengthMm = 50f,  startDiaMm = 50f, endDiaMm = 40f)
-        val spec  = ShaftSpec(liners = listOf(liner), tapers = listOf(taper), overallLengthMm = 300f)
+        val vm = vm(300f)
+        vm.addLinerAt(startMm = 0f, lengthMm = 100f, odMm = 50f)
+        vm.addTaperAt(startMm = 150f, lengthMm = 50f, startDiaMm = 50f, endDiaMm = 40f)
 
-        val result = spec.copy(
-            liners = spec.liners.toMutableList().also { l ->
-                l[0] = liner.withPhysical(startMmPhysical = 0f, lengthMm = 120f, odMm = liner.odMm)
-            }
-        )
+        vm.updateLiner(0, startMm = 0f, lengthMm = 120f, odMm = 50f)
 
-        assertEquals("taper start must not change", 150f, result.tapers[0].startFromAftMm, 0.001f)
+        assertEquals("taper start must not change", 150f, vm.spec.value.tapers[0].startFromAftMm, 0.001f)
+        assertOal(300f, vm)
     }
 
     // ── Body ─────────────────────────────────────────────────────────────────
 
     @Test
     fun `updating body start does not move subsequent liner`() {
-        val body  = Body(id  = "b1",  startFromAftMm = 0f,   lengthMm = 100f, diaMm = 50f)
-        val liner = Liner(id = "ln1", startFromAftMm = 100f, lengthMm = 60f,  odMm  = 50f, endMmPhysical = 160f)
-        val spec  = ShaftSpec(bodies = listOf(body), liners = listOf(liner), overallLengthMm = 200f)
+        val vm = vm(200f)
+        vm.addBodyAt(startMm = 0f, lengthMm = 100f, diaMm = 50f)
+        vm.addLinerAt(startMm = 100f, lengthMm = 60f, odMm = 50f)
 
-        val result = spec.copy(
-            bodies = spec.bodies.toMutableList().also { list ->
-                list[0] = body.copy(startFromAftMm = 0f, lengthMm = max(0f, 80f), diaMm = max(0f, body.diaMm))
-            }
-        )
+        // The start genuinely moves: 0 → 20.
+        vm.updateBody(0, startMm = 20f, lengthMm = 80f, diaMm = 50f)
 
-        assertEquals("liner start must not change", 100f, result.liners[0].startFromAftMm, 0.001f)
-        assertEquals("liner length must not change", 60f, result.liners[0].lengthMm,        0.001f)
+        val s = vm.spec.value
+        assertEquals("body start updated", 20f, s.bodies[0].startFromAftMm, 0.001f)
+        assertEquals("body length updated", 80f, s.bodies[0].lengthMm, 0.001f)
+        assertEquals("liner start must not change", 100f, s.liners[0].startFromAftMm, 0.001f)
+        assertEquals("liner length must not change", 60f, s.liners[0].lengthMm, 0.001f)
+        assertOal(200f, vm)
     }
 
     @Test
     fun `updating body does not move a taper aft of it`() {
-        val taper = Taper(id = "t1", startFromAftMm = 0f,  lengthMm = 100f, startDiaMm = 60f, endDiaMm = 50f)
-        val body  = Body(id  = "b1", startFromAftMm = 100f, lengthMm = 200f, diaMm = 50f)
-        val spec  = ShaftSpec(bodies = listOf(body), tapers = listOf(taper), overallLengthMm = 300f)
+        val vm = vm(300f)
+        vm.addTaperAt(startMm = 0f, lengthMm = 100f, startDiaMm = 60f, endDiaMm = 50f)
+        vm.addBodyAt(startMm = 100f, lengthMm = 200f, diaMm = 50f)
 
-        val result = spec.copy(
-            bodies = spec.bodies.toMutableList().also { list ->
-                list[0] = body.copy(startFromAftMm = 100f, lengthMm = max(0f, 150f), diaMm = max(0f, body.diaMm))
-            }
-        )
+        vm.updateBody(0, startMm = 100f, lengthMm = 150f, diaMm = 50f)
 
-        assertEquals("taper start must not change",  0f,   result.tapers[0].startFromAftMm, 0.001f)
-        assertEquals("taper length must not change", 100f, result.tapers[0].lengthMm,        0.001f)
+        val s = vm.spec.value
+        assertEquals("taper start must not change", 0f, s.tapers[0].startFromAftMm, 0.001f)
+        assertEquals("taper length must not change", 100f, s.tapers[0].lengthMm, 0.001f)
+        assertOal(300f, vm)
+    }
+
+    /** Golden rule: a typed start is stored exactly as typed, sign included — nothing snaps it. */
+    @Test
+    fun `a negative body start commits verbatim`() {
+        val vm = vm(300f)
+        vm.addBodyAt(startMm = 0f, lengthMm = 100f, diaMm = 50f)
+        vm.addLinerAt(startMm = 150f, lengthMm = 50f, odMm = 50f)
+
+        vm.updateBody(0, startMm = -3f, lengthMm = 100f, diaMm = 50f)
+
+        val s = vm.spec.value
+        assertEquals("typed start stored verbatim", -3f, s.bodies[0].startFromAftMm, 0f)
+        assertEquals("liner untouched", 150f, s.liners[0].startFromAftMm, 0.001f)
+        assertOal(300f, vm)
+    }
+
+    /** An oversized component is a legal state: the shaft does not stretch to swallow it. */
+    @Test
+    fun `an edit running a body past the end leaves the OAL alone`() {
+        val vm = vm(300f)
+        vm.addBodyAt(startMm = 0f, lengthMm = 100f, diaMm = 50f)
+
+        vm.updateBody(0, startMm = 0f, lengthMm = 900f, diaMm = 50f)
+
+        assertEquals("length stored verbatim", 900f, vm.spec.value.bodies[0].lengthMm, 0.001f)
+        assertOal(300f, vm)
     }
 
     // ── Taper ────────────────────────────────────────────────────────────────
 
     @Test
     fun `updating taper does not move fwd body`() {
-        val taper = Taper(id = "t1", startFromAftMm = 0f,   lengthMm = 100f, startDiaMm = 60f, endDiaMm = 50f)
-        val body  = Body(id  = "b1", startFromAftMm = 100f, lengthMm = 200f, diaMm = 50f)
-        val spec  = ShaftSpec(bodies = listOf(body), tapers = listOf(taper), overallLengthMm = 300f)
+        val vm = vm(300f)
+        vm.addTaperAt(startMm = 0f, lengthMm = 100f, startDiaMm = 60f, endDiaMm = 50f)
+        vm.addBodyAt(startMm = 100f, lengthMm = 200f, diaMm = 50f)
 
-        val result = spec.copy(
-            tapers = spec.tapers.toMutableList().also { list ->
-                list[0] = taper.copy(
-                    startFromAftMm = 0f,
-                    lengthMm = max(0f, 120f),     // extended 20mm
-                    startDiaMm = max(0f, 60f),
-                    endDiaMm   = max(0f, 50f),
-                )
-            }
-        )
+        vm.updateTaper(0, startMm = 0f, lengthMm = 120f, startDiaMm = 60f, endDiaMm = 50f)
 
-        assertEquals("body start must not change",  100f, result.bodies[0].startFromAftMm, 0.001f)
-        assertEquals("body length must not change", 200f, result.bodies[0].lengthMm,        0.001f)
+        val s = vm.spec.value
+        assertEquals("taper length updated", 120f, s.tapers[0].lengthMm, 0.001f)
+        assertEquals("body start must not change", 100f, s.bodies[0].startFromAftMm, 0.001f)
+        assertEquals("body length must not change", 200f, s.bodies[0].lengthMm, 0.001f)
+        assertOal(300f, vm)
     }
 
     @Test
     fun `updating taper does not move aft liner`() {
-        val liner = Liner(id = "ln1", startFromAftMm = 0f,  lengthMm = 50f, odMm = 50f, endMmPhysical = 50f)
-        val taper = Taper(id = "t1",  startFromAftMm = 50f, lengthMm = 100f, startDiaMm = 50f, endDiaMm = 40f)
-        val spec  = ShaftSpec(liners = listOf(liner), tapers = listOf(taper), overallLengthMm = 200f)
+        val vm = vm(200f)
+        vm.addLinerAt(startMm = 0f, lengthMm = 50f, odMm = 50f)
+        vm.addTaperAt(startMm = 50f, lengthMm = 100f, startDiaMm = 50f, endDiaMm = 40f)
 
-        val result = spec.copy(
-            tapers = spec.tapers.toMutableList().also { list ->
-                list[0] = taper.copy(startFromAftMm = 60f, lengthMm = max(0f, 100f), startDiaMm = max(0f, 50f), endDiaMm = max(0f, 40f))
-            }
-        )
+        vm.updateTaper(0, startMm = 60f, lengthMm = 100f, startDiaMm = 50f, endDiaMm = 40f)
 
-        assertEquals("liner start must not change",  0f,  result.liners[0].startFromAftMm, 0.001f)
-        assertEquals("liner length must not change", 50f, result.liners[0].lengthMm,        0.001f)
+        val s = vm.spec.value
+        assertEquals("taper start updated", 60f, s.tapers[0].startFromAftMm, 0.001f)
+        assertEquals("liner start must not change", 0f, s.liners[0].startFromAftMm, 0.001f)
+        assertEquals("liner length must not change", 50f, s.liners[0].lengthMm, 0.001f)
+        assertOal(200f, vm)
     }
 
     // ── Thread ───────────────────────────────────────────────────────────────
 
     @Test
     fun `updating in-shaft thread does not move adjacent body`() {
-        val thread = Threads(id = "th1", startFromAftMm = 0f,   lengthMm = 50f, majorDiaMm = 45f, pitchMm = 2f, excludeFromOAL = false)
-        val body   = Body(id   = "b1",  startFromAftMm = 50f,  lengthMm = 200f, diaMm = 50f)
-        val spec   = ShaftSpec(bodies = listOf(body), threads = listOf(thread), overallLengthMm = 250f)
+        val vm = vm(250f)
+        vm.addBodyAt(startMm = 50f, lengthMm = 200f, diaMm = 50f)
+        vm.addThreadAt(startMm = 0f, lengthMm = 50f, majorDiaMm = 45f, pitchMm = 2f)
 
-        val newLength = max(0f, 60f)
-        val effectiveStart = thread.startFromAftMm  // not excluded; use authored start
-        val result = spec.copy(
-            threads = spec.threads.toMutableList().also { l ->
-                l[0] = thread.copy(startFromAftMm = effectiveStart, lengthMm = newLength, majorDiaMm = max(0f, 45f), pitchMm = max(0f, 2f))
-            }
-        )
+        vm.updateThread(0, startMm = 0f, lengthMm = 60f, majorDiaMm = 45f, pitchMm = 2f)
 
-        assertEquals("body start must not change",  50f,  result.bodies[0].startFromAftMm, 0.001f)
-        assertEquals("body length must not change", 200f, result.bodies[0].lengthMm,        0.001f)
+        val s = vm.spec.value
+        assertEquals("thread start kept as authored", 0f, s.threads[0].startFromAftMm, 0.001f)
+        assertEquals("thread length updated", 60f, s.threads[0].lengthMm, 0.001f)
+        assertEquals("body start must not change", 50f, s.bodies[0].startFromAftMm, 0.001f)
+        assertEquals("body length must not change", 200f, s.bodies[0].lengthMm, 0.001f)
+        assertOal(250f, vm)
     }
 
     @Test
     fun `updating excluded aft thread does not move any body`() {
-        val oal    = 300f
-        val thread = Threads(id = "th1", startFromAftMm = -50f, lengthMm = 50f, majorDiaMm = 45f, pitchMm = 2f, excludeFromOAL = true, isAftEnd = true)
-        val body   = Body(id   = "b1",   startFromAftMm = 0f,   lengthMm = 200f, diaMm = 50f)
-        val spec   = ShaftSpec(bodies = listOf(body), threads = listOf(thread), overallLengthMm = oal)
-
-        val newLength = max(0f, 60f)
-        val effectiveStart = if (thread.isAftEnd) -newLength else oal
-        val result = spec.copy(
-            threads = spec.threads.toMutableList().also { l ->
-                l[0] = thread.copy(startFromAftMm = effectiveStart, lengthMm = newLength, majorDiaMm = max(0f, 45f), pitchMm = max(0f, 2f))
-            }
+        val vm = vm(300f)
+        vm.addBodyAt(startMm = 0f, lengthMm = 200f, diaMm = 50f)
+        vm.addThreadAt(
+            startMm = -50f, lengthMm = 50f, majorDiaMm = 45f, pitchMm = 2f,
+            excludeFromOAL = true, isAftEnd = true,
         )
 
-        assertEquals("body start must not change",    0f,   result.bodies[0].startFromAftMm, 0.001f)
-        assertEquals("body length must not change",   200f, result.bodies[0].lengthMm,        0.001f)
-        assertEquals("excluded thread start synced", -60f,  result.threads[0].startFromAftMm, 0.001f)
+        vm.updateThread(0, startMm = -50f, lengthMm = 60f, majorDiaMm = 45f, pitchMm = 2f)
+
+        val s = vm.spec.value
+        assertEquals("body start must not change", 0f, s.bodies[0].startFromAftMm, 0.001f)
+        assertEquals("body length must not change", 200f, s.bodies[0].lengthMm, 0.001f)
+        assertEquals("excluded thread start derived from its own length",
+            -60f, s.threads[0].startFromAftMm, 0.001f)
+        assertOal(300f, vm)
     }
 
     // ── Multi-component stability ─────────────────────────────────────────────
 
     @Test
     fun `updating one of three liners leaves the other two untouched`() {
-        val ln1 = Liner(id = "ln1", startFromAftMm = 0f,   lengthMm = 100f, odMm = 50f, endMmPhysical = 100f)
-        val ln2 = Liner(id = "ln2", startFromAftMm = 150f, lengthMm = 100f, odMm = 50f, endMmPhysical = 250f)
-        val ln3 = Liner(id = "ln3", startFromAftMm = 300f, lengthMm = 100f, odMm = 50f, endMmPhysical = 400f)
-        val spec = ShaftSpec(liners = listOf(ln1, ln2, ln3), overallLengthMm = 400f)
+        val vm = vm(400f)
+        vm.addLinerAt(startMm = 0f, lengthMm = 100f, odMm = 50f)
+        vm.addLinerAt(startMm = 150f, lengthMm = 100f, odMm = 50f)
+        vm.addLinerAt(startMm = 300f, lengthMm = 100f, odMm = 50f)
 
-        // Update ln2 only
-        val result = spec.copy(
-            liners = spec.liners.toMutableList().also { l ->
-                l[1] = ln2.withPhysical(startMmPhysical = 160f, lengthMm = 90f, odMm = ln2.odMm)
-            }
-        )
+        val middle = linerIndexAt(vm, 150f)
+        vm.updateLiner(middle, startMm = 160f, lengthMm = 90f, odMm = 50f)
 
-        assertEquals("ln1 start unchanged",  0f,   result.liners[0].startFromAftMm, 0.001f)
-        assertEquals("ln1 length unchanged", 100f, result.liners[0].lengthMm,        0.001f)
-        assertEquals("ln2 start updated",    160f, result.liners[1].startFromAftMm,  0.001f)
-        assertEquals("ln2 length updated",    90f, result.liners[1].lengthMm,         0.001f)
-        assertEquals("ln3 start unchanged",  300f, result.liners[2].startFromAftMm,  0.001f)
-        assertEquals("ln3 length unchanged", 100f, result.liners[2].lengthMm,         0.001f)
+        val liners = vm.spec.value.liners
+        assertEquals("middle liner start updated", 160f, liners[middle].startFromAftMm, 0.001f)
+        assertEquals("middle liner length updated", 90f, liners[middle].lengthMm, 0.001f)
+        val others = liners.filterIndexed { i, _ -> i != middle }
+        assertEquals("the other two keep their spans",
+            setOf(0f to 100f, 300f to 100f),
+            others.map { it.startFromAftMm to it.lengthMm }.toSet())
+        assertOal(400f, vm)
     }
 
     @Test
     fun `updating aft liner in mixed spec leaves taper body and fwd liner positions unchanged`() {
-        val aftLiner  = Liner(id = "aft",   startFromAftMm = 0f,   lengthMm = 80f,  odMm = 50f, endMmPhysical = 80f)
-        val taper     = Taper(id = "tp",    startFromAftMm = 80f,  lengthMm = 50f,  startDiaMm = 50f, endDiaMm = 40f)
-        val body      = Body( id = "body",  startFromAftMm = 130f, lengthMm = 100f, diaMm = 40f)
-        val fwdLiner  = Liner(id = "fwd",   startFromAftMm = 230f, lengthMm = 70f,  odMm = 40f, endMmPhysical = 300f)
-        val spec = ShaftSpec(
-            liners = listOf(aftLiner, fwdLiner),
-            tapers = listOf(taper),
-            bodies = listOf(body),
-            overallLengthMm = 300f
-        )
+        val vm = vm(300f)
+        vm.addBodyAt(startMm = 130f, lengthMm = 100f, diaMm = 40f)
+        vm.addTaperAt(startMm = 80f, lengthMm = 50f, startDiaMm = 50f, endDiaMm = 40f)
+        vm.addLinerAt(startMm = 0f, lengthMm = 80f, odMm = 50f)
+        vm.addLinerAt(startMm = 230f, lengthMm = 70f, odMm = 40f)
 
-        // Extend the AFT liner by 20mm — nothing else should move
-        val result = spec.copy(
-            liners = spec.liners.toMutableList().also { l ->
-                l[0] = aftLiner.withPhysical(startMmPhysical = 0f, lengthMm = 100f, odMm = aftLiner.odMm)
-            }
-        )
+        val aft = linerIndexAt(vm, 0f)
+        val fwd = linerIndexAt(vm, 230f)
+        // Extend the AFT liner by 20mm — nothing else may move.
+        vm.updateLiner(aft, startMm = 0f, lengthMm = 100f, odMm = 50f)
 
-        assertEquals("aft liner extended",          100f, result.liners[0].lengthMm,        0.001f)
-        assertEquals("taper start unchanged",        80f, result.tapers[0].startFromAftMm,  0.001f)
-        assertEquals("body start unchanged",        130f, result.bodies[0].startFromAftMm,  0.001f)
-        assertEquals("fwd liner start unchanged",   230f, result.liners[1].startFromAftMm,  0.001f)
+        val s = vm.spec.value
+        assertEquals("aft liner extended", 100f, s.liners[aft].lengthMm, 0.001f)
+        assertEquals("taper start unchanged", 80f, s.tapers[0].startFromAftMm, 0.001f)
+        assertEquals("body start unchanged", 130f, s.bodies[0].startFromAftMm, 0.001f)
+        assertEquals("fwd liner start unchanged", 230f, s.liners[fwd].startFromAftMm, 0.001f)
+        assertOal(300f, vm)
     }
 
-    // ── FWD-reference taper update (physStart recalculation) ─────────────
-    // When a taper uses FWD reference and its length changes, physStart is
-    // recomputed to keep the authored FWD distance fixed.  These tests verify
-    // that this recomputation doesn't silently move any other component.
-
-    private fun fwdRefPhysStart(taper: Taper, newLengthMm: Float, oalMm: Float): Float {
-        val authored = oalMm - taper.startFromAftMm - taper.lengthMm
-        return oalMm - authored - newLengthMm
-    }
+    // ── FWD-reference taper length edits ──────────────────────────────────────
+    // The card re-anchors a FWD-referenced taper through [taperPhysStartForNewLength] and hands
+    // the ViewModel the resulting canonical start. These drive that same pair.
 
     @Test
     fun `fwd-ref taper length change does not move adjacent aft body`() {
-        val oal    = 500f
-        val body   = Body(id  = "b1",  startFromAftMm = 0f,   lengthMm = 100f, diaMm = 60f)
-        val taper  = Taper(id = "t1",  startFromAftMm = 200f, lengthMm = 100f,
-                           startDiaMm = 60f, endDiaMm = 50f,
-                           authoredReference = LinerAuthoredReference.FWD)
-        val spec   = ShaftSpec(bodies = listOf(body), tapers = listOf(taper), overallLengthMm = oal)
-
-        val newLen      = 150f
-        val newStart    = fwdRefPhysStart(taper, newLen, oal)  // physStart moves AFT
-        val result = spec.copy(
-            tapers = spec.tapers.toMutableList().also { list ->
-                list[0] = taper.copy(startFromAftMm = newStart, lengthMm = max(0f, newLen))
-            }
+        val vm = vm(500f)
+        vm.addBodyAt(startMm = 0f, lengthMm = 100f, diaMm = 60f)
+        vm.addTaperAt(
+            startMm = 200f, lengthMm = 100f, startDiaMm = 60f, endDiaMm = 50f,
+            reference = LinerAuthoredReference.FWD,
         )
 
-        assertEquals("body start must not change",  0f,   result.bodies[0].startFromAftMm, 0.001f)
-        assertEquals("body length must not change", 100f, result.bodies[0].lengthMm,        0.001f)
-        assertEquals("taper physStart recalculated", newStart, result.tapers[0].startFromAftMm, 0.001f)
-        assertEquals("taper length updated",          newLen,  result.tapers[0].lengthMm,        0.001f)
+        val newLen = 150f
+        val newStart = taperPhysStartForNewLength(vm.spec.value.tapers[0], newLen, 500f)
+        vm.updateTaper(0, startMm = newStart, lengthMm = newLen, startDiaMm = 60f, endDiaMm = 50f)
+
+        val s = vm.spec.value
+        assertEquals("body start must not change", 0f, s.bodies[0].startFromAftMm, 0.001f)
+        assertEquals("body length must not change", 100f, s.bodies[0].lengthMm, 0.001f)
+        assertEquals("taper start re-anchored", 150f, s.tapers[0].startFromAftMm, 0.001f)
+        assertEquals("taper length updated", newLen, s.tapers[0].lengthMm, 0.001f)
+        assertOal(500f, vm)
     }
 
     @Test
     fun `fwd-ref taper length change does not move adjacent fwd liner`() {
-        val oal   = 500f
-        val taper = Taper(id = "t1",  startFromAftMm = 100f, lengthMm = 100f,
-                          startDiaMm = 60f, endDiaMm = 50f,
-                          authoredReference = LinerAuthoredReference.FWD)
-        val liner = Liner(id = "ln1", startFromAftMm = 300f, lengthMm = 100f,
-                          odMm = 50f, endMmPhysical = 400f)
-        val spec  = ShaftSpec(tapers = listOf(taper), liners = listOf(liner), overallLengthMm = oal)
-
-        val newLen   = 50f
-        val newStart = fwdRefPhysStart(taper, newLen, oal)
-        val result = spec.copy(
-            tapers = spec.tapers.toMutableList().also { list ->
-                list[0] = taper.copy(startFromAftMm = newStart, lengthMm = max(0f, newLen))
-            }
+        val vm = vm(500f)
+        vm.addLinerAt(startMm = 300f, lengthMm = 100f, odMm = 50f)
+        vm.addTaperAt(
+            startMm = 100f, lengthMm = 100f, startDiaMm = 60f, endDiaMm = 50f,
+            reference = LinerAuthoredReference.FWD,
         )
 
-        assertEquals("liner start must not change",  300f, result.liners[0].startFromAftMm, 0.001f)
-        assertEquals("liner length must not change", 100f, result.liners[0].lengthMm,        0.001f)
+        val newLen = 50f
+        val newStart = taperPhysStartForNewLength(vm.spec.value.tapers[0], newLen, 500f)
+        vm.updateTaper(0, startMm = newStart, lengthMm = newLen, startDiaMm = 60f, endDiaMm = 50f)
+
+        val s = vm.spec.value
+        assertEquals("liner start must not change", 300f, s.liners[0].startFromAftMm, 0.001f)
+        assertEquals("liner length must not change", 100f, s.liners[0].lengthMm, 0.001f)
+        assertOal(500f, vm)
     }
 
     @Test
     fun `fwd-ref taper fwd end is unchanged after length update`() {
-        val oal   = 600f
-        val taper = Taper(id = "t1",  startFromAftMm = 300f, lengthMm = 200f,
-                          startDiaMm = 60f, endDiaMm = 50f,
-                          authoredReference = LinerAuthoredReference.FWD)
-        val spec  = ShaftSpec(tapers = listOf(taper), overallLengthMm = oal)
-
-        val originalFwdEnd = taper.startFromAftMm + taper.lengthMm  // 500mm
-        val newLen    = 120f
-        val newStart  = fwdRefPhysStart(taper, newLen, oal)
-        val result = spec.copy(
-            tapers = spec.tapers.toMutableList().also { list ->
-                list[0] = taper.copy(startFromAftMm = newStart, lengthMm = max(0f, newLen))
-            }
+        val vm = vm(600f)
+        vm.addTaperAt(
+            startMm = 300f, lengthMm = 200f, startDiaMm = 60f, endDiaMm = 50f,
+            reference = LinerAuthoredReference.FWD,
         )
+        val originalFwdEnd = 500f
 
-        val resultFwdEnd = result.tapers[0].startFromAftMm + result.tapers[0].lengthMm
-        assertEquals("FWD end of taper must be preserved", originalFwdEnd, resultFwdEnd, 0.001f)
+        val newLen = 120f
+        val newStart = taperPhysStartForNewLength(vm.spec.value.tapers[0], newLen, 600f)
+        vm.updateTaper(0, startMm = newStart, lengthMm = newLen, startDiaMm = 60f, endDiaMm = 50f)
+
+        val t = vm.spec.value.tapers[0]
+        assertEquals("FWD end of taper must be preserved",
+            originalFwdEnd, t.startFromAftMm + t.lengthMm, 0.001f)
+        assertOal(600f, vm)
     }
 
     @Test
     fun `aft-ref taper fwd end changes when length changes (contrast to fwd-ref)`() {
-        // AFT anchor keeps startFromAftMm fixed, so fwd end moves.
-        // This is the expected/correct AFT-ref behaviour — contrast with fwd-ref above.
-        val taper = Taper(id = "t1",  startFromAftMm = 100f, lengthMm = 100f,
-                          startDiaMm = 60f, endDiaMm = 50f,
-                          authoredReference = LinerAuthoredReference.AFT)
-        val spec  = ShaftSpec(tapers = listOf(taper), overallLengthMm = 500f)
-
-        val newLen   = 200f
-        val result = spec.copy(
-            tapers = spec.tapers.toMutableList().also { list ->
-                list[0] = taper.copy(startFromAftMm = taper.startFromAftMm, lengthMm = max(0f, newLen))
-            }
+        // An AFT anchor keeps startFromAftMm fixed, so the FWD end moves — the correct
+        // AFT-ref behaviour, and the contrast that makes the FWD cases above meaningful.
+        val vm = vm(500f)
+        vm.addTaperAt(
+            startMm = 100f, lengthMm = 100f, startDiaMm = 60f, endDiaMm = 50f,
+            reference = LinerAuthoredReference.AFT,
         )
 
-        assertEquals("AFT start unchanged",       100f, result.tapers[0].startFromAftMm, 0.001f)
-        assertEquals("FWD end moved to 300mm",    300f,
-            result.tapers[0].startFromAftMm + result.tapers[0].lengthMm, 0.001f)
+        val newLen = 200f
+        val newStart = taperPhysStartForNewLength(vm.spec.value.tapers[0], newLen, 500f)
+        vm.updateTaper(0, startMm = newStart, lengthMm = newLen, startDiaMm = 60f, endDiaMm = 50f)
+
+        val t = vm.spec.value.tapers[0]
+        assertEquals("AFT start unchanged", 100f, t.startFromAftMm, 0.001f)
+        assertEquals("FWD end moved to 300mm", 300f, t.startFromAftMm + t.lengthMm, 0.001f)
+        assertOal(500f, vm)
     }
 }

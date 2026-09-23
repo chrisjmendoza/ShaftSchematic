@@ -24,8 +24,8 @@ enum class WearSpotReference { LINER_AFT, LINER_FWD, AFT_SET, FWD_SET }
  *
  * This is a **pure reference feature** — same contract class as [CouplerBoltSlot]
  * (see `CLAUDE.md` and `docs/archive/LinerWearAreas_Proposal.md` §7):
- * - It never affects `coverageEndMm`, `ensureOverall`, body resolution, collision/overlap
- *   validation, or the Free-to-End badge.
+ * - It never affects `coverageEndMm`, body resolution, or collision/overlap
+ *   validation.
  * - It lives outside [ShaftSpec] entirely (flat list in [WearRecord], stored beside
  *   `RunoutConfig` in the document envelope) so geometry resolution never has to know
  *   about it.
@@ -96,7 +96,7 @@ enum class DyePenResult { PASS, FAIL }
  *
  * A **pure reference feature**, the same contract class as [WearSpot] / [CouplerBoltSlot] /
  * [com.android.shaftschematic.model.RunoutReading]: it never affects `coverageEndMm`,
- * `ensureOverall`, body resolution, collision/overlap validation, or the Free-to-End badge,
+ * body resolution, or collision/overlap validation,
  * and it lives outside [ShaftSpec] entirely (in [WearRecord], the document envelope).
  *
  * Unlike [WearSpot] (which is liner-only), a pit may sit on **any** pit-eligible component —
@@ -138,7 +138,7 @@ data class WearPit(
  *
  * A **pure reference feature**, the same contract class as [WearSpot] / [WearPit] /
  * [com.android.shaftschematic.model.RunoutReading]: it never affects `coverageEndMm`,
- * `ensureOverall`, body resolution, collision/overlap validation, or the Free-to-End badge,
+ * body resolution, or collision/overlap validation,
  * and it lives outside [ShaftSpec] entirely (in [WearRecord], the document envelope).
  *
  * Like [WearPit], a reading may sit on **any** liner, taper, or body (explicit or auto) and
@@ -214,6 +214,14 @@ data class WearDiaReading(
  *   `WEAR_STRIP_COMPACT_MIN_PT_PER_MM`), so a strip's drawn width matches its span on the
  *   profile above it and the page reads denser. Layout-only, and per-document, so it lives here.
  *   Additive + defaulted, same no-version-bump rule as [pits].
+ * @property stripSizeFrac Multiplier on the detail strips' height ceiling — the page's own row
+ *   budget scaled up or down. `1` (the default) is the traditional height a full page of rows
+ *   gives a strip; the settable range and the base cap live with the layout math
+ *   (`WEAR_STRIP_SIZE_FRAC_MIN`/`_MAX`/`_DEFAULT` and `wearRowHeightCapPt`,
+ *   `pdf/WearStripLayout.kt` — the model stays free of any `pdf` import, so the literal `1f` is
+ *   repeated here rather than referenced). Display-only, and per-document, so it lives here: it
+ *   changes how tall a strip draws, never a stored or printed measurement. Additive + defaulted,
+ *   same no-version-bump rule as [pits].
  */
 @Serializable
 data class WearRecord(
@@ -226,4 +234,5 @@ data class WearRecord(
     val stripComponentIds: List<String>? = null,
     val showShaftProfile: Boolean = true,
     val compactStrips: Boolean = false,
+    val stripSizeFrac: Float = 1f,
 )

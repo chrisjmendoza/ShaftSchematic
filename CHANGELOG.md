@@ -6,6 +6,1147 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-09-23
+
+### fix(ui): the tablet orientation unlock is applied at activity creation, not from the manifest
+
+Android Studio's build failed on lint `ManifestResource`: `android:screenOrientation` referenced
+`@integer/activity_orientation`, and a manifest resource cannot vary by configuration — the
+`values-sw600dp` override there was never read, so every tablet would have stayed locked to
+portrait. The manifest now declares a literal `portrait` (the phone lock, unchanged) and
+`MainActivity.onCreate` applies `baseActivityOrientation()` before `setContent`, so the ONE
+resource still decides both the base orientation and what the PDF preview screens restore.
+Phones are byte-identical; a tablet held landscape at launch recreates once into landscape.
+`docs/contracts/Adaptive.md` and the CLAUDE.md invariant say why the manifest must not reference
+the resource.
+
+### test(pdf): a taper name is pinned clear of a neighbouring body's Ø callout
+
+On-device screenshot: "FWD Taper" printed through the `Ø 10.368"` callout of the short bare run
+beside it. The 2026-09-03 collision fix below already covers this — every callout on the sheet is
+an obstacle to every name (`geom/BelowShaftLabelLayout.kt`), not only the name's own — but that
+branch had not been merged, so the installed build predated it. Merged now, and
+`ComponentLabelCalloutClearanceTest` gains the taper fixture: it first proves the sheet collides
+when the callouts are NOT reserved, then sweeps the compressed drawing widths with them reserved
+and fails on any overlap.
+
+## 2026-09-16
+
+### feat(ui): tablet layout — free rotation on tablets, two panes on a landscape tablet
+
+The app was a portrait phone layout; on a tablet the shaft drew as a flat strip over a column
+of controls stretched edge to edge, and the activity was locked to portrait. It now adapts on
+ONE axis, the window width class (`ui/adaptive/WindowSize.kt`: COMPACT < 600 dp, MEDIUM
+< 840 dp, EXPANDED), with the phone layout byte-identical.
+
+- **Orientation.** Phones stay portrait; tablets (smallest width ≥ 600 dp) rotate freely. One
+  resource, `R.integer.activity_orientation`, sits behind both the manifest and what the two
+  PDF preview screens restore when they give rotation back — they used to restore a literal
+  portrait, which would have locked a tablet to portrait the first time a preview closed.
+- **Editor (Schematic and Final tabs).** MEDIUM raises the preview card's height cap; EXPANDED
+  lays out two panes — preview, OAL and warnings on the left, the Components header, Add
+  button and carousel on the right — each scrolling on its own.
+- **Runout, Wear and Undercut tabs.** MEDIUM gives the canvas more height; EXPANDED puts the
+  canvas with its print group (blank draft, export gate, Print/Preview/Export) in the left pane
+  and the tab's editors in the right, the canvas pinned.
+- **Sidebar.** On a landscape tablet the editor sidebar is a permanent panel beside the tabs,
+  built from the same content composable the phone overlay hosts; the tab hamburgers hide
+  through `LocalSidebarPermanent`.
+- **List screens** (Start, Settings, Help, About, Achievements, Developer Options, Templates,
+  Open, Save As) cap their one scrolling column at a readable 720 dp and centre it
+  (`readableWidth()`), a no-op on phones.
+- Every screen that lays out two ways calls the SAME block composables from both branches, so
+  the phone and the tablet cannot drift. Nothing adaptive touches sheet ink, a composer, the
+  model, or a document. Contract: `docs/contracts/Adaptive.md`; per-surface notes in
+  `ShaftScreen.md`, `RunoutSheet.md`, `UndercutDrawing.md`, `Navigation.md`, `UI_CONTRACT.md`.
+- Tests: `WindowSizeTest` pins the breakpoints; Robolectric hosts the editor at
+  `w1280dp-h800dp-land` and at the phone default and asserts the pane tags and the hamburger
+  follow the window. **Unverified on a real tablet** — the on-device pass is in `TODO.md`.
+## 2026-09-15
+
+### feat(pdf): line art for the printed undercut drawing
+
+The on-screen "Line art (no shading)" undercut style was screen-only; the printed sheet always
+shaded its detail-strip liner and the cut section's core. The print side now has its own switch.
+
+- **Settings → PDF Export → "Undercut drawing: line art (no shading)"**, also at the foot of the
+  Shade-in-Components group on the undercut preview's PDF options sheet (the one document it
+  reaches). Default off, so every existing document prints byte for byte as before.
+- On, the undercut PDF draws **no shade fill anywhere** — bodies, tapers, liners, the detail
+  strips' otherwise-always-shaded liner span, and the section core — and the cut reads from the
+  notch construction alone: the void erasing the surface stroke, the full-height section faces,
+  the floor lines. Outlines, thread hatch, the coupler-slot cutout marker, rails and text are
+  untouched. "Always shades its liner" now reads "always, unless line art".
+- One pure decision, `undercutPdfFillPlan` (`pdf/UndercutPdfFillPlan.kt`, `UndercutPdfFillPlanTest`);
+  the composer builds its paints from it and threads the section-core choice into the notch pass.
+- Part of the drawing look, so **drawing profiles capture it** and "Restore Drawing defaults"
+  resets it (`DrawingProfileTest` round-trips it; an older profile payload still loads).
+- **Independent of the screen style by design** — the `UndercutStyle` line-art flag still never
+  reaches a composer; the two flags mean the same thing on two surfaces and neither reads the
+  other. Contract: `UndercutDrawing.md`, `PDF_EXPORT.md` §5.6, CLAUDE.md sheet-ink invariant.
+
+### feat(help): search, and a "?" on each sheet tab that opens its own guide
+
+The Help screen was a long scroll with no way in but the top. It now has a search field and
+can be opened straight at a topic.
+
+- **Search** is pinned above the list. It narrows the screen to the topics whose title or text
+  contain what was typed (case-insensitive), drops sections with no hits, and **opens every
+  match** — a hit that still needs a tap to read is the failing state. Clearing the box puts
+  each card back exactly as it was: the query never writes a card's saved expansion. An empty
+  result says so by name.
+- **Deep links.** The `help` route takes an optional `topic` argument (`helpRoute(key)` in
+  `AppNav` is the one place the query syntax lives). Topics carry a stable key derived from
+  their title (`helpTopicKey`, pure) — the list key, the saved-expansion key and the route
+  argument are all the same string, so they cannot disagree — and a test asserts the keys are
+  unique across the real content. A deep link opens its topic expanded and scrolls to it; an
+  unknown key lands at the top.
+- **A "?" on the Runout, Wear, Undercut and Consolidated Output tabs**, at the trailing end of
+  each toolbar row after Save, opens Help at that tab's how-to. One construction (`TabHelpButton`)
+  serves all four. The Schematic tab carries none — its help is the Getting Started material one
+  sidebar tap away. Seven entry points in all; the top-level ones stay.
+- Pure logic in `ui/screen/HelpSearch.kt` (`HelpSearchTest`); contract in `Navigation.md`.
+
+### fix(a11y): labelled back buttons and spoken sheet summaries
+
+Four icon-only back buttons (About, Achievements, Developer Options, Settings) announced
+nothing to a screen reader; every other icon-only button already did. They now say "Back".
+
+Each of the five white-sheet canvases (undercut overview and detail, wear overview and detail,
+runout preview) was a silent surface to TalkBack. Each now carries a spoken summary from the pure
+`ui/screen/SheetSemantics.kt` — **counts only** (undercut sections, wear areas, pits, diameter
+readings, stations, readings entered), never a diameter or a length — plus the tab's real
+accessible editing path, since a canvas's placement gesture is not one. `SheetSemanticsTest`
+pins the wording.
+
+Rulings recorded in `docs/contracts/Appearance.md` §Accessibility, closing the audit plan: sheet
+text is drawing ink and does not follow the system font scale (UI chrome must); carousel cards
+are not merged into one node (that would fold their fields together); canvas touch targets are
+not widened; no reduced-motion handling. The 200% font-scale and TalkBack walks are on-device
+items in `TODO.md`.
+
+### docs: settings customization plan closed
+
+`docs/SettingsCustomization_PLAN.md` moves to `docs/archive/` with a rulings table for every
+proposal it still carried: line-art print **yes**, Help search and deep links **yes**, the
+accessibility slice **yes, scoped**; sheet colour customization deferred and not queued; the
+custom RGB picker, Material You, per-document line thickness, touch-target widening,
+reduced-motion handling, Help images / "What's new" / localization all **no**, each with its
+reason.
+
+## 2026-09-14
+
+### feat(ui): taper calculator — Calculate button, answers in the fields
+
+On-device request: the live result at the bottom read as the calculator answering before it was
+asked, and it did not say what was still missing. The calculator is now button-driven.
+
+- **Calculate** is the one trigger (the keyboard's Done key is the same tap). Nothing is derived
+  until it is pressed; before that only unreadable text is flagged, at its field.
+- **The answer appears in its own field** — an italic preview in the empty field, with the label
+  reading "… — calculated". It is a placeholder, never text: the field still holds only what was
+  typed, so typing over it needs no clearing and nothing is ever filled in behind the user's back.
+  A ✓ beside it **keeps** the value as an input, so one answer can feed the next question (find
+  the rate, keep it, clear the length, find the length for a different small end).
+- **Too few values:** the fields that could complete the solve turn red and the message names
+  them — "Enter one more value — Small end Ø or Taper rate."
+- **A result never goes stale.** The calculated state is a snapshot of the entries it came from;
+  any edit or a unit change drops the preview, the red outlines and the message together.
+- The rate field's supporting line carries the "/ft reading (inch entry only) and the common
+  rate it lands on; the bottom results block is gone. All four typed still checks them, quoting
+  the rate the three geometry values give when the typed one disagrees. **Clear** resets the form.
+- The display rules are pure (`util/TaperCalcPresentation.kt`, `TaperCalcPresentationTest`) —
+  the calculator dialogs cannot be hosted under the Robolectric harness, so the rules live where
+  they can be tested.
+
+### feat(editor): tap the title to name the document; drafts on the Start screen name themselves
+
+The document title strip was a read-only label on all five tabs. It is now the naming
+affordance it already looked like — the desktop-editor gesture of clicking a title to rename
+it — and an unsaved draft on the Start screen says which shaft it is instead of reading
+"Untitled draft" three times over.
+
+- **Tap the title strip on any tab.** A document that has never been saved opens the Save As
+  screen (already seeded with the suggested name); a saved one opens a rename dialog, and the
+  strip follows the new name on every tab. The choice between the two is made once, in
+  `AppNav` — the tabs pass the tap along and have no naming behaviour of their own, so the
+  same strip can never come to mean different things on different tabs.
+- **One rename dialog, two callers.** The Open screen's inline "Rename saved shaft" dialog is
+  now the shared `RenameShaftDocumentDialog`, which owns the typed name and the storage work
+  while each caller owns what a rename means there. Its rules are unchanged and can no longer
+  drift between the two surfaces: a blank name is refused, a name that comes back to the
+  current one just dismisses, and an existing file is **never** overwritten.
+- **Unsaved drafts name themselves.** A draft row is titled with the name the save screen
+  would suggest from the job number / customer / vessel already typed into it, falling back to
+  "Untitled draft" only when the draft carries nothing at all. A row named that way reads
+  "Unsaved draft · <age>" underneath, so a named-looking row is never mistaken for a saved
+  file. The draft stays unsaved and unnamed — this names a ROW, and writes nothing.
+
+### feat(pdf): Output font — every sheet set in the shop's chosen face
+
+**Settings → Drawing → "Output font"** picks the typeface every exported PDF is set in — dimension
+values, callouts, component names and the footer alike. Four system families: **Standard**
+(the platform sans, the historical look and the default), **Condensed**, **Serif** and
+**Monospace**. Each chip is labelled in the face it selects, so the row reads as a specimen sheet.
+
+- **App-wide, like every other drawing pref.** `PdfPrefs.outputFont`, captured by a named Drawing
+  profile and put back by "Restore Drawing defaults". No doc-envelope field and no per-document
+  override — a shop picks a face once and prints every job in it, which is also why the picker
+  stays out of the per-sheet PDF options sheets.
+- **One seam to the ink.** `OutputTypography.active` is the process-wide mirror, written only by
+  `SettingsStore.updatePdfPrefs` — the `FractionTypography` posture exactly. The four composers
+  build their root text `Paint` from it and every other text paint on a sheet is a
+  copy-constructor of that root, so a single line per composer carries the choice to every glyph.
+- **Nothing on a sheet shifts.** Every text metric the layout budgets read — `measureRichText`,
+  `measureDualLabel`, the rail planner's inflated ascent — comes off the live `Paint`, so a wider
+  or narrower face is measured exactly as it will be drawn. A condensed face simply seats more
+  values inside the dimension line instead of above it.
+- **The mirror is not snapshot state**, so each preview's render-inputs record carries the font as
+  a re-render key; without it a tab would keep rasterizing in the face it last drew.
+- **No bundled font files.** A device missing one of these families falls back through
+  `Typeface.create` to its default sans — a legible sheet in the wrong face rather than no sheet —
+  and an unreadable stored name decodes to Standard.
+- `FractionTextRendererTest`'s stacked and diagonal ink-bounds checks now run in every face, so a
+  fraction stack that broke out of the line box in a condensed or slab font fails there.
+
+### feat(editor): standard key-stock sizes for keyways
+
+A **"Standard size…"** menu sits under the KW W × D row on all four keyway surfaces — the Body and
+Taper carousel cards and `AddBodyDialog` / `AddTaperDialog` — so a keyway can be specified off the
+standard rather than remembered and typed.
+
+- **ANSI B17.1 for an inch keyway, DIN 6885-1 / ISO 773 for a metric one.** The "Keyway in: in | mm"
+  chip picks the table, because that chip already decides the unit the keyway is typed and printed
+  in. Both tables live in the pure `geom/KeyStockStandards.kt`.
+- **The entry the standard names for the host Ø is offered first**, checked and captioned
+  "Suggested for Ø …" — the body's Ø on a body, the taper's LARGE end on a taper (a key is specified
+  for the section it seats in). Every other size stays reachable in table order: the shop fits the
+  key it has.
+- **The depth offered is the SHAFT keyseat depth** — what `keywayDepthMm` means and what gets cut —
+  not the key's overall height. For ANSI that is half the key height; DIN publishes it as `t1`.
+- **A pick writes through the typed-value path** (the card's keyway update callback, the dialog's
+  own W/D text state) and the numbers are authored and sacred from then on. The menu never writes
+  on its own: no fill on a Ø change, no rewrite of a W × D that is already there.
+- Both tables are **provisional**, chosen without shop input — the `LINER_SHOULDER_STD_RADII_IN`
+  posture. Nothing derives from them except what the user picks off the menu.
+
+### chore(build): Compose BOM 2024.09.00 → 2026.04.01
+
+`2026.04.01` is the last BOM that builds against compileSdk 36 — the next one (2026.08.00) requires
+37, which the Robolectric chain still blocks — so it moves alone and the compileSdk-37 bump stays
+one coordinated change for later (TODO §"Build tooling").
+
+- **The real change is Material3 1.3.0 → 1.4.0.** UI and Foundation were *already* running 1.9.2:
+  the newer activity/lifecycle/navigation dependencies out-rank a BOM constraint, so the old pin
+  had been overridden upward for some time and only Material3 was actually being held back. The
+  bump takes UI and Foundation 1.9.2 → **1.11.0** and Material3 1.3.0 → **1.4.0**, which is where
+  the visual pass is owed: component defaults live in Material3, and the sliders, bottom sheets,
+  chips, and dialogs are the app's whole tuning surface.
+- **No source changes.** Main, unit-test, and androidTest sources all compile against the new
+  surface untouched; the suite is green at 2219 tests, 0 failures. Nothing in the app leaned on an
+  API the new versions removed.
+- **No build config went stale.** `buildFeatures { compose = true }` with the Kotlin 2.x Compose
+  plugin is still the whole configuration — there is no `composeOptions` block or compiler
+  extension version to drop.
+- **`material-icons-extended` moves 1.7.0 → 1.7.8 only.** The BOM still pins the frozen icon
+  artifacts at their final version, so the icon set is unchanged and the pre-existing
+  `Icons.Filled.Article` → `Icons.AutoMirrored.Filled.Article` deprecation is neither new nor
+  resolved here.
+- **One new deprecation, deliberately not chased**: the `rememberTransformableState` overload whose
+  `onTransformation` lambda takes no centroid, at the four pinch-zoom surfaces (wear detail,
+  undercut detail, runout canvas, PDF preview overlay). Taking the centroid changes where a pinch
+  zooms from — a gesture change, not a rename — so it waits for a pass that can be judged
+  on-device.
+
+---
+
+## 2026-09-04
+
+### feat(editor): the Final Schematic — a second drawing for the shaft that ships
+
+A liner's position is decided before the job starts, but once the wear areas are mapped the
+foreman can decide — after an undercut — to extend it, shorten it, or move the whole thing a few
+inches onto sound metal. The drawing the job started from has to survive that decision as the
+historical record, so the document now carries a **second** schematic (on-device request:
+"keep the original for historical purpose, like a before and after").
+
+- **New tab, Final Schematic**, between Undercut Drawing and Consolidated Output (it follows
+  undercuts in the shop process), same built-shaft gate as the other document tabs. With no final
+  yet it explains itself and offers one button, **Start from original schematic**; from then on
+  it is the SAME editor as the Schematic tab — carousel, add dialogs, preview box, collision
+  badges — pointed at the final drawing, under a banner that says the original is untouched and
+  carries Reset to original / Discard (both confirm, both undo).
+- **Model**: `final_spec` in the `.shaft` envelope (`null` = none yet; older files load
+  unchanged). A whole `ShaftSpec`, created as a structural copy with component ids kept — so
+  per-component unit overrides apply to both and a future before/after can line up — and
+  independent from then on: no edit on either drawing reaches the other. Never in a template,
+  never in a mate duplicate, cleared by New. Wear, undercut and runout records stay keyed to the
+  original.
+- **One editor, two targets.** Every geometry mutator takes an explicit
+  `SpecTarget { ORIGINAL, FINAL }` (default ORIGINAL — every existing call site is byte-identical)
+  and writes through one seam; only the two per-component unit setters stay target-free, since
+  unit overrides are keyed by component id and apply to both drawings. The target is a parameter, never a flag on the ViewModel: a
+  "current target" would put the wrong drawing one tab-switch away from every edit. The final
+  rides the undo history and the autosave snapshot like the rest of the document.
+- **Outputs.** The Final tab prints the schematic PDF (preview / export / print) and a blank
+  classic runout sheet from the final geometry — no readings, no pinned stations, no wear: the
+  final measurement sheet to take runouts on before the job ships. The schematic can also carry
+  **runout bubbles** — a "Runout bubbles" election on its PDF options sheet, off by default
+  because the final drawing is primarily the welding and machining copy that gets the liner
+  placements updated (on-device direction); on, it prints as the consolidated Schematic + Runout
+  sheet over the final geometry, still with empty readings. Session-only, like Blank draft.
+  Consolidated Output keeps
+  drawing the original. Every final sheet is marked so it can never pass for the original:
+  `Drawing: Final` in the footer job block and the runout header, a bold FINAL badge beside the
+  Side badge (`ProjectInfo.drawingLabel`, blank everywhere else), and a suffix in the
+  filename — `_Final`, `_Final_Runout` with bubbles elected, `_Final_RunoutSheet` for the
+  banner's blank runout sheet: three documents that never share a name. The bubbled sheet is
+  the consolidated composer's, so the schematic-only Ø-callout election and Template mode do
+  not reach it; the options sheet says so and greys the callout chip.
+- Not yet: "Create a new job from the final" — the natural next step, deliberately left for a
+  later pass.
+
+### feat(pdf): tapers compress with the liners, on one control
+
+The two kinds the sheet is about now foreshorten together. "Liner compression" — renamed **"Liner
+& taper compression"**, with the checkbox now reading "Keep liners and tapers proportional
+lengthwise" — feeds the tapers as well as the liners, so asking for proportional length lengthens
+both and the drawing reads even (on-device request: liners walking up to true length beside tapers
+stuck at their 70% baseline looked lopsided).
+
+- `taperMinFracOfTrue(linerMinFracOfTrue)` = `max(PROFILE_TAPER_MIN_FRAC_OF_TRUE, request)`, applied
+  once in the single span builder `profileFeatureSpans`, so every consumer — the schematic, the
+  runout/consolidated sheet, and the UI's kept-% estimator — gets the same coupling without asking.
+  Sharing one requested fraction and one λ is what makes the kept fractions EQUAL: tapers and liners
+  land on the same proportion of true length at every squeeze.
+- **The coupling is one-way upward.** Below the 0.7 baseline tapers hold it rather than following
+  the liners down: a liner has its flat `PROFILE_MIN_LINER_PT` floor to land on, and a taper has no
+  flat floor by design (a flat floor equalizes unequal tapers), so a taper tracking a bare request
+  would compress like plain bare shaft and vanish on a long drawing.
+- **Sheets that never touch the control print exactly as before.** The stored default is full
+  compression (request 0), which leaves tapers on the baseline they already had; nothing in the
+  scale solve moved, so the drawn shaft height is untouched — the raise is still best-effort and
+  λ-fitted (`fracFitFactor`).
+- The live readout under the slider reports both kinds, and splits the two numbers only where they
+  genuinely differ (a request under the taper baseline). Help topics and the glossary follow the
+  new name.
+
+---
+
+## 2026-09-03
+
+### feat(dev): Developer Options gains diagnostics, and its master switch now switches
+
+Audit of every control on the Developer Options screen. All eleven switches are still wired to a
+live consumer — the dimension debug overlay reads the composer's own `mapToLinerDimsForPdf` /
+`tierOriginMmFor`, and all four verbose categories have call sites — so nothing was retired. Three
+things were wrong with the screen around them.
+
+- **The master switch was not a master switch.** Only the preview OAL badge was ANDed with
+  `devOptionsEnabled` at its draw site. `SettingsStore.resetDevSubFlagsIfDisabled` clears the
+  stored sub-flags at the next start, which left the current session drawing debug labels and
+  overlays on a screen that no longer had the switch to turn them off. All six overlay flags are
+  now gated once, in `ShaftRoute`, where they are collected; `ShaftPreviewPanel`'s own copy of the
+  gate is gone, because one flag guarded twice and five guarded once is how the next one is missed.
+- **The four verbose categories now disable while the master is off**, rather than reading as
+  live switches that change nothing (`VerboseLog.isEnabled` already ANDs them). Disabled, not
+  hidden: a control that vanishes reads as a setting that was lost.
+- **Every switch gained a line saying what it does.** "Show Dim Debug Overlay" names a variable;
+  "Tier origin rule and the liner spans the PDF would dimension" names a picture.
+
+New **Diagnostics** section, aimed at the device rather than the desk:
+
+- **Build** — `VERSION_NAME (VERSION_CODE) • GIT_SHA • BUILD_TYPE`. The app-start breadcrumb has
+  always recorded this; nothing showed it, so "I'm on the latest build" could only be believed.
+- **Crash reporting** — live `CrashReporter.isActive`, i.e. whether *this* build shipped with a
+  `google-services.json`. Previously answerable only from the Firebase console.
+- **Record test non-fatal** — breadcrumb + `CrashReporter.recordNonFatal`, with a snackbar saying
+  which of the two actually happened. End-to-end verification of the reporting path that does not
+  cost the process.
+- **View recent breadcrumbs** — `AppLog.tail(300)` in a dialog, rotated half first so a tail
+  spanning a rotation still reads in order. "Share diagnostic logs" needs an email app and a
+  person at the other end; a shop tablet has neither, and the question is usually just how far an
+  export got. `AppLog.tail` is new, read-only, and swallows its own errors like every other path
+  in that file (`AppLogTest`, two new cases).
+- **Force a test crash** — behind a confirm dialog naming what is lost, and last in the section.
+  It is the only way to exercise the handler chain the Diagnostics contract turns on: `AppLog`
+  writes and flushes, then delegates to Crashlytics'. Both halves are invisible until something
+  actually dies.
+
+`docs/contracts/Diagnostics.md` gains a "Developer Options" section covering the layout, the
+single-seam master gate, and the three actions.
+
+### fix(pdf): component names no longer print through their own Ø callouts
+
+The schematic hangs two things under the shaft — the component-name labels and the Ø
+callouts — and both anchor on a component's **center**. A component printing a name and a
+diameter therefore aimed two strings at the same x and set one through the other; an
+on-device sheet showed "AFT Liner" struck through by `Ø 7.936"`. Each pass tracked
+collisions only against its own kind, which is blind exactly where the two meet.
+
+They share ONE collision space now, the rule the dimension rails already follow:
+
+- **New pure engine** `geom/BelowShaftLabelLayout.kt` places every name at once against the
+  callouts as obstacles, in the rails' resolution order — **slide the name horizontally along
+  its own component's span** first (a name reads as its component's from anywhere over it, so
+  this costs no vertical room), and only **drop a row** when no slide fits.
+- **The obstacles are measured, not guessed**: `DiameterLeaderRenderer.occupancy(calls)`
+  returns the value boxes and the leader lines off the same geometry the renderer inks, so the
+  reservation and the ink cannot disagree. Callouts are planned before the names and drawn
+  after; a callout never moves for a name.
+- **Rows stop at the footer band**, and a pass that still cannot place a name retries a point
+  smaller (down to 7 pt) rather than collapsing rows onto each other — the fit-loop posture the
+  dimension rails use. A name that fits nowhere takes the row it overlaps least and leaves a
+  breadcrumb; it is never dropped.
+
+Holds across compression: `ComponentLabelCalloutClearanceTest` sweeps the drawing widths a
+compressed x map produces, plus stacked dual values and blank drafts, and fails on any overlap.
+`BelowShaftLabelSvgPreviewTest` writes same-math SVG previews of the band to
+`build/reports/below-shaft-labels/`.
+
+### fix(diagnostics): "Share diagnostic logs" no longer crashes the app
+
+On-device report: tapping Settings → Data → "Share diagnostic logs" killed the app, twice, and
+clearing the cache changed nothing — which correctly ruled out the log files themselves. The
+crash was in building the intent, before any chooser could appear.
+
+- **Root cause**: `FeedbackIntentFactory` attached the logs through
+  `ClipData.newUri(null, "attachment", uri)`. That helper calls `resolver.getType(uri)` for
+  every `content://` URI, so a `null` resolver is an immediate `NullPointerException` — and a
+  FileProvider attachment is *always* `content://`. Every tap of the button hit it. The plain
+  Feedback path escaped only because it usually has no attachment and takes the `mailto:`
+  branch instead.
+- **Fix**: build the clip from the **intent's own** mime type, the construction AOSP's
+  `Intent.migrateExtraStreamToClipData` uses — no resolver, and the clip still carries every
+  attachment so `FLAG_GRANT_READ_URI_PERMISSION` reaches whichever app the chooser picks.
+- **Hardened the tap**: the handler now also catches `Throwable`, leaving a breadcrumb and a
+  "Could not share the logs." snackbar. This is `AppLog`'s own posture — logging exists to
+  explain a failure and may never become one — applied to the button that ships it. It is the
+  screen a stuck tester is sent to, so a crash here destroys the evidence rather than mailing it.
+- **`FeedbackIntentFactoryTest`** (new, Robolectric) pins the intent, the clip, and the grant
+  flag; against the old call it fails with exactly the reported NPE.
+- **The same NPE was live on a second button**: Open drawing → ⋮ → "Send Feedback" attaches the
+  `.shaft` file, so it took the identical attachment branch and died the same way. The shared fix
+  covers it; it now has its own pin. Its `uriForFile` call is also wrapped — it runs inside a
+  coroutine, where a throw reaches the crash handler — so a URI that cannot be built costs the
+  attachment rather than the report.
+
+### fix(settings): a corrupt preferences file no longer bricks the app
+
+Audit of the rest of the Settings surface for the same class of failure — an unguarded platform
+call in a tap handler — turned up two more, neither yet reported on-device.
+
+- **`Context.settingsDataStore` had no corruption handler.** Every preference in the app lives in
+  one `settings.preferences_pb`, and DataStore's unhandled answer to a truncated file is to throw
+  `CorruptionException` from *every* read. Several of those reads run during startup, so the
+  failure would not have been "settings went back to default" — it would have been a permanent
+  crash on launch, recoverable only by clearing app data, which takes the drawings too. A tablet
+  yanked off power mid-write is all it takes, and shop-floor devices get yanked off power. Now
+  built with `ReplaceFileCorruptionHandler { emptyPreferences() }`: the preferences are lost, the
+  app and the saved shafts are not. `SettingsStoreCorruptionTest` drives both halves against a
+  throwaway file and confirms the unguarded store really does throw.
+- **Every SAF picker launch was unguarded** (16 call sites — backup, restore, mirror folder,
+  import, save-a-copy, and all five export routes). `launch` throws `ActivityNotFoundException`
+  when nothing handles the intent; DocumentsUI is always there on a normal phone and *not*
+  guaranteed on enterprise-locked or stripped rugged tablets, where each of those buttons would
+  kill the app. All sixteen now go through one `util/SafPickerLaunch.launchPicker`, which
+  breadcrumbs and — where a snackbar exists — says so on screen. The breadcrumb label is fixed at
+  the call site, never the picker input, which carries customer and job text.
+
+### fix(persistence): the crash-safety sweep the settings audit implied
+
+A pass over the rest of the app for the same shape — an unguarded call that escapes into a
+coroutine with nothing catching above it. Four findings, one of them worse than the settings bug
+that started this.
+
+- **The autosave DataStore had no corruption handler either, and it is the more exposed of the
+  two.** `autosave_datastore` is rewritten every 1.5 s of editing, so it is by far the likeliest
+  file to be caught mid-write by a power cut — and `AutosaveManager.loadDrafts` runs from the
+  ViewModel's `init`, inside a `viewModelScope.launch`. There is no `CoroutineExceptionHandler`
+  anywhere in the app, so a `CorruptionException` there would have reached the process crash
+  handler: a hard crash on every launch, on the store most likely to break. Now handled, and
+  `AutosaveManager` additionally never throws at all — reads degrade to an empty ring, writes to
+  a breadcrumb, which is what its own KDoc already promised for decode failures. Two of its
+  callers (`init`, `discardDraft`) were unguarded and are now covered by construction.
+- **Settings reads and writes now go through one guarded seam each** (`Context.settingsPrefs` /
+  `Context.editSettings`, 129 call sites routed). The corruption handler repairs a broken file
+  once; these keep a read or write failing for any *other* reason — I/O error, full disk — from
+  propagating into a Compose collector or out of one of the many bare `scope.launch { setX(…) }`
+  in the UI. `CancellationException` is rethrown, never swallowed.
+- **The backup zip's size guard never fired.** `readZip` skipped entries via
+  `entry.size > MAX_ENTRY_BYTES`, but `ZipEntry.size` is `-1` for any entry written as a stream —
+  which is how `ZipOutputStream` writes them, so it is `-1` even for this app's own backups — and
+  `-1 > cap` is false. Measured: a 40 KB zip expands to 40 MB in memory with the guard reporting
+  `false`. The cap now applies to the bytes actually read, with whole-archive byte and entry
+  budgets beside it, and an oversize entry is skipped rather than fatal so one bad member cannot
+  cost the user the documents beside it.
+- **Checked and found already sound**, worth recording so the next sweep can skip them: every
+  document decode path (`ShaftDocCodec.decode` callers all guard, with the one apparent exception
+  pre-validating the same string moments earlier); `BackupMirror` end to end; `PdfRaster`
+  (`runCatching` catches the `OutOfMemoryError` a large raster can throw); all five "Open PDF"
+  paths; every `contentResolver` call; and all 23 non-null assertions in `main`, each of which is
+  structurally guarded by a preceding size, count or nullability check.
+
+---
+
+## 2026-09-01
+
+### fix(undercut): Ø callouts anchor on the cut's visible shelf
+
+On-device report from the nested-undercuts sheets: on a staircase of concentric cuts every Ø
+leader left the profile at the **same** x, dropping onto one shared vertical stem that fanned
+out to the spread labels — a bird foot in which no leader identified which floor its value
+named. The same anchoring also mis-landed a plain nested pair: a parent's span midpoint can
+fall **inside** a child, so the leader terminated on the child's section face or in the void
+below it rather than on the parent's floor.
+
+- **New pure anchor** `undercutCalloutAnchorMm(span, others)` / `undercutCalloutAnchorsMm(spans)`
+  (`geom/UndercutMath.kt`, beside the containment forest): subtract from a cut's clamped span
+  every other span **contained** in it (`undercutSpanContains` — direct children are enough,
+  since deeper descendants lie inside them), then take the midpoint of the **widest remaining
+  segment**, ties to the AFT-most so concentric nesting stays deterministic. That segment is the
+  largest piece of the cut's own floor still drawn, which is exactly where its leader can
+  terminate on the surface it names.
+- **Childless cuts are byte-identical** — one segment, its whole span, so the anchor is the span
+  midpoint the builder always used. A cut whose children cover it end to end draws no floor
+  anywhere and falls back to the midpoint, the historical position and the least-bad one. A
+  **partially** overlapping sibling (legacy data, contained by nothing) is never subtracted.
+- **Both draw sites moved together** — `buildUndercutDiaStations` (`pdf/UndercutStripLayout.kt`,
+  the PDF strips) and the authoring overlay's callout pass (`ui/screen/UndercutDetail.kt`) take
+  the same anchors, so a leader leaves the same shelf on paper and on screen. The leader's floor
+  Y was already per-cut and is unchanged; only the station x moves. Anchors derive from **every**
+  drawable cut on the strip, unmeasured ones included — a child with no Ø prints no callout but
+  still replaces its parent's floor.
+- Pinned by `UndercutMathTest` (childless, mid-span child, exact tie, AFT-flush child, the
+  three-level concentric staircase, full coverage, partial overlap), `UndercutStripLayoutTest`
+  (station build, unmeasured child), and `UndercutStripSvgPreviewTest`, whose H staircase now
+  asserts the three leader origins differ pairwise.
+
+### feat(ui): Standalone taper calculator
+
+"A taper calculator where I can find the taper rate by entering known values without having
+to create an entire shaft output." The ruling (`docs/DESIGN_INTENT.md` §3.8): a shop
+calculation must not require building a document, and a calculator never writes into the open
+one.
+
+- **New dialog** `ui/screen/TaperCalcDialog.kt` (`testTag("taper_calc_dialog")`), the same
+  tool posture as the keyway calculator and the unit converter — reads nothing from the
+  shaft, stores nothing (blank every open), marks nothing dirty, prints on no sheet, and
+  recomputes live per keystroke. Four fields — **Large end Ø (L.E.T.)**, **Small end Ø
+  (S.E.T.)**, **Length**, **Taper rate** — plus the shared `in | mm` entry-unit chips, which
+  reinterpret rather than convert. The rate field takes "1:12", "1/12", or a bare decimal
+  through the existing `parseTaperRateText` (bare "1" stays blocked as ambiguous) and carries
+  no unit suffix: a ratio is the same number on either drawing.
+- **Any three give the fourth.** Rate from the three geometry values is the headline case;
+  the inverses (rate + length + one Ø → the other Ø, rate + both Øs → length) fall out of the
+  same slope identity. Enter all four and the sheet is *checked* instead: the exact rate is
+  shown with a warning line when the typed rate misses the geometry by more than the 3%
+  common-rate tolerance. A mismatch is information, never an error state, and nothing is ever
+  written back into a typed field — results are displayed for the user to read and use.
+- **Rate display** leads with the exact `1:N` and names the common taper it snaps to beside
+  it, when they differ. In inch entry mode a shop-notation line follows — `12 / N` inches per
+  foot, set fraction-smart (`LengthFormat.formatInchesSmart`), which is the general form of
+  the footer's hand-written 1:12 → 1"/ft and 1:16 → 3/4"/ft. Metric entry shows no per-foot
+  line. Computed lengths and diameters print in the entry unit, fraction-smart in inches.
+- **Nothing about the rate convention is restated.** The snap tolerance, the common-rate list
+  and the bore tie-break stay in `util/TaperRateAuto.kt`; the new pure solve
+  `util/TaperCalcMath.kt` delegates every naming decision to `autoTaperRate`, so the
+  calculator and a taper card can never disagree about what a geometry is called.
+  `DEFAULT_SLOPE_ERROR_TOLERANCE` and `formatOneToN` are promoted from private to `internal`
+  for that reuse rather than copied.
+- **Entry point.** "Taper calculator" joins the editor sidebar's tools group between the
+  keyway calculator and the unit converter, so the two calculators are adjacent
+  (Keyway calculator · Taper calculator · Unit converter · Help & FAQ · Settings). Icon
+  `Icons.Filled.SquareFoot`. `onTaperCalculator` threads through `ShaftEditorRoute`, which
+  owns the open-state boolean and emits the dialog beside the other two.
+- **Invalid entries read wrong at the field**, not only in the results block: non-positive
+  length or Ø, a non-positive rate, a small end at or above the large end (equal ends are a
+  straight shaft, which has no rate), and a rate that over its length would consume the whole
+  large end. Fewer than three values is a quiet "Enter any three values." hint — never an
+  error on a blank field.
+- **Tests** — `TaperCalcMathTest` (28): every solve direction, the snap and its absence, the
+  all-four agree/disagree boundary pinned against the shared tolerance constant, the invalid
+  geometries, incomplete input, the inches-per-foot derivation, and delegation of the
+  common-rate decision to `autoTaperRate`. `EditorSidebarHelpTest` now pins the five-item
+  tools order. No dialog UI test: `AlertDialog` + `OutlinedTextField` exhausts the heap under
+  this Robolectric harness for the *existing* calculators too, so pure-math coverage is the
+  bar, as it already is for the keyway calculator.
+
+### feat(ui): Print is the primary output action
+
+The shop works from paper and prints straight from the device; a PDF file is the backup or
+archive copy, not the daily route. The UI said the opposite nearly everywhere — Export was the
+only filled button on four tabs and the only labelled one in the preview chrome. The ruling
+(`docs/DESIGN_INTENT.md` §3.4): wherever Print and Export both appear, Print leads and takes
+the primary treatment; Export takes the secondary one.
+
+- **One shared trio.** The Runout, Wear, Undercut and Consolidated Output tabs each inlined
+  the same three buttons; they now render `ui/screen/DocumentActionButtons.kt` — filled
+  **Print &lt;doc&gt;** leading, then outlined **Preview &lt;doc&gt;** and **Export &lt;doc&gt; PDF**, all
+  full width. Print leads and is the only filled button; Preview follows as the inspection
+  step; Export trails. The three labels are built from the one document name a route passes,
+  so a tab cannot label one action differently from its siblings. Each route's callbacks,
+  export gate and disabled-gate message are unchanged — the gate's wording stays with the
+  route. Test tags `doc_action_print` / `doc_action_preview` / `doc_action_export`.
+- **Preview chrome.** `PdfPreviewOverlay` (the four document tabs) and the schematic's
+  `PdfPreviewScreen` swap prominence: Print is now a labelled `FilledTonalButton`, Export a
+  `PictureAsPdf` icon ("Export PDF"). Action order is unchanged — Tune, [Reset zoom,] Print,
+  Export.
+- **Schematic toolbar.** The `PictureAsPdf` icon opens the PDF preview rather than exporting
+  anything, so it is labelled for what it does: content description "PDF preview", test tag
+  `toolbar_pdf_preview` (was `toolbar_export_pdf`). Same icon, same destination.
+- **Export all** keeps its behavior and treatment: the Android print framework runs one
+  interactive job at a time, so a batch-print variant is not planned.
+- **Tests** — `DocumentActionButtonsTest`, the first coverage for any of these buttons: the
+  labels a document name produces, Print above Preview above Export by measured position,
+  each callback firing on its own button, and a closed export gate disabling all three.
+
+### feat(ui): Help & FAQ in the side menu, and a Glossary section
+
+Help was reachable from exactly one place — a row at the bottom of Settings — which is not
+where anyone looks for it mid-job ("so hidden I don't even know where to find it"). The
+ruling (`docs/DESIGN_INTENT.md` §3.7): reference content a user reaches for while working
+gets a top-level entry point; Settings is for changing things, not for finding explanations.
+
+- **Editor side menu.** "Help & FAQ" joins the sidebar's bottom utility group, directly
+  above Settings (Keyway calculator · Unit converter · Help & FAQ · Settings). It is a tool,
+  not a document view, so it is never dimmed by the "built" gate. `onHelp` threads through
+  `ShaftEditorRoute` to the existing `help` route, mirroring `onOpenSettings`.
+- **Start screen.** A "Help & FAQ" button sits under Settings, ahead of Send Feedback
+  (`testTag("start_help_button")`). The Settings entry stays where it was — this adds
+  entry points rather than moving one.
+- **Glossary.** A new Help section, placed second so a term can be looked up without
+  reading past the how-to guides. One expandable topic per term, alphabetical: AFT / FWD,
+  Blank draft, Body S-break, Coupling face, Dual units, L.E.T. / S.E.T., Liner compression,
+  Measurement reference, OAL, Runout station / bubble, Shade in Components, Shaft height,
+  TIR, Trace depth exaggeration. The AFT/FWD and S-break figures are reused from the
+  sections that already carry them. Where a term names an exaggerated drawing (S-break,
+  shaft height, trace depth) the entry keeps the load-bearing caveat: printed values are
+  always the true, typed numbers.
+- **Tests** — first coverage for either surface. `EditorSidebarHelpTest` pins the tools
+  group's contents, that Help sits between the converter and Settings, and that tapping it
+  fires `onHelp` and closes the sidebar; `HelpGlossaryTest` renders `HelpRoute` and pins
+  that Glossary follows Getting Started and that a term expands to its definition.
+
+### feat(undercut): nested undercuts
+
+A machinist cuts a wide relief section — say 4" long at 1" depth — and later machines a
+more-corroded 1" section *inside* it deeper still, to 1-1/4". That was blocked at draft-confirm
+as an overlap, and stored nested data rendered as one flat cut. Containment is now legal and
+draws as a recursive staircase, identically on the canvas and on the printed sheet: the relief
+reads as three sections — relief floor, deeper floor, relief floor.
+
+- **Containment forest** — `undercutNestingForest` / `undercutSpanContains`
+  (`geom/UndercutMath.kt`): each span's nesting level and the id of the smallest span
+  containing it. Containment is **eps-inclusive** — a child may run right up to the parent's
+  own shoulder, which is how the shop authors it — and excludes only the SAME span (one cut
+  entered twice). Ties between equal-width containers, which shared edges can produce, break to
+  the first in record order so the forest is deterministic. Partial overlaps are TOLERATED,
+  never repaired: neither span contains the other, both stay top-level, and older records keep
+  rendering exactly as they did.
+- **Validation** — `undercutOverlapIssue` now passes a draft that sits fully inside another
+  cut or fully around one, shared edges included, and blocks only a partial intrusion or a
+  duplicate span. One wording, `UNDERCUT_PARTIAL_OVERLAP_MSG`, because the fix is the same
+  either way. Confirm-time gate on new values only; nothing stored is retroactively rejected.
+- **A shared edge prints as ONE continuous face** — surface straight down to the deeper floor,
+  exactly the silhouette two separately-authored adjacent sections give. The builder emits a
+  zero-width **step point** at that end (`nestedSurfacePoints`, `SurfaceProfileMath`'s
+  duplicated-x convention, carried recursively so a cut flush through two levels still reaches
+  the shaft surface). Both draw sites already read a region's face height from its first/last
+  surface point and draw faces after the void, so the child's own full-height face covers the
+  stroke-width sliver its void erased off the parent's — no draw-site change, both sites
+  identical, and no fill area moves.
+- **Drawn floors stack.** `deepestUndercutDepthMm` now measures **top-level cuts only** — a
+  child's depth is relative to its parent's floor, so pooling it from the base surface would
+  hand the sheet a reference no cut draws against. A child's true floor comes from
+  `effectiveNotchDiaMm` against the PARENT's floor, and its drawn floor from the new
+  `nestedNotchFloorDiaMm`: the exaggerated depth is computed relative to the parent's true
+  floor and then subtracted from the parent's DRAWN floor. Two invariants fall out — the stair
+  is visible at **every** slider value (the min-share clamp can no longer flatten two
+  shallow-from-the-base cuts into one step) and a child is never drawn shallower than true.
+  Capped at `UNDERCUT_NESTED_MAX_DEPTH_FRAC` (75%) of the parent's drawn floor unless the true
+  relative depth demands deeper — truth beats prettiness. Recursive: level 2 reads level 1's
+  results.
+- **One notch builder behind both draw sites.** `buildUndercutNotches`
+  (`geom/UndercutOverlayMath.kt`, now over a shared `resolveUndercutFloors`) cuts a nested
+  notch against a one-segment local surface at its parent's TRUE floor — so faces top out
+  there and a child at or above that floor yields no region — then swaps the profiles for
+  drawing: floor to the child's drawn floor, every surface point to the parent's DRAWN floor.
+  Results come back **parents before children**, so paint-over correctness no longer depends
+  on start-coordinate luck. `pdf/UndercutPdfComposer.kt` was refactored onto that builder for
+  both its call sites (whole-shaft fallback + per strip), dropping its private `NotchCut`
+  re-derivation and its second `normalizedNotchFloorDiaMm` call for the Ø-callout leaders;
+  `drawUndercutNotches` there is now pt-mapping and Canvas work only. The canvas overlay,
+  which already used the builder, gained nesting with **zero** draw-site changes.
+- **Dimension rail.** The level-0 chain is fed **top-level spans only**: `buildUndercutRailSpans`
+  walks a forward cursor, which collapses a fully nested cut to zero width and drops it
+  silently (its absorb rule for legacy partial overlaps is unchanged). Each nesting level k ≥ 1
+  instead gets **one extra chain row** — `buildNestedUndercutRailRows` — anchored at the
+  PARENT's edges: `parentStart → c1, c1, c1 → c2, …, cn → parentEnd`. Parents at one level are
+  disjoint, so a level always lays out on one row; a child flush with a parent's shoulder simply
+  omits that zero-length gap span, the chain's existing rule. The rows stack UNDER the level-0 chain
+  (chained dimensions run most-detailed nearest the part) through the existing rail drawing and
+  the ONE `undercutRailRowHeightPt` metric; `planUndercutRailRows` reserves a row for each
+  level's line plus its own fallback labels (`UndercutRailRowPlan.nestedRows`), so the strip
+  budgets the height instead of drawing into the cylinder. A lone relief holding one child no
+  longer prints a total rail that just restates its own length.
+- **Authoring.** The card's non-blocking implausible-Ø warning compares a nested draft against
+  the **surrounding cut's floor** ("Ø meets or exceeds the surrounding cut's floor here");
+  top-level drafts keep the base-surface wording. `pickUndercutAt` prefers the **innermost**
+  span when several contain the tap — a child is the smaller target and the one drawn on top.
+- **Golden rule untouched**: stored Ø, start and length are never rewritten. Clamping and every
+  exaggeration here are draw-only, and printed Ø callouts stay the typed numbers.
+- **Tests** — `UndercutMathTest` gains the containment matrix (nested both ways and shared-edge
+  nesting OK; partial overlap and identical spans blocked; touching still legal), forest
+  construction (levels, parents, smallest-container, flush children, coincident-span siblings,
+  the equal-width tie-break, partial-overlap tolerance), the drawn-floor stacking
+  (visible step at 0%/5%/max where the min-share clamp used to collapse it, never-shallower,
+  the cap and its truth override, level-2 recursion, placeholder child), the top-level-only
+  depth pool and the innermost hit-test. New `UndercutNotchBuildTest` gives
+  `buildUndercutNotches` its first coverage — base single cut pinned, nested child on the
+  parent's drawn floor, a child at the parent floor drawing nothing, parents-first ordering,
+  level 2, and the shared-edge face at each end (AFT-flush, FWD-flush, mid-span, and flush
+  through two levels). `UndercutStripLayoutTest` pins the nested rail rows (parent-anchored, two
+  children in sequence, one row per level, the flush child's omitted zero-length gap, the
+  reserved-row plan) and documents the absorb rule that makes the top-level filter necessary;
+  the legacy partial-overlap test is unchanged. `UndercutStripSvgPreviewTest` now drives the
+  shared notch builder and writes four more human-review sheets into
+  `app/build/reports/undercut-preview/` — `g-liner-strip-nested-pair.svg`,
+  `h-bareshaft-nested-staircase.svg` (level 2), and the shop's own case as
+  `i-relief-with-deeper-section.svg` (mid-span) and `j-relief-deeper-section-flush.svg` (at the
+  relief's AFT boundary). `UndercutDraftTest` pins that a contained draft — flush included —
+  confirms while a partial overlap still blocks.
+
+## 2026-08-29
+
+### chore(test): full-suite spec audit — tests that can fail for the right reason
+
+Every test class was walked against the contracts. The theme of the findings: a number of tests
+asserted on their own arithmetic rather than on the code they named, so the invariant they
+documented was not actually guarded.
+
+**Tests that now drive the real thing.**
+- `ShaftViewModelUpdateTest` hand-wrote `spec.copy(...)` mutations and asserted on its own
+  copies — it never called `updateBody`/`updateTaper`/`updateThread`/`updateLiner`, so a
+  reintroduced snap or forward cascade would not have failed it. The whole class now runs under
+  Robolectric against a real `ShaftViewModel`: seed with `onSetOverallLengthMm` + the `addXAt`
+  functions, drive the real `updateX`, read `spec.value`. Three things are pinned per case — the
+  edited component lands **verbatim** (a negative start included, golden rule), every other
+  component's span is byte-identical, and `overallLengthMm` is untouched. That last one was
+  pinned nowhere in the repo: nothing an edit does to a component may grow or shrink the shaft
+  around it. Two sub-issues fixed: the "updating body start does not move subsequent liner" case
+  rewrote 0 over 0 and never moved anything, and the class carried a third copy of the FWD
+  re-anchor formula.
+- `ShaftViewModelRemoveTest` lost three tests that asserted their own `MutableList` calls. The
+  taper case now drives the real `removeTaper` and pins the documented `mergeBodiesAround` pair:
+  equal-Ø flanks fuse into one body spanning the freed gap, unequal-Ø flanks both survive
+  untouched (fusing them would invent a diameter nobody typed). The two undo cases stay.
+- `TaperAddOrientationTest`'s overhang case had lost its discriminating assertion — SET/LET land
+  on the same faces under both the authored-OAL rule and the retired grown-OAL one. A Robolectric
+  case now adds an overhanging taper for real and pins that the authored OAL stands.
+
+**Coverage added where a documented branch had none.**
+- `deriveAutoBodies`' 0-OAL guards (`ui/resolved/AutoBodyOalGuardTest`): an empty spec with no
+  authored length resolves to nothing, a spec with components resolves only the gaps BETWEEN
+  them, and both edges reappear once a length is typed.
+- The OAL field's edges (`ui/screen/OverallLengthFieldTest`): clearing the field and pressing
+  Done — or walking away — commits nothing and restores the stored length, a not-yet-typed length
+  is not an error while a component past a real one is, and a parseable keystroke commits
+  immediately (the documented exception to commit-on-blur).
+- The Save button's aggregate (`ComponentCardSaveButtonTest`): several fields on one card, a
+  dirty field leaving composition, an instant-commit checkbox that must never register, plus
+  `CardDirtyState` directly.
+- `NumericInputFieldBlurTest`: a run of divergent edits still reports dirty exactly once, and an
+  external model refresh arriving mid-focus settles the field without writing back.
+- `ComponentWarningsTest`: a coupler bolt slot past the FWD end raises nothing (reference
+  features are outside the bounds check), and two tapers identical in stored span but differing
+  in authored reference both get the chip (bounds are judged on the STORED span).
+
+**Three behavior-preserving extractions**, each so a test could reach the shipped code rather
+than a copy of it: `OverallLengthField` out of `ShaftScreen.kt`, `ShaftSpec.renderSpanSpec()`
+out of the two duplicated `safeSpec` blocks (`ui/drawing/RenderSpanSpec.kt` — it deliberately
+folds excluded threads, unlike `coverageEndMm()`, because a thread drawn outside the shaft still
+has to fit on the canvas; the thumbnail's copy had dropped them), and
+`taperPhysStartForNewLength` out of `TaperPagerCard`'s Length handler
+(`ui/input/TaperLengthReanchor.kt`), which its test now calls.
+
+**One production wording fix.** The spec-level banner emitted "1 segments shorter than 1 mm";
+it now reads "1 segment" / "*n* segments", matching the past-OAL line beside it
+(`docs/VALIDATION_RULES.md` §4.3).
+
+**Repairs.** `TemplateScrubTest`'s hand-kept mirror of `exportTemplateJson` had drifted — it
+omitted `unitOverrides`, so nothing checked that per-component unit overrides travel with a
+template; the mirror is corrected and a test added. Corrected in the docs: the auto-body
+leading/trailing comment ("only when OAL is manually specified"), `specWarningMessages`' "not yet
+wired to any UI surface" (it is, `SpecWarningBanner`), `ShaftScreen.md`'s "commits per keystroke
+in manual mode", and `VALIDATION_RULES.md` §5.3's Bounds row (`collectAddWarnings` early-outs on
+a negative start, so only its `end > OAL` arm is reachable there). `ShaftSpec.validate()` gained
+a line saying it is a test-only sample-integrity gate.
+
+**Deleted:** the stock `ExampleUnitTest`/`ExampleInstrumentedTest` boilerplate, and a handful of
+assertions that could not fail — a `Color.alpha > 0f` check, `150f + 150f == 300f`, a ratio
+re-derived from the constant it was testing, an `x >= y` on a value with a known answer, and an
+`|| label.length > 4` escape hatch that let an OAL label pass without containing its distance.
+2113 tests green.
+
+### feat(ui): carousel length validation + a Save button that says whether anything is pending
+
+Two on-device requests on the component carousel.
+
+**A component past the shaft end now says so.** A card edit that pushed a component past
+`overallLengthMm` committed silently — only the OAL field went red, with nothing naming the
+culprit. Each card now carries the amber advisory chip "Extends past shaft length (OAL *n* mm)"
+and `SpecWarningBanner` gains a count line ("1 component extends past shaft length" /
+"*n* components extend past shaft length"). Bodies are included (a **stored** body span past the
+OAL is authored geometry); excluded threads are skipped, since their derived position sits
+outside the envelope by design; reference features are outside it entirely.
+
+It is **advisory, never blocking and never clamping**. Oversize is a legal state
+(`docs/contracts/OverallLength.md`): the edit commits verbatim under the golden rule, and
+`collidingIds()`, the export gate, and the OAL field's own `isError` are untouched.
+
+The comparison is now **one implementation** — `outsideShaftSpan`
+(`ui/util/ComponentWarnings.kt`) — read by both the add dialogs' pre-submit "Falls outside shaft
+span" warning (`outsideShaftSpanMessage`, via a refactored `collectAddWarnings`, whose message
+text and behavior are byte-identical: `CollisionWarningsTest` passes unchanged) and the cards'
+chip (`pastShaftEndMessage`). The two differ in wording only; forking the comparison back out is
+now a documented Do Not. `threadWarningMessages` takes the spec for it.
+`SpecWarningBanner`'s `remember` key became the whole spec — the new message depends on
+`overallLengthMm`, which the component-list key did not cover, so an OAL edit alone left the
+banner stale.
+
+**A Length of 0 stops at the card.** All four cards' Length fields now validate with
+`positiveLengthErrorMm` ("Must be > 0"), so `NumericInputField`'s existing validator path shows
+the error, reverts, and skips the commit. Previously a zero committed silently and nothing
+downstream noticed — the short-segment advisory starts *above* 0. This gates an entry, not a
+stored value; Ø fields are untouched (an auto-body Ø of ≤ 0 clearing its override is a feature),
+as are keyway fields and the Add dialogs.
+
+**The card's Save button is now a full-width filled button, disabled when nothing is pending.**
+Greyed out is a solid statement that every field on the card is committed; filled means an edit
+is waiting. Commit-on-blur is completely unchanged — Save still just force-clears focus, and the
+blur pipeline does the writing. `NumericInputField` gained an optional edge-triggered
+`onDirtyChange`, and fields register themselves with the card's `CardDirtyState` through the
+`LocalCardDirtyState` composition local rather than through a hand-maintained per-field key list
+— a card carries dozens of fields, and a list is a second place for the button and the fields to
+drift apart. `CommitDesignationField` registers the same way; the card title's rename editor
+does not (bespoke field, own commit), and instant-commit controls never do. Accepted trade:
+with nothing pending, Save is no longer a tap-anywhere keyboard dismissal — IME back and Done
+still are.
+
+New/changed: `ui/screen/CardDirtyState.kt`, `ui/input/NumericInputField.kt`,
+`ui/util/ComponentWarnings.kt`, `ui/util/CollisionWarnings.kt`,
+`ui/util/StartOverlapValidation.kt`, `ui/screen/ComponentCarousel.kt`,
+`ui/screen/SpecWarningBanner.kt`, the four `*PagerCard.kt` files. Docs:
+`docs/VALIDATION_RULES.md` (new §3.1a), `docs/contracts/NumberField.md`,
+`docs/contracts/ShaftScreen.md`, `docs/contracts/AddComponentDialogs.md`.
+
+### feat(ui)!: Free-to-End badge removed
+
+On-device direction: auto-bodies fill the gap to the OAL automatically, so the "Free to end"
+number the preview overlay printed described a stretch of shaft that is already drawn as
+covered. The badge misled rather than warned, so it is gone rather than re-tuned.
+
+Removed: the `FreeToEndBadge` overlay from the preview card (`ui/screen/ShaftPreviewPanel.kt`),
+its value helper `ui/util/FreeToEndBadgeMath.kt` (`freeToEndSignedMm`) with
+`FreeToEndBadgeMathTest`, the unused `ShaftSpec.freeToEndMm()` model helper with its three
+`ShaftSpecTest` cases, the "Why is the Free-to-End badge missing?" Help topic, and the
+`docs/contracts/FreeToEndBadge.md` contract.
+
+**Oversize is unchanged and is now the only signal**: the OAL field's red `isError` state
+(`ShaftScreen.kt`, off `lastOccupiedEndMm` — which stays) and the add dialogs' "falls outside
+shaft span" warning (`ui/util/CollisionWarnings.kt`). Neither was touched. The chrome severity
+ladder (`errorContainer` → `tertiaryContainer` → `surface`) also stays as-is; it still carries
+the per-card warning chips and the advisory banner, which is what its comments now cite.
+
+### feat(ui)!: auto OAL mode removed — the overall length is always user-typed
+
+The Auto/Manual chips beside the Overall Length field are gone, and with them the whole
+automatic mode. The OAL is a user-typed value under the golden rule: nothing derives it,
+grows it, or snaps it back to the content end. The surviving behavior everywhere is what
+"manual" used to do, so a document that already carried an authored length prints and
+resolves exactly as before.
+
+What changed at the edges:
+
+- **Empty field** on IME-Done or blur commits **nothing** — the field text reverts to the
+  stored length. It no longer flips a mode and no longer zeroes the shaft. Per-keystroke
+  commit stays (the preview updates live).
+- **`overallLengthMm == 0` means "not typed yet"**, not an error. The field draws no red
+  state at 0, and the renderer's existing `safeSpec` fallback — mirrored in the thumbnail
+  and now in the preview OAL badge — draws such a shaft to its coverage end. Nothing
+  backfills it: not a document load, not the first component added.
+- **Free-to-End badge** is no longer mode-gated; its own suppression math (the
+  no-precision-components rule) is the only gate.
+- **Add-dialog bounds warning** ("falls outside shaft span") now fires whenever `OAL > 0`,
+  where it previously required manual mode.
+- **Add Body** pre-fills Length with the remaining OAL whenever `OAL > startMm`.
+
+Internals: the session-only `overallIsManual` flag is deleted from the ViewModel,
+`EditState`, and the autosave draft snapshot (older drafts still decode — the field is simply
+ignored). `ShaftViewModel.ensureOverall()` is deleted wholesale along with its 14 call sites;
+it was a no-op in the surviving mode, so no add/update/remove path changes behavior.
+`resolveComponents(spec)` lost its mode parameter and always passes the spec's OAL to
+`deriveAutoBodies`, whose `<= 0f` branches are now the genuine 0-OAL guards.
+`ShaftSpec.oalIsManualOnLoad()` (with `envelopeStartMm` / `OAL_MODE_EPS_MM`) and
+`oalAfterTaperAddMm` are gone — taper-half classification reads the stored OAL directly. The
+`showOalHelperLine` developer option is deleted too: its gate became unconditional, so the
+"Dimensioned OAL:" helper line now shows whenever an excluded end thread makes the dimensioned
+span differ from the physical length.
+
+### feat(ui): the editor preview box mirrors the shade decision
+
+Same-day follow-up to the per-component shading below (on-device report: "the shading does
+not appear in the preview box for the new toggle — it does work in the pdf preview"). The
+editor's preview canvas draws its own theme-styled fills and had never heard of PDF shading.
+It now overlays the SAME effective decision the composers make — the positive complement
+`shadedComponentIds` (pure, `ui/resolved/ResolvedComponent.kt`) threads through
+`RenderOptions.shadedComponentIds` and each fill pass paints an onSurface-tinted overlay
+(16% alpha — visible on light and dark canvases; a print-decision marker, not print
+fidelity) over every component that will print shaded. Ticking "Shade on drawing" on a card
+now colors that section in the preview box immediately, and the kind checkboxes show there
+too. An empty set draws exactly as before, so nothing changes until something shades.
+
+### feat(pdf): per-component "Shade on drawing" — tri-state, on the explicit cards
+
+On-device request: shade one component — a named "SKF" body — without switching shading on
+for every body ("colored in the preview right away rather than selecting all explicit bodies").
+Explicit `Body`/`Taper`/`Liner` cards gain a **"Shade on drawing"** toggle backed by
+`shadeOnDrawing: Boolean? = null` — tri-state like the name flag, and nullable from day one
+(the label flag's serialized-default lesson): unset follows the kind's "Shade in Components"
+checkbox (with "Explicit bodies only" still carving auto runs out of the body default);
+explicit ON shades that one component even with the kind off; explicit OFF keeps it unshaded
+with the kind on. Threads keep their hatch — no shade flag.
+
+Mechanically the fill passes now always receive a paint and a per-component decision rides
+the id sets: the audit's subtractive `unfilledBodyIds` seam generalizes to three pure
+builders (`unshadedBodyRunIds`/`unshadedTaperIds`/`unshadedLinerIds`), so the schematic and
+the runout/consolidated sheet resolve shading identically, S-break stub fills and blend
+curves follow their run's decision as before, and a flagless document prints byte-identically
+at every checkbox combination. Two boundaries stand above the flag, both documented: the
+consolidated sheet's in-profile-values liner lock (halos over grey read as pasted boxes),
+and the wear/undercut documents' one-fill-per-kind `SimpleShaftProfile` (the same boundary
+"Explicit bodies only" already has — the logged DESIGN_INTENT §5 debt). Split/merge
+fragments carry the flag with the other display choices.
+
+### feat(pdf): options-sheet audit — Print everywhere, content chips, reorder, expandables, bubble sliders
+
+Every PDF preview overlay (Runout, Wear, Undercut, Consolidated Output) now offers a Print
+icon in its top bar beside Export, not just its tab body — each route reuses the exact same
+snapshot-and-compose action for both, factored into one local function so the two entry
+points can't drift.
+
+The schematic and shared options sheets both lead with a compact "Content" chip row —
+Blank draft / Ø callouts / Labels on the schematic, Blank draft / Coupling face on the
+shared sheet — replacing the old switch rows and moving their captions to Help. Both sheets
+now follow one unified order: "Shaft height" leads the live-tuning group (ahead of Body
+S-break and Line thickness, since it's the control reached for most), followed by Liner
+compression, a new "Runout bubbles" heading (Bubble size 60–150% / Bubble height 50–200%,
+runout + consolidated sheets only), Dimension arrows, Fractions, then "Measurement
+reference" and "Shade in Components" collapse into expandable sections, with Dual units
+last. The wear document's main profile band now honors the shared per-job "Shaft height"
+multiplier too (the wear composer's own absolute paper-band clamp; detail strips are
+untouched).
+
+Two new app-wide `PdfPrefs`: `runoutBubbleScale` / `runoutBubbleDropScale` (both default
+1.0, byte-identical output) scale the runout bubble radius and row-0 drop at both draw
+sites — the sheet composer and the canvas preview; `runoutBubbleDropScale` is explicitly
+experimental. A third, `shadeExplicitBodiesOnly` (default off), narrows "Shade in
+Components" → Bodies to explicit bodies only, leaving auto (bare-shaft) runs unfilled; the
+narrowing never reaches the wear/undercut documents' profile pass, so those two sheets hide
+the sub-checkbox rather than show one their page ignores. "Shade in
+PDF" is renamed "Shade in Components" and "Dimension tiering reference" is renamed
+"Measurement reference" everywhere, including Settings, which gained the same "Explicit
+bodies only" sub-checkbox.
+
+## 2026-08-28
+
+### fix(resolve): an explicit body never absorbs the auto fill beside it
+
+On-device report: a 12″ explicit body named "SKF" at the aft end of a 150¾″ shaft had no
+visible 12″ section — its selection highlight covered the whole shaft, the dimension rail
+measured the merged extent (45 3/16″ to the next component), and the remainder's auto-body
+card vanished. `normalizeBodies` was absorbing adjacent auto spans into an explicit body's
+run ("merging is for auto spans flowing into an explicit body"), which meant shortening an
+explicit body had no visible effect at all: the freed gap flowed straight back into the run.
+
+Explicit bodies now never fuse with anything — the rule that already protected two abutting
+explicit bodies extends to auto fill in both directions. Only auto spans merge with each
+other. The auto run beside an explicit body still inherits its Ø for continuity, so a same-Ø
+neighbour draws at the same diameter with just the component face line between — which is the
+point: an explicit body is an authored section and reads as one, with its own card, highlight,
+face lines, and rail dimension.
+
+Contract consequences, documented in `COMPONENT_CONTRACT.md` and CLAUDE.md: every bare-shaft
+gap now survives as its own auto run, so `AutoDiaOverride`/`AutoBlend` anchors inside such a
+gap are live rather than dormant, and a blend authored on an explicit face that meets a same-Ø
+surviving gap draws no blend there (no step at that face; the gap run's far face is the step,
+which an `AutoBlend` anchor covers). A body previously merged with its gap loses the merged
+run's extra runout stations; readings keyed to them orphan harmlessly (render-skipped, never
+pruned).
+
+### fix(pdf): a liner sitting on its S.E.T. prints no zero-length datum dimension
+
+On-device report: a liner starting at the shaft's aft end printed a floating `0.000"` beside
+the S.E.T. `buildLinerSpans` always emitted the SET→near-edge datum span; at offset zero
+there is nothing to dimension, so the span is now skipped (both anchors, forced references
+included). `LinerSpanBuilderTest` pins it.
+
+### feat(pdf): per-component "Show name on drawing" toggles (tri-state)
+
+The schematic's component-name labels were all-or-nothing (`PdfPrefs.showComponentTitles`).
+Every explicit Body/Taper/Thread/Liner now carries `showLabelOnDrawing` — **tri-state**:
+unset (the default, and what every pre-flag document decodes to) follows the global Settings
+switch, so untouched documents print exactly as their setting says; an explicit ON prints
+that one name even with the global switch off; an explicit OFF hides it even with the switch
+on. The first cut AND-composed the card flag under the global switch, which made a freshly
+checked toggle print nothing on a device whose global titles switch was off (on-device
+report, same day) — the global is now the flags' DEFAULT, not a master gate; only template
+mode still drops the pass whole. The card toggle displays the resolved state (its flag, else
+the global). Card-only toggles (the post-hoc display-toggle carve-out), testTags
+`*_show_label_toggle`. The label pass's entry building moved to a pure `componentLabelSpans`
+so the rule is testable; hiding a label never renumbers the positional fallback names of the
+others.
+
+### feat(ui): card titles show their rename affordance
+
+On-device report: the tap-to-rename card title was not discoverable ("I can't name any body
+component" — the mechanism existed but nothing indicated it). The four copy-pasted
+inline-rename title blocks are now one shared `EditableCardTitle` with a low-emphasis pencil
+icon beside the title; commit semantics unchanged (Done or focus-loss commits trimmed text,
+blank clears to the positional default).
+
+### feat(project): optional "Item" field — tail shaft / line shaft designation
+
+Project details gain an optional free-text **Item** field (envelope key `item`, autosave
+snapshot, draft-ring default gate, project-info sheet between Vessel and Shaft position).
+Prints as `Item: …` after `Job #:` on the schematic/consolidated footer and both shared
+headers — skipped entirely when blank (unlike the always-printed identity rows: an optional
+field must not print an orphan label), with a write-in `Item:` rule on blank drafts.
+Deliberately scrubbed from templates (job identity) and absent from filename seeds. A blank
+Item leaves every sheet and every persisted byte identical to before the field existed.
+
+### feat(doc): "Duplicate for mate" — copy a shaft for its twin
+
+A twin-screw job is two near-identical shafts. "Duplicate for mate…" (Open-screen row menu,
+and the editor overflow next to Save As) opens a dialog seeded from the source — name (the
+standard job–customer–vessel seed with the mate's side suffix, deduped), job number, customer,
+vessel, and shaft side defaulting to the OPPOSITE side (PORT↔STBD; CENTER/OTHER unchanged,
+and always overridable) — and writes a sibling `.shaft` file. The open session is untouched.
+
+The transform (`doc/MateDuplicate.kt`, pure + tested) copies everything that describes the
+shaft — spec verbatim (golden rule), unit preference/lock, per-component unit overrides,
+dual-units, the per-job `RunoutConfig` fit, Item, Notes — and RESETS every measurement record
+(wear record, runout readings, dragged station placements, undercut record): those are
+measurements of one physical shaft, keyed by component ids the mate shares, so copying them
+would present fabricated inspection data as measured. The editor path builds from the live
+session through the same envelope builder `exportJson` uses (one field list, one scrub).
+
+### fix(pdf): mate exports no longer collide on filenames
+
+`buildOutputFilename` (runout/wear/undercut/consolidated exports) omitted the shaft side while
+the schematic export included it — two mates on one job overwrote each other's PDFs. The side
+now joins the base name exactly as the schematic does (omitted when unset; no-position output
+byte-identical to before). The Wear and Undercut routes' private copies of the builder were
+deleted in favor of the one in `OutputDoc`.
+
+### fix(pdf): the name-label flag moves to a fresh key — first-build stamps dropped
+
+On-device report: "show individual component labels seems to turn ALL of them on. I want
+PER component option." The tri-state semantics (below) were behaving as designed; the data
+was not: the flag's FIRST build serialized its plain default (`showLabelOnDrawing: true`)
+onto every component of every document saved with it, and the tri-state build then honored
+those stamps as authored always-show overrides — so the moment the sheet showed any labels,
+it showed all of them, whatever the global switch said.
+
+The flag is renamed to **`showNameOnDrawing`** and the retired `showLabelOnDrawing` key is
+ignored at decode — the only clean cut, since a default-stamp and an authored choice are
+byte-identical under the old key. Semantics are unchanged and are what the user confirmed
+wanting: the Settings switch ("Show component titles in PDF") is the DEFAULT for components
+whose toggle was never touched; each card's "Show name on drawing" overrides it in either
+direction — checked prints even with the global off, unchecked-after-touching hides even
+with it on. A name checked under the old key needs one re-check. Documents never touched by
+the first build are unaffected in every respect.
+
+### fix(pdf): the spoon bowl tightens — uniform drawn clearance on both axes
+
+On-device report: on a compressed sheet the spooned keyway's bowl drew tall — "the distance
+from the keyway arch to the keyway horizontally is good, let's get the vertical to be
+similar." The bowl was a shaft-space circle stretched by the sheet's scale ratio, so its
+clearance rode each axis's own scale: the horizontal gap took the (small) axial scale while
+the vertical gap took the (large) diameter scale. The bowl's two semi-axes are now
+independent in `keywaySpoonBowl` itself: x stays `SPOON_BOWL_WIDTH_RATIO × halfW`, and the
+y-semi (`KeywaySpoonBowl.ry`) is the slot's drawn half-height plus the bowl's axial poke past
+the LET tip — one clearance number all around. The wall-tangent angle derives from
+`halfH / ry` on the drawn ellipse, so the bowl still meets the slot walls exactly; both draw
+sites (canvas + PDF) and the Help figure take `ry` from the one pure function. On an
+uncompressed drawing the bowl barely changes (2.2× vs 2.4× the width tall); the tightening
+bites exactly where the scales diverge.
+
+### feat(pdf): explicit bodies opt out of compression — "Compress on drawing" checkbox
+
+On-device report: a newly authored explicit body (a named 12″ section) printed with an
+S-break like any body run. Explicit bodies now carry `Body.compressOnDrawing`: when false,
+the body's whole stored span is pinned at TRUE scale through the same mechanism as keyway
+windows (`compressOptOutBodySpans`, contributed inside the one `profileFeatureSpans` builder
+so the schematic, the runout/consolidated sheet, and the height-slider estimator all agree)
+and its S-break is suppressed — the 220 pt long-span trigger included. The drawn height
+yields to the pin, so the card's "Compress on drawing" checkbox (explicit cards only, the
+fifth card-only carve-out) re-enables compression for a body big enough to need its break.
+**New explicit bodies are created opted-out** (Add dialog and auto-body promotion alike);
+the serialization default keeps compression ON, so bodies in already-saved documents render
+exactly as before until their checkbox is unticked — flipping a saved long-shaft body to
+pinned-true silently could make that sheet unrenderable.
+
+### fix(model): body split/merge fragments keep their display choices
+
+Pre-existing drop surfaced by the work above: `splitBodiesAround`/`mergeBodiesAround`
+constructed fragments fresh and discarded `label`, "Show Ø", and "Show name" (only the keyway
+was carried), so adding a liner over a named body silently reset its authored display
+choices. Fragments now carry all of them plus `compressOnDrawing` (`carryBodyDisplay`; a
+merge takes the AFT fragment's values — aft is authored first).
+
+### fix(pdf): a checked "Show name" toggle prints under a global titles switch turned off
+
+Same-day on-device follow-up to the label toggles below: the per-component flag was
+AND-composed under Settings → "Show component titles in PDF", so on a device with that switch
+off the new card toggle silently did nothing. The flag is now tri-state — see the revised
+entry below.
+
+### fix(pdf): a lone wear strip stops filling the page — and gets a "Strip size" slider
+
+On-device report: with the shaft profile hidden, a single detail strip drew across the entire
+wear page (the single-column path's height cap lifted entirely, and a lone strip's drawn
+radius fills whatever band it gets). Both layout paths now take their per-row ceiling from ONE
+rule, `wearRowHeightCapPt`: with the profile shown the flat cap holds as before; with it
+hidden a multi-row page keeps owning the band (capping those rows stranded half the page —
+the earlier on-device report), and a LONE row now caps at the height a traditional full
+3-row page would give it. The single-column path gains the packed path's lift, so the
+reclaimed height lands as bottom margin rather than a white hole under the header.
+
+The cap is scaled by a new per-job **"Strip size"** slider (50–200%, default 100% = the
+traditional size) in the wear preview's options sheet, right after the component election —
+commit-on-release like the sheet's other controls (`WearRecord.stripSizeFrac`, additive,
+display-only; a document that never touches it prints identically at every path the cap
+doesn't newly bite).
+
+### fix(ui): the card's delete button sits in the title row
+
+On-device report: the trash icon floated transparently over the carousel card's content —
+it was overlaid on the card's top-end corner while the content scrolled beneath it, so on a
+scrolled card it sat on top of whatever field happened to be there. It now lives in the
+title row and scrolls with the card. The shared `EditableCardTitle` drops its end-padding
+workaround (nothing floats over the trailing edge any more).
+
+### fix(ui): the OAL field keeps a typed fraction
+
+On-device report: typing `150 3/4` into Overall Length echoed back as `150.75`. The field's
+text was keyed on the model value, and the OAL field commits per keystroke (deliberate — live
+preview), so each commit's echo reformatted the user's own text. The display now re-derives
+from the model only when the field is unfocused AND its text no longer explains the model
+value (auto-mode recompute, undo, an edit from elsewhere) — so `150 3/4` stays `150 3/4`,
+while auto-mode and external changes still refresh the display. Entry parsing is unchanged.
+
 ## 2026-08-27
 
 ### fix(ui): the spec banner carries problems only — "No explicit bodies" removed
@@ -902,7 +2043,7 @@ surface at its edges, and the non-positive / keyway-wider-than-bore cases.
 
 Pure math in `geom/BoreKeywayMath.kt`, pinned by the spec's four test vectors and the
 invariants (equal widths → finished depth; narrower → always less; smaller bore → larger
-correction; unit independence). Plan: `docs/BoreKeywayCalculator_Plan_2026-08-24.md`.
+correction; unit independence). Plan: `docs/archive/BoreKeywayCalculator_Plan_2026-08-24.md`.
 
 ### fix: a taper overlap blocks PDF export, the same as a thread or liner
 

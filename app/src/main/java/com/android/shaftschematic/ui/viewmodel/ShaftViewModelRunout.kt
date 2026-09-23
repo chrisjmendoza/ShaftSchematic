@@ -69,12 +69,12 @@ fun ShaftViewModel.setRunoutHeightScale(scale: Float) {
     }
 }
 
-/** "Keep liners proportional lengthwise" — see [RunoutConfig.linersProportional]. */
+/** "Keep liners and tapers proportional lengthwise" — see [RunoutConfig.linersProportional]. */
 fun ShaftViewModel.setLinersProportional(proportional: Boolean) {
     _runoutConfig.update { it.copy(linersProportional = proportional) }
 }
 
-/** "Liner compression" slider — see [RunoutConfig.linerCompression]. */
+/** "Liner & taper compression" slider — see [RunoutConfig.linerCompression]. */
 fun ShaftViewModel.setLinerCompression(fraction: Float) {
     _runoutConfig.update { it.copy(linerCompression = fraction.coerceIn(0f, 1f)) }
 }

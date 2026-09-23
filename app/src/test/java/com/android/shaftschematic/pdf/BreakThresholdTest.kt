@@ -12,7 +12,10 @@ import org.junit.Test
  * at ~74% of true carried a full break pair under an any-foreshortening rule). The
  * threshold is Settings → Drawing → "Body S-break" (`PdfPrefs.sBreakThresholdFrac`,
  * default half); the long-span trigger (COMPRESS_TRIGGER_PT at the draw sites) is
- * independent of it and fires at every setting.
+ * independent of it and fires at every setting — for every body that MAY compress. A body
+ * whose author turned "Compress on drawing" off is pinned at true width, so this predicate
+ * is false for it and the draw site suppresses the length trigger too
+ * (`BreakGapKeywayAvoidanceTest`, which renders the composed decision).
  */
 class BreakThresholdTest {
 

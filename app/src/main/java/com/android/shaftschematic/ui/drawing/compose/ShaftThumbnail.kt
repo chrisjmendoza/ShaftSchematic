@@ -10,7 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import com.android.shaftschematic.model.ShaftSpec
-import com.android.shaftschematic.model.lastOccupiedEndMm
+import com.android.shaftschematic.ui.drawing.renderSpanSpec
 import com.android.shaftschematic.ui.drawing.render.RenderOptions
 import com.android.shaftschematic.ui.drawing.render.ShaftLayout
 import com.android.shaftschematic.ui.drawing.render.ShaftRenderer
@@ -75,12 +75,7 @@ fun ShaftThumbnail(
 
     // Same preview-safe fallback the editor uses: a spec with parts but no authored OAL still
     // draws, extended to its last occupied end.
-    val safeSpec = remember(spec) {
-        if (spec.overallLengthMm <= 0f) {
-            val end = spec.lastOccupiedEndMm()
-            if (end > 0f) spec.copy(overallLengthMm = end) else spec
-        } else spec
-    }
+    val safeSpec = remember(spec) { spec.renderSpanSpec() }
 
     Canvas(modifier) {
         val padX = options.paddingPx.toFloat()

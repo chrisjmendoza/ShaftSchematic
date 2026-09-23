@@ -4,7 +4,6 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
-import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import com.android.shaftschematic.model.*
 import com.android.shaftschematic.geom.DiaCalloutStation
@@ -22,6 +21,7 @@ import com.android.shaftschematic.geom.pitHalfArm
 import com.android.shaftschematic.geom.planDiaCallouts
 import com.android.shaftschematic.geom.sequenceWearTraces
 import com.android.shaftschematic.geom.smoothWearTrace
+import com.android.shaftschematic.geom.wearProfileHeightScale
 import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_DEFAULT
 import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_MAX
 import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_MIN
@@ -31,8 +31,10 @@ import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.ResolvedLiner
 import com.android.shaftschematic.ui.resolved.ResolvedTaper
 import com.android.shaftschematic.util.DisplayUnits
+import com.android.shaftschematic.util.PDF_PAGE_WIDTH_PT
 import com.android.shaftschematic.util.VerboseLog
 import com.android.shaftschematic.util.DualUnitLayout
+import com.android.shaftschematic.util.OutputTypography
 import com.android.shaftschematic.util.drawDualLabelCentered
 import com.android.shaftschematic.util.dualStackMetrics
 import com.android.shaftschematic.util.measureDualLabel
@@ -139,6 +141,18 @@ fun composeWearPdf(
      * sites stay identical. Defaults to the shipped high end.
      */
     traceDepthFrac: Float = WEAR_TRACE_MAX_DEPTH_FRAC,
+    /**
+     * This job's "Shaft height" multiplier (`RunoutConfig.heightScale` — the ONE per-job value
+     * behind every drawing). It reaches the MAIN profile band only: the drawn shaft radius and the
+     * band's height budget, and with them everything anchored to that radius. The detail strips
+     * keep their own scale and their own "Strip size" control, and the axial map is untouched at
+     * every setting — this sheet's shaft always spans the content width.
+     *
+     * Resolved by [wearProfileHeightScale] against the profile's natural (100%) height, so the
+     * drawn shaft stays inside the absolute paper band. 1f draws the sheet exactly as it draws
+     * with no slider at all.
+     */
+    heightScale: Float = 1f,
 ) {
     val c = page.canvas
     c.drawColor(Color.WHITE)
@@ -161,7 +175,7 @@ fun composeWearPdf(
     val dim = Paint(outline).apply { strokeWidth = WEAR_DIM_PT * thicknessScale }
     val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL; textSize = WEAR_TEXT_PT
-        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
+        typeface = OutputTypography.active
         color = Color.BLACK
     }
     fun shadeFill() = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -218,11 +232,21 @@ fun composeWearPdf(
 
     val maxDiaMm = (docSpec.maxOuterDiaMm().takeIf { it > 0f } ?: 50f).coerceAtLeast(20f)
 
+    // "Shaft height": the per-job multiplier, resolved ONCE against the profile's natural drawn
+    // height (this sheet fits the SET-to-SET span to the content width, so `maxDiaMm * ptPerMm`
+    // IS the 100% height) and clamped to the absolute paper band. Everything on the MAIN profile
+    // band measures its radius through `rPxProfile` so the marks stay ON the drawn shaft; the
+    // detail strips run off `stripPtPerMm` and never see it, and `xAt` is untouched — the axial
+    // map fills the content width at every height.
+    val profileHeightScale = wearProfileHeightScale(heightScale, maxDiaMm * ptPerMm)
+    fun rPxProfile(diaMm: Float): Float = rPx(diaMm) * profileHeightScale
+
     // ── Wear strip selection (pure — pdf/WearStripLayout.kt) ──────────────────
     // The job's elected components, defaulting to EVERY drawable liner, aft→fwd, with or without
     // recorded wear (normal shop procedure; also what makes the blank write-in template render
     // all zoomed strips). GRID mode (2+ strips) packs them into width-filled rows; the
-    // single-column path (0-1 strips) uses the fixed cap.
+    // single-column path takes 0-1 strips. Both cap their row height through the ONE shared
+    // `wearRowHeightCapPt`.
     //
     // The election and the profile toggle read `wearRecord`, not `effectiveRecord`: a blank
     // write-in draft blanks the VALUES, never the sheet's shape — the machinist writes into the
@@ -311,13 +335,13 @@ fun composeWearPdf(
     // zero preference, and no profile→strips gap, so the strips start at the top of the band
     // instead of leaving a phantom gap where the profile would have been.
     val minProfileHeightPt = if (!showProfile) 0f else
-        maxOf(WEAR_MIN_PROFILE_HEIGHT_PT, 2f * rPx(maxDiaMm) + WEAR_PROFILE_RADIUS_MARGIN_PT)
+        maxOf(WEAR_MIN_PROFILE_HEIGHT_PT, 2f * rPxProfile(maxDiaMm) + WEAR_PROFILE_RADIUS_MARGIN_PT)
 
     // Content-derived profile height: OAL label region + OAL clearance + shaft + names row.
     // The band shrinks toward this (never below minProfileHeightPt) and the strips absorb
     // the reclaimed height (device feedback: dead white between shaft and strips).
     val preferredProfileHeightPt = if (!showProfile) 0f else maxOf(
-        WEAR_OAL_TOP_REGION_PT + WEAR_OAL_ABOVE_SHAFT_PT + 2f * rPx(maxDiaMm) +
+        WEAR_OAL_TOP_REGION_PT + WEAR_OAL_ABOVE_SHAFT_PT + 2f * rPxProfile(maxDiaMm) +
             WEAR_PROFILE_NAMES_ROW_PT + profileDiaBandPt + WEAR_PROFILE_BOTTOM_PAD_PT,
         minProfileHeightPt,
     )
@@ -340,26 +364,26 @@ fun composeWearPdf(
         blankValues -> WEAR_STRIP_TOP_GAP_BLANK_PT
         else -> WEAR_STRIP_TOP_GAP_PT
     }
-    // Single-column path only: with no profile band there is nothing for a capped strip's leftover
-    // height to flow back to, so the cap lifts and the lone COMBINED strip fills the page instead
-    // of stranding white at the top.
-    val maxStripHeightPt = if (showProfile) WEAR_STRIP_HEIGHT_MAX_PT else Float.MAX_VALUE
+    // The height a strip may grow to, from the ONE rule both layout paths share
+    // (`wearRowHeightCapPt`): the flat cap with the profile on the page, the band's own row share
+    // without it, times this job's "Strip size". The band the rows would share is the same
+    // midTop..midBot span less the overflow note in both paths.
+    val stripBandHPt = (midBotFull - overflowNoteH - midTopFull).coerceAtLeast(0f)
+    val stripSizeFrac = wearRecord.stripSizeFrac
+    // Single-column path: 0-1 strips, so it always takes the lone-row case.
+    val maxStripHeightPt =
+        wearRowHeightCapPt(stripBandHPt, onPage.size, showProfile, stripSizeFrac)
     if (packing != null) {
         // The packer owns the horizontal split (one cell per window, rows centered); the vertical
         // band is the same count-driven split the fixed grid makes internally, fed the PACKED row
         // count instead of ceil(strips / 2).
         //
-        // Per-row height cap: with the profile shown the fixed cap holds and the profile band
-        // absorbs the slack (its shaft slack-centered inside it). With the profile hidden the
-        // rows OWN the band — a multi-row page splits the whole height between its rows, so the
-        // cap must never bite there (capping every packed row stranded the bottom half of the
-        // page as dead white under two top-pinned rows, on-device report). Only a LONE row keeps
-        // a guard, at the height a two-row page would give it, so it still cannot stretch into a
-        // short fat cylinder; its leftover height goes to the page bottom via the lift below.
-        val packedRowCap = if (showProfile) WEAR_STRIP_HEIGHT_MAX_PT else {
-            val bandH = (midBotFull - overflowNoteH - midTopFull).coerceAtLeast(0f)
-            maxOf(WEAR_STRIP_HEIGHT_MAX_PT, (bandH - WEAR_STRIP_GAP_PT) / 2f)
-        }
+        // Per-row height cap: the shared rule, fed the PACKED row count — a multi-row page keeps
+        // owning the band, a lone row takes the full-page row height, and either way this job's
+        // "Strip size" scales the result. A capped row's leftover height goes to the page bottom
+        // via the lift below.
+        val packedRowCap =
+            wearRowHeightCapPt(stripBandHPt, packing.rowCount, showProfile, stripSizeFrac)
         val v = computeWearVerticalLayout(
             midTopFull, midBotFull, packing.rowCount,
             reservedBottomPt = overflowNoteH, minProfileHeightPt = minProfileHeightPt,
@@ -426,13 +450,17 @@ fun composeWearPdf(
             preferredProfileHeightPt = preferredProfileHeightPt,
             maxStripHeightPt = maxStripHeightPt,
         )
-        profileTop = v.profileTop; profileBottom = v.profileBottom
+        // Same lift as the packed path: with no profile band above them the capped strips would
+        // sit at the BOTTOM of the band, leaving the reclaimed height as a white hole under the
+        // header. Lifting pins them to the band top so it lands as ordinary bottom margin.
+        val lift = if (showProfile) 0f else (v.stripTops.firstOrNull() ?: midTopFull) - midTopFull
+        profileTop = v.profileTop; profileBottom = v.profileBottom - lift
         stripCells = onPage.indices.map { i ->
-            WearStripCell(v.stripTops[i], v.stripBottoms[i], contentLeft, contentRight)
+            WearStripCell(v.stripTops[i] - lift, v.stripBottoms[i] - lift, contentLeft, contentRight)
         }
         // Single-column strips are alone in their row — nothing bounds their break curls.
         stripBreakRooms = onPage.indices.map { Float.MAX_VALUE to Float.MAX_VALUE }
-        overflowBandTop = v.stripBottoms.lastOrNull() ?: profileBottom
+        overflowBandTop = (v.stripBottoms.lastOrNull() ?: v.profileBottom) - lift
     }
 
     // §7 degradation, wear sheet: the strips are the tightest vertical budget in the app, so the
@@ -466,10 +494,10 @@ fun composeWearPdf(
         // Clamped so a squeezed band (huge shaft OD on a short page) keeps the shaft above the names row instead of overlapping the strips.
         val profileSlack = ((profileBottom - profileTop) - preferredProfileHeightPt).coerceAtLeast(0f)
         val shaftCy = (profileTop + WEAR_OAL_TOP_REGION_PT + WEAR_OAL_ABOVE_SHAFT_PT +
-            rPx(maxDiaMm) + profileSlack * 0.5f)
-            .coerceAtMost(profileBottom - rPx(maxDiaMm) - WEAR_PROFILE_NAMES_ROW_PT - profileDiaBandPt)
+            rPxProfile(maxDiaMm) + profileSlack * 0.5f)
+            .coerceAtMost(profileBottom - rPxProfile(maxDiaMm) - WEAR_PROFILE_NAMES_ROW_PT - profileDiaBandPt)
         val geomRect = RectF(contentLeft, profileTop, contentRight, profileBottom)
-        val shaftTopApprox = shaftCy - rPx(maxDiaMm)
+        val shaftTopApprox = shaftCy - rPxProfile(maxDiaMm)
         val oalLineY = (shaftTopApprox - WEAR_OAL_ABOVE_SHAFT_PT).coerceAtLeast(profileTop + WEAR_TEXT_PT + 6f)
 
         // Label rule: the printed value is always the user's typed OAL (same as the main schematic),
@@ -481,7 +509,7 @@ fun composeWearPdf(
             displayUnits.documentUnit, spec.overallLengthMm, blankValues, dual = displayUnits.dual,
         )
         drawSimpleShaftProfile(
-            c, docSpec, shaftCy, outline, geomRect, ::xAt, ::rPx,
+            c, docSpec, shaftCy, outline, geomRect, ::xAt, ::rPxProfile,
             bodyFill = bodyFill, taperFill = taperFill, linerFill = linerFill, ptPerMm = ptPerMm,
             // Ratio of the outline's (already thickness-scaled) weight, so Settings → "Line
             // thickness" reaches the liner end faces and the thread hatch too, not just the
@@ -491,29 +519,29 @@ fun composeWearPdf(
 
         // Vertical-stroke wear bands (liner spots) + pit "X"s at true position on the profile. Bands
         // clamp to the liner span for rendering only; the stored data is never touched.
-        drawWearBandsOnProfile(c, wearGroups, shaftCy, ::xAt, ::rPx, outline)
+        drawWearBandsOnProfile(c, wearGroups, shaftCy, ::xAt, ::rPxProfile, outline)
         if (resolvedComponents != null) {
-            drawWearPitsOnProfile(c, effectiveRecord.pits, resolvedComponents, shaftCy, ::xAt, ::rPx, pitPaint)
+            drawWearPitsOnProfile(c, effectiveRecord.pits, resolvedComponents, shaftCy, ::xAt, ::rPxProfile, pitPaint)
         }
 
         // Shaft-direction reference so anyone reading the sheet knows the layout: AFT is drawn at the
         // left, FWD at the right (the schematic/SET convention).
-        drawWearDirectionRef(c, text, contentLeft, contentRight, shaftCy + rPx(maxDiaMm), profileBottom)
+        drawWearDirectionRef(c, text, contentLeft, contentRight, shaftCy + rPxProfile(maxDiaMm), profileBottom)
 
         // Liner names centered under their span on the main profile — a reference tying each wear band
         // to its broken-out (zoomed) strip below. Only the liners that get a strip on this page.
-        drawWearLinerNamesOnProfile(c, onPageGroups, shaftCy + rPx(maxDiaMm), profileBottom, contentLeft, contentRight, ::xAt, text, linerTitles)
+        drawWearLinerNamesOnProfile(c, onPageGroups, shaftCy + rPxProfile(maxDiaMm), profileBottom, contentLeft, contentRight, ::xAt, text, linerTitles)
 
         // Measured-Ø callouts (body/taper readings): leader from the drawn bottom surface at the
         // station down to the value, in the band reserved below the names/direction row. Same
         // engine + construction as the detail strips and the overlay canvas.
         if (profileDiaPlan != null) {
             val placed = profileDiaPlan.finish(
-                row0Top = shaftCy + rPx(maxDiaMm) + WEAR_PROFILE_NAMES_ROW_PT + 2f,
+                row0Top = shaftCy + rPxProfile(maxDiaMm) + WEAR_PROFILE_NAMES_ROW_PT + 2f,
                 labelTextHeight = profileDiaRowHeightPt,
                 rowGap = WEAR_DIA_ROW_GAP_PT,
                 surfaceYAt = { i ->
-                    shaftCy + rPx(profileDia.surfaceDiaByKey[profileDiaPlan.stations[i].key] ?: maxDiaMm)
+                    shaftCy + rPxProfile(profileDia.surfaceDiaByKey[profileDiaPlan.stations[i].key] ?: maxDiaMm)
                 },
                 leaderStartGap = 2f,
             )
@@ -573,6 +601,19 @@ fun composeWearPdf(
     // ── Notes / dye-pen area ──────────────────────────────────────────────
     // effectiveRecord, not wearRecord: a blank write-in draft keeps both boxes empty.
     drawWearNotesArea(c, text, contentLeft, contentRight, notesY, effectiveRecord.dyePenResult)
+}
+
+/**
+ * The wear sheet's natural (100%) mm→pt profile scale — the shaft fitted across the content
+ * column, which is exactly what [composeWearPdf] draws at `heightScale = 1f`. A "Shaft height"
+ * slider on this sheet takes it as its `baseScale`, so the inches it reports and the shaft the
+ * composer draws come off the same number; the sheet has no compression solve and no page-budget
+ * fit, so there is nothing else in the base.
+ */
+internal fun wearProfileBaseScale(spec: ShaftSpec): Float {
+    val sets = computeSetPositionsInMeasureSpace(computeOalWindow(spec), spec)
+    val spanMm = (sets.fwdSETxMm - sets.aftSETxMm).toFloat().coerceAtLeast(1f)
+    return (PDF_PAGE_WIDTH_PT - 2f * WEAR_MARGIN_PT) / spanMm
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -984,7 +1025,6 @@ private const val WEAR_OAL_ABOVE_SHAFT_PT     = 44f   // gap from shaft top edge
 private const val WEAR_PROFILE_NAMES_ROW_PT = 26f   // names/direction row reserved under the shaft bottom (drawWearDirectionRef's ts+12 offset + descender)
 private const val WEAR_PROFILE_BOTTOM_PAD_PT = 6f   // air under the names row before the strips gap
 private const val WEAR_OAL_TOP_REGION_PT = 18f      // OAL label + air above the dimension line at the top of the profile band (matches the oalLineY clamp floor ts + 6, plus label height)
-private const val WEAR_STRIP_HEIGHT_MAX_PT = 170f   // per-strip growth cap when the profile donates its slack
 private const val WEAR_NOTES_BOTTOM_OFFSET_PT = 24f   // notes baseline above contentBot
 private const val WEAR_NOTES_GAP_PT           = 28f   // gap from drawing area bottom to notes
 

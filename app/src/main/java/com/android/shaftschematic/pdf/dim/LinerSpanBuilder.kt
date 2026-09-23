@@ -9,8 +9,12 @@ import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.UnitSystem
 import kotlin.math.abs
 
+/** Below this, a datum span is the liner sitting on its SET — nothing to dimension. */
+private const val ZERO_SPAN_EPS_MM = 1e-3
+
 /**
- * Builds two spans per liner: (SET→near edge) and (near edge→far edge).
+ * Builds two spans per liner: (SET→near edge) and (near edge→far edge) — the datum span
+ * only when the near edge actually stands off its SET.
  * FWD-anchored: offset to the FWD edge (toward AFT), length AFT.
  *
  * Each liner's labels resolve their own display unit via [displayUnits] (keyed by the
@@ -46,7 +50,11 @@ fun buildLinerSpans(
                     ?: formatLenDimDualLabel(ln.offsetFromSetMm, lnUnit, dual)
                 val localLabel = forcedRefMm?.let { formatLenDimDualLabel(abs(end - it), lnUnit, dual) }
                     ?: formatLenDimDualLabel(ln.lengthMm, lnUnit, dual)
-                add(DimSpan(sets.aftSETxMm, start, label = datumLabel, kind = SpanKind.DATUM))
+                // A liner sitting ON its datum has no offset to dimension: a zero-length
+                // datum span printed a floating "0.000" beside the SET (on-device report).
+                if (abs(start - sets.aftSETxMm) > ZERO_SPAN_EPS_MM) {
+                    add(DimSpan(sets.aftSETxMm, start, label = datumLabel, kind = SpanKind.DATUM))
+                }
                 add(DimSpan(start, end, label = localLabel, kind = SpanKind.LOCAL))
             }
             LinerAnchor.FWD_SET -> {
@@ -56,7 +64,9 @@ fun buildLinerSpans(
                     ?: formatLenDimDualLabel(ln.offsetFromSetMm, lnUnit, dual)
                 val localLabel = forcedRefMm?.let { formatLenDimDualLabel(abs(aftEdge - it), lnUnit, dual) }
                     ?: formatLenDimDualLabel(ln.lengthMm, lnUnit, dual)
-                add(DimSpan(sets.fwdSETxMm, fwdEdge, label = datumLabel, kind = SpanKind.DATUM))
+                if (abs(fwdEdge - sets.fwdSETxMm) > ZERO_SPAN_EPS_MM) {
+                    add(DimSpan(sets.fwdSETxMm, fwdEdge, label = datumLabel, kind = SpanKind.DATUM))
+                }
                 add(DimSpan(fwdEdge, aftEdge, label = localLabel, kind = SpanKind.LOCAL))
             }
         }

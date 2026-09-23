@@ -10,6 +10,12 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
+/**
+ * `startOverlapErrorMm` — the inline Start-field validator on the carousel cards and Add dialogs.
+ *
+ * It flags a placement that would land on another precision component. Bodies are deliberately
+ * not obstacles: a body runs under a liner and up against a taper as a matter of course.
+ */
 class StartOverlapValidationTest {
 
     @Test
@@ -135,5 +141,25 @@ class StartOverlapValidationTest {
         )
         assertNull(startOverlapErrorMm(spec, "new", ComponentKind.BODY, 500f, 0f))
         assertNull(startOverlapErrorMm(spec, "new", ComponentKind.TAPER, 500f, 0f))
+    }
+
+    /* ── Length must be > 0 (carousel card field gate) ───────────────────────── */
+
+    @Test
+    fun `a positive length passes`() {
+        assertNull(positiveLengthErrorMm(0.001f))
+        assertNull(positiveLengthErrorMm(500f))
+    }
+
+    @Test
+    fun `zero and negative lengths are rejected`() {
+        assertEquals("Must be > 0", positiveLengthErrorMm(0f))
+        assertEquals("Must be > 0", positiveLengthErrorMm(-1f))
+    }
+
+    /** Unparseable text is the field's own "Invalid number", not a too-short length. */
+    @Test
+    fun `an unparsed value is deferred to the field's parse check`() {
+        assertNull(positiveLengthErrorMm(null))
     }
 }
