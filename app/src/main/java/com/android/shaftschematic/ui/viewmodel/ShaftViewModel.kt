@@ -319,6 +319,11 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     internal val _pdfShadedLiners = MutableStateFlow(false)
     val pdfShadedLiners: StateFlow<Boolean> = _pdfShadedLiners.asStateFlow()
 
+    // Line art on the printed undercut drawing: that sheet draws no shade fill at all. Also a
+    // preview re-render key on the Undercut tab, which rasterizes with the current PdfPrefs.
+    internal val _pdfUndercutLineArt = MutableStateFlow(PdfPrefs().undercutLineArt)
+    val pdfUndercutLineArt: StateFlow<Boolean> = _pdfUndercutLineArt.asStateFlow()
+
     // Narrows the body shade to authored sections (auto/bare-shaft runs draw unfilled). Also a
     // preview re-render key on every tab that rasterizes with the current PdfPrefs.
     internal val _pdfShadeExplicitBodiesOnly = MutableStateFlow(PdfPrefs().shadeExplicitBodiesOnly)
@@ -985,6 +990,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             SettingsStore.pdfShadedLinersFlow(getApplication()).collectLatest { persisted ->
                 _pdfShadedLiners.value = persisted
                 SettingsStore.updatePdfPrefs { it.copy(shadedLiners = persisted) }
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.pdfUndercutLineArtFlow(getApplication()).collectLatest { persisted ->
+                _pdfUndercutLineArt.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(undercutLineArt = persisted) }
             }
         }
         viewModelScope.launch {

@@ -4,10 +4,10 @@ ShaftScreen Contract
 Layer: UI → Screens  
 Purpose: Present the shaft editor surface and bind ViewModel state to user controls.
 
-Version: v0.17 (2026-08-29 — carousel: the card Save button becomes a full-width filled button
-that is DISABLED while every field is committed and enabled while any holds a pending edit; the
-cards gain the advisory past-OAL warning chip and a "Must be > 0" gate on the Length field.
-v0.16 2026-08-29)
+Version: v0.18 (2026-09-16 — window width becomes the editor's adaptive axis: MEDIUM raises the
+preview card's height ceiling, EXPANDED splits the screen into a preview pane and a components
+pane and hides the hamburger. See "Window width".
+v0.17 2026-08-29)
 
 ---
 
@@ -127,6 +127,50 @@ Responsibilities
 
 ---
 
+Window width
+------------
+Window width is the editor's **one** adaptive axis (`ui/adaptive/WindowSize.kt`,
+`currentWindowWidthClass()`); the policy for the app as a whole lives in `Adaptive.md`. Height
+is never a class here. The Final Schematic tab hosts this same screen through
+`ShaftRoute(target = FINAL)`, so it inherits every branch below.
+
+- **COMPACT** (< 600 dp) — the phone layout, unchanged: one column with the preview card pinned
+  under the app bar (`heightIn(min 120, max 200.dp)`, `aspectRatio(3f)`) above a single
+  scrolling column holding the OAL field, the dimensioned-OAL / debug labels, the Components
+  heading, the "+ Add Component" button, `SpecWarningBanner`, and the carousel.
+- **MEDIUM** (600–839 dp: a portrait tablet, a phone in landscape) — the same single column,
+  with **only** the preview card's height ceiling raised to **280 dp**. The 3:1 ratio and the
+  120 dp floor stand, so a wide window stops drawing the shaft as a flat strip. Nothing else
+  moves: splitting a MEDIUM window would leave both halves narrower than a phone.
+- **EXPANDED** (≥ 840 dp: a landscape tablet) — **two panes** in a `Row`, divided by a
+  `VerticalDivider`:
+  - Left, weight 0.55, `testTag("editor_pane_preview")`: the preview card (pane width,
+    `aspectRatio(3f)`, ceiling **320 dp**), the OAL field and its labels, then
+    `SpecWarningBanner`. The warnings move here because they are about the drawing and the
+    length beside them.
+  - Right, weight 0.45, `testTag("editor_pane_components")`: the Components heading and hint,
+    the "+ Add Component" button, and the carousel at its usual `CAROUSEL_HEIGHT`.
+  - Each pane scrolls **independently**, so a long warning banner can never push the preview
+    off the screen and swiping the carousel can never scroll the shaft out of sight. Only the
+    components pane carries `imePadding()` — it is the one that holds text fields.
+  - Panes keep the editor's existing 16 dp horizontal padding; the carousel pager has no peek
+    or `contentPadding`, so one card fills whatever width the pane offers with no change.
+
+**Both branches emit the SAME content blocks.** `ShaftScreen` declares them once
+(`previewBlock`, `oalBlock`, `componentsBlock`) and each branch only decides where they go —
+composable lambdas rather than private composables because a private one would have to restate
+the screen's parameter list (the carousel alone takes fifty callbacks), and a signature copied
+twice is exactly the drift this prevents. `componentsBlock` takes a `warningSlot` emitted
+between the add button and the carousel: the single column fills it with `SpecWarningBanner`,
+the two-pane branch leaves it empty because the banner has moved left. Every `testTag` survives
+in both branches.
+
+The toolbar's hamburger (`testTag("toolbar_menu")`) is **hidden** when
+`LocalSidebarPermanent.current` is true — in an EXPANDED window the sidebar is already laid out
+beside the content, so the button would open a panel that is on screen. See `Navigation.md`.
+
+---
+
 Do Nots
 --------
 - Do **not** group components by type in the list.  
@@ -228,6 +272,15 @@ Future Enhancements
 
 Change Log
 -----------
+**v0.18 (2026-09-16)**
+- **Window width branches added.** COMPACT is byte-identical to before. MEDIUM raises only the
+  preview card's height ceiling to 280 dp. EXPANDED lays the editor out as two scrolling panes
+  — preview / OAL / warnings on the left (`editor_pane_preview`), components on the right
+  (`editor_pane_components`) — and drops the toolbar hamburger, since `ShaftEditorRoute` places
+  the sidebar permanently beside the content there. The content blocks are declared once and
+  invoked by both branches, so the phone and tablet layouts cannot drift. Pinned by
+  `ShaftScreenTwoPaneTest`. See "Window width" and `Adaptive.md`.
+
 **v0.16 (2026-08-29)**
 - **Free-to-End badge removed.** The preview overlay is gone, along with
   `ui/util/FreeToEndBadgeMath.kt`, `ShaftSpec.freeToEndMm()` and the `FreeToEndBadge.md`

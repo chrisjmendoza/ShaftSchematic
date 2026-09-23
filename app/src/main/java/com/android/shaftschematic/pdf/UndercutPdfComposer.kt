@@ -188,15 +188,18 @@ fun composeUndercutPdf(
     // §7 degradation: stacked dual values only if the tightest strip on the page can carry the
     // taller rail rows AND still draw its cut — decided once, for the whole sheet.
     val wantDualStacked = displayUnits.dual && pdfPrefs.dualUnitLayout == DualUnitLayout.STACKED
-    val bodyFill: Paint? = if (pdfPrefs.shadedBodies) shadeFill() else null
-    val taperFill: Paint? = if (pdfPrefs.shadedTapers) shadeFill() else null
-    val linerFill: Paint? = if (pdfPrefs.shadedLiners) shadeFill() else null
-    // Detail strips ALWAYS shade the liner, whatever `shadedLiners` says: the notch voids are
-    // pure white, so the grey liner is what gives the boxed cut sections their contrast
-    // (on-device request). Bodies and tapers stay pref-driven, and the blank template's
-    // edges-only started strip draws no liner span at all, so it stays clear paper. The
-    // whole-shaft fallback form (no strips) keeps the pref.
-    val stripLinerFill = shadeFill()
+    // Every fill on this sheet, decided once by the pure [undercutPdfFillPlan]: each component
+    // kind follows its own "Shade in Components" preference, the detail strips ALWAYS shade the
+    // liner whatever `shadedLiners` says (the notch voids are pure white, so the grey liner is
+    // what gives the boxed cut sections their contrast — on-device request), and
+    // `PdfPrefs.undercutLineArt` drops all of it, the strip liner and the section core included.
+    // The blank template's edges-only started strip draws no liner span either way, so it stays
+    // clear paper; the whole-shaft fallback form (no strips) takes the plain liner decision.
+    val fills = undercutPdfFillPlan(pdfPrefs)
+    val bodyFill: Paint? = if (fills.body) shadeFill() else null
+    val taperFill: Paint? = if (fills.taper) shadeFill() else null
+    val linerFill: Paint? = if (fills.liner) shadeFill() else null
+    val stripLinerFill: Paint? = if (fills.stripLiner) shadeFill() else null
     // A notch is a VOID: the removed material is painted out in the page colour so the
     // surface stroke and any shading fill are erased inside the cut, then the shoulders and
     // floor are outlined on top.
@@ -372,7 +375,10 @@ fun composeUndercutPdf(
         // construction the strips draw zoomed, so nothing is a separate "marker style". Only
         // reachable with an empty record, so in practice this draws nothing; it stays because
         // the form is a *fallback*, not a separate drawing.
-        drawUndercutNotches(c, sheetNotches, shaftCy, ::xAt, ::rPx, outline, voidFill)
+        drawUndercutNotches(
+            c, sheetNotches, shaftCy, ::xAt, ::rPx, outline, voidFill,
+            sectionCoreFill = fills.sectionCore,
+        )
         drawUndercutDirectionRow(
             c, text, contentLeft, contentRight,
             (shaftCy + rPx(maxDiaMm) + text.textSize + 12f).coerceAtMost(profileBottom - 2f),
@@ -435,6 +441,7 @@ fun composeUndercutPdf(
             // This strip's slice of the sheet's notches, in the builder's parents-before-children
             // order — never rebuilt here, so a strip's staircase is the sheet's staircase.
             notches = sheetNotches.filter { it.id in strip.undercutIds },
+            sectionCoreFill = fills.sectionCore,
             dual = displayUnits.dual,
             dualStacked = dualStacked,
         )
@@ -577,11 +584,17 @@ private fun drawUndercutNotches(
     rAt: (Float) -> Float,
     outline: Paint,
     voidFill: Paint,
+    /**
+     * Whether the section's core takes its light fill — [undercutPdfFillPlan]'s decision, off
+     * under print line art. The void erase below runs either way: it is what removes the
+     * component's surface stroke and shading across the cut, not a tone.
+     */
+    sectionCoreFill: Boolean,
 ) {
     if (notches.isEmpty()) return
     // One step LIGHTER than the liner shade (half its 40/255 alpha): the section's core is
     // erased to the page colour first, so this is its absolute tone, not a darkening overlay.
-    val sectionFill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    val sectionFill = if (!sectionCoreFill) null else Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
         color = Color.argb((UNDERCUT_SECTION_FILL_ALPHA * 255f).roundToInt(), 0, 0, 0)
     }
@@ -612,9 +625,10 @@ private fun drawUndercutNotches(
             }
 
             // Remaining core: erased to the page colour, then refilled one step lighter
-            // than the liner shade so the section reads distinct (on-device request).
+            // than the liner shade so the section reads distinct (on-device request). Under
+            // print line art the erase stands alone and the faces carry the section.
             c.drawRect(xStart, cy - rFloor, xEnd, cy + rFloor, voidFill)
-            c.drawRect(xStart, cy - rFloor, xEnd, cy + rFloor, sectionFill)
+            sectionFill?.let { c.drawRect(xStart, cy - rFloor, xEnd, cy + rFloor, it) }
 
             // Outline — the step-section construction: a full-height section face at each
             // end (top surface to bottom surface, through the core, only where the surface
@@ -713,6 +727,8 @@ private fun drawUndercutDetailStrip(
      * a floor, so its staircase and the sheet's Ø-leader anchors read the same numbers.
      */
     notches: List<UndercutNotch>,
+    /** Whether the section cores take their light fill — [undercutPdfFillPlan]'s decision. */
+    sectionCoreFill: Boolean,
     /** [unit] is already this strip's resolved unit (liner override, else the document unit);
      *  this only carries the sheet-wide dual (inline "primary [secondary]") flag through. */
     dual: Boolean = false,
@@ -845,7 +861,10 @@ private fun drawUndercutDetailStrip(
     drawUndercutWindowEnd(c, segs, drawStartMm, cy, ::xAtStrip, ::rStrip, outline, shaftExtentMm, eyeAtTop = true)
     drawUndercutWindowEnd(c, segs, drawEndMm, cy, ::xAtStrip, ::rStrip, outline, shaftExtentMm, eyeAtTop = false)
 
-    drawUndercutNotches(c, notches, cy, ::xAtStrip, ::rStrip, outline, voidFill)
+    drawUndercutNotches(
+        c, notches, cy, ::xAtStrip, ::rStrip, outline, voidFill,
+        sectionCoreFill = sectionCoreFill,
+    )
 
     // ── Measured-Ø callouts: leader from each notch floor down to the printed value ──
     if (diaPlan != null) {

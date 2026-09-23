@@ -6,6 +6,30 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-09-23
+
+### fix(ui): the tablet orientation unlock is applied at activity creation, not from the manifest
+
+Android Studio's build failed on lint `ManifestResource`: `android:screenOrientation` referenced
+`@integer/activity_orientation`, and a manifest resource cannot vary by configuration — the
+`values-sw600dp` override there was never read, so every tablet would have stayed locked to
+portrait. The manifest now declares a literal `portrait` (the phone lock, unchanged) and
+`MainActivity.onCreate` applies `baseActivityOrientation()` before `setContent`, so the ONE
+resource still decides both the base orientation and what the PDF preview screens restore.
+Phones are byte-identical; a tablet held landscape at launch recreates once into landscape.
+`docs/contracts/Adaptive.md` and the CLAUDE.md invariant say why the manifest must not reference
+the resource.
+
+### test(pdf): a taper name is pinned clear of a neighbouring body's Ø callout
+
+On-device screenshot: "FWD Taper" printed through the `Ø 10.368"` callout of the short bare run
+beside it. The 2026-09-03 collision fix below already covers this — every callout on the sheet is
+an obstacle to every name (`geom/BelowShaftLabelLayout.kt`), not only the name's own — but that
+branch had not been merged, so the installed build predated it. Merged now, and
+`ComponentLabelCalloutClearanceTest` gains the taper fixture: it first proves the sheet collides
+when the callouts are NOT reserved, then sweeps the compressed drawing widths with them reserved
+and fails on any overlap.
+
 ## 2026-09-17
 
 ### feat(schematic): cross-drilled coupler bolt hole — the plain coupling end with no taper
@@ -57,6 +81,110 @@ every row as the muff-coupler seam cutout — two half-circles straddling the ou
 - Still deferred: no dimension rail for a bolt row (the footer now carries the numbers). A
   blind hole at 90° is drawn entering from the top silhouette; which side it actually enters
   is not yet authored.
+
+## 2026-09-16
+
+### feat(ui): tablet layout — free rotation on tablets, two panes on a landscape tablet
+
+The app was a portrait phone layout; on a tablet the shaft drew as a flat strip over a column
+of controls stretched edge to edge, and the activity was locked to portrait. It now adapts on
+ONE axis, the window width class (`ui/adaptive/WindowSize.kt`: COMPACT < 600 dp, MEDIUM
+< 840 dp, EXPANDED), with the phone layout byte-identical.
+
+- **Orientation.** Phones stay portrait; tablets (smallest width ≥ 600 dp) rotate freely. One
+  resource, `R.integer.activity_orientation`, sits behind both the manifest and what the two
+  PDF preview screens restore when they give rotation back — they used to restore a literal
+  portrait, which would have locked a tablet to portrait the first time a preview closed.
+- **Editor (Schematic and Final tabs).** MEDIUM raises the preview card's height cap; EXPANDED
+  lays out two panes — preview, OAL and warnings on the left, the Components header, Add
+  button and carousel on the right — each scrolling on its own.
+- **Runout, Wear and Undercut tabs.** MEDIUM gives the canvas more height; EXPANDED puts the
+  canvas with its print group (blank draft, export gate, Print/Preview/Export) in the left pane
+  and the tab's editors in the right, the canvas pinned.
+- **Sidebar.** On a landscape tablet the editor sidebar is a permanent panel beside the tabs,
+  built from the same content composable the phone overlay hosts; the tab hamburgers hide
+  through `LocalSidebarPermanent`.
+- **List screens** (Start, Settings, Help, About, Achievements, Developer Options, Templates,
+  Open, Save As) cap their one scrolling column at a readable 720 dp and centre it
+  (`readableWidth()`), a no-op on phones.
+- Every screen that lays out two ways calls the SAME block composables from both branches, so
+  the phone and the tablet cannot drift. Nothing adaptive touches sheet ink, a composer, the
+  model, or a document. Contract: `docs/contracts/Adaptive.md`; per-surface notes in
+  `ShaftScreen.md`, `RunoutSheet.md`, `UndercutDrawing.md`, `Navigation.md`, `UI_CONTRACT.md`.
+- Tests: `WindowSizeTest` pins the breakpoints; Robolectric hosts the editor at
+  `w1280dp-h800dp-land` and at the phone default and asserts the pane tags and the hamburger
+  follow the window. **Unverified on a real tablet** — the on-device pass is in `TODO.md`.
+## 2026-09-15
+
+### feat(pdf): line art for the printed undercut drawing
+
+The on-screen "Line art (no shading)" undercut style was screen-only; the printed sheet always
+shaded its detail-strip liner and the cut section's core. The print side now has its own switch.
+
+- **Settings → PDF Export → "Undercut drawing: line art (no shading)"**, also at the foot of the
+  Shade-in-Components group on the undercut preview's PDF options sheet (the one document it
+  reaches). Default off, so every existing document prints byte for byte as before.
+- On, the undercut PDF draws **no shade fill anywhere** — bodies, tapers, liners, the detail
+  strips' otherwise-always-shaded liner span, and the section core — and the cut reads from the
+  notch construction alone: the void erasing the surface stroke, the full-height section faces,
+  the floor lines. Outlines, thread hatch, the coupler-slot cutout marker, rails and text are
+  untouched. "Always shades its liner" now reads "always, unless line art".
+- One pure decision, `undercutPdfFillPlan` (`pdf/UndercutPdfFillPlan.kt`, `UndercutPdfFillPlanTest`);
+  the composer builds its paints from it and threads the section-core choice into the notch pass.
+- Part of the drawing look, so **drawing profiles capture it** and "Restore Drawing defaults"
+  resets it (`DrawingProfileTest` round-trips it; an older profile payload still loads).
+- **Independent of the screen style by design** — the `UndercutStyle` line-art flag still never
+  reaches a composer; the two flags mean the same thing on two surfaces and neither reads the
+  other. Contract: `UndercutDrawing.md`, `PDF_EXPORT.md` §5.6, CLAUDE.md sheet-ink invariant.
+
+### feat(help): search, and a "?" on each sheet tab that opens its own guide
+
+The Help screen was a long scroll with no way in but the top. It now has a search field and
+can be opened straight at a topic.
+
+- **Search** is pinned above the list. It narrows the screen to the topics whose title or text
+  contain what was typed (case-insensitive), drops sections with no hits, and **opens every
+  match** — a hit that still needs a tap to read is the failing state. Clearing the box puts
+  each card back exactly as it was: the query never writes a card's saved expansion. An empty
+  result says so by name.
+- **Deep links.** The `help` route takes an optional `topic` argument (`helpRoute(key)` in
+  `AppNav` is the one place the query syntax lives). Topics carry a stable key derived from
+  their title (`helpTopicKey`, pure) — the list key, the saved-expansion key and the route
+  argument are all the same string, so they cannot disagree — and a test asserts the keys are
+  unique across the real content. A deep link opens its topic expanded and scrolls to it; an
+  unknown key lands at the top.
+- **A "?" on the Runout, Wear, Undercut and Consolidated Output tabs**, at the trailing end of
+  each toolbar row after Save, opens Help at that tab's how-to. One construction (`TabHelpButton`)
+  serves all four. The Schematic tab carries none — its help is the Getting Started material one
+  sidebar tap away. Seven entry points in all; the top-level ones stay.
+- Pure logic in `ui/screen/HelpSearch.kt` (`HelpSearchTest`); contract in `Navigation.md`.
+
+### fix(a11y): labelled back buttons and spoken sheet summaries
+
+Four icon-only back buttons (About, Achievements, Developer Options, Settings) announced
+nothing to a screen reader; every other icon-only button already did. They now say "Back".
+
+Each of the five white-sheet canvases (undercut overview and detail, wear overview and detail,
+runout preview) was a silent surface to TalkBack. Each now carries a spoken summary from the pure
+`ui/screen/SheetSemantics.kt` — **counts only** (undercut sections, wear areas, pits, diameter
+readings, stations, readings entered), never a diameter or a length — plus the tab's real
+accessible editing path, since a canvas's placement gesture is not one. `SheetSemanticsTest`
+pins the wording.
+
+Rulings recorded in `docs/contracts/Appearance.md` §Accessibility, closing the audit plan: sheet
+text is drawing ink and does not follow the system font scale (UI chrome must); carousel cards
+are not merged into one node (that would fold their fields together); canvas touch targets are
+not widened; no reduced-motion handling. The 200% font-scale and TalkBack walks are on-device
+items in `TODO.md`.
+
+### docs: settings customization plan closed
+
+`docs/SettingsCustomization_PLAN.md` moves to `docs/archive/` with a rulings table for every
+proposal it still carried: line-art print **yes**, Help search and deep links **yes**, the
+accessibility slice **yes, scoped**; sheet colour customization deferred and not queued; the
+custom RGB picker, Material You, per-document line thickness, touch-target widening,
+reduced-motion handling, Help images / "What's new" / localization all **no**, each with its
+reason.
 
 ## 2026-09-14
 
@@ -300,6 +428,33 @@ New **Diagnostics** section, aimed at the device rather than the desk:
 `docs/contracts/Diagnostics.md` gains a "Developer Options" section covering the layout, the
 single-seam master gate, and the three actions.
 
+### fix(pdf): component names no longer print through their own Ø callouts
+
+The schematic hangs two things under the shaft — the component-name labels and the Ø
+callouts — and both anchor on a component's **center**. A component printing a name and a
+diameter therefore aimed two strings at the same x and set one through the other; an
+on-device sheet showed "AFT Liner" struck through by `Ø 7.936"`. Each pass tracked
+collisions only against its own kind, which is blind exactly where the two meet.
+
+They share ONE collision space now, the rule the dimension rails already follow:
+
+- **New pure engine** `geom/BelowShaftLabelLayout.kt` places every name at once against the
+  callouts as obstacles, in the rails' resolution order — **slide the name horizontally along
+  its own component's span** first (a name reads as its component's from anywhere over it, so
+  this costs no vertical room), and only **drop a row** when no slide fits.
+- **The obstacles are measured, not guessed**: `DiameterLeaderRenderer.occupancy(calls)`
+  returns the value boxes and the leader lines off the same geometry the renderer inks, so the
+  reservation and the ink cannot disagree. Callouts are planned before the names and drawn
+  after; a callout never moves for a name.
+- **Rows stop at the footer band**, and a pass that still cannot place a name retries a point
+  smaller (down to 7 pt) rather than collapsing rows onto each other — the fit-loop posture the
+  dimension rails use. A name that fits nowhere takes the row it overlaps least and leaves a
+  breadcrumb; it is never dropped.
+
+Holds across compression: `ComponentLabelCalloutClearanceTest` sweeps the drawing widths a
+compressed x map produces, plus stacked dual values and blank drafts, and fails on any overlap.
+`BelowShaftLabelSvgPreviewTest` writes same-math SVG previews of the band to
+`build/reports/below-shaft-labels/`.
 
 ### fix(diagnostics): "Share diagnostic logs" no longer crashes the app
 

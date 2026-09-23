@@ -45,6 +45,7 @@ import com.android.shaftschematic.util.CrashReporter
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.*
 import kotlinx.coroutines.launch
+import com.android.shaftschematic.ui.adaptive.readableWidth
 
 /** How many breadcrumbs the on-device viewer shows; the files themselves hold far more. */
 private const val LOG_TAIL_LINES = 300
@@ -82,7 +83,7 @@ fun DeveloperOptionsRoute(
                 title = { Text("Developer Options") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 }
             )
@@ -94,6 +95,7 @@ fun DeveloperOptionsRoute(
             modifier = Modifier
                 .padding(pad)
                 .verticalScroll(scrollState)
+                .readableWidth()
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {

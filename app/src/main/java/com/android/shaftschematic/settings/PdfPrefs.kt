@@ -138,6 +138,21 @@ data class PdfPrefs(
      */
     val shadeExplicitBodiesOnly: Boolean = false,
     /**
+     * Line art on the PRINTED undercut drawing: that sheet draws NO shade fill anywhere —
+     * bodies, tapers, liners, the detail strips' otherwise-always-shaded liner span and the
+     * undercut section's core all come out unfilled, leaving the notch construction (the void
+     * erasing the surface stroke, the full-height section faces, the floor lines) to carry the
+     * reading on its own. Settings → PDF Export and the undercut preview's PDF options sheet.
+     *
+     * The undercut document only — the schematic, wear and runout composers never read it.
+     *
+     * Deliberately INDEPENDENT of the screen-side `util/UndercutStyle.kt` line-art mode: that
+     * style never reaches a composer (`docs/contracts/Appearance.md`), so the printed sheet
+     * carries its own flag with the same meaning rather than borrowing one. Off by default, so
+     * an untouched install prints the shipped sheet byte for byte.
+     */
+    val undercutLineArt: Boolean = false,
+    /**
      * Default sizing-curve anchor heights (paper inches of drawn height at 100% on the
      * "Shaft height" slider): a 4" shaft draws [curveLoHeightIn] tall, an 8" shaft
      * [curveHiHeightIn]; sizes between and beyond follow the line

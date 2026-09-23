@@ -9,6 +9,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.android.shaftschematic.ui.adaptive.baseActivityOrientation
 import com.android.shaftschematic.ui.nav.AppNav
 import com.android.shaftschematic.ui.theme.ShaftSchematicTheme
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
@@ -31,6 +32,12 @@ import com.android.shaftschematic.ui.viewmodel.ShaftViewModelFactory
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // The manifest declares portrait, the phone lock. A manifest resource cannot vary by
+        // configuration (lint ManifestResource: a values-sw600dp override there is simply never
+        // read), so the per-device base orientation is applied here from the ONE resource the
+        // rotation-unlocking screens restore. On a tablet this lifts the lock before the first
+        // frame; on a phone it is the value already in force.
+        requestedOrientation = baseActivityOrientation()
         enableEdgeToEdge()
 
         setContent {

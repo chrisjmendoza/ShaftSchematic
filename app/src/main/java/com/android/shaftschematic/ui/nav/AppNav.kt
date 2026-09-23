@@ -60,6 +60,22 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/** The `help` route's optional deep-link argument — the topic slug to open on. */
+const val HELP_TOPIC_ARG = "topic"
+
+/** The NavHost pattern for Help. Built here so the query syntax lives in one place. */
+const val HELP_ROUTE_PATTERN = "help?$HELP_TOPIC_ARG={$HELP_TOPIC_ARG}"
+
+/**
+ * The route string for Help, optionally deep-linked to one topic.
+ *
+ * Every caller goes through this rather than spelling the query itself, so the argument's
+ * name and encoding are stated once. A null or blank [topicKey] yields the bare `help`
+ * route, which the optional argument's default value still matches.
+ */
+fun helpRoute(topicKey: String? = null): String =
+    if (topicKey.isNullOrBlank()) "help" else "help?$HELP_TOPIC_ARG=$topicKey"
+
 /**
  * AppNav
  *
@@ -159,7 +175,7 @@ fun AppNav(vm: ShaftViewModel) {
                         onOpen = { runGuarded { nav.navigate("openLocal") } },
                         onOpenTemplates = { nav.navigate("templates") },
                         onSettings = { nav.navigate("settings") },
-                        onHelp = { nav.navigate("help") },
+                        onHelp = { nav.navigate(helpRoute()) },
                         onSendFeedback = {
                             val intent = FeedbackIntentFactory.create(
                                 context = ctx,
@@ -300,7 +316,9 @@ fun AppNav(vm: ShaftViewModel) {
                         }
                     },
                     onOpenSettings = { nav.navigate("settings") },
-                    onOpenHelp = { nav.navigate("help") },
+                    onOpenHelp = { nav.navigate(helpRoute()) },
+                    // Per-tab "?" buttons: the same screen, opened on the tab's own guide.
+                    onOpenHelpTopic = { topicKey -> nav.navigate(helpRoute(topicKey)) },
                     onOpenDeveloperOptions = { nav.navigate("developerOptions") },
                     // PDF EXPORT = show preview first, then SAF
                     onExportPdf = { nav.navigate("pdfPreview") },
@@ -396,7 +414,7 @@ fun AppNav(vm: ShaftViewModel) {
                 onBack = { nav.popBackStack() },
                 onOpenAchievements = { nav.navigate("achievements") },
                 onOpenAbout = { nav.navigate("about") },
-                onOpenHelp = { nav.navigate("help") },
+                onOpenHelp = { nav.navigate(helpRoute()) },
                 onOpenDeveloperOptions = { nav.navigate("developerOptions") },
             )
         }
@@ -406,9 +424,22 @@ fun AppNav(vm: ShaftViewModel) {
             AboutRoute(vm = vm, onBack = { nav.popBackStack() })
         }
 
-        /* ───────── Help & FAQ ───────── */
-        composable("help") {
-            HelpRoute(onBack = { nav.popBackStack() })
+        /* ───────── Help & FAQ ─────────
+           The optional `topic` argument is a deep link: the document tabs' "?" buttons open
+           Help at their own how-to topic. It defaults to empty, so every plain `helpRoute()`
+           caller lands at the top of the list exactly as before.
+        */
+        composable(
+            HELP_ROUTE_PATTERN,
+            arguments = listOf(navArgument(HELP_TOPIC_ARG) {
+                type = NavType.StringType
+                defaultValue = ""
+            }),
+        ) { entry ->
+            HelpRoute(
+                onBack = { nav.popBackStack() },
+                initialTopicKey = entry.arguments?.getString(HELP_TOPIC_ARG)?.ifBlank { null },
+            )
         }
 
         /* ───────── Developer Options ───────── */

@@ -3,11 +3,13 @@ Navigation Contracts
 
 Files: AppNav.kt, InternalDocRoutes.kt, PdfExportRoute.kt (ui/nav/);
 ShaftEditorRoute.kt, ShaftRoute.kt, StartScreen.kt, RunoutRoute.kt, WearRoute.kt,
-UndercutRoute.kt, HelpRoute.kt, EditorDocumentTitle.kt, RenameShaftDocumentDialog.kt
-(ui/screen/)  
+UndercutRoute.kt, OutputRoute.kt, HelpRoute.kt, HelpSearch.kt, EditorDocumentTitle.kt,
+RenameShaftDocumentDialog.kt (ui/screen/)  
 Layer: UI → Nav
 
-Version: v0.11 (2026-09-14)
+Version: v0.13 (2026-09-16 — the editor sidebar becomes permanent in an EXPANDED window,
+through the shared `EditorSidebarPanel`; `LocalSidebarPermanent` hides the tab hamburgers.
+v0.12 2026-09-15 — Help search, topic deep links, per-tab "?" buttons)
 
 Invariants
 - Routes are stable, typed constants or sealed routes.
@@ -18,8 +20,20 @@ Invariants
 Route graph (AppNav.kt NavHost)
 - `start` → StartScreen (New Drawing / Open / Unsaved drafts list (up to 3) / Settings /
   Help & FAQ / Send Feedback)
-- `editor` → **ShaftEditorRoute** — the editor container. Owns the sidebar overlay
-  (`EditorSidebarOverlay`) and the `EditorTab` state switching between:
+- `editor` → **ShaftEditorRoute** — the editor container. Owns the sidebar and the `EditorTab`
+  state. **The sidebar's placement follows the window width** (`Adaptive.md`): COMPACT/MEDIUM
+  keep the modal `EditorSidebarOverlay` (scrim, 200 dp panel, slides in over full-width
+  content); EXPANDED lays the panel out **permanently** in a 240 dp `Surface`
+  (`EDITOR_SIDEBAR_PERMANENT_WIDTH`) with a trailing `VerticalDivider`, no scrim and no
+  open/close state — a tab tap just switches. Both placements render the ONE
+  `EditorSidebarPanel` (Home · document tabs · tools group · Help · Settings), so they can
+  never offer different destinations; the overlay passes its close as `onNavigated`, the
+  permanent panel a no-op. `sidebarOpen` stays `rememberSaveable` and simply goes unread while
+  the panel is permanent, so shrinking back to one pane restores the overlay unchanged. The
+  permanent branch composes the tab content under `LocalSidebarPermanent provides true`
+  (`ui/adaptive/EditorChrome.kt`), which is how **every tab's toolbar knows to hide its
+  hamburger** (`testTag("toolbar_menu")`) — the panel is on screen, so there is nothing to
+  open. Tabs:
   - Schematic tab → ShaftRoute → ShaftScreen
   - Runout tab → RunoutRoute (runout authoring; exports the classic runout sheet)
   - Wear tab → WearRoute
@@ -41,11 +55,46 @@ Route graph (AppNav.kt NavHost)
 - `settings` → SettingsRoute — main page plus two in-screen sub-pages (`SettingsPage`:
   Preview Colors, PDF Export), back-arrow returns to the main page before leaving the route
 - `about` → AboutRoute
-- `help` → HelpRoute — static Help & FAQ content (no ViewModel). **Three entry points**:
-  the editor sidebar's tools group (directly above Settings), the Start screen's button
-  column (under Settings), and the Settings list row. Help is reference content reached for
-  mid-job, so it must keep a top-level entry — Settings alone is the failing state
-  (`docs/DESIGN_INTENT.md` §3.7). Five sections: Getting Started, **Glossary**, How-To
+- `help?topic={topic}` → HelpRoute — static Help & FAQ content (no ViewModel). The `topic`
+  argument is **optional** (`NavType.StringType`, default `""`), so the bare `help` route
+  still matches and lands at the top of the list. **Every caller builds the route through
+  `helpRoute(topicKey: String? = null)`** (AppNav.kt) — the query syntax and the argument
+  name (`HELP_TOPIC_ARG`, pattern `HELP_ROUTE_PATTERN`) are stated once there and nowhere
+  else.
+  **Seven entry points**: the editor sidebar's tools group (directly above Settings), the
+  Start screen's button column (under Settings), the Settings list row, and a `?` icon
+  button on each of the **Runout, Wear, Undercut and Consolidated Output** tabs. Help is
+  reference content reached for mid-job, so it must keep a top-level entry — Settings alone
+  is the failing state (`docs/DESIGN_INTENT.md` §3.7).
+  - **Per-tab `?` buttons** (`TabHelpButton`, HelpRoute.kt, testTag `tab_help`,
+    contentDescription "Help for this tab"): one construction, placed at the **trailing end
+    of each tab's toolbar row** after the Save icon, so it never displaces the Print-primary
+    button in `DocumentActionButtons`. Each opens Help deep-linked to that tab's how-to
+    topic — `record-runout`, `record-wear-readings`, `record-undercut-sections`,
+    `consolidated-output-and-export-all` (the `HELP_TOPIC_*` constants in HelpSearch.kt;
+    `HelpSearchTest` pins each to a topic that still exists). The Schematic tab
+    deliberately carries none — its help is the Getting Started material one sidebar tap
+    away. The callback `onOpenHelpTopic: (String) -> Unit` is plumbed from AppNav through
+    `ShaftEditorRoute` exactly as `onOpenHelp`/`onSave`/`onTitleClick` are; there is no
+    second Help channel.
+  - **Topic keys are derived, never authored** — `helpTopicKey(title)` (HelpSearch.kt, pure)
+    slugifies the title to kebab-case, and `HelpTopic.key` is what the `LazyColumn` item
+    key, the `rememberSaveable` expansion key, and the route argument all use. Titles must
+    therefore stay distinct under slugification (`HelpSearchTest` asserts uniqueness across
+    the real content). A deep link expands its topic on first composition (a **seed** for
+    the saved expansion, so it can still be collapsed) and scrolls the list to it via
+    `helpTopicItemIndex`, which counts items exactly as the list lays them out — one header
+    per section, then its topics. An unknown key is ignored: top of list, nothing expanded.
+  - **Search** — an `OutlinedTextField` pinned above the list inside the Scaffold content
+    (testTag `help_search`, label/placeholder "Search help", a × trailing icon while
+    non-empty). Filtering is the pure `filterHelpSections(sections, query)`: blank or
+    whitespace-only returns the content unchanged, otherwise case-insensitive substring over
+    title OR body, sections with no surviving topic dropped, order preserved. An empty
+    result prints `No topics match "<query>".` **While a query is active its hits render
+    EXPANDED** — a search hit that still needs a tap to read is the failing state — as an
+    `expanded || searching` read at the card, never a write to the saved expansion, so
+    clearing the query restores every card's own state.
+  Five sections: Getting Started, **Glossary**, How-To
   Guides, **Settings Reference**, FAQ. The Glossary sits second so a term can be looked up
   without reading past the guides; it defines shop and app vocabulary (AFT/FWD, blank draft,
   S-break, coupling face, dual units, L.E.T./S.E.T., liner compression, measurement
@@ -64,7 +113,10 @@ Route graph (AppNav.kt NavHost)
 
 Responsibilities
 - **AppNav.kt:** Define NavHost, start destination, and route graph.
-- **ShaftEditorRoute.kt:** Editor container — sidebar, tab switch, back handling.
+- **ShaftEditorRoute.kt:** Editor container — sidebar placement (overlay vs permanent), tab
+  switch, back handling.
+- **EditorSidebar.kt:** `EditorSidebarPanel` (the nav list itself) plus the
+  `EditorSidebarOverlay` that wraps it for COMPACT/MEDIUM windows.
 - **ShaftRoute.kt:** Wire VM ↔ ShaftScreen; own SAF PDF export for the schematic.
 - **StartScreen.kt:** Landing screen — recents, "Unsaved drafts" card (up to 3 entries
   from `ShaftViewModel.drafts`: row title (see below), relative age, tap to

@@ -2,9 +2,16 @@
 package com.android.shaftschematic.ui.screen
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -12,6 +19,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import com.android.shaftschematic.ui.adaptive.LocalSidebarPermanent
+import com.android.shaftschematic.ui.adaptive.currentWindowWidthClass
+import com.android.shaftschematic.ui.adaptive.twoPane
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 
 /**
@@ -22,12 +32,19 @@ import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
  * and Consolidated Output.
  *
  * ## Navigation model
- * Navigation is handled by [EditorSidebarOverlay], which is a modal overlay drawer.
- * The sidebar never displaces content — it slides in from the left and overlays the
- * content with a scrim. Content always occupies the full screen width.
+ * On a COMPACT or MEDIUM window navigation is handled by [EditorSidebarOverlay], a modal
+ * overlay drawer. The sidebar never displaces content — it slides in from the left and
+ * overlays the content with a scrim. Content always occupies the full screen width.
  *
  * This avoids the "crushed content" problem that occurs with a persistent side rail
  * on phones, especially smaller devices.
+ *
+ * An EXPANDED window has the room, so the same [EditorSidebarPanel] is laid out PERMANENTLY
+ * beside the tab content — no scrim, no open/close state, a tab tap just switches. The tab
+ * content is composed under [LocalSidebarPermanent] `true`, which is how each tab's toolbar
+ * knows to drop its hamburger: the panel is already on screen, so there is nothing to open.
+ * `sidebarOpen` is still remembered and simply goes unread there, so shrinking back to one
+ * pane restores the overlay exactly as it was.
  *
  * ## "Built" definition
  * The Runout, Wear, Undercut, Final Schematic, and Consolidated Output tabs are enabled once
@@ -56,6 +73,12 @@ fun ShaftEditorRoute(
     onOpenSettings: () -> Unit,
     /** Open the Help & FAQ screen from the sidebar's tools group. */
     onOpenHelp: () -> Unit = {},
+    /**
+     * Open Help at one topic — the "?" button the Runout, Wear, Undercut and Consolidated
+     * Output tabs carry. The same screen as [onOpenHelp], reached with its `topic` argument
+     * set; a second Help channel would let the two drift apart.
+     */
+    onOpenHelpTopic: (String) -> Unit = {},
     onOpenDeveloperOptions: () -> Unit,
     /** Export the main shaft schematic PDF (goes to existing preview/SAF flow). */
     onExportPdf: () -> Unit,
@@ -94,10 +117,15 @@ fun ShaftEditorRoute(
         activeTab = EditorTab.RUNOUT
     }
 
-    // Full-size Box so the sidebar can overlay the content
-    Box(Modifier.fillMaxSize()) {
+    // One adaptive decision for the whole container; see `docs/contracts/Adaptive.md`.
+    val sidebarPermanent = currentWindowWidthClass().twoPane
 
-        // ── Active document (always full-width) ─────────────────────────────
+    val onTabSelected: (EditorTab) -> Unit = { tab ->
+        if (isBuilt || tab == EditorTab.SCHEMATIC) activeTab = tab
+    }
+
+    // The active document, declared once so both placements host the identical tab switch.
+    val tabContent: @Composable () -> Unit = {
         when (activeTab) {
             EditorTab.SCHEMATIC -> ShaftRoute(
                 vm = vm,
@@ -119,6 +147,7 @@ fun ShaftEditorRoute(
                 onOpenSidebar = { sidebarOpen = true },
                 onSave = onSave,
                 onTitleClick = onTitleClick,
+                onOpenHelpTopic = onOpenHelpTopic,
             )
 
             EditorTab.WEAR -> WearRoute(
@@ -126,6 +155,7 @@ fun ShaftEditorRoute(
                 onOpenSidebar = { sidebarOpen = true },
                 onSave = onSave,
                 onTitleClick = onTitleClick,
+                onOpenHelpTopic = onOpenHelpTopic,
             )
 
             EditorTab.UNDERCUT -> UndercutRoute(
@@ -133,6 +163,7 @@ fun ShaftEditorRoute(
                 onOpenSidebar = { sidebarOpen = true },
                 onSave = onSave,
                 onTitleClick = onTitleClick,
+                onOpenHelpTopic = onOpenHelpTopic,
             )
 
             EditorTab.FINAL -> FinalRoute(
@@ -155,26 +186,65 @@ fun ShaftEditorRoute(
                 onOpenRunoutTab = { activeTab = EditorTab.RUNOUT },
                 onSave = onSave,
                 onTitleClick = onTitleClick,
+                onOpenHelpTopic = onOpenHelpTopic,
             )
         }
+    }
 
-        // ── Overlay sidebar (handle tab when closed, modal panel when open) ──
-        EditorSidebarOverlay(
-            open = sidebarOpen,
-            selectedTab = activeTab,
-            runoutEnabled = isBuilt,
-            onOpen = { sidebarOpen = true },
-            onClose = { sidebarOpen = false },
-            onTabSelected = { tab ->
-                if (isBuilt || tab == EditorTab.SCHEMATIC) activeTab = tab
-            },
-            onHome = onNavigateHome,
-            onSettings = onOpenSettings,
-            onKeywayCalculator = { keywayCalcOpen = true },
-            onTaperCalculator = { taperCalcOpen = true },
-            onUnitConverter = { converterOpen = true },
-            onHelp = onOpenHelp,
-        )
+    // Full-size Box so the sidebar can overlay the content
+    Box(Modifier.fillMaxSize()) {
+
+        if (sidebarPermanent) {
+            // ── Permanent sidebar: the panel displaces the content rather than covering it ──
+            Row(Modifier.fillMaxSize()) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .width(EDITOR_SIDEBAR_PERMANENT_WIDTH),
+                    color = MaterialTheme.colorScheme.surface,
+                ) {
+                    EditorSidebarPanel(
+                        selectedTab = activeTab,
+                        runoutEnabled = isBuilt,
+                        onTabSelected = onTabSelected,
+                        onHome = onNavigateHome,
+                        onSettings = onOpenSettings,
+                        onKeywayCalculator = { keywayCalcOpen = true },
+                        onTaperCalculator = { taperCalcOpen = true },
+                        onUnitConverter = { converterOpen = true },
+                        onHelp = onOpenHelp,
+                        // Nothing to close — the panel stays put and the selection moves.
+                    )
+                }
+
+                VerticalDivider(modifier = Modifier.fillMaxHeight())
+
+                Box(Modifier.weight(1f).fillMaxHeight()) {
+                    CompositionLocalProvider(LocalSidebarPermanent provides true) {
+                        tabContent()
+                    }
+                }
+            }
+        } else {
+            // ── Active document (always full-width) ─────────────────────────────
+            tabContent()
+
+            // ── Overlay sidebar (modal panel when open) ─────────────────────────
+            EditorSidebarOverlay(
+                open = sidebarOpen,
+                selectedTab = activeTab,
+                runoutEnabled = isBuilt,
+                onOpen = { sidebarOpen = true },
+                onClose = { sidebarOpen = false },
+                onTabSelected = onTabSelected,
+                onHome = onNavigateHome,
+                onSettings = onOpenSettings,
+                onKeywayCalculator = { keywayCalcOpen = true },
+                onTaperCalculator = { taperCalcOpen = true },
+                onUnitConverter = { converterOpen = true },
+                onHelp = onOpenHelp,
+            )
+        }
 
         if (keywayCalcOpen) {
             BoreKeywayCalcDialog(

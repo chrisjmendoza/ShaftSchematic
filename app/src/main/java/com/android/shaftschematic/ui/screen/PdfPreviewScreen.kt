@@ -3,7 +3,8 @@ package com.android.shaftschematic.ui.screen
 
 import android.app.Activity
 import android.content.Context
-import android.content.pm.ActivityInfo
+import com.android.shaftschematic.ui.adaptive.restoreBaseOrientation
+import com.android.shaftschematic.ui.adaptive.unlockRotation
 import android.os.Build
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.VectorConverter
@@ -142,13 +143,12 @@ fun PdfPreviewScreen(
     val ctx = LocalContext.current
     val isFinal = target == SpecTarget.FINAL
 
-    // Unlock rotation for this screen only; restore portrait when leaving.
+    // Unlock rotation for this screen only; restore the device's base orientation when leaving
+    // (portrait on a phone, free rotation on a tablet).
     val activity = ctx as? Activity
     DisposableEffect(Unit) {
-        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-        onDispose {
-            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-        }
+        activity?.unlockRotation()
+        onDispose { activity?.restoreBaseOrientation() }
     }
 
     // The final drawing is the document's SECOND geometry — its own spec and resolved

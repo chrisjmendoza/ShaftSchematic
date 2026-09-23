@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.data.AutosaveManager
 import com.android.shaftschematic.doc.stripShaftDocExtension
 import com.android.shaftschematic.util.DocumentNaming
+import com.android.shaftschematic.ui.adaptive.readableWidth
 
 /**
  * StartScreen
@@ -93,6 +94,7 @@ fun StartScreen(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
+            .readableWidth()
             .padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally

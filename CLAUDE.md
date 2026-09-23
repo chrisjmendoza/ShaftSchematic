@@ -443,8 +443,30 @@ near-white onSurface would print invisible ink on the white sheet. The undercut 
 fills are additionally user-styled via `util/UndercutStyle.kt` (shade color/intensity +
 line-art mode; the Standard/Grey default reproduces the historical fixed shades, and the
 section core stays half the liner alpha at every intensity — `UndercutStyleTest`) — still
-fixed inks, never theme roles, and never leaking into the PDF composers. See
+fixed inks, never theme roles, and never leaking into the PDF composers. The PRINTED undercut
+sheet therefore carries its OWN `PdfPrefs.undercutLineArt` (profile-captured, decided by the
+pure `undercutPdfFillPlan`), which suppresses every fill on that document — the detail strips'
+always-shaded liner and the notch section core included; the two flags are independent by
+design, one meaning on two surfaces, neither reading the other. See
 `docs/contracts/Appearance.md`.
+
+### Layout adapts on ONE axis, the window width class
+Phones and tablets run the same screens; what changes is decided by `WindowWidthClass`
+(`ui/adaptive/WindowSize.kt` — COMPACT < 600 dp, MEDIUM < 840 dp, EXPANDED) and nothing else.
+COMPACT is the pre-tablet phone layout, byte-identical; MEDIUM is a taller single column;
+**only EXPANDED lays out two panes** (editor preview | components; sheet canvas | controls;
+the permanent 240 dp sidebar, `LocalSidebarPermanent` hiding the hamburgers). A screen that
+lays out two ways extracts its blocks into composables **called from both branches** — a
+duplicated block is how the phone and the tablet drift. List screens cap their one scrolling
+column with `readableWidth()` (720 dp), never per row. Orientation: phones portrait, tablets
+(sw600dp) free, ONE resource `R.integer.activity_orientation` behind both
+`MainActivity.onCreate` and `restoreBaseOrientation()` — a rotation-unlocking screen never
+restores a literal portrait. The manifest keeps a literal `portrait` and must NOT reference the
+resource: a manifest resource cannot vary by configuration (lint `ManifestResource` fails the
+build, and the sw600dp value is silently never read), so the tablet unlock is applied at
+activity creation.
+Nothing adaptive touches sheet ink, a composer, the model, or a document. See
+`docs/contracts/Adaptive.md`.
 
 ### Runout stations are per COMPONENT, never per drawn run
 Station counts are length-driven — one per `RUNOUT_STATION_INTERVAL_MM` (20") via
@@ -708,6 +730,21 @@ groups** — a liner OD is never deduped against a body OD. Horizontally-close l
 a second row via `geom/DiameterCalloutLayout.kt` (pure, unit-tested), the same two-tier
 posture as runout bubbles. PDF-only — no on-screen canvas equivalent, so no draw-both-sites
 rule applies.
+
+**Callouts and component-NAME labels share ONE collision space.** Both hang below the shaft
+and both anchor on a component's CENTER, so a component printing a name and a Ø aimed two
+strings at the same x and set one through the other (on-device report); a per-pass collision
+space is blind exactly where the two meet. The pure `geom/BelowShaftLabelLayout.kt` places
+every name against the callouts as obstacles, in `DimensionRailLayout`'s resolution order:
+**slide the name along its own component's span first** (a name reads as its component's from
+anywhere over it, so a slide costs no vertical room), **drop a row only when no slide fits**.
+The obstacles are measured, never guessed — `DiameterLeaderRenderer.occupancy` returns the
+value boxes AND the leader lines off the same geometry `drawOne` inks, which is why the
+callouts are planned before the labels and drawn after. Callouts never move for a name: the
+leaders are anchored geometry, the names are what move. Rows stop at the footer band and the
+pass shrinks a point at a time (floor 7 pt) rather than collapsing rows onto each other; a name
+that fits nowhere takes the row it overlaps least (`Placement.fitted = false`, breadcrumbed)
+and is never dropped.
 
 Two visibility controls gate the pass, and they compose as an AND:
 - **Per component** — `Body.showDiaOnDrawing` / `Liner.showDiaOnDrawing` (and

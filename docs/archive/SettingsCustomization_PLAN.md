@@ -1,8 +1,34 @@
-# Settings Customization & Accessibility — Plan
+# Settings Customization & Accessibility — Plan (archived)
 
-Date: 2026-08-04
-Status: Phase 1 **shipped** — committed on `feat/settings-customization` (2026-08-05,
-`824937b`); Phases 2+ are proposals.
+Date: 2026-08-04 · Archived: 2026-09-15
+Status: **closed.** Phase 1 shipped 2026-08-05 (`824937b`); every remaining proposal below was
+ruled on 2026-09-15 (see §0) and either shipped that day or declined. Nothing here describes
+current behavior — the living contracts are `docs/contracts/Appearance.md` (theme, sheet ink,
+accessibility rulings), `docs/contracts/UndercutDrawing.md` (screen style + printed line art),
+and `docs/contracts/Navigation.md` (Help route, search, deep links).
+
+---
+
+## 0. Rulings (2026-09-15)
+
+| Proposal | Ruling | Where it went |
+|---|---|---|
+| §2.1 Line-art PRINTED undercut PDF | **Yes — option (a).** A separate print pref, `PdfPrefs.undercutLineArt` (default off, profile-captured), suppresses every fill on the undercut sheet — the strip's always-shaded liner and the section core included. The notch construction (open mouth, full-height faces, floor lines) carries the reading, exactly as the screen line-art mode already proved. Independent of the screen `UndercutStyle` flag by design: the "style never leaks into the composers" invariant stands. | Shipped; `UndercutDrawing.md`, `PDF_EXPORT.md` |
+| §2.2 Colour choices for wear / runout sheets | **No — deferred, not queued.** Non-priority; the wear document's red/bronze conventions are a shop-communication question. Reopen only on a shop-side ask. | — |
+| §2.3 Custom RGB colour picker | **No.** Presets cover the practical range; a raw picker needs contrast guardrails per theme for one unrequested use. | — |
+| §2.4 Material You (dynamic colour) | **No.** Already a Do-Not in `Appearance.md`; presets must resolve predictably. | — |
+| §2.5 Per-document line-thickness override | **No.** The look is single-sourced app-wide (`DESIGN_INTENT.md` Q3 ruling: no per-document override axis). | — |
+| §3.1 Font-scale audit | **Ruled, no code.** Sheet-canvas text is drawing ink (fixed size, a printed sheet); UI chrome is Material `sp` and must scale. The sweep found no clipping row — the carousel's fixed height is safe because the card column scrolls. The 200% on-device walk is a TODO item. | `Appearance.md` §Accessibility, `TODO.md` |
+| §3.2 TalkBack / semantics pass | **Yes — scoped.** Icon-only back buttons labelled; every sheet canvas carries a spoken summary (counts only, never geometry) naming the list/controls as the accessible editing path. Carousel `mergeDescendants` declined (it would fold the text fields into one node). | Shipped; `Appearance.md` §Accessibility |
+| §3.3 Touch-target minimums | **No.** Material controls meet 48 dp; canvas placement has the list path. | — |
+| §3.4 Colour-independence | **Verified by inspection, no change.** Every colour-only signal already has a shape/text channel. | — |
+| §3.5 Reduced motion | **No.** Only trivial animations exist. | — |
+| §4 Help search | **Yes.** Substring search over title + body, hits render expanded, empty state named. | Shipped; `Navigation.md` |
+| §4 Deep links from context | **Yes.** `help?topic=<key>` with stable per-topic keys; a "?" on the Runout / Wear / Undercut / Consolidated Output tabs opens that tab's how-to. | Shipped; `Navigation.md` |
+| §4 Images/diagrams, "What's new", localization | **No** for now. Figures already exist for the undercut conventions (`HelpIllustrations.kt`); a "What's new" panel duplicates the changelog; localization is not on the roadmap. | — |
+| §5 Settings sub-page regrouping | **No action.** Layout preference stays with the owner; Accessibility toggles were not added, so the trigger never fired. | — |
+
+---
 
 Scope requested (on-device request): extend user-settings customization beyond the
 existing preview "material colors" — undercut colors, a color-removal mode, app theme

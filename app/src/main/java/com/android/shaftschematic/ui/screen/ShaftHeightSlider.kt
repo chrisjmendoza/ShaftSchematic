@@ -830,6 +830,10 @@ internal fun MeasurementReferenceSection(
  * there (`consolidatedSheetHasInProfileValues`). The row then reads unchecked and disabled
  * — **display only**; the stored pref is never rewritten, so the user's choice returns as
  * soon as the document stops printing in-profile values.
+ *
+ * [showUndercutLineArt] adds the undercut document's print line-art row at the FOOT of the group
+ * — the rarely-reached option trails, and it is shown only on the sheet it governs, so the other
+ * documents are not offered a control their composers ignore.
  */
 @Composable
 internal fun ShadeInPdfChecks(
@@ -843,6 +847,10 @@ internal fun ShadeInPdfChecks(
     onSetShadeExplicitBodiesOnly: (Boolean) -> Unit,
     linerShadeLocked: Boolean = false,
     showExplicitBodiesOnly: Boolean = true,
+    showUndercutLineArt: Boolean = false,
+    /** The app-wide `PdfPrefs.undercutLineArt`; read only when [showUndercutLineArt]. */
+    undercutLineArt: Boolean = false,
+    onSetUndercutLineArt: (Boolean) -> Unit = {},
 ) {
     OptionsExpander("Shade in Components", "options_shade_expander") {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -896,6 +904,23 @@ internal fun ShadeInPdfChecks(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+            }
+        }
+        if (showUndercutLineArt) Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(
+                checked = undercutLineArt,
+                onCheckedChange = onSetUndercutLineArt,
+                modifier = Modifier.testTag("pdf_undercut_line_art"),
+            )
+            Spacer(Modifier.width(8.dp))
+            Column {
+                Text("Undercut drawing: line art (no shading)", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "The printed undercut sheet drops every fill; the cut sections read from " +
+                        "their faces and floor lines.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }

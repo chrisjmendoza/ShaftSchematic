@@ -151,7 +151,10 @@ Help — the glossary included — must be reachable from the app's main menu, n
 behind Settings ("so hidden I don't even know where to find it" — the failing state).
 The rule going forward: any reference content a user might reach for mid-job (what a term
 means, what a control does) gets a top-level entry point; Settings is for changing
-things, not for finding explanations.
+things, not for finding explanations. Reaching the screen is only half of it — Help also
+carries a **search field** and each document tab (Runout, Wear, Undercut, Consolidated
+Output) carries a **"?" button that opens Help on that tab's own guide**, so the answer is
+one tap from the work rather than a scroll through five sections.
 
 ### 3.8 Standalone calculators (Q10)
 

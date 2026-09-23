@@ -96,6 +96,18 @@ fun ShaftViewModel.setPdfShadedLiners(v: Boolean, persist: Boolean = true) {
 }
 
 /**
+ * Wired to the "Undercut drawing: line art" row in Settings → PDF Export and on the undercut
+ * preview's options sheet. Print-side only: it suppresses every shade fill on the undercut
+ * document, the detail strips' always-shaded liner and the section core included. Independent of
+ * the screen-side `UndercutStyle` line-art mode, which never reaches a composer.
+ */
+fun ShaftViewModel.setPdfUndercutLineArt(v: Boolean, persist: Boolean = true) {
+    _pdfUndercutLineArt.value = v
+    SettingsStore.updatePdfPrefs { it.copy(undercutLineArt = v) }
+    if (persist) viewModelScope.launch { SettingsStore.setPdfUndercutLineArt(getApplication(), v) }
+}
+
+/**
  * Wired to the "Shade in Components" block in Settings and both PDF options sheets — narrows
  * the body shade to authored sections, leaving auto (bare-shaft) runs unfilled. Subtractive:
  * it changes nothing while [setPdfShadedBodies] is off.
@@ -354,6 +366,7 @@ fun ShaftViewModel.applyDrawingProfile(profile: DrawingProfile) {
     setPdfShadedTapers(prefs.shadedTapers)
     setPdfShadedLiners(prefs.shadedLiners)
     setPdfShadeExplicitBodiesOnly(prefs.shadeExplicitBodiesOnly)
+    setPdfUndercutLineArt(prefs.undercutLineArt)
     setPdfCurveLoHeightIn(prefs.curveLoHeightIn)
     setPdfCurveHiHeightIn(prefs.curveHiHeightIn)
     setPdfSBreakThresholdFrac(prefs.sBreakThresholdFrac)

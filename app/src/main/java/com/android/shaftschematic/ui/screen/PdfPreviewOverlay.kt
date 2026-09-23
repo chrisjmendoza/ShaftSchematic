@@ -11,7 +11,8 @@ import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
-import android.content.pm.ActivityInfo
+import com.android.shaftschematic.ui.adaptive.restoreBaseOrientation
+import com.android.shaftschematic.ui.adaptive.unlockRotation
 import android.net.Uri
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -96,6 +97,7 @@ import com.android.shaftschematic.ui.viewmodel.setPdfSBreakThresholdFrac
 import com.android.shaftschematic.ui.viewmodel.setPdfShadeExplicitBodiesOnly
 import com.android.shaftschematic.ui.viewmodel.setPdfShadedBodies
 import com.android.shaftschematic.ui.viewmodel.setPdfShadedLiners
+import com.android.shaftschematic.ui.viewmodel.setPdfUndercutLineArt
 import com.android.shaftschematic.ui.viewmodel.setPdfShadedTapers
 import com.android.shaftschematic.ui.viewmodel.setPdfTieringMode
 import com.android.shaftschematic.ui.viewmodel.setPdfWearBandShadeFrac
@@ -210,14 +212,13 @@ internal fun PdfPreviewOverlay(
     }
 
     // Unlock device rotation while the preview is open so the landscape sheet can be viewed in
-    // landscape (the app is otherwise locked to portrait); restore portrait on dismiss. Same
-    // pattern as the schematic `PdfPreviewScreen`.
+    // landscape (phones are otherwise locked to portrait); restore the device's BASE
+    // orientation on dismiss — portrait on a phone, free rotation on a tablet. Same pattern as
+    // the schematic `PdfPreviewScreen`.
     val activity = LocalContext.current as? Activity
     DisposableEffect(Unit) {
-        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-        onDispose {
-            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-        }
+        activity?.unlockRotation()
+        onDispose { activity?.restoreBaseOrientation() }
     }
 
     Surface(
@@ -385,6 +386,14 @@ internal fun RunoutWearOptionsSheet(
     showShadeExplicitBodiesOnly: Boolean = true,
     /** Locks the "Liners" shade row — see [ShadeInPdfChecks]. */
     linerShadeLocked: Boolean = false,
+    /**
+     * Shows the "Undercut drawing: line art (no shading)" row at the foot of the shade section.
+     * On only for the UNDERCUT preview — `PdfPrefs.undercutLineArt` reaches one composer, so on
+     * any other sheet the row would be a checkbox the page ignores.
+     */
+    showUndercutLineArt: Boolean = false,
+    /** The app-wide `PdfPrefs.undercutLineArt`; read only when [showUndercutLineArt]. */
+    undercutLineArt: Boolean = false,
     /**
      * Shows the per-job "Coupling face" election. On for the runout and consolidated sheets,
      * the two documents that can draw the end view; off for the wear and undercut sheets,
@@ -752,6 +761,9 @@ internal fun RunoutWearOptionsSheet(
             onSetShadeExplicitBodiesOnly = { vm.setPdfShadeExplicitBodiesOnly(it) },
             linerShadeLocked = linerShadeLocked,
             showExplicitBodiesOnly = showShadeExplicitBodiesOnly,
+            showUndercutLineArt = showUndercutLineArt,
+            undercutLineArt = undercutLineArt,
+            onSetUndercutLineArt = { vm.setPdfUndercutLineArt(it) },
         )
 
         Spacer(Modifier.height(12.dp))

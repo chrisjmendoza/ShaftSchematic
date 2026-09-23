@@ -13,7 +13,7 @@
 
 ## What It Is
 
-ShaftSchematic is an Android app (portrait-locked, single Activity, Jetpack Compose + Material3) for modeling marine propeller-shaft assemblies. A machinist or shipyard engineer can define a multi-segment shaft, see a live dimensioned preview, and export a one-page technical PDF — without opening CAD software.
+ShaftSchematic is an Android app (single Activity, Jetpack Compose + Material3; phones portrait, tablets adaptive) for modeling marine propeller-shaft assemblies. A machinist or shipyard engineer can define a multi-segment shaft, see a live dimensioned preview, and export a one-page technical PDF — without opening CAD software.
 
 Target users: machinists, shipyards, repair technicians, marine engineers.  
 Target hardware: Android 8.0+ (API 28), Target SDK 36.
@@ -188,7 +188,10 @@ $env:PATH = "$env:JAVA_HOME\bin;$env:PATH"
 
 ## Known Constraints / Design Decisions
 
-- **Portrait only** — landscape is disabled; editor layout optimized for portrait.
+- **Phones portrait, tablets free** — phones lock to portrait (the editor is a portrait layout
+  there); tablets (sw600dp) rotate freely and the screens adapt on one axis, the window width
+  class: a taller single column at MEDIUM, two panes and a permanent sidebar at EXPANDED
+  (landscape tablet). `docs/contracts/Adaptive.md`.
 - **Single-page PDF only** — multi-page PDF is explicitly out of scope through v1.0.
 - **No pixel math in ViewModel** — VM is the geometry authority; UI passes raw mm coordinates.
 - **Auto bodies never persisted** — when the resolved pipeline is complete, auto-generated bodies exist only in the derived view layer.
