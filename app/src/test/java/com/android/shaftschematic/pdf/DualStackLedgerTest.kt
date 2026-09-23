@@ -18,7 +18,7 @@ import org.robolectric.annotation.GraphicsMode
 import kotlin.math.max
 
 /**
- * The ledger the whole feature rests on (`docs/DualUnitStacking_PLAN.md` §2, §9).
+ * The ledger the whole feature rests on (`docs/archive/DualUnitStacking_PLAN.md` §2, §9).
  *
  * Stacking a dual value costs a taller label band, and refunds it by seating values back in the
  * dimension line — every value restored to the break removes a fallback rail, and each fallback

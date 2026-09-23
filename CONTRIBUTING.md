@@ -3,7 +3,7 @@
 ## Before you edit anything
 
 Per-subsystem contract docs live in `docs/contracts/`
-(index: `README.md` in that folder). **Read the relevant contract doc before editing a
+(index: `INDEX.md` in that folder). **Read the relevant contract doc before editing a
 subsystem**, and update it in the same change if you alter behavior. Project-wide
 conventions and critical invariants are in `CLAUDE.md` at the repo root.
 
@@ -17,8 +17,8 @@ or renderers.
 **State/VM:** `ShaftViewModel` exposes StateFlow for spec, unit, grid, and project meta.
 The VM parses/normalizes UI input → mm. Always instantiate via `ShaftViewModelFactory`.
 
-**UI:** `ShaftEditorRoute` hosts the sidebar and the five editor tabs (`EditorTab.kt`):
-Schematic / Runout Sheet / Wear Document / Undercut Drawing / Consolidated Output;
+**UI:** `ShaftEditorRoute` hosts the sidebar and the editor tabs (`EditorTab.kt`); the tab
+list lives in `docs/ARCHITECTURE.md` §5, which owns it.
 `ShaftRoute` wires the VM to `ShaftScreen` and owns SAF PDF export. `ShaftScreen` is
 pure Compose Material3 UI. The carousel lives in `ComponentCarousel.kt`.
 
@@ -28,8 +28,9 @@ pure Compose Material3 UI. The carousel lives in `ComponentCarousel.kt`.
   → `ShaftRenderer` (DrawScope geometry).
 - PDF: `ShaftPdfComposer` / `RunoutPdfComposer` / `WearPdfComposer` /
   `UndercutPdfComposer` use the same model but draw with **their own Canvas code** and
-  their own scale math (never `ShaftLayout`). Four composers, five documents — the
-  consolidated sheet is `composeRunoutPdf(consolidated = true)`.
+  their own scale math (never `ShaftLayout`). The composer/document inventory — including
+  which sheets the Final Schematic tab prints — lives in `docs/ARCHITECTURE.md`
+  §"PDF Export", which owns it.
 
 A fix in the preview renderer does **not** propagate to the PDF composers (or vice
 versa) automatically. When you change how a component draws, check both paths.

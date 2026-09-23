@@ -197,4 +197,42 @@ class UnshadedComponentIdsTest {
             unshadedLinerIds(plainKinds, shadedLiners = false),
         )
     }
+
+    // ── Positive complement (the editor preview's PDF-shade mirror) ───────────
+
+    @Test
+    fun `shadedComponentIds is empty for a flagless spec with every kind off`() {
+        assertTrue(
+            shadedComponentIds(
+                spec(), resolved,
+                shadedBodies = false, shadedTapers = false, shadedLiners = false,
+                shadeExplicitBodiesOnly = false,
+            ).isEmpty()
+        )
+    }
+
+    @Test
+    fun `one explicit shade under all kinds off names exactly that body's runs`() {
+        // The on-device case: a named section's card toggle checked, every checkbox off —
+        // the preview box must mark that section and nothing else.
+        assertEquals(
+            setOf("b1", "b1#2"),
+            shadedComponentIds(
+                spec(shade = true), resolved,
+                shadedBodies = false, shadedTapers = false, shadedLiners = false,
+                shadeExplicitBodiesOnly = false,
+            )
+        )
+    }
+
+    @Test
+    fun `kinds on shade everything a sheet draws minus explicit opt-outs`() {
+        val ids = shadedComponentIds(
+            spec(shade = false), resolved,
+            shadedBodies = true, shadedTapers = true, shadedLiners = true,
+            shadeExplicitBodiesOnly = false,
+        )
+        // The opted-out body's runs stay bare; auto runs and the liner shade.
+        assertEquals(setOf("auto_body_0_100", "auto_body_700_900", "ln1"), ids)
+    }
 }

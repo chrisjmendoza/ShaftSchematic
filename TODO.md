@@ -1,7 +1,7 @@
 # ShaftSchematic TODO
 
 **Version: v0.5.x Development Queue**
-**Last updated: 2026-08-27**
+**Last updated: 2026-09-16**
 
 ## What belongs here
 
@@ -46,7 +46,8 @@ at most a pointer from here.
 | Fraction typography | ✅ Shipped — Stacked / Diagonal (default) / Plain |
 | Drawing preset profiles | ✅ Shipped, app-wide |
 | Appearance settings (theme + high contrast) | ✅ Shipped — see §2 for the open on-device pass |
-| Sidebar nav (5 tabs) | ✅ Schematic / Runout / Wear / Undercut / Consolidated Output |
+| Sidebar nav (6 tabs) | ✅ Schematic / Runout / Wear / Undercut / Final / Consolidated Output |
+| Tablet layout | ✅ Shipped, unverified on hardware — window width class, two panes at EXPANDED, permanent sidebar, free rotation on sw600dp; see §2 |
 | Undo/redo | ✅ Session-scoped `SessionHistory` over `EditState` |
 | Internal save/open, autosave draft ring | ✅ Shipped |
 | Backup & restore, auto-mirror folder | ✅ Shipped |
@@ -72,6 +73,18 @@ at most a pointer from here.
 - **Multi-shaft per job number** (requested 2026-07-26) — two shafts sometimes share a job
   number. Plan in `docs/MultiShaftJob_Plan_2026-07-26.md` (recommends derived job grouping over
   single-shaft files; no file-format change). **Awaiting answers to its 6 product questions.**
+- **Shop deployment — users, manager lock, audit trail, shop oversight** (requested 2026-09-02,
+  revised 2026-09-03 from the foreman's seat). Nothing exists today: no identity, no timestamps,
+  hard delete, filename-only search, silent mirror failures, debug-signed distribution. Plan in
+  `docs/ShopDeployment_PLAN.md` — device-local users/roles, manager PIN gating only the
+  IRREVERSIBLE set (purge, restore-over-library, roster/policy) plus a per-document **Released**
+  flag behind ONE `Guard`, trash instead of hard delete (mirror deletes only on purge), envelope
+  stamps (`doc_id`, revision, created/modified by, device), a **footer print stamp** (rev /
+  printed by / device), Open-screen search over Customer/Vessel/Job/Item, mirror-health warning
+  on Start, a durable `AuditLog` separate from `AppLog`, security cut to PIN hash + rate limit.
+  Phase 0 = release signing key + tester group (§4.4); Phase 1 = provenance + trash + footer
+  stamp + search + mirror health (no login). **Awaiting answers to its 12 product questions**
+  (each carries a recommended answer).
 - **Coupler-slot hit-test.** The preview hit-test covers Body/Taper/Thread/Liner but not
   `ResolvedCouplerBoltSlot`, so tapping a slot selects the body underneath and the slot's card is
   unreachable by tap. Plausibly deliberate — a slot always overlies something, and letting it win
@@ -101,19 +114,25 @@ at most a pointer from here.
   hardware; `CHANGELOG.md` is the running record of which.
 - [ ] On-device visual pass of dark and high-contrast chrome (the Appearance schemes have only
   been reasoned about, not looked at). See `docs/contracts/Appearance.md`.
-
-### Rendering / components
-
-- [ ] **Mixed-unit follow-ups**: carousel numeric *entry* fields still take the document unit
-  (the chip governs how a component PRINTS, not how its fields are typed), so a metric keyway is
-  typed in inches and stored mm; and standard metric key-stock presets for keyways aren't built.
-- [ ] **Additional output fonts** (requested 2026-08-14) — let a shop pick a look rather than
-  take the platform default. Constraints: the PDF composers draw with `android.graphics.Paint`,
-  so a face must be a real `Typeface` (bundled `.ttf` or a system family); every text metric is
-  measured live from the paint, so a swap is safe by construction *provided* nothing hard-codes a
-  width. Check the fraction stack against a condensed or slab face before shipping —
-  `FractionTextRendererTest` exists to catch exactly that. Same pref posture as
-  `PdfPrefs.fractionStyle`.
+- [ ] On-device accessibility walk: the app at 200% system font scale (any clipped row —
+  usually a `Modifier.height(x)` that wants `heightIn(min = x)`), and one TalkBack pass over
+  the five sheet tabs to hear the canvas summaries and confirm the list rows are a workable
+  editing path. Rulings in `docs/contracts/Appearance.md` §Accessibility.
+- [ ] On-device: print one undercut sheet with "Line art (no shading)" on and judge whether the
+  notch construction alone reads on paper (the ruling assumed it does, from the screen mode).
+- [ ] **Tablet pass** (the layouts were built against Robolectric window sizes, never a tablet):
+  every tab in portrait (MEDIUM) and landscape (EXPANDED), the permanent sidebar, a rotation
+  mid-edit on each tab (what resets is listed in `docs/contracts/Adaptive.md` §Orientation), the
+  carousel card width inside its pane, the tuning sheet's page strip in landscape, and the PDF
+  preview closing on a tablet (must stay free to rotate). Judge the 0.55/0.45 pane split and the
+  720 dp readable width by eye — both are first guesses.
+- [ ] **On-device visual pass after Material3 1.3.0 → 1.4.0** (Compose BOM 2026.04.01): component
+  defaults moved, not APIs. Look at the tuning sliders, the `ModalBottomSheet` page-strip cap
+  (`TUNING_SHEET_CHROME_DP` counts the drag handle + inset chrome; a changed default shifts it),
+  the Square | Blend | Seal chip row (labels above, outlines on ALL chips), AlertDialogs,
+  Switch/Checkbox density, and numeric-field blur commits. Also decide the four pinch-zoom
+  surfaces' `rememberTransformableState` centroid deprecation on-device — taking the centroid
+  changes where a pinch zooms from.
 
 ### Tech debt
 
@@ -128,8 +147,6 @@ at most a pointer from here.
     all require compileSdk 37, but stable Robolectric (4.16.x) certifies only through API 36 —
     and the whole Compose test suite runs on Robolectric. Waits for Robolectric 4.17 stable,
     then moves as ONE coordinated bump.
-  - **Compose BOM 2024.09.00 → 2026.04.01** (the last compileSdk-36-safe BOM): real Compose API
-    surface over ~19 months — its own branch with a compile + visual pass, not a chore.
   - **Kotlin 2.4.0** (K1 drop, annotation-target and warning-promotion changes) — its own branch.
 
 ### Testing
@@ -146,9 +163,6 @@ androidTest) or the Add dialogs; their logic is pure and covered.
 
 ## 3. Backlog (v0.5.x+)
 
-- [ ] Title-strip follow-ups (liked, not yet requested): tappable title → Save As / rename;
-  smarter untitled-draft row names on StartScreen (via `DocumentNaming.suggestedBaseName`);
-  title strip on the Runout/Wear tabs too.
 - [ ] Selection → contextual "Add near selected" defaults.
 - [ ] Inline "Add here" buttons between components in the list.
 - [ ] Preset library (common tapers, common shoulder patterns).

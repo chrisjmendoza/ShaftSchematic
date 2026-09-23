@@ -82,6 +82,8 @@ import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_DEFAULT
 import com.android.shaftschematic.settings.PDF_WEAR_JOIN_GAP_DEFAULT_MM
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.util.AppLog
+import com.android.shaftschematic.util.launchPicker
+import com.android.shaftschematic.util.NO_PICKER_MESSAGE
 import com.android.shaftschematic.util.FeedbackIntentFactory
 import com.android.shaftschematic.util.PreviewColorPreset
 import com.android.shaftschematic.util.PreviewColorRole
@@ -89,6 +91,7 @@ import com.android.shaftschematic.util.PreviewColorSetting
 import com.android.shaftschematic.util.UndercutShadeColor
 import com.android.shaftschematic.util.UndercutShadeIntensity
 import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.ui.adaptive.readableWidth
 
 /**
  * SettingsRoute
@@ -145,6 +148,7 @@ fun SettingsRoute(
     val pdfShadedBodies by vm.pdfShadedBodies.collectAsState()
     val pdfShadedTapers by vm.pdfShadedTapers.collectAsState()
     val pdfShadedLiners by vm.pdfShadedLiners.collectAsState()
+    val pdfUndercutLineArt by vm.pdfUndercutLineArt.collectAsState()
     val pdfShadeExplicitBodiesOnly by vm.pdfShadeExplicitBodiesOnly.collectAsState()
     val pdfExportMode by vm.pdfExportMode.collectAsState()
     val lineThicknessScale by vm.lineThicknessScale.collectAsState()
@@ -156,6 +160,7 @@ fun SettingsRoute(
     val pdfWearJoinGapMaxMm by vm.pdfWearJoinGapMaxMm.collectAsState()
     val pdfArrowSizePt by vm.pdfArrowSizePt.collectAsState()
     val pdfFractionStyle by vm.pdfFractionStyle.collectAsState()
+    val pdfOutputFont by vm.pdfOutputFont.collectAsState()
     val pdfDualUnitLayout by vm.pdfDualUnitLayout.collectAsState()
 
     // App-wide defaults for mixed per-component units + inline dual-unit display. Not
@@ -210,7 +215,7 @@ fun SettingsRoute(
                             }
                         }
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 }
             )
@@ -224,6 +229,7 @@ fun SettingsRoute(
                     modifier = Modifier
                         .padding(pad)
                         .verticalScroll(scrollState)
+                        .readableWidth()
                         .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
@@ -370,6 +376,13 @@ fun SettingsRoute(
                     DimensionArrowSizeChips(
                         arrowSizePt = pdfArrowSizePt,
                         onCommit = { vm.setPdfArrowSizePt(it) },
+                    )
+
+                    // Settings-only, unlike the pickers around it: the face is a house style
+                    // a shop sets once, so it stays off the per-document options sheets.
+                    OutputFontChips(
+                        outputFont = pdfOutputFont,
+                        onCommit = { vm.setPdfOutputFont(it) },
                     )
 
                     // Same picker both PDF options sheets carry — one PdfPrefs.fractionStyle.
@@ -580,9 +593,12 @@ fun SettingsRoute(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
-                                backupLauncher.launch(
-                                    ShaftBackup.defaultBackupFilename(System.currentTimeMillis())
-                                )
+                                backupLauncher.launchPicker(
+                                    ShaftBackup.defaultBackupFilename(System.currentTimeMillis()),
+                                    what = "backup",
+                                ) {
+                                    scope.launch { snackbarHostState.showSnackbar(NO_PICKER_MESSAGE) }
+                                }
                             }
                     )
                     ListItem(
@@ -591,13 +607,16 @@ fun SettingsRoute(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
-                                restoreLauncher.launch(
+                                restoreLauncher.launchPicker(
                                     arrayOf(
                                         "application/zip",
                                         "application/x-zip-compressed",
                                         "application/octet-stream",
-                                    )
-                                )
+                                    ),
+                                    what = "restore",
+                                ) {
+                                    scope.launch { snackbarHostState.showSnackbar(NO_PICKER_MESSAGE) }
+                                }
                             }
                     )
                     BackupMirrorSection()
@@ -630,15 +649,24 @@ fun SettingsRoute(
                                     uris.isEmpty() ->
                                         scope.launch { snackbarHostState.showSnackbar("Could not attach the logs.") }
                                     else -> {
-                                        val intent = FeedbackIntentFactory.createDiagnostics(
-                                            context = ctx,
-                                            attachedFileNames = logs.map { it.name },
-                                            attachments = uris,
-                                        )
                                         try {
+                                            val intent = FeedbackIntentFactory.createDiagnostics(
+                                                context = ctx,
+                                                attachedFileNames = logs.map { it.name },
+                                                attachments = uris,
+                                            )
                                             ctx.startActivity(Intent.createChooser(intent, "Share diagnostic logs"))
                                         } catch (_: ActivityNotFoundException) {
                                             scope.launch { snackbarHostState.showSnackbar("No email app found.") }
+                                        } catch (t: Throwable) {
+                                            // AppLog's own posture, applied to the button that ships it:
+                                            // the diagnostics path exists to explain a failure and may
+                                            // never become one. A throw here would take the app down on
+                                            // the one screen a stuck tester was sent to.
+                                            AppLog.e("Settings", "share diagnostic logs failed", t)
+                                            scope.launch {
+                                                snackbarHostState.showSnackbar("Could not share the logs.")
+                                            }
                                         }
                                     }
                                 }
@@ -687,6 +715,7 @@ fun SettingsRoute(
                     modifier = Modifier
                         .padding(pad)
                         .verticalScroll(scrollState)
+                        .readableWidth()
                         .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
@@ -814,6 +843,7 @@ fun SettingsRoute(
                     modifier = Modifier
                         .padding(pad)
                         .verticalScroll(scrollState)
+                        .readableWidth()
                         .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
@@ -883,6 +913,27 @@ fun SettingsRoute(
                         Checkbox(checked = pdfShadedLiners, onCheckedChange = { vm.setPdfShadedLiners(it) })
                         Spacer(Modifier.width(8.dp))
                         Text("Liners")
+                    }
+                    // Trails the kind checkboxes: it governs one document, and it is reached for
+                    // after looking at a printed sheet rather than while setting the shade up.
+                    // Independent of the screen-side Undercut Drawing style, which never reaches
+                    // a composer — two flags, one meaning, two surfaces.
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = pdfUndercutLineArt,
+                            onCheckedChange = { vm.setPdfUndercutLineArt(it) },
+                            modifier = Modifier.testTag("pdf_undercut_line_art"),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Column {
+                            Text("Undercut drawing: line art (no shading)")
+                            Text(
+                                "The printed undercut sheet drops every fill; the cut sections " +
+                                    "read from their faces and floor lines.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
 
                     HorizontalDivider()

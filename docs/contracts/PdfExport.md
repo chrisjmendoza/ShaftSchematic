@@ -28,6 +28,7 @@ via SAF, delegating drawing to `composeShaftPdf`.
 | `shadedBodies` | `false` | Fill body sections with light grey |
 | `shadedTapers` | `false` | Fill taper trapezoids with light grey |
 | `shadedLiners` | `false` | Fill liner sections with light grey |
+| `undercutLineArt` | `false` | Line art on the UNDERCUT document: no shade fill anywhere on that sheet — bodies, tapers, liners, the detail strips' otherwise-always-shaded liner span and the notch section core — leaving the notch construction (void, section faces, floor lines) to carry the reading. Decided by the pure `undercutPdfFillPlan` (`pdf/UndercutPdfFillPlan.kt`). Reaches one composer, so it surfaces in Settings → PDF Export and the **undercut** preview's options sheet only. Independent of the screen-side `UndercutStyle` line-art mode, which never reaches a composer |
 | `curveLoHeightIn` | `0.5` | Sizing-curve anchor: drawn height (paper in) of a 4" shaft at 100% (0.25–1.5) |
 | `curveHiHeightIn` | `1.0` | Sizing-curve anchor: drawn height (paper in) of an 8" shaft at 100% (0.25–1.5) |
 | `sBreakThresholdFrac` | `0.5` | Body S-break threshold: a body run breaks once drawn below this fraction of its true length (0–1; `0` = never break on compression) |
@@ -46,7 +47,9 @@ schematic Tune sheet this section otherwise describes. `runoutBubbleScale` /
 `runoutBubbleDropScale` are a third: they govern only the runout bubble draw sites, so — unlike
 every other pref in this table — they have no Settings → Drawing control at all; they surface
 only in the runout/consolidated PDF Options sheets, under a "Runout bubbles" heading, not on
-the schematic or wear/undercut sheets, whose composers never read them.
+the schematic or wear/undercut sheets, whose composers never read them. `undercutLineArt` is
+the fourth, the mirror image of that: it reaches only the undercut composer, so it lives in
+Settings → PDF Export and the **undercut** preview's options sheet and nowhere else.
 
 Every one of those sheet rows is a **remote control for the one app-wide pref**, never a
 per-page copy: there is no per-document look-override axis and none is planned
@@ -141,7 +144,7 @@ Full-resolution preview through the shared `util/PdfRaster.renderPdfPageBitmap`
     Both caps keep the sheet clear of the status bar, which would otherwise leave no edge to
     swipe it back down by (on-device report).
 - **Live tuning:** the four tuning sliders — Line thickness, Body S-break, Shaft height,
-  Liner compression — reshape the page **while the finger is still on the track**
+  Liner & taper compression — reshape the page **while the finger is still on the track**
   ("see the differences without choosing, closing menu, opening menu, choosing" —
   on-device request). Each shared control (`ui/screen/ShaftHeightSlider.kt`) carries an
   optional `onDrag: (Float?) -> Unit`: the in-progress value every frame in the SAME units
@@ -217,8 +220,12 @@ Full-resolution preview through the shared `util/PdfRaster.renderPdfPageBitmap`
     transparent scrim still handles tap-outside-to-dismiss, unchanged.
   - The blank-draft chip overlaid on the preview is **hidden while the sheet is open** — it
     would sit on the page strip, and the sheet's own first row is that same switch.
-- **Orientation:** `DisposableEffect` unlocks rotation on entry and restores the
-  portrait lock on dispose — every other screen stays portrait-only.
+- **Orientation:** `DisposableEffect` unlocks rotation on entry (`unlockRotation`) and
+  restores the device's BASE orientation on dispose (`restoreBaseOrientation`,
+  `ui/adaptive/Orientation.kt` — the one `R.integer.activity_orientation` the manifest
+  declares: portrait on a phone, free rotation on a tablet). Restoring a hard-coded portrait
+  here would lock a tablet to portrait the first time a preview closed. See
+  `docs/contracts/Adaptive.md`.
 - **Pipeline:** `snapshotFlow { SchematicRenderInputs(…) }.conflate().collect { … }` →
   snapshot `vm.currentPdfPrefs` on main thread → `Dispatchers.IO` →
   `renderPdfPageBitmap` (temp PDF via the `composeShaftPdf` lambda → rasterize page 0) →

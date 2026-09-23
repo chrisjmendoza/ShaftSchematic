@@ -30,9 +30,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.android.shaftschematic.ui.screen.AchievementsRoute
 import com.android.shaftschematic.ui.screen.AboutRoute
 import com.android.shaftschematic.doc.stripShaftDocExtension
@@ -40,6 +42,7 @@ import com.android.shaftschematic.ui.screen.DeveloperOptionsRoute
 import com.android.shaftschematic.ui.screen.DuplicateForMateDialog
 import com.android.shaftschematic.ui.screen.HelpRoute
 import com.android.shaftschematic.ui.screen.PdfPreviewScreen
+import com.android.shaftschematic.ui.screen.RenameShaftDocumentDialog
 import com.android.shaftschematic.ui.screen.SettingsRoute
 import com.android.shaftschematic.ui.screen.ShaftEditorRoute
 import com.android.shaftschematic.ui.screen.StartScreen
@@ -56,6 +59,22 @@ import com.android.shaftschematic.util.FeedbackIntentFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+/** The `help` route's optional deep-link argument — the topic slug to open on. */
+const val HELP_TOPIC_ARG = "topic"
+
+/** The NavHost pattern for Help. Built here so the query syntax lives in one place. */
+const val HELP_ROUTE_PATTERN = "help?$HELP_TOPIC_ARG={$HELP_TOPIC_ARG}"
+
+/**
+ * The route string for Help, optionally deep-linked to one topic.
+ *
+ * Every caller goes through this rather than spelling the query itself, so the argument's
+ * name and encoding are stated once. A null or blank [topicKey] yields the bare `help`
+ * route, which the optional argument's default value still matches.
+ */
+fun helpRoute(topicKey: String? = null): String =
+    if (topicKey.isNullOrBlank()) "help" else "help?$HELP_TOPIC_ARG=$topicKey"
 
 /**
  * AppNav
@@ -156,7 +175,7 @@ fun AppNav(vm: ShaftViewModel) {
                         onOpen = { runGuarded { nav.navigate("openLocal") } },
                         onOpenTemplates = { nav.navigate("templates") },
                         onSettings = { nav.navigate("settings") },
-                        onHelp = { nav.navigate("help") },
+                        onHelp = { nav.navigate(helpRoute()) },
                         onSendFeedback = {
                             val intent = FeedbackIntentFactory.create(
                                 context = ctx,
@@ -225,6 +244,11 @@ fun AppNav(vm: ShaftViewModel) {
             var mateDialogOpen by remember { mutableStateOf(false) }
             var mateExistingBases by remember { mutableStateOf(emptyList<String>()) }
 
+            // Rename reached from the title strip. Only a SAVED document has a file to rename;
+            // an unnamed one goes to the save screen instead, so this is never open without a
+            // current name (see onTitleClick).
+            var renameDialogOpen by remember { mutableStateOf(false) }
+
             val goHome: () -> Unit = {
                 nav.navigate("start") {
                     launchSingleTop = true
@@ -264,6 +288,17 @@ fun AppNav(vm: ShaftViewModel) {
                         }
                     },
                     onSaveAs = { nav.navigate("saveLocal") },
+                    // The title strip is the document's naming affordance, and the choice of
+                    // what naming MEANS is made here, once, for all five tabs: a document that
+                    // has never been saved has no file to rename, so it goes to the save screen
+                    // (which already seeds the suggested name); a saved one is renamed in place.
+                    onTitleClick = {
+                        if (currentDocumentName == null) {
+                            nav.navigate("saveLocal")
+                        } else {
+                            renameDialogOpen = true
+                        }
+                    },
                     onDuplicateForMate = {
                         scope.launch {
                             mateExistingBases = withContext(Dispatchers.IO) {
@@ -281,10 +316,15 @@ fun AppNav(vm: ShaftViewModel) {
                         }
                     },
                     onOpenSettings = { nav.navigate("settings") },
-                    onOpenHelp = { nav.navigate("help") },
+                    onOpenHelp = { nav.navigate(helpRoute()) },
+                    // Per-tab "?" buttons: the same screen, opened on the tab's own guide.
+                    onOpenHelpTopic = { topicKey -> nav.navigate(helpRoute(topicKey)) },
                     onOpenDeveloperOptions = { nav.navigate("developerOptions") },
                     // PDF EXPORT = show preview first, then SAF
-                    onExportPdf = { nav.navigate("pdfPreview") }
+                    onExportPdf = { nav.navigate("pdfPreview") },
+                    // Same preview, over the final drawing — the route argument is what
+                    // decides, so the preview and its export can never disagree.
+                    onExportFinalPdf = { nav.navigate("pdfPreview?target=$TARGET_ARG_FINAL") },
                 )
 
                 if (mateDialogOpen) {
@@ -318,6 +358,24 @@ fun AppNav(vm: ShaftViewModel) {
                             }
                         },
                     )
+                }
+
+                // Updating the session's document name is what makes the title strip follow the
+                // rename — on whichever tab the user tapped it, and on every other one.
+                if (renameDialogOpen) {
+                    currentDocumentName?.let { fromName ->
+                        RenameShaftDocumentDialog(
+                            fromName = fromName,
+                            onDismiss = { renameDialogOpen = false },
+                            onRenamed = { toName ->
+                                renameDialogOpen = false
+                                vm.setCurrentDocumentName(toName)
+                            },
+                            onError = { message ->
+                                scope.launch { editorSnackbarHostState.showSnackbar(message) }
+                            },
+                        )
+                    }
                 }
 
                 // The tabs own their own insets, so the host needs only the navigation bar's.
@@ -356,7 +414,7 @@ fun AppNav(vm: ShaftViewModel) {
                 onBack = { nav.popBackStack() },
                 onOpenAchievements = { nav.navigate("achievements") },
                 onOpenAbout = { nav.navigate("about") },
-                onOpenHelp = { nav.navigate("help") },
+                onOpenHelp = { nav.navigate(helpRoute()) },
                 onOpenDeveloperOptions = { nav.navigate("developerOptions") },
             )
         }
@@ -366,9 +424,22 @@ fun AppNav(vm: ShaftViewModel) {
             AboutRoute(vm = vm, onBack = { nav.popBackStack() })
         }
 
-        /* ───────── Help & FAQ ───────── */
-        composable("help") {
-            HelpRoute(onBack = { nav.popBackStack() })
+        /* ───────── Help & FAQ ─────────
+           The optional `topic` argument is a deep link: the document tabs' "?" buttons open
+           Help at their own how-to topic. It defaults to empty, so every plain `helpRoute()`
+           caller lands at the top of the list exactly as before.
+        */
+        composable(
+            HELP_ROUTE_PATTERN,
+            arguments = listOf(navArgument(HELP_TOPIC_ARG) {
+                type = NavType.StringType
+                defaultValue = ""
+            }),
+        ) { entry ->
+            HelpRoute(
+                onBack = { nav.popBackStack() },
+                initialTopicKey = entry.arguments?.getString(HELP_TOPIC_ARG)?.ifBlank { null },
+            )
         }
 
         /* ───────── Developer Options ───────── */
@@ -406,11 +477,21 @@ fun AppNav(vm: ShaftViewModel) {
            Shows a full-resolution raster preview of the PDF page with pinch-to-zoom.
            The "Export PDF" action in the top bar navigates onward to the SAF route.
         */
-        composable("pdfPreview") {
+        composable(
+            "pdfPreview?target={target}",
+            arguments = listOf(navArgument("target") {
+                type = NavType.StringType
+                defaultValue = TARGET_ARG_ORIGINAL
+            }),
+        ) { entry ->
+            val target = specTargetFromArg(entry.arguments?.getString("target"))
             PdfPreviewScreen(
                 vm = vm,
                 onBack = { nav.popBackStack() },
-                onExport = { nav.navigate("exportPdf") }
+                // The preview hands its OWN drawing to the export — the sheet on screen and
+                // the file written must never be two different geometries.
+                onExport = { nav.navigate("exportPdf?target=${targetArg(target)}") },
+                target = target,
             )
         }
 
@@ -418,8 +499,19 @@ fun AppNav(vm: ShaftViewModel) {
            This should remain your SAF-based CreateDocument("application/pdf") route.
            It writes PDF bytes to the chosen external location.
         */
-        composable("exportPdf") {
-            PdfExportRoute(nav = nav, vm = vm) { nav.popBackStack() }
+        composable(
+            "exportPdf?target={target}",
+            arguments = listOf(navArgument("target") {
+                type = NavType.StringType
+                defaultValue = TARGET_ARG_ORIGINAL
+            }),
+        ) { entry ->
+            PdfExportRoute(
+                nav = nav,
+                vm = vm,
+                onFinished = { nav.popBackStack() },
+                target = specTargetFromArg(entry.arguments?.getString("target")),
+            )
         }
     }
 }

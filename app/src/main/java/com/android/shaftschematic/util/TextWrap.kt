@@ -7,7 +7,7 @@ import android.graphics.Paint
  *
  * The footer used to ellipsize: `Thread: 5.25" [133.4 mm] × 4 TPI × 5 13/16" [147.6 m…` — the value
  * the sheet exists to communicate, replaced by a `…` (on-device sheet,
- * `docs/DualUnitStacking_PLAN.md` §1d). Dual units roughly double a footer line's width, so this
+ * `docs/archive/DualUnitStacking_PLAN.md` §1d). Dual units roughly double a footer line's width, so this
  * stopped being an edge case. Wrapping keeps every figure on the page; the caller pays for it in
  * line count, which the footer's pitch fit-clamp already knows how to absorb.
  *

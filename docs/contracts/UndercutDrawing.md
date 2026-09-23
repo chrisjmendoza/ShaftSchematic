@@ -288,7 +288,11 @@ data class UndercutRecord(val undercuts: List<Undercut> = emptyList())
   started strip draws no liner span, so it stays clear paper) — the notch voids stay pure white,
   and the section's remaining core (between the floor lines) fills one step **lighter** than the
   liner: erased to the sheet colour, then refilled at half the liner shade so the cut span reads
-  distinct from the liner around it. Same tone in every draw site. Both
+  distinct from the liner around it. Same tone in every draw site. **Unless the sheet is printed
+  as line art**: `PdfPrefs.undercutLineArt` (below) drops every fill on the PDF, the always-shaded
+  strip liner and the section core included, so "always shades its liner" reads "always, unless
+  line art". The void erase runs either way — it removes the component's surface stroke across
+  the mouth, which is construction, not a tone. Both
   canvases (route overview, detail overlay) paint onto a hard-coded white sheet, so their
   component fills are fixed ink colours rather than theme colours: a dark-theme tint
   (near-white `onSurface`/`tertiary`) would wash into the paper and leave the white voids nothing
@@ -307,10 +311,27 @@ data class UndercutRecord(val undercuts: List<Undercut> = emptyList())
   every intensity, and the STANDARD/GREY default reproduces the historical fixed shades (liner
   ≈ the PDF `argb 40` weight, section = the constant exactly; pinned by `UndercutStyleTest`).
   `drawUndercutNotches` takes the core fill as its `sectionFillColor` parameter. **The PDF is
-  deliberately not style-driven** — the printed drawing keeps the standard black-ink shading
-  (same posture as preview colors never leaking into `ShaftPdfComposer`); a PDF line-art option
-  is a considered follow-up in `docs/SettingsCustomization_PLAN.md`, complicated by the
-  strip's always-shaded-liner rule above.
+  deliberately not style-driven** — the printed drawing keeps the standard black ink, and no
+  `UndercutStyle` value ever reaches a composer (same posture as preview colors never leaking
+  into `ShaftPdfComposer`).
+
+  **Print shading — `PdfPrefs.undercutLineArt`** (default `false`; Settings → PDF Export, and the
+  undercut preview's PDF options sheet at the FOOT of the "Shade in Components" group, testTag
+  `pdf_undercut_line_art`): the print side's own line-art switch, part of the drawing LOOK and
+  therefore captured by drawing profiles. On, the undercut PDF draws **no shade fill anywhere** —
+  `bodyFill`, `taperFill`, `linerFill`, `stripLinerFill` and the notch section core are all absent
+  — and the sheet reads from the notch construction alone (void, full-height section faces, floor
+  lines). Everything else is untouched: outlines, thread hatch, the coupler-slot cutout fill in
+  `SimpleShaftProfile` (a reference-cutout marker, not shading), rails, text, and the void fill
+  itself. ONE pure decision behind it, `undercutPdfFillPlan` (`pdf/UndercutPdfFillPlan.kt`,
+  `UndercutPdfFillPlanTest`); the composer builds its paints from the plan and threads
+  `sectionCoreFill` into `drawUndercutNotches`. The undercut document ONLY — the schematic, wear
+  and runout composers never read it, which is why the row is offered on that one options sheet
+  rather than on every one.
+
+  It is **independent of the screen `UndercutStyle` line-art mode by design**: two settings with
+  the same meaning on two surfaces, neither reading the other, because a style meant for the
+  canvases must not leak into a composer. Turning one on does not turn the other on.
 
 - **Strips — liner-anchored vs free windows.** The zoomed-view unit consumed by the overview
   affordances, the detail overlay, and the PDF is a sealed `UndercutStrip`, not a bare
@@ -395,6 +416,38 @@ threads/liners`), so a notch is cut against an identical local surface everywher
 (`EditorTab.kt`, `ShaftEditorRoute.kt`, `EditorSidebar.kt`): disabled until the shaft has ≥1
 component and a non-zero OAL. The sidebar's `ContentCut` icon sits after Wear Document in the
 top nav group.
+
+### Window width
+
+The tab keys its skeleton on `currentWindowWidthClass()`; the policy behind the classes is
+`docs/contracts/Adaptive.md`. Everything else in this section describes the COMPACT layout,
+which is unchanged.
+
+- **COMPACT** — one scrolling column: intro line, overview canvas + hint, "Add undercut",
+  the exaggeration slider and the recorded-cut list, then the blank-draft switch, the gate
+  message and `DocumentActionButtons`.
+- **MEDIUM** — the same single column with a taller canvas box (at the phone's height a shaft
+  drawn across a 600–840 dp column flattens into a rule). Nothing else moves.
+- **EXPANDED** — two panes in a `Row` under the toolbar divider, a `VerticalDivider` between,
+  each scrolling independently:
+  - **left**, `testTag "sheet_pane_canvas"` — the overview canvas, then the intro line, the
+    blank-draft switch, the gate message and `DocumentActionButtons`.
+  - **right**, `testTag "sheet_pane_controls"` — the authoring side: "Add undercut", the cut
+    depth exaggeration slider, and the recorded-cut list.
+
+  The canvas is **pinned** out of the left pane's scroll: the exaggeration slider opposite it
+  restyles what it draws, and a control whose effect scrolls off screen cannot be judged. The
+  canvas sizes by PROPORTION there rather than by a fixed height, since the pane's width is the
+  free variable.
+
+The skeleton is the ONLY thing the width class changes. The tab composes its blocks **once**
+(`canvasBlock`, `addButton`, `recordSection`, `printGroup`) and both branches call the same
+values, so a phone layout and a tablet layout cannot drift; `sheetCanvasModifier` and
+`SheetTwoPane` (`ui/screen/SheetPaneLayout.kt`) are shared with the Runout and Wear tabs. Every
+`testTag` and the canvas's tap `pointerInput` survive unchanged.
+
+The hamburger `IconButton` is omitted when `LocalSidebarPermanent.current` is true — there is
+nothing to open when the sidebar is already laid out beside the tabs.
 
 ### Overview canvas (`UndercutRoute`)
 - `ShaftLayout.compute` + `ShaftRenderer.draw` over `resolvedComponents`, then notches drawn

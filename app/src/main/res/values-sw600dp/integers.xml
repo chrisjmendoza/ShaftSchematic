@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Tablets (smallest width >= 600 dp) rotate freely: the layouts adapt by window width
+      class, and a landscape tablet is the demo/shop-floor posture.
+      ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED = -1 (the system's own rotation policy).
+    -->
+    <integer name="activity_orientation">-1</integer>
+</resources>

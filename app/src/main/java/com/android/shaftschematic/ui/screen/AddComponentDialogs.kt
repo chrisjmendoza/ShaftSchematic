@@ -43,6 +43,8 @@ import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.BlendProfile
 import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.BoltHoleClocking
+import com.android.shaftschematic.model.BoltHoleStyle
 import com.android.shaftschematic.model.SlotAuthoredReference
 import com.android.shaftschematic.model.keywayCount
 import com.android.shaftschematic.model.suggestedBodyKeywayEnd
@@ -326,6 +328,13 @@ fun AddBodyDialog(
                         CommitNumField("KW D (${abbr(kwUnit)})", kwDepth,
                             modifier = Modifier.weight(1f)) { kwDepth = it }
                     }
+                    // Standard key stock, mirroring the body card (parity rule — it writes W and
+                    // D, which are geometry). A pick fills the two fields with exactly the text a
+                    // typed value would show; nothing is written until the user taps an entry.
+                    KeywayStdSizePicker(unit = kwUnit, hostDiaMm = diaMm) { w, d ->
+                        kwWidth = dispKw(w, kwUnit)
+                        kwDepth = dispKw(d, kwUnit)
+                    }
                     Spacer(Modifier.height(8.dp))
                     CommitNumField("KW L (${abbr(kwUnit)})", kwLength) { kwLength = it }
                     Spacer(Modifier.height(8.dp))
@@ -585,8 +594,10 @@ fun AddLinerDialog(
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
- * Coupler Bolt Slot — one axial row of radial cutouts.
- * Start, Hole Ø, Count, Spacing, Through/Blind (+ Depth). Reference defaults FWD.
+ * Coupler Bolt Slot — one axial row of radial holes.
+ * Hole style (Seam | Cross-drilled), Start, Hole Ø, Count, Spacing, Through/Blind (+ Depth).
+ * Reference defaults FWD. The style is an add-time choice (it decides what the row draws
+ * as), so it sits under the parity rule and is mirrored on the card.
  * ──────────────────────────────────────────────────────────────────────────── */
 
 @Composable
@@ -603,12 +614,17 @@ fun AddCouplerBoltSlotDialog(
     onSubmit: (
         startMm: Float, holeDiaMm: Float, count: Int, spacingMm: Float,
         through: Boolean, depthMm: Float, reference: SlotAuthoredReference,
+        holeStyle: BoltHoleStyle, clocking: BoltHoleClocking,
     ) -> Unit,
     onCancel: () -> Unit,
 ) {
     // Default reference is FWD per spec.
     var isFwd by remember { mutableStateOf(true) }
     var through by remember { mutableStateOf(true) }
+    var holeStyle by remember { mutableStateOf(BoltHoleStyle.SEAM) }
+    // 90° is the norm for a coupling bolt (in line, it would pass through the key).
+    var clocking by remember { mutableStateOf(BoltHoleClocking.DEG_90) }
+    val isCross = holeStyle == BoltHoleStyle.CROSS
 
     var startAft by remember(unit, initialStartMm) { mutableStateOf(toDisplayString(initialStartMm, unit)) }
     var startFwd by remember(unit) { mutableStateOf("0") }
@@ -670,13 +686,36 @@ fun AddCouplerBoltSlotDialog(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    Text("Hole:", style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    DirectionChip("Seam", selected = !isCross) { holeStyle = BoltHoleStyle.SEAM }
+                    DirectionChip("Cross-drilled", selected = isCross) { holeStyle = BoltHoleStyle.CROSS }
+                }
+                if (isCross) {
+                    val is90 = clocking == BoltHoleClocking.DEG_90
+                    Row(
+                        Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("From keyway:", style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        DirectionChip("90°", selected = is90) { clocking = BoltHoleClocking.DEG_90 }
+                        DirectionChip("In line", selected = !is90) { clocking = BoltHoleClocking.IN_LINE }
+                    }
+                }
+                Row(
+                    Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text("Measure From:", style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     DirectionChip("AFT", selected = !isFwd) { isFwd = false }
                     DirectionChip("FWD", selected =  isFwd) { isFwd = true  }
                 }
                 CommitNumField(
-                    label = "First slot from ${if (isFwd) "FWD" else "AFT"} (${abbr(unit)})",
+                    label = slotStartFieldLabel(isFwd = isFwd, isCross = isCross, unit = unit),
                     initial = if (isFwd) startFwd else startAft,
                     errorText = boundsError,
                 ) { if (isFwd) startFwd = it else startAft = it }
@@ -711,12 +750,25 @@ fun AddCouplerBoltSlotDialog(
                 val ref = if (isFwd) SlotAuthoredReference.FWD else SlotAuthoredReference.AFT
                 onSubmit(
                     physStartMm, holeDiaMm, count, spacingMm.coerceAtLeast(0f),
-                    through, if (through) 0f else depthMm, ref,
+                    through, if (through) 0f else depthMm, ref, holeStyle, clocking,
                 )
             }) { Text("Add") }
         },
         dismissButton = { TextButton(onClick = onCancel) { Text("Cancel") } }
     )
+}
+
+/**
+ * Label of the coupler bolt row's position field — ONE source for the Add dialog and the
+ * card, so the two surfaces name the same measurement the same way. The value is always the
+ * distance from the chosen face to the nearest hole CENTER; a cross-drilled hole says so
+ * outright because that is how the shop quotes it ("from the end of the shaft to the center
+ * of the hole"), while a seam row keeps its "first slot" wording.
+ */
+internal fun slotStartFieldLabel(isFwd: Boolean, isCross: Boolean, unit: UnitSystem): String {
+    val face = if (isFwd) "FWD" else "AFT"
+    val what = if (isCross) "Hole center" else "First slot"
+    return "$what from $face (${abbr(unit)})"
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
@@ -1104,6 +1156,12 @@ fun AddTaperDialog(
                     Text("×", style = MaterialTheme.typography.titleMedium)
                     CommitNumField("KW D (${abbr(kwUnit)})", kwDepth,
                         modifier = Modifier.weight(1f)) { kwDepth = it }
+                }
+                // Standard key stock, mirroring the taper card (parity rule). Sized to the LARGE
+                // end — a key is specified for the section it seats in, and that is the L.E.T.
+                KeywayStdSizePicker(unit = kwUnit, hostDiaMm = max(setMm, letMm)) { w, d ->
+                    kwWidth = dispKw(w, kwUnit)
+                    kwDepth = dispKw(d, kwUnit)
                 }
                 Spacer(Modifier.height(8.dp))
                 CommitNumField("KW L (${abbr(kwUnit)})", kwLength) { kwLength = it }

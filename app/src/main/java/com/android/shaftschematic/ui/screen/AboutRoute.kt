@@ -41,6 +41,7 @@ import com.android.shaftschematic.ui.viewmodel.unlockAchievement
 import com.android.shaftschematic.util.Achievements
 import kotlinx.coroutines.launch
 import java.util.Calendar
+import com.android.shaftschematic.ui.adaptive.readableWidth
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -69,7 +70,7 @@ fun AboutRoute(
                 title = { Text("About") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 }
             )
@@ -79,6 +80,7 @@ fun AboutRoute(
         Column(
             modifier = Modifier
                 .padding(pad)
+                .readableWidth()
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {

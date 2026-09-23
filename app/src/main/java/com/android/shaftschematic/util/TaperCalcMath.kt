@@ -200,8 +200,12 @@ fun taperCalcRate(lengthMm: Double, smallDiaMm: Double, largeDiaMm: Double): Tap
  * shop reads a scale), millimeters take the app's three-decimal print convention.
  */
 fun taperCalcValueText(mm: Double, unit: UnitSystem): String =
+    "${taperCalcNumberText(mm, unit)} ${if (unit == UnitSystem.INCHES) "in" else "mm"}"
+
+/** [taperCalcValueText] without the suffix — for a field that already shows its unit. */
+fun taperCalcNumberText(mm: Double, unit: UnitSystem): String =
     if (unit == UnitSystem.INCHES) {
-        "${LengthFormat.formatInchesSmart(mm / MM_PER_IN)} in"
+        LengthFormat.formatInchesSmart(mm / MM_PER_IN)
     } else {
-        "${String.format(Locale.US, "%.3f", mm)} mm"
+        String.format(Locale.US, "%.3f", mm)
     }

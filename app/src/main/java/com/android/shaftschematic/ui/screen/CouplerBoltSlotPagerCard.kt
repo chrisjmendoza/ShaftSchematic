@@ -15,6 +15,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.android.shaftschematic.model.BoltHoleClocking
+import com.android.shaftschematic.model.BoltHoleStyle
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.SlotAuthoredReference
 import com.android.shaftschematic.ui.order.ComponentKind
@@ -30,9 +32,9 @@ import com.android.shaftschematic.util.UnitSystem
  * Carousel editor card for a coupler bolt slot — a reference-only radial cutout, so nothing
  * here reaches OAL, body splitting, or collision.
  *
- * Measure From, hole Ø, count, spacing (only above one hole) and the through/blind pair are
- * mirrored in `AddCouplerBoltSlotDialog` by the add-dialog-parity invariant; "Show dimension
- * rail" is the documented card-only carve-out.
+ * Hole style (Seam | Cross-drilled), Measure From, hole Ø, count, spacing (only above one
+ * hole) and the through/blind pair are mirrored in `AddCouplerBoltSlotDialog` by the
+ * add-dialog-parity invariant; "Show dimension rail" is the documented card-only carve-out.
  *
  * [f1] is supplied by [ComponentPagerCard] because every card's debug line uses it.
  */
@@ -47,12 +49,15 @@ internal fun CouplerBoltSlotPagerCard(
     f1: (Float) -> String,
     onUpdateCouplerBoltSlot: (index: Int, startMm: Float, holeDiaMm: Float, count: Int, spacingMm: Float, through: Boolean, depthMm: Float) -> Unit,
     onUpdateCouplerBoltSlotReference: (Int, SlotAuthoredReference) -> Unit,
+    onUpdateCouplerBoltSlotStyle: (Int, BoltHoleStyle) -> Unit,
+    onUpdateCouplerBoltSlotClocking: (Int, BoltHoleClocking) -> Unit,
     onUpdateCouplerBoltSlotShowRail: (Int, Boolean) -> Unit,
     onRemoveCouplerBoltSlot: (String) -> Unit,
 ) {
     val idx = explicitIndex ?: return
     val cs  = spec.couplerBoltSlots.getOrNull(idx) ?: return
     val isFwdRef = cs.authoredReference == SlotAuthoredReference.FWD
+    val isCross = cs.holeStyle == BoltHoleStyle.CROSS
     // Row span from aft-most (i=0) to fwd-most center.
     val rowSpanMm = (cs.count - 1).coerceAtLeast(0) * cs.spacingMm
     // Displayed authored start: distance from the reference face to the nearest cutout.
@@ -67,13 +72,50 @@ internal fun CouplerBoltSlotPagerCard(
         return if (isFwdRef) (spec.overallLengthMm - authoredMm - span).coerceAtLeast(0f) else authoredMm
     }
 
+    val selectedColors = FilterChipDefaults.filterChipColors(
+        selectedContainerColor = Color.Black, selectedLabelColor = Color.White,
+        containerColor = Color.Transparent, labelColor = MaterialTheme.colorScheme.onSurface
+    )
+
     ComponentCard(
-        title = cs.label ?: "Coupler Bolt Slot",
+        title = cs.label ?: if (isCross) "Coupler Bolt Hole" else "Coupler Bolt Slot",
         debugText = if (showComponentDebugLabels) "id=${cs.id} • startMm=${f1(cs.startFromAftMm)} • count=${cs.count}" else null,
         componentId = cs.id, componentKind = ComponentKind.COUPLER_BOLT_SLOT,
         outerPaddingHorizontal = outerPaddingHorizontal,
         onRemove = { onRemoveCouplerBoltSlot(cs.id) }
     ) {
+        // Hole style toggle — seam cutout (muff coupler) vs cross-drilled through the shaft.
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Hole:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            FilterChip(selected = !isCross, onClick = { onUpdateCouplerBoltSlotStyle(idx, BoltHoleStyle.SEAM) },
+                label = { Text("Seam") }, colors = selectedColors,
+                border = if (!isCross) BorderStroke(1.dp, Color.Black) else null)
+            FilterChip(selected = isCross, onClick = { onUpdateCouplerBoltSlotStyle(idx, BoltHoleStyle.CROSS) },
+                label = { Text("Cross-drilled") }, colors = selectedColors,
+                border = if (isCross) BorderStroke(1.dp, Color.Black) else null)
+        }
+        if (isCross) {
+            // Clocking relative to the keyway — 90° draws the bore hidden, in line draws the circle.
+            val is90 = cs.clocking == BoltHoleClocking.DEG_90
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("From keyway:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                FilterChip(selected = is90, onClick = { onUpdateCouplerBoltSlotClocking(idx, BoltHoleClocking.DEG_90) },
+                    label = { Text("90°") }, colors = selectedColors,
+                    border = if (is90) BorderStroke(1.dp, Color.Black) else null)
+                FilterChip(selected = !is90, onClick = { onUpdateCouplerBoltSlotClocking(idx, BoltHoleClocking.IN_LINE) },
+                    label = { Text("In line") }, colors = selectedColors,
+                    border = if (!is90) BorderStroke(1.dp, Color.Black) else null)
+            }
+        }
+
         // AFT / FWD reference toggle
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -81,10 +123,6 @@ internal fun CouplerBoltSlotPagerCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text("Measure From:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            val selectedColors = FilterChipDefaults.filterChipColors(
-                selectedContainerColor = Color.Black, selectedLabelColor = Color.White,
-                containerColor = Color.Transparent, labelColor = MaterialTheme.colorScheme.onSurface
-            )
             FilterChip(selected = !isFwdRef, onClick = { onUpdateCouplerBoltSlotReference(idx, SlotAuthoredReference.AFT) },
                 label = { Text("AFT") }, colors = selectedColors,
                 border = if (!isFwdRef) BorderStroke(1.dp, Color.Black) else null)
@@ -94,7 +132,7 @@ internal fun CouplerBoltSlotPagerCard(
         }
 
         CommitNum(
-            label = "First slot from ${if (isFwdRef) "FWD" else "AFT"} (${abbr(unit)})",
+            label = slotStartFieldLabel(isFwd = isFwdRef, isCross = isCross, unit = unit),
             initialDisplay = disp(authoredStartMm, unit)
         ) { s ->
             val authoredMm = toMmOrNull(s, unit) ?: return@CommitNum

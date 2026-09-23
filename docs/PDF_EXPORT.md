@@ -1,18 +1,29 @@
 # PDF Export Specification
 Version: v0.5.x
-Last updated: 2026-08-29 — §5.5/§5.6 document the PDF options audit: a Print icon now sits
-in every preview overlay's top bar beside Export (each route reuses its own tab-body Print
+Last updated: 2026-09-15 — stale-identifier sweep: §6.4's body-compression entry now names the
+real pass (`drawBodyRunsWithBreaks`, `pdf/BodyRunDraw.kt`) instead of the long-gone
+`ShaftPdfComposer.drawBodiesCompressedCenterBreak()`, and §5.4/§5.5 drop `DimSpan.labelBottom`
+(a second rail-label line that was never populated and was deleted as dead in the 2026-07-26
+Wave 2 pass) — component names and S.E.T. markers print from their own below-shaft pass, not
+from a rail.
+2026-09-03 — §5.3/§5.3b: the component-name labels and the Ø callouts now share ONE collision
+space below the shaft (pure `geom/BelowShaftLabelLayout.kt`, obstacles from
+`DiameterLeaderRenderer.occupancy`) — both anchor on a component's center, so a component
+printing a name and a Ø set one string through the other; names slide along their own span
+before dropping a row, rows stop at the footer band, and the pass shrinks a point at a time
+rather than collapsing. 2026-08-29 — §5.5/§5.6 document the PDF options audit: a Print icon now
+sits in every preview overlay's top bar beside Export (each route reuses its own tab-body Print
 action, so the two entry points cannot drift); the schematic and shared options sheets both
 lead with a compact "Content" chip row in place of the old switch rows; both sheets reorder
 around a single unified sequence (Shaft height now leads, ahead of S-break and Line
-thickness; Liner compression and the new "Runout bubbles" size/drop sliders follow; Dimension
+thickness; Liner & taper compression and the new "Runout bubbles" size/drop sliders follow; Dimension
 arrows, Fractions, then the "Measurement reference" and "Shade in Components" sections
 collapse into expandables, with Dual units last); the wear document's MAIN profile band now
 takes the shared per-job "Shaft height" multiplier too (§5.7); and "Shade in PDF" /
 "Dimension tiering reference" are renamed "Shade in Components" / "Measurement reference"
 everywhere, Settings included, with a new "Explicit bodies only" sub-checkbox under Bodies.
 2026-08-12 — §5.6 documents the consolidated preview's Tune sheet gaining
-Blank draft, Shaft height, Liner compression, and Measurement reference (the schematic
+Blank draft, Shaft height, Liner & taper compression, and Measurement reference (the schematic
 Tune sheet's applicable set, minus Component labels and the blank Ø-callouts sub-toggle,
 which the consolidated composer never reads). 2026-08-06 (b) — §5.4/§5.5 gain the one-collision-space rule for dimension
 labels (pure `geom/DimensionRailLayout.kt`: rail lines are obstacles too, slide along the
@@ -152,14 +163,28 @@ Top of page, full width.
   tier step, the wear Ø callout rows, and the consolidated sheet's rotated in-profile values
   (where the axes swap: a stack costs room ALONG the shaft and needs LESS drawn diameter). A
   sheet whose budget cannot absorb it reverts to INLINE for the whole sheet and logs why —
-  per sheet, never per label. See `docs/DualUnitStacking_PLAN.md`.
+  per sheet, never per label. See `docs/archive/DualUnitStacking_PLAN.md`.
 - Overall Length
 - Scale (“1:1”, “2:1”, or “Scale to Fit”)
 - Drawn By (optional)
 - Revision (optional)
+- Drawing label (`ProjectInfo.drawingLabel`, optional) — names WHICH drawing of the document
+  the sheet is. Blank on every ordinary sheet (nothing prints); the Final Schematic tab sets
+  `"Final"`, which prints `Drawing: Final` in the footer job block (after Item, before Date)
+  and in the runout/wear/undercut header line (`jobInfoHeaderLine`), plus a bold **FINAL**
+  badge sharing the Side badge's line. The schematic's title-block header never carries it —
+  the schematic gets the footer line and the badge. In the footer job block a blank draft
+  rules a `Drawing:` line only when the label is set; the header's blank-label set
+  (`JOB_INFO_BLANK_LABELS`) is untouched. See `docs/contracts/FinalSchematic.md`.
 
 ### Font Rules:
-- Sans-serif
+- Sans-serif by default, but the face is user-set: **Settings → Drawing → "Output font"**
+  (`PdfPrefs.outputFont` — Standard / Condensed / Serif / Monospace). Each composer builds its
+  root text `Paint` with `typeface = OutputTypography.active`, the process-wide mirror
+  `SettingsStore.updatePdfPrefs` writes; every other text paint on a sheet is a copy-constructor
+  of that root and inherits the face. App-wide and captured by Drawing profiles, never
+  per-document, and deliberately absent from the PDF options sheets. See
+  `docs/contracts/FractionTypography.md` §6.
 - 10–14 pt depending on field importance
 - Black text only
 
@@ -365,6 +390,10 @@ they are now all-BELOW, same as liners.
   `geom/DiameterCalloutLayout.kt` (`assignTiers` — greedy left-to-right interval
   coloring, capped at `MAX_TIERS = 2`, `MIN_GAP = 4f` pt clearance); the renderer only
   measures label widths and reads back the tier.
+- **The band is shared with the component-name labels** (§5.3b), which are placed against
+  `DiameterLeaderRenderer.occupancy(calls)` — the value boxes and the leader lines, measured
+  off the same geometry `drawOne` inks. The callouts are planned before the names for that
+  reason and drawn after; they never move for a name.
 - **PDF-only:** there is no on-screen canvas diameter leader, so the "draw identically
   in both sites" rule that applies to coupler bolt slots / wear pits / runout markers
   does not apply here.
@@ -435,6 +464,33 @@ Auto spans are never labelled, so they carry no flag. Hiding a label never renum
 positional fallback names of the remaining components ("Body #2" stays #2). Card-only
 toggles (`*_show_label_toggle`), the same carve-out as "Show Ø on drawing"; draw-only in
 every respect.
+
+## One collision space with the Ø callouts
+
+Names and Ø callouts both hang below the shaft and both anchor on a component's **CENTER**, so
+a component printing a name and a Ø aimed two strings at the same x and set one through the
+other (on-device report). Tracking collisions per pass is blind exactly where the two meet, so
+they share ONE space — the same rule §5.4 states for dimension labels and rail lines.
+
+`geom/BelowShaftLabelLayout.kt` (pure, JVM-tested) places every name at once against the
+callouts' occupancy boxes as obstacles, in §5.4's resolution order:
+
+1. **slide the label horizontally along its own component's span** — the smallest shift from
+   the centered position that clears everything. A name reads as its component's from anywhere
+   over it, so a slide is nearly free and costs no vertical room. The window is the component's
+   span widened to contain the centered position (a short component's name is wider than the
+   component) and clamped to the content rect;
+2. only when no slide fits, **drop to the next row**.
+
+Rows stop at the footer band, so a crowded sheet can never walk labels off the drawing. When a
+label still finds nowhere to go, the whole pass retries one point smaller — narrower text needs
+less room and fits more rows — down to 7 pt, the fit-loop posture §5.4's rails already use. Past
+that a label takes the row it overlaps least (`Placement.fitted = false`, breadcrumbed): a
+least-bad placement, never a dropped name.
+
+The obstacles are the callouts' **value boxes and their leader lines** — a name struck through
+by a leader stem reads no better than one struck through by a value. Callout placement is
+unchanged: the leaders are anchored geometry and the names are what move.
 
 ---
 
@@ -513,8 +569,10 @@ hand-drafting convention `|←—— 237 1/2" ——→|` — instead of floatin
   no extra OAL padding constant (on-device report: the wider gap wasted whitespace). The
   planner's lift is the only thing that widens the gap, and only when the tier below
   floats a label into the lane.
-- **Unchanged:** extension lines, `labelBottom` (SET name below the rail), `drawArrow`,
-  and `canFitInwardArrows`.
+- **Unchanged:** extension lines, `drawArrow`, and `canFitInwardArrows`. (A `DimSpan` carries
+  exactly one label, `span.label`; the never-populated second-line field `labelBottom` was
+  deleted as dead in the 2026-07-26 Wave 2 pass. Component names print from their own
+  below-shaft pass, not from a rail.)
 - **Scope: PDF-only, no canvas twin.** `PdfDimensionRenderer` backs both the exported
   PDF and the on-screen PDF preview — `PdfPreviewScreen` rasterizes the real PDF via
   `composeShaftPdf` → `ShaftPdfComposer` → this same renderer, so there is no separate
@@ -538,8 +596,9 @@ Rules (shared helpers in `pdf/BlankFormText.kt`):
   sized for handwriting a mixed-number dimension on a clipboard), but draw no value text —
   the gap is the write-in spot. Same eligibility/fallback/collision logic as §5.4: the
   planner measures the write-in width instead of the value text, so gaps are reserved — and
-  slid or lifted clear of each other — exactly as printed values are. `labelBottom` (SET
-  names) are identifiers and still print.
+  slid or lifted clear of each other — exactly as printed values are. Component names and the
+  S.E.T. markers are identifiers, not values, so they still print — they come from their own
+  below-shaft pass, never from a rail label.
   - **A short span shrinks its gap rather than losing it**
     (`DimensionRailLayout.blankGapWidth`): a span that cannot host 60 pt plus its pad and
     arrowheads cuts whatever it affords, down to `BLANK_DIM_GAP_MIN_PT` (28 pt, about a
@@ -605,7 +664,7 @@ row** (`ContentChipRow`/`ContentChip`, `ShaftHeightSlider.kt`) — **Blank draft
 callouts** (enabled only while Blank draft is on, still testTag `pdf_blank_dia_callouts_toggle`),
 **Labels** — replacing the old switch rows; the captions they used to carry moved to Help, since
 three explained rows cost exactly the room the sliders below need. Then, in order: the
-**live-tuning group** — **"Shaft height"**, Body S-break, Line thickness, Liner compression
+**live-tuning group** — **"Shaft height"**, Body S-break, Line thickness, Liner & taper compression
 (the first and last §5.7 — the same per-job `RunoutConfig` values the Consolidated Output tab
 exposes, §5.6; the group leads because these are the controls the page-strip layout exists
 to keep judgeable, and Shaft height leads it — the control reached for most, on-device
@@ -640,6 +699,20 @@ liners per item in each composer's fill loop. Two boundaries stand above the fla
 consolidated sheet's in-profile-values liner lock, and the wear/undercut
 `SimpleShaftProfile` one-fill-per-kind pass (the paragraph above; DESIGN_INTENT §5 debt).
 Threads carry no shade flag — they hatch.
+
+**Undercut drawing: line art** (`PdfPrefs.undercutLineArt`, default `false`; Settings → PDF
+Export and the undercut preview's options sheet, at the foot of the shade group, testTag
+`pdf_undercut_line_art`): the UNDERCUT document draws **no shade fill anywhere** — bodies,
+tapers, liners, the detail strips' otherwise-always-shaded liner span, and the undercut
+section's core — so the sheet reads from the notch construction alone (the void erasing the
+surface stroke, the full-height section faces, the floor lines). Outlines, thread hatch, the
+coupler-slot cutout fill, rails, text and the void fill itself are untouched. ONE pure decision,
+`undercutPdfFillPlan` (`pdf/UndercutPdfFillPlan.kt`), feeds the composer's paints and the
+`sectionCoreFill` flag on `drawUndercutNotches`. It reaches that one composer, so the row is
+offered on that one options sheet; it is part of the drawing LOOK and rides Drawing profiles.
+**Independent of the screen-side `util/UndercutStyle.kt` line-art mode** — same meaning, two
+surfaces, neither reading the other, because a preview style never leaks into a composer
+(`docs/contracts/Appearance.md`).
 
 **Direct print** (`util/PdfPrint.kt`, `printShaftPdfPage`) wraps the same composers in a
 `PrintDocumentAdapter` (US Letter landscape, 1 page) and hands them to the Android print
@@ -716,18 +789,20 @@ sub-checkbox) — Dual units + layout LAST. This is the fullest instance of the 
 every gated row is on. The other three tabs reuse the same sheet with rows gated off by
 what their composer actually reads:
 - **Runout** (the classic standalone sheet) keeps the Content chips, Shaft height, Body
-  S-break (it draws compression breaks too), Line thickness, Liner compression, and the
+  S-break (it draws compression breaks too), Line thickness, Liner & taper compression, and the
   Runout bubbles sliders (its bubbles are the whole point of the sheet) — off: Dimension
   arrows and Measurement reference, since it draws no dimension rails.
 - **Wear** keeps the Content chip (Blank draft only — no Coupling face row), its own wear
   tuning block (Components election, Strip size, Trace depth, Wear area shade,
   Taper–liner join — `showWearControls`), **and now "Shaft height"** (the wear composer's
   MAIN profile band takes the shared multiplier too, §5.7) plus Line thickness — off:
-  Body S-break, Liner compression, Runout bubbles, Dimension arrows, and Measurement
+  Body S-break, Liner & taper compression, Runout bubbles, Dimension arrows, and Measurement
   reference (the wear composer takes none of them).
 - **Undercut** keeps only the Content chip (Blank draft) and Line thickness — its normal
   form draws no whole-shaft profile, so none of the sizing/compression/bubble controls
-  apply.
+  apply — plus the one row nothing else gets: **"Undercut drawing: line art (no shading)"**
+  (`showUndercutLineArt = true`) at the foot of the shade group, since
+  `PdfPrefs.undercutLineArt` reaches this composer alone.
 
 Every instance keeps Fractions (ungated — every document here prints lengths) and Shade in
 Components (ungated) at their fixed spots in the order.
@@ -809,7 +884,11 @@ posture as its trace-depth/wear-band controls.
   floor equalizes unequal tapers when both clamp to it — and use a ratio-preserving
   fraction-of-true floor instead (`PROFILE_TAPER_MIN_FRAC_OF_TRUE` = 0.7, λ-fit like
   the liner raises, so the drawn height never yields to it; ratio preservation is
-  structural — both tapers scale by the same factor at every squeeze). The SCHEMATIC
+  structural — both tapers scale by the same factor at every squeeze). That 0.7 is a
+  BASELINE: tapers ride the "Liner & taper compression" request with the liners
+  (`taperMinFracOfTrue` = `max(0.7, linerMinFracOfTrue)`, applied in the one builder
+  `profileFeatureSpans`), so the two measured kinds keep the same fraction of true
+  length — see that control below. The SCHEMATIC
   composer additionally uses lean floors (`SCHEMATIC_MIN_THREAD_PT` 28 /
   `_BODY_RUN_PT` 40 / `_LINER_PT` 56) — its values live on dimension rails and
   callouts, so proportion wins there; the runout/consolidated sheet keeps the writable
@@ -863,26 +942,34 @@ posture as its trace-depth/wear-band controls.
   ~0.29, 1 1/2" on a 2" shaft needs 6 — and the height clamp above means a wide multiplier
   range cannot produce a wide drawing. Commits near the standard height snap to exactly
   100% (`snappedHeightScale`); a "Standard (X″)" button restores the default.
-- **Liner compression (per-job pair, same two surfaces)**: the measured components —
-  tapers and liners — are what the sheets are about, so liners can be held proportional
-  lengthwise. **The drawing height takes precedence; liner compression is secondary**
-  (on-device direction): neither control ever changes the drawn shaft height. Checkbox
-  "Keep liners proportional lengthwise" (`RunoutConfig.linersProportional`): liners hold
-  true-scale width up to what the page affords at the selected height; the slider is
-  disabled while checked. Slider "Liner compression" (`RunoutConfig.linerCompression`,
-  0–100%, default 100%): how far liners may foreshorten below true scale — 100% = down
-  to the 100 pt writable floor (historical behavior), 0% = not at all. Both feed the
+- **Liner & taper compression (per-job pair, same two surfaces)**: the measured
+  components — tapers and liners — are what the sheets are about, so BOTH kinds ride this
+  one request and can be held proportional lengthwise. **The drawing height takes
+  precedence; this control is secondary** (on-device direction): neither part ever changes
+  the drawn shaft height. Checkbox "Keep liners and tapers proportional lengthwise"
+  (`RunoutConfig.linersProportional`): both hold true-scale width up to what the page
+  affords at the selected height; the slider is disabled while checked. Slider "Liner &
+  taper compression" (`RunoutConfig.linerCompression`, 0–100%, default 100%): how far they
+  may foreshorten below true scale — 100% = liners down to the 100 pt writable floor and
+  tapers to their 0.7 baseline (historical behavior), 0% = not at all. Both feed the
   derived `linerMinFracOfTrue` → `ProfileFeatureSpan.minWidthFracOfTrue` (geom,
-  unit-tested): a BEST-EFFORT width floor of `max(100pt, frac × true width)` — the
-  scale solve ignores it entirely, and when the raised floors don't fit at the solved
-  scale they shrink uniformly to fit (`fracFitFactor`); flat floors
+  unit-tested): a BEST-EFFORT width floor of `max(100pt, frac × true width)` for liners
+  and `max(0.7, frac) × true width` for tapers (`taperMinFracOfTrue`) — the scale solve
+  ignores both entirely, and when the raised floors don't fit at the solved scale they
+  shrink uniformly to fit (`fracFitFactor`); flat floors
   and keyway pins are untouched, and only keyway pins may still yield the height.
+  Because the two kinds share one requested fraction and one λ, their kept fractions are
+  EQUAL wherever the request clears the taper baseline — that evenness is the point of the
+  coupling (on-device request: liners walking up to true length beside tapers pinned at
+  70% read uneven). The coupling is one-way upward; under the baseline tapers hold 0.7,
+  since they carry no flat floor to land on.
   Applies to the schematic (`composeShaftPdf(linerMinFracOfTrue)`) and the
   runout/consolidated sheets (from `config`); rides the `.shaft` envelope (additive,
-  legacy default = free compression). The readout under the slider shows LIVE what
-  liners actually keep — "Liners keep at least ~N% of true length. The drawn height
-  never changes." (`estimatedLinerKeptFracOfTrue`, `ShaftHeightSlider.kt`,
-  unit-tested).
+  legacy default = free compression, which prints exactly as it did before the coupling).
+  The readout under the slider shows LIVE what they actually keep — "Liners and tapers
+  keep at least ~N% of true length. The drawn height never changes." — and splits the two
+  numbers only when the request sits under the taper baseline
+  (`estimatedLinerKeptFracOfTrue`, `ShaftHeightSlider.kt`, unit-tested).
 
 ---
 
@@ -894,8 +981,9 @@ posture as its trace-depth/wear-band controls.
 2. No multi-page continuation.
 3. No BOM tables.
 4. **Round-stock display compression exists for long bodies** (this replaces an earlier "no
-   display compression" claim, which is no longer true). `ShaftPdfComposer.drawBodiesCompressedCenterBreak()`
-   triggers per-body when that body's on-paper length reaches `COMPRESS_TRIGGER_PT` (220 pt) —
+   display compression" claim, which is no longer true). The ONE body-run pass both composers
+   call — `drawBodyRunsWithBreaks` (`pdf/BodyRunDraw.kt`) — breaks a run when its on-paper
+   length reaches `COMPRESS_TRIGGER_PT` (220 pt) —
    or when the compressed profile x-map squeezes it below a **user-set fraction of its true
    drawn width** (`breakForCompression`, `pdf/BreakSymbol.kt` — ONE predicate, behind the single
    body-run pass both composers call). The fraction is `PdfPrefs.sBreakThresholdFrac`, set in

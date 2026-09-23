@@ -90,7 +90,7 @@ fallback), so it carries neither the height slider nor the S-break slider.
 ### 3.2 Placement and order
 
 - **Order of presumed use, top to bottom**: content election first (compact chips), then the
-  page-reshaping sliders (Shaft height, S-break, Line thickness, Liner compression), then
+  page-reshaping sliders (Shaft height, S-break, Line thickness, Liner & taper compression), then
   page-specific controls, then typography (arrows, fractions), then the rarely-touched
   groups as **collapsed expandables** (Measurement reference, Shade in Components), and
   **dual units always last** (standing rule: dual/rarely-used options trail).
@@ -177,7 +177,10 @@ Help — the glossary included — must be reachable from the app's main menu, n
 behind Settings ("so hidden I don't even know where to find it" — the failing state).
 The rule going forward: any reference content a user might reach for mid-job (what a term
 means, what a control does) gets a top-level entry point; Settings is for changing
-things, not for finding explanations.
+things, not for finding explanations. Reaching the screen is only half of it — Help also
+carries a **search field** and each document tab (Runout, Wear, Undercut, Consolidated
+Output) carries a **"?" button that opens Help on that tab's own guide**, so the answer is
+one tap from the work rather than a scroll through five sections.
 
 ### 3.8 Standalone calculators (Q10)
 
@@ -186,6 +189,17 @@ calculator set the pattern; a **taper calculator** (enter the known values, read
 taper rate) joins it. Calculators are document-free utilities: they never write into the
 open document, and their entry point sits with the other utilities, not inside a
 component card.
+
+**Interaction model (ruled on-device for the taper calculator, the pattern for the rest):**
+a calculator answers when asked, not while the question is being typed — a **Calculate**
+button is the one trigger. The answer appears **in the empty field it belongs to**, as an
+italic preview, never as typed text (the golden rule reaches the calculators: a field holds
+what the user typed and nothing else; a ✓ lets the user *keep* the preview as an input by
+explicit act). When too little has been entered, the fields that could complete the solve
+turn red and the message names them. A result is a snapshot of the entries it came from and
+drops the moment any of them changes, so a stale number is never on screen. Typo feedback
+(text that does not read as a number) stays immediate; feedback about the *set* of values
+waits for the button.
 
 ## 4. Wording conventions
 

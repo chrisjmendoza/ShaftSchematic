@@ -6,7 +6,9 @@ All model values are **canonical millimeters (mm)**. Unit conversion (mm ↔ in)
 only at the UI edge for display and input — never in the model, ViewModel, or renderer.
 
 ## Docs
-Detailed contracts live in `docs/contracts/`.
+Detailed contracts live in `docs/contracts/` (index: `docs/contracts/INDEX.md`). This file is
+the ONE copy of the project rules — `AGENTS.md` and `.github/copilot-instructions.md` are
+pointers to it, never copies; a rule added here needs no mirroring.
 Read the relevant doc before editing a subsystem. Key files:
 - `ShaftScreen.md` — overall screen contract, commit-on-blur rule, unit edge rule
 - `AddComponentDialogs.md` — add-dialog parity rules (mirror carousel cards)
@@ -14,6 +16,7 @@ Read the relevant doc before editing a subsystem. Key files:
 - `ShaftViewModel.md` — ViewModel responsibilities and state ownership
 - `Model_Conventions.md` — model layer rules
 - `CouplerBoltSlot.md` — coupler bolt slot feature contract (reference-only cutouts)
+- `FinalSchematic.md` — the document's second drawing (`final_spec`), one editor / two targets
 
 ## Comment conventions
 No date stamps and no prior-code narratives in `.kt` comments — comments state current
@@ -45,11 +48,17 @@ Specifically:
   `AddBodyDialog`/`AddTaperDialog` when adding would reach ≥ 2 (≥ 1 existing + this
   dialog's keyway defined). Same condition on both surfaces. 180° and 90° are mutually
   exclusive.
+- **Keyway standard size**: the "Standard size…" picker appears on the Body/Taper cards and in
+  AddBodyDialog/AddTaperDialog under the W × D row; it writes through the typed-value path and
+  never fills on its own.
 - **Taper AFT/FWD reference**: `AddTaperDialog` must show AFT/FWD direction chips.
 - **Coupler bolt slot**: `AddCouplerBoltSlotDialog` and the `ResolvedCouplerBoltSlot`
-  carousel card must both expose Measure From (AFT | FWD), hole Ø, count, spacing (only
-  when count > 1), through/blind toggle + depth (only when blind). The card additionally
-  has the deferred "show dimension rail" toggle.
+  carousel card must both expose Hole (Seam | Cross-drilled — `BoltHoleStyle`, chosen at
+  add time because it decides what the row draws as), From keyway (90° | In line —
+  `BoltHoleClocking`, only while Cross-drilled), Measure From (AFT | FWD), hole Ø,
+  count, spacing (only when count > 1), through/blind toggle + depth (only when blind). The
+  position field's label comes from ONE helper (`slotStartFieldLabel`) on both surfaces.
+  The card additionally has the deferred "show dimension rail" toggle.
 
 **Carve-out — post-hoc display toggles are card-only.** A control that only exists to change
 how an *already-drawn* component prints, has a stable default, and is reached for after
@@ -66,7 +75,11 @@ pure `unshadedBodyRunIds`/`unshadedTaperIds`/`unshadedLinerIds`
 (`ui/resolved/ResolvedComponent.kt`) and threaded as id sets into the fill passes, which now
 always receive a paint; the consolidated sheet's in-profile-values liner lock and the
 wear/undercut documents' one-fill-per-kind `SimpleShaftProfile` boundary both stand above the
-per-component flag), **"Show name on drawing"** (`showNameOnDrawing`, all four explicit component cards —
+per-component flag. The EDITOR PREVIEW BOX mirrors the same effective decision — the positive
+complement `shadedComponentIds` rides `RenderOptions.shadedComponentIds` as an
+onSurface-tinted overlay on the preview fills (a print-decision marker, not print fidelity;
+on-device report: a checked Shade toggle changed nothing in the preview box), so the box and
+the composers can never disagree about what shades), **"Show name on drawing"** (`showNameOnDrawing`, all four explicit component cards —
 TRI-STATE per-component gate on the schematic's name label: unset follows the global
 `showComponentTitles` pref, an explicit ON prints even with that pref off, an explicit OFF
 hides even with it on — the pref is the default, never a master gate over an authored
@@ -90,7 +103,18 @@ but they **never** affect overall length (`coverageEndMm` ignores them), **never
 bodies, and **never** collide with other components (`collisionGroup() → null`). Do not
 add them to `coverageEndMm`, body-split/merge, or overlap validation.
 They are resolved as `ResolvedCouplerBoltSlot` *after* body resolution so they stay out
-of auto-body/subtraction geometry. See `docs/contracts/CouplerBoltSlot.md`.
+of auto-body/subtraction geometry. A row's `holeStyle` is **draw-only**: SEAM (default —
+every row saved before the field existed) is the muff-coupler cutout, a circle straddling
+the outline top and bottom; CROSS is the cross-drilled coupling-end bolt hole, ONE circle on
+the centerline, located from the end of the shaft to the hole center. Same entry, same
+bounds, same posture; both draw sites (`ShaftRenderer` overlay, `drawCouplerBoltSlots`)
+branch on it identically. A CROSS hole also carries `clocking` — **DEG_90 from the keyway
+(default: a bolt in line with the keyway would pass through the key)** draws the bore HIDDEN
+(dashed walls one hole width apart, entering from the top silhouette, via the ONE pure
+`crossBoreLines` in `geom/BoltHoleMath.kt`), IN_LINE draws the circle. CROSS rows print
+footer lines (Ø, "Hole center from FWD/AFT", and the clocking note ONLY when the shaft has a
+keyway); SEAM rows print nothing, as before. The coupling end view counts bolts from the
+first SEAM row only. See `docs/contracts/CouplerBoltSlot.md`.
 
 ### Wear pits are reference features
 Wear pits (`WearRecord.pits` — a `WearPit` "X" marker per pit/dye-failure, small or large) are
@@ -178,9 +202,18 @@ a 19.5" and an 11.5" taper draw identical, on-device report); instead a
 ratio-preserving fraction-of-true floor (`PROFILE_TAPER_MIN_FRAC_OF_TRUE` 0.7, λ-fit
 like the liner raises — ratio preservation is structural: same λ, same K threshold, so
 relative taper widths always read true, and the drawn height never yields to it). The
-taper fraction is deliberately the λ pool's largest: width flows in proportion to the
-fractions, so tapers out-prioritize body runs (on-device request — body compression is
-the give that funds taper proportionality). The
+taper fraction is deliberately the λ pool's largest constant: width flows in proportion to
+the fractions, so tapers out-prioritize body runs (on-device request — body compression is
+the give that funds taper proportionality). It is a BASELINE, not a ceiling: **tapers ride
+the "Liner & taper compression" request with the liners** (`taperMinFracOfTrue` =
+`max(baseline, linerMinFracOfTrue)`, applied in the ONE builder `profileFeatureSpans`), so
+the two measured kinds share one requested fraction and one λ and therefore keep the SAME
+fraction of true length — a control that walked liners up to true length while tapers stayed
+at 70% printed one measured kind at full scale beside another foreshortened, and the sheet
+read uneven (on-device request). The coupling is one-way UPWARD; below the baseline tapers
+hold it, because a liner falling to its flat `PROFILE_MIN_LINER_PT` floor has something to
+land on and a taper (no flat floor, by the equalize rule) would compress like bare shaft and
+vanish. The
 SCHEMATIC composer uses the lean `SCHEMATIC_MIN_*` floors (28/40/56 — its values live
 on rails/callouts, so proportion wins); the runout/consolidated sheet keeps the
 writable `PROFILE_MIN_*` floors.
@@ -229,9 +262,11 @@ spans never opt out — bare shaft is the compression give. Split/merge fragment
 fragment's values; dropping them silently reset authored display choices).
 **Liners compress in SIZE only** (finite `PROFILE_MIN_LINER_PT` floor — proportional
 foreshortening, NEVER a body-style S-break cutout; the S-break glyph is a body-only draw
-path); the per-job **"Liner compression" pair** (`RunoutConfig.linersProportional` +
+path); the per-job **"Liner & taper compression" pair** (`RunoutConfig.linersProportional` +
 `linerCompression` → derived `linerMinFracOfTrue`, fed to
-`ProfileFeatureSpan.minWidthFracOfTrue`) can raise the liner floor toward true width —
+`ProfileFeatureSpan.minWidthFracOfTrue` — and to the TAPERS through `taperMinFracOfTrue`,
+see the taper rule above; the stored field names are the control's, not a limit on which
+kinds read it) can raise the liner floor toward true width —
 **the drawing height takes PRECEDENCE**: the raises are best-effort, never enter the
 scale solve, and λ-fit whatever room the page has at the selected height
 (`fracFitFactor`) — do not let a liner demand lower the drawn shaft; control on the
@@ -367,6 +402,38 @@ data), and each level ≥ 1 gets ONE extra chain row anchored at its **parent's 
 (`buildNestedUndercutRailRows`), reserved through the same `undercutRailRowHeightPt` metric. See
 `docs/archive/UndercutDrawing_PLAN.md`.
 
+### The Final schematic is a second geometry, never a view of the original
+`final_spec` (`ShaftDocV1.finalSpec: ShaftSpec?`, sibling of `spec` in the envelope — `null` =
+no final drawing yet) is the drawing the shaft LEAVES with, after the wear/undercut work moved,
+lengthened or shortened a liner; the original `spec` is the record of what came IN and the two
+are the before and the after (on-device request). It is **NOT a reference feature**: it is a
+whole `ShaftSpec`, created by "Start from original schematic" as a structural copy — component
+ids INCLUDED, so `unit_overrides` apply to both and a future before/after diff lines up — and
+from then on independent under the same golden rule: no edit on one ever reaches the other,
+and nothing derives one from the other. It lives OUTSIDE `ShaftSpec`; wear, undercut, runout
+readings and station placements stay keyed to the ORIGINAL. Exactly one per document (Reset =
+fresh copy, Discard = `null`, both undoable); never in a template, never in a mate duplicate,
+cleared by `newDocument`. Editing goes through the ONE editor with an EXPLICIT
+`SpecTarget { ORIGINAL, FINAL }` parameter on every mutator (default ORIGINAL — existing call
+sites byte-identical; `updateSpec(target)`/`specValue(target)` are the only seam; FINAL while
+`null` is a no-op) — never a "current target" flag on the ViewModel, which would put the wrong
+drawing one tab-switch away from every edit. `finalSpec` rides `EditState` (one undo history
+for the document) AND the autosave `SessionSnapshot` combine (a field in the builder but not
+the combine is the autosave-incident data-loss gap). Outputs: the Schematic, Runout, Wear,
+Undercut and Consolidated Output tabs draw the ORIGINAL, untouched; the Final tab
+(`EditorTab.FINAL`, after UNDERCUT, same built-shaft gate) draws the FINAL — the schematic PDF
+(plain by default — the welding/machining copy that gets the liner placements updated; with the
+session-only "Runout bubbles" election on its options sheet, the consolidated Schematic + Runout
+sheet over the final geometry, empty readings, ONE compose helper behind preview/print/export)
+and a blank classic runout sheet (no readings/placements/wear, default stations: the final
+measurement sheet before shipping). Every final sheet is MARKED (`ProjectInfo.drawingLabel` =
+"Final": `Drawing: Final` in the footer job block and the runout header, a bold FINAL badge on
+the Side line, and a filename suffix — `_Final`, `_Final_Runout` with bubbles elected,
+`_Final_RunoutSheet` for the banner's blank classic sheet: THREE distinct documents, never
+collapsed onto one name); blank on every other caller, so existing output is
+byte-identical. `PdfPreviewScreen`/`PdfExportRoute` take the target from the NAV ROUTE ARGUMENT
+(`?target=final`), never from ViewModel state. See `docs/contracts/FinalSchematic.md`.
+
 ### Paper sheets are theme-independent
 The app theme (Settings → Appearance: System/Light/Dark + high contrast; default Light =
 the historical look) styles Compose chrome only. The five white-sheet canvases (undercut
@@ -376,8 +443,30 @@ near-white onSurface would print invisible ink on the white sheet. The undercut 
 fills are additionally user-styled via `util/UndercutStyle.kt` (shade color/intensity +
 line-art mode; the Standard/Grey default reproduces the historical fixed shades, and the
 section core stays half the liner alpha at every intensity — `UndercutStyleTest`) — still
-fixed inks, never theme roles, and never leaking into the PDF composers. See
+fixed inks, never theme roles, and never leaking into the PDF composers. The PRINTED undercut
+sheet therefore carries its OWN `PdfPrefs.undercutLineArt` (profile-captured, decided by the
+pure `undercutPdfFillPlan`), which suppresses every fill on that document — the detail strips'
+always-shaded liner and the notch section core included; the two flags are independent by
+design, one meaning on two surfaces, neither reading the other. See
 `docs/contracts/Appearance.md`.
+
+### Layout adapts on ONE axis, the window width class
+Phones and tablets run the same screens; what changes is decided by `WindowWidthClass`
+(`ui/adaptive/WindowSize.kt` — COMPACT < 600 dp, MEDIUM < 840 dp, EXPANDED) and nothing else.
+COMPACT is the pre-tablet phone layout, byte-identical; MEDIUM is a taller single column;
+**only EXPANDED lays out two panes** (editor preview | components; sheet canvas | controls;
+the permanent 240 dp sidebar, `LocalSidebarPermanent` hiding the hamburgers). A screen that
+lays out two ways extracts its blocks into composables **called from both branches** — a
+duplicated block is how the phone and the tablet drift. List screens cap their one scrolling
+column with `readableWidth()` (720 dp), never per row. Orientation: phones portrait, tablets
+(sw600dp) free, ONE resource `R.integer.activity_orientation` behind both
+`MainActivity.onCreate` and `restoreBaseOrientation()` — a rotation-unlocking screen never
+restores a literal portrait. The manifest keeps a literal `portrait` and must NOT reference the
+resource: a manifest resource cannot vary by configuration (lint `ManifestResource` fails the
+build, and the sw600dp value is silently never read), so the tablet unlock is applied at
+activity creation.
+Nothing adaptive touches sheet ink, a composer, the model, or a document. See
+`docs/contracts/Adaptive.md`.
 
 ### Runout stations are per COMPONENT, never per drawn run
 Station counts are length-driven — one per `RUNOUT_STATION_INTERVAL_MM` (20") via
@@ -570,7 +659,8 @@ Named drawing preset profiles (`settings/DrawingProfile.kt`, Settings → Drawin
 capture the drawing LOOK — the whole `PdfPrefs` plus line thickness — as one DataStore JSON
 map. A profile is device preferences and nothing more: **no doc-envelope field, no per-document
 state, no "active profile" tracking** — applying is a one-shot copy through the EXISTING
-setters (so every mirror fires, `FractionTypography` included), and a document never remembers
+setters (so every mirror fires, `FractionTypography` and `OutputTypography` included — the
+captured set includes `outputFont`, the sheets' typeface), and a document never remembers
 which profile drew it. Do not "improve" this by persisting a profile reference anywhere in a
 document. Excluded from capture, deliberately: capability gates (per-component units, liner
 shoulders — they decide which controls exist), the dual-units default (document behavior), the
@@ -649,6 +739,21 @@ groups** — a liner OD is never deduped against a body OD. Horizontally-close l
 a second row via `geom/DiameterCalloutLayout.kt` (pure, unit-tested), the same two-tier
 posture as runout bubbles. PDF-only — no on-screen canvas equivalent, so no draw-both-sites
 rule applies.
+
+**Callouts and component-NAME labels share ONE collision space.** Both hang below the shaft
+and both anchor on a component's CENTER, so a component printing a name and a Ø aimed two
+strings at the same x and set one through the other (on-device report); a per-pass collision
+space is blind exactly where the two meet. The pure `geom/BelowShaftLabelLayout.kt` places
+every name against the callouts as obstacles, in `DimensionRailLayout`'s resolution order:
+**slide the name along its own component's span first** (a name reads as its component's from
+anywhere over it, so a slide costs no vertical room), **drop a row only when no slide fits**.
+The obstacles are measured, never guessed — `DiameterLeaderRenderer.occupancy` returns the
+value boxes AND the leader lines off the same geometry `drawOne` inks, which is why the
+callouts are planned before the labels and drawn after. Callouts never move for a name: the
+leaders are anchored geometry, the names are what move. Rows stop at the footer band and the
+pass shrinks a point at a time (floor 7 pt) rather than collapsing rows onto each other; a name
+that fits nowhere takes the row it overlaps least (`Placement.fitted = false`, breadcrumbed)
+and is never dropped.
 
 Two visibility controls gate the pass, and they compose as an AND:
 - **Per component** — `Body.showDiaOnDrawing` / `Liner.showDiaOnDrawing` (and
@@ -753,7 +858,11 @@ process-wide `FractionTypography.active` mirror, whose ONLY writer is
 `SettingsStore.updatePdfPrefs` (the `SettingsStore.pdfPrefs` pattern — threading a uniform
 drawing decision through every composer's private draw functions costs more than it buys). That
 mirror is not snapshot state, so every preview's render-inputs record must carry `fractionStyle`
-as a **re-render key** or that tab keeps drawing the old style. See `docs/contracts/FractionTypography.md`.
+as a **re-render key** or that tab keeps drawing the old style. `OutputTypography.active`
+(`PdfPrefs.outputFont`, Settings → Drawing → "Output font" — the FACE every sheet is set in, and
+the composers' root text paint) is the sibling mirror with the same single writer, the same
+re-render-key rule, and the same tolerant `fromName` fallback; it is Settings-only, never on the
+PDF options sheets. See `docs/contracts/FractionTypography.md`.
 
 ### Mixed units and dual display are a DISPLAY AXIS
 Per-component display units (`unit_overrides` — resolved component id → `UnitSystem`) and
@@ -833,8 +942,9 @@ mutates them except a direct user action. See `docs/contracts/ShaftScreen.md`.
 Tapping a component in the Schematic tab's preview highlights it (`onTapComponentId`); tapping
 bare canvas does **nothing**. The bare-canvas tap used to open an add-component chooser at the
 tapped position — it fired unintentionally far more often than it was wanted and was never used
-deliberately (on-device report). Components are added from the FAB chooser, the single add
-entry point. Do not reintroduce a bare-canvas tap action without asking: the objection was to
+deliberately (on-device report). Components are added from the full-width "+ Add Component"
+button's chooser (`InlineAddChooserDialog` — a `Button` in the scroll column, not a FAB), the
+single add entry point. Do not reintroduce a bare-canvas tap action without asking: the objection was to
 the gesture existing, not to its behavior. See `docs/UI_CONTRACT.md` §3.1.1.
 
 ### Numeric input commit behavior

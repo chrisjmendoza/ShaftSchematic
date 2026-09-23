@@ -34,6 +34,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.ExperimentalTextApi
+import androidx.compose.ui.text.font.DeviceFontFamilyName
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.profileFeatureSpans
 import com.android.shaftschematic.geom.computeOalWindow
@@ -54,6 +58,7 @@ import com.android.shaftschematic.geom.PROFILE_TAPER_MIN_FRAC_OF_TRUE
 import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
 import com.android.shaftschematic.geom.WEAR_TRACE_MIN_DEPTH_FRAC
 import com.android.shaftschematic.geom.solveMaxProfileScale
+import com.android.shaftschematic.geom.taperMinFracOfTrue
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.WearRecord
 import com.android.shaftschematic.model.maxOuterDiaMm
@@ -79,6 +84,7 @@ import com.android.shaftschematic.ui.viewmodel.setWearTraceDepthFrac
 import com.android.shaftschematic.util.FractionStyle
 import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.LengthFormat
+import com.android.shaftschematic.util.OutputFont
 import com.android.shaftschematic.util.PDF_PAGE_WIDTH_PT
 import com.android.shaftschematic.util.UnitSystem
 import kotlin.math.abs
@@ -553,6 +559,56 @@ internal fun DimensionArrowSizeChips(
 }
 
 /**
+ * The "Output font" picker — Settings → Drawing only, unlike its fraction neighbour.
+ *
+ * A shop picks a face once and prints every job in it, so this is a house style rather than a
+ * per-sheet decision, and the PDF options sheets stay as they are. A tap IS the commit: the
+ * choice lands in `PdfPrefs.outputFont`, which mirrors into `OutputTypography.active`, and each
+ * open preview re-renders from its own font key.
+ *
+ * Each chip is labelled in the face it selects, so the row reads as a specimen sheet.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun OutputFontChips(
+    outputFont: OutputFont,
+    onCommit: (OutputFont) -> Unit,
+) {
+    Column {
+        Text("Output font", style = MaterialTheme.typography.titleSmall)
+        Spacer(Modifier.height(4.dp))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutputFont.entries.forEach { font ->
+                FilterChip(
+                    selected = outputFont == font,
+                    onClick = { onCommit(font) },
+                    label = { Text(font.uiLabel(), fontFamily = outputFontPreviewFamily(font)) },
+                    modifier = Modifier.testTag("output_font_${font.name}"),
+                )
+            }
+        }
+        Text(
+            "Every printed sheet is set in this face. Standard is the historical look.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/**
+ * The Compose family matching what an [OutputFont] draws with on paper, so a chip is a specimen
+ * of its own choice. A device without the named family falls back to its default sans, exactly
+ * as the printed sheet would.
+ */
+@OptIn(ExperimentalTextApi::class)
+private fun outputFontPreviewFamily(font: OutputFont): FontFamily = when (font) {
+    OutputFont.STANDARD -> FontFamily.SansSerif
+    OutputFont.CONDENSED -> FontFamily(Font(DeviceFontFamilyName("sans-serif-condensed")))
+    OutputFont.SERIF -> FontFamily.Serif
+    OutputFont.MONOSPACE -> FontFamily.Monospace
+}
+
+/**
  * The "Fractions" style picker, shared by both PDF options sheets and Settings → Drawing —
  * ONE `PdfPrefs.fractionStyle` behind all three.
  *
@@ -801,6 +857,10 @@ internal fun MeasurementReferenceSection(
  * there (`consolidatedSheetHasInProfileValues`). The row then reads unchecked and disabled
  * — **display only**; the stored pref is never rewritten, so the user's choice returns as
  * soon as the document stops printing in-profile values.
+ *
+ * [showUndercutLineArt] adds the undercut document's print line-art row at the FOOT of the group
+ * — the rarely-reached option trails, and it is shown only on the sheet it governs, so the other
+ * documents are not offered a control their composers ignore.
  */
 @Composable
 internal fun ShadeInPdfChecks(
@@ -814,6 +874,10 @@ internal fun ShadeInPdfChecks(
     onSetShadeExplicitBodiesOnly: (Boolean) -> Unit,
     linerShadeLocked: Boolean = false,
     showExplicitBodiesOnly: Boolean = true,
+    showUndercutLineArt: Boolean = false,
+    /** The app-wide `PdfPrefs.undercutLineArt`; read only when [showUndercutLineArt]. */
+    undercutLineArt: Boolean = false,
+    onSetUndercutLineArt: (Boolean) -> Unit = {},
 ) {
     OptionsExpander("Shade in Components", "options_shade_expander") {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -867,6 +931,23 @@ internal fun ShadeInPdfChecks(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+            }
+        }
+        if (showUndercutLineArt) Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(
+                checked = undercutLineArt,
+                onCheckedChange = onSetUndercutLineArt,
+                modifier = Modifier.testTag("pdf_undercut_line_art"),
+            )
+            Spacer(Modifier.width(8.dp))
+            Column {
+                Text("Undercut drawing: line art (no shading)", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "The printed undercut sheet drops every fill; the cut sections read from " +
+                        "their faces and floor lines.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }
@@ -1138,17 +1219,23 @@ internal fun runoutHeightSliderBase(
 }
 
 /**
- * The per-job "Liner compression" control, shared by the same two surfaces as
+ * The per-job "Liner & taper compression" control, shared by the same two surfaces as
  * [ShaftHeightSlider] (one `RunoutConfig` pair behind both). The measured components —
- * tapers and liners — are what the sheet is about, so liners can be held proportional:
+ * tapers and liners — are what the sheet is about, so BOTH kinds ride this one request
+ * ([taperMinFracOfTrue]) and foreshorten together; a slider that raised only the liners
+ * printed one measured kind at true length beside another stuck at its baseline, and the
+ * drawing read uneven (on-device request). Tapers never fall below their
+ * [PROFILE_TAPER_MIN_FRAC_OF_TRUE] baseline, so the low end of the track is a liner-only
+ * move.
  *
- * - Checkbox "Keep liners proportional lengthwise" (`linersProportional`): liners
- *   request full true-scale width. Best-effort — the request never enters the scale
- *   solve, so the drawn height does not yield; the floors λ-shrink instead. While
+ * - Checkbox "Keep liners and tapers proportional lengthwise" (`linersProportional`):
+ *   both kinds request full true-scale width. Best-effort — the request never enters the
+ *   scale solve, so the drawn height does not yield; the floors λ-shrink instead. While
  *   checked the slider is disabled.
- * - Slider "Liner compression" (`linerCompression`, 0–100%): how far liners may
- *   foreshorten when the page needs the room — 100% = down to the writable floor (the
- *   default), 0% = not at all (same drawing as the checkbox).
+ * - Slider "Liner & taper compression" (`linerCompression`, 0–100%): how far they may
+ *   foreshorten when the page needs the room — 100% = liners down to the writable floor
+ *   and tapers to their baseline (the default), 0% = not at all (same drawing as the
+ *   checkbox).
  *
  * The drawing height takes PRECEDENCE (on-device direction): this control never changes
  * the drawn shaft height — liner floors take only the room the page has at the selected
@@ -1156,7 +1243,8 @@ internal fun runoutHeightSliderBase(
  * [estimateKeptFrac] maps a requested width-floor fraction to the fraction liners
  * actually keep at this height — see [estimatedLinerKeptFracOfTrue]; the readout under
  * the slider shows it LIVE during the drag (on-device report: the slider "gives no
- * indication" of its effect).
+ * indication" of its effect), and reports the tapers separately only while the two
+ * differ (a request under the taper baseline).
  *
  * Drag-local value, committed once on release, same posture as the height slider. [onDrag]
  * is the visual-only channel a hosting preview opts into — the raw in-progress compression
@@ -1177,12 +1265,15 @@ internal fun LinerCompressionControl(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox(checked = linersProportional, onCheckedChange = onSetProportional)
             Spacer(Modifier.width(8.dp))
-            Text("Keep liners proportional lengthwise", style = MaterialTheme.typography.bodyLarge)
+            Text(
+                "Keep liners and tapers proportional lengthwise",
+                style = MaterialTheme.typography.bodyLarge,
+            )
         }
         var compressionDrag by remember { mutableStateOf<Float?>(null) }
         val shown = compressionDrag ?: linerCompression
         Text(
-            "Liner compression  ${(shown * 100).roundToInt()}%",
+            "Liner & taper compression  ${(shown * 100).roundToInt()}%",
             style = MaterialTheme.typography.titleSmall,
             color = if (linersProportional) MaterialTheme.colorScheme.onSurfaceVariant
             else MaterialTheme.colorScheme.onSurface,
@@ -1207,21 +1298,35 @@ internal fun LinerCompressionControl(
         val kept = estimateKeptFrac(requested)
         val keptPct = (kept * 100).roundToInt()
         val shortfall = kept < requested - 0.005f
+        // Tapers ride the same request and the same λ, so their kept fraction is the
+        // liners' λ applied to the taper floor — equal to the liners' above the baseline,
+        // higher below it. `kept / requested` IS that λ.
+        val lambda = if (requested > 0.005f) kept / requested else 1f
+        val taperPct = (taperMinFracOfTrue(requested) * lambda * 100).roundToInt()
+        val together = taperPct == keptPct
         Text(
             when {
                 requested <= 0.005f ->
-                    "Liners may compress to the writable floor. The drawn height " +
-                        "never changes. Saved with this job."
+                    "Liners may compress to the writable floor; tapers hold their " +
+                        "${(PROFILE_TAPER_MIN_FRAC_OF_TRUE * 100).roundToInt()}% baseline. " +
+                        "The drawn height never changes. Saved with this job."
                 !shortfall && requested >= 0.995f ->
-                    "Liners draw fully proportional at this height. The drawn height " +
-                        "never changes. Saved with this job."
+                    "Liners and tapers draw fully proportional at this height. The drawn " +
+                        "height never changes. Saved with this job."
+                !shortfall && together ->
+                    "Liners and tapers keep at least ~$keptPct% of true length. The drawn " +
+                        "height never changes. Saved with this job."
                 !shortfall ->
-                    "Liners keep at least ~$keptPct% of true length. The drawn height " +
-                        "never changes. Saved with this job."
+                    "Liners keep at least ~$keptPct% of true length, tapers ~$taperPct%. " +
+                        "The drawn height never changes. Saved with this job."
+                together ->
+                    "The page affords liners and tapers ~$keptPct% of true length at this " +
+                        "height (of the ${(requested * 100).roundToInt()}% asked). The " +
+                        "drawn height never changes. Saved with this job."
                 else ->
                     "The page affords liners ~$keptPct% of true length at this height " +
-                        "(of the ${(requested * 100).roundToInt()}% asked). The drawn " +
-                        "height never changes. Saved with this job."
+                        "(of the ${(requested * 100).roundToInt()}% asked) and tapers " +
+                        "~$taperPct%. The drawn height never changes. Saved with this job."
             },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,

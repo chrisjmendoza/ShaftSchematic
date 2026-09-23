@@ -79,6 +79,22 @@ object ShaftDocCodec {
         val shaftPosition: ShaftPosition = ShaftPosition.OTHER,
         val notes: String = "",
         val spec: ShaftSpec,
+        /**
+         * The FINAL drawing — the shaft as it leaves — as a whole second [ShaftSpec], or null
+         * (every older file, and every document until one is started) for "no final drawing
+         * yet". Additive + defaulted: no version bump needed.
+         *
+         * NOT a reference feature: this is a second geometry, independent of [spec] under the
+         * same golden rule — nothing typed into either is ever rewritten, and no edit on one
+         * reaches the other. It is seeded as a structural copy of [spec] with the component ids
+         * INCLUDED, which is what lets [unitOverrides] (keyed by resolved id) and a future
+         * before/after comparison line the two drawings up component for component. Decode-time
+         * migration reaches the ORIGINAL only ([freezeLegacyStationCounts], spec normalization):
+         * the wear/undercut/runout records are the inspection of the shaft that came in, and
+         * they key to [spec]. See `docs/archive/FinalSchematic_PLAN.md` §2.
+         */
+        @SerialName("final_spec")
+        val finalSpec: ShaftSpec? = null,
         /** Runout-sheet preferences. Absent in older files → default empty config. */
         @SerialName("runout_config")
         val runoutConfig: RunoutConfig = RunoutConfig(),
@@ -153,6 +169,8 @@ object ShaftDocCodec {
         val shaftPosition: ShaftPosition,
         val notes: String,
         val spec: ShaftSpec,
+        /** The final drawing, or null when the document has none. See [ShaftDocV1.finalSpec]. */
+        val finalSpec: ShaftSpec?,
         val runoutConfig: RunoutConfig,
         val wearRecord: WearRecord,
         val runoutReadings: RunoutReadings,
@@ -264,6 +282,7 @@ object ShaftDocCodec {
             shaftPosition = d.shaftPosition,
             notes = d.notes,
             spec = d.spec,
+            finalSpec = d.finalSpec,
             runoutConfig = d.runoutConfig,
             wearRecord = d.wearRecord,
             runoutReadings = d.runoutReadings,
@@ -294,6 +313,11 @@ object ShaftDocCodec {
                     shaftPosition = doc.shaftPosition,
                     notes = doc.notes,
                     spec = normalizedSpec,
+                    // The final drawing is its own geometry and carries no measurement
+                    // records, so nothing here migrates it: the legacy station-count freeze
+                    // is about readings keyed to the ORIGINAL, and a final drawing can only
+                    // exist in a file written by a build that already has both.
+                    finalSpec = doc.finalSpec,
                     runoutConfig = freezeLegacyStationCounts(
                         spec = normalizedSpec,
                         config = doc.runoutConfig,
@@ -344,6 +368,8 @@ object ShaftDocCodec {
             shaftPosition = ShaftPosition.OTHER,
             notes = "",
             spec = legacy,
+            // A spec-only file predates the final drawing entirely.
+            finalSpec = null,
             runoutConfig = RunoutConfig(),
             wearRecord = WearRecord(),
             runoutReadings = RunoutReadings(),

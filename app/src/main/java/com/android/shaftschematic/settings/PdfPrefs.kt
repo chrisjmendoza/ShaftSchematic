@@ -5,6 +5,7 @@ import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
 import com.android.shaftschematic.geom.WEAR_TRACE_MIN_DEPTH_FRAC
 import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.FractionStyle
+import com.android.shaftschematic.util.OutputFont
 
 /**
  * Controls how liner dimension rails are anchored in the PDF export.
@@ -137,6 +138,21 @@ data class PdfPrefs(
      */
     val shadeExplicitBodiesOnly: Boolean = false,
     /**
+     * Line art on the PRINTED undercut drawing: that sheet draws NO shade fill anywhere —
+     * bodies, tapers, liners, the detail strips' otherwise-always-shaded liner span and the
+     * undercut section's core all come out unfilled, leaving the notch construction (the void
+     * erasing the surface stroke, the full-height section faces, the floor lines) to carry the
+     * reading on its own. Settings → PDF Export and the undercut preview's PDF options sheet.
+     *
+     * The undercut document only — the schematic, wear and runout composers never read it.
+     *
+     * Deliberately INDEPENDENT of the screen-side `util/UndercutStyle.kt` line-art mode: that
+     * style never reaches a composer (`docs/contracts/Appearance.md`), so the printed sheet
+     * carries its own flag with the same meaning rather than borrowing one. Off by default, so
+     * an untouched install prints the shipped sheet byte for byte.
+     */
+    val undercutLineArt: Boolean = false,
+    /**
      * Default sizing-curve anchor heights (paper inches of drawn height at 100% on the
      * "Shaft height" slider): a 4" shaft draws [curveLoHeightIn] tall, an 8" shaft
      * [curveHiHeightIn]; sizes between and beyond follow the line
@@ -175,6 +191,14 @@ data class PdfPrefs(
      * the draw sites actually read.
      */
     val fractionStyle: FractionStyle = FractionStyle.Default,
+    /**
+     * The typeface every printed sheet is set in — Settings → Drawing → "Output font".
+     *
+     * The sibling of [fractionStyle], and mirrored the same way: `SettingsStore.updatePdfPrefs`
+     * writes `OutputTypography.active`, which is what the four composers build their root text
+     * paint from. Deliberately absent from the PDF options sheets — a shop picks a face once.
+     */
+    val outputFont: OutputFont = OutputFont.Default,
     /**
      * How a DUAL value is set on the drawing — Settings → Drawing → "Dual-unit layout" and both
      * PDF options sheets. Only ever visible on a sheet whose document has `dual_units` on.

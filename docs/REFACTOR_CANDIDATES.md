@@ -42,7 +42,14 @@ the runout/consolidated sheet (writable `PROFILE_MIN_*` floors), and the estimat
 anticipated body-list parameter proved unnecessary — tapers/liners/threads read identically
 from a stored spec and a `withResolvedBodies` copy, and the keyway pins must come from
 STORED bodies anyway (a resolved body carries no keyway fields), so every caller passes the
-stored spec. The keyway-window pin helpers moved into the same file. Original entry:
+stored spec. The keyway-window pin helpers moved into the same file. Current signature:
+`profileFeatureSpans(spec, linerFloorPt, threadFloorPt, linerMinFracOfTrue)`.
+
+**Since superseded in one detail:** tapers no longer carry a flat floor at all — the
+`PROFILE_MIN_TAPER_PT` named below is deleted. A flat floor made a 19.5" and an 11.5" taper draw
+identical, so tapers now take a ratio-preserving fraction of true length
+(`PROFILE_TAPER_MIN_FRAC_OF_TRUE`, raised with the liners' request through `taperMinFracOfTrue`,
+applied inside this same builder). Original entry, as written:
 
 
 **What:** The feature-span list (tapers at `PROFILE_MIN_TAPER_PT`, liners at
@@ -110,7 +117,15 @@ would have tightened its row gaps from 12 dp to 0 and changed the heading offset
 change, not a behavior-preserving extraction. Its wording, prefs, and setters are
 identical to the shared block, and a comment at the site records why it is separate.
 
-## 5. Long-body bubble count — **RESOLVED: deleted**
+## 5. Long-body bubble count — **RESOLVED: deleted, then OBSOLETE**
+
+**Status now:** the uniform-count decision below no longer describes the app. Default station
+counts are **length-driven** — one station per `RUNOUT_STATION_INTERVAL_MM` (20") via
+`defaultStationCount` (`geom/RunoutBubbleLayout.kt`): bodies `ceil(L/20")` min 1, liners the
+same floored at 2, tapers a flat 2. `BODY_DEFAULT_COUNT` is gone with it; only
+`RunoutConfig.LEGACY_BODY_DEFAULT_COUNT` (3) survives, read solely by
+`ShaftDocCodec.freezeLegacyStationCounts` so a document that already carries a reading keeps
+its pre-interval count. `componentOverrides` still wins over both. Kept below for the record:
 
 **What:** `RunoutConfig.BODY_SHORT_THRESHOLD_MM` (914 mm) and
 `RunoutConfig.BODY_LONG_COUNT` were defined and documented ("Default for long bodies —
@@ -150,14 +165,14 @@ care around empty/degenerate specs.
 **Recommendation:** Do it with the next slider-UX pass; until then the slider is
 honest at the "~" level (the drawn height simply stops growing past the pin ceiling).
 
-## 5d. Spec-level warnings: pick a UI surface (decision needed)
+## 5d. Spec-level warnings: pick a UI surface — DONE (banner shipped 2026-08-25)
 
-**What:** `specWarningMessages` (`ui/util/ComponentWarnings.kt`) is pure, unit-tested,
-and deliberately unwired — its siblings feed the carousel cards, but the spec-level
-aggregate has no surface. `TODO.md` already tracks the open UX decision.
+**What:** `specWarningMessages` (`ui/util/ComponentWarnings.kt`) is pure and unit-tested, and
+the open question was where its spec-level aggregate should show. It is no longer unwired: the
+surface is the editor banner, `ui/screen/SpecWarningBanner.kt`, with dismissal keyed to the
+exact warning message set (`ui/util/SpecWarningVisibility.kt`) so a changed set reappears.
 
-**Recommendation:** Not a removal candidate — decide where spec-level warnings show
-(editor banner? export gate advisory?) and wire it, or consciously retire the seam.
+**Status:** Closed — nothing to decide or retire here.
 
 ## 6. Retire `computeDetailPtPerMm` by migrating its tests
 

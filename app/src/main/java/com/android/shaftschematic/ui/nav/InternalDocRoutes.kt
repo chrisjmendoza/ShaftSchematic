@@ -49,6 +49,8 @@ import com.android.shaftschematic.util.AppLog
 import com.android.shaftschematic.util.FeedbackIntentFactory
 import com.android.shaftschematic.util.Achievements
 import com.android.shaftschematic.util.DocumentNaming
+import com.android.shaftschematic.util.launchPicker
+import com.android.shaftschematic.util.NO_PICKER_MESSAGE
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -63,7 +65,9 @@ import com.android.shaftschematic.doc.ShaftDocCodec
 import com.android.shaftschematic.doc.mateDuplicate
 import com.android.shaftschematic.doc.stripShaftDocExtension
 import com.android.shaftschematic.ui.screen.DuplicateForMateDialog
+import com.android.shaftschematic.ui.screen.RenameShaftDocumentDialog
 import com.android.shaftschematic.io.ShaftBackup
+import com.android.shaftschematic.ui.adaptive.readableWidth
 
 /**
 # InternalDocRoutes – open/save shaft docs *inside app storage*
@@ -107,16 +111,6 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
     var searchQuery by remember { mutableStateOf("") }
     var sortColumn by remember { mutableStateOf(OpenSortColumn.DATE) }
     var sortDir    by remember { mutableStateOf(OpenSortDir.DESC) }
-
-    fun sanitizeUserBaseName(raw: String): String {
-        val collapsed = raw.trim().replace(Regex("\\s+"), " ")
-        if (collapsed.isEmpty()) return ""
-
-        return collapsed
-            .replace(Regex("[\\\\/:*?\"<>|]"), "_")
-            .replace(Regex("[\\u0000-\\u001F]"), "")
-            .trim()
-    }
 
     LaunchedEffect(Unit) {
         files = withContext(Dispatchers.IO) { InternalStorage.listWithMetadata(ctx) }
@@ -206,65 +200,22 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
         )
     }
 
-    if (pendingRename != null) {
-        val fromName = pendingRename!!
-        var value by remember(fromName) {
-            val base = stripShaftDocExtension(fromName)
-            mutableStateOf(TextFieldValue(base, selection = TextRange(0, base.length)))
-        }
-        AlertDialog(
-            onDismissRequest = { pendingRename = null },
-            title = { Text("Rename saved shaft") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Enter a new name. The file will be saved as $SHAFT_DOT_EXT.")
-                    OutlinedTextField(
-                        value = value,
-                        onValueChange = { value = it },
-                        singleLine = true,
-                        label = { Text("Name") },
-                    )
+    // The dialog owns the name and the storage work; this screen owns what the rename means
+    // here — a refreshed list, and the session's name when the renamed file is the open one.
+    pendingRename?.let { fromName ->
+        RenameShaftDocumentDialog(
+            fromName = fromName,
+            onDismiss = { pendingRename = null },
+            onRenamed = { toName ->
+                pendingRename = null
+                if (vm.currentDocumentName.value == fromName) {
+                    vm.setCurrentDocumentName(toName)
+                }
+                scope.launch {
+                    files = withContext(Dispatchers.IO) { InternalStorage.listWithMetadata(ctx) }
                 }
             },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        val sanitizedBase = sanitizeUserBaseName(value.text)
-                        val toName = InternalStorage.normalizeShaftDocName(sanitizedBase)
-                        if (toName == null) {
-                            scope.launch { snackbarHostState.showSnackbar("Name cannot be blank.") }
-                            return@TextButton
-                        }
-
-                        if (toName.equals(fromName, ignoreCase = true)) {
-                            pendingRename = null
-                            return@TextButton
-                        }
-
-                        scope.launch {
-                            val ok = withContext(Dispatchers.IO) {
-                                // Avoid overwrites.
-                                if (InternalStorage.exists(ctx, toName)) return@withContext false
-                                InternalStorage.rename(ctx, fromName, toName)
-                            }
-                            if (ok) {
-                                files = withContext(Dispatchers.IO) { InternalStorage.listWithMetadata(ctx) }
-                                pendingRename = null
-                                if (vm.currentDocumentName.value == fromName) {
-                                    vm.setCurrentDocumentName(toName)
-                                }
-                            } else {
-                                snackbarHostState.showSnackbar(
-                                    message = "Could not rename to ‘${stripShaftDocExtension(toName)}’."
-                                )
-                            }
-                        }
-                    }
-                ) { Text("Rename") }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingRename = null }) { Text("Cancel") }
-            }
+            onError = { message -> scope.launch { snackbarHostState.showSnackbar(message) } },
         )
     }
 
@@ -315,7 +266,11 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
                 title = { Text("Open drawing") },
                 actions = {
                     TextButton(
-                        onClick = { importLauncher.launch(arrayOf("*/*")) }
+                        onClick = {
+                            importLauncher.launchPicker(arrayOf("*/*"), what = "import") {
+                                scope.launch { snackbarHostState.showSnackbar(NO_PICKER_MESSAGE) }
+                            }
+                        }
                     ) { Text("Import") }
                     TextButton(
                         onClick = {
@@ -342,6 +297,7 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
             modifier = Modifier
                 .fillMaxSize()
                 .padding(pad)
+                .readableWidth()
         ) {
             // ── Search + sort header ──────────────────────────────────────────
             item {
@@ -531,7 +487,14 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
                                                     val file = File(dir, name)
                                                     val out = mutableListOf<android.net.Uri>()
                                                     if (file.exists()) {
-                                                        out += FeedbackIntentFactory.uriForFile(ctx, file)
+                                                        // A URI that cannot be built costs the
+                                                        // attachment, never the report: FileProvider
+                                                        // throws for a file outside its configured
+                                                        // roots, and this runs in a coroutine where a
+                                                        // throw would reach the app's crash handler.
+                                                        runCatching {
+                                                            FeedbackIntentFactory.uriForFile(ctx, file)
+                                                        }.getOrNull()?.let { out += it }
                                                     }
                                                     out
                                                 }
@@ -690,6 +653,7 @@ fun SaveLocalDocumentRoute(               // ← renamed (no clash with SAF)
         Column(
             modifier = Modifier
                 .padding(pad)
+                .readableWidth()
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -779,7 +743,9 @@ fun SaveLocalDocumentRoute(               // ← renamed (no clash with SAF)
 
             OutlinedButton(onClick = {
                 val base = stripShaftDocExtension(name.text.trim()).ifBlank { "Shaft" }
-                saveCopyLauncher.launch(base + SHAFT_DOT_EXT)
+                saveCopyLauncher.launchPicker(base + SHAFT_DOT_EXT, what = "save a copy") {
+                    scope.launch { snackbarHostState.showSnackbar(NO_PICKER_MESSAGE) }
+                }
             }) { Text("Save a copy to device…") }
 
             OutlinedButton(

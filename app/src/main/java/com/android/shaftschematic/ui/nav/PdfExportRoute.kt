@@ -19,15 +19,18 @@ import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.collidingIds
-import com.android.shaftschematic.pdf.composeShaftPdf
 import com.android.shaftschematic.pdf.PdfExportOptions
 import com.android.shaftschematic.ui.order.ComponentKind
+import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.util.startOverlapErrorMm
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
+import com.android.shaftschematic.ui.viewmodel.SpecTarget
 import com.android.shaftschematic.ui.viewmodel.unlockAchievement
 import com.android.shaftschematic.util.Achievements
 import com.android.shaftschematic.util.DocumentNaming
+import com.android.shaftschematic.util.exportPdfFilename
 import com.android.shaftschematic.util.buildOpenPdfIntent
+import com.android.shaftschematic.util.launchPicker
 import com.android.shaftschematic.util.PDF_PAGE_HEIGHT_PT
 import com.android.shaftschematic.util.PDF_PAGE_WIDTH_PT
 import com.android.shaftschematic.util.VerboseLog
@@ -52,12 +55,42 @@ import java.util.Locale
 fun PdfExportRoute(
     nav: NavController,
     vm: ShaftViewModel,
-    onFinished: () -> Unit
+    onFinished: () -> Unit,
+    /**
+     * Which of the document's two drawings is being exported. Comes from the route argument,
+     * never from a flag on the ViewModel — the preview the user came from and the file that
+     * gets written must be the same drawing.
+     */
+    target: SpecTarget = SpecTarget.ORIGINAL,
 ) {
     val ctx = LocalContext.current
     var launched by rememberSaveable { mutableStateOf(false) }
     var finished by rememberSaveable { mutableStateOf(false) }
     var blockingErrorMessage by rememberSaveable { mutableStateOf<String?>(null) }
+
+    // The final drawing is a second geometry: its own spec, its own resolved components, and
+    // a "Final" drawing label so the written sheet can never pass for the original.
+    val exportSpec: () -> ShaftSpec = {
+        when (target) {
+            SpecTarget.ORIGINAL -> vm.spec.value
+            SpecTarget.FINAL -> vm.finalSpec.value ?: ShaftSpec()
+        }
+    }
+    val exportResolved: () -> List<ResolvedComponent> = {
+        when (target) {
+            SpecTarget.ORIGINAL -> vm.resolvedComponents.value
+            SpecTarget.FINAL -> vm.finalResolvedComponents.value
+        }
+    }
+    val drawingLabel = if (target == SpecTarget.FINAL) FINAL_DRAWING_LABEL else ""
+    // The final drawing's optional runout stations — session-only, off by default, and read
+    // only here so the exported file matches the sheet the preview showed.
+    val finalRunoutBubbles by vm.finalRunoutBubbles.collectAsState()
+    val sheetKind = finalSheetKind(target, finalRunoutBubbles)
+    val drawingSuffix = when {
+        target != SpecTarget.FINAL -> ""
+        else -> finalDrawingSuffix(finalRunoutBubbles)
+    }
 
     val openAfterExport by vm.openPdfAfterExport.collectAsState()
     val pdfExportMode by vm.pdfExportMode.collectAsState()
@@ -82,14 +115,16 @@ fun PdfExportRoute(
                     customer = customer,
                     vessel = vessel,
                     shaftPosition = shaftPosition,
-                    blankDraft = pdfBlankDraft
+                    blankDraft = pdfBlankDraft,
+                    drawingSuffix = drawingSuffix,
                 )
             val project = ProjectInfo(
                 customer = customer,
                 vessel = vessel,
                 side = shaftPosition,
                 jobNumber = jobNumber,
-                item = item
+                item = item,
+                drawingLabel = drawingLabel,
             )
 
             VerboseLog.d(VerboseLog.Category.PDF, "PdfExport") {
@@ -99,9 +134,10 @@ fun PdfExportRoute(
             // Hardened write: a composer throw yields a valid error page, never a
             // truncated file (util/PdfSafExport.kt — one implementation for every tab).
             val wrote = writeShaftPdfToUri(ctx, uri) { page ->
-                composeShaftPdf(
+                composeSchematicSheet(
                     page = page,
-                    spec = vm.spec.value,
+                    kind = sheetKind,
+                    spec = exportSpec(),
                     unit = vm.unit.value,
                     project = project,
                     appVersion = appVersionFromContext(ctx),
@@ -112,10 +148,9 @@ fun PdfExportRoute(
                         blankValues = pdfBlankDraft,
                         blankDiaCallouts = pdfBlankDiaCallouts,
                     ),
-                    resolvedComponents = vm.resolvedComponents.value,
+                    resolvedComponents = exportResolved(),
                     lineThicknessScale = vm.lineThicknessScale.value,
-                    heightScale = vm.runoutConfig.value.heightScale,
-                    linerMinFracOfTrue = vm.runoutConfig.value.linerMinFracOfTrue,
+                    runoutConfig = vm.runoutConfig.value,
                     displayUnits = vm.currentDisplayUnits(),
                 )
             }
@@ -135,18 +170,20 @@ fun PdfExportRoute(
     LaunchedEffect(Unit) {
         if (!launched) {
             launched = true
-            val error = blockingExportError(vm.spec.value)
+            val error = blockingExportError(exportSpec())
             if (error != null) {
                 blockingErrorMessage = error
             } else {
-                launcher.launch(
+                launcher.launchPicker(
                     defaultFilename(
                         jobNumber = jobNumber,
                         customer = customer,
                         vessel = vessel,
                         shaftPosition = shaftPosition,
-                        blankDraft = pdfBlankDraft
-                    )
+                        blankDraft = pdfBlankDraft,
+                        drawingSuffix = drawingSuffix,
+                    ),
+                    what = "schematic export",
                 )
             }
         }
@@ -231,7 +268,9 @@ private fun defaultFilename(
     customer: String,
     vessel: String,
     shaftPosition: ShaftPosition,
-    blankDraft: Boolean = false
+    blankDraft: Boolean = false,
+    /** Names which drawing this is — "_Final" for the final schematic, blank for the original. */
+    drawingSuffix: String = "",
 ): String {
     val stamp = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())
     val suggested = DocumentNaming.suggestedBaseName(
@@ -240,9 +279,27 @@ private fun defaultFilename(
         vessel = vessel,
         suffix = shaftPosition.printableLabelOrNull()
     )
-    val blankSuffix = if (blankDraft) "_BlankDraft" else ""
-    return (suggested ?: "Shaft_$stamp") + blankSuffix + ".pdf"
+    return exportPdfFilename(suggested ?: "Shaft_$stamp", drawingSuffix, blankDraft)
 }
+
+/**
+ * The label a final-drawing sheet prints ([ProjectInfo.drawingLabel]) and the suffix its file
+ * takes. One pair behind every Final-tab surface — preview, export, print — so a sheet and its
+ * filename always agree on which drawing they came from.
+ */
+internal const val FINAL_DRAWING_LABEL = "Final"
+internal const val FINAL_FILENAME_SUFFIX = "_Final"
+
+/**
+ * The final schematic's suffix once it carries runout stations: that sheet IS a runout sheet,
+ * so its name says so rather than sitting beside the machining copy under one name. The
+ * banner's blank classic runout sheet takes `_Final_RunoutSheet` to stay distinct from it.
+ */
+internal const val FINAL_BUBBLES_FILENAME_SUFFIX = "_Final_Runout"
+
+/** The filename suffix a final schematic takes, given whether it carries stations. */
+internal fun finalDrawingSuffix(runoutBubbles: Boolean): String =
+    if (runoutBubbles) FINAL_BUBBLES_FILENAME_SUFFIX else FINAL_FILENAME_SUFFIX
 
 /**
  * App version string stamped into the schematic PDF footer. Shared with the Runout tab's

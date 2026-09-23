@@ -43,7 +43,7 @@ internal fun PreviewCard(
     spec: ShaftSpec,
     resolvedComponents: List<ResolvedComponent>,
     unit: UnitSystem,
-    devOptionsEnabled: Boolean,
+    /** Already ANDed with the Developer Options master switch by `ShaftRoute`. */
     showOalInPreviewBox: Boolean,
     // NEW: explicit preview controls
     highlightEnabled: Boolean,
@@ -61,6 +61,8 @@ internal fun PreviewCard(
     previewThreadHatch: PreviewColorSetting,
     previewBlackWhiteOnly: Boolean,
     lineThicknessScale: Float = 1.0f,
+    /** PDF-shade mirror: components the PDF will print shaded — see [ShaftDrawing]. */
+    shadedComponentIds: Set<String> = emptySet(),
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -83,6 +85,7 @@ internal fun PreviewCard(
                 previewThreadFill = previewThreadFill,
                 previewThreadHatch = previewThreadHatch,
                 lineThicknessScale = lineThicknessScale,
+                shadedComponentIds = shadedComponentIds,
                 highlightEnabled = highlightEnabled && (highlightId != null),
                 highlightId = highlightId,
                 onTapComponentId = onTapComponentId,
@@ -96,7 +99,7 @@ internal fun PreviewCard(
                 modifier = Modifier.align(Alignment.TopStart).padding(8.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                if (devOptionsEnabled && showOalInPreviewBox) {
+                if (showOalInPreviewBox) {
                     PreviewOalBadge(
                         spec = spec,
                         unit = unit,

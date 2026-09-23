@@ -48,6 +48,47 @@ the screen is open), builds an email through the existing `FeedbackIntentFactory
 cannot resolve FileProvider roots, so the test pins that log files live under `filesDir`;
 the actual share is a one-tap on-device check.
 
+**The attachment clip is built from the INTENT's mime type, never from a resolver lookup.**
+`ClipData.newUri(resolver, …)` dereferences its `ContentResolver` for any `content://` URI —
+and a FileProvider attachment is always `content://` — so the `null` resolver this once passed
+made every tap of this button an NPE on the spot (on-device report: the app died twice, and
+surviving a cache clear ruled the log files out). `FeedbackIntentFactory.setClipDataForUris`
+therefore constructs the clip with the intent's own type, the construction AOSP's
+`Intent.migrateExtraStreamToClipData` uses; `FeedbackIntentFactoryTest` pins it and fails with
+that exact NPE on the old call. The clip has to carry **every** attachment, not just the first:
+it is what propagates `FLAG_GRANT_READ_URI_PERMISSION` to whichever app the chooser picks.
+
+The tap handler additionally catches `Throwable` — breadcrumb + "Could not share the logs."
+snackbar — which is `AppLog`'s own "logging may never become a failure" posture applied to the
+button that ships it. This screen is where a stuck tester is sent; a crash here takes the app
+down *and* destroys the evidence instead of mailing it.
+
+## The "may never become a failure" rule
+
+Three subsystems exist to make failures survivable, and each is therefore held to the rule that
+it may never *cause* one. They are listed together because the rule is the same and the
+temptation to break it is the same — a `runCatching` around housekeeping looks like sloppiness
+until you notice what the alternative crashes:
+
+| Subsystem | Degrades to | Because |
+|---|---|---|
+| `AppLog` | a dropped line | it records the failures it must outlive |
+| `AutosaveManager` | an empty draft ring | it runs from `viewModelScope` in the ViewModel's `init`, with no handler above it — a throw is a crash on launch |
+| `SettingsStore` reads/writes | the default value, an unlanded write | reads feed Compose collectors; writes fire from bare `scope.launch` all over the UI |
+
+Two shared constraints:
+- **`CancellationException` is always rethrown, never swallowed.** The autosave observer is a
+  `collectLatest` that cancels the in-flight write on every newer snapshot; eating that breaks
+  the structured concurrency the debounce depends on.
+- **The breadcrumb is still written.** Degrading quietly and degrading *silently* are different
+  things — the second is how a bug survives a release.
+
+There is deliberately **no `CoroutineExceptionHandler`** anywhere in the app. Its absence is what
+makes the rule above load-bearing rather than belt-and-braces: nothing catches a throw that
+escapes a `launch`, so every such surface has to hold its own.
+
+---
+
 ## CrashReporter — Firebase as optional configuration
 
 - `app/google-services.json` is **gitignored** and belongs to the Firebase project, not the
@@ -65,6 +106,45 @@ the actual share is a one-tap on-device check.
 - `recordNonFatal` is for failures the code recovered from and would otherwise be invisible —
   the canonical site is `PdfSafExport`'s composer catch (the user sees an error page; the
   throwable behind it goes to AppLog with its stack and to Crashlytics as a non-fatal).
+
+## Developer Options — the switchboard
+
+Unlocked by seven taps on About → App Version; the entry appears in Settings → Support once
+`devOptionsEnabled` is set. Three sections, in the order a problem is worked: what to draw on the
+screen in front of you, what to trace with a cable attached, what to send back afterwards.
+
+- **Debug overlays** — six draw-only switches (OAL debug label, OAL badge in the preview box,
+  component debug labels, render layout overlay, render OAL markers, dimension debug overlay).
+  Each row carries a line saying what it draws; the labels alone name a variable, not a picture.
+- **Verbose logging** — the `VerboseLog` master plus its four categories. The categories are
+  **disabled, not hidden, while the master is off**: `VerboseLog.isEnabled` already ANDs them, so
+  an enabled-looking switch that changes nothing is the lie; a switch that disappears reads as a
+  setting that was lost.
+- **Diagnostics** — build identity (`VERSION_NAME`/`VERSION_CODE`/`GIT_SHA`/`BUILD_TYPE`, so
+  "I'm on the latest" can be checked rather than believed), live crash-reporting state
+  (`CrashReporter.isActive` — whether *this* build got a `google-services.json`), and three
+  actions: record a test non-fatal, view recent breadcrumbs, force a test crash.
+
+**The master switch is a real master switch.** `ShaftRoute` ANDs all six overlay flags with
+`devOptionsEnabled` at one seam, so turning Developer Options off clears the drawing on the spot.
+`SettingsStore.resetDevSubFlagsIfDisabled` still clears the stored flags at the next start, but it
+cannot be the only gate: without the in-session AND, an overlay left on survives on a screen that
+no longer has the switch to turn it off. `ShaftPreviewPanel` therefore carries no gate of its own —
+one flag gated twice and five gated once is how the next one gets missed.
+
+### The three actions
+
+- **Record test non-fatal** — writes a breadcrumb and calls `CrashReporter.recordNonFatal`, then
+  says in the snackbar which of those actually happened. It is the end-to-end check on Firebase
+  wiring that does not cost the process, and it works from the shop floor rather than a console.
+- **View recent breadcrumbs** — `AppLog.tail(300)`, the rotated half first so a tail spanning a
+  rotation still reads in order. "Share diagnostic logs" needs an email app and a person at the
+  other end; a shop tablet has neither, and the question there is usually just how far an export
+  got. Read-only, and like every other path in `AppLog` it swallows its own errors.
+- **Force a test crash** — behind a confirm dialog that says what is lost, and last in the section.
+  It is the only way to exercise the handler chain the contract above turns on: `AppLog`'s handler
+  writes and flushes, then delegates to Crashlytics'. Both halves are invisible until something
+  actually dies.
 
 ## Versions
 

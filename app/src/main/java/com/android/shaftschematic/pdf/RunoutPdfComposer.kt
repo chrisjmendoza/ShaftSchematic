@@ -5,7 +5,6 @@ import android.graphics.Color
 import android.graphics.DashPathEffect
 import android.graphics.Paint
 import android.graphics.RectF
-import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import com.android.shaftschematic.model.*
 import com.android.shaftschematic.geom.DimensionRailLayout
@@ -61,6 +60,7 @@ import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.VerboseLog
 import com.android.shaftschematic.util.DualLabel
 import com.android.shaftschematic.util.DualUnitLayout
+import com.android.shaftschematic.util.OutputTypography
 import com.android.shaftschematic.util.dualStackMetrics
 import com.android.shaftschematic.util.measureDualLabel
 import com.android.shaftschematic.util.setsStacked
@@ -281,7 +281,7 @@ fun composeRunoutPdf(
     val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
         textSize = TEXT_PT
-        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
+        typeface = OutputTypography.active
         color = Color.BLACK
     }
     // ── Page regions ─────────────────────────────────────────────────────────
@@ -732,8 +732,9 @@ fun composeRunoutPdf(
     // ── Coupling end view (bottom-right of the bottom lane) ───────────────────
     // Drawn after the profile, marks, bubbles, and the TIR line: it owns its own reserved
     // block, so nothing above it moves and the in-profile "marks first, text last" order
-    // is untouched. The bolt count is the coupling bolt slot's — no slots authored means
-    // the plain two-circle face the hand sketch shows at minimum.
+    // is untouched. The bolt count is the coupling bolt slot's — the first SEAM row, since a
+    // cross-drilled hole is a bolt through the shaft, not a flange bolt on the face — and no
+    // seam row authored means the plain two-circle face the hand sketch shows at minimum.
     if (drawFace) {
         drawCouplingFace(
             c = c,
@@ -741,7 +742,7 @@ fun composeRunoutPdf(
             cy = footerTop - COUPLING_FACE_BOTTOM_PAD_PT - COUPLING_FACE_CAPTION_LANE_PT -
                 COUPLING_FACE_OUTER_R_PT,
             outerR = COUPLING_FACE_OUTER_R_PT,
-            boltCount = spec.couplerBoltSlots.firstOrNull()?.count ?: 0,
+            boltCount = spec.couplerBoltSlots.firstOrNull { it.holeStyle == BoltHoleStyle.SEAM }?.count ?: 0,
             outline = outline,
             dim = dim,
             text = text,
@@ -1447,7 +1448,7 @@ private fun drawPlacedBubbles(
         // Printed value sits small inside the (larger) circle, leaving room to hand-write.
         textSize = r * 0.60f
         textAlign = Paint.Align.CENTER
-        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
+        typeface = OutputTypography.active
     }
     val highSpot = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.rgb(198, 40, 40) // red — the high spot, per shop convention

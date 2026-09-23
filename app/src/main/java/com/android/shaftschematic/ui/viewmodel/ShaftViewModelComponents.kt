@@ -4,6 +4,8 @@ import android.util.Log
 import com.android.shaftschematic.model.BlendProfile
 import com.android.shaftschematic.model.Body
 import com.android.shaftschematic.model.BodySplitResult
+import com.android.shaftschematic.model.BoltHoleClocking
+import com.android.shaftschematic.model.BoltHoleStyle
 import com.android.shaftschematic.model.CouplerBoltSlot
 import com.android.shaftschematic.model.Liner
 import com.android.shaftschematic.model.LinerAuthoredReference
@@ -37,6 +39,13 @@ import kotlin.math.max
  * Extracted from ShaftViewModel to keep component CRUD grouped by concern. All functions are
  * extensions on ShaftViewModel and access internal-visibility backing fields and helpers
  * declared in the primary class file.
+ *
+ * Every mutator here takes a [SpecTarget] as its LAST parameter and reads/writes through
+ * `specValue(target)` / `updateSpec(target)` — the ONE seam deciding whether an edit lands on
+ * the original schematic or on the final drawing. The default (`ORIGINAL`) keeps every
+ * existing call site byte-identical, and a FINAL write while the document has no final drawing
+ * is a no-op. The unit-override setters are deliberately targetless: overrides key by
+ * component id, and the two geometries share their ids by construction.
  */
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -67,9 +76,10 @@ fun ShaftViewModel.addBodyAt(
     blendProfile: BlendProfile = BlendProfile.OGEE,
     blendAftSeal: Boolean = false,
     blendFwdSeal: Boolean = false,
+    target: SpecTarget = SpecTarget.ORIGINAL,
 ) {
     val id = newId()
-    _spec.update { s ->
+    updateSpec(target) { s ->
         s.copy(
             bodies = listOf(
                 Body(
@@ -100,12 +110,18 @@ fun ShaftViewModel.addBodyAt(
     }
     applyKeywayUnit(id, keywayUnit)
     rememberBodyDefaults(lengthMm = lengthMm, diaMm = diaMm)
-    _selectedComponentId.value = id
+    selectAdded(id, target)
 }
 
-fun ShaftViewModel.updateBody(index: Int, startMm: Float, lengthMm: Float, diaMm: Float) {
-    _spec.update { s -> s.withBodyAt(index, startMm, lengthMm, diaMm) }
-    if (index in _spec.value.bodies.indices) {
+fun ShaftViewModel.updateBody(
+    index: Int,
+    startMm: Float,
+    lengthMm: Float,
+    diaMm: Float,
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) {
+    updateSpec(target) { s -> s.withBodyAt(index, startMm, lengthMm, diaMm) }
+    if (index in specValue(target).bodies.indices) {
         rememberBodyDefaults(lengthMm = lengthMm, diaMm = diaMm)
     }
 }
@@ -119,7 +135,8 @@ fun ShaftViewModel.updateBodyKeyway(
     offsetFromEndMm: Float,
     end: LinerAuthoredReference,
     spooned: Boolean,
-) = _spec.update { s ->
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) = updateSpec(target) { s ->
     if (index !in s.bodies.indices) s else {
         val old = s.bodies[index]
         s.copy(
@@ -141,31 +158,34 @@ fun ShaftViewModel.updateBodyKeyway(
  * Set the drawing note that the shaft's keyways are clocked 180° apart. Enabling clears the
  * 90° note — a shaft carries at most one clocking note. Unchanged input is a no-op.
  */
-fun ShaftViewModel.setKeyways180Apart(enabled: Boolean) = _spec.update { s -> s.withKeyways180Apart(enabled) }
+fun ShaftViewModel.setKeyways180Apart(enabled: Boolean, target: SpecTarget = SpecTarget.ORIGINAL) =
+    updateSpec(target) { s -> s.withKeyways180Apart(enabled) }
 
 /**
  * Set the drawing note that the shaft's keyways are clocked 90° apart. Enabling clears the
  * 180° note — a shaft carries at most one clocking note. Unchanged input is a no-op.
  */
-fun ShaftViewModel.setKeyways90Apart(enabled: Boolean) = _spec.update { s -> s.withKeyways90Apart(enabled) }
+fun ShaftViewModel.setKeyways90Apart(enabled: Boolean, target: SpecTarget = SpecTarget.ORIGINAL) =
+    updateSpec(target) { s -> s.withKeyways90Apart(enabled) }
 
 /**
  * Set the 90° clocking direction — true = clockwise viewed from aft. Meaningful only while
  * [setKeyways90Apart] is on; the choice survives toggling the note off and back on.
  */
-fun ShaftViewModel.setKeyways90Cw(cw: Boolean) = _spec.update { s -> s.withKeyways90Cw(cw) }
+fun ShaftViewModel.setKeyways90Cw(cw: Boolean, target: SpecTarget = SpecTarget.ORIGINAL) =
+    updateSpec(target) { s -> s.withKeyways90Cw(cw) }
 
 /**
  * Remove a [Body] by its stable [id].
  *
  * The removed body (spec + order) is recoverable via [undoEdit] — the central session
- * history records the post-delete state, so undo restores both the spec and the row order.
+ * history records the post-delete state, so undo restores the spec.
  */
-fun ShaftViewModel.removeBody(id: String) {
+fun ShaftViewModel.removeBody(id: String, target: SpecTarget = SpecTarget.ORIGINAL) {
     Log.d("ShaftViewModel", "removeBody invoked for id=$id")
     var removed = false
 
-    _spec.update { s ->
+    updateSpec(target) { s ->
         val idx = s.bodies.indexOfFirst { it.id == id }
         if (idx < 0) {
             Log.w(
@@ -173,7 +193,7 @@ fun ShaftViewModel.removeBody(id: String) {
                 "removeBody: requested id=$id not found. current ids=${s.bodies.map { it.id }}"
             )
             // NOTE: This should never happen during normal UI usage.
-            return@update s
+            return@updateSpec s
         }
         removed = true
         s.copy(
@@ -211,6 +231,7 @@ fun ShaftViewModel.addTaperAt(
      * no new field.
      */
     keywayUnit: UnitSystem? = null,
+    target: SpecTarget = SpecTarget.ORIGINAL,
 ) {
     val id = newId()
     // Which end is the Small End follows the taper's physical half, judged against the
@@ -218,9 +239,9 @@ fun ShaftViewModel.addTaperAt(
     val smallEndAtStart = taperSmallEndAtStart(
         startMm = startMm,
         lengthMm = lengthMm,
-        overallLengthMm = _spec.value.overallLengthMm,
+        overallLengthMm = specValue(target).overallLengthMm,
     )
-    _spec.update { s ->
+    updateSpec(target) { s ->
         val split = s.splitBodiesAround(startMm, startMm + lengthMm) { newId() }
 
         val (resolvedStartDia, resolvedEndDia) = deriveTaperDiameters(
@@ -255,7 +276,7 @@ fun ShaftViewModel.addTaperAt(
         setDiaMm = if (smallEndAtStart) startDiaMm else endDiaMm,
         letDiaMm = if (smallEndAtStart) endDiaMm else startDiaMm,
     )
-    _selectedComponentId.value = id
+    selectAdded(id, target)
 }
 
 fun ShaftViewModel.updateTaper(
@@ -265,7 +286,8 @@ fun ShaftViewModel.updateTaper(
     startDiaMm: Float,
     endDiaMm: Float,
     rateText: String = "",
-) = _spec.update { s ->
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) = updateSpec(target) { s ->
     if (index !in s.tapers.indices) s else {
         val old = s.tapers[index]
         val effectiveRate = rateText.ifBlank { old.taperRateText }
@@ -295,13 +317,13 @@ fun ShaftViewModel.updateTaper(
         )
     }
 }.also {
-    if (index in _spec.value.tapers.indices) {
+    if (index in specValue(target).tapers.indices) {
         // The x-ordered pair is read back as SET/LET through the taper's own half — seeding
         // the SET default from startDiaMm alone would take a FWD-half taper's LET.
         val smallEndAtStart = taperSmallEndAtStart(
             startMm = startMm,
             lengthMm = lengthMm,
-            overallLengthMm = _spec.value.overallLengthMm,
+            overallLengthMm = specValue(target).overallLengthMm,
         )
         rememberTaperDefaults(
             lengthMm = lengthMm,
@@ -318,7 +340,8 @@ fun ShaftViewModel.updateTaperKeyway(
     lengthMm: Float,
     offsetFromSetMm: Float,
     spooned: Boolean,
-) = _spec.update { s ->
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) = updateSpec(target) { s ->
     if (index !in s.tapers.indices) s else {
         val old = s.tapers[index]
         val updatedTapers = s.tapers.toMutableList().also { list ->
@@ -335,10 +358,14 @@ fun ShaftViewModel.updateTaperKeyway(
 }
 
 
-fun ShaftViewModel.updateTaperAuthoredReference(index: Int, reference: LinerAuthoredReference) = _spec.update { s ->
+fun ShaftViewModel.updateTaperAuthoredReference(
+    index: Int,
+    reference: LinerAuthoredReference,
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) = updateSpec(target) { s ->
     if (index !in s.tapers.indices) s else {
         val old = s.tapers[index]
-        if (old.authoredReference == reference) return@update s
+        if (old.authoredReference == reference) return@updateSpec s
         s.copy(
             tapers = s.tapers.toMutableList().also { l ->
                 l[index] = old.copy(authoredReference = reference)
@@ -348,11 +375,11 @@ fun ShaftViewModel.updateTaperAuthoredReference(index: Int, reference: LinerAuth
 }
 
 /** Remove a [Taper] by id. Recoverable via [undoEdit] (spec + order restored together). */
-fun ShaftViewModel.removeTaper(id: String) {
+fun ShaftViewModel.removeTaper(id: String, target: SpecTarget = SpecTarget.ORIGINAL) {
     Log.d("ShaftViewModel", "removeTaper invoked for id=$id")
     var removed = false
 
-    _spec.update { s ->
+    updateSpec(target) { s ->
         val idx = s.tapers.indexOfFirst { it.id == id }
         if (idx < 0) {
             Log.w(
@@ -360,7 +387,7 @@ fun ShaftViewModel.removeTaper(id: String) {
                 "removeTaper: requested id=$id not found. current ids=${s.tapers.map { it.id }}"
             )
             // NOTE: This should never happen during normal UI usage.
-            return@update s
+            return@updateSpec s
         }
         removed = true
 
@@ -397,9 +424,10 @@ fun ShaftViewModel.addThreadAt(
     excludeFromOAL: Boolean = false,
     isAftEnd: Boolean = true,
     metricDesignation: String? = null,
+    target: SpecTarget = SpecTarget.ORIGINAL,
 ) {
     val id = newId()
-    _spec.update { s ->
+    updateSpec(target) { s ->
         // Excluded threads live outside the shaft envelope; they don't split in-shaft bodies.
         val split = if (!excludeFromOAL) s.splitBodiesAround(startMm, startMm + lengthMm) { newId() }
                     else BodySplitResult(s, emptyList(), emptyList())
@@ -422,7 +450,7 @@ fun ShaftViewModel.addThreadAt(
     // so every formatting site resolves it to mm uniformly (see DisplayUnits).
     applyMetricThreadUnit(id, metricDesignation)
     rememberThreadDefaults(lengthMm = lengthMm, majorDiaMm = majorDiaMm, pitchMm = pitchMm)
-    _selectedComponentId.value = id
+    selectAdded(id, target)
 }
 
 fun ShaftViewModel.updateThread(
@@ -432,14 +460,15 @@ fun ShaftViewModel.updateThread(
     majorDiaMm: Float,
     pitchMm: Float,
     metricDesignation: String? = null,
-) = _spec.update { s ->
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) = updateSpec(target) { s ->
     if (index !in s.threads.indices) s else {
         val old = s.threads[index]
         val newLength = max(0f, lengthMm)
 
         // For excluded threads the start position is always derived from isAftEnd + OAL,
         // never from a user-authored startMm. Use the same formula as syncExcludedThreadPositions()
-        // so the position is correct inside this single _spec.update call.
+        // so the position is correct inside this single spec update.
         val effectiveStart = if (old.excludeFromOAL) {
             if (old.isAftEnd) -newLength else s.overallLengthMm
         } else startMm
@@ -457,8 +486,8 @@ fun ShaftViewModel.updateThread(
         )
     }
 }.also {
-    if (index in _spec.value.threads.indices) {
-        applyMetricThreadUnit(_spec.value.threads[index].id, metricDesignation)
+    if (index in specValue(target).threads.indices) {
+        applyMetricThreadUnit(specValue(target).threads[index].id, metricDesignation)
         rememberThreadDefaults(lengthMm = lengthMm, majorDiaMm = majorDiaMm, pitchMm = pitchMm)
     }
 }
@@ -474,6 +503,9 @@ fun ShaftViewModel.updateThread(
  * Public counterpart of [applyMetricThreadUnit]: both register a display-unit override under a
  * derived key rather than adding storage, so a metric keyway on an imperial taper travels in
  * the same `unit_overrides` map as everything else.
+ *
+ * Targetless: the overrides key by component id, and the original and final drawings share
+ * their ids by construction — one entry describes the component on both.
  */
 fun ShaftViewModel.setKeywayUnit(componentId: String, unit: UnitSystem?) {
     if (componentId.isBlank()) return
@@ -493,7 +525,11 @@ private fun ShaftViewModel.applyMetricThreadUnit(threadId: String, metricDesigna
     }
 }
 
-fun ShaftViewModel.setThreadExcludeFromOal(id: String, excludeFromOAL: Boolean) = _spec.update { s ->
+fun ShaftViewModel.setThreadExcludeFromOal(
+    id: String,
+    excludeFromOAL: Boolean,
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) = updateSpec(target) { s ->
     val idx = s.threads.indexOfFirst { it.id == id }
     if (idx == -1) s
     else s.copy(
@@ -504,7 +540,11 @@ fun ShaftViewModel.setThreadExcludeFromOal(id: String, excludeFromOAL: Boolean) 
     ).syncExcludedThreadPositions()
 }
 
-fun ShaftViewModel.setThreadEndPosition(id: String, isAft: Boolean) = _spec.update { s ->
+fun ShaftViewModel.setThreadEndPosition(
+    id: String,
+    isAft: Boolean,
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) = updateSpec(target) { s ->
     val idx = s.threads.indexOfFirst { it.id == id }
     if (idx == -1) s
     else s.copy(
@@ -515,11 +555,11 @@ fun ShaftViewModel.setThreadEndPosition(id: String, isAft: Boolean) = _spec.upda
 }
 
 /** Remove a [Threads] segment by id. Recoverable via [undoEdit] (spec + order together). */
-fun ShaftViewModel.removeThread(id: String) {
+fun ShaftViewModel.removeThread(id: String, target: SpecTarget = SpecTarget.ORIGINAL) {
     Log.d("ShaftViewModel", "removeThread invoked for id=$id")
     var removed = false
 
-    _spec.update { s ->
+    updateSpec(target) { s ->
         val idx = s.threads.indexOfFirst { it.id == id }
         if (idx < 0) {
             Log.w(
@@ -527,7 +567,7 @@ fun ShaftViewModel.removeThread(id: String) {
                 "removeThread: requested id=$id not found. current ids=${s.threads.map { it.id }}"
             )
             // NOTE: This should never happen during normal UI usage.
-            return@update s
+            return@updateSpec s
         }
         removed = true
 
@@ -558,9 +598,10 @@ fun ShaftViewModel.addLinerAt(
     shoulderFwdLenMm: Float = 0f,
     shoulderFwdOdMm: Float = 0f,
     shoulderFwdRadiusMm: Float = 0f,
+    target: SpecTarget = SpecTarget.ORIGINAL,
 ) {
     val id = newId()
-    _spec.update { s ->
+    updateSpec(target) { s ->
         val len = max(0f, lengthMm)
         val split = s.splitBodiesAround(startMm, startMm + len) { newId() }
         val od = max(0f, odMm)
@@ -581,10 +622,16 @@ fun ShaftViewModel.addLinerAt(
         split.spec.copy(liners = listOf(liner) + split.spec.liners)
     }
     rememberLinerDefaults(lengthMm = lengthMm, odMm = odMm)
-    _selectedComponentId.value = id
+    selectAdded(id, target)
 }
 
-fun ShaftViewModel.updateLiner(index: Int, startMm: Float, lengthMm: Float, odMm: Float) = _spec.update { s ->
+fun ShaftViewModel.updateLiner(
+    index: Int,
+    startMm: Float,
+    lengthMm: Float,
+    odMm: Float,
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) = updateSpec(target) { s ->
     if (index !in s.liners.indices) s else {
         val old = s.liners[index]
         val len = max(0f, lengthMm)
@@ -596,15 +643,19 @@ fun ShaftViewModel.updateLiner(index: Int, startMm: Float, lengthMm: Float, odMm
         )
     }
 }.also {
-    if (index in _spec.value.liners.indices) {
+    if (index in specValue(target).liners.indices) {
         rememberLinerDefaults(lengthMm = lengthMm, odMm = odMm)
     }
 }
 
-fun ShaftViewModel.updateLinerAuthoredReference(index: Int, reference: LinerAuthoredReference) = _spec.update { s ->
+fun ShaftViewModel.updateLinerAuthoredReference(
+    index: Int,
+    reference: LinerAuthoredReference,
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) = updateSpec(target) { s ->
     if (index !in s.liners.indices) s else {
         val old = s.liners[index]
-        if (old.authoredReference == reference) return@update s
+        if (old.authoredReference == reference) return@updateSpec s
         s.copy(
             liners = s.liners.toMutableList().also { l ->
                 l[index] = old.copy(authoredReference = reference)
@@ -639,7 +690,11 @@ private inline fun <T, V> ShaftSpec.withItemField(
 
 private fun normalizeLabel(label: String?): String? = label?.trim()?.takeIf { it.isNotEmpty() }
 
-fun ShaftViewModel.updateLinerLabel(index: Int, label: String?) = _spec.update { s ->
+fun ShaftViewModel.updateLinerLabel(
+    index: Int,
+    label: String?,
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) = updateSpec(target) { s ->
     s.withItemField(
         list = s.liners, index = index, newValue = label,
         normalize = ::normalizeLabel,
@@ -649,7 +704,11 @@ fun ShaftViewModel.updateLinerLabel(index: Int, label: String?) = _spec.update {
     )
 }
 
-fun ShaftViewModel.updateBodyLabel(index: Int, label: String?) = _spec.update { s ->
+fun ShaftViewModel.updateBodyLabel(
+    index: Int,
+    label: String?,
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) = updateSpec(target) { s ->
     s.withItemField(
         list = s.bodies, index = index, newValue = label,
         normalize = ::normalizeLabel,
@@ -664,7 +723,11 @@ fun ShaftViewModel.updateBodyLabel(index: Int, label: String?) = _spec.update { 
  * rewrite. Routed through [withItemField], whose identity guard no-ops when the flag
  * already matches so a recomposition can never mark the document dirty.
  */
-fun ShaftViewModel.updateBodyShowDia(index: Int, show: Boolean) = _spec.update { s ->
+fun ShaftViewModel.updateBodyShowDia(
+    index: Int,
+    show: Boolean,
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) = updateSpec(target) { s ->
     s.withItemField(
         list = s.bodies, index = index, newValue = show,
         get = { it.showDiaOnDrawing },
@@ -680,7 +743,11 @@ fun ShaftViewModel.updateBodyShowDia(index: Int, show: Boolean) = _spec.update {
  * around it; turning it back ON is the escape hatch for a body long enough that pinning it
  * would starve the rest of the shaft.
  */
-fun ShaftViewModel.updateBodyCompressOnDrawing(index: Int, compress: Boolean) = _spec.update { s ->
+fun ShaftViewModel.updateBodyCompressOnDrawing(
+    index: Int,
+    compress: Boolean,
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) = updateSpec(target) { s ->
     s.withItemField(
         list = s.bodies, index = index, newValue = compress,
         get = { it.compressOnDrawing },
@@ -693,7 +760,11 @@ fun ShaftViewModel.updateBodyCompressOnDrawing(index: Int, compress: Boolean) = 
  * Show/hide this body's NAME label on the schematic. Draw-only, and the same identity-guarded
  * [withItemField] path as [updateBodyShowDia] — the label text itself is never rewritten.
  */
-fun ShaftViewModel.updateBodyShowLabel(index: Int, show: Boolean) = _spec.update { s ->
+fun ShaftViewModel.updateBodyShowLabel(
+    index: Int,
+    show: Boolean,
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) = updateSpec(target) { s ->
     s.withItemField(
         list = s.bodies, index = index, newValue = show,
         get = { it.showNameOnDrawing },
@@ -703,7 +774,11 @@ fun ShaftViewModel.updateBodyShowLabel(index: Int, show: Boolean) = _spec.update
 }
 
 /** Taper mirror of [updateBodyShowLabel]. */
-fun ShaftViewModel.updateTaperShowLabel(index: Int, show: Boolean) = _spec.update { s ->
+fun ShaftViewModel.updateTaperShowLabel(
+    index: Int,
+    show: Boolean,
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) = updateSpec(target) { s ->
     s.withItemField(
         list = s.tapers, index = index, newValue = show,
         get = { it.showNameOnDrawing },
@@ -713,7 +788,11 @@ fun ShaftViewModel.updateTaperShowLabel(index: Int, show: Boolean) = _spec.updat
 }
 
 /** Thread mirror of [updateBodyShowLabel]. */
-fun ShaftViewModel.updateThreadShowLabel(index: Int, show: Boolean) = _spec.update { s ->
+fun ShaftViewModel.updateThreadShowLabel(
+    index: Int,
+    show: Boolean,
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) = updateSpec(target) { s ->
     s.withItemField(
         list = s.threads, index = index, newValue = show,
         get = { it.showNameOnDrawing },
@@ -723,7 +802,11 @@ fun ShaftViewModel.updateThreadShowLabel(index: Int, show: Boolean) = _spec.upda
 }
 
 /** Liner mirror of [updateBodyShowLabel]. */
-fun ShaftViewModel.updateLinerShowLabel(index: Int, show: Boolean) = _spec.update { s ->
+fun ShaftViewModel.updateLinerShowLabel(
+    index: Int,
+    show: Boolean,
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) = updateSpec(target) { s ->
     s.withItemField(
         list = s.liners, index = index, newValue = show,
         get = { it.showNameOnDrawing },
@@ -738,7 +821,11 @@ fun ShaftViewModel.updateLinerShowLabel(index: Int, show: Boolean) = _spec.updat
  * geometry, no value rewrite. Only the two dimensioned sheets read it; the wear and undercut
  * documents keep one fill per kind.
  */
-fun ShaftViewModel.updateBodyShade(index: Int, shade: Boolean) = _spec.update { s ->
+fun ShaftViewModel.updateBodyShade(
+    index: Int,
+    shade: Boolean,
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) = updateSpec(target) { s ->
     s.withItemField(
         list = s.bodies, index = index, newValue = shade,
         get = { it.shadeOnDrawing },
@@ -748,7 +835,11 @@ fun ShaftViewModel.updateBodyShade(index: Int, shade: Boolean) = _spec.update { 
 }
 
 /** Taper mirror of [updateBodyShade]. */
-fun ShaftViewModel.updateTaperShade(index: Int, shade: Boolean) = _spec.update { s ->
+fun ShaftViewModel.updateTaperShade(
+    index: Int,
+    shade: Boolean,
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) = updateSpec(target) { s ->
     s.withItemField(
         list = s.tapers, index = index, newValue = shade,
         get = { it.shadeOnDrawing },
@@ -761,7 +852,11 @@ fun ShaftViewModel.updateTaperShade(index: Int, shade: Boolean) = _spec.update {
  * Liner mirror of [updateBodyShade]. A consolidated sheet printing measured Ø values inside
  * the profile still draws every liner bare — the knockout-halo rule outranks this override.
  */
-fun ShaftViewModel.updateLinerShade(index: Int, shade: Boolean) = _spec.update { s ->
+fun ShaftViewModel.updateLinerShade(
+    index: Int,
+    shade: Boolean,
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) = updateSpec(target) { s ->
     s.withItemField(
         list = s.liners, index = index, newValue = shade,
         get = { it.shadeOnDrawing },
@@ -784,8 +879,9 @@ fun ShaftViewModel.updateBodyBlend(
     profile: BlendProfile,
     sealAft: Boolean = false,
     sealFwd: Boolean = false,
+    target: SpecTarget = SpecTarget.ORIGINAL,
 ) =
-    _spec.update { s ->
+    updateSpec(target) { s ->
         if (index !in s.bodies.indices) s else {
             val old = s.bodies[index]
             if (old.blendAftMm == blendAftMm &&
@@ -793,7 +889,7 @@ fun ShaftViewModel.updateBodyBlend(
                 old.blendProfile == profile &&
                 old.blendAftSeal == sealAft &&
                 old.blendFwdSeal == sealFwd
-            ) return@update s
+            ) return@updateSpec s
             s.copy(
                 bodies = s.bodies.toMutableList().also { l ->
                     l[index] = old.copy(
@@ -824,10 +920,15 @@ fun ShaftViewModel.setAutoBlend(
     lengthMm: Float,
     profile: BlendProfile,
     seal: Boolean = false,
-) = _spec.update { s -> s.withAutoBlend(spanStartMm, spanEndMm, end, lengthMm, profile, seal) }
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) = updateSpec(target) { s -> s.withAutoBlend(spanStartMm, spanEndMm, end, lengthMm, profile, seal) }
 
 /** Liner mirror of [updateBodyShowDia]. */
-fun ShaftViewModel.updateLinerShowDia(index: Int, show: Boolean) = _spec.update { s ->
+fun ShaftViewModel.updateLinerShowDia(
+    index: Int,
+    show: Boolean,
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) = updateSpec(target) { s ->
     s.withItemField(
         list = s.liners, index = index, newValue = show,
         get = { it.showDiaOnDrawing },
@@ -846,7 +947,8 @@ fun ShaftViewModel.updateLinerShoulder(
     lenMm: Float,
     odMm: Float,
     radiusMm: Float,
-) = _spec.update { s ->
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) = updateSpec(target) { s ->
     if (index !in s.liners.indices) s else {
         val old = s.liners[index]
         val new = when (end) {
@@ -855,7 +957,7 @@ fun ShaftViewModel.updateLinerShoulder(
             LinerAuthoredReference.FWD -> old.copy(
                 shoulderFwdLenMm = lenMm, shoulderFwdOdMm = odMm, shoulderFwdRadiusMm = radiusMm)
         }
-        if (new == old) return@update s
+        if (new == old) return@updateSpec s
         s.copy(liners = s.liners.toMutableList().also { l -> l[index] = new })
     }
 }
@@ -865,11 +967,16 @@ fun ShaftViewModel.updateLinerShoulder(
  * explicit components is one piece of stock, so it carries one visibility, matching the
  * single [ShaftSpec.autoBodyDiaMm].
  */
-fun ShaftViewModel.setShowAutoBodyDia(show: Boolean) = _spec.update { s ->
-    if (s.showAutoBodyDia == show) s else s.copy(showAutoBodyDia = show)
-}
+fun ShaftViewModel.setShowAutoBodyDia(show: Boolean, target: SpecTarget = SpecTarget.ORIGINAL) =
+    updateSpec(target) { s ->
+        if (s.showAutoBodyDia == show) s else s.copy(showAutoBodyDia = show)
+    }
 
-fun ShaftViewModel.updateTaperLabel(index: Int, label: String?) = _spec.update { s ->
+fun ShaftViewModel.updateTaperLabel(
+    index: Int,
+    label: String?,
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) = updateSpec(target) { s ->
     s.withItemField(
         list = s.tapers, index = index, newValue = label,
         normalize = ::normalizeLabel,
@@ -879,7 +986,11 @@ fun ShaftViewModel.updateTaperLabel(index: Int, label: String?) = _spec.update {
     )
 }
 
-fun ShaftViewModel.updateThreadLabel(index: Int, label: String?) = _spec.update { s ->
+fun ShaftViewModel.updateThreadLabel(
+    index: Int,
+    label: String?,
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) = updateSpec(target) { s ->
     s.withItemField(
         list = s.threads, index = index, newValue = label,
         normalize = ::normalizeLabel,
@@ -890,11 +1001,11 @@ fun ShaftViewModel.updateThreadLabel(index: Int, label: String?) = _spec.update 
 }
 
 /** Remove a [Liner] by id. Recoverable via [undoEdit] (spec + order restored together). */
-fun ShaftViewModel.removeLiner(id: String) {
+fun ShaftViewModel.removeLiner(id: String, target: SpecTarget = SpecTarget.ORIGINAL) {
     Log.d("ShaftViewModel", "removeLiner invoked for id=$id")
     var removed = false
 
-    _spec.update { s ->
+    updateSpec(target) { s ->
         val idx = s.liners.indexOfFirst { it.id == id }
         if (idx < 0) {
             Log.w(
@@ -902,7 +1013,7 @@ fun ShaftViewModel.removeLiner(id: String) {
                 "removeLiner: requested id=$id not found. current ids=${s.liners.map { it.id }}"
             )
             // NOTE: This should never happen during normal UI usage.
-            return@update s
+            return@updateSpec s
         }
         removed = true
 
@@ -930,9 +1041,12 @@ fun ShaftViewModel.addCouplerBoltSlotAt(
     through: Boolean = true,
     depthMm: Float = 0f,
     reference: SlotAuthoredReference = SlotAuthoredReference.FWD,
+    holeStyle: BoltHoleStyle = BoltHoleStyle.SEAM,
+    clocking: BoltHoleClocking = BoltHoleClocking.DEG_90,
+    target: SpecTarget = SpecTarget.ORIGINAL,
 ) {
     val id = newId()
-    _spec.update { s ->
+    updateSpec(target) { s ->
         val slot = CouplerBoltSlot(
             id = id,
             startFromAftMm = max(0f, startMm),
@@ -942,12 +1056,14 @@ fun ShaftViewModel.addCouplerBoltSlotAt(
             through = through,
             depthMm = max(0f, depthMm),
             authoredReference = reference,
+            holeStyle = holeStyle,
+            clocking = clocking,
         )
         // Newest-on-top, like the other component lists.
         s.copy(couplerBoltSlots = listOf(slot) + s.couplerBoltSlots)
     }
     rememberSlotDefaults(holeDiaMm = holeDiaMm, spacingMm = spacingMm, depthMm = depthMm, count = count)
-    _selectedComponentId.value = id
+    selectAdded(id, target)
 }
 
 fun ShaftViewModel.updateCouplerBoltSlot(
@@ -958,7 +1074,8 @@ fun ShaftViewModel.updateCouplerBoltSlot(
     spacingMm: Float,
     through: Boolean,
     depthMm: Float,
-) = _spec.update { s ->
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) = updateSpec(target) { s ->
     if (index !in s.couplerBoltSlots.indices) s else {
         val old = s.couplerBoltSlots[index]
         s.copy(
@@ -975,15 +1092,19 @@ fun ShaftViewModel.updateCouplerBoltSlot(
         )
     }
 }.also {
-    if (index in _spec.value.couplerBoltSlots.indices) {
+    if (index in specValue(target).couplerBoltSlots.indices) {
         rememberSlotDefaults(holeDiaMm = holeDiaMm, spacingMm = spacingMm, depthMm = depthMm, count = count)
     }
 }
 
-fun ShaftViewModel.updateCouplerBoltSlotReference(index: Int, reference: SlotAuthoredReference) = _spec.update { s ->
+fun ShaftViewModel.updateCouplerBoltSlotReference(
+    index: Int,
+    reference: SlotAuthoredReference,
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) = updateSpec(target) { s ->
     if (index !in s.couplerBoltSlots.indices) s else {
         val old = s.couplerBoltSlots[index]
-        if (old.authoredReference == reference) return@update s
+        if (old.authoredReference == reference) return@updateSpec s
         s.copy(
             couplerBoltSlots = s.couplerBoltSlots.toMutableList().also { l ->
                 l[index] = old.copy(authoredReference = reference)
@@ -992,10 +1113,55 @@ fun ShaftViewModel.updateCouplerBoltSlotReference(index: Int, reference: SlotAut
     }
 }
 
-fun ShaftViewModel.updateCouplerBoltSlotShowRail(index: Int, show: Boolean) = _spec.update { s ->
+/**
+ * Switch a row between the muff-seam cutout and the cross-drilled hole. Draw-only — the
+ * stored position, hole Ø, count and spacing are untouched, so the same entry re-reads as
+ * the other kind of hole.
+ */
+fun ShaftViewModel.updateCouplerBoltSlotStyle(
+    index: Int,
+    style: BoltHoleStyle,
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) = updateSpec(target) { s ->
     if (index !in s.couplerBoltSlots.indices) s else {
         val old = s.couplerBoltSlots[index]
-        if (old.showDimensionRail == show) return@update s
+        if (old.holeStyle == style) return@updateSpec s
+        s.copy(
+            couplerBoltSlots = s.couplerBoltSlots.toMutableList().also { l ->
+                l[index] = old.copy(holeStyle = style)
+            }
+        )
+    }
+}
+
+/**
+ * Set a cross-drilled hole's clocking relative to the keyway (in line / 90°). Draw + footer
+ * text only — nothing stored about position or size moves. Read only for CROSS rows.
+ */
+fun ShaftViewModel.updateCouplerBoltSlotClocking(
+    index: Int,
+    clocking: BoltHoleClocking,
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) = updateSpec(target) { s ->
+    if (index !in s.couplerBoltSlots.indices) s else {
+        val old = s.couplerBoltSlots[index]
+        if (old.clocking == clocking) return@updateSpec s
+        s.copy(
+            couplerBoltSlots = s.couplerBoltSlots.toMutableList().also { l ->
+                l[index] = old.copy(clocking = clocking)
+            }
+        )
+    }
+}
+
+fun ShaftViewModel.updateCouplerBoltSlotShowRail(
+    index: Int,
+    show: Boolean,
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) = updateSpec(target) { s ->
+    if (index !in s.couplerBoltSlots.indices) s else {
+        val old = s.couplerBoltSlots[index]
+        if (old.showDimensionRail == show) return@updateSpec s
         s.copy(
             couplerBoltSlots = s.couplerBoltSlots.toMutableList().also { l ->
                 l[index] = old.copy(showDimensionRail = show)
@@ -1005,12 +1171,12 @@ fun ShaftViewModel.updateCouplerBoltSlotShowRail(index: Int, show: Boolean) = _s
 }
 
 /** Remove a [CouplerBoltSlot] by id. Recoverable via [undoEdit] (spec + order together). */
-fun ShaftViewModel.removeCouplerBoltSlot(id: String) {
+fun ShaftViewModel.removeCouplerBoltSlot(id: String, target: SpecTarget = SpecTarget.ORIGINAL) {
     var removed = false
 
-    _spec.update { s ->
+    updateSpec(target) { s ->
         val idx = s.couplerBoltSlots.indexOfFirst { it.id == id }
-        if (idx < 0) return@update s
+        if (idx < 0) return@updateSpec s
         removed = true
         // No body merge needed — slots never split bodies.
         s.copy(couplerBoltSlots = s.couplerBoltSlots.toMutableList().apply { removeAt(idx) })

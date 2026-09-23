@@ -6,6 +6,539 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-09-23
+
+### fix(ui): the tablet orientation unlock is applied at activity creation, not from the manifest
+
+Android Studio's build failed on lint `ManifestResource`: `android:screenOrientation` referenced
+`@integer/activity_orientation`, and a manifest resource cannot vary by configuration — the
+`values-sw600dp` override there was never read, so every tablet would have stayed locked to
+portrait. The manifest now declares a literal `portrait` (the phone lock, unchanged) and
+`MainActivity.onCreate` applies `baseActivityOrientation()` before `setContent`, so the ONE
+resource still decides both the base orientation and what the PDF preview screens restore.
+Phones are byte-identical; a tablet held landscape at launch recreates once into landscape.
+`docs/contracts/Adaptive.md` and the CLAUDE.md invariant say why the manifest must not reference
+the resource.
+
+### test(pdf): a taper name is pinned clear of a neighbouring body's Ø callout
+
+On-device screenshot: "FWD Taper" printed through the `Ø 10.368"` callout of the short bare run
+beside it. The 2026-09-03 collision fix below already covers this — every callout on the sheet is
+an obstacle to every name (`geom/BelowShaftLabelLayout.kt`), not only the name's own — but that
+branch had not been merged, so the installed build predated it. Merged now, and
+`ComponentLabelCalloutClearanceTest` gains the taper fixture: it first proves the sheet collides
+when the callouts are NOT reserved, then sweeps the compressed drawing widths with them reserved
+and fails on any overlap.
+
+## 2026-09-17
+
+### feat(schematic): cross-drilled coupler bolt hole — the plain coupling end with no taper
+
+A new FWD-end configuration turned up on the floor: a shaft coupling end with no taper, just a
+single bolt hole cross-drilled through the shaft, quoted as a hole Ø and the distance from the
+end of the shaft to the center of the hole. The existing Coupler Bolt Slot already takes
+exactly that entry (Measure From FWD, count 1, hole Ø, distance to the hole center) but drew
+every row as the muff-coupler seam cutout — two half-circles straddling the outline.
+
+- **`CouplerBoltSlot.holeStyle`** (`BoltHoleStyle`): **Seam** (default) keeps the straddling
+  cutout; **Cross-drilled** draws the hole through the shaft. Draw-only — position, Ø, count,
+  spacing, bounds, and the reference-only posture (never OAL, never a split, never a
+  collision) are unchanged, and the style can be switched on the card without touching any
+  typed value.
+- **`CouplerBoltSlot.clocking`** (`BoltHoleClocking`) — where a cross-drilled hole sits around
+  the shaft relative to the keyway, the floor's second detail. **90° from keyway** (default:
+  a coupling bolt in line with the keyway would pass through the key) draws the bore HIDDEN —
+  two dashed walls one hole width apart, top surface to bottom for a through hole, to the
+  drill depth with a dashed floor for a blind one — because the keyway draws face-on and the
+  hole's axis therefore lies in the page. **In line** draws ONE circle on the centerline, the
+  hole as seen on the near surface. One pure construction (`geom/BoltHoleMath.kt`,
+  `crossBoreLines`, unit-tested) feeds both draw sites; the dashes are the hidden-keyway
+  pattern. Drawing + footer text only, no geometric effect — the keyway-clocking-note posture.
+- **Footer lines for cross-drilled holes**, in the end column of the face the hole was quoted
+  from: `Bolt hole: Ø …` (× count above one), `Hole center from FWD: …` (@ pitch above one),
+  and `90° from keyway` / `In line with keyway` — the note only when the shaft has a keyway.
+  Own display unit, dual-aware, blank drafts rule the values. Seam rows still print nothing.
+- Additive and defaulted: every row in a saved document decodes as Seam, so existing sheets
+  print byte-identically.
+- Both surfaces under the parity rule: a "Hole: Seam | Cross-drilled" chip row heads the Add
+  dialog and the card, with a "From keyway: 90° | In line" row beneath it while Cross-drilled
+  is selected; the position field reads "Hole center from FWD" for a cross-drilled
+  hole and "First slot from FWD" for a seam row, from one shared label helper. The card titles
+  a cross-drilled row "Coupler Bolt Hole"; the add chooser's button reads "Coupler Bolt
+  Slot / Hole".
+- Preview overlay and the shared PDF pass (schematic, runout/consolidated, wear, undercut
+  fallback profile) branch on the style from the same construction.
+- The runout sheets' coupling end view takes its bolt count from the first **Seam** row — a
+  cross-drilled hole is a bolt through the shaft, not a flange bolt on the face.
+- Help topic renamed "Coupler bolt slots and holes" with the two styles described.
+- Tests: `CouplerBoltSlotTest` pins the Seam default, legacy decode without the key, the
+  Cross round-trip, the 90° clocking default, the hidden-bore predicate, the authored center
+  distance, and that the style changes nothing about footprint/validity/coverage/OD;
+  `BoltHoleMathTest` the bore construction; `CrossDrilledHoleFooterTest` the footer lines,
+  column choice, keyway gating, count/pitch, blank drafts, and seam silence.
+- Contracts: `docs/contracts/CouplerBoltSlot.md` (Hole style, Clocking, Footer lines),
+  `AddComponentDialogs.md`.
+- Still deferred: no dimension rail for a bolt row (the footer now carries the numbers). A
+  blind hole at 90° is drawn entering from the top silhouette; which side it actually enters
+  is not yet authored.
+
+## 2026-09-16
+
+### feat(ui): tablet layout — free rotation on tablets, two panes on a landscape tablet
+
+The app was a portrait phone layout; on a tablet the shaft drew as a flat strip over a column
+of controls stretched edge to edge, and the activity was locked to portrait. It now adapts on
+ONE axis, the window width class (`ui/adaptive/WindowSize.kt`: COMPACT < 600 dp, MEDIUM
+< 840 dp, EXPANDED), with the phone layout byte-identical.
+
+- **Orientation.** Phones stay portrait; tablets (smallest width ≥ 600 dp) rotate freely. One
+  resource, `R.integer.activity_orientation`, sits behind both the manifest and what the two
+  PDF preview screens restore when they give rotation back — they used to restore a literal
+  portrait, which would have locked a tablet to portrait the first time a preview closed.
+- **Editor (Schematic and Final tabs).** MEDIUM raises the preview card's height cap; EXPANDED
+  lays out two panes — preview, OAL and warnings on the left, the Components header, Add
+  button and carousel on the right — each scrolling on its own.
+- **Runout, Wear and Undercut tabs.** MEDIUM gives the canvas more height; EXPANDED puts the
+  canvas with its print group (blank draft, export gate, Print/Preview/Export) in the left pane
+  and the tab's editors in the right, the canvas pinned.
+- **Sidebar.** On a landscape tablet the editor sidebar is a permanent panel beside the tabs,
+  built from the same content composable the phone overlay hosts; the tab hamburgers hide
+  through `LocalSidebarPermanent`.
+- **List screens** (Start, Settings, Help, About, Achievements, Developer Options, Templates,
+  Open, Save As) cap their one scrolling column at a readable 720 dp and centre it
+  (`readableWidth()`), a no-op on phones.
+- Every screen that lays out two ways calls the SAME block composables from both branches, so
+  the phone and the tablet cannot drift. Nothing adaptive touches sheet ink, a composer, the
+  model, or a document. Contract: `docs/contracts/Adaptive.md`; per-surface notes in
+  `ShaftScreen.md`, `RunoutSheet.md`, `UndercutDrawing.md`, `Navigation.md`, `UI_CONTRACT.md`.
+- Tests: `WindowSizeTest` pins the breakpoints; Robolectric hosts the editor at
+  `w1280dp-h800dp-land` and at the phone default and asserts the pane tags and the hamburger
+  follow the window. **Unverified on a real tablet** — the on-device pass is in `TODO.md`.
+## 2026-09-15
+
+### feat(pdf): line art for the printed undercut drawing
+
+The on-screen "Line art (no shading)" undercut style was screen-only; the printed sheet always
+shaded its detail-strip liner and the cut section's core. The print side now has its own switch.
+
+- **Settings → PDF Export → "Undercut drawing: line art (no shading)"**, also at the foot of the
+  Shade-in-Components group on the undercut preview's PDF options sheet (the one document it
+  reaches). Default off, so every existing document prints byte for byte as before.
+- On, the undercut PDF draws **no shade fill anywhere** — bodies, tapers, liners, the detail
+  strips' otherwise-always-shaded liner span, and the section core — and the cut reads from the
+  notch construction alone: the void erasing the surface stroke, the full-height section faces,
+  the floor lines. Outlines, thread hatch, the coupler-slot cutout marker, rails and text are
+  untouched. "Always shades its liner" now reads "always, unless line art".
+- One pure decision, `undercutPdfFillPlan` (`pdf/UndercutPdfFillPlan.kt`, `UndercutPdfFillPlanTest`);
+  the composer builds its paints from it and threads the section-core choice into the notch pass.
+- Part of the drawing look, so **drawing profiles capture it** and "Restore Drawing defaults"
+  resets it (`DrawingProfileTest` round-trips it; an older profile payload still loads).
+- **Independent of the screen style by design** — the `UndercutStyle` line-art flag still never
+  reaches a composer; the two flags mean the same thing on two surfaces and neither reads the
+  other. Contract: `UndercutDrawing.md`, `PDF_EXPORT.md` §5.6, CLAUDE.md sheet-ink invariant.
+
+### feat(help): search, and a "?" on each sheet tab that opens its own guide
+
+The Help screen was a long scroll with no way in but the top. It now has a search field and
+can be opened straight at a topic.
+
+- **Search** is pinned above the list. It narrows the screen to the topics whose title or text
+  contain what was typed (case-insensitive), drops sections with no hits, and **opens every
+  match** — a hit that still needs a tap to read is the failing state. Clearing the box puts
+  each card back exactly as it was: the query never writes a card's saved expansion. An empty
+  result says so by name.
+- **Deep links.** The `help` route takes an optional `topic` argument (`helpRoute(key)` in
+  `AppNav` is the one place the query syntax lives). Topics carry a stable key derived from
+  their title (`helpTopicKey`, pure) — the list key, the saved-expansion key and the route
+  argument are all the same string, so they cannot disagree — and a test asserts the keys are
+  unique across the real content. A deep link opens its topic expanded and scrolls to it; an
+  unknown key lands at the top.
+- **A "?" on the Runout, Wear, Undercut and Consolidated Output tabs**, at the trailing end of
+  each toolbar row after Save, opens Help at that tab's how-to. One construction (`TabHelpButton`)
+  serves all four. The Schematic tab carries none — its help is the Getting Started material one
+  sidebar tap away. Seven entry points in all; the top-level ones stay.
+- Pure logic in `ui/screen/HelpSearch.kt` (`HelpSearchTest`); contract in `Navigation.md`.
+
+### fix(a11y): labelled back buttons and spoken sheet summaries
+
+Four icon-only back buttons (About, Achievements, Developer Options, Settings) announced
+nothing to a screen reader; every other icon-only button already did. They now say "Back".
+
+Each of the five white-sheet canvases (undercut overview and detail, wear overview and detail,
+runout preview) was a silent surface to TalkBack. Each now carries a spoken summary from the pure
+`ui/screen/SheetSemantics.kt` — **counts only** (undercut sections, wear areas, pits, diameter
+readings, stations, readings entered), never a diameter or a length — plus the tab's real
+accessible editing path, since a canvas's placement gesture is not one. `SheetSemanticsTest`
+pins the wording.
+
+Rulings recorded in `docs/contracts/Appearance.md` §Accessibility, closing the audit plan: sheet
+text is drawing ink and does not follow the system font scale (UI chrome must); carousel cards
+are not merged into one node (that would fold their fields together); canvas touch targets are
+not widened; no reduced-motion handling. The 200% font-scale and TalkBack walks are on-device
+items in `TODO.md`.
+
+### docs: settings customization plan closed
+
+`docs/SettingsCustomization_PLAN.md` moves to `docs/archive/` with a rulings table for every
+proposal it still carried: line-art print **yes**, Help search and deep links **yes**, the
+accessibility slice **yes, scoped**; sheet colour customization deferred and not queued; the
+custom RGB picker, Material You, per-document line thickness, touch-target widening,
+reduced-motion handling, Help images / "What's new" / localization all **no**, each with its
+reason.
+
+## 2026-09-14
+
+### feat(ui): taper calculator — Calculate button, answers in the fields
+
+On-device request: the live result at the bottom read as the calculator answering before it was
+asked, and it did not say what was still missing. The calculator is now button-driven.
+
+- **Calculate** is the one trigger (the keyboard's Done key is the same tap). Nothing is derived
+  until it is pressed; before that only unreadable text is flagged, at its field.
+- **The answer appears in its own field** — an italic preview in the empty field, with the label
+  reading "… — calculated". It is a placeholder, never text: the field still holds only what was
+  typed, so typing over it needs no clearing and nothing is ever filled in behind the user's back.
+  A ✓ beside it **keeps** the value as an input, so one answer can feed the next question (find
+  the rate, keep it, clear the length, find the length for a different small end).
+- **Too few values:** the fields that could complete the solve turn red and the message names
+  them — "Enter one more value — Small end Ø or Taper rate."
+- **A result never goes stale.** The calculated state is a snapshot of the entries it came from;
+  any edit or a unit change drops the preview, the red outlines and the message together.
+- The rate field's supporting line carries the "/ft reading (inch entry only) and the common
+  rate it lands on; the bottom results block is gone. All four typed still checks them, quoting
+  the rate the three geometry values give when the typed one disagrees. **Clear** resets the form.
+- The display rules are pure (`util/TaperCalcPresentation.kt`, `TaperCalcPresentationTest`) —
+  the calculator dialogs cannot be hosted under the Robolectric harness, so the rules live where
+  they can be tested.
+
+### feat(editor): tap the title to name the document; drafts on the Start screen name themselves
+
+The document title strip was a read-only label on all five tabs. It is now the naming
+affordance it already looked like — the desktop-editor gesture of clicking a title to rename
+it — and an unsaved draft on the Start screen says which shaft it is instead of reading
+"Untitled draft" three times over.
+
+- **Tap the title strip on any tab.** A document that has never been saved opens the Save As
+  screen (already seeded with the suggested name); a saved one opens a rename dialog, and the
+  strip follows the new name on every tab. The choice between the two is made once, in
+  `AppNav` — the tabs pass the tap along and have no naming behaviour of their own, so the
+  same strip can never come to mean different things on different tabs.
+- **One rename dialog, two callers.** The Open screen's inline "Rename saved shaft" dialog is
+  now the shared `RenameShaftDocumentDialog`, which owns the typed name and the storage work
+  while each caller owns what a rename means there. Its rules are unchanged and can no longer
+  drift between the two surfaces: a blank name is refused, a name that comes back to the
+  current one just dismisses, and an existing file is **never** overwritten.
+- **Unsaved drafts name themselves.** A draft row is titled with the name the save screen
+  would suggest from the job number / customer / vessel already typed into it, falling back to
+  "Untitled draft" only when the draft carries nothing at all. A row named that way reads
+  "Unsaved draft · <age>" underneath, so a named-looking row is never mistaken for a saved
+  file. The draft stays unsaved and unnamed — this names a ROW, and writes nothing.
+
+### feat(pdf): Output font — every sheet set in the shop's chosen face
+
+**Settings → Drawing → "Output font"** picks the typeface every exported PDF is set in — dimension
+values, callouts, component names and the footer alike. Four system families: **Standard**
+(the platform sans, the historical look and the default), **Condensed**, **Serif** and
+**Monospace**. Each chip is labelled in the face it selects, so the row reads as a specimen sheet.
+
+- **App-wide, like every other drawing pref.** `PdfPrefs.outputFont`, captured by a named Drawing
+  profile and put back by "Restore Drawing defaults". No doc-envelope field and no per-document
+  override — a shop picks a face once and prints every job in it, which is also why the picker
+  stays out of the per-sheet PDF options sheets.
+- **One seam to the ink.** `OutputTypography.active` is the process-wide mirror, written only by
+  `SettingsStore.updatePdfPrefs` — the `FractionTypography` posture exactly. The four composers
+  build their root text `Paint` from it and every other text paint on a sheet is a
+  copy-constructor of that root, so a single line per composer carries the choice to every glyph.
+- **Nothing on a sheet shifts.** Every text metric the layout budgets read — `measureRichText`,
+  `measureDualLabel`, the rail planner's inflated ascent — comes off the live `Paint`, so a wider
+  or narrower face is measured exactly as it will be drawn. A condensed face simply seats more
+  values inside the dimension line instead of above it.
+- **The mirror is not snapshot state**, so each preview's render-inputs record carries the font as
+  a re-render key; without it a tab would keep rasterizing in the face it last drew.
+- **No bundled font files.** A device missing one of these families falls back through
+  `Typeface.create` to its default sans — a legible sheet in the wrong face rather than no sheet —
+  and an unreadable stored name decodes to Standard.
+- `FractionTextRendererTest`'s stacked and diagonal ink-bounds checks now run in every face, so a
+  fraction stack that broke out of the line box in a condensed or slab font fails there.
+
+### feat(editor): standard key-stock sizes for keyways
+
+A **"Standard size…"** menu sits under the KW W × D row on all four keyway surfaces — the Body and
+Taper carousel cards and `AddBodyDialog` / `AddTaperDialog` — so a keyway can be specified off the
+standard rather than remembered and typed.
+
+- **ANSI B17.1 for an inch keyway, DIN 6885-1 / ISO 773 for a metric one.** The "Keyway in: in | mm"
+  chip picks the table, because that chip already decides the unit the keyway is typed and printed
+  in. Both tables live in the pure `geom/KeyStockStandards.kt`.
+- **The entry the standard names for the host Ø is offered first**, checked and captioned
+  "Suggested for Ø …" — the body's Ø on a body, the taper's LARGE end on a taper (a key is specified
+  for the section it seats in). Every other size stays reachable in table order: the shop fits the
+  key it has.
+- **The depth offered is the SHAFT keyseat depth** — what `keywayDepthMm` means and what gets cut —
+  not the key's overall height. For ANSI that is half the key height; DIN publishes it as `t1`.
+- **A pick writes through the typed-value path** (the card's keyway update callback, the dialog's
+  own W/D text state) and the numbers are authored and sacred from then on. The menu never writes
+  on its own: no fill on a Ø change, no rewrite of a W × D that is already there.
+- Both tables are **provisional**, chosen without shop input — the `LINER_SHOULDER_STD_RADII_IN`
+  posture. Nothing derives from them except what the user picks off the menu.
+
+### chore(build): Compose BOM 2024.09.00 → 2026.04.01
+
+`2026.04.01` is the last BOM that builds against compileSdk 36 — the next one (2026.08.00) requires
+37, which the Robolectric chain still blocks — so it moves alone and the compileSdk-37 bump stays
+one coordinated change for later (TODO §"Build tooling").
+
+- **The real change is Material3 1.3.0 → 1.4.0.** UI and Foundation were *already* running 1.9.2:
+  the newer activity/lifecycle/navigation dependencies out-rank a BOM constraint, so the old pin
+  had been overridden upward for some time and only Material3 was actually being held back. The
+  bump takes UI and Foundation 1.9.2 → **1.11.0** and Material3 1.3.0 → **1.4.0**, which is where
+  the visual pass is owed: component defaults live in Material3, and the sliders, bottom sheets,
+  chips, and dialogs are the app's whole tuning surface.
+- **No source changes.** Main, unit-test, and androidTest sources all compile against the new
+  surface untouched; the suite is green at 2219 tests, 0 failures. Nothing in the app leaned on an
+  API the new versions removed.
+- **No build config went stale.** `buildFeatures { compose = true }` with the Kotlin 2.x Compose
+  plugin is still the whole configuration — there is no `composeOptions` block or compiler
+  extension version to drop.
+- **`material-icons-extended` moves 1.7.0 → 1.7.8 only.** The BOM still pins the frozen icon
+  artifacts at their final version, so the icon set is unchanged and the pre-existing
+  `Icons.Filled.Article` → `Icons.AutoMirrored.Filled.Article` deprecation is neither new nor
+  resolved here.
+- **One new deprecation, deliberately not chased**: the `rememberTransformableState` overload whose
+  `onTransformation` lambda takes no centroid, at the four pinch-zoom surfaces (wear detail,
+  undercut detail, runout canvas, PDF preview overlay). Taking the centroid changes where a pinch
+  zooms from — a gesture change, not a rename — so it waits for a pass that can be judged
+  on-device.
+
+---
+
+## 2026-09-04
+
+### feat(editor): the Final Schematic — a second drawing for the shaft that ships
+
+A liner's position is decided before the job starts, but once the wear areas are mapped the
+foreman can decide — after an undercut — to extend it, shorten it, or move the whole thing a few
+inches onto sound metal. The drawing the job started from has to survive that decision as the
+historical record, so the document now carries a **second** schematic (on-device request:
+"keep the original for historical purpose, like a before and after").
+
+- **New tab, Final Schematic**, between Undercut Drawing and Consolidated Output (it follows
+  undercuts in the shop process), same built-shaft gate as the other document tabs. With no final
+  yet it explains itself and offers one button, **Start from original schematic**; from then on
+  it is the SAME editor as the Schematic tab — carousel, add dialogs, preview box, collision
+  badges — pointed at the final drawing, under a banner that says the original is untouched and
+  carries Reset to original / Discard (both confirm, both undo).
+- **Model**: `final_spec` in the `.shaft` envelope (`null` = none yet; older files load
+  unchanged). A whole `ShaftSpec`, created as a structural copy with component ids kept — so
+  per-component unit overrides apply to both and a future before/after can line up — and
+  independent from then on: no edit on either drawing reaches the other. Never in a template,
+  never in a mate duplicate, cleared by New. Wear, undercut and runout records stay keyed to the
+  original.
+- **One editor, two targets.** Every geometry mutator takes an explicit
+  `SpecTarget { ORIGINAL, FINAL }` (default ORIGINAL — every existing call site is byte-identical)
+  and writes through one seam; only the two per-component unit setters stay target-free, since
+  unit overrides are keyed by component id and apply to both drawings. The target is a parameter, never a flag on the ViewModel: a
+  "current target" would put the wrong drawing one tab-switch away from every edit. The final
+  rides the undo history and the autosave snapshot like the rest of the document.
+- **Outputs.** The Final tab prints the schematic PDF (preview / export / print) and a blank
+  classic runout sheet from the final geometry — no readings, no pinned stations, no wear: the
+  final measurement sheet to take runouts on before the job ships. The schematic can also carry
+  **runout bubbles** — a "Runout bubbles" election on its PDF options sheet, off by default
+  because the final drawing is primarily the welding and machining copy that gets the liner
+  placements updated (on-device direction); on, it prints as the consolidated Schematic + Runout
+  sheet over the final geometry, still with empty readings. Session-only, like Blank draft.
+  Consolidated Output keeps
+  drawing the original. Every final sheet is marked so it can never pass for the original:
+  `Drawing: Final` in the footer job block and the runout header, a bold FINAL badge beside the
+  Side badge (`ProjectInfo.drawingLabel`, blank everywhere else), and a suffix in the
+  filename — `_Final`, `_Final_Runout` with bubbles elected, `_Final_RunoutSheet` for the
+  banner's blank runout sheet: three documents that never share a name. The bubbled sheet is
+  the consolidated composer's, so the schematic-only Ø-callout election and Template mode do
+  not reach it; the options sheet says so and greys the callout chip.
+- Not yet: "Create a new job from the final" — the natural next step, deliberately left for a
+  later pass.
+
+### feat(pdf): tapers compress with the liners, on one control
+
+The two kinds the sheet is about now foreshorten together. "Liner compression" — renamed **"Liner
+& taper compression"**, with the checkbox now reading "Keep liners and tapers proportional
+lengthwise" — feeds the tapers as well as the liners, so asking for proportional length lengthens
+both and the drawing reads even (on-device request: liners walking up to true length beside tapers
+stuck at their 70% baseline looked lopsided).
+
+- `taperMinFracOfTrue(linerMinFracOfTrue)` = `max(PROFILE_TAPER_MIN_FRAC_OF_TRUE, request)`, applied
+  once in the single span builder `profileFeatureSpans`, so every consumer — the schematic, the
+  runout/consolidated sheet, and the UI's kept-% estimator — gets the same coupling without asking.
+  Sharing one requested fraction and one λ is what makes the kept fractions EQUAL: tapers and liners
+  land on the same proportion of true length at every squeeze.
+- **The coupling is one-way upward.** Below the 0.7 baseline tapers hold it rather than following
+  the liners down: a liner has its flat `PROFILE_MIN_LINER_PT` floor to land on, and a taper has no
+  flat floor by design (a flat floor equalizes unequal tapers), so a taper tracking a bare request
+  would compress like plain bare shaft and vanish on a long drawing.
+- **Sheets that never touch the control print exactly as before.** The stored default is full
+  compression (request 0), which leaves tapers on the baseline they already had; nothing in the
+  scale solve moved, so the drawn shaft height is untouched — the raise is still best-effort and
+  λ-fitted (`fracFitFactor`).
+- The live readout under the slider reports both kinds, and splits the two numbers only where they
+  genuinely differ (a request under the taper baseline). Help topics and the glossary follow the
+  new name.
+
+---
+
+## 2026-09-03
+
+### feat(dev): Developer Options gains diagnostics, and its master switch now switches
+
+Audit of every control on the Developer Options screen. All eleven switches are still wired to a
+live consumer — the dimension debug overlay reads the composer's own `mapToLinerDimsForPdf` /
+`tierOriginMmFor`, and all four verbose categories have call sites — so nothing was retired. Three
+things were wrong with the screen around them.
+
+- **The master switch was not a master switch.** Only the preview OAL badge was ANDed with
+  `devOptionsEnabled` at its draw site. `SettingsStore.resetDevSubFlagsIfDisabled` clears the
+  stored sub-flags at the next start, which left the current session drawing debug labels and
+  overlays on a screen that no longer had the switch to turn them off. All six overlay flags are
+  now gated once, in `ShaftRoute`, where they are collected; `ShaftPreviewPanel`'s own copy of the
+  gate is gone, because one flag guarded twice and five guarded once is how the next one is missed.
+- **The four verbose categories now disable while the master is off**, rather than reading as
+  live switches that change nothing (`VerboseLog.isEnabled` already ANDs them). Disabled, not
+  hidden: a control that vanishes reads as a setting that was lost.
+- **Every switch gained a line saying what it does.** "Show Dim Debug Overlay" names a variable;
+  "Tier origin rule and the liner spans the PDF would dimension" names a picture.
+
+New **Diagnostics** section, aimed at the device rather than the desk:
+
+- **Build** — `VERSION_NAME (VERSION_CODE) • GIT_SHA • BUILD_TYPE`. The app-start breadcrumb has
+  always recorded this; nothing showed it, so "I'm on the latest build" could only be believed.
+- **Crash reporting** — live `CrashReporter.isActive`, i.e. whether *this* build shipped with a
+  `google-services.json`. Previously answerable only from the Firebase console.
+- **Record test non-fatal** — breadcrumb + `CrashReporter.recordNonFatal`, with a snackbar saying
+  which of the two actually happened. End-to-end verification of the reporting path that does not
+  cost the process.
+- **View recent breadcrumbs** — `AppLog.tail(300)` in a dialog, rotated half first so a tail
+  spanning a rotation still reads in order. "Share diagnostic logs" needs an email app and a
+  person at the other end; a shop tablet has neither, and the question is usually just how far an
+  export got. `AppLog.tail` is new, read-only, and swallows its own errors like every other path
+  in that file (`AppLogTest`, two new cases).
+- **Force a test crash** — behind a confirm dialog naming what is lost, and last in the section.
+  It is the only way to exercise the handler chain the Diagnostics contract turns on: `AppLog`
+  writes and flushes, then delegates to Crashlytics'. Both halves are invisible until something
+  actually dies.
+
+`docs/contracts/Diagnostics.md` gains a "Developer Options" section covering the layout, the
+single-seam master gate, and the three actions.
+
+### fix(pdf): component names no longer print through their own Ø callouts
+
+The schematic hangs two things under the shaft — the component-name labels and the Ø
+callouts — and both anchor on a component's **center**. A component printing a name and a
+diameter therefore aimed two strings at the same x and set one through the other; an
+on-device sheet showed "AFT Liner" struck through by `Ø 7.936"`. Each pass tracked
+collisions only against its own kind, which is blind exactly where the two meet.
+
+They share ONE collision space now, the rule the dimension rails already follow:
+
+- **New pure engine** `geom/BelowShaftLabelLayout.kt` places every name at once against the
+  callouts as obstacles, in the rails' resolution order — **slide the name horizontally along
+  its own component's span** first (a name reads as its component's from anywhere over it, so
+  this costs no vertical room), and only **drop a row** when no slide fits.
+- **The obstacles are measured, not guessed**: `DiameterLeaderRenderer.occupancy(calls)`
+  returns the value boxes and the leader lines off the same geometry the renderer inks, so the
+  reservation and the ink cannot disagree. Callouts are planned before the names and drawn
+  after; a callout never moves for a name.
+- **Rows stop at the footer band**, and a pass that still cannot place a name retries a point
+  smaller (down to 7 pt) rather than collapsing rows onto each other — the fit-loop posture the
+  dimension rails use. A name that fits nowhere takes the row it overlaps least and leaves a
+  breadcrumb; it is never dropped.
+
+Holds across compression: `ComponentLabelCalloutClearanceTest` sweeps the drawing widths a
+compressed x map produces, plus stacked dual values and blank drafts, and fails on any overlap.
+`BelowShaftLabelSvgPreviewTest` writes same-math SVG previews of the band to
+`build/reports/below-shaft-labels/`.
+
+### fix(diagnostics): "Share diagnostic logs" no longer crashes the app
+
+On-device report: tapping Settings → Data → "Share diagnostic logs" killed the app, twice, and
+clearing the cache changed nothing — which correctly ruled out the log files themselves. The
+crash was in building the intent, before any chooser could appear.
+
+- **Root cause**: `FeedbackIntentFactory` attached the logs through
+  `ClipData.newUri(null, "attachment", uri)`. That helper calls `resolver.getType(uri)` for
+  every `content://` URI, so a `null` resolver is an immediate `NullPointerException` — and a
+  FileProvider attachment is *always* `content://`. Every tap of the button hit it. The plain
+  Feedback path escaped only because it usually has no attachment and takes the `mailto:`
+  branch instead.
+- **Fix**: build the clip from the **intent's own** mime type, the construction AOSP's
+  `Intent.migrateExtraStreamToClipData` uses — no resolver, and the clip still carries every
+  attachment so `FLAG_GRANT_READ_URI_PERMISSION` reaches whichever app the chooser picks.
+- **Hardened the tap**: the handler now also catches `Throwable`, leaving a breadcrumb and a
+  "Could not share the logs." snackbar. This is `AppLog`'s own posture — logging exists to
+  explain a failure and may never become one — applied to the button that ships it. It is the
+  screen a stuck tester is sent to, so a crash here destroys the evidence rather than mailing it.
+- **`FeedbackIntentFactoryTest`** (new, Robolectric) pins the intent, the clip, and the grant
+  flag; against the old call it fails with exactly the reported NPE.
+- **The same NPE was live on a second button**: Open drawing → ⋮ → "Send Feedback" attaches the
+  `.shaft` file, so it took the identical attachment branch and died the same way. The shared fix
+  covers it; it now has its own pin. Its `uriForFile` call is also wrapped — it runs inside a
+  coroutine, where a throw reaches the crash handler — so a URI that cannot be built costs the
+  attachment rather than the report.
+
+### fix(settings): a corrupt preferences file no longer bricks the app
+
+Audit of the rest of the Settings surface for the same class of failure — an unguarded platform
+call in a tap handler — turned up two more, neither yet reported on-device.
+
+- **`Context.settingsDataStore` had no corruption handler.** Every preference in the app lives in
+  one `settings.preferences_pb`, and DataStore's unhandled answer to a truncated file is to throw
+  `CorruptionException` from *every* read. Several of those reads run during startup, so the
+  failure would not have been "settings went back to default" — it would have been a permanent
+  crash on launch, recoverable only by clearing app data, which takes the drawings too. A tablet
+  yanked off power mid-write is all it takes, and shop-floor devices get yanked off power. Now
+  built with `ReplaceFileCorruptionHandler { emptyPreferences() }`: the preferences are lost, the
+  app and the saved shafts are not. `SettingsStoreCorruptionTest` drives both halves against a
+  throwaway file and confirms the unguarded store really does throw.
+- **Every SAF picker launch was unguarded** (16 call sites — backup, restore, mirror folder,
+  import, save-a-copy, and all five export routes). `launch` throws `ActivityNotFoundException`
+  when nothing handles the intent; DocumentsUI is always there on a normal phone and *not*
+  guaranteed on enterprise-locked or stripped rugged tablets, where each of those buttons would
+  kill the app. All sixteen now go through one `util/SafPickerLaunch.launchPicker`, which
+  breadcrumbs and — where a snackbar exists — says so on screen. The breadcrumb label is fixed at
+  the call site, never the picker input, which carries customer and job text.
+
+### fix(persistence): the crash-safety sweep the settings audit implied
+
+A pass over the rest of the app for the same shape — an unguarded call that escapes into a
+coroutine with nothing catching above it. Four findings, one of them worse than the settings bug
+that started this.
+
+- **The autosave DataStore had no corruption handler either, and it is the more exposed of the
+  two.** `autosave_datastore` is rewritten every 1.5 s of editing, so it is by far the likeliest
+  file to be caught mid-write by a power cut — and `AutosaveManager.loadDrafts` runs from the
+  ViewModel's `init`, inside a `viewModelScope.launch`. There is no `CoroutineExceptionHandler`
+  anywhere in the app, so a `CorruptionException` there would have reached the process crash
+  handler: a hard crash on every launch, on the store most likely to break. Now handled, and
+  `AutosaveManager` additionally never throws at all — reads degrade to an empty ring, writes to
+  a breadcrumb, which is what its own KDoc already promised for decode failures. Two of its
+  callers (`init`, `discardDraft`) were unguarded and are now covered by construction.
+- **Settings reads and writes now go through one guarded seam each** (`Context.settingsPrefs` /
+  `Context.editSettings`, 129 call sites routed). The corruption handler repairs a broken file
+  once; these keep a read or write failing for any *other* reason — I/O error, full disk — from
+  propagating into a Compose collector or out of one of the many bare `scope.launch { setX(…) }`
+  in the UI. `CancellationException` is rethrown, never swallowed.
+- **The backup zip's size guard never fired.** `readZip` skipped entries via
+  `entry.size > MAX_ENTRY_BYTES`, but `ZipEntry.size` is `-1` for any entry written as a stream —
+  which is how `ZipOutputStream` writes them, so it is `-1` even for this app's own backups — and
+  `-1 > cap` is false. Measured: a 40 KB zip expands to 40 MB in memory with the guard reporting
+  `false`. The cap now applies to the bytes actually read, with whole-archive byte and entry
+  budgets beside it, and an oversize entry is skipped rather than fatal so one bad member cannot
+  cost the user the documents beside it.
+- **Checked and found already sound**, worth recording so the next sweep can skip them: every
+  document decode path (`ShaftDocCodec.decode` callers all guard, with the one apparent exception
+  pre-validating the same string moments earlier); `BackupMirror` end to end; `PdfRaster`
+  (`runCatching` catches the `OutOfMemoryError` a large raster can throw); all five "Open PDF"
+  paths; every `contentResolver` call; and all 23 non-null assertions in `main`, each of which is
+  structurally guarded by a preceding size, count or nullability check.
+
 ## 2026-09-02
 
 ### docs+ui: options sheets say which controls are app-wide and which are saved with the job
@@ -39,6 +572,7 @@ way; what was missing was saying so. No draw path, composer, or stored field cha
   per-job controls). `docs/contracts/PdfExport.md` (v1.1) states the ruling and fixes the
   `arrowSizePt` default in its field table (`3`/Small, not `4`); `docs/PDF_EXPORT.md` §5.6 notes
   the caption and the per-job wording.
+
 
 ---
 
@@ -446,6 +980,19 @@ it was a no-op in the surviving mode, so no add/update/remove path changes behav
 `showOalHelperLine` developer option is deleted too: its gate became unconditional, so the
 "Dimensioned OAL:" helper line now shows whenever an excluded end thread makes the dimensioned
 span differ from the physical length.
+
+### feat(ui): the editor preview box mirrors the shade decision
+
+Same-day follow-up to the per-component shading below (on-device report: "the shading does
+not appear in the preview box for the new toggle — it does work in the pdf preview"). The
+editor's preview canvas draws its own theme-styled fills and had never heard of PDF shading.
+It now overlays the SAME effective decision the composers make — the positive complement
+`shadedComponentIds` (pure, `ui/resolved/ResolvedComponent.kt`) threads through
+`RenderOptions.shadedComponentIds` and each fill pass paints an onSurface-tinted overlay
+(16% alpha — visible on light and dark canvases; a print-decision marker, not print
+fidelity) over every component that will print shaded. Ticking "Shade on drawing" on a card
+now colors that section in the preview box immediately, and the kind checkboxes show there
+too. An empty set draws exactly as before, so nothing changes until something shades.
 
 ### feat(pdf): per-component "Shade on drawing" — tri-state, on the explicit cards
 
@@ -1539,7 +2086,7 @@ surface at its edges, and the non-positive / keyway-wider-than-bore cases.
 
 Pure math in `geom/BoreKeywayMath.kt`, pinned by the spec's four test vectors and the
 invariants (equal widths → finished depth; narrower → always less; smaller bore → larger
-correction; unit independence). Plan: `docs/BoreKeywayCalculator_Plan_2026-08-24.md`.
+correction; unit independence). Plan: `docs/archive/BoreKeywayCalculator_Plan_2026-08-24.md`.
 
 ### fix: a taper overlap blocks PDF export, the same as a thread or liner
 

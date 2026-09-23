@@ -40,7 +40,12 @@ This document defines the conventions for Kotlin, Compose, architectural boundar
 ### Rules:
 - UI must NEVER perform geometry or px-per-mm math.
 - Use `collectAsState()` for StateFlow observations.
-- Use `commit-on-blur` for all numeric fields.
+- Numeric fields use one of **two** commit strategies, not one. Carousel / edit-card fields
+  (`NumericInputField`) commit **on blur or Done**, and only when the value changed since
+  focus was gained. Add-dialog fields (`CommitNumField`, `ui/screen/AddComponentDialogs.kt`)
+  and the OAL field commit on **every parseable keystroke** — a dialog's Add button can be
+  tapped while a field is still focused, before any blur fires, and the OAL field updates the
+  preview live. See `docs/UI_CONTRACT.md` §2.1 and `docs/contracts/NumberField.md`.
 - Use local state (`remember`) only for editing buffers.
 
 ### File Placement

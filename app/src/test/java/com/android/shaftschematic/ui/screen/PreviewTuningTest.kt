@@ -169,6 +169,43 @@ class PreviewTuningTest {
     }
 
     @Test
+    fun `a landscape tablet keeps the sheet floor and gives the strip the remainder`() {
+        // ~1280 x 800 dp — the window a tablet in landscape hands the preview.
+        val w = 1280f
+        val h = 800f
+        val strip = tuningPageStripHeightDp(w, h, chrome)
+        val sheet = tuningSheetMaxHeightDp(h, strip, chrome)
+        // The fit-width page is taller than this short, wide window, so the sheet keeps its
+        // floor and the strip takes what is left — the landscape-phone case at tablet size.
+        assertTrue(fitWidthPageHeightDp(w) > h)
+        assertEquals(h * TUNING_SHEET_MIN_FRAC, sheet, 0.01f)
+        assertEquals(296f, strip, 0.01f)
+        assertTrue(strip > 0f)
+        assertEquals(h, PREVIEW_TOP_CHROME_DP + strip + sheet + chrome, 0.01f)
+    }
+
+    @Test
+    fun `a portrait tablet caps the strip so the sheet still clears its floor`() {
+        // ~800 x 1280 dp. The fit-width page fits the window, but not alongside the sheet.
+        val w = 800f
+        val h = 1280f
+        val strip = tuningPageStripHeightDp(w, h, chrome)
+        val sheet = tuningSheetMaxHeightDp(h, strip, chrome)
+        assertTrue(strip < fitWidthPageHeightDp(w))
+        assertEquals(584f, strip, 0.01f)
+        assertEquals(h * TUNING_SHEET_MIN_FRAC, sheet, 0.01f)
+        assertEquals(h, PREVIEW_TOP_CHROME_DP + strip + sheet + chrome, 0.01f)
+
+        // A measured ink band hands the paper it crops back to the sheet, and the sheet
+        // stays inside its ceiling — neither term runs away on a tall window.
+        val cropped = tuningPageStripHeightDp(w, h, chrome, inkFrac = 0.5f)
+        val croppedSheet = tuningSheetMaxHeightDp(h, cropped, chrome)
+        assertEquals(fitWidthPageHeightDp(w) * 0.5f, cropped, 0.01f)
+        assertTrue(croppedSheet > sheet)
+        assertTrue(croppedSheet <= h * PREVIEW_SHEET_MAX_FRAC)
+    }
+
+    @Test
     fun `the strip never goes negative on a tiny screen`() {
         assertTrue(tuningPageStripHeightDp(200f, 120f, chrome) >= 0f)
         assertTrue(tuningPageStripHeightDp(731f, 200f, chrome, inkFrac = 0.5f) >= 0f)

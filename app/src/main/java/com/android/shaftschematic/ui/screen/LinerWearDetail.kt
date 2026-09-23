@@ -68,6 +68,8 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.DiaCalloutStation
@@ -367,6 +369,13 @@ fun ComponentWearDetailOverlay(
                         .height(canvasHeightDp)
                         .clip(cardShape)
                         .background(Color.White)
+                        .semantics {
+                            contentDescription = SheetSemantics.wearDetail(
+                                wearAreaCount = spots.size,
+                                pitCount = pits.size,
+                                diaReadingCount = diaReadings.size,
+                            )
+                        }
                         .transformable(zoomTransformState)
                         .pointerInput(componentId, pits, diaReadings, brushSize, tool, lenMm, startDiaMm, endDiaMm) {
                             detectTapGestures { rawTap ->

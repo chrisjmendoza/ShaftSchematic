@@ -3,6 +3,7 @@ package com.android.shaftschematic.io
 
 import com.android.shaftschematic.doc.SHAFT_DOT_EXT
 import com.android.shaftschematic.doc.stripShaftDocExtension
+import java.io.ByteArrayOutputStream
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -37,8 +38,21 @@ object ShaftBackup {
     const val MANIFEST_ENTRY = "manifest.json"
     const val DOCS_PREFIX = "shafts/"
 
-    /** Refuse absurd entries so a malformed zip can't balloon memory. */
+    /**
+     * Refuse absurd entries so a malformed zip can't balloon memory.
+     *
+     * Enforced on the bytes actually read, never on `ZipEntry.size`: that field is -1 for any
+     * entry written as a stream — which is how `ZipOutputStream` writes them, this app's own
+     * backups included — so a declared-size check silently never fires. A 40 KB zip of
+     * compressible data expands to 40 MB unchecked, and the restore runs on a tablet.
+     */
     private const val MAX_ENTRY_BYTES = 10L * 1024 * 1024
+
+    /** And a whole-archive budget, so many small entries cannot add up to the same problem. */
+    private const val MAX_TOTAL_BYTES = 200L * 1024 * 1024
+
+    /** A backup of this app cannot legitimately hold more documents than this. */
+    private const val MAX_ENTRIES = 5_000
 
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
@@ -90,27 +104,36 @@ object ShaftBackup {
         var manifest: Manifest? = null
         val docs = mutableListOf<Pair<String, String>>()
 
+        var seen = 0
+        var totalBytes = 0L
+
         ZipInputStream(input).use { zip ->
             while (true) {
                 val entry = zip.nextEntry ?: break
                 if (entry.isDirectory) continue
-                if (entry.size > MAX_ENTRY_BYTES) continue
+                if (++seen > MAX_ENTRIES) break
 
                 // Basename only: entry paths from untrusted zips must never
                 // influence where a file lands (zip-slip).
                 val baseName = entry.name.substringAfterLast('/').substringAfterLast('\\')
 
-                when {
-                    baseName.equals(MANIFEST_ENTRY, ignoreCase = true) && manifest == null -> {
-                        val text = zip.readBytes().toString(Charsets.UTF_8)
-                        manifest = runCatching {
-                            json.decodeFromString(Manifest.serializer(), text)
-                        }.getOrNull()
-                    }
-                    baseName.endsWith(SHAFT_DOT_EXT, ignoreCase = true) -> {
-                        val text = zip.readBytes().toString(Charsets.UTF_8)
-                        docs += baseName to text
-                    }
+                val isManifest = baseName.equals(MANIFEST_ENTRY, ignoreCase = true)
+                val isDoc = baseName.endsWith(SHAFT_DOT_EXT, ignoreCase = true)
+                if (!(isManifest && manifest == null) && !isDoc) continue
+
+                // An oversize entry is skipped, not fatal: one bad member of an otherwise good
+                // backup must not cost the user the documents beside it.
+                val bytes = zip.readEntryCapped(MAX_ENTRY_BYTES) ?: continue
+                totalBytes += bytes.size
+                if (totalBytes > MAX_TOTAL_BYTES) break
+
+                val text = bytes.toString(Charsets.UTF_8)
+                if (isManifest) {
+                    manifest = runCatching {
+                        json.decodeFromString(Manifest.serializer(), text)
+                    }.getOrNull()
+                } else {
+                    docs += baseName to text
                 }
             }
         }
@@ -267,4 +290,25 @@ object ShaftBackup {
             .replace(Regex("[\\\\/:*?\"<>|]"), "_")
             .replace(Regex("[\\u0000-\\u001F]"), "")
             .trim()
+
+    /**
+     * Reads the current entry, giving up (null) once it passes [max] decompressed bytes.
+     *
+     * The cap lives here rather than on `ZipEntry.size` for the reason [MAX_ENTRY_BYTES]
+     * records: the declared size is absent from streamed entries, so it cannot be trusted to
+     * decide anything.
+     */
+    private fun ZipInputStream.readEntryCapped(max: Long): ByteArray? {
+        val out = ByteArrayOutputStream()
+        val buf = ByteArray(64 * 1024)
+        var total = 0L
+        while (true) {
+            val n = read(buf)
+            if (n < 0) break
+            total += n
+            if (total > max) return null
+            out.write(buf, 0, n)
+        }
+        return out.toByteArray()
+    }
 }

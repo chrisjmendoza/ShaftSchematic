@@ -73,6 +73,8 @@ import com.android.shaftschematic.pdf.consolidatedSheetHasInProfileValues
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.settings.RunoutConfig
+import com.android.shaftschematic.ui.adaptive.LocalSidebarPermanent
+import com.android.shaftschematic.ui.adaptive.readableWidth
 import com.android.shaftschematic.ui.nav.appVersionFromContext
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.util.exportPdfGate
@@ -91,7 +93,9 @@ import com.android.shaftschematic.ui.viewmodel.updateWornSectionReference
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.FractionStyle
+import com.android.shaftschematic.util.OutputFont
 import com.android.shaftschematic.util.InkBand
+import com.android.shaftschematic.util.launchPicker
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.createPdfInTree
 import com.android.shaftschematic.util.inkBand
@@ -136,6 +140,11 @@ private data class ConsolidatedRenderInputs(
     /** Not a composer argument — it reaches the ink via `FractionTypography.active`. Key only. */
     val fractionStyle: FractionStyle,
     /**
+     * The typeface the sheet is set in. Not a composer argument either — it reaches the ink via
+     * `OutputTypography.active`. Key only.
+     */
+    val outputFont: OutputFont,
+    /**
      * A LAYOUT input, not just a key: the composers take it as a parameter, and a sheet whose
      * budget cannot absorb the taller stacked value falls back to inline on its own.
      */
@@ -172,6 +181,10 @@ fun OutputRoute(
     onOpenRunoutTab: () -> Unit = {},
     /** Quick-save the document (prompts for a name when it has never been saved). */
     onSave: () -> Unit = {},
+    /** Tap on the document title strip — names an unsaved document, renames a saved one. */
+    onTitleClick: (() -> Unit)? = null,
+    /** Open Help at one topic — the toolbar's "?" opens this tab's own guide. */
+    onOpenHelpTopic: (String) -> Unit = {},
 ) {
     val spec               by vm.spec.collectAsState()
     val currentDocumentName by vm.currentDocumentName.collectAsState()
@@ -203,6 +216,7 @@ fun OutputRoute(
     // Fraction style: same posture — it reaches the ink through the renderer's active style,
     // which the loop cannot observe, so it rides along as an input key.
     val pdfFractionStyle   by vm.pdfFractionStyle.collectAsState()
+    val pdfOutputFont      by vm.pdfOutputFont.collectAsState()
     val pdfDualUnitLayout  by vm.pdfDualUnitLayout.collectAsState()
     val pdfTieringMode     by vm.pdfTieringMode.collectAsState()
     val runoutReadings     by vm.runoutReadings.collectAsState()
@@ -493,6 +507,7 @@ fun OutputRoute(
                 runoutBubbleDropScale = pdfRunoutBubbleDropScale,
                 arrowSizePt = pdfArrowSizePt,
                 fractionStyle = pdfFractionStyle,
+                outputFont = pdfOutputFont,
                 dualUnitLayout = pdfDualUnitLayout,
                 curveLoHeightIn = curveLoHeightIn,
                 curveHiHeightIn = curveHiHeightIn,
@@ -547,6 +562,7 @@ fun OutputRoute(
         EditorDocumentTitle(
             documentName = currentDocumentName,
             hasUnsavedChanges = hasUnsavedChanges,
+            onClick = onTitleClick,
         )
 
         Row(
@@ -556,8 +572,11 @@ fun OutputRoute(
                 .padding(horizontal = 4.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = onOpenSidebar) {
-                Icon(Icons.Filled.Menu, contentDescription = "Open navigation")
+            // Nothing to open when the sidebar is already laid out beside the tabs.
+            if (!LocalSidebarPermanent.current) {
+                IconButton(onClick = onOpenSidebar) {
+                    Icon(Icons.Filled.Menu, contentDescription = "Open navigation")
+                }
             }
             Text(
                 text = "Consolidated Output",
@@ -571,14 +590,22 @@ fun OutputRoute(
             ) {
                 Icon(Icons.Filled.Save, contentDescription = "Save")
             }
+            TabHelpButton(HELP_TOPIC_CONSOLIDATED_OUTPUT, onOpenHelpTopic)
         }
 
         HorizontalDivider()
 
+        // This tab carries no canvas and reads as ONE ordered workflow — elect the sheet's
+        // content, produce it, then tune and author what it prints, then batch-export —
+        // where each block acts on the one above it ("Export all" names the content
+        // selection above it explicitly). Splitting that into panes would separate steps
+        // that read in sequence, so a tablet gets the readable column instead: the scroll
+        // gutter still spans the window, the content stops at a legible width.
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
+                .readableWidth()
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
@@ -635,7 +662,7 @@ fun OutputRoute(
                 documentName = "Consolidated Sheet",
                 onPrint = { printConsolidated() },
                 onPreview = { showPreview = true },
-                onExport = { launcher.launch(outputFilename) },
+                onExport = { launcher.launchPicker(outputFilename, what = "output export") },
                 enabled = gate.enabled,
             )
 
@@ -773,7 +800,7 @@ fun OutputRoute(
             }
 
             Button(
-                onClick = { batchResult = null; batchLauncher.launch(null) },
+                onClick = { batchResult = null; batchLauncher.launchPicker(null, what = "export-all folder") },
                 enabled = gate.enabled && batchChecked.any { it },
                 modifier = Modifier.fillMaxWidth(),
             ) {
@@ -828,7 +855,7 @@ fun OutputRoute(
             onClose = { showPreview = false },
             onExport = {
                 showPreview = false
-                launcher.launch(outputFilename)
+                launcher.launchPicker(outputFilename, what = "output export")
             },
             // The tab body's Print action, unchanged — one function behind both.
             onPrint = { printConsolidated() },

@@ -108,7 +108,18 @@ RenderOptions (styling config)
 ------------------------------
 Immutable view/style configuration — pixels/dp/colors only, never mm, no model data:
 line widths (`outlineWidthPx`, `dimLineWidthPx`), colors (outline, per-component
-fills, thread hatch/fill, slot fill), and highlight (glow) controls. The dead grid /
+fills, thread hatch/fill, slot fill), and highlight (glow) controls.
+
+The **PDF-shade mirror** lives here too: `shadedComponentIds: Set<String>` names the
+components that will print SHADED — the same effective decision the composers make (kind
+checkboxes + per-component `shadeOnDrawing`, resolved by the `unshaded*Ids` builders) — and
+each one's fill gets `shadeOverlayColor` drawn over it, so the editor preview answers "what
+prints shaded" without opening the PDF preview. Themed callers pass an onSurface-derived
+tint: this is a marker for the print decision, **not** print fidelity. Empty (the default)
+draws exactly as before the mirror existed, and the overlay's own default is the PDF
+`shadeFill` grey.
+
+The dead grid /
 legend / text-size / edge-ring fields were deleted in the 2026-07-26 pass — the grid is
 drawn by `GridRenderer` from the composable layer, not via `RenderOptions`. Construct
 via `remember { RenderOptions(...) }` with ColorScheme accessed at construction, never

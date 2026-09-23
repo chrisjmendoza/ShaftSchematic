@@ -77,6 +77,7 @@ import com.android.shaftschematic.util.UnitSystem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.android.shaftschematic.ui.adaptive.readableWidth
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -258,7 +259,7 @@ private fun TemplateBrowserList(
     var openSize by remember { mutableStateOf<TemplateSizeBucket?>(null) }
     var openCount by remember { mutableStateOf<TemplateLinerCount?>(null) }
 
-    LazyColumn(modifier = Modifier.fillMaxSize()) {
+    LazyColumn(modifier = Modifier.fillMaxSize().readableWidth()) {
         bySize.forEach { (sizeBucket, sizeGroup) ->
             item(key = "size-${sizeBucket.label}") {
                 AccordionHeader(
