@@ -8,10 +8,11 @@ import com.android.shaftschematic.R
 
 /**
  * The orientation this device's activity runs in when no screen has unlocked rotation —
- * `R.integer.activity_orientation`, the same value the manifest declares: portrait on phones,
- * unspecified (free rotation) on tablets (`values-sw600dp`). ONE resource decides both the
- * launch orientation and what a rotation-unlocking screen restores on dispose, so the two can
- * never disagree.
+ * `R.integer.activity_orientation`: portrait on phones, unspecified (free rotation) on tablets
+ * (`values-sw600dp`). ONE resource decides both what `MainActivity.onCreate` applies and what a
+ * rotation-unlocking screen restores on dispose, so the two can never disagree. The manifest
+ * keeps a literal portrait rather than referencing this resource: a manifest resource cannot
+ * vary by configuration (lint ManifestResource), so a tablet override there is never read.
  */
 fun Context.baseActivityOrientation(): Int = resources.getInteger(R.integer.activity_orientation)
 

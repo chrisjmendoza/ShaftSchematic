@@ -445,8 +445,12 @@ the permanent 240 dp sidebar, `LocalSidebarPermanent` hiding the hamburgers). A 
 lays out two ways extracts its blocks into composables **called from both branches** — a
 duplicated block is how the phone and the tablet drift. List screens cap their one scrolling
 column with `readableWidth()` (720 dp), never per row. Orientation: phones portrait, tablets
-(sw600dp) free, ONE resource `R.integer.activity_orientation` behind both the manifest and
-`restoreBaseOrientation()` — a rotation-unlocking screen never restores a literal portrait.
+(sw600dp) free, ONE resource `R.integer.activity_orientation` behind both
+`MainActivity.onCreate` and `restoreBaseOrientation()` — a rotation-unlocking screen never
+restores a literal portrait. The manifest keeps a literal `portrait` and must NOT reference the
+resource: a manifest resource cannot vary by configuration (lint `ManifestResource` fails the
+build, and the sw600dp value is silently never read), so the tablet unlock is applied at
+activity creation.
 Nothing adaptive touches sheet ink, a composer, the model, or a document. See
 `docs/contracts/Adaptive.md`.
 

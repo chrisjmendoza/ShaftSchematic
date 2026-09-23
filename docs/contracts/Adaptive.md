@@ -74,8 +74,13 @@ Per-surface details live in the owning contracts (`ShaftScreen.md`, `RunoutSheet
 - **Phones lock to portrait; tablets rotate freely.** ONE resource decides it:
   `R.integer.activity_orientation` — `1` (`SCREEN_ORIENTATION_PORTRAIT`) in `values/`, `-1`
   (`SCREEN_ORIENTATION_UNSPECIFIED`, the system's own rotation policy) in `values-sw600dp/`.
-  The manifest's `android:screenOrientation` references it, so the lock is applied before the
-  first frame with no programmatic flip at launch.
+  `MainActivity.onCreate` applies it (`requestedOrientation = baseActivityOrientation()`)
+  before `setContent`. The manifest keeps a literal `portrait` and must NOT reference the
+  resource: a manifest attribute is resolved once at package parse and cannot vary by
+  configuration — lint `ManifestResource` fails the build on it, and the `values-sw600dp`
+  value would simply never be read, leaving every tablet locked to portrait. On a phone the
+  runtime call restates the manifest's value; on a tablet it lifts the lock at creation (a
+  tablet held landscape at launch recreates once into landscape).
 - **A screen that unlocks rotation restores the BASE orientation, never portrait.** The two PDF
   preview screens call `unlockRotation()` on entry and `restoreBaseOrientation()` on dispose
   (`ui/adaptive/Orientation.kt`, reading the same resource). Restoring a hard-coded portrait

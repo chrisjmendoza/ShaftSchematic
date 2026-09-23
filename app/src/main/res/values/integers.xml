@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!--
-      The activity's base orientation, referenced by AndroidManifest.xml and restored by the
+      The activity's base orientation, applied by MainActivity.onCreate and restored by the
       PDF preview screens when they give rotation back. Phones lock to portrait
       (ActivityInfo.SCREEN_ORIENTATION_PORTRAIT = 1): the editor is a portrait layout there.
-      values-sw600dp overrides it for tablets. See docs/contracts/Adaptive.md.
+      values-sw600dp overrides it for tablets. It is deliberately NOT referenced from the
+      manifest: a manifest resource cannot vary by configuration (lint ManifestResource), so
+      the tablet override would never be read there. See docs/contracts/Adaptive.md.
     -->
     <integer name="activity_orientation">1</integer>
 </resources>

@@ -8,6 +8,18 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-09-23
 
+### fix(ui): the tablet orientation unlock is applied at activity creation, not from the manifest
+
+Android Studio's build failed on lint `ManifestResource`: `android:screenOrientation` referenced
+`@integer/activity_orientation`, and a manifest resource cannot vary by configuration — the
+`values-sw600dp` override there was never read, so every tablet would have stayed locked to
+portrait. The manifest now declares a literal `portrait` (the phone lock, unchanged) and
+`MainActivity.onCreate` applies `baseActivityOrientation()` before `setContent`, so the ONE
+resource still decides both the base orientation and what the PDF preview screens restore.
+Phones are byte-identical; a tablet held landscape at launch recreates once into landscape.
+`docs/contracts/Adaptive.md` and the CLAUDE.md invariant say why the manifest must not reference
+the resource.
+
 ### test(pdf): a taper name is pinned clear of a neighbouring body's Ø callout
 
 On-device screenshot: "FWD Taper" printed through the `Ø 10.368"` callout of the short bare run
