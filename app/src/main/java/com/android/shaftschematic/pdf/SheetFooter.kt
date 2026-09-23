@@ -5,7 +5,11 @@ import android.graphics.Paint
 import android.graphics.RectF
 import com.android.shaftschematic.geom.END_EPS_MM
 import com.android.shaftschematic.model.Body
+import com.android.shaftschematic.model.BoltHoleClocking
+import com.android.shaftschematic.model.BoltHoleStyle
+import com.android.shaftschematic.model.CouplerBoltSlot
 import com.android.shaftschematic.model.KeywayClocking
+import com.android.shaftschematic.model.SlotAuthoredReference
 import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.model.ShaftSpec
@@ -344,6 +348,39 @@ internal data class FooterColumns(
     val fwdLines: List<String>
 )
 
+/** Clocking note under a cross-drilled hole's lines; null when the shaft has no keyway to clock against. */
+internal const val BOLT_HOLE_90_NOTE = "90° from keyway"
+internal const val BOLT_HOLE_IN_LINE_NOTE = "In line with keyway"
+
+/**
+ * Footer lines for ONE cross-drilled coupler bolt row: "Bolt hole:" (Ø, × count above one),
+ * "Hole center from FWD/AFT:" (the authored distance, plus pitch above one), and the clocking
+ * note — printed only when the shaft carries a keyway, since "from keyway" says nothing without
+ * one (the keyway-clocking-note rule). [line] is the caller's label/value joiner so blank drafts
+ * keep the labels and rule the values, like every other spec line.
+ */
+internal fun crossDrilledHoleLines(
+    slot: CouplerBoltSlot,
+    spec: ShaftSpec,
+    displayUnits: DisplayUnits,
+    line: (String, () -> String) -> String,
+): List<String> = buildList {
+    val unit = displayUnits.unitFor(slot.id)
+    val dual = displayUnits.dual
+    val face = if (slot.authoredReference == SlotAuthoredReference.FWD) "FWD" else "AFT"
+    add(line("Bolt hole:") {
+        val count = if (slot.count > 1) " × ${slot.count}" else ""
+        "Ø ${formatDiaWithUnitDual(slot.holeDiaMm.toDouble(), unit, dual)}$count"
+    })
+    add(line("Hole center from $face:") {
+        val pitch = if (slot.count > 1) " @ ${formatLenWithUnitDual(slot.spacingMm.toDouble(), unit, dual)}" else ""
+        "${formatLenWithUnitDual(slot.authoredCenterMm(spec.overallLengthMm).toDouble(), unit, dual)}$pitch"
+    })
+    if (spec.keywayCount() >= 1) {
+        add(if (slot.clocking == BoltHoleClocking.DEG_90) BOLT_HOLE_90_NOTE else BOLT_HOLE_IN_LINE_NOTE)
+    }
+}
+
 /**
  * Reader note printed directly under a spooned keyway's footer spec line: the stated KW
  * length runs to the base of the spoon bowl (where the mill cut ends), not to the tip
@@ -449,6 +486,14 @@ internal fun buildFooterEndColumns(
     }
     if (cfg.showFwdThread && ends.fwdThread) {
         getFwdEndThread(spec)?.let { th -> fwd += threadLine(th) }
+    }
+
+    // Cross-drilled coupler bolt holes — the plain coupling end's spec: hole Ø, the distance
+    // from the authored face to the hole center, and its clocking against the keyway. Listed
+    // in the column of the face it was quoted from. Seam rows print nothing, as before.
+    spec.couplerBoltSlots.filter { it.holeStyle == BoltHoleStyle.CROSS }.forEach { slot ->
+        val col = if (slot.authoredReference == SlotAuthoredReference.FWD) fwd else aft
+        col += crossDrilledHoleLines(slot, spec, displayUnits, ::line)
     }
 
     // Body-hosted keyways (fitted couplings on intermediate shafts): list in the column

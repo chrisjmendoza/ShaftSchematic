@@ -760,6 +760,10 @@ private fun PdfOptionsSheet(
             .padding(horizontal = 24.dp, vertical = 8.dp),
     ) {
         Text("PDF Options", style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(4.dp))
+        // This sheet carries the per-job Shaft height and Liner compression alongside the
+        // app-wide look prefs, so the note points at their captions.
+        OptionsScopeNote(hasJobControls = true)
         Spacer(Modifier.height(12.dp))
 
         // ── Content ──────────────────────────────────────────────────────────

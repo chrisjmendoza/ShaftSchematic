@@ -30,6 +30,58 @@ branch had not been merged, so the installed build predated it. Merged now, and
 when the callouts are NOT reserved, then sweeps the compressed drawing widths with them reserved
 and fails on any overlap.
 
+## 2026-09-17
+
+### feat(schematic): cross-drilled coupler bolt hole — the plain coupling end with no taper
+
+A new FWD-end configuration turned up on the floor: a shaft coupling end with no taper, just a
+single bolt hole cross-drilled through the shaft, quoted as a hole Ø and the distance from the
+end of the shaft to the center of the hole. The existing Coupler Bolt Slot already takes
+exactly that entry (Measure From FWD, count 1, hole Ø, distance to the hole center) but drew
+every row as the muff-coupler seam cutout — two half-circles straddling the outline.
+
+- **`CouplerBoltSlot.holeStyle`** (`BoltHoleStyle`): **Seam** (default) keeps the straddling
+  cutout; **Cross-drilled** draws the hole through the shaft. Draw-only — position, Ø, count,
+  spacing, bounds, and the reference-only posture (never OAL, never a split, never a
+  collision) are unchanged, and the style can be switched on the card without touching any
+  typed value.
+- **`CouplerBoltSlot.clocking`** (`BoltHoleClocking`) — where a cross-drilled hole sits around
+  the shaft relative to the keyway, the floor's second detail. **90° from keyway** (default:
+  a coupling bolt in line with the keyway would pass through the key) draws the bore HIDDEN —
+  two dashed walls one hole width apart, top surface to bottom for a through hole, to the
+  drill depth with a dashed floor for a blind one — because the keyway draws face-on and the
+  hole's axis therefore lies in the page. **In line** draws ONE circle on the centerline, the
+  hole as seen on the near surface. One pure construction (`geom/BoltHoleMath.kt`,
+  `crossBoreLines`, unit-tested) feeds both draw sites; the dashes are the hidden-keyway
+  pattern. Drawing + footer text only, no geometric effect — the keyway-clocking-note posture.
+- **Footer lines for cross-drilled holes**, in the end column of the face the hole was quoted
+  from: `Bolt hole: Ø …` (× count above one), `Hole center from FWD: …` (@ pitch above one),
+  and `90° from keyway` / `In line with keyway` — the note only when the shaft has a keyway.
+  Own display unit, dual-aware, blank drafts rule the values. Seam rows still print nothing.
+- Additive and defaulted: every row in a saved document decodes as Seam, so existing sheets
+  print byte-identically.
+- Both surfaces under the parity rule: a "Hole: Seam | Cross-drilled" chip row heads the Add
+  dialog and the card, with a "From keyway: 90° | In line" row beneath it while Cross-drilled
+  is selected; the position field reads "Hole center from FWD" for a cross-drilled
+  hole and "First slot from FWD" for a seam row, from one shared label helper. The card titles
+  a cross-drilled row "Coupler Bolt Hole"; the add chooser's button reads "Coupler Bolt
+  Slot / Hole".
+- Preview overlay and the shared PDF pass (schematic, runout/consolidated, wear, undercut
+  fallback profile) branch on the style from the same construction.
+- The runout sheets' coupling end view takes its bolt count from the first **Seam** row — a
+  cross-drilled hole is a bolt through the shaft, not a flange bolt on the face.
+- Help topic renamed "Coupler bolt slots and holes" with the two styles described.
+- Tests: `CouplerBoltSlotTest` pins the Seam default, legacy decode without the key, the
+  Cross round-trip, the 90° clocking default, the hidden-bore predicate, the authored center
+  distance, and that the style changes nothing about footprint/validity/coverage/OD;
+  `BoltHoleMathTest` the bore construction; `CrossDrilledHoleFooterTest` the footer lines,
+  column choice, keyway gating, count/pitch, blank drafts, and seam silence.
+- Contracts: `docs/contracts/CouplerBoltSlot.md` (Hole style, Clocking, Footer lines),
+  `AddComponentDialogs.md`.
+- Still deferred: no dimension rail for a bolt row (the footer now carries the numbers). A
+  blind hole at 90° is drawn entering from the top silhouette; which side it actually enters
+  is not yet authored.
+
 ## 2026-09-16
 
 ### feat(ui): tablet layout — free rotation on tablets, two panes on a landscape tablet
@@ -486,6 +538,41 @@ that started this.
   (`runCatching` catches the `OutOfMemoryError` a large raster can throw); all five "Open PDF"
   paths; every `contentResolver` call; and all 23 non-null assertions in `main`, each of which is
   structurally guarded by a preceding size, count or nullability check.
+
+## 2026-09-02
+
+### docs+ui: options sheets say which controls are app-wide and which are saved with the job
+
+`docs/DESIGN_INTENT.md` §3.3 now carries the Q3 ruling: a look control on a document's PDF
+Options sheet is a **remote control for the ONE app-wide `PdfPrefs` value** Settings → Drawing
+keeps — never a per-page copy — and there is no per-document look-override axis (it would fight
+Drawing profiles, and no on-device case has asked for one). Every control already behaved that
+way; what was missing was saying so. No draw path, composer, or stored field changed.
+
+- **Shared scope caption** — one new `OptionsScopeNote` (`ui/screen/ShaftHeightSlider.kt`, test
+  tag `options_scope_note`) sits under the "PDF Options" title on **both** sheets
+  (`PdfOptionsSheet`, `RunoutWearOptionsSheet`): "Drawing settings here are app-wide — the same
+  ones as Settings → Drawing — so every document follows them." The second sentence,
+  "Controls saved with this job say so.", is appended only when the instance actually carries a
+  per-job row, so the undercut sheet (which carries none) never points at a caption it does not
+  show. ONE construction for both sheets — the sentence cannot drift between them.
+- **"Saved with this job" on the per-job captions** — appended to the existing bodySmall lines
+  of Shaft height (both branches), Liner compression (all four), Wear strip size, and the wear
+  Components election. Trace depth, which is a per-job pin over an app default, says the whole
+  thing: "Saved with this job; \"Save as default\" makes it the app-wide setting." App-wide
+  controls gain no wording — the header note covers them and the sheets stay caption-light.
+- **Help** — the topic "Drawing controls that live on the document" opened by claiming
+  everything it listed was saved with the job, while three of its bullets (bubble size/height,
+  dimension arrows, and the "repeats Line thickness…" row) are app-wide prefs. It is now split
+  into a labelled "Saved with this job" group and an "App-wide — one setting, wherever you move
+  it" group, with the note that the two bubble sliders have no Settings row yet are still
+  app-wide and captured by Drawing profiles. New FAQ entry: "Why did a slider on one document's
+  PDF Options change my other documents?"
+- Pinned by two `PdfOptionsSectionsTest` cases hosting the caption directly (with and without
+  per-job controls). `docs/contracts/PdfExport.md` (v1.1) states the ruling and fixes the
+  `arrowSizePt` default in its field table (`3`/Small, not `4`); `docs/PDF_EXPORT.md` §5.6 notes
+  the caption and the per-job wording.
+
 
 ---
 

@@ -90,6 +90,31 @@ import com.android.shaftschematic.util.UnitSystem
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
+/** Test tag on the options sheets' scope caption. */
+internal const val OPTIONS_SCOPE_NOTE_TAG = "options_scope_note"
+
+/**
+ * The one-line scope caption under an options sheet's title. Every drawing control on these
+ * sheets is a remote control for the SAME app-wide preference Settings → Drawing keeps — there
+ * is no per-page copy and no per-document look override — so a change here changes every
+ * document; the per-job controls say so in their own captions. One construction for both
+ * sheets so the sentence can never drift between them.
+ *
+ * [hasJobControls] adds the pointer to those captions, and is false on a sheet that carries
+ * none (the undercut sheet): promising a caption the reader cannot find is worse than silence.
+ */
+@Composable
+internal fun OptionsScopeNote(hasJobControls: Boolean) {
+    Text(
+        "Drawing settings here are app-wide — the same ones as Settings → Drawing — so " +
+            "every document follows them." +
+            if (hasJobControls) " Controls saved with this job say so." else "",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.testTag(OPTIONS_SCOPE_NOTE_TAG),
+    )
+}
+
 /**
  * Commits within this distance of the standard multiplier (1.0) snap to exactly 1.0 — a
  * magnetic detent so the default never has to be fished for by pixel ("don't want to
@@ -315,7 +340,8 @@ internal fun WearTraceDepthControlRow(
         )
         Text(
             "Deepest measured wear draws at this fraction of the liner radius. " +
-                "Drawing only — printed Ø values never change.",
+                "Drawing only — printed Ø values never change. Saved with this job; " +
+                "\"Save as default\" makes it the app-wide setting.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -412,7 +438,8 @@ internal fun WearStripSizeSlider(
             Text(fmtWholePct(WEAR_STRIP_SIZE_FRAC_MAX), style = MaterialTheme.typography.bodySmall)
         }
         Text(
-            "How tall the detail strips draw. 100% is the height a full page of strips gives one.",
+            "How tall the detail strips draw. 100% is the height a full page of strips gives " +
+                "one. Saved with this job.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -1128,9 +1155,10 @@ internal fun ShaftHeightSlider(
                 "Drawn height of the shaft on paper, ${fmtIn(PROFILE_MIN_SHAFT_HEIGHT_PT / 72f)} " +
                     "to ${fmtIn(PROFILE_MAX_SHAFT_HEIGHT_PT / 72f)}. The drawing keeps true " +
                     "proportion and narrows instead of overflowing — shrink a long shaft to " +
-                    "uncramp the sheet, or grow it for room to write in."
+                    "uncramp the sheet, or grow it for room to write in. Saved with this job."
             } else {
-                "Drawn height of the shaft on paper. This shaft reaches ${fmtIn(maxIn)} at most."
+                "Drawn height of the shaft on paper. This shaft reaches ${fmtIn(maxIn)} at " +
+                    "most. Saved with this job."
             },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1281,24 +1309,24 @@ internal fun LinerCompressionControl(
                 requested <= 0.005f ->
                     "Liners may compress to the writable floor; tapers hold their " +
                         "${(PROFILE_TAPER_MIN_FRAC_OF_TRUE * 100).roundToInt()}% baseline. " +
-                        "The drawn height never changes."
+                        "The drawn height never changes. Saved with this job."
                 !shortfall && requested >= 0.995f ->
                     "Liners and tapers draw fully proportional at this height. The drawn " +
-                        "height never changes."
+                        "height never changes. Saved with this job."
                 !shortfall && together ->
                     "Liners and tapers keep at least ~$keptPct% of true length. The drawn " +
-                        "height never changes."
+                        "height never changes. Saved with this job."
                 !shortfall ->
                     "Liners keep at least ~$keptPct% of true length, tapers ~$taperPct%. " +
-                        "The drawn height never changes."
+                        "The drawn height never changes. Saved with this job."
                 together ->
                     "The page affords liners and tapers ~$keptPct% of true length at this " +
                         "height (of the ${(requested * 100).roundToInt()}% asked). The " +
-                        "drawn height never changes."
+                        "drawn height never changes. Saved with this job."
                 else ->
                     "The page affords liners ~$keptPct% of true length at this height " +
                         "(of the ${(requested * 100).roundToInt()}% asked) and tapers " +
-                        "~$taperPct%. The drawn height never changes."
+                        "~$taperPct%. The drawn height never changes. Saved with this job."
             },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,

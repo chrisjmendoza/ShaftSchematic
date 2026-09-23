@@ -1,7 +1,7 @@
 # PDF Export & Preview (routes/screens)
 
 **Files:** `ui/nav/PdfExportRoute.kt`, `ui/screen/PdfPreviewScreen.kt`  
-**Version:** v1.0 (2026-07-18) — consolidates the former `PdfExportRoute.md` and
+**Version:** v1.1 (2026-09-02) — consolidates the former `PdfExportRoute.md` and
 `PdfPreviewScreen.md`. For the composer/drawing pipeline itself see
 `docs/PDF_EXPORT.md` at repo level.
 
@@ -32,7 +32,7 @@ via SAF, delegating drawing to `composeShaftPdf`.
 | `curveLoHeightIn` | `0.5` | Sizing-curve anchor: drawn height (paper in) of a 4" shaft at 100% (0.25–1.5) |
 | `curveHiHeightIn` | `1.0` | Sizing-curve anchor: drawn height (paper in) of an 8" shaft at 100% (0.25–1.5) |
 | `sBreakThresholdFrac` | `0.5` | Body S-break threshold: a body run breaks once drawn below this fraction of its true length (0–1; `0` = never break on compression) |
-| `arrowSizePt` | `4` | Dimension-rail arrowhead length (pt): Small `3` / Medium `4` / Large `5` |
+| `arrowSizePt` | `3` | Dimension-rail arrowhead length (pt): Small `3` (default) / Medium `4` / Large `5` |
 | `wearJoinGapMaxMm` | `76.2` (3") | Taper–liner join threshold: bare shaft between two components in one wear detail strip that still draws true, in canonical mm (0–304.8; `0` = break on any gap) |
 | `runoutBubbleScale` | `1.0` | Multiplier on the runout bubble radius (`BUBBLE_RADIUS_PT`), read by both bubble draw sites — the sheet composer and the Runout tab's canvas preview. Stored clamp 0.5–2.0 (defensive, wider than the UI); UI range 60–150%, 5% steps |
 | `runoutBubbleDropScale` | `1.0` | Multiplier on the drop from the shaft surface to the first bubble row (`SHORT_LEADER_PT` / `RunoutBubbleGeometry.shortLeader`), same two draw sites as `runoutBubbleScale`. Stored clamp 0.5–2.0; UI range 50–200%. Experimental — exists to find where the pointer lines land best and may be retired |
@@ -50,6 +50,14 @@ only in the runout/consolidated PDF Options sheets, under a "Runout bubbles" hea
 the schematic or wear/undercut sheets, whose composers never read them. `undercutLineArt` is
 the fourth, the mirror image of that: it reaches only the undercut composer, so it lives in
 Settings → PDF Export and the **undercut** preview's options sheet and nowhere else.
+
+Every one of those sheet rows is a **remote control for the one app-wide pref**, never a
+per-page copy: there is no per-document look-override axis and none is planned
+(`docs/DESIGN_INTENT.md` §3.3, ruling 2026-09-02 / Q3). Both options sheets say so in one
+line under their title — the shared `OptionsScopeNote` (`ui/screen/ShaftHeightSlider.kt`,
+test tag `options_scope_note`) — while every per-job control (Shaft height, liner
+compression, wear strip election and size, trace depth) ends its own caption with "Saved
+with this job", so the reader never has to guess which kind a row is.
 
 - **Body S-break** (`sBreakThresholdFrac`): slider in 5% steps, commits on release, with a
   "Default (50%)" reset button — the same posture as Line Thickness, and like Line

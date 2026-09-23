@@ -53,9 +53,12 @@ Specifically:
   never fills on its own.
 - **Taper AFT/FWD reference**: `AddTaperDialog` must show AFT/FWD direction chips.
 - **Coupler bolt slot**: `AddCouplerBoltSlotDialog` and the `ResolvedCouplerBoltSlot`
-  carousel card must both expose Measure From (AFT | FWD), hole Ø, count, spacing (only
-  when count > 1), through/blind toggle + depth (only when blind). The card additionally
-  has the deferred "show dimension rail" toggle.
+  carousel card must both expose Hole (Seam | Cross-drilled — `BoltHoleStyle`, chosen at
+  add time because it decides what the row draws as), From keyway (90° | In line —
+  `BoltHoleClocking`, only while Cross-drilled), Measure From (AFT | FWD), hole Ø,
+  count, spacing (only when count > 1), through/blind toggle + depth (only when blind). The
+  position field's label comes from ONE helper (`slotStartFieldLabel`) on both surfaces.
+  The card additionally has the deferred "show dimension rail" toggle.
 
 **Carve-out — post-hoc display toggles are card-only.** A control that only exists to change
 how an *already-drawn* component prints, has a stable default, and is reached for after
@@ -100,7 +103,18 @@ but they **never** affect overall length (`coverageEndMm` ignores them), **never
 bodies, and **never** collide with other components (`collisionGroup() → null`). Do not
 add them to `coverageEndMm`, body-split/merge, or overlap validation.
 They are resolved as `ResolvedCouplerBoltSlot` *after* body resolution so they stay out
-of auto-body/subtraction geometry. See `docs/contracts/CouplerBoltSlot.md`.
+of auto-body/subtraction geometry. A row's `holeStyle` is **draw-only**: SEAM (default —
+every row saved before the field existed) is the muff-coupler cutout, a circle straddling
+the outline top and bottom; CROSS is the cross-drilled coupling-end bolt hole, ONE circle on
+the centerline, located from the end of the shaft to the hole center. Same entry, same
+bounds, same posture; both draw sites (`ShaftRenderer` overlay, `drawCouplerBoltSlots`)
+branch on it identically. A CROSS hole also carries `clocking` — **DEG_90 from the keyway
+(default: a bolt in line with the keyway would pass through the key)** draws the bore HIDDEN
+(dashed walls one hole width apart, entering from the top silhouette, via the ONE pure
+`crossBoreLines` in `geom/BoltHoleMath.kt`), IN_LINE draws the circle. CROSS rows print
+footer lines (Ø, "Hole center from FWD/AFT", and the clocking note ONLY when the shaft has a
+keyway); SEAM rows print nothing, as before. The coupling end view counts bolts from the
+first SEAM row only. See `docs/contracts/CouplerBoltSlot.md`.
 
 ### Wear pits are reference features
 Wear pits (`WearRecord.pits` — a `WearPit` "X" marker per pit/dye-failure, small or large) are
@@ -654,6 +668,15 @@ per-job `RunoutConfig` pair (a FIT, not a look), theme/preview/undercut styling,
 "Restore Drawing defaults" resets exactly the captured set, so a profile can always be undone.
 Enums are stored by NAME through the tolerant `fromName` helpers; every payload field is
 defaulted — profiles from older builds must keep loading.
+The same rule governs the PDF options sheets (ruling 2026-09-02, `docs/DESIGN_INTENT.md`
+§3.3 Q3): a look control on a document's sheet is a **remote control for the one shared
+`PdfPrefs` value** — there is **no per-document override slot for a look pref and none is
+planned** (it would fight profiles). "Drawn differently" is served by promoting ONE control to
+the per-job envelope case by case, the trace-depth precedent (`WearRecord.traceDepthFrac` over
+`PdfPrefs.wearTraceDepthFrac`, with "Save as default" back). Legibility is part of the contract:
+both sheets carry the shared `OptionsScopeNote` caption ("app-wide") and every per-job control's
+caption ends "Saved with this job" — a new sheet control must land in one of those two classes
+and say so.
 
 ### A keyway's WIDTH rides the diameter scale, its LENGTH the axial map
 A sheet carries two scales: `diaPtPerMm` (the drawn shaft height, what the "Shaft height" slider

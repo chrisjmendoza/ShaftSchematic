@@ -94,6 +94,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.testTag
 import com.android.shaftschematic.model.BlendProfile
 import com.android.shaftschematic.model.LinerAuthoredReference
+import com.android.shaftschematic.model.BoltHoleClocking
+import com.android.shaftschematic.model.BoltHoleStyle
 import com.android.shaftschematic.model.SlotAuthoredReference
 import com.android.shaftschematic.model.MM_PER_IN
 import com.android.shaftschematic.model.ShaftPosition
@@ -238,7 +240,7 @@ fun ShaftScreen(
     onAddThread: (startMm: Float, lengthMm: Float, majorDiaMm: Float, pitchMm: Float, excludeFromOAL: Boolean,
                   isAftEnd: Boolean, metricDesignation: String?) -> Unit,
     onAddLiner: (Float, Float, Float, LinerAuthoredReference, LinerShoulderDraft) -> Unit,
-    onAddCouplerBoltSlot: (startMm: Float, holeDiaMm: Float, count: Int, spacingMm: Float, through: Boolean, depthMm: Float, reference: SlotAuthoredReference) -> Unit,
+    onAddCouplerBoltSlot: (startMm: Float, holeDiaMm: Float, count: Int, spacingMm: Float, through: Boolean, depthMm: Float, reference: SlotAuthoredReference, holeStyle: BoltHoleStyle, clocking: BoltHoleClocking) -> Unit,
 
     // Updates (all mm)
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
@@ -270,6 +272,8 @@ fun ShaftScreen(
     onUpdateLinerReference: (Int, LinerAuthoredReference) -> Unit,
     onUpdateCouplerBoltSlot: (index: Int, startMm: Float, holeDiaMm: Float, count: Int, spacingMm: Float, through: Boolean, depthMm: Float) -> Unit,
     onUpdateCouplerBoltSlotReference: (Int, SlotAuthoredReference) -> Unit,
+    onUpdateCouplerBoltSlotStyle: (Int, BoltHoleStyle) -> Unit,
+    onUpdateCouplerBoltSlotClocking: (Int, BoltHoleClocking) -> Unit,
     onUpdateCouplerBoltSlotShowRail: (Int, Boolean) -> Unit,
 
     onSetKeyways180Apart: (Boolean) -> Unit,
@@ -639,6 +643,8 @@ fun ShaftScreen(
                 onUpdateLinerReference = onUpdateLinerReference,
                 onUpdateCouplerBoltSlot = onUpdateCouplerBoltSlot,
                 onUpdateCouplerBoltSlotReference = onUpdateCouplerBoltSlotReference,
+                onUpdateCouplerBoltSlotStyle = onUpdateCouplerBoltSlotStyle,
+                onUpdateCouplerBoltSlotClocking = onUpdateCouplerBoltSlotClocking,
                 onUpdateCouplerBoltSlotShowRail = onUpdateCouplerBoltSlotShowRail,
                 onSetKeyways180Apart = onSetKeyways180Apart,
                 onSetKeyways90Apart = onSetKeyways90Apart,
@@ -739,9 +745,9 @@ fun ShaftScreen(
                     initialSpacingMm = sessionAddDefaults.slotSpacingMm,
                     initialDepthMm = sessionAddDefaults.slotDepthMm,
                     dialogUnitConverterEnabled = dialogUnitConverterEnabled,
-                    onSubmit = { startMm, holeDiaMm, count, spacingMm, through, depthMm, ref ->
+                    onSubmit = { startMm, holeDiaMm, count, spacingMm, through, depthMm, ref, style, clocking ->
                         addSlotOpen = false
-                        onAddCouplerBoltSlot(startMm, holeDiaMm, count, spacingMm, through, depthMm, ref)
+                        onAddCouplerBoltSlot(startMm, holeDiaMm, count, spacingMm, through, depthMm, ref, style, clocking)
                     },
                     onCancel = { addSlotOpen = false }
                 )

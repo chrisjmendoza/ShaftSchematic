@@ -62,6 +62,8 @@ import com.android.shaftschematic.model.BlendProfile
 import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.ui.config.AddDefaultsConfig
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.BoltHoleClocking
+import com.android.shaftschematic.model.BoltHoleStyle
 import com.android.shaftschematic.model.SlotAuthoredReference
 import com.android.shaftschematic.model.keywayCount
 import com.android.shaftschematic.ui.input.NumericInputField
@@ -184,6 +186,8 @@ internal fun ComponentCarouselPager(
     onUpdateLinerReference: (Int, LinerAuthoredReference) -> Unit,
     onUpdateCouplerBoltSlot: (index: Int, startMm: Float, holeDiaMm: Float, count: Int, spacingMm: Float, through: Boolean, depthMm: Float) -> Unit,
     onUpdateCouplerBoltSlotReference: (Int, SlotAuthoredReference) -> Unit,
+    onUpdateCouplerBoltSlotStyle: (Int, BoltHoleStyle) -> Unit,
+    onUpdateCouplerBoltSlotClocking: (Int, BoltHoleClocking) -> Unit,
     onUpdateCouplerBoltSlotShowRail: (Int, Boolean) -> Unit,
     onSetKeyways180Apart: (Boolean) -> Unit,
     onSetKeyways90Apart: (Boolean) -> Unit,
@@ -342,6 +346,8 @@ internal fun ComponentCarouselPager(
                     onUpdateLinerReference = onUpdateLinerReference,
                     onUpdateCouplerBoltSlot = onUpdateCouplerBoltSlot,
                     onUpdateCouplerBoltSlotReference = onUpdateCouplerBoltSlotReference,
+                    onUpdateCouplerBoltSlotStyle = onUpdateCouplerBoltSlotStyle,
+                    onUpdateCouplerBoltSlotClocking = onUpdateCouplerBoltSlotClocking,
                     onUpdateCouplerBoltSlotShowRail = onUpdateCouplerBoltSlotShowRail,
                     onSetKeyways180Apart = onSetKeyways180Apart,
                     onSetKeyways90Apart = onSetKeyways90Apart,
@@ -609,6 +615,8 @@ internal fun ComponentPagerCard(
     onUpdateLinerReference: (Int, LinerAuthoredReference) -> Unit,
     onUpdateCouplerBoltSlot: (index: Int, startMm: Float, holeDiaMm: Float, count: Int, spacingMm: Float, through: Boolean, depthMm: Float) -> Unit,
     onUpdateCouplerBoltSlotReference: (Int, SlotAuthoredReference) -> Unit,
+    onUpdateCouplerBoltSlotStyle: (Int, BoltHoleStyle) -> Unit,
+    onUpdateCouplerBoltSlotClocking: (Int, BoltHoleClocking) -> Unit,
     onUpdateCouplerBoltSlotShowRail: (Int, Boolean) -> Unit,
     onSetKeyways180Apart: (Boolean) -> Unit,
     onSetKeyways90Apart: (Boolean) -> Unit,
@@ -776,6 +784,8 @@ internal fun ComponentPagerCard(
             f1 = ::f1,
             onUpdateCouplerBoltSlot = onUpdateCouplerBoltSlot,
             onUpdateCouplerBoltSlotReference = onUpdateCouplerBoltSlotReference,
+            onUpdateCouplerBoltSlotStyle = onUpdateCouplerBoltSlotStyle,
+            onUpdateCouplerBoltSlotClocking = onUpdateCouplerBoltSlotClocking,
             onUpdateCouplerBoltSlotShowRail = onUpdateCouplerBoltSlotShowRail,
             onRemoveCouplerBoltSlot = onRemoveCouplerBoltSlot,
         )

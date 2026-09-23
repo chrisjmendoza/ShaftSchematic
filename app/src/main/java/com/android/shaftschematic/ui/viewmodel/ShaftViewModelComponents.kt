@@ -4,6 +4,8 @@ import android.util.Log
 import com.android.shaftschematic.model.BlendProfile
 import com.android.shaftschematic.model.Body
 import com.android.shaftschematic.model.BodySplitResult
+import com.android.shaftschematic.model.BoltHoleClocking
+import com.android.shaftschematic.model.BoltHoleStyle
 import com.android.shaftschematic.model.CouplerBoltSlot
 import com.android.shaftschematic.model.Liner
 import com.android.shaftschematic.model.LinerAuthoredReference
@@ -1039,6 +1041,8 @@ fun ShaftViewModel.addCouplerBoltSlotAt(
     through: Boolean = true,
     depthMm: Float = 0f,
     reference: SlotAuthoredReference = SlotAuthoredReference.FWD,
+    holeStyle: BoltHoleStyle = BoltHoleStyle.SEAM,
+    clocking: BoltHoleClocking = BoltHoleClocking.DEG_90,
     target: SpecTarget = SpecTarget.ORIGINAL,
 ) {
     val id = newId()
@@ -1052,6 +1056,8 @@ fun ShaftViewModel.addCouplerBoltSlotAt(
             through = through,
             depthMm = max(0f, depthMm),
             authoredReference = reference,
+            holeStyle = holeStyle,
+            clocking = clocking,
         )
         // Newest-on-top, like the other component lists.
         s.copy(couplerBoltSlots = listOf(slot) + s.couplerBoltSlots)
@@ -1102,6 +1108,47 @@ fun ShaftViewModel.updateCouplerBoltSlotReference(
         s.copy(
             couplerBoltSlots = s.couplerBoltSlots.toMutableList().also { l ->
                 l[index] = old.copy(authoredReference = reference)
+            }
+        )
+    }
+}
+
+/**
+ * Switch a row between the muff-seam cutout and the cross-drilled hole. Draw-only — the
+ * stored position, hole Ø, count and spacing are untouched, so the same entry re-reads as
+ * the other kind of hole.
+ */
+fun ShaftViewModel.updateCouplerBoltSlotStyle(
+    index: Int,
+    style: BoltHoleStyle,
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) = updateSpec(target) { s ->
+    if (index !in s.couplerBoltSlots.indices) s else {
+        val old = s.couplerBoltSlots[index]
+        if (old.holeStyle == style) return@updateSpec s
+        s.copy(
+            couplerBoltSlots = s.couplerBoltSlots.toMutableList().also { l ->
+                l[index] = old.copy(holeStyle = style)
+            }
+        )
+    }
+}
+
+/**
+ * Set a cross-drilled hole's clocking relative to the keyway (in line / 90°). Draw + footer
+ * text only — nothing stored about position or size moves. Read only for CROSS rows.
+ */
+fun ShaftViewModel.updateCouplerBoltSlotClocking(
+    index: Int,
+    clocking: BoltHoleClocking,
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) = updateSpec(target) { s ->
+    if (index !in s.couplerBoltSlots.indices) s else {
+        val old = s.couplerBoltSlots[index]
+        if (old.clocking == clocking) return@updateSpec s
+        s.copy(
+            couplerBoltSlots = s.couplerBoltSlots.toMutableList().also { l ->
+                l[index] = old.copy(clocking = clocking)
             }
         )
     }

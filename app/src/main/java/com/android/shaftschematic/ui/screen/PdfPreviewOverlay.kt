@@ -533,6 +533,14 @@ internal fun RunoutWearOptionsSheet(
             .padding(horizontal = 24.dp, vertical = 8.dp),
     ) {
         Text("PDF Options", style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(4.dp))
+        // One sheet serves the runout, consolidated, wear and undercut documents, and only
+        // some of them carry per-job controls — the undercut sheet has none, so it gets the
+        // app-wide sentence alone rather than a pointer to captions it does not show.
+        OptionsScopeNote(
+            hasJobControls = showHeightSlider || showLinerCompression ||
+                showCouplingFaceRow || showWearControls,
+        )
         Spacer(Modifier.height(12.dp))
 
         // ── Content ──────────────────────────────────────────────────────────
