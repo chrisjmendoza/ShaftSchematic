@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.util.Achievements
+import com.android.shaftschematic.ui.adaptive.readableWidth
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -49,7 +50,7 @@ fun AchievementsRoute(
                 .padding(pad)
         ) {
             Column(
-                modifier = Modifier.padding(16.dp),
+                modifier = Modifier.readableWidth().padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Achievements.all.forEach { a ->

@@ -40,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.android.shaftschematic.ui.adaptive.readableWidth
 
 /**
  * HelpRoute — in-app glossary, how-to guides, and FAQ. Reached from the editor sidebar's
@@ -103,7 +104,10 @@ fun HelpRoute(onBack: () -> Unit, initialTopicKey: String? = null) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(pad),
+                .padding(pad)
+                // Search field and list share the one readable column, so both stop at the
+                // same width on a tablet and the field never runs wider than the cards.
+                .readableWidth(),
         ) {
             OutlinedTextField(
                 value = query,

@@ -61,6 +61,9 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
   move, and lower priority
 
 **Delivered in v0.5.x so far** (newest first):
+- Tablet layout (2026-09-16) — one adaptive axis, the window width class: phones unchanged and
+  portrait, tablets rotate freely, a taller single column at MEDIUM, two panes and a permanent
+  sidebar at EXPANDED, list screens capped at a readable width. `docs/contracts/Adaptive.md`
 - Taper calculator — Calculate button, answers in the fields (2026-09-14) — the calculator is
   button-driven: nothing derives until Calculate, the answer appears as an italic preview in its
   own empty field (a ✓ keeps it as an input for the next question), too-few-values reds exactly

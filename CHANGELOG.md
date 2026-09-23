@@ -6,6 +6,38 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-09-16
+
+### feat(ui): tablet layout — free rotation on tablets, two panes on a landscape tablet
+
+The app was a portrait phone layout; on a tablet the shaft drew as a flat strip over a column
+of controls stretched edge to edge, and the activity was locked to portrait. It now adapts on
+ONE axis, the window width class (`ui/adaptive/WindowSize.kt`: COMPACT < 600 dp, MEDIUM
+< 840 dp, EXPANDED), with the phone layout byte-identical.
+
+- **Orientation.** Phones stay portrait; tablets (smallest width ≥ 600 dp) rotate freely. One
+  resource, `R.integer.activity_orientation`, sits behind both the manifest and what the two
+  PDF preview screens restore when they give rotation back — they used to restore a literal
+  portrait, which would have locked a tablet to portrait the first time a preview closed.
+- **Editor (Schematic and Final tabs).** MEDIUM raises the preview card's height cap; EXPANDED
+  lays out two panes — preview, OAL and warnings on the left, the Components header, Add
+  button and carousel on the right — each scrolling on its own.
+- **Runout, Wear and Undercut tabs.** MEDIUM gives the canvas more height; EXPANDED puts the
+  canvas with its print group (blank draft, export gate, Print/Preview/Export) in the left pane
+  and the tab's editors in the right, the canvas pinned.
+- **Sidebar.** On a landscape tablet the editor sidebar is a permanent panel beside the tabs,
+  built from the same content composable the phone overlay hosts; the tab hamburgers hide
+  through `LocalSidebarPermanent`.
+- **List screens** (Start, Settings, Help, About, Achievements, Developer Options, Templates,
+  Open, Save As) cap their one scrolling column at a readable 720 dp and centre it
+  (`readableWidth()`), a no-op on phones.
+- Every screen that lays out two ways calls the SAME block composables from both branches, so
+  the phone and the tablet cannot drift. Nothing adaptive touches sheet ink, a composer, the
+  model, or a document. Contract: `docs/contracts/Adaptive.md`; per-surface notes in
+  `ShaftScreen.md`, `RunoutSheet.md`, `UndercutDrawing.md`, `Navigation.md`, `UI_CONTRACT.md`.
+- Tests: `WindowSizeTest` pins the breakpoints; Robolectric hosts the editor at
+  `w1280dp-h800dp-land` and at the phone default and asserts the pane tags and the hamburger
+  follow the window. **Unverified on a real tablet** — the on-device pass is in `TODO.md`.
 ## 2026-09-15
 
 ### feat(pdf): line art for the printed undercut drawing

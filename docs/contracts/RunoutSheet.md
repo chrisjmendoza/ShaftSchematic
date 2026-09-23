@@ -95,6 +95,49 @@ region reads, top to bottom:
    (`WearTraceDepthControlRow`), the dye-pen PASS/FAIL chips, and the Components election
    (`WearStripComponentChecks`).
 
+### Window width
+
+Both tabs key their skeleton on `currentWindowWidthClass()`; the policy behind the classes is
+`docs/contracts/Adaptive.md`. Everything above describes the COMPACT layout, which is unchanged.
+
+- **COMPACT** — as described above.
+- **MEDIUM** — the same single column, with the canvas box taller (a 600–840 dp column draws the
+  shaft nearly twice as wide as a phone's, and at the phone's height the profile flattens into a
+  rule). Nothing else moves.
+- **EXPANDED** — two panes in a `Row` under the toolbar divider, with a `VerticalDivider`
+  between and each pane scrolling independently:
+  - **left**, `testTag "sheet_pane_canvas"` — the canvas, then the tab's explanatory line, the
+    blank-draft switch, the export-gate message and `DocumentActionButtons`: the "look at the
+    sheet and print it" group.
+  - **right**, `testTag "sheet_pane_controls"` — everything that shapes what the sheet draws.
+    Runout: TIR orientation, coupling face, the station editor. Wear: trace depth, the dye-pen
+    chips, the Components election.
+
+  The canvas is **pinned** out of the left pane's scroll at EXPANDED — the same rule
+  RunoutRoute's canvas already follows at every width, and for the same reason: the controls
+  opposite it reshape what it draws. The rest of the left pane scrolls under it. The canvas
+  sizes by PROPORTION there rather than by a fixed height, since the pane's width is the free
+  variable.
+
+The skeleton is the ONLY thing the width class changes. Each tab composes its blocks **once**
+(`previewBlock` / `canvasBlock`, `printGroup`, and the control sections) and both branches call
+the same values, so a phone layout and a tablet layout cannot drift; `sheetCanvasModifier` and
+`SheetTwoPane` (`ui/screen/SheetPaneLayout.kt`) are shared by all three sheet tabs. Every
+`testTag` and every gesture modifier on the canvases survives unchanged.
+
+Each tab's hamburger `IconButton` is omitted when `LocalSidebarPermanent.current` is true —
+there is nothing to open when the sidebar is already laid out beside the tabs.
+
+### Consolidated Output tab — window width
+
+`OutputRoute` carries no canvas and reads as ONE ordered workflow: elect the sheet's content,
+produce it, tune and author what it prints, then batch-export — each block acting on the one
+above it ("Export all" names the content selection above it explicitly). Splitting that into
+panes would separate steps that read in sequence, so it takes the **readable column** instead
+(`Modifier.readableWidth()`, see `docs/UI_CONTRACT.md`) at every width: the scroll gutter still
+spans the window, the content stops at a legible width. Its hamburger follows the same
+`LocalSidebarPermanent` rule.
+
 ---
 
 ## Measurement stations (counts, fragments, identity)

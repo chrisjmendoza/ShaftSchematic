@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -63,6 +64,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -98,6 +100,10 @@ import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.collidingIds
 import com.android.shaftschematic.settings.PdfTieringMode
+import com.android.shaftschematic.ui.adaptive.LocalSidebarPermanent
+import com.android.shaftschematic.ui.adaptive.WindowWidthClass
+import com.android.shaftschematic.ui.adaptive.currentWindowWidthClass
+import com.android.shaftschematic.ui.adaptive.twoPane
 import com.android.shaftschematic.ui.dialog.InlineAddChooserDialog
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.util.exportPdfGate
@@ -125,6 +131,9 @@ import kotlinx.coroutines.launch
  *   their spans); there is no separate cross-type order. See `docs/contracts/ComponentsOrdering.md`.
  * • IME safety: imePadding shrinks the scroll viewport (applied before verticalScroll) so
  *   Compose auto-scrolls to keep the focused field in view.
+ * • Window width is the ONE adaptive axis: COMPACT is the phone column, MEDIUM raises only the
+ *   preview card's height cap, EXPANDED splits into two panes. Every branch draws the SAME
+ *   content blocks, declared once below. See `docs/contracts/Adaptive.md`.
  * • No file I/O or routing here.
  */
 @Composable
@@ -374,11 +383,15 @@ fun ShaftScreen(
                 navigationIcon = {
                     // Hamburger opens the sidebar nav drawer.
                     // Home lives inside the sidebar — not duplicated here.
-                    IconButton(
-                        onClick = onOpenSidebar,
-                        modifier = Modifier.testTag("toolbar_menu")
-                    ) {
-                        Icon(Icons.Filled.Menu, contentDescription = "Open navigation")
+                    // Where the sidebar is laid out beside the content there is nothing to
+                    // open, and a button whose panel is already on screen reads as broken.
+                    if (!LocalSidebarPermanent.current) {
+                        IconButton(
+                            onClick = onOpenSidebar,
+                            modifier = Modifier.testTag("toolbar_menu")
+                        ) {
+                            Icon(Icons.Filled.Menu, contentDescription = "Open navigation")
+                        }
                     }
                 },
                 actions = {
@@ -462,17 +475,15 @@ fun ShaftScreen(
             }
         },
     ) { inner ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(inner)
-                .padding(start = 16.dp, end = 16.dp, top = 0.dp, bottom = 16.dp)
-        ) {
-            // Separator (matches the divider below the preview)
-            HorizontalDivider()
-            Spacer(Modifier.height(8.dp))
+        val widthClass = currentWindowWidthClass()
+        val previewScroll = rememberScrollState()
 
-            // Preview
+        // The editor's content blocks are declared ONCE here and invoked by whichever width
+        // branch lays out, so the phone column and the tablet two-pane cannot drift apart.
+        // They are composable lambdas rather than private composables because each would
+        // otherwise have to restate this screen's parameter list — the carousel alone takes
+        // fifty callbacks — and a signature copied twice is the drift this exists to prevent.
+        val previewBlock: @Composable (Dp) -> Unit = { previewMaxHeight ->
             PreviewCard(
                 showGrid = showGrid,
                 spec = spec,
@@ -497,325 +508,435 @@ fun ShaftScreen(
                 shadedComponentIds = shadedComponentIds,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 120.dp, max = 200.dp)
+                    .heightIn(min = 120.dp, max = previewMaxHeight)
                     .aspectRatio(3.0f)
             )
             // NOTE: Highlight state is threaded into ShaftDrawing via PreviewCard.
+        }
 
-            Spacer(Modifier.height(12.dp))
-            HorizontalDivider()
-            Spacer(Modifier.height(12.dp))
+        // Overall length entry and its two read-only companion labels.
+        val oalBlock: @Composable () -> Unit = {
+            OverallLengthField(
+                spec = spec,
+                unit = unit,
+                onSetOverallLengthMm = onSetOverallLengthMm,
+                onSetOverallLengthRaw = onSetOverallLengthRaw,
+            )
 
-            // Scrollable editor content
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .imePadding()
-                    .verticalScroll(scroll)
-                    .windowInsetsPadding(
-                        WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)
-                    ),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                OverallLengthField(
-                    spec = spec,
-                    unit = unit,
-                    onSetOverallLengthMm = onSetOverallLengthMm,
-                    onSetOverallLengthRaw = onSetOverallLengthRaw,
+            // Read-only: computed OAL in measurement space (less excluded end threads)
+            val win = remember(spec.overallLengthMm, spec.threads, spec.tapers) { computeOalWindow(spec) }
+            val physicalOalMm = spec.overallLengthMm.toDouble()
+            val effectiveOalWindowMm = win.oalMm
+            val excluded = kotlin.math.abs(effectiveOalWindowMm - physicalOalMm) > OAL_EPS_MM
+
+            // Only meaningful when an excluded end thread makes the dimensioned span
+            // differ from the physical length.
+            if (excluded) {
+                Text(
+                    text = "Dimensioned OAL: ${formatDisplay(effectiveOalWindowMm.toFloat(), unit)} ${abbr(unit)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp)
                 )
+            }
 
-                // Read-only: computed OAL in measurement space (less excluded end threads)
-                val win = remember(spec.overallLengthMm, spec.threads, spec.tapers) { computeOalWindow(spec) }
-                val physicalOalMm = spec.overallLengthMm.toDouble()
-                val effectiveOalWindowMm = win.oalMm
-                val excluded = kotlin.math.abs(effectiveOalWindowMm - physicalOalMm) > OAL_EPS_MM
+            if (showOalDebugLabel) {
+                val coveredEndMm = lastOccupiedEndMm(spec)
+                Text(
+                    text = "OAL debug • physical=${formatDisplay(spec.overallLengthMm, unit)} ${abbr(unit)} • effective=${formatDisplay(effectiveOalWindowMm.toFloat(), unit)} ${abbr(unit)} • covered=${formatDisplay(coveredEndMm, unit)} ${abbr(unit)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+        }
 
-                // Only meaningful when an excluded end thread makes the dimensioned span
-                // differ from the physical length.
-                if (excluded) {
-                    Text(
-                        text = "Dimensioned OAL: ${formatDisplay(effectiveOalWindowMm.toFloat(), unit)} ${abbr(unit)}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-                }
+        // The components side: heading, the single add entry point, and the carousel, with
+        // the add dialogs it raises. A dialog takes no layout space, so it rides with the
+        // control that opens it in either branch.
+        //
+        // [warningSlot] is emitted between the add button and the carousel — where the spec
+        // warnings sit in one column. With two panes they move across to the preview, beside
+        // the drawing and the overall length they are about, and this slot stays empty.
+        val componentsBlock: @Composable (warningSlot: @Composable () -> Unit) -> Unit = { warningSlot ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Components",
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    "Swipe to select",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
 
-                if (showOalDebugLabel) {
-                    val coveredEndMm = lastOccupiedEndMm(spec)
-                    Text(
-                        text = "OAL debug • physical=${formatDisplay(spec.overallLengthMm, unit)} ${abbr(unit)} • effective=${formatDisplay(effectiveOalWindowMm.toFloat(), unit)} ${abbr(unit)} • covered=${formatDisplay(coveredEndMm, unit)} ${abbr(unit)}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-                }
-
-                Row(
+            Surface(
+                tonalElevation = 2.dp,
+                shape = MaterialTheme.shapes.large
+            ) {
+                Button(
+                    onClick = { chooserOpen = true },
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        "Components",
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                    Spacer(Modifier.width(10.dp))
-                    Text(
-                        "Swipe to select",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                Surface(
-                    tonalElevation = 2.dp,
                     shape = MaterialTheme.shapes.large
                 ) {
-                    Button(
-                        onClick = { chooserOpen = true },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = MaterialTheme.shapes.large
-                    ) {
-                        Text("+ Add Component")
-                    }
+                    Text("+ Add Component")
                 }
+            }
 
-                SpecWarningBanner(spec = spec)
+            warningSlot()
 
-                ComponentCarouselPager(
-                    spec = spec,
-                    resolvedComponents = resolvedComponents,
+            ComponentCarouselPager(
+                spec = spec,
+                resolvedComponents = resolvedComponents,
+                unit = unit,
+                showEdgeArrows = showComponentArrows,
+                edgeArrowWidthDp = componentArrowWidthDp,
+                showComponentDebugLabels = showComponentDebugLabels,
+                componentTitlesDefault = componentTitlesDefault,
+                componentShadeDefaults = componentShadeDefaults,
+                selectedComponentId = selectedComponentId,
+                // Auto-body promotion adds a plain body; keyways and blends are added
+                // later via the promoted card's own fields.
+                onAddBody = { s, l, d ->
+                    onAddBody(
+                        s, l, d, 0f, 0f, 0f, 0f, LinerAuthoredReference.AFT, false, null,
+                        0f, 0f, BlendProfile.OGEE, false, false,
+                    )
+                },
+                onSetAutoSectionDia = onSetAutoSectionDia,
+                onSetAutoBlend = onSetAutoBlend,
+                onSetShowAutoBodyDia = onSetShowAutoBodyDia,
+                onUpdateBody = onUpdateBody,
+                onUpdateBodyShowDia = onUpdateBodyShowDia,
+                onUpdateBodyShowLabel = onUpdateBodyShowLabel,
+                onUpdateBodyShade = onUpdateBodyShade,
+                onUpdateBodyCompressOnDrawing = onUpdateBodyCompressOnDrawing,
+                onUpdateBodyBlend = onUpdateBodyBlend,
+                onUpdateBodyLabel = onUpdateBodyLabel,
+                onUpdateBodyKeyway = onUpdateBodyKeyway,
+                onUpdateTaper = onUpdateTaper,
+                onUpdateTaperLabel = onUpdateTaperLabel,
+                onUpdateTaperShowLabel = onUpdateTaperShowLabel,
+                onUpdateTaperShade = onUpdateTaperShade,
+                onUpdateTaperKeyway = onUpdateTaperKeyway,
+                onUpdateTaperReference = onUpdateTaperReference,
+                onUpdateThread = onUpdateThread,
+                onUpdateThreadLabel = onUpdateThreadLabel,
+                onUpdateThreadShowLabel = onUpdateThreadShowLabel,
+                onUpdateLiner = onUpdateLiner,
+                onUpdateLinerShowDia = onUpdateLinerShowDia,
+                onUpdateLinerShowLabel = onUpdateLinerShowLabel,
+                onUpdateLinerShade = onUpdateLinerShade,
+                onUpdateLinerShoulder = onUpdateLinerShoulder,
+                linerShouldersEnabled = linerShouldersEnabled,
+                onUpdateLinerLabel = onUpdateLinerLabel,
+                onUpdateLinerReference = onUpdateLinerReference,
+                onUpdateCouplerBoltSlot = onUpdateCouplerBoltSlot,
+                onUpdateCouplerBoltSlotReference = onUpdateCouplerBoltSlotReference,
+                onUpdateCouplerBoltSlotShowRail = onUpdateCouplerBoltSlotShowRail,
+                onSetKeyways180Apart = onSetKeyways180Apart,
+                onSetKeyways90Apart = onSetKeyways90Apart,
+                onSetKeyways90Cw = onSetKeyways90Cw,
+
+                onSetThreadExcludeFromOal = onSetThreadExcludeFromOal,
+                onSetThreadEndPosition = onSetThreadEndPosition,
+
+                onRemoveBody = onRemoveBody,
+                onRemoveTaper = onRemoveTaper,
+                onRemoveThread = onRemoveThread,
+                onRemoveLiner = onRemoveLiner,
+                onRemoveCouplerBoltSlot = onRemoveCouplerBoltSlot,
+                onSelectComponentById = onSelectComponentById,
+                collidingComponentIds = collidingComponentIds,
+                perComponentUnitsEnabled = perComponentUnitsEnabled,
+                unitOverrides = unitOverrides,
+                onSetComponentUnit = onSetComponentUnit,
+                onSetKeywayUnit = onSetKeywayUnit,
+            )
+
+            if (chooserOpen) {
+                val d = computeAddDefaults(spec)
+
+                InlineAddChooserDialog(
+                    onDismiss = { chooserOpen = false },
+                    onAddBody = {
+                        chooserOpen = false
+                        addStartMm = d.startMm
+                        addLengthMm = if (spec.overallLengthMm > d.startMm) {
+                            spec.overallLengthMm - d.startMm
+                        } else {
+                            sessionAddDefaults.bodyLenMm
+                        }
+                        addBodyOpen = true
+                    },
+                    onAddLiner = {
+                        chooserOpen = false
+                        addStartMm = d.startMm
+                        addLengthMm = sessionAddDefaults.linerLenMm
+                        addLinerOpen = true
+                    },
+                    onAddThread = {
+                        chooserOpen = false
+                        addThreadStartMm = d.startMm
+                        addThreadOpen = true
+                    },
+                    onAddTaper = {
+                        chooserOpen = false
+                        addStartMm = d.startMm
+                        addLengthMm = sessionAddDefaults.taperLenMm
+                        addTaperOpen = true
+                    },
+                    onAddCouplerBoltSlot = {
+                        chooserOpen = false
+                        addSlotStartMm = d.startMm
+                        addSlotOpen = true
+                    }
+                )
+            }
+
+            if (addThreadOpen) {
+                AddThreadDialog(
                     unit = unit,
-                    showEdgeArrows = showComponentArrows,
-                    edgeArrowWidthDp = componentArrowWidthDp,
-                    showComponentDebugLabels = showComponentDebugLabels,
-                    componentTitlesDefault = componentTitlesDefault,
-                    componentShadeDefaults = componentShadeDefaults,
-                    selectedComponentId = selectedComponentId,
-                    // Auto-body promotion adds a plain body; keyways and blends are added
-                    // later via the promoted card's own fields.
-                    onAddBody = { s, l, d ->
-                        onAddBody(
-                            s, l, d, 0f, 0f, 0f, 0f, LinerAuthoredReference.AFT, false, null,
-                            0f, 0f, BlendProfile.OGEE, false, false,
+                    spec = spec,
+                    initialStartMm = addThreadStartMm,
+                    initialLengthMm = sessionAddDefaults.threadLenMm,
+                    initialMajorDiaMm = sessionAddDefaults.threadMajorDiaMm,
+                    initialPitchMm = sessionAddDefaults.threadPitchMm,
+                    dialogUnitConverterEnabled = dialogUnitConverterEnabled,
+                    onSubmit = { startMm, lengthMm, majorDiaMm, pitchMm, excludeFromOAL, isAftEnd, metricDesignation ->
+                        addThreadOpen = false
+                        // IMPORTANT: argument order is start, length, majorDia, pitch, excludeFromOAL,
+                        // isAftEnd, metricDesignation. The dialog already converts TPI to pitch (or
+                        // reads pitch straight off a metric designation) so this call never re-derives
+                        // it. Keep this aligned with `ShaftRoute`/`ShaftViewModel.addThreadAt`.
+                        onAddThread(
+                            startMm,
+                            lengthMm,
+                            majorDiaMm,
+                            pitchMm,
+                            excludeFromOAL,
+                            isAftEnd,
+                            metricDesignation
                         )
                     },
-                    onSetAutoSectionDia = onSetAutoSectionDia,
-                    onSetAutoBlend = onSetAutoBlend,
-                    onSetShowAutoBodyDia = onSetShowAutoBodyDia,
-                    onUpdateBody = onUpdateBody,
-                    onUpdateBodyShowDia = onUpdateBodyShowDia,
-                    onUpdateBodyShowLabel = onUpdateBodyShowLabel,
-                    onUpdateBodyShade = onUpdateBodyShade,
-                    onUpdateBodyCompressOnDrawing = onUpdateBodyCompressOnDrawing,
-                    onUpdateBodyBlend = onUpdateBodyBlend,
-                    onUpdateBodyLabel = onUpdateBodyLabel,
-                    onUpdateBodyKeyway = onUpdateBodyKeyway,
-                    onUpdateTaper = onUpdateTaper,
-                    onUpdateTaperLabel = onUpdateTaperLabel,
-                    onUpdateTaperShowLabel = onUpdateTaperShowLabel,
-                    onUpdateTaperShade = onUpdateTaperShade,
-                    onUpdateTaperKeyway = onUpdateTaperKeyway,
-                    onUpdateTaperReference = onUpdateTaperReference,
-                    onUpdateThread = onUpdateThread,
-                    onUpdateThreadLabel = onUpdateThreadLabel,
-                    onUpdateThreadShowLabel = onUpdateThreadShowLabel,
-                    onUpdateLiner = onUpdateLiner,
-                    onUpdateLinerShowDia = onUpdateLinerShowDia,
-                    onUpdateLinerShowLabel = onUpdateLinerShowLabel,
-                    onUpdateLinerShade = onUpdateLinerShade,
-                    onUpdateLinerShoulder = onUpdateLinerShoulder,
-                    linerShouldersEnabled = linerShouldersEnabled,
-                    onUpdateLinerLabel = onUpdateLinerLabel,
-                    onUpdateLinerReference = onUpdateLinerReference,
-                    onUpdateCouplerBoltSlot = onUpdateCouplerBoltSlot,
-                    onUpdateCouplerBoltSlotReference = onUpdateCouplerBoltSlotReference,
-                    onUpdateCouplerBoltSlotShowRail = onUpdateCouplerBoltSlotShowRail,
-                    onSetKeyways180Apart = onSetKeyways180Apart,
-                    onSetKeyways90Apart = onSetKeyways90Apart,
-                    onSetKeyways90Cw = onSetKeyways90Cw,
+                    onCancel = { addThreadOpen = false }
+                )
+            }
 
-                    onSetThreadExcludeFromOal = onSetThreadExcludeFromOal,
-                    onSetThreadEndPosition = onSetThreadEndPosition,
+            if (addSlotOpen) {
+                AddCouplerBoltSlotDialog(
+                    unit = unit,
+                    spec = spec,
+                    initialStartMm = addSlotStartMm,
+                    initialHoleDiaMm = sessionAddDefaults.slotHoleDiaMm,
+                    initialCount = sessionAddDefaults.slotCount,
+                    initialSpacingMm = sessionAddDefaults.slotSpacingMm,
+                    initialDepthMm = sessionAddDefaults.slotDepthMm,
+                    dialogUnitConverterEnabled = dialogUnitConverterEnabled,
+                    onSubmit = { startMm, holeDiaMm, count, spacingMm, through, depthMm, ref ->
+                        addSlotOpen = false
+                        onAddCouplerBoltSlot(startMm, holeDiaMm, count, spacingMm, through, depthMm, ref)
+                    },
+                    onCancel = { addSlotOpen = false }
+                )
+            }
 
-                    onRemoveBody = onRemoveBody,
-                    onRemoveTaper = onRemoveTaper,
-                    onRemoveThread = onRemoveThread,
-                    onRemoveLiner = onRemoveLiner,
-                    onRemoveCouplerBoltSlot = onRemoveCouplerBoltSlot,
-                    onSelectComponentById = onSelectComponentById,
-                    collidingComponentIds = collidingComponentIds,
+            if (addBodyOpen) {
+                AddBodyDialog(
+                    unit = unit,
+                    spec = spec,
+                    initialStartMm = addStartMm,
+                    initialLengthMm = addLengthMm,
                     perComponentUnitsEnabled = perComponentUnitsEnabled,
-                    unitOverrides = unitOverrides,
-                    onSetComponentUnit = onSetComponentUnit,
-                    onSetKeywayUnit = onSetKeywayUnit,
+                    dialogUnitConverterEnabled = dialogUnitConverterEnabled,
+                    onSubmit = { s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSpooned, k180, k90, cw90, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd ->
+                        addBodyOpen = false
+                        onAddBody(s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSpooned, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd)
+                        onSetKeyways180Apart(k180)
+                        onSetKeyways90Apart(k90)
+                        if (k90) onSetKeyways90Cw(cw90)
+                    },
+                    onCancel = { addBodyOpen = false }
+                )
+            }
+
+            if (addLinerOpen) {
+                AddLinerDialog(
+                    unit = unit,
+                    spec = spec,
+                    initialStartMm = addStartMm,
+                    initialLengthMm = addLengthMm,
+                    linerShouldersEnabled = linerShouldersEnabled,
+                    dialogUnitConverterEnabled = dialogUnitConverterEnabled,
+                    onSubmit = { s, l, od, ref, shoulders ->
+                        addLinerOpen = false
+                        onAddLiner(s, l, od, ref, shoulders)
+                    },
+                    onCancel = { addLinerOpen = false }
+                )
+            }
+
+            if (addTaperOpen) {
+                AddTaperDialog(
+                    unit = unit,
+                    spec = spec,
+                    initialStartMm = addStartMm,
+                    initialLengthMm = addLengthMm,
+                    perComponentUnitsEnabled = perComponentUnitsEnabled,
+                    dialogUnitConverterEnabled = dialogUnitConverterEnabled,
+                    onSubmit = { s, l, startDia, endDia, rate, ref, kwW, kwD, kwL, kwO, kwSpooned, k180, k90, cw90, kwUnit ->
+                        addTaperOpen = false
+                        onAddTaper(s, l, startDia, endDia, rate, ref, kwW, kwD, kwL, kwO, kwSpooned, kwUnit)
+                        onSetKeyways180Apart(k180)
+                        onSetKeyways90Apart(k90)
+                        if (k90) onSetKeyways90Cw(cw90)
+                    },
+                    onCancel = { addTaperOpen = false }
+                )
+            }
+        }
+
+        if (projectInfoOpen) {
+            // Raised from the toolbar, so it belongs to the screen rather than to either pane.
+            ProjectInfoBottomSheet(
+                customer = customer,
+                vessel = vessel,
+                jobNumber = jobNumber,
+                item = item,
+                shaftPosition = shaftPosition,
+                notes = notes,
+                onSetCustomer = onSetCustomer,
+                onSetVessel = onSetVessel,
+                onSetJobNumber = onSetJobNumber,
+                onSetItem = onSetItem,
+                onSetShaftPosition = onSetShaftPosition,
+                onSetNotes = onSetNotes,
+                onDismiss = { projectInfoOpen = false }
+            )
+        }
+
+        if (widthClass.twoPane) {
+            // Two panes: the drawing and the length it is measured against on the left, the
+            // components being edited on the right. Each pane scrolls on its own, so a long
+            // warning banner can never push the preview off the screen and the carousel can
+            // never scroll the shaft out of sight while a card is being edited.
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(inner)
+            ) {
+                HorizontalDivider()
+                Row(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                    Column(
+                        modifier = Modifier
+                            .weight(EXPANDED_PREVIEW_PANE_WEIGHT)
+                            .fillMaxHeight()
+                            .testTag(EDITOR_PANE_PREVIEW_TAG)
+                            .padding(horizontal = 16.dp)
+                            .verticalScroll(previewScroll)
+                            .padding(top = 8.dp, bottom = 16.dp)
+                            .windowInsetsPadding(
+                                WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)
+                            ),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        previewBlock(EXPANDED_PREVIEW_MAX_HEIGHT)
+                        HorizontalDivider()
+                        oalBlock()
+                        SpecWarningBanner(spec = spec)
+                    }
+
+                    VerticalDivider(modifier = Modifier.fillMaxHeight())
+
+                    Column(
+                        modifier = Modifier
+                            .weight(EXPANDED_COMPONENTS_PANE_WEIGHT)
+                            .fillMaxHeight()
+                            .testTag(EDITOR_PANE_COMPONENTS_TAG)
+                            .padding(horizontal = 16.dp)
+                            // IME padding shrinks the scroll viewport, so it stays BEFORE
+                            // verticalScroll — see the Do Nots in `ShaftScreen.md`.
+                            .imePadding()
+                            .verticalScroll(scroll)
+                            .padding(top = 8.dp, bottom = 16.dp)
+                            .windowInsetsPadding(
+                                WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)
+                            ),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        componentsBlock {}
+                    }
+                }
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(inner)
+                    .padding(start = 16.dp, end = 16.dp, top = 0.dp, bottom = 16.dp)
+            ) {
+                // Separator (matches the divider below the preview)
+                HorizontalDivider()
+                Spacer(Modifier.height(8.dp))
+
+                // Preview. A MEDIUM window is wide enough that the phone's cap would draw the
+                // shaft as a flat strip, so only the ceiling moves — ratio and floor stand.
+                previewBlock(
+                    if (widthClass == WindowWidthClass.MEDIUM) MEDIUM_PREVIEW_MAX_HEIGHT
+                    else COMPACT_PREVIEW_MAX_HEIGHT
                 )
 
-                if (chooserOpen) {
-                    val d = computeAddDefaults(spec)
+                Spacer(Modifier.height(12.dp))
+                HorizontalDivider()
+                Spacer(Modifier.height(12.dp))
 
-                    InlineAddChooserDialog(
-                        onDismiss = { chooserOpen = false },
-                        onAddBody = {
-                            chooserOpen = false
-                            addStartMm = d.startMm
-                            addLengthMm = if (spec.overallLengthMm > d.startMm) {
-                                spec.overallLengthMm - d.startMm
-                            } else {
-                                sessionAddDefaults.bodyLenMm
-                            }
-                            addBodyOpen = true
-                        },
-                        onAddLiner = {
-                            chooserOpen = false
-                            addStartMm = d.startMm
-                            addLengthMm = sessionAddDefaults.linerLenMm
-                            addLinerOpen = true
-                        },
-                        onAddThread = {
-                            chooserOpen = false
-                            addThreadStartMm = d.startMm
-                            addThreadOpen = true
-                        },
-                        onAddTaper = {
-                            chooserOpen = false
-                            addStartMm = d.startMm
-                            addLengthMm = sessionAddDefaults.taperLenMm
-                            addTaperOpen = true
-                        },
-                        onAddCouplerBoltSlot = {
-                            chooserOpen = false
-                            addSlotStartMm = d.startMm
-                            addSlotOpen = true
-                        }
-                    )
-                }
-
-                if (addThreadOpen) {
-                    AddThreadDialog(
-                        unit = unit,
-                        spec = spec,
-                        initialStartMm = addThreadStartMm,
-                        initialLengthMm = sessionAddDefaults.threadLenMm,
-                        initialMajorDiaMm = sessionAddDefaults.threadMajorDiaMm,
-                        initialPitchMm = sessionAddDefaults.threadPitchMm,
-                        dialogUnitConverterEnabled = dialogUnitConverterEnabled,
-                        onSubmit = { startMm, lengthMm, majorDiaMm, pitchMm, excludeFromOAL, isAftEnd, metricDesignation ->
-                            addThreadOpen = false
-                            // IMPORTANT: argument order is start, length, majorDia, pitch, excludeFromOAL,
-                            // isAftEnd, metricDesignation. The dialog already converts TPI to pitch (or
-                            // reads pitch straight off a metric designation) so this call never re-derives
-                            // it. Keep this aligned with `ShaftRoute`/`ShaftViewModel.addThreadAt`.
-                            onAddThread(
-                                startMm,
-                                lengthMm,
-                                majorDiaMm,
-                                pitchMm,
-                                excludeFromOAL,
-                                isAftEnd,
-                                metricDesignation
-                            )
-                        },
-                        onCancel = { addThreadOpen = false }
-                    )
-                }
-
-                if (addSlotOpen) {
-                    AddCouplerBoltSlotDialog(
-                        unit = unit,
-                        spec = spec,
-                        initialStartMm = addSlotStartMm,
-                        initialHoleDiaMm = sessionAddDefaults.slotHoleDiaMm,
-                        initialCount = sessionAddDefaults.slotCount,
-                        initialSpacingMm = sessionAddDefaults.slotSpacingMm,
-                        initialDepthMm = sessionAddDefaults.slotDepthMm,
-                        dialogUnitConverterEnabled = dialogUnitConverterEnabled,
-                        onSubmit = { startMm, holeDiaMm, count, spacingMm, through, depthMm, ref ->
-                            addSlotOpen = false
-                            onAddCouplerBoltSlot(startMm, holeDiaMm, count, spacingMm, through, depthMm, ref)
-                        },
-                        onCancel = { addSlotOpen = false }
-                    )
-                }
-
-                if (addBodyOpen) {
-                    AddBodyDialog(
-                        unit = unit,
-                        spec = spec,
-                        initialStartMm = addStartMm,
-                        initialLengthMm = addLengthMm,
-                        perComponentUnitsEnabled = perComponentUnitsEnabled,
-                        dialogUnitConverterEnabled = dialogUnitConverterEnabled,
-                        onSubmit = { s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSpooned, k180, k90, cw90, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd ->
-                            addBodyOpen = false
-                            onAddBody(s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSpooned, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd)
-                            onSetKeyways180Apart(k180)
-                            onSetKeyways90Apart(k90)
-                            if (k90) onSetKeyways90Cw(cw90)
-                        },
-                        onCancel = { addBodyOpen = false }
-                    )
-                }
-
-                if (addLinerOpen) {
-                    AddLinerDialog(
-                        unit = unit,
-                        spec = spec,
-                        initialStartMm = addStartMm,
-                        initialLengthMm = addLengthMm,
-                        linerShouldersEnabled = linerShouldersEnabled,
-                        dialogUnitConverterEnabled = dialogUnitConverterEnabled,
-                        onSubmit = { s, l, od, ref, shoulders ->
-                            addLinerOpen = false
-                            onAddLiner(s, l, od, ref, shoulders)
-                        },
-                        onCancel = { addLinerOpen = false }
-                    )
-                }
-
-                if (addTaperOpen) {
-                    AddTaperDialog(
-                        unit = unit,
-                        spec = spec,
-                        initialStartMm = addStartMm,
-                        initialLengthMm = addLengthMm,
-                        perComponentUnitsEnabled = perComponentUnitsEnabled,
-                        dialogUnitConverterEnabled = dialogUnitConverterEnabled,
-                        onSubmit = { s, l, startDia, endDia, rate, ref, kwW, kwD, kwL, kwO, kwSpooned, k180, k90, cw90, kwUnit ->
-                            addTaperOpen = false
-                            onAddTaper(s, l, startDia, endDia, rate, ref, kwW, kwD, kwL, kwO, kwSpooned, kwUnit)
-                            onSetKeyways180Apart(k180)
-                            onSetKeyways90Apart(k90)
-                            if (k90) onSetKeyways90Cw(cw90)
-                        },
-                        onCancel = { addTaperOpen = false }
-                    )
-                }
-
-                if (projectInfoOpen) {
-                    ProjectInfoBottomSheet(
-                        customer = customer,
-                        vessel = vessel,
-                        jobNumber = jobNumber,
-                        item = item,
-                        shaftPosition = shaftPosition,
-                        notes = notes,
-                        onSetCustomer = onSetCustomer,
-                        onSetVessel = onSetVessel,
-                        onSetJobNumber = onSetJobNumber,
-                        onSetItem = onSetItem,
-                        onSetShaftPosition = onSetShaftPosition,
-                        onSetNotes = onSetNotes,
-                        onDismiss = { projectInfoOpen = false }
-                    )
+                // Scrollable editor content
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .imePadding()
+                        .verticalScroll(scroll)
+                        .windowInsetsPadding(
+                            WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)
+                        ),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    oalBlock()
+                    componentsBlock { SpecWarningBanner(spec = spec) }
                 }
             }
         }
     }
     }
 }
+
+/** The preview card's height ceiling on a phone — the historical cap. */
+private val COMPACT_PREVIEW_MAX_HEIGHT = 200.dp
+
+/** The preview card's height ceiling in a MEDIUM window (portrait tablet, phone landscape). */
+private val MEDIUM_PREVIEW_MAX_HEIGHT = 280.dp
+
+/** The preview card's height ceiling inside the two-pane left column. */
+private val EXPANDED_PREVIEW_MAX_HEIGHT = 320.dp
+
+// The drawing is the reference being read while the cards on the right are edited, so it
+// takes the larger share; the carousel cards are a phone-width design and need no more than
+// the remainder at any tablet size.
+private const val EXPANDED_PREVIEW_PANE_WEIGHT = 0.55f
+private const val EXPANDED_COMPONENTS_PANE_WEIGHT = 0.45f
+
+/** Two-pane left column — preview, overall length, warnings. */
+internal const val EDITOR_PANE_PREVIEW_TAG = "editor_pane_preview"
+
+/** Two-pane right column — the Components heading, the add button, and the carousel. */
+internal const val EDITOR_PANE_COMPONENTS_TAG = "editor_pane_components"
 
 @Composable
 private fun HistoryMenu(

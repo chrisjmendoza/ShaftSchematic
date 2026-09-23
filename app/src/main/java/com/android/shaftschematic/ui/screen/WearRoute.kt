@@ -13,6 +13,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -71,6 +72,9 @@ import com.android.shaftschematic.pdf.buildWearStripTitleById
 import com.android.shaftschematic.pdf.defaultWearStripComponentIds
 import com.android.shaftschematic.pdf.wearProfileBaseScale
 import com.android.shaftschematic.pdf.wearStripComponentsFor
+import com.android.shaftschematic.ui.adaptive.LocalSidebarPermanent
+import com.android.shaftschematic.ui.adaptive.WindowWidthClass
+import com.android.shaftschematic.ui.adaptive.currentWindowWidthClass
 import com.android.shaftschematic.ui.drawing.render.RenderOptions
 import com.android.shaftschematic.ui.drawing.render.ShaftLayout
 import com.android.shaftschematic.ui.drawing.render.ShaftRenderer
@@ -352,6 +356,186 @@ fun WearRoute(
         )
     }
 
+    // ── Window width ────────────────────────────────────────────────────────
+    // One skeleton decision for the whole tab; every block below is composed once and
+    // called from both branches, so a phone and a tablet cannot drift apart.
+    val widthClass = currentWindowWidthClass()
+    val canvasModifier = sheetCanvasModifier(widthClass)
+
+    val introText: @Composable ColumnScope.() -> Unit = {
+        Text(
+            text = "Prints a blank shaft outline for field use. Mark damage, pitting, and " +
+                "dye-penetrant inspection results directly on the printed form.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+
+    // ── Interactive shaft canvas — tap a component to inspect wear ───────────
+    val canvasBlock: @Composable ColumnScope.() -> Unit = {
+        if (spec.overallLengthMm > 0f) {
+            Box(
+                modifier = canvasModifier
+                    .clip(previewShape)
+                    .background(Color.White)
+                    .semantics {
+                        contentDescription = SheetSemantics.wearOverview(
+                            wearAreaCount = wearRecord.spots.size,
+                            pitCount = wearRecord.pits.size,
+                            diaReadingCount = wearRecord.diaReadings.size,
+                        )
+                    }
+                    .pointerInput(spec, resolvedComponents) {
+                        detectTapGestures { tapOffset ->
+                            val layout = ShaftLayout.compute(
+                                spec               = spec,
+                                leftPx             = 0f,
+                                topPx              = 0f,
+                                rightPx            = size.width.toFloat(),
+                                bottomPx           = size.height.toFloat(),
+                                marginPx           = 12.dp.toPx(),
+                                resolvedComponents = resolvedComponents,
+                            )
+                            val tapMm = layout.xMmFromPx(tapOffset.x)
+                            // Pit-eligible resolved components (body / taper / liner) have
+                            // disjoint spans, so the first one containing the tap wins.
+                            resolvedComponents.firstOrNull { rc ->
+                                (rc is ResolvedBody || rc is ResolvedTaper || rc is ResolvedLiner) &&
+                                    tapMm >= rc.startMmPhysical && tapMm <= rc.endMmPhysical
+                            }?.let { selectedComponentId = it.id }
+                        }
+                    },
+            ) {
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val marginPx = 12.dp.toPx()
+                    val layout = ShaftLayout.compute(
+                        spec               = spec,
+                        leftPx             = 0f,
+                        topPx              = 0f,
+                        rightPx            = size.width,
+                        bottomPx           = size.height,
+                        marginPx           = marginPx,
+                        resolvedComponents = resolvedComponents,
+                    )
+                    with(ShaftRenderer) {
+                        draw(spec, layout, previewOpts, resolvedComponents)
+                    }
+                    drawWearAffordances(
+                        layout = layout,
+                        components = resolvedComponents,
+                        wearRecord = wearRecord,
+                        tapTintColor = tapTintColor,
+                        tapBorderColor = tapBorderColor,
+                        badgeColor = badgeColor,
+                        badgeTextArgb = badgeTextArgb,
+                    )
+                }
+            }
+            Text(
+                text = "Tap a body, taper, or liner to inspect wear and mark pits.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+
+    // ── Document output ─────────────────────────────────────────────────────
+    // The output actions sit directly under the drawing they produce, and every
+    // per-job customization row follows BELOW them (on-device request): options
+    // above the buttons push the thing the page exists for off the screen. Blank
+    // draft belongs to this block rather than to the options below it — it selects
+    // WHICH document the three buttons produce.
+    val printGroup: @Composable ColumnScope.() -> Unit = {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Switch(checked = blankDraft, onCheckedChange = { blankDraft = it })
+            Spacer(Modifier.width(12.dp))
+            Column {
+                Text("Blank draft (write-in)", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "Job info and OAL are blanked; recorded wear is omitted — a fresh form.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
+        if (!gate.enabled) {
+            Text(
+                gate.disabledMessage,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+
+        DocumentActionButtons(
+            documentName = "Wear Document",
+            onPrint = { printWearDocument() },
+            onPreview = { showPreview = true },
+            onExport = {
+                launcher.launchPicker(
+                    buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.WEAR, blankDraft),
+                    what = "wear export",
+                )
+            },
+            enabled = gate.enabled,
+        )
+    }
+
+    // ── Per-job customization ───────────────────────────────────────────────
+    // Trace depth, the dye-pen result, and the strip election — everything that shapes
+    // what the document draws, as opposed to producing it.
+    val optionsSection: @Composable ColumnScope.() -> Unit = {
+        // The wear preview's PDF options sheet carries this same row, from the one
+        // construction, so the two surfaces can never drift.
+        WearTraceDepthControlRow(
+            vm = vm,
+            effectiveFrac = traceDepthFrac,
+            globalDefault = wearTraceDefault,
+        )
+
+        // ── Dye pen inspection result ─────────────────────────────────────
+        // Selecting a chip prints an "X" inside that PASS/FAIL checkbox on the sheet's
+        // notes row; the other box stays present and blank. Tapping the selected chip
+        // deselects it, returning both boxes to blank for hand-marking (the original
+        // form posture, and what a blank draft always prints).
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "Dye pen inspection:",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            val result = wearRecord.dyePenResult
+            WearChip("Pass", result == DyePenResult.PASS) {
+                vm.setDyePenResult(if (result == DyePenResult.PASS) null else DyePenResult.PASS)
+            }
+            WearChip("Fail", result == DyePenResult.FAIL) {
+                vm.setDyePenResult(if (result == DyePenResult.FAIL) null else DyePenResult.FAIL)
+            }
+        }
+
+        // ── Strip election ────────────────────────────────────────────────
+        // The same section the preview's PDF options sheet carries, from the one
+        // construction and bound to the one ViewModel state, so the two surfaces always
+        // agree. It lives here as well because electing components is authoring work, not
+        // print-time styling — reaching it should not require opening the preview
+        // (on-device request). Distinct tag prefix: this row stays composed behind the
+        // overlay while the sheet's copy is on screen.
+        WearStripComponentChecks(
+            options = stripOptions,
+            selection = wearRecord.stripComponentIds,
+            defaultIds = stripDefaultIds,
+            showShaftProfile = wearRecord.showShaftProfile,
+            onSetShowShaftProfile = { vm.setWearShowShaftProfile(it) },
+            compactStrips = wearRecord.compactStrips,
+            onSetCompactStrips = { vm.setWearCompactStrips(it) },
+            onSetSelection = { vm.setWearStripComponents(it) },
+            testTagPrefix = "wear_tab_strip",
+        )
+    }
+
     // ── Main UI ─────────────────────────────────────────────────────────────
     Column(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
 
@@ -372,8 +556,11 @@ fun WearRoute(
                 .padding(horizontal = 4.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = onOpenSidebar) {
-                Icon(Icons.Filled.Menu, contentDescription = "Open navigation")
+            // Nothing to open when the sidebar is already laid out beside the tabs.
+            if (!LocalSidebarPermanent.current) {
+                IconButton(onClick = onOpenSidebar) {
+                    Icon(Icons.Filled.Menu, contentDescription = "Open navigation")
+                }
             }
             Text(
                 text = "Wear Document",
@@ -392,188 +579,42 @@ fun WearRoute(
 
         HorizontalDivider()
 
-        // ── Scrollable content ────────────────────────────────────────────────
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            Text(
-                text = "Prints a blank shaft outline for field use. Mark damage, pitting, and " +
-                    "dye-penetrant inspection results directly on the printed form.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
-            // ── Interactive shaft canvas — tap a liner to inspect wear (Phase 2) ─────
-            if (spec.overallLengthMm > 0f) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(200.dp)
-                        .clip(previewShape)
-                        .background(Color.White)
-                        .semantics {
-                            contentDescription = SheetSemantics.wearOverview(
-                                wearAreaCount = wearRecord.spots.size,
-                                pitCount = wearRecord.pits.size,
-                                diaReadingCount = wearRecord.diaReadings.size,
-                            )
-                        }
-                        .pointerInput(spec, resolvedComponents) {
-                            detectTapGestures { tapOffset ->
-                                val layout = ShaftLayout.compute(
-                                    spec               = spec,
-                                    leftPx             = 0f,
-                                    topPx              = 0f,
-                                    rightPx            = size.width.toFloat(),
-                                    bottomPx           = size.height.toFloat(),
-                                    marginPx           = 12.dp.toPx(),
-                                    resolvedComponents = resolvedComponents,
-                                )
-                                val tapMm = layout.xMmFromPx(tapOffset.x)
-                                // Pit-eligible resolved components (body / taper / liner) have
-                                // disjoint spans, so the first one containing the tap wins.
-                                resolvedComponents.firstOrNull { rc ->
-                                    (rc is ResolvedBody || rc is ResolvedTaper || rc is ResolvedLiner) &&
-                                        tapMm >= rc.startMmPhysical && tapMm <= rc.endMmPhysical
-                                }?.let { selectedComponentId = it.id }
-                            }
-                        },
-                ) {
-                    Canvas(modifier = Modifier.fillMaxSize()) {
-                        val marginPx = 12.dp.toPx()
-                        val layout = ShaftLayout.compute(
-                            spec               = spec,
-                            leftPx             = 0f,
-                            topPx              = 0f,
-                            rightPx            = size.width,
-                            bottomPx           = size.height,
-                            marginPx           = marginPx,
-                            resolvedComponents = resolvedComponents,
-                        )
-                        with(ShaftRenderer) {
-                            draw(spec, layout, previewOpts, resolvedComponents)
-                        }
-                        drawWearAffordances(
-                            layout = layout,
-                            components = resolvedComponents,
-                            wearRecord = wearRecord,
-                            tapTintColor = tapTintColor,
-                            tapBorderColor = tapBorderColor,
-                            badgeColor = badgeColor,
-                            badgeTextArgb = badgeTextArgb,
-                        )
-                    }
-                }
-                Text(
-                    text = "Tap a body, taper, or liner to inspect wear and mark pits.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
-            Spacer(Modifier.height(4.dp))
-
-            // ── Document output ───────────────────────────────────────────────
-            // The output actions sit directly under the drawing they produce, and every
-            // per-job customization row follows BELOW them (on-device request): options
-            // above the buttons push the thing the page exists for off the screen. Blank
-            // draft belongs to this block rather than to the options below it — it selects
-            // WHICH document the three buttons produce.
-
-            // ── Blank draft toggle ────────────────────────────────────────────
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Switch(checked = blankDraft, onCheckedChange = { blankDraft = it })
-                Spacer(Modifier.width(12.dp))
-                Column {
-                    Text("Blank draft (write-in)", style = MaterialTheme.typography.bodyLarge)
-                    Text(
-                        "Job info and OAL are blanked; recorded wear is omitted — a fresh form.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-
-            // ── Export gate ───────────────────────────────────────────────────
-            if (!gate.enabled) {
-                Text(
-                    gate.disabledMessage,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-
-            // ── Print / Preview / Export ──────────────────────────────────────
-            DocumentActionButtons(
-                documentName = "Wear Document",
-                onPrint = { printWearDocument() },
-                onPreview = { showPreview = true },
-                onExport = {
-                    launcher.launchPicker(
-                        buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.WEAR, blankDraft),
-                        what = "wear export",
-                    )
+        // ── Tab body ──────────────────────────────────────────────────────────
+        // One column on a phone or a MEDIUM window; two panes on an EXPANDED one. The
+        // blocks are the same composables either way (see their declarations above), so
+        // the two skeletons can never drift apart.
+        if (widthClass == WindowWidthClass.EXPANDED) {
+            SheetTwoPane(
+                // The drawing and the actions that print it. The canvas is pinned out of
+                // the pane's scroll: the controls opposite it reshape what it draws.
+                pinnedCanvas = canvasBlock,
+                canvasPaneScrolling = {
+                    introText()
+                    printGroup()
                 },
-                enabled = gate.enabled,
+                // Everything that shapes the document.
+                controlsPane = optionsSection,
             )
-
-            HorizontalDivider()
-
-            // ── Worn-profile trace depth ──────────────────────────────────────
-            // First of the per-job customization rows, below the output block. The wear
-            // preview's PDF options sheet carries this same row, from the one construction,
-            // so the two surfaces can never drift.
-            WearTraceDepthControlRow(
-                vm = vm,
-                effectiveFrac = traceDepthFrac,
-                globalDefault = wearTraceDefault,
-            )
-
-            // ── Dye pen inspection result ─────────────────────────────────────
-            // Selecting a chip prints an "X" inside that PASS/FAIL checkbox on the sheet's
-            // notes row; the other box stays present and blank. Tapping the selected chip
-            // deselects it, returning both boxes to blank for hand-marking (the original
-            // form posture, and what a blank draft always prints).
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
+        } else {
+            // ── Scrollable content ────────────────────────────────────────────
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                Text(
-                    "Dye pen inspection:",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                val result = wearRecord.dyePenResult
-                WearChip("Pass", result == DyePenResult.PASS) {
-                    vm.setDyePenResult(if (result == DyePenResult.PASS) null else DyePenResult.PASS)
-                }
-                WearChip("Fail", result == DyePenResult.FAIL) {
-                    vm.setDyePenResult(if (result == DyePenResult.FAIL) null else DyePenResult.FAIL)
-                }
-            }
+                introText()
+                canvasBlock()
 
-            // ── Strip election ────────────────────────────────────────────────
-            // The same section the preview's PDF options sheet carries, from the one
-            // construction and bound to the one ViewModel state, so the two surfaces always
-            // agree. It lives here as well because electing components is authoring work, not
-            // print-time styling — reaching it should not require opening the preview
-            // (on-device request). Distinct tag prefix: this row stays composed behind the
-            // overlay while the sheet's copy is on screen.
-            WearStripComponentChecks(
-                options = stripOptions,
-                selection = wearRecord.stripComponentIds,
-                defaultIds = stripDefaultIds,
-                showShaftProfile = wearRecord.showShaftProfile,
-                onSetShowShaftProfile = { vm.setWearShowShaftProfile(it) },
-                compactStrips = wearRecord.compactStrips,
-                onSetCompactStrips = { vm.setWearCompactStrips(it) },
-                onSetSelection = { vm.setWearStripComponents(it) },
-                testTagPrefix = "wear_tab_strip",
-            )
+                Spacer(Modifier.height(4.dp))
+
+                printGroup()
+
+                HorizontalDivider()
+
+                optionsSection()
+            }
         }
     }
 

@@ -212,8 +212,12 @@ Full-resolution preview through the shared `util/PdfRaster.renderPdfPageBitmap`
     transparent scrim still handles tap-outside-to-dismiss, unchanged.
   - The blank-draft chip overlaid on the preview is **hidden while the sheet is open** — it
     would sit on the page strip, and the sheet's own first row is that same switch.
-- **Orientation:** `DisposableEffect` unlocks rotation on entry and restores the
-  portrait lock on dispose — every other screen stays portrait-only.
+- **Orientation:** `DisposableEffect` unlocks rotation on entry (`unlockRotation`) and
+  restores the device's BASE orientation on dispose (`restoreBaseOrientation`,
+  `ui/adaptive/Orientation.kt` — the one `R.integer.activity_orientation` the manifest
+  declares: portrait on a phone, free rotation on a tablet). Restoring a hard-coded portrait
+  here would lock a tablet to portrait the first time a preview closed. See
+  `docs/contracts/Adaptive.md`.
 - **Pipeline:** `snapshotFlow { SchematicRenderInputs(…) }.conflate().collect { … }` →
   snapshot `vm.currentPdfPrefs` on main thread → `Dispatchers.IO` →
   `renderPdfPageBitmap` (temp PDF via the `composeShaftPdf` lambda → rasterize page 0) →

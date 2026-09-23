@@ -67,6 +67,7 @@ import com.android.shaftschematic.doc.stripShaftDocExtension
 import com.android.shaftschematic.ui.screen.DuplicateForMateDialog
 import com.android.shaftschematic.ui.screen.RenameShaftDocumentDialog
 import com.android.shaftschematic.io.ShaftBackup
+import com.android.shaftschematic.ui.adaptive.readableWidth
 
 /**
 # InternalDocRoutes – open/save shaft docs *inside app storage*
@@ -296,6 +297,7 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
             modifier = Modifier
                 .fillMaxSize()
                 .padding(pad)
+                .readableWidth()
         ) {
             // ── Search + sort header ──────────────────────────────────────────
             item {
@@ -651,6 +653,7 @@ fun SaveLocalDocumentRoute(               // ← renamed (no clash with SAF)
         Column(
             modifier = Modifier
                 .padding(pad)
+                .readableWidth()
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {

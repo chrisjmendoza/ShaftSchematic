@@ -1,6 +1,8 @@
 # UI Contract
 Version: v0.5.x
-Last updated: 2026-09-15 — the editor now has **six** tabs: §7.8 (Final Schematic) added.
+Last updated: 2026-09-16 — §1 gains "Readable width on list screens" (`Modifier.readableWidth()`,
+720 dp, one column per page, never per row).
+2026-09-15 — the editor now has **six** tabs: §7.8 (Final Schematic) added.
 2026-08-05 — §7.6 (Undercut Drawing) and
 §7.7 (Consolidated Output) added, §7.5 notes the `WEAR_TAB_ENABLED` retirement switch, and
 §5.2 points at the app-theme / sheet-ink contract. 2026-07-28 — added §7.5 pointing the Runout Sheet / Wear Document tab
@@ -32,6 +34,26 @@ The UI is responsible for **presenting** data, not **interpreting** or **computi
 - Modify model objects directly
 
 Only the ViewModel may change the `ShaftSpec`.
+
+## Readable width on list screens
+
+A column of reading content — settings rows, help cards, a document list, the Start screen's
+button stack — is capped at **720 dp** and centred by `Modifier.readableWidth()`
+(`ui/adaptive/ReadableWidth.kt`). Past that a row's text and its trailing control drift too far
+apart to read as one line, and a full-width button on a landscape tablet reads as a banner. On a
+phone the cap is a no-op: the window is narrower, so the column still fills it.
+
+The screens that take it: `StartScreen`, `SettingsRoute` (the main page and both sub-pages),
+`HelpRoute`, `AboutRoute`, `AchievementsRoute`, `DeveloperOptionsRoute`, `TemplatesRoute`, both
+routes in `ui/nav/InternalDocRoutes.kt` (Open / Save As), and the editor's Consolidated Output
+tab (`OutputRoute` — no canvas, one ordered workflow; see `docs/contracts/RunoutSheet.md`).
+
+**The cap is a property of the page, never of a row.** It goes on the ONE main scrolling column
+or `LazyColumn`; rows keep their own `fillMaxWidth()` and are never capped individually. On a
+`verticalScroll` column it sits AFTER the scroll modifier, so the scroll container still spans
+the window and only the content inside it is narrowed — the scroll gutter belongs to the screen.
+
+See `docs/contracts/Adaptive.md` for the window-width policy this sits under.
 
 ---
 

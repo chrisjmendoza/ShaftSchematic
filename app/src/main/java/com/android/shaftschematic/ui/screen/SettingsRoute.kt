@@ -91,6 +91,7 @@ import com.android.shaftschematic.util.PreviewColorSetting
 import com.android.shaftschematic.util.UndercutShadeColor
 import com.android.shaftschematic.util.UndercutShadeIntensity
 import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.ui.adaptive.readableWidth
 
 /**
  * SettingsRoute
@@ -228,6 +229,7 @@ fun SettingsRoute(
                     modifier = Modifier
                         .padding(pad)
                         .verticalScroll(scrollState)
+                        .readableWidth()
                         .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
@@ -713,6 +715,7 @@ fun SettingsRoute(
                     modifier = Modifier
                         .padding(pad)
                         .verticalScroll(scrollState)
+                        .readableWidth()
                         .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
@@ -840,6 +843,7 @@ fun SettingsRoute(
                     modifier = Modifier
                         .padding(pad)
                         .verticalScroll(scrollState)
+                        .readableWidth()
                         .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {

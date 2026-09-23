@@ -73,6 +73,8 @@ import com.android.shaftschematic.pdf.consolidatedSheetHasInProfileValues
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.settings.RunoutConfig
+import com.android.shaftschematic.ui.adaptive.LocalSidebarPermanent
+import com.android.shaftschematic.ui.adaptive.readableWidth
 import com.android.shaftschematic.ui.nav.appVersionFromContext
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.util.exportPdfGate
@@ -570,8 +572,11 @@ fun OutputRoute(
                 .padding(horizontal = 4.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = onOpenSidebar) {
-                Icon(Icons.Filled.Menu, contentDescription = "Open navigation")
+            // Nothing to open when the sidebar is already laid out beside the tabs.
+            if (!LocalSidebarPermanent.current) {
+                IconButton(onClick = onOpenSidebar) {
+                    Icon(Icons.Filled.Menu, contentDescription = "Open navigation")
+                }
             }
             Text(
                 text = "Consolidated Output",
@@ -590,10 +595,17 @@ fun OutputRoute(
 
         HorizontalDivider()
 
+        // This tab carries no canvas and reads as ONE ordered workflow — elect the sheet's
+        // content, produce it, then tune and author what it prints, then batch-export —
+        // where each block acts on the one above it ("Export all" names the content
+        // selection above it explicitly). Splitting that into panes would separate steps
+        // that read in sequence, so a tablet gets the readable column instead: the scroll
+        // gutter still spans the window, the content stops at a legible width.
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
+                .readableWidth()
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {

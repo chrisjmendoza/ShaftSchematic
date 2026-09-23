@@ -436,6 +436,20 @@ always-shaded liner and the notch section core included; the two flags are indep
 design, one meaning on two surfaces, neither reading the other. See
 `docs/contracts/Appearance.md`.
 
+### Layout adapts on ONE axis, the window width class
+Phones and tablets run the same screens; what changes is decided by `WindowWidthClass`
+(`ui/adaptive/WindowSize.kt` — COMPACT < 600 dp, MEDIUM < 840 dp, EXPANDED) and nothing else.
+COMPACT is the pre-tablet phone layout, byte-identical; MEDIUM is a taller single column;
+**only EXPANDED lays out two panes** (editor preview | components; sheet canvas | controls;
+the permanent 240 dp sidebar, `LocalSidebarPermanent` hiding the hamburgers). A screen that
+lays out two ways extracts its blocks into composables **called from both branches** — a
+duplicated block is how the phone and the tablet drift. List screens cap their one scrolling
+column with `readableWidth()` (720 dp), never per row. Orientation: phones portrait, tablets
+(sw600dp) free, ONE resource `R.integer.activity_orientation` behind both the manifest and
+`restoreBaseOrientation()` — a rotation-unlocking screen never restores a literal portrait.
+Nothing adaptive touches sheet ink, a composer, the model, or a document. See
+`docs/contracts/Adaptive.md`.
+
 ### Runout stations are per COMPONENT, never per drawn run
 Station counts are length-driven — one per `RUNOUT_STATION_INTERVAL_MM` (20") via
 `geom/RunoutBubbleLayout.kt`'s `defaultStationCount` (bodies `ceil(L/20")` min 1; liners the

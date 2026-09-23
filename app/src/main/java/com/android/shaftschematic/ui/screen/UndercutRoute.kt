@@ -15,6 +15,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -90,6 +91,9 @@ import com.android.shaftschematic.model.Undercut
 import com.android.shaftschematic.model.UndercutReference
 import com.android.shaftschematic.model.collidingIds
 import com.android.shaftschematic.pdf.composeUndercutPdf
+import com.android.shaftschematic.ui.adaptive.LocalSidebarPermanent
+import com.android.shaftschematic.ui.adaptive.WindowWidthClass
+import com.android.shaftschematic.ui.adaptive.currentWindowWidthClass
 import com.android.shaftschematic.ui.drawing.render.RenderOptions
 import com.android.shaftschematic.ui.drawing.render.ShaftLayout
 import com.android.shaftschematic.ui.drawing.render.ShaftRenderer
@@ -392,6 +396,254 @@ fun UndercutRoute(
         )
     }
 
+    // ── Window width ────────────────────────────────────────────────────────
+    // One skeleton decision for the whole tab; every block below is composed once and
+    // called from both branches, so a phone and a tablet cannot drift apart.
+    val widthClass = currentWindowWidthClass()
+    val canvasModifier = sheetCanvasModifier(widthClass)
+
+    val introText: @Composable ColumnScope.() -> Unit = {
+        Text(
+            text = "Records undercut sections — distance from a S.E.T., length, and measured " +
+                "diameter — and prints them as zoomed detail views with chained dimensions.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+
+    // ── Overview canvas — tap a cluster window to open its detail view ───────
+    val canvasBlock: @Composable ColumnScope.() -> Unit = {
+        if (oalMm > 0f) {
+            Box(
+                modifier = canvasModifier
+                    .clip(previewShape)
+                    .background(Color.White)
+                    .semantics {
+                        contentDescription =
+                            SheetSemantics.undercutOverview(undercutRecord.undercuts.size)
+                    }
+                    .pointerInput(spec, resolvedComponents, strips, linerSpans) {
+                        detectTapGestures { tapOffset ->
+                            val layout = ShaftLayout.compute(
+                                spec               = spec,
+                                leftPx             = 0f,
+                                topPx              = 0f,
+                                rightPx            = size.width.toFloat(),
+                                bottomPx           = size.height.toFloat(),
+                                marginPx           = 12.dp.toPx(),
+                                resolvedComponents = resolvedComponents,
+                            )
+                            val tapMm = layout.xMmFromPx(tapOffset.x)
+                            // A strip claims the tap first (it covers its cuts plus context);
+                            // failing that, any liner opens as an empty strip to author in.
+                            val hit = pickUndercutStripAt(tapMm, strips)
+                                ?: pickLinerIdAtMm(
+                                    tapMm,
+                                    linerSpans.map { LinerSpanMm(it.id, it.startMm, it.endMm) },
+                                )?.let { id -> linerSpans.firstOrNull { it.id == id } }
+                                    ?.let { ln -> stripForLiner(ln) }
+                            when (hit) {
+                                is UndercutStrip.LinerStrip -> {
+                                    anchorLinerId = hit.linerId
+                                    anchorUndercutId = null
+                                }
+                                is UndercutStrip.FreeStrip -> {
+                                    anchorLinerId = null
+                                    anchorUndercutId = hit.window.undercutIds.firstOrNull()
+                                }
+                                null -> Unit
+                            }
+                        }
+                    },
+            ) {
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val marginPx = 12.dp.toPx()
+                    val layout = ShaftLayout.compute(
+                        spec               = spec,
+                        leftPx             = 0f,
+                        topPx              = 0f,
+                        rightPx            = size.width,
+                        bottomPx           = size.height,
+                        marginPx           = marginPx,
+                        resolvedComponents = resolvedComponents,
+                    )
+                    with(ShaftRenderer) {
+                        draw(spec, layout, previewOpts, resolvedComponents)
+                    }
+                    // Notches first (they erase profile strokes inside each cut), then the
+                    // window tint + badge on top as the tap affordance.
+                    drawUndercutNotches(
+                        notches = notches,
+                        xPx = { mm -> layout.xPx(mm) },
+                        rPx = { dia -> layout.rPx(dia) },
+                        cy = layout.centerlineYPx,
+                        voidColor = Color.White,
+                        outlineColor = outlineColor,
+                        strokeWidthPx = 1.5f,
+                        sectionFillColor = undercutStyle.sectionFill(),
+                    )
+                    drawUndercutStripAffordances(
+                        layout = layout,
+                        liners = linerSpans,
+                        cutCountByLiner = cutCountByLiner,
+                        windows = freeWindows,
+                        segs = segs,
+                        tapTintColor = tapTintColor,
+                        tapBorderColor = tapBorderColor,
+                        badgeColor = badgeColor,
+                        badgeTextArgb = badgeTextArgb,
+                    )
+                }
+            }
+            Text(
+                text = when {
+                    linerSpans.isNotEmpty() ->
+                        "Tap a liner — or any highlighted section — to zoom in and record cuts there."
+                    freeWindows.isEmpty() ->
+                        "No undercuts recorded yet — add one to start the drawing."
+                    else ->
+                        "Tap a highlighted section to open its zoomed detail view."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+
+    val addButton: @Composable ColumnScope.() -> Unit = {
+        Button(
+            onClick = {
+                val (aftSetXMm, _) = undercutSetPositions(spec)
+                val start = aftSetXMm.coerceIn(0f, oalMm)
+                val length = DEFAULT_UNDERCUT_LENGTH_MM
+                    .coerceAtMost((oalMm - start).coerceAtLeast(0.1f))
+                anchorLinerId = null
+                anchorUndercutId = vm.addUndercut(start, length)
+            },
+            enabled = oalMm > 0f,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Icon(Icons.Filled.Add, contentDescription = null)
+            Spacer(Modifier.width(8.dp))
+            Text("Add undercut")
+        }
+    }
+
+    // ── Drawn depth exaggeration + recorded undercuts ────────────────────────
+    // Visibility + removal without hunting for the right strip first: every cut on the
+    // shaft is listed here, aft → fwd, whichever strip it belongs to.
+    val recordSection: @Composable ColumnScope.() -> Unit = {
+        if (undercutRecord.undercuts.isNotEmpty()) {
+            HorizontalDivider()
+
+            // Sheet-wide drawn-depth styling, sitting with the overview canvas it
+            // restyles so the change is visible while dragging. Display-only: the
+            // deepest cut draws at this fraction of its local surface Ø and shallower
+            // cuts scale relative to it, so sheets with very different absolute depths
+            // read alike; stored and printed Ø values never move (golden rule). The
+            // canvas follows the drag from route-local state; the record takes ONE
+            // write on release (PreviewTuning doctrine) — committing per frame marked
+            // the document dirty on every pixel of travel.
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Cut depth exaggeration", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        text = "${(shownExaggeration * 100f).roundToInt()}%",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Slider(
+                    value = shownExaggeration,
+                    onValueChange = { dragExaggeration = it },
+                    onValueChangeFinished = {
+                        dragExaggeration?.let { vm.setUndercutExaggeration(it) }
+                        dragExaggeration = null
+                    },
+                    valueRange = 0f..UNDERCUT_EXAGGERATION_MAX_FRAC,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("undercut_exaggeration_slider"),
+                )
+                Text(
+                    "Drawing only — 0% is true scale. The deepest cut draws at this depth " +
+                        "and shallower cuts scale to it; printed Ø values never change.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            // Own spacing: the surrounding 16 dp rhythm would read as separate blocks
+            // rather than one list.
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    "Recorded undercuts",
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.padding(bottom = 4.dp),
+                )
+                val setPositions = undercutSetPositions(spec)
+                val linerTitles = buildLinerTitleById(spec)
+                undercutRecord.undercuts
+                    .sortedBy { it.startFromAftMm }
+                    .forEachIndexed { i, u ->
+                        UndercutListRow(
+                            index = i,
+                            undercut = u,
+                            unit = unit,
+                            oalMm = oalMm,
+                            linerSpans = linerSpans,
+                            linerTitles = linerTitles,
+                            aftSetXMm = setPositions.first,
+                            fwdSetXMm = setPositions.second,
+                            onOpen = { anchorToUndercut(u.id) },
+                            onDelete = { vm.removeUndercut(u.id) },
+                        )
+                    }
+            }
+        }
+    }
+
+    // ── Blank draft, export gate, Print / Preview / Export ───────────────────
+    val printGroup: @Composable ColumnScope.() -> Unit = {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Switch(checked = blankDraft, onCheckedChange = { blankDraft = it })
+            Spacer(Modifier.width(12.dp))
+            Column {
+                Text("Blank draft (write-in)", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "Job info and OAL are blanked; recorded undercuts are omitted — a fresh form.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
+        if (!gate.enabled) {
+            Text(
+                gate.disabledMessage,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+
+        DocumentActionButtons(
+            documentName = "Undercut Drawing",
+            onPrint = { printUndercutDrawing() },
+            onPreview = { showPreview = true },
+            onExport = {
+                launcher.launchPicker(
+                    buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.UNDERCUT, blankDraft),
+                    what = "undercut export",
+                )
+            },
+            enabled = gate.enabled,
+        )
+    }
+
     // ── Main UI ─────────────────────────────────────────────────────────────
     Column(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
 
@@ -412,8 +664,11 @@ fun UndercutRoute(
                 .padding(horizontal = 4.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = onOpenSidebar) {
-                Icon(Icons.Filled.Menu, contentDescription = "Open navigation")
+            // Nothing to open when the sidebar is already laid out beside the tabs.
+            if (!LocalSidebarPermanent.current) {
+                IconButton(onClick = onOpenSidebar) {
+                    Icon(Icons.Filled.Menu, contentDescription = "Open navigation")
+                }
             }
             Text(
                 text = "Undercut Drawing",
@@ -432,251 +687,43 @@ fun UndercutRoute(
 
         HorizontalDivider()
 
-        // ── Scrollable content ────────────────────────────────────────────────
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            Text(
-                text = "Records undercut sections — distance from a S.E.T., length, and measured " +
-                    "diameter — and prints them as zoomed detail views with chained dimensions.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
-            // ── Overview canvas — tap a cluster window to open its detail view ────
-            if (oalMm > 0f) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(200.dp)
-                        .clip(previewShape)
-                        .background(Color.White)
-                        .semantics {
-                            contentDescription =
-                                SheetSemantics.undercutOverview(undercutRecord.undercuts.size)
-                        }
-                        .pointerInput(spec, resolvedComponents, strips, linerSpans) {
-                            detectTapGestures { tapOffset ->
-                                val layout = ShaftLayout.compute(
-                                    spec               = spec,
-                                    leftPx             = 0f,
-                                    topPx              = 0f,
-                                    rightPx            = size.width.toFloat(),
-                                    bottomPx           = size.height.toFloat(),
-                                    marginPx           = 12.dp.toPx(),
-                                    resolvedComponents = resolvedComponents,
-                                )
-                                val tapMm = layout.xMmFromPx(tapOffset.x)
-                                // A strip claims the tap first (it covers its cuts plus context);
-                                // failing that, any liner opens as an empty strip to author in.
-                                val hit = pickUndercutStripAt(tapMm, strips)
-                                    ?: pickLinerIdAtMm(
-                                        tapMm,
-                                        linerSpans.map { LinerSpanMm(it.id, it.startMm, it.endMm) },
-                                    )?.let { id -> linerSpans.firstOrNull { it.id == id } }
-                                        ?.let { ln -> stripForLiner(ln) }
-                                when (hit) {
-                                    is UndercutStrip.LinerStrip -> {
-                                        anchorLinerId = hit.linerId
-                                        anchorUndercutId = null
-                                    }
-                                    is UndercutStrip.FreeStrip -> {
-                                        anchorLinerId = null
-                                        anchorUndercutId = hit.window.undercutIds.firstOrNull()
-                                    }
-                                    null -> Unit
-                                }
-                            }
-                        },
-                ) {
-                    Canvas(modifier = Modifier.fillMaxSize()) {
-                        val marginPx = 12.dp.toPx()
-                        val layout = ShaftLayout.compute(
-                            spec               = spec,
-                            leftPx             = 0f,
-                            topPx              = 0f,
-                            rightPx            = size.width,
-                            bottomPx           = size.height,
-                            marginPx           = marginPx,
-                            resolvedComponents = resolvedComponents,
-                        )
-                        with(ShaftRenderer) {
-                            draw(spec, layout, previewOpts, resolvedComponents)
-                        }
-                        // Notches first (they erase profile strokes inside each cut), then the
-                        // window tint + badge on top as the tap affordance.
-                        drawUndercutNotches(
-                            notches = notches,
-                            xPx = { mm -> layout.xPx(mm) },
-                            rPx = { dia -> layout.rPx(dia) },
-                            cy = layout.centerlineYPx,
-                            voidColor = Color.White,
-                            outlineColor = outlineColor,
-                            strokeWidthPx = 1.5f,
-                            sectionFillColor = undercutStyle.sectionFill(),
-                        )
-                        drawUndercutStripAffordances(
-                            layout = layout,
-                            liners = linerSpans,
-                            cutCountByLiner = cutCountByLiner,
-                            windows = freeWindows,
-                            segs = segs,
-                            tapTintColor = tapTintColor,
-                            tapBorderColor = tapBorderColor,
-                            badgeColor = badgeColor,
-                            badgeTextArgb = badgeTextArgb,
-                        )
-                    }
-                }
-                Text(
-                    text = when {
-                        linerSpans.isNotEmpty() ->
-                            "Tap a liner — or any highlighted section — to zoom in and record cuts there."
-                        freeWindows.isEmpty() ->
-                            "No undercuts recorded yet — add one to start the drawing."
-                        else ->
-                            "Tap a highlighted section to open its zoomed detail view."
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
-            Button(
-                onClick = {
-                    val (aftSetXMm, _) = undercutSetPositions(spec)
-                    val start = aftSetXMm.coerceIn(0f, oalMm)
-                    val length = DEFAULT_UNDERCUT_LENGTH_MM
-                        .coerceAtMost((oalMm - start).coerceAtLeast(0.1f))
-                    anchorLinerId = null
-                    anchorUndercutId = vm.addUndercut(start, length)
+        // ── Tab body ──────────────────────────────────────────────────────────
+        // One column on a phone or a MEDIUM window; two panes on an EXPANDED one. The
+        // blocks are the same composables either way (see their declarations above), so
+        // the two skeletons can never drift apart.
+        if (widthClass == WindowWidthClass.EXPANDED) {
+            SheetTwoPane(
+                // The drawing and the actions that print it. The canvas is pinned out of
+                // the pane's scroll: the cut list opposite it reshapes what it draws.
+                pinnedCanvas = canvasBlock,
+                canvasPaneScrolling = {
+                    introText()
+                    printGroup()
                 },
-                enabled = oalMm > 0f,
-                modifier = Modifier.fillMaxWidth(),
+                // Authoring: adding cuts, exaggerating their drawn depth, listing them.
+                controlsPane = {
+                    addButton()
+                    recordSection()
+                },
+            )
+        } else {
+            // ── Scrollable content ────────────────────────────────────────────
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                Icon(Icons.Filled.Add, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Add undercut")
-            }
+                introText()
+                canvasBlock()
+                addButton()
+                recordSection()
 
-            // ── Drawn depth exaggeration + recorded undercuts ─────────────────
-            // Visibility + removal without hunting for the right strip first: every cut on the
-            // shaft is listed here, aft → fwd, whichever strip it belongs to.
-            if (undercutRecord.undercuts.isNotEmpty()) {
                 HorizontalDivider()
 
-                // Sheet-wide drawn-depth styling, sitting directly under the overview canvas
-                // it restyles so the change is visible while dragging. Display-only: the
-                // deepest cut draws at this fraction of its local surface Ø and shallower
-                // cuts scale relative to it, so sheets with very different absolute depths
-                // read alike; stored and printed Ø values never move (golden rule). The
-                // canvas follows the drag from route-local state; the record takes ONE
-                // write on release (PreviewTuning doctrine) — committing per frame marked
-                // the document dirty on every pixel of travel.
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text("Cut depth exaggeration", style = MaterialTheme.typography.bodyLarge)
-                        Text(
-                            text = "${(shownExaggeration * 100f).roundToInt()}%",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Slider(
-                        value = shownExaggeration,
-                        onValueChange = { dragExaggeration = it },
-                        onValueChangeFinished = {
-                            dragExaggeration?.let { vm.setUndercutExaggeration(it) }
-                            dragExaggeration = null
-                        },
-                        valueRange = 0f..UNDERCUT_EXAGGERATION_MAX_FRAC,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("undercut_exaggeration_slider"),
-                    )
-                    Text(
-                        "Drawing only — 0% is true scale. The deepest cut draws at this depth " +
-                            "and shallower cuts scale to it; printed Ø values never change.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-
-                // Own spacing: the surrounding 16 dp rhythm would read as separate blocks
-                // rather than one list.
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(
-                        "Recorded undercuts",
-                        style = MaterialTheme.typography.titleSmall,
-                        modifier = Modifier.padding(bottom = 4.dp),
-                    )
-                    val setPositions = undercutSetPositions(spec)
-                    val linerTitles = buildLinerTitleById(spec)
-                    undercutRecord.undercuts
-                        .sortedBy { it.startFromAftMm }
-                        .forEachIndexed { i, u ->
-                            UndercutListRow(
-                                index = i,
-                                undercut = u,
-                                unit = unit,
-                                oalMm = oalMm,
-                                linerSpans = linerSpans,
-                                linerTitles = linerTitles,
-                                aftSetXMm = setPositions.first,
-                                fwdSetXMm = setPositions.second,
-                                onOpen = { anchorToUndercut(u.id) },
-                                onDelete = { vm.removeUndercut(u.id) },
-                            )
-                        }
-                }
+                printGroup()
             }
-
-            HorizontalDivider()
-
-            // ── Blank draft toggle ────────────────────────────────────────────
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Switch(checked = blankDraft, onCheckedChange = { blankDraft = it })
-                Spacer(Modifier.width(12.dp))
-                Column {
-                    Text("Blank draft (write-in)", style = MaterialTheme.typography.bodyLarge)
-                    Text(
-                        "Job info and OAL are blanked; recorded undercuts are omitted — a fresh form.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-
-            // ── Export gate ───────────────────────────────────────────────────
-            if (!gate.enabled) {
-                Text(
-                    gate.disabledMessage,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-
-            // ── Print / Preview / Export ──────────────────────────────────────
-            DocumentActionButtons(
-                documentName = "Undercut Drawing",
-                onPrint = { printUndercutDrawing() },
-                onPreview = { showPreview = true },
-                onExport = {
-                    launcher.launchPicker(
-                        buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.UNDERCUT, blankDraft),
-                        what = "undercut export",
-                    )
-                },
-                enabled = gate.enabled,
-            )
         }
     }
 

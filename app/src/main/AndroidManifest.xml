@@ -12,7 +12,7 @@
         android:theme="@style/Theme.ShaftSchematic">
         <activity android:name=".MainActivity"
           android:exported="true"
-          android:screenOrientation="portrait"
+          android:screenOrientation="@integer/activity_orientation"
           android:windowSoftInputMode="stateUnspecified|adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

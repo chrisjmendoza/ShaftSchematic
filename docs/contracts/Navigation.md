@@ -7,7 +7,9 @@ UndercutRoute.kt, OutputRoute.kt, HelpRoute.kt, HelpSearch.kt, EditorDocumentTit
 RenameShaftDocumentDialog.kt (ui/screen/)  
 Layer: UI → Nav
 
-Version: v0.12 (2026-09-15)
+Version: v0.13 (2026-09-16 — the editor sidebar becomes permanent in an EXPANDED window,
+through the shared `EditorSidebarPanel`; `LocalSidebarPermanent` hides the tab hamburgers.
+v0.12 2026-09-15 — Help search, topic deep links, per-tab "?" buttons)
 
 Invariants
 - Routes are stable, typed constants or sealed routes.
@@ -18,8 +20,20 @@ Invariants
 Route graph (AppNav.kt NavHost)
 - `start` → StartScreen (New Drawing / Open / Unsaved drafts list (up to 3) / Settings /
   Help & FAQ / Send Feedback)
-- `editor` → **ShaftEditorRoute** — the editor container. Owns the sidebar overlay
-  (`EditorSidebarOverlay`) and the `EditorTab` state switching between:
+- `editor` → **ShaftEditorRoute** — the editor container. Owns the sidebar and the `EditorTab`
+  state. **The sidebar's placement follows the window width** (`Adaptive.md`): COMPACT/MEDIUM
+  keep the modal `EditorSidebarOverlay` (scrim, 200 dp panel, slides in over full-width
+  content); EXPANDED lays the panel out **permanently** in a 240 dp `Surface`
+  (`EDITOR_SIDEBAR_PERMANENT_WIDTH`) with a trailing `VerticalDivider`, no scrim and no
+  open/close state — a tab tap just switches. Both placements render the ONE
+  `EditorSidebarPanel` (Home · document tabs · tools group · Help · Settings), so they can
+  never offer different destinations; the overlay passes its close as `onNavigated`, the
+  permanent panel a no-op. `sidebarOpen` stays `rememberSaveable` and simply goes unread while
+  the panel is permanent, so shrinking back to one pane restores the overlay unchanged. The
+  permanent branch composes the tab content under `LocalSidebarPermanent provides true`
+  (`ui/adaptive/EditorChrome.kt`), which is how **every tab's toolbar knows to hide its
+  hamburger** (`testTag("toolbar_menu")`) — the panel is on screen, so there is nothing to
+  open. Tabs:
   - Schematic tab → ShaftRoute → ShaftScreen
   - Runout tab → RunoutRoute (runout authoring; exports the classic runout sheet)
   - Wear tab → WearRoute
@@ -99,7 +113,10 @@ Route graph (AppNav.kt NavHost)
 
 Responsibilities
 - **AppNav.kt:** Define NavHost, start destination, and route graph.
-- **ShaftEditorRoute.kt:** Editor container — sidebar, tab switch, back handling.
+- **ShaftEditorRoute.kt:** Editor container — sidebar placement (overlay vs permanent), tab
+  switch, back handling.
+- **EditorSidebar.kt:** `EditorSidebarPanel` (the nav list itself) plus the
+  `EditorSidebarOverlay` that wraps it for COMPACT/MEDIUM windows.
 - **ShaftRoute.kt:** Wire VM ↔ ShaftScreen; own SAF PDF export for the schematic.
 - **StartScreen.kt:** Landing screen — recents, "Unsaved drafts" card (up to 3 entries
   from `ShaftViewModel.drafts`: row title (see below), relative age, tap to

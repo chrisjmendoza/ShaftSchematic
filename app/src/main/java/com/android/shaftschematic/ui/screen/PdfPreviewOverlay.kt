@@ -11,7 +11,8 @@ import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
-import android.content.pm.ActivityInfo
+import com.android.shaftschematic.ui.adaptive.restoreBaseOrientation
+import com.android.shaftschematic.ui.adaptive.unlockRotation
 import android.net.Uri
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -211,14 +212,13 @@ internal fun PdfPreviewOverlay(
     }
 
     // Unlock device rotation while the preview is open so the landscape sheet can be viewed in
-    // landscape (the app is otherwise locked to portrait); restore portrait on dismiss. Same
-    // pattern as the schematic `PdfPreviewScreen`.
+    // landscape (phones are otherwise locked to portrait); restore the device's BASE
+    // orientation on dismiss — portrait on a phone, free rotation on a tablet. Same pattern as
+    // the schematic `PdfPreviewScreen`.
     val activity = LocalContext.current as? Activity
     DisposableEffect(Unit) {
-        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-        onDispose {
-            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-        }
+        activity?.unlockRotation()
+        onDispose { activity?.restoreBaseOrientation() }
     }
 
     Surface(

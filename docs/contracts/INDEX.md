@@ -73,6 +73,10 @@ work ships they move to `docs/archive/`; each is listed under the contract it be
   size/count bucketing, the browser + thumbnail, and why a loaded template starts unnamed
   and dirty. Design plan: `docs/archive/Templates_And_DiaVisibility_PLAN.md`
 - **Navigation.md** — route graph, editor container (sidebar + tabs), screen wiring
+- **Adaptive.md** — phones vs tablets: the one window-width axis (`WindowWidthClass`), what
+  each class changes per surface (two panes only at EXPANDED, permanent sidebar, readable
+  width), the orientation policy (phones portrait, tablets free, restore-to-base), and the
+  same-composables-both-branches rule
 - **Appearance.md** — app theme (System/Light/Dark + high contrast), the sheet-ink
   invariant (paper-sheet canvases draw fixed ink, never theme colors), and the accessibility
   rulings (sheet text is ink; canvases carry spoken summaries). Design plan with the

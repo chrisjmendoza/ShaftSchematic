@@ -1,7 +1,7 @@
 # ShaftSchematic TODO
 
 **Version: v0.5.x Development Queue**
-**Last updated: 2026-09-15**
+**Last updated: 2026-09-16**
 
 ## What belongs here
 
@@ -46,7 +46,8 @@ at most a pointer from here.
 | Fraction typography | ✅ Shipped — Stacked / Diagonal (default) / Plain |
 | Drawing preset profiles | ✅ Shipped, app-wide |
 | Appearance settings (theme + high contrast) | ✅ Shipped — see §2 for the open on-device pass |
-| Sidebar nav (5 tabs) | ✅ Schematic / Runout / Wear / Undercut / Consolidated Output |
+| Sidebar nav (6 tabs) | ✅ Schematic / Runout / Wear / Undercut / Final / Consolidated Output |
+| Tablet layout | ✅ Shipped, unverified on hardware — window width class, two panes at EXPANDED, permanent sidebar, free rotation on sw600dp; see §2 |
 | Undo/redo | ✅ Session-scoped `SessionHistory` over `EditState` |
 | Internal save/open, autosave draft ring | ✅ Shipped |
 | Backup & restore, auto-mirror folder | ✅ Shipped |
@@ -119,6 +120,12 @@ at most a pointer from here.
   editing path. Rulings in `docs/contracts/Appearance.md` §Accessibility.
 - [ ] On-device: print one undercut sheet with "Line art (no shading)" on and judge whether the
   notch construction alone reads on paper (the ruling assumed it does, from the screen mode).
+- [ ] **Tablet pass** (the layouts were built against Robolectric window sizes, never a tablet):
+  every tab in portrait (MEDIUM) and landscape (EXPANDED), the permanent sidebar, a rotation
+  mid-edit on each tab (what resets is listed in `docs/contracts/Adaptive.md` §Orientation), the
+  carousel card width inside its pane, the tuning sheet's page strip in landscape, and the PDF
+  preview closing on a tablet (must stay free to rotate). Judge the 0.55/0.45 pane split and the
+  720 dp readable width by eye — both are first guesses.
 - [ ] **On-device visual pass after Material3 1.3.0 → 1.4.0** (Compose BOM 2026.04.01): component
   defaults moved, not APIs. Look at the tuning sliders, the `ModalBottomSheet` page-strip cap
   (`TUNING_SHEET_CHROME_DP` counts the drag handle + inset chrome; a changed default shifts it),
