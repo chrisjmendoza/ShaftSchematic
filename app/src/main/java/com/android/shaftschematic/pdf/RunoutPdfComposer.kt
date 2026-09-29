@@ -49,7 +49,6 @@ import com.android.shaftschematic.settings.TirDirection
 import com.android.shaftschematic.ui.resolved.BodyBlend
 import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
-import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
 import com.android.shaftschematic.ui.resolved.bodyBlends
 import com.android.shaftschematic.ui.resolved.bodyDrawEdges
 import com.android.shaftschematic.ui.resolved.resolvedBodyBaseId
@@ -169,6 +168,43 @@ fun composeRunoutPdf(
     config: RunoutConfig,
     project: ProjectInfo,
     unit: UnitSystem,
+    displayUnits: DisplayUnits = DisplayUnits.single(unit),
+    pdfPrefs: PdfPrefs = PdfPrefs(),
+    resolvedComponents: List<ResolvedComponent>? = null,
+    lineThicknessScale: Float = 1.0f,
+    runoutReadings: RunoutReadings = RunoutReadings(),
+    runoutStationPlacements: RunoutStationPlacements = RunoutStationPlacements(),
+    wearRecord: WearRecord = WearRecord(),
+    blankValues: Boolean = false,
+    consolidated: Boolean = true,
+    includeBubbles: Boolean = true,
+    includeWearInfo: Boolean = true,
+) = composeRunoutPdfOnCanvas(
+    c = page.canvas,
+    pageW = page.info.pageWidth.toFloat(),
+    pageH = page.info.pageHeight.toFloat(),
+    spec = spec, config = config, project = project, unit = unit,
+    displayUnits = displayUnits, pdfPrefs = pdfPrefs, resolvedComponents = resolvedComponents,
+    lineThicknessScale = lineThicknessScale, runoutReadings = runoutReadings,
+    runoutStationPlacements = runoutStationPlacements, wearRecord = wearRecord,
+    blankValues = blankValues, consolidated = consolidated,
+    includeBubbles = includeBubbles, includeWearInfo = includeWearInfo,
+)
+
+/**
+ * The whole sheet, drawn onto any [Canvas] of the given page size — the seam a test uses to
+ * put a recording canvas under the composer (`SheetTextOverlapTest`) while the app always
+ * comes in through [composeRunoutPdf] with a real `PdfDocument.Page`. Same parameters, same
+ * drawing.
+ */
+internal fun composeRunoutPdfOnCanvas(
+    c: Canvas,
+    pageW: Float,
+    pageH: Float,
+    spec: ShaftSpec,
+    config: RunoutConfig,
+    project: ProjectInfo,
+    unit: UnitSystem,
     /**
      * Per-component display-unit overrides + the sheet-wide dual (inline "primary [secondary]")
      * flag. Defaults to a single-unit resolver equivalent to [unit] everywhere, reproducing
@@ -225,7 +261,6 @@ fun composeRunoutPdf(
     // The coupling end view is runout content: it rides the bubble election, so a
     // Schematic + Wear sheet carries no face.
     val drawFace = config.showCouplingFace && drawBubbles
-    val c = page.canvas
     c.drawColor(Color.WHITE)
 
     val docSpec = spec.withResolvedBodies(resolvedComponents)
@@ -233,9 +268,6 @@ fun composeRunoutPdf(
     // a resolve pass there is nothing to blend against, so the faces simply stay square —
     // the schematic composer's rule (`ShaftPdfComposer.blendsForPdf`).
     val bodyBlendsForSheet = resolvedComponents?.let { bodyBlends(spec, it) } ?: emptyList()
-
-    val pageW = page.info.pageWidth.toFloat()
-    val pageH = page.info.pageHeight.toFloat()
 
     // ── Paints ──────────────────────────────────────────────────────────────
     val thicknessScale = lineThicknessScale.coerceIn(0.5f, 2.0f)
@@ -410,12 +442,20 @@ fun composeRunoutPdf(
         else HEADER_HEIGHT_PT + OAL_GAP_PT + OAL_LINE_SPACE_PT
 
     // Footer block pinned to the page bottom (consolidated only); the TIR line sits
-    // directly above it — or directly above the margin on the classic sheet.
-    val footerBlockH = when {
-        !consolidated -> 0f
-        blankValues -> FOOTER_BLOCK_BLANK_PT
-        else -> FOOTER_BLOCK_PT
-    }
+    // directly above it — or directly above the margin on the classic sheet. The block is
+    // reserved at the height the footer will actually PRINT (`footerBlockHeightPt` — the
+    // mode's default, or taller when a column wraps or runs to eight lines: taper header,
+    // Rate, L.E.T., S.E.T., Length, KW, spoon note, Thread). Reserving the fixed default
+    // and letting `drawFooter` grow upward put the "TIR's taken looking:" line through the
+    // "AFT Taper" heading on a Schematic + Runout sheet (on-device report); on the schematic
+    // sheet that growth has a 1-inch info gap to climb into, here it has none.
+    val footerCfg = if (consolidated) sheetFooterConfig(spec, resolvedComponents) else null
+    val footerBlockH = footerCfg?.let {
+        footerBlockHeightPt(
+            contentLeft, contentRight, spec, unit, project, text, it,
+            blankValues = blankValues, displayUnits = displayUnits,
+        )
+    } ?: 0f
     val footerTop = pageH - margin - footerBlockH
     // No TIR line when bubbles are elected out — its lane returns to the shaft area.
     val tirY = footerTop - (if (drawBubbles) TIR_LINE_HEIGHT_PT else 0f)
@@ -757,30 +797,15 @@ fun composeRunoutPdf(
     // Length/KW/Threads columns, work-order center (Customer/Vessel/Job#/Date/Side, keyway
     // clocking note), blank-draft write-in rules. Consolidated sheet only — the classic
     // sheet carries its job info in the one-line header instead.
-    if (consolidated) {
-        val footerBodyDiasMm = (
-            resolvedComponents
-                ?.filterIsInstance<ResolvedBody>()
-                ?.filter {
-                    it.source == ResolvedComponentSource.EXPLICIT &&
-                        it.endMmPhysical - it.startMmPhysical > 0f && it.diaMm > 0f
-                }
-                ?.map { it.diaMm }
-                ?: spec.bodies.filter { it.lengthMm > 0f && it.diaMm > 0f }.map { it.diaMm }
-            ).distinct().sorted()
-        val footerTapers = selectFooterTapers(spec)
-        val footerCfg = FooterConfig(
-            bodyDiasMm = footerBodyDiasMm,
-            showAftThread = hasAftThread(spec),
-            showFwdThread = hasFwdThread(spec),
-            showAftTaper = footerTapers.aft != null,
-            showFwdTaper = footerTapers.fwd != null,
-        )
+    if (footerCfg != null) {
         drawFooter(
             c, RectF(contentLeft, footerTop, contentRight, pageH - margin),
             spec, unit, project,
             filename = "", appVersion = "",
             text = text, cfg = footerCfg, blankValues = blankValues,
+            // The same resolver the reservation above measured with — reserve and draw must
+            // agree — and the same one the schematic's footer prints with.
+            displayUnits = displayUnits,
         )
     }
 }

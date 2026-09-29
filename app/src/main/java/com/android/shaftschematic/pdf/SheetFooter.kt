@@ -20,6 +20,9 @@ import com.android.shaftschematic.model.keywayAbsSpanMm
 import com.android.shaftschematic.model.keywayClocking
 import com.android.shaftschematic.model.keywayCount
 import com.android.shaftschematic.model.shoulderOn
+import com.android.shaftschematic.ui.resolved.ResolvedBody
+import com.android.shaftschematic.ui.resolved.ResolvedComponent
+import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.autoTaperRateText
@@ -72,6 +75,8 @@ internal const val FOOTER_BLOCK_PT = 96f
 // + Thread = 8 lines) at the blank pitch; drawFooter additionally fit-clamps its pitch to
 // the band, so an overloaded column tightens up instead of running off the page.
 internal const val FOOTER_BLOCK_BLANK_PT = 200f
+/** Air the band keeps around its rows — the plan's height and the drawn pitch both count it. */
+private const val FOOTER_BAND_PAD_PT = 10f
 private const val FOOTER_LINE_FACTOR = 1.35f
 /**
  * Tightest footer line pitch. The fit-clamp may squeeze toward it when wrapped lines make a column
@@ -81,8 +86,11 @@ private const val FOOTER_LINE_FACTOR_MIN = 1.12f
 /**
  * How far the footer band may grow UPWARD to fit wrapped content, in points.
  *
- * Comfortably inside `INFO_GAP_PT` (72 pt of air between the geometry and the footer), so a footer
- * that grows can never climb into the drawing.
+ * A safety net for a caller that hands [drawFooter] a fixed rect. Both composers now reserve
+ * [footerBlockHeightPt], the measured height, so on their sheets this never fires — growth into
+ * the info gap is where the component-name rows and the Ø callouts live, and a fully loaded
+ * footer climbed into them (`SheetTextOverlapTest`). Comfortably inside `INFO_GAP_PT` still, so a
+ * footer that does grow can never reach the drawing itself.
  */
 private const val FOOTER_GROWTH_MAX_PT = 48f
 // Handwriting pitch: ~2.2 lines of the footer text size (≈ 26 pt on the schematic, ≈ 22 pt
@@ -176,6 +184,127 @@ internal fun buildFooterMidColumn(
     }
 }
 
+/**
+ * Everything [drawFooter] decides BEFORE it inks: the three columns' lines (already built for
+ * the mode and units), where each column starts and how wide it may print, and how tall the
+ * band has to be to print every wrapped row at the printed pitch. One plan, two consumers:
+ * `drawFooter` lays out from it, and a composer that reserves its own footer band asks it for
+ * [neededHeightPt] first — so the band a sheet reserves and the band the footer draws are the
+ * same number. The consolidated sheet reserving a fixed block while the footer grew upward past
+ * it put the "TIR's taken looking:" line through the "AFT Taper" heading (on-device report).
+ */
+internal class FooterPlan(
+    val cols: FooterColumns,
+    val midLines: List<String>,
+    val midLeadLines: Int,
+    val leftX: Float,
+    val midX: Float,
+    val rightX: Float,
+    val leftMaxW: Float,
+    val midMaxW: Float,
+    val rightMaxW: Float,
+    val wrappedMaxLines: Int,
+    /** Band height that prints every wrapped row at the printed pitch, pad included. */
+    val neededHeightPt: Float,
+)
+
+/** Today's footer date, the one string both the plan and the draw must agree on. */
+private fun footerDate(): String = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+
+internal fun planFooter(
+    rectLeft: Float,
+    rectRight: Float,
+    spec: ShaftSpec,
+    unit: UnitSystem,
+    project: ProjectInfo,
+    text: Paint,
+    cfg: FooterConfig,
+    blankValues: Boolean = false,
+    displayUnits: DisplayUnits = DisplayUnits.single(unit),
+    date: String = footerDate(),
+): FooterPlan {
+    val cols = buildFooterEndColumns(spec, unit, cfg, blankValues, displayUnits)
+
+    // The end columns lead with a taper heading; the middle job-info block has no heading of its
+    // own, so its writing rules would sit one line proud of the end columns' rules. On a blank
+    // draft (every line a rule) that misalignment is what the eye reads first — drop the middle
+    // column one line so all three columns share the same set of baselines. Printed footers carry
+    // values, not rules, and their reserved band has no room to spare, so they stay flush.
+    val midLeadLines = if (
+        blankValues && (
+            cols.aftLines.firstOrNull() == FOOTER_AFT_TAPER_HEADER ||
+                cols.fwdLines.firstOrNull() == FOOTER_FWD_TAPER_HEADER
+            )
+    ) 1 else 0
+
+    // Column starts. A printed footer weights the band toward the left and middle columns,
+    // where the long free text lives (taper specs, customer and vessel names) — the FWD column
+    // holds the same short spec lines as AFT and needs no more. A blank draft prints no values
+    // at all: every line is a writing rule that runs to its column edge, so an uneven split is
+    // read as uneven writing room and the FWD column comes out visibly short (on-device report).
+    // Blank drafts therefore split the band into equal thirds.
+    val width = rectRight - rectLeft
+    val midFrac   = if (blankValues) 1f / 3f else 0.40f
+    val rightFrac = if (blankValues) 2f / 3f else 0.76f
+    val leftX  = rectLeft
+    val midX   = rectLeft + width * midFrac
+    val rightX = rectLeft + width * rightFrac
+
+    // Column budgets: long free text (customer/vessel names) must never overrun the
+    // neighbouring column.
+    val colPad = 6f
+    val leftMaxW  = midX - leftX - colPad
+    val midMaxW   = rightX - midX - colPad
+    // The last column has no neighbour to clear, so printed text may run to the band edge; a
+    // blank draft pads it like the others so all three rules come out the same length.
+    val rightMaxW = rectRight - rightX - (if (blankValues) colPad else 0f)
+
+    val midLines = buildFooterMidColumn(spec, project, cfg, date, blankValues, displayUnits)
+
+    // WRAPPING, not ellipsizing. A dual-unit spec line is roughly twice as wide as a single-unit
+    // one, and the old `…` truncation dropped the very figure the sheet exists to carry
+    // (on-device sheet, `docs/DualUnitStacking_PLAN.md` §1d). Wrapped rows cost line count, which
+    // the pitch absorbs — and the band grows a little if it must.
+    fun wrapCount(lines: List<String>, maxW: Float): Int =
+        lines.sumOf { wrapRichLines(it, text, maxW, rich = true).size }
+    val wrappedMaxLines = maxOf(
+        wrapCount(cols.aftLines, leftMaxW),
+        wrapCount(cols.fwdLines, rightMaxW),
+        midLeadLines + wrapCount(midLines, midMaxW) + (if (blankValues) 0 else 1),  // +1: Side badge
+        1,
+    )
+    val printedPitch = text.textSize * FOOTER_LINE_FACTOR
+    return FooterPlan(
+        cols = cols, midLines = midLines, midLeadLines = midLeadLines,
+        leftX = leftX, midX = midX, rightX = rightX,
+        leftMaxW = leftMaxW, midMaxW = midMaxW, rightMaxW = rightMaxW,
+        wrappedMaxLines = wrappedMaxLines,
+        neededHeightPt = wrappedMaxLines * printedPitch + FOOTER_BAND_PAD_PT,
+    )
+}
+
+/**
+ * The footer band a composer must RESERVE for this sheet: never less than its mode's default
+ * block, and as much more as the wrapped columns need at the printed pitch. A composer that
+ * stacks other content directly above its footer (the consolidated sheet's TIR line and coupling
+ * face) reserves this, so the block never has to grow upward into that content.
+ */
+internal fun footerBlockHeightPt(
+    rectLeft: Float,
+    rectRight: Float,
+    spec: ShaftSpec,
+    unit: UnitSystem,
+    project: ProjectInfo,
+    text: Paint,
+    cfg: FooterConfig,
+    blankValues: Boolean = false,
+    displayUnits: DisplayUnits = DisplayUnits.single(unit),
+): Float {
+    val base = if (blankValues) FOOTER_BLOCK_BLANK_PT else FOOTER_BLOCK_PT
+    val plan = planFooter(rectLeft, rectRight, spec, unit, project, text, cfg, blankValues, displayUnits)
+    return max(base, plan.neededHeightPt)
+}
+
 // Internal (not private): the consolidated runout sheet prints the SAME footer block —
 // one footer implementation for both documents, so the spec lines can never drift apart.
 internal fun drawFooter(
@@ -191,63 +320,23 @@ internal fun drawFooter(
     blankValues: Boolean = false,
     displayUnits: DisplayUnits = DisplayUnits.single(unit),
 ) {
-    val cols = buildFooterEndColumns(spec, unit, cfg, blankValues, displayUnits)
-
-    // The end columns lead with a taper heading; the middle job-info block has no heading of its
-    // own, so its writing rules would sit one line proud of the end columns' rules. On a blank
-    // draft (every line a rule) that misalignment is what the eye reads first — drop the middle
-    // column one line so all three columns share the same set of baselines. Printed footers carry
-    // values, not rules, and their reserved band has no room to spare, so they stay flush.
-    val midLeadLines = if (
-        blankValues && (
-            cols.aftLines.firstOrNull() == FOOTER_AFT_TAPER_HEADER ||
-                cols.fwdLines.firstOrNull() == FOOTER_FWD_TAPER_HEADER
-            )
-    ) 1 else 0
-
-
-    // Column starts. A printed footer weights the band toward the left and middle columns,
-    // where the long free text lives (taper specs, customer and vessel names) — the FWD column
-    // holds the same short spec lines as AFT and needs no more. A blank draft prints no values
-    // at all: every line is a writing rule that runs to its column edge, so an uneven split is
-    // read as uneven writing room and the FWD column comes out visibly short (on-device report).
-    // Blank drafts therefore split the band into equal thirds.
-    val midFrac   = if (blankValues) 1f / 3f else 0.40f
-    val rightFrac = if (blankValues) 2f / 3f else 0.76f
-    val leftX  = rect.left
-    val midX   = rect.left + rect.width() * midFrac
-    val rightX = rect.left + rect.width() * rightFrac
-
-    // Column budgets: long free text (customer/vessel names) must never overrun the
-    // neighbouring column.
-    val colPad = 6f
-    val leftMaxW  = midX - leftX - colPad
-    val midMaxW   = rightX - midX - colPad
-    // The last column has no neighbour to clear, so printed text may run to the band edge; a
-    // blank draft pads it like the others so all three rules come out the same length.
-    val rightMaxW = rect.right - rightX - (if (blankValues) colPad else 0f)
-
-    val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-    val midLines = buildFooterMidColumn(spec, project, cfg, date, blankValues, displayUnits)
-
-    // WRAPPING, not ellipsizing. A dual-unit spec line is roughly twice as wide as a single-unit
-    // one, and the old `…` truncation dropped the very figure the sheet exists to carry
-    // (on-device sheet, `docs/DualUnitStacking_PLAN.md` §1d). Wrapped rows cost line count, which
-    // the pitch below absorbs — and the band grows a little if it must.
-    fun wrapCount(lines: List<String>, maxW: Float): Int =
-        lines.sumOf { wrapRichLines(it, text, maxW, rich = true).size }
-    val wrappedMaxLines = maxOf(
-        wrapCount(cols.aftLines, leftMaxW),
-        wrapCount(cols.fwdLines, rightMaxW),
-        midLeadLines + wrapCount(midLines, midMaxW) + (if (blankValues) 0 else 1),  // +1: Side badge
-        1,
-    )
+    val plan = planFooter(rect.left, rect.right, spec, unit, project, text, cfg, blankValues, displayUnits)
+    val cols = plan.cols
+    val midLines = plan.midLines
+    val midLeadLines = plan.midLeadLines
+    val leftX = plan.leftX
+    val midX = plan.midX
+    val rightX = plan.rightX
+    val leftMaxW = plan.leftMaxW
+    val midMaxW = plan.midMaxW
+    val rightMaxW = plan.rightMaxW
+    val wrappedMaxLines = plan.wrappedMaxLines
 
     // The band grows UPWARD into the info gap when the wrapped content cannot fit it at the
     // printed pitch — never past [FOOTER_GROWTH_MAX_PT], which is well inside `INFO_GAP_PT`, so
-    // the footer can never climb into the drawing.
-    val printedPitch = text.textSize * FOOTER_LINE_FACTOR
-    val neededH = wrappedMaxLines * printedPitch + 10f
+    // the footer can never climb into the drawing. A composer that reserved
+    // [footerBlockHeightPt] hands a rect the plan already fits, and no growth happens.
+    val neededH = plan.neededHeightPt
     val bandH = maxOf(rect.height(), minOf(neededH, rect.height() + FOOTER_GROWTH_MAX_PT))
     val top = rect.bottom - bandH + 6f
 
@@ -255,7 +344,7 @@ internal fun drawFooter(
     // so the fullest column tightens instead of running off the page.
     val lh = min(
         text.textSize * (if (blankValues) FOOTER_LINE_FACTOR_BLANK else FOOTER_LINE_FACTOR),
-        (bandH - 10f) / wrappedMaxLines,
+        (bandH - FOOTER_BAND_PAD_PT) / wrappedMaxLines,
     ).coerceAtLeast(text.textSize * FOOTER_LINE_FACTOR_MIN)
 
     // Blank drafts: any line that ends with ":" (or a bare "Ø") is a label whose value gets
@@ -741,3 +830,39 @@ data class FooterConfig(
     /** Distinct body ODs (mm) to print as the "Body:" line; empty hides the line. */
     val bodyDiasMm: List<Float> = emptyList(),
 )
+
+/**
+ * The footer configuration both sheets print from — which end columns print and the distinct
+ * explicit-body Ø list. ONE builder so the schematic and the consolidated sheet can never
+ * disagree about the block, and built BEFORE either composer's vertical budget, because the
+ * band each reserves ([footerBlockHeightPt]) is measured from exactly the lines it will print.
+ *
+ * The "Body:" diameters are the authored bodies as actually DRAWN: raw `spec.bodies` can hold
+ * degenerate rows (zero-length, or fully swallowed by body subtraction under a liner/taper) that
+ * are invisible in the drawing and the carousel, and their Ø must not print. Taper rendering is
+ * gated by `detectEndFeatures()`; the taper flags here only decide whether the footer carries
+ * that end's spec column at all.
+ */
+internal fun sheetFooterConfig(
+    spec: ShaftSpec,
+    resolvedComponents: List<ResolvedComponent>?,
+): FooterConfig {
+    val bodyDiasMm = (
+        resolvedComponents
+            ?.filterIsInstance<ResolvedBody>()
+            ?.filter {
+                it.source == ResolvedComponentSource.EXPLICIT &&
+                    it.endMmPhysical - it.startMmPhysical > 0f && it.diaMm > 0f
+            }
+            ?.map { it.diaMm }
+            ?: spec.bodies.filter { it.lengthMm > 0f && it.diaMm > 0f }.map { it.diaMm }
+        ).distinct().sorted()
+    val tapers = selectFooterTapers(spec)
+    return FooterConfig(
+        bodyDiasMm = bodyDiasMm,
+        showAftThread = hasAftThread(spec),
+        showFwdThread = hasFwdThread(spec),
+        showAftTaper = tapers.aft != null,
+        showFwdTaper = tapers.fwd != null,
+    )
+}

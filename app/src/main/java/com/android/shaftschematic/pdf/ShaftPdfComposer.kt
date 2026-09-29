@@ -94,6 +94,38 @@ fun composeShaftPdf(
     options: PdfExportOptions = PdfExportOptions(),
     resolvedComponents: List<ResolvedComponent>? = null,
     lineThicknessScale: Float = 1.0f,
+    heightScale: Float = 1.0f,
+    linerMinFracOfTrue: Float = 0f,
+    displayUnits: DisplayUnits = DisplayUnits.single(unit),
+) = composeShaftPdfOnCanvas(
+    c = page.canvas,
+    pageW = page.info.pageWidth.toFloat(),
+    pageH = page.info.pageHeight.toFloat(),
+    spec = spec, unit = unit, project = project, appVersion = appVersion, filename = filename,
+    pdfPrefs = pdfPrefs, options = options, resolvedComponents = resolvedComponents,
+    lineThicknessScale = lineThicknessScale, heightScale = heightScale,
+    linerMinFracOfTrue = linerMinFracOfTrue, displayUnits = displayUnits,
+)
+
+/**
+ * The whole sheet, drawn onto any [Canvas] of the given page size — the seam a test uses to
+ * put a recording canvas under the composer (`SheetTextOverlapTest`) while the app always
+ * comes in through [composeShaftPdf] with a real `PdfDocument.Page`. Same parameters, same
+ * drawing.
+ */
+internal fun composeShaftPdfOnCanvas(
+    c: Canvas,
+    pageW: Float,
+    pageH: Float,
+    spec: ShaftSpec,
+    unit: UnitSystem,
+    project: ProjectInfo,
+    appVersion: String,
+    filename: String,
+    pdfPrefs: PdfPrefs = PdfPrefs(),
+    options: PdfExportOptions = PdfExportOptions(),
+    resolvedComponents: List<ResolvedComponent>? = null,
+    lineThicknessScale: Float = 1.0f,
     /**
      * "Shaft height" slider — the same per-job multiplier the runout/consolidated sheets
      * use (`RunoutConfig.heightScale`): exaggerate or shrink the drawn shaft, hard-capped
@@ -125,20 +157,38 @@ fun composeShaftPdf(
         PdfExportMode.Standard -> options
     }
 
-    val c = page.canvas
     // PDF safety: explicitly paint a white page background so geometry/labels are visible
     // even if the viewer/app is in dark mode (some viewers treat an unpainted page as dark).
     c.drawColor(Color.WHITE)
-    val pageW = page.info.pageWidth.toFloat()
-    val pageH = page.info.pageHeight.toFloat()
 
     // Blank-draft (write-in) mode: keep drawing + layout, blank every value. The footer band
     // grows and its lines space out because handwriting is larger than printed text.
     val blank = effectiveOptions.blankValues
-    val footerBlockPt = if (blank) FOOTER_BLOCK_BLANK_PT else FOOTER_BLOCK_PT
+
+    val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL; textSize = TEXT_PT
+        typeface = OutputTypography.active
+        color = 0xFF000000.toInt()
+    }
+
+    // The footer band is reserved at the height the footer will actually PRINT
+    // (`footerBlockHeightPt`): its mode's default block, or taller when a column wraps or runs to
+    // the full eight spec lines. The band used to reserve the default and let `drawFooter` grow
+    // upward into the 1-inch info gap — but the component-name rows and the Ø callouts live in
+    // that gap, so a fully loaded footer (two tapers with keyways, both threads, a wrapped
+    // customer name) climbed into the name band and printed its "FWD Taper" heading through a
+    // liner's name (found by `SheetTextOverlapTest`). Reserving the measured height keeps the
+    // label rows above the footer by construction; the gap stays air.
+    val footerCfg = if (effectiveOptions.showFooter) sheetFooterConfig(spec, resolvedComponents) else null
+    val footerBlockPt = footerCfg?.let {
+        footerBlockHeightPt(
+            PAGE_MARGIN_PT, pageW - PAGE_MARGIN_PT, spec, unit, project, text, it,
+            blankValues = blank, displayUnits = displayUnits,
+        )
+    } ?: (if (blank) FOOTER_BLOCK_BLANK_PT else FOOTER_BLOCK_PT)
 
     VerboseLog.d(VerboseLog.Category.PDF, "ShaftPdf") {
-        "compose start: page=${page.info.pageWidth}x${page.info.pageHeight}pt filename=$filename unit=$unit oalMm=${"%.3f".format(spec.overallLengthMm)}" +
+        "compose start: page=${pageW.toInt()}x${pageH.toInt()}pt filename=$filename unit=$unit oalMm=${"%.3f".format(spec.overallLengthMm)}" +
             " parts(bodies=${spec.bodies.size}, tapers=${spec.tapers.size}, threads=${spec.threads.size}, liners=${spec.liners.size})"
     }
 
@@ -164,11 +214,6 @@ fun composeShaftPdf(
     }
     val dim = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE; strokeWidth = DIM_PT_BASE * scale; color = 0xFF000000.toInt()
-    }
-    val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.FILL; textSize = TEXT_PT
-        typeface = OutputTypography.active
-        color = 0xFF000000.toInt()
     }
 
     // Total content span: shaft body (0..OAL) plus any excluded end threads that sit
@@ -511,33 +556,7 @@ fun composeShaftPdf(
     // The callouts themselves — planned above (the name labels had to see them), inked here.
     diaLeader?.draw(c, diaCalls)
 
-    if (effectiveOptions.showFooter) {
-        // Footer "Body:" diameters — authored bodies as actually drawn. Raw spec.bodies
-        // can hold degenerate rows (zero-length, or fully swallowed by body subtraction
-        // under a liner/taper) that are invisible in the drawing and the carousel; their
-        // Ø must not print in the footer.
-        val footerBodyDiasMm = (
-            resolvedComponents
-                ?.filterIsInstance<ResolvedBody>()
-                ?.filter {
-                    it.source == ResolvedComponentSource.EXPLICIT &&
-                        it.endMmPhysical - it.startMmPhysical > 0f && it.diaMm > 0f
-                }
-                ?.map { it.diaMm }
-                ?: spec.bodies.filter { it.lengthMm > 0f && it.diaMm > 0f }.map { it.diaMm }
-            ).distinct().sorted()
-
-        val footerTapers = selectFooterTapers(spec)
-        val footerCfg = FooterConfig(
-            bodyDiasMm = footerBodyDiasMm,
-            showAftThread = hasAftThread(spec),
-            showFwdThread = hasFwdThread(spec),
-            // Taper rendering is gated by detectEndFeatures(); this flag only controls whether
-            // taper details are enabled for the footer at all.
-            showAftTaper  = footerTapers.aft != null,
-            showFwdTaper  = footerTapers.fwd != null,
-        )
-
+    if (footerCfg != null) {
         val infoBottom = pageH - PAGE_MARGIN_PT
         val infoTop = footerBandTop(pageH, PAGE_MARGIN_PT, footerBlockPt, cy + halfHeightPx)
         val infoRect = RectF(geomRect.left, infoTop, geomRect.right, infoBottom)
