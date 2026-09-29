@@ -443,6 +443,10 @@ with the export/paper rules in `docs/PDF_EXPORT.md` §5.6–5.7. Boundary summar
 - **Content election** (`ConsolidatedVariant`): All three (default) | Schematic + Runout |
   Schematic + Wear. Session-only state; it selects what the composer draws, it does not
   change stored data.
+- **Coupling face switch** ("Sheet content", under the variant chips; live only while the
+  variant carries runouts) — `RunoutConfig.showCouplingFace`, per-job, off by default. One field
+  behind four surfaces: this switch, the Runout tab's checkbox, and the "Coupling face" chip on
+  both PDF options sheets.
 - **Worn-section editor** — the authoring surface for `WearRecord.wornSections`
   (reference-only, shaft-space spans). Layout is pure math in `geom/WornSectionMath.kt`;
   the route never places values itself.
