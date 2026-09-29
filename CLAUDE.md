@@ -574,16 +574,26 @@ no blend there. A blended face may carry a **seal area** (`Body.blendAftSeal`/`b
 the radius cuts the fiberglass seats into, a fixed `SEAL_GROOVE_COUNT` (3) at `sealGrooveFracs`
 stations (evenly spaced, margin at each end). Each cut draws as a **V notch in both silhouette
 edges plus a DASHED line across seated on the notch floors** (`sealNotchGeom` — depth rides the
-blend's drawn width, capped against the shaft radius; notch width capped against the groove pitch
+seal area's drawn width, capped against the body radius; notch width capped against the groove pitch
 so the V's never merge; dash `SEAL_DASH_ON_PT`/`SEAL_DASH_OFF_PT`, deliberately finer than the
 hidden-keyway 6/4 so a near-side cut never reads as a far-side feature). Inset + dash are both
 load-bearing: a solid full-height stroke is this drawing's glyph for a component face, and three of
 them made one shaft read as 3–4 segments (on-device report) — so seal lines stop on the notch floors, and
-`sealGrooveLines` + `curvePoints` derive floor and notch from the SAME `sealNotchGeom` so they
+`sealGrooveLines` + `sealAreaPoints` derive floor and notch from the SAME `sealNotchGeom` so they
 cannot disagree. The shop cuts 3–4, but the sheet is a cue rather than a count to machine from.
-The cuts are made INTO the blend, so the control only appears once that face is blended, and both
+**The cuts sit on the FLAT body span just INBOARD of the blend ramp, never on the ramp** (the
+photographed shop geometry: rings on the fiberglassed body, then a short shoulder up to the liner;
+cutting the grooves into the ramp tapered the whole seal area once the ramp was authored to the
+shoulder — on-device report). From the face inward a sealed face draws the ramp (blend length) and
+then the grooved seal area at the body Ø, sized by its own stored length
+(`blendAftSealLenMm`/`blendFwdSealLenMm`, `AutoBlend.sealLenMm`; `0` follows the blend length, so
+documents saved before the field keep their grooves; resolved once in `blendAt`, the drawn span by
+`sealDrawSpan` — floored at `SEAL_AREA_MIN_WIDTH_FACTOR` × the blend floor and capped so ramp + seal
+never exceed `MAX_SEAL_FACE_FRAC_OF_HOST` (45%) of the run, the ramp keeping its width first).
+The length control appears only in Seal mode, and both
 draw sites build them from the same `bodyDrawEdges` (`aftSeal`/`fwdSeal` carry FLOOR radii; the
-notches ride the curve point lists, so fill and stroke inherit them with no draw-site code). Blends print **no dimension rail and no footer row** — the
+seal area rides the curve point lists as a flat notched tail, so fill and stroke inherit it with
+no draw-site code). Blends print **no dimension rail and no footer row** — the
 rails keep dimensioning the STORED span (dimension to the theoretical sharp corner), which is why
 nothing in `DimensionRailLayout` or either composer's rail pass changed. That silence is what
 licenses the one exaggeration: a 2" blend on a 25' shaft is sub-pixel at true scale, so the
@@ -605,9 +615,9 @@ mm span, never the drawn floor. The controls are under the **add-dialog-parity r
 card-only carve-out (they change geometry): one shared `ui/screen/BlendSection.kt` renders them on
 both carousel cards and in `AddBodyDialog`, as one chip row per face —
 **Square | Blend | Seal area**. Those modes are exclusive AS PRESENTED only: a seal area INCLUDES
-its blend (the cuts are machined across the blended section), and the stored model keeps length and
-seal flag independent — `blendFaceMode`/`blendLenForMode` are the only projection, and switching
-Blend ↔ Seal keeps the typed length. Do not restore the nested Blend-checkbox-reveals-Seal-checkbox
+its blend (the shoulder the grooves sit behind), and the stored model keeps blend length, seal flag
+and seal length independent — `blendFaceMode`/`blendLenForMode`/`sealLenForMode` are the only
+projection, and switching Blend ↔ Seal keeps both typed lengths. Do not restore the nested Blend-checkbox-reveals-Seal-checkbox
 layout: it hid the seal behind a control nobody thinks to tick first (on-device report). Related: `normalizeBodies` never fuses an **explicit** body with
 anything — not with another explicit body (absorbing one drops its Ø and its carousel card, so a
 Ø6-to-Ø8 stepped shaft drew as one run) and not with adjacent auto fill (absorbing the gap made a
@@ -733,7 +743,7 @@ half-height plus the poke-past clearance (see the keyway-scale invariant above).
 ### Diameter callouts are BELOW-only, tiered, and footer-formatted
 On-shaft diameter callouts (body OD, liner OD — `buildBodyOdCallouts`/`buildLinerOdCallouts`
 in `ShaftPdfComposer.kt`) all hang **BELOW** the shaft; do not reintroduce above/below
-alternation. Labels use `formatDiaWithUnit` (≤3 decimals, trailing zeros trimmed) to match the
+alternation. Labels use `formatDiaWithUnit` (inches: a whole number bare, any other value at exactly 3 decimals — `10.990"`, never `10.99"`, on-device report; mm compact 1-decimal) to match the
 footer's "Ø" text — never the raw 4-decimal format. Bodies and liners are **separate OD
 groups** — a liner OD is never deduped against a body OD. Horizontally-close labels stack onto
 a second row via `geom/DiameterCalloutLayout.kt` (pure, unit-tested), the same two-tier

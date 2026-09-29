@@ -120,6 +120,19 @@ Two clearances keep the growth off the drawing. The shaft's own placement (`maxC
 `footerBandTop`'s floor, `INFO_GAP_MIN_PT` (56 pt), stays clear of `FOOTER_GROWTH_MAX_PT`
 (48 pt) for the degenerate case where a shaft is too tall for that reservation to have held.
 
+**The band is reserved at its measured height, on both sheets.** `footerBlockPt` is no longer the
+fixed default block: each composer builds its `FooterConfig` first (ONE builder,
+`sheetFooterConfig`) and reserves `footerBlockHeightPt` — the default block, or as much taller as
+the wrapped columns need at the printed pitch (`planFooter`, the same plan `drawFooter` lays out
+from, so reserve and draw are one number). Growth into the info gap is now the never-fires safety
+net it reads as: the component-name rows and the Ø callouts LIVE in that gap, and a fully loaded
+footer (two tapers with keyways, both threads, a wrapped customer name — ten middle-column lines)
+climbed 48 pt into them and printed its "FWD Taper" heading through a liner's name. On the
+consolidated sheet, which stacks its TIR line and coupling face directly on the band with no gap
+at all, the same growth put "TIR's taken looking:" through "AFT Taper" (on-device report).
+`SheetTextOverlapTest` composes every export combination of the schematic, classic runout and
+consolidated sheets onto a recording canvas and fails on any two strings whose boxes overlap.
+
 ---
 
 # 4. Title Block Specification
@@ -382,7 +395,7 @@ they are now all-BELOW, same as liners.
   *longest* segment carrying that OD. Bodies group by `Body.diaMm`; liners group by
   `Liner.odMm`. Bodies and liners are **separate groups** — a liner OD is never merged
   with a body OD even when the values match numerically.
-- **Formatting:** labels use `formatDiaWithUnit` (≤3 decimals, trailing zeros trimmed),
+- **Formatting:** labels use `formatDiaWithUnit` (inches: whole numbers print bare, any other value prints exactly 3 decimals — `11"`, `10.990"`; mm stays compact 1-decimal),
   the same convention as the footer's "Ø" text — not the old raw 4-decimal formatting.
 - **Two-tier stacking:** horizontally-close labels stack onto a second row instead of
   overlapping, the same posture as the runout bubbles' two-row layout (see
