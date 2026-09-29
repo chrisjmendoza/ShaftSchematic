@@ -11,6 +11,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
@@ -32,9 +33,9 @@ import org.robolectric.annotation.Config
  *
  * Three behaviours the field owns alone and that nothing else pins: an empty field commits
  * NOTHING and restores the stored length (clearing to retype must never zero the shaft), a
- * not-yet-typed length is not an error while a component past a real one is, and a parseable
- * keystroke commits immediately — the deliberate exception to commit-on-blur that keeps the
- * preview growing as the user types (`docs/contracts/ShaftScreen.md`).
+ * not-yet-typed length is not an error while a component past a real one is, and nothing
+ * commits until the value is accepted — ✓, IME Done, or a blur after a change, each exactly
+ * once — while ✗ restores the stored length (`docs/contracts/ShaftScreen.md`).
  *
  * Runs on the JVM under Robolectric, like `NumericInputFieldBlurTest`.
  */
@@ -130,18 +131,130 @@ class OverallLengthFieldTest {
             .assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Error))
     }
 
-    /* ── The documented per-keystroke exception ──────────────────────────────── */
+    /* ── Commit on accept, never per keystroke ───────────────────────────────── */
+
+    private fun typeInField(text: String) {
+        rule.onNodeWithTag(OAL_FIELD_TAG).performClick()
+        rule.onNodeWithTag(OAL_FIELD_TAG).performTextReplacement(text)
+        rule.waitForIdle()
+    }
 
     @Test
-    fun `a parseable keystroke commits immediately`() {
+    fun `a keystroke commits nothing until the value is accepted`() {
+        rule.setContent { Host(measured) }
+
+        typeInField("1234")
+
+        // No blur, no Done, no check: an intermediate value must never reach the drawing.
+        assertEquals(emptyList<Float>(), mmCommits)
+        assertEquals(emptyList<String>(), rawCommits)
+    }
+
+    @Test
+    fun `the check commits the typed value once`() {
+        rule.setContent { Host(measured) }
+
+        typeInField("1234")
+        rule.onNodeWithTag(OAL_ACCEPT_TAG).performClick()
+        rule.waitForIdle()
+
+        assertEquals(listOf(1234f), mmCommits)
+        assertEquals(listOf("1234"), rawCommits)
+
+        // The blur that follows the accept must not commit a second time.
+        rule.onNodeWithTag(AWAY).performClick()
+        rule.waitForIdle()
+        assertEquals(listOf(1234f), mmCommits)
+        assertEquals(listOf("1234"), rawCommits)
+    }
+
+    @Test
+    fun `the cross reverts the text and commits nothing`() {
+        rule.setContent { Host(measured) }
+
+        typeInField("1234")
+        rule.onNodeWithTag(OAL_CANCEL_TAG).performClick()
+        rule.waitForIdle()
+
+        assertEquals(emptyList<Float>(), mmCommits)
+        assertEquals(emptyList<String>(), rawCommits)
+        assertEquals("the text reverts to the stored length", storedText, fieldText())
+
+        rule.onNodeWithTag(AWAY).performClick()
+        rule.waitForIdle()
+        assertEquals("the blur after a cancel commits nothing", emptyList<Float>(), mmCommits)
+    }
+
+    @Test
+    fun `Done commits once`() {
+        rule.setContent { Host(measured) }
+
+        typeInField("1234")
+        rule.onNodeWithTag(OAL_FIELD_TAG).performImeAction()
+        rule.waitForIdle()
+        rule.onNodeWithTag(AWAY).performClick()
+        rule.waitForIdle()
+
+        assertEquals(listOf(1234f), mmCommits)
+        assertEquals(listOf("1234"), rawCommits)
+    }
+
+    @Test
+    fun `walking away after a change commits once`() {
+        rule.setContent { Host(measured) }
+
+        typeInField("1234")
+        rule.onNodeWithTag(AWAY).performClick()
+        rule.waitForIdle()
+
+        assertEquals(listOf(1234f), mmCommits)
+        assertEquals(listOf("1234"), rawCommits)
+    }
+
+    @Test
+    fun `walking away without a change commits nothing`() {
         rule.setContent { Host(measured) }
 
         rule.onNodeWithTag(OAL_FIELD_TAG).performClick()
-        rule.onNodeWithTag(OAL_FIELD_TAG).performTextReplacement("1234")
+        rule.onNodeWithTag(AWAY).performClick()
         rule.waitForIdle()
 
-        // No blur, no Done: the preview has to follow the typing.
-        assertEquals(listOf(1234f), mmCommits)
+        assertEquals(emptyList<Float>(), mmCommits)
+        assertEquals(emptyList<String>(), rawCommits)
+    }
+
+    @Test
+    fun `the accept and cancel buttons only appear while the value is modified`() {
+        rule.setContent { Host(measured) }
+
+        rule.onNodeWithTag(OAL_ACCEPT_TAG).assertDoesNotExist()
+        rule.onNodeWithTag(OAL_CANCEL_TAG).assertDoesNotExist()
+
+        // Focused but untouched is not modified.
+        rule.onNodeWithTag(OAL_FIELD_TAG).performClick()
+        rule.waitForIdle()
+        rule.onNodeWithTag(OAL_ACCEPT_TAG).assertDoesNotExist()
+
+        rule.onNodeWithTag(OAL_FIELD_TAG).performTextReplacement("1234")
+        rule.waitForIdle()
+        rule.onNodeWithTag(OAL_ACCEPT_TAG).assertIsDisplayed()
+        rule.onNodeWithTag(OAL_CANCEL_TAG).assertIsDisplayed()
+
+        rule.onNodeWithTag(OAL_ACCEPT_TAG).performClick()
+        rule.waitForIdle()
+        rule.onNodeWithTag(OAL_ACCEPT_TAG).assertDoesNotExist()
+        rule.onNodeWithTag(OAL_CANCEL_TAG).assertDoesNotExist()
+    }
+
+    @Test
+    fun `the cleared zero ghost is not a modification`() {
+        rule.setContent { Host(ShaftSpec(overallLengthMm = 0f)) }
+
+        rule.onNodeWithTag(OAL_FIELD_TAG).performClick()
+        rule.waitForIdle()
+
+        assertEquals("the ghost clears on focus", "", fieldText())
+        rule.onNodeWithTag(OAL_ACCEPT_TAG).assertDoesNotExist()
     }
 
     private companion object {

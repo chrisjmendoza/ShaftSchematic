@@ -36,8 +36,16 @@ Invariants
 - Component carousel shows the **resolved** component list (auto-bodies included) in
   **physical position order** along the shaft. See `ComponentsOrdering.md` (v1.2).  
 - Text fields **commit on blur** or IME “Done”; no live ViewModel writes while typing.
-  **Exception:** the OAL field commits on every keystroke (intentional — the preview
-  updates live; see CLAUDE.md). The OAL field's **display never rewrites the
+  The OAL field follows the same rule — it no longer commits per keystroke (deleting one
+  digit on the way from 368.5 to 367.75 committed a transient 36″ shaft and left a
+  re-anchored taper's residue behind, on-device report). It commits on **accept**: the green
+  ✓ beside the field, IME Done, or a blur after the text changed since focus (the
+  `BlurCommitPolicy` baseline rule), each exactly once. The red ✗ restores the stored value
+  and commits nothing. The ✓/✗ pair shows only while the value is being modified (focused
+  AND the text differs from the on-focus baseline); the slot is reserved so the row does not
+  jump, and the field is a narrowed value box (160–240 dp), not a full-width banner.
+  Unparseable text commits nothing: ✓/Done leave it as typed, a blur restores the stored
+  value. The OAL field's **display never rewrites the
   user's own text**: a typed `150 3/4` stays a fraction rather than echoing back as
   `150.75` (on-device report). The text re-derives from the model only when the field is
   unfocused AND no longer parses to the model value (undo, an edit from elsewhere, a
@@ -108,7 +116,9 @@ Responsibilities
   - Black/White Only mode (forces black outlines and disables fills in Preview)
 
 - **Scrollable Form Area:**  
-  - Overall length field (`OverallLengthField`, unit-aware; commits per keystroke)  
+  - Overall length field (`OverallLengthField`, unit-aware, narrowed value box; commits on
+    accept — ✓ / Done / blur-with-change — with the ✓/✗ accept/cancel pair beside it while
+    the value is being modified; never per keystroke)  
   - Project information sheet (Job Number, Customer, Vessel, Item, Shaft Position, Notes) —
     opened from the toolbar, **Save/Cancel**, not commit-on-blur (see Notes). **Item** is an
     optional shaft designation ("Tail shaft", "Line shaft"); blank is the default and prints

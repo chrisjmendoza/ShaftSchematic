@@ -72,7 +72,11 @@ This is mandatory because the user may tap the "Add" / "Submit" button while a f
 - Avoids recomposition jitter during typing.
 - User can type partial numbers freely.
 
-In both cases `parse text → float?` and `VM.update*(parsed)` are called only with valid values; invalid input reverts to the last committed text.
+**Overall Length field (`OverallLengthField`)** — commits on **accept** only: the ✓ beside the
+field, IME Done, or a blur after a change; ✗ restores the stored value. Never per keystroke. See
+`docs/contracts/ShaftScreen.md`.
+
+In every case `parse text → float?` and `VM.update*(parsed)` are called only with valid values; invalid input reverts to the last committed text on blur (the OAL field's ✓ / Done leave unparseable text in place, since the user is mid-edit; its blur reverts like the cards).
 
 ### 2.2 Tap-to-Clear(0)
 When the committed value is exactly `0f`, tapping the field clears it.

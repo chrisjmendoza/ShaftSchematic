@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
@@ -33,6 +34,7 @@ import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.NoteAdd
 import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Email
@@ -82,7 +84,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.android.shaftschematic.geom.computeOalWindow
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -107,6 +112,7 @@ import com.android.shaftschematic.ui.adaptive.WindowWidthClass
 import com.android.shaftschematic.ui.adaptive.currentWindowWidthClass
 import com.android.shaftschematic.ui.adaptive.twoPane
 import com.android.shaftschematic.ui.dialog.InlineAddChooserDialog
+import com.android.shaftschematic.ui.input.shouldCommitOnBlur
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.util.exportPdfGate
 import com.android.shaftschematic.ui.viewmodel.SessionAddDefaults
@@ -1377,14 +1383,25 @@ internal fun disp(mm: Float, unit: UnitSystem, d: Int = 3): String =
  * The shaft's Overall Length entry field.
  *
  * Three behaviours it owns, each deliberate:
- *  • **Per-keystroke commit.** Every parseable keystroke reaches [onSetOverallLengthMm] so the
- *    preview grows as the user types — the documented exception to the commit-on-blur rule
- *    (`docs/contracts/ShaftScreen.md`).
- *  • **An empty field commits nothing.** Blur or IME Done on empty text restores the stored
+ *  • **Commit on ACCEPT, never per keystroke.** Typing only changes the local text; nothing
+ *    reaches [onSetOverallLengthMm] until the value is accepted — the ✓ button, IME Done, or a
+ *    blur after the text changed since focus (`shouldCommitOnBlur`, the component cards' rule).
+ *    ✓ and ✗ are the explicit accept/cancel pair, shown beside the field only while the value is
+ *    being modified; ✗ restores the stored length and commits nothing. A per-keystroke commit
+ *    publishes every intermediate value: deleting one digit of 368.5 on the way to 367.75
+ *    committed a 36″ shaft, the drawing collapsed, and re-anchoring a FWD-referenced taper
+ *    through that transient length left a residue and a "past the shaft end" warning
+ *    (on-device report). See `docs/contracts/ShaftScreen.md`.
+ *  • **An empty field commits nothing.** Every accept path on empty text restores the stored
  *    length instead of zeroing the shaft, so clearing the field to retype cannot wipe the OAL.
+ *    Unparseable text also commits nothing: ✓/Done leave it as typed (the user is mid-edit),
+ *    a blur restores the stored length.
  *  • **Oversize is an error STYLE, not a rejection.** A component past the authored length is a
  *    legal, advisory state; the field is only tinted. A not-yet-typed length (0) is not
  *    oversize — the renderer draws to the coverage end until a length is authored.
+ *
+ * Every accept or cancel moves the focus baseline to the text it leaves behind before clearing
+ * focus, so the blur that follows sees no change and cannot commit a second time.
  *
  * The text echoes what the user typed ("150 3/4" stays a fraction) and only re-derives from the
  * model while unfocused and no longer explaining the stored value — an undo, an edit from
@@ -1417,72 +1434,147 @@ internal fun OverallLengthField(
     val isOversized = spec.overallLengthMm > 0f &&
         spec.overallLengthMm < lastOccupiedEndMm(spec)
 
-    OutlinedTextField(
-        value = lengthText,
-        onValueChange = { input ->
-            lengthText = input
-            toMmOrNull(input, unit)?.let { mm ->
-                onSetOverallLengthMm(mm)
-            }
-        },
-        label = { Text("Overall Length (${abbr(unit)})") },
-        singleLine = true,
-        enabled = true,
-        isError = isOversized,
-        keyboardOptions = KeyboardOptions(
-            keyboardType = KeyboardType.Decimal,
-            imeAction = ImeAction.Done
-        ),
-        keyboardActions = KeyboardActions(onDone = {
-            val t = lengthText.trim()
-            if (t.isEmpty()) {
-                lengthText = formatDisplay(spec.overallLengthMm, unit)
-            } else {
-                toMmOrNull(t, unit)?.let { mm ->
-                    onSetOverallLengthMm(mm)
-                    onSetOverallLengthRaw(t) // keep user’s display text
-                }
-            }
-        }),
-        modifier = modifier
-            .fillMaxWidth()
-            .testTag(OAL_FIELD_TAG)
-            .onFocusChanged { f ->
-                val wasFocused = hasLenFocus
-                hasLenFocus = f.isFocused
+    val focusManager = LocalFocusManager.current
 
-                if (!wasFocused && f.isFocused) {
-                    // Baseline for the commit-on-change rule.
-                    lenTextOnFocus = lengthText
-                    // A not-yet-set length reads "0"; clear it so the user can
-                    // type without a leading zero. Leaving without typing reverts.
-                    if (lengthText.trim() == "0") lengthText = ""
-                }
+    // Being modified = focused AND the text differs from the on-focus baseline. The cleared
+    // "0" ghost and an empty field are the same untouched state.
+    val isModified = hasLenFocus &&
+        oalGhostNormalized(lengthText) != oalGhostNormalized(lenTextOnFocus)
 
-                if (wasFocused && !f.isFocused) {
-                    val baseline = lenTextOnFocus
-                    lenTextOnFocus = null
-                    val t = lengthText.trim()
+    // Restores the stored length and ends the edit. The baseline moves to the restored text
+    // first, so the blur that clearFocus() triggers sees no change and commits nothing.
+    fun cancelEdit() {
+        val stored = formatDisplay(spec.overallLengthMm, unit)
+        lengthText = stored
+        lenTextOnFocus = stored
+        focusManager.clearFocus()
+    }
 
-                    // Commit only what changed since focus (BlurCommitPolicy).
-                    if (baseline != null && lengthText == baseline) {
-                        return@onFocusChanged
+    // The ✓ / IME Done accept. Empty text restores the stored length; unparseable text stays
+    // as typed with focus kept, since the user is mid-edit. A commit moves the baseline to the
+    // committed text before clearing focus so the blur cannot commit it a second time.
+    fun acceptEdit() {
+        val t = lengthText.trim()
+        if (t.isEmpty()) {
+            cancelEdit()
+            return
+        }
+        val mm = toMmOrNull(t, unit) ?: return
+        onSetOverallLengthMm(mm)
+        onSetOverallLengthRaw(t) // keeps the user's display text, fractions included
+        lenTextOnFocus = lengthText
+        focusManager.clearFocus()
+    }
+
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        OutlinedTextField(
+            value = lengthText,
+            onValueChange = { input -> lengthText = input },
+            label = { Text("Overall Length (${abbr(unit)})") },
+            singleLine = true,
+            enabled = true,
+            isError = isOversized,
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Decimal,
+                imeAction = ImeAction.Done
+            ),
+            keyboardActions = KeyboardActions(onDone = { acceptEdit() }),
+            modifier = Modifier
+                .weight(1f, fill = false)
+                .widthIn(min = 160.dp, max = 240.dp)
+                .testTag(OAL_FIELD_TAG)
+                .onFocusChanged { f ->
+                    val wasFocused = hasLenFocus
+                    hasLenFocus = f.isFocused
+
+                    if (!wasFocused && f.isFocused) {
+                        // Baseline for the commit-on-change rule.
+                        lenTextOnFocus = lengthText
+                        // A not-yet-set length reads "0"; clear it so the user can
+                        // type without a leading zero. Leaving without typing reverts.
+                        if (lengthText.trim() == "0") lengthText = ""
                     }
 
-                    if (t.isEmpty()) {
-                        lengthText = formatDisplay(spec.overallLengthMm, unit)
-                    } else {
-                        toMmOrNull(t, unit)?.let { mm ->
+                    if (wasFocused && !f.isFocused) {
+                        val baseline = lenTextOnFocus
+                        lenTextOnFocus = null
+
+                        // Commit only what changed since focus (BlurCommitPolicy).
+                        if (!shouldCommitOnBlur(baseline, lengthText)) return@onFocusChanged
+
+                        val t = lengthText.trim()
+                        val mm = if (t.isEmpty()) null else toMmOrNull(t, unit)
+                        if (mm == null) {
+                            // Empty or unparseable: nothing commits, the stored length returns.
+                            lengthText = formatDisplay(spec.overallLengthMm, unit)
+                        } else {
                             onSetOverallLengthMm(mm)
                             onSetOverallLengthRaw(t)
                         }
                     }
                 }
+        )
+
+        // Fixed-size slot so the row does not jump when the pair appears. The buttons cannot
+        // take focus: a click that pulled focus off the field would blur-commit before the
+        // button's own handler ran.
+        Box(
+            modifier = Modifier
+                .width(OAL_ACTION_SLOT_WIDTH)
+                .height(OAL_ACTION_SLOT_HEIGHT),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            if (isModified) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = { acceptEdit() },
+                        modifier = Modifier
+                            .focusProperties { canFocus = false }
+                            .testTag(OAL_ACCEPT_TAG),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Check,
+                            contentDescription = "Accept length",
+                            tint = OAL_ACCEPT_GREEN,
+                        )
+                    }
+                    IconButton(
+                        onClick = { cancelEdit() },
+                        modifier = Modifier
+                            .focusProperties { canFocus = false }
+                            .testTag(OAL_CANCEL_TAG),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Close,
+                            contentDescription = "Cancel length change",
+                            tint = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
             }
-    )
+        }
+    }
+}
+
+/** The cleared "0" ghost and an empty field both read as the untouched state. */
+private fun oalGhostNormalized(text: String?): String? {
+    val t = text?.trim() ?: return null
+    return if (t == "0") "" else text
 }
 
 internal const val OAL_FIELD_TAG = "overall_length_field"
+internal const val OAL_ACCEPT_TAG = "oal_accept"
+internal const val OAL_CANCEL_TAG = "oal_cancel"
+
+/** Semantic "accept" status colour for the ✓; legible on both themes. */
+private val OAL_ACCEPT_GREEN = Color(0xFF2E7D32)
+
+/** Two 48 dp icon buttons side by side. */
+private val OAL_ACTION_SLOT_WIDTH = 96.dp
+private val OAL_ACTION_SLOT_HEIGHT = 48.dp
 
 private const val OAL_EPS_MM: Double = 1e-3
 
