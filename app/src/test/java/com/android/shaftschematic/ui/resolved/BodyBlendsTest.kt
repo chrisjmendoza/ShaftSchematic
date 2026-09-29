@@ -487,6 +487,180 @@ class BodyBlendsTest {
         assertEquals(101.6f, b.sealLenMm, eps)
     }
 
+    // ───────── seal areas independent of the face finish ─────────
+
+    /**
+     * A seal area is a SECTION property, not a face finish: on a square face (no blend) it
+     * draws its grooves starting AT the face, with no ramp and the cap at the body radius.
+     */
+    @Test
+    fun `a seal on a square face draws its grooves from the face with no ramp`() {
+        val spec = ShaftSpec(
+            overallLengthMm = 800f,
+            bodies = listOf(
+                Body(
+                    id = "run", startFromAftMm = 0f, lengthMm = 400f, diaMm = 200f,
+                    blendFwdMm = 0f, blendFwdSeal = true, blendFwdSealLenMm = 120f,
+                ),
+            ),
+            liners = listOf(Liner(startFromAftMm = 400f, lengthMm = 400f, odMm = 240f)),
+        )
+        val b = blendsOf(spec).single()
+        assertEquals(LinerAuthoredReference.FWD, b.end)
+        assertEquals(0f, b.lengthMm, 0f)
+        assertEquals(200f, b.neighbourDiaMm, eps) // no step: the body's own Ø
+        assertTrue(b.seal)
+        assertEquals(120f, b.sealLenMm, eps)
+
+        val e = edges(spec, "run")
+        val x1 = 400f
+        val sealW = 120f
+        assertEquals(SEAL_GROOVE_COUNT, e.fwdSeal.size)
+        assertTrue(e.aftSeal.isEmpty())
+        e.fwdSeal.forEach {
+            assertTrue("cut at ${it.xPx} is outside the seal area", it.xPx > x1 - sealW && it.xPx < x1)
+        }
+        assertTrue("a square face has no ramp", e.fwdCurve.none { it.rPx > e.flatR + eps })
+        assertEquals(e.flatR, e.capFwdR, eps)
+        assertEquals(x1 - sealW, e.flatX1, eps)
+    }
+
+    /** The zero-width span a seal-only face hands the seal area sits exactly AT the face. */
+    @Test
+    fun `a seal-only face resolves to a zero-width draw span at the face`() {
+        val seal = BodyBlend(
+            bodyId = "run", end = LinerAuthoredReference.FWD, faceMm = 400f, lengthMm = 0f,
+            bodyDiaMm = 200f, neighbourDiaMm = 200f, profile = BlendProfile.OGEE,
+            seal = true, sealLenMm = 120f,
+        )
+        val span = seal.drawSpan(0f, 400f, xAt = { it }, minWidthPx = 7f)
+        assertEquals(400f, span.xAftPx, 0f)
+        assertEquals(400f, span.xFwdPx, 0f)
+        assertEquals(200f, span.diaAtAftMm, 0f)
+        assertEquals(200f, span.diaAtFwdMm, 0f)
+        val sealSpan = seal.sealDrawSpan(0f, 400f, span, xAt = { it }, minWidthPx = 7f)!!
+        assertEquals(280f, sealSpan.xAftPx, eps)
+        assertEquals(400f, sealSpan.xFwdPx, eps)
+    }
+
+    /** Blend + seal on a face with no step: the curve drops, the grooves still draw. */
+    @Test
+    fun `a sealed blend with no step keeps its grooves and drops its curve`() {
+        val spec = ShaftSpec(
+            overallLengthMm = 400f,
+            bodies = listOf(
+                Body(id = "a", startFromAftMm = 0f, lengthMm = 200f, diaMm = 150f),
+                Body(
+                    id = "b", startFromAftMm = 200f, lengthMm = 200f, diaMm = 150f,
+                    blendAftMm = 30f, blendAftSeal = true, blendAftSealLenMm = 60f,
+                ),
+            ),
+        )
+        val b = blendsOf(spec).single()
+        assertEquals(0f, b.lengthMm, 0f)
+        assertTrue(b.seal)
+        assertEquals(60f, b.sealLenMm, eps)
+
+        val e = edges(spec, "b")
+        assertEquals(SEAL_GROOVE_COUNT, e.aftSeal.size)
+        e.aftSeal.forEach { assertTrue(it.xPx > 200f && it.xPx < 260f) }
+        assertTrue("no ramp without a step", e.aftCurve.none { it.rPx > e.flatR + eps })
+        assertEquals(e.flatR, e.capAftR, eps)
+        assertEquals(260f, e.flatX0, eps)
+    }
+
+    /** A seal on a square face at the open end of the shaft: nothing across the face, grooves anyway. */
+    @Test
+    fun `a seal at an open shaft end still draws its grooves`() {
+        val spec = ShaftSpec(
+            overallLengthMm = 300f,
+            bodies = listOf(
+                Body(
+                    id = "only", startFromAftMm = 0f, lengthMm = 300f, diaMm = 150f,
+                    blendAftSeal = true, blendAftSealLenMm = 90f,
+                ),
+            ),
+        )
+        val b = blendsOf(spec).single()
+        assertEquals(0f, b.lengthMm, 0f)
+        val e = edges(spec, "only")
+        assertEquals(SEAL_GROOVE_COUNT, e.aftSeal.size)
+        e.aftSeal.forEach { assertTrue(it.xPx > 0f && it.xPx < 90f) }
+        assertEquals(90f, e.flatX0, eps)
+        assertEquals(e.flatR, e.capAftR, eps)
+    }
+
+    /** A seal flag with no resolvable length on a square face draws nothing — never an error. */
+    @Test
+    fun `a seal on a square face with no length draws nothing`() {
+        val spec = ShaftSpec(
+            overallLengthMm = 300f,
+            bodies = listOf(
+                Body(id = "only", startFromAftMm = 0f, lengthMm = 300f, diaMm = 150f, blendAftSeal = true),
+            ),
+        )
+        assertTrue(blendsOf(spec).isEmpty())
+    }
+
+    /** The auto-span mirror: a seal-only anchor stores, resolves at the face, and clears. */
+    @Test
+    fun `an auto span seal-only anchor draws grooves at the face and clears cleanly`() {
+        val base = ShaftSpec(
+            overallLengthMm = 900f,
+            liners = listOf(
+                Liner(id = "aft", startFromAftMm = 0f, lengthMm = 200f, odMm = 220f),
+                Liner(id = "fwd", startFromAftMm = 600f, lengthMm = 300f, odMm = 220f),
+            ),
+            autoDiaOverrides = listOf(AutoDiaOverride(anchorMm = 400f, diaMm = 180f)),
+        )
+        val sealed = base.withAutoBlend(
+            200f, 600f, LinerAuthoredReference.AFT, lengthMm = 0f, seal = true, sealLenMm = 100f,
+        )
+        assertEquals(1, sealed.autoBlends.size)
+        assertEquals(0f, sealed.autoBlends.single().lengthMm, 0f)
+
+        val b = blendsOf(sealed).single()
+        assertEquals(0f, b.lengthMm, 0f)
+        assertEquals(200f, b.faceMm, eps)
+        assertEquals(180f, b.neighbourDiaMm, eps)
+        assertEquals(100f, b.sealLenMm, eps)
+
+        val comps = resolveComponents(sealed)
+        val run = comps.filterIsInstance<ResolvedBody>()
+            .single { it.source == ResolvedComponentSource.AUTO && it.startMmPhysical < 400f && it.endMmPhysical > 400f }
+        val e = edges(sealed, run.id)
+        assertEquals(SEAL_GROOVE_COUNT, e.aftSeal.size)
+        e.aftSeal.forEach { assertTrue(it.xPx > 200f && it.xPx < 300f) }
+        assertEquals(300f, e.flatX0, eps)
+
+        val cleared = sealed.withAutoBlend(200f, 600f, LinerAuthoredReference.AFT, 0f, seal = false)
+        assertTrue(cleared.autoBlends.isEmpty())
+        assertTrue(blendsOf(cleared).isEmpty())
+    }
+
+    /** The grooves are a drawn cue, not a diameter: a seal-only body's surface stays one seg. */
+    @Test
+    fun `a seal-only body yields a single constant diameter surface seg`() {
+        val spec = ShaftSpec(
+            overallLengthMm = 800f,
+            bodies = listOf(
+                Body(
+                    id = "run", startFromAftMm = 0f, lengthMm = 400f, diaMm = 200f,
+                    blendFwdSeal = true, blendFwdSealLenMm = 120f,
+                ),
+            ),
+            liners = listOf(Liner(startFromAftMm = 400f, lengthMm = 400f, odMm = 240f)),
+        )
+        val comps = resolveComponents(spec)
+        val run = comps.filterIsInstance<ResolvedBody>().single { it.id == "run" }
+        val segs = surfaceSegsFrom(listOf(run), bodyBlends(spec, comps))
+        val seg = segs.single()
+        assertEquals(0f, seg.startMm, eps)
+        assertEquals(400f, seg.endMm, eps)
+        assertEquals(200f, seg.diaStartMm, eps)
+        assertEquals(200f, seg.diaEndMm, eps)
+    }
+
     // ───────── bodyDrawEdges ─────────
 
     private fun edges(spec: ShaftSpec, runId: String, minWidthPx: Float = 7f): BodyDrawEdges {

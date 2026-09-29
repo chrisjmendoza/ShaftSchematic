@@ -570,7 +570,7 @@ draw sites cannot tell them apart. The face a blend curves from is the run's **D
 beside it — see the normalize rule below; body fragmentation still trims it). Every bare-shaft
 gap survives as its own auto run, so gap-side steps are the auto run's own faces and carry
 `AutoBlend` anchors; an explicit face that meets a same-Ø surviving gap has no step and draws
-no blend there. A blended face may carry a **seal area** (`Body.blendAftSeal`/`blendFwdSeal`, `AutoBlend.seal`) —
+no blend there. A body face — blended OR square — may carry a **seal area** (`Body.blendAftSeal`/`blendFwdSeal`, `AutoBlend.seal`) —
 the radius cuts the fiberglass seats into, a fixed `SEAL_GROOVE_COUNT` (3) at `sealGrooveFracs`
 stations (evenly spaced, margin at each end). Each cut draws as a **V notch in both silhouette
 edges plus a DASHED line across seated on the notch floors** (`sealNotchGeom` — depth rides the
@@ -584,13 +584,15 @@ cannot disagree. The shop cuts 3–4, but the sheet is a cue rather than a count
 **The cuts sit on the FLAT body span just INBOARD of the blend ramp, never on the ramp** (the
 photographed shop geometry: rings on the fiberglassed body, then a short shoulder up to the liner;
 cutting the grooves into the ramp tapered the whole seal area once the ramp was authored to the
-shoulder — on-device report). From the face inward a sealed face draws the ramp (blend length) and
-then the grooved seal area at the body Ø, sized by its own stored length
+shoulder — on-device report). From the face inward a sealed blended face draws the ramp (blend
+length) and then the grooved seal area at the body Ø; a sealed SQUARE face (or a blend with no step
+to climb) draws the seal area from the face itself — a seal-only `BodyBlend` (`lengthMm = 0`,
+zero-width curve span, cap at the body radius). The seal area is sized by its own stored length
 (`blendAftSealLenMm`/`blendFwdSealLenMm`, `AutoBlend.sealLenMm`; `0` follows the blend length, so
 documents saved before the field keep their grooves; resolved once in `blendAt`, the drawn span by
 `sealDrawSpan` — floored at `SEAL_AREA_MIN_WIDTH_FACTOR` × the blend floor and capped so ramp + seal
 never exceed `MAX_SEAL_FACE_FRAC_OF_HOST` (45%) of the run, the ramp keeping its width first).
-The length control appears only in Seal mode, and both
+The length control appears only while that face's seal is on, and both
 draw sites build them from the same `bodyDrawEdges` (`aftSeal`/`fwdSeal` carry FLOOR radii; the
 seal area rides the curve point lists as a flat notched tail, so fill and stroke inherit it with
 no draw-site code). Blends print **no dimension rail and no footer row** — the
@@ -613,12 +615,18 @@ undercut end radius call it rather than reimplementing it. `surfaceSegsFrom` tak
 undercut or wear reading in a transition sees the real diameter — sampled at the blend's **true**
 mm span, never the drawn floor. The controls are under the **add-dialog-parity rule**, not the
 card-only carve-out (they change geometry): one shared `ui/screen/BlendSection.kt` renders them on
-both carousel cards and in `AddBodyDialog`, as one chip row per face —
-**Square | Blend | Seal area**. Those modes are exclusive AS PRESENTED only: a seal area INCLUDES
-its blend (the shoulder the grooves sit behind), and the stored model keeps blend length, seal flag
-and seal length independent — `blendFaceMode`/`blendLenForMode`/`sealLenForMode` are the only
-projection, and switching Blend ↔ Seal keeps both typed lengths. Do not restore the nested Blend-checkbox-reveals-Seal-checkbox
-layout: it hid the seal behind a control nobody thinks to tick first (on-device report). Related: `normalizeBodies` never fuses an **explicit** body with
+both carousel cards and in `AddBodyDialog`. The **face finish** is one chip row per face —
+**Square | Blend** — deciding only whether the body END has a shoulder; **seal areas** are a
+separate "Seal areas" section (AFT / FWD checkboxes, a length field under each ticked face), on
+BOTH surfaces. A seal area is a SECTION property, independent of the finish (on-device report,
+photo of a shaft on the lathe): a seal on a square end draws its grooves from the face, and nothing
+couples the two except that the seal area sits inboard of whatever ramp the face has. A finish
+change never touches the seal flags and a seal toggle never touches the blend length —
+`blendFaceMode`/`blendLenForMode`/`sealLenForSeal` are the only projection, and unticking a seal
+keeps its typed length. Do not restore the nested Blend-checkbox-reveals-Seal-checkbox
+layout: it hid the seal behind a control nobody thinks to tick first (on-device report); and do
+not fold the seal back into the finish chips as a third mode — a seal area is a section property,
+not a face finish (on-device report). Related: `normalizeBodies` never fuses an **explicit** body with
 anything — not with another explicit body (absorbing one drops its Ø and its carousel card, so a
 Ø6-to-Ø8 stepped shaft drew as one run) and not with adjacent auto fill (absorbing the gap made a
 shortened explicit body span the whole run again: the typed length had no visible effect, its

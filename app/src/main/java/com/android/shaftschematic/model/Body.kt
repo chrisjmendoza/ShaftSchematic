@@ -71,19 +71,20 @@ import java.util.UUID
  *   no dimension rail and no footer row, and rails keep dimensioning the stored span — you
  *   dimension to the theoretical sharp corner and let the drawn curve show the blend.
  * @property blendFwdMm The same for this body's FWD face.
- * @property blendAftSeal Whether the AFT face carries a **seal area** — the radius cuts the
- *   fiberglass seats into, drawn as [com.android.shaftschematic.geom.SEAL_GROOVE_COUNT] grooves
- *   on the FLAT body just inboard of the blend: the shoulder ramps from the neighbour down to
- *   [diaMm] over [blendAftMm], and the grooves sit on the body beyond it (the photographed
- *   shaft: rings on the fiberglassed body, then a short shoulder up to the liner; cutting the
- *   grooves into the ramp tapered the whole seal area — on-device report). A schematic cue,
- *   not a machining count; ignored when that face has no blend.
+ * @property blendAftSeal Whether the AFT end of this body carries a **seal area** — the radius
+ *   cuts the fiberglass seats into, drawn as [com.android.shaftschematic.geom.SEAL_GROOVE_COUNT]
+ *   grooves on the FLAT body. A seal area is a property of the body SECTION, independent of the
+ *   face finish ([blendAftMm]): on a blended face the grooves sit just inboard of the ramp (the
+ *   photographed shaft: rings on the fiberglassed body, then a short shoulder up to the liner;
+ *   cutting the grooves into the ramp tapered the whole seal area — on-device report), and on a
+ *   square face they start at the face itself. A schematic cue, not a machining count.
  * @property blendFwdSeal The same for the FWD face.
  * @property blendAftSealLenMm Axial length of the AFT seal area — the grooved flat span
- *   inboard of the blend — canonical mm, stored verbatim. Drawing-only like the blend length:
- *   no rail, no footer row, clamped only where it is DRAWN. `0` (every document saved before
- *   the field existed) lets the seal area take the blend's own length, so a seal authored
- *   before the ramp and the grooves were separated keeps its grooves.
+ *   inboard of the blend (or from the face, on a square end) — canonical mm, stored verbatim.
+ *   Drawing-only like the blend length: no rail, no footer row, clamped only where it is
+ *   DRAWN. `0` (every document saved before the field existed) lets the seal area take the
+ *   blend's own length, so a seal authored before the ramp and the grooves were separated
+ *   keeps its grooves; on a square face a `0` resolves to no seal area drawn.
  * @property blendFwdSealLenMm The same for the FWD seal area.
  * @property blendProfile How both faces ease. Drawing-only, like the blend lengths.
  */
@@ -172,7 +173,7 @@ fun Body.blendMmOn(end: LinerAuthoredReference): Float = when (end) {
     LinerAuthoredReference.FWD -> blendFwdMm
 }
 
-/** Whether the blend on the given face carries seal grooves. */
+/** Whether the given end carries a seal area — independent of whether that face is blended. */
 fun Body.blendSealOn(end: LinerAuthoredReference): Boolean = when (end) {
     LinerAuthoredReference.AFT -> blendAftSeal
     LinerAuthoredReference.FWD -> blendFwdSeal

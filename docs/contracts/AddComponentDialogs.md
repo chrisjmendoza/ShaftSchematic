@@ -281,17 +281,22 @@ submit, but every control and every visibility condition is decided in one place
 
 | Control | Shown when |
 |---|---|
-| Face-finish chips, per face — **Square \| Blend \| Seal area** | always |
-| Axial length field, per face ("Blend AFT/FWD") | that face is not Square |
-| Seal area length field, per face ("Seal area AFT/FWD") — directly under that face's blend length | that face is **Seal area** (both surfaces — parity) |
-| Shape chips — S-curve \| Fillet \| Eased cone | either face is not Square |
+| Face-finish chips, per face — **Square \| Blend** | always |
+| Axial length field, per face ("Blend AFT/FWD") | that face is **Blend** |
+| Shape chips — S-curve \| Fillet \| Eased cone | either face is Blend |
+| Seal area checkbox, per face (AFT / FWD) — under its own "Seal areas" heading | always |
+| Seal area length field, per face ("Seal area AFT/FWD") | that face's seal is ON (both surfaces — parity) |
 
-**Seal area includes the blend** — a seal face is the short shoulder ramp (blend length) PLUS the
-grooved flat span inboard of it at the body Ø (seal area length), so the three modes are exclusive
-as presented while the stored model keeps blend length, seal flag and seal length independent.
-Switching to Seal area seeds an empty seal length with the preset (`AddDefaultsConfig.SEAL_LEN_IN`,
-4 in, capped at a quarter of the body — `defaultSealLenMm`); switching away keeps the typed value
-(`sealLenForMode`). A stored `0` follows the blend length (documents saved before the field).
+**A seal area is a section property, not a face finish.** The finish only decides whether the body
+END has a shoulder (a blend ramp up to the neighbour) or is square; the seal area — the grooves the
+fiberglass seats into — has its own per-face on/off and length, independent of the finish (on-device
+report, photo of a shaft on the lathe). The grooves start AT the face on a square end and inboard of
+the ramp on a blended one. A finish change never touches the seal flags, and a seal toggle never
+touches the blend length. Ticking a seal seeds an empty seal length with the preset
+(`AddDefaultsConfig.SEAL_LEN_IN`, 4 in, capped at a quarter of the body — `defaultSealLenMm`);
+unticking keeps the typed value (`sealLenForSeal`). A stored `0` follows the blend length (documents
+saved before the field). The "Seal areas" section is a sibling of "Face finish" — never a third
+finish chip, never nested under a blend control.
 
 The auto-body card carries the same section, anchored in shaft space (`AutoBlend`), so a template's
 seal areas survive liners moving under it; the dialog has no auto counterpart because an Add dialog

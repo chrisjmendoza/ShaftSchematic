@@ -8,6 +8,42 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-09-29
 
+### feat(ui): seal areas are their own control, independent of the face finish
+
+The body face-finish chips were **Square | Blend | Seal area**, three exclusive modes with "Seal
+area" defined as a blend plus grooves inboard of it. That modelled the shaft wrong (on-device
+report, photo of a shaft on the lathe): the grooves the fiberglass seats into sit on the
+fiberglassed body SECTION, and beyond them the body ramps up to where the liner's full height
+begins — the ramp is a property of the body END, the grooves a property of the section, and a body
+can carry either without the other.
+
+The two are decoupled. **Face finish** is now **Square | Blend** per face, deciding only whether the
+end has a shoulder. **Seal areas** are a separate section beneath it — "Seal areas" with AFT / FWD
+checkboxes and a length field under each ticked face — on the explicit-body card, the auto-body
+card and `AddBodyDialog` alike (the shared `BlendSection`, add-dialog parity). A finish change
+never touches a seal flag, a seal toggle never touches a blend length, and unticking a seal keeps
+its typed length (`sealLenForSeal`, replacing `sealLenForMode`).
+
+Draw rule: grooves sit inboard of the ramp on a blended end, and start AT the face on a square end.
+A face with no step to blend (nothing across it, or a same-Ø neighbour) drops its curve but keeps
+its grooves. The resolve layer returns a seal-only `BodyBlend` (`lengthMm = 0`, neighbour Ø = the
+body's own) whose zero-width curve span places the seal area against the face and caps at the body
+radius; `bodyDrawEdges` emits no curve points for it, so the canvas, schematic PDF and runout sheet
+draw it with no draw-site change, and the surface envelope stays one constant-Ø seg. On auto spans
+an `AutoBlend` anchor with `lengthMm = 0` and `seal = true` is now a stored seal-only face
+(`withAutoBlend` clears only when both are off; `autoBlendFor` honours it).
+
+No new fields and no codec change: `Body.blendAftSeal`/`blendFwdSeal`/`blend*SealLenMm` and
+`AutoBlend.seal`/`sealLenMm` were already stored independently of the blend length; only their
+interpretation widened. Every document saved so far carries seal flags only on blended faces (the
+old UI could not produce anything else), so no saved document changes appearance — with one
+edge: a saved sealed blend on a face with NO step (a same-Ø neighbour or an open shaft end), which
+used to draw nothing at all, now draws its grooves from the face. `BodyBlendsTest`
+pins the square-face, no-step and open-end seal cases, the zero-width span and the auto seal-only
+anchor; `BlendFaceModeTest` is rewritten for the two-mode finish; the blend SVG preview gains two
+square-end seal rows. `COMPONENT_CONTRACT.md`, `AddComponentDialogs.md`, `DATA_MODEL.md`,
+`PDF_EXPORT.md` and the CLAUDE.md blend invariant follow.
+
 ### fix(ui): the Overall Length field commits on accept, with a ✓/✗ pair, never per keystroke
 
 Editing a mate duplicate's length from 368.5″ to 367.75″ by deleting the "8" committed an

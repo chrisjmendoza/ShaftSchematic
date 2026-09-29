@@ -197,12 +197,15 @@ fun AddBodyDialog(
     var length by remember(unit, effectiveLengthMm) { mutableStateOf(toDisplayString(effectiveLengthMm, unit)) }
     var dia by remember(unit, d.bodyDiaMm) { mutableStateOf(toDisplayString(max(1f, d.bodyDiaMm), unit)) }
 
-    // Blend — mirrors the body card by contract (it changes drawn geometry, so it is under
-    // the add-dialog-parity rule, not the card-only carve-out). Same shared BlendSection.
+    // Face finish + seal areas — mirror the body card by contract (they change drawn geometry,
+    // so they are under the add-dialog-parity rule, not the card-only carve-out). Same shared
+    // BlendSection. The seal flags are independent of the finish.
     var blendAftMode by remember { mutableStateOf(BlendFaceMode.SQUARE) }
     var blendFwdMode by remember { mutableStateOf(BlendFaceMode.SQUARE) }
     var blendAft by remember { mutableStateOf("") }
     var blendFwd by remember { mutableStateOf("") }
+    var sealAft by remember { mutableStateOf(false) }
+    var sealFwd by remember { mutableStateOf(false) }
     var blendAftSealLen by remember { mutableStateOf("") }
     var blendFwdSealLen by remember { mutableStateOf("") }
     var blendProfile by remember { mutableStateOf(BlendProfile.OGEE) }
@@ -272,25 +275,33 @@ fun AddBodyDialog(
                     aftMode = blendAftMode,
                     fwdMode = blendFwdMode,
                     profile = blendProfile,
+                    aftSeal = sealAft,
+                    fwdSeal = sealFwd,
                     onSetAftMode = { m ->
                         blendAftMode = m
-                        if (m != BlendFaceMode.SQUARE && blendAft.isBlank()) {
+                        if (m == BlendFaceMode.BLEND && blendAft.isBlank()) {
                             blendAft = toDisplayString(defaultBlendMm(lengthMm), unit)
-                        }
-                        if (m == BlendFaceMode.SEAL && blendAftSealLen.isBlank()) {
-                            blendAftSealLen = toDisplayString(defaultSealLenMm(lengthMm), unit)
                         }
                     },
                     onSetFwdMode = { m ->
                         blendFwdMode = m
-                        if (m != BlendFaceMode.SQUARE && blendFwd.isBlank()) {
+                        if (m == BlendFaceMode.BLEND && blendFwd.isBlank()) {
                             blendFwd = toDisplayString(defaultBlendMm(lengthMm), unit)
-                        }
-                        if (m == BlendFaceMode.SEAL && blendFwdSealLen.isBlank()) {
-                            blendFwdSealLen = toDisplayString(defaultSealLenMm(lengthMm), unit)
                         }
                     },
                     onProfile = { blendProfile = it },
+                    onSetAftSeal = { on ->
+                        sealAft = on
+                        if (on && blendAftSealLen.isBlank()) {
+                            blendAftSealLen = toDisplayString(defaultSealLenMm(lengthMm), unit)
+                        }
+                    },
+                    onSetFwdSeal = { on ->
+                        sealFwd = on
+                        if (on && blendFwdSealLen.isBlank()) {
+                            blendFwdSealLen = toDisplayString(defaultSealLenMm(lengthMm), unit)
+                        }
+                    },
                     aftLengthField = {
                         CommitNumField("Blend AFT (${abbr(unit)})", blendAft) { blendAft = it }
                     },
@@ -420,13 +431,13 @@ fun AddBodyDialog(
                     if (showClockingToggle) clock90 else spec.keyways90Apart,
                     if (showClockingToggle) cw90 else spec.keyways90Cw,
                     if (kwEnabled) kwUnitOverride else null,
-                    if (blendAftMode != BlendFaceMode.SQUARE) toMmOrNull(blendAft, unit) ?: 0f else 0f,
-                    if (blendFwdMode != BlendFaceMode.SQUARE) toMmOrNull(blendFwd, unit) ?: 0f else 0f,
+                    if (blendAftMode == BlendFaceMode.BLEND) toMmOrNull(blendAft, unit) ?: 0f else 0f,
+                    if (blendFwdMode == BlendFaceMode.BLEND) toMmOrNull(blendFwd, unit) ?: 0f else 0f,
                     blendProfile,
-                    blendAftMode == BlendFaceMode.SEAL,
-                    blendFwdMode == BlendFaceMode.SEAL,
-                    if (blendAftMode == BlendFaceMode.SEAL) toMmOrNull(blendAftSealLen, unit) ?: 0f else 0f,
-                    if (blendFwdMode == BlendFaceMode.SEAL) toMmOrNull(blendFwdSealLen, unit) ?: 0f else 0f,
+                    sealAft,
+                    sealFwd,
+                    if (sealAft) toMmOrNull(blendAftSealLen, unit) ?: 0f else 0f,
+                    if (sealFwd) toMmOrNull(blendFwdSealLen, unit) ?: 0f else 0f,
                 )
             }) { Text("Add") }
         },
