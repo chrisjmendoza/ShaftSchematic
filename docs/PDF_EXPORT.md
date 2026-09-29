@@ -294,8 +294,10 @@ absorbed into the run moves that edge outward and the drawn step moves with it. 
 blends too, as shaft-space anchors (`AutoBlend`), and resolve to the same `BodyBlend` — this pass
 cannot tell the two sources apart.
 
-**Seal areas.** A blended face may carry the radius cuts the fiberglass seats into
-(`Body.blendAftSeal`/`blendFwdSeal`, `AutoBlend.seal`): `SEAL_GROOVE_COUNT` (3) stations from
+**Seal areas.** A body face (blended or square) may carry the radius cuts the fiberglass seats into
+(`Body.blendAftSeal`/`blendFwdSeal`, `AutoBlend.seal`) — a section property independent of the face
+finish, starting AT the face on a square end (a zero-width `BodyBlend`, `lengthMm = 0`, cap at the
+body radius) and inboard of the ramp on a blended one: `SEAL_GROOVE_COUNT` (3) stations from
 `sealGrooveFracs`, each drawn as a V notch in both silhouette edges plus a **dashed** line across
 seated on the notch floors. The notches ride the curve point lists this pass already walks, so the
 fill polygon and the stroked edges inherit them with no extra code here — only the dashed lines are

@@ -51,7 +51,11 @@ data class AutoBlend(
     val lengthMm: Float = 0f,
     /** How the curve eases; drawing-only, like [lengthMm]. */
     val profile: BlendProfile = BlendProfile.OGEE,
-    /** Whether this face carries a seal area — radius cuts on the flat span inboard of the curve. */
+    /**
+     * Whether this face carries a seal area — radius cuts on the flat span inboard of the curve,
+     * or starting at the face itself when [lengthMm] is 0 (a seal area on a square face).
+     * Independent of [lengthMm]: a seal area is a section property, not a face finish.
+     */
     val seal: Boolean = false,
     /**
      * Axial length of the seal area (the grooved flat span inboard of the blend), canonical mm,
@@ -63,9 +67,10 @@ data class AutoBlend(
 
 /**
  * The blend that applies to face [end] of the auto span `[startMm, endMm)`, or null when none
- * anchors inside it. Aft-most anchor wins; the rest stay dormant. A non-positive
- * [AutoBlend.lengthMm] is ignored — a cleared face is a removal, so such a value only reaches
- * here from a hand-edited document.
+ * anchors inside it. Aft-most anchor wins; the rest stay dormant. An anchor with a
+ * non-positive [AutoBlend.lengthMm] counts only when it carries a seal (a seal area on a square
+ * face); one with neither is ignored — a cleared face is a removal, so such a value only
+ * reaches here from a hand-edited document.
  */
 fun List<AutoBlend>.autoBlendFor(
     startMm: Float,
@@ -73,7 +78,10 @@ fun List<AutoBlend>.autoBlendFor(
     end: LinerAuthoredReference,
 ): AutoBlend? =
     asSequence()
-        .filter { it.end == end && it.lengthMm > 0f && it.anchorMm >= startMm && it.anchorMm < endMm }
+        .filter {
+            it.end == end && (it.lengthMm > 0f || it.seal) &&
+                it.anchorMm >= startMm && it.anchorMm < endMm
+        }
         .minByOrNull { it.anchorMm }
 
 /**
@@ -81,7 +89,8 @@ fun List<AutoBlend>.autoBlendFor(
  * [end] of the auto span `[spanStartMm, spanEndMm)`.
  *
  * Upsert: every blend for that face anchored inside the span is dropped, then the value is
- * stored **verbatim** against a fresh anchor at the span midpoint. [lengthMm] ≤ 0 is a clear.
+ * stored **verbatim** against a fresh anchor at the span midpoint. [lengthMm] ≤ 0 with
+ * [seal] = false is a clear; a seal on a square face stores an anchor with `lengthMm = 0`.
  * The other face, and anchors outside the span — including dormant ones — are left alone, so
  * they resurrect unchanged if their span reappears. Returns `this` when nothing moves, so a
  * no-op set never emits new state or marks the document dirty.
@@ -99,10 +108,10 @@ fun ShaftSpec.withAutoBlend(
         it.end == end && it.anchorMm >= spanStartMm && it.anchorMm < spanEndMm
     }
     val next =
-        if (lengthMm > 0f) kept + AutoBlend(
+        if (lengthMm > 0f || seal) kept + AutoBlend(
             anchorMm = (spanStartMm + spanEndMm) / 2f,
             end = end,
-            lengthMm = lengthMm,
+            lengthMm = lengthMm.coerceAtLeast(0f),
             profile = profile,
             seal = seal,
             sealLenMm = sealLenMm.coerceAtLeast(0f),

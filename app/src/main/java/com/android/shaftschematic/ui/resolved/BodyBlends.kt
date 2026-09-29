@@ -20,6 +20,7 @@ import com.android.shaftschematic.model.autoBlendFor
 import com.android.shaftschematic.model.blendMmOn
 import com.android.shaftschematic.model.blendSealLenMmOn
 import com.android.shaftschematic.model.blendSealOn
+import com.android.shaftschematic.model.hasBlendOn
 import kotlin.math.abs
 
 /**
@@ -42,6 +43,9 @@ private const val BLEND_EPS_MM = 1e-3f
  * One drawable blend: the curve runs from [neighbourDiaMm] at [faceMm] to [bodyDiaMm] at
  * [lengthMm] inward. [end] says which way "inward" points, and [bodyId] is the RESOLVED id
  * of the run it belongs to (a fragment id when the body is split).
+ *
+ * [lengthMm] == 0 is a SEAL-ONLY face: no ramp (a square face, or a blend with no step to
+ * climb), [neighbourDiaMm] equal to [bodyDiaMm], and the seal area starting at the face itself.
  */
 data class BodyBlend(
     val bodyId: String,
@@ -77,8 +81,11 @@ data class BlendDrawSpan(
  * length move under it. Both resolve to the same [BodyBlend] here, and every draw site is blind
  * to which kind it came from.
  *
- * A blend is dropped (not drawn, never an error) when there is no step to blend: nothing
- * across the face, or a neighbour at the same diameter.
+ * A blend's CURVE is dropped (not drawn, never an error) when there is no step to blend:
+ * nothing across the face, or a neighbour at the same diameter. A seal area is a property of
+ * the body section, independent of the face finish, so a face with a seal keeps its grooves
+ * either way — they start at the face when there is no ramp, and inboard of the ramp when
+ * there is one.
  *
  * Liners are excluded from the ordinary neighbour lookup — a sleeve sitting over mid-body is
  * not a diameter the shaft steps to. The one exception is a face a liner butts directly
@@ -89,7 +96,9 @@ data class BlendDrawSpan(
  * [seatDiaUnderLiner].
  */
 fun bodyBlends(spec: ShaftSpec, components: List<ResolvedComponent>): List<BodyBlend> {
-    val blended = spec.bodies.filter { it.blendAftMm > 0f || it.blendFwdMm > 0f }
+    val blended = spec.bodies.filter { b ->
+        LinerAuthoredReference.values().any { b.hasBlendOn(it) || b.blendSealOn(it) }
+    }
     // Auto spans carry their blends as anchors, not as fields on a stored body, so the
     // early-out has to clear BOTH sources or a shaft with only bare-shaft seal areas
     // (no explicit body anywhere) returns before the auto pass runs.
@@ -124,7 +133,7 @@ fun bodyBlends(spec: ShaftSpec, components: List<ResolvedComponent>): List<BodyB
             val runs = runsByBase[b.id] ?: continue
             for (end in LinerAuthoredReference.values()) {
                 val stored = b.blendMmOn(end)
-                if (stored <= 0f) continue
+                if (stored <= 0f && !b.blendSealOn(end)) continue
 
                 // The face is the OUTER edge of the body's drawn extent, not its stored
                 // position. A split body draws as several runs, so only the aft-most (or
@@ -149,11 +158,16 @@ fun bodyBlends(spec: ShaftSpec, components: List<ResolvedComponent>): List<BodyB
 }
 
 /**
- * Resolve one face of one drawn run into a [BodyBlend], or null when there is no step to blend.
+ * Resolve one face of one drawn run into a [BodyBlend], or null when the face draws nothing —
+ * no curve (square, or no step to blend) and no seal area.
  *
  * Shared by the explicit and auto paths so the two can never disagree about what a face steps
  * to. The face is the run's own outer edge — its DRAWN extent (for an explicit body, its
  * stored span; body fragmentation still trims it).
+ *
+ * The curve and the seal area are independent: a face with no curve still draws its seal area,
+ * returned as a seal-only [BodyBlend] (`lengthMm = 0`, neighbour Ø = the run's own), so the
+ * grooves start at the face.
  */
 private fun blendAt(
     components: List<ResolvedComponent>,
@@ -165,38 +179,44 @@ private fun blendAt(
     seal: Boolean,
     storedSealLenMm: Float = 0f,
 ): BodyBlend? {
-    if (storedLengthMm <= 0f) return null
+    if (storedLengthMm <= 0f && !seal) return null
     val runLen = run.endMmPhysical - run.startMmPhysical
     if (runLen <= BLEND_EPS_MM) return null
-    val curveLen = storedLengthMm.coerceAtMost(runLen)
-    // The seal area sits INBOARD of the curve, so it can only take what the curve left; a
-    // stored 0 (every document from before the ramp and the grooves were separated) follows
-    // the blend length, so an older seal keeps its grooves without anyone retyping it.
-    val sealLen = if (!seal) 0f else
-        (storedSealLenMm.takeIf { it > 0f } ?: storedLengthMm).coerceIn(0f, runLen - curveLen)
     val faceMm = if (end == LinerAuthoredReference.AFT) run.startMmPhysical else run.endMmPhysical
 
-    // Sample just OUTSIDE the face: that is the diameter the curve leaves from.
-    val probeMm = if (end == LinerAuthoredReference.AFT) faceMm - BLEND_EPS_MM * 10f
-                  else faceMm + BLEND_EPS_MM * 10f
-    // Shaft surface first (liners excluded); a liner butting the face is the seal-area case
-    // and supplies a derived seat instead.
-    val neighbourDia = outerDiaAt(segs, probeMm).takeIf { it > 0f }
-        ?: seatDiaUnderLiner(components, probeMm, run.diaMm)
-        ?: return null
-    if (abs(neighbourDia - run.diaMm) <= BLEND_EPS_MM) return null
+    // The curve needs a step to climb. A square face has none by definition; otherwise sample
+    // just OUTSIDE the face — that is the diameter the curve leaves from. Shaft surface first
+    // (liners excluded); a liner butting the face supplies a derived seat instead.
+    val neighbourDia: Float? = if (storedLengthMm <= 0f) null else {
+        val probeMm = if (end == LinerAuthoredReference.AFT) faceMm - BLEND_EPS_MM * 10f
+                      else faceMm + BLEND_EPS_MM * 10f
+        (outerDiaAt(segs, probeMm).takeIf { it > 0f }
+            ?: seatDiaUnderLiner(components, probeMm, run.diaMm))
+            ?.takeIf { abs(it - run.diaMm) > BLEND_EPS_MM }
+    }
+    // Clamping the DRAWN curve is not rewriting what was typed.
+    val curveLen = if (neighbourDia == null) 0f else storedLengthMm.coerceAtMost(runLen)
+
+    // The seal area sits INBOARD of the curve (at the face when there is none), so it can only
+    // take what the curve left; a stored 0 (every document from before the ramp and the grooves
+    // were separated) follows the blend length, so an older seal keeps its grooves without
+    // anyone retyping it. A length that resolves to nothing draws no seal — never an error.
+    val sealLen = if (!seal) 0f else
+        (storedSealLenMm.takeIf { it > 0f } ?: storedLengthMm).coerceIn(0f, runLen - curveLen)
+    val sealDrawn = seal && sealLen > 0f
+
+    if (curveLen <= 0f && !sealDrawn) return null
 
     return BodyBlend(
         bodyId = run.id,
         end = end,
         faceMm = faceMm,
-        // Clamping the DRAWN curve is not rewriting what was typed.
         lengthMm = curveLen,
         bodyDiaMm = run.diaMm,
-        neighbourDiaMm = neighbourDia,
+        neighbourDiaMm = neighbourDia ?: run.diaMm,
         profile = profile,
-        seal = seal,
-        sealLenMm = sealLen,
+        seal = sealDrawn,
+        sealLenMm = if (sealDrawn) sealLen else 0f,
     )
 }
 
@@ -214,6 +234,9 @@ fun BodyBlend.drawSpan(
     minWidthPx: Float,
 ): BlendDrawSpan {
     val xFace = xAt(faceMm)
+    // A seal-only face has no ramp: a zero-width span AT the face, so the seal area is placed
+    // against the face itself.
+    if (lengthMm <= 0f) return BlendDrawSpan(xFace, xFace, bodyDiaMm, bodyDiaMm)
     val hostWidth = abs(xAt(runEndMm) - xAt(runStartMm))
     val inwardMm = if (end == LinerAuthoredReference.AFT) faceMm + lengthMm else faceMm - lengthMm
     val trueWidth = abs(xAt(inwardMm) - xFace)
@@ -298,7 +321,8 @@ data class BodyEdgePoint(val xPx: Float, val rPx: Float)
  *
  * A seal area rides the same lists: [aftCurve]/[fwdCurve] carry the ramp AND the grooved flat
  * span inboard of it (at the body radius, V-notched at each groove), in aft → fwd order, and
- * the flat span shrinks by that too. Draw sites iterate the lists and never know where the
+ * the flat span shrinks by that too. A seal-only face (no ramp) carries just the grooved span,
+ * starting at the face, and its cap stands at the body radius. Draw sites iterate the lists and never know where the
  * ramp ends — which is how the grooves reach fill and stroke on every surface with no
  * draw-site code.
  *
@@ -370,13 +394,19 @@ fun bodyDrawEdges(
 
     // Curves are listed aft → fwd. The AFT face's seal area follows its ramp; the FWD face's
     // seal area PRECEDES its ramp, since the ramp is what meets the face.
+    // A zero-width span (a seal-only face) contributes no curve points — sampling it would emit
+    // `steps + 1` coincident vertices.
     val aftCurve = buildList {
-        if (aftSpan != null) addAll(curvePoints(aftSpan, aft.profile, rAt, steps))
+        if (aftSpan != null && aftSpan.xFwdPx - aftSpan.xAftPx > 0f) {
+            addAll(curvePoints(aftSpan, aft.profile, rAt, steps))
+        }
         if (aftSealSpan != null) addAll(sealAreaPoints(aftSealSpan, r, aftNotch))
     }
     val fwdCurve = buildList {
         if (fwdSealSpan != null) addAll(sealAreaPoints(fwdSealSpan, r, fwdNotch))
-        if (fwdSpan != null) addAll(curvePoints(fwdSpan, fwd.profile, rAt, steps))
+        if (fwdSpan != null && fwdSpan.xFwdPx - fwdSpan.xAftPx > 0f) {
+            addAll(curvePoints(fwdSpan, fwd.profile, rAt, steps))
+        }
     }
 
     return BodyDrawEdges(
@@ -450,8 +480,8 @@ private fun sealAreaPoints(
 /**
  * Where a seal area's radius cuts cross it, in drawn units.
  *
- * The shop cuts 3–4 rings for the fiberglass to seat into, on the FLAT body just inboard of the
- * shoulder that ramps up to the liner. Each point carries the radius of the notch FLOOR — the
+ * The shop cuts 3–4 rings for the fiberglass to seat into, on the FLAT body — just inboard of the
+ * shoulder that ramps up to the liner, or from the face itself on a square end. Each point carries the radius of the notch FLOOR — the
  * body radius minus [sealNotchGeom]'s depth — so a draw site stroking `cy − r → cy + r`
  * produces a line that ends exactly on the bottoms of the two silhouette notches
  * [sealAreaPoints] cuts at the same station. Stopping short of the silhouette is deliberate: a

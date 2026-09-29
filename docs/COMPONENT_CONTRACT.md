@@ -147,7 +147,8 @@ material.
 
 - Diameters are **derived** from whatever sits across the face, never typed. Re-diametering a
   neighbour re-curves the blend; derived values are exactly what may move.
-- Nothing across the face, or a neighbour at the same Ø → **no blend drawn** (not an error).
+- Nothing across the face, or a neighbour at the same Ø → **no curve drawn** (not an error). A
+  seal area on that face still draws (see below).
 - Liners are excluded from the ordinary neighbour lookup — a sleeve over mid-body is not a
   diameter the shaft steps to. The exception is a face a liner **butts directly against**, a real
   seal area: the shaft IS cut down under the liner, but that seat is covered and never drawn, and
@@ -157,25 +158,32 @@ material.
   would be a made-up number. A seat authored as its own body under the liner is **not** consulted:
   `subtractBodiesAgainstNonBodies` trims a fully covered body out of the drawing, so there is
   nothing on the sheet for the curve to arrive at.
-- A face may carry a **seal area** — `Body.blendAftSeal`/`blendFwdSeal` (or `AutoBlend.seal`) —
-  drawing `SEAL_GROOVE_COUNT` (3) cuts for the fiberglass to seat into. The cuts sit on a
-  **grooved FLAT span at the body Ø, inboard of the blend**: from the face inward the drawing
-  runs the blend ramp (blend length), then the seal area (its own stored length,
-  `Body.blendAftSealLenMm`/`blendFwdSealLenMm`, `AutoBlend.sealLenMm` — typed, stored verbatim,
-  drawing-only like the blend length). `0` means "follow the blend length", which is what every
-  document saved before the field existed carries, so a legacy seal area keeps its grooves. The
-  shop geometry is the reason (on-device report, photo of a shaft on the lathe): the rings sit on
-  the fiberglassed body and a short shoulder ramps up from it to the liner — cutting the grooves
-  into the ramp tapered the whole seal area once the ramp was authored to the shoulder. Each cut
-  is a V notch in both silhouette edges plus a DASHED line across seated on the notch floors —
-  never a solid full-height line, which is the glyph for a component face and made the shaft read
-  as segments (on-device report); the dash is finer than the hidden-keyway pattern on purpose (`sealNotchGeom` sizes the notch;
-  line and notch derive from the same geometry so they meet exactly). Authored as the third state of a face's
-  finish chips (Square | Blend | Seal area) — exclusive as presented, but a seal area INCLUDES its
-  blend (the shoulder it sits behind), and its length field appears only in Seal mode. The stored
-  blend length, seal flag and seal length are independent, so switching Seal → Blend keeps the
-  typed seal length. A fixed count, since the drawing is a cue rather than something to machine
-  from.
+- A body end may carry a **seal area** — `Body.blendAftSeal`/`blendFwdSeal` (or `AutoBlend.seal`) —
+  drawing `SEAL_GROOVE_COUNT` (3) cuts for the fiberglass to seat into. A seal area is a
+  **property of the body SECTION with its own on/off and length, independent of the face finish**
+  (on-device report, photo of a shaft on the lathe): a body can carry grooves at a square end,
+  grooves behind a blended shoulder, or a shoulder with no grooves. The cuts sit on a **grooved
+  FLAT span at the body Ø**: on a **square** end it starts AT the face; on a **blended** end it
+  starts inboard of the ramp (from the face inward: blend ramp, then the seal area). A face with
+  no step to blend (nothing across it, or a same-Ø neighbour) drops its curve but **keeps its
+  grooves**, drawn from the face. The seal area's length is its own stored field
+  (`Body.blendAftSealLenMm`/`blendFwdSealLenMm`, `AutoBlend.sealLenMm` — typed, stored verbatim,
+  drawing-only like the blend length); `0` means "follow the blend length", which is what every
+  document saved before the field existed carries, so a legacy seal area keeps its grooves (on a
+  square end a `0` resolves to nothing, and the face draws no seal — never an error). The stored
+  fields are unchanged; only their interpretation widened — every document saved before carries
+  seal flags only on blended faces, so none changes appearance. The shop geometry is why the cuts
+  never sit on the ramp: the rings sit on the fiberglassed body and a short shoulder ramps up from
+  it to the liner — cutting the grooves into the ramp tapered the whole seal area once the ramp
+  was authored to the shoulder. Each cut is a V notch in both silhouette edges plus a DASHED line
+  across seated on the notch floors — never a solid full-height line, which is the glyph for a
+  component face and made the shaft read as segments (on-device report); the dash is finer than
+  the hidden-keyway pattern on purpose (`sealNotchGeom` sizes the notch; line and notch derive
+  from the same geometry so they meet exactly). Authored in its own **"Seal areas"** section
+  (AFT / FWD checkboxes, a length field under each ticked face), a sibling of the Square | Blend
+  "Face finish" chips — never a third finish mode and never nested under a blend control. A
+  finish change leaves the seal flags alone, and unticking a seal keeps its typed length. A fixed
+  count, since the drawing is a cue rather than something to machine from.
 - Silhouette only — no dimension rail, no footer row, no effect on OAL, coverage, or collision.
 - Draw sites: the schematic canvas (`ShaftRenderer`), the schematic PDF (`ShaftPdfComposer`),
   and the runout/consolidated sheet (`RunoutPdfComposer.drawBodiesForRunout`) all decompose the

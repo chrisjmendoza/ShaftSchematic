@@ -1141,24 +1141,23 @@ internal fun defaultBlendMm(bodyLengthMm: Float): Float {
     return if (bodyLengthMm > 0f) minOf(preset, bodyLengthMm * 0.25f) else preset
 }
 
-/** The stored (length, seal) pair read back as the face's mode. */
-internal fun blendFaceMode(lengthMm: Float, seal: Boolean): BlendFaceMode = when {
-    lengthMm <= 0f -> BlendFaceMode.SQUARE
-    seal -> BlendFaceMode.SEAL
-    else -> BlendFaceMode.BLEND
-}
+/**
+ * The stored blend length read back as the face's finish. The seal flag plays no part: a seal
+ * area is a section property, independent of the finish.
+ */
+internal fun blendFaceMode(lengthMm: Float): BlendFaceMode =
+    if (lengthMm <= 0f) BlendFaceMode.SQUARE else BlendFaceMode.BLEND
 
 /**
- * The blend length a mode change should commit: zero for a square face, otherwise whatever the
- * face already carried, falling back to the starting preset. Switching Blend ↔ Seal area keeps
- * the typed length — the two differ only by the cuts.
+ * The blend length a finish change should commit: zero for a square face, otherwise whatever the
+ * face already carried, falling back to the starting preset. It never touches the seal flag.
  */
 internal fun blendLenForMode(mode: BlendFaceMode, currentMm: Float, bodyLengthMm: Float): Float =
     if (mode == BlendFaceMode.SQUARE) 0f
     else currentMm.takeIf { it > 0f } ?: defaultBlendMm(bodyLengthMm)
 
 /**
- * Starting seal-area length when a face is first switched to Seal area: the 4 in preset, or a
+ * Starting seal-area length when a face's seal area is first switched on: the 4 in preset, or a
  * quarter of a body too short to host it. A starting value only — the user types over it, and
  * nothing re-derives it afterwards.
  */
@@ -1168,11 +1167,11 @@ internal fun defaultSealLenMm(bodyLengthMm: Float): Float {
 }
 
 /**
- * The seal-area length a mode change should commit. Seal area keeps a typed length and seeds
- * the preset only when the face carries none; every other mode passes the stored length through
- * UNCHANGED — the seal length is stored independently of the seal flag, so switching Seal area →
- * Blend just stops drawing the grooves, and switching back restores the typed length.
+ * The seal-area length a seal toggle should commit. Switching ON keeps a typed length and seeds
+ * the preset only when the face carries none; switching OFF passes the stored length through
+ * UNCHANGED — the seal length is stored independently of the seal flag, so unticking just stops
+ * drawing the grooves, and ticking again restores the typed length.
  */
-internal fun sealLenForMode(mode: BlendFaceMode, currentMm: Float, bodyLengthMm: Float): Float =
-    if (mode == BlendFaceMode.SEAL) currentMm.takeIf { it > 0f } ?: defaultSealLenMm(bodyLengthMm)
+internal fun sealLenForSeal(on: Boolean, currentMm: Float, bodyLengthMm: Float): Float =
+    if (on) currentMm.takeIf { it > 0f } ?: defaultSealLenMm(bodyLengthMm)
     else currentMm

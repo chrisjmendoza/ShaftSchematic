@@ -87,7 +87,8 @@ fun linerSurfaceSegs(
 
 /**
  * One body's surface: the flat run, with each blended face replaced by the sampled curve.
- * An unblended body yields the single constant-Ø seg it always did.
+ * An unblended body yields the single constant-Ø seg it always did, and so does a seal-only face
+ * (`lengthMm = 0`): the seal grooves are a drawn cue, not a diameter change.
  */
 private fun blendedBodySegs(b: ResolvedBody, blends: List<BodyBlend>): List<SurfaceSeg> {
     val mine = blends.filter { it.bodyId == b.id }

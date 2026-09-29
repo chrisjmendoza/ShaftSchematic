@@ -57,10 +57,21 @@ class BlendSvgPreviewTest {
         val seal: Boolean = false,
         /** Seal-area length; 0 follows the blend length (the pre-field document rule). */
         val sealLenMm: Float = 0f,
+        /** Nothing fwd of the body at all — its FWD face is the open end of the shaft. */
+        val openEnd: Boolean = false,
     )
 
     /** Smaller aft body enlarging into a bigger one — the coupling-fit case, blended on its AFT face. */
-    private fun spec(r: Row) = if (r.linerOdMm > 0f) ShaftSpec(
+    private fun spec(r: Row) = if (r.openEnd) ShaftSpec(
+        overallLengthMm = 500f,
+        bodies = listOf(
+            Body(
+                id = "run", startFromAftMm = 0f, lengthMm = 500f, diaMm = r.smallDiaMm,
+                blendFwdMm = r.blendMm, blendProfile = r.profile, blendFwdSeal = r.seal,
+                blendFwdSealLenMm = r.sealLenMm,
+            ),
+        ),
+    ) else if (r.linerOdMm > 0f) ShaftSpec(
         // Seal area: the body's FWD face butts a liner; the seat under it is never drawn.
         overallLengthMm = 1000f,
         bodies = listOf(
@@ -120,6 +131,10 @@ class BlendSvgPreviewTest {
                 linerOdMm = 203.2f, seal = true, sealLenMm = 4 * IN),
             Row("Older document: seal length 0 follows the 2 in blend", BlendProfile.OGEE, 2 * IN, 177.8f,
                 linerOdMm = 203.2f, seal = true),
+            Row("Square end + 4 in seal area (no shoulder)", BlendProfile.OGEE, 0f, 177.8f,
+                linerOdMm = 203.2f, seal = true, sealLenMm = 4 * IN),
+            Row("Square end + seal area, no neighbour", BlendProfile.OGEE, 0f, 177.8f,
+                seal = true, sealLenMm = 4 * IN, openEnd = true),
         )
 
         val groupCount = rows.count { it.group != null }
@@ -138,7 +153,8 @@ class BlendSvgPreviewTest {
             val s = spec(r)
             val comps = resolveComponents(s)
             val blends = bodyBlends(s, comps)
-            if (r.blendMm > 0f && blends.isEmpty()) missing++
+            // A sealed row must resolve to a blend entry too — even a square, seal-only face.
+            if ((r.blendMm > 0f || r.seal) && blends.isEmpty()) missing++
 
             svg.text(12f, cy - 38f, r.title, size = 13f)
             svg.line(padL - 12f, cy, padL + 1000f * scaleX + 12f, cy, stroke = "#c33", sw = 0.5f)

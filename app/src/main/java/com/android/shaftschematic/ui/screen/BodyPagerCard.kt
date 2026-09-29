@@ -48,7 +48,7 @@ import com.android.shaftschematic.util.UnitSystem
  *
  * An AUTO span (`ResolvedComponentSource.AUTO`) shows derived Start/Length read-only with an
  * editable Ø (a per-section bare-shaft override) and the "Explicit body" checkbox that promotes
- * it; an explicit body shows the editable Start/Length/Ø, the blend/seal faces, and the keyway
+ * it; an explicit body shows the editable Start/Length/Ø, the face finishes and seal areas, and the keyway
  * section. Every control here that changes geometry, position, or a value is mirrored in
  * `AddBodyDialog` by the add-dialog-parity invariant; "Show Ø on drawing", "Show name on
  * drawing", "Compress on drawing", "Shade on drawing", and the "Prints in: in | mm" chip are
@@ -170,17 +170,21 @@ internal fun BodyPagerCard(
             val fwdBlend = spec.autoBlends.autoBlendFor(
                 component.startMmPhysical, component.endMmPhysical, LinerAuthoredReference.FWD)
             val autoProfile = aftBlend?.profile ?: fwdBlend?.profile ?: BlendProfile.OGEE
+            // An anchor may carry a seal with no blend (lengthMm 0): the finish and the seal
+            // area are independent, so a finish change passes the seal pair through untouched
+            // and a seal toggle passes the blend length through untouched.
             BlendSection(
-                aftMode = blendFaceMode(aftBlend?.lengthMm ?: 0f, aftBlend?.seal == true),
-                fwdMode = blendFaceMode(fwdBlend?.lengthMm ?: 0f, fwdBlend?.seal == true),
+                aftMode = blendFaceMode(aftBlend?.lengthMm ?: 0f),
+                fwdMode = blendFaceMode(fwdBlend?.lengthMm ?: 0f),
                 profile = autoProfile,
+                aftSeal = aftBlend?.seal == true,
+                fwdSeal = fwdBlend?.seal == true,
                 onSetAftMode = { m ->
                     onSetAutoBlend(
                         component.startMmPhysical, component.endMmPhysical,
                         LinerAuthoredReference.AFT,
                         blendLenForMode(m, aftBlend?.lengthMm ?: 0f, lengthMm),
-                        autoProfile, m == BlendFaceMode.SEAL,
-                        sealLenForMode(m, aftBlend?.sealLenMm ?: 0f, lengthMm),
+                        autoProfile, aftBlend?.seal ?: false, aftBlend?.sealLenMm ?: 0f,
                     )
                 },
                 onSetFwdMode = { m ->
@@ -188,8 +192,22 @@ internal fun BodyPagerCard(
                         component.startMmPhysical, component.endMmPhysical,
                         LinerAuthoredReference.FWD,
                         blendLenForMode(m, fwdBlend?.lengthMm ?: 0f, lengthMm),
-                        autoProfile, m == BlendFaceMode.SEAL,
-                        sealLenForMode(m, fwdBlend?.sealLenMm ?: 0f, lengthMm),
+                        autoProfile, fwdBlend?.seal ?: false, fwdBlend?.sealLenMm ?: 0f,
+                    )
+                },
+                // Unticking a seal on a square face clears the anchor (length 0, no seal).
+                onSetAftSeal = { on ->
+                    onSetAutoBlend(
+                        component.startMmPhysical, component.endMmPhysical,
+                        LinerAuthoredReference.AFT, aftBlend?.lengthMm ?: 0f, autoProfile, on,
+                        sealLenForSeal(on, aftBlend?.sealLenMm ?: 0f, lengthMm),
+                    )
+                },
+                onSetFwdSeal = { on ->
+                    onSetAutoBlend(
+                        component.startMmPhysical, component.endMmPhysical,
+                        LinerAuthoredReference.FWD, fwdBlend?.lengthMm ?: 0f, autoProfile, on,
+                        sealLenForSeal(on, fwdBlend?.sealLenMm ?: 0f, lengthMm),
                     )
                 },
                 onProfile = { p ->
@@ -220,8 +238,8 @@ internal fun BodyPagerCard(
                         }
                     }
                 },
-                // Shown only in Seal mode, so the face's blend exists; the null check keeps a
-                // commit racing a clear from resurrecting a zero-length anchor.
+                // Shown only while the face's seal is on, so its anchor exists; the null check
+                // keeps a commit racing a clear from resurrecting an anchor.
                 aftSealLengthField = {
                     CommitNum("Seal area AFT (${abbr(unit)})", disp(aftBlend?.sealLenMm ?: 0f, unit)) { str ->
                         val blend = aftBlend
@@ -357,27 +375,41 @@ internal fun BodyPagerCard(
             onCheckedChange = { onUpdateBodyShade(idx, it) },
         )
 
-        // Blend — a machined smooth transition into whatever the face steps to.
-        // Silhouette only: the rails keep dimensioning the stored span, so nothing
-        // here moves a value or a neighbour. Mirrored in AddBodyDialog by contract.
-        val aftMode = blendFaceMode(b.blendAftMm, b.blendAftSeal)
-        val fwdMode = blendFaceMode(b.blendFwdMm, b.blendFwdSeal)
+        // Blend — a machined smooth transition into whatever the face steps to — and the
+        // seal areas, a separate per-face section property. Silhouette only: the rails keep
+        // dimensioning the stored span, so nothing here moves a value or a neighbour. A
+        // finish change leaves the seal flags untouched and a seal toggle leaves the blend
+        // lengths untouched. Mirrored in AddBodyDialog by contract.
         BlendSection(
-            aftMode = aftMode,
-            fwdMode = fwdMode,
+            aftMode = blendFaceMode(b.blendAftMm),
+            fwdMode = blendFaceMode(b.blendFwdMm),
             profile = b.blendProfile,
+            aftSeal = b.blendAftSeal,
+            fwdSeal = b.blendFwdSeal,
             onSetAftMode = { m ->
                 onUpdateBodyBlend(
                     idx, blendLenForMode(m, b.blendAftMm, b.lengthMm), b.blendFwdMm,
-                    b.blendProfile, m == BlendFaceMode.SEAL, b.blendFwdSeal,
-                    sealLenForMode(m, b.blendAftSealLenMm, b.lengthMm), b.blendFwdSealLenMm,
+                    b.blendProfile, b.blendAftSeal, b.blendFwdSeal,
+                    b.blendAftSealLenMm, b.blendFwdSealLenMm,
                 )
             },
             onSetFwdMode = { m ->
                 onUpdateBodyBlend(
                     idx, b.blendAftMm, blendLenForMode(m, b.blendFwdMm, b.lengthMm),
-                    b.blendProfile, b.blendAftSeal, m == BlendFaceMode.SEAL,
-                    b.blendAftSealLenMm, sealLenForMode(m, b.blendFwdSealLenMm, b.lengthMm),
+                    b.blendProfile, b.blendAftSeal, b.blendFwdSeal,
+                    b.blendAftSealLenMm, b.blendFwdSealLenMm,
+                )
+            },
+            onSetAftSeal = { on ->
+                onUpdateBodyBlend(
+                    idx, b.blendAftMm, b.blendFwdMm, b.blendProfile, on, b.blendFwdSeal,
+                    sealLenForSeal(on, b.blendAftSealLenMm, b.lengthMm), b.blendFwdSealLenMm,
+                )
+            },
+            onSetFwdSeal = { on ->
+                onUpdateBodyBlend(
+                    idx, b.blendAftMm, b.blendFwdMm, b.blendProfile, b.blendAftSeal, on,
+                    b.blendAftSealLenMm, sealLenForSeal(on, b.blendFwdSealLenMm, b.lengthMm),
                 )
             },
             onProfile = { p ->
