@@ -15,8 +15,10 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -27,9 +29,15 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.util.TaperCalcEntries
 import com.android.shaftschematic.util.TaperCalcField
@@ -47,8 +55,8 @@ import com.android.shaftschematic.util.presentTaperCalc
  *
  * Button-driven, by on-device request: a value appearing at the bottom while typing read as
  * the calculator answering a question that had not been asked yet. Calculate is the one
- * trigger. The derived value shows as an italic preview inside the EMPTY field — a
- * placeholder, never text, so the field still holds only what the user typed (golden rule)
+ * trigger. The derived value shows as an italic value inside the EMPTY, highlighted field —
+ * drawn, never stored as text, so the field still holds only what the user typed (golden rule)
  * and typing over it needs no clearing. The ✓ beside it KEEPS the value as an input, an
  * explicit act that lets one answer feed the next question (find the rate, keep it, clear the
  * length, find the length for a new small end).
@@ -178,10 +186,18 @@ fun TaperCalcDialog(
 }
 
 /**
- * One entry field. A derived value rides the PLACEHOLDER slot — italic, in the primary
- * colour so it reads as an answer rather than a hint — and only ever appears while the field
- * is empty, which is exactly when there is a value to derive. The ✓ trailing the preview
- * copies it into the field as typed text; from then on it is the user's number.
+ * One entry field. A derived value is shown IN the box, in the value slot, italic and in the
+ * primary colour, on a highlighted container — the highlight is what says "generated", so the
+ * label never changes. Two on-device failures rule out the alternatives: a "— calculated"
+ * label wrapped over the whole half-width box, and a placeholder, which Material 3 hides while
+ * an unfocused field carries a label, so the answer never appeared (on-device report).
+ *
+ * The field's `value` stays exactly what the user typed (empty while a value is derived —
+ * golden rule); [DerivedValueTransformation] only changes what is DRAWN, and only while the
+ * text is empty, so the first keystroke returns the field to plain entry. The transformed text
+ * is also what the decoration box reads for its float state, which keeps the label floated.
+ * The ✓ trailing the value copies it into the field as typed text; from then on it is the
+ * user's number.
  */
 @Composable
 private fun TaperEntryField(
@@ -195,26 +211,30 @@ private fun TaperEntryField(
 ) {
     val derived = state.derivedText
     val isRate = field == TaperCalcField.RATE
+    val text = entries.text(field)
+    val showsDerived = derived != null && text.isEmpty()
+    val highlight = MaterialTheme.colorScheme.primaryContainer
+    val colors = if (showsDerived) {
+        OutlinedTextFieldDefaults.colors(
+            unfocusedContainerColor = highlight,
+            focusedContainerColor = highlight,
+            unfocusedBorderColor = MaterialTheme.colorScheme.primary,
+        )
+    } else {
+        OutlinedTextFieldDefaults.colors()
+    }
     OutlinedTextField(
-        value = entries.text(field),
+        value = text,
         onValueChange = onChange,
-        label = { Text(if (derived != null) "$label — calculated" else label) },
+        label = { Text(label) },
         isError = state.isError,
         // The rate is dimensionless: a ratio is the same number on either drawing.
         suffix = if (isRate) null else {
             { Text(if (entries.unit == UnitSystem.INCHES) "in" else "mm") }
         },
-        placeholder = {
-            when {
-                derived != null -> Text(
-                    derived,
-                    fontStyle = FontStyle.Italic,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.testTag("${tag}_derived"),
-                )
-                isRate -> Text("e.g. 1:12")
-            }
-        },
+        placeholder = if (isRate) {
+            { Text("e.g. 1:12") }
+        } else null,
         trailingIcon = if (derived == null) null else {
             {
                 IconButton(
@@ -227,12 +247,45 @@ private fun TaperEntryField(
         },
         supportingText = state.supportingText?.let { { Text(it) } },
         singleLine = true,
+        textStyle = if (showsDerived) {
+            LocalTextStyle.current.copy(
+                fontStyle = FontStyle.Italic,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        } else LocalTextStyle.current,
+        visualTransformation = if (showsDerived && derived != null) {
+            DerivedValueTransformation(derived)
+        } else VisualTransformation.None,
+        colors = colors,
         // Text keyboard, not decimal: fraction entry ("19/32", "1 1/2") and ratios ("1:12")
         // need '/', ':' and space. Done on the keyboard is the same as tapping Calculate.
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Done),
         keyboardActions = KeyboardActions(onDone = { onCalculate() }),
-        modifier = Modifier.fillMaxWidth().testTag(tag),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(tag)
+            .semantics { if (showsDerived) stateDescription = "calculated" },
     )
+}
+
+/**
+ * Draws [derived] in place of an EMPTY field. The cursor sits after it; the original text
+ * offset is always 0, so nothing typed or selected can map into the displayed answer.
+ */
+private class DerivedValueTransformation(private val derived: String) : VisualTransformation {
+    override fun filter(text: AnnotatedString): TransformedText =
+        TransformedText(
+            AnnotatedString(derived),
+            object : OffsetMapping {
+                override fun originalToTransformed(offset: Int): Int = derived.length
+                override fun transformedToOriginal(offset: Int): Int = 0
+            },
+        )
+
+    override fun equals(other: Any?): Boolean =
+        other is DerivedValueTransformation && other.derived == derived
+
+    override fun hashCode(): Int = derived.hashCode()
 }
 
 private fun entriesFromSaved(l: List<String?>): TaperCalcEntries? {
