@@ -1,4 +1,4 @@
-# Overall Length (v2.1, 2026-08-29)
+# Overall Length (v2.2, 2026-09-29)
 
 ## Scope
 Defines how the **Overall Length** field behaves, how it interacts with components, and how the
@@ -12,12 +12,20 @@ UI signals errors. Applies to `ShaftViewModel`, `ShaftRoute`, and `ShaftScreen`.
   golden rule (`CLAUDE.md`) — a typed length stands exactly as typed.
 - **Default**: Overall starts at **0** — "not set yet", not "a zero-length shaft". The field
   shows `0`, and focusing it clears that ghost so the user can type without a leading zero.
-- **Commit on every keystroke**: `onSetOverallLengthMm` fires on every parseable keystroke so
-  the preview updates live. This is deliberate; do **not** narrow it to commit-on-blur.
+- **Commit on accept, never per keystroke.** The field follows the component cards' discipline:
+  `onSetOverallLengthMm` fires when the value is accepted — the green ✓ beside the field, IME
+  Done, or a blur after the text changed — and never while typing. The red ✗ reverts the text to
+  the stored value and commits nothing. Both buttons appear only while the value is being
+  modified (focused, text differs from what it was on focus), so an edit in progress is visible
+  as one; the field itself is a value box (`widthIn` cap), not a full-width banner. The
+  per-keystroke commit was the documented live-preview exception until an on-device edit from
+  368.5″ to 367.75″ committed 36″ on the way through: the drawing collapsed, then sprang back
+  with the FWD taper re-anchored through the transient value (see Re-anchoring below).
 - **Empty field**: an IME-Done or a blur on an empty field commits **nothing**. The field text
   re-derives from the stored value (a revert). It never zeroes the shaft.
 - **Blur discipline**: a commit on blur also requires the text to have changed since focus
-  (`ui/input/BlurCommitPolicy.kt`) — a tap-and-leave is a no-op.
+  (`ui/input/BlurCommitPolicy.kt`) — a tap-and-leave is a no-op. A ✓ or ✗ resets that baseline
+  before it clears focus, so the blur that follows cannot commit a second time or undo a cancel.
 - **Oversize**: if components extend past a **set** Overall (`> 0`), the input shows an
   **error**. A not-yet-set Overall (`0`) is never an error.
 
@@ -86,6 +94,20 @@ fun ShaftSpec.lastOccupiedEndMm(): Float {
 }
 ```
 
+### Re-anchoring on an OAL change
+`ShaftSpec.withNewOal` (`model/ShaftSpecExtensions.kt`) is the ONE OAL-change helper. AFT-referenced
+components keep `startFromAftMm`; FWD-referenced tapers, liners and coupler bolt slots keep their
+authored distance from the FWD face, recovered from the stored start as `oldOal − start − span`.
+That recovery is float-noisy on a long shaft: a `Float` at 9 m resolves to ~0.001 mm, so a taper
+authored flush with the face ("0 from the FWD end") came back a few thousandths of a millimetre
+past the shaft end after a round trip, the card printed a stray offset and the past-end warning lit
+(on-device report). The helper therefore computes in `Double` and snaps a recovered distance within
+`OAL_REANCHOR_SNAP_MM` (0.01 mm) to the zero it was authored as — a derivation cleanup, not a
+rewrite of a typed value (nobody authors a 0.005 mm offset; a real 1/32″ survives verbatim,
+`WithNewOalTest`). The bounds predicate's slop (`BOUNDS_EPS_MM`, `ui/util/ComponentWarnings.kt`)
+is 0.01 mm for the same reason: at exactly the float resolution, one unit of rounding lit the
+warning on a legitimately flush taper.
+
 ### Load (open, template apply, template preview)
 There is nothing to decide. A document's stored `overallLengthMm` is restored verbatim and
 every load path resolves through the same one-argument `resolveComponents(spec)`, so a
@@ -94,6 +116,11 @@ template card's preview can never disagree with the drawing it becomes.
 ---
 
 ## Change Log
+**v2.2 (2026-09-29)** — **Per-keystroke commit removed** (on-device report: an edit from 368.5″
+to 367.75″ committed 36″ in passing and collapsed the drawing). The field commits on accept (✓ /
+IME Done / blur-with-change), ✗ cancels, the pair shows only while modified, and the field is
+narrowed to a value box. `withNewOal` re-anchors in `Double` with a 0.01 mm zero-snap and
+`BOUNDS_EPS_MM` widened to 0.01 mm, closing the flush-taper "past the shaft end" residue.
 **v2.1 (2026-08-29)** — **Free-to-End badge removed entirely** (on-device direction: auto-bodies
 fill the gap to the OAL automatically, so the number misleads). The preview overlay, its value
 helper (`ui/util/FreeToEndBadgeMath.kt`), `ShaftSpec.freeToEndMm()` and the `FreeToEndBadge.md`

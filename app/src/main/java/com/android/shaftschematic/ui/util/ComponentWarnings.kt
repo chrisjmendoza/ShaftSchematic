@@ -44,8 +44,14 @@ private const val SANITY_MAX_COMPONENT_LENGTH_MM = 15_000f
  */
 private const val SANITY_MAX_DIA_MM = 1_000f
 
-/** Axial slop absorbing float round-trip noise in the shaft-span bounds comparison. */
-private const val BOUNDS_EPS_MM = 1e-3f
+/**
+ * Axial slop absorbing float round-trip noise in the shaft-span bounds comparison. A `Float`
+ * start on a 9 m shaft resolves to about 0.001 mm, so a slop of exactly that let a
+ * one-unit rounding of `start + length` past the OAL light the "past the shaft end" warning on
+ * a taper authored flush with the FWD face (on-device report). 0.01 mm is a hundredth of the
+ * finest value anyone types and still far below anything measurable on the shaft.
+ */
+private const val BOUNDS_EPS_MM = 1e-2f
 
 private const val SHORT_SEGMENT_MSG = "Very short segment (< 1 mm)"
 private const val LENGTH_SANITY_MSG = "Length exceeds 15 m — check for a typo"

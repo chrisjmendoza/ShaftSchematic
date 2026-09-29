@@ -132,15 +132,38 @@ fun ShaftSpec.collidingIds(): Set<String> {
  *
  * This is the single authoritative OAL-change helper; every mutation that changes the shaft
  * length should go through here rather than calling `.copy(overallLengthMm = …)` directly.
+ *
+ * The authored FWD distance is recovered from the stored start, and that recovery is where a
+ * long shaft picks up noise: at 9 m a `Float` resolves to about 0.001 mm, so `oldOal − start −
+ * length` for a taper flush with the FWD face comes back as a few thousandths of a millimetre
+ * rather than 0, and re-deriving the start from it pushed the taper past the shaft end by that
+ * much — the card printed a stray offset and the "past the shaft end" warning lit (on-device
+ * report, an OAL edit that passed through an intermediate value). The arithmetic therefore runs
+ * in `Double` and a recovered distance within [OAL_REANCHOR_SNAP_MM] of zero is taken as the
+ * zero it was authored as — a derivation cleanup, not a rewrite of a typed value: nobody authors
+ * a 0.005 mm offset from a face.
  */
+/**
+ * A recovered FWD distance closer to zero than this (mm) is float noise from the stored start,
+ * not an authored offset. Ten times the `Float` resolution at a 9 m shaft, a hundredth of the
+ * finest value anyone types.
+ */
+const val OAL_REANCHOR_SNAP_MM = 0.01
+
 fun ShaftSpec.withNewOal(newOal: Float): ShaftSpec {
     val clampedOal = newOal.coerceAtLeast(0f)
-    val oldOal = overallLengthMm
+    val oldOal = overallLengthMm.toDouble()
+
+    /** The new start of a FWD-anchored span whose stored start was [startMm] and whose anchored extent is [spanMm]. */
+    fun reanchoredStart(startMm: Float, spanMm: Float): Float {
+        val recovered = oldOal - startMm - spanMm
+        val authoredFromFwd = if (abs(recovered) < OAL_REANCHOR_SNAP_MM) 0.0 else recovered
+        return (clampedOal - authoredFromFwd - spanMm).toFloat()
+    }
 
     val newTapers = tapers.map { t ->
         if (t.authoredReference == LinerAuthoredReference.FWD) {
-            val authoredFromFwd = oldOal - t.startFromAftMm - t.lengthMm
-            t.copy(startFromAftMm = clampedOal - authoredFromFwd - t.lengthMm)
+            t.copy(startFromAftMm = reanchoredStart(t.startFromAftMm, t.lengthMm))
         } else {
             t
         }
@@ -148,9 +171,8 @@ fun ShaftSpec.withNewOal(newOal: Float): ShaftSpec {
 
     val newLiners = liners.map { ln ->
         if (ln.authoredReference == LinerAuthoredReference.FWD) {
-            val authoredFromFwd = oldOal - ln.startFromAftMm - ln.lengthMm
             ln.withPhysical(
-                startMmPhysical = clampedOal - authoredFromFwd - ln.lengthMm,
+                startMmPhysical = reanchoredStart(ln.startFromAftMm, ln.lengthMm),
                 lengthMm = ln.lengthMm,
                 odMm = ln.odMm,
             )
@@ -164,8 +186,7 @@ fun ShaftSpec.withNewOal(newOal: Float): ShaftSpec {
     val newSlots = couplerBoltSlots.map { cs ->
         if (cs.authoredReference == SlotAuthoredReference.FWD) {
             val rowSpan = (cs.count - 1).coerceAtLeast(0) * cs.spacingMm
-            val authoredFromFwd = oldOal - (cs.startFromAftMm + rowSpan)
-            cs.copy(startFromAftMm = clampedOal - authoredFromFwd - rowSpan)
+            cs.copy(startFromAftMm = reanchoredStart(cs.startFromAftMm, rowSpan))
         } else {
             cs
         }

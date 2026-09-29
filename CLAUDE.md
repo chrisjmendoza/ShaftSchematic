@@ -1013,10 +1013,19 @@ rejoins flanking fragments but **never merges across a component still occupying
 (that would manufacture a long phantom body).
 
 ### OAL field
-The OAL is **always user-typed** — there is no auto mode. It calls `onSetOverallLengthMm`
-on **every parseable keystroke** (not just on blur). This is intentional — the preview
-updates live. Do not change this to commit-on-blur only. An **empty** field on IME-Done or
-blur commits nothing and reverts the text to the stored value; it never zeroes the shaft.
+The OAL is **always user-typed** — there is no auto mode. It commits on **accept**, like the
+component cards — the green ✓ beside the field, IME-Done, or a blur after the text changed
+(`BlurCommitPolicy`) — and the red ✗ reverts the text and commits nothing; the pair shows only
+while the value is being modified, and the field is a value box, not a full-width banner. It
+does NOT commit per keystroke: that was the documented exception for a live preview, and on
+device an edit from 368.5″ to 367.75″ committed 36″ on the way through, collapsed the drawing,
+and re-anchored the FWD taper through that transient (on-device report). Do not reintroduce the
+per-keystroke commit. An **empty** field on IME-Done or blur commits nothing and reverts the text
+to the stored value; it never zeroes the shaft. `ShaftSpec.withNewOal` (the ONE OAL-change
+helper) re-anchors FWD-referenced components in `Double` and snaps a recovered FWD distance
+under `OAL_REANCHOR_SNAP_MM` (0.01 mm) to the zero it was authored as — `Float` noise at 9 m
+is ~0.001 mm, and one unit of it put a flush taper "past the shaft end"; the bounds slop
+`BOUNDS_EPS_MM` is 0.01 mm for the same reason.
 `overallLengthMm == 0` means "not typed yet", not an error: the field draws no red state and
 the renderer's 0-OAL fallback (`ShaftSpec.renderSpanSpec()`, `ui/drawing/RenderSpanSpec.kt` —
 ONE implementation behind both canvases and the preview OAL badge) draws such a shaft to its

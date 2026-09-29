@@ -404,14 +404,30 @@ class ComponentWarningsTest {
         assertFalse(outsideShaftSpan(spec, 800f, 200f))
     }
 
-    /** The eps absorbs float round-trip noise; a real overrun still fires. */
+    /**
+     * The eps absorbs float round-trip noise; a real overrun still fires. It is 0.01 mm — a
+     * `Float` start on a 9 m shaft resolves to ~0.001 mm, and a slop of exactly that lit the
+     * warning on a taper authored flush with the FWD face (on-device report).
+     */
     @Test
     fun `bounds honor the eps at the boundary`() {
         val spec = ShaftSpec(overallLengthMm = 1000f)
-        assertFalse(outsideShaftSpan(spec, 800f, 200.0005f))
-        assertTrue(outsideShaftSpan(spec, 800f, 200.01f))
-        assertFalse(outsideShaftSpan(spec, -0.0005f, 100f))
-        assertTrue(outsideShaftSpan(spec, -0.01f, 100f))
+        assertFalse(outsideShaftSpan(spec, 800f, 200.005f))
+        assertTrue(outsideShaftSpan(spec, 800f, 200.05f))
+        assertFalse(outsideShaftSpan(spec, -0.005f, 100f))
+        assertTrue(outsideShaftSpan(spec, -0.05f, 100f))
+    }
+
+    /** One float unit of rounding on a 30 ft shaft is inside, not past the end. */
+    @Test
+    fun `a flush taper on a long shaft is not past the end by float noise`() {
+        val inch = 25.4f
+        val oal = 367.75f * inch
+        val len = 25.25f * inch
+        val spec = ShaftSpec(overallLengthMm = oal)
+        val start = (oal.toDouble() - len).toFloat()
+        assertFalse(outsideShaftSpan(spec, start, len))
+        assertFalse(outsideShaftSpan(spec, Math.nextUp(start), len))
     }
 
     /** Both surfaces read the ONE comparison; only the wording differs. */

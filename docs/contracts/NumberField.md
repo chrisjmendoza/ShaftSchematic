@@ -101,9 +101,11 @@ Do Nots
 - Do not mutate ViewModel directly.
 - Do not parse or convert (VM handles it).
 
-Known exception
-- The OAL field intentionally commits on every keystroke in manual mode (live preview);
-  it does not use this field's commit-on-blur discipline. See `ShaftScreen.md`.
+The OAL field
+- `OverallLengthField` is not a `NumericInputField`, but it follows the same commit-on-blur
+  discipline (commit only when the text changed since focus, `shouldCommitOnBlur`) plus an
+  explicit ✓/✗ accept/cancel pair and IME Done. It never commits per keystroke: an
+  intermediate value reached the drawing that way (on-device report). See `ShaftScreen.md`.
 
 ---
 

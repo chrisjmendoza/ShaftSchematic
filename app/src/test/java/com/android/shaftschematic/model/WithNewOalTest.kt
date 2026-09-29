@@ -1,7 +1,9 @@
 package com.android.shaftschematic.model
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.abs
 
 private const val EPS = 0.001f
 
@@ -29,6 +31,51 @@ class WithNewOalTest {
     private fun authoredFromFwd(spec: ShaftSpec, cs: CouplerBoltSlot): Float {
         val rowSpan = (cs.count - 1).coerceAtLeast(0) * cs.spacingMm
         return spec.overallLengthMm - (cs.startFromAftMm + rowSpan)
+    }
+
+    // ── Float noise on a long shaft ──────────────────────────────────────────
+
+    @Test
+    fun `a flush fwd taper on a 30 ft shaft stays flush through a keystroke-sized detour`() {
+        // On-device: editing 368.5" -> 367.75" passed through 36", and the taper authored
+        // "0 from the FWD end" came back a few thousandths of a millimetre past the shaft end.
+        val inch = 25.4f
+        val oal0 = 368.5f * inch
+        val len = 25.25f * inch
+        val taper = Taper(id = "t1", startFromAftMm = oal0 - len, lengthMm = len,
+            startDiaMm = 263f, endDiaMm = 210f, authoredReference = LinerAuthoredReference.FWD)
+        var spec = ShaftSpec(overallLengthMm = oal0, tapers = listOf(taper))
+
+        // Every intermediate value a keystroke edit could commit, in order.
+        for (oalIn in listOf(368f, 36f, 367f, 367.7f, 367.75f)) {
+            spec = spec.withNewOal(oalIn * inch)
+            val t = spec.tapers[0]
+            // The stored start is the nearest Float to (OAL − length): no accumulated drift
+            // from the detour, whatever route the value took to get here.
+            val exact = (spec.overallLengthMm.toDouble() - len).toFloat()
+            assertEquals("start re-derived exactly at ${oalIn}\"", exact, t.startFromAftMm, 0f)
+            assertEquals("length untouched", len, t.lengthMm, 0f)
+            // What is left is one Float rounding of start + length, an order of magnitude
+            // inside the 0.01 mm slop the bounds predicate and the snap both use.
+            assertTrue(
+                "residue at ${oalIn}\" is float noise, not a drift",
+                abs(authoredFromFwd(spec, t)) < 2e-3f,
+            )
+        }
+    }
+
+    @Test
+    fun `a real fwd offset is never snapped`() {
+        // 1/32" from the face is an authored value and must survive the round trip verbatim.
+        val inch = 25.4f
+        val offset = inch / 32f
+        val taper = Taper(id = "t1", startFromAftMm = 400f * inch - offset - 100f, lengthMm = 100f,
+            startDiaMm = 60f, endDiaMm = 50f, authoredReference = LinerAuthoredReference.FWD)
+        val spec = ShaftSpec(overallLengthMm = 400f * inch, tapers = listOf(taper))
+
+        val result = spec.withNewOal(380f * inch)
+
+        assertEquals(offset, authoredFromFwd(result, result.tapers[0]), 1e-3f)
     }
 
     // ── OAL update, no FWD components ────────────────────────────────────────

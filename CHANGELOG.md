@@ -8,6 +8,26 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-09-29
 
+### fix(ui): the Overall Length field commits on accept, with a ✓/✗ pair, never per keystroke
+
+Editing a mate duplicate's length from 368.5″ to 367.75″ by deleting the "8" committed an
+intermediate 36″: the whole drawing collapsed, then sprang back with the FWD taper carrying a stray
+offset and a "past the shaft end" warning (on-device report). The per-keystroke commit was the
+documented live-preview exception; it is gone. The field now behaves like the component cards —
+the value reaches the ViewModel on the green ✓ beside it, on IME Done, or on a blur after the text
+changed — and the red ✗ reverts the text and commits nothing. The pair appears only while the value
+is being modified, and the field is a value box rather than a full-width banner. An empty field
+still commits nothing and reverts. `OverallLengthFieldTest` pins every path; `docs/contracts/
+OverallLength.md` v2.2, `ShaftScreen.md`, `NumberField.md` and the CLAUDE.md invariant follow.
+
+The residue itself is closed too: `ShaftSpec.withNewOal` recovers a FWD-referenced component's
+authored distance from its stored start, and a `Float` at 9 m resolves to ~0.001 mm — one unit of
+that put a taper authored flush with the face past the shaft end. The helper now re-anchors in
+`Double` and snaps a recovered distance under `OAL_REANCHOR_SNAP_MM` (0.01 mm) to the zero it was
+authored as (a real 1/32″ offset survives verbatim), and the bounds predicate's slop
+(`BOUNDS_EPS_MM`) is 0.01 mm instead of exactly the float resolution. `WithNewOalTest` walks the
+reported keystroke sequence on a 30 ft shaft; `ComponentWarningsTest` pins the slop.
+
 ### fix(pdf): the footer band is reserved at its measured height, so nothing above it can collide
 
 On device, a Schematic + Runout consolidated sheet printed "TIR's taken looking:" straight through
