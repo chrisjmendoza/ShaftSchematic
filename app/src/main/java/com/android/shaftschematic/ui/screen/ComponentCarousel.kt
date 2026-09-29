@@ -157,14 +157,14 @@ internal fun ComponentCarouselPager(
     selectedComponentId: String?,
     onAddBody: (Float, Float, Float) -> Unit,
     onSetAutoSectionDia: (spanStartMm: Float, spanEndMm: Float, diaMm: Float) -> Unit,
-    onSetAutoBlend: (spanStartMm: Float, spanEndMm: Float, end: LinerAuthoredReference, lengthMm: Float, profile: BlendProfile, seal: Boolean) -> Unit,
+    onSetAutoBlend: (spanStartMm: Float, spanEndMm: Float, end: LinerAuthoredReference, lengthMm: Float, profile: BlendProfile, seal: Boolean, sealLenMm: Float) -> Unit,
     onSetShowAutoBodyDia: (Boolean) -> Unit,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateBodyShowDia: (Int, Boolean) -> Unit,
     onUpdateBodyShowLabel: (Int, Boolean) -> Unit,
     onUpdateBodyShade: (Int, Boolean) -> Unit = { _, _ -> },
     onUpdateBodyCompressOnDrawing: (Int, Boolean) -> Unit,
-    onUpdateBodyBlend: (index: Int, blendAftMm: Float, blendFwdMm: Float, profile: BlendProfile, sealAft: Boolean, sealFwd: Boolean) -> Unit,
+    onUpdateBodyBlend: (index: Int, blendAftMm: Float, blendFwdMm: Float, profile: BlendProfile, sealAft: Boolean, sealFwd: Boolean, sealAftLenMm: Float, sealFwdLenMm: Float) -> Unit,
     onUpdateBodyLabel: (Int, String?) -> Unit,
     onUpdateBodyKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromEndMm: Float, end: LinerAuthoredReference, spooned: Boolean) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float, String) -> Unit,
@@ -586,14 +586,14 @@ internal fun ComponentPagerCard(
     componentShadeDefaults: ComponentShadeDefaults = ComponentShadeDefaults(),
     onAddBody: (Float, Float, Float) -> Unit,
     onSetAutoSectionDia: (spanStartMm: Float, spanEndMm: Float, diaMm: Float) -> Unit,
-    onSetAutoBlend: (spanStartMm: Float, spanEndMm: Float, end: LinerAuthoredReference, lengthMm: Float, profile: BlendProfile, seal: Boolean) -> Unit,
+    onSetAutoBlend: (spanStartMm: Float, spanEndMm: Float, end: LinerAuthoredReference, lengthMm: Float, profile: BlendProfile, seal: Boolean, sealLenMm: Float) -> Unit,
     onSetShowAutoBodyDia: (Boolean) -> Unit,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateBodyShowDia: (Int, Boolean) -> Unit,
     onUpdateBodyShowLabel: (Int, Boolean) -> Unit,
     onUpdateBodyShade: (Int, Boolean) -> Unit = { _, _ -> },
     onUpdateBodyCompressOnDrawing: (Int, Boolean) -> Unit,
-    onUpdateBodyBlend: (index: Int, blendAftMm: Float, blendFwdMm: Float, profile: BlendProfile, sealAft: Boolean, sealFwd: Boolean) -> Unit,
+    onUpdateBodyBlend: (index: Int, blendAftMm: Float, blendFwdMm: Float, profile: BlendProfile, sealAft: Boolean, sealFwd: Boolean, sealAftLenMm: Float, sealFwdLenMm: Float) -> Unit,
     onUpdateBodyLabel: (Int, String?) -> Unit,
     onUpdateBodyKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromEndMm: Float, end: LinerAuthoredReference, spooned: Boolean) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float, String) -> Unit,
@@ -1156,3 +1156,23 @@ internal fun blendFaceMode(lengthMm: Float, seal: Boolean): BlendFaceMode = when
 internal fun blendLenForMode(mode: BlendFaceMode, currentMm: Float, bodyLengthMm: Float): Float =
     if (mode == BlendFaceMode.SQUARE) 0f
     else currentMm.takeIf { it > 0f } ?: defaultBlendMm(bodyLengthMm)
+
+/**
+ * Starting seal-area length when a face is first switched to Seal area: the 4 in preset, or a
+ * quarter of a body too short to host it. A starting value only — the user types over it, and
+ * nothing re-derives it afterwards.
+ */
+internal fun defaultSealLenMm(bodyLengthMm: Float): Float {
+    val preset = AddDefaultsConfig.SEAL_LEN_IN * 25.4f
+    return if (bodyLengthMm > 0f) minOf(preset, bodyLengthMm * 0.25f) else preset
+}
+
+/**
+ * The seal-area length a mode change should commit. Seal area keeps a typed length and seeds
+ * the preset only when the face carries none; every other mode passes the stored length through
+ * UNCHANGED — the seal length is stored independently of the seal flag, so switching Seal area →
+ * Blend just stops drawing the grooves, and switching back restores the typed length.
+ */
+internal fun sealLenForMode(mode: BlendFaceMode, currentMm: Float, bodyLengthMm: Float): Float =
+    if (mode == BlendFaceMode.SEAL) currentMm.takeIf { it > 0f } ?: defaultSealLenMm(bodyLengthMm)
+    else currentMm

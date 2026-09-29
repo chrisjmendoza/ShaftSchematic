@@ -276,20 +276,26 @@ nothing.
 **Body blend — under the parity rule, NOT a carve-out.** A blend changes the drawn silhouette,
 so it fails test 1 above. `AddBodyDialog` and the explicit-body carousel card must both expose
 the same section, and they do so by sharing one composable (`ui/screen/BlendSection.kt`) — the
-length FIELD is a slot because the card commits on blur while the dialog holds local state until
+length FIELDS are slots because the card commits on blur while the dialog holds local state until
 submit, but every control and every visibility condition is decided in one place:
 
 | Control | Shown when |
 |---|---|
 | Face-finish chips, per face — **Square \| Blend \| Seal area** | always |
-| Axial length field, per face | that face is not Square |
+| Axial length field, per face ("Blend AFT/FWD") | that face is not Square |
+| Seal area length field, per face ("Seal area AFT/FWD") — directly under that face's blend length | that face is **Seal area** (both surfaces — parity) |
 | Shape chips — S-curve \| Fillet \| Eased cone | either face is not Square |
 
-**Seal area includes the blend** — the cuts are machined across the blended section, so the three
-modes are exclusive as presented while the stored model keeps length and seal flag independent.
+**Seal area includes the blend** — a seal face is the short shoulder ramp (blend length) PLUS the
+grooved flat span inboard of it at the body Ø (seal area length), so the three modes are exclusive
+as presented while the stored model keeps blend length, seal flag and seal length independent.
+Switching to Seal area seeds an empty seal length with the preset (`AddDefaultsConfig.SEAL_LEN_IN`,
+4 in, capped at a quarter of the body — `defaultSealLenMm`); switching away keeps the typed value
+(`sealLenForMode`). A stored `0` follows the blend length (documents saved before the field).
 
-The auto-body card omits the section: an auto span is a derived gap with no card fields of its
-own, and promoting it to an explicit body is the documented way to gain them.
+The auto-body card carries the same section, anchored in shaft space (`AutoBlend`), so a template's
+seal areas survive liners moving under it; the dialog has no auto counterpart because an Add dialog
+always creates an explicit body.
 
 FWD-reference math: the entered position locates the fwd-most cutout; the ViewModel stores
 the aft-most center as `startFromAftMm = OAL − enteredFwd − (count−1)·spacingMm`.

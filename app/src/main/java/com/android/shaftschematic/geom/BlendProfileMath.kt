@@ -139,10 +139,11 @@ fun drawnBlendWidthPx(trueWidthPx: Float, hostWidthPx: Float, minWidthPx: Float)
 const val SEAL_GROOVE_COUNT = 3
 
 /**
- * Where the seal grooves cross a blend, as fractions of its span.
+ * Where the seal grooves cross the seal area, as fractions of its span.
  *
  * Evenly spaced with a margin at each end — `(i + 1) / (count + 1)` — so no groove lands on the
- * curve's own end faces, where it would read as a component boundary rather than a cut.
+ * span's own ends: at the outboard end it would read as the shoulder's foot, at the inboard end
+ * as a component boundary rather than a cut.
  */
 fun sealGrooveFracs(count: Int = SEAL_GROOVE_COUNT): List<Float> =
     if (count < 1) emptyList() else (1..count).map { it.toFloat() / (count + 1) }
@@ -159,7 +160,7 @@ fun sealGrooveFracs(count: Int = SEAL_GROOVE_COUNT): List<Float> =
  */
 data class SealNotch(val depthPx: Float, val halfWidthPx: Float)
 
-/** Notch depth as a fraction of the blend's drawn width — ties the cut size to its host. */
+/** Notch depth as a fraction of the seal area's drawn width — ties the cut size to its host. */
 const val SEAL_NOTCH_DEPTH_FRAC_OF_SPAN = 0.10f
 
 /** A notch never cuts deeper than this fraction of the smaller end radius. */
@@ -169,8 +170,8 @@ const val SEAL_NOTCH_MAX_DEPTH_FRAC_OF_RADIUS = 0.12f
 const val SEAL_NOTCH_HALF_WIDTH_FRAC_OF_DEPTH = 0.7f
 
 /**
- * Size one seal notch for a blend drawn [spanWidthPx] wide between end radii whose smaller
- * is [minEndRadiusPx]. Null when the geometry is degenerate. The half-width is additionally
+ * Size one seal notch for a seal area drawn [spanWidthPx] wide on a body of drawn radius
+ * [minEndRadiusPx]. Null when the geometry is degenerate. The half-width is additionally
  * capped against the groove pitch so adjacent notches always keep clear surface between them.
  */
 // Dash pattern for the line a seal cut draws between its notch floors. Dashed on purpose:
@@ -199,6 +200,37 @@ fun sealNotchGeom(
 
 /** A blend never eats more than this fraction of the drawn run it is machined into. */
 const val MAX_BLEND_FRAC_OF_HOST = 0.4f
+
+/**
+ * The seal area's visibility floor, as a multiple of the blend's: three grooves with clear
+ * surface between them need more room than one curve before they read at all.
+ */
+const val SEAL_AREA_MIN_WIDTH_FACTOR = 2f
+
+/**
+ * A sealed face — its shoulder curve plus its seal area — never eats more than this fraction
+ * of the drawn run. Wider than [MAX_BLEND_FRAC_OF_HOST] because the grooved area IS most of a
+ * fiberglassed body (8 in of rings on a 12 in section is ordinary); under half so that two
+ * sealed faces on one run still leave a flat span between them instead of inverting it.
+ */
+const val MAX_SEAL_FACE_FRAC_OF_HOST = 0.45f
+
+/**
+ * Drawn width of a seal area whose true width is [trueWidthPx], sitting inboard of a curve
+ * already drawn [curveWidthPx] wide on a run [hostWidthPx] wide.
+ *
+ * Same posture as [drawnBlendWidthPx] — the stored length is never touched, the floor keeps the
+ * grooves legible on a compressed sheet, and it is safe because a seal area prints no number.
+ * Curve and seal together respect the face cap ([MAX_SEAL_FACE_FRAC_OF_HOST]), the curve keeping
+ * its width first: the shoulder is what meets the face, so it must never be the part that
+ * vanishes. Returns 0 when nothing fits.
+ */
+fun drawnSealWidthPx(trueWidthPx: Float, hostWidthPx: Float, curveWidthPx: Float, minWidthPx: Float): Float {
+    if (trueWidthPx <= 0f || hostWidthPx <= 0f) return 0f
+    val room = hostWidthPx * MAX_SEAL_FACE_FRAC_OF_HOST - curveWidthPx
+    if (room <= 0f) return 0f
+    return maxOf(trueWidthPx, minWidthPx * SEAL_AREA_MIN_WIDTH_FACTOR).coerceAtMost(room)
+}
 
 /** Minimum drawn blend width so the curve still reads on a compressed sheet (PDF points). */
 const val MIN_BLEND_WIDTH_PT = 7f

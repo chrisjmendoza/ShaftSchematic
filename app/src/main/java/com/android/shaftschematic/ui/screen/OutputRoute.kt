@@ -88,6 +88,7 @@ import com.android.shaftschematic.ui.viewmodel.resetRunoutStationPositions
 import com.android.shaftschematic.ui.viewmodel.setLinerCompression
 import com.android.shaftschematic.ui.viewmodel.setLinersProportional
 import com.android.shaftschematic.ui.viewmodel.setRunoutHeightScale
+import com.android.shaftschematic.ui.viewmodel.setShowCouplingFace
 import com.android.shaftschematic.ui.viewmodel.updateWornSection
 import com.android.shaftschematic.ui.viewmodel.updateWornSectionReference
 import com.android.shaftschematic.util.DisplayUnits
@@ -620,6 +621,27 @@ fun OutputRoute(
                         selected = variant == v,
                         onClick = { variant = v },
                         label = { Text(v.label) },
+                    )
+                }
+            }
+            // The coupling end view is runout content, so the switch is live only while the
+            // sheet carries runouts. Same per-job field as the Runout tab's checkbox and both
+            // options-sheet chips; on-device report: a face appeared with no visible source.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(
+                    checked = runoutConfig.showCouplingFace,
+                    onCheckedChange = { vm.setShowCouplingFace(it) },
+                    enabled = variant.includeBubbles,
+                    modifier = Modifier.testTag("output_coupling_face_switch"),
+                )
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Text("Coupling face", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "End view bottom-right, taken looking forward. Per job — shared with " +
+                            "the Runout tab. Saved with this job.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }

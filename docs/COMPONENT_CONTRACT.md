@@ -158,14 +158,24 @@ material.
   `subtractBodiesAgainstNonBodies` trims a fully covered body out of the drawing, so there is
   nothing on the sheet for the curve to arrive at.
 - A face may carry a **seal area** — `Body.blendAftSeal`/`blendFwdSeal` (or `AutoBlend.seal`) —
-  drawing `SEAL_GROOVE_COUNT` (3) cuts across the curve for the fiberglass to seat into. Each cut
+  drawing `SEAL_GROOVE_COUNT` (3) cuts for the fiberglass to seat into. The cuts sit on a
+  **grooved FLAT span at the body Ø, inboard of the blend**: from the face inward the drawing
+  runs the blend ramp (blend length), then the seal area (its own stored length,
+  `Body.blendAftSealLenMm`/`blendFwdSealLenMm`, `AutoBlend.sealLenMm` — typed, stored verbatim,
+  drawing-only like the blend length). `0` means "follow the blend length", which is what every
+  document saved before the field existed carries, so a legacy seal area keeps its grooves. The
+  shop geometry is the reason (on-device report, photo of a shaft on the lathe): the rings sit on
+  the fiberglassed body and a short shoulder ramps up from it to the liner — cutting the grooves
+  into the ramp tapered the whole seal area once the ramp was authored to the shoulder. Each cut
   is a V notch in both silhouette edges plus a DASHED line across seated on the notch floors —
   never a solid full-height line, which is the glyph for a component face and made the shaft read
   as segments (on-device report); the dash is finer than the hidden-keyway pattern on purpose (`sealNotchGeom` sizes the notch;
   line and notch derive from the same geometry so they meet exactly). Authored as the third state of a face's
   finish chips (Square | Blend | Seal area) — exclusive as presented, but a seal area INCLUDES its
-  blend, since the cuts are machined into the blended section. A fixed count, since the drawing is a cue rather
-  than something to machine from.
+  blend (the shoulder it sits behind), and its length field appears only in Seal mode. The stored
+  blend length, seal flag and seal length are independent, so switching Seal → Blend keeps the
+  typed seal length. A fixed count, since the drawing is a cue rather than something to machine
+  from.
 - Silhouette only — no dimension rail, no footer row, no effect on OAL, coverage, or collision.
 - Draw sites: the schematic canvas (`ShaftRenderer`), the schematic PDF (`ShaftPdfComposer`),
   and the runout/consolidated sheet (`RunoutPdfComposer.drawBodiesForRunout`) all decompose the

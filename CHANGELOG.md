@@ -6,6 +6,86 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-09-29
+
+### fix(pdf): the footer band is reserved at its measured height, so nothing above it can collide
+
+On device, a Schematic + Runout consolidated sheet printed "TIR's taken looking:" straight through
+the footer's "AFT Taper" heading. The shared footer block grows upward when a column runs to eight
+lines (taper header, Rate, L.E.T., S.E.T., Length, KW, spoon note, Thread) or wraps; the schematic
+sheet keeps a 1-inch gap above the band for that growth, but the consolidated sheet stacks its TIR
+line and coupling face directly on the band. Both composers now build their `FooterConfig` first
+(one builder, `sheetFooterConfig`) and reserve `footerBlockHeightPt` — the footer's own measured
+plan (`planFooter`, the same plan `drawFooter` lays out from) — so reserve and draw are one
+number and the growth path never fires. The schematic needed it too: its name-label rows and Ø
+callouts live in the gap the footer grew into, and a fully loaded footer put its "FWD Taper"
+heading through a liner's name. The consolidated sheet's footer also now prints with the sheet's
+dual-unit resolver, as the schematic's already did.
+
+The verification the report asked for is `SheetTextOverlapTest`: a recording canvas under the real
+composers, across every export combination — the schematic (printed/blank, single/dual), the classic
+runout sheet (printed/blank, face on/off) and the consolidated sheet (all three content variants ×
+printed/blank × face on/off, plus dual units) — on a fixture that loads every text pass at once.
+Any two strings whose boxes overlap fail it. The two composers gained a canvas-taking seam
+(`composeShaftPdfOnCanvas`/`composeRunoutPdfOnCanvas`) for it; the app still enters through the
+`PdfDocument.Page` functions, unchanged. `docs/PDF_EXPORT.md` §3 (footer band),
+`docs/contracts/RunoutSheet.md`.
+
+### fix(ui): the taper calculator's answer shows in its box, highlighted, and the label stays put
+
+On device, after Calculate the half-width Length box read "Length — calculated" wrapped over four
+lines and the number was nowhere to be seen: the answer rode the placeholder slot, which Material 3
+hides while an unfocused field has a label. The label no longer changes; the derived value is drawn
+in the value slot (a display-only `VisualTransformation`, applied only while the typed text is
+empty) in italic primary on a primary-container box with a primary border. The field still holds
+only what the user typed, and the ✓ still keeps the value as an input. `TaperCalcDialog.kt`,
+`docs/DESIGN_INTENT.md` §3.8; the display rules stay pinned by `TaperCalcPresentationTest`.
+
+### fix(pdf): inch diameters print three decimals unless the value is whole
+
+A Ø typed as 10.990 printed `10.99"` beside `8.266"` on the same sheet. `formatDiaWithUnit` now
+prints a whole inch value bare (`11"`) and anything else at exactly three decimals (`10.990"`,
+`10.500"`); millimeters keep the compact one-decimal form. Every callout, footer line, wear and
+undercut label and in-profile value already routes through it, so the sheets cannot mix
+conventions. Pinned by `UnitFormatDiaTest` and `UnitFormatDualTest`; CLAUDE.md and
+`docs/PDF_EXPORT.md` §5.3 state the rule (supersedes the trailing-zero-trim ruling).
+
+### fix(ui): the coupling face election is a switch on the Output tab body
+
+The consolidated sheet could carry the coupling end view with no visible source on the tab: the
+election lived on the Runout tab and inside the options sheet. "Sheet content" now has a "Coupling
+face" switch under the variant chips (`output_coupling_face_switch`), bound to the same per-job
+`RunoutConfig.showCouplingFace` and enabled only while the variant carries runouts.
+`docs/contracts/RunoutSheet.md` (Coupling Face) and `docs/UI_CONTRACT.md` §7.7 list the four
+surfaces.
+
+### fix(schematic): a seal area's grooves sit on the flat body inboard of the shoulder, not on the ramp
+
+A photo of a shaft on the lathe showed the shop geometry: the fiberglass seal rings sit on the flat
+fiberglassed body, and a short shoulder ramps up from that body to the liner. The drawing cut the
+three grooves INTO the blend ramp instead, so authoring the ramp to the shoulder tapered the whole
+seal area (on-device report). A sealed face now draws, from the face inward, the blend ramp (blend
+length) and then a flat grooved span at the body Ø with its OWN stored length —
+`Body.blendAftSealLenMm`/`blendFwdSealLenMm` and `AutoBlend.sealLenMm`, additive, typed and stored
+verbatim, drawing-only like the blend length. `0` follows the blend length, which is what every
+document saved before the field existed decodes to, so legacy seal areas keep their grooves. The
+"Seal area AFT/FWD" length field appears under the blend length only in Seal mode, on both body
+carousel cards and in `AddBodyDialog` through the shared `BlendSection` (add-dialog parity);
+switching a face to Seal seeds an empty length with a 4 in preset (`AddDefaultsConfig.SEAL_LEN_IN`,
+capped at a quarter of the body), and switching away keeps the typed value. In the geometry
+(`ui/resolved/BodyBlends.kt`) the seal area rides the same curve point lists as the ramp — a flat
+notched tail at the body radius — so the canvas, the schematic PDF and the runout sheet all inherit
+it with no draw-site code; the ramp is a clean curve again, the notch is sized off the seal span
+and the body radius, and a sealed face (ramp + seal) is capped at 45% of its run
+(`MAX_SEAL_FACE_FRAC_OF_HOST`, wider than a plain blend's 40% because the grooved area IS most of
+a fiberglassed body), the ramp keeping its width first. The geometry rewrite is covered by
+`BodyBlendsTest` (cuts inboard of the ramp, the legacy-0 rule, an aft seal area, the cap) and the
+regenerated `BlendSvgPreviewTest` sheets; the plumbing by `BodySealLengthCodecTest`,
+`ShaftViewModelBodySealLengthTest` and the new seal-length cases in `BlendFaceModeTest`.
+`docs/COMPONENT_CONTRACT.md`, `docs/contracts/AddComponentDialogs.md`, `docs/DATA_MODEL.md`.
+
+---
+
 ## 2026-09-23
 
 ### fix(ui): the tablet orientation unlock is applied at activity creation, not from the manifest

@@ -161,8 +161,10 @@ data class Body(
     // Blended faces (draw-only): curve length inward from each face, 0 = square.
     val blendAftMm: Float = 0f,
     val blendFwdMm: Float = 0f,
-    val blendAftSeal: Boolean = false,  // seal area: 3 radius cuts across the aft blend
+    val blendAftSeal: Boolean = false,  // seal area: 3 radius cuts on the flat body inboard of the aft blend
     val blendFwdSeal: Boolean = false,
+    val blendAftSealLenMm: Float = 0f,  // seal-area length (grooved flat span inboard of the blend); 0 = follow blendAftMm
+    val blendFwdSealLenMm: Float = 0f,
     val blendProfile: BlendProfile = BlendProfile.OGEE,
 ) : Segment
 Taper
@@ -195,9 +197,15 @@ Blend fields on Body (drawing-only, additive, default 0/OGEE):
   moves or trims another component. Diameters are DERIVED at resolve, never stored. Where a liner
   butts the face (a seal area) the curve leaves from the midpoint of the liner OD and `diaMm`
   (`seatDiaUnderLiner`) — the real seat is hidden under the liner and its depth varies job to job.
-- `blendAftSeal` / `blendFwdSeal`: whether that face's blend carries a seal area — the radius
-  cuts the fiberglass seats into, drawn as 3 silhouette-notched cuts across the curve. Ignored
-  on an unblended face.
+- `blendAftSeal` / `blendFwdSeal`: whether that face carries a seal area — the radius cuts the
+  fiberglass seats into, drawn as 3 silhouette-notched cuts on the FLAT body span just inboard of
+  the blend (from the face: blend ramp, then the grooved seal area at `diaMm`). Ignored on an
+  unblended face.
+- `blendAftSealLenMm` / `blendFwdSealLenMm`: axial length of that seal area, typed and stored
+  verbatim, drawing-only like the blend length (clamped only where DRAWN). `0` = follow the
+  blend length — every document saved before the field existed decodes to it and keeps its
+  grooves. Stored independently of the seal flag: leaving Seal mode keeps the typed length.
+  Derived: `Body.blendSealLenMmOn(end)`.
 - `blendProfile`: `OGEE` (tangent both ends, default) | `FILLET` (tangent at the large end only)
   | `EASED_CONE` (straight cone, both corners eased).
 - Silhouette only: no dimension rail, no footer row, no effect on OAL, coverage, resolve spans,
@@ -209,15 +217,16 @@ Blend fields on Body (drawing-only, additive, default 0/OGEE):
 `ShaftSpec.autoBlends: List<AutoBlend>` (additive, defaults empty) — blended faces on auto-body
 spans, keyed in **shaft space** by anchor rather than by a component id, since auto ids are
 position-derived and regenerate on every edit:
-- `AutoBlend(anchorMm, end, lengthMm, profile, seal)`. The span whose half-open extent
+- `AutoBlend(anchorMm, end, lengthMm, profile, seal, sealLenMm)`. The span whose half-open extent
   `[startMm, endMm)` contains the anchor blends the named face; the anchor is system-placed at
   the span midpoint and carries no authored meaning. `lengthMm` is typed and stored verbatim.
 - Aft-most anchor wins **per face**, so one span may carry both an aft and a fwd blend.
 - Dormant under a component or inside an absorbed gap; **never pruned**, resurrects unchanged.
 - Helpers: `List<AutoBlend>.autoBlendFor(startMm, endMm, end)`,
-  `ShaftSpec.withAutoBlend(spanStartMm, spanEndMm, end, lengthMm, profile = OGEE, seal = false)`
-  (`model/AutoBlend.kt`; upsert — `lengthMm` ≤ 0 clears that face only, and `seal` carries the
-  auto span's seal area the way `Body.blendAftSeal`/`blendFwdSeal` do for an explicit body).
+  `ShaftSpec.withAutoBlend(spanStartMm, spanEndMm, end, lengthMm, profile = OGEE, seal = false, sealLenMm = 0f)`
+  (`model/AutoBlend.kt`; upsert — `lengthMm` ≤ 0 clears that face only, and `seal`/`sealLenMm`
+  carry the auto span's seal area the way `Body.blendAftSeal`/`blendAftSealLenMm` do for an
+  explicit body; `sealLenMm` is stored verbatim, a negative coerced to 0, 0 = follow `lengthMm`).
 
 Keyways are features, not standalone components.
 They are hosted on **Tapers** (offset from the SET face) or **Bodies** (offset from the

@@ -74,14 +74,14 @@ internal fun BodyPagerCard(
     startValidator: (String, ComponentKind, Float) -> (String) -> String?,
     onAddBody: (Float, Float, Float) -> Unit,
     onSetAutoSectionDia: (spanStartMm: Float, spanEndMm: Float, diaMm: Float) -> Unit,
-    onSetAutoBlend: (spanStartMm: Float, spanEndMm: Float, end: LinerAuthoredReference, lengthMm: Float, profile: BlendProfile, seal: Boolean) -> Unit,
+    onSetAutoBlend: (spanStartMm: Float, spanEndMm: Float, end: LinerAuthoredReference, lengthMm: Float, profile: BlendProfile, seal: Boolean, sealLenMm: Float) -> Unit,
     onSetShowAutoBodyDia: (Boolean) -> Unit,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateBodyShowDia: (Int, Boolean) -> Unit,
     onUpdateBodyShowLabel: (Int, Boolean) -> Unit,
     onUpdateBodyShade: (Int, Boolean) -> Unit = { _, _ -> },
     onUpdateBodyCompressOnDrawing: (Int, Boolean) -> Unit,
-    onUpdateBodyBlend: (index: Int, blendAftMm: Float, blendFwdMm: Float, profile: BlendProfile, sealAft: Boolean, sealFwd: Boolean) -> Unit,
+    onUpdateBodyBlend: (index: Int, blendAftMm: Float, blendFwdMm: Float, profile: BlendProfile, sealAft: Boolean, sealFwd: Boolean, sealAftLenMm: Float, sealFwdLenMm: Float) -> Unit,
     onUpdateBodyLabel: (Int, String?) -> Unit,
     onUpdateBodyKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromEndMm: Float, end: LinerAuthoredReference, spooned: Boolean) -> Unit,
     onSetKeyways180Apart: (Boolean) -> Unit,
@@ -180,6 +180,7 @@ internal fun BodyPagerCard(
                         LinerAuthoredReference.AFT,
                         blendLenForMode(m, aftBlend?.lengthMm ?: 0f, lengthMm),
                         autoProfile, m == BlendFaceMode.SEAL,
+                        sealLenForMode(m, aftBlend?.sealLenMm ?: 0f, lengthMm),
                     )
                 },
                 onSetFwdMode = { m ->
@@ -188,23 +189,25 @@ internal fun BodyPagerCard(
                         LinerAuthoredReference.FWD,
                         blendLenForMode(m, fwdBlend?.lengthMm ?: 0f, lengthMm),
                         autoProfile, m == BlendFaceMode.SEAL,
+                        sealLenForMode(m, fwdBlend?.sealLenMm ?: 0f, lengthMm),
                     )
                 },
                 onProfile = { p ->
                     aftBlend?.let {
                         onSetAutoBlend(component.startMmPhysical, component.endMmPhysical,
-                            LinerAuthoredReference.AFT, it.lengthMm, p, it.seal)
+                            LinerAuthoredReference.AFT, it.lengthMm, p, it.seal, it.sealLenMm)
                     }
                     fwdBlend?.let {
                         onSetAutoBlend(component.startMmPhysical, component.endMmPhysical,
-                            LinerAuthoredReference.FWD, it.lengthMm, p, it.seal)
+                            LinerAuthoredReference.FWD, it.lengthMm, p, it.seal, it.sealLenMm)
                     }
                 },
                 aftLengthField = {
                     CommitNum("Blend AFT (${abbr(unit)})", disp(aftBlend?.lengthMm ?: 0f, unit)) { str ->
                         toMmOrNull(str, unit)?.let {
                             onSetAutoBlend(component.startMmPhysical, component.endMmPhysical,
-                                LinerAuthoredReference.AFT, it, autoProfile, aftBlend?.seal ?: false)
+                                LinerAuthoredReference.AFT, it, autoProfile, aftBlend?.seal ?: false,
+                                aftBlend?.sealLenMm ?: 0f)
                         }
                     }
                 },
@@ -212,7 +215,30 @@ internal fun BodyPagerCard(
                     CommitNum("Blend FWD (${abbr(unit)})", disp(fwdBlend?.lengthMm ?: 0f, unit)) { str ->
                         toMmOrNull(str, unit)?.let {
                             onSetAutoBlend(component.startMmPhysical, component.endMmPhysical,
-                                LinerAuthoredReference.FWD, it, autoProfile, fwdBlend?.seal ?: false)
+                                LinerAuthoredReference.FWD, it, autoProfile, fwdBlend?.seal ?: false,
+                                fwdBlend?.sealLenMm ?: 0f)
+                        }
+                    }
+                },
+                // Shown only in Seal mode, so the face's blend exists; the null check keeps a
+                // commit racing a clear from resurrecting a zero-length anchor.
+                aftSealLengthField = {
+                    CommitNum("Seal area AFT (${abbr(unit)})", disp(aftBlend?.sealLenMm ?: 0f, unit)) { str ->
+                        val blend = aftBlend
+                        val mm = toMmOrNull(str, unit)
+                        if (blend != null && mm != null) {
+                            onSetAutoBlend(component.startMmPhysical, component.endMmPhysical,
+                                LinerAuthoredReference.AFT, blend.lengthMm, autoProfile, blend.seal, mm)
+                        }
+                    }
+                },
+                fwdSealLengthField = {
+                    CommitNum("Seal area FWD (${abbr(unit)})", disp(fwdBlend?.sealLenMm ?: 0f, unit)) { str ->
+                        val blend = fwdBlend
+                        val mm = toMmOrNull(str, unit)
+                        if (blend != null && mm != null) {
+                            onSetAutoBlend(component.startMmPhysical, component.endMmPhysical,
+                                LinerAuthoredReference.FWD, blend.lengthMm, autoProfile, blend.seal, mm)
                         }
                     }
                 },
@@ -344,28 +370,59 @@ internal fun BodyPagerCard(
                 onUpdateBodyBlend(
                     idx, blendLenForMode(m, b.blendAftMm, b.lengthMm), b.blendFwdMm,
                     b.blendProfile, m == BlendFaceMode.SEAL, b.blendFwdSeal,
+                    sealLenForMode(m, b.blendAftSealLenMm, b.lengthMm), b.blendFwdSealLenMm,
                 )
             },
             onSetFwdMode = { m ->
                 onUpdateBodyBlend(
                     idx, b.blendAftMm, blendLenForMode(m, b.blendFwdMm, b.lengthMm),
                     b.blendProfile, b.blendAftSeal, m == BlendFaceMode.SEAL,
+                    b.blendAftSealLenMm, sealLenForMode(m, b.blendFwdSealLenMm, b.lengthMm),
                 )
             },
             onProfile = { p ->
-                onUpdateBodyBlend(idx, b.blendAftMm, b.blendFwdMm, p, b.blendAftSeal, b.blendFwdSeal)
+                onUpdateBodyBlend(
+                    idx, b.blendAftMm, b.blendFwdMm, p, b.blendAftSeal, b.blendFwdSeal,
+                    b.blendAftSealLenMm, b.blendFwdSealLenMm,
+                )
             },
             aftLengthField = {
                 CommitNum("Blend AFT (${abbr(unit)})", disp(b.blendAftMm, unit)) { str ->
                     toMmOrNull(str, unit)?.let {
-                        onUpdateBodyBlend(idx, it, b.blendFwdMm, b.blendProfile, b.blendAftSeal, b.blendFwdSeal)
+                        onUpdateBodyBlend(
+                            idx, it, b.blendFwdMm, b.blendProfile, b.blendAftSeal, b.blendFwdSeal,
+                            b.blendAftSealLenMm, b.blendFwdSealLenMm,
+                        )
                     }
                 }
             },
             fwdLengthField = {
                 CommitNum("Blend FWD (${abbr(unit)})", disp(b.blendFwdMm, unit)) { str ->
                     toMmOrNull(str, unit)?.let {
-                        onUpdateBodyBlend(idx, b.blendAftMm, it, b.blendProfile, b.blendAftSeal, b.blendFwdSeal)
+                        onUpdateBodyBlend(
+                            idx, b.blendAftMm, it, b.blendProfile, b.blendAftSeal, b.blendFwdSeal,
+                            b.blendAftSealLenMm, b.blendFwdSealLenMm,
+                        )
+                    }
+                }
+            },
+            aftSealLengthField = {
+                CommitNum("Seal area AFT (${abbr(unit)})", disp(b.blendAftSealLenMm, unit)) { str ->
+                    toMmOrNull(str, unit)?.let {
+                        onUpdateBodyBlend(
+                            idx, b.blendAftMm, b.blendFwdMm, b.blendProfile, b.blendAftSeal, b.blendFwdSeal,
+                            it, b.blendFwdSealLenMm,
+                        )
+                    }
+                }
+            },
+            fwdSealLengthField = {
+                CommitNum("Seal area FWD (${abbr(unit)})", disp(b.blendFwdSealLenMm, unit)) { str ->
+                    toMmOrNull(str, unit)?.let {
+                        onUpdateBodyBlend(
+                            idx, b.blendAftMm, b.blendFwdMm, b.blendProfile, b.blendAftSeal, b.blendFwdSeal,
+                            b.blendAftSealLenMm, it,
+                        )
                     }
                 }
             },

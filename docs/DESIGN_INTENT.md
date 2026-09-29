@@ -193,7 +193,7 @@ component card.
 **Interaction model (ruled on-device for the taper calculator, the pattern for the rest):**
 a calculator answers when asked, not while the question is being typed — a **Calculate**
 button is the one trigger. The answer appears **in the empty field it belongs to**, as an
-italic preview, never as typed text (the golden rule reaches the calculators: a field holds
+italic, primary-coloured value in a highlighted box (the label never changes — a "calculated" label wrapped over the number and a placeholder is hidden under a floated label, on-device report), never as typed text (the golden rule reaches the calculators: a field holds
 what the user typed and nothing else; a ✓ lets the user *keep* the preview as an input by
 explicit act). When too little has been entered, the fields that could complete the solve
 turn red and the message names them. A result is a snapshot of the entries it came from and

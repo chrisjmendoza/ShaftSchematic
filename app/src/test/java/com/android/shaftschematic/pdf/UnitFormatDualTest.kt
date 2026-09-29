@@ -21,13 +21,13 @@ class UnitFormatDualTest {
     fun `dual appends the other unit in brackets, primary inches`() {
         // 38.1 mm == 1.5" == 1 1/2"
         assertEquals("1 1/2\" [38.1 mm]", formatLenWithUnitDual(38.1, inch, dual = true))
-        assertEquals("1.5\" [38.1 mm]", formatDiaWithUnitDual(38.1, inch, dual = true))
+        assertEquals("1.500\" [38.1 mm]", formatDiaWithUnitDual(38.1, inch, dual = true))
     }
 
     @Test
     fun `dual appends the other unit in brackets, primary mm`() {
         assertEquals("38.1 mm [1 1/2\"]", formatLenWithUnitDual(38.1, mm, dual = true))
-        assertEquals("38.1 mm [1.5\"]", formatDiaWithUnitDual(38.1, mm, dual = true))
+        assertEquals("38.1 mm [1.500\"]", formatDiaWithUnitDual(38.1, mm, dual = true))
     }
 
     @Test

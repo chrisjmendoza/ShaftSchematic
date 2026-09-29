@@ -38,16 +38,24 @@ fun formatLenWithUnit(mm: Double, unit: Any?): String {
 }
 
 /**
- * Formats a *diameter* for footer fields, always including a unit suffix.
+ * Formats a *diameter* for footer fields and callouts, always including a unit suffix.
  *
- * - Inches: fixed 3 decimals (shop print convention).
- * - Millimeters: compact 1-decimal.
+ * - Inches: a whole number prints bare (`11"`); anything else prints all three decimals
+ *   (`10.990"`, `10.500"`). Trimming trailing zeros made one sheet read `10.99"` beside `8.266"`
+ *   (on-device report), so a value with any decimal keeps the same three places.
+ * - Millimeters: compact 1-decimal, trailing zeros trimmed.
  */
 fun formatDiaWithUnit(mm: Double, unit: Any?): String {
     val name = unit?.toString()?.uppercase(Locale.US) ?: "MM"
     return when {
         name.contains("INCH") -> {
-            val s = String.format(Locale.US, "%.3f", mm / 25.4).trimEnd('0').trimEnd('.')
+            val inches = mm / 25.4
+            val rounded = Math.round(inches)
+            val s = if (kotlin.math.abs(inches - rounded) < 5e-4) {
+                rounded.toString()
+            } else {
+                String.format(Locale.US, "%.3f", inches)
+            }
             "$s\""
         }
         else -> {
@@ -119,6 +127,6 @@ fun formatLenDimDualLabel(mm: Double, primary: UnitSystem, dual: Boolean): DualL
 fun formatLenWithUnitDualLabel(mm: Double, primary: UnitSystem, dual: Boolean): DualLabel =
     composeDual(primary, dual, fmt = { formatLenWithUnit(mm, it) })
 
-/** [formatDiaWithUnit] as a two-term label — compact mm, shop 3-decimal inches. */
+/** [formatDiaWithUnit] as a two-term label — compact mm, inches whole or 3-decimal. */
 fun formatDiaWithUnitDualLabel(mm: Double, primary: UnitSystem, dual: Boolean): DualLabel =
     composeDual(primary, dual, fmt = { formatDiaWithUnit(mm, it) })

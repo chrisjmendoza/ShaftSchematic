@@ -550,7 +550,7 @@ via an elbow above the row-0 band so drops provably clear every label; uniform c
   `WEAR_DIA_TICK_OVERSHOOT_PT`), value labels in a band reserved **below** the cylinder by
   `computeWearStripInnerLayout(diaBandPt = …)` (label rows only; the leader region reuses
   the existing label headroom, so a reading-free strip's layout is byte-identical to
-  before — `WearStripDiaBandTest`). Labels use `formatDiaWithUnit` — the same ≤3-decimal
+  before — `WearStripDiaBandTest`). Labels use `formatDiaWithUnit` — the same whole-or-3-decimal
   format as the footer's Ø text, no `Ø` prefix (matches the hand sketch, keeps labels
   narrow). **The per-band min-Ø label is retired** (on-device report: it collided with
   these values under a wear band) — measured-Ø readings ARE the diameter story now; the
@@ -1214,13 +1214,14 @@ block rather than running under it (`drawTirLine`'s `right` parameter). The face
 profile, marks, bubbles, and TIR line — it owns a reserved block, so the consolidated sheet's
 "marks first, text last" in-profile ordering is untouched.
 
-### Authoring UI — three surfaces, ONE field
+### Authoring UI — four surfaces, ONE field
 
-The election is a checkbox in both **PDF options sheets** — the Runout tab preview's and the
+The election is a switch on the Output tab body ("Sheet content", under the variant chips,
+enabled only while the variant carries runouts, `output_coupling_face_switch`) and a checkbox in both **PDF options sheets** — the Runout tab preview's and the
 Output tab's consolidated one (`RunoutWearOptionsSheet(showCouplingFaceRow, couplingFaceOn)`,
 gated off for the wear/undercut documents where it would be inert) — and again on the Runout
 tab body, where it pairs with a **"Pilot runout…"** button (enabled only when the face is on).
-All three bind `vm.setShowCouplingFace`, so they cannot drift. It is a checkbox commit, not a
+All four bind `vm.setShowCouplingFace`, so they cannot drift. It is a checkbox commit, not a
 drag, so there is no live-tuning channel: `runoutConfig` is already a re-render key in both
 previews' render-inputs records, which is what refreshes the page.
 

@@ -55,6 +55,8 @@ class BlendSvgPreviewTest {
         /** > 0 puts a liner fwd of the face instead of a second body — the seal-area case. */
         val linerOdMm: Float = 0f,
         val seal: Boolean = false,
+        /** Seal-area length; 0 follows the blend length (the pre-field document rule). */
+        val sealLenMm: Float = 0f,
     )
 
     /** Smaller aft body enlarging into a bigger one — the coupling-fit case, blended on its AFT face. */
@@ -65,6 +67,7 @@ class BlendSvgPreviewTest {
             Body(
                 id = "run", startFromAftMm = 0f, lengthMm = 500f, diaMm = r.smallDiaMm,
                 blendFwdMm = r.blendMm, blendProfile = r.profile, blendFwdSeal = r.seal,
+                blendFwdSealLenMm = r.sealLenMm,
             ),
         ),
         liners = listOf(Liner(startFromAftMm = 500f, lengthMm = 500f, odMm = r.linerOdMm)),
@@ -108,12 +111,14 @@ class BlendSvgPreviewTest {
             Row("Eased cone", BlendProfile.EASED_CONE, 1 * IN, 177.8f, linerOdMm = 203.2f),
             Row("No blend (control)", BlendProfile.OGEE, 0f, 177.8f, linerOdMm = 203.2f),
 
-            Row("S-curve + seal area", BlendProfile.OGEE, 1 * IN, 177.8f, linerOdMm = 203.2f,
-                seal = true,
-                group = "Seal area  —  3 radius cuts across the blend, for the fiberglass to seat into"),
-            Row("Eased cone + seal area", BlendProfile.EASED_CONE, 1 * IN, 177.8f,
-                linerOdMm = 203.2f, seal = true),
-            Row("S-curve + seal, 2 in blend", BlendProfile.OGEE, 2 * IN, 177.8f,
+            Row("S-curve, 1 in shoulder + 8 in seal area", BlendProfile.OGEE, 1 * IN, 177.8f, linerOdMm = 203.2f,
+                seal = true, sealLenMm = 8 * IN,
+                group = "Seal area  —  3 radius cuts on the FLAT body inboard of the shoulder (the photographed shaft)"),
+            Row("Eased cone, 1 in shoulder + 8 in seal area", BlendProfile.EASED_CONE, 1 * IN, 177.8f,
+                linerOdMm = 203.2f, seal = true, sealLenMm = 8 * IN),
+            Row("S-curve, 2 in shoulder + 4 in seal area", BlendProfile.OGEE, 2 * IN, 177.8f,
+                linerOdMm = 203.2f, seal = true, sealLenMm = 4 * IN),
+            Row("Older document: seal length 0 follows the 2 in blend", BlendProfile.OGEE, 2 * IN, 177.8f,
                 linerOdMm = 203.2f, seal = true),
         )
 
@@ -205,7 +210,7 @@ class BlendSvgPreviewTest {
      * Pinned (not just rendered): under the compressed map each curve still leaves exactly
      * AT the drawn face, the floored curve width never collapses below
      * [MIN_BLEND_WIDTH_PT] even when the host run compresses hard, and every seal cut
-     * stays strictly inside its curve's span.
+     * stays on the flat seal area inboard of its ramp.
      */
     @Test
     fun `render blends under the compressed sheet map to svg`() {
@@ -221,7 +226,7 @@ class BlendSvgPreviewTest {
                 Body(
                     id = "run", startFromAftMm = 300f, lengthMm = 5296f, diaMm = 177.8f,
                     blendAftMm = 50.8f, blendProfile = BlendProfile.OGEE,
-                    blendFwdMm = 50.8f, blendFwdSeal = true,
+                    blendFwdMm = 50.8f, blendFwdSeal = true, blendFwdSealLenMm = 203.2f,
                 ),
             ),
             liners = listOf(Liner(startFromAftMm = 5596f, lengthMm = 500f, odMm = 203.2f)),
@@ -276,10 +281,13 @@ class BlendSvgPreviewTest {
                 if (e.fwdCurve.isNotEmpty()) {
                     assertEquals("fwd curve arrives AT the drawn face", x1, e.fwdCurve.last().xPx, 1e-3f)
                 }
+                // The seal area sits inboard of the ramp: every cut lies between the flat
+                // span's end and the point where the ramp starts to rise off the body radius.
+                val rampStartX = e.fwdCurve.first { it.rPx > e.flatR + 1e-3f }.xPx
                 e.fwdSeal.forEach { g ->
                     assertTrue(
-                        "seal cut stays inside its curve span",
-                        g.xPx > e.fwdCurve.first().xPx && g.xPx < e.fwdCurve.last().xPx,
+                        "seal cut stays on the flat seal area, inboard of the ramp",
+                        g.xPx > e.flatX1 && g.xPx < rampStartX,
                     )
                 }
 
