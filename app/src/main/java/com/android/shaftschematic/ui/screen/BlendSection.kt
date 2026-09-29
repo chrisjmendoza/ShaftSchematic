@@ -26,11 +26,12 @@ import com.android.shaftschematic.model.BlendProfile
  * How one body face is finished. Three mutually exclusive states, because that is how the shop
  * describes a face: it is square, or it is blended, or it is a seal area.
  *
- * [SEAL] **includes** the blend — the radius cuts the fiberglass seats into are machined across
- * the blended section running up to the liner, so there is nowhere to put them on a square face.
- * Presenting the two as alternatives is therefore a small, deliberate fiction: it matches the
- * shop's mental model (a seal area is a thing you add, not a modifier on something else) and
- * costs nothing, since the stored model still carries a length and a flag independently.
+ * [SEAL] **includes** the blend — a seal face is the short shoulder ramping up to the liner PLUS
+ * the radius cuts the fiberglass seats into, which sit on the flat body span just inboard of that
+ * ramp and carry their own length (the seal-area length field). Presenting the modes as
+ * alternatives is therefore a small, deliberate fiction: it matches the shop's mental model (a
+ * seal area is a thing you add, not a modifier on something else) and costs nothing, since the
+ * stored model still carries the blend length, the seal flag and the seal length independently.
  */
 enum class BlendFaceMode { SQUARE, BLEND, SEAL }
 
@@ -47,9 +48,10 @@ private fun BlendFaceMode.chipLabel(): String = when (this) {
  *
  * A blend changes the drawn geometry, so it lives under the add-dialog-parity invariant, not the
  * card-only carve-out that covers "Show Ø on drawing" and the unit chip. Sharing the composable
- * is what keeps the surfaces from drifting: the length FIELD is a slot because the cards commit
+ * is what keeps the surfaces from drifting: the length FIELDS are slots because the cards commit
  * on blur while the dialog holds local state until submit, but every control and every visibility
- * condition is decided here, once.
+ * condition is decided here, once — a blend length under any finished face, a seal-area length
+ * under it only in [BlendFaceMode.SEAL].
  *
  * Each face gets one chip row rather than a checkbox with a nested one. The nesting hid the seal
  * area behind a control nobody would think to tick first (on-device: "I was thinking a body could
@@ -67,6 +69,8 @@ fun BlendSection(
     onProfile: (BlendProfile) -> Unit,
     aftLengthField: @Composable () -> Unit,
     fwdLengthField: @Composable () -> Unit,
+    aftSealLengthField: @Composable () -> Unit,
+    fwdSealLengthField: @Composable () -> Unit,
 ) {
     Column(Modifier.fillMaxWidth()) {
         Text(
@@ -77,8 +81,10 @@ fun BlendSection(
 
         BlendFaceRow("AFT", aftMode, "body_blend_aft", onSetAftMode)
         if (aftMode != BlendFaceMode.SQUARE) aftLengthField()
+        if (aftMode == BlendFaceMode.SEAL) aftSealLengthField()
         BlendFaceRow("FWD", fwdMode, "body_blend_fwd", onSetFwdMode)
         if (fwdMode != BlendFaceMode.SQUARE) fwdLengthField()
+        if (fwdMode == BlendFaceMode.SEAL) fwdSealLengthField()
 
         if (aftMode != BlendFaceMode.SQUARE || fwdMode != BlendFaceMode.SQUARE) {
             Spacer(Modifier.height(8.dp))

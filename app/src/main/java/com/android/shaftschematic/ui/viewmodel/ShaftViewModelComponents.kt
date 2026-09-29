@@ -76,6 +76,9 @@ fun ShaftViewModel.addBodyAt(
     blendProfile: BlendProfile = BlendProfile.OGEE,
     blendAftSeal: Boolean = false,
     blendFwdSeal: Boolean = false,
+    /** Seal-area lengths (mm) — drawing only, stored verbatim; 0 = follow the blend length. */
+    blendAftSealLenMm: Float = 0f,
+    blendFwdSealLenMm: Float = 0f,
     target: SpecTarget = SpecTarget.ORIGINAL,
 ) {
     val id = newId()
@@ -104,6 +107,8 @@ fun ShaftViewModel.addBodyAt(
                     blendProfile = blendProfile,
                     blendAftSeal = blendAftSeal,
                     blendFwdSeal = blendFwdSeal,
+                    blendAftSealLenMm = max(0f, blendAftSealLenMm),
+                    blendFwdSealLenMm = max(0f, blendFwdSealLenMm),
                 )
             ) + s.bodies
         )
@@ -871,6 +876,11 @@ fun ShaftViewModel.updateLinerShade(
  * Drawing-only: a blend changes the silhouette and nothing else — not OAL, not resolve,
  * not collision, and no other component's span. The lengths are stored VERBATIM; a value
  * longer than the body is clamped where it is DRAWN, never here.
+ *
+ * [sealAftLenMm]/[sealFwdLenMm] size each face's seal area — the grooved flat span inboard
+ * of the blend — and are drawing-only in exactly the same way; `0` lets the seal area follow
+ * the blend length. They are stored independently of the seal flags, so a face switched out
+ * of Seal mode keeps its typed seal length.
  */
 fun ShaftViewModel.updateBodyBlend(
     index: Int,
@@ -879,6 +889,8 @@ fun ShaftViewModel.updateBodyBlend(
     profile: BlendProfile,
     sealAft: Boolean = false,
     sealFwd: Boolean = false,
+    sealAftLenMm: Float = 0f,
+    sealFwdLenMm: Float = 0f,
     target: SpecTarget = SpecTarget.ORIGINAL,
 ) =
     updateSpec(target) { s ->
@@ -888,7 +900,9 @@ fun ShaftViewModel.updateBodyBlend(
                 old.blendFwdMm == blendFwdMm &&
                 old.blendProfile == profile &&
                 old.blendAftSeal == sealAft &&
-                old.blendFwdSeal == sealFwd
+                old.blendFwdSeal == sealFwd &&
+                old.blendAftSealLenMm == sealAftLenMm &&
+                old.blendFwdSealLenMm == sealFwdLenMm
             ) return@updateSpec s
             s.copy(
                 bodies = s.bodies.toMutableList().also { l ->
@@ -898,6 +912,8 @@ fun ShaftViewModel.updateBodyBlend(
                         blendProfile = profile,
                         blendAftSeal = sealAft,
                         blendFwdSeal = sealFwd,
+                        blendAftSealLenMm = sealAftLenMm.coerceAtLeast(0f),
+                        blendFwdSealLenMm = sealFwdLenMm.coerceAtLeast(0f),
                     )
                 }
             )
@@ -911,7 +927,9 @@ fun ShaftViewModel.updateBodyBlend(
  * Drawing-only, and it never promotes the span: an auto body stays derived, which is the
  * point — a blend anchored to the span survives edits that would strand one authored
  * against a promoted body's fixed boundary. [lengthMm] ≤ 0 clears that face; the value is
- * stored verbatim and clamped only where it is drawn.
+ * stored verbatim and clamped only where it is drawn. [sealLenMm] sizes the face's seal area
+ * (the grooved flat span inboard of the blend), drawing-only the same way; `0` follows
+ * [lengthMm].
  */
 fun ShaftViewModel.setAutoBlend(
     spanStartMm: Float,
@@ -920,8 +938,9 @@ fun ShaftViewModel.setAutoBlend(
     lengthMm: Float,
     profile: BlendProfile,
     seal: Boolean = false,
+    sealLenMm: Float = 0f,
     target: SpecTarget = SpecTarget.ORIGINAL,
-) = updateSpec(target) { s -> s.withAutoBlend(spanStartMm, spanEndMm, end, lengthMm, profile, seal) }
+) = updateSpec(target) { s -> s.withAutoBlend(spanStartMm, spanEndMm, end, lengthMm, profile, seal, sealLenMm) }
 
 /** Liner mirror of [updateBodyShowDia]. */
 fun ShaftViewModel.updateLinerShowDia(

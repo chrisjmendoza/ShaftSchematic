@@ -71,11 +71,20 @@ import java.util.UUID
  *   no dimension rail and no footer row, and rails keep dimensioning the stored span — you
  *   dimension to the theoretical sharp corner and let the drawn curve show the blend.
  * @property blendFwdMm The same for this body's FWD face.
- * @property blendAftSeal Whether the AFT blend carries a **seal area** — the radius cuts the
- *   fiberglass seats into, drawn as [com.android.shaftschematic.geom.SEAL_GROOVE_COUNT] lines
- *   across the curve. A schematic cue, not a machining count; ignored when that face has no
- *   blend, since the grooves are cut INTO the blended section.
- * @property blendFwdSeal The same for the FWD blend.
+ * @property blendAftSeal Whether the AFT face carries a **seal area** — the radius cuts the
+ *   fiberglass seats into, drawn as [com.android.shaftschematic.geom.SEAL_GROOVE_COUNT] grooves
+ *   on the FLAT body just inboard of the blend: the shoulder ramps from the neighbour down to
+ *   [diaMm] over [blendAftMm], and the grooves sit on the body beyond it (the photographed
+ *   shaft: rings on the fiberglassed body, then a short shoulder up to the liner; cutting the
+ *   grooves into the ramp tapered the whole seal area — on-device report). A schematic cue,
+ *   not a machining count; ignored when that face has no blend.
+ * @property blendFwdSeal The same for the FWD face.
+ * @property blendAftSealLenMm Axial length of the AFT seal area — the grooved flat span
+ *   inboard of the blend — canonical mm, stored verbatim. Drawing-only like the blend length:
+ *   no rail, no footer row, clamped only where it is DRAWN. `0` (every document saved before
+ *   the field existed) lets the seal area take the blend's own length, so a seal authored
+ *   before the ramp and the grooves were separated keeps its grooves.
+ * @property blendFwdSealLenMm The same for the FWD seal area.
  * @property blendProfile How both faces ease. Drawing-only, like the blend lengths.
  */
 @Serializable
@@ -98,6 +107,8 @@ data class Body(
     val blendFwdMm: Float = 0f,
     val blendAftSeal: Boolean = false,
     val blendFwdSeal: Boolean = false,
+    val blendAftSealLenMm: Float = 0f,
+    val blendFwdSealLenMm: Float = 0f,
     val blendProfile: BlendProfile = BlendProfile.OGEE,
     /** Optional user-defined label for display (not used for geometry). */
     val label: String? = null,
@@ -165,4 +176,10 @@ fun Body.blendMmOn(end: LinerAuthoredReference): Float = when (end) {
 fun Body.blendSealOn(end: LinerAuthoredReference): Boolean = when (end) {
     LinerAuthoredReference.AFT -> blendAftSeal
     LinerAuthoredReference.FWD -> blendFwdSeal
+}
+
+/** Stored seal-area length on the given face (mm); 0 = follow the blend length. */
+fun Body.blendSealLenMmOn(end: LinerAuthoredReference): Float = when (end) {
+    LinerAuthoredReference.AFT -> blendAftSealLenMm
+    LinerAuthoredReference.FWD -> blendFwdSealLenMm
 }

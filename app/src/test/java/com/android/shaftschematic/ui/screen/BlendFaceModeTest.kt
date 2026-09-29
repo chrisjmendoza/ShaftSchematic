@@ -29,7 +29,7 @@ class BlendFaceModeTest {
         assertEquals(BlendFaceMode.SEAL, blendFaceMode(50f, seal = true))
     }
 
-    /** A seal flag on a face with no blend is not a seal area — the cuts need a blend to sit on. */
+    /** A seal flag on a face with no blend is not a seal area — a seal face comes with its blend. */
     @Test
     fun `a stray seal flag without a length still reads square`() {
         assertEquals(BlendFaceMode.SQUARE, blendFaceMode(0f, seal = true))
@@ -129,5 +129,46 @@ class BlendFaceModeTest {
         len = blendLenForMode(BlendFaceMode.SQUARE, len, bodyLengthMm = 800f); seal = false
         assertEquals(BlendFaceMode.SQUARE, blendFaceMode(len, seal))
         assertEquals(0f, len, eps)
+    }
+
+    // ───────── seal-area length ─────────
+
+    private val sealPreset = AddDefaultsConfig.SEAL_LEN_IN * 25.4f
+
+    @Test
+    fun `the seal preset is 4 in, or a quarter of a short body`() {
+        assertEquals(101.6f, sealPreset, eps)
+        assertEquals(sealPreset, defaultSealLenMm(bodyLengthMm = 800f), eps)
+        assertEquals(50f, defaultSealLenMm(bodyLengthMm = 200f), eps)
+        // Unknown body length (dialog with a blank Length field): the plain preset.
+        assertEquals(sealPreset, defaultSealLenMm(bodyLengthMm = -1f), eps)
+    }
+
+    @Test
+    fun `switching to seal area seeds an empty seal length and keeps a typed one`() {
+        assertEquals(sealPreset, sealLenForMode(BlendFaceMode.SEAL, 0f, bodyLengthMm = 800f), eps)
+        assertEquals(123.456f, sealLenForMode(BlendFaceMode.SEAL, 123.456f, bodyLengthMm = 800f), 0f)
+    }
+
+    /**
+     * The seal length is stored independently of the seal flag: leaving Seal area must pass it
+     * through untouched — never zero it, never seed it — so switching back restores the typed value.
+     */
+    @Test
+    fun `leaving seal area keeps the typed seal length untouched`() {
+        val typed = 123.456f
+        assertEquals(typed, sealLenForMode(BlendFaceMode.BLEND, typed, bodyLengthMm = 800f), 0f)
+        assertEquals(typed, sealLenForMode(BlendFaceMode.SQUARE, typed, bodyLengthMm = 800f), 0f)
+        assertEquals(0f, sealLenForMode(BlendFaceMode.BLEND, 0f, bodyLengthMm = 800f), 0f)
+        assertEquals(0f, sealLenForMode(BlendFaceMode.SQUARE, 0f, bodyLengthMm = 800f), 0f)
+    }
+
+    @Test
+    fun `seal to blend to seal round-trips the typed seal length`() {
+        var sealLen = sealLenForMode(BlendFaceMode.SEAL, 0f, bodyLengthMm = 800f)
+        sealLen = 76.2f // typed
+        sealLen = sealLenForMode(BlendFaceMode.BLEND, sealLen, bodyLengthMm = 800f)
+        sealLen = sealLenForMode(BlendFaceMode.SEAL, sealLen, bodyLengthMm = 800f)
+        assertEquals(76.2f, sealLen, 0f)
     }
 }

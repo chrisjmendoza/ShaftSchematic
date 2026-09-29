@@ -185,7 +185,8 @@ fun AddBodyDialog(
                keywaySpooned: Boolean, keyways180Apart: Boolean, keyways90Apart: Boolean,
                keyways90Cw: Boolean, keywayUnit: UnitSystem?,
                blendAftMm: Float, blendFwdMm: Float, blendProfile: BlendProfile,
-               blendAftSeal: Boolean, blendFwdSeal: Boolean) -> Unit,
+               blendAftSeal: Boolean, blendFwdSeal: Boolean,
+               blendAftSealLenMm: Float, blendFwdSealLenMm: Float) -> Unit,
     onCancel: () -> Unit,
 ) {
     val d = rememberAddDialogDefaults(spec)
@@ -202,6 +203,8 @@ fun AddBodyDialog(
     var blendFwdMode by remember { mutableStateOf(BlendFaceMode.SQUARE) }
     var blendAft by remember { mutableStateOf("") }
     var blendFwd by remember { mutableStateOf("") }
+    var blendAftSealLen by remember { mutableStateOf("") }
+    var blendFwdSealLen by remember { mutableStateOf("") }
     var blendProfile by remember { mutableStateOf(BlendProfile.OGEE) }
 
     // Keyway — gated behind a checkbox (fields hidden until turned on); mirrors the body card.
@@ -274,11 +277,17 @@ fun AddBodyDialog(
                         if (m != BlendFaceMode.SQUARE && blendAft.isBlank()) {
                             blendAft = toDisplayString(defaultBlendMm(lengthMm), unit)
                         }
+                        if (m == BlendFaceMode.SEAL && blendAftSealLen.isBlank()) {
+                            blendAftSealLen = toDisplayString(defaultSealLenMm(lengthMm), unit)
+                        }
                     },
                     onSetFwdMode = { m ->
                         blendFwdMode = m
                         if (m != BlendFaceMode.SQUARE && blendFwd.isBlank()) {
                             blendFwd = toDisplayString(defaultBlendMm(lengthMm), unit)
+                        }
+                        if (m == BlendFaceMode.SEAL && blendFwdSealLen.isBlank()) {
+                            blendFwdSealLen = toDisplayString(defaultSealLenMm(lengthMm), unit)
                         }
                     },
                     onProfile = { blendProfile = it },
@@ -287,6 +296,12 @@ fun AddBodyDialog(
                     },
                     fwdLengthField = {
                         CommitNumField("Blend FWD (${abbr(unit)})", blendFwd) { blendFwd = it }
+                    },
+                    aftSealLengthField = {
+                        CommitNumField("Seal area AFT (${abbr(unit)})", blendAftSealLen) { blendAftSealLen = it }
+                    },
+                    fwdSealLengthField = {
+                        CommitNumField("Seal area FWD (${abbr(unit)})", blendFwdSealLen) { blendFwdSealLen = it }
                     },
                 )
                 Spacer(Modifier.height(12.dp))
@@ -410,6 +425,8 @@ fun AddBodyDialog(
                     blendProfile,
                     blendAftMode == BlendFaceMode.SEAL,
                     blendFwdMode == BlendFaceMode.SEAL,
+                    if (blendAftMode == BlendFaceMode.SEAL) toMmOrNull(blendAftSealLen, unit) ?: 0f else 0f,
+                    if (blendFwdMode == BlendFaceMode.SEAL) toMmOrNull(blendFwdSealLen, unit) ?: 0f else 0f,
                 )
             }) { Text("Add") }
         },

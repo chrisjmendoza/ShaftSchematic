@@ -51,8 +51,14 @@ data class AutoBlend(
     val lengthMm: Float = 0f,
     /** How the curve eases; drawing-only, like [lengthMm]. */
     val profile: BlendProfile = BlendProfile.OGEE,
-    /** Whether this blend carries a seal area — radius cuts drawn across the curve. */
+    /** Whether this face carries a seal area — radius cuts on the flat span inboard of the curve. */
     val seal: Boolean = false,
+    /**
+     * Axial length of the seal area (the grooved flat span inboard of the blend), canonical mm,
+     * stored verbatim. `0` = follow [lengthMm], which is what every anchor saved before the
+     * field existed carries.
+     */
+    val sealLenMm: Float = 0f,
 )
 
 /**
@@ -71,8 +77,8 @@ fun List<AutoBlend>.autoBlendFor(
         .minByOrNull { it.anchorMm }
 
 /**
- * Returns a copy carrying [lengthMm] and [profile] on face [end] of the auto span
- * `[spanStartMm, spanEndMm)`.
+ * Returns a copy carrying [lengthMm], [profile] and the seal pair ([seal], [sealLenMm]) on face
+ * [end] of the auto span `[spanStartMm, spanEndMm)`.
  *
  * Upsert: every blend for that face anchored inside the span is dropped, then the value is
  * stored **verbatim** against a fresh anchor at the span midpoint. [lengthMm] ≤ 0 is a clear.
@@ -87,6 +93,7 @@ fun ShaftSpec.withAutoBlend(
     lengthMm: Float,
     profile: BlendProfile = BlendProfile.OGEE,
     seal: Boolean = false,
+    sealLenMm: Float = 0f,
 ): ShaftSpec {
     val kept = autoBlends.filterNot {
         it.end == end && it.anchorMm >= spanStartMm && it.anchorMm < spanEndMm
@@ -98,6 +105,7 @@ fun ShaftSpec.withAutoBlend(
             lengthMm = lengthMm,
             profile = profile,
             seal = seal,
+            sealLenMm = sealLenMm.coerceAtLeast(0f),
         )
         else kept
     return if (next == autoBlends) this else copy(autoBlends = next)
