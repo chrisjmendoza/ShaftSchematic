@@ -1,5 +1,7 @@
 package com.android.shaftschematic.ui.resolved
 
+import com.android.shaftschematic.geom.MAX_SEAL_FACES_TOTAL_FRAC_OF_HOST
+import com.android.shaftschematic.geom.MAX_SEAL_FACE_FRAC_OF_HOST
 import com.android.shaftschematic.geom.SEAL_GROOVE_COUNT
 import com.android.shaftschematic.model.AutoDiaOverride
 import com.android.shaftschematic.model.BlendProfile
@@ -342,55 +344,73 @@ class BodyBlendsTest {
     // ───────── seal areas: the radius cuts ─────────
 
     @Test
-    fun `a seal area's cuts sit on the flat body inboard of the ramp, never on the ramp`() {
-        // The photographed shaft: rings on the fiberglassed body, then a short shoulder up to
-        // the liner. Cutting the grooves into the ramp tapered the whole seal area.
+    fun `a seal area is measured from the face and the flat span runs ramp to ramp`() {
         val e = edgesWithSealedLiner(blendMm = 50f, sealLenMm = 120f, minWidthPx = 7f)
         assertEquals(SEAL_GROOVE_COUNT, e.fwdSeal.size)
         assertTrue("no cuts belong on the unblended aft face", e.aftSeal.isEmpty())
 
-        // The ramp occupies the 50 mm against the face (x 350..400); the seal area the 120 mm
-        // before it (x 230..350). Every cut sits strictly inside the seal area.
+        // The ramp occupies the 50 mm against the face (x 350..400); the seal area is the 120 mm
+        // measured FROM THE FACE (x 280..400), overlapping the ramp at its outer end.
+        val face = 400f
         val rampStart = 350f
-        val sealStart = 230f
+        val sealStart = face - 120f
         e.fwdSeal.forEach {
-            assertTrue("cut at ${it.xPx} is not inboard of the ramp", it.xPx < rampStart && it.xPx > sealStart)
+            assertTrue("cut at ${it.xPx} is outside [face − sealW, face]", it.xPx > sealStart && it.xPx < face)
         }
-        // Evenly spaced, ordered aft -> fwd.
-        val gaps = e.fwdSeal.zipWithNext { a, b -> b.xPx - a.xPx }
-        gaps.forEach { assertEquals(gaps.first(), it, eps) }
+        assertEquals(listOf(310f, 340f, 370f), e.fwdSeal.map { it.xPx }.map { Math.round(it * 100f) / 100f })
+        assertEquals(1, e.sealSpansX.size)
+        assertEquals(sealStart, e.sealSpansX.single().start, eps)
+        assertEquals(face, e.sealSpansX.single().endInclusive, eps)
 
-        // The ramp itself is a clean curve: its radius rises monotonically toward the face.
-        val ramp = e.fwdCurve.filter { it.xPx >= rampStart - eps }
-        ramp.zipWithNext { a, b -> assertTrue("ramp dips at ${b.xPx}", b.rPx >= a.rPx - eps) }
+        // The seal area never shrinks the flat span: it ends at the RAMP start.
+        assertEquals(rampStart, e.flatX1, eps)
 
-        // The flat span ends where the seal area begins, so the S-break stays clear of it.
-        assertEquals(sealStart, e.flatX1, eps)
+        // The curve list is the ramp only, rising monotonically toward the face, and the
+        // silhouette never dips below the body radius (no notches).
+        assertEquals(rampStart, e.fwdCurve.first().xPx, eps)
+        e.fwdCurve.zipWithNext { a, b -> assertTrue("ramp dips at ${b.xPx}", b.rPx >= a.rPx - eps) }
+        assertTrue("no edge point below the body radius", e.fwdCurve.none { it.rPx < e.flatR - eps })
 
-        // A groove is a cut INTO the surface: the silhouette carries a notch at each station,
-        // and the line across ends exactly on that notch's floor — never at full silhouette
-        // height, which is the glyph for a component face. Lockstep is the invariant: the
-        // seal point must BE a vertex of the curve polyline, cut below the BODY radius.
-        e.fwdSeal.forEach { g ->
-            assertTrue(
-                "no notch vertex under the line at x=${g.xPx}",
-                e.fwdCurve.any { abs(it.xPx - g.xPx) < eps && abs(it.rPx - g.rPx) < eps },
-            )
-            assertTrue("floor ${g.rPx} not below the body radius ${e.flatR}", g.rPx < e.flatR)
+        // A cut on the flat is full body height; a cut inside the ramp takes the ramp's local
+        // radius — between its two neighbouring curve points, above the body radius.
+        e.fwdSeal.filter { it.xPx < rampStart }.forEach { assertEquals(e.flatR, it.rPx, eps) }
+        val inRamp = e.fwdSeal.filter { it.xPx > rampStart }
+        assertEquals(1, inRamp.size)
+        inRamp.forEach { g ->
+            val i = e.fwdCurve.indexOfLast { it.xPx <= g.xPx }
+            val a = e.fwdCurve[i]
+            val b = e.fwdCurve[i + 1]
+            assertTrue("cut radius ${g.rPx} not between ${a.rPx} and ${b.rPx}", g.rPx >= a.rPx - eps && g.rPx <= b.rPx + eps)
+            assertTrue("cut inside the ramp drew at the body radius", g.rPx > e.flatR + eps)
         }
+    }
+
+    @Test
+    fun `a blend never pushes the seal area inward`() {
+        // Same body, same seal length, square vs blended face: the dashes sit at the SAME x
+        // (on-device report: a blend moved the dashes inboard by the ramp width).
+        val square = edgesWithSealedLiner(blendMm = 0f, sealLenMm = 120f, minWidthPx = 7f)
+        val blended = edgesWithSealedLiner(blendMm = 50f, sealLenMm = 120f, minWidthPx = 7f)
+        assertEquals(SEAL_GROOVE_COUNT, square.fwdSeal.size)
+        assertEquals(square.fwdSeal.size, blended.fwdSeal.size)
+        square.fwdSeal.zip(blended.fwdSeal).forEach { (s, b) -> assertEquals(s.xPx, b.xPx, eps) }
+        assertEquals(square.sealSpansX, blended.sealSpansX)
     }
 
     @Test
     fun `a seal length of zero follows the blend length so older documents keep their grooves`() {
         val e = edgesWithSealedLiner(blendMm = 50f, sealLenMm = 0f, minWidthPx = 7f)
         assertEquals(SEAL_GROOVE_COUNT, e.fwdSeal.size)
-        // Seal area = 50 mm inboard of the 50 mm ramp: x 300..350.
-        assertEquals(300f, e.flatX1, eps)
-        e.fwdSeal.forEach { assertTrue(it.xPx > 300f && it.xPx < 350f) }
+        // Seal area = 50 mm from the face, coinciding with the 50 mm ramp: x 350..400.
+        assertEquals(350f, e.flatX1, eps)
+        e.fwdSeal.forEach {
+            assertTrue(it.xPx > 350f && it.xPx < 400f)
+            assertTrue("a cut inside the ramp follows the ramp's height", it.rPx > e.flatR + eps)
+        }
     }
 
     @Test
-    fun `an aft seal area follows its ramp inward and the lists stay aft to fwd`() {
+    fun `an aft seal area is measured from its face and the lists stay aft to fwd`() {
         val spec = ShaftSpec(
             overallLengthMm = 800f,
             liners = listOf(Liner(startFromAftMm = 0f, lengthMm = 300f, odMm = 240f)),
@@ -404,16 +424,18 @@ class BodyBlendsTest {
         val e = edges(spec, "run")
         assertEquals(SEAL_GROOVE_COUNT, e.aftSeal.size)
         assertTrue(e.fwdSeal.isEmpty())
-        // Ramp x 300..340, seal area x 340..440, flat from 440.
-        assertEquals(440f, e.flatX0, eps)
-        e.aftSeal.forEach { assertTrue(it.xPx > 340f && it.xPx < 440f) }
+        // Ramp x 300..340, seal area x 300..400 (from the face), flat from the ramp's end.
+        assertEquals(340f, e.flatX0, eps)
+        e.aftSeal.forEach { assertTrue(it.xPx > 300f && it.xPx < 400f) }
+        assertEquals(300f, e.sealSpansX.single().start, eps)
+        assertEquals(400f, e.sealSpansX.single().endInclusive, eps)
         e.aftCurve.zipWithNext { a, b -> assertTrue("aft list folds at ${b.xPx}", b.xPx >= a.xPx - eps) }
     }
 
     @Test
-    fun `ramp and seal area together never take more than the host cap and the ramp wins`() {
-        // A 100 mm body asked for a 30 mm ramp and a 300 mm seal area: 45% of the run is the
-        // ceiling for the sealed face, the ramp keeps its 30 and the seal gets the 15 left.
+    fun `one seal area caps at the per-face fraction of its run`() {
+        // A 100 mm body asked for a 300 mm seal area: it draws 45% of the run, from the face,
+        // and the ramp takes nothing from it.
         val spec = ShaftSpec(
             overallLengthMm = 800f,
             bodies = listOf(
@@ -427,21 +449,80 @@ class BodyBlendsTest {
         val e = edges(spec, "run")
         // The ramp's foot (its first vertex, at the body radius) sits exactly 30 mm in from the face.
         assertTrue(e.fwdCurve.any { abs(it.xPx - 70f) < eps && abs(it.rPx - e.flatR) < eps })
-        assertEquals(55f, e.flatX1, eps)
+        assertEquals(70f, e.flatX1, eps)
         assertEquals(SEAL_GROOVE_COUNT, e.fwdSeal.size)
+        assertEquals(100f * MAX_SEAL_FACE_FRAC_OF_HOST, e.sealSpansX.single().endInclusive - e.sealSpansX.single().start, eps)
+        assertEquals(100f, e.sealSpansX.single().endInclusive, eps)
     }
 
     @Test
-    fun `seal notches never merge and never touch the seal area ends`() {
+    fun `two seal areas together cap at half the run with their ratio preserved`() {
+        // A 200 mm run with 84 mm and 28 mm seal areas (3:1): 112 mm of seal would leave the
+        // S-break too little flat, so both scale to 75 + 25 = 50% of the run.
+        val spec = ShaftSpec(
+            overallLengthMm = 200f,
+            bodies = listOf(
+                Body(
+                    id = "run", startFromAftMm = 0f, lengthMm = 200f, diaMm = 150f,
+                    blendAftSeal = true, blendAftSealLenMm = 84f,
+                    blendFwdSeal = true, blendFwdSealLenMm = 28f,
+                ),
+            ),
+        )
+        val e = edges(spec, "run")
+        assertEquals(2, e.sealSpansX.size)
+        val (aftR, fwdR) = e.sealSpansX
+        val aftW = aftR.endInclusive - aftR.start
+        val fwdW = fwdR.endInclusive - fwdR.start
+        assertEquals(75f, aftW, eps)
+        assertEquals(25f, fwdW, eps)
+        assertEquals(200f * MAX_SEAL_FACES_TOTAL_FRAC_OF_HOST, aftW + fwdW, eps)
+        // Anchored at their faces.
+        assertEquals(0f, aftR.start, eps)
+        assertEquals(200f, fwdR.endInclusive, eps)
+        // The flat span is untouched by either seal — it is the whole run with square faces.
+        assertEquals(0f, e.flatX0, eps)
+        assertEquals(200f, e.flatX1, eps)
+        e.aftSeal.forEach { assertTrue(it.xPx > aftR.start && it.xPx < aftR.endInclusive) }
+        e.fwdSeal.forEach { assertTrue(it.xPx > fwdR.start && it.xPx < fwdR.endInclusive) }
+    }
+
+    @Test
+    fun `two oversize seal areas never exceed half the run`() {
+        // 300 mm and 100 mm asked of a 100 mm run: each first caps at 45%, then the pair shares 50%.
+        val spec = ShaftSpec(
+            overallLengthMm = 100f,
+            bodies = listOf(
+                Body(
+                    id = "run", startFromAftMm = 0f, lengthMm = 100f, diaMm = 150f,
+                    blendAftSeal = true, blendAftSealLenMm = 300f,
+                    blendFwdSeal = true, blendFwdSealLenMm = 100f,
+                ),
+            ),
+        )
+        val e = edges(spec, "run")
+        val total = e.sealSpansX.sumOf { (it.endInclusive - it.start).toDouble() }.toFloat()
+        assertEquals(100f * MAX_SEAL_FACES_TOTAL_FRAC_OF_HOST, total, eps)
+    }
+
+    @Test
+    fun `seal cuts sit strictly inside the seal span at equal pitch`() {
         // The floored seal span is the tightest host a seal area can land on.
         val e = edgesWithSealedLiner(blendMm = 0.5f, sealLenMm = 0.5f, minWidthPx = 7f)
         assertEquals(SEAL_GROOVE_COUNT, e.fwdSeal.size)
-        val xs = e.fwdCurve.map { it.xPx }
-        // Strictly increasing x — overlapping notch windows would fold the polyline back.
-        xs.zipWithNext { a, b -> assertTrue("polyline folds at $a", b >= a - eps) }
-        // Full surface height survives between and outside the notches.
-        assertTrue(e.flatR > e.fwdSeal.maxOf { it.rPx })
-        e.fwdSeal.forEach { assertTrue(it.xPx > e.flatX1 + eps && it.xPx < e.fwdCurve.first { p -> p.rPx > e.flatR + eps }.xPx) }
+        val span = e.sealSpansX.single()
+        val sealAft = span.start
+        val sealFwd = span.endInclusive
+        assertEquals(400f, sealFwd, eps) // anchored at the face
+        assertTrue("seal span is empty", sealFwd > sealAft + eps)
+        e.fwdSeal.forEach {
+            assertTrue("cut at ${it.xPx} touches the seal span ends", it.xPx > sealAft + eps && it.xPx < sealFwd - eps)
+        }
+        // Equal pitch between cuts, and the same margin from each end: (i + 1) / (count + 1).
+        val pitch = (sealFwd - sealAft) / (SEAL_GROOVE_COUNT + 1)
+        e.fwdSeal.forEachIndexed { i, g -> assertEquals(sealAft + pitch * (i + 1), g.xPx, eps) }
+        // The edge list still runs aft → fwd without folding back.
+        e.fwdCurve.zipWithNext { a, b -> assertTrue("polyline folds at ${a.xPx}", b.xPx >= a.xPx - eps) }
     }
 
     /** A 400 mm body (x 0..400) butting a Ø240 liner at FWD, sealed on that face. */
@@ -522,7 +603,10 @@ class BodyBlendsTest {
         }
         assertTrue("a square face has no ramp", e.fwdCurve.none { it.rPx > e.flatR + eps })
         assertEquals(e.flatR, e.capFwdR, eps)
-        assertEquals(x1 - sealW, e.flatX1, eps)
+        // No ramp, so the flat span runs to the face; the seal area is reported separately.
+        assertEquals(x1, e.flatX1, eps)
+        assertEquals(x1 - sealW, e.sealSpansX.single().start, eps)
+        assertEquals(x1, e.sealSpansX.single().endInclusive, eps)
     }
 
     /** The zero-width span a seal-only face hands the seal area sits exactly AT the face. */
@@ -538,7 +622,7 @@ class BodyBlendsTest {
         assertEquals(400f, span.xFwdPx, 0f)
         assertEquals(200f, span.diaAtAftMm, 0f)
         assertEquals(200f, span.diaAtFwdMm, 0f)
-        val sealSpan = seal.sealDrawSpan(0f, 400f, span, xAt = { it }, minWidthPx = 7f)!!
+        val sealSpan = seal.sealDrawSpan(0f, 400f, xAt = { it }, minWidthPx = 7f)!!
         assertEquals(280f, sealSpan.xAftPx, eps)
         assertEquals(400f, sealSpan.xFwdPx, eps)
     }
@@ -566,7 +650,9 @@ class BodyBlendsTest {
         e.aftSeal.forEach { assertTrue(it.xPx > 200f && it.xPx < 260f) }
         assertTrue("no ramp without a step", e.aftCurve.none { it.rPx > e.flatR + eps })
         assertEquals(e.flatR, e.capAftR, eps)
-        assertEquals(260f, e.flatX0, eps)
+        assertEquals(200f, e.flatX0, eps)
+        assertEquals(200f, e.sealSpansX.single().start, eps)
+        assertEquals(260f, e.sealSpansX.single().endInclusive, eps)
     }
 
     /** A seal on a square face at the open end of the shaft: nothing across the face, grooves anyway. */
@@ -586,7 +672,8 @@ class BodyBlendsTest {
         val e = edges(spec, "only")
         assertEquals(SEAL_GROOVE_COUNT, e.aftSeal.size)
         e.aftSeal.forEach { assertTrue(it.xPx > 0f && it.xPx < 90f) }
-        assertEquals(90f, e.flatX0, eps)
+        assertEquals(0f, e.flatX0, eps)
+        assertEquals(90f, e.sealSpansX.single().endInclusive, eps)
         assertEquals(e.flatR, e.capAftR, eps)
     }
 
@@ -631,7 +718,8 @@ class BodyBlendsTest {
         val e = edges(sealed, run.id)
         assertEquals(SEAL_GROOVE_COUNT, e.aftSeal.size)
         e.aftSeal.forEach { assertTrue(it.xPx > 200f && it.xPx < 300f) }
-        assertEquals(300f, e.flatX0, eps)
+        assertEquals(200f, e.flatX0, eps)
+        assertEquals(300f, e.sealSpansX.single().endInclusive, eps)
 
         val cleared = sealed.withAutoBlend(200f, 600f, LinerAuthoredReference.AFT, 0f, seal = false)
         assertTrue(cleared.autoBlends.isEmpty())

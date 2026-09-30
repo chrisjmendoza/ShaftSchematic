@@ -50,8 +50,8 @@ private fun BlendFaceMode.chipLabel(): String = when (this) {
  *   into. A seal area belongs to the body SECTION, not to the face finish, so a body can carry
  *   grooves at a square end, grooves behind a blended shoulder, or a shoulder with no grooves
  *   (on-device report: the photographed shaft has grooves on the fiberglassed body and, beyond
- *   them, a ramp up to the liner). The grooves start AT the face on a square end and just
- *   inboard of the ramp on a blended one.
+ *   them, a ramp up to the liner). The seal area is measured from the face either way, so it
+ *   sits in the same place whether the end is square or blended.
  *
  * Both change the drawn geometry, so they live under the add-dialog-parity invariant, not the
  * card-only carve-out that covers "Show Ø on drawing" and the unit chip. Sharing the composable

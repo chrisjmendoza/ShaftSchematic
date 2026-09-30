@@ -161,9 +161,9 @@ data class Body(
     // Blended faces (draw-only): curve length inward from each face, 0 = square.
     val blendAftMm: Float = 0f,
     val blendFwdMm: Float = 0f,
-    val blendAftSeal: Boolean = false,  // seal area: 3 radius cuts on the flat body at the aft end (inboard of the blend, or from a square face) — independent of blendAftMm
+    val blendAftSeal: Boolean = false,  // seal area: 3 radius cuts at the aft end, measured from the face (square or blended) — independent of blendAftMm
     val blendFwdSeal: Boolean = false,
-    val blendAftSealLenMm: Float = 0f,  // seal-area length (grooved flat span inboard of the blend); 0 = follow blendAftMm
+    val blendAftSealLenMm: Float = 0f,  // seal-area length, measured from the face; 0 = follow blendAftMm
     val blendFwdSealLenMm: Float = 0f,
     val blendProfile: BlendProfile = BlendProfile.OGEE,
 ) : Segment
@@ -198,12 +198,12 @@ Blend fields on Body (drawing-only, additive, default 0/OGEE):
   butts the face (a seal area) the curve leaves from the midpoint of the liner OD and `diaMm`
   (`seatDiaUnderLiner`) — the real seat is hidden under the liner and its depth varies job to job.
 - `blendAftSeal` / `blendFwdSeal`: whether that end carries a seal area — the radius cuts the
-  fiberglass seats into, drawn as 3 silhouette-notched cuts on the FLAT body span at `diaMm`. A
-  section property, **independent of the blend length**: on a blended face the grooved seal area
-  sits just inboard of the ramp (from the face: blend ramp, then the seal area); on a square face
-  (`blend*Mm == 0`) it starts at the face itself. A face with no step to blend drops its curve and
-  keeps its grooves.
-- `blendAftSealLenMm` / `blendFwdSealLenMm`: axial length of that seal area, typed and stored
+  fiberglass seats into, drawn as 3 full-height dashed lines across the body (the silhouette stays
+  flat — no notches). A section property, **independent of the blend length**: the seal area is
+  measured **from the face** and sits in the same place whether the face is square
+  (`blend*Mm == 0`) or blended — a ramp may overlap its outer end. A face with no step to blend
+  drops its curve and keeps its grooves.
+- `blendAftSealLenMm` / `blendFwdSealLenMm`: axial length of that seal area, measured from the face, typed and stored
   verbatim, drawing-only like the blend length (clamped only where DRAWN). `0` = follow the
   blend length — every document saved before the field existed decodes to it and keeps its
   grooves (on a square face a `0` resolves to no seal area drawn). Stored independently of the

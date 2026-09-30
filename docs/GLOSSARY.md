@@ -88,14 +88,14 @@ footer row; rails keep dimensioning the stored span (dimension to the theoretica
 corner). Not to be confused with a *fillet radius* on a liner shoulder.
 
 ### Seal area
-The radius cuts a body-to-liner transition carries for the **fiberglass to seat into** — the
-shop cuts 3–4 rings across the blended section running up to the liner. Drawn as a fixed 3
-cuts (`SEAL_GROOVE_COUNT`), each a V notch in both silhouette edges with a **dashed** line
-across seated on the notch floors: a solid full-height line is this drawing's glyph for a
-component face, and three of them made one shaft read as three or four segments. A schematic
-cue, not a count to machine from, and it prints no value. Authored as the third state of a
-face's finish chips (**Square | Blend | Seal area**) — exclusive as presented, but a seal area
-INCLUDES its blend, since the cuts are machined into the blended section. Stored per face as
+The radius cuts a body end carries for the **fiberglass to seat into** — the shop cuts 3–4
+rings on the fiberglassed section by the liner. Drawn as a fixed 3 cuts (`SEAL_GROOVE_COUNT`),
+measured from the face whether the end is square or blended, each ONE full-height **dashed**
+line across the body over a flat silhouette (no notches in the edges): a solid full-height line
+is this drawing's glyph for a component face, and three of them made one shaft read as three or
+four segments. A schematic cue, not a count to machine from, and it prints no value. Authored in
+its own **"Seal areas"** section (AFT / FWD checkboxes plus a length), independent of the
+Square | Blend face finish. Stored per face as
 `Body.blendAftSeal` / `blendFwdSeal`, or `AutoBlend.seal` on a bare-shaft span.
 
 ---

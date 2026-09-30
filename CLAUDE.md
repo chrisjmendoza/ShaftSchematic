@@ -572,30 +572,34 @@ gap survives as its own auto run, so gap-side steps are the auto run's own faces
 `AutoBlend` anchors; an explicit face that meets a same-Ø surviving gap has no step and draws
 no blend there. A body face — blended OR square — may carry a **seal area** (`Body.blendAftSeal`/`blendFwdSeal`, `AutoBlend.seal`) —
 the radius cuts the fiberglass seats into, a fixed `SEAL_GROOVE_COUNT` (3) at `sealGrooveFracs`
-stations (evenly spaced, margin at each end). Each cut draws as a **V notch in both silhouette
-edges plus a DASHED line across seated on the notch floors** (`sealNotchGeom` — depth rides the
-seal area's drawn width, capped against the body radius; notch width capped against the groove pitch
-so the V's never merge; dash `SEAL_DASH_ON_PT`/`SEAL_DASH_OFF_PT`, deliberately finer than the
-hidden-keyway 6/4 so a near-side cut never reads as a far-side feature). Inset + dash are both
-load-bearing: a solid full-height stroke is this drawing's glyph for a component face, and three of
-them made one shaft read as 3–4 segments (on-device report) — so seal lines stop on the notch floors, and
-`sealGrooveLines` + `sealAreaPoints` derive floor and notch from the SAME `sealNotchGeom` so they
-cannot disagree. The shop cuts 3–4, but the sheet is a cue rather than a count to machine from.
-**The cuts sit on the FLAT body span just INBOARD of the blend ramp, never on the ramp** (the
-photographed shop geometry: rings on the fiberglassed body, then a short shoulder up to the liner;
-cutting the grooves into the ramp tapered the whole seal area once the ramp was authored to the
-shoulder — on-device report). From the face inward a sealed blended face draws the ramp (blend
-length) and then the grooved seal area at the body Ø; a sealed SQUARE face (or a blend with no step
-to climb) draws the seal area from the face itself — a seal-only `BodyBlend` (`lengthMm = 0`,
-zero-width curve span, cap at the body radius). The seal area is sized by its own stored length
+stations (evenly spaced, margin at each end). Each cut draws as **ONE full-height DASHED line
+across the body at its station, silhouette to silhouette, and the silhouette stays FLAT through the
+seal area** (on-device report: the notched edges were unwanted detail — the real cuts are small
+radius grooves and the dashes are indication enough; do not reintroduce silhouette notches). The
+dash is load-bearing: a solid full-height stroke is this drawing's glyph for a component face, and
+three of them made one shaft read as 3–4 segments (on-device report); `SEAL_DASH_ON_PT`/
+`SEAL_DASH_OFF_PT` is deliberately finer than the hidden-keyway 6/4 so a near-side cut never reads
+as a far-side feature. The shop cuts 3–4, but the sheet is a cue rather than a count to machine from.
+**The seal area is measured FROM THE FACE and stays put whether the face is square or blended**
+(on-device report: a blend pushed the dashes inward by the ramp width). A ramp at the same face may
+overlap the seal area's outer end — the two are independent — and a dashed line that lands inside
+the ramp follows the silhouette there (`aftSeal`/`fwdSeal` carry the SILHOUETTE radius at each
+station — the body radius on the flat, the ramp's local radius inside it — so each line strokes
+`cy − r → cy + r` and never pokes past or stops short of the outline). A sealed square face (or a
+blend with no step to climb) is a seal-only `BodyBlend` (`lengthMm = 0`, zero-width curve span, cap
+at the body radius). The seal area is sized by its own stored length
 (`blendAftSealLenMm`/`blendFwdSealLenMm`, `AutoBlend.sealLenMm`; `0` follows the blend length, so
 documents saved before the field keep their grooves; resolved once in `blendAt`, the drawn span by
-`sealDrawSpan` — floored at `SEAL_AREA_MIN_WIDTH_FACTOR` × the blend floor and capped so ramp + seal
-never exceed `MAX_SEAL_FACE_FRAC_OF_HOST` (45%) of the run, the ramp keeping its width first).
-The length control appears only while that face's seal is on, and both
-draw sites build them from the same `bodyDrawEdges` (`aftSeal`/`fwdSeal` carry FLOOR radii; the
-seal area rides the curve point lists as a flat notched tail, so fill and stroke inherit it with
-no draw-site code). Blends print **no dimension rail and no footer row** — the
+`sealDrawSpan`, anchored at the face — floored at `SEAL_AREA_MIN_WIDTH_FACTOR` × the blend floor,
+ONE seal ≤ `MAX_SEAL_FACE_FRAC_OF_HOST` (45%) of the run, and TWO on one run ≤
+`MAX_SEAL_FACES_TOTAL_FRAC_OF_HOST` (50%) together, scaled down with their ratio preserved). The
+seal span NEVER enters the curve lists or the flat span: the curves are ramps only and the flat
+span runs ramp to ramp. **The S-break gap steers clear of seal areas** — `BodyDrawEdges.sealSpansX`
+joins the keyway windows as `breakGapCenter` avoid ranges (the keyway-window mechanism), so a sealed
+body still breaks (on-device report: a run with two seal areas and a ramp at each end lost its break
+and read as a short body — the seal spans had shrunk its flat span until no gap placement fit). The
+length control appears only while that face's seal is on, and both draw sites build the lines from
+the same `bodyDrawEdges`. Blends print **no dimension rail and no footer row** — the
 rails keep dimensioning the STORED span (dimension to the theoretical sharp corner), which is why
 nothing in `DimensionRailLayout` or either composer's rail pass changed. That silence is what
 licenses the one exaggeration: a 2" blend on a 25' shaft is sub-pixel at true scale, so the
@@ -619,8 +623,8 @@ both carousel cards and in `AddBodyDialog`. The **face finish** is one chip row 
 **Square | Blend** — deciding only whether the body END has a shoulder; **seal areas** are a
 separate "Seal areas" section (AFT / FWD checkboxes, a length field under each ticked face), on
 BOTH surfaces. A seal area is a SECTION property, independent of the finish (on-device report,
-photo of a shaft on the lathe): a seal on a square end draws its grooves from the face, and nothing
-couples the two except that the seal area sits inboard of whatever ramp the face has. A finish
+photo of a shaft on the lathe): nothing couples the two — the seal area is measured from the face
+and sits in the same place whatever ramp the face has, or none. A finish
 change never touches the seal flags and a seal toggle never touches the blend length —
 `blendFaceMode`/`blendLenForMode`/`sealLenForSeal` are the only projection, and unticking a seal
 keeps its typed length. Do not restore the nested Blend-checkbox-reveals-Seal-checkbox

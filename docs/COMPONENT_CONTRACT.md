@@ -162,9 +162,10 @@ material.
   drawing `SEAL_GROOVE_COUNT` (3) cuts for the fiberglass to seat into. A seal area is a
   **property of the body SECTION with its own on/off and length, independent of the face finish**
   (on-device report, photo of a shaft on the lathe): a body can carry grooves at a square end,
-  grooves behind a blended shoulder, or a shoulder with no grooves. The cuts sit on a **grooved
-  FLAT span at the body Ø**: on a **square** end it starts AT the face; on a **blended** end it
-  starts inboard of the ramp (from the face inward: blend ramp, then the seal area). A face with
+  grooves beside a blended shoulder, or a shoulder with no grooves. The seal area is **measured
+  FROM THE FACE and stays put whether the end is square or blended** (on-device report: a blend
+  pushed the dashes inward by the ramp width); a ramp at the same face may overlap the seal area's
+  outer end, and a cut that lands inside the ramp draws at the ramp's local height. A face with
   no step to blend (nothing across it, or a same-Ø neighbour) drops its curve but **keeps its
   grooves**, drawn from the face. The seal area's length is its own stored field
   (`Body.blendAftSealLenMm`/`blendFwdSealLenMm`, `AutoBlend.sealLenMm` — typed, stored verbatim,
@@ -172,14 +173,17 @@ material.
   document saved before the field existed carries, so a legacy seal area keeps its grooves (on a
   square end a `0` resolves to nothing, and the face draws no seal — never an error). The stored
   fields are unchanged; only their interpretation widened — every document saved before carries
-  seal flags only on blended faces, so none changes appearance. The shop geometry is why the cuts
-  never sit on the ramp: the rings sit on the fiberglassed body and a short shoulder ramps up from
-  it to the liner — cutting the grooves into the ramp tapered the whole seal area once the ramp
-  was authored to the shoulder. Each cut is a V notch in both silhouette edges plus a DASHED line
-  across seated on the notch floors — never a solid full-height line, which is the glyph for a
-  component face and made the shaft read as segments (on-device report); the dash is finer than
-  the hidden-keyway pattern on purpose (`sealNotchGeom` sizes the notch; line and notch derive
-  from the same geometry so they meet exactly). Authored in its own **"Seal areas"** section
+  seal flags only on blended faces. Drawn width: one seal area ≤ `MAX_SEAL_FACE_FRAC_OF_HOST`
+  (45%) of its run; two on one run ≤ `MAX_SEAL_FACES_TOTAL_FRAC_OF_HOST` (50%) together, scaled
+  with their ratio preserved. The seal span never enters the curve lists or the flat span (the
+  flat span runs ramp to ramp), and the S-break gap steers clear of it (`BodyDrawEdges.sealSpansX`
+  → `breakGapCenter` avoid ranges, beside the keyway windows) so a sealed body still breaks
+  (on-device report: a run with two seal areas lost its break). Each cut is ONE full-height DASHED line across the body at its
+  station, silhouette to silhouette, and the silhouette stays flat through the seal area — the
+  real cuts are small radius grooves and the dashes are indication enough, so the edges carry no
+  notches (on-device report; do not reintroduce silhouette notches). Dashed, never solid: a solid
+  full-height line is the glyph for a component face and made the shaft read as segments
+  (on-device report); the dash is finer than the hidden-keyway pattern on purpose. Authored in its own **"Seal areas"** section
   (AFT / FWD checkboxes, a length field under each ticked face), a sibling of the Square | Blend
   "Face finish" chips — never a third finish mode and never nested under a blend control. A
   finish change leaves the seal flags alone, and unticking a seal keeps its typed length. A fixed

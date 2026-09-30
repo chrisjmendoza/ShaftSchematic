@@ -44,7 +44,7 @@ object AddDefaultsConfig {
 
     /**
      * Axial length a face's seal area takes when it is first switched on (4 in) — the grooved
-     * flat span inboard of the blend that the fiberglass seats into. A starting value the user
+     * span, measured from the face, that the fiberglass seats into. A starting value the user
      * types over, never a derivation.
      */
     const val SEAL_LEN_IN = 4f

@@ -52,7 +52,9 @@ internal fun drawBodyRunsWithBreaks(
      * real geometry, but the REST of a keyed body compresses and breaks like any other run —
      * a 95%-shaft body with an end keyway still needs its break (on-device report). The gap
      * shifts off the window ([breakGapCenter]); only a run with no clear placement at all
-     * prints plain.
+     * prints plain. These are one of TWO avoid sources: each run's seal areas
+     * (`BodyDrawEdges.sealSpansX`) join them, so the gap never cuts through a seal area either
+     * and a sealed body still breaks.
      */
     keywayAvoidSpansMm: List<KeywaySpan> = emptyList(),
     /**
@@ -103,8 +105,10 @@ internal fun drawBodyRunsWithBreaks(
         drawBlendCurvePdf(c, edges.aftCurve, cy, outline, runFill)
         drawBlendCurvePdf(c, edges.fwdCurve, cy, outline, runFill)
 
-        // Break layout first: the gap steers clear of any protected keyway window, and a
-        // run with no clear placement falls back to the plain rectangle.
+        // Break layout first: the gap steers clear of any protected keyway window AND this
+        // run's seal areas (a dashed seal line floating in the paper gap would be nonsense),
+        // and a run with no clear placement falls back to the plain rectangle. The gap is
+        // sized on the flat span, ramp to ramp — seal areas do not shrink it.
         val flatLenPt = abs(fx1 - fx0)
         val pair = if (compress) breakPairLayout(
             runLenPt = flatLenPt,
@@ -113,7 +117,7 @@ internal fun drawBodyRunsWithBreaks(
             strokeWidthPt = capPaint.strokeWidth,
         ) else null
         val gapCenter = pair?.let {
-            breakGapCenter(minOf(fx0, fx1), maxOf(fx0, fx1), it.gapPt, avoidX)
+            breakGapCenter(minOf(fx0, fx1), maxOf(fx0, fx1), it.gapPt, avoidX + edges.sealSpansX)
         }
 
         if (pair == null || gapCenter == null) {
@@ -154,10 +158,13 @@ internal fun drawBodyRunsWithBreaks(
         c.drawLine(x0, cy - edges.capAftR, x0, cy + edges.capAftR, outline)
         c.drawLine(x1, cy - edges.capFwdR, x1, cy + edges.capFwdR, outline)
 
-        // Seal area: the radius cuts the fiberglass seats into, drawn across the blend.
-        // Same construction and dash as the canvas renderer — both read `bodyDrawEdges`.
-        // Dashed so the shaft still reads as one unit (a solid vertical is the
-        // component-face glyph); finer than the hidden-keyway dash on purpose.
+        // Seal area: the radius cuts the fiberglass seats into, each one full-height line
+        // across the body over a flat outline, drawn LAST (after fills, stubs and caps) so
+        // nothing paints over it; a line inside a ramp spans the ramp's local height. Same
+        // construction and dash as the canvas
+        // renderer — both read `bodyDrawEdges`. Dashed so the shaft still reads as one unit
+        // (a solid vertical is the component-face glyph); finer than the hidden-keyway dash
+        // on purpose.
         if (edges.aftSeal.isNotEmpty() || edges.fwdSeal.isNotEmpty()) {
             val sealPaint = Paint(outline).apply {
                 style = Paint.Style.STROKE
