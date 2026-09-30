@@ -1030,9 +1030,12 @@ Two rules make the difference between a printed keyway and a silent nothing:
    through `breakGapCenter` (`pdf/BreakSymbol.kt`, pure): span midpoint by the hand-sheet
    convention, shifted the minimal distance that clears every protected window, and only a
    run with NO clear placement prints plain. Keyed bodies break like any other run — only the
-   slot's own window is protected, so there is no exemption anywhere.
-   Pinned by `BreakGapKeywayAvoidanceTest` (pure placement + both draw sites) and
-   `KeywayPinnedBodySpansTest` (window-not-body, long-shaft scale survival).
+   slot's own window is protected, so there is no exemption anywhere. A body's **seal areas**
+   (`BodyDrawEdges.sealSpansX`) are the second avoid source, so a sealed body keeps its break too
+   and no dashed seal line floats in the gap.
+   Pinned by `BreakGapKeywayAvoidanceTest` (pure placement + both draw sites),
+   `BreakGapSealAvoidanceTest` (seal areas) and `KeywayPinnedBodySpansTest` (window-not-body,
+   long-shaft scale survival).
 
 Clocking is decided once per sheet from the authored spec (`keywayClocking`,
 `hiddenKeywayHostIds`, `secondaryKeywayHostIds`) and handed to both passes, so the two cannot

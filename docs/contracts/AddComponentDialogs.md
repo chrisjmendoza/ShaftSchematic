@@ -290,8 +290,9 @@ submit, but every control and every visibility condition is decided in one place
 **A seal area is a section property, not a face finish.** The finish only decides whether the body
 END has a shoulder (a blend ramp up to the neighbour) or is square; the seal area — the grooves the
 fiberglass seats into — has its own per-face on/off and length, independent of the finish (on-device
-report, photo of a shaft on the lathe). The grooves start AT the face on a square end and inboard of
-the ramp on a blended one. A finish change never touches the seal flags, and a seal toggle never
+report, photo of a shaft on the lathe). The seal area is measured from the face either way — it sits
+in the same place on a square end and a blended one (on-device report: a blend pushed the dashes
+inward). A finish change never touches the seal flags, and a seal toggle never
 touches the blend length. Ticking a seal seeds an empty seal length with the preset
 (`AddDefaultsConfig.SEAL_LEN_IN`, 4 in, capped at a quarter of the body — `defaultSealLenMm`);
 unticking keeps the typed value (`sealLenForSeal`). A stored `0` follows the blend length (documents

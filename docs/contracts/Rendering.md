@@ -87,11 +87,12 @@ See `CouplerBoltSlot.md`.
   all four sides: a blended face has to cap at the NEIGHBOUR's radius while the curve's inner
   end carries no vertical at all. The PDF composer decomposes the same result rather than
   building one path — its flat span still hosts the S-break pair — so the two remain a
-  draw-both-sites pair (see `docs/PDF_EXPORT.md` §5.2b). A **seal area** on a blended face adds a
-  V notch per cut to that same point list — so fill and outline inherit it — plus a dashed line
-  across each notch's floor, drawn after the outline. Both the inset and the dash are deliberate:
-  a solid full-height vertical is the component-face glyph, so three solid cuts made one shaft
-  read as segments.
+  draw-both-sites pair (see `docs/PDF_EXPORT.md` §5.2b). A **seal area** never
+  touches that point list (the silhouette stays flat — no notches): it adds one full-height dashed
+  line per cut, measured from the face, following the silhouette it crosses (a ramp's local height
+  inside a ramp), drawn after the outline. The
+  dash is deliberate: a solid full-height vertical is the component-face glyph, so three solid
+  cuts made one shaft read as segments.
 - Threads: diagonal hatch (`drawThreadHatch`), pitch-spaced, clipped to the envelope.
   ONE convention app-wide (2026-08-26 ruling — "no sense in having different forms with
   different outputs"): full-band diagonals at the thread's own pitch capped 4–18, mirroring

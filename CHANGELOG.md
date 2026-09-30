@@ -8,6 +8,57 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-09-29
 
+### fix(pdf): seal areas anchor at the face and never starve the S-break
+
+Two on-device reports from the printed sheet:
+
+- **A blend pushed the seal drawings inward.** With a blended face the dashes sat inboard by the
+  ramp width; with a square face they sat at the face. The seal area now stays in the same place
+  either way: `BodyBlend.sealDrawSpan` anchors it AT THE FACE (AFT `[xFace, xFace + w]`, FWD
+  `[xFace − w, xFace]`), its true width measured from the face over `sealLenMm`, and it lost its
+  `curve` parameter. A ramp at the same face may overlap the seal area's outer end; the two are
+  independent. A dashed line that lands inside the ramp now takes the SILHOUETTE radius at its x
+  (`sealGrooveLines(span, silhouetteRadiusAt)`, interpolated between the neighbouring curve points),
+  so it spans the ramp's local height and never pokes past or stops short of the outline.
+  `blendAt` clamps the seal length to the run instead of to the room the ramp left.
+- **A body with seal areas at both ends lost its S-break.** A run with two seal areas and a ramp at
+  each end had its flat span — the part that hosts the break — shrunk by all four, `breakGapCenter`
+  found no placement, and the run printed plain and read as a short body. The seal spans no longer
+  ride the curve lists or shrink the flat span (the curves are ramps only again, the flat span runs
+  ramp to ramp; the dead `sealAreaPoints` is removed). Instead `BodyDrawEdges.sealSpansX` exposes
+  each seal area's drawn x-range, and `drawBodyRunsWithBreaks` passes it to `breakGapCenter` beside
+  the keyway windows, so the gap steers clear of the seal areas the same way it steers clear of a
+  keyway — and no dashed line floats in the paper gap.
+
+Sizing: `drawnSealWidthPx(trueWidthPx, hostWidthPx, minWidthPx)` dropped `curveWidthPx` — one seal
+area caps at `MAX_SEAL_FACE_FRAC_OF_HOST` (45%) of its run on its own. New
+`MAX_SEAL_FACES_TOTAL_FRAC_OF_HOST` (0.5): when both faces of a run carry seal areas, their drawn
+widths together never exceed half the run, both scaled down with their ratio preserved, so the
+break always has room. Pinned by `BodyBlendsTest` (square vs blended at the same stations, the
+45% / 50% caps, ramp-following radius, `sealSpansX`) and the new `BreakGapSealAvoidanceTest`
+(pure placement + a two-ramp, two-seal run that keeps its break).
+
+### fix(pdf): seal cuts draw as full-height dashed lines, no silhouette notches
+
+On-device report (screenshot of the printed sheet): the V-notches the seal cuts drove into both
+silhouette edges were unwanted detail. The real cuts are small radius grooves, and the dashed
+lines are indication enough. Each seal cut now draws as ONE full-height **dashed** line across the
+body at its station, silhouette to silhouette, and the body outline runs flat straight through the
+seal area.
+
+`bodyDrawEdges` no longer notches the seal span: `sealAreaPoints` emits just the span's two flat
+endpoints at the body radius (the span still rides the curve lists, so the flat span shrinks by it
+and the S-break stays clear of the grooves), and `sealGrooveLines` returns one point per
+`sealGrooveFracs` station at the BODY radius, so the draw sites' existing `cy − r → cy + r` stroke
+spans the whole silhouette. The draw sites (`ShaftRenderer`, `pdf/BodyRunDraw.kt`) are unchanged
+beyond comments, so the canvas, the schematic PDF and the runout/consolidated sheet all follow. The
+dash pattern (`SEAL_DASH_ON_PT`/`SEAL_DASH_OFF_PT`, finer than the hidden-keyway 6/4) stays — a
+solid full-height vertical is the component-face glyph. The notch helpers went with the feature:
+`SealNotch`, `sealNotchGeom`, `SEAL_NOTCH_DEPTH_FRAC_OF_SPAN`, `SEAL_NOTCH_MAX_DEPTH_FRAC_OF_RADIUS`
+and `SEAL_NOTCH_HALF_WIDTH_FRAC_OF_DEPTH` are removed. Everything else from the seal-area change
+below stays: seal areas as their own control, seal-only faces, grooves inboard of the ramp or from
+the face on a square end.
+
 ### feat(ui): seal areas are their own control, independent of the face finish
 
 The body face-finish chips were **Square | Blend | Seal area**, three exclusive modes with "Seal

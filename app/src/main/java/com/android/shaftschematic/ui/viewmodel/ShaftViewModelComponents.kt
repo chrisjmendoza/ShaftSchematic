@@ -883,7 +883,7 @@ fun ShaftViewModel.updateLinerShade(
  *
  * The seal flags are independent of the blend lengths; a seal on a square face draws its
  * grooves from the face. [sealAftLenMm]/[sealFwdLenMm] size each face's seal area — the grooved
- * flat span inboard of the blend, or from the face on a square end — and are drawing-only in
+ * span, measured from the face whether it is square or blended — and are drawing-only in
  * exactly the same way; `0` lets the seal area follow the blend length. They are stored
  * independently of the seal flags, so a seal switched off keeps its typed length.
  */
@@ -934,8 +934,8 @@ fun ShaftViewModel.updateBodyBlend(
  * against a promoted body's fixed boundary. The seal flag is independent of the blend length;
  * a seal on a square face draws its grooves from the face. [lengthMm] ≤ 0 with [seal] false
  * clears that face; the value is stored verbatim and clamped only where it is drawn.
- * [sealLenMm] sizes the face's seal area (the grooved flat span inboard of the blend, or from
- * the face on a square end), drawing-only the same way; `0` follows [lengthMm].
+ * [sealLenMm] sizes the face's seal area (the grooved span, measured from the face whether it
+ * is square or blended), drawing-only the same way; `0` follows [lengthMm].
  */
 fun ShaftViewModel.setAutoBlend(
     spanStartMm: Float,

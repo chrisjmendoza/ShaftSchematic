@@ -52,13 +52,13 @@ data class AutoBlend(
     /** How the curve eases; drawing-only, like [lengthMm]. */
     val profile: BlendProfile = BlendProfile.OGEE,
     /**
-     * Whether this face carries a seal area — radius cuts on the flat span inboard of the curve,
-     * or starting at the face itself when [lengthMm] is 0 (a seal area on a square face).
-     * Independent of [lengthMm]: a seal area is a section property, not a face finish.
+     * Whether this face carries a seal area — radius cuts measured from the face, in the same
+     * place whether [lengthMm] is 0 (a square face) or not. Independent of [lengthMm]: a seal
+     * area is a section property, not a face finish.
      */
     val seal: Boolean = false,
     /**
-     * Axial length of the seal area (the grooved flat span inboard of the blend), canonical mm,
+     * Axial length of the seal area (the grooved span, measured from the face), canonical mm,
      * stored verbatim. `0` = follow [lengthMm], which is what every anchor saved before the
      * field existed carries.
      */

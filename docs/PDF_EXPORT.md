@@ -296,16 +296,26 @@ cannot tell the two sources apart.
 
 **Seal areas.** A body face (blended or square) may carry the radius cuts the fiberglass seats into
 (`Body.blendAftSeal`/`blendFwdSeal`, `AutoBlend.seal`) — a section property independent of the face
-finish, starting AT the face on a square end (a zero-width `BodyBlend`, `lengthMm = 0`, cap at the
-body radius) and inboard of the ramp on a blended one: `SEAL_GROOVE_COUNT` (3) stations from
-`sealGrooveFracs`, each drawn as a V notch in both silhouette edges plus a **dashed** line across
-seated on the notch floors. The notches ride the curve point lists this pass already walks, so the
-fill polygon and the stroked edges inherit them with no extra code here — only the dashed lines are
-a separate draw. Two constructions are load-bearing and must not be "simplified": the line stops on
-the notch floors rather than spanning the silhouette, and it is dashed with
-`SEAL_DASH_ON_PT`/`SEAL_DASH_OFF_PT` — a solid full-height vertical is this sheet's glyph for a
-component face, and three of them made one shaft read as three or four segments (on-device report).
-The dash is finer than the hidden-keyway 6/4 so a near-side cut never reads as a far-side feature.
+finish, **measured FROM THE FACE and in the same place whether the face is square or blended**
+(on-device report: a blend pushed the dashes inward by the ramp width; a square face is a
+zero-width `BodyBlend`, `lengthMm = 0`, cap at the body radius). A ramp at the same face may
+overlap the seal area's outer end. `SEAL_GROOVE_COUNT` (3) stations from `sealGrooveFracs`, each
+drawn as ONE full-height **dashed** line across the body, silhouette to silhouette
+(`aftSeal`/`fwdSeal` carry the silhouette radius at each station — the body radius on the flat, the
+ramp's local radius inside a ramp — stroked `cy − r → cy + r`). The silhouette stays flat through
+the seal area: the real cuts are small radius grooves and the dashes are indication enough, so the
+edges carry no notches (on-device report; do not reintroduce them). Drawn width: one seal area ≤
+`MAX_SEAL_FACE_FRAC_OF_HOST` (45%) of its run, two on one run ≤ `MAX_SEAL_FACES_TOTAL_FRAC_OF_HOST`
+(50%) together, ratio preserved. The seal span never enters the curve lists or the flat span (the
+flat span runs ramp to ramp); instead **the S-break gap steers clear of it** —
+`BodyDrawEdges.sealSpansX` joins the keyway windows as `breakGapCenter` avoid ranges, so a sealed
+body still breaks (on-device report: a run with two seal areas and a ramp at each end printed plain
+and read as a short body) and no dashed line floats in the paper gap. The seal lines draw LAST in
+the body pass, after fills, stubs and caps. The dash is
+load-bearing and must not be "simplified" to a solid stroke: `SEAL_DASH_ON_PT`/`SEAL_DASH_OFF_PT` —
+a solid full-height vertical is this sheet's glyph for a component face, and three of them made one
+shaft read as three or four segments (on-device report). The dash is finer than the hidden-keyway
+6/4 so a near-side cut never reads as a far-side feature.
 
 ---
 

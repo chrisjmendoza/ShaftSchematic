@@ -124,7 +124,7 @@ class BlendSvgPreviewTest {
 
             Row("S-curve, 1 in shoulder + 8 in seal area", BlendProfile.OGEE, 1 * IN, 177.8f, linerOdMm = 203.2f,
                 seal = true, sealLenMm = 8 * IN,
-                group = "Seal area  —  3 radius cuts on the FLAT body inboard of the shoulder (the photographed shaft)"),
+                group = "Seal area  —  3 radius cuts measured from the face; a shoulder may overlap its outer end"),
             Row("Eased cone, 1 in shoulder + 8 in seal area", BlendProfile.EASED_CONE, 1 * IN, 177.8f,
                 linerOdMm = 203.2f, seal = true, sealLenMm = 8 * IN),
             Row("S-curve, 2 in shoulder + 4 in seal area", BlendProfile.OGEE, 2 * IN, 177.8f,
@@ -135,6 +135,12 @@ class BlendSvgPreviewTest {
                 linerOdMm = 203.2f, seal = true, sealLenMm = 4 * IN),
             Row("Square end + seal area, no neighbour", BlendProfile.OGEE, 0f, 177.8f,
                 seal = true, sealLenMm = 4 * IN, openEnd = true),
+
+            Row("Blend 1 in + 4 in seal area", BlendProfile.OGEE, 1 * IN, 177.8f,
+                linerOdMm = 203.2f, seal = true, sealLenMm = 4 * IN,
+                group = "Blend 1 in + 4 in seal area vs square + 4 in seal area  —  dashes at the same stations"),
+            Row("Square + 4 in seal area", BlendProfile.OGEE, 0f, 177.8f,
+                linerOdMm = 203.2f, seal = true, sealLenMm = 4 * IN),
         )
 
         val groupCount = rows.count { it.group != null }
@@ -226,7 +232,7 @@ class BlendSvgPreviewTest {
      * Pinned (not just rendered): under the compressed map each curve still leaves exactly
      * AT the drawn face, the floored curve width never collapses below
      * [MIN_BLEND_WIDTH_PT] even when the host run compresses hard, and every seal cut
-     * stays on the flat seal area inboard of its ramp.
+     * lies within its seal area measured from the face.
      */
     @Test
     fun `render blends under the compressed sheet map to svg`() {
@@ -297,14 +303,18 @@ class BlendSvgPreviewTest {
                 if (e.fwdCurve.isNotEmpty()) {
                     assertEquals("fwd curve arrives AT the drawn face", x1, e.fwdCurve.last().xPx, 1e-3f)
                 }
-                // The seal area sits inboard of the ramp: every cut lies between the flat
-                // span's end and the point where the ramp starts to rise off the body radius.
-                val rampStartX = e.fwdCurve.first { it.rPx > e.flatR + 1e-3f }.xPx
-                e.fwdSeal.forEach { g ->
-                    assertTrue(
-                        "seal cut stays on the flat seal area, inboard of the ramp",
-                        g.xPx > e.flatX1 && g.xPx < rampStartX,
-                    )
+                // The seal area is measured from the face: every fwd cut lies within
+                // [x1 − sealW, x1], ramp or no ramp.
+                if (e.fwdSeal.isNotEmpty()) {
+                    val fwdSpan = e.sealSpansX.last()
+                    val sealW = fwdSpan.endInclusive - fwdSpan.start
+                    assertEquals("the fwd seal area is anchored at the face", x1, fwdSpan.endInclusive, 1e-3f)
+                    e.fwdSeal.forEach { g ->
+                        assertTrue(
+                            "seal cut lies within the seal area measured from the face",
+                            g.xPx >= x1 - sealW - 1e-3f && g.xPx <= x1 + 1e-3f,
+                        )
+                    }
                 }
 
                 val top = buildList {

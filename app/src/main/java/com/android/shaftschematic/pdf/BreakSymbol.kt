@@ -207,8 +207,10 @@ internal const val BREAK_GAP_MIN_STUB_PT = 6f
 
 /**
  * Center x for a break gap on the flat span [flatX0]..[flatX1], steering the gap clear of
- * [avoidRanges] — drawn x-spans that must stay unbroken (a body keyway's slot: the gap
- * landing inside it would cut the one region the sheet promises at true scale). The span
+ * [avoidRanges] — drawn x-spans that must stay unbroken. Two sources feed it: a body
+ * keyway's protected window (the gap landing inside it would cut the one region the sheet
+ * promises at true scale) and a body's seal areas (`BodyDrawEdges.sealSpansX` — a dashed
+ * seal line floating in the paper gap would be nonsense). The span
  * midpoint is preferred (the hand-sheet convention); a centered gap that would touch an
  * avoid range shifts the minimal distance that clears every range while keeping
  * [minStubPt] of stub at both ends. Returns null when no clear placement exists — the

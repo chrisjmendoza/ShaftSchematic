@@ -200,10 +200,11 @@ object ShaftRenderer {
 
                 drawPath(path, color = outline, style = Stroke(width = outlineW))
 
-                // Seal area: the radius cuts the fiberglass seats into, drawn across the
-                // blend. Dashed so the shaft still reads as one unit — a solid vertical is
-                // the component-face glyph (on-device report: 3 solid lines looked like 3-4
-                // segments). Finer than the hidden-keyway dash on purpose.
+                // Seal area: the radius cuts the fiberglass seats into, each one full-height
+                // line across the seal area over a flat outline. Dashed so the shaft still
+                // reads as one unit — a solid vertical is the component-face glyph (on-device
+                // report: 3 solid lines looked like 3-4 segments). Finer than the
+                // hidden-keyway dash on purpose.
                 val sealDash = PathEffect.dashPathEffect(floatArrayOf(SEAL_DASH_ON_PT, SEAL_DASH_OFF_PT), 0f)
                 (edges.aftSeal + edges.fwdSeal).forEach { g ->
                     drawLine(
