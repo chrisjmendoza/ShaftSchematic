@@ -1175,3 +1175,18 @@ internal fun defaultSealLenMm(bodyLengthMm: Float): Float {
 internal fun sealLenForSeal(on: Boolean, currentMm: Float, bodyLengthMm: Float): Float =
     if (on) currentMm.takeIf { it > 0f } ?: defaultSealLenMm(bodyLengthMm)
     else currentMm
+
+/** Starting inset for a newly captured keyway: the [AddDefaultsConfig.KEYWAY_INSET_IN] preset. */
+internal fun defaultKeywayInsetMm(): Float = AddDefaultsConfig.KEYWAY_INSET_IN * 25.4f
+
+/**
+ * The keyway inset a "Captured keyway" toggle should commit. A keyway is captured exactly when
+ * its inset is > 0, so switching OFF clears the inset to 0 — that is what "not captured" means,
+ * an open keyway at the face. Switching ON keeps a typed inset ([currentMm]), else restores the
+ * last inset typed in this card session ([rememberedMm], held in composable state keyed by the
+ * component id), else seeds the preset ([defaultKeywayInsetMm]). The golden rule holds: the
+ * only writer of these values is the user's own toggle or typing.
+ */
+internal fun keywayInsetForCaptured(on: Boolean, currentMm: Float, rememberedMm: Float): Float =
+    if (!on) 0f
+    else currentMm.takeIf { it > 0f } ?: rememberedMm.takeIf { it > 0f } ?: defaultKeywayInsetMm()

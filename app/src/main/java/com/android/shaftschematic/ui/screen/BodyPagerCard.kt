@@ -49,7 +49,9 @@ import com.android.shaftschematic.util.UnitSystem
  * An AUTO span (`ResolvedComponentSource.AUTO`) shows derived Start/Length read-only with an
  * editable Ø (a per-section bare-shaft override) and the "Explicit body" checkbox that promotes
  * it; an explicit body shows the editable Start/Length/Ø, the face finishes and seal areas, and the keyway
- * section. Every control here that changes geometry, position, or a value is mirrored in
+ * section (KW from AFT | FWD, W × D, the standard-size picker, KW L, the "Captured keyway" toggle
+ * with its "KW Inset from AFT/FWD" field shown only while captured, "Keyway spooned", and the
+ * clocking section). Every control here that changes geometry, position, or a value is mirrored in
  * `AddBodyDialog` by the add-dialog-parity invariant; "Show Ø on drawing", "Show name on
  * drawing", "Compress on drawing", "Shade on drawing", and the "Prints in: in | mm" chip are
  * the documented card-only carve-outs — each changes only how an already-drawn body prints and
@@ -549,23 +551,52 @@ internal fun BodyPagerCard(
             ) { w, d ->
                 onUpdateBodyKeyway(idx, w, d, b.keywayLengthMm, b.keywayOffsetFromEndMm, kwEnd, b.keywaySpooned)
             }
-            // KW L / Offset parse in `kwUnit` like KW W/D — the keyway-unit chip governs what
+            // KW L / Inset parse in `kwUnit` like KW W/D — the keyway-unit chip governs what
             // EVERY keyway number means; parsing these two in the document unit under a kwUnit
             // label read a metric keyway's length as inches.
             CommitNum("KW L (${abbr(kwUnit)})", dispKw(b.keywayLengthMm, kwUnit)) { s ->
                 val v = if (s.isBlank()) 0f else (toMmOrNull(s, kwUnit) ?: return@CommitNum)
                 onUpdateBodyKeyway(idx, b.keywayWidthMm, b.keywayDepthMm, v, b.keywayOffsetFromEndMm, kwEnd, b.keywaySpooned)
             }
-            CommitNum("KW Offset from ${if (isKwFwd) "FWD" else "AFT"} (${abbr(kwUnit)})", dispKw(b.keywayOffsetFromEndMm, kwUnit)) { s ->
-                val v = if (s.isBlank()) 0f else (toMmOrNull(s, kwUnit) ?: return@CommitNum)
-                onUpdateBodyKeyway(idx, b.keywayWidthMm, b.keywayDepthMm, b.keywayLengthMm, v, kwEnd, b.keywaySpooned)
+
+            // Captured ⇔ inset > 0: the toggle is derived from the stored offset, never stored
+            // itself. The last inset cleared or typed is remembered for this body so re-capturing
+            // restores it.
+            val isCaptured = b.keywayOffsetFromEndMm > 0f
+            var rememberedInsetMm by remember(b.id) { mutableStateOf(0f) }
+            Row(
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                    .testTag("body_kw_captured")
+                    .toggleable(
+                        value = isCaptured,
+                        role = androidx.compose.ui.semantics.Role.Switch,
+                        onValueChange = { on ->
+                            if (!on && b.keywayOffsetFromEndMm > 0f) rememberedInsetMm = b.keywayOffsetFromEndMm
+                            val inset = keywayInsetForCaptured(on, b.keywayOffsetFromEndMm, rememberedInsetMm)
+                            onUpdateBodyKeyway(idx, b.keywayWidthMm, b.keywayDepthMm, b.keywayLengthMm, inset, kwEnd, b.keywaySpooned)
+                        }
+                    ).padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(text = "Captured keyway", modifier = Modifier.weight(1f))
+                androidx.compose.material3.Switch(checked = isCaptured, onCheckedChange = null)
+            }
+            if (isCaptured) {
+                // A blank or ≤ 0 inset is not a way to un-capture: the toggle is the one control
+                // that clears the inset, so such a commit is a no-op.
+                CommitNum("KW Inset from ${if (isKwFwd) "FWD" else "AFT"} (${abbr(kwUnit)})", dispKw(b.keywayOffsetFromEndMm, kwUnit)) { s ->
+                    if (s.isBlank()) return@CommitNum
+                    val v = toMmOrNull(s, kwUnit) ?: return@CommitNum
+                    if (v <= 0f) return@CommitNum
+                    rememberedInsetMm = v
+                    onUpdateBodyKeyway(idx, b.keywayWidthMm, b.keywayDepthMm, b.keywayLengthMm, v, kwEnd, b.keywaySpooned)
+                }
             }
 
-            val isKwFloating = b.keywayOffsetFromEndMm > 0f
             Row(
                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
                     .toggleable(
-                        value = b.keywaySpooned, enabled = !isKwFloating,
+                        value = b.keywaySpooned, enabled = !isCaptured,
                         role = androidx.compose.ui.semantics.Role.Switch,
                         onValueChange = { checked ->
                             onUpdateBodyKeyway(idx, b.keywayWidthMm, b.keywayDepthMm, b.keywayLengthMm, b.keywayOffsetFromEndMm, kwEnd, checked)
@@ -574,13 +605,13 @@ internal fun BodyPagerCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = if (isKwFloating) "Keyway spooned (N/A — floating)" else "Keyway spooned",
+                    text = if (isCaptured) "Keyway spooned (N/A — captured)" else "Keyway spooned",
                     modifier = Modifier.weight(1f),
-                    color = if (isKwFloating) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
+                    color = if (isCaptured) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
                 )
                 androidx.compose.material3.Switch(
-                    checked = b.keywaySpooned && !isKwFloating,
-                    enabled = !isKwFloating,
+                    checked = b.keywaySpooned && !isCaptured,
+                    enabled = !isCaptured,
                     onCheckedChange = null
                 )
             }

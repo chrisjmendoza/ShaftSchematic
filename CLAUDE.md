@@ -38,7 +38,8 @@ Specifically:
   (`ThreadPagerCard.kt`, `!includeInOal` block).
 - **Liner AFT/FWD reference**: `AddLinerDialog` must show "Measure From: AFT | FWD" chips.
 - **Body keyway**: `AddBodyDialog` and the explicit-body carousel card must both expose
-  the keyway section (KW from AFT | FWD chips, W × D, L, offset, spooned toggle). The
+  the keyway section (KW from AFT | FWD chips, W × D, L, "Captured keyway" toggle + the
+  "KW Inset from AFT|FWD" field shown only while it is on, spooned toggle). The
   auto-body card intentionally omits it (auto-bodies can't host keyways until promoted).
   The AFT/FWD chips' DEFAULT is seeded by `ShaftSpec.suggestedBodyKeywayEnd` on BOTH
   surfaces — opposite the shaft's existing keyway when exactly one side is taken,
@@ -52,6 +53,10 @@ Specifically:
   AddBodyDialog/AddTaperDialog under the W × D row; it writes through the typed-value path and
   never fills on its own.
 - **Taper AFT/FWD reference**: `AddTaperDialog` must show AFT/FWD direction chips.
+- **Captured keyway**: the taper card and `AddTaperDialog` both carry the "Captured keyway"
+  toggle + the "KW Inset from SET" field shown only while it is on (same on the body pair,
+  above). Captured ⇔ inset > 0 — no stored flag; the cards derive the toggle from the offset,
+  the dialogs hold it as local state, and turning it off commits inset 0.
 - **Coupler bolt slot**: `AddCouplerBoltSlotDialog` and the `ResolvedCouplerBoltSlot`
   carousel card must both expose Hole (Seam | Cross-drilled — `BoltHoleStyle`, chosen at
   add time because it decides what the row draws as), From keyway (90° | In line —
@@ -744,8 +749,9 @@ resolve, OAL, collision, or footer geometry (only the footer *text* gains `(spoo
 mill ends). A spooned
 **open** keyway keeps the normal keyway (full-length walls + mill semicircle) and **adds** an
 enlarged circle around the closed (LET) end — the mill semicircle stays as an inner reference line
-inside the bowl. It is **ignored for floating keyways** (offset > 0) — the UI disables the toggle
-there. The bowl must be drawn **identically in both keyway draw sites** —
+inside the bowl. It is **ignored for captured keyways** (inset > 0), the footer text included — the
+UI disables the toggle there, and a stale stored flag never prints " (spooned)" or the note (ONE
+predicate, `effectiveKeywaySpooned` in `pdf/SheetFooter.kt`). The bowl must be drawn **identically in both keyway draw sites** —
 `ShaftRenderer.drawKeywaySlot` (canvas) and `ShaftPdfComposer.drawKeywaySlotPdf` (PDF). Pure bowl
 math (radius, y-semi, wall tangent, major-arc sweep) lives in `geom/KeywaySpoonMath.kt` (shared,
 no `pdf → ui` dep); `SPOON_BOWL_WIDTH_RATIO` sizes its axial term and the y-semi is the slot

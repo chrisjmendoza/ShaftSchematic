@@ -62,7 +62,7 @@ class KeywaySlotMathTest {
      * the drawn length has to clear the arcs the width demands.
      */
     @Test
-    fun `an open slot reserves one arc and a floating slot two`() {
+    fun `an open slot reserves one arc and a captured slot two`() {
         assertEquals(10f, minKeywaySlotLenPx(halfWidthPx = 10f, openEnd = true), eps)
         assertEquals(20f, minKeywaySlotLenPx(halfWidthPx = 10f, openEnd = false), eps)
     }

@@ -220,7 +220,8 @@ Rectangular torque-transfer slot (a cut feature), owned by a host component.
 
 Current state:
 - Supported on `Taper` (SET-referenced offset) and `Body` (AFT/FWD end-referenced offset),
-  each with keyway length and a spooned flag. Open (offset 0) or floating (offset > 0).
+  each with keyway length and a spooned flag. Open (offset 0) or captured (offset > 0 — see
+  **Captured keyway**).
 - Body-hosted keyways serve intermediate shafts with fitted couplings that end on a plain body.
 - **Keyways 180° apart:** `ShaftSpec.keyways180Apart` — a drawing note that the shaft's keyways
   are clocked 180° from each other. The aft-most keyway (measurement datum) stays solid; every
@@ -237,6 +238,15 @@ Current state:
   slot's length stays page-bound. The drawn width is true — a visibility floor and a host ceiling
   exist (`geom/KeywaySlotMath.kt`) but reach only the smallest shafts at the lowest settings.
   See `docs/PDF_EXPORT.md` §5.2c.
+
+### Captured keyway
+Shop term for a keyway that is NOT cut as a complete slot out the end of its host: it is inset
+from the S.E.T. (taper) or from the referenced end face (body), so both ends carry the mill arc.
+The app formerly called it a "floating" keyway. Stored as nothing more than
+`keywayOffsetFromSetMm` / `keywayOffsetFromEndMm` > 0 — no separate flag. Authored through the
+"Captured keyway" toggle, which reveals the "KW Inset from SET / AFT / FWD" field (first-on seed
+0.5 in, `AddDefaultsConfig.KEYWAY_INSET_IN`); printed in the footer as
+"Captured KW: inset … from S.E.T. / AFT / FWD" under the KW line. Cannot be spooned (no open end).
 
 Non-goal:
 - Keyways will never exist as standalone components.

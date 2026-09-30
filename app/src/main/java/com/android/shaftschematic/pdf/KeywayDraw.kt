@@ -202,7 +202,7 @@ internal fun drawKeywayNotchBodyPdf(
     // keyway window is pinned at true scale while the rest of a long body compresses, so a
     // body-average pt/mm would draw the slot shrunken inside the very window that was
     // pinned to keep it real. Within the pinned window the map is linear, so this is exact;
-    // an anchor reconstructed one offset back keeps a floating slot at its mapped position.
+    // an anchor reconstructed one offset back keeps a captured slot at its mapped position.
     val span = b.keywayAbsSpanMm()
     val axialPtPerMm: Float
     val anchorX: Float
@@ -224,7 +224,7 @@ internal fun drawKeywayNotchBodyPdf(
 /**
  * Shared keyway slot geometry. [refX] is the referenced face (SET face for tapers,
  * AFT/FWD end face for bodies); [dir] is +1 when the slot extends rightward from it.
- * offset ≈ 0 = open at the referenced face; > 0 = floating (mill arcs both ends).
+ * offset ≈ 0 = open at the referenced face; > 0 = captured (mill arcs both ends).
  *
  * Two scales, because the sheet has two: the slot's offset and length ride
  * [axialPtPerMm] (the compressed x map's local scale), its WIDTH and mill-arc radius ride
@@ -271,7 +271,7 @@ private fun drawKeywaySlotPdf(
     // ADD an enlarged bowl around the closed (LET) end — the mill end stays as an inner reference
     // line inside the bowl. The bowl's y-semi comes from the math itself (uniform drawn
     // clearance), never from stretching its x-radius by the sheet's scale ratio — that drew a
-    // tall bowl on every compressed sheet (on-device report). Floating keyways ignore the flag.
+    // tall bowl on every compressed sheet (on-device report). Captured keyways ignore the flag.
     // Mirrors the canvas renderer.
     val bowl        = if (spooned && isOpen && halfW > 0f) keywaySpoonBowl(kwLetX, dir, halfW, halfH) else null
     val bowlRy      = bowl?.ry ?: 0f

@@ -266,7 +266,12 @@ Keyway attributes (host-owned, `model/Taper.kt` / `model/Body.kt`):
   - Taper: `keywayOffsetFromSetMm` — measured from the SET face
   - Body: `keywayOffsetFromEndMm` — measured from the referenced end face, with
     `keywayEnd` (AFT | FWD) selecting which face
-  - In both: 0 = open keyway at the referenced face, > 0 = floating keyway inset from it
+  - In both: 0 = open keyway at the referenced face, > 0 = **captured keyway** (the shop
+    term) inset from it, mill arcs at both ends. "Captured" is derived from the offset alone —
+    there is no stored flag, so a captured keyway with inset 0 cannot exist. The UI shows a
+    "Captured keyway" toggle that reveals the "KW Inset from …" field (see
+    `docs/contracts/AddComponentDialogs.md`); the footer prints the inset on its own line
+    ("Captured KW: inset … from S.E.T. / AFT / FWD")
 - `spoon flag` (stored as `keywaySpooned` — there is no `keywayHasSpoon` alias)
 
 Body keyways survive body split/merge by **absolute position**: `carryBodyKeyway`

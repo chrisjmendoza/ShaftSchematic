@@ -26,7 +26,7 @@ import kotlin.math.sqrt
  * - canvas: `ShaftRenderer.drawKeywaySlot` (Compose `DrawScope`),
  * - PDF: `ShaftPdfComposer.drawKeywaySlotPdf` (`android.graphics.Canvas`/`Paint`).
  *
- * Only meaningful for **open** keyways (offset ≈ 0); floating keyways ignore the spoon flag.
+ * Only meaningful for **open** keyways (offset ≈ 0); captured keyways ignore the spoon flag.
  */
 
 /**

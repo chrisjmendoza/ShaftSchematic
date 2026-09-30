@@ -477,6 +477,22 @@ internal fun crossDrilledHoleLines(
  */
 internal const val SPOONED_KW_NOTE = "KW length to base of spoon (mill end)"
 
+/**
+ * Label of the line printed directly under a captured keyway's footer spec line (inset > 0):
+ * "Captured KW: inset <len> from S.E.T." on a taper, "... from AFT|FWD" on a body. The inset is
+ * a machining value the drawing only shows to scale; an open keyway (inset 0) prints no such line.
+ */
+internal const val CAPTURED_KW_PREFIX = "Captured KW:"
+
+/**
+ * Whether a keyway's spoon prints in the footer (" (spooned)" and [SPOONED_KW_NOTE]). A captured
+ * keyway (inset > 0) has no open end for a spoon — the rule the drawing and the card's disabled
+ * switch already apply (on-device rule) — so a stale stored flag never prints. One definition for
+ * the taper and body keyway lines and the note alike.
+ */
+internal fun effectiveKeywaySpooned(spooned: Boolean, offsetMm: Float): Boolean =
+    spooned && offsetMm <= 0f
+
 // The footer carries NO compression note. The S-break pair IS the drawing's statement that a
 // body run is foreshortened — a line of prose repeating it is redundant (on-device direction),
 // and it cost a footer row on exactly the long shafts with the least room to spare.
@@ -521,7 +537,8 @@ internal fun buildFooterEndColumns(
         add(line("S.E.T.:") { formatDiaWithUnitDual(ls.set.toDouble(), tpUnit, dual) })
         add(line("Length:") { formatLenWithUnitDual(tp.lengthMm.toDouble(), tpUnit, dual) })
         if (tp.keywayWidthMm > 0f && tp.keywayDepthMm > 0f) {
-            val spoon = if (tp.keywaySpooned) " (spooned)" else ""
+            val spooned = effectiveKeywaySpooned(tp.keywaySpooned, tp.keywayOffsetFromSetMm)
+            val spoon = if (spooned) " (spooned)" else ""
             // The keyway resolves its OWN unit, falling back to the taper's: a metric keyway on an
             // imperial taper is the common European case, and the rest of this column stays inches.
             val kwUnit = displayUnits.keywayUnitFor(tp.id)
@@ -532,7 +549,12 @@ internal fun buildFooterEndColumns(
                     "${formatLenWithUnitDual(tp.keywayWidthMm.toDouble(), kwUnit, dual)} × ${formatLenWithUnitDual(tp.keywayDepthMm.toDouble(), kwUnit, dual)}$spoon"
                 }
             })
-            if (tp.keywaySpooned) add(SPOONED_KW_NOTE)
+            if (tp.keywayOffsetFromSetMm > 0f) {
+                add(line(CAPTURED_KW_PREFIX) {
+                    "inset ${formatLenWithUnitDual(tp.keywayOffsetFromSetMm.toDouble(), kwUnit, dual)} from S.E.T."
+                })
+            }
+            if (spooned) add(SPOONED_KW_NOTE)
         }
     }
 
@@ -588,7 +610,7 @@ internal fun buildFooterEndColumns(
     // Body-hosted keyways (fitted couplings on intermediate shafts): list in the column
     // matching the keyway's physical half of the shaft.
     fun bodyKwLine(b: Body): String {
-        val spoon = if (b.keywaySpooned) " (spooned)" else ""
+        val spoon = if (effectiveKeywaySpooned(b.keywaySpooned, b.keywayOffsetFromEndMm)) " (spooned)" else ""
         val kwUnit = displayUnits.keywayUnitFor(b.id)
         return line("Body KW:") {
             "${formatLenWithUnitDual(b.keywayWidthMm.toDouble(), kwUnit, dual)} × " +
@@ -601,7 +623,14 @@ internal fun buildFooterEndColumns(
         val centerMm = span.centerMm
         val col = if (centerMm <= spec.overallLengthMm * 0.5f) aft else fwd
         col += bodyKwLine(b)
-        if (b.keywaySpooned) col += SPOONED_KW_NOTE
+        if (b.keywayOffsetFromEndMm > 0f) {
+            val kwUnit = displayUnits.keywayUnitFor(b.id)
+            val face = if (b.keywayEnd == LinerAuthoredReference.FWD) "FWD" else "AFT"
+            col += line(CAPTURED_KW_PREFIX) {
+                "inset ${formatLenWithUnitDual(b.keywayOffsetFromEndMm.toDouble(), kwUnit, dual)} from $face"
+            }
+        }
+        if (effectiveKeywaySpooned(b.keywaySpooned, b.keywayOffsetFromEndMm)) col += SPOONED_KW_NOTE
     }
 
     // Liner shoulder edge radii — the radius's ONLY printed value (the drawing shows the

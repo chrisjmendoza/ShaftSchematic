@@ -6,6 +6,42 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-09-30
+
+### feat(ui): captured keyways — toggle + inset field, footer line
+
+On-device report: a keyway that is NOT cut as a complete slot out the end of its host — the one
+inset from the S.E.T. (taper) or from the referenced end face (body), rounded by the mill at both
+ends — is a **captured keyway** in the shop. The app called it "floating", and asked for it through
+a bare "KW Offset from …" field that was always on screen.
+
+- **UI, all four keyway surfaces** (Taper card, explicit-Body card, `AddTaperDialog`,
+  `AddBodyDialog` — add-dialog parity holds control-for-control): the always-visible offset field
+  is replaced by a **"Captured keyway"** switch row (tags `taper_kw_captured` / `body_kw_captured`
+  / `add_taper_kw_captured` / `add_body_kw_captured`) that reveals **"KW Inset from SET"** /
+  **"KW Inset from AFT|FWD"** only while it is on. Order in the block: W × D → Standard size →
+  KW L → Captured keyway → (Inset) → Keyway spooned → clocking — capturing disables spooning, so
+  the dependency reads top-down; the spooned row says "N/A — captured".
+- **Model unchanged**: captured ⇔ `keywayOffsetFromSetMm` / `keywayOffsetFromEndMm` > 0. No stored
+  flag and no codec change — two sources of truth would let a "captured" keyway with inset 0 draw
+  as open. The cards derive the toggle from the offset; the dialogs hold it as local state.
+- **Seed**: switching it on with no inset seeds `AddDefaultsConfig.KEYWAY_INSET_IN` (0.5 in) — a
+  starting value the user types over. On a card, switching it off clears the inset (that is what
+  "not captured" means) and remembers it for the session, so switching back on restores the typed
+  inset (`keywayInsetForCaptured`); a blank or ≤ 0 Inset commit is a no-op, so the toggle stays the
+  one control that clears it. The dialog keeps the typed text until submit and commits inset 0
+  while the toggle is off.
+- **Footer**: a captured keyway prints ONE new line directly under its `KW:` / `Body KW:` line —
+  `Captured KW: inset <len> from S.E.T.` (taper) or `… from AFT` / `… from FWD` (body), in the
+  keyway's own unit (`CAPTURED_KW_PREFIX`). The inset is a machining value the footer never
+  printed before. Open keyways print nothing new, so existing sheets are byte-identical. A
+  captured keyway also no longer prints " (spooned)" or the spoon note from a stale stored flag
+  (`effectiveKeywaySpooned`) — the drawing and the card already ignored it, and the footer was the
+  one surface that disagreed.
+- **Vocabulary**: "floating keyway" is renamed "captured keyway" everywhere a user or reader sees
+  it — card/dialog strings, KDoc, Help (a new "Captured keyway" glossary entry; the keyways how-to
+  explains the toggle), docs, test names. Field names are unchanged.
+
 ## 2026-09-29
 
 ### fix(pdf): seal areas anchor at the face and never starve the S-break

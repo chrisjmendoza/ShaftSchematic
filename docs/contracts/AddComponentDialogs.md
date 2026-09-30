@@ -1,4 +1,4 @@
-# AddComponentDialogs Contract (v1.9, 2026-08-29)
+# AddComponentDialogs Contract (v1.10, 2026-09-30)
 
 ## Purpose
 Composable dialogs for adding new components: `AddBodyDialog`, `AddLinerDialog`,
@@ -62,7 +62,7 @@ different thread, added as one.
 
 **Also under the parity rule:** the **"Keyway in: in | mm"** chip in the keyway section of
 `AddBodyDialog` / `AddTaperDialog` and of the Body / Taper cards, shown when Settings → Drawing →
-*Per-component units* is on. It sets the unit the keyway's four fields (W, D, L, offset) are
+*Per-component units* is on. It sets the unit the keyway's four fields (W, D, L, inset) are
 **typed** in as well as the unit its footer line prints in, so it is value entry, not display — a
 European keyway is whole millimetres on an otherwise imperial shaft, and typing 20 × 12 mm as
 0.7874 × 0.4724 in loses the number the shop was given. Stored as a derived-key override
@@ -105,8 +105,9 @@ still authored in inches on an inch document. That asymmetry is a known follow-u
 | KW from: AFT \| FWD chips | Always (keyway end-face reference). Default seeded by `ShaftSpec.suggestedBodyKeywayEnd`: opposite the shaft's existing keyway when exactly one side is taken (an aft taper keyway suggests FWD, and vice versa); both/neither → AFT. The SAME seed drives the card's chips for a not-yet-real keyway (parity of behavior, on-device report: a new body keyway defaulting onto the taken side read as a second aft keyway). A seed only — the chips always win, and nothing stored is ever rewritten by it |
 | KW W / KW D / KW L | Always (blank = 0 = no keyway) |
 | "Standard size…" picker | Always, inside the keyway section, directly under the W × D row. A menu of standard key stock (ANSI B17.1 in inches, DIN 6885-1 in mm — the keyway unit chooses; `geom/KeyStockStandards.kt`), the size the standard names for the body's Ø listed first. A pick fills W and D through the same path typing them takes and writes nothing on its own — never on a Ø change, never over an existing W × D |
-| KW Offset from AFT / FWD | Always (label follows chip; 0 = open, > 0 = floating) |
-| Keyway spooned toggle | Always (disabled + "N/A — floating" when offset > 0) |
+| Captured keyway toggle | Always. Captured ⇔ inset > 0 — no stored flag (the card derives the toggle from `keywayOffsetFromEndMm`; the dialog holds it as local state). Turning it ON with a blank inset seeds `AddDefaultsConfig.KEYWAY_INSET_IN` (0.5 in); turning it OFF commits an open keyway (inset 0) — the dialog keeps the typed text until submit, and the card remembers the cleared inset for the session and restores it on the next ON (`keywayInsetForCaptured`) |
+| KW Inset from AFT / FWD | Only while the Captured keyway toggle is ON (label follows chip). On the card, a blank or ≤ 0 commit is a no-op — the toggle is the one control that clears the inset |
+| Keyway spooned toggle | Always (disabled + "N/A — captured" while captured) |
 | Keyways 180° apart toggle | Only when the shaft will have ≥ 2 keyways (≥ 1 existing **and** this dialog's keyway is fully defined) |
 | Keyways 90° apart toggle | Same condition as the 180° toggle |
 | CW \| CCW direction chips | Only when the Keyways 90° apart toggle is on |
@@ -173,8 +174,11 @@ unit override for that thread; see `docs/DATA_MODEL.md`.
 | SET Ø / LET Ø | Always (labels swap for FWD) |
 | Rate mode: Auto \| Manual | Always |
 | Rate | Always (read-only in Auto, editable in Manual) |
-| Keyway fields | Always |
+| KW W / KW D / KW L | Always (blank = 0 = no keyway) |
 | "Standard size…" picker | Always, directly under the W × D row — the same menu as `AddBodyDialog`, suggested off the taper's **LARGE** end (a key is specified for the section it seats in) |
+| Captured keyway toggle | Always — same rules as `AddBodyDialog` (captured ⇔ `keywayOffsetFromSetMm` > 0, 0.5 in seed, OFF commits inset 0) |
+| KW Inset from SET | Only while the Captured keyway toggle is ON |
+| Keyway spooned toggle | Always (disabled + "N/A — captured" while captured) |
 | Keyways 180° apart toggle | Only when the shaft will have ≥ 2 keyways (≥ 1 existing **and** this dialog's keyway is fully defined) |
 | Keyways 90° apart toggle | Same condition as the 180° toggle |
 | CW \| CCW direction chips | Only when the Keyways 90° apart toggle is on |
@@ -324,6 +328,13 @@ the aft-most center as `startFromAftMm = OAL − enteredFwd − (count−1)·spa
 ---
 
 ## Change log
+**v1.10 (2026-09-30)**
+- Captured keyways (the shop term for what the app called a "floating" keyway — inset from the
+  S.E.T. or the referenced face, mill arcs at both ends): the always-visible "KW Offset from …"
+  field is replaced on all four keyway surfaces (Body/Taper cards, `AddBodyDialog`,
+  `AddTaperDialog`) by a **Captured keyway** toggle that reveals a **KW Inset from SET / AFT /
+  FWD** field. No model change — captured ⇔ offset > 0. Parity holds control-for-control.
+
 **v1.9 (2026-08-29)**
 - The dialogs' bounds warning and the carousel cards' new past-OAL chip now share ONE
   predicate (`outsideShaftSpan`); `collectAddWarnings` was refactored onto it and the dialog's
