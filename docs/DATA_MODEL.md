@@ -149,7 +149,8 @@ data class Body(
     val keywayDepthMm: Float = 0f,
     val keywayLengthMm: Float = 0f,
     // Axial distance from the referenced end face (keywayEnd) to the keyway slot.
-    // 0 = open keyway (starts at the face); > 0 = floating (rounded both ends).
+    // 0 = open keyway (starts at the face); > 0 = captured (inset, mill arcs both ends).
+    // "Captured" is derived from this value — no stored flag.
     val keywayOffsetFromEndMm: Float = 0f,
     val keywayEnd: LinerAuthoredReference = LinerAuthoredReference.AFT,  // which face the offset is measured from
     val keywaySpooned: Boolean = false,
@@ -182,7 +183,7 @@ data class Taper(
     val keywayLengthMm: Float = 0f,
     // Axial distance from the SET face to the start of the keyway slot.
     // 0 = open keyway (starts at SET face, open-ended there).
-    // > 0 = floating keyway (inset from SET, rounded at both ends).
+    // > 0 = captured keyway (inset from SET, mill arcs at both ends); derived, no stored flag.
     val keywayOffsetFromSetMm: Float = 0f,
     val keywaySpooned: Boolean = false,  // no "keywayHasSpoon" alias exists
     val taperRateText: String = "",  // user-authored rate text (e.g. "1:12"); derived/validated in the ViewModel

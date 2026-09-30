@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Calculate
@@ -215,6 +216,8 @@ fun AddBodyDialog(
     var kwWidth   by remember { mutableStateOf("") }
     var kwDepth   by remember { mutableStateOf("") }
     var kwLength  by remember { mutableStateOf("") }
+    // Captured keyway: local toggle; `kwOffset` holds the inset text it reveals.
+    var kwCaptured by remember { mutableStateOf(false) }
     var kwOffset  by remember { mutableStateOf("") }
     // Default end = opposite the shaft's existing keyway when one side is taken
     // (`suggestedBodyKeywayEnd`) — a new body keyway defaulting onto the side an aft taper
@@ -240,8 +243,10 @@ fun AddBodyDialog(
     val kwW = if (kwEnabled) toMmOrNull(kwWidth,  kwUnit) ?: 0f else 0f
     val kwD = if (kwEnabled) toMmOrNull(kwDepth,  kwUnit) ?: 0f else 0f
     val kwL = if (kwEnabled) toMmOrNull(kwLength, kwUnit) ?: 0f else 0f
-    val kwO = if (kwEnabled) toMmOrNull(kwOffset, kwUnit) ?: 0f else 0f
-    val isFloating = kwO > 0f
+    // The inset text only counts while "Captured keyway" is on; switching it off holds the
+    // text until submit but commits an open keyway (inset 0).
+    val kwO = if (kwEnabled && kwCaptured) toMmOrNull(kwOffset, kwUnit) ?: 0f else 0f
+    val isCaptured = kwCaptured && kwO > 0f
     // Same condition as the carousel card's switch: it appears once the shaft will
     // have ≥ 2 keyways (≥ 1 existing plus the one being defined here).
     val showClockingToggle = kwEnabled && spec.keywayCount() >= 1 && kwW > 0f && kwD > 0f && kwL > 0f
@@ -363,23 +368,32 @@ fun AddBodyDialog(
                     }
                     Spacer(Modifier.height(8.dp))
                     CommitNumField("KW L (${abbr(kwUnit)})", kwLength) { kwLength = it }
-                    Spacer(Modifier.height(8.dp))
-                    CommitNumField("KW Offset from ${if (kwFwd) "FWD" else "AFT"} (${abbr(kwUnit)})", kwOffset) { kwOffset = it }
                     Spacer(Modifier.height(4.dp))
+                    CapturedKeywayToggleRow(
+                        checked = kwCaptured,
+                        testTag = "add_body_kw_captured",
+                    ) { on ->
+                        kwCaptured = on
+                        if (on && kwOffset.isBlank()) kwOffset = dispKw(defaultKeywayInsetMm(), kwUnit)
+                    }
+                    if (kwCaptured) {
+                        CommitNumField("KW Inset from ${if (kwFwd) "FWD" else "AFT"} (${abbr(kwUnit)})", kwOffset) { kwOffset = it }
+                        Spacer(Modifier.height(4.dp))
+                    }
                     Row(
                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            if (isFloating) "Keyway spooned (N/A — floating)" else "Keyway spooned",
+                            if (isCaptured) "Keyway spooned (N/A — captured)" else "Keyway spooned",
                             modifier = Modifier.weight(1f),
-                            color = if (isFloating) MaterialTheme.colorScheme.onSurfaceVariant
+                            color = if (isCaptured) MaterialTheme.colorScheme.onSurfaceVariant
                                     else MaterialTheme.colorScheme.onSurface
                         )
                         Switch(
-                            checked = kwSpooned && !isFloating,
-                            enabled = !isFloating,
-                            onCheckedChange = { if (!isFloating) kwSpooned = it }
+                            checked = kwSpooned && !isCaptured,
+                            enabled = !isCaptured,
+                            onCheckedChange = { if (!isCaptured) kwSpooned = it }
                         )
                     }
                 }
@@ -426,7 +440,7 @@ fun AddBodyDialog(
                     startMm, lengthMm, diaMm,
                     kwW, kwD, kwL, kwO,
                     if (kwFwd) LinerAuthoredReference.FWD else LinerAuthoredReference.AFT,
-                    kwSpooned && !isFloating,
+                    kwSpooned && !isCaptured,
                     if (showClockingToggle) clock180 else spec.keyways180Apart,
                     if (showClockingToggle) clock90 else spec.keyways90Apart,
                     if (showClockingToggle) cw90 else spec.keyways90Cw,
@@ -1014,6 +1028,8 @@ fun AddTaperDialog(
     var kwWidth   by remember { mutableStateOf("") }
     var kwDepth   by remember { mutableStateOf("") }
     var kwLength  by remember { mutableStateOf("") }
+    // Captured keyway: local toggle; `kwOffset` holds the inset text it reveals.
+    var kwCaptured by remember { mutableStateOf(false) }
     var kwOffset  by remember { mutableStateOf("") }
     var kwSpooned by remember { mutableStateOf(false) }
     // 180°/90° clocking are mutually exclusive; enforced locally here (mirrors the
@@ -1095,8 +1111,10 @@ fun AddTaperDialog(
     // Null = the keyway follows the document unit, the default and the common case.
     var kwUnitOverride by remember { mutableStateOf<UnitSystem?>(null) }
     val kwUnit = kwUnitOverride ?: unit
-    val keywayOffsetMm = toMmOrNull(kwOffset, kwUnit) ?: 0f
-    val isFloating = keywayOffsetMm > 0f
+    // The inset text only counts while "Captured keyway" is on; switching it off holds the
+    // text until submit but commits an open keyway (inset 0).
+    val keywayOffsetMm = if (kwCaptured) toMmOrNull(kwOffset, kwUnit) ?: 0f else 0f
+    val isCaptured = kwCaptured && keywayOffsetMm > 0f
     // Same condition as the carousel card's switch: it appears once the shaft will
     // have ≥ 2 keyways (≥ 1 existing plus the one being defined here).
     val kwDefined = (toMmOrNull(kwWidth, kwUnit) ?: 0f) > 0f &&
@@ -1193,23 +1211,32 @@ fun AddTaperDialog(
                 }
                 Spacer(Modifier.height(8.dp))
                 CommitNumField("KW L (${abbr(kwUnit)})", kwLength) { kwLength = it }
-                Spacer(Modifier.height(8.dp))
-                CommitNumField("KW Offset from SET (${abbr(kwUnit)})", kwOffset) { kwOffset = it }
                 Spacer(Modifier.height(4.dp))
+                CapturedKeywayToggleRow(
+                    checked = kwCaptured,
+                    testTag = "add_taper_kw_captured",
+                ) { on ->
+                    kwCaptured = on
+                    if (on && kwOffset.isBlank()) kwOffset = dispKw(defaultKeywayInsetMm(), kwUnit)
+                }
+                if (kwCaptured) {
+                    CommitNumField("KW Inset from SET (${abbr(kwUnit)})", kwOffset) { kwOffset = it }
+                    Spacer(Modifier.height(4.dp))
+                }
                 Row(
                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        if (isFloating) "Keyway spooned (N/A — floating)" else "Keyway spooned",
+                        if (isCaptured) "Keyway spooned (N/A — captured)" else "Keyway spooned",
                         modifier = Modifier.weight(1f),
-                        color = if (isFloating) MaterialTheme.colorScheme.onSurfaceVariant
+                        color = if (isCaptured) MaterialTheme.colorScheme.onSurfaceVariant
                                 else MaterialTheme.colorScheme.onSurface
                     )
                     Switch(
-                        checked = kwSpooned && !isFloating,
-                        enabled = !isFloating,
-                        onCheckedChange = { if (!isFloating) kwSpooned = it }
+                        checked = kwSpooned && !isCaptured,
+                        enabled = !isCaptured,
+                        onCheckedChange = { if (!isCaptured) kwSpooned = it }
                     )
                 }
                 if (showClockingToggle) {
@@ -1285,12 +1312,12 @@ fun AddTaperDialog(
                     val kwW = toMmOrNull(kwWidth,  kwUnit) ?: 0f
                     val kwD = toMmOrNull(kwDepth,  kwUnit) ?: 0f
                     val kwL = toMmOrNull(kwLength, kwUnit) ?: 0f
-                    val kwO = toMmOrNull(kwOffset, kwUnit) ?: 0f
+                    val kwO = if (kwCaptured) toMmOrNull(kwOffset, kwUnit) ?: 0f else 0f
                     val submitRateText = if (autoRate) computedRateText.orEmpty() else rateText
                     val action = {
                         onSubmit(physStartMm, lengthMm, startDia, endDia, submitRateText,
                                  reference,
-                                 kwW, kwD, kwL, kwO, kwSpooned && !isFloating,
+                                 kwW, kwD, kwL, kwO, kwSpooned && !isCaptured,
                                  if (showClockingToggle) clock180 else spec.keyways180Apart,
                                  if (showClockingToggle) clock90 else spec.keyways90Apart,
                                  if (showClockingToggle) cw90 else spec.keyways90Cw,
@@ -1324,6 +1351,33 @@ private fun DirectionChip(label: String, selected: Boolean, onClick: () -> Unit)
         ),
     ) {
         Text(label, style = MaterialTheme.typography.labelLarge)
+    }
+}
+
+/**
+ * The "Captured keyway" switch row shared by `AddBodyDialog` and `AddTaperDialog`, styled like
+ * the carousel cards' row (whole-row toggle, 48 dp, the switch itself not separately clickable).
+ * A captured keyway is inset from the S.E.T. / referenced face, with mill arcs at both ends;
+ * the host dialog reveals the inset field while it is on.
+ */
+@Composable
+private fun CapturedKeywayToggleRow(
+    checked: Boolean,
+    testTag: String,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+            .testTag(testTag)
+            .toggleable(
+                value = checked,
+                role = androidx.compose.ui.semantics.Role.Switch,
+                onValueChange = onCheckedChange,
+            ),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("Captured keyway", modifier = Modifier.weight(1f))
+        Switch(checked = checked, onCheckedChange = null)
     }
 }
 

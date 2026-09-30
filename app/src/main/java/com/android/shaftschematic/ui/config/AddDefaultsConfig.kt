@@ -48,4 +48,12 @@ object AddDefaultsConfig {
      * types over, never a derivation.
      */
     const val SEAL_LEN_IN = 4f
+
+    // ---- Keyway defaults ------------------------------------------------------
+    /**
+     * Inset a keyway takes when "Captured keyway" is first switched on with no inset typed
+     * (0.5 in) — the distance from the S.E.T. (taper) or the referenced end face (body) to the
+     * slot. A starting value the user types over, never a derivation.
+     */
+    const val KEYWAY_INSET_IN = 0.5f
 }

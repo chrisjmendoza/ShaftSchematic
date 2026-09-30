@@ -66,11 +66,11 @@ class BodyKeywayTest {
         assertTrue(keyedBody(kwOffset = 0f).isValid(1000f))
     }
 
-    @Test fun `isValid passes when floating keyway fits within body`() {
+    @Test fun `isValid passes when captured keyway fits within body`() {
         assertTrue(keyedBody(kwLength = 200f, kwOffset = 50f).isValid(1000f))
     }
 
-    @Test fun `isValid fails when floating keyway overruns body length`() {
+    @Test fun `isValid fails when captured keyway overruns body length`() {
         assertFalse(keyedBody(kwLength = 200f, kwOffset = 300f).isValid(1000f))
     }
 

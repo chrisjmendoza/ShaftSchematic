@@ -689,7 +689,7 @@ private fun DrawScope.drawHighlightStrokeRect(
  * The arc center is halfW inward from the LET face; straight lines stop there.
  *
  * Open keyway  (offset ≈ 0): SET face is the shaft end face, already drawn — no extra wall.
- * Floating keyway (offset > 0): both ends get a concave semicircle.
+ * Captured keyway (offset > 0): both ends get a concave semicircle.
  */
 private fun DrawScope.drawKeywayNotch(
     t: Taper,
@@ -757,7 +757,7 @@ private fun DrawScope.drawKeywayNotchBody(
 /**
  * Shared keyway slot geometry. [refX] is the referenced face (SET face for tapers, the
  * AFT/FWD end face for bodies); [dir] is +1 when the slot extends rightward from it.
- * offset ≈ 0 = open at the referenced face; > 0 = floating (mill arcs both ends).
+ * offset ≈ 0 = open at the referenced face; > 0 = captured (mill arcs both ends).
  * [hostRadiusPx] is the drawn radius the slot is cut into — the cap on its drawn width.
  *
  * [hidden] draws the slot as a far-side feature (keyways 180° apart): dashed outline and
@@ -800,7 +800,7 @@ private fun DrawScope.drawKeywaySlot(
     // Spooned (open keyways only): keep the normal keyway (full-length walls + mill semicircle) and
     // ADD an enlarged bowl around the closed (LET) end — the mill end stays as an inner reference
     // line inside the bowl. The bowl's y-semi comes from the shared math (uniform drawn
-    // clearance), matching the PDF site. Floating keyways ignore the flag.
+    // clearance), matching the PDF site. Captured keyways ignore the flag.
     val bowl = if (spooned && isOpen && halfW > 0f) keywaySpoonBowl(kwLetX, dir, halfW, halfH) else null
     val bowlRy = bowl?.ry ?: 0f
 

@@ -6,7 +6,7 @@ import org.junit.Test
 
 /**
  * A taper's keyway predicates: when the stored W × D × L counts as a keyway at all, and when the
- * draw-only spoon flag applies (an open keyway only — a floating one has no closed end to spoon).
+ * draw-only spoon flag applies (an open keyway only — a captured one has no closed end to spoon).
  */
 class TaperKeywayTest {
 
@@ -51,12 +51,12 @@ class TaperKeywayTest {
         assertTrue(taper(kwWidth = 30f, kwDepth = 15f, kwLength = 200f, kwOffset = 0f).isValid(1000f))
     }
 
-    @Test fun `isValid passes when floating keyway fits within taper`() {
+    @Test fun `isValid passes when captured keyway fits within taper`() {
         // offset 50 + length 200 = 250 <= taper length 400
         assertTrue(taper(kwWidth = 30f, kwDepth = 15f, kwLength = 200f, kwOffset = 50f).isValid(1000f))
     }
 
-    @Test fun `isValid fails when floating keyway overruns taper length`() {
+    @Test fun `isValid fails when captured keyway overruns taper length`() {
         // offset 300 + length 200 = 500 > taper length 400
         assertFalse(taper(kwWidth = 30f, kwDepth = 15f, kwLength = 200f, kwOffset = 300f).isValid(1000f))
     }

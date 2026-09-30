@@ -334,6 +334,14 @@ internal val helpSections: List<HelpSection> = listOf(
                 illustration = { SBreakFigure() },
             ),
             HelpTopic(
+                "Captured keyway",
+                "A keyway that does not run out the end of its host as an open slot: it is " +
+                    "inset from the S.E.T. (taper) or the chosen end face (body), so both ends " +
+                    "are rounded by the mill. Switch on \"Captured keyway\" on the card or in the " +
+                    "Add dialog to enter the inset; the footer prints it under the KW line. A " +
+                    "captured keyway cannot be spooned."
+            ),
+            HelpTopic(
                 "Coupling face",
                 "The end view shops hand-sketch on a runout sheet, taken looking forward: the " +
                     "coupling OD, the pilot bore with its keyseat, and the bolt circle with its " +
@@ -451,7 +459,11 @@ internal val helpSections: List<HelpSection> = listOf(
                 "Tapers, keyways, and spooned ends",
                 "Tapers measure from the AFT or FWD end (direction chips on the card and in " +
                     "the Add dialog). Tapers and explicit bodies can carry a keyway (width × " +
-                    "depth, length, offset). A spooned keyway adds the enlarged bowl at the " +
+                    "depth, length). A keyway runs out the end of its host unless you switch " +
+                    "on \"Captured keyway\" — the shop term for a slot inset from the S.E.T. " +
+                    "(taper) or the chosen end face (body), rounded at both ends — which " +
+                    "reveals its Inset field; the footer then prints the inset. A spooned " +
+                    "keyway adds the enlarged bowl at the " +
                     "closed end on the drawing — it is drawing-only and never changes the " +
                     "keyway's dimensions. With two or more keyways, clocking toggles " +
                     "(180°/90°, CW/CCW) appear on the keyway cards.",

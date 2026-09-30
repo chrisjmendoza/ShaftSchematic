@@ -96,7 +96,7 @@ class BodyKeywayDrawTest {
     }
 
     @Test
-    fun `a floating keyway inks a slot inset from the face`() {
+    fun `a captured keyway inks a slot inset from the face`() {
         val bmp = render(listOf(keyedBody(offsetFromEndMm = 50f)))
         // Inset by 50 mm: the face end stays clear, the slot lands beyond it.
         assertEquals(0, ink(bmp, 0, 0, 45, h))

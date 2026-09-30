@@ -21,6 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -48,7 +49,9 @@ import kotlin.math.max
 
 /**
  * Carousel editor card for a taper: the AFT/FWD reference chips, Start/Length, the SET/LET
- * diameters, the Auto/Manual rate pair, and the keyway section with its own unit chip.
+ * diameters, the Auto/Manual rate pair, and the keyway section with its own unit chip (W × D,
+ * the standard-size picker, KW L, the "Captured keyway" toggle with its "KW Inset from SET"
+ * field shown only while captured, "Keyway spooned", and the clocking section).
  *
  * Rate mode is user-owned state seeded once per taper — it must not be re-derived from the
  * stored text, which would discard an explicit Auto/Manual choice. Every control that changes
@@ -273,23 +276,51 @@ internal fun TaperPagerCard(
         ) { w, d ->
             onUpdateTaperKeyway(idx, w, d, t.keywayLengthMm, t.keywayOffsetFromSetMm, t.keywaySpooned)
         }
-        // KW L / Offset parse in `kwUnit` like KW W/D — the keyway-unit chip governs what
+        // KW L / Inset parse in `kwUnit` like KW W/D — the keyway-unit chip governs what
         // EVERY keyway number means; parsing these two in the document unit under a kwUnit
         // label read a metric keyway's length as inches.
         CommitNum("KW L (${abbr(kwUnit)})", dispKw(t.keywayLengthMm, kwUnit)) { s ->
             val v = if (s.isBlank()) 0f else (toMmOrNull(s, kwUnit) ?: return@CommitNum)
             onUpdateTaperKeyway(idx, t.keywayWidthMm, t.keywayDepthMm, v, t.keywayOffsetFromSetMm, t.keywaySpooned)
         }
-        CommitNum("KW Offset from SET (${abbr(kwUnit)})", dispKw(t.keywayOffsetFromSetMm, kwUnit)) { s ->
-            val v = if (s.isBlank()) 0f else (toMmOrNull(s, kwUnit) ?: return@CommitNum)
-            onUpdateTaperKeyway(idx, t.keywayWidthMm, t.keywayDepthMm, t.keywayLengthMm, v, t.keywaySpooned)
+
+        // Captured ⇔ inset > 0: the toggle is derived from the stored offset, never stored itself.
+        // The last inset cleared or typed is remembered for this taper so re-capturing restores it.
+        val isCaptured = t.keywayOffsetFromSetMm > 0f
+        var rememberedInsetMm by remember(t.id) { mutableStateOf(0f) }
+        Row(
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                .testTag("taper_kw_captured")
+                .toggleable(
+                    value = isCaptured,
+                    role = androidx.compose.ui.semantics.Role.Switch,
+                    onValueChange = { on ->
+                        if (!on && t.keywayOffsetFromSetMm > 0f) rememberedInsetMm = t.keywayOffsetFromSetMm
+                        val inset = keywayInsetForCaptured(on, t.keywayOffsetFromSetMm, rememberedInsetMm)
+                        onUpdateTaperKeyway(idx, t.keywayWidthMm, t.keywayDepthMm, t.keywayLengthMm, inset, t.keywaySpooned)
+                    }
+                ).padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(text = "Captured keyway", modifier = Modifier.weight(1f))
+            androidx.compose.material3.Switch(checked = isCaptured, onCheckedChange = null)
+        }
+        if (isCaptured) {
+            // A blank or ≤ 0 inset is not a way to un-capture: the toggle is the one control
+            // that clears the inset, so such a commit is a no-op.
+            CommitNum("KW Inset from SET (${abbr(kwUnit)})", dispKw(t.keywayOffsetFromSetMm, kwUnit)) { s ->
+                if (s.isBlank()) return@CommitNum
+                val v = toMmOrNull(s, kwUnit) ?: return@CommitNum
+                if (v <= 0f) return@CommitNum
+                rememberedInsetMm = v
+                onUpdateTaperKeyway(idx, t.keywayWidthMm, t.keywayDepthMm, t.keywayLengthMm, v, t.keywaySpooned)
+            }
         }
 
-        val isFloating = t.keywayOffsetFromSetMm > 0f
         Row(
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
                 .toggleable(
-                    value = t.keywaySpooned, enabled = !isFloating,
+                    value = t.keywaySpooned, enabled = !isCaptured,
                     role = androidx.compose.ui.semantics.Role.Switch,
                     onValueChange = { checked ->
                         onUpdateTaperKeyway(idx, t.keywayWidthMm, t.keywayDepthMm, t.keywayLengthMm, t.keywayOffsetFromSetMm, checked)
@@ -298,13 +329,13 @@ internal fun TaperPagerCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = if (isFloating) "Keyway spooned (N/A — floating)" else "Keyway spooned",
+                text = if (isCaptured) "Keyway spooned (N/A — captured)" else "Keyway spooned",
                 modifier = Modifier.weight(1f),
-                color = if (isFloating) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
+                color = if (isCaptured) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
             )
             androidx.compose.material3.Switch(
-                checked = t.keywaySpooned && !isFloating,
-                enabled = !isFloating,
+                checked = t.keywaySpooned && !isCaptured,
+                enabled = !isCaptured,
                 onCheckedChange = null
             )
         }

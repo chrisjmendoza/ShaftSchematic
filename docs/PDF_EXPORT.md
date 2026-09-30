@@ -386,9 +386,15 @@ thickness every shaft draws **exactly true** at 100% height and above; the floor
 ceiling bounds any lift at 1.6× for a standard key, by construction (0.40 ÷ 0.25).
 
 The drawn length takes a minimum of `minKeywaySlotLenPx` — one AXIAL arc radius for a slot open
-at its referenced face, two for a floating one. That guards authored geometry, not the scale
+at its referenced face, two for a captured one. That guards authored geometry, not the scale
 split: a keyway shorter than half its own width would run its arcs past its straight walls and
 invert the slot.
+
+A captured keyway's inset (offset > 0) is a machining value the drawing only shows to scale, so
+the footer prints it on its own line directly under the `KW:` / `Body KW:` line (before the spoon
+note): `Captured KW: inset <len> from S.E.T.` on a taper, `… from AFT` / `… from FWD` on a body
+(its `keywayEnd`), in the keyway's own unit (`CAPTURED_KW_PREFIX`, `pdf/SheetFooter.kt`). An open
+keyway prints nothing new, so its sheets are byte-identical.
 
 Unaffected: the 90°-clocked **silhouette** notch (`drawKeywaySilhouetteNotchPdf`) was always
 radial and always used the diameter scale; and the true-scale pin on a body keyway's window

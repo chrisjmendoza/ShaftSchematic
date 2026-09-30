@@ -257,7 +257,9 @@ Keyway (body-hosted feature — same rules referenced from the body's AFT/FWD en
 - keywayWidthMm / keywayDepthMm / keywayLengthMm / keywayOffsetFromEndMm ≥ 0 (blocking, `Body.isValid`)
 - keywayOffsetFromEndMm + keywayLengthMm ≤ body.lengthMm (blocking, `Body.isValid`)
 - `keywayEnd` (AFT | FWD) selects the referenced face; offset 0 = open at that face.
-- Spoon is optional, non-blocking, and ignored for floating keyways (offset > 0).
+- Spoon is optional, non-blocking, and ignored for captured keyways (offset > 0).
+- "Captured keyway" is derived from offset > 0 on both hosts — never a stored flag. The card's
+  Inset field ignores a blank or ≤ 0 commit; only the Captured toggle clears the inset to 0.
 
 ### Taper Rate Behavior
 Superseded by the Auto/Manual rate-mode system — authoritative contract in the

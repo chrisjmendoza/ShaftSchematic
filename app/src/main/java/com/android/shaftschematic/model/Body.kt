@@ -17,13 +17,14 @@ import java.util.UUID
  * @property keywayOffsetFromEndMm Axial distance from the referenced body end face
  *   ([keywayEnd]) to the near edge of the keyway slot.
  *   0 = open keyway (starts at the end face, open-ended there).
- *   > 0 = floating keyway (inset from the face, rounded at both ends).
+ *   > 0 = captured keyway (inset from the face, mill arcs at both ends). "Captured" is the
+ *   shop term; it is derived from this value alone, never stored as a separate flag.
  * @property keywayEnd Which body end face the keyway is referenced from (AFT or FWD).
  *   Intermediate shafts with fitted couplings carry keyways at a shaft end that is a
  *   plain cylindrical body — this picks the face the offset is measured from.
  * @property keywaySpooned Whether the open keyway's closed (LET) end is spooned — an enlarged
  *   circle drawn around the mill end (which stays as an inner reference line).
- *   Ignored when [keywayOffsetFromEndMm] > 0 (floating keyways have no open end to reference).
+ *   Ignored when [keywayOffsetFromEndMm] > 0 (captured keyways have no open end to reference).
  * @property showDiaOnDrawing Whether this body's Ø prints as a below-shaft callout on the
  *   schematic. Draw-only flag: it changes nothing in the model, resolve, OAL, collision, or
  *   footer geometry, and never rewrites [diaMm]. Defaults OFF (on-device preference): body Ø
