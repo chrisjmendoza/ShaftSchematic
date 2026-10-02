@@ -382,7 +382,8 @@ liner itself is a plain line (a real boundary, not a "cut").
 
 **End-thread stubs (2026-07-26):** a neighbor **thread with nothing beyond it** is the shaft's
 threaded end, not a truncation — its stub gets a **flat outer edge + diagonal thread hatch**
-(`drawThreadStubHatch`, same "legacy look" convention as `ShaftRenderer.drawThreadHatch`, fixed
+(`drawThreadStubHatch`, leaning by the end thread's own pitch at the app-wide slant like
+`ShaftRenderer.drawThreadHatch` — `geom/ThreadHatchMath.kt` — fixed
 8 px pitch since the stub is symbolic) instead of the S-break, which would misread as "shaft
 continues past here". Any other neighbor type keeps the break (the fixed-width stub genuinely
 truncates it), and no neighbor at all still means no stub — the component's own flat edge is the
@@ -2016,6 +2017,7 @@ All four routes (Runout, Wear, Undercut, Consolidated Output) pass `RunoutWearOp
 | Runout bubbles: Bubble height (Slider 50–200%) | `vm.setPdfRunoutBubbleDropScale()` (`PdfPrefs.runoutBubbleDropScale`) — same gate; caption reads "Experimental" |
 | Dimension arrows (Chips Small/Medium/Large) | `vm.setPdfArrowSizePt()` — only when `showDimensionArrows` (Consolidated Output only) |
 | Fractions (Chips Stacked/Diagonal/Plain) | `vm.setPdfFractionStyle()` — ungated, every instance |
+| Thread slant (Slider 1×–10×, 0.5 steps, commit on release) | `vm.setPdfThreadSlant()` (`PdfPrefs.threadSlant`) — ungated, every instance (every document draws the shaft's threads) |
 | Measurement reference (Radio: Auto / AFT / FWD, expandable) | `vm.setPdfTieringMode()` — only when `showMeasurementReference` (Consolidated Output only) |
 | Shade Bodies (Checkbox, in expandable "Shade in Components") | `vm.setPdfShadedBodies()` — ungated, every instance |
 | Shade Bodies → Explicit bodies only (indented sub-checkbox) | `vm.setPdfShadeExplicitBodiesOnly()` (`PdfPrefs.shadeExplicitBodiesOnly`) — enabled only while Shade Bodies is checked; HIDDEN on the Wear and Undercut sheets (`showShadeExplicitBodiesOnly = false` — the narrowing never reaches their `SimpleShaftProfile` body pass) |
@@ -2025,7 +2027,7 @@ All four routes (Runout, Wear, Undercut, Consolidated Output) pass `RunoutWearOp
 The **whole sheet follows one unified order** (matching the schematic Tune sheet, §5.5 of
 `PDF_EXPORT.md`): Content chips → the Wear block (Wear only) → Shaft height → Body S-break →
 Line thickness → Liner & taper compression → Runout bubbles → Dimension arrows → Fractions →
-Measurement reference → Shade in Components → Dual units + layout LAST. Every instance simply
+Thread slant → Measurement reference → Shade in Components → Dual units + layout LAST. Every instance simply
 skips the rows it doesn't gate in; nothing reorders per caller.
 
 The Consolidated Output **and Runout** instances turn on Liner & taper compression and the Runout
@@ -2041,8 +2043,8 @@ be inert there. Only Consolidated Output adds the Dimension arrows chips and the
 reference radios — the same set the schematic Tune sheet exposes, minus Component labels and
 the blank Ø-callouts sub-toggle, which the consolidated composer never reads. Only the
 **Wear** instance turns on `showWearControls`, the block that tunes the wear strips; the other
-three documents draw no wear strips. Fractions, Shade in Components, and Dual units are
-ungated everywhere.
+three documents draw no wear strips. Fractions, Thread slant, Shade in Components, and Dual
+units are ungated everywhere.
 
 The **Content chip row** is on for every instance — Consolidated Output, Wear, Undercut, and
 Runout all have a write-in mode, so Blank draft always renders; Coupling face only joins it on
@@ -2054,14 +2056,15 @@ re-renders the preview through the route's existing `blankDraft` render key.
 So, top to bottom: the **Wear** sheet shows Blank draft → Components (complete shaft +
 Compact strips + per-component checkboxes + the Default/All/None quick actions) → Strip size →
 Trace depth exaggeration → Wear area shade → Taper–liner join → **Shaft height** → Line
-thickness → Fractions → Shade in Components → Dual units + layout; the **Undercut** sheet
-shows Blank draft → Line thickness → Fractions → Shade in Components → Dual units + layout;
+thickness → Fractions → Thread slant → Shade in Components → Dual units + layout; the
+**Undercut** sheet shows Blank draft → Line thickness → Fractions → Thread slant → Shade in
+Components → Dual units + layout;
 the **Runout** sheet shows Blank draft → Coupling face → Shaft height → Body S-break → Line
-thickness → Liner & taper compression → Runout bubbles → Fractions → Shade in Components → Dual units
-+ layout; the **Consolidated Output** sheet (the fullest instance) shows Blank draft →
+thickness → Liner & taper compression → Runout bubbles → Fractions → Thread slant → Shade in
+Components → Dual units + layout; the **Consolidated Output** sheet (the fullest instance) shows Blank draft →
 Coupling face → Shaft height → Body S-break → Line thickness → Liner & taper compression → Runout
-bubbles → Dimension arrows → Fractions → Measurement reference → Shade in Components → Dual
-units + layout. Two ordering rules, both on-device requests: Shaft height leads the live-tuning
+bubbles → Dimension arrows → Fractions → Thread slant → Measurement reference → Shade in
+Components → Dual units + layout. Two ordering rules, both on-device requests: Shaft height leads the live-tuning
 group (the control reached for most), and the dual-units pair sits LAST on every sheet —
 drawing- and output-specific controls first, rarely used options at the foot. The wear sliders
 are commit-on-release like every other slider here, so the Wear preview is **not** a live-drag

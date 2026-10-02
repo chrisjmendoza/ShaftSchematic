@@ -146,6 +146,11 @@ private data class ConsolidatedRenderInputs(
      */
     val outputFont: OutputFont,
     /**
+     * The thread-hatch slant. Not a composer argument — it reaches the ink via
+     * `ThreadHatchSlant.active`. Key only.
+     */
+    val threadSlant: Float,
+    /**
      * A LAYOUT input, not just a key: the composers take it as a parameter, and a sheet whose
      * budget cannot absorb the taller stacked value falls back to inline on its own.
      */
@@ -218,6 +223,7 @@ fun OutputRoute(
     // which the loop cannot observe, so it rides along as an input key.
     val pdfFractionStyle   by vm.pdfFractionStyle.collectAsState()
     val pdfOutputFont      by vm.pdfOutputFont.collectAsState()
+    val pdfThreadSlant     by vm.pdfThreadSlant.collectAsState()
     val pdfDualUnitLayout  by vm.pdfDualUnitLayout.collectAsState()
     val pdfTieringMode     by vm.pdfTieringMode.collectAsState()
     val runoutReadings     by vm.runoutReadings.collectAsState()
@@ -509,6 +515,7 @@ fun OutputRoute(
                 arrowSizePt = pdfArrowSizePt,
                 fractionStyle = pdfFractionStyle,
                 outputFont = pdfOutputFont,
+                threadSlant = pdfThreadSlant,
                 dualUnitLayout = pdfDualUnitLayout,
                 curveLoHeightIn = curveLoHeightIn,
                 curveHiHeightIn = curveHiHeightIn,
@@ -897,6 +904,7 @@ fun OutputRoute(
                     showDimensionArrows = true,
                     arrowSizePt = pdfArrowSizePt,
                     fractionStyle = pdfFractionStyle,
+                    threadSlant = pdfThreadSlant,
                     dualUnitLayout = pdfDualUnitLayout,
                     dualUnits = dualUnits,
                     onDualUnitsChange = { vm.setDualUnits(it) },

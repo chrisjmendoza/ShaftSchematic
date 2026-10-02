@@ -33,6 +33,7 @@ via SAF, delegating drawing to `composeShaftPdf`.
 | `curveHiHeightIn` | `1.0` | Sizing-curve anchor: drawn height (paper in) of an 8" shaft at 100% (0.25–1.5) |
 | `sBreakThresholdFrac` | `0.5` | Body S-break threshold: a body run breaks once drawn below this fraction of its true length (0–1; `0` = never break on compression) |
 | `arrowSizePt` | `3` | Dimension-rail arrowhead length (pt): Small `3` (default) / Medium `4` / Large `5` |
+| `threadSlant` | `3` | Thread-hatch slant factor: multiplier on each thread's true crest lean (half its pitch over its major diameter, `geom/ThreadHatchMath.kt`), `1` (true geometry) – `10`, 0.5 steps; the lean is capped at 60° to the axis. Reaches every thread hatch — the PDF composers via the `ThreadHatchSlant.active` mirror, the canvases via `vm.pdfThreadSlant` |
 | `wearJoinGapMaxMm` | `76.2` (3") | Taper–liner join threshold: bare shaft between two components in one wear detail strip that still draws true, in canonical mm (0–304.8; `0` = break on any gap) |
 | `runoutBubbleScale` | `1.0` | Multiplier on the runout bubble radius (`BUBBLE_RADIUS_PT`), read by both bubble draw sites — the sheet composer and the Runout tab's canvas preview. Stored clamp 0.5–2.0 (defensive, wider than the UI); UI range 60–150%, 5% steps |
 | `runoutBubbleDropScale` | `1.0` | Multiplier on the drop from the shaft surface to the first bubble row (`SHORT_LEADER_PT` / `RunoutBubbleGeometry.shortLeader`), same two draw sites as `runoutBubbleScale`. Stored clamp 0.5–2.0; UI range 50–200%. Experimental — exists to find where the pointer lines land best and may be retired |
@@ -80,6 +81,13 @@ with this job", so the reader never has to guess which kind a row is.
   `PdfDimensionRenderer` — the schematic and the consolidated sheet; the wear/undercut strip
   rails keep their own fixed 4 pt head. A smaller head also slightly widens inline
   eligibility, since a break's stubs must each be at least `arrowSize` long.
+- **Thread slant** (`threadSlant`): slider 1×–10× in 0.5 steps, default 3×, commits on
+  release (no `PreviewTuning` drag channel) — in Settings → Drawing → "Thread slant" (with a
+  "Default (3×)" reset) and in both PDF Options sheets, ungated (one shared `ThreadSlantSlider`,
+  one app-wide pref, testTag `thread_slant_slider`). It multiplies each thread's TRUE crest
+  lean, so a coarse thread still leans further than a fine one at every setting. The composers
+  read the `util/ThreadHatchSlant.active` mirror (sole writer `SettingsStore.updatePdfPrefs`,
+  the fraction-style posture), so every preview carries `threadSlant` as a render-input key.
 - **Taper–liner join** (`wearJoinGapMaxMm`): slider 0–12", commits on release, with a
   "Default (3")" reset — in Settings → Drawing → "Taper–liner join" and the **wear** preview's
   PDF Options sheet (one shared `WearJoinGapSlider`, one app-wide pref). It is the only
@@ -111,7 +119,7 @@ Full-resolution preview through the shared `util/PdfRaster.renderPdfPageBitmap`
   callouts** (enabled only while Blank draft is on), **Labels** — then the live-tuning
   slider group at the head — **"Shaft height"** slider, "Body S-break" threshold, line
   thickness (50–200%), liner compression control — then "Dimension arrows" size, fractions,
-  an expandable "Measurement reference" section (Auto/AFT/FWD), an expandable "Shade in
+  "Thread slant", an expandable "Measurement reference" section (Auto/AFT/FWD), an expandable "Shade in
   Components" section (bodies/tapers/liners + an "Explicit bodies only" sub-checkbox under
   Bodies), and dual units + layout LAST (rarely used options trail, on-device request) —
   bound to

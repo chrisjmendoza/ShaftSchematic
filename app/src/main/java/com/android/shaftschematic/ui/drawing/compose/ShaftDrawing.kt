@@ -39,6 +39,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.unit.dp
+import com.android.shaftschematic.geom.THREAD_SLANT_DEFAULT
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.pdf.mapToLinerDimsForPdf
@@ -115,6 +116,11 @@ fun ShaftDrawing(
     previewThreadHatch: PreviewColorSetting = PreviewColorSetting(preset = PreviewColorPreset.STEEL),
     lineThicknessScale: Float = 1.0f,
     /**
+     * Thread-hatch slant factor (`PdfPrefs.threadSlant`, `geom/ThreadHatchMath.kt`) — the same
+     * app-wide value the sheets hatch with, so a thread leans alike in the preview and in print.
+     */
+    threadSlant: Float = THREAD_SLANT_DEFAULT,
+    /**
      * PDF-shade mirror: the components the PDF will print shaded (the composers' effective
      * decision, `shadedComponentIds` in `ui/resolved/ResolvedComponent.kt`). Overlaid on the
      * preview fills so the box answers "what prints shaded" live; empty draws as before.
@@ -160,7 +166,7 @@ fun ShaftDrawing(
         bodyFill, previewBodyFill, linerFill, previewLinerFill,
         taperFill, previewTaperFill, threadFill, previewThreadFill, threadHatch,
         highlightEnabled, highlightId, themeGlow,
-        shadedComponentIds, shadeOverlayColor,
+        shadedComponentIds, shadeOverlayColor, threadSlant,
     ) { RenderOptions(
         // Visual tuning
         paddingPx = 16,
@@ -173,6 +179,7 @@ fun ShaftDrawing(
         // Threads (legacy hatch look)
         threadFillColor = threadFill.copy(alpha = fillAlpha(previewThreadFill.preset, fallback = 0.10f)).toArgb(),
         threadHatchColor = threadHatch.toArgb(),
+        threadSlant = threadSlant,
 
         // PDF-shade mirror
         shadedComponentIds = shadedComponentIds,

@@ -75,6 +75,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.android.shaftschematic.geom.THREAD_SLANT_DEFAULT
 import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
 import com.android.shaftschematic.pdf.WEAR_STRIP_SIZE_FRAC_DEFAULT
 import com.android.shaftschematic.settings.PDF_ARROW_SIZE_DEFAULT_PT
@@ -89,6 +90,7 @@ import com.android.shaftschematic.ui.viewmodel.setLineThicknessScale
 import com.android.shaftschematic.ui.viewmodel.setLinerCompression
 import com.android.shaftschematic.ui.viewmodel.setLinersProportional
 import com.android.shaftschematic.ui.viewmodel.setPdfArrowSizePt
+import com.android.shaftschematic.ui.viewmodel.setPdfThreadSlant
 import com.android.shaftschematic.ui.viewmodel.setPdfDualUnitLayout
 import com.android.shaftschematic.ui.viewmodel.setPdfFractionStyle
 import com.android.shaftschematic.ui.viewmodel.setPdfRunoutBubbleDropScale
@@ -463,6 +465,11 @@ internal fun RunoutWearOptionsSheet(
      * this sheet serves prints lengths, so every one of them draws fractions.
      */
     fractionStyle: FractionStyle = FractionStyle.STACKED,
+    /**
+     * The app-wide `PdfPrefs.threadSlant`. Ungated like the fraction style: every document this
+     * sheet serves draws the shaft's threads.
+     */
+    threadSlant: Float = THREAD_SLANT_DEFAULT,
     /** The app-wide `PdfPrefs.dualUnitLayout`; ungated for the same reason as the fraction style. */
     dualUnitLayout: DualUnitLayout = DualUnitLayout.Default,
     /**
@@ -739,6 +746,15 @@ internal fun RunoutWearOptionsSheet(
         FractionStyleChips(
             fractionStyle = fractionStyle,
             onCommit = { vm.setPdfFractionStyle(it) },
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        // ── Thread slant ─────────────────────────────────────────────────────
+        // Ungated: every document this sheet serves draws the shaft's threads.
+        ThreadSlantSlider(
+            threadSlant = threadSlant,
+            onCommit = { vm.setPdfThreadSlant(it) },
         )
 
         Spacer(Modifier.height(12.dp))

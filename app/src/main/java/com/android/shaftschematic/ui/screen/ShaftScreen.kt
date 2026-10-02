@@ -83,6 +83,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.android.shaftschematic.geom.THREAD_SLANT_DEFAULT
 import com.android.shaftschematic.geom.computeOalWindow
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
@@ -203,6 +204,8 @@ fun ShaftScreen(
     previewThreadHatch: PreviewColorSetting,
     previewBlackWhiteOnly: Boolean,
     lineThicknessScale: Float = 1.0f,
+    /** App-wide thread-hatch slant (`PdfPrefs.threadSlant`) — the preview hatches like the sheets. */
+    threadSlant: Float = THREAD_SLANT_DEFAULT,
     /** PDF-shade mirror for the preview box — components the PDF will print shaded. */
     shadedComponentIds: Set<String> = emptySet(),
 
@@ -516,6 +519,7 @@ fun ShaftScreen(
                 previewThreadHatch = previewThreadHatch,
                 previewBlackWhiteOnly = previewBlackWhiteOnly,
                 lineThicknessScale = lineThicknessScale,
+                threadSlant = threadSlant,
                 shadedComponentIds = shadedComponentIds,
                 modifier = Modifier
                     .fillMaxWidth()

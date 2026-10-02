@@ -5,8 +5,15 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
+import com.android.shaftschematic.data.SettingsStore
+import com.android.shaftschematic.geom.THREAD_SLANT_DEFAULT
+import com.android.shaftschematic.geom.THREAD_SLANT_MAX
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Threads
+import com.android.shaftschematic.util.ThreadHatchSlant
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -17,7 +24,8 @@ import org.robolectric.annotation.GraphicsMode
 /**
  * One thread must print IDENTICALLY on every sheet ("no sense in having different forms
  * with different outputs" — on-device direction). All hatch sites share `drawThreadHatch`
- * plus one pitch/paint recipe (pitch = thread's own pitch capped 4–18 pt; 60%-dim-weight
+ * plus one pitch/lean/paint recipe (spacing = thread's own pitch capped 4–18 pt; lean = that
+ * pitch over its own diameter at the app-wide slant, `ThreadHatchSlant.active`; 60%-dim-weight
  * alpha-160 paint); the schematic's former private convention (short ±4 pt ticks at
  * max(8, pitch)) is gone.
  *
@@ -72,6 +80,12 @@ class ThreadHatchParityTest {
         )
     }
 
+    /** The slant mirror is process-wide, so a test that moves it must put it back. */
+    @After
+    fun restoreShippedSlant() {
+        SettingsStore.updatePdfPrefs { it.copy(threadSlant = THREAD_SLANT_DEFAULT) }
+    }
+
     @Test
     fun `schematic and wear-undercut profile print the same thread pixel-for-pixel`() {
         assertTrue(schematic().sameAs(simpleProfile()))
@@ -80,5 +94,28 @@ class ThreadHatchParityTest {
     @Test
     fun `schematic and runout profile print the same thread pixel-for-pixel`() {
         assertTrue(schematic().sameAs(runoutProfile()))
+    }
+
+    @Test
+    fun `every sheet prints the same thread pixel-for-pixel at a non-default slant`() {
+        SettingsStore.updatePdfPrefs { it.copy(threadSlant = 8f) }
+        val schematic = schematic()
+        assertTrue(schematic.sameAs(simpleProfile()))
+        assertTrue(schematic.sameAs(runoutProfile()))
+    }
+
+    @Test
+    fun `a slant change reaches the printed hatch`() {
+        val shipped = schematic()
+        SettingsStore.updatePdfPrefs { it.copy(threadSlant = 8f) }
+        assertFalse(shipped.sameAs(schematic()))
+    }
+
+    @Test
+    fun `the pref write is what moves the mirror, clamped`() {
+        SettingsStore.updatePdfPrefs { it.copy(threadSlant = 6.5f) }
+        assertEquals(6.5f, ThreadHatchSlant.active, 0f)
+        SettingsStore.updatePdfPrefs { it.copy(threadSlant = 40f) }
+        assertEquals(THREAD_SLANT_MAX, ThreadHatchSlant.active, 0f)
     }
 }

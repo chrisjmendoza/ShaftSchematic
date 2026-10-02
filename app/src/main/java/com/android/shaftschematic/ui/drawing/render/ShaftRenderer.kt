@@ -46,6 +46,9 @@ import com.android.shaftschematic.geom.SEAL_DASH_ON_PT
 import com.android.shaftschematic.geom.ShoulderDrawSpec
 import com.android.shaftschematic.geom.linerTopSilhouette
 import com.android.shaftschematic.geom.shoulderDrawSpec
+import com.android.shaftschematic.geom.threadHatchLean
+import com.android.shaftschematic.geom.threadHatchRun
+import com.android.shaftschematic.geom.threadHatchSpacing
 import com.android.shaftschematic.model.shoulderOn
 import com.android.shaftschematic.ui.resolved.BodyDrawEdges
 import com.android.shaftschematic.ui.resolved.BodyEdgePoint
@@ -150,6 +153,7 @@ object ShaftRenderer {
         val linerFill    = Color(opts.linerFillColor)
         val threadFill   = Color(opts.threadFillColor)
         val flankColor   = Color(opts.threadHatchColor)
+        val threadSlant  = opts.threadSlant
         // PDF-shade mirror: components the PDF will print shaded get this overlay on top of
         // their normal preview fill, so the box answers "what prints shaded" live.
         val shadedIds    = opts.shadedComponentIds
@@ -387,6 +391,8 @@ object ShaftRenderer {
                     bottomPx = cy + majorR,
                     pxPerMm = L.pxPerMm,
                     pitchMm = th.pitchMm,
+                    majorDiaMm = th.majorDiaMm,
+                    slant = threadSlant,
                     color = flankColor
                 )
 
@@ -430,6 +436,8 @@ object ShaftRenderer {
                 bottomPx = cy + majorR,
                 pxPerMm = L.pxPerMm,
                 pitchMm = th.pitchMm,
+                majorDiaMm = th.majorDiaMm,
+                slant = threadSlant,
                 color = flankColor
             )
 
@@ -598,27 +606,32 @@ object ShaftRenderer {
     // Helpers (threads)
     // ─────────────────────────────────────────────────────────────────────────────
 
-    /** Legacy look: diagonal hatch clipped to the thread envelope. */
+    /**
+     * Slanted hatch clipped to the thread envelope — spaced by the thread's own pitch and leaned
+     * by that pitch over its own diameter at slant factor [slant] (`geom/ThreadHatchMath.kt`).
+     */
     private fun DrawScope.drawThreadHatch(
         leftPx: Float,
         topPx: Float,
         rightPx: Float,
         bottomPx: Float,
         pxPerMm: Float,
-        pitchMm: Float?,
+        pitchMm: Float,
+        majorDiaMm: Float,
+        slant: Float,
         color: Color,
     ) {
         if (rightPx <= leftPx || bottomPx <= topPx || pxPerMm <= 0f) return
-        // The app-wide hatch convention (PDF mirror: `pdf/SimpleShaftProfile.drawThreadHatch`
-        // + its shared pitch recipe): full-band diagonals at the thread's own pitch, capped
-        // 4–18 — the same thread must read the same on the preview as on every sheet.
-        val spacing = ((pitchMm?.takeIf { it > 0f } ?: 2.5f) * pxPerMm).coerceIn(4f, 18f)
-        val bandH = bottomPx - topPx
+        // The app-wide hatch convention (PDF mirror: `pdf/SimpleShaftProfile.drawThreadHatch`):
+        // full-band slanted strokes at the thread's own pitch and lean — the same thread must
+        // read the same on the preview as on every sheet.
+        val spacing = threadHatchSpacing(pitchMm, pxPerMm)
+        val run = threadHatchRun(bottomPx - topPx, threadHatchLean(pitchMm, majorDiaMm, slant))
         val stroke = 1f
         withTransform({ clipRect(leftPx, topPx, rightPx, bottomPx) }) {
-            var hx = leftPx - bandH
+            var hx = leftPx - run
             while (hx <= rightPx) {
-                drawLine(color, Offset(hx, bottomPx), Offset(hx + bandH, topPx), stroke)
+                drawLine(color, Offset(hx, bottomPx), Offset(hx + run, topPx), stroke)
                 hx += spacing
             }
         }

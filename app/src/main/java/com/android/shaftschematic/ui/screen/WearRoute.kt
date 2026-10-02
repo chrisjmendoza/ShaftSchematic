@@ -165,6 +165,7 @@ fun WearRoute(
     val pdfShadedLiners    by vm.pdfShadedLiners.collectAsState()
     val pdfFractionStyle   by vm.pdfFractionStyle.collectAsState()
     val pdfOutputFont      by vm.pdfOutputFont.collectAsState()
+    val pdfThreadSlant     by vm.pdfThreadSlant.collectAsState()
     // Dual-unit layout: this document stacks its dual values like every other
     // (`wantDualStacked`), so its options sheet has to show the stored choice — and the
     // preview has to redraw when it changes.
@@ -297,10 +298,11 @@ fun WearRoute(
     // chips would change nothing on the page they sit over. runoutConfig.heightScale is keyed on
     // its own (the rest of the config draws nothing here): it sizes the main profile band.
     // pdfOutputFont is a key for the same reason: the typeface reaches the ink through
-    // OutputTypography.active, which is not snapshot state either.
+    // OutputTypography.active, which is not snapshot state either; so is pdfThreadSlant, which
+    // reaches the hatch through ThreadHatchSlant.active.
     LaunchedEffect(showPreview, spec, unit, resolvedComponents,
                    lineThicknessScale, pdfShadedBodies, pdfShadedTapers, pdfShadedLiners,
-                   wearRecord, blankDraft, pdfFractionStyle, pdfOutputFont, traceDepthFrac,
+                   wearRecord, blankDraft, pdfFractionStyle, pdfOutputFont, pdfThreadSlant, traceDepthFrac,
                    wearBandShadeFrac, wearJoinGapMaxMm, unitOverrides, dualUnits, pdfDualUnitLayout,
                    runoutConfig.heightScale) {
         if (!showPreview) { previewBitmap = null; previewInkBand = null; return@LaunchedEffect }
@@ -344,7 +346,7 @@ fun WearRoute(
     val previewShape   = MaterialTheme.shapes.medium
 
     val transparentArgb = Color.Transparent.toArgb()
-    val previewOpts = remember(outlineArgb, bodyFillArgb, hatchArgb) {
+    val previewOpts = remember(outlineArgb, bodyFillArgb, hatchArgb, pdfThreadSlant) {
         RenderOptions(
             outlineColor        = outlineArgb,
             outlineWidthPx      = 1.5f,
@@ -353,6 +355,7 @@ fun WearRoute(
             linerFillColor      = transparentArgb, // liner tint drawn separately as tap affordance
             threadFillColor     = 0x00000000,
             threadHatchColor    = hatchArgb,
+            threadSlant         = pdfThreadSlant,
         )
     }
 
@@ -649,6 +652,7 @@ fun WearRoute(
                     pdfShadedLiners = pdfShadedLiners,
                     vm = vm,
                     fractionStyle = pdfFractionStyle,
+                    threadSlant = pdfThreadSlant,
                     blankDraft = blankDraft,
                     onSetBlankDraft = { blankDraft = it },
                     showWearControls = true,
@@ -706,6 +710,7 @@ fun WearRoute(
             onRemoveDiaReading = vm::removeWearDiaReading,
             onClose = { selectedComponentId = null },
             traceDepthFrac = traceDepthFrac,
+            threadSlant = pdfThreadSlant,
         )
     }
 }
