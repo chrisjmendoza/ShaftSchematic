@@ -73,6 +73,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.DiaCalloutStation
+import com.android.shaftschematic.geom.THREAD_SLANT_DEFAULT
 import com.android.shaftschematic.geom.SurfaceSeg
 import com.android.shaftschematic.geom.UndercutLinerSpan
 import com.android.shaftschematic.geom.UndercutSpanMm
@@ -194,6 +195,12 @@ fun UndercutWindowDetailOverlay(
     unit: UnitSystem,
     undercutRecord: UndercutRecord,
     style: UndercutStyle = UndercutStyle(),
+    /**
+     * App-wide thread-hatch slant factor (`PdfPrefs.threadSlant`) for threaded spans in the
+     * strip — the value the printed sheet's hatch reads, passed in so a change recomposes this
+     * canvas.
+     */
+    threadSlant: Float = THREAD_SLANT_DEFAULT,
     onAddUndercut: (
         startFromAftMm: Float,
         lengthMm: Float,
@@ -595,7 +602,10 @@ fun UndercutWindowDetailOverlay(
                                 close()
                             }
                             if (rc is ResolvedThread) {
-                                drawThreadStubHatch(xa, cy - rA, xb, cy + rB, outlineColor)
+                                drawThreadStubHatch(
+                                    xa, cy - rA, xb, cy + rB, outlineColor,
+                                    threadStubHatchLean(rc, threadSlant),
+                                )
                             } else if (rc is ResolvedLiner) {
                                 // Only the liner is filled. Bodies/tapers draw outline-only —
                                 // a filled body sliver past the liner edge read as a mystery

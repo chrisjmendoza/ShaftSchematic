@@ -89,6 +89,10 @@ import com.android.shaftschematic.geom.pickPitAt
 import com.android.shaftschematic.geom.planDiaCallouts
 import com.android.shaftschematic.geom.sequenceWearTraces
 import com.android.shaftschematic.geom.smoothWearTrace
+import com.android.shaftschematic.geom.THREAD_SLANT_DEFAULT
+import com.android.shaftschematic.geom.threadHatchLean
+import com.android.shaftschematic.geom.threadHatchReferenceLean
+import com.android.shaftschematic.geom.threadHatchRun
 import com.android.shaftschematic.model.PitSize
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.WearPit
@@ -180,6 +184,12 @@ fun ComponentWearDetailOverlay(
      * `composeWearPdf`, so this canvas and the printed strip render identically.
      */
     traceDepthFrac: Float = WEAR_TRACE_MAX_DEPTH_FRAC,
+    /**
+     * App-wide thread-hatch slant factor (`PdfPrefs.threadSlant`) for the shaft-end thread
+     * stubs — the same value the printed strip's stub hatch reads, passed in so a change
+     * recomposes this canvas.
+     */
+    threadSlant: Float = THREAD_SLANT_DEFAULT,
 ) {
     BackHandler { onClose() }
 
@@ -537,7 +547,10 @@ fun ComponentWearDetailOverlay(
                             drawLine(outlineColor, Offset(startPx, top), Offset(startPx, bot), outlineWidthPx)
                             if (leftIsEndThread) {
                                 drawLine(outlineColor, Offset(outerX, top), Offset(outerX, bot), outlineWidthPx)
-                                drawThreadStubHatch(outerX, top, startPx, bot, outlineColor)
+                                drawThreadStubHatch(
+                                    outerX, top, startPx, bot, outlineColor,
+                                    threadStubHatchLean(leftNeighbor, threadSlant),
+                                )
                             } else {
                                 drawBreakEdgeCompose(
                                     x = outerX, yTop = top, yBot = bot, amplitude = r * 0.6f,
@@ -554,7 +567,10 @@ fun ComponentWearDetailOverlay(
                             drawLine(outlineColor, Offset(endPx, top), Offset(endPx, bot), outlineWidthPx)
                             if (rightIsEndThread) {
                                 drawLine(outlineColor, Offset(outerX, top), Offset(outerX, bot), outlineWidthPx)
-                                drawThreadStubHatch(endPx, top, outerX, bot, outlineColor)
+                                drawThreadStubHatch(
+                                    endPx, top, outerX, bot, outlineColor,
+                                    threadStubHatchLean(rightNeighbor, threadSlant),
+                                )
                             } else {
                                 drawBreakEdgeCompose(
                                     x = outerX, yTop = top, yBot = bot, amplitude = r * 0.6f,
@@ -1243,23 +1259,34 @@ private fun DrawScope.drawDimSegment(x0: Float, x1: Float, y: Float, label: Stri
 }
 
 /**
- * Diagonal thread hatch clipped to a neighbor stub — same "legacy look" as
+ * Slanted thread hatch clipped to a neighbor stub — strokes at run/rise [lean] (the stub's
+ * thread's own lean, [threadStubHatchLean]), the same construction as
  * `ShaftRenderer.drawThreadHatch`, at a fixed pitch (the stub is symbolic, not to scale). Used
  * only for shaft-END thread stubs, which get a flat outer edge instead of an S-curve break.
  * Shared with the undercut detail overlay, which applies the same rule to a window end that
  * lands on a threaded shaft end.
  */
-internal fun DrawScope.drawThreadStubHatch(x0: Float, top: Float, x1: Float, bot: Float, color: Color) {
+internal fun DrawScope.drawThreadStubHatch(x0: Float, top: Float, x1: Float, bot: Float, color: Color, lean: Float) {
     if (x1 <= x0 || bot <= top) return
     val hatch = color.copy(alpha = 0.6f)
+    val run = threadHatchRun(bot - top, lean)
     withTransform({ clipRect(x0, top, x1, bot) }) {
-        var hx = x0 + 4f
-        while (hx <= x1 + 4f) {
-            drawLine(hatch, Offset(hx - 4f, bot), Offset(hx + 4f, top), strokeWidth = 1f)
+        var hx = x0 - run
+        while (hx <= x1) {
+            drawLine(hatch, Offset(hx, bot), Offset(hx + run, top), strokeWidth = 1f)
             hx += 8f
         }
     }
 }
+
+/**
+ * Hatch lean for a stub standing for [rc]: a thread's own pitch over its own diameter at slant
+ * factor [slant] (`geom/ThreadHatchMath.kt`), or the reference thread's lean when [rc] is not a
+ * thread.
+ */
+internal fun threadStubHatchLean(rc: ResolvedComponent?, slant: Float): Float =
+    (rc as? ResolvedThread)?.let { threadHatchLean(it.pitchMm, it.majorDiaMm, slant) }
+        ?: threadHatchReferenceLean(slant)
 
 /**
  * Compose port of the pdf-layer `drawBreakEdge` S-curve convention (`pdf/BreakSymbol.kt`) — same

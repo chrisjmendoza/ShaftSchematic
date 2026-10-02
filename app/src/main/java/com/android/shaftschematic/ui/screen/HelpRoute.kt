@@ -825,7 +825,10 @@ internal val helpSections: List<HelpSection> = listOf(
                     "captures them.\n" +
                     "• \"Dimension arrows\" — Small / Medium / Large arrowheads on the " +
                     "dimension rails, on the schematic and consolidated sheets. Heads point " +
-                    "inward unless the span is too narrow to hold both.\n\n" +
+                    "inward unless the span is too narrow to hold both.\n" +
+                    "• \"Thread slant\" — on every document's sheet. How far the thread " +
+                    "hatch leans: it follows each thread's own pitch, 1× being the true crest " +
+                    "angle. This one applies when you let go rather than while you drag.\n\n" +
                     "• Drag any of those sliders and the preview updates as you drag — the " +
                     "sheet stops dimming the page and the drawing reshapes under your finger, " +
                     "so there is no need to pick a value, close the sheet, look, and reopen it. " +

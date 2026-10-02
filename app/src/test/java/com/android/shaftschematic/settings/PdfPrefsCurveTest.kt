@@ -1,5 +1,8 @@
 package com.android.shaftschematic.settings
 
+import com.android.shaftschematic.geom.THREAD_SLANT_DEFAULT
+import com.android.shaftschematic.geom.THREAD_SLANT_MAX
+import com.android.shaftschematic.geom.THREAD_SLANT_MIN
 import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
 import com.android.shaftschematic.geom.WEAR_TRACE_MIN_DEPTH_FRAC
 import org.junit.Assert.assertEquals
@@ -79,6 +82,21 @@ class PdfPrefsCurveTest {
         assertEquals(0.05f, PdfPrefs(wearTraceDepthFrac = 0.05f).clamped().wearTraceDepthFrac, 1e-6f)
         assertEquals(0.13f, PdfPrefs(wearTraceDepthFrac = 0.13f).clamped().wearTraceDepthFrac, 1e-6f)
         assertEquals(0.25f, PdfPrefs(wearTraceDepthFrac = 0.25f).clamped().wearTraceDepthFrac, 1e-6f)
+    }
+
+    // ── Thread slant (Settings → Drawing → "Thread slant") ─────────────────────
+
+    @Test
+    fun `thread slant defaults to the shipped factor`() {
+        assertEquals(THREAD_SLANT_DEFAULT, PdfPrefs().threadSlant, 1e-6f)
+    }
+
+    @Test
+    fun `clamped coerces the thread slant into the settable range`() {
+        assertEquals(THREAD_SLANT_MIN, PdfPrefs(threadSlant = 0.2f).clamped().threadSlant, 1e-6f)
+        assertEquals(THREAD_SLANT_MAX, PdfPrefs(threadSlant = 40f).clamped().threadSlant, 1e-6f)
+        assertEquals(THREAD_SLANT_DEFAULT, PdfPrefs(threadSlant = Float.NaN).clamped().threadSlant, 1e-6f)
+        assertEquals(4.5f, PdfPrefs(threadSlant = 4.5f).clamped().threadSlant, 1e-6f)
     }
 
     // ── Wear band shade (Settings → Drawing → "Wear area shade") ───────────────

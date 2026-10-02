@@ -6,6 +6,47 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-10-02
+
+### feat(drawing): thread hatch leans by the thread's own pitch, with a "Thread slant" slider
+
+On-device request: threads should look more like threads, then: base the hatch angle on the
+actual thread pitch, with a slider for adjustment. Every thread hatch drew at 45°, the drafting
+glyph for a section cut. Each stroke now crosses the band leaning by the thread's TRUE crest
+geometry — half a pitch over the major diameter — times a user-set slant factor.
+
+- Pure math in `geom/ThreadHatchMath.kt`: `threadHatchLean(pitchMm, majorDiaMm, slant)` =
+  `slant × (pitch / 2) / majorDia`, capped at tan 30° (`THREAD_HATCH_MAX_LEAN` — never flatter
+  than 60°, so a small coarse thread cannot fall back toward the 45° glyph); a pitch ≤ 0 leans at
+  the 2.5 mm hatch-spacing fallback, a diameter ≤ 0 takes the 4 TPI / 4.5″ reference thread's
+  lean. `threadHatchSpacing` centralizes the pitch-spacing recipe (pitch capped 4–18) the five
+  to-scale sites used to repeat. The lean is dimensionless, from the model, so one thread stands
+  at the same angle on every sheet and in the preview whatever the axial compression.
+- New app-wide pref `PdfPrefs.threadSlant`, 1× (true geometry) – 10×, step 0.5, default **3×**
+  (a 4 TPI thread on 4.5″ draws ≈ 85.2°, the angle picked on-device from a fixed-slant preview).
+  "Thread slant" slider on both PDF options sheets (ungated — every document draws threads) and
+  in Settings → Drawing next to "Dimension arrows"; commit on release, no DataStore write per
+  drag frame. Captured by Drawing profiles (defaulted field — older profiles load at 3×) and
+  reset by "Restore Drawing defaults".
+- Reaching the ink: the PDF composers read the process-wide mirror `util/ThreadHatchSlant.active`,
+  whose only writer is `SettingsStore.updatePdfPrefs` (the `FractionTypography`/`OutputTypography`
+  posture), and every preview's render inputs carry `threadSlant` as a re-render key. The Compose
+  canvases (editor preview via `RenderOptions.threadSlant`, the wear/undercut/runout tab canvases,
+  and the wear/undercut detail overlays) take the value from `vm.pdfThreadSlant` so a change
+  recomposes them.
+- Every hatch site leans by the thread it draws: the shared PDF hatch (`drawThreadHatch` now
+  takes the `Threads` — schematic, runout/consolidated, wear, undercut, Final), the editor
+  preview, and both thread-end stub hatches (the wear-strip PDF finds the end thread via
+  `wearStripEndThread`; the canvas overlays use the neighbouring `ResolvedThread`). The canvas
+  stub's old near-vertical ±4 px tick now matches the rest. Stroke weight, alpha and clipping are
+  unchanged; the stubs keep their fixed symbolic spacing.
+- Tests: `ThreadHatchMathTest` (true lean, 85.2° at 3×, monotonic in slant, 60° cap, pitch/dia
+  fallbacks, spacing), `ThreadHatchParityTest` extended (pixel equality across PDF sites at a
+  non-default slant, a slant change reaches the ink, the mirror clamps), `PdfPrefsCurveTest` and
+  `DrawingProfileTest` cover the clamp and the profile round trip.
+
+---
+
 ## 2026-09-30
 
 ### feat(ui): captured keyways — toggle + inset field, footer line

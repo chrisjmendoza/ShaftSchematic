@@ -58,6 +58,9 @@ import com.android.shaftschematic.geom.PROFILE_TAPER_MIN_FRAC_OF_TRUE
 import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
 import com.android.shaftschematic.geom.WEAR_TRACE_MIN_DEPTH_FRAC
 import com.android.shaftschematic.geom.solveMaxProfileScale
+import com.android.shaftschematic.geom.THREAD_SLANT_MAX
+import com.android.shaftschematic.geom.THREAD_SLANT_MIN
+import com.android.shaftschematic.geom.THREAD_SLANT_STEP
 import com.android.shaftschematic.geom.taperMinFracOfTrue
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.WearRecord
@@ -552,6 +555,70 @@ internal fun DimensionArrowSizeChips(
         Text(
             "Arrowhead size on the dimension rails. Heads point inward unless the span is " +
                 "too narrow to hold both.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** A thread-slant factor as the slider reads it: `3×`, `2.5×` — one decimal only when it has one. */
+internal fun fmtThreadSlant(slant: Float): String {
+    val v = (slant / THREAD_SLANT_STEP).roundToInt() * THREAD_SLANT_STEP
+    return if (v == v.roundToInt().toFloat()) "${v.roundToInt()}×" else "$v×"
+}
+
+/** Snaps a dragged slant factor to the slider's [THREAD_SLANT_STEP] inside the settable range. */
+internal fun snappedThreadSlant(slant: Float): Float =
+    ((slant / THREAD_SLANT_STEP).roundToInt() * THREAD_SLANT_STEP)
+        .coerceIn(THREAD_SLANT_MIN, THREAD_SLANT_MAX)
+
+/**
+ * The "Thread slant" slider, shared by both PDF options sheets and Settings → Drawing — ONE
+ * `PdfPrefs.threadSlant` behind all three, the [DimensionArrowSizeChips] posture.
+ *
+ * The thread hatch leans by each thread's own pitch over its own diameter (`geom/ThreadHatchMath.kt`);
+ * this multiplies that true lean, 1× being the real crest angle. Drag is tracked locally and
+ * committed once on release, so drag frames never write DataStore; the release commit re-renders
+ * the open preview from the stored value.
+ */
+@Composable
+internal fun ThreadSlantSlider(
+    threadSlant: Float,
+    onCommit: (Float) -> Unit,
+    trailing: @Composable () -> Unit = {},
+) {
+    var drag by remember { mutableStateOf<Float?>(null) }
+    val shown = (drag ?: threadSlant).coerceIn(THREAD_SLANT_MIN, THREAD_SLANT_MAX)
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "Thread slant  ${fmtThreadSlant(shown)}",
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.weight(1f),
+            )
+            trailing()
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("${fmtThreadSlant(THREAD_SLANT_MIN)} true", style = MaterialTheme.typography.bodySmall)
+            Slider(
+                value = shown,
+                onValueChange = { drag = snappedThreadSlant(it) },
+                onValueChangeFinished = {
+                    drag?.let(onCommit)
+                    drag = null
+                },
+                valueRange = THREAD_SLANT_MIN..THREAD_SLANT_MAX,
+                steps = ((THREAD_SLANT_MAX - THREAD_SLANT_MIN) / THREAD_SLANT_STEP).roundToInt() - 1,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 8.dp)
+                    .testTag("thread_slant_slider"),
+            )
+            Text(fmtThreadSlant(THREAD_SLANT_MAX), style = MaterialTheme.typography.bodySmall)
+        }
+        Text(
+            "How far the thread hatch leans. It follows each thread's own pitch; 1× is the true " +
+                "crest angle, higher values lean it further so the thread reads at print size.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

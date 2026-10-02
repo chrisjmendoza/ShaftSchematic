@@ -1081,8 +1081,7 @@ private fun drawUndercutWindowProfile(
         val a = max(s, w0Mm); val b = min(e, w1Mm)
         if (b - a <= UC_EDGE_EPS_MM) return@forEach
         val r = rAt(th.majorDiaMm)
-        val pitchPt = ((th.pitchMm.takeIf { it > 0f } ?: 2.5f) * ptPerMm).coerceIn(4f, 18f)
-        drawThreadHatch(c, xAt(a), xAt(b), cy - r, cy + r, hatchPaint, pitchPt)
+        drawThreadHatch(c, xAt(a), xAt(b), cy - r, cy + r, hatchPaint, th, ptPerMm)
         c.drawLine(xAt(a), cy - r, xAt(b), cy - r, outline)
         c.drawLine(xAt(a), cy + r, xAt(b), cy + r, outline)
         if (inside(s)) c.drawLine(xAt(a), cy - r, xAt(a), cy + r, outline)

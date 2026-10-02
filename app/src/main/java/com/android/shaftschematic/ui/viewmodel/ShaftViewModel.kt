@@ -374,6 +374,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     internal val _pdfArrowSizePt = MutableStateFlow(PdfPrefs().arrowSizePt)
     val pdfArrowSizePt: StateFlow<Float> = _pdfArrowSizePt.asStateFlow()
 
+    // Thread-hatch slant factor. The composers read it via `ThreadHatchSlant.active` (not
+    // snapshot state), so this flow keys each preview's re-render; the Compose canvases take
+    // its value directly so a change recomposes them.
+    internal val _pdfThreadSlant = MutableStateFlow(PdfPrefs().threadSlant)
+    val pdfThreadSlant: StateFlow<Float> = _pdfThreadSlant.asStateFlow()
+
     // How a fraction is SET on every drawn surface. Also a preview re-render key on every tab
     // that rasterizes — the style itself reaches the draw sites via `FractionTypography.active`,
     // which is not snapshot state.
@@ -1038,6 +1044,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             SettingsStore.pdfArrowSizePtFlow(getApplication()).collectLatest { persisted ->
                 _pdfArrowSizePt.value = persisted
                 SettingsStore.updatePdfPrefs { it.copy(arrowSizePt = persisted) }
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.pdfThreadSlantFlow(getApplication()).collectLatest { persisted ->
+                _pdfThreadSlant.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(threadSlant = persisted) }
             }
         }
         viewModelScope.launch {

@@ -1385,14 +1385,13 @@ internal fun drawShaftProfile(
         drawLinerOutlinePdf(c, cy, x0, x1, r, linerShoulderSpecs(ln, x0, x1, r, xAt, rPx), outline, dimPaint)
     }
     // Threads — envelope outline + the ONE shared hatch (`drawThreadHatch`, same
-    // pitch/paint recipe on every sheet).
+    // pitch/lean/paint recipe on every sheet).
     val hatchPaint = Paint(outline).apply { strokeWidth = DIM_PT * 0.6f; alpha = 160 }
     spec.threads.forEach { th ->
         if (th.lengthMm <= 0f || th.majorDiaMm <= 0f) return@forEach
         val x0 = xAt(th.startFromAftMm); val x1 = xAt(th.startFromAftMm + th.lengthMm)
         val r = rPx(th.majorDiaMm); val top = cy - r; val bot = cy + r
-        val pitchPt = ((th.pitchMm.takeIf { it > 0f } ?: 2.5f) * ptPerMm).coerceIn(4f, 18f)
-        drawThreadHatch(c, x0, x1, top, bot, hatchPaint, pitchPt)
+        drawThreadHatch(c, x0, x1, top, bot, hatchPaint, th, ptPerMm)
         c.drawLine(x0, top, x1, top, outline); c.drawLine(x0, bot, x1, bot, outline)
         c.drawLine(x0, top, x0, bot, outline); c.drawLine(x1, top, x1, bot, outline)
     }

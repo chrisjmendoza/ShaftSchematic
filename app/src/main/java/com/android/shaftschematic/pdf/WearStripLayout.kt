@@ -12,6 +12,7 @@ import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
 import com.android.shaftschematic.model.Liner
 import com.android.shaftschematic.model.LinerAnchor
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.Threads
 import com.android.shaftschematic.model.WearRecord
 import com.android.shaftschematic.model.WearSpot
 import com.android.shaftschematic.settings.PDF_WEAR_JOIN_GAP_DEFAULT_MM
@@ -1814,15 +1815,26 @@ fun wearStripEndThreadDiaMm(
     edgeMm: Float,
     aftSide: Boolean,
     epsMm: Float = NEIGHBOR_EPS_MM,
-): Float {
-    var dia = 0f
-    spec.threads.forEach {
-        val out = if (aftSide) it.startFromAftMm < edgeMm - epsMm
+): Float = wearStripEndThread(spec, edgeMm, aftSide, epsMm)?.majorDiaMm?.coerceAtLeast(0f) ?: 0f
+
+/**
+ * The threaded shaft end beyond [edgeMm] — the largest-diameter thread extending past it, `null`
+ * when none does. Its diameter sizes the [WearStripEndStyle.THREAD_END] stub
+ * ([wearStripEndThreadDiaMm]) and its pitch over that diameter leans the stub's hatch, so the
+ * stub hatches like the thread it stands for. Same side convention and resolved-bodies contract
+ * as [wearStripEndStyle].
+ */
+fun wearStripEndThread(
+    spec: ShaftSpec,
+    edgeMm: Float,
+    aftSide: Boolean,
+    epsMm: Float = NEIGHBOR_EPS_MM,
+): Threads? = spec.threads
+    .filter {
+        if (aftSide) it.startFromAftMm < edgeMm - epsMm
         else it.startFromAftMm + it.lengthMm > edgeMm + epsMm
-        if (out) dia = maxOf(dia, it.majorDiaMm)
     }
-    return dia
-}
+    .maxByOrNull { it.majorDiaMm }
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Labels

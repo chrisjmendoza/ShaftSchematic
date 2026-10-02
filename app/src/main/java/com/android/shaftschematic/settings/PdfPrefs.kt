@@ -1,6 +1,10 @@
 package com.android.shaftschematic.settings
 
 import com.android.shaftschematic.geom.PROFILE_MAX_SHAFT_HEIGHT_PT
+import com.android.shaftschematic.geom.THREAD_SLANT_DEFAULT
+import com.android.shaftschematic.geom.THREAD_SLANT_MAX
+import com.android.shaftschematic.geom.THREAD_SLANT_MIN
+import com.android.shaftschematic.geom.sanitizeThreadSlant
 import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
 import com.android.shaftschematic.geom.WEAR_TRACE_MIN_DEPTH_FRAC
 import com.android.shaftschematic.util.DualUnitLayout
@@ -182,6 +186,15 @@ data class PdfPrefs(
      */
     val arrowSizePt: Float = PDF_ARROW_SIZE_DEFAULT_PT,
     /**
+     * Thread-hatch slant factor — a multiplier on each thread's TRUE crest lean (half its pitch
+     * over its major diameter, `geom/ThreadHatchMath.kt`), [THREAD_SLANT_MIN] (true geometry)
+     * ..[THREAD_SLANT_MAX]. Settings → Drawing → "Thread slant" and both PDF options sheets.
+     * Reaches every thread hatch, sheets and canvases alike: `SettingsStore.updatePdfPrefs`
+     * mirrors it into `ThreadHatchSlant.active` for the composers, and the canvases take it
+     * from the ViewModel's flow.
+     */
+    val threadSlant: Float = THREAD_SLANT_DEFAULT,
+    /**
      * How a fraction is SET wherever the app draws one — Settings → Drawing → "Fractions".
      * Unlike the other fields here this reaches the previews as well as the PDFs, because both
      * draw families go through the one renderer (`util/FractionTextRenderer.kt`); it is a
@@ -270,6 +283,7 @@ data class PdfPrefs(
             curveHiHeightIn = curveHiHeightIn.coerceIn(PDF_CURVE_HEIGHT_MIN_IN, PDF_CURVE_HEIGHT_MAX_IN),
             sBreakThresholdFrac = sBreakThresholdFrac.coerceIn(0f, 1f),
             arrowSizePt = arrowSizePt.coerceIn(PDF_ARROW_SIZE_SMALL_PT, PDF_ARROW_SIZE_LARGE_PT),
+            threadSlant = sanitizeThreadSlant(threadSlant),
             wearTraceDepthFrac = wearTraceDepthFrac
                 .coerceIn(WEAR_TRACE_MIN_DEPTH_FRAC, WEAR_TRACE_MAX_DEPTH_FRAC),
             wearBandShadeFrac = wearBandShadeFrac

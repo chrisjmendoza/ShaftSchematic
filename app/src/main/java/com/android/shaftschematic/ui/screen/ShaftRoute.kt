@@ -170,6 +170,7 @@ fun ShaftRoute(
     val showGrid        by vm.showGrid.collectAsState()
     val previewBlackWhiteOnly by vm.previewBlackWhiteOnly.collectAsState()
     val lineThicknessScale by vm.lineThicknessScale.collectAsState()
+    val threadSlant by vm.pdfThreadSlant.collectAsState()
     val previewOutline by vm.previewOutlineSetting.collectAsState()
     val previewBodyFill by vm.previewBodyFillSetting.collectAsState()
     val previewTaperFill by vm.previewTaperFillSetting.collectAsState()
@@ -307,6 +308,7 @@ fun ShaftRoute(
         previewThreadHatch = previewThreadHatch,
         previewBlackWhiteOnly = previewBlackWhiteOnly,
         lineThicknessScale = lineThicknessScale,
+        threadSlant = threadSlant,
 
         // model updates (unchanged)
         onSetCustomer = vm::setCustomer,

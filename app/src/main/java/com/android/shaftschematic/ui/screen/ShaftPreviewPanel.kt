@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.unit.dp
+import com.android.shaftschematic.geom.THREAD_SLANT_DEFAULT
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.lastOccupiedEndMm
@@ -61,6 +62,8 @@ internal fun PreviewCard(
     previewThreadHatch: PreviewColorSetting,
     previewBlackWhiteOnly: Boolean,
     lineThicknessScale: Float = 1.0f,
+    /** App-wide thread-hatch slant (`PdfPrefs.threadSlant`) — see [ShaftDrawing]. */
+    threadSlant: Float = THREAD_SLANT_DEFAULT,
     /** PDF-shade mirror: components the PDF will print shaded — see [ShaftDrawing]. */
     shadedComponentIds: Set<String> = emptySet(),
     modifier: Modifier = Modifier
@@ -85,6 +88,7 @@ internal fun PreviewCard(
                 previewThreadFill = previewThreadFill,
                 previewThreadHatch = previewThreadHatch,
                 lineThicknessScale = lineThicknessScale,
+                threadSlant = threadSlant,
                 shadedComponentIds = shadedComponentIds,
                 highlightEnabled = highlightEnabled && (highlightId != null),
                 highlightId = highlightId,

@@ -15,8 +15,11 @@ import com.android.shaftschematic.geom.pitHalfArm
 import com.android.shaftschematic.geom.planDiaCallouts
 import com.android.shaftschematic.geom.sequenceWearTraces
 import com.android.shaftschematic.geom.smoothWearTrace
+import com.android.shaftschematic.geom.threadHatchLean
+import com.android.shaftschematic.geom.threadHatchReferenceLean
 import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_DEFAULT
 import com.android.shaftschematic.util.DisplayUnits
+import com.android.shaftschematic.util.ThreadHatchSlant
 import com.android.shaftschematic.util.drawDualLabelCentered
 import com.android.shaftschematic.util.dualStackMetrics
 import com.android.shaftschematic.util.measureDualLabel
@@ -383,12 +386,13 @@ internal fun drawWearStripWindow(
             drawBreakEdge(c, stubLeftX, cy - r, cy + r, amp, outline, eyeAtTop = true)
         }
         WearStripEndStyle.THREAD_END -> {
-            val threadDia = wearStripEndThreadDiaMm(docSpec, window.startMm, aftSide = true)
+            val endThread = wearStripEndThread(docSpec, window.startMm, aftSide = true)
+            val threadDia = endThread?.majorDiaMm ?: 0f
             val r = if (threadDia > 0f) rOf(threadDia) else radii.aftRPt
             c.drawLine(stubLeftX, cy - r, hLayout.linerLeftPt, cy - r, outline)
             c.drawLine(stubLeftX, cy + r, hLayout.linerLeftPt, cy + r, outline)
             c.drawLine(stubLeftX, cy - r, stubLeftX, cy + r, outline)
-            drawThreadStubHatch(c, stubLeftX, cy - r, hLayout.linerLeftPt, cy + r, outline)
+            drawThreadStubHatch(c, stubLeftX, cy - r, hLayout.linerLeftPt, cy + r, outline, endThread)
         }
         WearStripEndStyle.FLAT -> {
             val r = rOf(comps.first().aftDiaMm)
@@ -404,12 +408,13 @@ internal fun drawWearStripWindow(
             drawBreakEdge(c, stubRightX, cy - r, cy + r, amp, outline, eyeAtTop = false)
         }
         WearStripEndStyle.THREAD_END -> {
-            val threadDia = wearStripEndThreadDiaMm(docSpec, window.endMm, aftSide = false)
+            val endThread = wearStripEndThread(docSpec, window.endMm, aftSide = false)
+            val threadDia = endThread?.majorDiaMm ?: 0f
             val r = if (threadDia > 0f) rOf(threadDia) else radii.fwdRPt
             c.drawLine(hLayout.linerRightPt, cy - r, stubRightX, cy - r, outline)
             c.drawLine(hLayout.linerRightPt, cy + r, stubRightX, cy + r, outline)
             c.drawLine(stubRightX, cy - r, stubRightX, cy + r, outline)
-            drawThreadStubHatch(c, hLayout.linerRightPt, cy - r, stubRightX, cy + r, outline)
+            drawThreadStubHatch(c, hLayout.linerRightPt, cy - r, stubRightX, cy + r, outline, endThread)
         }
         WearStripEndStyle.FLAT -> {
             val r = rOf(comps.last().fwdDiaMm)
@@ -597,25 +602,24 @@ private const val BLANK_RULE_TRAIL_PT = 6f
 private const val WEAR_STRIP_THREAD_HATCH_PITCH_PT = 6f
 
 /**
- * Diagonal thread hatch filling a strip window's thread-end stub — the PDF port of the wear
+ * Slanted thread hatch filling a strip window's thread-end stub — the PDF port of the wear
  * detail overlay's `drawThreadStubHatch` (`ui/screen/LinerWearDetail.kt`), drawn with the same
  * thin part-transparent recipe the main profile's thread hatch uses, so a threaded shaft end
- * reads the same on the strip as it does on the profile above it. Only a
+ * reads the same on the strip as it does on the profile above it. The strokes lean by [thread]'s
+ * own pitch over its own diameter at the app-wide slant ([threadHatchLean]); the spacing stays
+ * fixed because the stub is symbolic, never drawn to scale. Only a
  * [WearStripEndStyle.THREAD_END] end gets one: it shows the whole remaining shaft, so it carries
  * a flat outer edge and this hatch instead of an S-break.
  */
-private fun drawThreadStubHatch(c: Canvas, x0: Float, top: Float, x1: Float, bot: Float, outline: Paint) {
+private fun drawThreadStubHatch(
+    c: Canvas, x0: Float, top: Float, x1: Float, bot: Float, outline: Paint, thread: Threads?,
+) {
     if (x1 <= x0 || bot <= top) return
     val hatch = Paint(outline).apply { strokeWidth = outline.strokeWidth * (WEAR_DIM_PT * 0.6f / WEAR_OUTLINE_PT); alpha = 160 }
-    val h = bot - top
-    val saved = c.save()
-    c.clipRect(x0, top, x1, bot)
-    var hx = x0 - h
-    while (hx <= x1) {
-        c.drawLine(hx, bot, hx + h, top, hatch)
-        hx += WEAR_STRIP_THREAD_HATCH_PITCH_PT
-    }
-    c.restoreToCount(saved)
+    val slant = ThreadHatchSlant.active
+    val lean = if (thread != null) threadHatchLean(thread.pitchMm, thread.majorDiaMm, slant)
+    else threadHatchReferenceLean(slant)
+    drawThreadHatchStrokes(c, x0, x1, top, bot, hatch, WEAR_STRIP_THREAD_HATCH_PITCH_PT, lean)
 }
 
 /**

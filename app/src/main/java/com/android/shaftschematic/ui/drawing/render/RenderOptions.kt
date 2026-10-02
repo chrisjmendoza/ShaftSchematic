@@ -1,6 +1,7 @@
 package com.android.shaftschematic.ui.drawing.render
 
 import androidx.compose.ui.graphics.Color
+import com.android.shaftschematic.geom.THREAD_SLANT_DEFAULT
 
 /**
  * Visual configuration for the shaft renderer.
@@ -47,6 +48,12 @@ data class RenderOptions(
      * If fully transparent, the renderer may skip the underlay.
      */
     val threadFillColor: Int = 0x22000000,
+    /**
+     * Thread-hatch slant factor (`PdfPrefs.threadSlant`, `geom/ThreadHatchMath.kt`) — the same
+     * app-wide value the PDF composers read from `ThreadHatchSlant.active`, carried here as a
+     * plain option so a change recomposes the canvas.
+     */
+    val threadSlant: Float = THREAD_SLANT_DEFAULT,
 
     // ──────────────────────────────
     // PDF-shade mirror

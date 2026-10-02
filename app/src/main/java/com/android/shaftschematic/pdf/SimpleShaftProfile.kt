@@ -4,7 +4,12 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
+import com.android.shaftschematic.geom.threadHatchLean
+import com.android.shaftschematic.geom.threadHatchRun
+import com.android.shaftschematic.geom.threadHatchSpacing
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.Threads
+import com.android.shaftschematic.util.ThreadHatchSlant
 import kotlin.math.abs
 import kotlin.math.min
 
@@ -137,14 +142,13 @@ internal fun drawSimpleShaftProfile(
         c.drawLine(x0, top, x1, top, outline); c.drawLine(x0, bot, x1, bot, outline)
         c.drawLine(x0, top, x0, bot, dimPaint); c.drawLine(x1, top, x1, bot, dimPaint)
     }
-    // Threads — outline envelope + diagonal hatch so the machinist knows the zone is threaded.
+    // Threads — outline envelope + slanted hatch so the machinist knows the zone is threaded.
     val hatchPaint = Paint(outline).apply { strokeWidth = dimStrokeWidthPt * 0.6f; alpha = 160 }
     spec.threads.forEach { th ->
         if (th.lengthMm <= 0f || th.majorDiaMm <= 0f) return@forEach
         val x0 = xAt(th.startFromAftMm); val x1 = xAt(th.startFromAftMm + th.lengthMm)
         val r = rPx(th.majorDiaMm); val top = cy - r; val bot = cy + r
-        val pitchPt = ((th.pitchMm.takeIf { it > 0f } ?: 2.5f) * ptPerMm).coerceIn(4f, 18f)
-        drawThreadHatch(c, x0, x1, top, bot, hatchPaint, pitchPt)
+        drawThreadHatch(c, x0, x1, top, bot, hatchPaint, th, ptPerMm)
         c.drawLine(x0, top, x1, top, outline); c.drawLine(x0, bot, x1, bot, outline)
         c.drawLine(x0, top, x0, bot, outline); c.drawLine(x1, top, x1, bot, outline)
     }
@@ -188,19 +192,35 @@ private fun simpleBodyBreak(
 }
 
 /**
- * Diagonal hatch clipped to `[x0,x1] × [top,bot]` — the threaded-zone mark. Shared with the
- * undercut sheet's detail strips, which hatch a window-clipped slice of the same thread.
+ * Slanted hatch clipped to `[x0,x1] × [top,bot]` — the threaded-zone mark for [thread], drawn
+ * at [ptPerMm]: strokes spaced by the thread's own pitch ([threadHatchSpacing]) and leaning by
+ * its own pitch over its own diameter at the app-wide slant factor ([threadHatchLean],
+ * [ThreadHatchSlant.active]). The ONE recipe every sheet hatches a thread with, so the same
+ * thread prints identically on all of them. Shared with the undercut sheet's detail strips,
+ * which hatch a window-clipped slice of the same thread.
  */
 internal fun drawThreadHatch(
-    c: Canvas, x0: Float, x1: Float, top: Float, bot: Float, paint: Paint, pitchPt: Float,
+    c: Canvas, x0: Float, x1: Float, top: Float, bot: Float, paint: Paint, thread: Threads, ptPerMm: Float,
 ) {
-    if (x1 <= x0) return
+    drawThreadHatchStrokes(
+        c, x0, x1, top, bot, paint,
+        spacingPt = threadHatchSpacing(thread.pitchMm, ptPerMm),
+        lean = threadHatchLean(thread.pitchMm, thread.majorDiaMm, ThreadHatchSlant.active),
+    )
+}
+
+/** The hatch strokes themselves: full-band lines at run/rise [lean], [spacingPt] apart, clipped. */
+internal fun drawThreadHatchStrokes(
+    c: Canvas, x0: Float, x1: Float, top: Float, bot: Float, paint: Paint, spacingPt: Float, lean: Float,
+) {
+    if (x1 <= x0 || bot <= top || spacingPt <= 0f) return
     val saved = c.save()
     c.clipRect(x0, top, x1, bot)
-    var hx = x0 - (bot - top)
+    val run = threadHatchRun(bot - top, lean)
+    var hx = x0 - run
     while (hx <= x1) {
-        c.drawLine(hx, bot, hx + (bot - top), top, paint)
-        hx += pitchPt
+        c.drawLine(hx, bot, hx + run, top, paint)
+        hx += spacingPt
     }
     c.restoreToCount(saved)
 }

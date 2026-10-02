@@ -73,6 +73,7 @@ import com.android.shaftschematic.io.ShaftBackup
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.UiEvent
 import com.android.shaftschematic.ui.viewmodel.*
+import com.android.shaftschematic.geom.THREAD_SLANT_DEFAULT
 import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
 import com.android.shaftschematic.geom.defaultShaftHeightPt
 import com.android.shaftschematic.settings.AppThemeMode
@@ -159,6 +160,7 @@ fun SettingsRoute(
     val pdfWearBandShadeFrac by vm.pdfWearBandShadeFrac.collectAsState()
     val pdfWearJoinGapMaxMm by vm.pdfWearJoinGapMaxMm.collectAsState()
     val pdfArrowSizePt by vm.pdfArrowSizePt.collectAsState()
+    val pdfThreadSlant by vm.pdfThreadSlant.collectAsState()
     val pdfFractionStyle by vm.pdfFractionStyle.collectAsState()
     val pdfOutputFont by vm.pdfOutputFont.collectAsState()
     val pdfDualUnitLayout by vm.pdfDualUnitLayout.collectAsState()
@@ -376,6 +378,19 @@ fun SettingsRoute(
                     DimensionArrowSizeChips(
                         arrowSizePt = pdfArrowSizePt,
                         onCommit = { vm.setPdfArrowSizePt(it) },
+                    )
+
+                    // Same slider both PDF options sheets carry — one PdfPrefs.threadSlant. Like
+                    // the fraction style it also restyles the on-screen canvases' thread hatch.
+                    ThreadSlantSlider(
+                        threadSlant = pdfThreadSlant,
+                        onCommit = { vm.setPdfThreadSlant(it) },
+                        trailing = {
+                            TextButton(
+                                onClick = { vm.setPdfThreadSlant(THREAD_SLANT_DEFAULT) },
+                                enabled = pdfThreadSlant != THREAD_SLANT_DEFAULT,
+                            ) { Text("Default (${fmtThreadSlant(THREAD_SLANT_DEFAULT)})") }
+                        },
                     )
 
                     // Settings-only, unlike the pickers around it: the face is a house style
