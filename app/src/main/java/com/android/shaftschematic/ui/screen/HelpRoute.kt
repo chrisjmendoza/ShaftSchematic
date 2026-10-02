@@ -459,7 +459,9 @@ internal val helpSections: List<HelpSection> = listOf(
                 "Tapers, keyways, and spooned ends",
                 "Tapers measure from the AFT or FWD end (direction chips on the card and in " +
                     "the Add dialog). Tapers and explicit bodies can carry a keyway (width × " +
-                    "depth, length). A keyway runs out the end of its host unless you switch " +
+                    "depth, length): tick \"Keyway\" on the card or in the Add dialog to show " +
+                    "its fields; unticking a card that has keyway values asks before clearing " +
+                    "them. A keyway runs out the end of its host unless you switch " +
                     "on \"Captured keyway\" — the shop term for a slot inset from the S.E.T. " +
                     "(taper) or the chosen end face (body), rounded at both ends — which " +
                     "reveals its Inset field; the footer then prints the inset. A spooned " +

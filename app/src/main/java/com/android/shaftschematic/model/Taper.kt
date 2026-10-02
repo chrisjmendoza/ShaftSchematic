@@ -69,6 +69,14 @@ fun Taper.isValid(overallLengthMm: Float): Boolean =
 val Taper.hasKeyway: Boolean get() = keywayWidthMm > 0f && keywayDepthMm > 0f && keywayLengthMm > 0f
 
 /**
+ * True if ANY keyway dimension (W, D or L) is entered. A half-typed keyway — one or two
+ * of the three — is not yet a keyway ([hasKeyway] needs all three) but it IS authored
+ * work, so a card keeps its keyway section open for it: collapsing the section would hide
+ * typed values (golden rule).
+ */
+val Taper.hasAnyKeywayValue: Boolean get() = keywayWidthMm > 0f || keywayDepthMm > 0f || keywayLengthMm > 0f
+
+/**
  * Absolute AFT-origin axial span of this taper's keyway, or null when the taper has no
  * keyway. The keyway is referenced from the SET face (the smaller-diameter end) and
  * extends toward LET. Mirrors [Body.keywayAbsSpanMm] for keyway clocking logic.

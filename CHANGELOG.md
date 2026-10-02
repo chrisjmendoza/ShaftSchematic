@@ -6,6 +6,44 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-10-02
+
+### feat(ui): keyway section gated on all four surfaces
+
+On-device request: the Taper card and `AddTaperDialog` showed every keyway control (W × D,
+Standard size, KW L, Captured keyway, Inset, Keyway spooned, clocking, the "Keyway in" chip) on
+every taper, keyway or not. The explicit-Body card and `AddBodyDialog` already hid theirs behind a
+"Keyway" checkbox; now all four surfaces share ONE gate so they cannot drift.
+
+- **Shared gate row** — `KeywayGateRow` (`ui/screen/KeywaySection.kt`): a full-width "Keyway"
+  checkbox row, tags `taper_kw_gate` / `body_kw_gate` / `add_taper_kw_gate` / `add_body_kw_gate`.
+  A Checkbox, not a Switch: in this app a checkbox means a thing exists on the component
+  (Explicit body, Keyway, Seal AFT/FWD), a Switch a mode of something that does (Captured,
+  Spooned, 180°).
+- **Inside the gate, on every surface**: the keyway unit chip, (body) KW from AFT | FWD, W × D,
+  the Standard size picker, KW L, Captured keyway + Inset, Keyway spooned, and the clocking
+  section. Control order inside the section is unchanged. On the body card the clocking section
+  moved inside the gate, so a body with no keyway no longer carries the 180°/90° toggles when the
+  shaft has two keyways elsewhere — they appear on the cards that carry the keyways.
+- **Cards** — the gate seeds open from `hasAnyKeywayValue` (ANY of W/D/L typed; the body card
+  previously seeded from the all-three `hasKeyway`, which closed the section on a half-typed
+  keyway and hid the typed values). Ticking only reveals the fields. Unticking with any value
+  present opens **"Remove keyway?"** (`kw_remove_confirm`, `RemoveKeywayConfirmDialog`) — one tap
+  would otherwise erase up to four typed values; confirm clears W/D/L/inset and spooned (body keeps
+  its `keywayEnd`), Cancel leaves everything as it was. With nothing typed the untick just hides.
+  Both cards route the untick through ONE decision, `keywayGateAction`. Stored values always
+  hold the section open regardless of the local tick, so an Undo of a confirmed removal brings
+  the fields back with the values rather than hiding them behind a cleared checkbox.
+- **Add dialogs** — default OFF, no confirm (nothing is stored yet). While off the dialog submits a
+  zero keyway and spooned `false` whatever the hidden fields hold, and the clocking rows need the
+  gate on. `AddBodyDialog` now also submits spooned `false` while the gate is off (it passed a
+  stale local toggle through).
+- **Model**: unchanged apart from the additive `Taper.hasAnyKeywayValue` / `Body.hasAnyKeywayValue`
+  helpers beside `hasKeyway`. No stored flag for the gate, no codec change.
+- **Tests**: `KeywaySectionTest` (gate row toggle + tag, caller-owned decision, `keywayGateAction`),
+  `KeywayAnyValueTest` (both helpers). The confirm dialog and the Add dialogs are not rendered —
+  an `AlertDialog` never settles under Robolectric here, the documented repo-wide limit.
+
 ## 2026-09-30
 
 ### feat(ui): captured keyways — toggle + inset field, footer line
