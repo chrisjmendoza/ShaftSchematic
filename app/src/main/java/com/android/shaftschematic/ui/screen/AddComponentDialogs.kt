@@ -321,16 +321,9 @@ fun AddBodyDialog(
                     },
                 )
                 Spacer(Modifier.height(12.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Keyway", modifier = Modifier.weight(1f))
-                    androidx.compose.material3.Checkbox(
-                        checked = kwEnabled,
-                        onCheckedChange = { kwEnabled = it }
-                    )
-                }
+                // The shared gate row the cards carry. No confirm on untick: nothing is stored
+                // until submit, and the hidden fields submit zeros while the gate is off.
+                KeywayGateRow(checked = kwEnabled, testTag = "add_body_kw_gate") { kwEnabled = it }
                 if (kwEnabled) {
                     Spacer(Modifier.height(4.dp))
                     Row(
@@ -440,7 +433,7 @@ fun AddBodyDialog(
                     startMm, lengthMm, diaMm,
                     kwW, kwD, kwL, kwO,
                     if (kwFwd) LinerAuthoredReference.FWD else LinerAuthoredReference.AFT,
-                    kwSpooned && !isCaptured,
+                    kwEnabled && kwSpooned && !isCaptured,
                     if (showClockingToggle) clock180 else spec.keyways180Apart,
                     if (showClockingToggle) clock90 else spec.keyways90Apart,
                     if (showClockingToggle) cw90 else spec.keyways90Cw,
@@ -1024,7 +1017,10 @@ fun AddTaperDialog(
     var rateText by remember { mutableStateOf("1:12") }   // manual-mode text; shop default
     var autoRate by remember { mutableStateOf(true) }
 
-    // Keyway — all optional (blank = 0)
+    // Keyway — gated behind the shared Keyway checkbox (fields hidden until turned on), the
+    // same gate the taper card carries. While it is off the keyway submits zeros; typed text in
+    // the hidden fields is held until submit but never counts.
+    var kwEnabled by remember { mutableStateOf(false) }
     var kwWidth   by remember { mutableStateOf("") }
     var kwDepth   by remember { mutableStateOf("") }
     var kwLength  by remember { mutableStateOf("") }
@@ -1113,14 +1109,15 @@ fun AddTaperDialog(
     val kwUnit = kwUnitOverride ?: unit
     // The inset text only counts while "Captured keyway" is on; switching it off holds the
     // text until submit but commits an open keyway (inset 0).
-    val keywayOffsetMm = if (kwCaptured) toMmOrNull(kwOffset, kwUnit) ?: 0f else 0f
+    val keywayOffsetMm = if (kwEnabled && kwCaptured) toMmOrNull(kwOffset, kwUnit) ?: 0f else 0f
     val isCaptured = kwCaptured && keywayOffsetMm > 0f
     // Same condition as the carousel card's switch: it appears once the shaft will
     // have ≥ 2 keyways (≥ 1 existing plus the one being defined here).
-    val kwDefined = (toMmOrNull(kwWidth, kwUnit) ?: 0f) > 0f &&
+    val kwDefined = kwEnabled &&
+        (toMmOrNull(kwWidth, kwUnit) ?: 0f) > 0f &&
         (toMmOrNull(kwDepth, kwUnit) ?: 0f) > 0f &&
         (toMmOrNull(kwLength, kwUnit) ?: 0f) > 0f
-    val showClockingToggle = spec.keywayCount() >= 1 && kwDefined
+    val showClockingToggle = kwEnabled && spec.keywayCount() >= 1 && kwDefined
 
     val scroll = rememberScrollState()
 
@@ -1186,90 +1183,93 @@ fun AddTaperDialog(
                     highlight = rateIssueText != null
                 ) { rateText = it }
                 Spacer(Modifier.height(12.dp))
-                Text("Keyway (optional)", style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.height(4.dp))
-                // The keyway's own unit — value entry, so it appears here as well as on the card
-                // (the parity rule); a European keyway is whole millimetres on an imperial shaft.
-                if (perComponentUnitsEnabled) {
-                    KeywayUnitEntryChips(kwUnit, unit) { kwUnitOverride = it }
+                // The shared gate row the cards carry. No confirm on untick: nothing is stored
+                // until submit, and the hidden fields submit zeros while the gate is off.
+                KeywayGateRow(checked = kwEnabled, testTag = "add_taper_kw_gate") { kwEnabled = it }
+                if (kwEnabled) {
                     Spacer(Modifier.height(4.dp))
-                }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    CommitNumField("KW W (${abbr(kwUnit)})", kwWidth,
-                        modifier = Modifier.weight(1f)) { kwWidth = it }
-                    Text("×", style = MaterialTheme.typography.titleMedium)
-                    CommitNumField("KW D (${abbr(kwUnit)})", kwDepth,
-                        modifier = Modifier.weight(1f)) { kwDepth = it }
-                }
-                // Standard key stock, mirroring the taper card (parity rule). Sized to the LARGE
-                // end — a key is specified for the section it seats in, and that is the L.E.T.
-                KeywayStdSizePicker(unit = kwUnit, hostDiaMm = max(setMm, letMm)) { w, d ->
-                    kwWidth = dispKw(w, kwUnit)
-                    kwDepth = dispKw(d, kwUnit)
-                }
-                Spacer(Modifier.height(8.dp))
-                CommitNumField("KW L (${abbr(kwUnit)})", kwLength) { kwLength = it }
-                Spacer(Modifier.height(4.dp))
-                CapturedKeywayToggleRow(
-                    checked = kwCaptured,
-                    testTag = "add_taper_kw_captured",
-                ) { on ->
-                    kwCaptured = on
-                    if (on && kwOffset.isBlank()) kwOffset = dispKw(defaultKeywayInsetMm(), kwUnit)
-                }
-                if (kwCaptured) {
-                    CommitNumField("KW Inset from SET (${abbr(kwUnit)})", kwOffset) { kwOffset = it }
+                    // The keyway's own unit — value entry, so it appears here as well as on the card
+                    // (the parity rule); a European keyway is whole millimetres on an imperial shaft.
+                    if (perComponentUnitsEnabled) {
+                        KeywayUnitEntryChips(kwUnit, unit) { kwUnitOverride = it }
+                        Spacer(Modifier.height(4.dp))
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        CommitNumField("KW W (${abbr(kwUnit)})", kwWidth,
+                            modifier = Modifier.weight(1f)) { kwWidth = it }
+                        Text("×", style = MaterialTheme.typography.titleMedium)
+                        CommitNumField("KW D (${abbr(kwUnit)})", kwDepth,
+                            modifier = Modifier.weight(1f)) { kwDepth = it }
+                    }
+                    // Standard key stock, mirroring the taper card (parity rule). Sized to the LARGE
+                    // end — a key is specified for the section it seats in, and that is the L.E.T.
+                    KeywayStdSizePicker(unit = kwUnit, hostDiaMm = max(setMm, letMm)) { w, d ->
+                        kwWidth = dispKw(w, kwUnit)
+                        kwDepth = dispKw(d, kwUnit)
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    CommitNumField("KW L (${abbr(kwUnit)})", kwLength) { kwLength = it }
                     Spacer(Modifier.height(4.dp))
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        if (isCaptured) "Keyway spooned (N/A — captured)" else "Keyway spooned",
-                        modifier = Modifier.weight(1f),
-                        color = if (isCaptured) MaterialTheme.colorScheme.onSurfaceVariant
-                                else MaterialTheme.colorScheme.onSurface
-                    )
-                    Switch(
-                        checked = kwSpooned && !isCaptured,
-                        enabled = !isCaptured,
-                        onCheckedChange = { if (!isCaptured) kwSpooned = it }
-                    )
-                }
-                if (showClockingToggle) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Keyways 180° apart", modifier = Modifier.weight(1f))
-                        Switch(checked = clock180, onCheckedChange = { checked ->
-                            clock180 = checked
-                            if (checked) clock90 = false
-                        })
+                    CapturedKeywayToggleRow(
+                        checked = kwCaptured,
+                        testTag = "add_taper_kw_captured",
+                    ) { on ->
+                        kwCaptured = on
+                        if (on && kwOffset.isBlank()) kwOffset = dispKw(defaultKeywayInsetMm(), kwUnit)
+                    }
+                    if (kwCaptured) {
+                        CommitNumField("KW Inset from SET (${abbr(kwUnit)})", kwOffset) { kwOffset = it }
+                        Spacer(Modifier.height(4.dp))
                     }
                     Row(
                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Keyways 90° apart", modifier = Modifier.weight(1f))
-                        Switch(checked = clock90, onCheckedChange = { checked ->
-                            clock90 = checked
-                            if (checked) clock180 = false
-                        })
+                        Text(
+                            if (isCaptured) "Keyway spooned (N/A — captured)" else "Keyway spooned",
+                            modifier = Modifier.weight(1f),
+                            color = if (isCaptured) MaterialTheme.colorScheme.onSurfaceVariant
+                                    else MaterialTheme.colorScheme.onSurface
+                        )
+                        Switch(
+                            checked = kwSpooned && !isCaptured,
+                            enabled = !isCaptured,
+                            onCheckedChange = { if (!isCaptured) kwSpooned = it }
+                        )
                     }
-                    if (clock90) {
+                    if (showClockingToggle) {
                         Row(
-                            Modifier.fillMaxWidth().padding(bottom = 4.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("From AFT keyway, viewed from aft:", style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            DirectionChip("CW", selected = cw90) { cw90 = true }
-                            DirectionChip("CCW", selected = !cw90) { cw90 = false }
+                            Text("Keyways 180° apart", modifier = Modifier.weight(1f))
+                            Switch(checked = clock180, onCheckedChange = { checked ->
+                                clock180 = checked
+                                if (checked) clock90 = false
+                            })
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Keyways 90° apart", modifier = Modifier.weight(1f))
+                            Switch(checked = clock90, onCheckedChange = { checked ->
+                                clock90 = checked
+                                if (checked) clock180 = false
+                            })
+                        }
+                        if (clock90) {
+                            Row(
+                                Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("From AFT keyway, viewed from aft:", style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                DirectionChip("CW", selected = cw90) { cw90 = true }
+                                DirectionChip("CCW", selected = !cw90) { cw90 = false }
+                            }
                         }
                     }
                 }
@@ -1309,15 +1309,16 @@ fun AddTaperDialog(
                     // All four keyway numbers parse in `kwUnit` — the keyway-unit chip governs
                     // what they MEAN; parsing W/D/L in the document unit stored a metric keyway
                     // as inches while the offset (and the card) read it as millimetres.
-                    val kwW = toMmOrNull(kwWidth,  kwUnit) ?: 0f
-                    val kwD = toMmOrNull(kwDepth,  kwUnit) ?: 0f
-                    val kwL = toMmOrNull(kwLength, kwUnit) ?: 0f
-                    val kwO = if (kwCaptured) toMmOrNull(kwOffset, kwUnit) ?: 0f else 0f
+                    // Keyway values only count while the Keyway checkbox is on.
+                    val kwW = if (kwEnabled) toMmOrNull(kwWidth,  kwUnit) ?: 0f else 0f
+                    val kwD = if (kwEnabled) toMmOrNull(kwDepth,  kwUnit) ?: 0f else 0f
+                    val kwL = if (kwEnabled) toMmOrNull(kwLength, kwUnit) ?: 0f else 0f
+                    val kwO = keywayOffsetMm
                     val submitRateText = if (autoRate) computedRateText.orEmpty() else rateText
                     val action = {
                         onSubmit(physStartMm, lengthMm, startDia, endDia, submitRateText,
                                  reference,
-                                 kwW, kwD, kwL, kwO, kwSpooned && !isCaptured,
+                                 kwW, kwD, kwL, kwO, kwEnabled && kwSpooned && !isCaptured,
                                  if (showClockingToggle) clock180 else spec.keyways180Apart,
                                  if (showClockingToggle) clock90 else spec.keyways90Apart,
                                  if (showClockingToggle) cw90 else spec.keyways90Cw,

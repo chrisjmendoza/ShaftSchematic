@@ -28,6 +28,7 @@ import com.android.shaftschematic.model.BlendProfile
 import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.autoBlendFor
+import com.android.shaftschematic.model.hasAnyKeywayValue
 import com.android.shaftschematic.model.hasKeyway
 import com.android.shaftschematic.model.suggestedBodyKeywayEnd
 import com.android.shaftschematic.ui.order.ComponentKind
@@ -49,9 +50,12 @@ import com.android.shaftschematic.util.UnitSystem
  * An AUTO span (`ResolvedComponentSource.AUTO`) shows derived Start/Length read-only with an
  * editable Ø (a per-section bare-shaft override) and the "Explicit body" checkbox that promotes
  * it; an explicit body shows the editable Start/Length/Ø, the face finishes and seal areas, and the keyway
- * section (KW from AFT | FWD, W × D, the standard-size picker, KW L, the "Captured keyway" toggle
- * with its "KW Inset from AFT/FWD" field shown only while captured, "Keyway spooned", and the
- * clocking section). Every control here that changes geometry, position, or a value is mirrored in
+ * section. That section is gated by the shared "Keyway" checkbox ([KeywayGateRow]), seeded open
+ * whenever any of W/D/L is typed; unticking it with values present confirms through
+ * [RemoveKeywayConfirmDialog] before clearing them. Inside the gate: KW from AFT | FWD, the keyway
+ * unit chip, W × D, the standard-size picker, KW L, the "Captured keyway" toggle with its "KW Inset
+ * from AFT/FWD" field shown only while captured, "Keyway spooned", and the clocking section.
+ * Every control here that changes geometry, position, or a value is mirrored in
  * `AddBodyDialog` by the add-dialog-parity invariant; "Show Ø on drawing", "Show name on
  * drawing", "Compress on drawing", "Shade on drawing", and the "Prints in: in | mm" chip are
  * the documented card-only carve-outs — each changes only how an already-drawn body prints and
@@ -462,30 +466,40 @@ internal fun BodyPagerCard(
             },
         )
 
-        // Keyway — gated behind a checkbox so the fields only appear once turned on
-        // (intermediate shafts with fitted couplings carry a keyway in a plain end
-        // body). Mirrors the taper keyway section, with an AFT/FWD end reference.
-        var kwEnabled by remember(b.id) { mutableStateOf(b.hasKeyway) }
-        Row(
-            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                .toggleable(
-                    value = kwEnabled,
-                    role = androidx.compose.ui.semantics.Role.Checkbox,
-                    onValueChange = { checked ->
-                        kwEnabled = checked
-                        // Unchecking removes the keyway; checking just reveals the fields.
-                        if (!checked && b.hasKeyway) {
-                            onUpdateBodyKeyway(idx, 0f, 0f, 0f, 0f, b.keywayEnd, false)
-                        }
-                    }
-                ).padding(vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("Keyway", modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurface)
-            androidx.compose.material3.Checkbox(checked = kwEnabled, onCheckedChange = null)
+        // Keyway — the whole section is gated behind the shared "Keyway" checkbox, so the
+        // fields only appear once turned on (intermediate shafts with fitted couplings carry a
+        // keyway in a plain end body). Mirrors the taper keyway section, with an AFT/FWD end
+        // reference. The gate is derived, never stored: it seeds open for ANY typed W/D/L, so a
+        // half-typed keyway keeps its fields on screen. Ticking only reveals the fields — the
+        // model is untouched until a value commits.
+        var kwEnabled by remember(b.id) { mutableStateOf(b.hasAnyKeywayValue) }
+        // Stored values ALWAYS hold the section open, whatever the local tick says: an undo of a
+        // confirmed removal brings the values back after the tick was cleared, and the only way
+        // to close a section that holds values is the confirmed removal below.
+        val kwOpen = kwEnabled || b.hasAnyKeywayValue
+        var showRemoveKwDialog by remember(b.id) { mutableStateOf(false) }
+        KeywayGateRow(checked = kwOpen, testTag = "body_kw_gate") { checked ->
+            // Unticking with typed keyway values confirms first: one tap would otherwise erase
+            // up to four typed values — the same reason the demote-to-auto checkbox above
+            // confirms.
+            when (keywayGateAction(checked, b.hasAnyKeywayValue)) {
+                KeywayGateAction.REVEAL -> kwEnabled = true
+                KeywayGateAction.CONFIRM_REMOVE -> showRemoveKwDialog = true
+                KeywayGateAction.HIDE -> kwEnabled = false
+            }
+        }
+        if (showRemoveKwDialog) {
+            RemoveKeywayConfirmDialog(
+                onConfirm = {
+                    showRemoveKwDialog = false
+                    onUpdateBodyKeyway(idx, 0f, 0f, 0f, 0f, b.keywayEnd, false)
+                    kwEnabled = false
+                },
+                onDismiss = { showRemoveKwDialog = false },
+            )
         }
 
-        if (kwEnabled) {
+        if (kwOpen) {
             val kwSelectedColors = FilterChipDefaults.filterChipColors(
                 selectedContainerColor = Color.Black,
                 selectedLabelColor = Color.White,
@@ -615,9 +629,12 @@ internal fun BodyPagerCard(
                     onCheckedChange = null
                 )
             }
-        }
 
-        KeywayClockingSection(spec, onSetKeyways180Apart, onSetKeyways90Apart, onSetKeyways90Cw)
+            // Inside the gate: a body with no keyway does not carry the clocking toggles even
+            // when the shaft has two keyways elsewhere — they appear on the cards that carry
+            // the keyways, which is where the control belongs.
+            KeywayClockingSection(spec, onSetKeyways180Apart, onSetKeyways90Apart, onSetKeyways90Cw)
+        }
 
         if (perComponentUnitsEnabled) {
             ComponentUnitChip(b.id, unit, unitOverrides, onSetComponentUnit)

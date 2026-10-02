@@ -62,8 +62,8 @@ different thread, added as one.
 
 **Also under the parity rule:** the **"Keyway in: in | mm"** chip in the keyway section of
 `AddBodyDialog` / `AddTaperDialog` and of the Body / Taper cards, shown when Settings → Drawing →
-*Per-component units* is on. It sets the unit the keyway's four fields (W, D, L, inset) are
-**typed** in as well as the unit its footer line prints in, so it is value entry, not display — a
+*Per-component units* is on and the Keyway checkbox is ON (it lives inside the gated section).
+It sets the unit the keyway's four fields (W, D, L, inset) are **typed** in as well as the unit its footer line prints in, so it is value entry, not display — a
 European keyway is whole millimetres on an otherwise imperial shaft, and typing 20 × 12 mm as
 0.7874 × 0.4724 in loses the number the shop was given. Stored as a derived-key override
 (`"<componentId>#kw"` in `unit_overrides`), resolved keyway → component → document, so a keyway
@@ -102,15 +102,16 @@ still authored in inches on an inch document. That asymmetry is a known follow-u
 | Start | Always |
 | Length | Always |
 | Diameter (Ø) | Always |
-| KW from: AFT \| FWD chips | Always (keyway end-face reference). Default seeded by `ShaftSpec.suggestedBodyKeywayEnd`: opposite the shaft's existing keyway when exactly one side is taken (an aft taper keyway suggests FWD, and vice versa); both/neither → AFT. The SAME seed drives the card's chips for a not-yet-real keyway (parity of behavior, on-device report: a new body keyway defaulting onto the taken side read as a second aft keyway). A seed only — the chips always win, and nothing stored is ever rewritten by it |
-| KW W / KW D / KW L | Always (blank = 0 = no keyway) |
-| "Standard size…" picker | Always, inside the keyway section, directly under the W × D row. A menu of standard key stock (ANSI B17.1 in inches, DIN 6885-1 in mm — the keyway unit chooses; `geom/KeyStockStandards.kt`), the size the standard names for the body's Ø listed first. A pick fills W and D through the same path typing them takes and writes nothing on its own — never on a Ø change, never over an existing W × D |
-| Captured keyway toggle | Always. Captured ⇔ inset > 0 — no stored flag (the card derives the toggle from `keywayOffsetFromEndMm`; the dialog holds it as local state). Turning it ON with a blank inset seeds `AddDefaultsConfig.KEYWAY_INSET_IN` (0.5 in); turning it OFF commits an open keyway (inset 0) — the dialog keeps the typed text until submit, and the card remembers the cleared inset for the session and restores it on the next ON (`keywayInsetForCaptured`) |
-| KW Inset from AFT / FWD | Only while the Captured keyway toggle is ON (label follows chip). On the card, a blank or ≤ 0 commit is a no-op — the toggle is the one control that clears the inset |
-| Keyway spooned toggle | Always (disabled + "N/A — captured" while captured) |
-| Keyways 180° apart toggle | Only when the shaft will have ≥ 2 keyways (≥ 1 existing **and** this dialog's keyway is fully defined) |
+| Keyway checkbox | Always. The gate for the whole keyway section (shared `KeywayGateRow`, `KeywaySection.kt`); default OFF in the dialog. On the card it seeds from `hasAnyKeywayValue` so a half-typed keyway keeps its section open, and unticking a card with any value opens "Remove keyway?" (`kw_remove_confirm`) before clearing W/D/L/inset/spooned |
+| KW from: AFT \| FWD chips | Only while the Keyway checkbox is ON (keyway end-face reference). Default seeded by `ShaftSpec.suggestedBodyKeywayEnd`: opposite the shaft's existing keyway when exactly one side is taken (an aft taper keyway suggests FWD, and vice versa); both/neither → AFT. The SAME seed drives the card's chips for a not-yet-real keyway (parity of behavior, on-device report: a new body keyway defaulting onto the taken side read as a second aft keyway). A seed only — the chips always win, and nothing stored is ever rewritten by it |
+| KW W / KW D / KW L | Only while the Keyway checkbox is ON (blank = 0 = no keyway; while OFF the dialog submits 0 whatever the hidden fields hold) |
+| "Standard size…" picker | Only while the Keyway checkbox is ON, directly under the W × D row. A menu of standard key stock (ANSI B17.1 in inches, DIN 6885-1 in mm — the keyway unit chooses; `geom/KeyStockStandards.kt`), the size the standard names for the body's Ø listed first. A pick fills W and D through the same path typing them takes and writes nothing on its own — never on a Ø change, never over an existing W × D |
+| Captured keyway toggle | Only while the Keyway checkbox is ON. Captured ⇔ inset > 0 — no stored flag (the card derives the toggle from `keywayOffsetFromEndMm`; the dialog holds it as local state). Turning it ON with a blank inset seeds `AddDefaultsConfig.KEYWAY_INSET_IN` (0.5 in); turning it OFF commits an open keyway (inset 0) — the dialog keeps the typed text until submit, and the card remembers the cleared inset for the session and restores it on the next ON (`keywayInsetForCaptured`) |
+| KW Inset from AFT / FWD | Only while the Keyway checkbox and the Captured keyway toggle are both ON (label follows chip). On the card, a blank or ≤ 0 commit is a no-op — the toggle is the one control that clears the inset |
+| Keyway spooned toggle | Only while the Keyway checkbox is ON (disabled + "N/A — captured" while captured; while OFF the dialog submits `false`) |
+| Keyways 180° apart toggle | Only when the shaft will have ≥ 2 keyways (≥ 1 existing **and** this dialog's keyway is fully defined) and the Keyway checkbox is ON |
 | Keyways 90° apart toggle | Same condition as the 180° toggle |
-| CW \| CCW direction chips | Only when the Keyways 90° apart toggle is on |
+| CW \| CCW direction chips | Only when the Keyways 90° apart toggle is on (and so only while the Keyway checkbox is ON) |
 
 Matches `BodyPagerCard.kt`'s explicit-body branch. The **auto-body**
 card intentionally shows only Start/Length/Ø — Start/Length disabled/greyed (derived),
@@ -119,7 +120,9 @@ auto-bodies are derived and cannot host a keyway until promoted; that reduced ca
 not a parity violation. The 180°/90°-apart toggles write spec-level
 `ShaftSpec.keyways180Apart`/`keyways90Apart` (+ `keyways90Cw` for the CW/CCW chips) — the
 card's switches appear when `spec.keywayCount() >= 2`, which is the same condition
-evaluated at add time. The two toggles are mutually exclusive (enabling one locally
+evaluated at add time. On the cards the clocking section sits **inside** the Keyway gate, so a
+card whose own keyway section is closed does not show it — the toggles appear on the cards that
+carry the keyways. The two toggles are mutually exclusive (enabling one locally
 clears the other's dialog state, mirroring the ViewModel's clearing behavior on commit).
 
 The explicit-body card's **"Explicit body"** checkbox (checked; unchecking demotes back
@@ -174,14 +177,15 @@ unit override for that thread; see `docs/DATA_MODEL.md`.
 | SET Ø / LET Ø | Always (labels swap for FWD) |
 | Rate mode: Auto \| Manual | Always |
 | Rate | Always (read-only in Auto, editable in Manual) |
-| KW W / KW D / KW L | Always (blank = 0 = no keyway) |
-| "Standard size…" picker | Always, directly under the W × D row — the same menu as `AddBodyDialog`, suggested off the taper's **LARGE** end (a key is specified for the section it seats in) |
-| Captured keyway toggle | Always — same rules as `AddBodyDialog` (captured ⇔ `keywayOffsetFromSetMm` > 0, 0.5 in seed, OFF commits inset 0) |
-| KW Inset from SET | Only while the Captured keyway toggle is ON |
-| Keyway spooned toggle | Always (disabled + "N/A — captured" while captured) |
-| Keyways 180° apart toggle | Only when the shaft will have ≥ 2 keyways (≥ 1 existing **and** this dialog's keyway is fully defined) |
+| Keyway checkbox | Always. The gate for the whole keyway section (shared `KeywayGateRow`, `KeywaySection.kt`); default OFF in the dialog. On the card it seeds from `hasAnyKeywayValue` so a half-typed keyway keeps its section open, and unticking a card with any value opens "Remove keyway?" (`kw_remove_confirm`) before clearing W/D/L/inset/spooned |
+| KW W / KW D / KW L | Only while the Keyway checkbox is ON (blank = 0 = no keyway; while OFF the dialog submits 0 whatever the hidden fields hold) |
+| "Standard size…" picker | Only while the Keyway checkbox is ON, directly under the W × D row — the same menu as `AddBodyDialog`, suggested off the taper's **LARGE** end (a key is specified for the section it seats in) |
+| Captured keyway toggle | Only while the Keyway checkbox is ON — same rules as `AddBodyDialog` (captured ⇔ `keywayOffsetFromSetMm` > 0, 0.5 in seed, OFF commits inset 0) |
+| KW Inset from SET | Only while the Keyway checkbox and the Captured keyway toggle are both ON |
+| Keyway spooned toggle | Only while the Keyway checkbox is ON (disabled + "N/A — captured" while captured; while OFF the dialog submits `false`) |
+| Keyways 180° apart toggle | Only when the shaft will have ≥ 2 keyways (≥ 1 existing **and** this dialog's keyway is fully defined) and the Keyway checkbox is ON |
 | Keyways 90° apart toggle | Same condition as the 180° toggle |
-| CW \| CCW direction chips | Only when the Keyways 90° apart toggle is on |
+| CW \| CCW direction chips | Only when the Keyways 90° apart toggle is on (and so only while the Keyway checkbox is ON) |
 
 Submit ordering (SET/LET → the stored pair):
 - The model stores `startDiaMm`/`endDiaMm` x-ordered AFT → FWD, and SET faces the nearer
@@ -328,6 +332,17 @@ the aft-most center as `startFromAftMm = OAL − enteredFwd − (count−1)·spa
 ---
 
 ## Change log
+**v1.11 (2026-10-02)**
+- The keyway block is a gated **section** on all four keyway surfaces (Body/Taper cards,
+  `AddBodyDialog`, `AddTaperDialog`) behind ONE shared "Keyway" checkbox row (`KeywayGateRow`,
+  `ui/screen/KeywaySection.kt`) — on-device request: every taper showed every keyway control.
+  Everything keyway-related sits inside it, the keyway unit chip and the clocking section
+  included. Cards seed the gate from `hasAnyKeywayValue` (any of W/D/L typed) and route the
+  untick through ONE decision (`keywayGateAction`): with values present it confirms through
+  "Remove keyway?" (`kw_remove_confirm`) before clearing; stored values always hold a card's
+  section open, so an Undo of that removal shows the fields again. Dialogs default OFF and
+  submit a zero keyway (spooned `false`) while it is off.
+
 **v1.10 (2026-09-30)**
 - Captured keyways (the shop term for what the app called a "floating" keyway — inset from the
   S.E.T. or the referenced face, mill arcs at both ends): the always-visible "KW Offset from …"

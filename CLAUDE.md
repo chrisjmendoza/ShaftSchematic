@@ -38,12 +38,22 @@ Specifically:
   (`ThreadPagerCard.kt`, `!includeInOal` block).
 - **Liner AFT/FWD reference**: `AddLinerDialog` must show "Measure From: AFT | FWD" chips.
 - **Body keyway**: `AddBodyDialog` and the explicit-body carousel card must both expose
-  the keyway section (KW from AFT | FWD chips, W × D, L, "Captured keyway" toggle + the
-  "KW Inset from AFT|FWD" field shown only while it is on, spooned toggle). The
+  the keyway section behind the Keyway gate (below): KW from AFT | FWD chips, W × D, L,
+  "Captured keyway" toggle + the "KW Inset from AFT|FWD" field shown only while it is on,
+  spooned toggle. The
   auto-body card intentionally omits it (auto-bodies can't host keyways until promoted).
   The AFT/FWD chips' DEFAULT is seeded by `ShaftSpec.suggestedBodyKeywayEnd` on BOTH
   surfaces — opposite the shaft's existing keyway when exactly one side is taken,
   AFT otherwise; a seed only, never applied to a stored keyway.
+- **Keyway gate**: the Body and Taper cards and both Add dialogs gate the ENTIRE keyway
+  section — unit chip, fields, picker, captured/inset, spooned, AND the clocking section —
+  behind ONE shared "Keyway" checkbox row (`KeywayGateRow`, `ui/screen/KeywaySection.kt`). Card
+  seed = `hasAnyKeywayValue` (any of W/D/L, so a half-typed keyway stays open); a card untick
+  with any typed value confirms via `kw_remove_confirm` before clearing (`keywayGateAction`).
+  Stored values ALWAYS hold a card's section open (`kwOpen = tick || hasAnyKeywayValue`) — an
+  Undo of a confirmed removal brings the fields back with the values; the confirmed removal is
+  the only way to close a section that holds values. Dialogs default OFF and submit a zero
+  keyway while off. No stored flag.
 - **Keyway clocking**: the spec-level 180°/90° toggles and the CW/CCW chips appear on
   keyway-bearing cards when the shaft has ≥ 2 keyways, and in
   `AddBodyDialog`/`AddTaperDialog` when adding would reach ≥ 2 (≥ 1 existing + this
