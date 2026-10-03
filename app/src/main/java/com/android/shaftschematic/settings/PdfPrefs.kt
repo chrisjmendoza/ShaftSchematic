@@ -1,9 +1,13 @@
 package com.android.shaftschematic.settings
 
 import com.android.shaftschematic.geom.PROFILE_MAX_SHAFT_HEIGHT_PT
+import com.android.shaftschematic.geom.THREAD_DENSITY_DEFAULT
+import com.android.shaftschematic.geom.THREAD_DENSITY_MAX
+import com.android.shaftschematic.geom.THREAD_DENSITY_MIN
 import com.android.shaftschematic.geom.THREAD_SLANT_DEFAULT
 import com.android.shaftschematic.geom.THREAD_SLANT_MAX
 import com.android.shaftschematic.geom.THREAD_SLANT_MIN
+import com.android.shaftschematic.geom.sanitizeThreadDensity
 import com.android.shaftschematic.geom.sanitizeThreadSlant
 import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
 import com.android.shaftschematic.geom.WEAR_TRACE_MIN_DEPTH_FRAC
@@ -190,10 +194,19 @@ data class PdfPrefs(
      * over its major diameter, `geom/ThreadHatchMath.kt`), [THREAD_SLANT_MIN] (true geometry)
      * ..[THREAD_SLANT_MAX]. Settings → Drawing → "Thread slant" and both PDF options sheets.
      * Reaches every thread hatch, sheets and canvases alike: `SettingsStore.updatePdfPrefs`
-     * mirrors it into `ThreadHatchSlant.active` for the composers, and the canvases take it
+     * mirrors it into `ThreadHatchStyle.slant` for the composers, and the canvases take it
      * from the ViewModel's flow.
      */
     val threadSlant: Float = THREAD_SLANT_DEFAULT,
+    /**
+     * Thread-hatch density — the fraction of each thread's TRUE crests the hatch draws (true
+     * spacing = one pitch at the drawing's own diametral scale, `geom/ThreadHatchMath.kt`),
+     * [THREAD_DENSITY_MIN]..[THREAD_DENSITY_MAX] (every crest at true pitch). Settings → Drawing →
+     * "Thread density" and both PDF options sheets, beside the slant. Reaches every thread hatch
+     * the same way: `SettingsStore.updatePdfPrefs` mirrors it into `ThreadHatchStyle.density`
+     * for the composers, and the canvases take it from the ViewModel's flow.
+     */
+    val threadDensity: Float = THREAD_DENSITY_DEFAULT,
     /**
      * How a fraction is SET wherever the app draws one — Settings → Drawing → "Fractions".
      * Unlike the other fields here this reaches the previews as well as the PDFs, because both
@@ -284,6 +297,7 @@ data class PdfPrefs(
             sBreakThresholdFrac = sBreakThresholdFrac.coerceIn(0f, 1f),
             arrowSizePt = arrowSizePt.coerceIn(PDF_ARROW_SIZE_SMALL_PT, PDF_ARROW_SIZE_LARGE_PT),
             threadSlant = sanitizeThreadSlant(threadSlant),
+            threadDensity = sanitizeThreadDensity(threadDensity),
             wearTraceDepthFrac = wearTraceDepthFrac
                 .coerceIn(WEAR_TRACE_MIN_DEPTH_FRAC, WEAR_TRACE_MAX_DEPTH_FRAC),
             wearBandShadeFrac = wearBandShadeFrac

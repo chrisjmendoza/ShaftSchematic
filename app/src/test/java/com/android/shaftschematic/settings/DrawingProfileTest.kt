@@ -1,5 +1,7 @@
 package com.android.shaftschematic.settings
 
+import com.android.shaftschematic.geom.THREAD_DENSITY_DEFAULT
+import com.android.shaftschematic.geom.THREAD_DENSITY_MIN
 import com.android.shaftschematic.geom.THREAD_SLANT_DEFAULT
 import com.android.shaftschematic.geom.THREAD_SLANT_MAX
 import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
@@ -57,6 +59,7 @@ class DrawingProfileTest {
             sBreakThresholdFrac = 0.35f,
             arrowSizePt = PDF_ARROW_SIZE_LARGE_PT,
             threadSlant = 6.5f,
+            threadDensity = 0.85f,
             fractionStyle = FractionStyle.STACKED,
             outputFont = OutputFont.CONDENSED,
             dualUnitLayout = DualUnitLayout.STACKED,
@@ -111,7 +114,7 @@ class DrawingProfileTest {
         listOf(
             "tieringMode", "showComponentTitles", "shadedBodies", "shadedTapers", "shadedLiners",
             "undercutLineArt", "curveLoHeightIn", "curveHiHeightIn", "sBreakThresholdFrac", "arrowSizePt",
-            "threadSlant", "fractionStyle", "outputFont", "dualUnitLayout", "wearTraceDepthFrac", "wearBandShadeFrac",
+            "threadSlant", "threadDensity", "fractionStyle", "outputFont", "dualUnitLayout", "wearTraceDepthFrac", "wearBandShadeFrac",
             "wearJoinGapMaxMm", "lineThicknessScale",
         ).forEach { field ->
             assertTrue("missing field in encoded profile: $field", json.contains("\"$field\""))
@@ -137,6 +140,8 @@ class DrawingProfileTest {
         assertEquals(OutputFont.Default, profile.toPdfPrefs().outputFont)
         // The thread slant too: an older preset hatches at the shipped factor.
         assertEquals(THREAD_SLANT_DEFAULT, profile.toPdfPrefs().threadSlant, 1e-6f)
+        // And the thread density: an older preset spaces at the shipped density.
+        assertEquals(THREAD_DENSITY_DEFAULT, profile.toPdfPrefs().threadDensity, 1e-6f)
         // Same posture for the undercut sheet's print line art: an older preset keeps shading.
         assertFalse(profile.toPdfPrefs().undercutLineArt)
     }
@@ -195,6 +200,7 @@ class DrawingProfileTest {
             sBreakThresholdFrac = 4f,
             arrowSizePt = 99f,
             threadSlant = 40f,
+            threadDensity = 0f,
             wearTraceDepthFrac = 0f,
             wearBandShadeFrac = 1f,
             wearJoinGapMaxMm = -20f,
@@ -208,6 +214,7 @@ class DrawingProfileTest {
         assertEquals(1f, prefs.sBreakThresholdFrac, 1e-6f)
         assertEquals(PDF_ARROW_SIZE_LARGE_PT, prefs.arrowSizePt, 1e-6f)
         assertEquals(THREAD_SLANT_MAX, prefs.threadSlant, 1e-6f)
+        assertEquals(THREAD_DENSITY_MIN, prefs.threadDensity, 1e-6f)
         assertEquals(WEAR_TRACE_MIN_DEPTH_FRAC, prefs.wearTraceDepthFrac, 1e-6f)
         assertEquals(PDF_WEAR_BAND_SHADE_MAX, prefs.wearBandShadeFrac, 1e-6f)
         assertEquals(PDF_WEAR_JOIN_GAP_MIN_MM, prefs.wearJoinGapMaxMm, 1e-6f)

@@ -510,7 +510,7 @@ fun composeWearPdf(
         )
         drawSimpleShaftProfile(
             c, docSpec, shaftCy, outline, geomRect, ::xAt, ::rPxProfile,
-            bodyFill = bodyFill, taperFill = taperFill, linerFill = linerFill, ptPerMm = ptPerMm,
+            bodyFill = bodyFill, taperFill = taperFill, linerFill = linerFill,
             // Ratio of the outline's (already thickness-scaled) weight, so Settings → "Line
             // thickness" reaches the liner end faces and the thread hatch too, not just the
             // silhouette.

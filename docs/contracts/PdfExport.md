@@ -33,7 +33,8 @@ via SAF, delegating drawing to `composeShaftPdf`.
 | `curveHiHeightIn` | `1.0` | Sizing-curve anchor: drawn height (paper in) of an 8" shaft at 100% (0.25–1.5) |
 | `sBreakThresholdFrac` | `0.5` | Body S-break threshold: a body run breaks once drawn below this fraction of its true length (0–1; `0` = never break on compression) |
 | `arrowSizePt` | `3` | Dimension-rail arrowhead length (pt): Small `3` (default) / Medium `4` / Large `5` |
-| `threadSlant` | `3` | Thread-hatch slant factor: multiplier on each thread's true crest lean (half its pitch over its major diameter, `geom/ThreadHatchMath.kt`), `1` (true geometry) – `10`, 0.5 steps; the lean is capped at 60° to the axis. Reaches every thread hatch — the PDF composers via the `ThreadHatchSlant.active` mirror, the canvases via `vm.pdfThreadSlant` |
+| `threadSlant` | `3` | Thread-hatch slant factor: multiplier on each thread's true crest lean (half its pitch over its major diameter, `geom/ThreadHatchMath.kt`), `1` (true geometry) – `10`, 0.5 steps; the lean is capped at 60° to the axis. Reaches every thread hatch — the PDF composers via the `ThreadHatchStyle.slant` mirror, the canvases via `vm.pdfThreadSlant` |
+| `threadDensity` | `0.5` | Thread-hatch density: the fraction of each thread's true crests the hatch draws (true spacing = `bandH × pitch / majorDia`, one pitch at the drawing's own diametral scale, `geom/ThreadHatchMath.kt`), `0.15` – `1` (every crest), 0.05 steps; the drawn spacing is clamped 3–18 in the site's own units, so fine threads sit on the floor at any density. Reaches every thread hatch, stubs included — the PDF composers via the `ThreadHatchStyle.density` mirror, the canvases via `vm.pdfThreadDensity` |
 | `wearJoinGapMaxMm` | `76.2` (3") | Taper–liner join threshold: bare shaft between two components in one wear detail strip that still draws true, in canonical mm (0–304.8; `0` = break on any gap) |
 | `runoutBubbleScale` | `1.0` | Multiplier on the runout bubble radius (`BUBBLE_RADIUS_PT`), read by both bubble draw sites — the sheet composer and the Runout tab's canvas preview. Stored clamp 0.5–2.0 (defensive, wider than the UI); UI range 60–150%, 5% steps |
 | `runoutBubbleDropScale` | `1.0` | Multiplier on the drop from the shaft surface to the first bubble row (`SHORT_LEADER_PT` / `RunoutBubbleGeometry.shortLeader`), same two draw sites as `runoutBubbleScale`. Stored clamp 0.5–2.0; UI range 50–200%. Experimental — exists to find where the pointer lines land best and may be retired |
@@ -86,8 +87,15 @@ with this job", so the reader never has to guess which kind a row is.
   "Default (3×)" reset) and in both PDF Options sheets, ungated (one shared `ThreadSlantSlider`,
   one app-wide pref, testTag `thread_slant_slider`). It multiplies each thread's TRUE crest
   lean, so a coarse thread still leans further than a fine one at every setting. The composers
-  read the `util/ThreadHatchSlant.active` mirror (sole writer `SettingsStore.updatePdfPrefs`,
+  read the `util/ThreadHatchStyle.slant` mirror (sole writer `SettingsStore.updatePdfPrefs`,
   the fraction-style posture), so every preview carries `threadSlant` as a render-input key.
+- **Thread density** (`threadDensity`): slider 15%–100% in 5% steps, default 50%, commits on
+  release — directly after Thread slant in Settings → Drawing (with a "Default (50%)" reset)
+  and in both PDF Options sheets, ungated (one shared `ThreadDensitySlider`, one app-wide pref,
+  testTag `thread_density_slider`; end labels "Sparse" / "100% true"). It is the fraction of
+  the thread's true crests drawn, so 100% shows separate lines only on coarse threads. Same
+  mirror (`util/ThreadHatchStyle.density`), so every preview carries `threadDensity` as a
+  render-input key beside `threadSlant`.
 - **Taper–liner join** (`wearJoinGapMaxMm`): slider 0–12", commits on release, with a
   "Default (3")" reset — in Settings → Drawing → "Taper–liner join" and the **wear** preview's
   PDF Options sheet (one shared `WearJoinGapSlider`, one app-wide pref). It is the only
@@ -119,7 +127,7 @@ Full-resolution preview through the shared `util/PdfRaster.renderPdfPageBitmap`
   callouts** (enabled only while Blank draft is on), **Labels** — then the live-tuning
   slider group at the head — **"Shaft height"** slider, "Body S-break" threshold, line
   thickness (50–200%), liner compression control — then "Dimension arrows" size, fractions,
-  "Thread slant", an expandable "Measurement reference" section (Auto/AFT/FWD), an expandable "Shade in
+  "Thread slant", "Thread density", an expandable "Measurement reference" section (Auto/AFT/FWD), an expandable "Shade in
   Components" section (bodies/tapers/liners + an "Explicit bodies only" sub-checkbox under
   Bodies), and dual units + layout LAST (rarely used options trail, on-device request) —
   bound to

@@ -95,18 +95,27 @@ See `CouplerBoltSlot.md`.
   cuts made one shaft read as segments.
 - Threads: slanted hatch (`drawThreadHatch`), pitch-spaced, clipped to the envelope.
   ONE convention app-wide (2026-08-26 ruling — "no sense in having different forms with
-  different outputs"): full-band strokes spaced by the thread's own pitch capped 4–18
-  (`threadHatchSpacing`), each leaning by that thread's OWN crest geometry — half a pitch over
+  different outputs"): full-band strokes spaced by the thread's TRUE crest spacing at the
+  drawing's own diametral scale — `bandH × pitch / majorDia`, `bandH` the drawn thread height —
+  divided by the app-wide density `PdfPrefs.threadDensity` (15%–100% of the true crests, default
+  50%: 4 TPI on 4.5″ at the default sheet height ≈ 4.5 pt), clamped 3–18 in the site's own units
+  (`threadHatchSpacing`; 2026-10-02 — the old pitch × site-scale recipe took inconsistent scales
+  per site and sat on its 4 pt floor for nearly every real thread; on-device request: the angle
+  got a slider, so should the density). The spacing takes no site scale, so the same thread at
+  the same drawn height spaces identically everywhere; fine threads sit on the 3-unit floor at
+  any density. Each stroke leans by that thread's OWN crest geometry — half a pitch over
   the major diameter — times the app-wide slant factor `PdfPrefs.threadSlant` (1× true – 10×,
   default 3×: 4 TPI on 4.5″ ≈ 85.2°), capped at 60° to the axis (`threadHatchLean`,
   `geom/ThreadHatchMath.kt`). The 45° hatch it replaced (2026-10-02) is the section-cut glyph
   and read as one (on-device request; then: base the angle on the actual pitch, with a
   slider). The lean is dimensionless, from the model, so a thread stands at the same angle on
   every sheet and in the preview whatever the axial compression. The PDF composers read the
-  slant from the `util/ThreadHatchSlant.active` mirror (one writer, `SettingsStore.updatePdfPrefs`);
-  the canvases take it as `RenderOptions.threadSlant` / an overlay parameter from
-  `vm.pdfThreadSlant`. The thread-end stub hatches (`drawThreadStubHatch`, canvas and wear-strip
-  PDF) lean by their end thread's pitch the same way (fixed symbolic spacing). Mirroring
+  slant and density from the `util/ThreadHatchStyle` mirror (`slant`, `density`; one writer,
+  `SettingsStore.updatePdfPrefs`); the canvases take them as `RenderOptions.threadSlant` /
+  `RenderOptions.threadDensity` or overlay parameters from `vm.pdfThreadSlant` /
+  `vm.pdfThreadDensity`. The thread-end stub hatches (`drawThreadStubHatch`, canvas and
+  wear-strip PDF) lean AND space by their end thread's pitch the same way, at the stub's own
+  drawn height (the reference 4 TPI / 4.5″ thread when no end thread is reachable). Mirroring
   the PDF helper of the same name (`pdf/SimpleShaftProfile.kt`) which every composer calls.
   The renderer keeps its user-set hatch color; the geometry must not diverge —
   `ThreadHatchParityTest` pins pixel equality across the PDF sites.

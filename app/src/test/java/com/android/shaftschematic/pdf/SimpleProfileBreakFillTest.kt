@@ -66,7 +66,6 @@ class SimpleProfileBreakFillTest {
             bodyFill = fill,
             taperFill = null,
             linerFill = null,
-            ptPerMm = 1f,
             dimStrokeWidthPt = 0.8f,
         )
         return bmp

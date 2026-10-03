@@ -3,6 +3,7 @@ package com.android.shaftschematic.ui.viewmodel
 import androidx.lifecycle.viewModelScope
 import com.android.shaftschematic.data.SettingsStore
 import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
+import com.android.shaftschematic.geom.sanitizeThreadDensity
 import com.android.shaftschematic.geom.sanitizeThreadSlant
 import com.android.shaftschematic.geom.WEAR_TRACE_MIN_DEPTH_FRAC
 import com.android.shaftschematic.pdf.PdfExportMode
@@ -217,7 +218,7 @@ fun ShaftViewModel.setPdfArrowSizePt(v: Float, persist: Boolean = true) {
  * Wired to the PDF options sheets and Settings → Drawing → "Thread slant". Commit-on-release
  * from the sliders — never called per drag frame.
  *
- * The `updatePdfPrefs` call mirrors the value into `ThreadHatchSlant.active`, which the PDF hatch
+ * The `updatePdfPrefs` call mirrors the value into `ThreadHatchStyle.slant`, which the PDF hatch
  * sites read; the StateFlow feeds the Compose canvases and keys each preview's re-render.
  */
 fun ShaftViewModel.setPdfThreadSlant(v: Float, persist: Boolean = true) {
@@ -225,6 +226,20 @@ fun ShaftViewModel.setPdfThreadSlant(v: Float, persist: Boolean = true) {
     _pdfThreadSlant.value = clamped
     SettingsStore.updatePdfPrefs { it.copy(threadSlant = clamped) }
     if (persist) viewModelScope.launch { SettingsStore.setPdfThreadSlant(getApplication(), clamped) }
+}
+
+/**
+ * Wired to the PDF options sheets and Settings → Drawing → "Thread density". Commit-on-release
+ * from the sliders — never called per drag frame.
+ *
+ * The `updatePdfPrefs` call mirrors the value into `ThreadHatchStyle.density`, which the PDF
+ * hatch sites read; the StateFlow feeds the Compose canvases and keys each preview's re-render.
+ */
+fun ShaftViewModel.setPdfThreadDensity(v: Float, persist: Boolean = true) {
+    val clamped = sanitizeThreadDensity(v)
+    _pdfThreadDensity.value = clamped
+    SettingsStore.updatePdfPrefs { it.copy(threadDensity = clamped) }
+    if (persist) viewModelScope.launch { SettingsStore.setPdfThreadDensity(getApplication(), clamped) }
 }
 
 /**
@@ -387,6 +402,7 @@ fun ShaftViewModel.applyDrawingProfile(profile: DrawingProfile) {
     setPdfSBreakThresholdFrac(prefs.sBreakThresholdFrac)
     setPdfArrowSizePt(prefs.arrowSizePt)
     setPdfThreadSlant(prefs.threadSlant)
+    setPdfThreadDensity(prefs.threadDensity)
     setPdfFractionStyle(prefs.fractionStyle)
     setPdfOutputFont(prefs.outputFont)
     setPdfDualUnitLayout(prefs.dualUnitLayout)

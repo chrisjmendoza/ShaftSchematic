@@ -89,10 +89,13 @@ import com.android.shaftschematic.geom.pickPitAt
 import com.android.shaftschematic.geom.planDiaCallouts
 import com.android.shaftschematic.geom.sequenceWearTraces
 import com.android.shaftschematic.geom.smoothWearTrace
+import com.android.shaftschematic.geom.THREAD_DENSITY_DEFAULT
 import com.android.shaftschematic.geom.THREAD_SLANT_DEFAULT
 import com.android.shaftschematic.geom.threadHatchLean
 import com.android.shaftschematic.geom.threadHatchReferenceLean
+import com.android.shaftschematic.geom.threadHatchReferenceSpacing
 import com.android.shaftschematic.geom.threadHatchRun
+import com.android.shaftschematic.geom.threadHatchSpacing
 import com.android.shaftschematic.model.PitSize
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.WearPit
@@ -190,6 +193,11 @@ fun ComponentWearDetailOverlay(
      * recomposes this canvas.
      */
     threadSlant: Float = THREAD_SLANT_DEFAULT,
+    /**
+     * App-wide thread-hatch density (`PdfPrefs.threadDensity`) for the same stubs — passed in for
+     * the same reason as [threadSlant].
+     */
+    threadDensity: Float = THREAD_DENSITY_DEFAULT,
 ) {
     BackHandler { onClose() }
 
@@ -550,6 +558,7 @@ fun ComponentWearDetailOverlay(
                                 drawThreadStubHatch(
                                     outerX, top, startPx, bot, outlineColor,
                                     threadStubHatchLean(leftNeighbor, threadSlant),
+                                    threadStubHatchSpacing(leftNeighbor, bot - top, threadDensity),
                                 )
                             } else {
                                 drawBreakEdgeCompose(
@@ -570,6 +579,7 @@ fun ComponentWearDetailOverlay(
                                 drawThreadStubHatch(
                                     endPx, top, outerX, bot, outlineColor,
                                     threadStubHatchLean(rightNeighbor, threadSlant),
+                                    threadStubHatchSpacing(rightNeighbor, bot - top, threadDensity),
                                 )
                             } else {
                                 drawBreakEdgeCompose(
@@ -1260,21 +1270,23 @@ private fun DrawScope.drawDimSegment(x0: Float, x1: Float, y: Float, label: Stri
 
 /**
  * Slanted thread hatch clipped to a neighbor stub — strokes at run/rise [lean] (the stub's
- * thread's own lean, [threadStubHatchLean]), the same construction as
- * `ShaftRenderer.drawThreadHatch`, at a fixed pitch (the stub is symbolic, not to scale). Used
- * only for shaft-END thread stubs, which get a flat outer edge instead of an S-curve break.
- * Shared with the undercut detail overlay, which applies the same rule to a window end that
- * lands on a threaded shaft end.
+ * thread's own lean, [threadStubHatchLean]), [spacing] apart (that thread's pitch at the stub's
+ * drawn height, thinned by the app-wide density, [threadStubHatchSpacing]) — the same
+ * construction as `ShaftRenderer.drawThreadHatch`. Used only for shaft-END thread stubs, which
+ * get a flat outer edge instead of an S-curve break. Shared with the undercut detail overlay,
+ * which applies the same rule to a window end that lands on a threaded shaft end.
  */
-internal fun DrawScope.drawThreadStubHatch(x0: Float, top: Float, x1: Float, bot: Float, color: Color, lean: Float) {
-    if (x1 <= x0 || bot <= top) return
+internal fun DrawScope.drawThreadStubHatch(
+    x0: Float, top: Float, x1: Float, bot: Float, color: Color, lean: Float, spacing: Float,
+) {
+    if (x1 <= x0 || bot <= top || spacing <= 0f) return
     val hatch = color.copy(alpha = 0.6f)
     val run = threadHatchRun(bot - top, lean)
     withTransform({ clipRect(x0, top, x1, bot) }) {
         var hx = x0 - run
         while (hx <= x1) {
             drawLine(hatch, Offset(hx, bot), Offset(hx + run, top), strokeWidth = 1f)
-            hx += 8f
+            hx += spacing
         }
     }
 }
@@ -1287,6 +1299,15 @@ internal fun DrawScope.drawThreadStubHatch(x0: Float, top: Float, x1: Float, bot
 internal fun threadStubHatchLean(rc: ResolvedComponent?, slant: Float): Float =
     (rc as? ResolvedThread)?.let { threadHatchLean(it.pitchMm, it.majorDiaMm, slant) }
         ?: threadHatchReferenceLean(slant)
+
+/**
+ * Hatch spacing for a stub [bandH] tall standing for [rc]: a thread's own pitch at that drawn
+ * height's diametral scale, thinned by [density] (`geom/ThreadHatchMath.kt`), or the reference
+ * thread's when [rc] is not a thread.
+ */
+internal fun threadStubHatchSpacing(rc: ResolvedComponent?, bandH: Float, density: Float): Float =
+    (rc as? ResolvedThread)?.let { threadHatchSpacing(bandH, it.pitchMm, it.majorDiaMm, density) }
+        ?: threadHatchReferenceSpacing(bandH, density)
 
 /**
  * Compose port of the pdf-layer `drawBreakEdge` S-curve convention (`pdf/BreakSymbol.kt`) — same

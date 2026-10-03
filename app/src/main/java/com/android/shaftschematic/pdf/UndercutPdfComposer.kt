@@ -365,7 +365,7 @@ fun composeUndercutPdf(
         )
         drawSimpleShaftProfile(
             c, docSpec, shaftCy, outline, geomRect, ::xAt, ::rPx,
-            bodyFill = bodyFill, taperFill = taperFill, linerFill = linerFill, ptPerMm = ptPerMm,
+            bodyFill = bodyFill, taperFill = taperFill, linerFill = linerFill,
             // Ratio of the outline's (already thickness-scaled) weight, so Settings ->
             // "Line thickness" reaches the secondary strokes here too — the wear sheet's
             // rule, applied to this document's profile as well.
@@ -835,11 +835,11 @@ private fun drawUndercutDetailStrip(
         val faceFwdMm = blankLiner.linerEndMm.coerceIn(drawStartMm, drawEndMm)
         drawUndercutWindowProfile(
             c, docSpec, drawStartMm, faceAftMm, cy, ::xAtStrip, ::rStrip,
-            outline, bodyFill, taperFill, linerFill, ptPerMmStrip,
+            outline, bodyFill, taperFill, linerFill,
         )
         drawUndercutWindowProfile(
             c, docSpec, faceFwdMm, drawEndMm, cy, ::xAtStrip, ::rStrip,
-            outline, bodyFill, taperFill, linerFill, ptPerMmStrip,
+            outline, bodyFill, taperFill, linerFill,
         )
         // Full drawn height at the liner's own OD — the surface envelope over the liner's span
         // is the liner, so its maximum there IS that OD. Drawn at outline weight: with the
@@ -851,7 +851,7 @@ private fun drawUndercutDetailStrip(
     } else {
         drawUndercutWindowProfile(
             c, docSpec, drawStartMm, drawEndMm, cy, ::xAtStrip, ::rStrip,
-            outline, bodyFill, taperFill, linerFill, ptPerMmStrip,
+            outline, bodyFill, taperFill, linerFill,
         )
     }
     // Cut ends: an S-break where the strip slices through material (void beyond it, so the
@@ -1030,7 +1030,6 @@ private fun drawUndercutWindowProfile(
     bodyFill: Paint?,
     taperFill: Paint?,
     linerFill: Paint?,
-    ptPerMm: Float,
 ) {
     val dimPaint = Paint(outline).apply { strokeWidth = outline.strokeWidth * (UC_DIM_PT / UC_OUTLINE_PT) }
     fun inside(mm: Float) = mm > w0Mm + UC_EDGE_EPS_MM && mm < w1Mm - UC_EDGE_EPS_MM
@@ -1081,7 +1080,7 @@ private fun drawUndercutWindowProfile(
         val a = max(s, w0Mm); val b = min(e, w1Mm)
         if (b - a <= UC_EDGE_EPS_MM) return@forEach
         val r = rAt(th.majorDiaMm)
-        drawThreadHatch(c, xAt(a), xAt(b), cy - r, cy + r, hatchPaint, th, ptPerMm)
+        drawThreadHatch(c, xAt(a), xAt(b), cy - r, cy + r, hatchPaint, th)
         c.drawLine(xAt(a), cy - r, xAt(b), cy - r, outline)
         c.drawLine(xAt(a), cy + r, xAt(b), cy + r, outline)
         if (inside(s)) c.drawLine(xAt(a), cy - r, xAt(a), cy + r, outline)

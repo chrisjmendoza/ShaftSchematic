@@ -17,9 +17,11 @@ import com.android.shaftschematic.geom.sequenceWearTraces
 import com.android.shaftschematic.geom.smoothWearTrace
 import com.android.shaftschematic.geom.threadHatchLean
 import com.android.shaftschematic.geom.threadHatchReferenceLean
+import com.android.shaftschematic.geom.threadHatchReferenceSpacing
+import com.android.shaftschematic.geom.threadHatchSpacing
 import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_DEFAULT
 import com.android.shaftschematic.util.DisplayUnits
-import com.android.shaftschematic.util.ThreadHatchSlant
+import com.android.shaftschematic.util.ThreadHatchStyle
 import com.android.shaftschematic.util.drawDualLabelCentered
 import com.android.shaftschematic.util.dualStackMetrics
 import com.android.shaftschematic.util.measureDualLabel
@@ -598,16 +600,14 @@ private const val BLANK_RULE_LEAD_PT = 4f
 /** `drawLabelWithRule`'s trailing advance, less the suffix's own pull-back (`afterRule - 8f`). */
 private const val BLANK_RULE_TRAIL_PT = 6f
 
-/** Fixed hatch pitch inside a thread-end stub — the stub is symbolic, never drawn to scale. */
-private const val WEAR_STRIP_THREAD_HATCH_PITCH_PT = 6f
-
 /**
  * Slanted thread hatch filling a strip window's thread-end stub — the PDF port of the wear
  * detail overlay's `drawThreadStubHatch` (`ui/screen/LinerWearDetail.kt`), drawn with the same
  * thin part-transparent recipe the main profile's thread hatch uses, so a threaded shaft end
  * reads the same on the strip as it does on the profile above it. The strokes lean by [thread]'s
- * own pitch over its own diameter at the app-wide slant ([threadHatchLean]); the spacing stays
- * fixed because the stub is symbolic, never drawn to scale. Only a
+ * own pitch over its own diameter at the app-wide slant ([threadHatchLean]) and space by that
+ * pitch at the stub's own drawn height, thinned by the app-wide density ([threadHatchSpacing]);
+ * with no end thread to read, the reference thread stands in for both. Only a
  * [WearStripEndStyle.THREAD_END] end gets one: it shows the whole remaining shaft, so it carries
  * a flat outer edge and this hatch instead of an S-break.
  */
@@ -616,10 +616,14 @@ private fun drawThreadStubHatch(
 ) {
     if (x1 <= x0 || bot <= top) return
     val hatch = Paint(outline).apply { strokeWidth = outline.strokeWidth * (WEAR_DIM_PT * 0.6f / WEAR_OUTLINE_PT); alpha = 160 }
-    val slant = ThreadHatchSlant.active
+    val slant = ThreadHatchStyle.slant
+    val density = ThreadHatchStyle.density
+    val bandH = bot - top
     val lean = if (thread != null) threadHatchLean(thread.pitchMm, thread.majorDiaMm, slant)
     else threadHatchReferenceLean(slant)
-    drawThreadHatchStrokes(c, x0, x1, top, bot, hatch, WEAR_STRIP_THREAD_HATCH_PITCH_PT, lean)
+    val spacing = if (thread != null) threadHatchSpacing(bandH, thread.pitchMm, thread.majorDiaMm, density)
+    else threadHatchReferenceSpacing(bandH, density)
+    drawThreadHatchStrokes(c, x0, x1, top, bot, hatch, spacing, lean)
 }
 
 /**

@@ -16,6 +16,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
+import com.android.shaftschematic.geom.sanitizeThreadDensity
 import com.android.shaftschematic.geom.sanitizeThreadSlant
 import com.android.shaftschematic.geom.WEAR_TRACE_MIN_DEPTH_FRAC
 import com.android.shaftschematic.settings.AppThemeMode
@@ -46,7 +47,7 @@ import com.android.shaftschematic.util.FractionStyle
 import com.android.shaftschematic.util.FractionTypography
 import com.android.shaftschematic.util.OutputFont
 import com.android.shaftschematic.util.OutputTypography
-import com.android.shaftschematic.util.ThreadHatchSlant
+import com.android.shaftschematic.util.ThreadHatchStyle
 import com.android.shaftschematic.util.PreviewColorPreset
 import com.android.shaftschematic.util.PreviewColorRole
 import com.android.shaftschematic.util.PreviewColorSetting
@@ -184,6 +185,7 @@ object SettingsStore {
     private val KEY_PDF_SBREAK_THRESHOLD_FRAC = floatPreferencesKey("pdf_sbreak_threshold_frac")
     private val KEY_PDF_ARROW_SIZE_PT = floatPreferencesKey("pdf_arrow_size_pt")
     private val KEY_PDF_THREAD_SLANT = floatPreferencesKey("pdf_thread_slant")
+    private val KEY_PDF_THREAD_DENSITY = floatPreferencesKey("pdf_thread_density")
     private val KEY_PDF_FRACTION_STYLE = stringPreferencesKey("pdf_fraction_style")
     private val KEY_PDF_OUTPUT_FONT = stringPreferencesKey("pdf_output_font")
     private val KEY_PDF_DUAL_UNIT_LAYOUT = stringPreferencesKey("pdf_dual_unit_layout")
@@ -410,6 +412,13 @@ object SettingsStore {
         ctx.settingsPrefs.map { p -> sanitizeThreadSlant(p[KEY_PDF_THREAD_SLANT] ?: PdfPrefs().threadSlant) }
     suspend fun setPdfThreadSlant(ctx: Context, v: Float) {
         ctx.editSettings { it[KEY_PDF_THREAD_SLANT] = sanitizeThreadSlant(v) }
+    }
+
+    // Thread-hatch density (fraction of each thread's true crests drawn). App-wide look pref.
+    fun pdfThreadDensityFlow(ctx: Context): Flow<Float> =
+        ctx.settingsPrefs.map { p -> sanitizeThreadDensity(p[KEY_PDF_THREAD_DENSITY] ?: PdfPrefs().threadDensity) }
+    suspend fun setPdfThreadDensity(ctx: Context, v: Float) {
+        ctx.editSettings { it[KEY_PDF_THREAD_DENSITY] = sanitizeThreadDensity(v) }
     }
 
     fun pdfExportModeFlow(ctx: Context): Flow<PdfExportMode> =
@@ -1020,8 +1029,9 @@ object SettingsStore {
         // Same posture for the typeface: the composers build their root text paint from
         // `OutputTypography.active`, so this mirror is what carries the Settings choice to the ink.
         OutputTypography.setFont(next.outputFont)
-        // Same posture for the thread-hatch slant: the PDF hatch sites read
-        // `ThreadHatchSlant.active`, so this mirror is what carries the slider to the ink.
-        ThreadHatchSlant.setSlant(next.threadSlant)
+        // Same posture for the thread-hatch slant and density: the PDF hatch sites read
+        // `ThreadHatchStyle`, so this mirror is what carries the two sliders to the ink.
+        ThreadHatchStyle.setSlant(next.threadSlant)
+        ThreadHatchStyle.setDensity(next.threadDensity)
     }
 }

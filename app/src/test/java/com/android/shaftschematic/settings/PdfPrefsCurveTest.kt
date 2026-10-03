@@ -1,5 +1,8 @@
 package com.android.shaftschematic.settings
 
+import com.android.shaftschematic.geom.THREAD_DENSITY_DEFAULT
+import com.android.shaftschematic.geom.THREAD_DENSITY_MAX
+import com.android.shaftschematic.geom.THREAD_DENSITY_MIN
 import com.android.shaftschematic.geom.THREAD_SLANT_DEFAULT
 import com.android.shaftschematic.geom.THREAD_SLANT_MAX
 import com.android.shaftschematic.geom.THREAD_SLANT_MIN
@@ -97,6 +100,22 @@ class PdfPrefsCurveTest {
         assertEquals(THREAD_SLANT_MAX, PdfPrefs(threadSlant = 40f).clamped().threadSlant, 1e-6f)
         assertEquals(THREAD_SLANT_DEFAULT, PdfPrefs(threadSlant = Float.NaN).clamped().threadSlant, 1e-6f)
         assertEquals(4.5f, PdfPrefs(threadSlant = 4.5f).clamped().threadSlant, 1e-6f)
+    }
+
+    // ── Thread density (Settings → Drawing → "Thread density") ─────────────────
+
+    @Test
+    fun `thread density defaults to every other crest`() {
+        assertEquals(THREAD_DENSITY_DEFAULT, PdfPrefs().threadDensity, 1e-6f)
+        assertEquals(0.5f, THREAD_DENSITY_DEFAULT, 0f)
+    }
+
+    @Test
+    fun `clamped coerces the thread density into the settable range`() {
+        assertEquals(THREAD_DENSITY_MIN, PdfPrefs(threadDensity = 0.01f).clamped().threadDensity, 1e-6f)
+        assertEquals(THREAD_DENSITY_MAX, PdfPrefs(threadDensity = 4f).clamped().threadDensity, 1e-6f)
+        assertEquals(THREAD_DENSITY_DEFAULT, PdfPrefs(threadDensity = Float.NaN).clamped().threadDensity, 1e-6f)
+        assertEquals(0.65f, PdfPrefs(threadDensity = 0.65f).clamped().threadDensity, 1e-6f)
     }
 
     // ── Wear band shade (Settings → Drawing → "Wear area shade") ───────────────

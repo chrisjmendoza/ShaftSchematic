@@ -9,7 +9,7 @@ import com.android.shaftschematic.geom.threadHatchRun
 import com.android.shaftschematic.geom.threadHatchSpacing
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Threads
-import com.android.shaftschematic.util.ThreadHatchSlant
+import com.android.shaftschematic.util.ThreadHatchStyle
 import kotlin.math.abs
 import kotlin.math.min
 
@@ -41,7 +41,6 @@ import kotlin.math.min
  *
  * @param spec     The DRAWN spec (`withResolvedBodies` already applied by the caller).
  * @param geomRect The profile band; a break gap is clamped inside it.
- * @param ptPerMm  Flat axial scale, used only to size the thread hatch pitch.
  * @param dimStrokeWidthPt Stroke weight for the sheet's secondary lines — the liner end
  *        faces, and (× 0.6) the thread hatch. Both callers pass their dim weight as a
  *        ratio of the (already thickness-scaled) outline weight, so Settings → "Line
@@ -59,7 +58,6 @@ internal fun drawSimpleShaftProfile(
     bodyFill: Paint?,
     taperFill: Paint?,
     linerFill: Paint?,
-    ptPerMm: Float,
     dimStrokeWidthPt: Float,
 ) {
     // ── Shade fills first (drawn under all outlines) ──────────────────────
@@ -148,7 +146,7 @@ internal fun drawSimpleShaftProfile(
         if (th.lengthMm <= 0f || th.majorDiaMm <= 0f) return@forEach
         val x0 = xAt(th.startFromAftMm); val x1 = xAt(th.startFromAftMm + th.lengthMm)
         val r = rPx(th.majorDiaMm); val top = cy - r; val bot = cy + r
-        drawThreadHatch(c, x0, x1, top, bot, hatchPaint, th, ptPerMm)
+        drawThreadHatch(c, x0, x1, top, bot, hatchPaint, th)
         c.drawLine(x0, top, x1, top, outline); c.drawLine(x0, bot, x1, bot, outline)
         c.drawLine(x0, top, x0, bot, outline); c.drawLine(x1, top, x1, bot, outline)
     }
@@ -192,20 +190,21 @@ private fun simpleBodyBreak(
 }
 
 /**
- * Slanted hatch clipped to `[x0,x1] × [top,bot]` — the threaded-zone mark for [thread], drawn
- * at [ptPerMm]: strokes spaced by the thread's own pitch ([threadHatchSpacing]) and leaning by
- * its own pitch over its own diameter at the app-wide slant factor ([threadHatchLean],
- * [ThreadHatchSlant.active]). The ONE recipe every sheet hatches a thread with, so the same
- * thread prints identically on all of them. Shared with the undercut sheet's detail strips,
- * which hatch a window-clipped slice of the same thread.
+ * Slanted hatch clipped to `[x0,x1] × [top,bot]` — the threaded-zone mark for [thread], whose
+ * full drawn height is `bot − top`: strokes spaced by the thread's own pitch at that drawn
+ * height's diametral scale, thinned by the app-wide density ([threadHatchSpacing],
+ * [ThreadHatchStyle.density]), and leaning by its own pitch over its own diameter at the
+ * app-wide slant factor ([threadHatchLean], [ThreadHatchStyle.slant]). The ONE recipe every
+ * sheet hatches a thread with, so the same thread prints identically on all of them. Shared
+ * with the undercut sheet's detail strips, which hatch a window-clipped slice of the same thread.
  */
 internal fun drawThreadHatch(
-    c: Canvas, x0: Float, x1: Float, top: Float, bot: Float, paint: Paint, thread: Threads, ptPerMm: Float,
+    c: Canvas, x0: Float, x1: Float, top: Float, bot: Float, paint: Paint, thread: Threads,
 ) {
     drawThreadHatchStrokes(
         c, x0, x1, top, bot, paint,
-        spacingPt = threadHatchSpacing(thread.pitchMm, ptPerMm),
-        lean = threadHatchLean(thread.pitchMm, thread.majorDiaMm, ThreadHatchSlant.active),
+        spacingPt = threadHatchSpacing(bot - top, thread.pitchMm, thread.majorDiaMm, ThreadHatchStyle.density),
+        lean = threadHatchLean(thread.pitchMm, thread.majorDiaMm, ThreadHatchStyle.slant),
     )
 }
 

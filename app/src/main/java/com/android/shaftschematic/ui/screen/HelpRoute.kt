@@ -830,7 +830,10 @@ internal val helpSections: List<HelpSection> = listOf(
                     "inward unless the span is too narrow to hold both.\n" +
                     "• \"Thread slant\" — on every document's sheet. How far the thread " +
                     "hatch leans: it follows each thread's own pitch, 1× being the true crest " +
-                    "angle. This one applies when you let go rather than while you drag.\n\n" +
+                    "angle. This one applies when you let go rather than while you drag.\n" +
+                    "• \"Thread density\" — beside it. How many of the thread's crests the " +
+                    "hatch draws, 100% being every crest at true pitch; fine threads stay at a " +
+                    "legible minimum spacing. It also applies when you let go.\n\n" +
                     "• Drag any of those sliders and the preview updates as you drag — the " +
                     "sheet stops dimming the page and the drawing reshapes under your finger, " +
                     "so there is no need to pick a value, close the sheet, look, and reopen it. " +

@@ -700,7 +700,9 @@ three explained rows cost exactly the room the sliders below need. Then, in orde
 exposes, §5.6; the group leads because these are the controls the page-strip layout exists
 to keep judgeable, and Shaft height leads it — the control reached for most, on-device
 direction) — then Dimension arrows, Fractions, **Thread slant** (`PdfPrefs.threadSlant`, the
-thread hatch's lean multiplier, commit on release), the expandable **"Measurement reference"**
+thread hatch's lean multiplier, commit on release), **Thread density** (`PdfPrefs.threadDensity`,
+the fraction of the thread's true crests the hatch draws, commit on release), the expandable
+**"Measurement reference"**
 section, the expandable **"Shade in Components"** section (renamed from "Shade in PDF"; a
 new "Explicit bodies only" sub-checkbox sits under its Bodies row — see below), and Dual
 units + layout LAST (rarely used options trail, on-device request). Both expandables
@@ -815,7 +817,8 @@ follows the same unified order the schematic sheet uses (§5.5): a **Content chi
 Coupling face), then **"Shaft height"**, Body S-break, Line thickness, **liner
 compression** (§5.7, the same per-job `RunoutConfig` values as the tab's own controls), a
 **"Runout bubbles"** heading with the **Bubble size** / **Bubble height** sliders (see
-below), Dimension arrows, Fractions, Thread slant, the expandable **Measurement reference** section,
+below), Dimension arrows, Fractions, Thread slant, Thread density, the expandable **Measurement
+reference** section,
 and the expandable **Shade in Components** section (+ its "Explicit bodies only"
 sub-checkbox) — Dual units + layout LAST. This is the fullest instance of the shared sheet:
 every gated row is on. The other three tabs reuse the same sheet with rows gated off by
@@ -837,8 +840,8 @@ what their composer actually reads:
   `PdfPrefs.undercutLineArt` reaches this composer alone.
 
 Every instance keeps Fractions (ungated — every document here prints lengths), Thread slant
-(ungated — every document draws the shaft's threads) and Shade in Components (ungated) at their
-fixed spots in the order.
+and Thread density (ungated — every document draws the shaft's threads) and Shade in Components
+(ungated) at their fixed spots in the order.
 
 **Scope legibility** (DESIGN_INTENT §3.3, ruling Q3): a look row on either sheet is a remote
 control for the ONE app-wide `PdfPrefs` value, never a per-page copy, so both sheets carry the

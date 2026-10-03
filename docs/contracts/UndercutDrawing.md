@@ -678,8 +678,9 @@ a tap that hits nothing leaves the current card alone. The rails, notches, and Ã
 read the selected card's **draft**, so an in-progress edit is dimensioned live.
 
 **Strip ends**: an end that lands on the shaft's own extent (`x = 0` or `x = OAL`) draws a flat
-edge; a threaded shaft end additionally gets the diagonal thread-stub hatch
-(`drawThreadStubHatch`, shared with the wear overlay). Any other end is a truncation and gets
+edge; a threaded shaft end additionally gets the slanted thread-stub hatch
+(`drawThreadStubHatch`, shared with the wear overlay â€” leaned and spaced by that thread's own
+pitch at the app-wide slant and density, `geom/ThreadHatchMath.kt`). Any other end is a truncation and gets
 the S-curve break (`drawBreakEdgeCompose`, AFT `eyeAtTop = true`, FWD `false`).
 
 ---
