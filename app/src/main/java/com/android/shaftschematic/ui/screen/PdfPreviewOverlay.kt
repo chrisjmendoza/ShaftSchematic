@@ -75,6 +75,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.android.shaftschematic.geom.THREAD_DENSITY_DEFAULT
 import com.android.shaftschematic.geom.THREAD_SLANT_DEFAULT
 import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
 import com.android.shaftschematic.pdf.WEAR_STRIP_SIZE_FRAC_DEFAULT
@@ -90,6 +91,7 @@ import com.android.shaftschematic.ui.viewmodel.setLineThicknessScale
 import com.android.shaftschematic.ui.viewmodel.setLinerCompression
 import com.android.shaftschematic.ui.viewmodel.setLinersProportional
 import com.android.shaftschematic.ui.viewmodel.setPdfArrowSizePt
+import com.android.shaftschematic.ui.viewmodel.setPdfThreadDensity
 import com.android.shaftschematic.ui.viewmodel.setPdfThreadSlant
 import com.android.shaftschematic.ui.viewmodel.setPdfDualUnitLayout
 import com.android.shaftschematic.ui.viewmodel.setPdfFractionStyle
@@ -470,6 +472,8 @@ internal fun RunoutWearOptionsSheet(
      * sheet serves draws the shaft's threads.
      */
     threadSlant: Float = THREAD_SLANT_DEFAULT,
+    /** The app-wide `PdfPrefs.threadDensity`; ungated for the same reason as the slant. */
+    threadDensity: Float = THREAD_DENSITY_DEFAULT,
     /** The app-wide `PdfPrefs.dualUnitLayout`; ungated for the same reason as the fraction style. */
     dualUnitLayout: DualUnitLayout = DualUnitLayout.Default,
     /**
@@ -755,6 +759,15 @@ internal fun RunoutWearOptionsSheet(
         ThreadSlantSlider(
             threadSlant = threadSlant,
             onCommit = { vm.setPdfThreadSlant(it) },
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        // ── Thread density ───────────────────────────────────────────────────
+        // Ungated beside the slant: the same threads, the other half of how their hatch reads.
+        ThreadDensitySlider(
+            threadDensity = threadDensity,
+            onCommit = { vm.setPdfThreadDensity(it) },
         )
 
         Spacer(Modifier.height(12.dp))

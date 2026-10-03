@@ -172,6 +172,7 @@ fun RunoutRoute(
     val pdfFractionStyle   by vm.pdfFractionStyle.collectAsState()
     val pdfOutputFont      by vm.pdfOutputFont.collectAsState()
     val pdfThreadSlant     by vm.pdfThreadSlant.collectAsState()
+    val pdfThreadDensity   by vm.pdfThreadDensity.collectAsState()
     val pdfDualUnitLayout  by vm.pdfDualUnitLayout.collectAsState()
     // Sizing-curve anchors: the composer sizes the drawn shaft off them and the preview's
     // "Shaft height" slider states its track in paper inches from the same pair, so a
@@ -353,6 +354,7 @@ fun RunoutRoute(
                 fractionStyle = pdfFractionStyle,
                 outputFont = pdfOutputFont,
                 threadSlant = pdfThreadSlant,
+                threadDensity = pdfThreadDensity,
                 dualUnitLayout = pdfDualUnitLayout,
                 curveLoHeightIn = curveLoHeightIn,
                 curveHiHeightIn = curveHiHeightIn,
@@ -410,7 +412,8 @@ fun RunoutRoute(
     // runouts only, so no sheet-white value halo ever sits over a shaded liner here.
     val transparentArgb = Color.Transparent.toArgb()
     val previewOpts = remember(outlineArgb, bodyFillArgb, hatchArgb,
-                               pdfShadedBodies, pdfShadedTapers, pdfShadedLiners, pdfThreadSlant) {
+                               pdfShadedBodies, pdfShadedTapers, pdfShadedLiners, pdfThreadSlant,
+                               pdfThreadDensity) {
         RenderOptions(
             outlineColor        = outlineArgb,
             outlineWidthPx      = 1.5f,
@@ -420,6 +423,7 @@ fun RunoutRoute(
             threadFillColor     = 0x00000000,
             threadHatchColor    = hatchArgb,
             threadSlant         = pdfThreadSlant,
+            threadDensity       = pdfThreadDensity,
         )
     }
 
@@ -937,6 +941,7 @@ fun RunoutRoute(
                     sBreakThresholdFrac = pdfSBreakThresholdFrac,
                     fractionStyle = pdfFractionStyle,
                     threadSlant = pdfThreadSlant,
+                    threadDensity = pdfThreadDensity,
                     dualUnitLayout = pdfDualUnitLayout,
                     dualUnits = dualUnits,
                     onDualUnitsChange = { vm.setDualUnits(it) },
@@ -1022,9 +1027,14 @@ private data class RunoutRenderInputs(
     val outputFont: OutputFont,
     /**
      * The thread-hatch slant. Not a composer argument — it reaches the ink via
-     * `ThreadHatchSlant.active`. Key only.
+     * `ThreadHatchStyle.slant`. Key only.
      */
     val threadSlant: Float,
+    /**
+     * The thread-hatch density. Not a composer argument — it reaches the ink via
+     * `ThreadHatchStyle.density`. Key only.
+     */
+    val threadDensity: Float,
     /**
      * A LAYOUT input, not just a key: the composers take it as a parameter, and a sheet whose
      * budget cannot absorb the taller stacked value falls back to inline on its own.

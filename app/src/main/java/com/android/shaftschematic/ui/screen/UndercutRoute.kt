@@ -181,6 +181,7 @@ fun UndercutRoute(
     val pdfFractionStyle   by vm.pdfFractionStyle.collectAsState()
     val pdfOutputFont      by vm.pdfOutputFont.collectAsState()
     val pdfThreadSlant     by vm.pdfThreadSlant.collectAsState()
+    val pdfThreadDensity   by vm.pdfThreadDensity.collectAsState()
     // Dual-unit layout: this document stacks its dual values like every other
     // (`wantDualStacked`), so its options sheet has to show the stored choice — and the
     // preview has to redraw when it changes.
@@ -336,13 +337,13 @@ fun UndercutRoute(
     // pdfDualUnitLayout joins them — the composer reads it off the PdfPrefs snapshot, so
     // without the key the sheet's own layout chips would change nothing on the page.
     // pdfOutputFont is a key for the same reason: the typeface reaches the ink through
-    // OutputTypography.active, which is not snapshot state either; so is pdfThreadSlant, which
-    // reaches the hatch through ThreadHatchSlant.active.
+    // OutputTypography.active, which is not snapshot state either; so are pdfThreadSlant and
+    // pdfThreadDensity, which reach the hatch through ThreadHatchStyle.
     LaunchedEffect(showPreview, spec, unit, resolvedComponents,
                    lineThicknessScale, pdfShadedBodies, pdfShadedTapers, pdfShadedLiners,
                    pdfUndercutLineArt,
                    undercutRecord, blankDraft, pdfFractionStyle, pdfOutputFont, pdfThreadSlant, unitOverrides,
-                   dualUnits, pdfDualUnitLayout) {
+                   dualUnits, pdfDualUnitLayout, pdfThreadDensity) {
         if (!showPreview) { previewBitmap = null; return@LaunchedEffect }
         previewLoading = true
         val prefsSnapshot     = vm.currentPdfPrefs
@@ -386,7 +387,7 @@ fun UndercutRoute(
     val badgeTextArgb  = MaterialTheme.colorScheme.onPrimary.toArgb()
     val previewShape   = MaterialTheme.shapes.medium
 
-    val previewOpts = remember(outlineArgb, bodyFillArgb, linerFillArgb, hatchArgb, pdfThreadSlant) {
+    val previewOpts = remember(outlineArgb, bodyFillArgb, linerFillArgb, hatchArgb, pdfThreadSlant, pdfThreadDensity) {
         RenderOptions(
             outlineColor        = outlineArgb,
             outlineWidthPx      = 1.5f,
@@ -396,6 +397,7 @@ fun UndercutRoute(
             threadFillColor     = 0x00000000,
             threadHatchColor    = hatchArgb,
             threadSlant         = pdfThreadSlant,
+            threadDensity       = pdfThreadDensity,
         )
     }
 
@@ -768,6 +770,7 @@ fun UndercutRoute(
                     vm = vm,
                     fractionStyle = pdfFractionStyle,
                     threadSlant = pdfThreadSlant,
+                    threadDensity = pdfThreadDensity,
                     blankDraft = blankDraft,
                     onSetBlankDraft = { blankDraft = it },
                 )
@@ -787,6 +790,7 @@ fun UndercutRoute(
             undercutRecord = undercutRecord,
             style = undercutStyle,
             threadSlant = pdfThreadSlant,
+            threadDensity = pdfThreadDensity,
             onAddUndercut = { startMm, lengthMm, reference, referenceLinerId ->
                 // Called when the overlay CONFIRMS a drafted new cut (a cancelled draft never
                 // reaches here, so the record gains no ghosts). The returned id lets the overlay

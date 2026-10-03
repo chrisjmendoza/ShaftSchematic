@@ -8,6 +8,54 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-02
 
+### feat(drawing): thread hatch spaces by the thread's own pitch at the drawn scale, with a "Thread density" slider
+
+On-device request: since the angle got a slider, add one for density. The old spacing recipe was
+pitch × whatever scale a site passed, clamped 4–18 — and the sites passed inconsistent scales
+(the schematic its diameter scale, the wear/undercut documents a flat axial one). At the default
+sheet height (8″ → 1″) a 4 TPI pitch is only ≈ 2.25 pt, so the 4 pt floor fired on essentially
+every real thread and the density was in practice a fixed 4 pt everywhere.
+
+- New spacing rule in `geom/ThreadHatchMath.kt`, dimensionless like the lean: the thread's TRUE
+  crest spacing at the drawing's own diametral scale, `bandH × pitch / majorDia`
+  (`threadHatchTrueSpacing` — `bandH` is the drawn thread height every site already has), over
+  the density: `threadHatchSpacing(bandH, pitchMm, majorDiaMm, density)` =
+  `trueSpacing / density`, clamped to `THREAD_HATCH_SPACING_MIN`..`MAX` in the site's own units.
+  The floor is lowered 4 → **3** (strokes are ≈ 0.7 units, so 3 keeps ≥ ~2 units of daylight;
+  tighter prints as grey tone); the cap stays 18. A pitch ≤ 0 keeps the 2.5 mm fallback, a
+  diameter ≤ 0 the 4 TPI / 4.5″ reference thread (`threadHatchReferenceSpacing`). The
+  `unitsPerMm` parameter is gone, and with it the hatch-only `ptPerMm` parameters of
+  `drawThreadHatch`, `drawSimpleShaftProfile`, `drawThreads` and the undercut sheet's
+  `drawUndercutWindowProfile` — the spacing can no longer depend on which scale a site passes,
+  so the same thread at the same drawn height spaces identically on every sheet and canvas.
+- New app-wide pref `PdfPrefs.threadDensity` — the fraction of the thread's true crests drawn,
+  **15%–100%** in 5% steps (`THREAD_DENSITY_MIN`/`MAX`/`STEP`), default **50%**
+  (`THREAD_DENSITY_DEFAULT`: every other crest — a 4 TPI thread on 4.5″ at the default height
+  spaces ≈ 4.5 pt, close to the old 4 pt look). 100% only shows as separate lines on coarse
+  threads; fine threads sit on the 3-unit floor whatever the setting. DataStore key
+  `pdf_thread_density`, sanitized by `sanitizeThreadDensity` (non-finite → default, then clamp),
+  captured by Drawing profiles (defaulted field — older profiles load at 50%) and reset by
+  "Restore Drawing defaults".
+- "Thread density" slider (`ThreadDensitySlider`, testTag `thread_density_slider`; "Sparse" ↔
+  "100% true", commit on release, no DataStore write per drag frame) directly after "Thread
+  slant" on both PDF options sheets (ungated) and in Settings → Drawing with a "Default (50%)"
+  reset; one Help line.
+- Reaching the ink: the slant mirror is renamed `util/ThreadHatchSlant` → `util/ThreadHatchStyle`
+  and holds both `slant` and `density` (two `@Volatile` fields, sanitizing setters, sole writer
+  still `SettingsStore.updatePdfPrefs`). Every preview's render inputs carry `threadDensity` as a
+  re-render key beside `threadSlant`; the Compose canvases take it as `RenderOptions.threadDensity`
+  / an overlay parameter from `vm.pdfThreadDensity`.
+- The thread-end STUB hatches (wear-strip PDF `drawThreadStubHatch`, canvas
+  `DrawScope.drawThreadStubHatch` in the wear and undercut detail overlays) leave their fixed
+  6 pt / 8 px spacing for the same rule, at the stub's own drawn height (`threadStubHatchSpacing`
+  on the canvas), so the density slider reaches every hatch; with no end thread to read they use
+  the reference thread.
+- Tests: `ThreadHatchMathTest` (true spacing formula, density 1 and 0.5, the ≈ 4.5 pt default,
+  floor and cap, height scaling, fallbacks, sanitize), `ThreadHatchParityTest` (pixel parity across
+  the PDF sites at a non-default density, a density change reaches the ink, a sheet's axial scale
+  never changes the hatch, both mirrors clamp), `PdfPrefsCurveTest`, `DrawingProfileTest` (round
+  trip, legacy default, clamp), and `ThreadDensitySliderMathTest` (snap lands on exactly 50%).
+
 ### feat(drawing): thread hatch leans by the thread's own pitch, with a "Thread slant" slider
 
 On-device request: threads should look more like threads, then: base the hatch angle on the

@@ -1820,9 +1820,9 @@ fun wearStripEndThreadDiaMm(
 /**
  * The threaded shaft end beyond [edgeMm] — the largest-diameter thread extending past it, `null`
  * when none does. Its diameter sizes the [WearStripEndStyle.THREAD_END] stub
- * ([wearStripEndThreadDiaMm]) and its pitch over that diameter leans the stub's hatch, so the
- * stub hatches like the thread it stands for. Same side convention and resolved-bodies contract
- * as [wearStripEndStyle].
+ * ([wearStripEndThreadDiaMm]) and its pitch over that diameter leans and spaces the stub's
+ * hatch, so the stub hatches like the thread it stands for. Same side convention and
+ * resolved-bodies contract as [wearStripEndStyle].
  */
 fun wearStripEndThread(
     spec: ShaftSpec,

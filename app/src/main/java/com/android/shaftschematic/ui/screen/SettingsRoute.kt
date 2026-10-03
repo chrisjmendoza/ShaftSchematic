@@ -73,6 +73,7 @@ import com.android.shaftschematic.io.ShaftBackup
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.UiEvent
 import com.android.shaftschematic.ui.viewmodel.*
+import com.android.shaftschematic.geom.THREAD_DENSITY_DEFAULT
 import com.android.shaftschematic.geom.THREAD_SLANT_DEFAULT
 import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
 import com.android.shaftschematic.geom.defaultShaftHeightPt
@@ -161,6 +162,7 @@ fun SettingsRoute(
     val pdfWearJoinGapMaxMm by vm.pdfWearJoinGapMaxMm.collectAsState()
     val pdfArrowSizePt by vm.pdfArrowSizePt.collectAsState()
     val pdfThreadSlant by vm.pdfThreadSlant.collectAsState()
+    val pdfThreadDensity by vm.pdfThreadDensity.collectAsState()
     val pdfFractionStyle by vm.pdfFractionStyle.collectAsState()
     val pdfOutputFont by vm.pdfOutputFont.collectAsState()
     val pdfDualUnitLayout by vm.pdfDualUnitLayout.collectAsState()
@@ -390,6 +392,18 @@ fun SettingsRoute(
                                 onClick = { vm.setPdfThreadSlant(THREAD_SLANT_DEFAULT) },
                                 enabled = pdfThreadSlant != THREAD_SLANT_DEFAULT,
                             ) { Text("Default (${fmtThreadSlant(THREAD_SLANT_DEFAULT)})") }
+                        },
+                    )
+
+                    // The slant's sibling, on the same three surfaces — one PdfPrefs.threadDensity.
+                    ThreadDensitySlider(
+                        threadDensity = pdfThreadDensity,
+                        onCommit = { vm.setPdfThreadDensity(it) },
+                        trailing = {
+                            TextButton(
+                                onClick = { vm.setPdfThreadDensity(THREAD_DENSITY_DEFAULT) },
+                                enabled = pdfThreadDensity != THREAD_DENSITY_DEFAULT,
+                            ) { Text("Default (${fmtThreadDensity(THREAD_DENSITY_DEFAULT)})") }
                         },
                     )
 

@@ -6,11 +6,13 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
 import com.android.shaftschematic.data.SettingsStore
+import com.android.shaftschematic.geom.THREAD_DENSITY_DEFAULT
+import com.android.shaftschematic.geom.THREAD_DENSITY_MIN
 import com.android.shaftschematic.geom.THREAD_SLANT_DEFAULT
 import com.android.shaftschematic.geom.THREAD_SLANT_MAX
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Threads
-import com.android.shaftschematic.util.ThreadHatchSlant
+import com.android.shaftschematic.util.ThreadHatchStyle
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -24,10 +26,11 @@ import org.robolectric.annotation.GraphicsMode
 /**
  * One thread must print IDENTICALLY on every sheet ("no sense in having different forms
  * with different outputs" — on-device direction). All hatch sites share `drawThreadHatch`
- * plus one pitch/lean/paint recipe (spacing = thread's own pitch capped 4–18 pt; lean = that
- * pitch over its own diameter at the app-wide slant, `ThreadHatchSlant.active`; 60%-dim-weight
- * alpha-160 paint); the schematic's former private convention (short ±4 pt ticks at
- * max(8, pitch)) is gone.
+ * plus one pitch/lean/paint recipe (spacing = the thread's own pitch at the drawn height's
+ * diametral scale over the app-wide density, `ThreadHatchStyle.density`, capped 3–18 pt; lean =
+ * that pitch over its own diameter at the app-wide slant, `ThreadHatchStyle.slant`;
+ * 60%-dim-weight alpha-160 paint); the schematic's former private convention (short ±4 pt ticks
+ * at max(8, pitch)) is gone.
  *
  * Pinned by pixel equality: the same thread rendered through the schematic's pass, the
  * wear/undercut shared profile, and the runout profile must produce byte-identical
@@ -58,8 +61,8 @@ class ThreadHatchParityTest {
         return b
     }
 
-    private fun schematic(): Bitmap = bmp { c, outline, dim ->
-        drawThreads(c, listOf(thread()), cy, { it }, { d -> d / 2f }, outline, dim, ptPerMm = 1f)
+    private fun schematic(xAt: (Float) -> Float = { it }): Bitmap = bmp { c, outline, dim ->
+        drawThreads(c, listOf(thread()), cy, xAt, { d -> d / 2f }, outline, dim)
     }
 
     private fun simpleProfile(): Bitmap = bmp { c, outline, dim ->
@@ -67,23 +70,33 @@ class ThreadHatchParityTest {
             c, ShaftSpec(overallLengthMm = 400f, threads = listOf(thread())), cy, outline,
             RectF(0f, 0f, w.toFloat(), h.toFloat()), { it }, { d -> d / 2f },
             bodyFill = null, taperFill = null, linerFill = null,
-            ptPerMm = 1f, dimStrokeWidthPt = dim.strokeWidth,
+            dimStrokeWidthPt = dim.strokeWidth,
         )
     }
 
-    private fun runoutProfile(): Bitmap = bmp { c, outline, _ ->
+    private fun runoutProfile(ptPerMm: Float = 1f): Bitmap = bmp { c, outline, _ ->
         val spec = ShaftSpec(overallLengthMm = 400f, threads = listOf(thread()))
         drawShaftProfile(
             c, spec, spec, cy, outline,
             RectF(0f, 0f, w.toFloat(), h.toFloat()), { it }, { d -> d / 2f },
-            ptPerMm = 1f,
+            ptPerMm = ptPerMm,
         )
     }
 
-    /** The slant mirror is process-wide, so a test that moves it must put it back. */
+    /** True when [a] and [b] agree on every pixel left of column [xEnd]. */
+    private fun sameLeftOf(a: Bitmap, b: Bitmap, xEnd: Int): Boolean {
+        for (x in 0 until xEnd) for (y in 0 until h) {
+            if (a.getPixel(x, y) != b.getPixel(x, y)) return false
+        }
+        return true
+    }
+
+    /** The hatch mirrors are process-wide, so a test that moves them must put them back. */
     @After
-    fun restoreShippedSlant() {
-        SettingsStore.updatePdfPrefs { it.copy(threadSlant = THREAD_SLANT_DEFAULT) }
+    fun restoreShippedHatch() {
+        SettingsStore.updatePdfPrefs {
+            it.copy(threadSlant = THREAD_SLANT_DEFAULT, threadDensity = THREAD_DENSITY_DEFAULT)
+        }
     }
 
     @Test
@@ -105,6 +118,14 @@ class ThreadHatchParityTest {
     }
 
     @Test
+    fun `every sheet prints the same thread pixel-for-pixel at a non-default density`() {
+        SettingsStore.updatePdfPrefs { it.copy(threadDensity = 0.8f) }
+        val schematic = schematic()
+        assertTrue(schematic.sameAs(simpleProfile()))
+        assertTrue(schematic.sameAs(runoutProfile()))
+    }
+
+    @Test
     fun `a slant change reaches the printed hatch`() {
         val shipped = schematic()
         SettingsStore.updatePdfPrefs { it.copy(threadSlant = 8f) }
@@ -112,10 +133,28 @@ class ThreadHatchParityTest {
     }
 
     @Test
-    fun `the pref write is what moves the mirror, clamped`() {
-        SettingsStore.updatePdfPrefs { it.copy(threadSlant = 6.5f) }
-        assertEquals(6.5f, ThreadHatchSlant.active, 0f)
-        SettingsStore.updatePdfPrefs { it.copy(threadSlant = 40f) }
-        assertEquals(THREAD_SLANT_MAX, ThreadHatchSlant.active, 0f)
+    fun `a density change reaches the printed hatch`() {
+        val shipped = schematic()
+        SettingsStore.updatePdfPrefs { it.copy(threadDensity = 1f) }
+        assertFalse(shipped.sameAs(schematic()))
+    }
+
+    @Test
+    fun `a sheet's own axial scale never changes the hatch`() {
+        // The runout pass is handed a pt/mm that once spaced its hatch; it no longer can.
+        assertTrue(runoutProfile(ptPerMm = 1f).sameAs(runoutProfile(ptPerMm = 0.3f)))
+        // An axially stretched thread (same drawn height) strokes the same over the span both
+        // drawings share — left of the unstretched thread's FWD end face at x = 160.
+        assertTrue(sameLeftOf(schematic(), schematic(xAt = { 40f + (it - 40f) * 2f }), xEnd = 155))
+    }
+
+    @Test
+    fun `the pref write is what moves the mirrors, clamped`() {
+        SettingsStore.updatePdfPrefs { it.copy(threadSlant = 6.5f, threadDensity = 0.35f) }
+        assertEquals(6.5f, ThreadHatchStyle.slant, 0f)
+        assertEquals(0.35f, ThreadHatchStyle.density, 0f)
+        SettingsStore.updatePdfPrefs { it.copy(threadSlant = 40f, threadDensity = 0.01f) }
+        assertEquals(THREAD_SLANT_MAX, ThreadHatchStyle.slant, 0f)
+        assertEquals(THREAD_DENSITY_MIN, ThreadHatchStyle.density, 0f)
     }
 }

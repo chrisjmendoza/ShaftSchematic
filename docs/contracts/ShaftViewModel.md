@@ -161,11 +161,14 @@ Two specs, one editor
   only jobs here are showing the current selection and serving as each preview's
   **re-render key** — a tab whose render-inputs record omits one keeps drawing the old style
   or the old typeface.
-- `pdfThreadSlant` (`PdfPrefs.threadSlant`, the thread-hatch slant factor) joins that posture
-  for the PDF composers — they read `ThreadHatchSlant.active` — and is a re-render key on every
-  preview; unlike the other two it is ALSO handed by value to the Compose canvases (editor
-  preview via `RenderOptions.threadSlant`, the wear/undercut/runout tab canvases and detail
-  overlays), so a change recomposes them. Setter `setPdfThreadSlant`, commit-on-release.
+- `pdfThreadSlant` (`PdfPrefs.threadSlant`, the thread-hatch slant factor) and
+  `pdfThreadDensity` (`PdfPrefs.threadDensity`, the fraction of each thread's true crests the
+  hatch draws) join that posture for the PDF composers — they read `ThreadHatchStyle.slant` /
+  `.density` — and are re-render keys on every preview; unlike the other two they are ALSO
+  handed by value to the Compose canvases (editor preview via `RenderOptions.threadSlant` /
+  `.threadDensity`, the wear/undercut/runout tab canvases and detail overlays), so a change
+  recomposes them. Setters `setPdfThreadSlant` / `setPdfThreadDensity`, commit-on-release; both
+  are collected from DataStore at startup and copied by `applyDrawingProfile`.
 
 Add APIs
 

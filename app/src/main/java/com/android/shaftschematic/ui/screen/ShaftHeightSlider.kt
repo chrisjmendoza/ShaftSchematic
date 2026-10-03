@@ -58,6 +58,9 @@ import com.android.shaftschematic.geom.PROFILE_TAPER_MIN_FRAC_OF_TRUE
 import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
 import com.android.shaftschematic.geom.WEAR_TRACE_MIN_DEPTH_FRAC
 import com.android.shaftschematic.geom.solveMaxProfileScale
+import com.android.shaftschematic.geom.THREAD_DENSITY_MAX
+import com.android.shaftschematic.geom.THREAD_DENSITY_MIN
+import com.android.shaftschematic.geom.THREAD_DENSITY_STEP
 import com.android.shaftschematic.geom.THREAD_SLANT_MAX
 import com.android.shaftschematic.geom.THREAD_SLANT_MIN
 import com.android.shaftschematic.geom.THREAD_SLANT_STEP
@@ -619,6 +622,73 @@ internal fun ThreadSlantSlider(
         Text(
             "How far the thread hatch leans. It follows each thread's own pitch; 1× is the true " +
                 "crest angle, higher values lean it further so the thread reads at print size.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** A thread-hatch density as the slider reads it: `50%`, `15%`. */
+internal fun fmtThreadDensity(density: Float): String = "${(density * 100f).roundToInt()}%"
+
+/**
+ * Snaps a dragged density to the slider's [THREAD_DENSITY_STEP] inside the settable range —
+ * through whole step counts, so the shipped 50% lands on exactly `0.5f`.
+ */
+internal fun snappedThreadDensity(density: Float): Float {
+    val perUnit = (1f / THREAD_DENSITY_STEP).roundToInt()
+    return ((density * perUnit).roundToInt() / perUnit.toFloat())
+        .coerceIn(THREAD_DENSITY_MIN, THREAD_DENSITY_MAX)
+}
+
+/**
+ * The "Thread density" slider, directly after [ThreadSlantSlider] in both PDF options sheets and
+ * Settings → Drawing — ONE `PdfPrefs.threadDensity` behind all three.
+ *
+ * The thread hatch spaces its strokes by each thread's own pitch at the drawing's diametral scale
+ * (`geom/ThreadHatchMath.kt`); this is the fraction of those true crests drawn, 100% being every
+ * crest. Fine threads sit on the legibility floor whatever the value. Drag is tracked locally and
+ * committed once on release, so drag frames never write DataStore; the release commit re-renders
+ * the open preview from the stored value.
+ */
+@Composable
+internal fun ThreadDensitySlider(
+    threadDensity: Float,
+    onCommit: (Float) -> Unit,
+    trailing: @Composable () -> Unit = {},
+) {
+    var drag by remember { mutableStateOf<Float?>(null) }
+    val shown = (drag ?: threadDensity).coerceIn(THREAD_DENSITY_MIN, THREAD_DENSITY_MAX)
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "Thread density  ${fmtThreadDensity(shown)}",
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.weight(1f),
+            )
+            trailing()
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Sparse", style = MaterialTheme.typography.bodySmall)
+            Slider(
+                value = shown,
+                onValueChange = { drag = snappedThreadDensity(it) },
+                onValueChangeFinished = {
+                    drag?.let(onCommit)
+                    drag = null
+                },
+                valueRange = THREAD_DENSITY_MIN..THREAD_DENSITY_MAX,
+                steps = ((THREAD_DENSITY_MAX - THREAD_DENSITY_MIN) / THREAD_DENSITY_STEP).roundToInt() - 1,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 8.dp)
+                    .testTag("thread_density_slider"),
+            )
+            Text("${fmtThreadDensity(THREAD_DENSITY_MAX)} true", style = MaterialTheme.typography.bodySmall)
+        }
+        Text(
+            "How many of the thread's crests the hatch draws. 100% is every crest at true pitch; " +
+                "fine threads stay at the legibility floor.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

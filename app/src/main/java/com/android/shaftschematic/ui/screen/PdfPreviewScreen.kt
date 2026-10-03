@@ -183,6 +183,7 @@ fun PdfPreviewScreen(
     // an input key or the page would keep the old heads.
     val pdfArrowSizePt by vm.pdfArrowSizePt.collectAsState()
     val pdfThreadSlant by vm.pdfThreadSlant.collectAsState()
+    val pdfThreadDensity by vm.pdfThreadDensity.collectAsState()
     // Fraction style: same posture — a chip tap changes the renderer's active style, which the
     // loop cannot observe, so it rides along as an input key.
     val pdfFractionStyle by vm.pdfFractionStyle.collectAsState()
@@ -266,6 +267,7 @@ fun PdfPreviewScreen(
                 fractionStyle = pdfFractionStyle,
                 outputFont = pdfOutputFont,
                 threadSlant = pdfThreadSlant,
+                threadDensity = pdfThreadDensity,
                 dualUnitLayout = pdfDualUnitLayout,
                 curveLoHeightIn = curveLoHeightIn,
                 curveHiHeightIn = curveHiHeightIn,
@@ -607,6 +609,7 @@ fun PdfPreviewScreen(
                 sBreakThresholdFrac = pdfSBreakThresholdFrac,
                 arrowSizePt = pdfArrowSizePt,
                 threadSlant = pdfThreadSlant,
+                threadDensity = pdfThreadDensity,
                 fractionStyle = pdfFractionStyle,
                 dualUnitLayout = pdfDualUnitLayout,
                 dualUnits = dualUnits,
@@ -667,9 +670,14 @@ private data class SchematicRenderInputs(
     val outputFont: OutputFont,
     /**
      * The thread-hatch slant. Not a composer argument — it reaches the ink via
-     * `ThreadHatchSlant.active`. Key only.
+     * `ThreadHatchStyle.slant`. Key only.
      */
     val threadSlant: Float,
+    /**
+     * The thread-hatch density. Not a composer argument — it reaches the ink via
+     * `ThreadHatchStyle.density`. Key only.
+     */
+    val threadDensity: Float,
     /**
      * A LAYOUT input, not just a key: the composers take it as a parameter, and a sheet whose
      * budget cannot absorb the taller stacked value falls back to inline on its own.
@@ -724,6 +732,7 @@ private fun PdfOptionsSheet(
     sBreakThresholdFrac: Float,
     arrowSizePt: Float,
     threadSlant: Float,
+    threadDensity: Float,
     fractionStyle: FractionStyle,
     dualUnitLayout: DualUnitLayout,
     dualUnits: Boolean,
@@ -916,6 +925,13 @@ private fun PdfOptionsSheet(
         ThreadSlantSlider(
             threadSlant = threadSlant,
             onCommit = { vm.setPdfThreadSlant(it) },
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        ThreadDensitySlider(
+            threadDensity = threadDensity,
+            onCommit = { vm.setPdfThreadDensity(it) },
         )
 
         Spacer(Modifier.height(12.dp))

@@ -1391,7 +1391,7 @@ internal fun drawShaftProfile(
         if (th.lengthMm <= 0f || th.majorDiaMm <= 0f) return@forEach
         val x0 = xAt(th.startFromAftMm); val x1 = xAt(th.startFromAftMm + th.lengthMm)
         val r = rPx(th.majorDiaMm); val top = cy - r; val bot = cy + r
-        drawThreadHatch(c, x0, x1, top, bot, hatchPaint, th, ptPerMm)
+        drawThreadHatch(c, x0, x1, top, bot, hatchPaint, th)
         c.drawLine(x0, top, x1, top, outline); c.drawLine(x0, bot, x1, bot, outline)
         c.drawLine(x0, top, x0, bot, outline); c.drawLine(x1, top, x1, bot, outline)
     }

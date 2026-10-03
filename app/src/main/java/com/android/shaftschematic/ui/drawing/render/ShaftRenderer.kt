@@ -154,6 +154,7 @@ object ShaftRenderer {
         val threadFill   = Color(opts.threadFillColor)
         val flankColor   = Color(opts.threadHatchColor)
         val threadSlant  = opts.threadSlant
+        val threadDensity = opts.threadDensity
         // PDF-shade mirror: components the PDF will print shaded get this overlay on top of
         // their normal preview fill, so the box answers "what prints shaded" live.
         val shadedIds    = opts.shadedComponentIds
@@ -389,10 +390,10 @@ object ShaftRenderer {
                     topPx = top,
                     rightPx = right,
                     bottomPx = cy + majorR,
-                    pxPerMm = L.pxPerMm,
                     pitchMm = th.pitchMm,
                     majorDiaMm = th.majorDiaMm,
                     slant = threadSlant,
+                    density = threadDensity,
                     color = flankColor
                 )
 
@@ -434,10 +435,10 @@ object ShaftRenderer {
                 topPx = top,
                 rightPx = right,
                 bottomPx = cy + majorR,
-                pxPerMm = L.pxPerMm,
                 pitchMm = th.pitchMm,
                 majorDiaMm = th.majorDiaMm,
                 slant = threadSlant,
+                density = threadDensity,
                 color = flankColor
             )
 
@@ -607,26 +608,28 @@ object ShaftRenderer {
     // ─────────────────────────────────────────────────────────────────────────────
 
     /**
-     * Slanted hatch clipped to the thread envelope — spaced by the thread's own pitch and leaned
-     * by that pitch over its own diameter at slant factor [slant] (`geom/ThreadHatchMath.kt`).
+     * Slanted hatch clipped to the thread envelope — spaced by the thread's own pitch at the
+     * envelope's drawn height, thinned by [density], and leaned by that pitch over its own
+     * diameter at slant factor [slant] (`geom/ThreadHatchMath.kt`).
      */
     private fun DrawScope.drawThreadHatch(
         leftPx: Float,
         topPx: Float,
         rightPx: Float,
         bottomPx: Float,
-        pxPerMm: Float,
         pitchMm: Float,
         majorDiaMm: Float,
         slant: Float,
+        density: Float,
         color: Color,
     ) {
-        if (rightPx <= leftPx || bottomPx <= topPx || pxPerMm <= 0f) return
+        if (rightPx <= leftPx || bottomPx <= topPx) return
         // The app-wide hatch convention (PDF mirror: `pdf/SimpleShaftProfile.drawThreadHatch`):
         // full-band slanted strokes at the thread's own pitch and lean — the same thread must
         // read the same on the preview as on every sheet.
-        val spacing = threadHatchSpacing(pitchMm, pxPerMm)
-        val run = threadHatchRun(bottomPx - topPx, threadHatchLean(pitchMm, majorDiaMm, slant))
+        val bandH = bottomPx - topPx
+        val spacing = threadHatchSpacing(bandH, pitchMm, majorDiaMm, density)
+        val run = threadHatchRun(bandH, threadHatchLean(pitchMm, majorDiaMm, slant))
         val stroke = 1f
         withTransform({ clipRect(leftPx, topPx, rightPx, bottomPx) }) {
             var hx = leftPx - run
