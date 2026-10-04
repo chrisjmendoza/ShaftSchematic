@@ -28,9 +28,7 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
@@ -41,19 +39,15 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.PictureAsPdf
-import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -154,25 +148,24 @@ internal fun openRunoutPdf(context: Context, uri: Uri) {
  *                      the same snapshot-and-compose action its tab-body Print button runs,
  *                      from one local function, so the two entry points cannot drift. Null
  *                      hides the action. Labelled and filled — the primary output action.
- * @param optionsSheet  Optional composable content shown in a bottom sheet when the user
- *                      taps the Tune icon. When null, no Tune icon is shown.
+ * @param optionsSheet  Optional composable content shown in the non-modal options panel
+ *                      ([PreviewOptionsPanel]) the Tune icon toggles. When null, no Tune icon
+ *                      is shown. The page stays pinch-zoomable and pannable under the open
+ *                      panel; the panel closes by its close button, the Tune icon, or Back.
  * @param sheetTunesPage Whether [optionsSheet] reshapes THIS page live. When true the open
- *                      sheet switches the preview to the tuning layout — the page redrawn
- *                      as a strip pinned under the toolbar, cropped to its ink, zoom/pan
- *                      reset, and the sheet capped ([tuningSheetMaxHeightDp]) to what is
- *                      left below the strip — and the sheet's scrim comes off, because
- *                      dimming the page being judged is exactly what the layout exists to
- *                      prevent (the black surround already separates strip from sheet).
+ *                      panel switches the preview to the tuning layout — the page redrawn
+ *                      as a strip pinned under the toolbar, cropped to its ink, and the panel
+ *                      capped ([tuningSheetMaxHeightDp]) to what is left below the strip.
  *                      Wear passes true as well — its controls commit on release rather than
- *                      mid-drag, but the commit still redraws THIS page, and a sheet that
+ *                      mid-drag, but the commit still redraws THIS page, and a panel that
  *                      covered it left the change unjudgeable (on-device report). Undercut
- *                      leaves it false: its sheet tunes nothing on the page.
+ *                      leaves it false: its options tune nothing on the page, which stays
+ *                      centered full-size behind the panel.
  * @param inkBand       Where [bitmap] carries ink, from the route's render loop. The strip
  *                      crops to it so the page's blank top margin does not take room from
  *                      the drawing; null shows the whole page. Measured on sharp passes
  *                      only, so the strip never resizes under a moving finger.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun PdfPreviewOverlay(
     bitmap: ImageBitmap?,
@@ -186,12 +179,11 @@ internal fun PdfPreviewOverlay(
     inkBand: InkBand? = null,
 ) {
     var showOptions by remember { mutableStateOf(false) }
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    // Tuning layout: page strip on top, sheet below it. See [tuningPageStripHeightDp].
-    // The sheet's drag handle and its navigation-bar inset stack OUTSIDE the content cap,
-    // so both are budgeted here — a cap that ignored them left the sheet overlapping the
-    // strip and swallowing the drawing's lowest callouts (on-device report).
+    // Tuning layout: page strip on top, panel below it. See [tuningPageStripHeightDp].
+    // The panel's header row and the navigation-bar inset below it sit OUTSIDE the content
+    // cap, so both are budgeted here — a cap that ignored them left the options overlapping
+    // the strip and swallowing the drawing's lowest callouts (on-device report).
     val stripLayout = showOptions && sheetTunesPage
     val configuration = LocalConfiguration.current
     val navBottomDp = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding().value
@@ -210,9 +202,32 @@ internal fun PdfPreviewOverlay(
             sheetChromeDp,
         ).dp
     } else {
-        // A sheet that reshapes nothing on the page has no strip to stay clear of, just the
-        // swipe-down edge at the top.
+        // Options that reshape nothing on the page have no strip to stay clear of, just a
+        // band of page to keep in view at the top.
         (configuration.screenHeightDp * PREVIEW_SHEET_MAX_FRAC).dp
+    }
+
+    // ── Pan / zoom ─────────────────────────────────────────────────────────
+    // Held HERE, not keyed by the bitmap and not inside the bitmap branch below: every
+    // commit-on-release control — the thread sliders included — re-renders the page, which
+    // replaces the bitmap and may flash the spinner in its place, and a zoom that reset on
+    // either would make the change unwatchable (on-device request: zoom on the threads while
+    // moving the thread sliders). Every draw path fits the bitmap into the same box, so a
+    // half-res draft raster and the sharp pass land on the same geometry and the zoom stays
+    // put.
+    val scaleState = remember { mutableFloatStateOf(1f) }
+    val offsetState = remember { mutableStateOf(Offset.Zero) }
+    val transformState = rememberTransformableState { zoomChange, panChange, _ ->
+        scaleState.floatValue = (scaleState.floatValue * zoomChange).coerceIn(0.5f, 8f)
+        offsetState.value = offsetState.value + panChange
+    }
+    // The zoom resets when the LAYOUT changes — the strip and the centered full page fit the
+    // page differently, so a zoom carried across the switch would point at the wrong place.
+    // That is every open and close of a page-tuning panel; on the undercut preview the page
+    // keeps its centered layout under the panel, so opening it leaves the zoom alone.
+    LaunchedEffect(stripLayout) {
+        scaleState.floatValue = 1f
+        offsetState.value = Offset.Zero
     }
 
     // Unlock device rotation while the preview is open so the landscape sheet can be viewed in
@@ -251,7 +266,9 @@ internal fun PdfPreviewOverlay(
                     modifier = Modifier.weight(1f).padding(start = 4.dp),
                 )
                 if (optionsSheet != null) {
-                    IconButton(onClick = { showOptions = true }) {
+                    // A toggle: the panel is non-modal, so this bar stays reachable while it
+                    // is open and the same icon closes it.
+                    IconButton(onClick = { showOptions = !showOptions }) {
                         Icon(Icons.Filled.Tune, contentDescription = "PDF options",
                             tint = MaterialTheme.colorScheme.onSurface)
                     }
@@ -279,32 +296,18 @@ internal fun PdfPreviewOverlay(
                 modifier = Modifier.fillMaxSize().clipToBounds(),
                 contentAlignment = Alignment.Center,
             ) {
+                // The full spinner stands in for the page only until a FIRST page exists; a
+                // re-render after that keeps the current page and its zoom on screen and
+                // signals the pass with the corner indicator below (see `PdfPreviewScreen`).
                 when {
-                    loading -> CircularProgressIndicator(color = Color.White)
+                    loading && bitmap == null -> CircularProgressIndicator(color = Color.White)
                     bitmap != null -> {
-                        val scaleState  = remember(bitmap) { mutableFloatStateOf(1f) }
-                        val offsetState = remember(bitmap) { mutableStateOf(Offset.Zero) }
                         val scale  by scaleState
                         val offset by offsetState
 
-                        val transformState = rememberTransformableState { zoomChange, panChange, _ ->
-                            scaleState.floatValue  = (scaleState.floatValue * zoomChange).coerceIn(0.5f, 8f)
-                            offsetState.value = offsetState.value + panChange
-                        }
-
-                        // Opening a tuning sheet RESETS zoom/pan: predictable beats
-                        // preserved — an inspection zoom would put the strip off-screen
-                        // exactly when the sliders need it visible.
-                        LaunchedEffect(stripLayout) {
-                            if (stripLayout) {
-                                scaleState.floatValue = 1f
-                                offsetState.value = Offset.Zero
-                            }
-                        }
-
                         if (stripLayout) {
                             // The drawing, cropped to its ink band and fitted into the
-                            // strip the sheet was sized to leave free. One draw helper
+                            // strip the panel was sized to leave free. One draw helper
                             // with the schematic preview's Canvas, so they cannot drift.
                             Canvas(
                                 modifier = Modifier
@@ -348,23 +351,26 @@ internal fun PdfPreviewOverlay(
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
-            }
-        }
-    }
+                if (loading && bitmap != null) {
+                    PreviewRerenderIndicator(Modifier.align(Alignment.TopEnd))
+                }
 
-    if (showOptions && optionsSheet != null) {
-        ModalBottomSheet(
-            onDismissRequest = { showOptions = false },
-            sheetState = sheetState,
-            // `ModalBottomSheet`'s scrim is one full-window rect — it cannot be restricted
-            // to the area below the page strip. A tuning sheet therefore takes none of it;
-            // the overlay's black surround already reads as separation, and dimming the
-            // page under a slider is what this layout exists to prevent.
-            scrimColor = if (sheetTunesPage) Color.Transparent else BottomSheetDefaults.ScrimColor,
-        ) {
-            // The cap lives here, not in the sheet content: only the overlay knows the
-            // strip the sheet has to stay clear of, and one owner keeps the two in step.
-            Box(Modifier.heightIn(max = sheetMaxHeight)) { optionsSheet() }
+                // The options, as a non-modal panel in this Box — composed LAST so it draws
+                // over the page and takes the touches that land on it, while the page above
+                // it keeps its pinch and pan. No scrim: nothing here is modal. The cap is
+                // computed here because only the overlay knows the strip the panel has to
+                // stay clear of; the panel applies it. The root Column's `systemBarsPadding`
+                // keeps this Box — and so the panel at its bottom — above the navigation bar.
+                if (showOptions && optionsSheet != null) {
+                    PreviewOptionsPanel(
+                        onClose = { showOptions = false },
+                        maxHeightDp = sheetMaxHeight,
+                        modifier = Modifier.align(Alignment.BottomCenter),
+                    ) {
+                        optionsSheet()
+                    }
+                }
+            }
         }
     }
 }
@@ -532,19 +538,17 @@ internal fun RunoutWearOptionsSheet(
     showMeasurementReference: Boolean = false,
     pdfTieringMode: PdfTieringMode = PdfTieringMode.AUTO,
 ) {
-    // Scrollable + inset-padded: without its own scroll a short screen clips the bottom
-    // rows mid-checkbox behind the navigation bar (same posture as PdfOptionsSheet). The
-    // height cap belongs to the hosting `PdfPreviewOverlay` — only it knows the page strip
-    // a tuning sheet must stay clear of.
+    // Scrollable: without its own scroll a short screen clips the bottom rows mid-checkbox
+    // (same posture as PdfOptionsSheet). The title and the height cap belong to the hosting
+    // [PreviewOptionsPanel] — only `PdfPreviewOverlay` knows the page strip a tuning panel must
+    // stay clear of — and the navigation-bar inset is paid by the overlay's
+    // `systemBarsPadding`, so this column carries none of them.
     Column(
         Modifier
             .fillMaxWidth()
             .verticalScroll(rememberScrollState())
-            .navigationBarsPadding()
             .padding(horizontal = 24.dp, vertical = 8.dp),
     ) {
-        Text("PDF Options", style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.height(4.dp))
         // One sheet serves the runout, consolidated, wear and undercut documents, and only
         // some of them carry per-job controls — the undercut sheet has none, so it gets the
         // app-wide sentence alone rather than a pointer to captions it does not show.

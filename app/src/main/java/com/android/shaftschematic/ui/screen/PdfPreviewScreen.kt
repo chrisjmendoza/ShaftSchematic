@@ -10,7 +10,6 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
@@ -24,8 +23,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -38,7 +35,6 @@ import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.PictureAsPdf
-import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
@@ -48,12 +44,10 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.rememberModalBottomSheetState
 import com.android.shaftschematic.settings.PdfTieringMode
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -67,16 +61,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.model.ShaftSpec
@@ -119,9 +112,12 @@ import kotlin.math.roundToInt
  *
  * Contract
  * - Rendering runs on Dispatchers.IO; a loading indicator is shown meanwhile.
- * - While the options sheet is open the page redraws as a fit-width strip pinned under the
- *   app bar, and the sheet is capped to what is left below it — the sliders tune the page
- *   live, so the page has to stay in sight. Opening the sheet resets zoom/pan.
+ * - The Tune action toggles a non-modal options panel ([PreviewOptionsPanel]) in this
+ *   screen's own layout. While it is open the page redraws as a fit-width strip pinned under
+ *   the app bar, and the panel is capped to what is left below it — the sliders tune the page
+ *   live, so the page has to stay in sight. The page stays pinch-zoomable and pannable under
+ *   the open panel, and a zoom survives a re-render; opening or closing the panel resets it,
+ *   since the two layouts fit the page differently.
  * - If rendering fails, a plain error message is shown (no crash).
  * - The "Export PDF" action in the top bar calls [onExport] to proceed to the SAF picker.
  * - No model state is mutated here.
@@ -228,7 +224,6 @@ fun PdfPreviewScreen(
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showOptions by remember { mutableStateOf(false) }
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     // Live slider drags — visual-only overrides, never a write. See [PreviewTuning].
     val tuning = rememberPreviewTuning()
 
@@ -329,14 +324,13 @@ fun PdfPreviewScreen(
     val offset = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
 
     // ── Tuning layout ─────────────────────────────────────────────────────────
-    // While the options sheet is open the page moves into a strip pinned under the app bar
-    // and the sheet is capped just below it, so a slider's effect is visible as it is
+    // While the options panel is open the page moves into a strip pinned under the app bar
+    // and the panel is capped just below it, so a slider's effect is visible as it is
     // dragged ("I can see the PDF Preview area lighten up on moving a slider but I can't
     // see anything" — on-device report). The strip carries the page's INK BAND, so the
-    // drawing gets the room the blank top margin used to hold. The sheet's drag handle and
-    // its navigation-bar inset stack OUTSIDE the content cap, so they are budgeted here;
-    // strip and cap come from one set of inputs and cannot disagree. Opening the sheet
-    // RESETS zoom/pan: predictable beats preserved, since a zoom would hide the strip.
+    // drawing gets the room the blank top margin used to hold. The panel's header row and
+    // the navigation-bar inset below it sit OUTSIDE the content cap, so they are budgeted
+    // here; strip and cap come from one set of inputs and cannot disagree.
     val configuration = LocalConfiguration.current
     val navBottomDp = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding().value
     val sheetChromeDp = TUNING_SHEET_CHROME_DP + navBottomDp
@@ -351,11 +345,14 @@ fun PdfPreviewScreen(
         stripHeightDp,
         sheetChromeDp,
     ).dp
+    // Zoom/pan resets when the panel opens AND when it closes: the strip layout and the
+    // full-page layout fit the page differently, so a zoom carried across either transition
+    // would point at the wrong place. Between those transitions the zoom is deliberately
+    // KEPT — a re-render swaps the bitmap but every pass fits it into the same box, so a zoom
+    // on the threads stays on the threads while their sliders commit (on-device request).
     LaunchedEffect(showOptions) {
-        if (showOptions) {
-            scale.snapTo(1f)
-            offset.snapTo(Offset.Zero)
-        }
+        scale.snapTo(1f)
+        offset.snapTo(Offset.Zero)
     }
 
     val gestures = Modifier
@@ -396,7 +393,9 @@ fun PdfPreviewScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { showOptions = true }) {
+                    // A toggle: the panel is non-modal, so the app bar stays reachable while
+                    // it is open and the same icon closes it.
+                    IconButton(onClick = { showOptions = !showOptions }) {
                         Icon(Icons.Filled.Tune, contentDescription = "PDF options")
                     }
                     IconButton(
@@ -473,14 +472,26 @@ fun PdfPreviewScreen(
     ) { paddingValues ->
         val currentError = errorMessage
         val currentBitmap = previewBitmap
+        // `clipToBounds` keeps the zoomed/panned page inside this Box: the canvas transform
+        // draws outside the layout node unless clipped, so a zoomed-in page could slide up OVER
+        // the app bar and hide its actions. The page tucks BEHIND the bar instead (the shared
+        // overlay clips for the same reason). `paddingValues` carries the Scaffold's default
+        // content insets — the navigation bar included — so the options panel anchored to this
+        // Box's bottom sits above the navigation bar without paying the inset itself.
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues),
+                .padding(paddingValues)
+                .clipToBounds(),
             contentAlignment = Alignment.Center
         ) {
+            // The full spinner stands in for the page only until a FIRST page exists. A
+            // re-render after that — a commit-on-release slider such as Thread slant — keeps
+            // the current page (and the zoom on it) on screen and signals the pass with the
+            // small corner indicator below: swapping the page out for a spinner at exactly
+            // the moment a change is being watched made the change unwatchable.
             when {
-                isLoading -> {
+                isLoading && currentBitmap == null -> {
                     CircularProgressIndicator()
                 }
 
@@ -505,7 +516,7 @@ fun PdfPreviewScreen(
                         }) {
                             if (showOptions) {
                                 // Tuning layout: the drawing, cropped to its ink band,
-                                // fitted into the strip the sheet was sized to leave free
+                                // fitted into the strip the panel was sized to leave free
                                 // and top-aligned under the app bar.
                                 drawPageBand(currentBitmap, inkBand, stripHeightDp.dp.toPx())
                             } else {
@@ -532,28 +543,17 @@ fun PdfPreviewScreen(
                     }
                 }
             }
-
-            // The gap between the page strip and the sheet, dimmed — the modal affordance
-            // the bottom sheet's own scrim would give, minus the part that matters: the
-            // strip stays at full brightness. `ModalBottomSheet`'s scrim is all-or-nothing
-            // over the whole window, so it is passed transparent and this stands in for it.
-            // A drag takes even this off — the page is the thing being judged.
-            if (showOptions && !tuning.active) {
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .padding(top = stripHeightDp.dp)
-                        .background(BottomSheetDefaults.ScrimColor)
-                )
+            if (isLoading && currentBitmap != null) {
+                PreviewRerenderIndicator(Modifier.align(Alignment.TopEnd))
             }
 
             // Always-visible blank-draft toggle, overlaid on the preview — the SAME
-            // session-only state as the options sheet's switch, so the two can never
-            // disagree. Surfaced here because the sheet buried it (on-device report:
+            // session-only state as the options panel's chip, so the two can never
+            // disagree. Surfaced here because the options buried it (on-device report:
             // hard to find, even when demoing the app). Toggling re-renders the
             // preview live, so what's shown is always what will print. Hidden while the
-            // options sheet is open: it would sit on the page strip, and the sheet's own
-            // first row is this same switch.
+            // options panel is open: it would sit on the page strip, and the panel's own
+            // first row is this same election.
             if (!showOptions) {
                 // The chip floats over the page, so its container is OPAQUE and it casts a
                 // shadow: an M3 filter chip's unselected container is transparent by default,
@@ -587,50 +587,49 @@ fun PdfPreviewScreen(
                         .testTag("pdf_blank_toggle"),
                 )
             }
-        }
-    }
 
-    if (showOptions) {
-        ModalBottomSheet(
-            onDismissRequest = { showOptions = false },
-            sheetState = sheetState,
-            // `ModalBottomSheet`'s scrim is a full-window rect — it cannot be restricted to
-            // the area below the page strip, and dimming the strip is exactly what this
-            // layout exists to prevent. It stays transparent; the preview Box paints the
-            // strip-to-sheet gap itself (and stops even that during a drag).
-            scrimColor = Color.Transparent,
-        ) {
-            PdfOptionsSheet(
-                vm = vm,
-                spec = spec,
-                pdfShowComponentTitles = pdfShowComponentTitles,
-                pdfTieringMode = pdfTieringMode,
-                lineThicknessScale = lineThicknessScale,
-                sBreakThresholdFrac = pdfSBreakThresholdFrac,
-                arrowSizePt = pdfArrowSizePt,
-                threadSlant = pdfThreadSlant,
-                threadDensity = pdfThreadDensity,
-                fractionStyle = pdfFractionStyle,
-                dualUnitLayout = pdfDualUnitLayout,
-                dualUnits = dualUnits,
-                heightScale = runoutConfig.heightScale,
-                linersProportional = runoutConfig.linersProportional,
-                linerCompression = runoutConfig.linerCompression,
-                curveLoHeightIn = curveLoHeightIn,
-                curveHiHeightIn = curveHiHeightIn,
-                pdfShadedBodies = pdfShadedBodies,
-                pdfShadedTapers = pdfShadedTapers,
-                pdfShadedLiners = pdfShadedLiners,
-                pdfShadeExplicitBodiesOnly = pdfShadeExplicitBodiesOnly,
-                pdfBlankDraft = pdfBlankDraft,
-                pdfBlankDiaCallouts = pdfBlankDiaCallouts,
-                // A FINAL-drawing election only — the original schematic's stations are the
-                // Runout and Consolidated Output tabs' documents.
-                showFinalRunoutBubbles = isFinal,
-                finalRunoutBubbles = finalRunoutBubbles,
-                tuning = tuning,
-                maxHeightDp = maxSheetHeight,
-            )
+            // The options, as a non-modal panel in this Box — composed LAST so it draws over
+            // the page and takes the touches that land on it, while the page strip above it
+            // keeps its pinch and pan. No scrim: nothing here is modal, and the page is the
+            // thing being judged.
+            if (showOptions) {
+                PreviewOptionsPanel(
+                    onClose = { showOptions = false },
+                    maxHeightDp = maxSheetHeight,
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                ) {
+                    PdfOptionsSheet(
+                        vm = vm,
+                        spec = spec,
+                        pdfShowComponentTitles = pdfShowComponentTitles,
+                        pdfTieringMode = pdfTieringMode,
+                        lineThicknessScale = lineThicknessScale,
+                        sBreakThresholdFrac = pdfSBreakThresholdFrac,
+                        arrowSizePt = pdfArrowSizePt,
+                        threadSlant = pdfThreadSlant,
+                        threadDensity = pdfThreadDensity,
+                        fractionStyle = pdfFractionStyle,
+                        dualUnitLayout = pdfDualUnitLayout,
+                        dualUnits = dualUnits,
+                        heightScale = runoutConfig.heightScale,
+                        linersProportional = runoutConfig.linersProportional,
+                        linerCompression = runoutConfig.linerCompression,
+                        curveLoHeightIn = curveLoHeightIn,
+                        curveHiHeightIn = curveHiHeightIn,
+                        pdfShadedBodies = pdfShadedBodies,
+                        pdfShadedTapers = pdfShadedTapers,
+                        pdfShadedLiners = pdfShadedLiners,
+                        pdfShadeExplicitBodiesOnly = pdfShadeExplicitBodiesOnly,
+                        pdfBlankDraft = pdfBlankDraft,
+                        pdfBlankDiaCallouts = pdfBlankDiaCallouts,
+                        // A FINAL-drawing election only — the original schematic's stations
+                        // are the Runout and Consolidated Output tabs' documents.
+                        showFinalRunoutBubbles = isFinal,
+                        finalRunoutBubbles = finalRunoutBubbles,
+                        tuning = tuning,
+                    )
+                }
+            }
         }
     }
 }
@@ -756,29 +755,20 @@ private fun PdfOptionsSheet(
     finalRunoutBubbles: Boolean = false,
     /**
      * Live-tuning sink: every slider here reports its in-progress value so the preview
-     * behind the sheet reshapes under the finger. Visual only — the commit path is
+     * above the panel reshapes under the finger. Visual only — the commit path is
      * unchanged and nothing persists on a drag frame.
      */
     tuning: PreviewTuning,
-    /**
-     * Cap for this content column, computed by the screen from the SAME inputs as the page
-     * strip ([tuningSheetMaxHeightDp]) so sheet and strip can never disagree. This sheet
-     * tunes the page live, so it must not cover it.
-     */
-    maxHeightDp: Dp,
 ) {
-    // Scrollable + inset-padded: the sheet's content is taller than a phone screen, so
-    // without its own scroll the bottom rows clip mid-checkbox behind the navigation bar.
+    // Scrollable: the content is taller than a phone screen. The height cap and the title
+    // belong to the hosting [PreviewOptionsPanel], and the navigation-bar inset is paid by the
+    // Scaffold's content padding the panel is laid out inside, so this column carries neither.
     Column(
         Modifier
             .fillMaxWidth()
-            .heightIn(max = maxHeightDp)
             .verticalScroll(rememberScrollState())
-            .navigationBarsPadding()
             .padding(horizontal = 24.dp, vertical = 8.dp),
     ) {
-        Text("PDF Options", style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.height(4.dp))
         // This sheet carries the per-job Shaft height and Liner compression alongside the
         // app-wide look prefs, so the note points at their captions.
         OptionsScopeNote(hasJobControls = true)
