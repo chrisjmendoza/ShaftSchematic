@@ -421,6 +421,8 @@ fun ShaftViewModel.removeTaper(id: String, target: SpecTarget = SpecTarget.ORIGI
  *  • majorDiaMm — major diameter
  *  • pitchMm — pitch in mm (e.g., 4 TPI ⇒ 6.35 mm)
  *  • excludeFromOAL — when true, thread length is excluded from OAL/measure-space
+ *  • reliefLenMm / reliefDiaMm / reliefAtAft — the relief groove (0/0 = none), stored verbatim;
+ *    part of the thread's span, so it moves nothing
  *
  * UI contract: Screen & Route pass arguments in exactly this order.
  * We also construct `Threads(...)` with named arguments to avoid pitch/major swaps.
@@ -433,6 +435,9 @@ fun ShaftViewModel.addThreadAt(
     excludeFromOAL: Boolean = false,
     isAftEnd: Boolean = true,
     metricDesignation: String? = null,
+    reliefLenMm: Float = 0f,
+    reliefDiaMm: Float = 0f,
+    reliefAtAft: Boolean = false,
     target: SpecTarget = SpecTarget.ORIGINAL,
 ) {
     val id = newId()
@@ -451,6 +456,9 @@ fun ShaftViewModel.addThreadAt(
                     excludeFromOAL = excludeFromOAL,
                     isAftEnd = isAftEnd,
                     metricDesignation = metricDesignation?.ifBlank { null },
+                    reliefLenMm = max(0f, reliefLenMm),
+                    reliefDiaMm = max(0f, reliefDiaMm),
+                    reliefAtAft = reliefAtAft,
                 )
             ) + split.spec.threads
         )
@@ -561,6 +569,33 @@ fun ShaftViewModel.setThreadEndPosition(
             l[idx] = l[idx].copy(isAftEnd = isAft)
         }
     ).syncExcludedThreadPositions()
+}
+
+/**
+ * Sets a thread's relief groove — length, Ø and which end carries it — stored verbatim (negative
+ * input floors at 0; `0` length or Ø means no relief, which is how the card's switch clears it).
+ * The relief is part of the thread's stored span, so nothing else moves: start, length and every
+ * other component stay exactly as authored. Through [updateSpec], so it undoes and reaches the
+ * Final drawing when [target] says so.
+ */
+fun ShaftViewModel.setThreadRelief(
+    id: String,
+    reliefLenMm: Float,
+    reliefDiaMm: Float,
+    reliefAtAft: Boolean,
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) = updateSpec(target) { s ->
+    val idx = s.threads.indexOfFirst { it.id == id }
+    if (idx == -1) s
+    else s.copy(
+        threads = s.threads.toMutableList().also { l ->
+            l[idx] = l[idx].copy(
+                reliefLenMm = max(0f, reliefLenMm),
+                reliefDiaMm = max(0f, reliefDiaMm),
+                reliefAtAft = reliefAtAft,
+            )
+        }
+    )
 }
 
 /** Remove a [Threads] segment by id. Recoverable via [undoEdit] (spec + order together). */

@@ -1384,17 +1384,10 @@ internal fun drawShaftProfile(
         val r = rPx(ln.odMm)
         drawLinerOutlinePdf(c, cy, x0, x1, r, linerShoulderSpecs(ln, x0, x1, r, xAt, rPx), outline, dimPaint)
     }
-    // Threads — envelope outline + the ONE shared hatch (`drawThreadHatch`, same
-    // pitch/lean/paint recipe on every sheet).
+    // Threads — envelope outline + the ONE shared hatch and relief groove (`drawThreadPdf`,
+    // same pitch/lean/paint recipe and the same span split on every sheet).
     val hatchPaint = Paint(outline).apply { strokeWidth = DIM_PT * 0.6f; alpha = 160 }
-    spec.threads.forEach { th ->
-        if (th.lengthMm <= 0f || th.majorDiaMm <= 0f) return@forEach
-        val x0 = xAt(th.startFromAftMm); val x1 = xAt(th.startFromAftMm + th.lengthMm)
-        val r = rPx(th.majorDiaMm); val top = cy - r; val bot = cy + r
-        drawThreadHatch(c, x0, x1, top, bot, hatchPaint, th)
-        c.drawLine(x0, top, x1, top, outline); c.drawLine(x0, bot, x1, bot, outline)
-        c.drawLine(x0, top, x0, bot, outline); c.drawLine(x1, top, x1, bot, outline)
-    }
+    spec.threads.forEach { th -> drawThreadPdf(c, th, cy, xAt, rPx, outline, hatchPaint) }
     // Coupler bolt slots — reference cutouts, same as the main schematic.
     val slotFill = Paint(outline).apply { style = Paint.Style.FILL; alpha = 40 }
     drawCouplerBoltSlots(c, spec.couplerBoltSlots, spec, cy, xAt, rPx, outline, slotFill)

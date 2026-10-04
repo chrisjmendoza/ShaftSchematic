@@ -23,6 +23,10 @@ import com.android.shaftschematic.geom.UNDERCUT_SECTION_FILL_ALPHA
 import com.android.shaftschematic.geom.maxOuterDiaOver
 import com.android.shaftschematic.geom.outerDiaAt
 import com.android.shaftschematic.geom.planDiaCallouts
+import com.android.shaftschematic.geom.hatchSpan
+import com.android.shaftschematic.geom.reliefSpan
+import com.android.shaftschematic.geom.shoulderEndMm
+import com.android.shaftschematic.geom.threadSurfaceSegs
 import com.android.shaftschematic.geom.undercutNestingForest
 import com.android.shaftschematic.model.*
 import com.android.shaftschematic.settings.PdfPrefs
@@ -530,7 +534,8 @@ private fun drawUndercutDirectionRow(
  * Outer-surface segments derived straight from the drawn spec — the fallback used when the
  * caller supplied no resolved component list. Mirrors `surfaceSegsFrom`'s rules (bodies
  * constant Ø, liners constant Ø or stepped through the SAME `linerSurfaceSegs` a shouldered
- * liner resolves to, tapers linear, threads at their major-Ø envelope, coupler bolt slots
+ * liner resolves to, tapers linear, threads at their major-Ø envelope with a relief groove at
+ * its own Ø through the SAME `threadSurfaceSegs` a resolved thread maps to, coupler bolt slots
  * skipped as radial cutouts rather than surface material).
  */
 private fun surfaceSegsFromSpec(spec: ShaftSpec): List<SurfaceSeg> = buildList {
@@ -547,7 +552,9 @@ private fun surfaceSegsFromSpec(spec: ShaftSpec): List<SurfaceSeg> = buildList {
         )
     }
     spec.tapers.forEach { add(SurfaceSeg(it.startFromAftMm, it.startFromAftMm + it.lengthMm, it.startDiaMm, it.endDiaMm)) }
-    spec.threads.forEach { add(SurfaceSeg(it.startFromAftMm, it.startFromAftMm + it.lengthMm, it.majorDiaMm, it.majorDiaMm)) }
+    spec.threads.forEach {
+        addAll(threadSurfaceSegs(it.startFromAftMm, it.lengthMm, it.majorDiaMm, it.reliefLenMm, it.reliefDiaMm, it.reliefAtAft))
+    }
 }.filter { it.endMm > it.startMm && (it.diaStartMm > 0f || it.diaEndMm > 0f) }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -1074,17 +1081,41 @@ private fun drawUndercutWindowProfile(
         if (ln.lengthMm > 0f) drawConstant(ln.startFromAftMm, ln.startFromAftMm + ln.lengthMm, ln.odMm, linerFill, dimPaint)
     }
     val hatchPaint = Paint(outline).apply { strokeWidth = outline.strokeWidth * (UC_DIM_PT * 0.6f / UC_OUTLINE_PT); alpha = 160 }
+    // Threads — a window-clipped slice of the same split every sheet draws
+    // (`geom/ThreadReliefMath.kt`): the hatch and the major-Ø envelope over the clipped HATCH span
+    // only, the relief groove as its reduced rectangle where the window reaches it. A face is
+    // drawn only at an edge that is the thread's own, never at the window's cut (same rule as
+    // every other component here); the face where the relief meets its shoulder spans the relief
+    // Ø only, since the shoulder draws its own larger face there.
     spec.threads.forEach { th ->
         if (th.lengthMm <= 0f || th.majorDiaMm <= 0f) return@forEach
-        val s = th.startFromAftMm; val e = s + th.lengthMm
-        val a = max(s, w0Mm); val b = min(e, w1Mm)
-        if (b - a <= UC_EDGE_EPS_MM) return@forEach
         val r = rAt(th.majorDiaMm)
-        drawThreadHatch(c, xAt(a), xAt(b), cy - r, cy + r, hatchPaint, th)
-        c.drawLine(xAt(a), cy - r, xAt(b), cy - r, outline)
-        c.drawLine(xAt(a), cy + r, xAt(b), cy + r, outline)
-        if (inside(s)) c.drawLine(xAt(a), cy - r, xAt(a), cy + r, outline)
-        if (inside(e)) c.drawLine(xAt(b), cy - r, xAt(b), cy + r, outline)
+        th.hatchSpan()?.let { hs ->
+            val a = max(hs.startMm, w0Mm); val b = min(hs.endMm, w1Mm)
+            if (b - a > UC_EDGE_EPS_MM) {
+                drawThreadHatch(c, xAt(a), xAt(b), cy - r, cy + r, hatchPaint, th)
+                c.drawLine(xAt(a), cy - r, xAt(b), cy - r, outline)
+                c.drawLine(xAt(a), cy + r, xAt(b), cy + r, outline)
+                if (inside(hs.startMm)) c.drawLine(xAt(a), cy - r, xAt(a), cy + r, outline)
+                if (inside(hs.endMm)) c.drawLine(xAt(b), cy - r, xAt(b), cy + r, outline)
+            }
+        }
+        th.reliefSpan()?.let { rs ->
+            val a = max(rs.startMm, w0Mm); val b = min(rs.endMm, w1Mm)
+            if (b - a <= UC_EDGE_EPS_MM) return@let
+            val rr = rAt(rs.diaMm)
+            c.drawLine(xAt(a), cy - rr, xAt(b), cy - rr, outline)
+            c.drawLine(xAt(a), cy + rr, xAt(b), cy + rr, outline)
+            val shoulderMm = rs.shoulderEndMm(th.reliefAtAft)
+            val xs = if (th.reliefAtAft) xAt(a) else xAt(b)
+            if (inside(shoulderMm)) c.drawLine(xs, cy - rr, xs, cy + rr, outline)
+            // A relief that takes the whole thread has no hatched span to close its other end.
+            if (th.hatchSpan() == null) {
+                val otherMm = if (th.reliefAtAft) rs.endMm else rs.startMm
+                val xo = if (th.reliefAtAft) xAt(b) else xAt(a)
+                if (inside(otherMm)) c.drawLine(xo, cy - rr, xo, cy + rr, outline)
+            }
+        }
     }
 }
 

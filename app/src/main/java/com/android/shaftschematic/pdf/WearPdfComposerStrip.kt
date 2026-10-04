@@ -609,7 +609,8 @@ private const val BLANK_RULE_TRAIL_PT = 6f
  * pitch at the stub's own drawn height, thinned by the app-wide density ([threadHatchSpacing]);
  * with no end thread to read, the reference thread stands in for both. Only a
  * [WearStripEndStyle.THREAD_END] end gets one: it shows the whole remaining shaft, so it carries
- * a flat outer edge and this hatch instead of an S-break.
+ * a flat outer edge and this hatch instead of an S-break. Symbolic, like the overlay's stub: it
+ * hatches plain across the whole band and never draws the thread's relief groove.
  */
 private fun drawThreadStubHatch(
     c: Canvas, x0: Float, top: Float, x1: Float, bot: Float, outline: Paint, thread: Threads?,

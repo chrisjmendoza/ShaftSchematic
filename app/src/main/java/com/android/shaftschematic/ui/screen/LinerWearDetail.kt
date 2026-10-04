@@ -1275,6 +1275,10 @@ private fun DrawScope.drawDimSegment(x0: Float, x1: Float, y: Float, label: Stri
  * construction as `ShaftRenderer.drawThreadHatch`. Used only for shaft-END thread stubs, which
  * get a flat outer edge instead of an S-curve break. Shared with the undercut detail overlay,
  * which applies the same rule to a window end that lands on a threaded shaft end.
+ *
+ * A stub is a SYMBOL for the shaft continuing into its thread, not a drawing of the thread, so it
+ * hatches plain across its whole band and never shows a relief groove (the PDF strip stub, its
+ * port, does the same); the relief draws on the whole-shaft profiles (`geom/ThreadReliefMath.kt`).
  */
 internal fun DrawScope.drawThreadStubHatch(
     x0: Float, top: Float, x1: Float, bot: Float, color: Color, lean: Float, spacing: Float,

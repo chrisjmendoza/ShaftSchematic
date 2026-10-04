@@ -4,6 +4,9 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
+import com.android.shaftschematic.geom.hatchSpan
+import com.android.shaftschematic.geom.reliefSpan
+import com.android.shaftschematic.geom.shoulderEndMm
 import com.android.shaftschematic.geom.threadHatchLean
 import com.android.shaftschematic.geom.threadHatchRun
 import com.android.shaftschematic.geom.threadHatchSpacing
@@ -11,6 +14,7 @@ import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Threads
 import com.android.shaftschematic.util.ThreadHatchStyle
 import kotlin.math.abs
+import kotlin.math.max
 import kotlin.math.min
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -59,6 +63,13 @@ internal fun drawSimpleShaftProfile(
     taperFill: Paint?,
     linerFill: Paint?,
     dimStrokeWidthPt: Float,
+    /**
+     * Whether a thread's relief groove draws. The undercut document shows it (its detail strips
+     * do, and the main profile must agree); the WEAR document passes false — it omits machining
+     * detail by product decision, the same posture as its keyway, blend and liner-shoulder
+     * omissions — so a relieved thread prints there as the plain hatched envelope.
+     */
+    threadRelief: Boolean = true,
 ) {
     // ── Shade fills first (drawn under all outlines) ──────────────────────
     bodyFill?.let { f ->
@@ -140,16 +151,10 @@ internal fun drawSimpleShaftProfile(
         c.drawLine(x0, top, x1, top, outline); c.drawLine(x0, bot, x1, bot, outline)
         c.drawLine(x0, top, x0, bot, dimPaint); c.drawLine(x1, top, x1, bot, dimPaint)
     }
-    // Threads — outline envelope + slanted hatch so the machinist knows the zone is threaded.
+    // Threads — outline envelope + slanted hatch so the machinist knows the zone is threaded,
+    // and the relief groove where one is set (the ONE shared [drawThreadPdf]).
     val hatchPaint = Paint(outline).apply { strokeWidth = dimStrokeWidthPt * 0.6f; alpha = 160 }
-    spec.threads.forEach { th ->
-        if (th.lengthMm <= 0f || th.majorDiaMm <= 0f) return@forEach
-        val x0 = xAt(th.startFromAftMm); val x1 = xAt(th.startFromAftMm + th.lengthMm)
-        val r = rPx(th.majorDiaMm); val top = cy - r; val bot = cy + r
-        drawThreadHatch(c, x0, x1, top, bot, hatchPaint, th)
-        c.drawLine(x0, top, x1, top, outline); c.drawLine(x0, bot, x1, bot, outline)
-        c.drawLine(x0, top, x0, bot, outline); c.drawLine(x1, top, x1, bot, outline)
-    }
+    spec.threads.forEach { th -> drawThreadPdf(c, th, cy, xAt, rPx, outline, hatchPaint, relief = threadRelief) }
     // Coupler bolt slots — reference cutouts, same as the main schematic.
     val slotFill = Paint(outline).apply { style = Paint.Style.FILL; alpha = 40 }
     drawCouplerBoltSlots(c, spec.couplerBoltSlots, spec, cy, xAt, rPx, outline, slotFill)
@@ -187,6 +192,56 @@ private fun simpleBodyBreak(
         rightBeg = (mid + half).coerceIn(geomRect.left, geomRect.right),
         amplitudePt = amp,
     )
+}
+
+/**
+ * One whole thread on a PDF sheet — the ONE thread pass the schematic (`drawThreads`), the
+ * runout/consolidated profile and this simple profile all call, so a thread (relieved or not)
+ * prints pixel-identically on every sheet (`ThreadHatchParityTest`). The span splits through
+ * `geom/ThreadReliefMath.kt`:
+ * - the hatch and the major-Ø envelope (top/bottom lines + both end faces) cover the HATCH span
+ *   only — the envelope's face on the relief side is the full-height step from the groove up to
+ *   the major diameter;
+ * - the relief draws as a reduced rectangle: top/bottom lines at the relief radius, no hatch, and
+ *   at the shoulder end the thread's own face spans the relief Ø only — the neighbouring body or
+ *   taper draws its own larger face there, so the silhouette steps down into the groove and the
+ *   shoulder face belongs to the shoulder. A relief that takes the whole thread closes its other
+ *   end at the relief Ø too.
+ * No hidden lines: the step is a visible silhouette. With [relief] false (the wear document)
+ * the groove is ignored and the whole stored span prints as the plain hatched envelope.
+ */
+internal fun drawThreadPdf(
+    c: Canvas,
+    th: Threads,
+    cy: Float,
+    xAt: (Float) -> Float,
+    rPx: (Float) -> Float,
+    outline: Paint,
+    hatchPaint: Paint,
+    relief: Boolean = true,
+) {
+    if (th.lengthMm <= 0f || th.majorDiaMm <= 0f) return
+    val r = rPx(th.majorDiaMm); val top = cy - r; val bot = cy + r
+    val plain = if (relief) th else th.copy(reliefLenMm = 0f, reliefDiaMm = 0f)
+    val hatch = plain.hatchSpan()
+    hatch?.let { hs ->
+        val x0 = xAt(hs.startMm); val x1 = xAt(hs.endMm)
+        drawThreadHatch(c, min(x0, x1), max(x0, x1), top, bot, hatchPaint, th)
+        // Envelope on top of the hatch
+        c.drawLine(x0, top, x1, top, outline); c.drawLine(x0, bot, x1, bot, outline)
+        c.drawLine(x0, top, x0, bot, outline); c.drawLine(x1, top, x1, bot, outline)
+    }
+    plain.reliefSpan()?.let { rs ->
+        val x0 = xAt(rs.startMm); val x1 = xAt(rs.endMm)
+        val rr = rPx(rs.diaMm)
+        c.drawLine(x0, cy - rr, x1, cy - rr, outline); c.drawLine(x0, cy + rr, x1, cy + rr, outline)
+        val xs = xAt(rs.shoulderEndMm(th.reliefAtAft))
+        c.drawLine(xs, cy - rr, xs, cy + rr, outline)
+        if (hatch == null) {
+            val xo = if (th.reliefAtAft) x1 else x0
+            c.drawLine(xo, cy - rr, xo, cy + rr, outline)
+        }
+    }
 }
 
 /**

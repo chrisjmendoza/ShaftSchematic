@@ -251,7 +251,8 @@ fun ShaftScreen(
                  keywayOffsetFromSetMm: Float, keywaySpooned: Boolean,
                  keywayUnit: UnitSystem?) -> Unit,
     onAddThread: (startMm: Float, lengthMm: Float, majorDiaMm: Float, pitchMm: Float, excludeFromOAL: Boolean,
-                  isAftEnd: Boolean, metricDesignation: String?) -> Unit,
+                  isAftEnd: Boolean, metricDesignation: String?,
+                  reliefLenMm: Float, reliefDiaMm: Float, reliefAtAft: Boolean) -> Unit,
     onAddLiner: (Float, Float, Float, LinerAuthoredReference, LinerShoulderDraft) -> Unit,
     onAddCouplerBoltSlot: (startMm: Float, holeDiaMm: Float, count: Int, spacingMm: Float, through: Boolean, depthMm: Float, reference: SlotAuthoredReference, holeStyle: BoltHoleStyle, clocking: BoltHoleClocking) -> Unit,
 
@@ -294,6 +295,7 @@ fun ShaftScreen(
     onSetKeyways90Cw: (Boolean) -> Unit,
     onSetThreadExcludeFromOal: (id: String, excludeFromOAL: Boolean) -> Unit,
     onSetThreadEndPosition: (id: String, isAft: Boolean) -> Unit,
+    onSetThreadRelief: (id: String, reliefLenMm: Float, reliefDiaMm: Float, reliefAtAft: Boolean) -> Unit,
 
     // Removes by stable id
     onRemoveBody: (String) -> Unit,
@@ -667,6 +669,7 @@ fun ShaftScreen(
 
                 onSetThreadExcludeFromOal = onSetThreadExcludeFromOal,
                 onSetThreadEndPosition = onSetThreadEndPosition,
+                onSetThreadRelief = onSetThreadRelief,
 
                 onRemoveBody = onRemoveBody,
                 onRemoveTaper = onRemoveTaper,
@@ -730,12 +733,14 @@ fun ShaftScreen(
                     initialMajorDiaMm = sessionAddDefaults.threadMajorDiaMm,
                     initialPitchMm = sessionAddDefaults.threadPitchMm,
                     dialogUnitConverterEnabled = dialogUnitConverterEnabled,
-                    onSubmit = { startMm, lengthMm, majorDiaMm, pitchMm, excludeFromOAL, isAftEnd, metricDesignation ->
+                    onSubmit = { startMm, lengthMm, majorDiaMm, pitchMm, excludeFromOAL, isAftEnd, metricDesignation,
+                                 reliefLenMm, reliefDiaMm, reliefAtAft ->
                         addThreadOpen = false
                         // IMPORTANT: argument order is start, length, majorDia, pitch, excludeFromOAL,
-                        // isAftEnd, metricDesignation. The dialog already converts TPI to pitch (or
-                        // reads pitch straight off a metric designation) so this call never re-derives
-                        // it. Keep this aligned with `ShaftRoute`/`ShaftViewModel.addThreadAt`.
+                        // isAftEnd, metricDesignation, then the relief (length, Ø, end). The dialog
+                        // already converts TPI to pitch (or reads pitch straight off a metric
+                        // designation) so this call never re-derives it. Keep this aligned with
+                        // `ShaftRoute`/`ShaftViewModel.addThreadAt`.
                         onAddThread(
                             startMm,
                             lengthMm,
@@ -743,7 +748,10 @@ fun ShaftScreen(
                             pitchMm,
                             excludeFromOAL,
                             isAftEnd,
-                            metricDesignation
+                            metricDesignation,
+                            reliefLenMm,
+                            reliefDiaMm,
+                            reliefAtAft,
                         )
                     },
                     onCancel = { addThreadOpen = false }

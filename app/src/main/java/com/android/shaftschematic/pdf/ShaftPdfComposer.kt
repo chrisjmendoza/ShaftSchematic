@@ -992,20 +992,10 @@ internal fun drawThreads(
     // app-wide density and slant, on a 60%-dim-weight alpha-160 paint. A per-sheet hatch
     // style made the same thread read differently across documents (on-device direction:
     // match them — no sense in different forms with different outputs).
+    // The thread itself — hatch span, envelope and any relief groove — draws through the ONE
+    // shared pass every sheet calls (`drawThreadPdf`).
     val hatchPaint = Paint(outline).apply { strokeWidth = dim.strokeWidth * 0.6f; alpha = 160 }
-    threads.forEach { th ->
-        if (th.lengthMm <= 0f || th.majorDiaMm <= 0f) return@forEach
-        val x0 = xAt(th.startFromAftMm); val x1 = xAt(th.startFromAftMm + th.lengthMm)
-        val r = rPx(th.majorDiaMm); val top = cy - r; val bot = cy + r
-
-        drawThreadHatch(c, min(x0, x1), max(x0, x1), top, bot, hatchPaint, th)
-
-        // Envelope on top of the hatch
-        c.drawLine(x0, top, x1, top, outline)
-        c.drawLine(x0, bot, x1, bot, outline)
-        c.drawLine(x0, top, x0, bot, outline)
-        c.drawLine(x1, top, x1, bot, outline)
-    }
+    threads.forEach { th -> drawThreadPdf(c, th, cy, xAt, rPx, outline, hatchPaint) }
 }
 
 /**

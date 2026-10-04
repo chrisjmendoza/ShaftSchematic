@@ -493,6 +493,18 @@ internal const val CAPTURED_KW_PREFIX = "Captured KW:"
 internal fun effectiveKeywaySpooned(spooned: Boolean, offsetMm: Float): Boolean =
     spooned && offsetMm <= 0f
 
+/** Label of the line printed directly under a relieved thread's "Thread:" line. */
+internal const val THREAD_RELIEF_PREFIX = "Thread relief:"
+
+/**
+ * The footer line for a relieved thread ([Threads.hasRelief]): "Thread relief: <len> × Ø <dia>",
+ * the STORED values in the thread's own display unit [unit] (dual-aware). The stored values print
+ * verbatim — the drawn clamps of `geom/ThreadReliefMath.kt` never reach a printed number.
+ */
+internal fun threadReliefFooterLine(th: Threads, unit: UnitSystem, dual: Boolean): String =
+    "$THREAD_RELIEF_PREFIX ${formatLenWithUnitDual(th.reliefLenMm.toDouble(), unit, dual)} × " +
+        "Ø ${formatDiaWithUnitDual(th.reliefDiaMm.toDouble(), unit, dual)}"
+
 // The footer carries NO compression note. The S-break pair IS the drawing's statement that a
 // body run is foreshortened — a line of prose repeating it is redundant (on-device direction),
 // and it cost a footer row on exactly the long shafts with the least room to spare.
@@ -565,15 +577,21 @@ internal fun buildFooterEndColumns(
     // The length term still resolves the thread's own display unit (its id already carries
     // an mm override when metric — see DisplayUnits/ShaftViewModel). Non-metric threads keep
     // today's dia × TPI-or-mm-pitch × length line, unchanged apart from dual-awareness.
-    fun threadLine(th: Threads): String {
+    fun threadLines(th: Threads): List<String> = buildList {
         val thUnit = displayUnits.unitFor(th.id)
-        return line("Thread:") {
+        add(line("Thread:") {
             val designation = th.metricDesignation
             if (designation != null) {
                 "$designation × ${formatLenWithUnitDual(th.lengthMm.toDouble(), thUnit, dual)}"
             } else {
                 "${formatDiaWithUnitDual(th.majorDiaMm.toDouble(), thUnit, dual)} × ${fmtPitch(th.pitchMm, thUnit)} × ${formatLenWithUnitDual(th.lengthMm.toDouble(), thUnit, dual)}"
             }
+        })
+        // A relieved thread states its groove right under it, in the thread's own unit: the
+        // relief is a machining value the drawing only shows to scale. Blank drafts print no
+        // relief line — a write-in sheet has no relief to describe.
+        if (!blankValues && th.hasRelief) {
+            add(threadReliefFooterLine(th, thUnit, dual))
         }
     }
 
@@ -585,7 +603,7 @@ internal fun buildFooterEndColumns(
         }
     }
     if (cfg.showAftThread && ends.aftThread) {
-        getAftEndThread(spec)?.let { th -> aft += threadLine(th) }
+        getAftEndThread(spec)?.let { th -> aft += threadLines(th) }
     }
 
     val fwd = mutableListOf<String>()
@@ -596,7 +614,7 @@ internal fun buildFooterEndColumns(
         }
     }
     if (cfg.showFwdThread && ends.fwdThread) {
-        getFwdEndThread(spec)?.let { th -> fwd += threadLine(th) }
+        getFwdEndThread(spec)?.let { th -> fwd += threadLines(th) }
     }
 
     // Cross-drilled coupler bolt holes — the plain coupling end's spec: hole Ø, the distance

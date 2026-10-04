@@ -970,7 +970,8 @@ On-device request following the worn-sections review:
     end caps stand at the neighbour's radius. Requires a resolve pass — without
     `resolvedComponents` the faces simply stay square, the schematic's fallback. The wear
     document deliberately keeps square faces (it omits machining detail, same posture as
-    its keyway omission).
+    its keyway omission — and its thread-relief omission: `drawSimpleShaftProfile(threadRelief
+    = false)`).
   - *Liner grey, conditionally:* liners follow the `shadedLiners` pref like bodies and
     tapers **unless the sheet prints Ø values inside the profile** — against a grey liner
     every sheet-white knockout reads as a pasted box (on-device request), so on such a

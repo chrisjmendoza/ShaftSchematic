@@ -49,6 +49,7 @@ import com.android.shaftschematic.model.BoltHoleStyle
 import com.android.shaftschematic.model.SlotAuthoredReference
 import com.android.shaftschematic.model.keywayCount
 import com.android.shaftschematic.model.suggestedBodyKeywayEnd
+import com.android.shaftschematic.model.suggestedThreadReliefAtAft
 import com.android.shaftschematic.ui.input.classifyTaperSideByMidpoint
 import com.android.shaftschematic.ui.input.taperAddDiameterOrder
 import com.android.shaftschematic.ui.order.ComponentKind
@@ -814,6 +815,8 @@ internal fun slotStartFieldLabel(isFwd: Boolean, isCross: Boolean, unit: UnitSys
 // When countInOal=false, show "Thread end: AFT | FWD" chips and hide the Start field —
 // mirroring ComponentCarousel.kt ResolvedThread !includeInOal block.
 // Do not remove the AFT/FWD branch; isAftEnd must be passed through to addThreadAt().
+// The "Thread relief" switch + Relief length / Relief Ø + "Relief at" chips mirror the thread
+// card's ThreadReliefCardSection; the relief must be passed through to addThreadAt() too.
 @Composable
 fun AddThreadDialog(
     unit: UnitSystem,
@@ -825,7 +828,8 @@ fun AddThreadDialog(
     /** Settings → Drawing → "Unit converter in Add dialogs": gates the title-row calculator icon. */
     dialogUnitConverterEnabled: Boolean = false,
     onSubmit: (startMm: Float, lengthMm: Float, majorDiaMm: Float, pitchMm: Float, excludeFromOAL: Boolean,
-               isAftEnd: Boolean, metricDesignation: String?) -> Unit,
+               isAftEnd: Boolean, metricDesignation: String?,
+               reliefLenMm: Float, reliefDiaMm: Float, reliefAtAft: Boolean) -> Unit,
     onCancel: () -> Unit,
 ) {
     val d = rememberAddDialogDefaults(spec)
@@ -843,6 +847,15 @@ fun AddThreadDialog(
     var tpiText by remember(initialTpi) { mutableStateOf(formatTpi(initialTpi)) }
     var countInOal by remember { mutableStateOf(true) }
     var isAftEnd by remember { mutableStateOf(true) }
+
+    // Thread relief: local switch (default OFF) revealing the two fields and the end chips. While
+    // it is off the dialog submits relief 0/0 whatever the hidden fields hold. The end is seeded
+    // once, when the switch is first turned on, from the thread's position at that moment.
+    var reliefOn by remember { mutableStateOf(false) }
+    var reliefLenText by remember { mutableStateOf("") }
+    var reliefDiaText by remember { mutableStateOf("") }
+    var reliefAtAft by remember { mutableStateOf(false) }
+    var reliefEndSeeded by remember { mutableStateOf(false) }
 
     // Imperial (TPI, entered in the session unit) vs Metric (a self-declaring M-designation
     // that always names its own mm values — see `ThreadDesignation`).
@@ -947,7 +960,39 @@ fun AddThreadDialog(
                     Spacer(Modifier.height(8.dp))
                 }
                 CommitNumField("Length (${abbr(unit)})", length) { length = it }
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(4.dp))
+                // Thread relief — mirrors the thread card's `ThreadReliefCardSection` (parity rule).
+                ThreadReliefSwitchRow(checked = reliefOn, testTag = "add_thread_relief") { on ->
+                    reliefOn = on
+                    if (on) {
+                        val seed = threadReliefForSwitch(
+                            on = true,
+                            currentLenMm = toMmOrNull(reliefLenText, unit) ?: 0f,
+                            currentDiaMm = toMmOrNull(reliefDiaText, unit) ?: 0f,
+                            rememberedLenMm = 0f,
+                            rememberedDiaMm = 0f,
+                            majorDiaMm = majorMm,
+                            pitchMm = pitchMm,
+                        )
+                        if (reliefLenText.isBlank()) reliefLenText = toDisplayString(seed.lenMm, unit)
+                        if (reliefDiaText.isBlank() && seed.diaMm > 0f) reliefDiaText = toDisplayString(seed.diaMm, unit)
+                        if (!reliefEndSeeded) {
+                            reliefAtAft = suggestedThreadReliefAtAft(
+                                startFromAftMm = startMm, lengthMm = lengthMm, excludeFromOAL = !countInOal,
+                                isAftEnd = isAftEnd, overallLengthMm = spec.overallLengthMm,
+                            )
+                            reliefEndSeeded = true
+                        }
+                    }
+                }
+                if (reliefOn) {
+                    CommitNumField("Relief length (${abbr(unit)})", reliefLenText) { reliefLenText = it }
+                    Spacer(Modifier.height(8.dp))
+                    CommitNumField("Relief Ø (${abbr(unit)})", reliefDiaText) { reliefDiaText = it }
+                    Spacer(Modifier.height(8.dp))
+                    ThreadReliefEndChips(atAft = reliefAtAft, testTag = "add_thread_relief_end") { reliefAtAft = it }
+                }
+                Spacer(Modifier.height(8.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -966,7 +1011,17 @@ fun AddThreadDialog(
             Button(enabled = ok, onClick = {
                 val excludeFromOAL = !countInOal
                 val designation = if (metricMode) parsedDesignation?.format() else null
-                val action = { onSubmit(startMm, lengthMm, majorMm, pitchMm, excludeFromOAL, isAftEnd, designation) }
+                val relief = threadReliefSubmitValues(
+                    reliefOn,
+                    toMmOrNull(reliefLenText, unit),
+                    toMmOrNull(reliefDiaText, unit),
+                )
+                val action = {
+                    onSubmit(
+                        startMm, lengthMm, majorMm, pitchMm, excludeFromOAL, isAftEnd, designation,
+                        relief.lenMm, relief.diaMm, reliefAtAft,
+                    )
+                }
                 // Excluded threads don't live on the shaft span, so skip collision for them.
                 val warnings = if (excludeFromOAL) emptyList()
                                else collectAddWarnings(spec, startMm, lengthMm)

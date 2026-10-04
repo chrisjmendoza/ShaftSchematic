@@ -56,4 +56,19 @@ object AddDefaultsConfig {
      * slot. A starting value the user types over, never a derivation.
      */
     const val KEYWAY_INSET_IN = 0.5f
+
+    // ---- Thread relief defaults -----------------------------------------------
+    /**
+     * Relief length, in pitches, a thread relief takes when it is first switched on with nothing
+     * typed — the shop convention of 1½–2 pitches (4 TPI → 0.375 in). A starting value the user
+     * types over, never a derivation.
+     */
+    const val THREAD_RELIEF_LEN_PITCHES = 1.5f
+
+    /**
+     * How far below the major Ø, in pitches, a new thread relief's Ø starts (major − 1.3 p): just
+     * under a 60° thread's root, which sits ≈ 1.08 p below the major. A starting value the user
+     * types over, never a derivation.
+     */
+    const val THREAD_RELIEF_DIA_BELOW_MAJOR_PITCHES = 1.3f
 }

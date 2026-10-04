@@ -63,6 +63,13 @@ Specifically:
   AddBodyDialog/AddTaperDialog under the W × D row; it writes through the typed-value path and
   never fills on its own.
 - **Taper AFT/FWD reference**: `AddTaperDialog` must show AFT/FWD direction chips.
+- **Thread relief**: the thread card and `AddThreadDialog` both carry the "Thread relief"
+  switch (`thread_relief` / `add_thread_relief`) + Relief length + Relief Ø + "Relief at:
+  AFT | FWD" chips, the last three shown only while it is on (shared
+  `ui/screen/ThreadReliefSection.kt`). Relief ⇔ `reliefLenMm > 0 && reliefDiaMm > 0` — no
+  stored flag; the card derives the switch from the stored length, the dialog holds it as local
+  state and submits 0/0 while off. The relief is PART of the thread's stored span: adding one
+  moves nothing. Drawn by every thread site from ONE split, `geom/ThreadReliefMath.kt`.
 - **Captured keyway**: the taper card and `AddTaperDialog` both carry the "Captured keyway"
   toggle + the "KW Inset from SET" field shown only while it is on (same on the body pair,
   above). Captured ⇔ inset > 0 — no stored flag; the cards derive the toggle from the offset,
@@ -627,7 +634,7 @@ the runout sheet keep their flat span separate (ONE shared body pass, `drawBodyR
 in `pdf/BodyRunDraw.kt`) because that span still hosts the S-break pair
 (the break is cut into the FLAT span, the curves stay whole, and the break decision stays on the
 run's FULL drawn width). The wear document deliberately keeps square faces — it omits machining
-detail by product decision, the same posture as its keyway omission. Pure curve math in `geom/BlendProfileMath.kt`, deliberately
+detail by product decision, the same posture as its keyway omission (and the thread relief: `drawSimpleShaftProfile(threadRelief = false)` prints a relieved thread as the plain hatched envelope there). Pure curve math in `geom/BlendProfileMath.kt`, deliberately
 a general "join two radii across an axial span" primitive (`(x, radius)` points, the
 `KeywaySilhouetteMath`/`SurfaceProfileMath` convention) so the queued liner-shoulder fillet and the
 undercut end radius call it rather than reimplementing it. `surfaceSegsFrom` takes the blends so an
