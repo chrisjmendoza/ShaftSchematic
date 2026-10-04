@@ -35,11 +35,13 @@ import com.android.shaftschematic.util.UnitSystem
 
 /**
  * Carousel editor card for a thread: the "Include thread in OAL" switch, the imperial
- * Major Ø/TPI pair or the metric designation field, and Length.
+ * Major Ø/TPI pair or the metric designation field, Length, and the thread relief
+ * ([ThreadReliefCardSection]).
  *
  * The `!includeInOal` block is the one `AddThreadDialog` must mirror by the add-dialog-parity
  * invariant — an excluded thread swaps its Start field for the "Thread end: AFT | FWD" chips,
- * and the dialog has to do the same. "Show name on drawing" and the "Prints in: in | mm" chip at
+ * and the dialog has to do the same. The relief switch, its two fields and its "Relief at" chips
+ * are under the same rule."Show name on drawing" and the "Prints in: in | mm" chip at
  * the card's foot are the documented card-only carve-outs.
  *
  * [f1] and [startValidator] are supplied by [ComponentPagerCard] because the body card shares
@@ -63,6 +65,7 @@ internal fun ThreadPagerCard(
     onUpdateThreadShowLabel: (Int, Boolean) -> Unit,
     onSetThreadExcludeFromOal: (id: String, excludeFromOAL: Boolean) -> Unit,
     onSetThreadEndPosition: (id: String, isAft: Boolean) -> Unit,
+    onSetThreadRelief: (id: String, reliefLenMm: Float, reliefDiaMm: Float, reliefAtAft: Boolean) -> Unit,
     onRemoveThread: (String) -> Unit,
     collidingComponentIds: Set<String>,
     perComponentUnitsEnabled: Boolean,
@@ -165,6 +168,14 @@ internal fun ThreadPagerCard(
         ) { s ->
             toMmOrNull(s, unit)?.let { onUpdateThread(idx, th.startFromAftMm, it, th.majorDiaMm, th.pitchMm, th.metricDesignation) }
         }
+
+        // Thread relief — mirrored in AddThreadDialog under the add-dialog-parity rule.
+        ThreadReliefCardSection(
+            th = th,
+            unit = unit,
+            overallLengthMm = spec.overallLengthMm,
+            onSetThreadRelief = onSetThreadRelief,
+        )
 
         ShowDiaToggleRow(
             label = "Show name on drawing",

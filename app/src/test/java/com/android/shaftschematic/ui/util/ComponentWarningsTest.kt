@@ -553,4 +553,42 @@ class ComponentWarningsTest {
         assertTrue(taperWarningMessages(spec, fwdRef).contains(PAST_OAL_1000))
         assertTrue(specWarningMessages(spec).contains("2 components extend past shaft length"))
     }
+
+    /* ── Thread relief advisories ──────────────────────────────────────────── */
+
+    private fun relievedThread(len: Float, dia: Float) = Threads(
+        startFromAftMm = 0f, lengthMm = 100f, majorDiaMm = 60f, pitchMm = 2f,
+        reliefLenMm = len, reliefDiaMm = dia,
+    )
+
+    private fun threadWarnings(th: Threads) =
+        threadWarningMessages(ShaftSpec(overallLengthMm = 1000f, threads = listOf(th)), th)
+
+    @Test
+    fun `a sound relief raises no advisory`() {
+        assertEquals(emptyList<String>(), threadWarnings(relievedThread(4f, 57f)))
+        assertEquals(emptyList<String>(), threadWarnings(relievedThread(0f, 0f)))
+    }
+
+    @Test
+    fun `relief diameter at or above the thread diameter warns`() {
+        assertTrue(threadWarnings(relievedThread(4f, 60f)).contains(THREAD_RELIEF_DIA_MSG))
+        assertTrue(threadWarnings(relievedThread(4f, 75f)).contains(THREAD_RELIEF_DIA_MSG))
+        assertFalse(threadWarnings(relievedThread(4f, 59.9f)).contains(THREAD_RELIEF_DIA_MSG))
+    }
+
+    @Test
+    fun `relief as long as the thread warns`() {
+        assertTrue(threadWarnings(relievedThread(100f, 57f)).contains(THREAD_RELIEF_LEN_MSG))
+        assertTrue(threadWarnings(relievedThread(150f, 57f)).contains(THREAD_RELIEF_LEN_MSG))
+        assertFalse(threadWarnings(relievedThread(99f, 57f)).contains(THREAD_RELIEF_LEN_MSG))
+    }
+
+    @Test
+    fun `relief advisories never rewrite the typed values`() {
+        val th = relievedThread(150f, 75f)
+        threadWarnings(th)
+        assertEquals(150f, th.reliefLenMm, 0f)
+        assertEquals(75f, th.reliefDiaMm, 0f)
+    }
 }

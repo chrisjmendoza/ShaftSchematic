@@ -515,6 +515,9 @@ fun composeWearPdf(
             // thickness" reaches the liner end faces and the thread hatch too, not just the
             // silhouette.
             dimStrokeWidthPt = outline.strokeWidth * (WEAR_DIM_PT / WEAR_OUTLINE_PT),
+            // The wear document omits machining detail by product decision (keyways, blends,
+            // liner shoulders) — the thread relief groove included.
+            threadRelief = false,
         )
 
         // Vertical-stroke wear bands (liner spots) + pit "X"s at true position on the profile. Bands

@@ -34,7 +34,9 @@ import org.robolectric.annotation.GraphicsMode
  *
  * Pinned by pixel equality: the same thread rendered through the schematic's pass, the
  * wear/undercut shared profile, and the runout profile must produce byte-identical
- * bitmaps. A recipe drift on any sheet fails here.
+ * bitmaps. A recipe drift on any sheet fails here. A RELIEVED thread is held to the same
+ * equality — all three sites decompose one `drawThreadPdf` over `geom/ThreadReliefMath.kt` — and
+ * the relief must visibly change the print (an unhatched groove below the major Ø).
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -61,21 +63,36 @@ class ThreadHatchParityTest {
         return b
     }
 
-    private fun schematic(xAt: (Float) -> Float = { it }): Bitmap = bmp { c, outline, dim ->
-        drawThreads(c, listOf(thread()), cy, xAt, { d -> d / 2f }, outline, dim)
+    /** The same thread with a relief groove at its FWD end (or AFT, with [atAft]). */
+    private fun relievedThread(atAft: Boolean = false) =
+        thread().copy(reliefLenMm = 20f, reliefDiaMm = 48f, reliefAtAft = atAft)
+
+    private fun schematic(xAt: (Float) -> Float = { it }, th: Threads = thread()): Bitmap = bmp { c, outline, dim ->
+        drawThreads(c, listOf(th), cy, xAt, { d -> d / 2f }, outline, dim)
     }
 
-    private fun simpleProfile(): Bitmap = bmp { c, outline, dim ->
+    private fun simpleProfile(th: Threads = thread(), threadRelief: Boolean = true): Bitmap = bmp { c, outline, dim ->
         drawSimpleShaftProfile(
-            c, ShaftSpec(overallLengthMm = 400f, threads = listOf(thread())), cy, outline,
+            c, ShaftSpec(overallLengthMm = 400f, threads = listOf(th)), cy, outline,
             RectF(0f, 0f, w.toFloat(), h.toFloat()), { it }, { d -> d / 2f },
             bodyFill = null, taperFill = null, linerFill = null,
             dimStrokeWidthPt = dim.strokeWidth,
+            threadRelief = threadRelief,
         )
     }
 
-    private fun runoutProfile(ptPerMm: Float = 1f): Bitmap = bmp { c, outline, _ ->
-        val spec = ShaftSpec(overallLengthMm = 400f, threads = listOf(thread()))
+    /**
+     * The WEAR document omits machining detail by product decision (keyways, blends, liner
+     * shoulders — and the thread relief): with `threadRelief = false` a relieved thread prints
+     * exactly as the same thread without one.
+     */
+    @Test
+    fun `the wear profile omits the relief and prints the plain thread`() {
+        assertTrue(simpleProfile(relievedThread(), threadRelief = false).sameAs(schematic(th = thread())))
+    }
+
+    private fun runoutProfile(ptPerMm: Float = 1f, th: Threads = thread()): Bitmap = bmp { c, outline, _ ->
+        val spec = ShaftSpec(overallLengthMm = 400f, threads = listOf(th))
         drawShaftProfile(
             c, spec, spec, cy, outline,
             RectF(0f, 0f, w.toFloat(), h.toFloat()), { it }, { d -> d / 2f },
@@ -146,6 +163,43 @@ class ThreadHatchParityTest {
         // An axially stretched thread (same drawn height) strokes the same over the span both
         // drawings share — left of the unstretched thread's FWD end face at x = 160.
         assertTrue(sameLeftOf(schematic(), schematic(xAt = { 40f + (it - 40f) * 2f }), xEnd = 155))
+    }
+
+    // ── Thread relief ─────────────────────────────────────────────────────────
+
+    @Test
+    fun `every sheet prints a relieved thread pixel-for-pixel`() {
+        for (atAft in listOf(false, true)) {
+            val th = relievedThread(atAft)
+            val schematic = schematic(th = th)
+            assertTrue("simple profile, atAft=$atAft", schematic.sameAs(simpleProfile(th)))
+            assertTrue("runout profile, atAft=$atAft", schematic.sameAs(runoutProfile(th = th)))
+        }
+    }
+
+    @Test
+    fun `a relief changes the printed thread`() {
+        assertFalse(schematic().sameAs(schematic(th = relievedThread())))
+        assertFalse(simpleProfile().sameAs(simpleProfile(relievedThread())))
+        assertFalse(runoutProfile().sameAs(runoutProfile(th = relievedThread())))
+    }
+
+    @Test
+    fun `the relief groove carries no hatch and steps below the major diameter`() {
+        // Thread x 40..160 on Ø60 (r = 30 at this test's rPx), relief x 140..160 on Ø48 (r = 24).
+        val plain = schematic()
+        val relieved = schematic(th = relievedThread())
+        // Inside the groove, between the relief radius and the major radius, the plain thread
+        // is hatched/outlined and the relieved one is bare paper.
+        val white = Color.WHITE
+        var plainInk = 0
+        for (x in 143..157) for (y in (cy - 28f).toInt()..(cy - 27f).toInt()) {
+            assertEquals("relieved groove must be bare above the relief line at ($x,$y)", white, relieved.getPixel(x, y))
+            if (plain.getPixel(x, y) != white) plainInk++
+        }
+        assertTrue("the plain thread hatches the same band", plainInk > 0)
+        // The hatched span left of the groove is untouched by the relief.
+        assertTrue(sameLeftOf(plain, relieved, xEnd = 138))
     }
 
     @Test

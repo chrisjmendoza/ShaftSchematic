@@ -4,7 +4,7 @@ ShaftViewModel Contract
 Layer: UI → ViewModel  
 Purpose: Owns editable ShaftSpec state, unit selection, grid toggle, and routes all commits from the UI to the model/persistence.
 
-Version: v1.2 (2026-09-15)
+Version: v1.3 (2026-10-03)
 
 Invariants
 - All stored geometry is **canonical millimeters (mm)**.  
@@ -178,7 +178,8 @@ editor* above); the listings below name the values ahead of it.
 - `addLinerAt(startMm, lengthMm, odMm, reference: LinerAuthoredReference = AFT, shoulder…, target)` — the `reference` parameter records which end the user measured from; stored on `Liner.authoredReference` for the carousel edit card to display correctly. The default is `AFT` for the quick-add path which does not ask for a reference. The six shoulder params (per end: length, reduced Ø, edge radius) ride the add under add-dialog parity; all-zero = no shoulder.
 - `addTaperAt(startMm, lengthMm, startDiaMm, endDiaMm, rateText, reference: LinerAuthoredReference = AFT, keyway…, target)` — `startDiaMm`/`endDiaMm` arrive **x-ordered AFT → FWD** (the Add dialog orders the typed S.E.T./L.E.T. by the taper's physical half, `ui/input/TaperSetLetMapping.kt`); `reference` records the measured-from end and is stored on `Taper.authoredReference` so the carousel card reopens in that frame. Which end is the Small End — used to derive a missing diameter from the rate and to seed the next dialog's SET/LET defaults — comes from `taperSmallEndAtStart` against `spec.overallLengthMm`, the shaft's authored OAL (nothing grows it around an overhanging taper; a 0 OAL has no frame and classifies AFT).
 - `addBodyAt(startMm, lengthMm, diaMm, keyway…, blend…, target)` — see `updateBodyBlend` above for the blend params; `docs/contracts/Defaults.md` carries the full parameter order.
-- `addThreadAt(startMm, lengthMm, majorDiaMm, pitchMm, excludeFromOAL = false, isAftEnd = true, metricDesignation = null, target)` — major Ø third, pitch fourth; swapping them yields nonsense TPI.
+- `addThreadAt(startMm, lengthMm, majorDiaMm, pitchMm, excludeFromOAL = false, isAftEnd = true, metricDesignation = null, reliefLenMm = 0f, reliefDiaMm = 0f, reliefAtAft = false, target)` — major Ø third, pitch fourth; swapping them yields nonsense TPI. The relief rides the add under add-dialog parity; 0/0 = no relief.
+- `setThreadRelief(id, reliefLenMm, reliefDiaMm, reliefAtAft, target)` — the thread card's relief commits (switch, both fields, the "Relief at" chips), the `setThreadEndPosition` shape: through `updateSpec(target)`, so it undoes and reaches the Final drawing; values stored verbatim (negatives floor at 0; 0/0 clears). The relief is PART of the thread's stored span, so nothing else moves — the thread's own start/length, every other component and the OAL stay as authored. Unknown id = no-op.
 - `addCouplerBoltSlotAt(startMm, holeDiaMm, count, spacingMm, through = true, depthMm = 0f, reference: SlotAuthoredReference = FWD, target)` — adds a coupler bolt-slot row. Slots never drive OAL; no body split. Paired with `updateCouplerBoltSlot(index, …, target)`, `updateCouplerBoltSlotReference/ShowRail(index, …, target)`, and `removeCouplerBoltSlot(id, target)` (recoverable via the general `undoEdit()` session history; no body merge). See `CouplerBoltSlot.md`.
 
 Do Nots
@@ -197,6 +198,10 @@ Future Enhancements
 
 Change Log
 ----------
+**v1.3 (2026-10-03)**
+- Thread relief: `setThreadRelief(id, len, dia, atAft, target)` added; `addThreadAt` gains
+  `reliefLenMm`/`reliefDiaMm`/`reliefAtAft` (defaulted, so existing call sites are unchanged).
+
 **v1.2 (2026-09-15)**
 - Stale-identifier sweep, doc-only. The placeholder `removeX()` is replaced by the real remover
   names; the v0.4 entry's parenthetical no longer points at `ui/viewmodel/SnapUtils.kt` (deleted

@@ -46,6 +46,12 @@ data class ResolvedTaper(
     val endDiaMm: Float,
 ) : ResolvedComponent()
 
+/**
+ * A resolved thread. Threads never fragment, so the resolved id is the stored id and the relief
+ * fields are copied verbatim off the stored [com.android.shaftschematic.model.Threads] — the
+ * preview's thread pass and the surface envelope ([surfaceSegsFrom]) both split the span through
+ * `geom/ThreadReliefMath.kt`, and carrying the values here means no call site can forget them.
+ */
 data class ResolvedThread(
     override val id: String,
     override val type: ResolvedComponentType = ResolvedComponentType.THREAD,
@@ -54,6 +60,9 @@ data class ResolvedThread(
     override val endMmPhysical: Float,
     val majorDiaMm: Float,
     val pitchMm: Float,
+    val reliefLenMm: Float = 0f,
+    val reliefDiaMm: Float = 0f,
+    val reliefAtAft: Boolean = false,
 ) : ResolvedComponent()
 
 /**
@@ -163,7 +172,10 @@ fun resolveExplicitComponents(spec: ShaftSpec): List<ResolvedComponent> = buildL
                 startMmPhysical = th.startFromAftMm,
                 endMmPhysical = th.startFromAftMm + th.lengthMm,
                 majorDiaMm = th.majorDiaMm,
-                pitchMm = th.pitchMm
+                pitchMm = th.pitchMm,
+                reliefLenMm = th.reliefLenMm,
+                reliefDiaMm = th.reliefDiaMm,
+                reliefAtAft = th.reliefAtAft,
             )
         )
     }

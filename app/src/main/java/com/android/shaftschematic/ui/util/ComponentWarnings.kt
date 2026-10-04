@@ -56,6 +56,10 @@ private const val BOUNDS_EPS_MM = 1e-2f
 private const val SHORT_SEGMENT_MSG = "Very short segment (< 1 mm)"
 private const val LENGTH_SANITY_MSG = "Length exceeds 15 m — check for a typo"
 private const val DIA_SANITY_MSG = "Diameter exceeds 1 m — check for a typo"
+/** Advisory: a thread relief's Ø at or above the thread's major Ø. */
+internal const val THREAD_RELIEF_DIA_MSG = "Relief Ø must be below the thread Ø"
+/** Advisory: a thread relief as long as or longer than the thread itself. */
+internal const val THREAD_RELIEF_LEN_MSG = "Relief longer than the thread"
 
 /* ────────────────────────────────────────────────────────────────────────────
  * Shaft-span bounds — ONE comparison behind two surfaces
@@ -170,7 +174,8 @@ fun linerWarningMessages(spec: ShaftSpec, liner: Liner): List<String> {
 
 /**
  * Advisory warnings for a [thread]: zero pitch, very short segment, the implausible
- * length/major-diameter sanity checks (§2.1), and the past-OAL bounds advisory.
+ * length/major-diameter sanity checks (§2.1), the past-OAL bounds advisory, and the two relief
+ * advisories (relief Ø at or above the major Ø, relief as long as the thread).
  *
  * An **excluded** thread (`excludeFromOAL`) is skipped by the bounds advisory: it sits outside
  * the shaft envelope by design, at a negative or past-OAL start the resolve layer derives, so
@@ -184,6 +189,14 @@ fun threadWarningMessages(spec: ShaftSpec, thread: Threads): List<String> {
     if (isImplausiblyLargeDia(thread.majorDiaMm)) out += DIA_SANITY_MSG
     if (!thread.excludeFromOAL) {
         pastShaftEndMessage(spec, thread.startFromAftMm, thread.lengthMm)?.let { out += it }
+    }
+    // Relief advisories: the typed values are kept verbatim and the drawing clamps them where it
+    // draws (`geom/ThreadReliefMath.kt`); these say why the groove does not read as typed.
+    if (thread.reliefDiaMm > 0f && thread.majorDiaMm > 0f && thread.reliefDiaMm >= thread.majorDiaMm) {
+        out += THREAD_RELIEF_DIA_MSG
+    }
+    if (thread.reliefLenMm > 0f && thread.lengthMm > 0f && thread.reliefLenMm >= thread.lengthMm) {
+        out += THREAD_RELIEF_LEN_MSG
     }
     return out
 }

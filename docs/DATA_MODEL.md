@@ -279,7 +279,26 @@ data class Threads(
     val tpi: Float? = null,
     val label: String? = null,  // optional user-defined display label; not used for geometry
     val metricDesignation: String? = null,  // e.g. "M20×2.5"; parsed at entry, drives implicit mm unit override
-) : Segment
+    val showNameOnDrawing: Boolean? = null,  // tri-state name-label gate (see Body)
+    val reliefLenMm: Float = 0f,     // relief groove length — PART of the stored span; 0 = none
+    val reliefDiaMm: Float = 0f,     // relief groove Ø, stored verbatim
+    val reliefAtAft: Boolean = false, // which end of the thread carries the groove
+) : Segment {
+    val hasRelief: Boolean  // reliefLenMm > 0 && reliefDiaMm > 0 — no stored flag
+}
+**Thread relief** (2026-10-03, on-device request): the plain groove turned below the thread's
+root at the end where it runs up to its shoulder (on a propeller shaft, the taper's S.E.T.), so
+the tool runs out and the nut seats. It is PART of the thread's stored span — the
+`reliefLenMm` at the relief end is groove, the rest is thread — so adding one moves nothing:
+`startFromAftMm`/`lengthMm` never change. Both values are stored verbatim (golden rule); an
+authored length longer than the thread or a Ø at or above the major Ø is kept as typed, flagged
+by an advisory (`threadWarningMessages`), and clamped only where DRAWN
+(`geom/ThreadReliefMath.kt`). The three fields are additive and defaulted, so every document
+saved before them decodes with no relief (`ThreadReliefCodecTest`); templates keep the relief
+(it is geometry). `reliefAtAft` is seeded on the authoring surfaces from
+`suggestedThreadReliefAtAft` (the thread's INBOARD end) — never applied to a stored thread.
+`ResolvedThread` carries the three values verbatim (threads never fragment).
+
 `isAftEnd` only matters when `excludeFromOAL = true`: true pins the thread's derived position
 to the AFT end (start = 0, extending to negative mm outside the envelope), false pins it to the
 FWD end (start = overallLengthMm). It is ignored when the thread counts toward OAL — position

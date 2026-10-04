@@ -99,6 +99,9 @@ import com.android.shaftschematic.geom.undercutReferenceLinerFor
 import com.android.shaftschematic.geom.undercutSetPositions
 import com.android.shaftschematic.geom.undercutSpanIssue
 import com.android.shaftschematic.geom.undercutStartToCanonicalMm
+import com.android.shaftschematic.geom.shoulderEndMm
+import com.android.shaftschematic.geom.threadHatchSpan
+import com.android.shaftschematic.geom.threadReliefSpan
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Undercut
 import com.android.shaftschematic.model.UndercutRecord
@@ -595,6 +598,55 @@ fun UndercutWindowDetailOverlay(
                             val a = max(rc.startMmPhysical, drawStartMm)
                             val b = min(rc.endMmPhysical, drawEndMm)
                             if (b - a <= eps) return@forEach
+                            // A relieved thread splits like the undercut sheet's strips
+                            // (`geom/ThreadReliefMath.kt`): hatch + major-Ø outline over the
+                            // hatch span, the groove as its reduced rectangle, the shoulder-end
+                            // face at the relief Ø only.
+                            if (rc is ResolvedThread) {
+                                val relief = threadReliefSpan(
+                                    rc.startMmPhysical, rc.endMmPhysical - rc.startMmPhysical, rc.majorDiaMm,
+                                    rc.reliefLenMm, rc.reliefDiaMm, rc.reliefAtAft,
+                                )
+                                if (relief != null) {
+                                    val hatch = threadHatchSpan(
+                                        rc.startMmPhysical, rc.endMmPhysical - rc.startMmPhysical, rc.majorDiaMm,
+                                        rc.reliefLenMm, rc.reliefDiaMm, rc.reliefAtAft,
+                                    )
+                                    fun ownEdge(mm: Float) = mm > drawStartMm + eps && mm < drawEndMm - eps
+                                    val r = rPx(rc.majorDiaMm)
+                                    hatch?.let { hs ->
+                                        val ha = max(hs.startMm, drawStartMm); val hb = min(hs.endMm, drawEndMm)
+                                        if (hb - ha > eps) {
+                                            val hxa = xPx(ha); val hxb = xPx(hb)
+                                            drawThreadStubHatch(
+                                                hxa, cy - r, hxb, cy + r, outlineColor,
+                                                threadStubHatchLean(rc, threadSlant),
+                                                threadStubHatchSpacing(rc, 2f * r, threadDensity),
+                                            )
+                                            drawLine(outlineColor, Offset(hxa, cy - r), Offset(hxb, cy - r), outlineWidthPx)
+                                            drawLine(outlineColor, Offset(hxa, cy + r), Offset(hxb, cy + r), outlineWidthPx)
+                                            if (ownEdge(hs.startMm)) drawLine(outlineColor, Offset(hxa, cy - r), Offset(hxa, cy + r), outlineWidthPx)
+                                            if (ownEdge(hs.endMm)) drawLine(outlineColor, Offset(hxb, cy - r), Offset(hxb, cy + r), outlineWidthPx)
+                                        }
+                                    }
+                                    val ra = max(relief.startMm, drawStartMm); val rb = min(relief.endMm, drawEndMm)
+                                    if (rb - ra > eps) {
+                                        val rr = rPx(relief.diaMm)
+                                        val rxa = xPx(ra); val rxb = xPx(rb)
+                                        drawLine(outlineColor, Offset(rxa, cy - rr), Offset(rxb, cy - rr), outlineWidthPx)
+                                        drawLine(outlineColor, Offset(rxa, cy + rr), Offset(rxb, cy + rr), outlineWidthPx)
+                                        val shoulderMm = relief.shoulderEndMm(rc.reliefAtAft)
+                                        val xs = if (rc.reliefAtAft) rxa else rxb
+                                        if (ownEdge(shoulderMm)) drawLine(outlineColor, Offset(xs, cy - rr), Offset(xs, cy + rr), outlineWidthPx)
+                                        if (hatch == null) {
+                                            val otherMm = if (rc.reliefAtAft) relief.endMm else relief.startMm
+                                            val xo = if (rc.reliefAtAft) rxb else rxa
+                                            if (ownEdge(otherMm)) drawLine(outlineColor, Offset(xo, cy - rr), Offset(xo, cy + rr), outlineWidthPx)
+                                        }
+                                    }
+                                    return@forEach
+                                }
+                            }
                             val rA = rPx(componentDiaAt(rc, a))
                             val rB = rPx(componentDiaAt(rc, b))
                             if (rA <= 0f && rB <= 0f) return@forEach

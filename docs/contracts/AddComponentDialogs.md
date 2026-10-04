@@ -1,4 +1,4 @@
-# AddComponentDialogs Contract (v1.10, 2026-09-30)
+# AddComponentDialogs Contract (v1.12, 2026-10-03)
 
 ## Purpose
 Composable dialogs for adding new components: `AddBodyDialog`, `AddLinerDialog`,
@@ -152,6 +152,10 @@ by definition, so there is nothing to toggle. This is intentional and not a pari
 | TPI | Only in Imperial mode |
 | Thread designation (`M20×2.5`) | Only in Metric mode |
 | Length | Always |
+| Thread relief switch (`add_thread_relief`) | Always (default OFF) |
+| Relief length | Only while the relief switch is on |
+| Relief Ø | Only while the relief switch is on |
+| Relief at: AFT \| FWD chips (`add_thread_relief_end`) | Only while the relief switch is on |
 | Count in OAL toggle | Always |
 
 The Start field is **replaced** by the AFT/FWD chips when excluded from OAL — it is
@@ -167,6 +171,28 @@ major Ø / pitch handed over are the ones **parsed from it**, so the two can nev
 A coarse designation with the pitch omitted (`M20`) submits pitch `0` — omitted, not unset —
 so it does not block the Add button. The ViewModel additionally registers an implicit **mm**
 unit override for that thread; see `docs/DATA_MODEL.md`.
+
+**Thread relief** (parity with the thread card's `ThreadReliefCardSection`,
+`ui/screen/ThreadReliefSection.kt` — the switch row and the chips are the SAME composables on
+both surfaces): the groove turned below the thread's root at the end where it runs up to its
+shoulder. A thread has a relief exactly when `reliefLenMm > 0` and `reliefDiaMm > 0` — no
+stored flag. The relief is PART of the thread's stored span; nothing moves when one is added.
+Switching it on with nothing typed seeds Relief length = 1.5 × pitch
+(`AddDefaultsConfig.THREAD_RELIEF_LEN_PITCHES`; 4 TPI → 0.375″; the hatch's 2.5 mm fallback
+pitch when there is none) and Relief Ø = major Ø − 1.3 × pitch
+(`THREAD_RELIEF_DIA_BELOW_MAJOR_PITCHES`, just under a 60° thread's root), both through the
+pure `threadReliefForSwitch`, and seeds the end ONCE from `suggestedThreadReliefAtAft` (the
+thread's INBOARD end: an AFT-end thread → FWD, a FWD-end thread → AFT, mid-shaft → FWD) read
+from the dialog's start / Count-in-OAL / Thread-end state at that moment. Values are typed in
+the document unit. While the switch is OFF the dialog submits relief 0/0 whatever the hidden
+fields hold (`threadReliefSubmitValues`). `reliefLenMm, reliefDiaMm, reliefAtAft` ride
+`onSubmit → ShaftScreen.onAddThread → ShaftRoute → ShaftViewModel.addThreadAt` verbatim.
+
+On the card the switch (`thread_relief`) is derived from the stored relief length, so stored
+values hold it open; switching OFF commits 0/0 and remembers the values for the card session so
+switching back on restores them (and their end); a blank or ≤ 0 field commit is a no-op — the
+switch is the one control that clears. The "Relief at" chips are `thread_relief_end`
+(`_aft`/`_fwd`); every card commit goes through `ShaftViewModel.setThreadRelief`.
 
 ### AddTaperDialog
 | Field / control | Condition |
@@ -332,6 +358,14 @@ the aft-most center as `startFromAftMm = OAL − enteredFwd − (count−1)·spa
 ---
 
 ## Change log
+**v1.12 (2026-10-03)**
+- Thread **relief** (on-device request, from a machine-shop textbook figure of a thread's
+  run-out groove): a "Thread relief" switch revealing Relief length, Relief Ø and "Relief at:
+  AFT | FWD" chips on `AddThreadDialog` and the thread card, under the parity rule (shared
+  `ThreadReliefSwitchRow`/`ThreadReliefEndChips`). Relief ⇔ length > 0 and Ø > 0, no stored
+  flag; part of the stored span, so nothing moves. `AddThreadDialog.onSubmit` gains
+  `reliefLenMm, reliefDiaMm, reliefAtAft`.
+
 **v1.11 (2026-10-02)**
 - The keyway block is a gated **section** on all four keyway surfaces (Body/Taper cards,
   `AddBodyDialog`, `AddTaperDialog`) behind ONE shared "Keyway" checkbox row (`KeywayGateRow`,

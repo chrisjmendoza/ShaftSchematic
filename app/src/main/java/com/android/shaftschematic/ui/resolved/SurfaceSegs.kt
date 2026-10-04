@@ -3,6 +3,7 @@ package com.android.shaftschematic.ui.resolved
 
 import com.android.shaftschematic.geom.SurfaceSeg
 import com.android.shaftschematic.geom.blendPolyline
+import com.android.shaftschematic.geom.threadSurfaceSegs
 import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.LinerShoulder
 
@@ -16,7 +17,9 @@ import com.android.shaftschematic.model.LinerShoulder
  *   rule makes the liner the surface, matching the drawn profile.
  * - Liners contribute a constant Ø, or the stepped run of [linerSurfaceSegs] when shouldered.
  * - Tapers contribute their linear Ø run.
- * - Threads contribute their major-Ø envelope (the drawn hatched outline).
+ * - Threads contribute their major-Ø envelope (the drawn hatched outline), and a relieved
+ *   thread its groove at the relief Ø besides — [threadSurfaceSegs], at TRUE stored mm, clamped
+ *   exactly as drawn.
  * - Coupler bolt slots are radial cutouts, not surface material — skipped.
  *
  * [blends] refines a blended body face into its curve instead of a square step, so a cut or a
@@ -35,7 +38,10 @@ fun surfaceSegsFrom(
             is ResolvedLiner ->
                 linerSurfaceSegs(c.startMmPhysical, c.endMmPhysical, c.odMm, c.shoulderAft, c.shoulderFwd)
             is ResolvedTaper -> listOf(SurfaceSeg(c.startMmPhysical, c.endMmPhysical, c.startDiaMm, c.endDiaMm))
-            is ResolvedThread -> listOf(SurfaceSeg(c.startMmPhysical, c.endMmPhysical, c.majorDiaMm, c.majorDiaMm))
+            is ResolvedThread -> threadSurfaceSegs(
+                c.startMmPhysical, c.endMmPhysical - c.startMmPhysical, c.majorDiaMm,
+                c.reliefLenMm, c.reliefDiaMm, c.reliefAtAft,
+            )
             is ResolvedCouplerBoltSlot -> emptyList()
         }
     }.filter { it.endMm > it.startMm && (it.diaStartMm > 0f || it.diaEndMm > 0f) }

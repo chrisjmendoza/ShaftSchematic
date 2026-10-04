@@ -396,6 +396,16 @@ note): `Captured KW: inset <len> from S.E.T.` on a taper, `… from AFT` / `… 
 (its `keywayEnd`), in the keyway's own unit (`CAPTURED_KW_PREFIX`, `pdf/SheetFooter.kt`). An open
 keyway prints nothing new, so its sheets are byte-identical.
 
+A **thread relief** (`Threads.hasRelief`, 2026-10-03) is the same kind of machining value: the
+footer prints ONE line directly under that thread's `Thread:` line, in the AFT and FWD thread
+blocks alike — `Thread relief: <len> × Ø <dia>` (`THREAD_RELIEF_PREFIX`,
+`threadReliefFooterLine`), the STORED length and Ø through the dual-aware
+`formatLenWithUnitDual`/`formatDiaWithUnitDual` in the thread's own display unit (never the drawn
+clamps of `geom/ThreadReliefMath.kt`). A thread with no relief prints nothing new. The line
+counts toward the measured footer height like any other row. The drawing itself shows the
+groove as a reduced, unhatched rectangle at the relief end (see `docs/contracts/Rendering.md`,
+threads bullet — the PDF sites share `drawThreadPdf`).
+
 Unaffected: the 90°-clocked **silhouette** notch (`drawKeywaySilhouetteNotchPdf`) was always
 radial and always used the diameter scale; and the true-scale pin on a body keyway's window
 (`keywayPinnedBodySpans`) still protects the slot's **length**, which is the axial term.
@@ -660,7 +670,9 @@ Rules (shared helpers in `pdf/BlankFormText.kt`):
   names — and on a value-less sheet only makes the FWD rules short. Both blank footers — schematic and
   consolidated — share this one implementation. `buildFooterEndColumns(blankValues =
   true)` returns label-only lines — same count and order as standard, no digits
-  (JVM-tested in `BlankDraftFooterTest`).
+  (JVM-tested in `BlankDraftFooterTest`) — with one deliberate exception: a blank draft prints
+  no `Thread relief:` line (a write-in sheet has no relief to describe), so a relieved thread's
+  standard column is one line longer than its blank one.
 - **Runout sheet**: header labels get rules; the OAL dimension line carries no label of any
   kind (2026-07-28) — it cuts an empty `BLANK_DIM_GAP_PT`-wide break at mid-span instead,
   the same convention as the dimension-line rule above, so the machinist writes the value

@@ -50,6 +50,11 @@ Features:
 
 - **Threads**: threaded span.
   - Intended for shaft-end threading; enforcement of “end-only” constraints is a ViewModel/validation rule.
+  - May carry a **relief** (`reliefLenMm`, `reliefDiaMm`, `reliefAtAft`; relief ⇔ both > 0, no
+    stored flag): the groove below the root at the end where the thread runs up to its shoulder.
+    PART of the stored span — nothing moves when one is added; drawn as an unhatched reduced
+    rectangle at that end through `geom/ThreadReliefMath.kt` (see DATA_MODEL.md and
+    `docs/contracts/Rendering.md`).
 
 - **Coupler Bolt Slot**: reference overlay for muff-coupling bolt cutouts.
   - A first-class list in `ShaftSpec` (`couplerBoltSlots`) and implements `Segment`, but it is a **pure reference marker**, not a geometric span.

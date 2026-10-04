@@ -141,6 +141,11 @@ class SheetTextOverlapTest {
             Threads(
                 id = "THA", startFromAftMm = -6f * inch, lengthMm = 6f * inch,
                 majorDiaMm = 5.828f * inch, tpi = 4f, excludeFromOAL = true, isAftEnd = true,
+                // A relief prints its own footer line under the thread's. On the AFT thread it
+                // rides every variant below without outgrowing the FWD column; the FWD thread's
+                // relief, which does grow the footer, has its own case
+                // (`relievedThreadsSpec`).
+                reliefLenMm = 0.375f * inch, reliefDiaMm = 5.5f * inch, reliefAtAft = false,
             ),
             Threads(
                 id = "THF", startFromAftMm = 300f * inch, lengthMm = 5f * inch,
@@ -257,14 +262,15 @@ class SheetTextOverlapTest {
         blank: Boolean,
         face: Boolean,
         dual: Boolean = false,
+        sheetSpec: ShaftSpec = spec,
     ): RecordingCanvas {
         val c = canvas()
         composeRunoutPdfOnCanvas(
-            c, pageW, pageH, spec,
+            c, pageW, pageH, sheetSpec,
             config = RunoutConfig(tirDirection = TirDirection.AFT, showCouplingFace = face),
             project = project, unit = UnitSystem.INCHES,
             displayUnits = DisplayUnits(UnitSystem.INCHES, dual = dual),
-            resolvedComponents = resolved,
+            resolvedComponents = if (sheetSpec === spec) resolved else resolveComponents(sheetSpec),
             runoutReadings = readings, wearRecord = wear,
             blankValues = blank, consolidated = true,
             includeBubbles = includeBubbles, includeWearInfo = includeWearInfo,
@@ -296,6 +302,38 @@ class SheetTextOverlapTest {
                 val name = "consolidated bubbles=$bubbles wear=$wearInfo blank=$blank face=$face"
                 assertNoOverlap(name, consolidated(bubbles, wearInfo, blank, face))
             }
+        }
+    }
+
+    /** The fixture with the FWD thread relieved too: its relief line grows the tallest column. */
+    private val relievedThreadsSpec: ShaftSpec = spec.copy(
+        threads = spec.threads.map {
+            if (it.id == "THF") it.copy(reliefLenMm = 0.25f * inch, reliefDiaMm = 4.25f * inch, reliefAtAft = true)
+            else it
+        },
+    )
+
+    @Test
+    fun `a relief line that grows the footer still prints with no overlapping text`() {
+        // The footer is reserved at its MEASURED height, so a relief row on the tallest column
+        // takes its room from the info gap instead of climbing into the drawing.
+        for (bubbles in listOf(true, false)) for (wearInfo in listOf(true, false)) {
+            if (!bubbles && !wearInfo) continue
+            for (face in listOf(false, true)) {
+                val name = "relieved threads, consolidated bubbles=$bubbles wear=$wearInfo face=$face"
+                assertNoOverlap(name, consolidated(bubbles, wearInfo, blank = false, face = face, sheetSpec = relievedThreadsSpec))
+            }
+        }
+        for (dual in listOf(false, true)) {
+            val c = canvas()
+            composeShaftPdfOnCanvas(
+                c, pageW, pageH, relievedThreadsSpec, UnitSystem.INCHES, project,
+                appVersion = "test", filename = "935037_Titan_PORT.pdf",
+                options = PdfExportOptions(),
+                resolvedComponents = resolveComponents(relievedThreadsSpec),
+                displayUnits = DisplayUnits(UnitSystem.INCHES, dual = dual),
+            )
+            assertNoOverlap("relieved threads, schematic dual=$dual", c)
         }
     }
 

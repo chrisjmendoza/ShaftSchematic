@@ -120,6 +120,30 @@ See `CouplerBoltSlot.md`.
   The renderer keeps its user-set hatch color; the geometry must not diverge —
   `ThreadHatchParityTest` pins pixel equality across the PDF sites.
   (The unused "unified profile" path and `ThreadStyle` enum were deleted 2026-07-26.)
+- Thread **relief** (2026-10-03, on-device request): a relieved thread (`Threads.hasRelief` —
+  relief length and Ø both > 0) splits its STORED span through the ONE pure helper
+  `geom/ThreadReliefMath.kt` — `threadReliefSpan` (the groove: `[start, start + len]` at the
+  AFT end, `[end − len, end]` at the FWD end; DRAWN length clamped to the thread, DRAWN Ø
+  clamped below the major — a value at or above it draws at `THREAD_RELIEF_INVALID_DIA_FRAC` —
+  stored values never rewritten) and `threadHatchSpan` (the rest; null when the relief takes the
+  whole thread). Every thread draw site decomposes it identically: the hatch and the major-Ø
+  envelope (top/bottom + both end faces) cover ONLY the hatch span, so the envelope face on the
+  relief side is the full-height step from the groove up to the major Ø; the relief draws as a
+  reduced rectangle — top/bottom at the relief radius, NO hatch — and at the SHOULDER end the
+  thread's own face spans the relief Ø only (the neighbouring body/taper draws its own larger
+  face there, so the silhouette steps down into the groove). A relief that takes the whole
+  thread closes its other end at the relief Ø too. No hidden lines. Sites: this renderer's
+  thread pass (one `drawOneThread` behind both the resolved and the `spec.threads` branch —
+  the `threadFill` underlay covers each span at its own height; the selection highlight stays
+  the FULL stored span), the PDF `drawThreadPdf` (`pdf/SimpleShaftProfile.kt`, called by the
+  schematic's `drawThreads`, the runout/consolidated profile and the wear/undercut simple
+  profile — pixel parity pinned by `ThreadHatchParityTest`), and the window-clipped slices on
+  the undercut strips (`UndercutPdfComposer`, and the canvas `UndercutDetail` overlay) where a
+  face prints only at an edge that is the thread's own. `ResolvedThread` carries the relief
+  verbatim, and `surfaceSegsFrom` emits the groove as its own seg at TRUE stored mm
+  (`threadSurfaceSegs`), so an undercut or wear reading in the groove sees the real Ø. The
+  thread-end STUB hatches stay plain — a stub is a symbol for the shaft continuing, not a
+  drawing of the thread.
 - `centerlineYPx` is a **Y-reference for positioning geometry only** — the renderer
   never draws a visible centerline stroke.
 - Performance: avoid allocations in hot paths except small Paths for bodies and tapers; no
@@ -156,6 +180,9 @@ Do Nots (whole subsystem)
 
 Change Log
 ----------
+**2026-10-03** — thread relief: the thread pass splits the stored span into hatch span +
+relief groove through `geom/ThreadReliefMath.kt` (threads bullet above).
+
 **v1.0 (2026-07-18)** — merged four per-file docs; carried forward: excluded-thread
 bounds expansion (ShaftLayout v0.4, 2026-06-18), centerline dead-code correction
 (ShaftRenderer v0.5, 2026-07-18), line-thickness bridge (ShaftDrawing v0.4).

@@ -40,6 +40,7 @@ import com.android.shaftschematic.ui.viewmodel.setKeyways90Cw
 import com.android.shaftschematic.ui.viewmodel.setShowAutoBodyDia
 import com.android.shaftschematic.ui.viewmodel.setThreadEndPosition
 import com.android.shaftschematic.ui.viewmodel.setThreadExcludeFromOal
+import com.android.shaftschematic.ui.viewmodel.setThreadRelief
 import com.android.shaftschematic.ui.viewmodel.updateBody
 import com.android.shaftschematic.ui.viewmodel.updateBodyBlend
 import com.android.shaftschematic.ui.viewmodel.updateBodyKeyway
@@ -335,7 +336,12 @@ fun ShaftRoute(
         onAddTaper  = { s, l, sd, ed, rate, ref, kwW, kwD, kwL, kwO, kwS, kwUnit ->
             vm.addTaperAt(s, l, sd, ed, rate, ref, kwW, kwD, kwL, kwO, kwS, kwUnit, target)
         },
-        onAddThread = { s, l, maj, p, ex, aft, desig -> vm.addThreadAt(s, l, maj, p, ex, aft, desig, target) },
+        onAddThread = { s, l, maj, p, ex, aft, desig, rLen, rDia, rAft ->
+            vm.addThreadAt(
+                s, l, maj, p, ex, aft, desig,
+                reliefLenMm = rLen, reliefDiaMm = rDia, reliefAtAft = rAft, target = target,
+            )
+        },
         onAddLiner  = { s, l, od, ref, shoulders -> vm.addLinerAt(
             s, l, od, ref,
             shoulderAftLenMm = shoulders.aft?.lenMm ?: 0f,
@@ -385,6 +391,7 @@ fun ShaftRoute(
         onSetKeyways90Cw = { cw -> vm.setKeyways90Cw(cw, target) },
         onSetThreadExcludeFromOal = { id, ex -> vm.setThreadExcludeFromOal(id, ex, target) },
         onSetThreadEndPosition = { id, isAft -> vm.setThreadEndPosition(id, isAft, target) },
+        onSetThreadRelief = { id, len, dia, atAft -> vm.setThreadRelief(id, len, dia, atAft, target) },
 
         onRemoveBody   = { id -> vm.removeBody(id, target) },
         onRemoveTaper  = { id -> vm.removeTaper(id, target) },

@@ -8,6 +8,51 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-03
 
+### feat(thread): relief groove at the shoulder end — model, drawing on every sheet, footer line, card + Add dialog
+
+On-device request, from a machine-shop textbook figure of 60° threads as they are developed: a
+shaft thread is machined with a relief — a short groove turned below the thread's root where the
+thread meets the shoulder it runs up to (on a propeller shaft, the taper's S.E.T.), so the tool
+can run out and the nut seats. The app drew a thread as a hatched major-Ø envelope over its whole
+stored span.
+
+- Model (`model/Threads.kt`): `reliefLenMm`, `reliefDiaMm`, `reliefAtAft` — additive and
+  defaulted, so every saved document decodes with no relief; stored verbatim. Relief ⇔
+  `hasRelief` (both > 0), no stored flag. The relief is PART of the thread's stored span — the
+  thread's start/length never move when one is added. `suggestedThreadReliefAtAft` seeds the end
+  at the thread's INBOARD end (AFT-end thread → FWD, FWD-end thread → AFT, mid-shaft → FWD); a
+  seed only, never applied to a stored thread.
+- Geometry (`geom/ThreadReliefMath.kt`, pure): `threadReliefSpan` / `threadHatchSpan` split the
+  span; the DRAWN length clamps to the thread and the DRAWN Ø below the major
+  (`THREAD_RELIEF_INVALID_DIA_FRAC`), values never rewritten. `threadSurfaceSegs` feeds the
+  surface envelope at TRUE stored mm (`surfaceSegsFrom`, the undercut composer's spec fallback).
+- Drawing, every thread site from the same split: the preview's thread pass (one
+  `drawOneThread` behind both branches; the highlight stays the full span), a new shared PDF
+  `drawThreadPdf` behind the schematic, the runout/consolidated profile and the wear/undercut
+  simple profile, and the window-clipped slices on the undercut strips (PDF and canvas). Hatch
+  and major-Ø envelope cover only the hatch span; the relief is an unhatched reduced rectangle
+  whose shoulder-end face spans the relief Ø only (the shoulder draws its own face). The
+  thread-end stub hatches stay plain (symbolic). `ResolvedThread` carries the relief verbatim.
+- Footer: `Thread relief: <len> × Ø <dia>` under a relieved thread's `Thread:` line (AFT and FWD
+  blocks), stored values in the thread's own unit, dual-aware; none on blank drafts.
+- Advisories: "Relief Ø must be below the thread Ø", "Relief longer than the thread".
+- UI (add-dialog parity): a "Thread relief" switch after Length on the thread card
+  (`thread_relief`) and in `AddThreadDialog` (`add_thread_relief`, default OFF), revealing Relief
+  length, Relief Ø and "Relief at: AFT | FWD" chips (`thread_relief_end` /
+  `add_thread_relief_end`) — shared `ui/screen/ThreadReliefSection.kt`. Switching on with nothing
+  typed seeds length = 1.5 × pitch and Ø = major − 1.3 × pitch
+  (`AddDefaultsConfig.THREAD_RELIEF_*`); switching off on the card commits 0/0 and remembers the
+  values for the session. New mutator `ShaftViewModel.setThreadRelief(id, len, dia, atAft,
+  target)`; `addThreadAt` and `AddThreadDialog.onSubmit` carry the relief.
+- Tests: `ThreadReliefMathTest`, `ThreadReliefSeedTest`, `ThreadReliefCardTest` (Robolectric),
+  `ShaftViewModelThreadReliefTest`, `ThreadReliefFooterTest`, `ThreadReliefCodecTest`,
+  relieved-thread pixel parity in `ThreadHatchParityTest`, relief advisories in
+  `ComponentWarningsTest`, a relieved-thread case in `SheetTextOverlapTest`.
+- The WEAR document omits the relief (`drawSimpleShaftProfile(threadRelief = false)`): it omits
+  machining detail by product decision — keyways, blends, liner shoulders — and a relieved thread
+  prints there as the plain hatched envelope. The undercut document shows it (its detail strips
+  do, and the main profile must agree).
+
 ### fix(ui): PDF preview options open as a panel, and the page stays zoomable under it
 
 On-device request: zoom in on the threads and watch the "Thread slant" / "Thread density"

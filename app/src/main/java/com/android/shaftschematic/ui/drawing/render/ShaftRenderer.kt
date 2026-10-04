@@ -49,6 +49,9 @@ import com.android.shaftschematic.geom.shoulderDrawSpec
 import com.android.shaftschematic.geom.threadHatchLean
 import com.android.shaftschematic.geom.threadHatchRun
 import com.android.shaftschematic.geom.threadHatchSpacing
+import com.android.shaftschematic.geom.shoulderEndMm
+import com.android.shaftschematic.geom.threadHatchSpan
+import com.android.shaftschematic.geom.threadReliefSpan
 import com.android.shaftschematic.model.shoulderOn
 import com.android.shaftschematic.ui.resolved.BodyDrawEdges
 import com.android.shaftschematic.ui.resolved.BodyEdgePoint
@@ -355,95 +358,103 @@ object ShaftRenderer {
         val resolvedThreads = components?.filterIsInstance<ResolvedThread>()
 
         // ───────── Threads ─────────
-        if (resolvedThreads != null) {
-            for (th in resolvedThreads) {
-                val startX   = L.xPx(th.startMmPhysical)
-                val endX     = L.xPx(th.endMmPhysical)
-                val left     = min(startX, endX)
-                val right    = max(startX, endX)
-                val lengthPx = right - left
+        // One drawer for both branches. The span splits through `geom/ThreadReliefMath.kt`, the
+        // split every PDF sheet's `drawThreadPdf` decomposes too: the underlay, hatch and
+        // major-Ø envelope cover the HATCH span, and a relief draws as its reduced rectangle with
+        // the thread's own face at the shoulder end spanning the relief Ø only (the shoulder draws
+        // its own larger face there). The highlight stays the FULL stored span — selecting a
+        // thread highlights the whole component.
+        fun drawOneThread(
+            id: String,
+            startMm: Float,
+            lengthMm: Float,
+            majorDiaMm: Float,
+            pitchMm: Float,
+            reliefLenMm: Float,
+            reliefDiaMm: Float,
+            reliefAtAft: Boolean,
+        ) {
+            val startX = L.xPx(startMm)
+            val endX   = L.xPx(startMm + lengthMm)
+            val left   = min(startX, endX)
+            val right  = max(startX, endX)
+            val majorR = L.rPx(majorDiaMm)
+            val top    = cy - majorR
 
-                val majorR  = L.rPx(th.majorDiaMm)
-                val minorR  = majorR * 0.85f // TODO: switch to model minor dia when available
-                val pitchPx = ((th.pitchMm.takeIf { it > 0f } ?: (25.4f / 10f)) * L.pxPerMm) // fallback ≈10 TPI
+            val hatch  = threadHatchSpan(startMm, lengthMm, majorDiaMm, reliefLenMm, reliefDiaMm, reliefAtAft)
+            val relief = threadReliefSpan(startMm, lengthMm, majorDiaMm, reliefLenMm, reliefDiaMm, reliefAtAft)
+            // A thread with no drawable length or diameter keeps the plain envelope it always drew.
+            val hatchLeft  = hatch?.let { min(L.xPx(it.startMm), L.xPx(it.endMm)) } ?: left
+            val hatchRight = hatch?.let { max(L.xPx(it.startMm), L.xPx(it.endMm)) } ?: right
+            val drawHatch  = hatch != null || relief == null
+            val hatchSize  = Size(hatchRight - hatchLeft, majorR * 2f)
 
-                val top  = cy - majorR
-                val size = Size(lengthPx, majorR * 2f)
-
-                // Underlay to separate from grid
-                if (threadFill.alpha > 0f) {
-                    drawRect(color = threadFill, topLeft = Offset(left, top), size = size)
-                }
-
-                // Highlight under-stroke on the envelope
-                if (isHighlighted(hiEnabled, hiId, th.id)) {
-                    drawHighlightStrokeRect(
-                        topLeft = Offset(left, top),
-                        size = size,
-                        baseStrokePx = outlineW,
-                        glowColor = hiGlowCol, glowDx = hiGlowDx, glowAlpha = hiGlowA
-                    )
-                }
-
-                drawThreadHatch(
-                    leftPx = left,
-                    topPx = top,
-                    rightPx = right,
-                    bottomPx = cy + majorR,
-                    pitchMm = th.pitchMm,
-                    majorDiaMm = th.majorDiaMm,
-                    slant = threadSlant,
-                    density = threadDensity,
-                    color = flankColor
-                )
-
-                // Envelope on top
-                drawRect(color = outline, topLeft = Offset(left, top), size = size, style = Stroke(width = outlineW))
-            }
-        } else {
-            for (th in spec.threads) {
-                val startX   = L.xPx(th.startFromAftMm)
-                val endX     = L.xPx(th.startFromAftMm + th.lengthMm)
-            val left     = min(startX, endX)
-            val right    = max(startX, endX)
-            val lengthPx = right - left
-
-            val majorR  = L.rPx(th.majorDiaMm)
-            val minorR  = majorR * 0.85f // TODO: switch to model minor dia when available
-            val pitchPx = ((th.pitchMm.takeIf { it > 0f } ?: (25.4f / 10f)) * L.pxPerMm) // fallback ≈10 TPI
-
-            val top  = cy - majorR
-            val size = Size(lengthPx, majorR * 2f)
-
-            // Underlay to separate from grid
+            // Underlay to separate from grid — each span at its own height.
             if (threadFill.alpha > 0f) {
-                drawRect(color = threadFill, topLeft = Offset(left, top), size = size)
+                if (drawHatch) drawRect(color = threadFill, topLeft = Offset(hatchLeft, top), size = hatchSize)
+                relief?.let { rs ->
+                    val rr = L.rPx(rs.diaMm)
+                    val rl = min(L.xPx(rs.startMm), L.xPx(rs.endMm))
+                    val rw = abs(L.xPx(rs.endMm) - L.xPx(rs.startMm))
+                    drawRect(color = threadFill, topLeft = Offset(rl, cy - rr), size = Size(rw, rr * 2f))
+                }
             }
 
-            // Highlight under-stroke on the envelope
-            if (isHighlighted(hiEnabled, hiId, th.id)) {
+            // Highlight under-stroke on the full stored span
+            if (isHighlighted(hiEnabled, hiId, id)) {
                 drawHighlightStrokeRect(
                     topLeft = Offset(left, top),
-                    size = size,
+                    size = Size(right - left, majorR * 2f),
                     baseStrokePx = outlineW,
                     glowColor = hiGlowCol, glowDx = hiGlowDx, glowAlpha = hiGlowA
                 )
             }
 
-            drawThreadHatch(
-                leftPx = left,
-                topPx = top,
-                rightPx = right,
-                bottomPx = cy + majorR,
-                pitchMm = th.pitchMm,
-                majorDiaMm = th.majorDiaMm,
-                slant = threadSlant,
-                density = threadDensity,
-                color = flankColor
-            )
+            if (drawHatch) {
+                drawThreadHatch(
+                    leftPx = hatchLeft,
+                    topPx = top,
+                    rightPx = hatchRight,
+                    bottomPx = cy + majorR,
+                    pitchMm = pitchMm,
+                    majorDiaMm = majorDiaMm,
+                    slant = threadSlant,
+                    density = threadDensity,
+                    color = flankColor
+                )
+                // Envelope on top — its face on the relief side is the step up from the groove.
+                drawRect(color = outline, topLeft = Offset(hatchLeft, top), size = hatchSize, style = Stroke(width = outlineW))
+            }
 
-            // Envelope on top
-                drawRect(color = outline, topLeft = Offset(left, top), size = size, style = Stroke(width = outlineW))
+            relief?.let { rs ->
+                val rr = L.rPx(rs.diaMm)
+                val x0 = L.xPx(rs.startMm)
+                val x1 = L.xPx(rs.endMm)
+                drawLine(outline, Offset(x0, cy - rr), Offset(x1, cy - rr), strokeWidth = outlineW)
+                drawLine(outline, Offset(x0, cy + rr), Offset(x1, cy + rr), strokeWidth = outlineW)
+                val xs = L.xPx(rs.shoulderEndMm(reliefAtAft))
+                drawLine(outline, Offset(xs, cy - rr), Offset(xs, cy + rr), strokeWidth = outlineW)
+                // A relief that takes the whole thread closes its other end at the relief Ø too.
+                if (hatch == null) {
+                    val xo = if (reliefAtAft) x1 else x0
+                    drawLine(outline, Offset(xo, cy - rr), Offset(xo, cy + rr), strokeWidth = outlineW)
+                }
+            }
+        }
+
+        if (resolvedThreads != null) {
+            for (th in resolvedThreads) {
+                drawOneThread(
+                    th.id, th.startMmPhysical, th.endMmPhysical - th.startMmPhysical,
+                    th.majorDiaMm, th.pitchMm, th.reliefLenMm, th.reliefDiaMm, th.reliefAtAft,
+                )
+            }
+        } else {
+            for (th in spec.threads) {
+                drawOneThread(
+                    th.id, th.startFromAftMm, th.lengthMm,
+                    th.majorDiaMm, th.pitchMm, th.reliefLenMm, th.reliefDiaMm, th.reliefAtAft,
+                )
             }
         }
 
