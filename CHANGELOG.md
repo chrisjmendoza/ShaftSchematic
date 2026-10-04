@@ -6,6 +6,48 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-10-03
+
+### fix(ui): PDF preview options open as a panel, and the page stays zoomable under it
+
+On-device request: zoom in on the threads and watch the "Thread slant" / "Thread density"
+sliders change them. The options were a Material `ModalBottomSheet` — a separate modal window
+that took every touch outside it as a dismiss — so the page strip above it could never be pinched
+while the sliders were up, and on the document-tab previews a zoom also reset on every new
+bitmap, i.e. on every slider release.
+
+- New shared `ui/screen/PreviewOptionsPanel.kt`: a NON-modal, in-layout `Surface` both preview
+  surfaces host at the bottom of the preview Box, composed after the page. Header row (title "PDF
+  options" + close button, testTags `preview_options_header` / `preview_options_close`) held to
+  exactly `TUNING_SHEET_CHROME_DP`, then the content slot under the cap — the panel is the ONE
+  owner of the cap. Closes by its close button, the Tune icon (now a toggle on both surfaces), or
+  Back (its `BackHandler` wins over the host's while open). An empty `pointerInput` makes the
+  whole panel a hit-test target, so a finger on its padding never pans the page beneath. No scrim.
+- `PdfPreviewScreen` (schematic / Final): the `ModalBottomSheet`, its transparent scrim and the
+  dimmed strip-to-sheet stand-in are gone. Zoom/pan resets when the panel opens AND when it
+  closes (the strip and the full page fit the page differently) and is otherwise kept. The
+  content Box now `clipToBounds()`, so a zoomed page tucks behind the app bar.
+- `PdfPreviewOverlay` (Output / Runout / Wear / Undercut): same panel; pan/zoom state hoisted to
+  the overlay and no longer keyed by the bitmap, so a zoom survives a re-render and the loading
+  spinner between passes. It resets when the layout switches (`stripLayout`) — every open/close
+  of a page-tuning panel; the undercut preview, whose layout never switches, keeps its zoom.
+- `PdfOptionsSheet` / `RunoutWearOptionsSheet` drop their own "PDF Options" title (the panel
+  header carries it), the schematic sheet's `maxHeightDp` parameter, and their
+  `navigationBarsPadding()` (the hosts pay the inset: the schematic Scaffold's default content
+  insets, the overlay's `systemBarsPadding`).
+- `PREVIEW_SHEET_MAX_FRAC` / `TUNING_SHEET_CHROME_DP` keep their values; their KDoc now describes
+  the panel (the swipe-edge and drag-handle rationales are gone).
+- New `PreviewOptionsPanelTest` (Robolectric): panel and page coexist and a page tap does not
+  close the panel; close button; Tune toggle; Back closes the panel before the route's handler;
+  header height; a zoom survives a re-render and resets on close.
+- **A re-render keeps the page on screen.** Both hosts showed the full spinner in place of the
+  page on every sharp pass, so a commit-on-release slider blanked the page at exactly the moment
+  its change was being watched. The spinner now stands in only until a FIRST page exists; after
+  that the current page (and the zoom on it) stays put and a small corner indicator
+  (`PreviewRerenderIndicator`, `preview_rerender_indicator`) marks the pass.
+- Docs: CLAUDE.md (live-tuning paragraph), `docs/contracts/PdfExport.md`,
+  `docs/contracts/RunoutSheet.md`.
+
 ## 2026-10-02
 
 ### feat(drawing): thread hatch spaces by the thread's own pitch at the drawn scale, with a "Thread density" slider

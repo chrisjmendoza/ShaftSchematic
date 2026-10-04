@@ -35,15 +35,16 @@ import kotlin.math.roundToInt
  * stay on the sliders' commit-on-release path, exactly as before. A field returns to null
  * when its drag ends, and the committed value takes over again.
  *
- * [active] is a `derivedStateOf` so the screens that read it (the raster resolution and the
- * bottom-sheet scrim) recompose when the drag STARTS and ENDS, not on every frame.
+ * [active] is a `derivedStateOf` so the screens that read it (the raster resolution) recompose
+ * when the drag STARTS and ENDS, not on every frame.
  *
  * The file also owns the pure **tuning layout** math ([tuningPageStripHeightDp],
  * [tuningSheetMaxHeightDp]) plus the one strip draw helper ([drawPageBand]) — where the page
- * sits and how tall its sheet may grow while that sheet is open. Live rendering is worthless
- * if the menu covers the page: the strip is sized from the page's INK BAND so blank paper
- * never takes room from the drawing, and the sheet budget counts the sheet's own chrome
- * ([TUNING_SHEET_CHROME_DP] + the navigation-bar inset), which no content cap covers.
+ * sits and how tall the options panel ([PreviewOptionsPanel]) may grow while it is open. Live
+ * rendering is worthless if the menu covers the page: the strip is sized from the page's INK
+ * BAND so blank paper never takes room from the drawing, and the panel budget counts the
+ * panel's own chrome ([TUNING_SHEET_CHROME_DP] + the navigation-bar inset below it), which no
+ * content cap covers.
  */
 class PreviewTuning {
     /** In-progress "Line thickness" multiplier, or null when no thickness drag is live. */
@@ -109,7 +110,7 @@ internal fun previewRenderScale(tuningActive: Boolean): Int =
     if (tuningActive) 1 else PDF_PREVIEW_RENDER_SCALE
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Tuning layout — the page strip above an open options sheet
+// Tuning layout — the page strip above an open options panel
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
@@ -120,26 +121,28 @@ internal fun previewRenderScale(tuningActive: Boolean): Int =
 internal const val PREVIEW_TOP_CHROME_DP = 88f
 
 /**
- * Floor for a tunable sheet's height, as a fraction of the screen. A short/wide device
- * cannot host both a full-width page and a usable sheet; the sheet keeps this much and the
+ * Floor for a tuning panel's content height, as a fraction of the screen. A short/wide device
+ * cannot host both a full-width page and a usable panel; the panel keeps this much and the
  * page strip takes what is left (it is zoomable, the sliders are not).
  */
 internal const val TUNING_SHEET_MIN_FRAC = 0.40f
 
 /**
- * Ceiling for any options sheet, as a fraction of the screen — a sheet expanded to the
- * status bar leaves no edge to swipe it back down by (on-device report). The non-tunable
- * sheets (wear, undercut) use this alone.
+ * Ceiling for any options panel's content, as a fraction of the screen — it keeps a band of
+ * the page visible above a panel that does not tune the page (the undercut preview, which uses
+ * this alone). The panel closes by its close button or Back, so no edge needs keeping for a
+ * dismiss gesture.
  */
 internal const val PREVIEW_SHEET_MAX_FRAC = 0.78f
 
 /**
- * The sheet chrome that sits OUTSIDE the content column's `heightIn` cap: M3's drag handle
- * (a 4 dp bar with 22 dp of padding above and below). The sheet's own bottom window inset
- * stacks outside the cap too, so callers add the measured `WindowInsets.navigationBars`
- * bottom to this constant. Both have to come out of the content budget — capping the column
- * alone leaves the sheet taller than the cap and overlapping the page strip, which cost the
- * drawing its lowest callouts and its footer (on-device report).
+ * The panel chrome that sits OUTSIDE the content slot's `heightIn` cap: the
+ * [PreviewOptionsPanel] header row (title + close button), held to exactly this height. The
+ * navigation-bar inset below the panel takes screen height outside the cap too — the hosts pay
+ * it as layout padding — so callers add the measured `WindowInsets.navigationBars` bottom to
+ * this constant. Both have to come out of the content budget — capping the content alone
+ * leaves the panel taller than the cap and overlapping the page strip, which cost the drawing
+ * its lowest callouts and its footer (on-device report).
  */
 internal const val TUNING_SHEET_CHROME_DP = 48f
 
@@ -152,8 +155,8 @@ internal fun fitWidthPageHeightDp(screenWidthDp: Float): Float =
     screenWidthDp * (PDF_PAGE_HEIGHT_PT.toFloat() / PDF_PAGE_WIDTH_PT.toFloat())
 
 /**
- * Height of the page strip the preview draws into while a tuning sheet is open — the first
- * of the pair, with the sheet cap derived from it.
+ * Height of the page strip the preview draws into while a tuning panel is open — the first
+ * of the pair, with the panel cap derived from it.
  *
  * The strip shows the page's INK BAND, not the whole sheet: [inkFrac] is the share of page
  * height that carries drawing (`InkBand.frac`), so the blank top margin never occupies the
@@ -161,10 +164,11 @@ internal fun fitWidthPageHeightDp(screenWidthDp: Float): Float =
  * we're losing some of the items under the shaft" — on-device report). Ink is never cropped;
  * only paper is. A page whose band has not been measured passes 1f and gets the full sheet.
  *
- * [sheetChromeDp] is the sheet furniture below the strip that no content cap covers —
+ * [sheetChromeDp] is the panel furniture below the strip that no content cap covers —
  * [TUNING_SHEET_CHROME_DP] plus the measured navigation-bar inset. On a screen too short to
- * host both, the SHEET keeps its [TUNING_SHEET_MIN_FRAC] floor and the strip yields the
- * remainder (the page fits to that height instead, and stays zoomable once the sheet closes).
+ * host both, the PANEL keeps its [TUNING_SHEET_MIN_FRAC] floor and the strip yields the
+ * remainder (the page fits to that height instead, and stays pinch-zoomable under the open
+ * panel).
  */
 internal fun tuningPageStripHeightDp(
     screenWidthDp: Float,
@@ -178,17 +182,17 @@ internal fun tuningPageStripHeightDp(
 ).coerceAtLeast(0f)
 
 /**
- * Height cap for the CONTENT COLUMN of an options sheet that tunes the page behind it:
- * whatever is left under the page strip once the top chrome and the sheet's own
+ * Height cap for the CONTENT SLOT of an options panel that tunes the page above it:
+ * whatever is left under the page strip once the top chrome and the panel's own
  * [sheetChromeDp] are paid for, so the drawing being judged stays visible while the sliders
  * move ("It may render live but the menu with the sliders is in the way" — on-device
  * report). Clamped between [TUNING_SHEET_MIN_FRAC] and [PREVIEW_SHEET_MAX_FRAC] of the
- * screen: the floor keeps the sheet usable on short/wide devices, the ceiling keeps the
- * historical swipe-down edge on very tall ones.
+ * screen: the floor keeps the panel usable on short/wide devices, the ceiling keeps a band of
+ * page in view on very tall ones.
  *
  * Takes [stripHeightDp] rather than recomputing it, so cap and strip can never disagree.
  * Where `Configuration.screenHeightDp` excludes the system bars the cap comes out
- * conservative — a slightly shorter sheet, never a covered page.
+ * conservative — a slightly shorter panel, never a covered page.
  */
 internal fun tuningSheetMaxHeightDp(
     screenHeightDp: Float,

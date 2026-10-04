@@ -123,7 +123,17 @@ with this job", so the reader never has to guess which kind a row is.
 Full-resolution preview through the shared `util/PdfRaster.renderPdfPageBitmap`
 (`PdfDocument` + `PdfRenderer`, 2× raster), pinch-to-zoom 0.5×–8×, double-tap reset.
 
-- **Options sheet (Tune icon):** a leading "Content" chip row — **Blank draft**, **Ø
+- **Options panel (Tune icon, a toggle):** the options open in `PreviewOptionsPanel`
+  (`ui/screen/PreviewOptionsPanel.kt`) — a NON-modal, in-layout `Surface` at the bottom of
+  the preview Box, composed after the page, with a header row (title "PDF options" + a close
+  button, `preview_options_close`) and the content slot under it. It closes by the close
+  button, the Tune icon, or Back (its `BackHandler` wins over navigation while open). There is
+  no scrim and no tap-outside dismissal: the page above the panel keeps its pinch, pan and
+  double-tap while the panel is up (on-device request: zoom on the threads while moving the
+  thread sliders — the modal `ModalBottomSheet` this replaced took every outside touch as a
+  dismiss). An empty `pointerInput` on the panel makes its whole area a hit-test target, so a
+  finger on its padding never pans the page beneath. The shared overlay
+  (`PdfPreviewOverlay`) hosts the same panel. The sheet content is a leading "Content" chip row — **Blank draft**, **Ø
   callouts** (enabled only while Blank draft is on), **Labels** — then the live-tuning
   slider group at the head — **"Shaft height"** slider, "Body S-break" threshold, line
   thickness (50–200%), liner compression control — then "Dimension arrows" size, fractions,
@@ -152,13 +162,12 @@ Full-resolution preview through the shared `util/PdfRaster.renderPdfPageBitmap`
     `spacedBy(12.dp)` column with a padded heading, not the expander); the prefs and setters
     are identical.
   - The sheet's content is taller than a phone screen, so it carries its own
-    `verticalScroll` plus `navigationBarsPadding()` — without them the bottom rows clip
-    mid-checkbox behind the navigation bar. Its height cap arrives as a `maxHeightDp`
-    parameter computed by the hosting screen from `tuningSheetMaxHeightDp` (see **Tuning
-    layout** below) — this sheet tunes the page live, so it stops below the page strip
-    instead of taking the historical 78% of the screen, and only the screen knows the strip.
-    Both caps keep the sheet clear of the status bar, which would otherwise leave no edge to
-    swipe it back down by (on-device report).
+    `verticalScroll` — without it the bottom rows clip mid-checkbox. It carries no title,
+    height cap or inset of its own: the panel header carries the title, the panel applies the
+    cap the screen computes from `tuningSheetMaxHeightDp` (see **Tuning layout** below — this
+    sheet tunes the page live, so it stops below the page strip, and only the screen knows the
+    strip), and the navigation-bar inset is paid by the Scaffold's default content insets
+    (`paddingValues` include the bottom system bar), which the panel is laid out inside.
 - **Live tuning:** the four tuning sliders — Line thickness, Body S-break, Shaft height,
   Liner & taper compression — reshape the page **while the finger is still on the track**
   ("see the differences without choosing, closing menu, opening menu, choosing" —
@@ -175,13 +184,20 @@ Full-resolution preview through the shared `util/PdfRaster.renderPdfPageBitmap`
   - **Draft resolution.** `renderPdfPageBitmap(renderScale = …)` takes 1 while a drag is
     live (≈¼ the pixels, so the page keeps up) and the pass after the release restores
     `PDF_PREVIEW_RENDER_SCALE`. The spinner is held back for drag frames and for that
-    release pass — the current page stays up instead of strobing.
+    release pass — the current page stays up instead of strobing. Every OTHER sharp pass
+    keeps the page up too: the full spinner replaces the page only while no bitmap exists
+    yet; once one does, a re-render (a commit-on-release control, Thread slant included)
+    leaves the current page and its zoom on screen under the small corner
+    `PreviewRerenderIndicator` (`ui/screen/PreviewOptionsPanel.kt`) — blanking the page at
+    the moment its change is being watched made the change unwatchable.
   - **Tuning layout — the page keeps a strip on top.** Live rendering is worthless if the
     menu covers the page: on a phone the options sheet filled virtually the whole screen
     ("It may render live but the menu with the sliders is in the way. I can see the PDF
     Preview area lighten up on moving a slider but I can't see anything. I need to close
     the menu to see the changes." — on-device report). While the sheet is open the preview
-    switches to the **tuning layout**, whose pure math lives in `ui/screen/PreviewTuning.kt`:
+    switches to the **tuning layout**, whose pure math lives in `ui/screen/PreviewTuning.kt`
+    ("sheet" in the names below is historical — the cap and chrome now size the options
+    panel):
     - The PDF pages are LANDSCAPE, so a whole page fits a strip only
       `screenWidthDp × (PDF_PAGE_HEIGHT_PT / PDF_PAGE_WIDTH_PT)` tall
       (`fitWidthPageHeightDp`, never a magic ratio). The Canvas draws the page fit-width and
@@ -204,18 +220,20 @@ Full-resolution preview through the shared `util/PdfRaster.renderPdfPageBitmap`
       bar + app bar) − sheet chrome, clamped to `[TUNING_SHEET_MIN_FRAC 40%,
       PREVIEW_SHEET_MAX_FRAC 78%]` of the screen. The cap takes the strip as an argument
       rather than recomputing it, so the two can never disagree.
-    - **The sheet's own chrome is budgeted.** `heightIn` caps the sheet's CONTENT column;
-      M3 stacks its drag handle (4 dp bar + 22 dp padding a side = `TUNING_SHEET_CHROME_DP`
-      48 dp) and the sheet's bottom window inset OUTSIDE that cap, so the real sheet stood
-      ~48 dp + nav bar taller than the budget and covered the bottom of the page (on-device
-      report). Both draw sites pass `TUNING_SHEET_CHROME_DP + WindowInsets.navigationBars`
-      bottom. On a 393 × 851 dp phone with a 48 dp nav bar: strip 303.7 dp, sheet 363.3 dp —
-      with the chrome, exactly the screen. The sheet scrolls internally, so no content is
-      lost. Where `Configuration.screenHeightDp` excludes the system bars the cap comes out
-      conservative: a slightly shorter sheet, never a covered page.
-    - **Clamp order: the sheet keeps its floor, the strip yields the remainder**
+    - **The panel's own chrome is budgeted.** `heightIn` caps the panel's CONTENT slot; the
+      header row above it (title + close button) is held to exactly `TUNING_SHEET_CHROME_DP`
+      (48 dp, testTag `preview_options_header`), and the navigation-bar inset the host pads
+      below the panel also takes screen height outside the cap. Ignoring them left the
+      options ~48 dp + nav bar taller than the budget, covering the bottom of the page
+      (on-device report), so both draw sites pass `TUNING_SHEET_CHROME_DP +
+      WindowInsets.navigationBars` bottom. On a 393 × 851 dp phone with a 48 dp nav bar: strip
+      303.7 dp, panel content 363.3 dp — with the chrome, exactly the screen. The content
+      scrolls internally, so none is lost. Where `Configuration.screenHeightDp` excludes the
+      system bars the cap comes out conservative: a slightly shorter panel, never a covered
+      page.
+    - **Clamp order: the panel keeps its floor, the strip yields the remainder**
       (`tuningPageStripHeightDp`). On a short/wide screen the page fits to the shrunken
-      strip — it is zoomable once the sheet closes; the sliders are not usable at all if
+      strip — it stays pinch-zoomable under the panel; the sliders are not usable at all if
       crushed.
     - **One draw helper.** `DrawScope.drawPageBand(bitmap, band, stripHeightPx)`
       (`PreviewTuning.kt`) crops to the band, fits to strip width/height, centers
@@ -224,18 +242,18 @@ Full-resolution preview through the shared `util/PdfRaster.renderPdfPageBitmap`
       layout, same modifier chain plus an explicit `contentDescription`) — so they cannot
       drift. The non-strip path is untouched: the normal preview still shows the real page,
       margins and all.
-    - Opening the sheet **resets zoom/pan** to fit. Deliberate: an inspection zoom would
-      put the strip off-screen exactly when the sliders need it visible — predictable over
-      preserved. Closing returns the normal layout (centered, pinch 0.5×–8×, double-tap
-      reset).
-  - **Scrim.** `ModalBottomSheet`'s scrim is one **full-window** rect — it cannot be
-    restricted to the area below the strip, and dimming the strip is what the layout exists
-    to prevent — so `scrimColor` is `Color.Transparent` whenever the sheet tunes the page.
-    The preview Box paints the strip-to-sheet **gap** itself with `BottomSheetDefaults.ScrimColor`
-    to keep the modal affordance, and drops even that while a slider is being dragged. The
-    transparent scrim still handles tap-outside-to-dismiss, unchanged.
-  - The blank-draft chip overlaid on the preview is **hidden while the sheet is open** — it
-    would sit on the page strip, and the sheet's own first row is that same switch.
+    - **Zoom under the panel.** The strip stays pinch-zoomable (0.5×–8×), pannable and
+      double-tap-resettable while the panel is open, and a zoom **survives a re-render**: the
+      pan/zoom state lives at screen level, never keyed by the bitmap, and every pass — draft
+      raster or sharp — fits into the same box, so a zoom on the threads stays on the threads
+      while their sliders commit. It **resets when the panel opens AND when it closes**: the
+      strip and the centered full page fit the page differently, so a zoom carried across
+      either switch would point at the wrong place. The preview Box `clipToBounds()`, so a
+      zoomed page tucks behind the app bar instead of painting over it.
+  - **No scrim.** Nothing about the panel is modal, so nothing dims — the page is the thing
+    being judged.
+  - The blank-draft chip overlaid on the preview is **hidden while the panel is open** — it
+    would sit on the page strip, and the panel's own first row is that same election.
 - **Orientation:** `DisposableEffect` unlocks rotation on entry (`unlockRotation`) and
   restores the device's BASE orientation on dispose (`restoreBaseOrientation`,
   `ui/adaptive/Orientation.kt` — the one `R.integer.activity_orientation` the manifest
