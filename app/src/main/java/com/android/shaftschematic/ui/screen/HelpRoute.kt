@@ -788,6 +788,12 @@ internal val helpSections: List<HelpSection> = listOf(
                 "Each document's PDF Options sheet mixes two kinds of control, and the sheet " +
                     "says which is which: its header notes that drawing settings are " +
                     "app-wide, and the controls saved with the job say so in their caption.\n\n" +
+                    "Under the Content chips the controls are grouped into sections you open " +
+                    "and close with a tap on the heading, the most used first and in the same " +
+                    "order on every sheet: \"Shaft\" (open), \"Wear\" (open, wear sheet " +
+                    "only), \"Runout bubbles\", \"Thread\" (only when the shaft has a thread), " +
+                    "\"Lines & text\", \"Shade in Components\", \"Measurement reference\", and " +
+                    "\"Units\" last. A sheet leaves out any section it has nothing for.\n\n" +
                     "Saved with this job — a reopened document prints exactly as it did:\n" +
                     "• \"Shaft height\" — on the Consolidated Output tab and in the schematic, " +
                     "runout, and wear PDF Options sheets. Sets the drawn shaft height on paper " +
@@ -828,7 +834,8 @@ internal val helpSections: List<HelpSection> = listOf(
                     "• \"Dimension arrows\" — Small / Medium / Large arrowheads on the " +
                     "dimension rails, on the schematic and consolidated sheets. Heads point " +
                     "inward unless the span is too narrow to hold both.\n" +
-                    "• \"Thread slant\" — on every document's sheet. How far the thread " +
+                    "• \"Thread slant\" — in the Thread section of every document's sheet, " +
+                    "shown whenever the shaft has a thread. How far the thread " +
                     "hatch leans: it follows each thread's own pitch, 1× being the true crest " +
                     "angle. This one applies when you let go rather than while you drag.\n" +
                     "• \"Thread density\" — beside it. How many of the thread's crests the " +

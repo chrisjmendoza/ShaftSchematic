@@ -769,6 +769,7 @@ fun UndercutRoute(
                     undercutLineArt = pdfUndercutLineArt,
                     vm = vm,
                     fractionStyle = pdfFractionStyle,
+                    hasThreads = hasDrawnThreads(spec),
                     threadSlant = pdfThreadSlant,
                     threadDensity = pdfThreadDensity,
                     blankDraft = blankDraft,

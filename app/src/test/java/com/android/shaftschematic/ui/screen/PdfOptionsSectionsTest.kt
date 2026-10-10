@@ -1,5 +1,6 @@
 package com.android.shaftschematic.ui.screen
 
+import android.app.Application
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -9,11 +10,20 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.test.core.app.ApplicationProvider
+import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.Threads
 import com.android.shaftschematic.settings.PdfTieringMode
+import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
+import com.android.shaftschematic.util.DualUnitLayout
+import com.android.shaftschematic.util.FractionStyle
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -174,5 +184,279 @@ class PdfOptionsSectionsTest {
 
         rule.onNodeWithText("Ø callouts").assertIsNotEnabled()
         assertEquals(0, callouts)
+    }
+
+    // ── The sheets' section layout ──────────────────────────────────────────────
+    // Both sheets build their sections from ONE ordered list (`OptionsSection`): most-used on
+    // top, the shaft fit open, everything from Runout bubbles down folded, Units last. These
+    // host the real sheets so a section moved, renamed, or opened by default on one of them
+    // fails here rather than reading as a different sheet on device.
+
+    private fun vm(): ShaftViewModel =
+        ShaftViewModel(ApplicationProvider.getApplicationContext<Application>())
+
+    private val bareSpec = ShaftSpec(overallLengthMm = 3000f)
+
+    private val threadedSpec = ShaftSpec(
+        overallLengthMm = 3000f,
+        threads = listOf(Threads(id = "t1", majorDiaMm = 50f, pitchMm = 2.5f, lengthMm = 60f)),
+    )
+
+    private fun hostSchematicSheet(spec: ShaftSpec) {
+        val vm = vm()
+        rule.setContent {
+            MaterialTheme {
+                PdfOptionsSheet(
+                    vm = vm,
+                    spec = spec,
+                    pdfShowComponentTitles = true,
+                    pdfTieringMode = PdfTieringMode.AUTO,
+                    lineThicknessScale = 1f,
+                    sBreakThresholdFrac = 0.5f,
+                    arrowSizePt = 4f,
+                    threadSlant = 3f,
+                    threadDensity = 0.5f,
+                    fractionStyle = FractionStyle.Default,
+                    dualUnitLayout = DualUnitLayout.Default,
+                    dualUnits = false,
+                    heightScale = 1f,
+                    linersProportional = false,
+                    linerCompression = 1f,
+                    curveLoHeightIn = 0.5f,
+                    curveHiHeightIn = 1f,
+                    pdfShadedBodies = false,
+                    pdfShadedTapers = false,
+                    pdfShadedLiners = false,
+                    pdfShadeExplicitBodiesOnly = false,
+                    pdfBlankDraft = false,
+                    pdfBlankDiaCallouts = false,
+                    tuning = PreviewTuning(),
+                )
+            }
+        }
+    }
+
+    /** The shared sheet as the Consolidated Output preview configures it. */
+    private fun hostConsolidatedSheet(hasThreads: Boolean) {
+        val vm = vm()
+        rule.setContent {
+            MaterialTheme {
+                RunoutWearOptionsSheet(
+                    lineThicknessScale = 1f,
+                    pdfShadedBodies = false,
+                    pdfShadedTapers = false,
+                    pdfShadedLiners = false,
+                    vm = vm,
+                    showCouplingFaceRow = true,
+                    showSBreak = true,
+                    showDimensionArrows = true,
+                    hasThreads = hasThreads,
+                    onDualUnitsChange = {},
+                    onSetBlankDraft = {},
+                    showHeightSlider = true,
+                    showLinerCompression = true,
+                    showBubbleControls = true,
+                    showMeasurementReference = true,
+                )
+            }
+        }
+    }
+
+    // The layout position, not `getBoundsInRoot`: the sheet scrolls, and a header below the
+    // test window's fold reports clipped bounds that say nothing about the order.
+    private fun headerTop(tag: String) = rule.onNodeWithTag(tag).fetchSemanticsNode().positionInRoot.y
+
+    private fun assertSectionOrder(vararg tags: String) {
+        val tops = tags.map { headerTop(it) }
+        for (i in 1 until tops.size) {
+            assertTrue(
+                "${tags[i - 1]} (${tops[i - 1]}) sits above ${tags[i]} (${tops[i]})",
+                tops[i - 1] < tops[i],
+            )
+        }
+    }
+
+    private val allSectionTags = OptionsSection.entries.map { it.testTag }
+
+    @Test
+    fun `the schematic sheet opens on the Shaft section holding the height slider`() {
+        hostSchematicSheet(bareSpec)
+
+        rule.onNodeWithTag("options_shaft_expander").assertExists()
+        rule.onNodeWithText("Shaft height", substring = true).assertExists()
+        rule.onNodeWithText("Body S-break", substring = true).assertExists()
+    }
+
+    @Test
+    fun `the consolidated sheet opens on the Shaft section holding the height slider`() {
+        hostConsolidatedSheet(hasThreads = false)
+
+        rule.onNodeWithText("Shaft height", substring = true).assertExists()
+    }
+
+    @Test
+    fun `the schematic sheet offers the Thread section only on a threaded shaft`() {
+        hostSchematicSheet(bareSpec)
+
+        rule.onNodeWithTag("options_thread_expander").assertDoesNotExist()
+        rule.onNodeWithText("Thread slant", substring = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun `the schematic sheet's Thread section is collapsed until tapped`() {
+        hostSchematicSheet(threadedSpec)
+
+        rule.onNodeWithTag("options_thread_expander").assertExists()
+        rule.onNodeWithText("Thread slant", substring = true).assertDoesNotExist()
+
+        rule.onNodeWithTag("options_thread_expander").performScrollTo().performClick()
+
+        rule.onNodeWithTag("thread_slant_slider").assertExists()
+        rule.onNodeWithTag("thread_density_slider").assertExists()
+    }
+
+    @Test
+    fun `the shared sheet offers the Thread section only when told there are threads`() {
+        hostConsolidatedSheet(hasThreads = false)
+
+        rule.onNodeWithTag("options_thread_expander").assertDoesNotExist()
+    }
+
+    @Test
+    fun `the shared sheet's Thread section is collapsed until tapped`() {
+        hostConsolidatedSheet(hasThreads = true)
+
+        rule.onNodeWithTag("thread_slant_slider").assertDoesNotExist()
+
+        rule.onNodeWithTag("options_thread_expander").performScrollTo().performClick()
+
+        rule.onNodeWithTag("thread_slant_slider").assertExists()
+    }
+
+    @Test
+    fun `Lines and text is collapsed until tapped, then shows Line thickness`() {
+        hostSchematicSheet(bareSpec)
+
+        rule.onNodeWithText("Line thickness", substring = true).assertDoesNotExist()
+
+        rule.onNodeWithTag("options_lines_expander").performScrollTo().performClick()
+
+        rule.onNodeWithText("Line thickness", substring = true).assertExists()
+        rule.onNodeWithText("Dimension arrows").assertExists()
+        rule.onNodeWithText("Fractions").assertExists()
+    }
+
+    @Test
+    fun `the schematic sheet lays its sections out in the documented order`() {
+        hostSchematicSheet(threadedSpec)
+
+        assertSectionOrder(
+            "options_shaft_expander",
+            "options_thread_expander",
+            "options_lines_expander",
+            "options_shade_expander",
+            "options_measure_ref_expander",
+            "options_units_expander",
+        )
+    }
+
+    @Test
+    fun `the consolidated sheet lays its sections out in the documented order`() {
+        hostConsolidatedSheet(hasThreads = true)
+
+        assertSectionOrder(
+            "options_shaft_expander",
+            "options_bubbles_expander",
+            "options_thread_expander",
+            "options_lines_expander",
+            "options_shade_expander",
+            "options_measure_ref_expander",
+            "options_units_expander",
+        )
+    }
+
+    @Test
+    fun `Units is the last section on both sheets`() {
+        hostConsolidatedSheet(hasThreads = true)
+
+        val unitsTop = headerTop("options_units_expander")
+        allSectionTags.filter { it != "options_units_expander" }.forEach { tag ->
+            val nodes = rule.onAllNodesWithTag(tag).fetchSemanticsNodes()
+            if (nodes.isNotEmpty()) {
+                assertTrue("$tag sits above Units", headerTop(tag) < unitsTop)
+            }
+        }
+    }
+
+    @Test
+    fun `Units is the last section on the schematic sheet`() {
+        hostSchematicSheet(threadedSpec)
+
+        val unitsTop = headerTop("options_units_expander")
+        allSectionTags.filter { it != "options_units_expander" }.forEach { tag ->
+            val nodes = rule.onAllNodesWithTag(tag).fetchSemanticsNodes()
+            if (nodes.isNotEmpty()) {
+                assertTrue("$tag sits above Units", headerTop(tag) < unitsTop)
+            }
+        }
+    }
+
+    @Test
+    fun `the wear sheet opens its Wear section and omits the runout-only sections`() {
+        val vm = vm()
+        rule.setContent {
+            MaterialTheme {
+                RunoutWearOptionsSheet(
+                    lineThicknessScale = 1f,
+                    pdfShadedBodies = false,
+                    pdfShadedTapers = false,
+                    pdfShadedLiners = false,
+                    vm = vm,
+                    showWearControls = true,
+                    showHeightSlider = true,
+                    showShadeExplicitBodiesOnly = false,
+                    onDualUnitsChange = {},
+                    onSetBlankDraft = {},
+                )
+            }
+        }
+
+        rule.onNodeWithTag("wear_strip_size_slider").assertExists()
+        rule.onNodeWithTag("options_bubbles_expander").assertDoesNotExist()
+        rule.onNodeWithTag("options_measure_ref_expander").assertDoesNotExist()
+        assertSectionOrder(
+            "options_shaft_expander",
+            "options_wear_expander",
+            "options_lines_expander",
+            "options_shade_expander",
+            "options_units_expander",
+        )
+    }
+
+    @Test
+    fun `the undercut sheet has no Shaft section`() {
+        val vm = vm()
+        rule.setContent {
+            MaterialTheme {
+                RunoutWearOptionsSheet(
+                    lineThicknessScale = 1f,
+                    pdfShadedBodies = false,
+                    pdfShadedTapers = false,
+                    pdfShadedLiners = false,
+                    vm = vm,
+                    showShadeExplicitBodiesOnly = false,
+                    showUndercutLineArt = true,
+                    onDualUnitsChange = {},
+                    onSetBlankDraft = {},
+                )
+            }
+        }
+
+        rule.onNodeWithTag("options_shaft_expander").assertDoesNotExist()
+        assertSectionOrder(
+            "options_lines_expander",
+            "options_shade_expander",
+            "options_units_expander",
+        )
     }
 }
