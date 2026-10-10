@@ -514,8 +514,15 @@ internal val helpSections: List<HelpSection> = listOf(
                 "Record runout",
                 "The Runout sheet places dial-indicator stations per component and records a " +
                     "TIR value plus a high-spot clock position per bubble. Tap a bubble to " +
-                    "edit it. Readings are reference-only and survive component edits; a " +
-                    "reading whose station no longer exists is simply not drawn.\n\n" +
+                    "edit it; press and hold one to drag it along its component. Readings " +
+                    "are reference-only and survive component edits; a reading whose station " +
+                    "no longer exists is simply not drawn.\n\n" +
+                    "Move mode — the pencil toggle in the preview's corner — is the quick way " +
+                    "to arrange bubbles: a bubble moves the moment you touch it, a tap selects " +
+                    "a bubble or a component instead of opening its reading, and the − / + " +
+                    "under the preview add or remove a station on whatever is selected. " +
+                    "\"Undo move\" puts the last moved bubble back. Switch the mode off to " +
+                    "enter readings again.\n\n" +
                     "Stations default to two per taper and liner (set in an inch from each " +
                     "edge, where the geometry changes and an indicator reads unreliably) and " +
                     "three per body; you can raise or lower the count per component, or set it " +

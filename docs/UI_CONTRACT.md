@@ -392,7 +392,9 @@ Wear Document, Undercut Drawing, Final Schematic, Consolidated Output); their UI
 rather than duplicated here. Summary of the boundaries, which follow the same rules as above:
 
 - **RunoutRoute** — station-count overrides, TIR orientation, tap-a-bubble editor
-  (`RunoutBubbleDialog`: TIR value + high-spot clock marker). All bubble placement comes
+  (`RunoutBubbleDialog`: TIR value + high-spot clock marker), press-and-hold drag, and the
+  canvas's **Move mode** toggle (touch-to-drag, tap-to-select, −/+ toolbar on the selection —
+  `docs/contracts/RunoutSheet.md` §Move mode). All bubble placement comes
   from the shared `geom/RunoutBubbleLayout.kt` engine; the route never computes placement.
 - **WearRoute** — tappable overview canvas (component tint + wear-count badges) opening
   `ComponentWearDetailOverlay`: a **Pits** section (tool chips **Add X** / **Remove X**)

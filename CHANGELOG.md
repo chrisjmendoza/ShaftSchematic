@@ -6,6 +6,58 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-10-09
+
+### feat(runout): Move mode — touch-to-drag bubbles, tap-to-select, −/+ on the selection
+
+On-device request: press-and-hold to drag a runout bubble is not discoverable and its hold slows
+down placing several bubbles in a row. The Runout tab's canvas gains an explicit **Move mode**
+behind a pencil toggle in the preview's corner (`runout_move_mode`, beside "Reset view", tinted
+while on, default OFF). OFF is the plain authoring canvas, unchanged; press-and-hold still works
+there and the "Undo move" chip is untouched.
+
+- **Touch a bubble and it drags at once** — an extra `pointerInput` applied only while the mode
+  is on (`awaitFirstDown` → hit-test → consume → `drag`). A press on bare paper is left
+  unconsumed, so the canvas still pans and pinch-zooms. The long-press detector does not start a
+  drag in Move mode (`ownsDrag`): left live, a long press under an instant drag would restart it,
+  and its `drag()` returning false on consumed changes would cancel the drag mid-gesture.
+- **A tap selects instead of opening the reading dialog** — a bubble, else the component run
+  under the tap (axial span + the drawn profile band at that station, one bubble radius of slop),
+  else nothing. A selected station takes the dragged bubble's heavier ring; a selected component
+  takes a thin dashed frame around each of its drawn runs. Screen affordance only, no PDF
+  counterpart. The selected station wins a press within its reach (`pickBubbleForMove`), so the
+  bubble already chosen is the one that moves on a crowded component.
+- **−/+ on the selection** — a toolbar under the canvas (`ui/screen/RunoutMoveToolbar.kt`:
+  `runout_move_selection`, `runout_move_remove`, `runout_move_add`) adds or removes a station on
+  the selected component without scrolling to the station rows. It calls the station editor's own
+  `addRunoutStation`/`removeRunoutStation` with the editor's own count and − rule
+  (`stationCountFor`/`canRemoveStation`, both extracted into `RunoutStationEditor.kt` and used by
+  the rows too). After either, the component stays selected and the station drops (the change
+  renumbers its stations). − is +'s inverse by the existing contract; the session Undo covers
+  both.
+- **Nothing below the gesture layer changed.** The drag's pickup/follow/commit bodies moved out
+  of the long-press detector into three local functions (`beginStationDrag`/
+  `continueStationDrag`/`endStationDrag`) that BOTH detectors call — the code is the former
+  long-press body verbatim, so commit-on-release, the ONE-station pin, the neighbour clamp and
+  the `lastBubbleMove` bookkeeping are shared, not duplicated. The selection is screen state
+  (`RunoutMoveSelection`, cleared when the mode turns off, read through `liveMoveSelection` so a
+  component that stops resolving reads as nothing selected) — never in the envelope.
+- The marker ink is now one shared `RunoutMarkerInk` (`SheetInk.Outline` at 70%, the same value
+  the markers always drew with). `runoutBubbleTitle` delegates to `moveSelectionLabel`, so the
+  dialog title and the toolbar label share one format (output identical).
+- Pure logic in `ui/screen/RunoutMoveModeLogic.kt` (no Compose): `moveModeSelectionForTap`,
+  `pickBubbleForMove`, `selectionAfterCountChange`, `liveMoveSelection`, `runoutSpanIdAt`,
+  `moveSelectionLabel`.
+- Tests: `RunoutMoveModeLogicTest` (16), `RunoutMoveToolbarTest` (Robolectric, 4, testTags only;
+  the whole `RunoutRoute` is not composable under Robolectric). Help topic "Record runout"
+  describes the mode.
+- Contracts: `docs/contracts/RunoutSheet.md` (§Move mode), `CLAUDE.md` (Dragged runout
+  stations), `UI_CONTRACT.md` §7.5, `Appearance.md` (the −/+ toolbar is a TalkBack path),
+  `ROADMAP.md` (tap-to-place item narrowed).
+- Noted, not fixed (pre-existing): with the mode off, the long-press detector's
+  `awaitFirstDown(requireUnconsumed = false)` can start a bubble drag from a long press on the
+  corner "Reset view" button when a zoomed bubble sits under it.
+
 ## 2026-10-03
 
 ### fix(ui): PDF options sheets grouped into collapsible sections, most-used first

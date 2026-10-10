@@ -207,9 +207,10 @@ tuning sections (bubbles, sliders, worn sections), then Export all.
 ## Draggable stations (authored positions, 2026-08-16)
 
 A station's position is normally **derived**. Press-and-hold a bubble on the Runout tab's live
-canvas and it can be **dragged along its component** — to mark a spot that actually got
-measured rather than the one the interval math picked (on-device request). A dragged position
-is an authored value in the golden-rule sense: no derivation may move it again.
+canvas — or switch on **Move mode** (below) and simply touch it — and it can be **dragged along
+its component**, to mark a spot that actually got measured rather than the one the interval
+math picked (on-device request). A dragged position is an authored value in the golden-rule
+sense: no derivation may move it again.
 
 ### Data — `model/RunoutStationPlacement.kt`
 
@@ -265,7 +266,7 @@ undo (a fully derived document shows none of them — a permanent reset would im
 position state on every document; pinned by `RunoutStationEditorTest`):
 
 - **"Undo move"** (`runout_undo_move`) — a chip beside the canvas hint, appearing after a
-  committed drag. One tap restores the moved station's pin as it stood **before** that drag;
+  committed drag in either mode (a Move-mode drag commits through the same path). One tap restores the moved station's pin as it stood **before** that drag;
   when the drag was that station's first, the pre-drag state is *derived*, so the undo un-pins
   it back to automatic placement rather than freezing it at its old derived spot
   (`LastBubbleMove.previousMm == null`). No other bubble is touched either way. Screen state,
@@ -331,6 +332,55 @@ and drawing cannot disagree about where a bubble is.
   (`originalPositionsMm`).
 - The bubble under the finger draws a heavier ring — transient screen affordance, no PDF
   counterpart, so the draw-both-sites rule is untouched.
+
+### Move mode — the explicit alternative to press-and-hold
+
+A long press is the least discoverable touch gesture, and its hold made placing several bubbles
+slow (on-device request). The canvas's corner toggle (`runout_move_mode`, beside "Reset view";
+tinted while on; `rememberSaveable`, default OFF) switches the canvas into **Move mode**. OFF is
+the authoring canvas described above, unchanged.
+
+While ON, the gestures are re-bound — and **nothing below the gesture layer changes**:
+
+- **Touch a bubble and it is picked up at once** — no hold. An extra `pointerInput`, applied
+  only while the mode is on and declared after the long-press detector, runs `awaitFirstDown` →
+  hit-test → consume → `drag(...)`. A press that hits no bubble is left **unconsumed**, so bare
+  paper still pans and pinch-zooms. The long-press detector stays declared but **does not start a
+  drag in Move mode** (`ownsDrag`): a long press firing under an instant drag would restart it,
+  and its `drag()` returning `false` on changes the instant detector consumed would fire
+  `onDragCancel` and null the drag mid-gesture. Press-and-hold still "works" in Move mode only
+  because the instant pickup already has the bubble.
+- **A tap selects instead of opening the reading dialog** — a bubble (`RunoutMoveSelection(id,
+  stationIndex)`), else the component run under the tap (`stationIndex = null`; axial hit by
+  `runoutSpanIdAt`, vertical hit inside the drawn profile at that station plus one bubble radius
+  of slop, `runoutComponentAt`), else nothing (clears). Readings are entered with the mode OFF.
+  The **selected station wins the hit test** on a press within its reach (`pickBubbleForMove`),
+  so on a crowded component the bubble already chosen is the one that moves; a pickup also
+  selects what it picked up.
+- **Highlight** — a selected station takes the dragged bubble's heavier ring (one look for "the
+  active bubble"); a selected component takes a thin dashed frame around each of its drawn runs
+  (`drawRunoutComponentSelection`, dashed so it never reads as a drawn edge). Both are screen
+  affordance in the marker ink (`RunoutMarkerInk`); no PDF counterpart.
+- **−/+ on the selection** — `RunoutMoveToolbar` (`ui/screen/RunoutMoveToolbar.kt`:
+  `runout_move_selection` label, `runout_move_remove`, `runout_move_add`) sits under the canvas
+  while the mode is on. It calls **the station editor's own** `addRunoutStation` /
+  `removeRunoutStation` with the editor's own count (`stationCountFor`) and − rule
+  (`canRemoveStation`, floor 0) — both extracted into `RunoutStationEditor.kt` so the rows and
+  the toolbar cannot act on different numbers. After either, the component stays selected but
+  the station drops (`selectionAfterCountChange`): the change renumbers its stations. "Undo
+  move" is move-only; a −/+ is undone by its inverse button (the contract above) or the session
+  Undo.
+- **Selection is screen state** — never in the envelope, cleared when the mode turns off, and
+  read through `liveMoveSelection`: a component that stopped resolving reads as no selection and a
+  station past the current count falls back to its component, without the stored selection being
+  rewritten (a geometry undo that brings the component back brings its selection back).
+
+The drag's three phases — pickup (`beginStationDrag`), follow (`continueStationDrag`), commit
+(`endStationDrag`, the ONE write, same `lastBubbleMove` bookkeeping) — are **one body each**,
+called by both detectors; the long-press path and the instant path cannot drift. Pure decisions
+in `ui/screen/RunoutMoveModeLogic.kt` (no Compose), pinned by `RunoutMoveModeLogicTest`; the
+toolbar by `RunoutMoveToolbarTest` (standalone — `RunoutRoute` itself is not composable under
+Robolectric).
 
 ### Both plans must be fed
 
