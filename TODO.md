@@ -1,7 +1,7 @@
 # ShaftSchematic TODO
 
 **Version: v0.5.x Development Queue**
-**Last updated: 2026-09-16**
+**Last updated: 2026-10-09**
 
 ## What belongs here
 
@@ -30,19 +30,23 @@ at most a pointer from here.
 | Validation — blocking errors | ✅ Add dialogs, carousel badges, export gate |
 | Validation — non-blocking warnings | ✅ Carousel badges, spec banner |
 | Snapping engine | ❌ Removed with tap-to-add — nothing snaps a position (golden rule) |
-| Tap-to-add pipeline | ❌ Removed — canvas tap is selection-only; add via the FAB chooser |
+| Tap-to-add pipeline | ❌ Removed — canvas tap is selection-only; add via the "+ Add Component" button's chooser |
 | OAL window / excluded threads | ✅ Implemented & unit-tested |
 | Taper rate input, derivation, colon entry | ✅ Auto-by-default with manual override |
-| Keyways — taper, body, spooned, 180°/90° clocking | ✅ Shipped |
+| Keyways — taper, body, spooned, captured, 180°/90° clocking, standard sizes | ✅ Shipped — one shared "Keyway" gate on cards + Add dialogs |
+| Threads — metric designations, relief groove, pitch-driven hatch (slant + density) | ✅ Shipped |
+| Coupler bolt rows — seam slots + cross-drilled holes | ✅ Shipped |
 | Liner shoulders | ✅ Shipped, capability-gated (default OFF) — schematic + runout/consolidated sheets, envelope-aware |
 | Diagnostics — breadcrumb log + Share logs, guarded Crashlytics | ✅ Shipped — activation steps open, see §2 |
-| Body blends + seal areas | ✅ Shipped on schematic and runout/consolidated sheets |
+| Body blends + seal areas | ✅ Shipped on schematic and runout/consolidated sheets — face finish Square \| Blend, seal areas their own section |
+| Final Schematic (`final_spec`) | ✅ Shipped — second geometry, Final tab, marked sheets |
 | Undercut drawing (tab + PDF) | ✅ Shipped |
 | Wear document | ✅ Shipped — strips, pits, dia readings, blank template |
 | Runout drawing + bubble editor | ✅ Shipped — draggable stations, coupling face |
 | Consolidated Output tab | ✅ Shipped — variant election, worn sections, Export all |
 | Profile sizing (PDF) | ✅ Shipped — 1/2"–1 1/2" paper band, sizing curve, liner compression, S-break threshold |
-| Mixed units + dual display | ✅ Shipped, off by default — see §2 for open follow-ups |
+| Mixed units + dual display | ✅ Shipped, off by default — one open composer bug, see §2 |
+| PDF options | ✅ Non-modal panel (page stays zoomable), collapsible sections most-used first |
 | Fraction typography | ✅ Shipped — Stacked / Diagonal (default) / Plain |
 | Drawing preset profiles | ✅ Shipped, app-wide |
 | Appearance settings (theme + high contrast) | ✅ Shipped — see §2 for the open on-device pass |
@@ -92,9 +96,19 @@ at most a pointer from here.
 - **Runout sheet: tap-to-place bubble** (requested 2026-07-26). The leader half is superseded by
   the auto leader; long-press-drag already pins a station, which covers most of the need. Confirm
   on-device whether anything remains wanted here.
-- **Warning thresholds** picked during the 2026-07-24 loop (1.5× adjacent-body step, 0.5 mm
-  adjacency eps in `ui/util/ComponentWarnings.kt`) — chosen without shop input; sanity-check
-  against real drawings.
+- **Provisional constants chosen without shop input** — sanity-check each against real drawings
+  and shop practice:
+  - Warning thresholds in `ui/util/ComponentWarnings.kt`: 1.5× adjacent-body step, 0.5 mm
+    adjacency eps, and the implausible-value badge (length > 15 m, any Ø > 1 m).
+  - The keyway "Standard size…" key-stock tables (ANSI / DIN).
+  - The liner-shoulder edge-radius list `LINER_SHOULDER_STD_RADII_IN`.
+  - The thread-relief seeds (length 1.5 × pitch, Ø = major − 1.3 × pitch).
+- **Liner vs taper compression on the consolidated sheet.** With "Liner & taper compression"
+  turned down, tapers reach ~40% of true length while liners stop at ~69%: the liners' flat
+  `PROFILE_MIN_LINER_PT` floor is λ-immune on that sheet (the schematic's lean floor lands both
+  on ~53%). The slider's top ~70% of travel therefore moves only liners. Options: lower the taper
+  baseline gate, or make the liner floor λ-aware (risk: body runs start to equalize). Decide
+  whether the mismatch matters on paper before changing anything.
 
 ---
 
@@ -110,8 +124,15 @@ at most a pointer from here.
   reporting simply inactive.
 - [ ] On-device: tap Settings → Data → "Share diagnostic logs" once — the FileProvider
   attachment path is pinned by test only indirectly (Robolectric cannot resolve provider roots).
-- [ ] On-device pass on the recent tail — several features are shipped but unverified on
-  hardware; `CHANGELOG.md` is the running record of which.
+- [ ] On-device pass on the recent tail — shipped but unverified on hardware (`CHANGELOG.md` has
+  the details). As of this update: runout Move mode (corner toggle, touch-to-drag, tap-select,
+  −/+ toolbar — judge the pickup haptic and the dashed component frame), PDF options sections
+  (order + which start open), the
+  non-modal options panel (zoom under it, re-render keeps the page), thread relief, thread slant
+  (judge the 3× default) and density, the keyway gate, captured keyways, seal areas as their own
+  control (dashed cuts, anchored at the face, S-break clear of them), OAL commit-on-accept,
+  cross-drilled bolt holes, the Final Schematic tab, keyway standard sizes, Output font,
+  tap-to-rename title + draft names.
 - [ ] On-device visual pass of dark and high-contrast chrome (the Appearance schemes have only
   been reasoned about, not looked at). See `docs/contracts/Appearance.md`.
 - [ ] On-device accessibility walk: the app at 200% system font scale (any clipped row —
@@ -127,12 +148,21 @@ at most a pointer from here.
   preview closing on a tablet (must stay free to rotate). Judge the 0.55/0.45 pane split and the
   720 dp readable width by eye — both are first guesses.
 - [ ] **On-device visual pass after Material3 1.3.0 → 1.4.0** (Compose BOM 2026.04.01): component
-  defaults moved, not APIs. Look at the tuning sliders, the `ModalBottomSheet` page-strip cap
-  (`TUNING_SHEET_CHROME_DP` counts the drag handle + inset chrome; a changed default shifts it),
-  the Square | Blend | Seal chip row (labels above, outlines on ALL chips), AlertDialogs,
+  defaults moved, not APIs. Look at the tuning sliders, the options panel's page-strip cap
+  (`TUNING_SHEET_CHROME_DP` counts the panel's header row; a changed default height shifts it),
+  the Square | Blend face-finish chips (labels above, outlines on ALL chips), AlertDialogs,
   Switch/Checkbox density, and numeric-field blur commits. Also decide the four pinch-zoom
   surfaces' `rememberTransformableState` centroid deprecation on-device — taking the centroid
   changes where a pinch zooms from.
+
+### Bugs
+
+- [ ] **Dual-units consolidated sheet: rail labels can overlap.** On a very full sheet with dual
+  units on, growing the footer by one line (e.g. a thread-relief line) prints overlapping rail
+  values. Suspected cause: `RunoutPdfComposer`'s `railsBlockH` estimates the fallback-rail lifts
+  off a prelim linear-map plan, and the final compressed map seats fewer values inline than that
+  plan assumed. Pre-existing; the thread-relief test fixture is arranged around it — un-arrange it
+  when fixing.
 
 ### Tech debt
 
@@ -166,6 +196,10 @@ androidTest) or the Add dialogs; their logic is pure and covered.
 - [ ] Selection → contextual "Add near selected" defaults.
 - [ ] Inline "Add here" buttons between components in the list.
 - [ ] Preset library (common tapers, common shoulder patterns).
+- [ ] Final Schematic: "Create a new job from the final" — deliberately left out of the first pass.
+- [ ] Coupler bolt rows: a dimension rail for a bolt row (the footer carries the numbers today),
+  and authoring which side a blind 90° cross-drilled hole enters from (it is always drawn from
+  the top silhouette).
 - [ ] Undo/redo follow-ups (not blocking v1.0): cross-session/persisted history (currently
   in-memory, cleared on process death and at every new/open/import boundary), and metadata
   (customer/vessel/job/notes/shaft position/unit) is deliberately excluded from undoable state —

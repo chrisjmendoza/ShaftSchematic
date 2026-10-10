@@ -1,6 +1,10 @@
 # PDF Export Specification
 Version: v0.5.x
-Last updated: 2026-09-15 — stale-identifier sweep: §6.4's body-compression entry now names the
+Last updated: 2026-10-03 — §5.5/§5.6: both PDF options sheets group their controls into
+collapsible sections from ONE ordered list (`OptionsSection`) — Shaft (open), Wear (open),
+Runout bubbles, Thread (only on a threaded shaft), Lines & text, Shade in Components,
+Measurement reference, Units last — most-used on top (on-device request).
+2026-09-15 — stale-identifier sweep: §6.4's body-compression entry now names the
 real pass (`drawBodyRunsWithBreaks`, `pdf/BodyRunDraw.kt`) instead of the long-gone
 `ShaftPdfComposer.drawBodiesCompressedCenterBreak()`, and §5.4/§5.5 drop `DimSpan.labelBottom`
 (a second rail-label line that was never populated and was deleted as dead in the 2026-07-26
@@ -706,22 +710,35 @@ Rules (shared helpers in `pdf/BlankFormText.kt`):
 row** (`ContentChipRow`/`ContentChip`, `ShaftHeightSlider.kt`) — **Blank draft**, **Ø
 callouts** (enabled only while Blank draft is on, still testTag `pdf_blank_dia_callouts_toggle`),
 **Labels** — replacing the old switch rows; the captions they used to carry moved to Help, since
-three explained rows cost exactly the room the sliders below need. Then, in order: the
-**live-tuning group** — **"Shaft height"**, Body S-break, Line thickness, Liner & taper compression
-(the first and last §5.7 — the same per-job `RunoutConfig` values the Consolidated Output tab
-exposes, §5.6; the group leads because these are the controls the page-strip layout exists
-to keep judgeable, and Shaft height leads it — the control reached for most, on-device
-direction) — then Dimension arrows, Fractions, **Thread slant** (`PdfPrefs.threadSlant`, the
-thread hatch's lean multiplier, commit on release), **Thread density** (`PdfPrefs.threadDensity`,
-the fraction of the thread's true crests the hatch draws, commit on release), the expandable
-**"Measurement reference"**
-section, the expandable **"Shade in Components"** section (renamed from "Shade in PDF"; a
-new "Explicit bodies only" sub-checkbox sits under its Bodies row — see below), and Dual
-units + layout LAST (rarely used options trail, on-device request). Both expandables
-(`OptionsExpander`, `ShaftHeightSlider.kt`) start collapsed, header testTags
-`options_measure_ref_expander` / `options_shade_expander`. The sheet scrolls; its height is
-capped by `tuningSheetMaxHeightDp` (78% is only the ceiling — the page strip usually binds
-first).
+three explained rows cost exactly the room the sliders below need. Under the chips, every
+other control sits in a **collapsible section**, the sections ordered by how often they are
+reached for, most-used on top (on-device request). ONE ordered list — `OptionsSection` +
+`OptionsSections` (`ShaftHeightSlider.kt`) — lays out both this sheet and the shared
+`RunoutWearOptionsSheet` (§5.6), so the two cannot name or order a section differently; a
+sheet omits any section it has nothing for, and a divider separates sections (none between
+the rows inside one). On this sheet:
+1. **Shaft** (OPEN by default, `options_shaft_expander`) — the **live-tuning group**:
+   **"Shaft height"**, Body S-break, Liner & taper compression (the first and last §5.7 — the
+   same per-job `RunoutConfig` values the Consolidated Output tab exposes, §5.6; the group
+   leads because these are the controls the page-strip layout exists to keep judgeable, and
+   Shaft height leads it — the control reached for most, on-device direction).
+2. **Thread** (collapsed, `options_thread_expander`) — **Thread slant** (`PdfPrefs.threadSlant`,
+   the thread hatch's lean multiplier, commit on release), **Thread density**
+   (`PdfPrefs.threadDensity`, the fraction of the thread's true crests the hatch draws, commit
+   on release). Only while the drawn spec has a thread of length > 0 (`hasDrawnThreads` —
+   the Final preview reads its own target spec). Header summary: `3× · 50%`.
+3. **Lines & text** (collapsed, `options_lines_expander`) — Line thickness (its live `onDrag`
+   channel unchanged), Dimension arrows, Fractions. Header summary: the line weight.
+4. **"Shade in Components"** (collapsed, `options_shade_expander`; renamed from "Shade in
+   PDF") — a new "Explicit bodies only" sub-checkbox sits under its Bodies row — see below.
+5. **"Measurement reference"** (collapsed, `options_measure_ref_expander`).
+6. **Units** (collapsed, `options_units_expander`) LAST — the Dual units switch + layout
+   chips (rarely used options trail, on-device request). Header summary: `Single` /
+   `Dual · <layout>`.
+
+The open/closed state is composition-local (`OptionsExpander(initiallyExpanded)`), so a
+reopened sheet starts from these defaults. The sheet scrolls; its height is capped by
+`tuningSheetMaxHeightDp` (78% is only the ceiling — the page strip usually binds first).
 
 **Shade explicit bodies only** (`PdfPrefs.shadeExplicitBodiesOnly`, default `false`): with
 "Bodies" shading on, this narrows the fill to explicit bodies only — auto (bare-shaft) runs
@@ -824,17 +841,18 @@ undercut; all on by default) written to one picked folder (`OpenDocumentTree` +
 line. Nothing auto-opens after a batch.
 
 **The consolidated preview's Tune sheet** (`RunoutWearOptionsSheet`, `ui/screen/PdfPreviewOverlay.kt`)
-follows the same unified order the schematic sheet uses (§5.5): a **Content chip row**
+follows the same section list the schematic sheet uses (§5.5): a **Content chip row**
 (Blank draft — this tab's own toggle, shown here too so the sheet can be judged live —
-Coupling face), then **"Shaft height"**, Body S-break, Line thickness, **liner
-compression** (§5.7, the same per-job `RunoutConfig` values as the tab's own controls), a
-**"Runout bubbles"** heading with the **Bubble size** / **Bubble height** sliders (see
-below), Dimension arrows, Fractions, Thread slant, Thread density, the expandable **Measurement
-reference** section,
-and the expandable **Shade in Components** section (+ its "Explicit bodies only"
-sub-checkbox) — Dual units + layout LAST. This is the fullest instance of the shared sheet:
-every gated row is on. The other three tabs reuse the same sheet with rows gated off by
-what their composer actually reads:
+Coupling face), then **Shaft** (open: **"Shaft height"**, Body S-break, **liner
+compression** — §5.7, the same per-job `RunoutConfig` values as the tab's own controls),
+**Runout bubbles** (collapsed: the **Bubble size** / **Bubble height** sliders, see below),
+**Thread** (collapsed, only on a threaded shaft: Thread slant, Thread density), **Lines &
+text** (collapsed: Line thickness, Dimension arrows, Fractions), **Shade in Components**
+(collapsed, + its "Explicit bodies only" sub-checkbox), **Measurement reference**
+(collapsed) — **Units** (collapsed: Dual units + layout) LAST. This is the fullest instance
+of the shared sheet: every gated row is on. The sheet takes `hasThreads`, which all four
+routes pass as `hasDrawnThreads(spec)`. The other three tabs reuse the same sheet with rows
+gated off by what their composer actually reads (a section left with nothing is omitted):
 - **Runout** (the classic standalone sheet) keeps the Content chips, Shaft height, Body
   S-break (it draws compression breaks too), Line thickness, Liner & taper compression, and the
   Runout bubbles sliders (its bubbles are the whole point of the sheet) — off: Dimension
@@ -844,16 +862,18 @@ what their composer actually reads:
   Taper–liner join — `showWearControls`), **and now "Shaft height"** (the wear composer's
   MAIN profile band takes the shared multiplier too, §5.7) plus Line thickness — off:
   Body S-break, Liner & taper compression, Runout bubbles, Dimension arrows, and Measurement
-  reference (the wear composer takes none of them).
+  reference (the wear composer takes none of them). Its sections run Shaft (open, height
+  only) → Wear (open, the tuning block) → [Thread] → Lines & text → Shade → Units.
 - **Undercut** keeps only the Content chip (Blank draft) and Line thickness — its normal
   form draws no whole-shaft profile, so none of the sizing/compression/bubble controls
-  apply — plus the one row nothing else gets: **"Undercut drawing: line art (no shading)"**
-  (`showUndercutLineArt = true`) at the foot of the shade group, since
-  `PdfPrefs.undercutLineArt` reaches this composer alone.
+  apply, and it has no Shaft section — plus the one row nothing else gets: **"Undercut
+  drawing: line art (no shading)"** (`showUndercutLineArt = true`) at the foot of the shade
+  group, since `PdfPrefs.undercutLineArt` reaches this composer alone.
 
-Every instance keeps Fractions (ungated — every document here prints lengths), Thread slant
-and Thread density (ungated — every document draws the shaft's threads) and Shade in Components
-(ungated) at their fixed spots in the order.
+Every instance keeps Lines & text (Line thickness + Fractions ungated — every document here
+prints lengths), Shade in Components and Units (ungated) at their fixed spots in the order;
+the Thread section follows the shaft — every document draws the shaft's threads, so it shows
+on every sheet exactly when there is one.
 
 **Scope legibility** (DESIGN_INTENT §3.3, ruling Q3): a look row on either sheet is a remote
 control for the ONE app-wide `PdfPrefs` value, never a per-page copy, so both sheets carry the

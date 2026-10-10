@@ -911,6 +911,7 @@ fun OutputRoute(
                     showDimensionArrows = true,
                     arrowSizePt = pdfArrowSizePt,
                     fractionStyle = pdfFractionStyle,
+                    hasThreads = hasDrawnThreads(spec),
                     threadSlant = pdfThreadSlant,
                     threadDensity = pdfThreadDensity,
                     dualUnitLayout = pdfDualUnitLayout,

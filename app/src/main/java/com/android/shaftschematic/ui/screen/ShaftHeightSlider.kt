@@ -20,14 +20,17 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -38,6 +41,7 @@ import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.font.DeviceFontFamilyName
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.profileFeatureSpans
 import com.android.shaftschematic.geom.computeOalWindow
@@ -861,8 +865,9 @@ internal fun fmtSBreakThreshold(v: Float): String =
     if (v <= 0f) "Never" else "below ${(v * 100).roundToInt()}%"
 
 /**
- * A collapsed-by-default section on a PDF options sheet: a clickable header row (chevron +
- * title) over content that composes only while open.
+ * A collapsible section on a PDF options sheet: a clickable header row (chevron + title, and an
+ * optional trailing [summary] of the section's current value) over content that composes only
+ * while open. Collapsed unless [initiallyExpanded].
  *
  * Both sheets are taller than the cap the page strip leaves them and scroll, so a control
  * parked below the fold reads as absent. Sections reached for once a job — the measurement
@@ -870,14 +875,20 @@ internal fun fmtSBreakThreshold(v: Float): String =
  * one costs a tap. Open state is composition-local by design: the sheet is dismissed far
  * more often than a section is reopened, so remembering it would only give the sheet a shape
  * nobody asked for.
+ *
+ * [contentSpacing] is the gap between the section's direct children: the slider sections
+ * space their controls, the checkbox and radio groups keep their rows tight.
  */
 @Composable
 internal fun OptionsExpander(
     title: String,
     testTag: String,
+    initiallyExpanded: Boolean = false,
+    summary: String? = null,
+    contentSpacing: Dp = 0.dp,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    var expanded by remember { mutableStateOf(false) }
+    var expanded by remember { mutableStateOf(initiallyExpanded) }
     Column {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -891,11 +902,138 @@ internal fun OptionsExpander(
                 contentDescription = if (expanded) "Collapse" else "Expand",
             )
             Spacer(Modifier.width(4.dp))
-            Text(title, style = MaterialTheme.typography.titleSmall)
+            Text(
+                title,
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.weight(1f),
+            )
+            if (summary != null) {
+                Text(
+                    summary,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
         if (expanded) {
             Spacer(Modifier.height(4.dp))
-            Column(Modifier.padding(start = 8.dp), content = content)
+            Column(
+                Modifier.padding(start = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(contentSpacing),
+                content = content,
+            )
+        }
+    }
+}
+
+/**
+ * The sections of a PDF options sheet, in sheet order — ONE list behind the schematic sheet
+ * (`PdfOptionsSheet`) and the shared runout / consolidated / wear / undercut sheet
+ * (`RunoutWearOptionsSheet`), so the two can never name or order a section differently.
+ *
+ * The order is how often a section is reached for, most-used on top (on-device request): the
+ * per-job shaft fit and the wear document's own block open by default, everything after them
+ * starts folded, and Units trails because the dual / rarely-used options sit last (on-device
+ * ruling). The Content chips and the scope note are not a section: they lead the sheet,
+ * outside this list. A sheet omits a section it has nothing to put in.
+ */
+internal enum class OptionsSection(
+    val title: String,
+    val testTag: String,
+    val initiallyExpanded: Boolean,
+    val contentSpacing: Dp,
+) {
+    SHAFT("Shaft", "options_shaft_expander", initiallyExpanded = true, contentSpacing = 12.dp),
+    WEAR("Wear", "options_wear_expander", initiallyExpanded = true, contentSpacing = 12.dp),
+    BUBBLES("Runout bubbles", "options_bubbles_expander", initiallyExpanded = false, contentSpacing = 12.dp),
+    THREAD("Thread", "options_thread_expander", initiallyExpanded = false, contentSpacing = 12.dp),
+    LINES("Lines & text", "options_lines_expander", initiallyExpanded = false, contentSpacing = 12.dp),
+    SHADING("Shade in Components", "options_shade_expander", initiallyExpanded = false, contentSpacing = 0.dp),
+    MEASUREMENT("Measurement reference", "options_measure_ref_expander", initiallyExpanded = false, contentSpacing = 0.dp),
+    UNITS("Units", "options_units_expander", initiallyExpanded = false, contentSpacing = 12.dp),
+}
+
+/** One section's body on an options sheet: its controls, and an optional header [summary]. */
+internal class OptionsSectionBody(
+    val summary: String? = null,
+    val content: @Composable ColumnScope.() -> Unit,
+)
+
+/** [section]'s header over [content] — the one construction a section's expander takes. */
+@Composable
+internal fun OptionsSectionExpander(
+    section: OptionsSection,
+    summary: String? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    OptionsExpander(
+        title = section.title,
+        testTag = section.testTag,
+        initiallyExpanded = section.initiallyExpanded,
+        summary = summary,
+        contentSpacing = section.contentSpacing,
+        content = content,
+    )
+}
+
+/**
+ * Lays out the sections a sheet supplies in [OptionsSection] order, whatever order [bodies]
+ * was built in, with a divider between consecutive sections. Each section is keyed by its
+ * identity, so a section appearing or vanishing while the sheet is open (a thread added in
+ * another tab) never hands its open state to a neighbour.
+ */
+@Composable
+internal fun OptionsSections(bodies: Map<OptionsSection, OptionsSectionBody>) {
+    OptionsSection.entries.filter { it in bodies }.forEachIndexed { index, section ->
+        key(section) {
+            if (index > 0) {
+                Spacer(Modifier.height(8.dp))
+                HorizontalDivider()
+                Spacer(Modifier.height(8.dp))
+            }
+            val body = bodies.getValue(section)
+            OptionsSectionExpander(section, body.summary, body.content)
+        }
+    }
+}
+
+/**
+ * Whether [spec] draws a thread — the gate on the options sheets' Thread section. A thread
+ * with no length prints no hatch, so the slant and density would tune nothing.
+ */
+internal fun hasDrawnThreads(spec: ShaftSpec): Boolean = spec.threads.any { it.lengthMm > 0f }
+
+/** The Thread section's header summary: slant and density, as their sliders read them. */
+internal fun threadSectionSummary(threadSlant: Float, threadDensity: Float): String =
+    "${fmtThreadSlant(threadSlant)} · ${fmtThreadDensity(threadDensity)}"
+
+/** The Lines & text section's header summary: the line weight, as its slider reads it. */
+internal fun linesSectionSummary(lineThicknessScale: Float): String =
+    "${(lineThicknessScale * 100).roundToInt()}%"
+
+/** The Units section's header summary: dual off, or on in its layout. */
+internal fun unitsSectionSummary(dualUnits: Boolean, layout: DualUnitLayout): String =
+    if (dualUnits) "Dual · ${layout.uiLabel()}" else "Single"
+
+/**
+ * The Units section's "Dual units" switch — the DOCUMENT's own flag, not a preference:
+ * `dual_units` travels with the job. One construction for both sheets.
+ */
+@Composable
+internal fun DualUnitsSwitchRow(
+    dualUnits: Boolean,
+    onDualUnitsChange: (Boolean) -> Unit,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Switch(checked = dualUnits, onCheckedChange = onDualUnitsChange)
+        Spacer(Modifier.width(12.dp))
+        Column {
+            Text("Dual units", style = MaterialTheme.typography.bodyLarge)
+            Text(
+                "Print every dimension in both inches and millimetres. Saved with the document.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -947,17 +1085,31 @@ internal fun ContentChip(
 }
 
 /**
- * The "Measurement reference" radios — `PdfPrefs.tieringMode`, the end a dimension rail
- * measures from — as both PDF options sheets show them: ONE expandable section and one label
- * set, so the schematic sheet and the consolidated one can never offer different wording for
- * the same preference. Settings → PDF Export names it the same and keeps its own wider rows.
+ * The "Measurement reference" section standing alone — [OptionsSection.MEASUREMENT]'s header
+ * over [MeasurementReferenceRadios]. The sheets lay the radios out through [OptionsSections].
  */
 @Composable
 internal fun MeasurementReferenceSection(
     pdfTieringMode: PdfTieringMode,
     onCommit: (PdfTieringMode) -> Unit,
 ) {
-    OptionsExpander("Measurement reference", "options_measure_ref_expander") {
+    OptionsSectionExpander(OptionsSection.MEASUREMENT) {
+        MeasurementReferenceRadios(pdfTieringMode, onCommit)
+    }
+}
+
+/**
+ * The "Measurement reference" radios — `PdfPrefs.tieringMode`, the end a dimension rail
+ * measures from — as both PDF options sheets show them: ONE label set, so the schematic sheet
+ * and the consolidated one can never offer different wording for the same preference.
+ * Settings → PDF Export names it the same and keeps its own wider rows.
+ */
+@Composable
+internal fun MeasurementReferenceRadios(
+    pdfTieringMode: PdfTieringMode,
+    onCommit: (PdfTieringMode) -> Unit,
+) {
+    Column {
         listOf(
             PdfTieringMode.AUTO to "Auto (closest end)",
             PdfTieringMode.AFT  to "AFT",
@@ -976,7 +1128,47 @@ internal fun MeasurementReferenceSection(
 }
 
 /**
- * The "Shade in Components" expandable section — Bodies (with its "Explicit bodies only"
+ * The "Shade in Components" section standing alone — [OptionsSection.SHADING]'s header over
+ * [ShadeInPdfCheckRows], taking the same parameters. The sheets lay the rows out through
+ * [OptionsSections].
+ */
+@Composable
+internal fun ShadeInPdfChecks(
+    pdfShadedBodies: Boolean,
+    pdfShadedTapers: Boolean,
+    pdfShadedLiners: Boolean,
+    shadeExplicitBodiesOnly: Boolean,
+    onSetShadedBodies: (Boolean) -> Unit,
+    onSetShadedTapers: (Boolean) -> Unit,
+    onSetShadedLiners: (Boolean) -> Unit,
+    onSetShadeExplicitBodiesOnly: (Boolean) -> Unit,
+    linerShadeLocked: Boolean = false,
+    showExplicitBodiesOnly: Boolean = true,
+    showUndercutLineArt: Boolean = false,
+    undercutLineArt: Boolean = false,
+    onSetUndercutLineArt: (Boolean) -> Unit = {},
+) {
+    OptionsSectionExpander(OptionsSection.SHADING) {
+        ShadeInPdfCheckRows(
+            pdfShadedBodies = pdfShadedBodies,
+            pdfShadedTapers = pdfShadedTapers,
+            pdfShadedLiners = pdfShadedLiners,
+            shadeExplicitBodiesOnly = shadeExplicitBodiesOnly,
+            onSetShadedBodies = onSetShadedBodies,
+            onSetShadedTapers = onSetShadedTapers,
+            onSetShadedLiners = onSetShadedLiners,
+            onSetShadeExplicitBodiesOnly = onSetShadeExplicitBodiesOnly,
+            linerShadeLocked = linerShadeLocked,
+            showExplicitBodiesOnly = showExplicitBodiesOnly,
+            showUndercutLineArt = showUndercutLineArt,
+            undercutLineArt = undercutLineArt,
+            onSetUndercutLineArt = onSetUndercutLineArt,
+        )
+    }
+}
+
+/**
+ * The "Shade in Components" rows — Bodies (with its "Explicit bodies only"
  * sub-checkbox) / Tapers / Liners — shared by the two PDF options sheets (`PdfOptionsSheet`
  * on the schematic preview, `RunoutWearOptionsSheet` on the runout / wear / undercut /
  * consolidated tabs). Settings → PDF Export keeps its own copy: its rows sit in a
@@ -1000,7 +1192,7 @@ internal fun MeasurementReferenceSection(
  * documents are not offered a control their composers ignore.
  */
 @Composable
-internal fun ShadeInPdfChecks(
+internal fun ShadeInPdfCheckRows(
     pdfShadedBodies: Boolean,
     pdfShadedTapers: Boolean,
     pdfShadedLiners: Boolean,
@@ -1016,7 +1208,7 @@ internal fun ShadeInPdfChecks(
     undercutLineArt: Boolean = false,
     onSetUndercutLineArt: (Boolean) -> Unit = {},
 ) {
-    OptionsExpander("Shade in Components", "options_shade_expander") {
+    Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox(checked = pdfShadedBodies, onCheckedChange = onSetShadedBodies)
             Spacer(Modifier.width(8.dp))

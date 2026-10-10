@@ -48,7 +48,7 @@ lives in Settings → Drawing and the **wear** preview's own PDF Options sheet, 
 schematic Tune sheet this section otherwise describes. `runoutBubbleScale` /
 `runoutBubbleDropScale` are a third: they govern only the runout bubble draw sites, so — unlike
 every other pref in this table — they have no Settings → Drawing control at all; they surface
-only in the runout/consolidated PDF Options sheets, under a "Runout bubbles" heading, not on
+only in the runout/consolidated PDF Options sheets, in their "Runout bubbles" section, not on
 the schematic or wear/undercut sheets, whose composers never read them. `undercutLineArt` is
 the fourth, the mirror image of that: it reaches only the undercut composer, so it lives in
 Settings → PDF Export and the **undercut** preview's options sheet and nowhere else.
@@ -84,14 +84,15 @@ with this job", so the reader never has to guess which kind a row is.
   eligibility, since a break's stubs must each be at least `arrowSize` long.
 - **Thread slant** (`threadSlant`): slider 1×–10× in 0.5 steps, default 3×, commits on
   release (no `PreviewTuning` drag channel) — in Settings → Drawing → "Thread slant" (with a
-  "Default (3×)" reset) and in both PDF Options sheets, ungated (one shared `ThreadSlantSlider`,
+  "Default (3×)" reset) and in both PDF Options sheets' "Thread" section, which a sheet shows
+  only while its shaft draws a thread (`hasDrawnThreads`) (one shared `ThreadSlantSlider`,
   one app-wide pref, testTag `thread_slant_slider`). It multiplies each thread's TRUE crest
   lean, so a coarse thread still leans further than a fine one at every setting. The composers
   read the `util/ThreadHatchStyle.slant` mirror (sole writer `SettingsStore.updatePdfPrefs`,
   the fraction-style posture), so every preview carries `threadSlant` as a render-input key.
 - **Thread density** (`threadDensity`): slider 15%–100% in 5% steps, default 50%, commits on
   release — directly after Thread slant in Settings → Drawing (with a "Default (50%)" reset)
-  and in both PDF Options sheets, ungated (one shared `ThreadDensitySlider`, one app-wide pref,
+  and in the same "Thread" section of both PDF Options sheets (one shared `ThreadDensitySlider`, one app-wide pref,
   testTag `thread_density_slider`; end labels "Sparse" / "100% true"). It is the fraction of
   the thread's true crests drawn, so 100% shows separate lines only on coarse threads. Same
   mirror (`util/ThreadHatchStyle.density`), so every preview carries `threadDensity` as a
@@ -133,15 +134,33 @@ Full-resolution preview through the shared `util/PdfRaster.renderPdfPageBitmap`
   thread sliders — the modal `ModalBottomSheet` this replaced took every outside touch as a
   dismiss). An empty `pointerInput` on the panel makes its whole area a hit-test target, so a
   finger on its padding never pans the page beneath. The shared overlay
-  (`PdfPreviewOverlay`) hosts the same panel. The sheet content is a leading "Content" chip row — **Blank draft**, **Ø
-  callouts** (enabled only while Blank draft is on), **Labels** — then the live-tuning
-  slider group at the head — **"Shaft height"** slider, "Body S-break" threshold, line
-  thickness (50–200%), liner compression control — then "Dimension arrows" size, fractions,
-  "Thread slant", "Thread density", an expandable "Measurement reference" section (Auto/AFT/FWD), an expandable "Shade in
-  Components" section (bodies/tapers/liners + an "Explicit bodies only" sub-checkbox under
-  Bodies), and dual units + layout LAST (rarely used options trail, on-device request) —
-  bound to
-  `PdfPrefs` (or, for the
+  (`PdfPreviewOverlay`) hosts the same panel. The sheet content is the scope note and a
+  leading "Content" chip row — **Blank draft**, **Ø callouts** (enabled only while Blank
+  draft is on), **Labels**, and on the Final drawing **Runout bubbles** with its caption —
+  never inside a section, then **collapsible sections** ordered by how often they are
+  reached for, most-used on top (on-device request). ONE ordered list behind both options
+  sheets — `OptionsSection` + `OptionsSections` (`ui/screen/ShaftHeightSlider.kt`) — lays
+  them out, so the schematic sheet and the shared runout/consolidated/wear/undercut sheet
+  can never name or order a section differently; a sheet omits a section it has nothing to
+  put in, and a `HorizontalDivider` separates consecutive sections (no dividers between the
+  rows inside one). On this sheet:
+  1. **Shaft** (`options_shaft_expander`, OPEN by default) — the live-tuning group:
+     **"Shaft height"**, "Body S-break" threshold, the liner & taper compression control.
+  2. **Thread** (`options_thread_expander`, collapsed) — "Thread slant", "Thread density";
+     only while the shaft draws a thread (`hasDrawnThreads`: a thread with length > 0).
+     Header summary: slant · density (`3× · 50%`).
+  3. **Lines & text** (`options_lines_expander`, collapsed) — line thickness (50–200%, its
+     live `onDrag` channel intact), "Dimension arrows" size, fractions. Header summary: the
+     line weight (`100%`).
+  4. **Shade in Components** (`options_shade_expander`, collapsed) — bodies/tapers/liners +
+     an "Explicit bodies only" sub-checkbox under Bodies.
+  5. **Measurement reference** (`options_measure_ref_expander`, collapsed) — Auto/AFT/FWD.
+  6. **Units** (`options_units_expander`, collapsed, LAST — rarely used options trail,
+     on-device ruling) — the document's "Dual units" switch + the dual-unit layout chips.
+     Header summary: `Single` or `Dual · <layout>`.
+
+  Open state is composition-local (`OptionsExpander(initiallyExpanded)`): a reopened sheet
+  starts from these defaults. Every control is bound to `PdfPrefs` (or, for the
   height/liner-compression pair, the per-job `RunoutConfig`) via VM setters, persisted,
   applied live (each option is a `LaunchedEffect` key). Blank draft is session-scoped, not
   persisted.
@@ -151,9 +170,10 @@ Full-resolution preview through the shared `util/PdfRaster.renderPdfPageBitmap`
     the shaft-height slider's Standard button, so 100% never has to be fished for by
     pixel (on-device report). The Settings → Editor Screen control keeps its own layout
     (it adds a typed % field, which is never snapped) but shares the detent and button.
-  - Shade bodies/tapers/liners is the shared `ShadeInPdfChecks` (`ShaftHeightSlider.kt`) —
-    an expandable "Shade in Components" section (renamed from "Shade in PDF"; header testTag
-    `options_shade_expander`) wrapping the three checkbox rows, an indented "Explicit bodies
+  - Shade bodies/tapers/liners is the shared `ShadeInPdfCheckRows` (`ShaftHeightSlider.kt`)
+    inside the "Shade in Components" section (renamed from "Shade in PDF"; header testTag
+    `options_shade_expander`; `ShadeInPdfChecks` is the same rows under that header, standing
+    alone): the three checkbox rows, an indented "Explicit bodies
     only" sub-checkbox under Bodies (`PdfPrefs.shadeExplicitBodiesOnly`, testTag
     `shade_explicit_bodies_only`, enabled only while Bodies is checked), and the
     `linerShadeLocked` display-only lock the consolidated sheet uses — the same block as the

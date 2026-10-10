@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -45,7 +44,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import com.android.shaftschematic.settings.PdfTieringMode
@@ -722,7 +720,7 @@ private fun appVersionName(context: Context): String = runCatching {
 }.getOrDefault("0")
 
 @Composable
-private fun PdfOptionsSheet(
+internal fun PdfOptionsSheet(
     vm: ShaftViewModel,
     spec: ShaftSpec,
     pdfShowComponentTitles: Boolean,
@@ -828,161 +826,121 @@ private fun PdfOptionsSheet(
 
         Spacer(Modifier.height(12.dp))
         HorizontalDivider()
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(8.dp))
 
-        // ── Shaft height ─────────────────────────────────────────────────────
-        // The same per-job multiplier the runout / consolidated sheets carry
-        // (`RunoutConfig.heightScale`) — one slider value behind every drawing
-        // (on-device request: the schematic was meant to follow it too). Selected by
-        // drawn-height VALUE in paper inches; the schematic's base is the default
-        // sizing curve at the configured anchor heights, no width-fit term.
-        //
-        // It leads the sliders because it is the one reached for most (on-device
-        // direction), and because it reshapes the page under a finger — the live-tuning
-        // group the page strip above this sheet exists to keep in view. The sheet is taller
-        // than its cap and scrolls, so a tuning slider parked below the typography rows
-        // reads as absent (on-device report).
+        // ── Sections ─────────────────────────────────────────────────────────
+        // Laid out in `OptionsSection` order (most-used first, Units last) whatever order
+        // they are supplied in here — the same list `RunoutWearOptionsSheet` builds from.
         val sliderDiaMm = remember(spec) { heightSliderMaxDiaFor(spec) }
         val sliderBase = schematicHeightSliderBase(sliderDiaMm, curveLoHeightIn, curveHiHeightIn)
-        ShaftHeightSlider(
-            heightScale = heightScale,
-            baseScale = sliderBase,
-            maxDiaMm = sliderDiaMm,
-            onCommit = { vm.setRunoutHeightScale(it) },
-            onDrag = { tuning.heightScale = it },
-        )
+        val sections = mutableMapOf<OptionsSection, OptionsSectionBody>()
 
-        Spacer(Modifier.height(12.dp))
-        HorizontalDivider()
-        Spacer(Modifier.height(12.dp))
-
-        // ── Body S-break ─────────────────────────────────────────────────────
-        // The same app-wide `PdfPrefs.sBreakThresholdFrac` Settings → Drawing sets —
-        // here so the threshold can be judged against the drawing it changes.
-        SBreakThresholdSlider(
-            frac = sBreakThresholdFrac,
-            onCommit = { vm.setPdfSBreakThresholdFrac(it) },
-            onDrag = { tuning.sBreakFrac = it },
-        )
-
-        Spacer(Modifier.height(12.dp))
-        HorizontalDivider()
-        Spacer(Modifier.height(12.dp))
-
-        // ── Line thickness ───────────────────────────────────────────────────
-        LineThicknessSlider(
-            scale = lineThicknessScale,
-            onCommit = { vm.setLineThicknessScale(it) },
-            onDrag = { tuning.lineThickness = it },
-        )
-
-        Spacer(Modifier.height(12.dp))
-        HorizontalDivider()
-        Spacer(Modifier.height(12.dp))
-
-        // ── Liner & taper compression ────────────────────────────────────────
-        // Same per-job pair as the Consolidated Output tab (`RunoutConfig`).
-        LinerCompressionControl(
-            linersProportional = linersProportional,
-            linerCompression = linerCompression,
-            estimateKeptFrac = { frac ->
-                estimatedLinerKeptFracOfTrue(spec, sliderBase, heightScale, frac)
-            },
-            onSetProportional = { vm.setLinersProportional(it) },
-            onSetCompression = { vm.setLinerCompression(it) },
-            onDrag = { tuning.linerCompression = it },
-        )
-
-        Spacer(Modifier.height(12.dp))
-        HorizontalDivider()
-        Spacer(Modifier.height(12.dp))
-
-        // ── Dimension arrows ─────────────────────────────────────────────────
-        DimensionArrowSizeChips(
-            arrowSizePt = arrowSizePt,
-            onCommit = { vm.setPdfArrowSizePt(it) },
-        )
-
-        Spacer(Modifier.height(12.dp))
-
-        FractionStyleChips(
-            fractionStyle = fractionStyle,
-            onCommit = { vm.setPdfFractionStyle(it) },
-        )
-
-        Spacer(Modifier.height(12.dp))
-
-        ThreadSlantSlider(
-            threadSlant = threadSlant,
-            onCommit = { vm.setPdfThreadSlant(it) },
-        )
-
-        Spacer(Modifier.height(12.dp))
-
-        ThreadDensitySlider(
-            threadDensity = threadDensity,
-            onCommit = { vm.setPdfThreadDensity(it) },
-        )
-
-        Spacer(Modifier.height(12.dp))
-        HorizontalDivider()
-        Spacer(Modifier.height(12.dp))
-
-        // ── Measurement reference ────────────────────────────────────────────
-        MeasurementReferenceSection(
-            pdfTieringMode = pdfTieringMode,
-            onCommit = { vm.setPdfTieringMode(it) },
-        )
-
-        Spacer(Modifier.height(12.dp))
-        HorizontalDivider()
-        Spacer(Modifier.height(12.dp))
-
-        // ── Shade in Components ──────────────────────────────────────────────
-        ShadeInPdfChecks(
-            pdfShadedBodies = pdfShadedBodies,
-            pdfShadedTapers = pdfShadedTapers,
-            pdfShadedLiners = pdfShadedLiners,
-            shadeExplicitBodiesOnly = pdfShadeExplicitBodiesOnly,
-            onSetShadedBodies = { vm.setPdfShadedBodies(it) },
-            onSetShadedTapers = { vm.setPdfShadedTapers(it) },
-            onSetShadedLiners = { vm.setPdfShadedLiners(it) },
-            onSetShadeExplicitBodiesOnly = { vm.setPdfShadeExplicitBodiesOnly(it) },
-        )
-
-        Spacer(Modifier.height(12.dp))
-        HorizontalDivider()
-        Spacer(Modifier.height(12.dp))
-
-        // ── Dual units (this document) — LAST by design ──────────────────────
-        // The document's own flag, not a preference: `dual_units` travels with the job. The
-        // layout chips under it style what this switch turns on, so they read as disabled
-        // until it is — a control for something invisible is worse than no control. The pair
-        // sits at the FOOT of the sheet: drawing- and output-specific controls lead, rarely
-        // used options trail (on-device request).
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Switch(
-                checked = dualUnits,
-                onCheckedChange = { vm.setDualUnits(it) },
+        // ── Shaft ────────────────────────────────────────────────────────────
+        // The live-tuning group the page strip above this sheet exists to keep in view, so it
+        // leads and starts open. Shaft height is the same per-job multiplier the runout /
+        // consolidated sheets carry (`RunoutConfig.heightScale`) — one value behind every
+        // drawing — selected by drawn-height VALUE in paper inches off the default sizing
+        // curve at the configured anchor heights, with no width-fit term. Body S-break is the
+        // app-wide `PdfPrefs.sBreakThresholdFrac`; the compression pair is the same per-job
+        // `RunoutConfig` pair as the Consolidated Output tab.
+        sections[OptionsSection.SHAFT] = OptionsSectionBody {
+            ShaftHeightSlider(
+                heightScale = heightScale,
+                baseScale = sliderBase,
+                maxDiaMm = sliderDiaMm,
+                onCommit = { vm.setRunoutHeightScale(it) },
+                onDrag = { tuning.heightScale = it },
             )
-            Spacer(Modifier.width(12.dp))
-            Column {
-                Text("Dual units", style = MaterialTheme.typography.bodyLarge)
-                Text(
-                    "Print every dimension in both inches and millimetres. Saved with the document.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+            SBreakThresholdSlider(
+                frac = sBreakThresholdFrac,
+                onCommit = { vm.setPdfSBreakThresholdFrac(it) },
+                onDrag = { tuning.sBreakFrac = it },
+            )
+            LinerCompressionControl(
+                linersProportional = linersProportional,
+                linerCompression = linerCompression,
+                estimateKeptFrac = { frac ->
+                    estimatedLinerKeptFracOfTrue(spec, sliderBase, heightScale, frac)
+                },
+                onSetProportional = { vm.setLinersProportional(it) },
+                onSetCompression = { vm.setLinerCompression(it) },
+                onDrag = { tuning.linerCompression = it },
+            )
+        }
+
+        // ── Thread ───────────────────────────────────────────────────────────
+        // Only on a shaft that draws a thread: on any other the hatch controls tune nothing.
+        if (hasDrawnThreads(spec)) {
+            sections[OptionsSection.THREAD] = OptionsSectionBody(
+                summary = threadSectionSummary(threadSlant, threadDensity),
+            ) {
+                ThreadSlantSlider(
+                    threadSlant = threadSlant,
+                    onCommit = { vm.setPdfThreadSlant(it) },
+                )
+                ThreadDensitySlider(
+                    threadDensity = threadDensity,
+                    onCommit = { vm.setPdfThreadDensity(it) },
                 )
             }
         }
 
-        Spacer(Modifier.height(12.dp))
+        // ── Lines & text ─────────────────────────────────────────────────────
+        sections[OptionsSection.LINES] = OptionsSectionBody(
+            summary = linesSectionSummary(lineThicknessScale),
+        ) {
+            LineThicknessSlider(
+                scale = lineThicknessScale,
+                onCommit = { vm.setLineThicknessScale(it) },
+                onDrag = { tuning.lineThickness = it },
+            )
+            DimensionArrowSizeChips(
+                arrowSizePt = arrowSizePt,
+                onCommit = { vm.setPdfArrowSizePt(it) },
+            )
+            FractionStyleChips(
+                fractionStyle = fractionStyle,
+                onCommit = { vm.setPdfFractionStyle(it) },
+            )
+        }
 
-        DualUnitLayoutChips(
-            layout = dualUnitLayout,
-            enabled = dualUnits,
-            onCommit = { vm.setPdfDualUnitLayout(it) },
-        )
+        // ── Shading ──────────────────────────────────────────────────────────
+        sections[OptionsSection.SHADING] = OptionsSectionBody {
+            ShadeInPdfCheckRows(
+                pdfShadedBodies = pdfShadedBodies,
+                pdfShadedTapers = pdfShadedTapers,
+                pdfShadedLiners = pdfShadedLiners,
+                shadeExplicitBodiesOnly = pdfShadeExplicitBodiesOnly,
+                onSetShadedBodies = { vm.setPdfShadedBodies(it) },
+                onSetShadedTapers = { vm.setPdfShadedTapers(it) },
+                onSetShadedLiners = { vm.setPdfShadedLiners(it) },
+                onSetShadeExplicitBodiesOnly = { vm.setPdfShadeExplicitBodiesOnly(it) },
+            )
+        }
+
+        // ── Measurement reference ────────────────────────────────────────────
+        sections[OptionsSection.MEASUREMENT] = OptionsSectionBody {
+            MeasurementReferenceRadios(
+                pdfTieringMode = pdfTieringMode,
+                onCommit = { vm.setPdfTieringMode(it) },
+            )
+        }
+
+        // ── Units ────────────────────────────────────────────────────────────
+        // The document's own `dual_units` flag plus the app-wide layout it is set in. The
+        // layout chips style what the switch turns on, so they read as disabled until it is.
+        sections[OptionsSection.UNITS] = OptionsSectionBody(
+            summary = unitsSectionSummary(dualUnits, dualUnitLayout),
+        ) {
+            DualUnitsSwitchRow(dualUnits = dualUnits, onDualUnitsChange = { vm.setDualUnits(it) })
+            DualUnitLayoutChips(
+                layout = dualUnitLayout,
+                enabled = dualUnits,
+                onCommit = { vm.setPdfDualUnitLayout(it) },
+            )
+        }
+
+        OptionsSections(sections)
 
         Spacer(Modifier.height(24.dp))
     }

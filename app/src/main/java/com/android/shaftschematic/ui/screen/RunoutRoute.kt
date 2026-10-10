@@ -1124,6 +1124,7 @@ fun RunoutRoute(
                     showSBreak = true,
                     sBreakThresholdFrac = pdfSBreakThresholdFrac,
                     fractionStyle = pdfFractionStyle,
+                    hasThreads = hasDrawnThreads(spec),
                     threadSlant = pdfThreadSlant,
                     threadDensity = pdfThreadDensity,
                     dualUnitLayout = pdfDualUnitLayout,

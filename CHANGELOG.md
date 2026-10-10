@@ -60,6 +60,43 @@ there and the "Undo move" chip is untouched.
 
 ## 2026-10-03
 
+### fix(ui): PDF options sheets grouped into collapsible sections, most-used first
+
+On-device request: the two PDF options sheets had grown into one long scroll of sliders and
+chips. Every control below the Content chips now sits in a collapsible section, the sections
+ordered by how often they are reached for. Layout only — every control keeps its behaviour,
+test tag, callback, and live-drag channel.
+
+- ONE ordered section list behind both sheets (`OptionsSection` + `OptionsSections`,
+  `ui/screen/ShaftHeightSlider.kt`), so the schematic / Final sheet (`PdfOptionsSheet`) and the
+  shared Runout / Consolidated / Wear / Undercut sheet (`RunoutWearOptionsSheet`) cannot name or
+  order a section differently: **Shaft** (open — Shaft height, Body S-break, Liner & taper
+  compression) → **Wear** (open, wear sheet only) → **Runout bubbles** → **Thread** (slant +
+  density, only while the shaft draws a thread) → **Lines & text** (Line thickness, Dimension
+  arrows, Fractions) → **Shade in Components** → **Measurement reference** → **Units** (Dual
+  units + Dual-unit layout) LAST. Everything from Runout bubbles down starts collapsed; a sheet
+  omits a section it has nothing for (the undercut sheet has no Shaft section). The scope note
+  and the Content chips stay at the top, outside any section.
+- Dividers between individual rows are gone: a divider separates sections, and the controls
+  inside one sit 12 dp apart. Thread, Lines & text and Units show a short value summary in their
+  header (`3× · 50%`, `100%`, `Single` / `Dual · Stacked`).
+- `OptionsExpander` gains `initiallyExpanded`, a header `summary`, and `contentSpacing`; the
+  shade and measurement-reference bodies split out as `ShadeInPdfCheckRows` /
+  `MeasurementReferenceRadios` so the sheets can host them as sections (their standalone
+  wrappers keep the `options_shade_expander` / `options_measure_ref_expander` headers).
+- `RunoutWearOptionsSheet(hasThreads)`; all four routes pass `hasDrawnThreads(spec)` (a thread
+  with length > 0), and the schematic sheet reads the same predicate off the spec it draws — the
+  Final preview's own target spec.
+- On the wear sheet the Shaft section (height only) precedes the Wear section, as the one list
+  orders them; both open by default.
+- Tests: `PdfOptionsSectionsTest` hosts the real sheets — Shaft open with the height slider,
+  Thread present only on a threaded shaft (both sheets) and collapsed until tapped, Lines & text
+  collapsed until tapped, the documented section order on the schematic / consolidated / wear /
+  undercut configurations, and Units last.
+- Docs: `docs/contracts/PdfExport.md`, `docs/contracts/RunoutSheet.md` (controls table, section
+  table, per-sheet orders), `docs/PDF_EXPORT.md` §5.5/§5.6, Help ("Drawing controls that live on
+  the document").
+
 ### feat(thread): relief groove at the shoulder end — model, drawing on every sheet, footer line, card + Add dialog
 
 On-device request, from a machine-shop textbook figure of 60° threads as they are developed: a
