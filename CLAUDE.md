@@ -569,7 +569,14 @@ between them), "−" removes the most redundant unmeasured station
 it was measured at. Pure math in `geom/RunoutStationPlacementMath.kt` (no `pdf → ui` dep).
 The gesture commits **once on release** (`PreviewTuning` doctrine — no ViewModel write on a
 drag frame), and `composeRunoutPdf` must thread placements into **both** `collectRunoutStations`
-calls, the prelim budget plan included. See `docs/contracts/RunoutSheet.md` (Draggable stations).
+calls, the prelim budget plan included. **Move mode** (the canvas's corner toggle,
+`runout_move_mode`) is a gesture-layer re-binding ONLY — touch picks a bubble up at once, tap
+selects a bubble or a component instead of opening the reading dialog, and a −/+ toolbar acts on
+the selection through the SAME `addRunoutStation`/`removeRunoutStation` and the editor's own
+count/− rule (`stationCountFor`/`canRemoveStation`). Both gesture paths call ONE pickup/follow/
+commit body (`beginStationDrag`/`continueStationDrag`/`endStationDrag`); the selection is screen
+state, never in the envelope. Default OFF, and OFF is byte-identical to the plain canvas. See
+`docs/contracts/RunoutSheet.md` (Draggable stations, Move mode).
 
 ### Runout readings are reference features
 Per-station runout readings (`RunoutReadings` in the doc envelope — a TIR value + high-spot

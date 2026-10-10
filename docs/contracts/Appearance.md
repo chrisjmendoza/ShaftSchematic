@@ -99,8 +99,9 @@ colors) — nothing in this contract touches it.
   the same golden-rule posture as a breadcrumb (`Diagnostics.md`). Each summary also names
   the sheet's real accessible editing path — the list rows below the canvas (undercuts, wear
   detail) or the canvas's own gesture (wear overview's tap-to-inspect, runout's
-  long-press-to-drag/tap-to-enter) — because the canvas's placement gestures (tap a pixel,
-  drag a bubble) are not themselves a TalkBack path.
+  long-press-to-drag/tap-to-enter, plus its Move mode's −/+ toolbar — real buttons, so adding
+  or removing a station on a selected component IS a TalkBack path) — because the canvas's
+  placement gestures (tap a pixel, drag a bubble) are not themselves a TalkBack path.
 - **Icon-only buttons always carry a `contentDescription`.** An `IconButton` whose only
   child is an `Icon` with no visible text sibling must describe its action ("Back", "Save",
   "Open navigation", …). An icon drawn beside its own visible text label keeps
