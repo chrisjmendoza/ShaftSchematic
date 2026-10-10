@@ -69,6 +69,20 @@ internal data class RunoutComponentEntry(
 }
 
 /**
+ * The count a component's row shows and its −/+ act on: the user's override when there is
+ * one, the derived default otherwise. ONE derivation behind the editor rows and the Runout
+ * tab's Move-mode toolbar, so the two can never act on different counts.
+ */
+internal fun stationCountFor(entry: RunoutComponentEntry, overrides: Map<String, Int>): Int =
+    overrides[entry.id] ?: entry.defaultCount
+
+/**
+ * Whether "−" may act at [currentCount]. 0 is a legal floor — a component not being measured
+ * carries no bubbles. Shared by the editor rows and the Move-mode toolbar.
+ */
+internal fun canRemoveStation(currentCount: Int): Boolean = currentCount > 0
+
+/**
  * Bodies, tapers and liners in axial order, one row per component the user names.
  *
  * Spans come from the ONE resolved→runout mapping (`ui/resolved/RunoutSpans.kt`) — the same
@@ -145,7 +159,7 @@ internal fun RunoutStationCountEditor(
             Text("Measurement stations", style = MaterialTheme.typography.titleSmall)
         }
         entries.forEach { entry ->
-            val currentCount = overrides[entry.id] ?: entry.defaultCount
+            val currentCount = stationCountFor(entry, overrides)
             RunoutStationRow(
                 label = entry.label,
                 currentCount = currentCount,
@@ -203,8 +217,7 @@ private fun RunoutStationRow(
                     modifier = Modifier.padding(end = 4.dp),
                 )
             }
-            // 0 is a legal floor — a component not being measured carries no bubbles.
-            IconButton(onClick = onDecrement, enabled = currentCount > 0) {
+            IconButton(onClick = onDecrement, enabled = canRemoveStation(currentCount)) {
                 Text("−", style = MaterialTheme.typography.titleMedium)
             }
             Text(

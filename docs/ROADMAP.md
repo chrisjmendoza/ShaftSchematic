@@ -41,11 +41,13 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
   the `Paint` — and `FractionTextRendererTest` now runs its ink-bounds checks in every face, so
   a fraction stack that breaks out of the line box in a condensed or slab font fails there
 - [ ] **Tap-to-place a NEW bubble** — leader clarity itself is resolved (2026-08-25 dogleg-dip
-  rework, on top of the 2026-08-16 pointer rework), and long-press-drag covers *moving* a
-  station. What remains of the original request is placing a NEW bubble at an arbitrary
-  station rather than adding with `+` and dragging. The drag work settled the hard parts
-  (authored positions, the neighbour clamp, reading re-keys), so this is now mostly a gesture +
-  insertion-index question — confirm on-device that it is still wanted
+  rework, on top of the 2026-08-16 pointer rework), long-press-drag covers *moving* a
+  station, and Move mode (2026-10-09) covers the rest of the workflow: select a component on
+  the canvas, `+` on the toolbar under it, touch-drag the new bubble into place — no trip to the
+  station rows. What remains of the original request is placing a NEW bubble at the tapped
+  position in ONE gesture. The hard parts are settled (authored positions, the neighbour clamp,
+  reading re-keys, the insertion index), so this is now a single-gesture nicety — confirm
+  on-device that it is still wanted after using Move mode
 - [ ] **Drag on the compressed preview** — the Runout tab's canvas maps mm linearly while the
   printed sheet foreshortens, so a bubble dragged to look centred in the preview does not look
   centred on paper in a compressed region (the stored mm is correct either way). Teaching the

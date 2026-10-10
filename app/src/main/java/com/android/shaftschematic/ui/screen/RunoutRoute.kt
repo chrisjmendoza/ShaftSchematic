@@ -5,10 +5,15 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
+import androidx.compose.ui.input.pointer.PointerInputChange
+import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,16 +33,19 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -61,6 +69,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -125,6 +134,7 @@ import com.android.shaftschematic.ui.viewmodel.*
 import com.android.shaftschematic.util.printShaftPdfPage
 import com.android.shaftschematic.util.renderPdfPageBitmap
 import com.android.shaftschematic.util.writeShaftPdfToUri
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.withContext
@@ -195,9 +205,10 @@ fun RunoutRoute(
     // finger-up (the commit-on-release rule the tuning sliders already follow — a per-frame
     // write would raise the unsaved-changes asterisk instantly and fill the undo history).
     var draggingStation by remember { mutableStateOf<DraggingRunoutStation?>(null) }
-    // A long-press pickup and a tap share one press: without this the finger-up that ends a
-    // drag would also read as a tap and open the reading dialog on the bubble just moved.
-    // Set when the long press fires, cleared by the next press.
+    // A pickup and a tap share one press: without this the finger-up that ends a drag would
+    // also read as a tap and open the reading dialog on the bubble just moved. Set when a
+    // drag picks a bubble up (long press, or Move mode's instant pickup), cleared by the
+    // next press.
     var suppressBubbleTap by remember { mutableStateOf(false) }
     // One-shot undo for the most recent committed drag ("Undo move" beside the canvas hint).
     // Session-scoped screen state, not persistence: it holds what the moved station's stored
@@ -207,6 +218,15 @@ fun RunoutRoute(
     // button also covers a drag (placements are in EditState); this chip is the zero-thought
     // path for "I nudged that by accident".
     var lastBubbleMove by remember { mutableStateOf<LastBubbleMove?>(null) }
+    // Move mode (the canvas's corner toggle): a tap selects instead of opening the reading
+    // dialog, a bubble drags the instant a finger lands on it, and −/+ under the canvas act
+    // on the selected component (on-device request: press-and-hold was not discoverable and
+    // slowed down placing several bubbles). OFF is the plain authoring canvas, unchanged.
+    var moveMode by rememberSaveable { mutableStateOf(false) }
+    // What Move mode has selected. Screen state only — cleared when the mode turns off, and
+    // read through `liveMoveSelection` so a component that stopped resolving reads as no
+    // selection without being cleared eagerly.
+    var moveSelection by remember { mutableStateOf<RunoutMoveSelection?>(null) }
 
     // What the canvas draws with: stored placements, plus the one station under the finger.
     // Only the dragged station is overlaid — its siblings stay derived, exactly as they will
@@ -433,6 +453,15 @@ fun RunoutRoute(
         buildRunoutStationEntries(spec, resolvedComponents)
     }
 
+    // The Move-mode selection as it applies to the drawing on screen: null while the mode is
+    // off, while nothing is chosen, or once the chosen component no longer resolves. Counts
+    // come from the station editor's own derivation, so a station past the current count
+    // falls back to its component.
+    val liveSelection: RunoutMoveSelection? = if (!moveMode) null else liveMoveSelection(
+        moveSelection,
+        entries.associate { it.id to stationCountFor(it, runoutConfig.componentOverrides) },
+    )
+
     // Zoom state for the shaft preview (hoisted so it survives spec updates)
     var previewScale  by remember { mutableFloatStateOf(1f) }
     var previewOffset by remember { mutableStateOf(Offset.Zero) }
@@ -454,7 +483,7 @@ fun RunoutRoute(
     // anything added here costs the scroll region height on a phone.
     val previewBlock: @Composable ColumnScope.() -> Unit = {
         // Pinch to zoom, tap a bubble to edit its reading, press-and-hold one to drag
-        // it along its component.
+        // it along its component. In Move mode a tap selects and a bubble drags at once.
         //
         // Read live inside the (non-restarting) gesture pointerInputs without
         // re-keying them: a re-key mid-gesture would abandon the drag.
@@ -478,6 +507,121 @@ fun RunoutRoute(
                 placements = livePlacements,
             ).size
         }
+
+        // The drag's phases, shared by the press-and-hold detector and Move mode's instant
+        // pickup — ONE body per phase, so the two gesture paths cannot drift. The pickup and
+        // the follow run on the gesture's PointerInputScope for its size and density.
+
+        /**
+         * Picks up the bubble under [raw], if any, and starts dragging it; returns the bubble
+         * when a drag started. [preferSelected] lets Move mode's selected station win a press
+         * that lands within reach of it — without it the nearest bubble wins, as a tap decides.
+         */
+        fun PointerInputScope.beginStationDrag(
+            raw: Offset,
+            preferSelected: Boolean,
+            haptic: HapticFeedbackType,
+        ): PlacedRunoutBubble? {
+            val preview = computeRunoutPreview(
+                size.width.toFloat(), size.height.toFloat(),
+                spec, resolvedComponents,
+                runoutConfig.componentOverrides, placementsForDrag.value,
+                bubbleScaleForTap.value, bubbleDropForTap.value,
+            )
+            val p = toPlanSpace(
+                raw, size.width.toFloat(), size.height.toFloat(),
+                scaleForTap.value, offsetForTap.value,
+            )
+            val hit = pickBubbleForMove(
+                preview.bubbles, preview.geom.radius, p.x, p.y,
+                tolerance = preview.geom.radius * 2f,
+                selected = if (preferSelected) moveSelection else null,
+            ) ?: return null
+            // The full current set is only the CLAMP fence — the neighbours the drag may not
+            // cross. Nothing but the station under the finger gets stored; its siblings stay
+            // derived and keep behaving automatically.
+            val positions = currentStationPositions(
+                hit.componentId, preview.bubbles,
+                resolvedComponents, placementsForDrag.value,
+            )
+            if (hit.stationIndex !in positions.indices) return null
+            suppressBubbleTap = true
+            haptics.performHapticFeedback(haptic)
+            draggingStation = DraggingRunoutStation(
+                componentId = hit.componentId,
+                stationIndex = hit.stationIndex,
+                positionsMm = positions,
+                originalPositionsMm = positions,
+                previousPinMm = placementsForDrag.value
+                    .position(hit.componentId, hit.stationIndex),
+            )
+            return hit
+        }
+
+        /** Follows the finger with the station being dragged, if any. */
+        fun PointerInputScope.continueStationDrag(change: PointerInputChange) {
+            val drag = draggingStation ?: return
+            change.consume()
+            // Plan against the in-progress set itself rather than a recomposition-lagged
+            // copy, so the mm the finger maps to is read off the layout actually on screen.
+            val preview = computeRunoutPreview(
+                size.width.toFloat(), size.height.toFloat(),
+                spec, resolvedComponents, runoutConfig.componentOverrides,
+                placementsForDrag.value.withPosition(
+                    drag.componentId, drag.stationIndex,
+                    drag.positionsMm[drag.stationIndex],
+                ),
+                bubbleScaleForTap.value, bubbleDropForTap.value,
+            )
+            val p = toPlanSpace(
+                change.position, size.width.toFloat(), size.height.toFloat(),
+                scaleForTap.value, offsetForTap.value,
+            )
+            val runs = runoutComponentSpans(resolvedComponents)
+                .filter { it.id == drag.componentId }
+            // Follow the finger in mm, then clamp inside the component and off its
+            // neighbours — station order never changes, so a typed TIR always stays on its
+            // own bubble.
+            val targetLocalMm = preview.layout.xMmFromPx(p.x) -
+                runoutComponentOriginMm(runs)
+            val clamped = clampDraggedStationMm(
+                positionsMm = drag.positionsMm,
+                index = drag.stationIndex,
+                targetMm = targetLocalMm,
+                spanMm = runoutComponentSpanMm(runs),
+            )
+            draggingStation = drag.copy(
+                positionsMm = drag.positionsMm.toMutableList()
+                    .also { it[drag.stationIndex] = clamped },
+            )
+        }
+
+        /**
+         * The one write of the whole gesture — see the commit-on-release note on
+         * `draggingStation`. A pickup that never moved commits nothing at all, and only the
+         * station that moved is pinned.
+         */
+        fun endStationDrag() {
+            draggingStation?.let {
+                if (it.positionsMm != it.originalPositionsMm) {
+                    vm.setRunoutStationPosition(
+                        it.componentId, it.stationIndex,
+                        it.positionsMm[it.stationIndex],
+                    )
+                    lastBubbleMove = LastBubbleMove(
+                        componentId = it.componentId,
+                        stationIndex = it.stationIndex,
+                        previousMm = it.previousPinMm,
+                    )
+                }
+            }
+            draggingStation = null
+        }
+
+        fun cancelStationDrag() {
+            draggingStation = null
+        }
+
         Box(
             modifier = canvasModifier
                 .clip(previewShape)
@@ -506,6 +650,24 @@ fun RunoutRoute(
                                 tap, size.width.toFloat(), size.height.toFloat(),
                                 scaleForTap.value, offsetForTap.value,
                             )
+                            if (moveMode) {
+                                // Move mode selects — a bubble, else the component run
+                                // under the tap, else nothing — and never opens the
+                                // reading dialog.
+                                val hit = pickBubbleForMove(
+                                    preview.bubbles, preview.geom.radius, p.x, p.y,
+                                    tolerance = preview.geom.radius * 2f,
+                                    selected = moveSelection,
+                                )
+                                moveSelection = moveModeSelectionForTap(
+                                    hit,
+                                    if (hit == null) runoutComponentAt(preview, resolvedComponents, p) else null,
+                                )
+                                if (hit != null) {
+                                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                }
+                                return@detectTapGestures
+                            }
                             pickBubbleAt(
                                 preview.bubbles, preview.geom.radius, p.x, p.y,
                                 tolerance = preview.geom.radius * 2f,
@@ -523,105 +685,61 @@ fun RunoutRoute(
                 // its consumed changes keep `transformable` from panning the canvas
                 // out from under the finger.
                 .pointerInput(spec, resolvedComponents, runoutConfig) {
+                    // Whether this detector's own long press started the drag in progress.
+                    // In Move mode the instant pickup below owns every bubble press; a long
+                    // press that fires under it must neither restart nor end that drag.
+                    var ownsDrag = false
                     detectDragGesturesAfterLongPress(
                         onDragStart = { raw ->
-                            val preview = computeRunoutPreview(
-                                size.width.toFloat(), size.height.toFloat(),
-                                spec, resolvedComponents,
-                                runoutConfig.componentOverrides, placementsForDrag.value,
-                                bubbleScaleForTap.value, bubbleDropForTap.value,
-                            )
-                            val p = toPlanSpace(
-                                raw, size.width.toFloat(), size.height.toFloat(),
-                                scaleForTap.value, offsetForTap.value,
-                            )
-                            val hit = pickBubbleAt(
-                                preview.bubbles, preview.geom.radius, p.x, p.y,
-                                tolerance = preview.geom.radius * 2f,
-                            )
-                            if (hit != null) {
-                                // The full current set is only the CLAMP fence — the
-                                // neighbours the drag may not cross. Nothing but the
-                                // station under the finger gets stored; its siblings
-                                // stay derived and keep behaving automatically.
-                                val positions = currentStationPositions(
-                                    hit.componentId, preview.bubbles,
-                                    resolvedComponents, placementsForDrag.value,
-                                )
-                                if (hit.stationIndex in positions.indices) {
-                                    suppressBubbleTap = true
-                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    draggingStation = DraggingRunoutStation(
-                                        componentId = hit.componentId,
-                                        stationIndex = hit.stationIndex,
-                                        positionsMm = positions,
-                                        originalPositionsMm = positions,
-                                        previousPinMm = placementsForDrag.value
-                                            .position(hit.componentId, hit.stationIndex),
-                                    )
-                                }
-                            }
+                            ownsDrag = !moveMode && beginStationDrag(
+                                raw, preferSelected = false,
+                                haptic = HapticFeedbackType.LongPress,
+                            ) != null
                         },
-                        onDrag = { change, _ ->
-                            val drag = draggingStation ?: return@detectDragGesturesAfterLongPress
-                            change.consume()
-                            // Plan against the in-progress set itself rather than a
-                            // recomposition-lagged copy, so the mm the finger maps to
-                            // is read off the layout actually on screen.
-                            val preview = computeRunoutPreview(
-                                size.width.toFloat(), size.height.toFloat(),
-                                spec, resolvedComponents, runoutConfig.componentOverrides,
-                                placementsForDrag.value.withPosition(
-                                    drag.componentId, drag.stationIndex,
-                                    drag.positionsMm[drag.stationIndex],
-                                ),
-                                bubbleScaleForTap.value, bubbleDropForTap.value,
-                            )
-                            val p = toPlanSpace(
-                                change.position, size.width.toFloat(), size.height.toFloat(),
-                                scaleForTap.value, offsetForTap.value,
-                            )
-                            val runs = runoutComponentSpans(resolvedComponents)
-                                .filter { it.id == drag.componentId }
-                            // Follow the finger in mm, then clamp inside the component
-                            // and off its neighbours — station order never changes, so
-                            // a typed TIR always stays on its own bubble.
-                            val targetLocalMm = preview.layout.xMmFromPx(p.x) -
-                                runoutComponentOriginMm(runs)
-                            val clamped = clampDraggedStationMm(
-                                positionsMm = drag.positionsMm,
-                                index = drag.stationIndex,
-                                targetMm = targetLocalMm,
-                                spanMm = runoutComponentSpanMm(runs),
-                            )
-                            draggingStation = drag.copy(
-                                positionsMm = drag.positionsMm.toMutableList()
-                                    .also { it[drag.stationIndex] = clamped },
-                            )
-                        },
+                        onDrag = { change, _ -> if (ownsDrag) continueStationDrag(change) },
                         onDragEnd = {
-                            // The one write of the whole gesture — see the
-                            // commit-on-release note on `draggingStation`. A pickup
-                            // that never moved commits nothing at all, and only the
-                            // station that moved is pinned.
-                            draggingStation?.let {
-                                if (it.positionsMm != it.originalPositionsMm) {
-                                    vm.setRunoutStationPosition(
-                                        it.componentId, it.stationIndex,
-                                        it.positionsMm[it.stationIndex],
-                                    )
-                                    lastBubbleMove = LastBubbleMove(
-                                        componentId = it.componentId,
-                                        stationIndex = it.stationIndex,
-                                        previousMm = it.previousPinMm,
-                                    )
-                                }
-                            }
-                            draggingStation = null
+                            if (ownsDrag) endStationDrag()
+                            ownsDrag = false
                         },
-                        onDragCancel = { draggingStation = null },
+                        onDragCancel = {
+                            if (ownsDrag) cancelStationDrag()
+                            ownsDrag = false
+                        },
                     )
-                },
+                }
+                // Move mode's instant pickup: no long press. Declared after the long-press
+                // detector so it takes the main pass first. A press on a bubble is consumed
+                // here and drags at once; a press on bare paper is left unconsumed, so the
+                // canvas still pans and zooms from it.
+                .then(
+                    if (moveMode) {
+                        Modifier.pointerInput(spec, resolvedComponents, runoutConfig) {
+                            awaitEachGesture {
+                                val down = awaitFirstDown(requireUnconsumed = false)
+                                // A corner button already took this press.
+                                if (down.isConsumed) return@awaitEachGesture
+                                val hit = beginStationDrag(
+                                    down.position, preferSelected = true,
+                                    haptic = HapticFeedbackType.TextHandleMove,
+                                ) ?: return@awaitEachGesture
+                                down.consume()
+                                moveSelection = RunoutMoveSelection(hit.componentId, hit.stationIndex)
+                                val completed = try {
+                                    drag(down.id) { change ->
+                                        change.consume()
+                                        continueStationDrag(change)
+                                    }
+                                } catch (e: CancellationException) {
+                                    cancelStationDrag()
+                                    throw e
+                                }
+                                if (completed) endStationDrag() else cancelStationDrag()
+                            }
+                        }
+                    } else {
+                        Modifier
+                    },
+                ),
         ) {
             Canvas(
                 modifier = Modifier
@@ -646,35 +764,101 @@ fun RunoutRoute(
                 // surface, so the profile carries just the bubbles. The wear
                 // marks/worn sections/in-profile values render on the Consolidated
                 // Output tab's preview (the rasterized real PDF).
+                liveSelection?.takeIf { it.stationIndex == null }?.let { sel ->
+                    drawRunoutComponentSelection(preview.layout, sel.componentId, resolvedComponents)
+                }
                 drawRunoutMarkers(
                     preview.bubbles, preview.geom, runoutReadings, unit, textMeasurer,
                     dragging = draggingStation,
+                    selected = liveSelection,
                 )
             }
 
-            // Compact reset control (top-right) — mirrors the schematic preview.
-            IconButton(
-                onClick = {
-                    previewScale  = 1f
-                    previewOffset = Offset.Zero
-                },
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(6.dp)
-                    .size(40.dp)
-                    .background(Color.White.copy(alpha = 0.6f), CircleShape),
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Refresh,
-                    contentDescription = "Reset view",
-                    tint = Color.Black.copy(alpha = 0.8f),
-                )
+            // Corner controls (top-right). Chrome over the sheet, not sheet ink, so the
+            // toggle's ON state may take the theme's primary.
+            Row(modifier = Modifier.align(Alignment.TopEnd)) {
+                // Move mode toggle — tinted while on, so the changed tap/drag behaviour is
+                // never a hidden mode.
+                IconToggleButton(
+                    checked = moveMode,
+                    onCheckedChange = { on ->
+                        moveMode = on
+                        if (!on) moveSelection = null
+                    },
+                    modifier = Modifier
+                        .padding(6.dp)
+                        .size(40.dp)
+                        .background(
+                            if (moveMode) MaterialTheme.colorScheme.primary
+                            else Color.White.copy(alpha = 0.6f),
+                            CircleShape,
+                        )
+                        .testTag("runout_move_mode"),
+                ) {
+                    Icon(
+                        imageVector = if (moveMode) Icons.Filled.Edit else Icons.Outlined.Edit,
+                        contentDescription = if (moveMode) "Done moving bubbles" else "Move bubbles",
+                        tint = if (moveMode) MaterialTheme.colorScheme.onPrimary
+                            else Color.Black.copy(alpha = 0.8f),
+                    )
+                }
+                // Compact reset control — mirrors the schematic preview.
+                IconButton(
+                    onClick = {
+                        previewScale  = 1f
+                        previewOffset = Offset.Zero
+                    },
+                    modifier = Modifier
+                        .padding(6.dp)
+                        .size(40.dp)
+                        .background(Color.White.copy(alpha = 0.6f), CircleShape),
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Refresh,
+                        contentDescription = "Reset view",
+                        tint = Color.Black.copy(alpha = 0.8f),
+                    )
+                }
             }
+        }
+        // −/+ on the selection, only while Move mode is on. Same count and same − rule as
+        // the station editor's rows, and the same ViewModel calls; after either the component
+        // stays selected but its station drops, because the change renumbers its stations.
+        // "Undo move" is left alone — it is move-only, and the session Undo covers −/+.
+        if (moveMode) {
+            val selectedEntry = liveSelection?.let { sel ->
+                entries.firstOrNull { it.id == sel.componentId }
+            }
+            val selectedCount = selectedEntry?.let {
+                stationCountFor(it, runoutConfig.componentOverrides)
+            }
+            RunoutMoveToolbar(
+                selectionLabel = moveSelectionLabel(liveSelection, entries),
+                hasSelection = selectedEntry != null,
+                canRemove = selectedCount != null && canRemoveStation(selectedCount),
+                onRemove = {
+                    if (selectedEntry != null && selectedCount != null) {
+                        vm.removeRunoutStation(selectedEntry.id, selectedCount)
+                        moveSelection = selectionAfterCountChange(moveSelection)
+                    }
+                },
+                onAdd = {
+                    if (selectedEntry != null && selectedCount != null) {
+                        vm.addRunoutStation(selectedEntry.id, selectedCount)
+                        moveSelection = selectionAfterCountChange(moveSelection)
+                    }
+                },
+            )
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = "Tap a bubble to enter its TIR reading and high spot. " +
-                    "Press and hold one to drag it along its component.",
+                text = if (moveMode) {
+                    "Move mode: tap a bubble or a component to select it, drag a bubble to " +
+                        "move it. Use − / + to remove or add a station on the selected component."
+                } else {
+                    "Tap a bubble to enter its TIR reading and high spot. " +
+                        "Press and hold one to drag it along its component."
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f),
@@ -1146,10 +1330,8 @@ private fun currentStationPositions(
 }
 
 /** Display title for the editor dialog, e.g. "Body 1 · Station 2". */
-private fun runoutBubbleTitle(bubble: PlacedRunoutBubble, entries: List<RunoutComponentEntry>): String {
-    val label = entries.firstOrNull { it.id == bubble.componentId }?.label ?: "Component"
-    return "$label · Station ${bubble.stationIndex + 1}"
-}
+private fun runoutBubbleTitle(bubble: PlacedRunoutBubble, entries: List<RunoutComponentEntry>): String =
+    moveSelectionLabel(RunoutMoveSelection(bubble.componentId, bubble.stationIndex), entries)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Local composables
@@ -1269,6 +1451,64 @@ private fun runoutMaxOdMm(components: List<ResolvedComponent>): Float =
         }
     }?.coerceAtLeast(10f) ?: 10f
 
+/** Bubble leaders, rings and values on the preview canvas — and Move mode's selection frame. */
+private val RunoutMarkerInk = SheetInk.Outline.copy(alpha = 0.70f)
+
+/**
+ * The component whose drawn run sits under plan-space point [p], or null. Axially the run's
+ * span decides ([runoutSpanIdAt]); vertically the point must fall inside the drawn profile at
+ * that station — the outer surface either side of the centreline, read off the same
+ * [runoutOdMmAt] the bubble leaders land on — widened by one bubble radius so a finger on the
+ * outline still counts. Below that band is the bubble field, where a miss is bare paper.
+ */
+private fun runoutComponentAt(
+    preview: RunoutPreview,
+    resolvedComponents: List<ResolvedComponent>,
+    p: Offset,
+): String? {
+    val mm = preview.layout.xMmFromPx(p.x)
+    val id = runoutSpanIdAt(runoutComponentSpans(resolvedComponents), mm) ?: return null
+    val halfHeight = preview.layout.rPx(runoutOdMmAt(mm, resolvedComponents)) + preview.geom.radius
+    return id.takeIf { abs(p.y - preview.layout.centerlineYPx) <= halfHeight }
+}
+
+/**
+ * Move mode's component selection: a thin dashed frame around each drawn run of [componentId],
+ * a few dp clear of the outline. Screen affordance only — the printed sheet carries no
+ * selection, so there is no PDF counterpart — and dashed so it never reads as a drawn edge.
+ */
+private fun DrawScope.drawRunoutComponentSelection(
+    layout: ShaftLayout.Result,
+    componentId: String,
+    resolvedComponents: List<ResolvedComponent>,
+) {
+    val pad = 4.dp.toPx()
+    val stroke = Stroke(
+        width = 1.dp.toPx(),
+        pathEffect = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 4.dp.toPx())),
+    )
+    runoutComponentSpans(resolvedComponents).filter { it.id == componentId }.forEach { run ->
+        val endMm = run.startMm + run.lengthMm
+        // Sampled just inside the run's ends (and mid-run) so the neighbour across a face
+        // never sets the frame's height; a taper's largest Ø is at one of its ends.
+        val inset = minOf(1f, run.lengthMm / 4f)
+        val maxOdMm = maxOf(
+            runoutOdMmAt(run.startMm + inset, resolvedComponents),
+            runoutOdMmAt(run.startMm + run.lengthMm / 2f, resolvedComponents),
+            runoutOdMmAt(endMm - inset, resolvedComponents),
+        )
+        val halfHeight = layout.rPx(maxOdMm) + pad
+        val left = layout.xPx(run.startMm) - pad
+        val right = layout.xPx(endMm) + pad
+        drawRect(
+            color = RunoutMarkerInk,
+            topLeft = Offset(left, layout.centerlineYPx - halfHeight),
+            size = Size(right - left, 2f * halfHeight),
+            style = stroke,
+        )
+    }
+}
+
 /**
  * Draw the planned runout bubbles: leader polylines, the circle with a keyway cutout at 12 o'clock,
  * and — when recorded — the TIR value (centred) and the high-spot marker (a short dash straddling
@@ -1277,8 +1517,10 @@ private fun runoutMaxOdMm(components: List<ResolvedComponent>): Float =
  * preview matches the export exactly.
  *
  * [dragging] is transient screen affordance, never ink: the bubble under the finger takes a
- * heavier ring so the user can see which one they picked up. It has no PDF counterpart, so the
- * lockstep rule above is untouched — nothing about the printed sheet changes.
+ * heavier ring so the user can see which one they picked up. [selected] — Move mode's selected
+ * station — takes the same ring: one look for "this bubble is the active one". Neither has a
+ * PDF counterpart, so the lockstep rule above is untouched — nothing about the printed sheet
+ * changes.
  */
 @OptIn(ExperimentalTextApi::class)
 private fun DrawScope.drawRunoutMarkers(
@@ -1288,22 +1530,25 @@ private fun DrawScope.drawRunoutMarkers(
     unit: com.android.shaftschematic.util.UnitSystem,
     textMeasurer: TextMeasurer,
     dragging: DraggingRunoutStation? = null,
+    selected: RunoutMoveSelection? = null,
 ) {
     val strokeW     = 1.2.dp.toPx()
-    val markerColor = Color.Black.copy(alpha = 0.70f)
+    val markerColor = RunoutMarkerInk
     val highSpotColor = Color(0xFFC62828) // red — the high spot, per shop convention
     val r = geom.radius
 
     bubbles.forEach { b ->
         val isDragged = dragging != null &&
             b.componentId == dragging.componentId && b.stationIndex == dragging.stationIndex
+        val isSelected = selected?.stationIndex != null &&
+            b.componentId == selected.componentId && b.stationIndex == selected.stationIndex
         val center = Offset(b.bubbleX, b.bubbleCenterY)
         b.leader.zipWithNext { p, q ->
             drawLine(markerColor, Offset(p.x, p.y), Offset(q.x, q.y), strokeWidth = strokeW)
         }
         drawRunoutBubbleRing(
             center, r, markerColor,
-            if (isDragged) strokeW * 2.5f else strokeW,
+            if (isDragged || isSelected) strokeW * 2.5f else strokeW,
         )
 
         val reading = readings.find(b.componentId, b.stationIndex)
