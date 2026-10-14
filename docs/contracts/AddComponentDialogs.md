@@ -128,7 +128,7 @@ clears the other's dialog state, mirroring the ViewModel's clearing behavior on 
 The explicit-body card's **"Explicit body"** checkbox (checked; unchecking demotes back
 to auto-fill via a confirmation dialog) — and the auto-body card's own "Explicit body"
 checkbox (unchecked; the sole promotion path) — are **card-state, not add-time state**,
-the same posture as the coupler-bolt-slot card's deferred "show dimension rail" toggle.
+the same posture as the coupler-bolt-slot card's card-only "show dimension rail" toggle.
 On both cards the checkbox row sits **above** the Start/Length/Ø fields so its position
 doesn't jump when checking it swaps the auto card for the explicit one.
 `AddBodyDialog` has no equivalent control: an Add dialog always creates an explicit body
@@ -267,9 +267,10 @@ Auto taper-rate rules (both surfaces — dialog and carousel card):
 | Depth | Only when blind (`through = false`) |
 
 Matches `CouplerBoltSlotPagerCard.kt`. The carousel card carries
-one extra control — the **"show dimension rail"** toggle (deferred; off by default). It is
-a card-only affordance (not an add-time choice), so its absence from the dialog is
-intentional and does not violate parity. See `CouplerBoltSlot.md`.
+one extra control — the **"show dimension rail"** toggle (off by default; on, the row prints
+one rail span from its authored shaft end to the nearest hole center). It is a card-only
+affordance (not an add-time choice), so its absence from the dialog is intentional and does
+not violate parity. See `CouplerBoltSlot.md`.
 
 ---
 
@@ -289,7 +290,7 @@ third carve-out, recorded in `CLAUDE.md`):
 
 | Control | Cards | Why card-only |
 |---|---|---|
-| **Show dimension rail** | `ResolvedCouplerBoltSlot` | Deferred print affordance, off by default |
+| **Show dimension rail** | `ResolvedCouplerBoltSlot` | Prints the row's position span (authored end → nearest hole center) on the rail sheets; off by default |
 | **Show Ø on drawing** | Body (explicit + auto), Liner | Controls whether the Ø callout prints below the shaft. Bodies and the bare shaft default **off** — body Ø callouts are opt-in per card (on-device preference; the footer's "Body:" list still carries every Ø). Liners default on |
 
 Anything that moves a value or a component stays under the parity rule above. See

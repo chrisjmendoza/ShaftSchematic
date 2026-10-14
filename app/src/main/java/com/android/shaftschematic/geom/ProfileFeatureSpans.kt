@@ -30,6 +30,8 @@ import com.android.shaftschematic.model.keywayAbsSpanMm
  * - Threads: flat floor (the hatched stub stays legible).
  * - Body-keyway windows pin at true scale ([keywayPinnedBodySpans]).
  * - Bodies that opted out of compression pin whole ([compressOptOutBodySpans]).
+ * - Coupler bolt-row windows pin at true scale ([boltRowPinnedSpans]) — the keyway-window
+ *   rule applied to the other feature whose drawn geometry is sized on the diameter scale.
  *
  * Tapers/liners/threads read the same from a stored spec and a `withResolvedBodies` copy
  * (only bodies are replaced), so callers may pass either.
@@ -62,7 +64,42 @@ fun profileFeatureSpans(
     }
     addAll(keywayPinnedBodySpans(spec))
     addAll(compressOptOutBodySpans(spec))
+    addAll(boltRowPinnedSpans(spec))
 }
+
+/**
+ * The protected axial window around each coupler bolt row: the row's own footprint (first
+ * hole center − hole radius … last hole center + hole radius) padded by one hole diameter at
+ * each end, clamped to the shaft. The body-keyway window rule ([bodyKeywayProtectedSpansMm])
+ * applied to bolt holes: the circles are sized on the DIAMETER scale while their centers ride
+ * the axial map, so inside a compressed body a 1″-on-3″ row printed as an overlapping chain
+ * and the S-break gap could land on the row (manual-figure report). The window — never the
+ * host body — pins at true scale and is what the break gap steers clear of. A cross-drilled
+ * hole's window is the same construction (its circle or hidden bore is one hole wide).
+ *
+ * Draw-only, like everything about a bolt row: the window reaches neither OAL, body
+ * resolution nor collision. Slots pass through resolution verbatim, so stored and resolved
+ * specs read the same here.
+ */
+fun boltRowProtectedSpansMm(spec: ShaftSpec): List<KeywaySpan> =
+    spec.couplerBoltSlots.mapNotNull { s ->
+        if (s.holeDiaMm <= 0f || s.count < 1) return@mapNotNull null
+        val reach = s.holeDiaMm * 1.5f   // hole radius + one hole diameter of padding
+        val lo = (s.centerMmAt(0) - reach).coerceAtLeast(0f)
+        val hiRaw = s.centerMmAt(s.count - 1) + reach
+        val hi = if (spec.overallLengthMm > 0f) hiRaw.coerceAtMost(spec.overallLengthMm) else hiRaw
+        if (hi - lo <= 1e-4f) null else KeywaySpan(loMm = lo, hiMm = hi)
+    }
+
+/**
+ * True-width pins for the bolt-row windows of [spec] ([boltRowProtectedSpansMm]) — the
+ * keyway-window pin for bolt holes. Contributed by the ONE builder above so the schematic, the
+ * runout/consolidated sheet and the UI's scale estimator all pin the span the holes draw in.
+ */
+fun boltRowPinnedSpans(spec: ShaftSpec): List<ProfileFeatureSpan> =
+    boltRowProtectedSpansMm(spec).map {
+        ProfileFeatureSpan(it.loMm, it.hiMm, Float.MAX_VALUE)
+    }
 
 /**
  * True-width pins for every stored body whose author turned compression off

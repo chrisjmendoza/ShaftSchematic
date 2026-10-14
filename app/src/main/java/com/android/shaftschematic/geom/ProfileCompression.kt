@@ -237,7 +237,14 @@ data class ProfileFeatureSpan(
     val endMm: Float,
     val minWidthPt: Float,
     val minWidthFracOfTrue: Float = 0f,
-)
+) {
+    /**
+     * True for a span pinned at true scale (`Float.MAX_VALUE` floor). A pin is a guarantee
+     * the layout yields its HEIGHT for; a floor is a request the λ pool may shrink. The two
+     * never merge ([normalizeFeatures]).
+     */
+    val isPinned: Boolean get() = minWidthPt == Float.MAX_VALUE
+}
 
 /** One monotonic piece of the compressed-profile x mapping. */
 data class ProfileXSegment(
@@ -474,7 +481,22 @@ fun solveMaxProfileScale(
     return lo
 }
 
-/** Clip to the window, drop empties, sort, and merge overlaps (keeping the larger floors). */
+/**
+ * Clip to the window, drop empties, sort, and merge overlaps — but only WITHIN a pin class,
+ * never across one. Touching or overlapping FLOORED spans (a liner butting a thread) merge
+ * keeping the larger floor and the larger fraction, as they always did; touching or
+ * overlapping PINNED spans (a keyway window inside an opted-out body) merge into one pin.
+ * A pinned span never absorbs a floored neighbour: merging the two under `max(floor)` turned
+ * the whole merged run into a pin, so a liner butting a "Compress on drawing"-unticked body —
+ * the ordinary seal-journal layout — drew at true scale while every other liner compressed,
+ * and the page budget it took came out of the tapers (manual-figure report: a 16″ liner drawn
+ * wider than a 20″ one, an 18″ taper squeezed to a quarter of its length). The pin keeps
+ * exactly its own span; a floored span the pin overlaps is CARVED around it, each remainder
+ * keeping the original floor and fraction. The result is disjoint and sorted, so every
+ * consumer ([walkSpans] → the height solve and the λ pool) still sees each span once.
+ *
+ * Documents with no pinned span touching a floored one normalize exactly as before.
+ */
 private fun normalizeFeatures(
     windowStartMm: Float,
     windowEndMm: Float,
@@ -490,8 +512,17 @@ private fun normalizeFeatures(
         .filter { it.endMm - it.startMm > 1e-4f }
         .sortedBy { it.startMm }
     if (clipped.isEmpty()) return emptyList()
-    val merged = mutableListOf(clipped.first())
-    clipped.drop(1).forEach { f ->
+    val (pinnedRaw, flooredRaw) = clipped.partition { it.isPinned }
+    val pinned = mergeTouching(pinnedRaw)
+    val floored = mergeTouching(flooredRaw).flatMap { carveAroundPins(it, pinned) }
+    return (pinned + floored).sortedBy { it.startMm }
+}
+
+/** Sequential merge of a start-sorted list: touching/overlapping spans keep the larger floors. */
+private fun mergeTouching(sorted: List<ProfileFeatureSpan>): List<ProfileFeatureSpan> {
+    if (sorted.isEmpty()) return emptyList()
+    val merged = mutableListOf(sorted.first())
+    sorted.drop(1).forEach { f ->
         val last = merged.last()
         if (f.startMm <= last.endMm + 1e-4f) {
             merged[merged.lastIndex] = ProfileFeatureSpan(
@@ -503,6 +534,25 @@ private fun normalizeFeatures(
         }
     }
     return merged
+}
+
+/**
+ * [span] minus every interval of [pins] (sorted, disjoint): the parts of a floored span that
+ * no pin covers, each carrying the span's own floor and fraction. A pin that merely TOUCHES
+ * the span removes nothing.
+ */
+private fun carveAroundPins(
+    span: ProfileFeatureSpan,
+    pins: List<ProfileFeatureSpan>,
+): List<ProfileFeatureSpan> = buildList {
+    var cursor = span.startMm
+    for (p in pins) {
+        if (p.endMm <= cursor + 1e-4f) continue
+        if (p.startMm >= span.endMm - 1e-4f) break
+        if (p.startMm > cursor + 1e-4f) add(span.copy(startMm = cursor, endMm = p.startMm))
+        cursor = maxOf(cursor, p.endMm)
+    }
+    if (span.endMm > cursor + 1e-4f) add(span.copy(startMm = cursor, endMm = span.endMm))
 }
 
 /**

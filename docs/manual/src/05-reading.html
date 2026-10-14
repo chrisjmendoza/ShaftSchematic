@@ -160,7 +160,7 @@
     <li>A run prints the break once it is drawn at less than a set fraction of its true length — half, by default. The office sets the fraction under <span class="path">Settings → Drawing → Body S-break</span>, down to <span class="ui">Never</span>. A very long run breaks at every setting, because nobody would mistake it for true scale.</li>
     <li>A run that is shortened only a little prints a plain outline, no break.</li>
     <li>A body the office has set not to compress prints at true length and never breaks.</li>
-    <li>The break never lands on a keyway or a seal area: the gap is placed clear of them.</li>
+    <li>The break never lands on a keyway, a seal area or a row of coupler bolt holes: the gap is placed clear of them.</li>
   </ul>
 
   <h2 id="reading-details">Drawing details</h2>
@@ -232,7 +232,7 @@
   </figure>
   <dl class="terms">
     <dt>Seam holes (muff coupling)</dt>
-    <dd>A row of circles straddling the top and bottom outline of the shaft, one per bolt at its spacing. These are reference marks: they print no footer line and no dimension.</dd>
+    <dd>A row of circles straddling the top and bottom outline of the shaft, one per bolt at its spacing. These are reference marks: they print no footer line, and a dimension only when the row's card has <span class="ui">Show dimension rail</span> on — then one rail runs from the end of the shaft the row was measured from to the nearest hole center, carrying the entered distance. The row itself is never shortened on paper: its holes keep their true spacing even inside a body that is, and a body's S-break is placed clear of them.</dd>
     <dt>Cross-drilled hole</dt>
     <dd>A bolt hole drilled through the coupling end. When it is clocked 90° from the keyway — the usual case, since a bolt in line with the keyway would pass through the key — it is out of sight and draws as two dashed lines one hole width apart. When it is in line with the keyway it draws as a circle on the centerline. The footer gives “Bolt hole: Ø 0.875″” (with × count for more than one), “Hole center from FWD: 16″” (measured from that end of the shaft to the hole center, with the spacing for more than one), and “90° from keyway” or “In line with keyway” when the shaft has a keyway.</dd>
   </dl>

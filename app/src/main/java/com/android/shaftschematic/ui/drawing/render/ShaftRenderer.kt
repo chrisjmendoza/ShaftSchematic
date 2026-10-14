@@ -32,6 +32,7 @@ import com.android.shaftschematic.model.secondaryKeywayHostIds
 import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.ResolvedComponentType
+import com.android.shaftschematic.geom.boltHoleCentersX
 import com.android.shaftschematic.geom.crossBoreLines
 import com.android.shaftschematic.model.BoltHoleStyle
 import com.android.shaftschematic.ui.resolved.ResolvedCouplerBoltSlot
@@ -568,9 +569,12 @@ object ShaftRenderer {
                 val holeR = L.rPx(slot.holeDiaMm)
                 if (holeR <= 0f || slot.count < 1) continue
                 val highlighted = isHighlighted(hiEnabled, hiId, slot.id)
+                // Centers off the shared boltHoleCentersX — the preview's map is linear, so this
+                // is xPx(center) exactly, and the sheet (compressed map) places them the same way.
+                val centersX = boltHoleCentersX(slot) { L.xPx(it) }
                 for (i in 0 until slot.count) {
-                    val cxMm = slot.startFromAftMm + i * slot.spacingMm
-                    val cx = L.xPx(cxMm)
+                    val cxMm = slot.centerMmAt(i)
+                    val cx = centersX[i]
                     // Cross-drilled, 90° from the keyway: the bore is hidden behind the surface —
                     // dashed walls one hole width apart (and a dashed floor when blind), from the
                     // shared crossBoreLines. Same construction as the PDF's drawCouplerBoltSlots.
