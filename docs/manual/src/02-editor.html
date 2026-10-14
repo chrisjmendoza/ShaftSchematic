@@ -1,0 +1,314 @@
+<section class="chapter" id="ch-editor" data-audience="office">
+  <h1>The Shaft Editor</h1>
+  <p class="lede">How to build a shaft in the editor: starting a job, setting the overall length, adding and editing components, working with bare shaft, clearing overlaps, undoing mistakes, and reusing work through templates and mate duplicates. This chapter covers the workflow; the field-by-field detail for each component is in <a href="#ch-components">Components Reference</a>.</p>
+
+  <h2 id="editor-tour">The editor at a glance</h2>
+  <p>The editor is the <span class="ui">Schematic</span> tab. From top to bottom it shows:</p>
+  <dl class="terms">
+    <dt>Title strip</dt>
+    <dd>The document name, or <span class="ui">Untitled draft</span> for a job that has never been saved. An asterisk after the name means there are unsaved changes. Tap it to name or rename the job (see <a href="#editor-naming">Naming the job</a>).</dd>
+    <dt>Toolbar</dt>
+    <dd><span class="ui">Shaft Editor</span>, with the navigation menu button, <span class="ui">History</span>, <span class="ui">Project information</span>, <span class="ui">New</span>, <span class="ui">Open</span>, <span class="ui">Save</span>, <span class="ui">PDF preview</span> and <span class="ui">More options</span> (see <a href="#intro-toolbar">The title strip and toolbar</a>).</dd>
+    <dt>Preview</dt>
+    <dd>A live drawing of the shaft, AFT on the left and FWD on the right.</dd>
+    <dt>Overall length</dt>
+    <dd>The <span class="ui">Overall Length</span> field.</dd>
+    <dt>Components</dt>
+    <dd>The <span class="ui">+ Add Component</span> button, any shaft-wide warnings, and the carousel of component cards, one card per component, in order along the shaft.</dd>
+  </dl>
+  <p>The other document tabs, the calculators, Help and Settings are in the navigation menu (see <a href="#intro-sidebar">The navigation menu</a>). On a tablet held wide, the editor splits into two panes; everything works the same way in either layout.</p>
+
+  <h2 id="editor-start">Starting a job</h2>
+  <p>Start from the home screen with <span class="ui">New Drawing</span>, <span class="ui">Start from Template</span> (see <a href="#editor-templates">Templates</a>) or <span class="ui">Open…</span>, or continue one of the <span class="ui">Unsaved drafts</span> listed above them (see <a href="#intro-home">The home screen</a>). Inside the editor, the toolbar <span class="ui">New</span> and <span class="ui">Open</span> buttons do the same. If the current job has unsaved changes, the app asks first: <span class="ui">Save</span>, <span class="ui">Don't save</span> (the autosave draft still keeps the work), or <span class="ui">Cancel</span>.</p>
+
+  <ol class="steps">
+    <li>Tap <span class="ui">New Drawing</span>.</li>
+    <li>Tap <span class="ui">Project information</span> on the toolbar and fill in the job details.</li>
+    <li>Check the unit (inches for a new drawing; see <a href="#editor-units">Units for the job</a>).</li>
+    <li>Type the <span class="ui">Overall Length</span> and tap the green ✓.</li>
+    <li>Add the components with <span class="ui">+ Add Component</span>, AFT end first is easiest.</li>
+    <li>Tap <span class="ui">Save</span> and confirm the suggested name.</li>
+  </ol>
+
+  <h3 id="editor-project-info">Project information</h3>
+  <p>The <span class="ui">Project information</span> button opens the <span class="ui">Project Information</span> sheet:</p>
+  <table class="ref">
+    <thead><tr><th>Field</th><th>Prints on the sheets</th></tr></thead>
+    <tbody>
+      <tr><td><span class="ui">Job Number</span></td><td>As “Job #:” in the footer and sheet headers.</td></tr>
+      <tr><td><span class="ui">Customer</span></td><td>As “Customer:”.</td></tr>
+      <tr><td><span class="ui">Vessel</span></td><td>As “Vessel:”.</td></tr>
+      <tr><td><span class="ui">Item (optional)</span></td><td>As “Item:”, a designation such as “Tail shaft”. Left blank, the line is left off the sheet entirely.</td></tr>
+      <tr><td><span class="ui">Shaft Position</span></td><td><span class="ui">PORT</span>, <span class="ui">STBD</span>, <span class="ui">Center</span> or <span class="ui">Other</span>. Prints as the Side; <span class="ui">Other</span> prints no side.</td></tr>
+      <tr><td><span class="ui">Notes</span></td><td>Not printed. Notes stay with the job file for the office.</td></tr>
+    </tbody>
+  </table>
+  <p>The sheet date is not typed: every sheet prints the date it was made. Nothing on the sheet takes effect until you tap <span class="ui">Save</span>; <span class="ui">Cancel</span> throws the edits away. If you swipe the sheet closed with edits pending, the app asks <span class="ui">Save changes?</span> and offers <span class="ui">Save</span>, <span class="ui">Keep editing</span> or <span class="ui">Discard</span>.</p>
+  <aside class="tip"><p>Fill in the project information before the first save. The suggested file name is built from it, and the mate duplicate copies it across.</p></aside>
+
+  <h3 id="editor-naming">Naming the job</h3>
+  <p>A job is named when it is first saved. Tap <span class="ui">Save</span> (or the title strip) on an unsaved job and the <span class="ui">Save Drawing</span> screen opens with a <span class="ui">File name</span> already suggested: job number, customer, vessel and side joined with dashes, for example “J-2214 - Acme Marine - Northern Star - PORT”. With no project information, the suggestion is “Shaft_” followed by the date and time. If the name matches a saved shaft, the screen says so and asks before overwriting.</p>
+  <p>Once a job is saved, tapping the title strip opens <span class="ui">Rename saved shaft</span>. If you save a job and its project information now suggests a better name than the one it was saved under, a message offers <span class="ui">Rename</span>; it never renames over another saved shaft.</p>
+  <p>Unsaved drafts on the home screen are listed by the name the job would be saved under, so three drafts are told apart by job, not just by age. A draft with no project information shows as <span class="ui">Untitled draft</span>.</p>
+
+  <h3 id="editor-units">Units for the job</h3>
+  <p>A new drawing starts in inches. To draw in millimeters, open <span class="path">Settings → Units</span> and choose <span class="ui">Millimeters</span>. The job remembers its unit, so it reopens the way it was drawn. Inch fields accept fractions: type “3 1/2” or “150 3/4”.</p>
+  <p>Switching units never changes a dimension (see <a href="#intro-units">Millimeters and inches</a>). To print one component in the other unit (a metric thread on an inch shaft), see <a href="#components-prints-in">Prints in: in | mm</a>.</p>
+
+  <h2 id="editor-oal">The overall length</h2>
+  <p>The <span class="ui">Overall Length</span> field holds the shaft's OAL, end to end. It is always the number you type; nothing in the app sets, grows or shrinks it for you.</p>
+  <h3>Entering and changing it</h3>
+  <ol class="steps">
+    <li>Tap the <span class="ui">Overall Length</span> field. A shaft with no length yet shows 0; the 0 clears when you tap in.</li>
+    <li>Type the length.</li>
+    <li>Tap the green ✓, or the keyboard's Done key. Tapping away from the field after changing it also accepts the new length.</li>
+  </ol>
+  <p>The green ✓ and red ✗ appear beside the field only while you are changing the value. The ✗ puts back the stored length and changes nothing. The drawing does not follow your typing digit by digit; it changes once, when you accept the new length, so an edit from 368 1/2″ to 367 3/4″ never passes through a 36″ shaft on the way.</p>
+  <ul>
+    <li><strong>An empty field changes nothing.</strong> Clear the field to retype it, change your mind, and the stored length comes back. You cannot zero a shaft by accident.</li>
+    <li><strong>No length yet is not an error.</strong> Until an OAL is typed, the preview draws the shaft out to its last component and no “past the end” warnings appear. The other document tabs wait for a length.</li>
+    <li><strong>Components past the end are allowed.</strong> If a component runs past the OAL, the field turns red as a warning. Nothing is rejected or trimmed; fix whichever number is wrong.</li>
+  </ul>
+  <p>When a thread is excluded from the OAL, a read-only line under the field, <span class="ui">Dimensioned OAL</span>, shows the span the sheet's OAL dimension actually covers.</p>
+
+  <h3 id="editor-oal-change">What moves when the OAL changes</h3>
+  <p>Each taper, liner and coupler bolt slot is measured from the end you chose for it with its AFT | FWD chips. When the OAL changes:</p>
+  <ul>
+    <li>Components measured from <strong>AFT</strong> stay exactly where they are.</li>
+    <li>Components measured from <strong>FWD</strong> keep their distance from the FWD end and move with it. A FWD taper set flush with the end stays flush.</li>
+    <li>A thread excluded from the OAL stays hung off its end of the shaft.</li>
+    <li>Bare shaft fills whatever gap opens or closes. An explicit body keeps its own start and length, so after a big change check it against the new end.</li>
+  </ul>
+  <aside class="shop"><p>This is the way the print reads at the lathe: a FWD taper dimensioned from the FWD face is still dimensioned from the FWD face after the shaft is shortened. Only the overall length on the sheet changes.</p></aside>
+
+  <h2 id="editor-add">Adding components</h2>
+  <p>Every component is added from the one full-width <span class="ui">+ Add Component</span> button under the overall length. It opens the <span class="ui">Add Component</span> chooser:</p>
+  <table class="ref">
+    <thead><tr><th>Choice</th><th>The Add dialog asks for</th></tr></thead>
+    <tbody>
+      <tr><td><span class="ui">Body</span></td><td>Start, Length and Diameter; optional face finish (Square or Blend) and seal areas at each end; an optional keyway behind the <span class="ui">Keyway</span> checkbox.</td></tr>
+      <tr><td><span class="ui">Liner</span></td><td><span class="ui">Measure From:</span> AFT | FWD, start from that end, Length, Outer Ø; shoulders when they are switched on in Settings.</td></tr>
+      <tr><td><span class="ui">Taper</span></td><td><span class="ui">Direction:</span> AFT | FWD, start from that end, Length, S.E.T. Ø, L.E.T. Ø, rate (Auto or Manual), and an optional keyway.</td></tr>
+      <tr><td><span class="ui">Thread</span></td><td>Start (or AFT | FWD end when the thread is not counted in the OAL), Imperial (TPI) or Metric (M-designation), diameter and pitch, Length, optional thread relief, and <span class="ui">Count in OAL</span>.</td></tr>
+      <tr><td><span class="ui">Coupler Bolt Slot / Hole</span></td><td>Hole style (Seam or Cross-drilled), Measure From, position, hole Ø, count, spacing, and through or blind.</td></tr>
+    </tbody>
+  </table>
+  <p>Every field and option is described in <a href="#ch-components">Components Reference</a>. Tap <span class="ui">Add</span> to place the component, or <span class="ui">Cancel</span>. The new component is selected straight away: it highlights in the preview and the carousel moves to its card.</p>
+
+  <h3>What the dialog fills in for you</h3>
+  <ul>
+    <li><strong>Start</strong> is pre-filled at the end of the last taper, thread or liner, so working AFT to FWD needs little typing. A new body is pre-filled to run from there to the OAL.</li>
+    <li><strong>Sizes</strong> are pre-filled from the last component of the same kind you added or edited in this session, or from the opened drawing. A run of identical liners takes one diameter typed once.</li>
+  </ul>
+  <p>These are suggestions in the box. Whatever you type replaces them, and the app stores exactly what you typed.</p>
+
+  <h3>When the Add button is greyed, or asks first</h3>
+  <ul>
+    <li><span class="ui">Add</span> stays greyed until the required values are entered: a start, a length above zero, and a diameter.</li>
+    <li>A liner that would overlap another liner, or a thread that would overlap another thread, shows <span class="ui">Overlaps another component</span> under its start field and cannot be added there.</li>
+    <li>A thread placed between two components shows <span class="ui">Thread must be at a shaft end, not between components</span>.</li>
+    <li>A liner, taper or thread that would overlap a different kind of component, or fall outside the shaft, opens <span class="ui">Add Anyway?</span> with the reasons listed, for example <span class="ui">Overlaps Taper 1</span> or <span class="ui">Falls outside shaft span</span>. Tap <span class="ui">Add Anyway</span> to add it regardless, or <span class="ui">Cancel</span> to go back and fix the numbers. An overlap added this way blocks printing until it is cleared (see <a href="#editor-overlaps">Overlaps and the print gate</a>).</li>
+  </ul>
+  <p>Bodies never warn about overlap. They are the shaft's base stock and are meant to run under liners and up to tapers (see <a href="#editor-bodies">Bodies and bare shaft</a>).</p>
+
+  <h3>The card and the dialog always match</h3>
+  <p>Every control on a component's card that changes its shape, position or a value also appears in its Add dialog, under the same conditions, so nothing is out of reach at add time. The only exceptions are a few drawing-only switches, such as <span class="ui">Show Ø on drawing</span>, which are on the card alone (see <a href="#components-drawing-toggles">Per-component drawing switches</a>).</p>
+
+  <h2 id="editor-preview">The preview</h2>
+  <p>The preview draws the shaft as you build it: bare shaft, tapers, threads with their hatching, liners, keyways and bolt holes, at the same proportions the schematic will use.</p>
+  <ul>
+    <li><strong>Tap a component to select it.</strong> It highlights and the carousel jumps to its card.</li>
+    <li><strong>Tapping empty space does nothing.</strong> The preview is for looking and selecting only; components are added from <span class="ui">+ Add Component</span>.</li>
+    <li><strong>Shading markers.</strong> A component that will print shaded on the sheets carries a tint in the preview, following the Settings shading choices and each card's <span class="ui">Shade on drawing</span> switch, so you can see what will print grey before you print.</li>
+  </ul>
+  <p>A grid behind the shaft, the selection highlight and ◀ ▶ arrow buttons on the carousel are set under <span class="path">Settings → Editor Screen</span> (see <a href="#settings-editor">Editor Screen</a>).</p>
+  <p>The preview's colors are set under <span class="path">Settings → Editor Screen → Preview Colors</span>. They change the screen only; printed sheets are always black ink on white.</p>
+
+  <h2 id="editor-carousel">Editing in the carousel</h2>
+  <p>Under the <span class="ui">Components</span> heading (<span class="ui">Swipe to select</span>), the carousel holds one card per component, in physical order from AFT to FWD, with bare-shaft cards in their places between them. Swipe left or right to move along the shaft; the card you land on is selected and highlights in the preview. When a document opens, the AFT-most card is selected.</p>
+
+  <h3>Card names</h3>
+  <p>Each card is titled with a name worked out from its place on the shaft: <span class="ui">Body #1</span>, <span class="ui">AFT Taper</span>, <span class="ui">FWD Thread</span>, <span class="ui">AFT Liner</span>, <span class="ui">MID Liner #2</span>, and so on (see <a href="#components-names">Component names</a>). Bare shaft shows as <span class="ui">Body (auto)</span>. To give a component your own name, tap its title or the pencil beside it (<span class="ui">Rename</span>), type, and tap Done. Clear the name to go back to the automatic one.</p>
+
+  <h3 id="editor-commit">How values are saved</h3>
+  <p>A value on a card is saved when you leave the field, either by tapping elsewhere or tapping Done. It is not saved on every keystroke. Tapping into a field and leaving without changing it does nothing at all.</p>
+  <p>Each card has a <span class="ui">Save</span> button at the bottom. It is greyed while everything on the card is saved and lights up while a field holds a value you have typed but not yet saved. Tap it to save that value.</p>
+  <aside class="tip"><p>Chips, checkboxes and switches do not take the keyboard's focus, so typing a value and then tapping a chip can leave the typed value unsaved in its field. If <span class="ui">Save</span> is lit, tap it.</p></aside>
+  <p>A value the field cannot accept, such as a length of zero (<span class="ui">Must be &gt; 0</span>), a negative start (<span class="ui">Must be ≥ 0</span>), or text that is not a number, shows a message under the field and is not saved; the field goes back to the stored value.</p>
+  <aside class="note"><p>A typed value is never rounded, snapped or adjusted; bare shaft fills the gaps around it. See <a href="#intro-sacred">What you type is what prints</a>.</p></aside>
+
+  <h3 id="editor-delete">Deleting a component</h3>
+  <p>Tap the red trash icon (<span class="ui">Remove</span>) in the card's title row. The component is removed at once and a message such as <span class="ui">Taper deleted</span> appears with <span class="ui">Undo</span>; tap it to bring the component back. A deletion can also be undone later from <span class="ui">History</span>. Bare-shaft cards have no trash icon: bare shaft goes away when something else covers it.</p>
+
+  <h3>Messages on a card</h3>
+  <p>A card can carry two kinds of strip under its title. An <strong>error strip</strong> means the component blocks printing (see <a href="#editor-overlaps">Overlaps and the print gate</a>). An <strong>advisory strip</strong> points out a value worth checking but blocks nothing. Advisories include:</p>
+  <table class="ref">
+    <thead><tr><th>Message</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><span class="ui">Extends past shaft length</span></td><td>The component runs past the OAL. Either the component or the OAL is wrong.</td></tr>
+      <tr><td><span class="ui">Very short segment (&lt; 1 mm)</span></td><td>A length so short it is probably a typo.</td></tr>
+      <tr><td><span class="ui">Length exceeds 15 m — check for a typo</span></td><td>A length no shaft has.</td></tr>
+      <tr><td><span class="ui">Diameter exceeds 1 m — check for a typo</span></td><td>A diameter no shaft has.</td></tr>
+      <tr><td><span class="ui">Large Ø step vs adjacent body</span></td><td>A body butts another body more than half again its size.</td></tr>
+      <tr><td><span class="ui">Liner OD smaller than shaft Ø beneath it</span></td><td>The liner is thinner than the body it covers.</td></tr>
+      <tr><td><span class="ui">Zero pitch — thread renders flat</span></td><td>The thread has no pitch.</td></tr>
+    </tbody>
+  </table>
+  <p>A thread relief that is too large also carries an advisory; see <a href="#components-thread-relief">Thread relief</a>.</p>
+
+  <h2 id="editor-bodies">Bodies and bare shaft</h2>
+  <p>Every stretch of the shaft you have not covered with a component is drawn as bare shaft, so the drawing is always one continuous piece. Bare shaft is filled in automatically and shows in the carousel as a <span class="ui">Body (auto)</span> card. You never need to add bodies just to join components together.</p>
+
+  <h3>Setting a bare-shaft diameter</h3>
+  <p>On a <span class="ui">Body (auto)</span> card, <span class="ui">Start</span> and <span class="ui">Length</span> are greyed: they come from the components on either side. The <span class="ui">Ø</span> field is live. Type a diameter to set that section of bare shaft. Each section takes its own diameter, so a shaft can step between liners without a single explicit body. Clear the field, or enter 0, to let that section take its diameter from its neighbors again.</p>
+  <p>If two sections with different diameters are joined (because the component between them was deleted), the joined section takes the AFT section's diameter. The FWD section's diameter is kept in reserve and comes back if the two are split again.</p>
+  <p>The auto card also carries <span class="ui">Show bare-shaft Ø on drawing</span> (one switch for all bare shaft) and the face finish and seal area controls; see <a href="#components-bodies">Bodies</a>.</p>
+
+  <h3>Making a body explicit</h3>
+  <p>An explicit body is a body you control: fixed start and length, its own diameter, a keyway, a name of its own. To turn bare shaft into one:</p>
+  <ol class="steps">
+    <li>Swipe to the <span class="ui">Body (auto)</span> card.</li>
+    <li>Tick <span class="ui">Explicit body</span>.</li>
+  </ol>
+  <p>The card becomes a body card holding the section's current start, length and diameter, now editable. You need an explicit body to put a keyway in a plain end section, or to lock a section's size so it no longer follows its neighbors. You can also add one directly with <span class="ui">+ Add Component</span> → <span class="ui">Body</span>.</p>
+
+  <h3>Making a body automatic again</h3>
+  <p>Untick <span class="ui">Explicit body</span> on the body card. The app asks <span class="ui">Make body automatic?</span>, warning that the body's stored size will be replaced by bare shaft, and adds <span class="ui">Its keyway will be removed too.</span> if it has one. Tap <span class="ui">Make automatic</span> to confirm, or <span class="ui">Cancel</span>.</p>
+
+  <h3>How bodies behave around other components</h3>
+  <ul>
+    <li><strong>Adding a taper, liner or thread over a body splits it</strong> into separate body cards, one each side.</li>
+    <li><strong>Deleting that component joins the pieces back</strong> into one body, unless something else still sits in the gap.</li>
+    <li><strong>A body with a keyway is never split.</strong> It stays one card with its keyway intact; the drawing still shows the component over it.</li>
+    <li><strong>A body may run under a liner or up against a taper.</strong> That is how a shaft is built, so it is never reported as an overlap. The drawing shows the liner or taper and trims the body around it.</li>
+    <li><strong>An explicit body never merges with its neighbors.</strong> Two explicit bodies of different diameters stay two bodies; a shortened explicit body leaves bare shaft beside it.</li>
+  </ul>
+
+  <h2 id="editor-overlaps">Overlaps and the print gate</h2>
+  <p>A shaft cannot have two solid features in the same place. The app treats these as collisions:</p>
+  <ul>
+    <li>a taper overlapping another taper, a thread, or a liner;</li>
+    <li>a thread overlapping another thread or a liner;</li>
+    <li>a liner overlapping another liner.</li>
+  </ul>
+  <p>Components that only touch end to end do not collide. Bodies and bare shaft never collide with anything, coupler bolt slots never collide (they are drawn reference holes), and a thread excluded from the OAL sits outside the shaft and is not checked.</p>
+
+  <h3>How a collision is shown</h3>
+  <ul>
+    <li>Each component involved carries the error strip <span class="ui">Overlaps another component</span> on its card.</li>
+    <li>The <span class="ui">PDF preview</span> button on the toolbar is greyed. Tapping it shows <span class="ui">Fix component collisions before exporting.</span></li>
+  </ul>
+  <p>Printing, preview and export are blocked because a sheet with two features in one place cannot be machined from. A shaft with no components at all is blocked the same way, with the message <span class="ui">Please add at least 1 component before export is active.</span></p>
+
+  <h3>Fixing a collision</h3>
+  <ol class="steps">
+    <li>Swipe through the carousel to a card with the error strip.</li>
+    <li>Correct its start or length (or its partner's) so the two no longer share any length.</li>
+    <li>When the strip clears on every card, the <span class="ui">PDF preview</span> button comes back.</li>
+  </ol>
+  <p>A thread placed between two components rather than at a shaft end shows <span class="ui">Thread must be at a shaft end, not between components</span>; move it to an end to print.</p>
+
+  <h3>The warnings banner</h3>
+  <p>Above the carousel, a banner sums up shaft-wide advisories so they are not missed when the card concerned is several swipes away: <span class="ui">1 component extends past shaft length</span> (or the count), and segments shorter than 1 mm. Advisories never block printing. Tap the ✗ (<span class="ui">Dismiss warning</span>) to hide the banner; it comes back if the set of warnings changes.</p>
+
+  <h2 id="editor-history">Undo and redo</h2>
+  <p>Tap <span class="ui">History</span> on the toolbar for <span class="ui">Undo</span> and <span class="ui">Redo</span>. Each is greyed when there is nothing to step to.</p>
+  <p>History covers the work on the shaft, on every tab of the job:</p>
+  <ul>
+    <li>components added, edited and deleted, keyways, names, the overall length;</li>
+    <li>both drawings, the original and the Final schematic;</li>
+    <li>runout readings, runout bubbles you have dragged, and station counts;</li>
+    <li>wear marks and readings, and undercuts.</li>
+  </ul>
+  <p>It does not cover project information, Settings, or the sheet sliders such as shaft height.</p>
+  <p>A quick burst of edits counts as one step, so undoing after typing a value takes you back to before you started typing, not one character at a time. History keeps the last 50 steps. It lasts for the editing session only: it is not saved with the file, and it starts fresh when you open, start or template a job.</p>
+  <aside class="tip"><p>History lives on the <span class="ui">Schematic</span> and <span class="ui">Final Schematic</span> toolbars. To undo a reading or a bubble move made on another tab, come back to the Schematic tab and use <span class="ui">History</span>. The Runout tab also has its own quick <span class="ui">Undo move</span>; see <a href="#ch-recording">Recording Shop Measurements</a>.</p></aside>
+
+  <h2 id="editor-templates">Templates</h2>
+  <p>A template is a saved shaft shape: geometry without a job. Use one when the shop sees the same shaft again and again, so the next job starts with the tapers, liners and bodies already in place.</p>
+
+  <h3>Saving a template</h3>
+  <ol class="steps">
+    <li>Open the shaft you want to keep as a template.</li>
+    <li>Open the save screen: tap <span class="ui">More options</span> → <span class="ui">Save As…</span> (or <span class="ui">Save</span> on a job that has never been saved).</li>
+    <li>Tap <span class="ui">Save as template…</span>.</li>
+    <li>Check the <span class="ui">Template name</span>. It is suggested from the shape, for example “6in 3 liners A-M-F”; the line under it shows where the template will be filed, such as “Files under: 6″ liners · 3 liners”.</li>
+    <li>Tap <span class="ui">Save</span>. The message <span class="ui">Saved to templates</span> confirms it.</li>
+  </ol>
+  <p>If a template of that name exists, the app asks <span class="ui">Replace existing template?</span> before replacing it. Saving a template does not save or rename the job you are working on.</p>
+  <p>A template keeps the shaft's geometry only: components, their names, the unit and any per-component units. The job number, customer, vessel, item, notes, and every reading and measurement stay behind, as does any Final schematic.</p>
+
+  <h3>Finding and using a template</h3>
+  <p>Tap <span class="ui">Start from Template</span> on the home screen to open <span class="ui">Templates</span>. Templates are grouped twice:</p>
+  <ul>
+    <li>by <strong>liner size</strong>, the largest liner OD to the nearest inch: <span class="ui">No liners</span> first, then 4″ through 12″ (“6″ liners”), then <span class="ui">Other sizes</span>;</li>
+    <li>within each size, by <strong>liner count</strong>: <span class="ui">1 liner</span>, <span class="ui">2 liners</span>, <span class="ui">3 liners</span>, <span class="ui">4+ liners</span>.</li>
+  </ul>
+  <p>Tap a heading to open it; any number of headings can be open at once, so you can compare templates from different groups. The number at the right of a heading is how many templates it holds. Each template card shows a drawing of the shaft, its name, its age, and a summary line such as “94 1/2″ OAL · Ø6″ max · 3 liners (A·M·F)”. The letters say where each liner sits, AFT to FWD: in the aft (A), middle (M) or forward (F) third of the shaft. Two templates with the same liner count can be told apart by this line alone.</p>
+  <p>Type in <span class="ui">Search templates…</span> to match names and summary lines; the groups give way to one list of matches. The <span class="ui">Name</span> and <span class="ui">Date</span> chips sort the list (tap the active chip again to reverse it).</p>
+  <ol class="steps">
+    <li>Tap the template card, or its ⋮ menu (<span class="ui">Template options</span>) → <span class="ui">Use this template</span>.</li>
+    <li>If the current job has unsaved changes, choose <span class="ui">Save</span>, <span class="ui">Don't save</span> or <span class="ui">Cancel</span>.</li>
+    <li>Fill in <span class="ui">Project information</span> for the new job.</li>
+    <li>Adjust the dimensions to this shaft and tap <span class="ui">Save</span>.</li>
+  </ol>
+  <p>The job opens as an unsaved, unnamed drawing, so the first save always asks for a name; the template itself can never be overwritten by a job made from it. The same ⋮ menu offers <span class="ui">Rename</span> and <span class="ui">Delete</span>. Deleting a template does not affect drawings already made from it.</p>
+  <aside class="note"><p>The app comes with a few starter templates so the list is never empty on a new device. <span class="path">Settings → Data → Restore sample shafts</span> separately puts the bundled example jobs back in your list of saved shafts.</p></aside>
+
+  <h2 id="editor-mate">Duplicate for mate</h2>
+  <p>A twin-screw vessel has a PORT and a STBD shaft that are nearly identical. Draw one, then make its mate from it.</p>
+  <ol class="steps">
+    <li>With the drawn shaft open, tap <span class="ui">More options</span> → <span class="ui">Duplicate for mate…</span>. (The same item is in each saved shaft's menu on the Open screen.)</li>
+    <li>In <span class="ui">Duplicate for mate</span>, check <span class="ui">Shaft Position</span>. It is already flipped: PORT becomes STBD and STBD becomes PORT. Center and Other are left as they are.</li>
+    <li>Check the <span class="ui">Name</span>. It is suggested from the job details with the new side, so “J-2214 - Acme Marine - PORT” proposes “J-2214 - Acme Marine - STBD”.</li>
+    <li>Change <span class="ui">Job Number</span>, <span class="ui">Customer</span> or <span class="ui">Vessel</span> if the mate is billed differently.</li>
+    <li>Tap <span class="ui">Create</span>.</li>
+  </ol>
+  <p>The mate is written as a new saved shaft and the message <span class="ui">Created ‘…’</span> confirms it. The shaft you were working on stays open, unchanged; open the mate from <span class="ui">Open</span> when you are ready to work on it. <span class="ui">Create</span> stays greyed if the name is blank or already taken (<span class="ui">A drawing with that name already exists.</span>), so a mate can never overwrite its twin.</p>
+  <table class="ref">
+    <thead><tr><th>Copied to the mate</th><th>Not copied</th></tr></thead>
+    <tbody>
+      <tr><td>All geometry, exactly as drawn, including any edits not yet saved</td><td>Runout readings and the positions of dragged runout bubbles</td></tr>
+      <tr><td>Component names, the unit, per-component units, dual-unit display</td><td>Wear marks, pits and diameter readings</td></tr>
+      <tr><td>The job's sheet settings, such as shaft height</td><td>Undercuts and worn sections</td></tr>
+      <tr><td>Item and Notes</td><td>The Final schematic</td></tr>
+    </tbody>
+  </table>
+  <aside class="warn"><p>Measurements belong to the shaft they were taken on. The mate starts with none so that one shaft's readings can never appear on the other's sheets as if they had been measured there. Take the mate's own readings.</p></aside>
+
+  <h2 id="editor-tools">Calculators and tools</h2>
+  <p>Three shop calculators sit in the navigation menu under the document tabs. Each opens over the current screen, starts blank every time, and has its own <span class="ui">Units</span> chips (<span class="ui">in</span> | <span class="ui">mm</span>, starting on the job's unit). They read nothing from the shaft and write nothing into it: read the answer and type it where you need it.</p>
+
+  <h3>Taper calculator</h3>
+  <p><span class="ui">Taper calculator</span> in the navigation menu opens <span class="ui">Taper calculator</span>, which solves the fourth value of a taper from any three:</p>
+  <ul>
+    <li><span class="ui">Large end Ø (L.E.T.)</span></li>
+    <li><span class="ui">Small end Ø (S.E.T.)</span></li>
+    <li><span class="ui">Length</span></li>
+    <li><span class="ui">Taper rate</span>, for example 1:12</li>
+  </ul>
+  <ol class="steps">
+    <li>Enter three of the four values.</li>
+    <li>Tap <span class="ui">Calculate</span>. The missing value appears in its own field, highlighted, so you can see it was worked out rather than typed.</li>
+    <li>To use the answer as a starting point for the next question, tap the ✓ beside it (<span class="ui">Keep calculated value as an input</span>).</li>
+  </ol>
+  <p>Enter all four values and <span class="ui">Calculate</span> checks them against each other. Change any entry and the old answer clears, so a number that no longer follows from the fields is never left on screen. <span class="ui">Clear</span> empties the fields; <span class="ui">Close</span> leaves. In inches, the rate is also shown in inches per foot.</p>
+
+  <h3>Keyway calculator</h3>
+  <p><span class="ui">Keyway calculator</span> in the navigation menu opens <span class="ui">Keyway rough-cutter depth</span>, for roughing a keyway in a bore with a cutter narrower than the finished keyway. Enter <span class="ui">Bore Ø</span>, the finished <span class="ui">Keyway width</span> and <span class="ui">Keyway depth</span>, and up to two rough cutters (<span class="ui">Cutter 1 width</span>, <span class="ui">Cutter 2 width</span>). For each cutter it shows the depth to measure at the cutter's outer edges so its flat bottom lands on the finished keyway's floor. The answer updates as you type.</p>
+  <p>In inches, each depth is also given as a fraction for checking against a scale, to the nearest 64th, 32nd or 16th (the <span class="ui">Scale</span> chips, 64 by default).</p>
+
+  <h3>Unit converter</h3>
+  <p><span class="ui">Unit converter</span> in the navigation menu opens <span class="ui">mm ↔ in converter</span>. Type a <span class="ui">Value</span> (fractions such as 1 1/2 are fine) in the unit chosen on the chips:</p>
+  <ul>
+    <li>inches convert to millimeters, to three decimals;</li>
+    <li>millimeters convert to decimal inches, to four places, and to the nearest 64th, for example ≈ 1 31/64 in.</li>
+  </ul>
+  <p>To reach the converter from inside an Add dialog, switch on <span class="path">Settings → Drawing → Unit converter in Add dialogs</span> (off by default). A calculator icon (<span class="ui">Unit converter</span>) then appears in the title of every Add dialog. The converter shows its answer only; type it into the field yourself.</p>
+
+  <h3>Standard keyway sizes</h3>
+  <p>Unlike the calculators, the <span class="ui">Standard size…</span> menu on a body or taper keyway does fill in the keyway's width and depth, exactly as if you had typed them, when you pick a size. See <a href="#components-standard-size">Standard size…</a>.</p>
+
+  <h2 id="editor-final">Editing the Final schematic</h2>
+  <p>The <span class="ui">Final Schematic</span> tab uses this same editor, titled for the Final drawing, to record the shaft as it leaves the shop. Edits there never touch the original drawing, and edits here never touch the Final. Starting, resetting and printing the Final schematic are covered in <a href="#documents-final">The Final Schematic tab</a>.</p>
+</section>

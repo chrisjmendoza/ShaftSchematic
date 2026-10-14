@@ -274,9 +274,11 @@ internal val helpSections: List<HelpSection> = listOf(
         listOf(
             HelpTopic(
                 "Create your first shaft",
-                "From the home screen tap New. Type the overall length (OAL) — the preview " +
-                    "follows it as you type. Add tapers, threads, " +
-                    "liners, and bodies with the add buttons; each component becomes a card in " +
+                "From the home screen tap New Drawing. Type the overall length (OAL) and accept it " +
+                    "with the green ✓ or the keyboard's Done key — the drawing takes the new " +
+                    "length once it is accepted, and the red ✗ puts the old value back. Add " +
+                    "tapers, threads, liners, and bodies with the + Add Component button; each " +
+                    "component becomes a card in " +
                     "the carousel where you edit its dimensions. Any span you don't cover is " +
                     "filled automatically with bare shaft (an \"auto-body\"), so the drawing " +
                     "is always continuous.",
@@ -302,8 +304,9 @@ internal val helpSections: List<HelpSection> = listOf(
                     "Redo. Each greys out when there is nothing to step to. A burst of quick " +
                     "edits collapses into a single undo step, so undoing after typing a value " +
                     "returns you to before you started typing rather than stepping back one " +
-                    "character at a time. History covers the shaft itself — components, " +
-                    "lengths, keyways — and lasts for the editing session; it is not saved " +
+                    "character at a time. History covers the whole job — the shaft and its " +
+                    "Final drawing, runout readings and bubble moves, station counts, wear " +
+                    "marks, and undercuts — and lasts for the editing session; it is not saved " +
                     "with the file and starts fresh when you open a document."
             ),
         )
@@ -399,7 +402,7 @@ internal val helpSections: List<HelpSection> = listOf(
             HelpTopic(
                 "Runout station / bubble",
                 "A station is one dial-indicator position on a component; its bubble is the " +
-                    "numbered circle drawn under the shaft where the reading is written. " +
+                    "circle drawn under the shaft where the reading is written. " +
                     "Stations are per component, not per drawn run, so a body split by liners " +
                     "still numbers straight through AFT to FWD."
             ),
@@ -449,8 +452,8 @@ internal val helpSections: List<HelpSection> = listOf(
             HelpTopic(
                 "Bodies and auto-bodies",
                 "Bodies are the shaft's filler stock. Spans you don't define are drawn as " +
-                    "auto-bodies — derived, greyed Start/Length, with one shared bare-shaft Ø " +
-                    "you can set on any auto-body card. Tick \"Explicit body\" on an auto-body " +
+                    "auto-bodies — derived, greyed Start/Length, and a Ø you can set on each " +
+                    "auto-body card for that section of bare shaft alone. Tick \"Explicit body\" on an auto-body " +
                     "card to promote it to a real, editable body; untick it on an explicit body " +
                     "to make it automatic again. Adding a taper, thread, or liner over a body " +
                     "splits it; deleting one merges the fragments back."
@@ -474,7 +477,8 @@ internal val helpSections: List<HelpSection> = listOf(
             HelpTopic(
                 "Liners and threads",
                 "Liners sleeve over the shaft and measure from the AFT or FWD end. Threads " +
-                    "can be excluded from the overall length (\"Thread excluded from OAL\") — " +
+                    "can be left out of the overall length (switch off \"Include thread in OAL\" " +
+                    "on the card, or \"Count in OAL\" in the Add dialog) — " +
                     "useful when the OAL is quoted to the shoulder; an excluded thread just " +
                     "picks which end it hangs off."
             ),
@@ -498,9 +502,7 @@ internal val helpSections: List<HelpSection> = listOf(
                     "circle on the centerline). The footer prints the Ø, the center distance " +
                     "and the clocking.\n\n" +
                     "Slots are reference features: they are drawn, but they never change the " +
-                    "overall length, never split a body, and never collide with anything else. " +
-                    "Their card carries a \"show dimension rail\" toggle if you want the row " +
-                    "dimensioned on the printed schematic."
+                    "overall length, never split a body, and never collide with anything else."
             ),
             HelpTopic(
                 "Record wear readings",
@@ -523,9 +525,10 @@ internal val helpSections: List<HelpSection> = listOf(
                     "under the preview add or remove a station on whatever is selected. " +
                     "\"Undo move\" puts the last moved bubble back. Switch the mode off to " +
                     "enter readings again.\n\n" +
-                    "Stations default to two per taper and liner (set in an inch from each " +
-                    "edge, where the geometry changes and an indicator reads unreliably) and " +
-                    "three per body; you can raise or lower the count per component, or set it " +
+                    "Station counts follow length: a body gets one station per 20 in (at least " +
+                    "one), a liner the same but never fewer than two (set in an inch from each " +
+                    "edge, where the geometry changes and an indicator reads unreliably), and a " +
+                    "taper always two; you can raise or lower the count per component, or set it " +
                     "to zero to hide that component's stations. Set the indicator direction on " +
                     "the sheet and it prints as \"TIR's taken looking AFT / FORWARD\" at the " +
                     "bottom, so the shop knows how to read the high-spot arrows.\n\n" +
@@ -549,8 +552,9 @@ internal val helpSections: List<HelpSection> = listOf(
                 "Each document (Shaft, Wear, Runout, Undercut) exports to PDF or prints " +
                     "directly from its own tab. The preview shows the actual page. Template " +
                     "mode prints the shaft only (no dimensions); Blank draft prints the " +
-                    "drawing with empty write-in value slots. PDF styling options (shading, " +
-                    "tiering, titles) live in Settings → PDF Export Options. The Final " +
+                    "drawing with empty write-in value slots. Drawing options sit on each " +
+                    "document's PDF Options panel, and also in Settings → Drawing and " +
+                    "Settings → PDF Export Options. The Final " +
                     "Schematic tab prints the same two ways from the shaft's finished " +
                     "geometry, and its sheets are marked Final."
             ),
@@ -823,8 +827,8 @@ internal val helpSections: List<HelpSection> = listOf(
                     "still carries Ø leaders to fill in.\n" +
                     "• \"Cut depth exaggeration\" — on the Undercut Drawing. Changes only how " +
                     "deep cuts look, never the printed numbers.\n" +
-                    "• \"Sheet content\", worn sections, and \"Export all\" — on the " +
-                    "Consolidated Output tab.\n\n" +
+                    "• Worn sections — on the Consolidated Output tab. (That tab's \"Sheet " +
+                    "content\" choice is not saved: it starts at All three each session.)\n\n" +
                     "App-wide — one setting, wherever you move it (also in Settings → " +
                     "Drawing):\n" +
                     "• Each document's PDF Options sheet repeats Line thickness and Shade in " +

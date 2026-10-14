@@ -1,0 +1,166 @@
+<section class="chapter" id="ch-intro" data-audience="both">
+  <h1>About ShaftSchematic</h1>
+  <p class="lede">What ShaftSchematic does, the sheets it prints, the handful of ideas every user should hold, and how to find your way around the app. Read this chapter first, whether you build drawings in the office or work from them at the lathe.</p>
+
+  <h2 id="intro-what">What the app is for</h2>
+  <p>ShaftSchematic draws marine propulsion shafts — tapers, threads, liners, bodies and keyways — and prints the shop sheets that follow a shaft through the repair: the schematic it arrives as, the runout and wear readings taken on it, the undercuts machined into it, and the drawing it leaves with. You build the shaft once. Every sheet is drawn from that one shaft, so a dimension changed on the schematic is changed on every sheet that shows it.</p>
+  <p>The app runs on Android phones and tablets. A phone is enough to build a drawing or type a reading; a tablet gives the drawing more room and is the better tool at the lathe.</p>
+
+  <h2 id="intro-documents">The sheets the app prints</h2>
+  <p>A job moves through the shop in a familiar order: the shaft comes in, it is drawn, it is measured, the worn areas and undercuts are recorded, it is repaired, and it is checked one last time before it ships. Each sheet below belongs to one step of that path. All of them come from the same job file.</p>
+
+  <figure class="wide">
+    <img src="figures/schematic.png" alt="A printed shaft schematic: the shaft profile with dimension rails above it, diameter callouts below it, and the job and component details in the footer.">
+    <figcaption>The Schematic — the drawing every other sheet is built on.</figcaption>
+  </figure>
+
+  <dl class="terms">
+    <dt>Schematic</dt>
+    <dd>The dimensioned drawing of the shaft as it came in: overall length, every component's position and length, diameters, keyways and threads, with the job details and component list in the footer. It is the record of what arrived and the sheet the rest of the job refers back to.</dd>
+    <dt>Runout Sheet</dt>
+    <dd>The shaft profile with a numbered bubble at each dial-indicator station. The machinist writes (or the app prints) the TIR in each bubble and marks the high spot as a clock position. It can also carry the coupling face end view. This is the sheet the shaft is set up and indicated against.</dd>
+    <dt>Wear Document</dt>
+    <dd>Where the inspection is recorded: worn areas on liners, pits and dye-penetrant failures marked with an X, and measured diameters at stations along the shaft. It tells the repair planner where the shaft is worn and by how much.</dd>
+    <dt>Undercut Drawing</dt>
+    <dd>The sections machined below the original surface — a seal area cut down for a sleeve, a corroded section cleaned up — each with its length, position and finished diameter. Cuts are drawn deeper than scale so a few thousandths can be seen at all; the printed diameters are always the numbers typed.</dd>
+    <dt>Consolidated Output</dt>
+    <dd>One sheet that combines the schematic's dimensions with the runout bubbles, the wear information, or both, and adds worn sections measured in place. It saves handing the floor three pieces of paper when one will do. This tab is also where every document for the job can be exported in one step.</dd>
+    <dt>Final Schematic</dt>
+    <dd>The drawing the shaft leaves with. It starts as a copy of the original schematic and is then adjusted — a liner moved, lengthened or shortened once the wear and undercut work is known. It prints its own schematic and a blank runout sheet for the finished shaft's readings, both marked Final.</dd>
+  </dl>
+  <p>Any of these sheets can also print as a blank draft — dimension lines in place, values left empty — so measurements can be written in by hand on the job. See <a href="#ch-documents">Documents, Printing &amp; Export</a> for printing and exporting, and <a href="#ch-reading">Reading the Printed Sheets</a> for a walk through each sheet.</p>
+
+  <h2 id="intro-manual">How to use this manual</h2>
+  <p>The manual serves two readers. <strong>Office</strong> chapters are for the person who builds the shaft in the app from a print, a customer sketch or measurements, and produces the sheets. <strong>Shop</strong> chapters are for the machinist or foreman who reads the printed sheets, fills in blank drafts, and types readings into the app at the machine. Chapters marked <strong>Both</strong> are for everyone.</p>
+  <table class="ref">
+    <thead>
+      <tr><th>Chapter</th><th>Audience</th><th>What it covers</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><a href="#ch-intro">1. About ShaftSchematic</a></td><td>Both</td><td>This chapter: the sheets, the core ideas, finding your way around.</td></tr>
+      <tr><td><a href="#ch-editor">2. The Shaft Editor</a></td><td>Office</td><td>Starting a job, overall length, adding and editing components, bare shaft, overlaps, undo, templates, mate duplicates, calculators.</td></tr>
+      <tr><td><a href="#ch-components">3. Components Reference</a></td><td>Office</td><td>Every control on tapers, threads, liners, bodies, keyways, blends and seal areas, liner shoulders and coupler bolt holes.</td></tr>
+      <tr><td><a href="#ch-documents">4. Documents, Printing &amp; Export</a></td><td>Office</td><td>The document tabs, PDF preview and options, blank drafts, consolidated output, the Final schematic, drawing profiles.</td></tr>
+      <tr><td><a href="#ch-reading">5. Reading the Printed Sheets</a></td><td>Shop</td><td>What every line, rail, bubble and footer entry on each sheet means.</td></tr>
+      <tr><td><a href="#ch-recording">6. Recording Shop Measurements</a></td><td>Shop</td><td>Typing runout, wear, undercut and worn-section readings into the app; working from blank drafts.</td></tr>
+      <tr><td><a href="#ch-settings">7. Settings Reference</a></td><td>Both</td><td>Every setting, its default and what it changes.</td></tr>
+      <tr><td><a href="#ch-help">8. Troubleshooting, Data &amp; Glossary</a></td><td>Both</td><td>Common problems, backups and file handling, and the terms used on the sheets.</td></tr>
+    </tbody>
+  </table>
+  <p>Throughout the manual, on-screen labels appear like <span class="ui">+ Add Component</span>, and menu paths like <span class="path">Settings → Data → Back up all shafts…</span>.</p>
+
+  <h2 id="intro-ideas">Core ideas</h2>
+  <p>A few rules shape everything the app does. Each one is here because, without it, something on the screen or the sheet would surprise you.</p>
+
+  <h3 id="intro-aft-fwd">AFT and FWD</h3>
+  <p>AFT is the propeller end; FWD is the engine end. <strong>AFT is always the left end of every drawing</strong>, on every sheet and on screen, so a shaft never appears reversed between two pieces of paper. Many components let you choose which end a position is measured from — the <span class="ui">Measure From</span> chips — because a print may dimension a liner from either end. The component is the same; only the quoted distance differs.</p>
+
+  <h3 id="intro-oal">OAL — overall length</h3>
+  <p>The OAL is the shaft's length end to end, and every drawing is laid out against it. You always type it yourself; the app never fills it in or changes it. The field takes your value when you tap the green ✓, press Done on the keyboard, or leave the field after changing it; the red ✗ puts the old value back. The drawing does not chase each keystroke, because a half-typed length (36″ on the way to 367 3/4″) would briefly collapse the drawing. See <a href="#editor-oal">The overall length</a>.</p>
+  <p>When you change the OAL, components measured from FWD keep their FWD distance and move with the end; components measured from AFT stay put.</p>
+
+  <h3 id="intro-set-let">S.E.T. and L.E.T.</h3>
+  <p>S.E.T. is the small end of a taper and L.E.T. the large end — named by diameter, not by which way they face. Both diameters print in the footer for every taper. Several measurements, such as undercut and worn-section distances, can be quoted from an S.E.T., the datum the shop actually measures from.</p>
+
+  <h3 id="intro-auto-bodies">Components and bare shaft</h3>
+  <p>You add the features the shaft has — tapers, threads, liners, bodies, keyways, bolt holes — as <strong>components</strong>. Any length you don't cover is filled automatically with <strong>bare shaft</strong> — plain round bar, shown in the editor as a <span class="ui">Body (auto)</span> card and called an <strong>auto-body</strong> in this manual — so the drawing is always one continuous shaft. Bare shaft resizes itself whenever you move or change a component; you never have to keep the gaps in step by hand. You can set the bare-shaft diameter section by section, and you can turn one into a body of its own with the <span class="ui">Explicit body</span> checkbox when it needs a keyway or a name. A body may run under a liner or up to a taper; that is normal, not a conflict.</p>
+
+  <h3 id="intro-sacred">What you type is what prints</h3>
+  <p>A value you type into a component is kept <strong>exactly as entered</strong>. The app never rounds it, snaps it to a neighboring edge, or “corrects” it — not even by a thousandth. If you type 14.062″, the sheet prints 14.062″. What moves to make room is the bare shaft between components, never your numbers. This is what lets a machinist trust the paper: every dimension on it is one somebody deliberately entered.</p>
+
+  <h3 id="intro-units">Millimeters and inches</h3>
+  <p>A new drawing starts in inches; choose the unit under <span class="path">Settings → Units</span> (<span class="ui">Millimeters</span> or <span class="ui">Inches</span>). The unit governs how values are shown and typed; it never changes a stored value. Switch from inches to millimeters and back, and every dimension comes back exactly as it was. Inch fields accept fractions as well as decimals — type 3 1/2, 7/8 or 3.5. On the printed sheets, fractions are set as true fractions (diagonal by default) rather than spelled out.</p>
+  <p>A shaft can also mix units — a metric thread and keyway on an otherwise imperial shaft, for instance — and print both units side by side. Those options are switched on in Settings; see <a href="#settings-capabilities">Switches that reveal extra controls</a>.</p>
+
+  <h3 id="intro-reference">Reference marks never change the shaft</h3>
+  <p>Runout readings, wear marks, pits, measured diameters, undercuts, worn sections and coupler bolt slots are <strong>reference marks</strong>: they record something about the shaft without changing its shape. They never alter the overall length, never split a body, and never count as an overlap with another component. You can record as many readings as the job needs without disturbing a single dimension on the schematic.</p>
+
+  <h3 id="intro-final">The original drawing and the Final drawing</h3>
+  <p>A job can hold two drawings of the same shaft: the <strong>original</strong> (the shaft as it came in) and the <strong>Final</strong> (the shaft as it leaves). The Final starts as a copy of the original and from then on the two are independent — an edit to one never reaches the other. Runout, wear and undercut records belong to the original, because that is the shaft they were measured on. Keeping both gives the job a clear before and after.</p>
+
+  <h3 id="intro-compression">Drawn to fit, dimensioned true</h3>
+  <p>A 25-foot shaft drawn to true scale on a letter-size sheet would be a thin line. So the app shortens long plain runs on paper and keeps liners, tapers and keyways closer to their true proportions, letting the whole shaft fit at a readable height. A body that has been shortened a lot is drawn with an S-break, the drafting symbol for “length removed here”. <strong>Every printed dimension is still the true length.</strong> Measure from the dimensions, never with a scale rule on the sheet. How the drawing is fitted, and how to adjust it, is in <a href="#documents-height">Shaft height and compression</a>.</p>
+  <figure class="detail">
+    <img src="figures/feature-sbreak.png" alt="A body run drawn with a pair of curved S-break lines through its middle.">
+    <figcaption>An S-break: the run is drawn shorter than true; its dimension is not.</figcaption>
+  </figure>
+
+  <h2 id="intro-around">Finding your way around</h2>
+
+  <h3 id="intro-home">The home screen</h3>
+  <p>The app opens on its home screen, headed <span class="ui">ShaftSchematic</span>. From top to bottom it shows:</p>
+  <dl class="terms">
+    <dt><span class="ui">Unsaved drafts</span></dt>
+    <dd>Up to three drafts the app kept for you automatically (see <a href="#intro-saving">Saving and drafts</a>). Tap a row to continue where you left off. The ✗ on a row removes that draft after you confirm <span class="ui">Discard this draft?</span>. A draft that was never saved is named from its job number, customer and vessel, and marked <span class="ui">Unsaved draft</span> with its age.</dd>
+    <dt><span class="ui">Recent</span></dt>
+    <dd>The three saved shafts you worked on most recently. Tap one to open it.</dd>
+    <dt><span class="ui">New Drawing</span></dt>
+    <dd>Starts a blank shaft and opens the editor.</dd>
+    <dt><span class="ui">Start from Template</span></dt>
+    <dd>Opens <span class="ui">Templates</span>, a list of saved starting shafts. The app includes starter templates, and you can save your own. See <a href="#editor-templates">Templates</a>.</dd>
+    <dt><span class="ui">Open…</span></dt>
+    <dd>Opens the <span class="ui">Open drawing</span> list of every saved shaft, with <span class="ui">Search drawings…</span>, <span class="ui">Name</span> and <span class="ui">Date</span> sort chips, and an <span class="ui">Import</span> button for bringing in a shaft file from elsewhere on the device. Each row's menu offers <span class="ui">Rename</span>, <span class="ui">Duplicate for mate…</span>, <span class="ui">Delete</span> and <span class="ui">Send Feedback</span>. A set of sample shafts is installed in this list the first time the app runs — a good way to see finished drawings before building your own.</dd>
+    <dt><span class="ui">Settings</span>, <span class="ui">Help &amp; FAQ</span>, <span class="ui">Send Feedback</span></dt>
+    <dd>App settings, the built-in help, and an email for sending feedback (see <a href="#help-feedback">Sending feedback</a>).</dd>
+  </dl>
+  <p>If the current shaft has unsaved changes when you start a new one or open another, the app asks <span class="ui">Unsaved changes</span> first: <span class="ui">Save</span>, <span class="ui">Don't save</span> or <span class="ui">Cancel</span>.</p>
+
+  <h3 id="intro-tabs">The editor and its tabs</h3>
+  <p>Every job opens in the editor. The editor holds six document tabs, listed in the navigation menu in this order:</p>
+  <table class="ref">
+    <thead>
+      <tr><th>Tab</th><th>What you do there</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><span class="ui">Schematic</span></td><td>Build and edit the shaft: OAL, components, project information. Its toolbar is titled <span class="ui">Shaft Editor</span>.</td></tr>
+      <tr><td><span class="ui">Runout Sheet</span></td><td>Set runout stations and type TIR readings and high spots; print the runout sheet.</td></tr>
+      <tr><td><span class="ui">Wear Document</span></td><td>Mark worn areas, pits and measured diameters; print the wear document.</td></tr>
+      <tr><td><span class="ui">Undercut Drawing</span></td><td>Record undercut sections; print the undercut drawing.</td></tr>
+      <tr><td><span class="ui">Final Schematic</span></td><td>Start, edit and print the Final drawing and its blank runout sheet.</td></tr>
+      <tr><td><span class="ui">Consolidated Output</span></td><td>Choose what the combined sheet carries, record worn sections, preview, print, and export every document at once.</td></tr>
+    </tbody>
+  </table>
+  <p>Only <span class="ui">Schematic</span> is available on an empty shaft. The other five unlock once the shaft has at least one component and an OAL; until then they appear dimmed with the hint <span class="ui">Add components first</span>, because there is nothing yet to measure or print.</p>
+
+  <h3 id="intro-sidebar">The navigation menu</h3>
+  <p>Tap the menu button (three lines) at the left of any tab's toolbar to slide out the navigation menu. It lists <span class="ui">Home</span>, the six document tabs, and a tools group: <span class="ui">Keyway calculator</span>, <span class="ui">Taper calculator</span>, <span class="ui">Unit converter</span>, <span class="ui">Help &amp; FAQ</span> and <span class="ui">Settings</span>. The tools work at any time, even on an empty shaft. Tap outside the menu to close it. <span class="ui">Home</span> returns to the home screen; to finish with a job and clear the editor, use <span class="ui">Close Document</span> instead.</p>
+
+  <h3 id="intro-toolbar">The title strip and toolbar</h3>
+  <p>A thin strip across the top of every tab shows the job's file name, or <span class="ui">Untitled draft</span> if it has never been saved. An <strong>asterisk</strong> after the name means there are changes since the last save — including a runout reading or wear mark, not just a dimension. Tap the strip to name the job: an unsaved job goes to the save screen, a saved one opens <span class="ui">Rename saved shaft</span>.</p>
+  <p>The <span class="ui">Schematic</span> and <span class="ui">Final Schematic</span> toolbars carry, left to right:</p>
+  <dl class="terms">
+    <dt>History</dt>
+    <dd>A menu holding <span class="ui">Undo</span> and <span class="ui">Redo</span>. History covers both drawings and every reading and mark on the job, for as long as the job is open; see <a href="#editor-history">Undo and redo</a>.</dd>
+    <dt>Project information</dt>
+    <dd><span class="ui">Job Number</span>, <span class="ui">Customer</span>, <span class="ui">Vessel</span>, <span class="ui">Item (optional)</span>, <span class="ui">Shaft Position</span> and <span class="ui">Notes</span>, which print in the sheet footers.</dd>
+    <dt>New, Open, Save</dt>
+    <dd>Start a blank shaft, open a saved one, or save this one. New and Open ask about unsaved changes first.</dd>
+    <dt>PDF preview</dt>
+    <dd>Opens the printed sheet, where you print or export it.</dd>
+    <dt>More options</dt>
+    <dd><span class="ui">Save As…</span>, <span class="ui">Duplicate for mate…</span>, <span class="ui">Close Document</span>, <span class="ui">Settings</span> and <span class="ui">Send feedback</span>.</dd>
+  </dl>
+  <p>The <span class="ui">Runout Sheet</span>, <span class="ui">Wear Document</span>, <span class="ui">Undercut Drawing</span> and <span class="ui">Consolidated Output</span> toolbars are simpler: the tab name, <strong>Save</strong>, and a <strong>?</strong> button. Their print actions sit on the page itself — <span class="ui">Print …</span>, <span class="ui">Preview …</span> and <span class="ui">Export … PDF</span>, named for the document.</p>
+
+  <h3 id="intro-help">Help &amp; FAQ</h3>
+  <p>The built-in <span class="ui">Help &amp; FAQ</span> screen is reachable from the home screen, the navigation menu and Settings. It is arranged in five sections — <span class="ui">Getting Started</span>, <span class="ui">Glossary</span>, <span class="ui">How-To Guides</span>, <span class="ui">Settings Reference</span> and <span class="ui">FAQ</span> — as cards you tap to expand. The <span class="ui">Search help</span> field at the top stays in view as you scroll and opens every matching card as you type. The <strong>?</strong> button on the Runout, Wear, Undercut and Consolidated Output tabs opens Help directly at that tab's own guide.</p>
+
+  <h3 id="intro-tablet">Phone and tablet layouts</h3>
+  <p>The app uses the same screens on every device and adjusts only to the width it has:</p>
+  <table class="ref">
+    <thead>
+      <tr><th>Device</th><th>Layout</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Phone</td><td>Stays in portrait. The preview sits at the top with the controls scrolling beneath it; the navigation menu slides in over the screen.</td></tr>
+      <tr><td>Tablet, portrait</td><td>The same single column, with a taller preview.</td></tr>
+      <tr><td>Tablet, landscape (wide screen)</td><td>Two panes side by side. On the Schematic: preview, OAL and warnings on the left, components on the right. On the Runout, Wear and Undercut tabs: the sheet on the left, its controls on the right. The navigation menu stays open beside the content, so there is no menu button.</td></tr>
+    </tbody>
+  </table>
+  <p>Tablets rotate freely. Layout never changes a drawing or a printed sheet — a job looks the same on paper whichever device built it.</p>
+
+  <h2 id="intro-saving">Saving, drafts and backups</h2>
+  <p><strong>Save</strong> stores the job inside the app. The first save of a new job opens <span class="ui">Save Drawing</span>, where the <span class="ui">File name</span> is suggested from the job number, customer and vessel; later saves write straight to the same file. <span class="ui">Save As…</span> saves under a new name. The save screen also offers <span class="ui">Save a copy to device…</span>, to put a copy of the file somewhere outside the app, and <span class="ui">Save as template…</span>.</p>
+  <p>While you work, the app keeps an <strong>autosave draft</strong> of any job with unsaved changes. If you leave without saving, or the app is closed, the draft appears under <span class="ui">Unsaved drafts</span> on the home screen; tap it to pick up where you stopped. A draft is not a saved file — save it to keep it in your list of shafts. See <a href="#help-autosave">Autosave and unsaved drafts</a>.</p>
+  <aside class="warn"><p>Saved shafts live inside the app on that device. Uninstalling the app or losing the device loses them unless you have a copy elsewhere. Use <span class="path">Settings → Data → Back up all shafts…</span> or <span class="ui">Mirror saves to folder</span> to keep a copy off the device; see <a href="#help-data">Your data</a>.</p></aside>
+</section>

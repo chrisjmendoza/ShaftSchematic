@@ -1,0 +1,418 @@
+<section class="chapter" id="ch-help" data-audience="both">
+  <h1>Troubleshooting, Data &amp; Glossary</h1>
+  <p class="lede">Answers to the questions people ask when the app or the paper does something unexpected, how your shafts are stored and protected, and a glossary of every shop and app term used in this manual. For the office and the shop alike.</p>
+
+  <p>Each troubleshooting heading is the question you would ask; scan them for your situation. Where a behavior is deliberate, the answer says why.</p>
+
+  <!-- ───────────────────────────── EDITING ───────────────────────────── -->
+  <h2 id="help-editing">Troubleshooting: editing a shaft</h2>
+  <aside class="tip"><p>Most editing surprises can be stepped back. Tap the History button (the clock icon) in the editor toolbar and choose <span class="ui">Undo</span>. History lasts for the editing session; see <a href="#editor-history">Undo and redo</a>.</p></aside>
+
+  <h3>Tapping the preview doesn't add anything</h3>
+  <p>That is by design. A tap on a component in the preview selects it and brings its card up in the carousel. A tap on bare canvas does nothing, so a stray touch never drops a part on the shaft.</p>
+  <p>To add a part, tap the full-width <span class="ui">+ Add Component</span> button under the preview. The <span class="ui">Add Component</span> chooser offers <span class="ui">Body</span>, <span class="ui">Liner</span>, <span class="ui">Taper</span>, <span class="ui">Thread</span> and <span class="ui">Coupler Bolt Slot / Hole</span>.</p>
+
+  <h3>I typed a new overall length and the drawing didn't change</h3>
+  <p>The <span class="ui">Overall Length</span> field does not apply what you type key by key, because a half-typed value (36″ on the way to 367 3/4″) would collapse the drawing and move every FWD-referenced part. Tap the green ✓, press the keyboard's Done key, or leave the field after changing it. The red ✗ puts the stored length back, and an empty field changes nothing. See <a href="#editor-oal">The overall length</a>.</p>
+
+  <h3>The Overall Length field is outlined in red</h3>
+  <p>The overall length is shorter than the far end of your last component, so something runs off the FWD end of the shaft. The card that runs past shows an amber advisory strip, <span class="ui">Extends past shaft length</span>, and a dismissible banner above the carousel counts the problem (for example <span class="ui">1 component extends past shaft length</span>).</p>
+  <p>This is a warning, not a block. Your values are kept exactly as typed. Fix it by lengthening the OAL or by moving or shortening the component.</p>
+
+  <h3>I changed the OAL and a taper (or liner) moved</h3>
+  <p>A component measured from FWD keeps its distance from the FWD end, so it moves with that end when the OAL changes; components measured from AFT stay put. To hold a part's position from the AFT end, set its <span class="ui">Measure From</span> chips to <span class="ui">AFT</span> before changing the OAL. See <a href="#editor-oal-change">What moves when the OAL changes</a>.</p>
+
+  <h3>My value wasn't rounded, or tapping a field did nothing</h3>
+  <p>Both by design. The app keeps every value you type exactly as entered, down to the last thousandth; the bare shaft between components grows or shrinks to fill the gaps (see <a href="#intro-sacred">What you type is what prints</a>). A field applies its value when you leave it or press Done, and only if you changed something, so tapping in and out without an edit changes nothing.</p>
+
+  <h3>A field shows “Must be &gt; 0” or “Must be ≥ 0” and won't keep my number</h3>
+  <p>A component's <span class="ui">Length</span> must be greater than zero (<span class="ui">Must be &gt; 0</span>). A <span class="ui">Start</span> position can't be negative (<span class="ui">Must be ≥ 0</span>). The field shows the message, puts the previous value back, and changes nothing. Text that doesn't read as a number is treated the same way. Inch fields accept fractions such as 3 1/2 and decimals such as 3.5.</p>
+
+  <h3>A card says “Overlaps another component”</h3>
+  <p>Two components that can't share shaft length (tapers, threads and liners, in any pairing) overlap. Every card involved shows the message. While any overlap exists, the drawings can't be printed or exported.</p>
+  <p>Bodies are never part of this check. A body running under a liner or up against a taper is normal: the drawing trims the body around them. If the warning shows, look at the tapers, threads and liners near that position.</p>
+
+  <h3>An Add dialog asks “Add Anyway?”</h3>
+  <p>The part you are adding conflicts with something already on the shaft. The dialog lists each problem, for example <span class="ui">Overlaps Taper 1</span> or <span class="ui">Falls outside shaft span</span> (with the shaft's OAL). Tap <span class="ui">Add Anyway</span> to add it and fix the position afterwards, or <span class="ui">Cancel</span> to go back and correct the numbers first.</p>
+
+  <h3>A thread card says “Thread must be at a shaft end, not between components”</h3>
+  <p>A thread counted in the overall length has to sit at one end of the shaft. Move it to the AFT or FWD end. If the OAL is quoted to the shoulder and the thread hangs off past it, switch off <span class="ui">Include thread in OAL</span> on the card (<span class="ui">Count in OAL</span> in the Add Thread dialog) and choose which end it hangs from with the <span class="ui">Thread end:</span> <span class="ui">AFT</span> | <span class="ui">FWD</span> chips.</p>
+
+  <h3>I shortened a body and a new “Body (auto)” card appeared</h3>
+  <p>The length you took off the body is now bare shaft, and the app fills every uncovered span with an automatic body so the drawing stays continuous. The new <span class="ui">Body (auto)</span> card shows that span. Your body keeps the exact length you typed. To make the bare section a real, editable body, tick <span class="ui">Explicit body</span> on its card.</p>
+
+  <h3>Adding a liner split my body into two cards</h3>
+  <p>Adding a taper, thread or liner over a body divides the body around it, because the shaft is no longer one run. Delete the part and the pieces join back into one body. The exception is a body that carries a keyway: it is never split, so the keyway stays whole on one card.</p>
+
+  <h3>I set the bare-shaft Ø and only one section changed</h3>
+  <p>The Ø on a <span class="ui">Body (auto)</span> card applies to that bare section only, so a shaft can step from one bare diameter to another between liners. Set each section on its own card; clear the field to let that section follow its neighbors again. See <a href="#editor-bodies">Bodies and bare shaft</a>.</p>
+
+  <h3>I can't add a keyway to a bare-shaft section</h3>
+  <p>Bare-shaft sections move and disappear as their neighbors change, which would silently move or delete a keyway. Tick <span class="ui">Explicit body</span> on the <span class="ui">Body (auto)</span> card to make it a real body, then open the <span class="ui">Keyway</span> section. The reverse also applies: unticking <span class="ui">Explicit body</span> asks <span class="ui">Make body automatic?</span>, warns <span class="ui">Its keyway will be removed too.</span>, and on confirming hands the span back to bare shaft.</p>
+
+  <h3>The Keyway section won't close</h3>
+  <p>A keyway section stays open while it holds any width, depth or length, so a keyway can never be hidden with numbers still in it. To remove the keyway, untick <span class="ui">Keyway</span>. The app asks <span class="ui">Remove keyway?</span> and explains it will clear the width, depth, length and inset. Tap <span class="ui">Remove</span>. Undo brings the keyway back with its values.</p>
+
+  <h3>A keyway control is greyed out or missing</h3>
+  <ul>
+    <li><span class="ui">Keyway spooned (N/A — captured)</span>: the keyway is captured, inset from the end, so it has no open end for a spoon. Switch off <span class="ui">Captured keyway</span> to spoon it.</li>
+    <li>No <span class="ui">Keyways 180° apart</span> / <span class="ui">Keyways 90° apart</span> toggles: clocking only matters between keyways, so they appear once the shaft has two or more (in an Add dialog, when the keyway you are adding would be the second). The two toggles exclude each other.</li>
+  </ul>
+
+  <h3>Liner shoulder fields or unit chips aren't on my cards</h3>
+  <p>Both are switched off by default, because most shafts never need them. Switch on <span class="path">Settings → Drawing → Liner shoulders</span> or <span class="path">Settings → Drawing → Per-component units</span> (see <a href="#settings-capabilities">Switches that reveal extra controls</a>). A liner that already carries shoulder values always shows and draws them, whatever the setting.</p>
+
+  <h3>I opened a shaft and the units changed</h3>
+  <p>A saved shaft remembers the unit it was saved in and opens in that unit. Switching units never changes your numbers: the app stores every value the same way and only changes how it is shown. Use <span class="path">Settings → Units</span> to switch between <span class="ui">Millimeters</span> and <span class="ui">Inches</span>.</p>
+
+  <!-- ───────────────────────────── DRAWINGS & PDFs ───────────────────────────── -->
+  <h2 id="help-drawings">Troubleshooting: drawings, printing &amp; PDFs</h2>
+
+  <h3>Print and Export are greyed out</h3>
+  <p>The shaft has no components yet (<span class="ui">Please add at least 1 component before export is active.</span> — coupler bolt slots alone don't count), or two components overlap (<span class="ui">Fix component collisions before exporting.</span> — find the cards marked <span class="ui">Overlaps another component</span>). On the document tabs the message shows above the greyed buttons; on the Schematic tab, tap the greyed PDF button to see it. See <a href="#documents-blocked">Why Print and Export are greyed out</a>.</p>
+
+  <h3>The Runout, Wear, Undercut, Final and Consolidated tabs are greyed out</h3>
+  <p>Those documents need a shaft to work from: at least one component and a typed overall length. Until both exist, only the <span class="ui">Schematic</span> tab opens. A shaft with no OAL yet still draws in the preview, out to the end of its last component, but the other documents stay locked until you type the length.</p>
+
+  <h3>A liner on the sheet looks shorter than it should</h3>
+  <p>To fit a long shaft on the page at a readable height, the drawing shortens components lengthwise. Liners and tapers shorten in proportion; they never get a break symbol. The dimension values always print the true lengths.</p>
+  <p>To draw them closer to true length, open the document's PDF options. Tick <span class="ui">Keep liners and tapers proportional lengthwise</span>, or lower <span class="ui">Liner &amp; taper compression</span>. Liners and tapers move together, and the line under the slider reports how much true length the page can give them. The drawn shaft height always wins: these controls never make the shaft draw smaller.</p>
+
+  <h3>Why is there a break symbol through my body?</h3>
+  <p>It is the drafting symbol for “length removed here”: the body run was shortened to fit the page. The printed dimensions are always true (see <a href="#reading-sbreak">S-breaks</a>).</p>
+  <ul>
+    <li><span class="path">Settings → Drawing → Body S-break</span> (also on the schematic and runout/consolidated PDF options) sets that point. The default is 50%: a body drawn at less than half its true length gets the break. Slide toward <span class="ui">Never</span> to hide compression, toward <span class="ui">Always</span> to mark even slight shortening.</li>
+    <li>A very long run (roughly 3″ of paper at true scale) prints its break at every setting, <span class="ui">Never</span> included.</li>
+    <li>Only bodies get the symbol. The break is placed clear of keyways and seal areas.</li>
+  </ul>
+
+  <h3>One long body made the whole drawing small</h3>
+  <p>The body is set to draw at full length. New bodies you add start with <span class="ui">Compress on drawing</span> off, so an authored section reads at true proportion. A body that long then leaves no room, and the shaft draws lower to fit. Tick <span class="ui">Compress on drawing</span> on that body's card: it can shorten and carry an S-break again, and the rest of the shaft gets its height back.</p>
+
+  <h3>My body's Ø isn't printed on the schematic</h3>
+  <p>Body Ø callouts are off until you ask for them, so the schematic stays clean. Turn on <span class="ui">Show Ø on drawing</span> on the body's card, or <span class="ui">Show bare-shaft Ø on drawing</span> on a <span class="ui">Body (auto)</span> card (one switch for all bare shaft). Liner Ø callouts are on by default.</p>
+  <p>When several bodies share a diameter, the value prints once, on the longest one that is switched on; the footer's “Body:” list always shows every body Ø. See <a href="#components-drawing-toggles">Per-component drawing switches</a>.</p>
+
+  <h3>A component's name is missing from the sheet</h3>
+  <p>Check the card's <span class="ui">Show name on drawing</span> switch. Until you set it, it follows the <span class="ui">Labels</span> chip on the schematic's PDF options (the same setting as <span class="path">Settings → PDF Export Options → Show component titles in PDF</span>); set on the card, your choice wins either way. Bare shaft never prints a name, and Template mode prints none. See <a href="#components-show-name">Show name on drawing</a>.</p>
+
+  <h3>My blank draft has no Ø leaders to write on</h3>
+  <p>On a blank draft, Ø callouts are a separate choice. In the schematic's PDF options, under <span class="ui">Content</span>, turn on <span class="ui">Ø callouts</span> beside <span class="ui">Blank draft</span>. The chip can only be tapped while <span class="ui">Blank draft</span> is on. Blank draft itself is off each time the app starts.</p>
+
+  <h3>My printed schematic has no dimensions at all</h3>
+  <p>Template mode is on. It prints the shaft outline only, for marking up by hand. Switch off <span class="path">Settings → PDF Export Options → Template (shaft only)</span>. If you want dimension lines with empty values instead, use <span class="ui">Blank draft</span>.</p>
+
+  <h3>Shading changed nothing</h3>
+  <p>Shading is decided at two levels: the kind checkboxes under <span class="ui">Shade in Components</span> (<span class="ui">Bodies</span>, <span class="ui">Tapers</span>, <span class="ui">Liners</span>) set the default, and a card's <span class="ui">Shade on drawing</span> switch overrides it for that one component. Check these in order:</p>
+  <ol class="steps">
+    <li>Look at the component's own card. A <span class="ui">Shade on drawing</span> switch set off keeps that component plain even with its kind ticked, and one set on shades it with its kind unticked.</li>
+    <li>For bare shaft, check <span class="ui">Explicit bodies only</span> under <span class="ui">Bodies</span>. While it is ticked, only bodies you added are shaded.</li>
+    <li>On the Consolidated Output sheet, see whether the <span class="ui">Liners</span> box is greyed with the note <span class="ui">Ø values print inside the profile on this sheet</span>. Liners on that sheet stay unshaded so the printed values stay readable. Your setting is untouched and applies on every other sheet.</li>
+    <li>On the Wear and Undercut documents, shading follows the kind checkboxes only. The per-card switch doesn't apply there.</li>
+  </ol>
+
+  <h3>A setting I changed on one document changed my others</h3>
+  <p>The look controls on a document's PDF options (line thickness, shading, S-break, arrows, fractions, and so on) are the same settings as <span class="path">Settings → Drawing</span>. Each options panel says so at the top: <span class="ui">Drawing settings here are app-wide — the same ones as Settings → Drawing — so every document follows them.</span></p>
+  <p>Controls that belong to one job say <span class="ui">Saved with this job</span> in their caption and never affect another document (see <a href="#documents-options">The PDF options panel</a>). To keep several house styles, save each as a drawing profile (<span class="path">Settings → Drawing → Profiles</span>) and apply the one you want.</p>
+
+  <h3>Why does a taper print with two keyway lines in the footer?</h3>
+  <p>The second line describes the keyway further:</p>
+  <ul>
+    <li>“Captured KW: inset … from S.E.T.” prints under the “KW:” line when the keyway is captured, giving the inset you typed. On a body it reads “from AFT” or “from FWD”.</li>
+    <li>“KW length to base of spoon (mill end)” prints when the keyway is spooned, and the “KW:” line ends with “(spooned)”. The keyway length is measured to the base of the spoon, where the mill stops.</li>
+  </ul>
+  <p>If no keyway line prints at all, the keyway is missing its width or its depth. The footer needs both.</p>
+
+  <h3>Why does a diameter print as 10.990″ instead of 10.99″?</h3>
+  <p>Inch diameters print with exactly three decimals unless they are whole numbers, which print with none. Every diameter on the sheet reads to the same precision, so a dropped zero is never mistaken for a looser tolerance. Millimeter diameters print to one decimal.</p>
+
+  <h3>Some dimension values print above the line instead of in a break</h3>
+  <p>A value sits in a gap cut into its dimension line only when the span has room for the value and an arrowhead on each side; shorter spans print it above an unbroken line (see <a href="#reading-rails">Dimension rails</a>). To seat more values in their lines, try a narrower face (<span class="path">Settings → Drawing → Output font → Condensed</span>) or smaller <span class="ui">Dimension arrows</span>.</p>
+
+  <h3>I chose Stacked dual units but this sheet prints them on one line</h3>
+  <p>A stacked value is taller than one line. When a sheet doesn't have the height for it, the whole sheet falls back to inline (1 1/2″ [38.1 mm]). It is never mixed value by value, because half-stacked values would read as a mistake. Dual units themselves are switched on per document with <span class="ui">Dual units</span> in the PDF options' <span class="ui">Units</span> section.</p>
+
+  <h3>The Shaft height slider won't go any higher or lower</h3>
+  <p>The drawn shaft is held between 1/2″ and 1 1/2″ of paper, the range in which a shaft sheet stays readable and still fits its rails and footer. A shaft that is already under 1/2″ at its standard size is never drawn larger. <span class="ui">Standard (…)</span> returns to the size set by <span class="path">Settings → Drawing → Default drawing size</span>.</p>
+
+  <h3>The Final schematic doesn't match my other sheets</h3>
+  <p>That is its purpose. The <span class="ui">Final Schematic</span> tab is a second drawing of the same job, the shaft as it leaves; from the moment you start it, it is edited separately, and every other tab draws the original. To start it over from the current original, choose <span class="ui">Reset to original</span> from the banner's menu. See <a href="#documents-final">The Final Schematic tab</a>.</p>
+
+  <!-- ───────────────────────────── RUNOUT / WEAR / UNDERCUT ───────────────────────────── -->
+  <h2 id="help-measurements">Troubleshooting: runout, wear &amp; undercut</h2>
+
+  <h3>A component has more or fewer runout bubbles than I expected</h3>
+  <p>Station counts follow component length until you set them: one per 20″ on bodies (at least 1) and liners (at least 2), and always 2 on tapers (see <a href="#recording-stations">Stations and bubbles</a>). Change a count with − and + in <span class="ui">Measurement stations</span> on the Runout tab. A count of 0 hides that component's stations. A body divided by liners is still one component: one row in the editor and one set of stations running AFT to FWD.</p>
+  <p>A component whose count you haven't set follows its length, so lengthening or shortening it can add or remove stations. Once you use − or + on a component, its count stays fixed through later length edits.</p>
+
+  <h3>I moved a bubble and it won't go past its neighbor</h3>
+  <p>A bubble stays on its own component and keeps at least 1/2″ from the bubbles on either side. It can never pass one, because that would renumber the stations under readings already taken. To rearrange freely, use <span class="ui">Reset</span> on that component's row (shown once a bubble has been moved) or <span class="ui">Reset all bubble positions</span>, then move the bubbles again. <span class="ui">Undo move</span> puts the last moved bubble back.</p>
+  <p>Moving one bubble pins only that bubble; the others keep their automatic spacing (see <a href="#recording-move">Moving bubbles</a>).</p>
+
+  <h3>Tapping a bubble no longer opens the reading</h3>
+  <p>Move mode is on: the pencil button in the corner of the preview is highlighted. In Move mode a touch picks a bubble up at once and a tap selects a bubble or a component. Tap the pencil (<span class="ui">Done moving bubbles</span>) to go back to entering readings.</p>
+
+  <h3>A runout reading disappeared</h3>
+  <p>Readings are never deleted by editing the shaft. They stop drawing when their bubble no longer exists:</p>
+  <ul>
+    <li>You lowered a component's station count. Raise it again and the reading returns.</li>
+    <li>You deleted the component. Undo brings the component and its readings back.</li>
+  </ul>
+
+  <h3>The sheet shows a blank line after “TIR's taken looking:”</h3>
+  <p><span class="ui">TIR orientation</span> on the Runout tab is set to <span class="ui">Not set</span>, so the sheet leaves the direction to be written in. Choose <span class="ui">Looking AFT</span> or <span class="ui">Looking FORWARD</span> and the sheet prints it.</p>
+
+  <h3>Why does the undercut look deeper than its numbers?</h3>
+  <p>A real undercut is a few thousandths deep, too thin to see at drawing scale, so its depth is drawn deeper than true, up to the <span class="ui">Cut depth exaggeration</span> setting (at most 25%). The printed Ø values are always the numbers you typed. See <a href="#recording-cut-depth">Cut depth exaggeration</a>.</p>
+
+  <h3>The undercut I'm entering says it overlaps another one</h3>
+  <p>The message <span class="ui">Overlaps an adjacent undercut — a cut must sit fully inside or fully clear of another</span> means the new cut crosses the edge of an existing one. A cut may sit entirely inside another (a deeper cut within a wider relief, drawn as a step) or entirely clear of it, but not halfway across. Adjust the distance or length so the cut sits fully inside or fully outside its neighbor.</p>
+
+  <h3>An undercut shows a warning symbol in its list</h3>
+  <p>The undercut now extends past the shaft end, usually because the OAL was reduced after it was recorded. The record is kept as typed and only the part on the shaft is drawn. Re-measure the cut, or check the OAL.</p>
+
+  <h3>The liner's surface line dips deeper than the wear really is</h3>
+  <p>Measured wear is too shallow to see at drawing scale, so the trace through the readings is drawn deeper than true. Set the amount per job with <span class="ui">Trace depth exaggeration</span> on the Wear Document tab (5% to 25%). The printed Ø values are always the measured numbers. See <a href="#recording-trace">The worn-profile trace</a>.</p>
+
+  <h3>Wear marks or readings vanished after I edited the shaft</h3>
+  <p>Pits and measured Ø readings belong to the component they were placed on. If that component no longer exists (deleted, or a bare-shaft section that merged away), its marks stop drawing but stay in the record. Undo the edit, or restore the component, and they reappear. Wear spots are the exception: a deleted liner's wear spots are dropped the next time the job is opened.</p>
+
+  <!-- ───────────────────────────── FILES & DATA ───────────────────────────── -->
+  <h2 id="help-files">Troubleshooting: files &amp; data</h2>
+
+  <h3>“Could not open … — the file may be damaged.”</h3>
+  <p>The file couldn't be read. It may have been cut short while copying, or changed outside the app. The app shows this message instead of opening a broken drawing. Try the same shaft from a backup or a mirrored copy (see <a href="#help-data">Your data</a>). If the message says the file needs a newer version of the app, update the app on this device.</p>
+
+  <h3>Import or restore made copies named “(restored)”, or added nothing</h3>
+  <p>Importing a shaft file or restoring a backup never overwrites a shaft. A file identical to one already saved is skipped (an import says <span class="ui">Already saved — an identical copy exists</span>). One with the same name but different contents is added as <span class="ui">name (restored)</span>, so you can compare the two. Delete whichever you don't need from the ⋮ menu on <span class="ui">Open drawing</span>.</p>
+
+  <!-- ───────────────────────────── YOUR DATA ───────────────────────────── -->
+  <h2 id="help-data">Your data</h2>
+  <p>Everything you draw stays on the device until you choose to send it somewhere. The app needs no account and no internet connection to draw or save.</p>
+
+  <h3>Where shafts are stored</h3>
+  <p>Saved shafts are kept in the app's own private storage on the device, as files ending in .shaft. Other apps can't see them. They survive app updates. They don't survive uninstalling the app or clearing its storage, so keep a backup or a mirror folder (below) if the device matters to your records.</p>
+  <p>To find a shaft, tap <span class="ui">Open…</span> on the home screen, or the folder icon in the editor (see <a href="#intro-home">The home screen</a>).</p>
+  <p>PDFs are different: each export goes wherever you choose at the time (Downloads, a cloud drive, an SD card). Switch on <span class="path">Settings → PDF Export Options → Open PDF after export</span> to open each file in your PDF viewer as soon as it is written.</p>
+
+  <h3>Saving</h3>
+  <ul>
+    <li>The Save button (the disk icon) opens <span class="ui">Save Drawing</span> the first time. The suggested <span class="ui">File name</span> is built from the job number, customer, vessel and shaft side. <span class="ui">Existing saves</span> lists names you can reuse with <span class="ui">Use</span>.</li>
+    <li>Saving over an existing name asks <span class="ui">Overwrite existing save?</span> first.</li>
+    <li>An asterisk in the title means unsaved changes. Leaving such a drawing asks <span class="ui">You have unsaved changes. Save before continuing?</span> with <span class="ui">Save</span>, <span class="ui">Don't save</span> and <span class="ui">Cancel</span>.</li>
+    <li><span class="ui">Save As…</span> in the editor's overflow menu saves the drawing under a new name.</li>
+    <li><span class="ui">Save as template…</span> stores the shaft's geometry only (see <a href="#editor-templates">Templates</a>).</li>
+  </ul>
+
+  <h3 id="help-autosave">Autosave and unsaved drafts</h3>
+  <p>While you work, the app quietly saves a draft of the drawing about a second and a half after you stop editing. A draft is kept only while the drawing has unsaved changes. Save the drawing and its draft is removed.</p>
+  <p>If you leave without saving, or the app or tablet shuts down mid-job, the home screen shows <span class="ui">Unsaved drafts</span>:</p>
+  <ul>
+    <li>Up to three drafts are kept, one per drawing. A fourth replaces the oldest.</li>
+    <li>Each row shows the drawing's name, or a name built from its job details marked <span class="ui">Unsaved draft</span>, or <span class="ui">Untitled draft</span>, with how long ago it was last changed.</li>
+    <li>Tap a row to continue. The drawing still counts as unsaved until you save it, so its draft stays as a safety net.</li>
+    <li>Tap × (<span class="ui">Discard draft</span>) to throw a draft away. The app asks <span class="ui">Discard this draft?</span> first, because a discarded draft can't be recovered.</li>
+  </ul>
+  <aside class="warn"><p>A draft is a safety net, not a save. Only three are kept, and the oldest drops off when a fourth drawing goes unsaved. Save any drawing you intend to keep.</p></aside>
+  <p>Undo history is not part of a draft or a saved file. A continued draft or a reopened drawing starts with an empty history.</p>
+
+  <h3>Back up and restore</h3>
+  <p>Under <span class="path">Settings → Data</span>, <span class="ui">Back up all shafts…</span> writes every saved shaft into one zip file at a location you pick, and <span class="ui">Restore from backup…</span> brings them back without overwriting anything. <span class="ui">Mirror saves to folder</span> copies each shaft to a folder of your choice every time you save it — point it at a cloud-synced folder and every save is backed up off the device. Each row is described in <a href="#settings-data">Data</a>.</p>
+
+  <h3>Moving one shaft to another device</h3>
+  <ol class="steps">
+    <li>On the first device, open the shaft and tap Save.</li>
+    <li>On <span class="ui">Save Drawing</span>, tap <span class="ui">Save a copy to device…</span> and choose a location both devices can reach (a shared drive, email attachment, or USB).</li>
+    <li>On the second device, tap <span class="ui">Open…</span>, then <span class="ui">Import</span> at the top of <span class="ui">Open drawing</span>.</li>
+    <li>Pick the .shaft file. The app confirms <span class="ui">Imported ‘name’</span>.</li>
+  </ol>
+  <p>To move every shaft at once, use <span class="ui">Back up all shafts…</span> on one device and <span class="ui">Restore from backup…</span> on the other.</p>
+
+  <h3 id="help-feedback">Sending feedback</h3>
+  <p><span class="ui">Send Feedback</span> on the home screen and on <span class="ui">Open drawing</span> starts an email with the app version, device, units and a short form for what happened. <span class="ui">Send Feedback</span> in a saved shaft's ⋮ menu also attaches that shaft file, so whoever reads it can open the exact drawing. Use the per-file option only when you are willing to share that drawing.</p>
+
+  <h3 id="help-logs">Sharing diagnostic logs</h3>
+  <p>The app keeps a small, rolling log of what it did: drawings opened and saved, exports, backups, and any errors. <span class="path">Settings → Data → Share diagnostic logs</span> emails those log files, with the app version and device, to whoever is helping you.</p>
+  <ul>
+    <li>The log records events and errors, and the names of the drawings involved. It never records what you drew: no dimensions, diameters, readings, or any other value typed into a drawing.</li>
+    <li>It is capped at a few hundred kilobytes and overwrites its oldest entries, so it never fills the device.</li>
+    <li>If the app shows <span class="ui">No logs recorded yet.</span> there is nothing to send. <span class="ui">No email app found.</span> means the device needs an email app to send them.</li>
+  </ul>
+
+  <h3>If the app closes unexpectedly</h3>
+  <ol class="steps">
+    <li>Reopen the app. Your saved shafts are untouched; they are stored separately from drafts.</li>
+    <li>Look under <span class="ui">Unsaved drafts</span> on the home screen and tap the drawing you were working on.</li>
+    <li>Check the last few edits, then save.</li>
+    <li>If the problem repeats, use <span class="ui">Share diagnostic logs</span> soon afterwards, while the event is still in the log.</li>
+  </ol>
+  <aside class="note"><p>A crash is written to the log just before the app closes, so the log you share afterwards shows what was happening at that moment.</p></aside>
+
+  <!-- ───────────────────────────── GLOSSARY ───────────────────────────── -->
+  <h2 id="help-glossary">Glossary</h2>
+  <p>Shop terms and app terms as this manual and the app use them, in alphabetical order.</p>
+
+  <dl class="terms glossary">
+    <dt>AFT</dt>
+    <dd>The aft end of the shaft, toward the propeller. AFT is always the left end of every drawing. <span class="ui">Measure From</span> chips choose whether a component's position is quoted from the AFT or the FWD end.</dd>
+
+    <dt>App-wide setting</dt>
+    <dd>A setting that applies to every document, such as line thickness or shading, even when changed from one document's PDF options. Compare “Saved with this job”.</dd>
+
+    <dt>Auto-body (bare shaft)</dt>
+    <dd>A span of plain shaft the app fills in wherever no component is placed, shown as a <span class="ui">Body (auto)</span> card. Its start and length come from its neighbors and can't be typed; its Ø can be set for that section. Tick <span class="ui">Explicit body</span> to turn it into a real body.</dd>
+
+    <dt>Blank draft</dt>
+    <dd>A sheet printed with its drawing and dimension lines but the values left empty, for writing measurements in by hand on the job. Off each time the app starts; it never changes the drawing's data.</dd>
+
+    <dt>Blend</dt>
+    <dd>A smooth machined transition at a body face, cut into the body from the face to its own Ø. Chosen per face as <span class="ui">Blend</span> (versus <span class="ui">Square</span>) under <span class="ui">Face finish</span>. Drawn only; it never changes a dimension.</dd>
+
+    <dt>Bubble</dt>
+    <dd>The circle drawn under the shaft at a runout station, where that station's TIR is written and its high spot marked.</dd>
+
+    <dt>Captured keyway</dt>
+    <dd>A keyway inset from the end instead of running out as an open slot, closed at both ends. The inset prints as a “Captured KW:” footer line. A captured keyway can't be spooned.</dd>
+
+    <dt>Compression</dt>
+    <dd>Drawing a component shorter than true length so a long shaft fits the page at a readable height. Bodies may carry an S-break when shortened; liners and tapers shorten in proportion. Printed values are always true lengths.</dd>
+
+    <dt>Consolidated sheet</dt>
+    <dd>One page combining the schematic's dimensions with runout bubbles, wear information, or both. Built on the <span class="ui">Consolidated Output</span> tab, which offers <span class="ui">All three</span>, <span class="ui">Schematic + Runout</span> or <span class="ui">Schematic + Wear</span>.</dd>
+
+    <dt>Coupler bolt slot (seam)</dt>
+    <dd>A row of muff-coupler bolt holes on the seam between the shaft and the coupling sleeve, drawn as circles straddling the shaft outline. Added from <span class="ui">Coupler Bolt Slot / Hole</span> with the <span class="ui">Seam</span> hole type. Never counts toward OAL.</dd>
+
+    <dt>Coupling face</dt>
+    <dd>The end view drawn on a runout sheet, taken looking forward: coupling OD, pilot bore with its keyseat, and bolt circle. Switched on with <span class="ui">Coupling face</span> on the Runout tab or the PDF options.</dd>
+
+    <dt>Cross-drilled hole</dt>
+    <dd>A bolt hole drilled straight through the shaft at a coupling end, located from the shaft end to the hole center. Drawn as a hidden bore at 90° from the keyway, or as a circle when in line with it.</dd>
+
+    <dt>Datum dimension</dt>
+    <dd>A dimension that locates a component from a reference end: for example, from the S.E.T. to the near edge of a liner. It places the part on the shaft; the liner's own length is a separate length dimension. A liner sitting right at the S.E.T. prints no datum dimension.</dd>
+
+    <dt>Dimension rail</dt>
+    <dd>A horizontal line of dimensions above the shaft. The top rail carries the OAL; the rails below locate and size the components. Values sit in breaks in the line wherever there is room.</dd>
+
+    <dt>Drawing profile</dt>
+    <dd>A named, saved copy of the whole drawing look, applied in one tap from <span class="path">Settings → Drawing → Profiles</span>. Profiles belong to the device, not to a document.</dd>
+
+    <dt>Dual units</dt>
+    <dd>Printing every dimension in both inches and millimeters, switched on per document with <span class="ui">Dual units</span>, side by side or stacked. The converted value is a courtesy reading, never a second measurement.</dd>
+
+    <dt>Explicit body</dt>
+    <dd>A body you placed and sized yourself, as opposed to bare shaft the app fills in. A body keyway needs an explicit body.</dd>
+
+    <dt>Final schematic</dt>
+    <dd>A second drawing of the same job showing the shaft as it leaves, after liners were moved, lengthened or shortened. Started from the original and edited separately on the <span class="ui">Final Schematic</span> tab; its sheets are marked Final.</dd>
+
+    <dt>Footer (title block)</dt>
+    <dd>The block along the bottom of each sheet with the job information (customer, vessel, job number, date) and the component spec lines: tapers' L.E.T./S.E.T./length, keyways, threads and body diameters.</dd>
+
+    <dt>FWD</dt>
+    <dd>The forward end of the shaft, toward the engine. FWD is always the right end of every drawing.</dd>
+
+    <dt>High spot</dt>
+    <dd>Where the shaft runs out most at a station, recorded as a clock position with the TIR and drawn as a marker on that station's bubble.</dd>
+
+    <dt>Keyway</dt>
+    <dd>A slot milled along a taper or body for a key, entered as width × depth and length. The keyway section on a card opens with its <span class="ui">Keyway</span> checkbox. <span class="ui">Standard size…</span> fills standard key-stock sizes.</dd>
+
+    <dt>Keyway clocking</dt>
+    <dd>How two or more keyways sit around the shaft relative to each other: <span class="ui">Keyways 180° apart</span> or <span class="ui">Keyways 90° apart</span>, plus direction chips for which way the second keyway is clocked. Shown only when the shaft has two or more keyways.</dd>
+
+    <dt>L.E.T.</dt>
+    <dd>Large End of Taper: the larger-diameter end of a taper, whichever way it faces on the shaft.</dd>
+
+    <dt>Length dimension</dt>
+    <dd>A dimension of a component's own size, such as a liner's length from one edge to the other. It reads the part itself, not where the part sits. Compare “Datum dimension”.</dd>
+
+    <dt>Liner</dt>
+    <dd>A sleeve shrunk or fitted over the shaft (typically bronze) for a bearing or seal surface. Placed with <span class="ui">Measure From</span> AFT or FWD. The body under it is trimmed from the drawing.</dd>
+
+    <dt>Liner shoulder</dt>
+    <dd>A machined step at a liner end: a short length at a reduced Ø with an edge radius. Its fields appear once <span class="path">Settings → Drawing → Liner shoulders</span> is on. The radius prints as a “Liner shoulder R:” footer line.</dd>
+
+    <dt>Mate shaft</dt>
+    <dd>The other shaft of a twin-screw pair. <span class="ui">Duplicate for mate…</span> makes its drawing from this one: same geometry, new side and job details, no measurements.</dd>
+
+    <dt>Measured Ø reading</dt>
+    <dd>A diameter measured at one point on a component and recorded on the Wear document. It prints exactly as typed. A reading left empty is a placeholder that never prints.</dd>
+
+    <dt>Measurement reference</dt>
+    <dd>Which end printed dimensions are measured from: <span class="ui">Auto (closest end)</span> by default, or forced to the AFT or FWD S.E.T. It changes where dimensions start, never the values stored.</dd>
+
+    <dt>Metric designation</dt>
+    <dd>A metric thread size written the standard way, such as M20×2.5, entered in the thread's <span class="ui">Metric (M-designation)</span> mode. It prints exactly as typed.</dd>
+
+    <dt>Nested undercut</dt>
+    <dd>A smaller, deeper undercut that sits fully inside a wider one, such as a corroded patch cut deeper within an earlier relief. It is drawn as a step below the outer cut's floor.</dd>
+
+    <dt>OAL</dt>
+    <dd>Overall length: the shaft's length end to end, typed in the <span class="ui">Overall Length</span> field. Every drawing is laid out against it. A thread can be left out of it with <span class="ui">Include thread in OAL</span>.</dd>
+
+    <dt>Ø callout</dt>
+    <dd>A diameter value printed below the shaft with a leader to the surface it describes. Body callouts are off until switched on per body; liner callouts are on by default.</dd>
+
+    <dt>Pilot runout</dt>
+    <dd>The runout of the coupling's pilot bore, recorded with <span class="ui">Pilot runout…</span> beside <span class="ui">Coupling face</span> and drawn inside the bore on the end view.</dd>
+
+    <dt>Pit / dye failure</dt>
+    <dd>An X marker on the Wear document for a pit or a spot that failed dye-penetrant inspection, placed <span class="ui">Small</span> or <span class="ui">Large</span> on any liner, taper or body. The overall result is recorded under <span class="ui">Dye pen inspection:</span> as <span class="ui">Pass</span> or <span class="ui">Fail</span>.</dd>
+
+    <dt>Runout station</dt>
+    <dd>One dial-indicator position on a component. Each station has a bubble on the sheet. Stations belong to components, not to drawn runs, so a body divided by liners keeps one set of stations running straight through AFT to FWD.</dd>
+
+    <dt>S.E.T.</dt>
+    <dd>Small End of Taper: the smaller-diameter end of a taper. Dimensions, undercuts and worn sections can be measured from the AFT and FWD S.E.T.</dd>
+
+    <dt>S-break</dt>
+    <dd>A pair of S-shaped break lines across a body run, the drafting symbol for “length removed here”. It marks a body drawn shorter than true; its dimension still prints the true length.</dd>
+
+    <dt>Saved with this job</dt>
+    <dd>The caption on a control whose value belongs to one document, such as <span class="ui">Shaft height</span> or trace depth. It reopens exactly as left and never affects another document. Compare “App-wide setting”.</dd>
+
+    <dt>Seal area</dt>
+    <dd>The zone at a body face where the shaft is cut for fiberglass seats, drawn as three fine dashed lines measured in from the face. Switched on per face under <span class="ui">Seal areas</span>, separately from the face finish.</dd>
+
+    <dt>Shaft height</dt>
+    <dd>The per-job slider setting how tall the shaft draws on paper, between 1/2″ and 1 1/2″. It changes only the drawing size, never a value. <span class="ui">Standard (…)</span> returns to the default size.</dd>
+
+    <dt>Spooned keyway</dt>
+    <dd>An open keyway whose closed end runs out into an enlarged, spoon-shaped bowl, drawn around the mill end. Drawing-only: it changes no keyway dimension, and the footer adds “(spooned)” and a note that the length runs to the base of the spoon.</dd>
+
+    <dt>Taper rate</dt>
+    <dd>How fast a taper's diameter changes along its length, written as a ratio such as 1:12 (one unit of diameter per twelve of length). In <span class="ui">Auto</span> rate mode the app works it out from the L.E.T., S.E.T. and length; in <span class="ui">Manual</span> mode you type it.</dd>
+
+    <dt>Template</dt>
+    <dd>A saved shaft shape without job details or measurements, made with <span class="ui">Save as template…</span> and started from with <span class="ui">Start from Template</span>. Useful for shafts a shop makes again and again.</dd>
+
+    <dt>Template mode</dt>
+    <dd>A printing option, <span class="ui">Template (shaft only)</span> in <span class="path">Settings → PDF Export Options</span>, that prints the shaft outline with no dimensions at all, for marking up by hand. Not the same as a saved template.</dd>
+
+    <dt>Thread relief</dt>
+    <dd>A groove of reduced Ø at one end of a thread, switched on with <span class="ui">Thread relief</span> and set by <span class="ui">Relief length</span>, <span class="ui">Relief Ø</span> and <span class="ui">Relief at:</span> AFT or FWD. It lies within the thread's length, so adding one moves nothing.</dd>
+
+    <dt>TIR</dt>
+    <dd>Total indicator reading: the full sweep of the dial indicator at one station as the shaft turns, high reading minus low. Typed into the station's bubble.</dd>
+
+    <dt>TPI</dt>
+    <dd>Threads per inch, the pitch of an imperial thread, entered in the thread's <span class="ui">Imperial (TPI)</span> mode with its major Ø.</dd>
+
+    <dt>Trace depth exaggeration</dt>
+    <dd>How much deeper than true the worn-profile trace draws, set per job between 5% and 25% with <span class="ui">Trace depth exaggeration</span>. The printed values stay the measured numbers.</dd>
+
+    <dt>Undercut</dt>
+    <dd>A section machined below the surrounding surface, recorded on the <span class="ui">Undercut Drawing</span> tab with its distance from an S.E.T. or a liner edge, its length and its measured Ø. Its depth is drawn exaggerated so it can be seen.</dd>
+
+    <dt>Wear spot</dt>
+    <dd>A marked stretch of worn surface on a liner (a wear band), recorded on the Wear Document, added under <span class="ui">Wear spots</span> with <span class="ui">Add spot</span>. Shown as a grey band.</dd>
+
+    <dt>Worn section</dt>
+    <dd>A designated measured area added on the Consolidated Output tab under <span class="ui">Worn sections</span>. Its boundary lines are drawn on the shaft and its Ø values print inside the profile, turned on their side.</dd>
+
+    <dt>Worn-profile trace</dt>
+    <dd>The liner surface line drawn dipping through the measured Ø readings inside a wear area, so the shape of the wear shows on the sheet.</dd>
+  </dl>
+</section>
