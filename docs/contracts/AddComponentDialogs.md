@@ -285,8 +285,9 @@ Add dialog — when all three hold:
    pre-set box on every add; and
 3. it is reached for **after looking at a printed sheet**, not while adding a component.
 
-Exactly two controls qualify today (the per-component "Prints in" unit chip above is the
-third carve-out, recorded in `CLAUDE.md`):
+Six controls qualify today — the two below plus "Shade on drawing", "Show name on drawing",
+"Compress on drawing" and the per-component "Prints in" unit chip; `CLAUDE.md` holds the full
+list and the reasoning for each:
 
 | Control | Cards | Why card-only |
 |---|---|---|
