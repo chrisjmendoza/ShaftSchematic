@@ -61,23 +61,23 @@ class OutputDocTest {
     @Test
     fun `all-blank customer vessel job falls back to each doc's own base name`() {
         assertEquals(
-            "ConsolidatedSheet_consolidated.pdf",
+            "Shaft_consolidated.pdf",
             buildOutputFilename("", "", "", noSide, OutputDoc.CONSOLIDATED),
         )
         assertEquals(
-            "RunoutSheet_runout.pdf",
+            "Shaft_runout.pdf",
             buildOutputFilename("", "", "", noSide, OutputDoc.RUNOUT),
         )
         assertEquals(
-            "Schematic_schematic.pdf",
+            "Shaft_schematic.pdf",
             buildOutputFilename("", "", "", noSide, OutputDoc.SCHEMATIC),
         )
         assertEquals(
-            "WearDocument_wear.pdf",
+            "Shaft_wear.pdf",
             buildOutputFilename("", "", "", noSide, OutputDoc.WEAR),
         )
         assertEquals(
-            "Undercuts_undercuts.pdf",
+            "Shaft_undercuts.pdf",
             buildOutputFilename("", "", "", noSide, OutputDoc.UNDERCUT),
         )
     }
@@ -101,7 +101,7 @@ class OutputDocTest {
             buildOutputFilename("A", "B", "C", noSide, OutputDoc.CONSOLIDATED, blankDraft = true),
         )
         assertEquals(
-            "RunoutSheet_runout_BlankDraft.pdf",
+            "Shaft_runout_BlankDraft.pdf",
             buildOutputFilename("", "", "", noSide, OutputDoc.RUNOUT, blankDraft = true),
         )
     }
@@ -148,7 +148,7 @@ class OutputDocTest {
         // Matches the schematic's rule: with no job information, the fallback base wins and
         // the side is dropped rather than standing in as the whole name.
         assertEquals(
-            "WearDocument_wear.pdf",
+            "Shaft_wear.pdf",
             buildOutputFilename("", "", "", ShaftPosition.PORT, OutputDoc.WEAR),
         )
     }

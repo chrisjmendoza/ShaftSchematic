@@ -715,7 +715,7 @@ Rules (shared helpers in `pdf/BlankFormText.kt`):
   `buildOutputFilename` (`ui/screen/OutputDoc.kt`) with its historical suffix — `_schematic`,
   `_runout`, `_wear`, `_undercuts`, `_consolidated` — the Schematic tab's own export included,
   so that export and "Export all" name the schematic identically; with no job information the
-  document's fallback base (`Schematic`, `RunoutSheet`, …) stands in. The Final drawing keeps
+  one fallback base `Shaft` stands in (`Shaft_runout.pdf` — the suffix already names the sheet). The Final drawing keeps
   its `_Final*` suffixes through the same join (`docs/contracts/FinalSchematic.md`). Pinned by
   `OutputDocTest` and `ExportFilenameTest`.
 - On the schematic PDF preview the toggle surfaces **twice from one state**: an

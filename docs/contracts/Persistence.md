@@ -183,10 +183,10 @@ Invariants
   `preferred_unit` and `unit_locked` (`encodeDefaults = true`).
 - Import (`ShaftViewModel.importJson()`):
   - Envelope: `preferred_unit` applied via `setUnit(unit, persist = false)`;
-    `unit_locked` decoded into `_unitLocked` session state, which only gates two
-    internal bookkeeping paths (whether the background "last used unit" Settings flow
-    may overwrite the selection, and whether a later `setUnit` persists as the new
-    default). It never blocks switching units in the UI — **functionally inert** for
+    `unit_locked` decoded into `_unitLocked` session state, which only gates one
+    internal bookkeeping path (whether the background Settings → Units default flow
+    may overwrite the selection; a Settings chip tap persists the default regardless of
+    the lock). It never blocks switching units in the UI — **functionally inert** for
     "can the user change units on this file".
   - Legacy bare spec: current Settings default unit is used; doc treated as unlocked.
 - New drawing (`ShaftViewModel.newDocument()`): `_unit` seeds from the Settings → Units

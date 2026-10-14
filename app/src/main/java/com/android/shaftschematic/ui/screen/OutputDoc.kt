@@ -18,15 +18,22 @@ enum class OutputDoc(
     val docName: String,
     /** Filename suffix — matches each document's historical export naming. */
     val filenameSuffix: String,
-    /** Fallback filename base when customer/vessel/job are all blank. */
-    val fallbackBase: String,
+    /**
+     * Fallback filename base when customer/vessel/job are all blank. One word for every
+     * document: the suffix already names the sheet, so a per-document base doubled it
+     * ("Schematic_schematic.pdf").
+     */
+    val fallbackBase: String = FALLBACK_FILENAME_BASE,
 ) {
-    CONSOLIDATED("Consolidated", "Consolidated Sheet", "consolidated", "ConsolidatedSheet"),
-    RUNOUT("Runout", "Runout Sheet", "runout", "RunoutSheet"),
-    SCHEMATIC("Schematic", "Schematic", "schematic", "Schematic"),
-    WEAR("Wear", "Wear Document", "wear", "WearDocument"),
-    UNDERCUT("Undercut", "Undercut Drawing", "undercuts", "Undercuts"),
+    CONSOLIDATED("Consolidated", "Consolidated Sheet", "consolidated"),
+    RUNOUT("Runout", "Runout Sheet", "runout"),
+    SCHEMATIC("Schematic", "Schematic", "schematic"),
+    WEAR("Wear", "Wear Document", "wear"),
+    UNDERCUT("Undercut", "Undercut Drawing", "undercuts"),
 }
+
+/** Base of every export filename when the job carries no customer, vessel or job number. */
+internal const val FALLBACK_FILENAME_BASE = "Shaft"
 
 /**
  * Which information the consolidated sheet carries (on-device request: "select which I

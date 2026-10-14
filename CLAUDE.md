@@ -496,7 +496,13 @@ measurement sheet before shipping). Every final sheet is MARKED (`ProjectInfo.dr
 the Side line, and a filename suffix — `_Final`, `_Final_Runout` with bubbles elected,
 `_Final_RunoutSheet` for the banner's blank classic sheet: THREE distinct documents, never
 collapsed onto one name); blank on every other caller, so existing output is
-byte-identical. `PdfPreviewScreen`/`PdfExportRoute` take the target from the NAV ROUTE ARGUMENT
+byte-identical. Every OTHER export (the original schematic included) names its file through the
+ONE builder `buildOutputFilename` (`ui/screen/OutputDoc.kt`): `DocumentNaming`'s sanitized
+"Job - Customer - Vessel - SIDE" base + `_<document suffix>` (`_schematic`, `_runout`, `_wear`,
+`_undercuts`, `_consolidated`, then `_BlankDraft`), so the same sheet gets the same name from
+its own tab and from Export all, and a `/`, `:` or `*` in a customer name never reaches the
+filename (two schemes had drifted apart and one of them did not sanitize — manual-figure
+report). `PdfPreviewScreen`/`PdfExportRoute` take the target from the NAV ROUTE ARGUMENT
 (`?target=final`), never from ViewModel state. See `docs/contracts/FinalSchematic.md`.
 
 ### Paper sheets are theme-independent
@@ -723,8 +729,11 @@ add-dialog parity) is gated by Settings → "Liner shoulders" (`SettingsStore.
 linerShouldersEnabledFlow`, default OFF — on-device request: don't inundate the UI), but a
 liner already carrying shoulder values keeps its controls and always draws them: a device pref
 may hide empty entry fields, never authored work. The edge radius comes from the standard list
-(`LINER_SHOULDER_STD_RADII_IN`, provisional) and prints ONLY as a footer line ("Liner shoulder
-R: …") — no leader, no rail — which is what licenses the drawn clamps (blend-width floor,
+(`LINER_SHOULDER_STD_RADII_IN`, provisional) and prints ONLY as a footer line — ONE line per
+liner: "Liner shoulder R: ¼"" when one end or both ends share a radius, "AFT ¼", FWD ⅜"" when
+they differ, prefixed with the liner's title when more than one liner carries shoulders (a
+two-ended liner printed the bare line twice with nothing telling them apart — manual-figure
+report) — no leader, no rail — which is what licenses the drawn clamps (blend-width floor,
 oversize clamped where DRAWN, values never rewritten). The runout/consolidated sheet draws
 shoulders too, through the ONE shared pass `pdf/LinerShoulderDraw.kt` (`linerShoulderSpecs` +
 fill/stroke decomposition — both composers map mm through their OWN `xAt`/`rPx`, so a shoulder

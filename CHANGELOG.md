@@ -8,6 +8,59 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-13
 
+### fix: the bug list the User Manual surfaced
+
+Writing the manual meant reading every screen and rendering every sheet against the code; this
+batch is what that turned up. Product calls it raised but did not settle are in `TODO.md` §1.
+
+- **New drawings follow Settings → Units** (ruling: a metric shop sets millimeters once and
+  every new drawing is metric). `newDocument()` seeds the unit from the last-collected default
+  (`ShaftViewModel._defaultUnit`) and locks it, so the document owns its unit from birth and a
+  later change of the setting never flips it; the "Dual-unit display" default seeds the same
+  way. A template keeps its own authored unit. A Settings chip tap now persists the default
+  whether or not the open document is locked. Help "Units" rewritten.
+- **TIR field keeps fractions** — Save parsed `toDoubleOrNull()` while the field accepted
+  fraction characters, so `1/64` saved nothing; now `parseRunoutValueInput` over
+  `parseFractionOrDecimal`, and Save is enabled only when the text parses.
+- **Taper rate: inches per foot is an explicit form, a bare fraction is ambiguous.** The labels
+  advertised "3/4" while `parseTaperRateText` read every slash as a ratio (3/4 → a 0.75 slope,
+  an absurd taper) and the footer prints 1:16 as `3/4"/ft`. `3/4"/ft` (also `″`, `in/ft`,
+  `/ft`, mixed numbers, decimals) now parses as value ÷ 12; a bare slash fraction is refused at
+  entry with "Write 3/4"/ft or a ratio like 1:16; a bare fraction is ambiguous" — the posture
+  the bare "1" already had. Labels read `Rate (1:12, 3/4"/ft, or decimal)`.
+- **Bounds warnings quote the OAL in the document's unit** ("Extends past shaft length (OAL
+  120")") instead of millimeters on every document.
+- **Card and Add-dialog labels match** for the same control: "Include thread in OAL" (was
+  "Count in OAL" in the dialog), "Measure From:" (was "Direction:"), "Diameter" on the body
+  cards (was a bare "Ø"); "Send feedback" in sentence case everywhere.
+- **One "Liner shoulder R:" footer line per liner** — `AFT ¼", FWD ⅜"` when the ends differ,
+  prefixed with the liner's title when more than one liner has shoulders (a two-ended liner
+  printed the bare line twice).
+- **Export filenames share one sanitized base.** `buildOutputFilename` now builds on
+  `DocumentNaming`'s "Job - Customer - Vessel - SIDE" base (every part sanitized) + the
+  document suffix, the Schematic tab's own export included, so a sheet gets the same name from
+  its tab and from Export all; the blank-job fallback is `Shaft_<suffix>.pdf`.
+- **A pin never promotes a touching neighbour** (`normalizeFeatures`): spans merge only within
+  a pin class, and a floored span a pin overlaps is carved around it. A liner butting a
+  "Compress on drawing"-unticked body had become a pin itself — a 16″ liner drew wider than a
+  20″ one and squeezed an 18″ taper to a quarter of its length.
+- **A coupler bolt row's window never compresses**, the body-keyway-window rule applied to
+  holes: `boltRowProtectedSpansMm` pins through the one builder `profileFeatureSpans`, joins
+  the S-break avoid ranges (three sources now: keyway windows, seal areas, bolt windows), and
+  both draw sites place holes through `boltHoleCentersX` so the drawn pitch is true inside a
+  compressed body (a 1″-on-3″ row had printed as an overlapping chain, and the break could land
+  on the row).
+- **"Show dimension rail" on the coupler slot card now prints** — one LOCAL span from the end
+  the row is measured from to the nearest hole center, on the schematic and the consolidated
+  sheet through `buildCouplerSlotSpans`; off (the default) is byte-identical.
+- Drawing-profile caption lists the full captured set; the stale `ShaftScreen.kt` header
+  comment (per-keystroke OAL, a header unit selector) rewritten.
+- Docs: CLAUDE.md rules for the pin classes, bolt windows, the slot rail, the footer line and
+  the filename builder; contracts (CouplerBoltSlot, AddComponentDialogs, TaperRate,
+  Persistence, ShaftViewModel, RunoutSheet, FinalSchematic), PDF_EXPORT, DATA_MODEL,
+  VALIDATION_RULES, GLOSSARY, the manual sources and Help; figures regenerated.
+  Tests: +54 (2718 green).
+
 ### docs(manual): printed User Manual + stale Help topics corrected
 
 - **User Manual** — `docs/manual/`: eight chapters for office and shop users (HTML fragments in

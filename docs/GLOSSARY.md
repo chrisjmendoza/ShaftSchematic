@@ -55,7 +55,9 @@ Smaller diameter.
 Larger diameter.
 
 ### Taper Rate
-Slope ratio (length per unit diameter change).
+Slope ratio (length per unit diameter change). Typed as a ratio (`1:16`), as inches per foot
+(`3/4"/ft` — the hand-sheet spelling, 1:16), or as a decimal; a bare fraction is ambiguous and
+is refused at entry.
 
 ### Threads
 External thread region defined by major diameter and pitch.
