@@ -56,7 +56,7 @@
   <p>Switching units never changes a dimension (see <a href="#intro-units">Millimeters and inches</a>). To print one component in the other unit (a metric thread on an inch shaft), see <a href="#components-prints-in">Prints in: in | mm</a>.</p>
 
   <h2 id="editor-oal">The overall length</h2>
-  <p>The <span class="ui">Overall Length</span> field holds the shaft's OAL, end to end. It is always the number you type; nothing in the app sets, grows or shrinks it for you.</p>
+  <p>The <span class="ui">Overall Length</span> field holds the shaft's OAL (overall length), end to end. It is always the number you type; nothing in the app sets, grows or shrinks it for you.</p>
   <h3>Entering and changing it</h3>
   <ol class="steps">
     <li>Tap the <span class="ui">Overall Length</span> field. A shaft with no length yet shows 0; the 0 clears when you tap in.</li>
@@ -88,8 +88,8 @@
     <tbody>
       <tr><td><span class="ui">Body</span></td><td>Start, Length and Diameter; optional face finish (Square or Blend) and seal areas at each end; an optional keyway behind the <span class="ui">Keyway</span> checkbox.</td></tr>
       <tr><td><span class="ui">Liner</span></td><td><span class="ui">Measure From:</span> AFT | FWD, start from that end, Length, Outer Ø; shoulders when they are switched on in Settings.</td></tr>
-      <tr><td><span class="ui">Taper</span></td><td><span class="ui">Measure From:</span> AFT | FWD, start from that end, Length, S.E.T. Ø, L.E.T. Ø, rate (Auto or Manual), and an optional keyway.</td></tr>
-      <tr><td><span class="ui">Thread</span></td><td>Start (or AFT | FWD end when the thread is not counted in the OAL), Imperial (TPI) or Metric (M-designation), diameter and pitch, Length, optional thread relief, and <span class="ui">Include thread in OAL</span>.</td></tr>
+      <tr><td><span class="ui">Taper</span></td><td><span class="ui">Measure From:</span> AFT | FWD, start from that end, Length, S.E.T. (small end of taper) Ø, L.E.T. (large end of taper) Ø, rate (Auto or Manual), and an optional keyway.</td></tr>
+      <tr><td><span class="ui">Thread</span></td><td>Start (or AFT | FWD end when the thread is not counted in the OAL), Imperial (TPI — threads per inch) or Metric (M-designation), diameter and pitch, Length, optional thread relief, and <span class="ui">Include thread in OAL</span>.</td></tr>
       <tr><td><span class="ui">Coupler Bolt Slot / Hole</span></td><td>Hole style (Seam or Cross-drilled), Measure From, position, hole Ø, count, spacing, and through or blind.</td></tr>
     </tbody>
   </table>
@@ -241,7 +241,7 @@
   <h3>Finding and using a template</h3>
   <p>Tap <span class="ui">Start from Template</span> on the home screen to open <span class="ui">Templates</span>. Templates are grouped twice:</p>
   <ul>
-    <li>by <strong>liner size</strong>, the largest liner OD to the nearest inch: <span class="ui">No liners</span> first, then 4″ through 12″ (“6″ liners”), then <span class="ui">Other sizes</span>;</li>
+    <li>by <strong>liner size</strong>, the largest liner OD (outside diameter) to the nearest inch: <span class="ui">No liners</span> first, then 4″ through 12″ (“6″ liners”), then <span class="ui">Other sizes</span>;</li>
     <li>within each size, by <strong>liner count</strong>: <span class="ui">1 liner</span>, <span class="ui">2 liners</span>, <span class="ui">3 liners</span>, <span class="ui">4+ liners</span>.</li>
   </ul>
   <p>Tap a heading to open it; any number of headings can be open at once, so you can compare templates from different groups. The number at the right of a heading is how many templates it holds. Each template card shows a drawing of the shaft, its name, its age, and a summary line such as “94 1/2″ OAL · Ø6″ max · 3 liners (A·M·F)”. The letters say where each liner sits, AFT to FWD: in the aft (A), middle (M) or forward (F) third of the shaft. Two templates with the same liner count can be told apart by this line alone.</p>
@@ -256,7 +256,7 @@
   <aside class="note"><p>The app comes with a few starter templates so the list is never empty on a new device. <span class="path">Settings → Data → Restore sample shafts</span> separately puts the bundled example jobs back in your list of saved shafts.</p></aside>
 
   <h2 id="editor-mate">Duplicate for mate</h2>
-  <p>A twin-screw vessel has a PORT and a STBD shaft that are nearly identical. Draw one, then make its mate from it.</p>
+  <p>A twin-screw vessel has a PORT and a STBD (starboard) shaft that are nearly identical. Draw one, then make its mate from it.</p>
   <ol class="steps">
     <li>With the drawn shaft open, tap <span class="ui">More options</span> → <span class="ui">Duplicate for mate…</span>. (The same item is in each saved shaft's menu on the Open screen.)</li>
     <li>In <span class="ui">Duplicate for mate</span>, check <span class="ui">Shaft Position</span>. It is already flipped: PORT becomes STBD and STBD becomes PORT. Center and Other are left as they are.</li>

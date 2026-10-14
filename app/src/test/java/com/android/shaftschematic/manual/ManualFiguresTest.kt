@@ -108,11 +108,6 @@ class ManualFiguresTest {
                 majorDiaMm = inch(3.5f), tpi = 4f, pitchMm = inch / 4f,
                 excludeFromOAL = true, isAftEnd = true,
             ),
-            Threads(
-                id = "THF", startFromAftMm = inch(168f), lengthMm = inch(4f),
-                majorDiaMm = inch(3.5f), tpi = 4f, pitchMm = inch / 4f,
-                excludeFromOAL = true, isAftEnd = false,
-            ),
         ),
         tapers = listOf(
             Taper(
@@ -322,10 +317,10 @@ class ManualFiguresTest {
     fun `render manual figures`() {
         val main = schematic(mainSpec, mainProject)
         save(main, "schematic.png")
-        crop(main, "schematic-rails.png", 28f, 205f, 764f, 370f)
+        crop(main, "schematic-rails.png", 14f, 205f, 764f, 370f)
         crop(main, "schematic-footer.png", 28f, 435f, 764f, 570f)
         // Cover art: drawing + rails + name labels, no footer; ink bounds plus ~40 px at 3×.
-        crop(main, "cover-shaft.png", 22f, 202.667f, 769.667f, 427f)
+        crop(main, "cover-shaft.png", 12f, 202.667f, 769.667f, 427f)
 
         save(schematic(mainSpec, mainProject, PdfExportOptions(blankValues = true)), "schematic-blank.png")
         save(schematic(finalSpec, mainProject.copy(drawingLabel = "Final")), "schematic-final.png")

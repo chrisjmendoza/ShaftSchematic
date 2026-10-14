@@ -8,6 +8,17 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-13
 
+### docs(manual): sample shaft threaded at the AFT end only; acronyms expanded at first use
+
+- The manual's tailshaft fixture (`ManualFiguresTest`) loses its FWD thread — threads on both
+  ends read as unfamiliar with the shop's usual shaft (on-device direction: FWD threads exist
+  but are the less common case); every figure cut from that shaft is re-rendered, and the
+  `cover-shaft` / `schematic-rails` crops widened so the AFT thread is not flush with the edge.
+- Every acronym is spelled out at its first use in each chapter — `TIR (total indicated
+  runout)`, OAL, S.E.T./L.E.T., OD, KW, TPI, CW/CCW, ANSI, DIN, STBD — and each has a glossary
+  entry. The in-app Help glossary title becomes "TIR (total indicated runout)" (was "total
+  indicator reading"); `HelpGlossaryTest`/`HelpSearchTest` pin the new title and key.
+
 ### fix: the bug list the User Manual surfaced
 
 Writing the manual meant reading every screen and rendering every sheet against the code; this

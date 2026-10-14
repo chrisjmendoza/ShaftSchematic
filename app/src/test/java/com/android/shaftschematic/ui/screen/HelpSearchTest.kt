@@ -45,7 +45,7 @@ class HelpSearchTest {
     @Test
     fun `punctuation collapses and never leads or trails`() {
         assertEquals("aft-fwd", helpTopicKey("AFT / FWD"))
-        assertEquals("tir-total-indicator-reading", helpTopicKey("TIR (total indicator reading)"))
+        assertEquals("tir-total-indicated-runout", helpTopicKey("TIR (total indicated runout)"))
         assertEquals("why-are-my-files", helpTopicKey("  Why are my files?  "))
     }
 
