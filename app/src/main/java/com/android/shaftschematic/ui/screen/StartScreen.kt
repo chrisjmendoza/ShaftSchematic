@@ -240,7 +240,7 @@ fun StartScreen(
             onClick = onHelp,
             modifier = Modifier.fillMaxWidth().testTag("start_help_button"),
         ) { Text("Help & FAQ") }
-        OutlinedButton(onClick = onSendFeedback, modifier = Modifier.fillMaxWidth()) { Text("Send Feedback") }
+        OutlinedButton(onClick = onSendFeedback, modifier = Modifier.fillMaxWidth()) { Text("Send feedback") }
     }
 }
 

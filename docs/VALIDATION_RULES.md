@@ -199,8 +199,8 @@ Two message wrappers read it, and nothing else may re-derive the comparison:
 
 | Wrapper | Surface | Text |
 |---------|---------|------|
-| `outsideShaftSpanMessage` | Add dialogs, via `collectAddWarnings` (§5.3) | "Falls outside shaft span (OAL *n* mm)" |
-| `pastShaftEndMessage` | Carousel cards, via the four per-component predicates | "Extends past shaft length (OAL *n* mm)" |
+| `outsideShaftSpanMessage` | Add dialogs, via `collectAddWarnings` (§5.3) | "Falls outside shaft span (OAL *n*")" / "(OAL *n* mm)" — the OAL in the document's display unit through `formatLenWithUnit` |
+| `pastShaftEndMessage` | Carousel cards, via the four per-component predicates | "Extends past shaft length (OAL *n*")" / "(OAL *n* mm)" — same formatting |
 
 Both are **advisory**: they ride the amber warning chip / advisory banner
 (`tertiaryContainer`), never the error chip, because oversize is a legal state
@@ -270,8 +270,9 @@ Superseded by the Auto/Manual rate-mode system — authoritative contract in the
   derived diameter must be ≥ 0); a manual rate disagreeing with complete geometry
   shows a **warning**, it is not silently ignored.
 - Missing both SET and LET with no usable rate → **blocking**.
-- Bare `1` is blocked as ambiguous; common-rate snapping uses a 3% tolerance
-  (confirmed product decision).
+- Bare `1` and any bare slash fraction (`3/4` — slope or inches per foot?) are blocked as
+  ambiguous; the explicit forms are a ratio (`1:16`) or inches per foot (`3/4"/ft`).
+  Common-rate snapping uses a 3% tolerance (confirmed product decision).
 - Slope validation/derivation (`autoTaperRate`, `manualTaperRateWarning`, and
   `manualTaperRateBlockingMessage`'s derive-prompt) is inert at `lengthMm <= 0` — no
   rate is computed or demanded for a zero/negative-length taper. Pure-syntax checks

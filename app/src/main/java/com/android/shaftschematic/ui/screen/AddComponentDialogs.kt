@@ -621,7 +621,7 @@ fun AddLinerDialog(
                     fwd = end(shFwdOn, shFwdLen, shFwdOd, shFwdRadiusMm),
                 )
                 val action = { onSubmit(physStartMm, lengthMm, odMm, ref, shoulders) }
-                val warnings = collectAddWarnings(spec, physStartMm, lengthMm)
+                val warnings = collectAddWarnings(spec, physStartMm, lengthMm, unit)
                 if (warnings.isEmpty()) action() else { warningLines = warnings; warningAction = action }
             }) { Text("Add") }
         },
@@ -998,7 +998,7 @@ fun AddThreadDialog(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
                 ) {
-                    Text("Count in OAL")
+                    Text("Include thread in OAL")
                     androidx.compose.material3.Switch(
                         checked = countInOal,
                         onCheckedChange = { countInOal = it }
@@ -1024,7 +1024,7 @@ fun AddThreadDialog(
                 }
                 // Excluded threads don't live on the shaft span, so skip collision for them.
                 val warnings = if (excludeFromOAL) emptyList()
-                               else collectAddWarnings(spec, startMm, lengthMm)
+                               else collectAddWarnings(spec, startMm, lengthMm, unit)
                 if (warnings.isEmpty()) action() else { warningLines = warnings; warningAction = action }
             }) { Text("Add") }
         },
@@ -1033,7 +1033,8 @@ fun AddThreadDialog(
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
- * Taper — Start, Length, S.E.T., L.E.T., Rate (ratio like "1:12", or "3/4", or "1")
+ * Taper — Start, Length, S.E.T., L.E.T., Rate (a ratio like "1:12", inches per foot like
+ * "3/4\"/ft", or a decimal; a bare fraction is ambiguous and blocked — see `parseTaperRateText`)
  * Caller computes the missing diameter from the rate to keep logic centralized.
  * ──────────────────────────────────────────────────────────────────────────── */
 
@@ -1193,13 +1194,14 @@ fun AddTaperDialog(
         },
         text = {
             Column(Modifier.padding(top = 4.dp).verticalScroll(scroll)) {
-                // Direction selector
+                // Measure-from selector — the card's wording, so the same control reads the
+                // same on both surfaces.
                 Row(
                     Modifier.fillMaxWidth().padding(bottom = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Direction:", style = MaterialTheme.typography.bodyMedium,
+                    Text("Measure From:", style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     DirectionChip("AFT", selected = !isFwd) { isFwd = false }
                     DirectionChip("FWD", selected =  isFwd) { isFwd = true  }
@@ -1230,7 +1232,7 @@ fun AddTaperDialog(
                     DirectionChip("Manual", selected = !autoRate) { autoRate = false }
                 }
                 CommitNumField(
-                    "Taper Rate (1:12, 3/4, decimal)",
+                    "Rate (1:12, 3/4\"/ft, or decimal)",
                     rateDisplayText,
                     keyboardType = KeyboardType.Ascii,
                     enabled = !autoRate,
@@ -1379,7 +1381,7 @@ fun AddTaperDialog(
                                  if (showClockingToggle) cw90 else spec.keyways90Cw,
                                  if (kwDefined) kwUnitOverride else null)
                     }
-                    val warnings = collectAddWarnings(spec, physStartMm, lengthMm)
+                    val warnings = collectAddWarnings(spec, physStartMm, lengthMm, unit)
                     if (warnings.isEmpty()) action() else { warningLines = warnings; warningAction = action }
                 }
             ) { Text("Add") }

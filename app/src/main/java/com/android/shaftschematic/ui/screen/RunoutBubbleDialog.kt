@@ -47,9 +47,11 @@ import com.android.shaftschematic.geom.clockTickLabel
 import com.android.shaftschematic.geom.clockTickRimOffset
 import com.android.shaftschematic.geom.isOnRingBand
 import com.android.shaftschematic.geom.snapToClockTick
+import androidx.compose.ui.platform.testTag
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.filterNumericInput
 import com.android.shaftschematic.util.formatRunoutValue
+import com.android.shaftschematic.util.parseRunoutValueInput
 import kotlin.math.min
 
 /**
@@ -60,9 +62,13 @@ import kotlin.math.min
  *   which snaps to 30-minute clock ticks ([snapToClockTick]). Touches off the ring (the hollow
  *   centre where the value field lives, or far outside the rim) do nothing.
  * - a **value field** in the centre for the TIR reading, entered/shown in the active [unit]
- *   (converted to canonical mm only on Save — the model never sees display units).
+ *   (converted to canonical mm only on Save — the model never sees display units). It takes
+ *   the same grammar as every other numeric field — a decimal, a shop fraction (`1/64`) or a
+ *   mixed number — through [parseRunoutValueInput].
  * - three buttons: **Clear** (wipe the working marker + value in place), **Cancel** (discard,
- *   close), **Save** (persist + close). Saving with neither value nor marker removes the reading.
+ *   close), **Save** (persist + close). Saving with neither value nor marker removes the reading;
+ *   Save is disabled while the field holds text the parser cannot read, so nothing typed is
+ *   ever silently dropped.
  *
  * Both value and marker are optional and independent. The working state seeds from the passed
  * initial values, so reopening a saved bubble shows its saved data until the user edits it.
@@ -172,7 +178,7 @@ fun RunoutBubbleDialog(
                         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
                             keyboardType = KeyboardType.Decimal,
                         ),
-                        modifier = Modifier.width(132.dp),
+                        modifier = Modifier.width(132.dp).testTag("runout_bubble_value"),
                     )
                 }
 
@@ -195,11 +201,15 @@ fun RunoutBubbleDialog(
                     Row {
                         TextButton(onClick = onDismiss) { Text("Cancel") }
                         Spacer(Modifier.width(8.dp))
-                        Button(onClick = {
-                            val mm = valueText.trim().toDoubleOrNull()
-                                ?.let { unit.toMillimeters(it).toFloat() }
-                            onSave(mm, markerTick)
-                        }) { Text("Save") }
+                        // Blank saves "no value"; a fraction or decimal saves through the same
+                        // parser every numeric field uses; unreadable text cannot be saved at
+                        // all — the filter admits `1/64`, so Save must read it, never drop it.
+                        val parsedMm = parseRunoutValueInput(valueText, unit)
+                        Button(
+                            onClick = { onSave(parsedMm, markerTick) },
+                            enabled = valueText.isBlank() || parsedMm != null,
+                            modifier = Modifier.testTag("runout_bubble_save"),
+                        ) { Text("Save") }
                     }
                 }
             }

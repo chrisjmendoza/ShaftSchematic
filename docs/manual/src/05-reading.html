@@ -84,6 +84,7 @@
     <li><strong>The rails below carry the liners and the end tapers.</strong> Each end taper gets its length. Each liner gets two dimensions: a datum dimension locating it, and its length (see the next section).</li>
     <li><strong>Shorter dimensions sit lower.</strong> A dimension that sits inside a longer one takes the rail below it. On the tailshaft, the 14″ AFT taper sits under the 22″ datum that contains it, and the 22″ sits under the OAL.</li>
     <li><strong>Bodies and bare shaft carry no rail dimension.</strong> Their length is whatever the liners and tapers leave between them.</li>
+    <li><strong>A coupler bolt row can add one.</strong> When the row's card has <span class="ui">Show dimension rail</span> on, a rail runs from the end of the shaft the row is measured from to the center of its nearest hole, carrying the entered distance. Off, the usual case, the row prints no dimension.</li>
   </ul>
   <p>How a dimension is drawn:</p>
   <ul>
@@ -124,7 +125,7 @@
     <thead><tr><th>Line</th><th>What it means</th></tr></thead>
     <tbody>
       <tr><td>“AFT Taper” / “FWD Taper”</td><td>Column heading. A shaft end without a taper has no heading.</td></tr>
-      <tr><td>“Rate:”</td><td>The taper. A 1:12 taper prints as “1″/ft” and a 1:16 taper as “3/4″/ft”; any other taper prints as a ratio.</td></tr>
+      <tr><td>“Rate:”</td><td>The taper. On inch sheets a 1:12 taper prints as “1″/ft” and a 1:16 taper as “3/4″/ft”; any other rate prints as it was typed (a taper left in Auto prints its computed ratio).</td></tr>
       <tr><td>“L.E.T.:”</td><td>Diameter at the large end of the taper.</td></tr>
       <tr><td>“S.E.T.:”</td><td>Diameter at the small end of the taper.</td></tr>
       <tr><td>“Length:”</td><td>Taper length.</td></tr>
@@ -144,7 +145,7 @@
       <tr><td>“Body KW:”</td><td>A keyway in a body, width × depth × length.</td></tr>
       <tr><td>“Keyways 180° apart”, “Keyways 90° apart (CW from aft)”, “Keyways 90° apart (CCW from aft)”</td><td>Two or more keyways with a set clocking (middle column).</td></tr>
       <tr><td>“Thread relief:”</td><td>A relieved thread: relief length × relief Ø, directly under its Thread line.</td></tr>
-      <tr><td>“Liner shoulder R:”</td><td>One line per shouldered liner end with a corner radius.</td></tr>
+      <tr><td>“Liner shoulder R:”</td><td>One line per shouldered liner: the radius once when both ends match, “AFT r, FWD r” when they differ; the liner's name leads the line when more than one liner is shouldered.</td></tr>
       <tr><td>“Bolt hole:”, “Hole center from FWD:” / “from AFT:”, “90° from keyway” / “In line with keyway”</td><td>A cross-drilled coupling bolt hole (see <a href="#reading-bolts">Coupler bolt holes</a>).</td></tr>
     </tbody>
   </table>
@@ -160,7 +161,7 @@
     <li>A run prints the break once it is drawn at less than a set fraction of its true length — half, by default. The office sets the fraction under <span class="path">Settings → Drawing → Body S-break</span>, down to <span class="ui">Never</span>. A very long run breaks at every setting, because nobody would mistake it for true scale.</li>
     <li>A run that is shortened only a little prints a plain outline, no break.</li>
     <li>A body the office has set not to compress prints at true length and never breaks.</li>
-    <li>The break never lands on a keyway or a seal area: the gap is placed clear of them.</li>
+    <li>The break never lands on a keyway, a seal area or a row of coupler bolt holes: the gap is placed clear of them.</li>
   </ul>
 
   <h2 id="reading-details">Drawing details</h2>
@@ -210,7 +211,7 @@
     <img src="figures/feature-liner-shoulder.png" alt="Close-up of a liner whose ends step down to a smaller diameter through a small rounded corner.">
     <figcaption>A liner with a shoulder at each end.</figcaption>
   </figure>
-  <p>A shouldered liner steps down to a smaller diameter for a short length at its end, with a rounded corner at the step. The step is drawn to the sheet's scale; the corner radius is the one value the sheet prints, as a footer line per shouldered end — “Liner shoulder R: 1/4″”. Shoulders appear only on jobs where the office uses them; they are switched on in Settings.</p>
+  <p>A shouldered liner steps down to a smaller diameter for a short length at its end, with a rounded corner at the step. The step is drawn to the sheet's scale; the corner radius is the one value the sheet prints, as one footer line per liner — “Liner shoulder R: 1/4″”, or “Liner shoulder R: AFT 1/4″, FWD 3/8″” when the two ends differ. Shoulders appear only on jobs where the office uses them; they are switched on in Settings.</p>
 
   <h3>Blends and seal areas</h3>
   <figure class="detail">
@@ -227,12 +228,12 @@
 
   <h3 id="reading-bolts">Coupler bolt holes</h3>
   <figure class="detail">
-    <img src="figures/feature-bolt-holes.png" alt="Close-up of the coupling end: two dashed vertical lines across the shaft, and a row of three circles straddling the top outline and three straddling the bottom outline.">
-    <figcaption>A cross-drilled hole drawn hidden (the two dashed lines) and a seam bolt row (the circles on the outline).</figcaption>
+    <img src="figures/feature-bolt-holes.png" alt="Close-up of the coupling end: two dashed vertical lines across the shaft, then a row of three circles straddling the top outline and three straddling the bottom outline.">
+    <figcaption>A cross-drilled hole drawn hidden (the two dashed lines) and, FWD of it, a seam bolt row (the circles on the outline, one per bolt).</figcaption>
   </figure>
   <dl class="terms">
     <dt>Seam holes (muff coupling)</dt>
-    <dd>A row of circles straddling the top and bottom outline of the shaft, one per bolt at its spacing. These are reference marks: they print no footer line and no dimension.</dd>
+    <dd>A row of circles straddling the top and bottom outline of the shaft, one per bolt at its spacing. These are reference marks: they print no footer line, and a dimension only when the row's card has <span class="ui">Show dimension rail</span> on — then one rail runs from the end of the shaft the row was measured from to the nearest hole center, carrying the entered distance. The row itself is never shortened on paper: its holes keep their true spacing even inside a body that is, and a body's S-break is placed clear of them.</dd>
     <dt>Cross-drilled hole</dt>
     <dd>A bolt hole drilled through the coupling end. When it is clocked 90° from the keyway — the usual case, since a bolt in line with the keyway would pass through the key — it is out of sight and draws as two dashed lines one hole width apart. When it is in line with the keyway it draws as a circle on the centerline. The footer gives “Bolt hole: Ø 0.875″” (with × count for more than one), “Hole center from FWD: 16″” (measured from that end of the shaft to the hole center, with the spacing for more than one), and “90° from keyway” or “In line with keyway” when the shaft has a keyway.</dd>
   </dl>

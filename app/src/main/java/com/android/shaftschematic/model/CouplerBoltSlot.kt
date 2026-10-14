@@ -65,7 +65,9 @@ enum class BoltHoleClocking { IN_LINE, DEG_90 }
  *   existed is a seam cutout) or [BoltHoleStyle.CROSS]. Draw-only; see the enum.
  * @property clocking Angular position of a CROSS hole relative to the keyway (default 90°);
  *   ignored for SEAM. Draw + footer text only; see [BoltHoleClocking].
- * @property showDimensionRail Opt-in per-card dimension rail (deferred; off by default).
+ * @property showDimensionRail Opt-in per-card dimension rail (off by default): ONE span on
+ *   the schematic and consolidated sheets, from the [authoredReference] shaft end to the
+ *   nearest hole center, labelled [authoredCenterMm]. Draw-only.
  * @property label Optional user-defined label (not used for geometry).
  */
 @Serializable

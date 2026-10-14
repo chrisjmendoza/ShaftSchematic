@@ -282,12 +282,12 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
                                 attachments = emptyList()
                             )
                             try {
-                                ctx.startActivity(Intent.createChooser(intent, "Send Feedback"))
+                                ctx.startActivity(Intent.createChooser(intent, "Send feedback"))
                             } catch (_: ActivityNotFoundException) {
                                 scope.launch { snackbarHostState.showSnackbar("No email app found.") }
                             }
                         }
-                    ) { Text("Send Feedback") }
+                    ) { Text("Send feedback") }
                 }
             )
         },
@@ -478,7 +478,7 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
                                         }
                                     )
                                     DropdownMenuItem(
-                                        text = { Text("Send Feedback") },
+                                        text = { Text("Send feedback") },
                                         onClick = {
                                             menuOpen = false
                                             scope.launch {
@@ -506,7 +506,7 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
                                                     attachments = attachments
                                                 )
                                                 try {
-                                                    ctx.startActivity(Intent.createChooser(intent, "Send Feedback"))
+                                                    ctx.startActivity(Intent.createChooser(intent, "Send feedback"))
                                                 } catch (_: ActivityNotFoundException) {
                                                     snackbarHostState.showSnackbar("No email app found.")
                                                 }

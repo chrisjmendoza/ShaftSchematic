@@ -286,7 +286,8 @@ internal val helpSections: List<HelpSection> = listOf(
             ),
             HelpTopic(
                 "Millimeters and inches",
-                "Settings → Units picks how values are displayed and typed. Internally every " +
+                "Settings → Units picks the unit every new drawing starts in, and how the open " +
+                    "drawing's values are displayed and typed. Internally every " +
                     "value is stored in millimeters, so switching units never changes your " +
                     "numbers — it only changes how they are shown. Inch fields accept " +
                     "fractions like 3 1/2."
@@ -460,8 +461,11 @@ internal val helpSections: List<HelpSection> = listOf(
             ),
             HelpTopic(
                 "Tapers, keyways, and spooned ends",
-                "Tapers measure from the AFT or FWD end (direction chips on the card and in " +
-                    "the Add dialog). Tapers and explicit bodies can carry a keyway (width × " +
+                "Tapers measure from the AFT or FWD end (\"Measure From\" chips on the card and " +
+                    "in the Add dialog). The rate field takes a ratio (1:12), inches per foot " +
+                    "(3/4\"/ft — the shop's 1:16), or a decimal; a bare fraction like 3/4 is " +
+                    "refused because it could mean either, and the message names the two " +
+                    "forms to write instead. Tapers and explicit bodies can carry a keyway (width × " +
                     "depth, length): tick \"Keyway\" on the card or in the Add dialog to show " +
                     "its fields; unticking a card that has keyway values asks before clearing " +
                     "them. A keyway runs out the end of its host unless you switch " +
@@ -478,7 +482,7 @@ internal val helpSections: List<HelpSection> = listOf(
                 "Liners and threads",
                 "Liners sleeve over the shaft and measure from the AFT or FWD end. Threads " +
                     "can be left out of the overall length (switch off \"Include thread in OAL\" " +
-                    "on the card, or \"Count in OAL\" in the Add dialog) — " +
+                    "on the card or in the Add dialog) — " +
                     "useful when the OAL is quoted to the shoulder; an excluded thread just " +
                     "picks which end it hangs off."
             ),
@@ -501,6 +505,11 @@ internal val helpSections: List<HelpSection> = listOf(
                     "the shaft, since the keyway faces you) or \"In line\" (drawn as one " +
                     "circle on the centerline). The footer prints the Ø, the center distance " +
                     "and the clocking.\n\n" +
+                    "The card's \"Show dimension rail\" switch prints one dimension from the end " +
+                    "of the shaft the row was measured from to the nearest hole center, on the " +
+                    "schematic and consolidated sheets. On paper a row is never shortened: its " +
+                    "holes keep their true spacing inside a compressed body, and the body's " +
+                    "S-break is placed clear of them.\n\n" +
                     "Slots are reference features: they are drawn, but they never change the " +
                     "overall length, never split a body, and never collide with anything else."
             ),
@@ -606,8 +615,12 @@ internal val helpSections: List<HelpSection> = listOf(
         listOf(
             HelpTopic(
                 "Units",
-                "\"Millimeters\" or \"Inches\" — default Millimeters. Picks how every value is " +
-                    "shown and typed throughout the app: fields, badges, drawings, and PDFs. " +
+                "\"Millimeters\" or \"Inches\" — default Millimeters. Every NEW drawing starts " +
+                    "in this unit: a metric shop sets Millimeters once and each new drawing " +
+                    "is metric. A drawing owns its unit from then on — a saved drawing keeps " +
+                    "the unit it was saved in and opens in it whatever this setting says. " +
+                    "While a drawing is open, the chips also switch how it is shown and " +
+                    "typed: fields, badges, drawings, and PDFs. " +
                     "Nothing in the file is converted — the model is always millimeters — so " +
                     "you can switch back and forth as often as you like with no drift. Inch " +
                     "fields also accept fractions like 3 1/2."

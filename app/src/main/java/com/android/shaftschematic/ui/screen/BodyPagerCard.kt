@@ -153,7 +153,7 @@ internal fun BodyPagerCard(
             }
             CommitNum("Start (${abbr(unit)})", disp(startMm, unit), enabled = false) { }
             CommitNum("Length (${abbr(unit)})", disp(lengthMm, unit), enabled = false) { }
-            CommitNum("Ø (${abbr(unit)})", disp(diaMm, unit)) { s ->
+            CommitNum("Diameter (${abbr(unit)})", disp(diaMm, unit)) { s ->
                 toMmOrNull(s, unit)?.let {
                     onSetAutoSectionDia(component.startMmPhysical, component.endMmPhysical, it)
                 }
@@ -287,7 +287,7 @@ internal fun BodyPagerCard(
         },
         debugText = if (showComponentDebugLabels) "id=${b.id} • startMm=${f1(b.startFromAftMm)} • endMm=${f1(b.startFromAftMm + b.lengthMm)}" else null,
         errorMessage = if (b.id in collidingComponentIds) "Overlaps another component" else null,
-        warningMessage = bodyWarningMessages(spec, b).joinToString("; ").ifEmpty { null },
+        warningMessage = bodyWarningMessages(spec, b, unit).joinToString("; ").ifEmpty { null },
         componentId = b.id, componentKind = ComponentKind.BODY,
         outerPaddingHorizontal = outerPaddingHorizontal,
         onRemove = {
@@ -346,7 +346,7 @@ internal fun BodyPagerCard(
         ) { s ->
             toMmOrNull(s, unit)?.let { onUpdateBody(idx, b.startFromAftMm, it, b.diaMm) }
         }
-        CommitNum("Ø (${abbr(unit)})", disp(b.diaMm, unit)) { s ->
+        CommitNum("Diameter (${abbr(unit)})", disp(b.diaMm, unit)) { s ->
             toMmOrNull(s, unit)?.let { onUpdateBody(idx, b.startFromAftMm, b.lengthMm, it) }
         }
         ShowDiaToggleRow(

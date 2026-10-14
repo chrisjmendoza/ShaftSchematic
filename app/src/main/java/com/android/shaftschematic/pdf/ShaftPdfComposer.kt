@@ -17,6 +17,8 @@ import com.android.shaftschematic.geom.SCHEMATIC_MIN_LINER_PT
 import com.android.shaftschematic.geom.SCHEMATIC_MIN_THREAD_PT
 import com.android.shaftschematic.geom.ProfileFeatureSpan
 import com.android.shaftschematic.geom.bodyKeywayProtectedSpansMm
+import com.android.shaftschematic.geom.boltHoleCentersX
+import com.android.shaftschematic.geom.boltRowProtectedSpansMm
 import com.android.shaftschematic.geom.keywayPinnedBodySpans
 import com.android.shaftschematic.geom.profileFeatureSpans
 import com.android.shaftschematic.geom.defaultVisualScale
@@ -341,6 +343,7 @@ internal fun composeShaftPdfOnCanvas(
         breakMinFracOfTrue = pdfPrefs.sBreakThresholdFrac,
         blends = blendsForPdf,
         keywayAvoidSpansMm = bodyKeywayProtectedSpansMm(spec),
+        boltRowAvoidSpansMm = boltRowProtectedSpansMm(spec),
         unfilledBodyIds = unfilledBodyIds,
     )
     // Keyway clocking: the aft-most keyway (measurement datum) always draws face-on; every other
@@ -437,7 +440,8 @@ internal fun composeShaftPdfOnCanvas(
             unit = unit,
             measureFrom = measureFromMode,
             displayUnits = displayUnits,
-        ) + buildTaperLengthSpans(spec, win, unit, displayUnits)
+        ) + buildTaperLengthSpans(spec, win, unit, displayUnits) +
+            buildCouplerSlotSpans(spec, win, unit, displayUnits)
         val planner = RailPlanner()
         val tierOriginMm = tierOriginMmFor(pdfPrefs.tieringMode, win.oalMm)
         val assignments = planner.assignAll(spans, tierOriginMm)
@@ -873,6 +877,42 @@ internal fun buildTaperLengthSpans(
     }
 }
 
+/**
+ * One LOCAL span per coupler bolt row whose card has "Show dimension rail" on
+ * ([CouplerBoltSlot.showDimensionRail]) — the row's authored position: from the shaft END it
+ * was measured from (`Measure From` AFT = the AFT face at 0, FWD = the FWD face at OAL — the
+ * shaft end, not a SET) to the NEAREST hole center, labelled with the stored distance
+ * ([CouplerBoltSlot.authoredCenterMm], the value the card shows and the footer prints). The
+ * row's own display unit resolves off its id, like every other span. Shared by the schematic
+ * and the consolidated sheet beside [buildTaperLengthSpans], so the planner tiers it like any
+ * other span; blank drafts rule the value like every other span. Default OFF contributes
+ * nothing, so sheets that never touched the toggle print byte-identically.
+ *
+ * Draw-only, like the row itself: the span changes no geometry and the slot stays outside
+ * OAL, body resolution and collision.
+ */
+internal fun buildCouplerSlotSpans(
+    spec: ShaftSpec,
+    win: com.android.shaftschematic.geom.OalWindow,
+    unit: UnitSystem,
+    displayUnits: DisplayUnits = DisplayUnits.single(unit),
+): List<DimSpan> = spec.couplerBoltSlots.mapNotNull { s ->
+    if (!s.showDimensionRail || s.count < 1) return@mapNotNull null
+    val fromFwd = s.authoredReference == SlotAuthoredReference.FWD
+    val faceMm = if (fromFwd) spec.overallLengthMm else 0f
+    val centerMm = if (fromFwd) s.centerMmAt(s.count - 1) else s.centerMmAt(0)
+    val distanceMm = s.authoredCenterMm(spec.overallLengthMm)
+    // A hole centered on the face has nothing to dimension; a negative distance means the
+    // OAL is not typed yet (0) and the FWD face is nowhere to measure from.
+    if (distanceMm <= 1e-3f) return@mapNotNull null
+    DimSpan(
+        win.toMeasureX(faceMm.toDouble()),
+        win.toMeasureX(centerMm.toDouble()),
+        label = formatLenDimDualLabel(distanceMm.toDouble(), displayUnits.unitFor(s.id), displayUnits.dual),
+        kind = SpanKind.LOCAL,
+    )
+}
+
 
 /**
  * Adapter from model liners to export-only LinerDim.
@@ -1004,7 +1044,13 @@ internal fun drawThreads(
  * cross-drilled hole ([BoltHoleStyle.CROSS]) is ONE circle on the centerline, the hole as
  * seen on the near surface — or, clocked 90° from the keyway, a HIDDEN bore: dashed walls
  * from the shared `crossBoreLines`. Must stay identical to the preview's overlay pass in
- * `ShaftRenderer`. Reference feature — no dimension rail in v1.
+ * `ShaftRenderer`. Reference feature — its only rail is the opt-in position span
+ * ([buildCouplerSlotSpans]).
+ *
+ * Hole centers come from the shared [boltHoleCentersX]: placed off the row's own mapped
+ * window (pinned at true scale by `boltRowPinnedSpans`, `geom/ProfileFeatureSpans.kt`), so
+ * the circles — sized on the diameter scale — keep their true pitch inside a body that
+ * compresses around them.
  */
 internal fun drawCouplerBoltSlots(
     c: Canvas,
@@ -1055,9 +1101,10 @@ internal fun drawCouplerBoltSlots(
     slots.forEach { slot ->
         val holeR = rPx(slot.holeDiaMm)
         if (holeR <= 0f || slot.count < 1) return@forEach
+        val centersX = boltHoleCentersX(slot, xAt)
         for (i in 0 until slot.count) {
-            val cxMm = slot.startFromAftMm + i * slot.spacingMm
-            val cx = xAt(cxMm)
+            val cxMm = slot.centerMmAt(i)
+            val cx = centersX[i]
             if (slot.isHiddenCrossBore) {
                 val bore = crossBoreLines(
                     cx, holeR, cy, surfaceRadiusPx(cxMm), slot.through, rPx(slot.depthMm * 2f),

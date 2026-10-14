@@ -26,6 +26,7 @@ import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.autoTaperRateText
+import com.android.shaftschematic.util.buildLinerTitleById
 import com.android.shaftschematic.util.drawRichText
 import com.android.shaftschematic.util.wrapRichLines
 import java.text.SimpleDateFormat
@@ -652,21 +653,35 @@ internal fun buildFooterEndColumns(
     }
 
     // Liner shoulder edge radii — the radius's ONLY printed value (the drawing shows the
-    // step and fillet curve; no leader, by decision). Listed in the column matching the
-    // shouldered end's physical half; a sharp corner (radius 0) prints nothing.
-    fun shoulderLine(radiusMm: Float, lnUnit: UnitSystem): String =
-        line("Liner shoulder R:") { formatLenWithUnitDual(radiusMm.toDouble(), lnUnit, dual) }
-    spec.liners.forEach { ln ->
+    // step and fillet curve; no leader, by decision). ONE line per liner: a shoulder at one
+    // end prints its radius alone (column of that end's physical half, as before); shoulders
+    // at both ends share the line — one value when the radii agree, `AFT r, FWD r` when they
+    // differ (on-device report: two identical "Liner shoulder R:" lines with nothing telling
+    // them apart). A sharp corner (radius 0) prints nothing. With more than one shouldered
+    // liner the line carries the liner's name, the carousel's title for it.
+    val shoulderedLiners = spec.liners.filter { ln ->
+        (ln.shoulderOn(LinerAuthoredReference.AFT)?.radiusMm ?: 0f) > 0f ||
+            (ln.shoulderOn(LinerAuthoredReference.FWD)?.radiusMm ?: 0f) > 0f
+    }
+    val linerTitles = if (shoulderedLiners.size > 1) buildLinerTitleById(spec) else emptyMap()
+    shoulderedLiners.forEach { ln ->
         val lnUnit = displayUnits.unitFor(ln.id)
-        ln.shoulderOn(LinerAuthoredReference.AFT)?.takeIf { it.radiusMm > 0f }?.let { s ->
-            val col = if (ln.startFromAftMm <= spec.overallLengthMm * 0.5f) aft else fwd
-            col += shoulderLine(s.radiusMm, lnUnit)
+        fun fmt(radiusMm: Float) = formatLenWithUnitDual(radiusMm.toDouble(), lnUnit, dual)
+        val aftR = ln.shoulderOn(LinerAuthoredReference.AFT)?.radiusMm?.takeIf { it > 0f }
+        val fwdR = ln.shoulderOn(LinerAuthoredReference.FWD)?.radiusMm?.takeIf { it > 0f }
+        val label = linerTitles[ln.id]?.let { "$it shoulder R:" } ?: "Liner shoulder R:"
+        val half = spec.overallLengthMm * 0.5f
+        val startMm = ln.startFromAftMm
+        val endMm = ln.startFromAftMm + ln.lengthMm
+        val (col, value) = when {
+            aftR != null && fwdR != null -> {
+                val col = if ((startMm + endMm) * 0.5f <= half) aft else fwd
+                col to (if (aftR == fwdR) fmt(aftR) else "AFT ${fmt(aftR)}, FWD ${fmt(fwdR)}")
+            }
+            aftR != null -> (if (startMm <= half) aft else fwd) to fmt(aftR)
+            else -> (if (endMm <= half) aft else fwd) to fmt(fwdR!!)
         }
-        ln.shoulderOn(LinerAuthoredReference.FWD)?.takeIf { it.radiusMm > 0f }?.let { s ->
-            val endMm = ln.startFromAftMm + ln.lengthMm
-            val col = if (endMm <= spec.overallLengthMm * 0.5f) aft else fwd
-            col += shoulderLine(s.radiusMm, lnUnit)
-        }
+        col += line(label) { value }
     }
 
     return FooterColumns(aftLines = aft, fwdLines = fwd)

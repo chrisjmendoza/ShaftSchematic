@@ -91,7 +91,7 @@ internal fun ThreadPagerCard(
             startOverlapErrorMm(spec, th.id, ComponentKind.THREAD, th.lengthMm, th.startFromAftMm)
                 ?: if (th.id in collidingComponentIds) "Overlaps another component" else null
         ),
-        warningMessage = threadWarningMessages(spec, th).joinToString("; ").ifEmpty { null },
+        warningMessage = threadWarningMessages(spec, th, unit).joinToString("; ").ifEmpty { null },
         componentId = th.id, componentKind = ComponentKind.THREAD,
         outerPaddingHorizontal = outerPaddingHorizontal,
         onRemove = {

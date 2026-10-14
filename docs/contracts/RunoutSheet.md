@@ -814,9 +814,13 @@ Overnight wave (on-device request), three features on the Runout tab:
   sticky pick would silently export the wrong document later — the blank-draft posture).
   The Schematic / Wear / Undercut tabs keep their own hard-wired buttons; the Undercut
   Drawing is deliberately absent from the picker (it authors on its own tab). Filenames
-  follow each document's historical shape via `buildOutputFilename`
-  (`{customer_vessel_job | fallback}_{suffix}[_BlankDraft].pdf`; the consolidated sheet
-  takes the `_consolidated` suffix, freeing `_runout` for the classic sheet). Because the
+  follow each document's historical suffix via `buildOutputFilename`
+  (`{<DocumentNaming base> | fallback}_{suffix}[_BlankDraft].pdf` — the base is the ONE
+  `DocumentNaming.suggestedBaseName` builds for the document, `Job - Customer - Vessel - SIDE`
+  with every part through `sanitizePart`, joined by `exportPdfFilename`; so the schematic
+  exported from its own tab and from Export all share a name and a `/` in a customer name
+  never reaches a filename. The consolidated sheet takes the `_consolidated` suffix, freeing
+  `_runout` for the classic sheet). Because the
   consolidated sheet embeds the schematic's dimensions, the schematic's export gate
   (`exportPdfGate` — components exist, no collisions) now guards this whole surface.
 - **Classic runout sheet restored** — `composeRunoutPdf(..., consolidated = false)`
@@ -1085,7 +1089,9 @@ Two rules make the difference between a printed keyway and a silent nothing:
    run with NO clear placement prints plain. Keyed bodies break like any other run — only the
    slot's own window is protected, so there is no exemption anywhere. A body's **seal areas**
    (`BodyDrawEdges.sealSpansX`) are the second avoid source, so a sealed body keeps its break too
-   and no dashed seal line floats in the gap.
+   and no dashed seal line floats in the gap; the coupler bolt-row windows
+   (`boltRowProtectedSpansMm`, threaded as `boltRowAvoidSpansMm`) are the third, so the gap
+   never lands on a hole row or a cross-bore (`BreakGapBoltRowAvoidanceTest`).
    Pinned by `BreakGapKeywayAvoidanceTest` (pure placement + both draw sites),
    `BreakGapSealAvoidanceTest` (seal areas) and `KeywayPinnedBodySpansTest` (window-not-body,
    long-shaft scale survival).

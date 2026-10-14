@@ -1669,7 +1669,7 @@ internal fun LinerCompressionControl(
  * (the solve ignores the liner raises entirely, so the drawn height never moves with
  * this control). Same feature construction the composers use, over an approximate
  * window (0..OAL, standard content width): tapers/threads/liners at their kind floors,
- * keyway windows and compression-opted-out bodies pinned. An estimate — the composers' exact windows differ by
+ * keyway windows, bolt-row windows and compression-opted-out bodies pinned. An estimate — the composers' exact windows differ by
  * hairs — but it moves exactly when the page starts shorting the request, which is what
  * the readout is for.
  */

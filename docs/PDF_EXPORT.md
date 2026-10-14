@@ -72,7 +72,7 @@ Preview rendering (`ShaftLayout` + `ShaftRenderer`) and the PDF composers (`Shaf
 `ShaftRenderer`. This is an intentional architectural split, not a bug to unify — see
 `docs/archive/AUDIT.md` §4.4 for history.
 
-**Coupler bolt slots** are drawn via a shared `drawCouplerBoltSlots` helper on the main schematic (`ShaftPdfComposer`), the runout sheet (`RunoutPdfComposer`), the wear document (`WearPdfComposer`), and the undercut composer's whole-shaft fallback profile (`UndercutPdfComposer` — its strip pages print no slots). Each cutout is a circle straddling the shaft outline (half in the shaft, half in the coupling), mirrored on the top and bottom edges, at each cutout position along the row. No dimension rail is drawn in v1 (the `showDimensionRail` toggle exists but is deferred).
+**Coupler bolt slots** are drawn via a shared `drawCouplerBoltSlots` helper on the main schematic (`ShaftPdfComposer`), the runout sheet (`RunoutPdfComposer`), the wear document (`WearPdfComposer`), and the undercut composer's whole-shaft fallback profile (`UndercutPdfComposer` — its strip pages print no slots). Each cutout is a circle straddling the shaft outline (half in the shaft, half in the coupling), mirrored on the top and bottom edges, at each cutout position along the row. Hole centers come from the shared `boltHoleCentersX` (`geom/BoltHoleMath.kt`), placed off the row's own mapped window — pinned at true scale by the one `profileFeatureSpans` builder (`boltRowPinnedSpans`), so the circles keep their true pitch inside a body that compresses around them (§5.7). A row whose card has "Show dimension rail" on contributes one LOCAL span to the schematic and consolidated rail sets (`buildCouplerSlotSpans`, §5.2; `docs/contracts/CouplerBoltSlot.md`).
 
 ---
 
@@ -246,6 +246,8 @@ The bracket **position** changes based on `excludeFromOAL`:
 
 The label is passed as an explicit `labelMm` override to `oalSpan()` so it is always the typed OAL regardless of bracket width. Component dimension rails always reference SET positions.
 
+**What else is dimensioned** (all through the same planner, §5.4): the liner spans (`buildLinerSpans`), the end-taper lengths (`buildTaperLengthSpans`), and — per row, opt-in — a **coupler bolt row's authored position** (`buildCouplerSlotSpans`, beside the taper builder; the consolidated sheet calls the same function). That span is the only one that references a **shaft end rather than a SET**: it runs from the face the row was measured from (`Measure From` AFT = 0, FWD = OAL) to the nearest hole center, carries the stored distance (`authoredCenterMm`) in the row's own display unit, and tiers LOCAL like any other. Off by default, so untouched sheets print byte-identically; see `docs/contracts/CouplerBoltSlot.md` § Dimension rail.
+
 **Label text (2026-07-28):** printed end-to-end spans keep their small `"OAL"` prefix —
 `oalSpan()` (`pdf/dim/LinerSpanBuilder.kt`) renders `"OAL " + formatLenDim(labelMm, unit)`,
 and the wear/runout OAL lines print `"OAL: value"` (product decision: compact print output
@@ -312,7 +314,8 @@ edges carry no notches (on-device report; do not reintroduce them). Drawn width:
 `MAX_SEAL_FACE_FRAC_OF_HOST` (45%) of its run, two on one run ≤ `MAX_SEAL_FACES_TOTAL_FRAC_OF_HOST`
 (50%) together, ratio preserved. The seal span never enters the curve lists or the flat span (the
 flat span runs ramp to ramp); instead **the S-break gap steers clear of it** —
-`BodyDrawEdges.sealSpansX` joins the keyway windows as `breakGapCenter` avoid ranges, so a sealed
+`BodyDrawEdges.sealSpansX` joins the keyway windows and the coupler bolt-row windows
+(`boltRowProtectedSpansMm`) as `breakGapCenter` avoid ranges, so a sealed
 body still breaks (on-device report: a run with two seal areas and a ramp at each end printed plain
 and read as a short body) and no dashed line floats in the paper gap. The seal lines draw LAST in
 the body pass, after fills, stubs and caps. The dash is
@@ -409,6 +412,16 @@ clamps of `geom/ThreadReliefMath.kt`). A thread with no relief prints nothing ne
 counts toward the measured footer height like any other row. The drawing itself shows the
 groove as a reduced, unhatched rectangle at the relief end (see `docs/contracts/Rendering.md`,
 threads bullet — the PDF sites share `drawThreadPdf`).
+
+A **liner shoulder's edge radius** prints as ONE footer line per shouldered liner — its only
+printed value (no leader, no rail). A shoulder at one end prints `Liner shoulder R: <r>` in the
+column of that end's physical half, byte-identical to before; shoulders at both ends share the
+line in the column of the liner's midpoint — `Liner shoulder R: <r>` when the two radii agree,
+`Liner shoulder R: AFT <r>, FWD <r>` when they differ (two identical lines with nothing telling
+them apart was an on-device report). With more than one shouldered liner on the shaft the label
+takes the liner's carousel title (`buildLinerTitleById`): `AFT Liner shoulder R: …`,
+`SKF sleeve shoulder R: …`. A sharp corner (radius 0) prints nothing. Pinned by
+`LinerShoulderFooterTest`.
 
 Unaffected: the 90°-clocked **silhouette** notch (`drawKeywaySilhouetteNotchPdf`) was always
 radial and always used the diameter scale; and the true-scale pin on a body keyway's window
@@ -695,6 +708,17 @@ Rules (shared helpers in `pdf/BlankFormText.kt`):
   `ShaftViewModel.pdfBlankDraft`, runout/wear: local screen state) — a forgotten sticky
   toggle would silently blank every future export. Blank exports get a `_BlankDraft`
   filename suffix.
+- **Export filenames** share ONE base and ONE join. The base is
+  `DocumentNaming.suggestedBaseName(jobNumber, customer, vessel, side)` — `Job - Customer -
+  Vessel - SIDE`, every part through `DocumentNaming.sanitizePart` so a `/`, `:` or `*` in a
+  customer name never reaches a filename — and the join is `util/ExportFilename.kt`
+  (`<base><suffix>[_BlankDraft].pdf`). Every document of the set goes through
+  `buildOutputFilename` (`ui/screen/OutputDoc.kt`) with its historical suffix — `_schematic`,
+  `_runout`, `_wear`, `_undercuts`, `_consolidated` — the Schematic tab's own export included,
+  so that export and "Export all" name the schematic identically; with no job information the
+  one fallback base `Shaft` stands in (`Shaft_runout.pdf` — the suffix already names the sheet). The Final drawing keeps
+  its `_Final*` suffixes through the same join (`docs/contracts/FinalSchematic.md`). Pinned by
+  `OutputDocTest` and `ExportFilenameTest`.
 - On the schematic PDF preview the toggle surfaces **twice from one state**: an
   always-visible `FilterChip` overlaid top-center on the preview itself (testTag
   `pdf_blank_toggle` — added because the options-sheet control alone was too hard to find,
@@ -981,6 +1005,23 @@ posture as its trace-depth/wear-band controls.
 - **Keyways scale with the height** — a keyway's width and mill-arc radius ride the diameter
   scale, not the compressed x map, so the slot stays proportional to the drawn shaft at every
   slider position. Floors and the host cap in §5.2c.
+- **Coupler bolt rows pin their window, like a body keyway** — the hole circles are sized on
+  the diameter scale while their centers ride the x map, so inside a compressed body a row
+  printed as an overlapping chain (manual-figure report). `boltRowPinnedSpans` (the row's
+  footprint padded by one hole diameter, clamped to the shaft; a cross-drilled hole the same)
+  rides the one `profileFeatureSpans` builder as a `Float.MAX_VALUE` pin, the S-break gap avoids
+  the window, and `boltHoleCentersX` places the holes off the window's own local scale so the
+  drawn pitch is the true pitch. See `docs/contracts/CouplerBoltSlot.md` § Compression.
+- **A pin never promotes a touching neighbour** — `normalizeFeatures` merges touching or
+  overlapping feature spans only WITHIN a pin class: floored spans with floored spans (keeping
+  the larger floor and fraction, as always — a liner butting a thread), pins with pins (a keyway
+  window inside an opted-out body). A floored span a pin overlaps is carved around the pin, each
+  remainder keeping its own floor and fraction, and a pin that merely touches one removes
+  nothing. Merging across the classes under `max(floor)` turned a liner butting a "Compress on
+  drawing"-unticked body — the ordinary seal-journal layout — into a pin: a 16″ liner drew wider
+  than a 20″ one, and the page budget the pinned liner took squeezed an 18″ taper to a quarter of
+  its length (manual-figure report). Documents with no pin touching a floored span normalize
+  exactly as before.
 - **The drawn height is a paper BAND: 1/2" … 1 1/2"** (`PROFILE_MIN_SHAFT_HEIGHT_PT` 36 pt
   … `PROFILE_MAX_SHAFT_HEIGHT_PT` 108 pt). Both ends are absolute paper measures, not
   multiples of this shaft's own curve height, and the slider offers the whole band on any
@@ -1025,7 +1066,8 @@ posture as its trace-depth/wear-band controls.
   and `max(0.7, frac) × true width` for tapers (`taperMinFracOfTrue`) — the scale solve
   ignores both entirely, and when the raised floors don't fit at the solved scale they
   shrink uniformly to fit (`fracFitFactor`); flat floors
-  and keyway pins are untouched, and only keyway pins may still yield the height.
+  and pins are untouched, and only pins (keyway windows, opted-out bodies, bolt-row windows)
+  may still yield the height.
   Because the two kinds share one requested fraction and one λ, their kept fractions are
   EQUAL wherever the request clears the taper baseline — that evenness is the point of the
   coupling (on-device request: liners walking up to true length beside tapers pinned at
@@ -1081,7 +1123,9 @@ posture as its trace-depth/wear-band controls.
    drawing's statement that the run is foreshortened, so a line of prose saying so again is
    redundant (on-device direction) — and it cost a footer row on exactly the long shafts with the
    least room to spare. Only bodies are compressed this way — tapers/threads/liners are never
-   broken.
+   broken. The gap steers clear of three avoid sources (`breakGapCenter`): body-keyway windows,
+   seal areas, and coupler bolt-row windows (`boltRowProtectedSpansMm`); a run with no clear
+   placement prints plain.
 5. No component overlays, cross-sections, or detailed machinist symbols (aside from the
    round-stock break symbol above, which is a length-compression cue, not a machinist symbol).
 6. Geometry must reflect the same logic as preview.

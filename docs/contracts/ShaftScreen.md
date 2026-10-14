@@ -214,7 +214,8 @@ Notes
   back and Done still are. See `NumberField.md`.  
 - **Card fields carry two card-level validations, and neither rewrites a stored value.**
   A card whose component runs past `spec.overallLengthMm` shows the amber advisory chip
-  "Extends past shaft length (OAL *n* mm)" — the SAME `outsideShaftSpan` predicate the add
+  "Extends past shaft length (OAL *n*")" (the OAL in the document's display unit, inch or
+  mm, through `formatLenWithUnit`) — the SAME `outsideShaftSpan` predicate the add
   dialogs' bounds warning uses (`ui/util/ComponentWarnings.kt`; excluded threads skipped,
   bodies included). It is advisory, not the error chip: oversize is legal (`OverallLength.md`),
   the edit still commits verbatim, and neither `collidingIds()`, the export gate, nor the OAL

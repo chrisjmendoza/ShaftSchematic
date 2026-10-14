@@ -35,12 +35,12 @@
   <table class="ref">
     <thead><tr><th>Field / control</th><th>What it means</th></tr></thead>
     <tbody>
-      <tr><td><span class="ui">Measure From:</span> <span class="ui">AFT</span> | <span class="ui">FWD</span><br>(in the dialog: <span class="ui">Direction:</span>)</td><td>Which end of the shaft you are measuring the start from. It changes how the position is typed and shown, never where the taper sits. Default AFT.</td></tr>
+      <tr><td><span class="ui">Measure From:</span> <span class="ui">AFT</span> | <span class="ui">FWD</span></td><td>Which end of the shaft you are measuring the start from. It changes how the position is typed and shown, never where the taper sits. Default AFT.</td></tr>
       <tr><td><span class="ui">Start from AFT</span> / <span class="ui">Start from FWD</span></td><td>Distance from the chosen shaft end to the near end of the taper. A propeller taper flush with the AFT end is “0” from AFT; a coupling taper flush with the FWD end is “0” from FWD.</td></tr>
       <tr><td><span class="ui">Length</span></td><td>Axial length of the taper. On a FWD-measured taper, a length change keeps the FWD end where it was and the taper grows toward AFT.</td></tr>
       <tr><td><span class="ui">S.E.T. Ø</span>, <span class="ui">L.E.T. Ø</span></td><td>Small-end and large-end diameters. On the card the two fields are listed in shaft order, AFT end first, so an aft-half taper shows S.E.T. then L.E.T., and a forward-half taper shows L.E.T. then S.E.T.</td></tr>
       <tr><td><span class="ui">Rate mode:</span> <span class="ui">Auto</span> | <span class="ui">Manual</span></td><td>Auto works the rate out from Length, S.E.T. and L.E.T. Manual lets you type it. Default Auto.</td></tr>
-      <tr><td><span class="ui">Rate (1:12, 3/4, or decimal)</span><br>(in the dialog: <span class="ui">Taper Rate (1:12, 3/4, decimal)</span>)</td><td>The taper rate as diameter change over length. Greyed out in Auto, where it shows the computed rate. Editable in Manual.</td></tr>
+      <tr><td><span class="ui">Rate (1:12, 3/4"/ft, or decimal)</span></td><td>The taper rate: a ratio (1:12), inches per foot (3/4″/ft — the shop's 1:16; “3/4 in/ft” and “3/4/ft” are read the same way) or a decimal; a bare fraction like 3/4 is refused as ambiguous and the message names the forms to write. Greyed out in Auto, where it shows the computed rate. Editable in Manual.</td></tr>
       <tr><td><span class="ui">Keyway</span> checkbox and section</td><td>See <a href="#components-keyways">Keyways</a>.</td></tr>
     </tbody>
   </table>
@@ -52,12 +52,12 @@
     <li><strong>Manual</strong> keeps exactly what you type. If the typed rate disagrees with the three dimensions by more than 3%, the card shows <span class="ui">Rate does not match Length + SET + LET</span>. Nothing is changed; you decide which number is wrong.</li>
     <li>A plain whole number is read as 1:N, so “16” means 1:16. A bare “1” is refused as ambiguous.</li>
   </ul>
-  <aside class="warn"><p>Type rates as a ratio (“1:16”). A fraction such as “3/4” is read as a diameter change per unit of length, not as 3/4″ per foot, and gives a very steep taper. The shop notation 3/4″/ft is 1:16; 1″/ft is 1:12.</p></aside>
+  <aside class="warn"><p>Type rates as a ratio (“1:16”) or as inches per foot with the “/ft” written out (“3/4″/ft”). A bare fraction such as “3/4” is refused — it could mean 3/4″ per foot or a diameter change of 0.75 per unit of length, a very steep taper — and the card says <span class="ui">Write 3/4"/ft or a ratio like 1:16; a bare fraction is ambiguous</span>. The shop notation 3/4″/ft is 1:16; 1″/ft is 1:12.</p></aside>
 
   <h3>Adding a taper from S.E.T. and rate</h3>
   <ol class="steps">
     <li>Tap <span class="ui">+ Add Component</span>, then <span class="ui">Taper</span>.</li>
-    <li>Choose <span class="ui">Direction:</span> <span class="ui">AFT</span> or <span class="ui">FWD</span> and enter the start and <span class="ui">Length</span>.</li>
+    <li>Choose <span class="ui">Measure From:</span> <span class="ui">AFT</span> or <span class="ui">FWD</span> and enter the start and <span class="ui">Length</span>.</li>
     <li>Enter <span class="ui">S.E.T. Ø</span>. Leave <span class="ui">L.E.T. Ø</span> blank.</li>
     <li>Tap <span class="ui">Manual</span> and enter the rate, for example “1:12” (the dialog starts with “1:12”).</li>
     <li>Tap <span class="ui">Add</span>. The app works out the L.E.T. from the length and rate.</li>
@@ -89,7 +89,7 @@
   <table class="ref">
     <thead><tr><th>Field / control</th><th>What it means</th></tr></thead>
     <tbody>
-      <tr><td><span class="ui">Include thread in OAL</span> (card)<br><span class="ui">Count in OAL</span> (dialog)</td><td>On (default): the thread is part of the overall length and is placed by its Start. Off: the thread sits outside the OAL, beyond the end of the shaft.</td></tr>
+      <tr><td><span class="ui">Include thread in OAL</span></td><td>On (default): the thread is part of the overall length and is placed by its Start. Off: the thread sits outside the OAL, beyond the end of the shaft.</td></tr>
       <tr><td><span class="ui">Start</span></td><td>Distance from the AFT end to the start of the thread. Shown only while the thread counts in the OAL.</td></tr>
       <tr><td><span class="ui">Thread end:</span> <span class="ui">AFT</span> | <span class="ui">FWD</span></td><td>Replaces Start when the thread is excluded from the OAL: which end of the shaft the thread hangs off. Default AFT.</td></tr>
       <tr><td><span class="ui">Major Ø</span>, <span class="ui">TPI</span></td><td>Imperial threads only. TPI accepts decimals and fractions.</td></tr>
@@ -171,7 +171,7 @@
     <li>The liner outline over the shaft, with any shoulders stepped in.</li>
     <li>Two dimensions above the shaft: the distance from the nearer S.E.T. to the liner's near edge (left out when the liner sits right on the S.E.T.), and the liner length. Which S.E.T. is used follows <span class="path">Settings → PDF Export Options → Measurement reference</span>, not the liner's own Measure From chip.</li>
     <li>An OD callout below the shaft (on by default; see <a href="#components-drawing-toggles">Show Ø on drawing</a>).</li>
-    <li>For a shoulder with a radius: a footer line “Liner shoulder R: &lt;radius&gt;”. A sharp corner prints nothing.</li>
+    <li>For a shoulder with a radius: one footer line per liner, “Liner shoulder R: &lt;radius&gt;” (“AFT r, FWD r” when the two ends differ). A sharp corner prints nothing.</li>
   </ul>
   <aside class="shop"><p>On a long shaft a liner may be drawn shorter than scale so the sheet fits the page; the dimension still gives the true length. The shoulder step is drawn to scale but its length and reduced Ø are not dimensioned on the sheet; only the edge radius prints, in the footer.</p></aside>
 
@@ -185,7 +185,7 @@
       <tr><td><span class="ui">Explicit body</span> checkbox</td><td>Ticked on every explicit body. Unticking asks <span class="ui">Make body automatic?</span> and, on <span class="ui">Make automatic</span>, hands the span back to the auto fill (its keyway goes with it).</td></tr>
       <tr><td><span class="ui">Start</span></td><td>Distance from the AFT end of the shaft. Bodies have no Measure From chip.</td></tr>
       <tr><td><span class="ui">Length</span></td><td>Axial length.</td></tr>
-      <tr><td><span class="ui">Ø</span> (dialog: <span class="ui">Diameter</span>)</td><td>The body diameter.</td></tr>
+      <tr><td><span class="ui">Diameter</span></td><td>The body diameter.</td></tr>
       <tr><td><span class="ui">Face finish</span></td><td>Square or Blend at each end; see below.</td></tr>
       <tr><td><span class="ui">Seal areas</span></td><td>Grooved fiberglass seat areas at either end; see below.</td></tr>
       <tr><td><span class="ui">Keyway</span> checkbox and section</td><td>See <a href="#components-keyways">Keyways</a>.</td></tr>
@@ -195,7 +195,7 @@
   <aside class="note"><p>A body may run under a liner or up against a taper, and a body with a keyway is never split; see <a href="#editor-bodies">Bodies and bare shaft</a>.</p></aside>
 
   <h3>Bare-shaft card</h3>
-  <p>A bare-shaft card is titled <span class="ui">Body (auto)</span>. <span class="ui">Start</span> and <span class="ui">Length</span> are greyed out because the surrounding components decide them. <span class="ui">Ø</span> is editable and sets the diameter of that one stretch of bare shaft only. The card also carries <span class="ui">Show bare-shaft Ø on drawing</span>, the same <span class="ui">Face finish</span> and <span class="ui">Seal areas</span> controls as an explicit body, and the <span class="ui">Explicit body</span> checkbox that promotes it.</p>
+  <p>A bare-shaft card is titled <span class="ui">Body (auto)</span>. <span class="ui">Start</span> and <span class="ui">Length</span> are greyed out because the surrounding components decide them. <span class="ui">Diameter</span> is editable and sets the diameter of that one stretch of bare shaft only. The card also carries <span class="ui">Show bare-shaft Ø on drawing</span>, the same <span class="ui">Face finish</span> and <span class="ui">Seal areas</span> controls as an explicit body, and the <span class="ui">Explicit body</span> checkbox that promotes it.</p>
   <aside class="note"><p>Blends and seal areas set on an auto section belong to that stretch of bare shaft and follow it when the components around it move. Promoting the section starts the new explicit body with square faces and no seal areas; set them again on its card.</p></aside>
 
   <h3 id="components-blends">Face finish: Square or Blend</h3>
@@ -346,20 +346,22 @@
       <tr><td><span class="ui">Spacing</span></td><td>Shown when Count is more than 1: center-to-center distance between holes.</td></tr>
       <tr><td><span class="ui">Through hole</span> switch</td><td>On (default): a through hole. Off: a blind hole.</td></tr>
       <tr><td><span class="ui">Depth</span></td><td>Shown when the hole is blind: drill depth.</td></tr>
+      <tr><td><span class="ui">Show dimension rail</span> switch</td><td>Card only, off by default. On, the schematic and consolidated sheets print one dimension for the row: from the end of the shaft it is measured from to the center of the nearest hole, carrying the distance you entered. See <a href="#components-drawing-toggles">Per-component drawing switches</a>.</td></tr>
     </tbody>
   </table>
   <p>The Add dialog checks that every hole fits on the shaft and shows <span class="ui">Row extends past the AFT end of the shaft</span> or <span class="ui">Row extends past the end of the shaft</span> if one would not.</p>
 
   <h3>What prints for a bolt slot or hole</h3>
   <ul>
-    <li><strong>Seam</strong>: a circle at each hole position, straddling the shaft outline top and bottom. A seam row prints no numbers on the schematic.</li>
+    <li><strong>Seam</strong>: a circle at each hole position, straddling the shaft outline top and bottom. A seam row prints no footer line; the only number it can print is the rail dimension its <span class="ui">Show dimension rail</span> switch turns on.</li>
+    <li><strong>Either style</strong>: the row is never shortened on paper. Its holes keep their true spacing even inside a body that is compressed around them, and the body's S-break is placed clear of the row.</li>
     <li><strong>Cross-drilled, 90° from keyway</strong>: the bore drawn as hidden lines, two dashed walls one hole width apart running down from the top of the shaft, all the way through or, for a blind hole, to the drill depth with a dashed bottom.</li>
     <li><strong>Cross-drilled, in line with keyway</strong>: one circle on the shaft centerline at the hole position.</li>
     <li><strong>Cross-drilled footer lines</strong>, in the column of the end it was measured from: “Bolt hole: Ø &lt;dia&gt;” (with “× &lt;count&gt;” for more than one), “Hole center from FWD:” or “Hole center from AFT:” with the distance (and “@ &lt;spacing&gt;” for more than one), and, when the shaft has a keyway, “90° from keyway” or “In line with keyway”.</li>
   </ul>
   <figure class="detail">
-    <img src="figures/feature-bolt-holes.png" alt="Close-up of the schematic showing circles straddling the shaft outline for seam bolt slots, and dashed parallel lines through the shaft for a cross-drilled hole.">
-    <figcaption>Seam bolt slots straddle the outline; a cross-drilled hole clocked 90° from the keyway draws as a hidden bore.</figcaption>
+    <img src="figures/feature-bolt-holes.png" alt="Close-up of the coupling end of the schematic: two dashed lines through the shaft for a cross-drilled hole, then a row of three circles straddling the top outline with the matching row on the bottom outline.">
+    <figcaption>A cross-drilled hole clocked 90° from the keyway draws as a hidden bore (the two dashed lines); a seam bolt row draws as circles straddling the outline, one per bolt at its spacing.</figcaption>
   </figure>
   <aside class="shop"><p>The hole-center distance in the footer is measured from the shaft end named on the line to the center of the hole. On the runout sheet's coupling end view, the bolt count comes from the first seam row; a cross-drilled hole is not a flange bolt and is not counted there.</p></aside>
 
@@ -374,6 +376,7 @@
       <tr><td><span class="ui">Show name on drawing</span></td><td>Explicit bodies, tapers, threads, liners</td><td>Follows <span class="ui">Show component titles in PDF</span></td></tr>
       <tr><td><span class="ui">Compress on drawing</span></td><td>Explicit bodies</td><td>Off for new bodies</td></tr>
       <tr><td><span class="ui">Prints in:</span> <span class="ui">in</span> | <span class="ui">mm</span></td><td>Explicit bodies, tapers, threads, liners</td><td>The document unit</td></tr>
+      <tr><td><span class="ui">Show dimension rail</span></td><td>Coupler bolt slots and holes</td><td>Off</td></tr>
     </tbody>
   </table>
 
@@ -406,6 +409,7 @@
   <h3 id="components-prints-in">Prints in: in | mm</h3>
   <p>Prints this one component's values in a different unit from the document. It appears at the foot of the card only when <span class="path">Settings → Drawing → Per-component units</span> is on. It changes how the component prints, not how you type it: the card's fields stay in the document unit. Tapping the document's own unit clears the choice.</p>
   <p>A keyway has its own <span class="ui">Keyway in:</span> chip, which does change the unit you type the keyway in, because a metric keyway on an inch shaft should be entered in millimeters. That chip is in the Add dialogs as well as on the cards. A metric thread prints in millimeters without any chip.</p>
+  <p><span class="ui">Show dimension rail</span> is on coupler bolt slot and hole cards only. Off, the row prints no dimension; on, the schematic and consolidated sheets add one dimension rail from the end of the shaft the row is measured from (<span class="ui">Measure From</span>) to the center of the nearest hole, carrying the distance you entered. It changes nothing about the row itself, which is why it is not in the Add dialog. See <a href="#reading-bolts">Coupler bolt holes</a>.</p>
 
   <h2 id="components-names">Component names</h2>
   <p>Every taper, thread, liner and explicit body has a name. Until you give it one, the app names it by position:</p>

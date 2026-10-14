@@ -6,6 +6,8 @@ import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Taper
 import com.android.shaftschematic.model.Threads
 import com.android.shaftschematic.model.maxDiaMm
+import com.android.shaftschematic.pdf.formatLenWithUnit
+import com.android.shaftschematic.util.UnitSystem
 import kotlin.math.abs
 
 /**
@@ -83,13 +85,18 @@ fun outsideShaftSpan(spec: ShaftSpec, startMm: Float, lengthMm: Float): Boolean 
     spec.overallLengthMm > 0f &&
         (startMm < -BOUNDS_EPS_MM || startMm + lengthMm > spec.overallLengthMm + BOUNDS_EPS_MM)
 
-/** The overall length rendered the way both bounds messages print it. */
-private fun oalText(spec: ShaftSpec): String =
-    "%.3f".format(spec.overallLengthMm).trimEnd('0').trimEnd('.')
+/**
+ * The overall length rendered the way both bounds messages print it — in the document's
+ * display [unit] through the footer's own length formatter, so an inch drawing reads
+ * `OAL 120"` rather than the canonical `3048 mm` (on-device report: the warning quoted
+ * millimeters on an inch document).
+ */
+private fun oalText(spec: ShaftSpec, unit: UnitSystem): String =
+    formatLenWithUnit(spec.overallLengthMm.toDouble(), unit)
 
 /** Add-dialog phrasing of [outsideShaftSpan] — a component that is not placed yet. */
-fun outsideShaftSpanMessage(spec: ShaftSpec, startMm: Float, lengthMm: Float): String? =
-    if (outsideShaftSpan(spec, startMm, lengthMm)) "Falls outside shaft span (OAL ${oalText(spec)} mm)"
+fun outsideShaftSpanMessage(spec: ShaftSpec, startMm: Float, lengthMm: Float, unit: UnitSystem): String? =
+    if (outsideShaftSpan(spec, startMm, lengthMm)) "Falls outside shaft span (OAL ${oalText(spec, unit)})"
     else null
 
 /**
@@ -97,8 +104,8 @@ fun outsideShaftSpanMessage(spec: ShaftSpec, startMm: Float, lengthMm: Float): S
  * edit committed verbatim. The wording names the shaft END because that is what a card edit
  * usually runs past; the comparison is the same one the dialog uses.
  */
-fun pastShaftEndMessage(spec: ShaftSpec, startMm: Float, lengthMm: Float): String? =
-    if (outsideShaftSpan(spec, startMm, lengthMm)) "Extends past shaft length (OAL ${oalText(spec)} mm)"
+fun pastShaftEndMessage(spec: ShaftSpec, startMm: Float, lengthMm: Float, unit: UnitSystem): String? =
+    if (outsideShaftSpan(spec, startMm, lengthMm)) "Extends past shaft length (OAL ${oalText(spec, unit)})"
     else null
 
 /** True for a positive length at or below the short-segment threshold (0 excluded). */
@@ -128,12 +135,12 @@ private fun facesAbut(aStart: Float, aEnd: Float, bStart: Float, bEnd: Float): B
  * implausible length/diameter sanity checks (§2.1), the past-OAL bounds advisory, plus §3.2
  * Ø-discontinuity vs an adjacent stored body.
  */
-fun bodyWarningMessages(spec: ShaftSpec, body: Body): List<String> {
+fun bodyWarningMessages(spec: ShaftSpec, body: Body, unit: UnitSystem): List<String> {
     val out = mutableListOf<String>()
     if (isShortSegment(body.lengthMm)) out += SHORT_SEGMENT_MSG
     if (isImplausiblyLong(body.lengthMm)) out += LENGTH_SANITY_MSG
     if (isImplausiblyLargeDia(body.diaMm)) out += DIA_SANITY_MSG
-    pastShaftEndMessage(spec, body.startFromAftMm, body.lengthMm)?.let { out += it }
+    pastShaftEndMessage(spec, body.startFromAftMm, body.lengthMm, unit)?.let { out += it }
     if (hasAdjacentBodyStep(spec, body)) out += "Large Ø step vs adjacent body"
     return out
 }
@@ -148,12 +155,12 @@ fun bodyWarningMessages(spec: ShaftSpec, body: Body): List<String> {
  * edit) disagree on SET/LET ordering for FWD tapers, which would make such a check misfire.
  * Do not add one without resolving that discrepancy first (`TODO.md` §2.3).
  */
-fun taperWarningMessages(spec: ShaftSpec, taper: Taper): List<String> {
+fun taperWarningMessages(spec: ShaftSpec, taper: Taper, unit: UnitSystem): List<String> {
     val out = mutableListOf<String>()
     if (isShortSegment(taper.lengthMm)) out += SHORT_SEGMENT_MSG
     if (isImplausiblyLong(taper.lengthMm)) out += LENGTH_SANITY_MSG
     if (isImplausiblyLargeDia(taper.maxDiaMm)) out += DIA_SANITY_MSG
-    pastShaftEndMessage(spec, taper.startFromAftMm, taper.lengthMm)?.let { out += it }
+    pastShaftEndMessage(spec, taper.startFromAftMm, taper.lengthMm, unit)?.let { out += it }
     return out
 }
 
@@ -162,12 +169,12 @@ fun taperWarningMessages(spec: ShaftSpec, taper: Taper): List<String> {
  * implausible length/diameter sanity checks (§2.1), the past-OAL bounds advisory, plus §3.5
  * liner OD below the diameter of a body it overlaps.
  */
-fun linerWarningMessages(spec: ShaftSpec, liner: Liner): List<String> {
+fun linerWarningMessages(spec: ShaftSpec, liner: Liner, unit: UnitSystem): List<String> {
     val out = mutableListOf<String>()
     if (isShortSegment(liner.lengthMm)) out += SHORT_SEGMENT_MSG
     if (isImplausiblyLong(liner.lengthMm)) out += LENGTH_SANITY_MSG
     if (isImplausiblyLargeDia(liner.odMm)) out += DIA_SANITY_MSG
-    pastShaftEndMessage(spec, liner.startFromAftMm, liner.lengthMm)?.let { out += it }
+    pastShaftEndMessage(spec, liner.startFromAftMm, liner.lengthMm, unit)?.let { out += it }
     if (linerOdBelowUnderlyingBody(spec, liner)) out += "Liner OD smaller than shaft Ø beneath it"
     return out
 }
@@ -181,14 +188,14 @@ fun linerWarningMessages(spec: ShaftSpec, liner: Liner): List<String> {
  * the shaft envelope by design, at a negative or past-OAL start the resolve layer derives, so
  * flagging it would fire on every correctly authored one.
  */
-fun threadWarningMessages(spec: ShaftSpec, thread: Threads): List<String> {
+fun threadWarningMessages(spec: ShaftSpec, thread: Threads, unit: UnitSystem): List<String> {
     val out = mutableListOf<String>()
     if (thread.pitchMm == 0f) out += "Zero pitch — thread renders flat"
     if (isShortSegment(thread.lengthMm)) out += SHORT_SEGMENT_MSG
     if (isImplausiblyLong(thread.lengthMm)) out += LENGTH_SANITY_MSG
     if (isImplausiblyLargeDia(thread.majorDiaMm)) out += DIA_SANITY_MSG
     if (!thread.excludeFromOAL) {
-        pastShaftEndMessage(spec, thread.startFromAftMm, thread.lengthMm)?.let { out += it }
+        pastShaftEndMessage(spec, thread.startFromAftMm, thread.lengthMm, unit)?.let { out += it }
     }
     // Relief advisories: the typed values are kept verbatim and the drawing clamps them where it
     // draws (`geom/ThreadReliefMath.kt`); these say why the groove does not read as typed.

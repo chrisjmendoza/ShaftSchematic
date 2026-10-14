@@ -173,8 +173,8 @@ Invariants
 
 ## Doc format & units policy (`doc/ShaftDocCodec.kt`)
 
-- Canonical storage: **millimeters** in `ShaftSpec`; UI unit persisted to Settings
-  as the "last used unit".
+- Canonical storage: **millimeters** in `ShaftSpec`; the Settings → Units chips persist the
+  app-wide default, which is the unit every NEW drawing starts in (see "New drawing" below).
 - Single envelope version `CURRENT_VERSION = 1` (`ShaftDocV1`) plus a bare-spec
   legacy fallback. `decode()` tries `ShaftDocV1` first (throws
   `UnsupportedDocVersionException` if `doc.version > CURRENT_VERSION`) and falls back
@@ -183,12 +183,21 @@ Invariants
   `preferred_unit` and `unit_locked` (`encodeDefaults = true`).
 - Import (`ShaftViewModel.importJson()`):
   - Envelope: `preferred_unit` applied via `setUnit(unit, persist = false)`;
-    `unit_locked` decoded into `_unitLocked` session state, which only gates two
-    internal bookkeeping paths (whether the background "last used unit" Settings flow
-    may overwrite the selection, and whether a later `setUnit` persists as the new
-    default). It never blocks switching units in the UI — **functionally inert** for
+    `unit_locked` decoded into `_unitLocked` session state, which only gates one
+    internal bookkeeping path (whether the background Settings → Units default flow
+    may overwrite the selection; a Settings chip tap persists the default regardless of
+    the lock). It never blocks switching units in the UI — **functionally inert** for
     "can the user change units on this file".
   - Legacy bare spec: current Settings default unit is used; doc treated as unlocked.
+- New drawing (`ShaftViewModel.newDocument()`): `_unit` seeds from the Settings → Units
+  default as last collected into `ShaftViewModel._defaultUnit` (never a synchronous
+  DataStore read) and `_unitLocked` is set true, so the document owns its unit from birth and
+  a later change of the setting never flips it; `_dualUnits` seeds the same way from
+  `_dualUnitsDefault` (the "Dual-unit display" default). `applyTemplate` keeps the
+  template's own `preferred_unit`/`unit_locked` (the geometry was authored in it) and seeds
+  only the dual flag. The Settings → Units chips persist the default whether or not the open
+  document is locked — the lock stops the stored default from flipping the document, not the
+  user from setting the default.
 - The final drawing: `final_spec` (`ShaftDocV1.finalSpec: ShaftSpec?`, `@SerialName("final_spec")`)
   is the document's **second whole `ShaftSpec`** — the shaft as it leaves — sibling of `spec`,
   not a reference mark inside it. `null` (the default) = this document has no final drawing,

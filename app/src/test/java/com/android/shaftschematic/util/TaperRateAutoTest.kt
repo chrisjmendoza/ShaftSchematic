@@ -1,6 +1,7 @@
 package com.android.shaftschematic.util
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -109,14 +110,99 @@ class TaperRateAutoTest {
     fun `parseTaperRateText rejects bare one in strict mode`() {
         assertNull(parseTaperRateText("1", allowAmbiguousBareOne = false))
         assertEquals(1f / 12f, parseTaperRateText("12", allowAmbiguousBareOne = false))
-        assertEquals(1f, parseTaperRateText("1/1", allowAmbiguousBareOne = false))
+        assertEquals(1f, parseTaperRateText("1:1", allowAmbiguousBareOne = false))
+    }
+
+    // ─────────────────────────────────────────────
+    // Spellings. A ratio and a decimal read as they always did; the inches-per-foot form is
+    // new; a BARE slash fraction reads as nothing in either mode. "3/4" used to read as a
+    // 0.75 slope — an absurd taper — while the machinist writing it meant 3/4" per foot
+    // (1:16). The parser never guesses between the two: the blocking message asks for the
+    // explicit form. (The former `"1/1" → 1f` assertion went with that rule.)
+    // ─────────────────────────────────────────────
+
+    @Test
+    fun `inches per foot reads as value over twelve`() {
+        val sixteen = 1f / 16f
+        assertEquals(sixteen, parseTaperRateText("3/4\"/ft", allowAmbiguousBareOne = false)!!, 1e-6f)
+        assertEquals(sixteen, parseTaperRateText("3/4″/ft", allowAmbiguousBareOne = false)!!, 1e-6f)
+        assertEquals(sixteen, parseTaperRateText("3/4 in/ft", allowAmbiguousBareOne = false)!!, 1e-6f)
+        assertEquals(sixteen, parseTaperRateText("3/4/ft", allowAmbiguousBareOne = false)!!, 1e-6f)
+        assertEquals(sixteen, parseTaperRateText("0.75\"/ft", allowAmbiguousBareOne = false)!!, 1e-6f)
+        assertEquals(sixteen, parseTaperRateText(" 3/4\" / FT ", allowAmbiguousBareOne = false)!!, 1e-6f)
+        assertEquals(1f / 12f, parseTaperRateText("1\"/ft", allowAmbiguousBareOne = false)!!, 1e-6f)
+        // A mixed number: 1 1/4" per foot = 1.25 / 12.
+        assertEquals(1.25f / 12f, parseTaperRateText("1 1/4\"/ft", allowAmbiguousBareOne = false)!!, 1e-6f)
+    }
+
+    @Test
+    fun `a bare fraction is ambiguous in both modes`() {
+        for (lenient in listOf(true, false)) {
+            assertNull("3/4 lenient=$lenient", parseTaperRateText("3/4", allowAmbiguousBareOne = lenient))
+            assertNull("1/16 lenient=$lenient", parseTaperRateText("1/16", allowAmbiguousBareOne = lenient))
+            assertNull("1/1 lenient=$lenient", parseTaperRateText("1/1", allowAmbiguousBareOne = lenient))
+        }
+    }
+
+    @Test
+    fun `unreadable per-foot text is rejected rather than guessed`() {
+        assertNull(parseTaperRateText("0/ft", allowAmbiguousBareOne = false))
+        assertNull(parseTaperRateText("abc/ft", allowAmbiguousBareOne = false))
+        assertNull(parseTaperRateText("/ft", allowAmbiguousBareOne = false))
+    }
+
+    @Test
+    fun `the footer's per-foot notation round-trips through the parser`() {
+        // `printedTaperRate` prints 1:12 as 1"/ft and 1:16 as 3/4"/ft on inch drawings; what the
+        // sheet says must be something the rate field would accept back.
+        assertEquals(1f / 12f, parseTaperRateText("1\"/ft", allowAmbiguousBareOne = false)!!, 1e-6f)
+        assertEquals(1f / 16f, parseTaperRateText("3/4\"/ft", allowAmbiguousBareOne = false)!!, 1e-6f)
+    }
+
+    @Test
+    fun `every auto rate text parses back to its own slope`() {
+        // Snapped common rates and the exact 1:N.NNN fallback alike — the card shows this text
+        // read-only in Auto and commits it on a Manual switch, so the strict parser must take it.
+        val geometries = listOf(
+            Triple(16f, 4f, 5f), Triple(16.125f, 4f, 5f), Triple(15f, 4f, 5f),
+            Triple(15.3f, 4f, 5f), Triple(10f, 4f, 5f), Triple(20f, 4f, 5f), Triple(7.77f, 3f, 5f),
+        )
+        for ((len, set, let) in geometries) {
+            val auto = requireNotNull(autoTaperRate(lengthMm = len, setDiaMm = set, letDiaMm = let))
+            val parsed = parseTaperRateText(auto.text, allowAmbiguousBareOne = false)
+            assertNotNull("auto text '${auto.text}' must parse", parsed)
+            val expectedSlope = 1f / (auto.matchedCommonOneToN ?: auto.exactOneToN)
+            assertEquals(auto.text, expectedSlope, parsed!!, 1e-3f)
+            assertNull(manualTaperRateBlockingMessage(auto.text, len, set, let))
+        }
     }
 
     @Test
     fun `manualTaperRateBlockingMessage rejects bare one`() {
         assertEquals(
-            "Use a full ratio or fraction; `1` is ambiguous",
+            "Use a full ratio or inches per foot; `1` is ambiguous",
             manualTaperRateBlockingMessage(rateText = "1", lengthMm = 100f, setDiaMm = 100f, letDiaMm = 120f)
+        )
+    }
+
+    @Test
+    fun `manualTaperRateBlockingMessage names the explicit forms for a bare fraction`() {
+        assertEquals(
+            "Write 3/4\"/ft or a ratio like 1:16; a bare fraction is ambiguous",
+            manualTaperRateBlockingMessage(rateText = "3/4", lengthMm = 100f, setDiaMm = 100f, letDiaMm = 120f)
+        )
+        // The explicit forms pass the gate.
+        assertNull(manualTaperRateBlockingMessage(rateText = "3/4\"/ft", lengthMm = 100f, setDiaMm = 100f, letDiaMm = 120f))
+        assertNull(manualTaperRateBlockingMessage(rateText = "1:16", lengthMm = 100f, setDiaMm = 100f, letDiaMm = 120f))
+    }
+
+    @Test
+    fun `manualTaperRateWarning compares a per-foot rate like a ratio`() {
+        // 16 long, 4 → 5: exactly 1:16 = 3/4"/ft — no mismatch; 1"/ft (1:12) mismatches.
+        assertNull(manualTaperRateWarning(rateText = "3/4\"/ft", lengthMm = 16f, setDiaMm = 4f, letDiaMm = 5f))
+        assertEquals(
+            "Rate does not match Length + SET + LET",
+            manualTaperRateWarning(rateText = "1\"/ft", lengthMm = 16f, setDiaMm = 4f, letDiaMm = 5f)
         )
     }
 
@@ -192,11 +278,11 @@ class TaperRateAutoTest {
         // Pure-syntax guards are length-independent by design: ambiguous "1" and unparseable
         // text still surface even when length is 0.
         assertEquals(
-            "Use a full ratio or fraction; `1` is ambiguous",
+            "Use a full ratio or inches per foot; `1` is ambiguous",
             manualTaperRateBlockingMessage(rateText = "1", lengthMm = 0f, setDiaMm = 100f, letDiaMm = 120f)
         )
         assertEquals(
-            "Enter a ratio, fraction, or decimal",
+            "Enter a ratio (1:12), inches per foot (3/4\"/ft), or a decimal",
             manualTaperRateBlockingMessage(rateText = "xyz", lengthMm = 0f, setDiaMm = 100f, letDiaMm = 120f)
         )
     }

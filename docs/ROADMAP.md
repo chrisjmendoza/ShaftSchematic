@@ -13,7 +13,7 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
 - Snap engine + tap-to-add pipeline *(both removed in v0.5.x — the gesture fired
   unintentionally and was never used on purpose, and nothing else snapped)*
 - OAL window + excluded thread logic
-- Taper rate input (all formats: 1:12, 3/4, decimal)
+- Taper rate input (ratio 1:12, inches per foot 3/4"/ft, decimal; a bare fraction is ambiguous and blocked)
 - Full single-page PDF export (landscape, theme-safe, dimension tiers, footer)
 - PDF label collision avoidance, measurement tiering system
 - Internal save/open, autosave/draft restore
@@ -202,7 +202,7 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
 - Taper rate keyboard compatibility — taper rate inputs now accept colon-ratio
 	entry (`1:12`) on Android keyboards that omit `:` on numeric pads by using an
 	ASCII-capable field + colon-aware filtering for the rate path
-- Coupler bolt slots — reference overlay for muff-coupling bolt cutouts; new `CouplerBoltSlot` model type + `ShaftSpec.couplerBoltSlots` list, add-chooser entry, add dialog, carousel card; row of `count` cutouts at `spacingMm` pitch drawn straddling the shaft outline (mirrored top/bottom) in preview and all three PDFs; AFT/FWD authored reference (default FWD); pure reference — excluded from OAL/coverage, collision, and body split/merge; dimension rail toggle present but deferred (not drawn in v1)
+- Coupler bolt slots — reference overlay for muff-coupling bolt cutouts; new `CouplerBoltSlot` model type + `ShaftSpec.couplerBoltSlots` list, add-chooser entry, add dialog, carousel card; row of `count` cutouts at `spacingMm` pitch drawn straddling the shaft outline (mirrored top/bottom) in preview and all three PDFs; AFT/FWD authored reference (default FWD); pure reference — excluded from OAL/coverage, collision, and body split/merge; per-card dimension rail toggle (one span from the authored end to the nearest hole center, implemented later)
 - Taper keyway drawing (open + captured) — plan-view schematic convention, mill-cutter arc, white fill
 - Body keyways — keyways now host on bodies too (AFT/FWD end reference, open + captured), for intermediate shafts with fitted couplings that end on a plain body; survive body split/merge by absolute position
 - Keyways 180° apart — spec-level clocking note; renders the far-side (non-aft-most) keyway as hidden dashed lines and prints a footer note; aft-most keyway stays solid as the measurement datum

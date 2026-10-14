@@ -345,7 +345,7 @@ data class CouplerBoltSlot(
     val through: Boolean = true,               // true = through-hole, false = blind
     val depthMm: Float = 0f,                   // blind depth; ignored when through
     val authoredReference: SlotAuthoredReference = SlotAuthoredReference.FWD,
-    val showDimensionRail: Boolean = false,    // deferred — no rail drawn in v1
+    val showDimensionRail: Boolean = false,    // card-only; ON = one rail span, authored end → nearest hole center
     val label: String? = null,  // optional user-defined display label; not used for geometry
 ) : Segment
 

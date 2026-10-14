@@ -1,6 +1,7 @@
 package com.android.shaftschematic.ui.util
 
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.util.UnitSystem
 
 /**
  * Returns human-readable warning strings for a proposed component at [startMm] / [lengthMm].
@@ -19,6 +20,7 @@ fun collectAddWarnings(
     spec: ShaftSpec,
     startMm: Float,
     lengthMm: Float,
+    unit: UnitSystem,
 ): List<String> {
     if (startMm < 0f || lengthMm <= 0f) return emptyList()
 
@@ -31,7 +33,7 @@ fun collectAddWarnings(
         return startMm < bEnd - eps && proposedEnd > bStart + eps
     }
 
-    outsideShaftSpanMessage(spec, startMm, lengthMm)?.let { warnings.add(it) }
+    outsideShaftSpanMessage(spec, startMm, lengthMm, unit)?.let { warnings.add(it) }
 
     spec.tapers.forEachIndexed { i, t ->
         if (overlaps(t.startFromAftMm, t.lengthMm))

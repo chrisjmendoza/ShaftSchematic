@@ -632,4 +632,126 @@ class ProfileCompressionTest {
             assertEquals(a.x1, b.x1, 1e-4f)
         }
     }
+
+    // ── A pin never promotes a touching neighbour ──────────────────────────────
+    //
+    // Normalization merges touching/overlapping feature spans keeping the larger floor, so a
+    // pinned span (an opted-out body, a keyway window) that BUTTED a liner used to turn the
+    // liner into a pin too: a 16" liner against a seal journal drew at true scale while a 20"
+    // liner elsewhere compressed, and the page budget the pinned liner took came out of the
+    // tapers (manual-figure report). Pins and floors now merge only within their own class.
+
+    @Test
+    fun `a pinned span touching a floored span leaves the floor alone`() {
+        val spans = walkSpans(
+            0f, 1000f,
+            listOf(
+                ProfileFeatureSpan(100f, 200f, Float.MAX_VALUE),               // pinned body
+                ProfileFeatureSpan(200f, 400f, 100f, minWidthFracOfTrue = 0.5f), // liner butting it
+            ),
+            gapMinWidthPt = 64f,
+        )
+        val pinned = spans.single { it.startMm == 100f }
+        val liner = spans.single { it.startMm == 200f }
+        assertEquals(200f, pinned.endMm, 1e-3f)
+        assertEquals(Float.MAX_VALUE, pinned.floorPt, 0f)
+        assertEquals(400f, liner.endMm, 1e-3f)
+        assertEquals("the liner keeps its own floor", 100f, liner.floorPt, 1e-3f)
+        assertEquals("…and its own fraction", 0.5f, liner.fracOfTrue, 1e-6f)
+    }
+
+    @Test
+    fun `a pin overlapping a floored span is carved out of it, remainders keep their floor`() {
+        val spans = walkSpans(
+            0f, 1000f,
+            listOf(
+                ProfileFeatureSpan(100f, 500f, 100f, minWidthFracOfTrue = 0.5f),
+                ProfileFeatureSpan(250f, 300f, Float.MAX_VALUE),
+            ),
+            gapMinWidthPt = 64f,
+        )
+        val inside = spans.filter { it.startMm >= 100f && it.endMm <= 500f }
+        assertEquals(listOf(100f, 250f, 300f), inside.map { it.startMm })
+        assertEquals(listOf(250f, 300f, 500f), inside.map { it.endMm })
+        assertEquals(listOf(100f, Float.MAX_VALUE, 100f), inside.map { it.floorPt })
+        assertEquals(listOf(0.5f, 0f, 0.5f), inside.map { it.fracOfTrue })
+    }
+
+    @Test
+    fun `floored spans still merge with each other, pins still merge with each other`() {
+        val spans = walkSpans(
+            0f, 1000f,
+            listOf(
+                ProfileFeatureSpan(100f, 200f, 36f),                   // thread
+                ProfileFeatureSpan(200f, 400f, 100f, 0.5f),            // liner butting it
+                ProfileFeatureSpan(600f, 700f, Float.MAX_VALUE),       // keyway window
+                ProfileFeatureSpan(600f, 900f, Float.MAX_VALUE),       // opted-out host body
+            ),
+            gapMinWidthPt = 64f,
+        )
+        val merged = spans.single { it.startMm == 100f }
+        assertEquals("touching floors merge as before", 400f, merged.endMm, 1e-3f)
+        assertEquals(100f, merged.floorPt, 1e-3f)
+        assertEquals(0.5f, merged.fracOfTrue, 1e-6f)
+        val pin = spans.single { it.startMm == 600f }
+        assertEquals("overlapping pins merge to one", 900f, pin.endMm, 1e-3f)
+        assertEquals(Float.MAX_VALUE, pin.floorPt, 0f)
+    }
+
+    /**
+     * The manual's feature fixture, reduced: a 180" shaft with an 18" and a 12" taper, a 20"
+     * liner, and a 10" body with "Compress on drawing" unticked butting a 16" liner.
+     */
+    @Test
+    fun `manual fixture - a pinned body against a liner never pins the liner`() {
+        val inch = 25.4f
+        val features = listOf(
+            ProfileFeatureSpan(0f, 18f * inch, 0f, minWidthFracOfTrue = PROFILE_TAPER_MIN_FRAC_OF_TRUE),
+            ProfileFeatureSpan(24f * inch, 44f * inch, SCHEMATIC_MIN_LINER_PT),              // 20" liner
+            ProfileFeatureSpan(92f * inch, 102f * inch, Float.MAX_VALUE),                      // opted-out body
+            ProfileFeatureSpan(102f * inch, 118f * inch, SCHEMATIC_MIN_LINER_PT),             // 16" liner, butting it
+            ProfileFeatureSpan(150f * inch, 162f * inch, 0f, minWidthFracOfTrue = PROFILE_TAPER_MIN_FRAC_OF_TRUE),
+        )
+        val diaPtPerMm = defaultVisualScale(6f * inch)
+        val solved = solveMaxProfileScale(
+            0f, 180f * inch, features, contentWidth = 720f, scaleHi = diaPtPerMm,
+            gapMinWidthPt = SCHEMATIC_MIN_BODY_RUN_PT,
+        )
+        val map = buildCompressedProfileXMap(
+            0f, 180f * inch, features, 0f, 720f, solved,
+            gapMinWidthPt = SCHEMATIC_MIN_BODY_RUN_PT,
+        )
+        fun width(startMm: Float, endMm: Float) = map.xAt(endMm) - map.xAt(startMm)
+        val w20 = width(24f * inch, 44f * inch)
+        val w16 = width(102f * inch, 118f * inch)
+        val body = width(92f * inch, 102f * inch)
+        val t18 = width(0f, 18f * inch)
+        val t12 = width(150f * inch, 162f * inch)
+
+        assertEquals("the opted-out body holds true width", 10f * inch * solved, body, 0.5f)
+        assertTrue("the 16\" liner may never draw wider than the 20\" liner ($w16 vs $w20)", w16 <= w20 + 1e-2f)
+        assertTrue("the liner against the pin compresses like any other", w16 < 16f * inch * solved - 0.25f)
+        assertEquals("tapers keep their fraction-of-true relationship", 18f / 12f, t18 / t12, 0.02f)
+        assertTrue(
+            "the tapers keep their baseline fraction",
+            t18 >= 18f * inch * solved * PROFILE_TAPER_MIN_FRAC_OF_TRUE - 0.5f,
+        )
+        assertEquals("the solve does not yield for a mere touch", diaPtPerMm, solved, 1e-4f)
+    }
+
+    /** No pinned span touches a floored one: normalization is byte-for-byte what it was. */
+    @Test
+    fun `isolated pins and floors normalize as before`() {
+        val spans = walkSpans(
+            0f, 1000f,
+            listOf(
+                ProfileFeatureSpan(100f, 200f, 100f),
+                ProfileFeatureSpan(300f, 400f, Float.MAX_VALUE),
+                ProfileFeatureSpan(500f, 600f, 36f),
+            ),
+            gapMinWidthPt = 64f,
+        )
+        assertEquals(listOf(0f, 100f, 200f, 300f, 400f, 500f, 600f), spans.map { it.startMm })
+        assertEquals(listOf(64f, 100f, 64f, Float.MAX_VALUE, 64f, 36f, 64f), spans.map { it.floorPt })
+    }
 }

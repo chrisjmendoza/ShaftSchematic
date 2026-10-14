@@ -1,7 +1,7 @@
 # ShaftSchematic TODO
 
 **Version: v0.5.x Development Queue**
-**Last updated: 2026-10-09**
+**Last updated: 2026-10-13**
 
 ## What belongs here
 
@@ -103,6 +103,36 @@ at most a pointer from here.
   - The keyway "Standard size…" key-stock tables (ANSI / DIN).
   - The liner-shoulder edge-radius list `LINER_SHOULDER_STD_RADII_IN`.
   - The thread-relief seeds (length 1.5 × pitch, Ø = major − 1.3 × pitch).
+- **Surfaced by the User Manual writers (2026-10-13)** — real but each is a product call, so none
+  was changed in the manual's bug batch:
+  - **Undo lives only on the Schematic and Final toolbars**, yet History covers runout, wear and
+    undercut edits made on the other tabs. Add the History button to those toolbars, or accept
+    "go back to the Schematic tab to undo" (the manual says that today).
+  - **Tri-state card toggles cannot return to "follow the setting"** — once "Shade on drawing" /
+    "Show name on drawing" is flipped on a card the component keeps its own value for good. A
+    third "Default" state on the control, or a long-press reset.
+  - **No Imperial/Metric switch on the thread card** — changing a thread between TPI and a metric
+    designation means delete + re-add.
+  - **Blend length, seal-area length, liner-shoulder length and reduced Ø never print** — only
+    the shoulder radius reaches the footer (deliberate per CLAUDE.md, but a machinist cannot make
+    these from the paper alone). Decide whether a footer line per feature is wanted.
+  - **The Undercut tab's two Add buttons behave differently** — the overview's "Add undercut"
+    records a cut at once (Ø shown as "—"); "Add undercut in this liner" starts a draft that needs
+    confirming.
+  - **Wear detail opens with the Add X tool selected**, so the first tap places a pit.
+  - **Home leaves no way back into the open job** except Unsaved drafts / Recent.
+  - **A bare metric designation ("M20") is accepted with zero pitch** and then warns "Zero pitch
+    — thread renders flat"; reject it at entry, or fill the ISO coarse pitch.
+  - **The Line Thickness % box saves on every keystroke** (clamped 50–200, so "1" on the way to
+    "150" briefly applies 50%) — the per-keystroke pattern removed from the OAL field.
+  - **Template mode has no on-preview indicator**; it persists, sits only in Settings, and is not
+    captured by Drawing profiles or reset by "Restore Drawing defaults".
+  - **Double-tap zoom reset exists only on the schematic preview**; the shared overlay (Runout /
+    Wear / Undercut / Consolidated) has neither it nor a Reset-zoom icon.
+  - **Project Notes never print** (the wear/undercut "Notes:" areas are blank write-in lines).
+  - **Measurement reference wording differs** — Settings "AFT (force AFT SET)" vs the panels'
+    "AFT"; the Keyway calculator opens a dialog titled "Keyway rough-cutter depth".
+  - **mm documents print rail dimensions at 3 decimals but footer/callout values at 1.**
 - **Liner vs taper compression on the consolidated sheet.** With "Liner & taper compression"
   turned down, tapers reach ~40% of true length while liners stop at ~69%: the liners' flat
   `PROFILE_MIN_LINER_PT` floor is λ-immune on that sheet (the schematic's lean floor lands both
@@ -197,9 +227,8 @@ androidTest) or the Add dialogs; their logic is pure and covered.
 - [ ] Inline "Add here" buttons between components in the list.
 - [ ] Preset library (common tapers, common shoulder patterns).
 - [ ] Final Schematic: "Create a new job from the final" — deliberately left out of the first pass.
-- [ ] Coupler bolt rows: a dimension rail for a bolt row (the footer carries the numbers today),
-  and authoring which side a blind 90° cross-drilled hole enters from (it is always drawn from
-  the top silhouette).
+- [ ] Coupler bolt rows: authoring which side a blind 90° cross-drilled hole enters from (it is
+  always drawn from the top silhouette).
 - [ ] Undo/redo follow-ups (not blocking v1.0): cross-session/persisted history (currently
   in-memory, cleared on process death and at every new/open/import boundary), and metadata
   (customer/vessel/job/notes/shaft position/unit) is deliberately excluded from undoable state —

@@ -71,7 +71,7 @@ class FeedbackIntentFactoryTest {
     }
 
     /**
-     * The same NPE reached a second button: Open drawing → ⋮ → "Send Feedback" attaches the
+     * The same NPE reached a second button: Open drawing → ⋮ → "Send feedback" attaches the
      * `.shaft` file itself, so it takes the same attachment branch. It looked like a different
      * feature and failed for identical reasons — worth its own pin, since a future change to
      * `create` could reopen it without touching `createDiagnostics`.

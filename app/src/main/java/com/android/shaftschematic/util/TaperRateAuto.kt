@@ -114,6 +114,41 @@ fun autoTaperRateText(
     exactDecimals = exactDecimals,
 )?.text
 
+/**
+ * The inches-per-foot spelling: a value followed by `/ft`, with an optional inch mark or `in`
+ * between — `3/4"/ft`, `3/4″/ft`, `3/4 in/ft`, `3/4/ft`, `1 1/4"/ft`, `0.75"/ft`. Case-insensitive.
+ */
+private val PER_FOOT_FORM = Regex("""^(.+?)\s*(?:"|″|''|in\.?)?\s*/\s*ft\.?$""", RegexOption.IGNORE_CASE)
+
+/** Reads a `/ft` spelling as inches of diameter change per foot of length, or null when it is not one. */
+internal fun parseInchesPerFoot(text: String): Float? {
+    val m = PER_FOOT_FORM.matchEntire(text.trim()) ?: return null
+    val inches = parseFractionOrDecimal(m.groupValues[1]) ?: return null
+    if (inches <= 0.0) return null
+    return (inches / 12.0).toFloat()
+}
+
+/** True for a bare `n/d` spelling — no colon, no `/ft` — which is ambiguous as a taper rate. */
+internal fun isBareFractionRateText(text: String): Boolean {
+    val t = text.trim()
+    return t.contains('/') && !t.contains(':') && PER_FOOT_FORM.matchEntire(t) == null
+}
+
+/**
+ * Reads a typed taper rate as a slope (diameter change per unit length).
+ *
+ * Accepted, deterministically:
+ * - a ratio `1:12` → 1/12 (any `N:D`, `D ≠ 0`);
+ * - inches per foot `3/4"/ft` (see [parseInchesPerFoot]) → value / 12, so `3/4"/ft` = 1:16;
+ * - a decimal: `12` reads as 1:12, a value under 1 as the slope itself (`0.0833`).
+ *
+ * A BARE slash fraction (`3/4`, `1/16`) is **never** read: a machinist writing 3/4 means 3/4
+ * inch per foot (1:16), while a slope reader would make it 0.75 — an absurd taper — so the only
+ * honest answer is to ask for the explicit form. [manualTaperRateBlockingMessage] names it.
+ *
+ * [allowAmbiguousBareOne] keeps a bare `1` readable on the legacy derivation path only; strict
+ * callers (every UI gate) reject it.
+ */
 fun parseTaperRateText(text: String, allowAmbiguousBareOne: Boolean = true): Float? {
     val t = text.trim()
     if (t.isEmpty()) return null
@@ -126,13 +161,11 @@ fun parseTaperRateText(text: String, allowAmbiguousBareOne: Boolean = true): Flo
         return num / den
     }
 
-    val slash = t.indexOf('/')
-    if (slash >= 0) {
-        val num = t.substring(0, slash).trim().toFloatOrNull() ?: return null
-        val den = t.substring(slash + 1).trim().toFloatOrNull() ?: return null
-        if (den == 0f) return null
-        return num / den
-    }
+    parseInchesPerFoot(t)?.let { return it }
+
+    // A bare fraction is ambiguous (see the KDoc); a per-foot spelling that failed to parse
+    // (e.g. "0/ft") is simply unreadable. Both end here.
+    if (t.contains('/')) return null
 
     val v = t.toFloatOrNull() ?: return null
     if (!allowAmbiguousBareOne && v == 1f) return null
@@ -157,11 +190,15 @@ fun manualTaperRateBlockingMessage(
     }
 
     if (raw == "1") {
-        return "Use a full ratio or fraction; `1` is ambiguous"
+        return "Use a full ratio or inches per foot; `1` is ambiguous"
+    }
+
+    if (isBareFractionRateText(raw)) {
+        return "Write $raw\"/ft or a ratio like 1:16; a bare fraction is ambiguous"
     }
 
     return if (parseTaperRateText(raw, allowAmbiguousBareOne = false) == null) {
-        "Enter a ratio, fraction, or decimal"
+        "Enter a ratio (1:12), inches per foot (3/4\"/ft), or a decimal"
     } else null
 }
 

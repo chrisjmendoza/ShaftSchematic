@@ -80,7 +80,8 @@ Specifically:
   `BoltHoleClocking`, only while Cross-drilled), Measure From (AFT | FWD), hole Ø,
   count, spacing (only when count > 1), through/blind toggle + depth (only when blind). The
   position field's label comes from ONE helper (`slotStartFieldLabel`) on both surfaces.
-  The card additionally has the deferred "show dimension rail" toggle.
+  The card additionally has the card-only "Show dimension rail" toggle (see the bolt-slot
+  invariant below for what it prints).
 
 **Carve-out — post-hoc display toggles are card-only.** A control that only exists to change
 how an *already-drawn* component prints, has a stable default, and is reached for after
@@ -135,8 +136,24 @@ branch on it identically. A CROSS hole also carries `clocking` — **DEG_90 from
 (dashed walls one hole width apart, entering from the top silhouette, via the ONE pure
 `crossBoreLines` in `geom/BoltHoleMath.kt`), IN_LINE draws the circle. CROSS rows print
 footer lines (Ø, "Hole center from FWD/AFT", and the clocking note ONLY when the shaft has a
-keyway); SEAM rows print nothing, as before. The coupling end view counts bolts from the
-first SEAM row only. See `docs/contracts/CouplerBoltSlot.md`.
+keyway); SEAM rows print no footer line. Either style may additionally print ONE opt-in
+dimension span: the card's "Show dimension rail" switch (`showDimensionRail`, default OFF —
+byte-identical off) adds a LOCAL `DimSpan` from the shaft END the row is measured from (the
+AFT face at 0 or the FWD face at OAL — the only span that references an end rather than a SET)
+to the NEAREST hole center, labelled with the stored distance in the row's own display unit,
+through the ONE builder `buildCouplerSlotSpans` (`pdf/ShaftPdfComposer.kt`) that the schematic
+and the consolidated sheet both call beside `buildTaperLengthSpans`; a hole centered on its
+face prints no span. **A bolt row's WINDOW never compresses** — the body-keyway-window rule
+applied to holes, because the circles are sized on the diameter scale while their centers ride
+the axial map, so inside a compressed body a 1″-on-3″ row printed as an overlapping chain
+(manual-figure report): `boltRowProtectedSpansMm` (first center − r … last center + r, padded
+by one hole diameter, clamped to the shaft; a cross-drilled hole's window is the same
+construction) pins at true scale through `boltRowPinnedSpans` in the ONE builder
+`profileFeatureSpans`, joins the S-break avoid ranges (`drawBodyRunsWithBreaks(boltRowAvoidSpansMm)`),
+and both draw sites place every hole off the row's own mapped window through the ONE pure
+`boltHoleCentersX` (`geom/BoltHoleMath.kt`), so the drawn pitch is the true pitch. Draw-only:
+the window reaches neither OAL, body resolution nor collision. The coupling end view counts
+bolts from the first SEAM row only. See `docs/contracts/CouplerBoltSlot.md`.
 
 ### Wear pits are reference features
 Wear pits (`WearRecord.pits` — a `WearPit` "X" marker per pit/dye-failure, small or large) are
@@ -265,13 +282,15 @@ other run** (on-device direction: a 95%-shaft body must keep its break or a long
 render). The protected window — the slot span padded by one keyway width, clamped to the body
 (`bodyKeywayProtectedSpansMm`, STORED spec) — pins at true scale
 (`keywayPinnedBodySpans`), the break gap steers clear of it (`breakGapCenter`, both body
-passes; a run with no clear placement prints plain), and the slot draw derives pt/mm from
+passes — THREE avoid sources: keyway windows, seal areas, bolt-row windows; a run with no
+clear placement prints plain), and the slot draw derives pt/mm from
 its OWN mapped span so it stays true-size inside a compressed body
 (`drawKeywayNotchBodyPdf`). Pinning the whole host body BECAUSE of its keyway, or suppressing
 its break outright, would be a regression on both sides. Separately, **an explicit body can
 opt out of compression wholesale** — `Body.compressOnDrawing` false pins its WHOLE stored
 span at true scale (`compressOptOutBodySpans`, added in the ONE builder `profileFeatureSpans`
-so both composers and the height-slider estimator agree) and suppresses its S-break, the
+— keyway windows, opt-out bodies and bolt-row windows all enter there, so both composers and
+the height-slider estimator agree) and suppresses its S-break, the
 long-span trigger included (`drawBodyRunsWithBreaks` guards the trigger on the flag; the
 foreshortening predicate self-disables at true width). New explicit bodies are created
 opted-OUT (`addBodyAt` — an authored section reads at true proportion, on-device request: a
@@ -293,8 +312,17 @@ kinds read it) can raise the liner floor toward true width —
 scale solve, and λ-fit whatever room the page has at the selected height
 (`fracFitFactor`) — do not let a liner demand lower the drawn shaft; control on the
 Output tab + the schematic and runout preview Tune sheets with a live kept-% readout
-(`estimatedLinerKeptFracOfTrue`); ONLY keyway-bearing bodies stay pinned at true width
-with the height yielding (`solveMaxProfileScale`). Body runs join the same λ pool
+(`estimatedLinerKeptFracOfTrue`); ONLY the pins — keyway windows, opted-out bodies,
+bolt-row windows — stay at true width with the height yielding (`solveMaxProfileScale`).
+**A pin never promotes a touching neighbour**: `normalizeFeatures`
+(`geom/ProfileCompression.kt`) merges touching or overlapping spans only WITHIN a pin class —
+floored with floored (keeping the larger floor and fraction, a liner butting a thread), pins
+with pins (a keyway window inside an opted-out body); a floored span a pin OVERLAPS is carved
+around the pin with each remainder keeping its own floor, and a pin that merely TOUCHES one
+removes nothing. Merging across the classes under `max(floor)` turned a liner butting a
+"Compress on drawing"-unticked body — the ordinary seal-journal layout — into a pin: a 16″
+liner drew wider than a 20″ one and the page budget it took squeezed an 18″ taper to a
+quarter of its length (manual-figure report). Body runs join the same λ pool
 (`PROFILE_BODY_RUN_MIN_FRAC_OF_TRUE` 0.30 — ratio-preserving gap floors), so liner raises
 can never consume the page and body-run relative lengths always read.
 The **"Shaft height" slider** (`RunoutConfig.heightScale`,
@@ -468,7 +496,13 @@ measurement sheet before shipping). Every final sheet is MARKED (`ProjectInfo.dr
 the Side line, and a filename suffix — `_Final`, `_Final_Runout` with bubbles elected,
 `_Final_RunoutSheet` for the banner's blank classic sheet: THREE distinct documents, never
 collapsed onto one name); blank on every other caller, so existing output is
-byte-identical. `PdfPreviewScreen`/`PdfExportRoute` take the target from the NAV ROUTE ARGUMENT
+byte-identical. Every OTHER export (the original schematic included) names its file through the
+ONE builder `buildOutputFilename` (`ui/screen/OutputDoc.kt`): `DocumentNaming`'s sanitized
+"Job - Customer - Vessel - SIDE" base + `_<document suffix>` (`_schematic`, `_runout`, `_wear`,
+`_undercuts`, `_consolidated`, then `_BlankDraft`), so the same sheet gets the same name from
+its own tab and from Export all, and a `/`, `:` or `*` in a customer name never reaches the
+filename (two schemes had drifted apart and one of them did not sanitize — manual-figure
+report). `PdfPreviewScreen`/`PdfExportRoute` take the target from the NAV ROUTE ARGUMENT
 (`?target=final`), never from ViewModel state. See `docs/contracts/FinalSchematic.md`.
 
 ### Paper sheets are theme-independent
@@ -639,7 +673,7 @@ ONE seal ≤ `MAX_SEAL_FACE_FRAC_OF_HOST` (45%) of the run, and TWO on one run �
 `MAX_SEAL_FACES_TOTAL_FRAC_OF_HOST` (50%) together, scaled down with their ratio preserved). The
 seal span NEVER enters the curve lists or the flat span: the curves are ramps only and the flat
 span runs ramp to ramp. **The S-break gap steers clear of seal areas** — `BodyDrawEdges.sealSpansX`
-joins the keyway windows as `breakGapCenter` avoid ranges (the keyway-window mechanism), so a sealed
+joins the keyway windows and bolt-row windows as `breakGapCenter` avoid ranges (the keyway-window mechanism), so a sealed
 body still breaks (on-device report: a run with two seal areas and a ramp at each end lost its break
 and read as a short body — the seal spans had shrunk its flat span until no gap placement fit). The
 length control appears only while that face's seal is on, and both draw sites build the lines from
@@ -695,8 +729,11 @@ add-dialog parity) is gated by Settings → "Liner shoulders" (`SettingsStore.
 linerShouldersEnabledFlow`, default OFF — on-device request: don't inundate the UI), but a
 liner already carrying shoulder values keeps its controls and always draws them: a device pref
 may hide empty entry fields, never authored work. The edge radius comes from the standard list
-(`LINER_SHOULDER_STD_RADII_IN`, provisional) and prints ONLY as a footer line ("Liner shoulder
-R: …") — no leader, no rail — which is what licenses the drawn clamps (blend-width floor,
+(`LINER_SHOULDER_STD_RADII_IN`, provisional) and prints ONLY as a footer line — ONE line per
+liner: "Liner shoulder R: ¼"" when one end or both ends share a radius, "AFT ¼", FWD ⅜"" when
+they differ, prefixed with the liner's title when more than one liner carries shoulders (a
+two-ended liner printed the bare line twice with nothing telling them apart — manual-figure
+report) — no leader, no rail — which is what licenses the drawn clamps (blend-width floor,
 oversize clamped where DRAWN, values never rewritten). The runout/consolidated sheet draws
 shoulders too, through the ONE shared pass `pdf/LinerShoulderDraw.kt` (`linerShoulderSpecs` +
 fill/stroke decomposition — both composers map mm through their OWN `xAt`/`rPx`, so a shoulder

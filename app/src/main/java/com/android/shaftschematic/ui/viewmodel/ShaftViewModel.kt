@@ -271,6 +271,18 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     internal val _unitLocked = MutableStateFlow(false)
     val unitLocked: StateFlow<Boolean> = _unitLocked.asStateFlow()
 
+    /**
+     * The Settings → Units default, as last collected from DataStore (the store's own fallback
+     * is MILLIMETERS). It is what a NEW drawing starts in — `newDocument` seeds `_unit` from it
+     * and locks the document, so a later change of the setting never flips an open or saved
+     * drawing; those keep the unit they were saved in. Kept as state so the seed never reads
+     * DataStore synchronously.
+     */
+    internal val _defaultUnit = MutableStateFlow(UnitSystem.MILLIMETERS)
+
+    /** The Settings "Dual-unit display" default, mirrored the same way for the same seed. */
+    internal val _dualUnitsDefault = MutableStateFlow(false)
+
     // Mixed units + dual display (document state, non-undoable — mirrors _runoutConfig's posture,
     // so dirtiness is derived from buildCurrentSnapshot). Display axis only; geometry stays mm.
     internal val _unitOverrides = MutableStateFlow<Map<String, UnitSystem>>(emptyMap())
@@ -945,11 +957,13 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        // Observe persisted defaults. Apply only when doc isn't unit-locked.
+        // Observe persisted defaults. The default is always remembered (it seeds the next new
+        // drawing); it is applied to the LIVE unit only when the document isn't unit-locked.
         viewModelScope.launch {
             SettingsStore.defaultUnitFlow(getApplication()).collectLatest { pref ->
+                val u = if (pref == UnitPref.INCHES) UnitSystem.INCHES else UnitSystem.MILLIMETERS
+                _defaultUnit.value = u
                 if (!_unitLocked.value) {
-                    val u = if (pref == UnitPref.INCHES) UnitSystem.INCHES else UnitSystem.MILLIMETERS
                     setUnit(u, persist = false) // avoid ping-ponging DataStore
                 }
             }
@@ -963,6 +977,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             // Global default drives the live session; a later document open (importJson) overrides
             // with the document's own stored value. persist = false avoids writing back the mirror.
             SettingsStore.dualUnitsDefaultFlow(getApplication()).collectLatest { persisted ->
+                _dualUnitsDefault.value = persisted
                 setDualUnits(persisted, persist = false)
             }
         }
@@ -1306,10 +1321,18 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         seedSessionAddDefaultsFromSpec(snapshot.shaftSpec)
     }
 
-    /** Sets the UI unit (preview/labels only). Model remains canonical mm. */
+    /**
+     * Sets the UI unit (preview/labels only). Model remains canonical mm.
+     *
+     * [persist] = true is the Settings → Units chips, the user naming the default every NEW
+     * drawing starts in; that choice is written whether or not the open document is
+     * unit-locked (the lock stops the stored default from flipping the document, not the user
+     * from setting the default — gating the write on the lock left a metric shop unable to
+     * make its next drawing metric from inside the editor). Every load path passes `false`.
+     */
     fun setUnit(newUnit: UnitSystem, persist: Boolean = true) {
         if (newUnit != _unit.value) _unit.value = newUnit
-        if (persist && !_unitLocked.value) {
+        if (persist) {
             viewModelScope.launch {
                 val pref = if (newUnit == UnitSystem.INCHES) UnitPref.INCHES else UnitPref.MILLIMETERS
                 SettingsStore.setDefaultUnit(getApplication(), pref)
@@ -1487,7 +1510,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
          * - If only one is provided: the other is derived so that |start − end| = rate × length
          *   and the derived diameter respects [smallEndAtStart] (SET < LET, always).
          * - If neither > 0: returns 0f for both.
-         * - Rate is parsed from [rateText] (formats: "1:12", "3/4", "0.0833", "1"). A "1:12"
+         * - Rate is parsed from [rateText] (formats: "1:12", "3/4\"/ft", "0.0833", "1"). A "1:12"
          *   ratio is interpreted as (1 unit diameter change per 12 units length), so rate = 1/12.
          * - If rate text is blank or unparseable the raw diameters are returned unchanged.
          * - Derived diameters are clamped ≥ 0.
@@ -1528,7 +1551,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
         /**
          * Parse a taper rate string into a dimensionless ratio (diameter change per length unit).
-         * Supports: "1:12" → 1/12, "3/4" → 0.75, "0.0833" → 0.0833, "1" → 1/12 (legacy bare int).
+         * Supports: "1:12" → 1/12, "3/4\"/ft" → 1/16, "0.0833" → 0.0833, a bare "1" (legacy
+         * stored text — strict UI gates reject it). A bare fraction ("3/4") reads as nothing:
+         * it is ambiguous between a slope and inches per foot, so the parser never guesses.
          */
         fun parseRateText(text: String): Float? = parseTaperRateText(text, allowAmbiguousBareOne = true)
     }

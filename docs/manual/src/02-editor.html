@@ -24,7 +24,7 @@
   <ol class="steps">
     <li>Tap <span class="ui">New Drawing</span>.</li>
     <li>Tap <span class="ui">Project information</span> on the toolbar and fill in the job details.</li>
-    <li>Check the unit (inches for a new drawing; see <a href="#editor-units">Units for the job</a>).</li>
+    <li>Check the unit (a new drawing takes the one set under <span class="path">Settings → Units</span>; see <a href="#editor-units">Units for the job</a>).</li>
     <li>Type the <span class="ui">Overall Length</span> and tap the green ✓.</li>
     <li>Add the components with <span class="ui">+ Add Component</span>, AFT end first is easiest.</li>
     <li>Tap <span class="ui">Save</span> and confirm the suggested name.</li>
@@ -52,7 +52,7 @@
   <p>Unsaved drafts on the home screen are listed by the name the job would be saved under, so three drafts are told apart by job, not just by age. A draft with no project information shows as <span class="ui">Untitled draft</span>.</p>
 
   <h3 id="editor-units">Units for the job</h3>
-  <p>A new drawing starts in inches. To draw in millimeters, open <span class="path">Settings → Units</span> and choose <span class="ui">Millimeters</span>. The job remembers its unit, so it reopens the way it was drawn. Inch fields accept fractions: type “3 1/2” or “150 3/4”.</p>
+  <p>A new drawing starts in the unit chosen under <span class="path">Settings → Units</span> (<span class="ui">Millimeters</span> or <span class="ui">Inches</span>), so set it once for the shop and every new drawing follows it. The job remembers its unit from then on: it reopens the way it was drawn, and changing the setting later never flips an open or saved job. While a job is open, the same chips switch how it is shown and typed. Inch fields accept fractions: type “3 1/2” or “150 3/4”.</p>
   <p>Switching units never changes a dimension (see <a href="#intro-units">Millimeters and inches</a>). To print one component in the other unit (a metric thread on an inch shaft), see <a href="#components-prints-in">Prints in: in | mm</a>.</p>
 
   <h2 id="editor-oal">The overall length</h2>
@@ -88,8 +88,8 @@
     <tbody>
       <tr><td><span class="ui">Body</span></td><td>Start, Length and Diameter; optional face finish (Square or Blend) and seal areas at each end; an optional keyway behind the <span class="ui">Keyway</span> checkbox.</td></tr>
       <tr><td><span class="ui">Liner</span></td><td><span class="ui">Measure From:</span> AFT | FWD, start from that end, Length, Outer Ø; shoulders when they are switched on in Settings.</td></tr>
-      <tr><td><span class="ui">Taper</span></td><td><span class="ui">Direction:</span> AFT | FWD, start from that end, Length, S.E.T. Ø, L.E.T. Ø, rate (Auto or Manual), and an optional keyway.</td></tr>
-      <tr><td><span class="ui">Thread</span></td><td>Start (or AFT | FWD end when the thread is not counted in the OAL), Imperial (TPI) or Metric (M-designation), diameter and pitch, Length, optional thread relief, and <span class="ui">Count in OAL</span>.</td></tr>
+      <tr><td><span class="ui">Taper</span></td><td><span class="ui">Measure From:</span> AFT | FWD, start from that end, Length, S.E.T. Ø, L.E.T. Ø, rate (Auto or Manual), and an optional keyway.</td></tr>
+      <tr><td><span class="ui">Thread</span></td><td>Start (or AFT | FWD end when the thread is not counted in the OAL), Imperial (TPI) or Metric (M-designation), diameter and pitch, Length, optional thread relief, and <span class="ui">Include thread in OAL</span>.</td></tr>
       <tr><td><span class="ui">Coupler Bolt Slot / Hole</span></td><td>Hole style (Seam or Cross-drilled), Measure From, position, hole Ø, count, spacing, and through or blind.</td></tr>
     </tbody>
   </table>
@@ -160,7 +160,7 @@
   <p>Every stretch of the shaft you have not covered with a component is drawn as bare shaft, so the drawing is always one continuous piece. Bare shaft is filled in automatically and shows in the carousel as a <span class="ui">Body (auto)</span> card. You never need to add bodies just to join components together.</p>
 
   <h3>Setting a bare-shaft diameter</h3>
-  <p>On a <span class="ui">Body (auto)</span> card, <span class="ui">Start</span> and <span class="ui">Length</span> are greyed: they come from the components on either side. The <span class="ui">Ø</span> field is live. Type a diameter to set that section of bare shaft. Each section takes its own diameter, so a shaft can step between liners without a single explicit body. Clear the field, or enter 0, to let that section take its diameter from its neighbors again.</p>
+  <p>On a <span class="ui">Body (auto)</span> card, <span class="ui">Start</span> and <span class="ui">Length</span> are greyed: they come from the components on either side. The <span class="ui">Diameter</span> field is live. Type a diameter to set that section of bare shaft. Each section takes its own diameter, so a shaft can step between liners without a single explicit body. Clear the field, or enter 0, to let that section take its diameter from its neighbors again.</p>
   <p>If two sections with different diameters are joined (because the component between them was deleted), the joined section takes the AFT section's diameter. The FWD section's diameter is kept in reserve and comes back if the two are split again.</p>
   <p>The auto card also carries <span class="ui">Show bare-shaft Ø on drawing</span> (one switch for all bare shaft) and the face finish and seal area controls; see <a href="#components-bodies">Bodies</a>.</p>
 
