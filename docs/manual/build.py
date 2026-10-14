@@ -1,6 +1,11 @@
-"""Builds the ShaftSchematic User Manual PDF from the chapter fragments in src/.
+"""Builds the ShaftSchematic User Manual from the chapter fragments in src/.
 
-    python docs/manual/build.py            # -> docs/manual/ShaftSchematic_User_Manual.pdf
+    python docs/manual/build.py            # -> the PDF, then the in-app manual
+    python docs/manual/build.py --web      # -> the in-app manual only (seconds; no Edge)
+
+The in-app manual is the same chapters as one reflowing web page, written to
+app/src/main/assets/manual/ with lossless WebP figures and a fingerprint of the sources it was
+built from (see write_web()).
 
 Prints through headless Microsoft Edge until the page numbers settle (usually two or three
 passes): the first prints with placeholder page numbers; the PDF's named destinations give the
@@ -11,7 +16,9 @@ Figures are regenerated separately by the gated ManualFiguresTest (see README.md
 """
 from __future__ import annotations
 
+import hashlib
 import html
+import io
 import os
 import re
 import shutil
@@ -22,12 +29,18 @@ import time
 from datetime import date
 from pathlib import Path
 
-import fitz  # PyMuPDF
+try:
+    import fitz  # PyMuPDF — the PDF build only; --web runs without it
+except ImportError:
+    fitz = None
 
 HERE = Path(__file__).resolve().parent
 SRC = HERE / "src"
 OUT_HTML = HERE / "manual.html"
 OUT_PDF = HERE / "ShaftSchematic_User_Manual.pdf"
+WEB_CSS = HERE / "web.css"
+WEB_DIR = HERE.parent.parent / "app" / "src" / "main" / "assets" / "manual"
+WEB_FINGERPRINT = "source.sha256"
 
 EDGE_CANDIDATES = [
     r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
@@ -596,11 +609,128 @@ def finish_pdf(pdf_path: Path, chapters: list[Chapter], version: str) -> None:
     os.replace(tmp, pdf_path)
 
 
+# ── In-app manual ─────────────────────────────────────────────────────────────────────────────
+# The app bundles the chapters as one web page (Help & FAQ → User manual). It is the PDF's text
+# without the print layout: figures stay where they were written, there are no page numbers,
+# and web.css reflows it for a phone. ManualAssetsTest recomputes source_fingerprint() and fails
+# when a chapter, stylesheet, figure or this script changed without `build.py --web`.
+TEXT_SUFFIXES = {".html", ".css", ".py"}
+
+
+def manual_sources() -> list[Path]:
+    """Every file the in-app manual is built from, sorted by path relative to docs/manual/."""
+    files = (list(SRC.glob("[0-9][0-9]-*.html")) + [HERE / "style.css", WEB_CSS, HERE / "build.py"]
+             + list((HERE / "figures").glob("*.png")))
+    return sorted(files, key=lambda f: f.relative_to(HERE).as_posix())
+
+
+def source_fingerprint() -> str:
+    """SHA-256 over each source's relative path, byte length and bytes; text files are read with
+    LF line endings, so a Windows checkout and a CI checkout agree. ManualAssetsTest mirrors this."""
+    h = hashlib.sha256()
+    for f in manual_sources():
+        data = f.read_bytes()
+        if f.suffix in TEXT_SUFFIXES:
+            data = data.replace(b"\r\n", b"\n")
+        h.update(f.relative_to(HERE).as_posix().encode("utf-8") + b"\n")
+        h.update(str(len(data)).encode("ascii") + b"\n")
+        h.update(data)
+    return h.hexdigest()
+
+
+def web_toc(chapters: list[Chapter]) -> str:
+    items = []
+    for c in chapters:
+        subs = "".join(f'<li><a href="#{hid}">{html.escape(t)}</a></li>' for hid, t in c.sections)
+        items.append(
+            f'<li><a href="#{c.id}"><span class="row"><span class="t"><span class="num">{c.n}</span>'
+            f'{html.escape(c.title)}<span class="aud">{AUDIENCE_LABEL.get(c.audience, "")}</span></span></span></a>'
+            f"<ul>{subs}</ul></li>"
+        )
+    return '<ol class="toc">' + "".join(items) + "</ol>"
+
+
+def web_document(chapters: list[Chapter]) -> str:
+    cover = next((n for n in ("cover-shaft.png", "schematic.png") if (HERE / "figures" / n).exists()), "")
+    by_aud = {
+        "office": [c for c in chapters if c.audience in ("office", "both")],
+        "shop": [c for c in chapters if c.audience in ("shop", "both")],
+    }
+
+    def links(cs: list[Chapter]) -> str:
+        return ", ".join(f'<a href="#{c.id}">{c.n}.&nbsp;{html.escape(c.title)}</a>' for c in cs)
+
+    body = "".join(re.sub(r'<section style="page: [^"]*" class="chapter"', '<section class="chapter"', c.html, count=1)
+                   for c in chapters)
+    body = re.sub(r'src="figures/([^"]+)\.png"', r'src="figures/\1.webp"', body)
+    band = f'<div class="band"><img src="figures/{Path(cover).stem}.webp" alt=""></div>' if cover else ""
+    return f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>ShaftSchematic User Manual</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="web.css">
+</head><body>
+<section class="cover">
+  <div class="titles">
+    <div class="kicker">Marine propulsion shafts</div>
+    <h1>ShaftSchematic</h1>
+    <p class="subtitle">User Manual — drawing, documenting and measuring propeller shafts, from the office to the lathe</p>
+  </div>
+  <div class="rule"></div>
+  {band}
+</section>
+<section class="front" id="contents">
+  <h1>Contents</h1>
+  {web_toc(chapters)}
+  <div class="howto">
+    <h2>Where to start</h2>
+    <p><strong>Building shafts and producing sheets in the office?</strong> Read {links(by_aud["office"][:4])}.</p>
+    <p><strong>Reading sheets and taking measurements on the floor?</strong> Read {links(by_aud["shop"][:3])}.</p>
+    <p>Stuck on something specific? The <a href="#ch-help">Troubleshooting</a> chapter is organized by the question you'd ask.
+    The <span class="ui">Help &amp; FAQ</span> screen gives the short answers and is searchable; its topics link to the matching section here.</p>
+  </div>
+</section>
+{body}
+</body></html>
+"""
+
+
+def write_web(chapters: list[Chapter]) -> None:
+    """Writes the in-app manual: index.html, both stylesheets, lossless WebP figures (about a
+    quarter of the PNGs' size, and lossless so a sheet can be zoomed in the app) and the source
+    fingerprint. The asset folder is rebuilt from scratch, so a dropped figure never lingers."""
+    from PIL import Image
+
+    if WEB_DIR.exists():
+        shutil.rmtree(WEB_DIR)
+    (WEB_DIR / "figures").mkdir(parents=True)
+    (WEB_DIR / "index.html").write_text(web_document(chapters), encoding="utf-8", newline="\n")
+    for css in (HERE / "style.css", WEB_CSS):
+        (WEB_DIR / css.name).write_bytes(css.read_bytes().replace(b"\r\n", b"\n"))
+    total = 0
+    for png in sorted((HERE / "figures").glob("*.png")):
+        buf = io.BytesIO()
+        with Image.open(png) as im:
+            im.save(buf, "WEBP", lossless=True, method=6)
+        (WEB_DIR / "figures" / f"{png.stem}.webp").write_bytes(buf.getvalue())
+        total += buf.tell()
+    (WEB_DIR / WEB_FINGERPRINT).write_text(source_fingerprint() + "\n", encoding="utf-8", newline="\n")
+    print(f"in-app manual: {WEB_DIR.relative_to(HERE.parent.parent).as_posix()}, "
+          f"figures {total // 1024} KB")
+
+
 def main() -> None:
     files = sorted(SRC.glob("[0-9][0-9]-*.html"))
     if not files:
         raise SystemExit("no chapters in src/")
     chapters = [Chapter(i + 1, f) for i, f in enumerate(files)]
+    if "--web" in sys.argv[1:]:
+        write_web(chapters)
+        return
+    if fitz is None:
+        raise SystemExit("the PDF build needs PyMuPDF (pip install pymupdf); --web builds the in-app manual without it")
     version = app_version()
 
     pages: dict[str, int] = {}
@@ -769,6 +899,8 @@ def main() -> None:
     with fitz.open(OUT_PDF) as d:
         n_pages = d.page_count
     print(f"{OUT_PDF.name}: {n_pages} pages, {len(chapters)} chapters, {n} passes")
+    # Fresh chapters: the layout passes mark some snug, which is print-only.
+    write_web([Chapter(i + 1, f) for i, f in enumerate(files)])
 
 
 if __name__ == "__main__":

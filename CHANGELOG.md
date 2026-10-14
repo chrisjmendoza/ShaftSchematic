@@ -6,6 +6,32 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-10-14
+
+### feat: the User Manual in the app
+
+- **Help & FAQ → User manual** opens the manual inside the app, offline: the same chapters
+  as the printed PDF, bundled as one reflowing page (`app/src/main/assets/manual/`, ~0.9 MB,
+  figures as lossless WebP) and shown in a WebView (`ManualRoute`, route
+  `manual?anchor=&find=`). Toolbar: Contents, Find in manual (match count, previous/next),
+  Print manual (the print stylesheet lays it out as the book). Back steps back from a
+  cross-reference before it leaves; pinch zooms a sheet. JavaScript and file access are off,
+  and nothing loads from outside the bundle.
+- **Help links into it instead of repeating it.** A "User manual" card heads the Help list;
+  55 topics end in "Read more in the manual", opening the manual at the matching section
+  (`HelpTopic.manualAnchor`); and a search ends in "Search the user manual for "…"", which
+  opens the manual's find bar on the same words.
+- **`build.py --web`** writes the in-app copy in seconds without Edge (a full PDF build runs
+  it at its end), with `web.css` as the screen stylesheet over the unchanged print one, and
+  records `source.sha256`. `ManualAssetsTest` recomputes the fingerprint and fails on a stale
+  copy, on a Help anchor the page no longer has, and on any cross-reference, image or
+  stylesheet that does not resolve inside the bundle; `docs/manual/` is declared a unit-test
+  input, so a chapter edit re-runs it locally instead of reporting up to date.
+  `HelpManualLinksTest` and `ManualRouteTest` cover the three Help entry points and the screen.
+- Manual: four `h3`s gain ids so Help can land on them (`reading-units`, `recording-coupling`,
+  `settings-undercut-style`, `help-backup`); chapter 1's Help & FAQ section and chapter 7's
+  Help & FAQ entry describe the in-app manual; the PDF is rebuilt with them.
+
 ## 2026-10-13
 
 ### docs(manual): sample shaft threaded at the AFT end only; acronyms expanded at first use
