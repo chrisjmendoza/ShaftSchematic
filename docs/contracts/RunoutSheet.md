@@ -1089,7 +1089,9 @@ Two rules make the difference between a printed keyway and a silent nothing:
    run with NO clear placement prints plain. Keyed bodies break like any other run — only the
    slot's own window is protected, so there is no exemption anywhere. A body's **seal areas**
    (`BodyDrawEdges.sealSpansX`) are the second avoid source, so a sealed body keeps its break too
-   and no dashed seal line floats in the gap.
+   and no dashed seal line floats in the gap; the coupler bolt-row windows
+   (`boltRowProtectedSpansMm`, threaded as `boltRowAvoidSpansMm`) are the third, so the gap
+   never lands on a hole row or a cross-bore (`BreakGapBoltRowAvoidanceTest`).
    Pinned by `BreakGapKeywayAvoidanceTest` (pure placement + both draw sites),
    `BreakGapSealAvoidanceTest` (seal areas) and `KeywayPinnedBodySpansTest` (window-not-body,
    long-shaft scale survival).

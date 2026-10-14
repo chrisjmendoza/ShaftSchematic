@@ -268,23 +268,23 @@
   <aside class="note"><p>If something goes wrong while the sheet is being drawn, the app still writes a valid PDF that shows a “PDF export failed” page instead of a damaged or empty file. Re-export after fixing the cause.</p></aside>
 
   <h3>File names</h3>
-  <p>The suggested name is built from the job information (Customer, Vessel, Job #) and the shaft side. A side of PORT, STBD or CENTER is added; Other adds nothing. Blank job fields are skipped.</p>
+  <p>Every document's name starts from the same base as the saved job: Job #, Customer and Vessel joined by “ - ”, then the shaft side. A side of PORT, STBD or CENTER is added; Other adds nothing. Blank job fields are skipped, and a character a file name cannot hold (such as / or :) becomes an underscore. Each document then adds its own ending.</p>
   <table class="ref">
     <thead><tr><th>Document</th><th>Suggested filename (example: Job 814201, NorthSound Marine, FV Tern Point, PORT)</th></tr></thead>
     <tbody>
-      <tr><td>Schematic (Schematic tab)</td><td>814201 - NorthSound Marine - FV Tern Point - PORT.pdf<br>No job information at all: Shaft_&lt;date&gt;_&lt;time&gt;.pdf</td></tr>
+      <tr><td>Schematic (Schematic tab, and the same file from <span class="ui">Export all</span>)</td><td>814201 - NorthSound Marine - FV Tern Point - PORT_schematic.pdf</td></tr>
+      <tr><td>Runout Sheet</td><td>…PORT_runout.pdf</td></tr>
+      <tr><td>Wear Document</td><td>…PORT_wear.pdf</td></tr>
+      <tr><td>Undercut Drawing</td><td>…PORT_undercuts.pdf</td></tr>
+      <tr><td>Consolidated Sheet</td><td>…PORT_consolidated.pdf</td></tr>
       <tr><td>Final schematic</td><td>…PORT_Final.pdf</td></tr>
       <tr><td>Final schematic with Runout bubbles</td><td>…PORT_Final_Runout.pdf</td></tr>
       <tr><td>Final runout sheet (Final banner)</td><td>…PORT_Final_RunoutSheet.pdf</td></tr>
-      <tr><td>Runout Sheet</td><td>NorthSound Marine_FV Tern Point_814201_PORT_runout.pdf</td></tr>
-      <tr><td>Wear Document</td><td>…_PORT_wear.pdf</td></tr>
-      <tr><td>Undercut Drawing</td><td>…_PORT_undercuts.pdf</td></tr>
-      <tr><td>Consolidated Sheet</td><td>…_PORT_consolidated.pdf</td></tr>
-      <tr><td>Schematic written by <span class="ui">Export all</span></td><td>…_PORT_schematic.pdf</td></tr>
-      <tr><td>Any blank draft</td><td>adds _BlankDraft at the end, for example …_Final_BlankDraft.pdf</td></tr>
+      <tr><td>Any blank draft</td><td>adds _BlankDraft at the end, for example …PORT_runout_BlankDraft.pdf</td></tr>
+      <tr><td>No job information at all</td><td>Shaft_schematic.pdf, Shaft_runout.pdf and so on; the Final documents use Shaft_&lt;date&gt;_&lt;time&gt;_Final.pdf</td></tr>
     </tbody>
   </table>
-  <p>The three Final names are deliberately different, so the welding copy, the pre-ship measurement sheet and the blank final runout sheet never overwrite each other. The side is part of every name, so the PORT and STBD shafts of a twin-screw job don't overwrite each other either.</p>
+  <p>The schematic gets the same name whether it is exported from its own tab or by <span class="ui">Export all</span>. The three Final names are deliberately different, so the welding copy, the pre-ship measurement sheet and the blank final runout sheet never overwrite each other. The side is part of every name, so the PORT and STBD shafts of a twin-screw job don't overwrite each other either.</p>
 
   <h3 id="documents-blocked">Why Print and Export are greyed out</h3>
   <p>Printing and exporting are blocked until the drawing can be trusted. The tab shows the reason in red above the buttons. On the Schematic tab, tapping the greyed <span class="ui">PDF preview</span> icon shows it as a message.</p>
@@ -354,7 +354,7 @@
   <ul>
     <li><strong>Bare shaft always compresses.</strong> Auto (bare-shaft) sections are what gives up length first.</li>
     <li><strong>Explicit bodies start uncompressed.</strong> A body you add draws at true proportion, with no S-break. To let a very long explicit body compress, tick <span class="ui">Compress on drawing</span> on its card (see <a href="#components-compress">Compress on drawing</a>). Bodies in older saved jobs keep compressing until you untick it.</li>
-    <li><strong>Keyways stay true size.</strong> The stretch of a body around its keyway never shortens, and the break is placed clear of it. The keyway's width scales with the drawn height, so it stays in proportion at any height.</li>
+    <li><strong>Keyways and bolt rows stay true size.</strong> The stretch of a body around its keyway, or around a row of coupler bolt holes, never shortens, and the break is placed clear of it. The keyway's width scales with the drawn height, so it stays in proportion at any height; the bolt holes keep their true spacing.</li>
   </ul>
 
   <h3>Liners and tapers keep their proportions</h3>

@@ -30,8 +30,10 @@ just per field.
 
 ### The bounds warning is shared, not mirrored
 
-The dialogs' pre-submit "Falls outside shaft span (OAL *n* mm)" warning and the carousel
-cards' "Extends past shaft length (OAL *n* mm)" chip are **two wordings of ONE predicate** —
+The dialogs' pre-submit "Falls outside shaft span (OAL *n*")" warning and the carousel
+cards' "Extends past shaft length (OAL *n*")" chip (both quote the OAL in the document's
+display unit — `120"` on an inch drawing, `3048 mm` on a metric one — through
+`formatLenWithUnit`, so every caller passes the unit) are **two wordings of ONE predicate** —
 `outsideShaftSpan` in `ui/util/ComponentWarnings.kt`, reached through
 `outsideShaftSpanMessage` (dialogs, via `collectAddWarnings`) and `pastShaftEndMessage`
 (cards). Parity here is enforced by construction rather than by duplication: **do not fork the

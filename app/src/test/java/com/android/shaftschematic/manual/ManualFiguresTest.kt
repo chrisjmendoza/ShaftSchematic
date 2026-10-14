@@ -406,10 +406,10 @@ class ManualFiguresTest {
         crop(features, "feature-keyway-spooned.png", 52f, 240f, 146f, 318f, CROP_SCALE)
         crop(features, "feature-thread-relief.png", 24f, 240f, 100f, 318f, CROP_SCALE)
         crop(features, "feature-liner-shoulder.png", 168f, 235f, 243f, 322f, CROP_SCALE)
-        crop(features, "feature-sbreak.png", 235f, 240f, 320f, 318f, CROP_SCALE)
+        crop(features, "feature-sbreak.png", 220f, 240f, 320f, 318f, CROP_SCALE)
         crop(features, "feature-blend-seal.png", 310f, 240f, 430f, 352f, CROP_SCALE)
         crop(features, "feature-keyway-captured.png", 508f, 240f, 622f, 318f, CROP_SCALE)
-        crop(features, "feature-bolt-holes.png", 625f, 236f, 764f, 322f, CROP_SCALE)
+        crop(features, "feature-bolt-holes.png", 590f, 232f, 764f, 332f, CROP_SCALE)
     }
 
     private companion object {

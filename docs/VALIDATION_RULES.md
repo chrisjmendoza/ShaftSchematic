@@ -199,8 +199,8 @@ Two message wrappers read it, and nothing else may re-derive the comparison:
 
 | Wrapper | Surface | Text |
 |---------|---------|------|
-| `outsideShaftSpanMessage` | Add dialogs, via `collectAddWarnings` (§5.3) | "Falls outside shaft span (OAL *n* mm)" |
-| `pastShaftEndMessage` | Carousel cards, via the four per-component predicates | "Extends past shaft length (OAL *n* mm)" |
+| `outsideShaftSpanMessage` | Add dialogs, via `collectAddWarnings` (§5.3) | "Falls outside shaft span (OAL *n*")" / "(OAL *n* mm)" — the OAL in the document's display unit through `formatLenWithUnit` |
+| `pastShaftEndMessage` | Carousel cards, via the four per-component predicates | "Extends past shaft length (OAL *n*")" / "(OAL *n* mm)" — same formatting |
 
 Both are **advisory**: they ride the amber warning chip / advisory banner
 (`tertiaryContainer`), never the error chip, because oversize is a legal state

@@ -314,7 +314,8 @@ edges carry no notches (on-device report; do not reintroduce them). Drawn width:
 `MAX_SEAL_FACE_FRAC_OF_HOST` (45%) of its run, two on one run ≤ `MAX_SEAL_FACES_TOTAL_FRAC_OF_HOST`
 (50%) together, ratio preserved. The seal span never enters the curve lists or the flat span (the
 flat span runs ramp to ramp); instead **the S-break gap steers clear of it** —
-`BodyDrawEdges.sealSpansX` joins the keyway windows as `breakGapCenter` avoid ranges, so a sealed
+`BodyDrawEdges.sealSpansX` joins the keyway windows and the coupler bolt-row windows
+(`boltRowProtectedSpansMm`) as `breakGapCenter` avoid ranges, so a sealed
 body still breaks (on-device report: a run with two seal areas and a ramp at each end printed plain
 and read as a short body) and no dashed line floats in the paper gap. The seal lines draw LAST in
 the body pass, after fills, stubs and caps. The dash is

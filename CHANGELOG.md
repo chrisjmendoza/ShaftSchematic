@@ -57,8 +57,10 @@ batch is what that turned up. Product calls it raised but did not settle are in 
   comment (per-keystroke OAL, a header unit selector) rewritten.
 - Docs: CLAUDE.md rules for the pin classes, bolt windows, the slot rail, the footer line and
   the filename builder; contracts (CouplerBoltSlot, AddComponentDialogs, TaperRate,
-  Persistence, ShaftViewModel, RunoutSheet, FinalSchematic), PDF_EXPORT, DATA_MODEL,
-  VALIDATION_RULES, GLOSSARY, the manual sources and Help; figures regenerated.
+  Persistence, ShaftViewModel, ShaftScreen, RunoutSheet, Navigation), PDF_EXPORT, DATA_MODEL,
+  COMPONENT_CONTRACT, VALIDATION_RULES, STYLE_GUIDE, GLOSSARY, ROADMAP, the manual sources
+  (the coupler slot's "Show dimension rail" is now documented, the file-name table follows the
+  one builder, Units/TIR/taper-rate wording) and Help; figures regenerated.
   Tests: +54 (2718 green).
 
 ### docs(manual): printed User Manual + stale Help topics corrected

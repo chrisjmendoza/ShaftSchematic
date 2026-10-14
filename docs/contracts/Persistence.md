@@ -173,8 +173,8 @@ Invariants
 
 ## Doc format & units policy (`doc/ShaftDocCodec.kt`)
 
-- Canonical storage: **millimeters** in `ShaftSpec`; UI unit persisted to Settings
-  as the "last used unit".
+- Canonical storage: **millimeters** in `ShaftSpec`; the Settings → Units chips persist the
+  app-wide default, which is the unit every NEW drawing starts in (see "New drawing" below).
 - Single envelope version `CURRENT_VERSION = 1` (`ShaftDocV1`) plus a bare-spec
   legacy fallback. `decode()` tries `ShaftDocV1` first (throws
   `UnsupportedDocVersionException` if `doc.version > CURRENT_VERSION`) and falls back

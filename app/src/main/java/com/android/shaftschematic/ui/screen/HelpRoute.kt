@@ -286,7 +286,8 @@ internal val helpSections: List<HelpSection> = listOf(
             ),
             HelpTopic(
                 "Millimeters and inches",
-                "Settings → Units picks how values are displayed and typed. Internally every " +
+                "Settings → Units picks the unit every new drawing starts in, and how the open " +
+                    "drawing's values are displayed and typed. Internally every " +
                     "value is stored in millimeters, so switching units never changes your " +
                     "numbers — it only changes how they are shown. Inch fields accept " +
                     "fractions like 3 1/2."

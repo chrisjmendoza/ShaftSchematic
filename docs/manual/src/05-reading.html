@@ -84,6 +84,7 @@
     <li><strong>The rails below carry the liners and the end tapers.</strong> Each end taper gets its length. Each liner gets two dimensions: a datum dimension locating it, and its length (see the next section).</li>
     <li><strong>Shorter dimensions sit lower.</strong> A dimension that sits inside a longer one takes the rail below it. On the tailshaft, the 14″ AFT taper sits under the 22″ datum that contains it, and the 22″ sits under the OAL.</li>
     <li><strong>Bodies and bare shaft carry no rail dimension.</strong> Their length is whatever the liners and tapers leave between them.</li>
+    <li><strong>A coupler bolt row can add one.</strong> When the row's card has <span class="ui">Show dimension rail</span> on, a rail runs from the end of the shaft the row is measured from to the center of its nearest hole, carrying the entered distance. Off, the usual case, the row prints no dimension.</li>
   </ul>
   <p>How a dimension is drawn:</p>
   <ul>
@@ -124,7 +125,7 @@
     <thead><tr><th>Line</th><th>What it means</th></tr></thead>
     <tbody>
       <tr><td>“AFT Taper” / “FWD Taper”</td><td>Column heading. A shaft end without a taper has no heading.</td></tr>
-      <tr><td>“Rate:”</td><td>The taper. A 1:12 taper prints as “1″/ft” and a 1:16 taper as “3/4″/ft”; any other taper prints as a ratio.</td></tr>
+      <tr><td>“Rate:”</td><td>The taper. On inch sheets a 1:12 taper prints as “1″/ft” and a 1:16 taper as “3/4″/ft”; any other rate prints as it was typed (a taper left in Auto prints its computed ratio).</td></tr>
       <tr><td>“L.E.T.:”</td><td>Diameter at the large end of the taper.</td></tr>
       <tr><td>“S.E.T.:”</td><td>Diameter at the small end of the taper.</td></tr>
       <tr><td>“Length:”</td><td>Taper length.</td></tr>
@@ -227,8 +228,8 @@
 
   <h3 id="reading-bolts">Coupler bolt holes</h3>
   <figure class="detail">
-    <img src="figures/feature-bolt-holes.png" alt="Close-up of the coupling end: two dashed vertical lines across the shaft, and a row of three circles straddling the top outline and three straddling the bottom outline.">
-    <figcaption>A cross-drilled hole drawn hidden (the two dashed lines) and a seam bolt row (the circles on the outline).</figcaption>
+    <img src="figures/feature-bolt-holes.png" alt="Close-up of the coupling end: two dashed vertical lines across the shaft, then a row of three circles straddling the top outline and three straddling the bottom outline.">
+    <figcaption>A cross-drilled hole drawn hidden (the two dashed lines) and, FWD of it, a seam bolt row (the circles on the outline, one per bolt).</figcaption>
   </figure>
   <dl class="terms">
     <dt>Seam holes (muff coupling)</dt>
