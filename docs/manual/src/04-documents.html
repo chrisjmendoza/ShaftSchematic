@@ -9,7 +9,7 @@
     <thead><tr><th>Tab</th><th>Document it produces</th><th>What it carries</th></tr></thead>
     <tbody>
       <tr><td><span class="ui">Schematic</span></td><td>Schematic</td><td>The dimensioned shaft drawing: dimension rails, Ø callouts, component names and the spec footer (tapers, keyways, threads, job information).</td></tr>
-      <tr><td><span class="ui">Runout Sheet</span></td><td>Runout Sheet</td><td>The shaft profile with numbered runout bubbles, recorded TIR values and high spots, and the optional coupling face end view.</td></tr>
+      <tr><td><span class="ui">Runout Sheet</span></td><td>Runout Sheet</td><td>The shaft profile with numbered runout bubbles, recorded TIR (total indicated runout) values and high spots, and the optional coupling face end view.</td></tr>
       <tr><td><span class="ui">Wear Document</span></td><td>Wear Document</td><td>The shaft outline and liner detail strips with wear areas, pit marks and measured Ø readings.</td></tr>
       <tr><td><span class="ui">Undercut Drawing</span></td><td>Undercut Drawing</td><td>Machined-below-surface sections, shown in zoomed detail strips with their lengths and Ø.</td></tr>
       <tr><td><span class="ui">Final Schematic</span></td><td>Final schematic and a blank final runout sheet</td><td>The drawing the shaft leaves with, after the wear and undercut work. Every sheet is marked Final. See <a href="#documents-final">The Final Schematic tab</a>.</td></tr>
@@ -33,7 +33,7 @@
   <table class="ref">
     <thead><tr><th>Document</th><th>Needs</th><th>Prints without it</th></tr></thead>
     <tbody>
-      <tr><td>Schematic</td><td>At least one component (body, taper, thread or liner) and no overlapping components.</td><td>The OAL. A shaft with no OAL typed yet draws to the end of its last component.</td></tr>
+      <tr><td>Schematic</td><td>At least one component (body, taper, thread or liner) and no overlapping components.</td><td>The OAL (overall length). A shaft with no OAL typed yet draws to the end of its last component.</td></tr>
       <tr><td>Runout Sheet</td><td>A built shaft.</td><td>Readings. Stations without a value print as empty bubbles, ready to fill by hand.</td></tr>
       <tr><td>Wear Document</td><td>A built shaft.</td><td>A wear record. Without one it prints a clean inspection form.</td></tr>
       <tr><td>Undercut Drawing</td><td>A built shaft.</td><td>Recorded undercuts.</td></tr>
@@ -207,7 +207,7 @@
   <p>The app has two ways to produce a sheet for marking up by hand. They answer different needs.</p>
 
   <h3>Blank draft (write-in)</h3>
-  <p>A blank draft prints the full drawing and form layout with every value left empty. Dimension lines still cut their break, which becomes a space to write in. The footer keeps every label (“Rate:”, “L.E.T.:”, “KW:”, “Customer:” …) followed by a writing rule, and the lines are spaced wider to suit handwriting. Component names and S.E.T. markers still print, because they identify parts rather than measure them.</p>
+  <p>A blank draft prints the full drawing and form layout with every value left empty. Dimension lines still cut their break, which becomes a space to write in. The footer keeps every label — “Rate:”, “L.E.T.:” (large end of taper), “KW:” (keyway), “Customer:” and so on — each followed by a writing rule, and the lines are spaced wider to suit handwriting. Component names and S.E.T. (small end of taper) markers still print, because they identify parts rather than measure them.</p>
   <figure class="wide">
     <img src="figures/schematic-blank.png" alt="A blank-draft schematic: the shaft outline with dimension lines broken for write-in values, a Ø leader with a writing rule, component names, and a footer of labeled writing rules for both tapers and the job information.">
     <figcaption>A blank-draft schematic. Each dimension break, the Ø leader and every footer line is a write-in spot.</figcaption>
@@ -268,7 +268,7 @@
   <aside class="note"><p>If something goes wrong while the sheet is being drawn, the app still writes a valid PDF that shows a “PDF export failed” page instead of a damaged or empty file. Re-export after fixing the cause.</p></aside>
 
   <h3>File names</h3>
-  <p>Every document's name starts from the same base as the saved job: Job #, Customer and Vessel joined by “ - ”, then the shaft side. A side of PORT, STBD or CENTER is added; Other adds nothing. Blank job fields are skipped, and a character a file name cannot hold (such as / or :) becomes an underscore. Each document then adds its own ending.</p>
+  <p>Every document's name starts from the same base as the saved job: Job #, Customer and Vessel joined by “ - ”, then the shaft side. A side of PORT, STBD (starboard) or CENTER is added; Other adds nothing. Blank job fields are skipped, and a character a file name cannot hold (such as / or :) becomes an underscore. Each document then adds its own ending.</p>
   <table class="ref">
     <thead><tr><th>Document</th><th>Suggested filename (example: Job 814201, NorthSound Marine, FV Tern Point, PORT)</th></tr></thead>
     <tbody>

@@ -20,12 +20,12 @@
       <tr><td>Length, inches</td><td>Whole numbers bare; a value that lands on a sixteenth as a fraction; anything else to three decimals.</td><td>14″ · 11 1/2″ · 2 1/2″</td></tr>
       <tr><td>Diameter, inches</td><td>Whole numbers bare; every other value at exactly three decimals.</td><td>Ø 8″ · Ø 5.750″ · 3.833″</td></tr>
       <tr><td>Millimeters</td><td>Dimension rails to three decimals; footer lines and Ø callouts to one decimal, trailing zero dropped. Always with the unit.</td><td>38.1 mm</td></tr>
-      <tr><td>Runout (TIR)</td><td>Thousandths, leading zero dropped, the way a TIR is hand-written.</td><td>.001 · .002 · .010</td></tr>
+      <tr><td>Runout (TIR)</td><td>Thousandths, leading zero dropped, the way a TIR (total indicated runout) is hand-written.</td><td>.001 · .002 · .010</td></tr>
     </tbody>
   </table>
 
   <h3>Fractions</h3>
-  <p>Fractions are set as built-up fractions. The standard style is <strong>diagonal</strong>: a small raised numerator, a slanted bar and the denominator on the line, as in the keyway line “KW: 1 1/4″ × 7/16″ × 11 1/2″” on the schematic below. The office can switch every sheet to <strong>stacked</strong> fractions (numerator over denominator, the shop-ruler look) or <strong>plain</strong> ones (3/16 on one line) under <span class="path">Settings → Drawing → Fractions</span>. Dates and job numbers are never turned into fractions.</p>
+  <p>Fractions are set as built-up fractions. The standard style is <strong>diagonal</strong>: a small raised numerator, a slanted bar and the denominator on the line, as in the KW (keyway) line “KW: 1 1/4″ × 7/16″ × 11 1/2″” on the schematic below. The office can switch every sheet to <strong>stacked</strong> fractions (numerator over denominator, the shop-ruler look) or <strong>plain</strong> ones (3/16 on one line) under <span class="path">Settings → Drawing → Fractions</span>. Dates and job numbers are never turned into fractions.</p>
 
   <h3>Units, mixed units and dual values</h3>
   <ul>
@@ -80,7 +80,7 @@
   </figure>
   <p>The dimensions sit in rows — rails — above the shaft.</p>
   <ul>
-    <li><strong>The top rail is the overall length.</strong> It always prints the OAL exactly as typed, prefixed “OAL”. Where its bracket lands tells you how the threads were counted: when the end threads are excluded from OAL, the bracket runs S.E.T. to S.E.T. and the threads hang outside it, as on the tailshaft above. When a thread counts toward OAL, that end of the bracket moves out to the end of the thread.</li>
+    <li><strong>The top rail is the overall length.</strong> It always prints the OAL (overall length) exactly as typed, prefixed “OAL”. Where its bracket lands tells you how the threads were counted: when the end threads are excluded from OAL, the bracket runs S.E.T. (small end of taper) to S.E.T. and the threads hang outside it, as on the tailshaft above. When a thread counts toward OAL, that end of the bracket moves out to the end of the thread.</li>
     <li><strong>The rails below carry the liners and the end tapers.</strong> Each end taper gets its length. Each liner gets two dimensions: a datum dimension locating it, and its length (see the next section).</li>
     <li><strong>Shorter dimensions sit lower.</strong> A dimension that sits inside a longer one takes the rail below it. On the tailshaft, the 14″ AFT taper sits under the 22″ datum that contains it, and the 22″ sits under the OAL.</li>
     <li><strong>Bodies and bare shaft carry no rail dimension.</strong> Their length is whatever the liners and tapers leave between them.</li>
@@ -107,7 +107,7 @@
   <h3 id="reading-dia">Diameter callouts</h3>
   <p>Diameters that matter on the floor hang <strong>below</strong> the shaft, each on an L-shaped leader that touches the component it belongs to: “Ø 5.750″” for the Stern tube liner, “Ø 5.500″” for the Seal liner. When two callouts would crowd each other, one drops to a second row.</p>
   <ul>
-    <li><strong>Liner ODs</strong> print by default.</li>
+    <li><strong>Liner ODs</strong> (outside diameters) print by default.</li>
     <li><strong>Body and bare-shaft diameters</strong> print only where the office has switched them on for that body (<span class="ui">Show Ø on drawing</span>). A clean schematic with no body callouts is normal.</li>
     <li>Whatever the callouts show, the footer's “Body:” line lists the diameter of every named body on the shaft (see <a href="#reading-footer">The footer</a>).</li>
   </ul>
@@ -126,14 +126,14 @@
     <tbody>
       <tr><td>“AFT Taper” / “FWD Taper”</td><td>Column heading. A shaft end without a taper has no heading.</td></tr>
       <tr><td>“Rate:”</td><td>The taper. On inch sheets a 1:12 taper prints as “1″/ft” and a 1:16 taper as “3/4″/ft”; any other rate prints as it was typed (a taper left in Auto prints its computed ratio).</td></tr>
-      <tr><td>“L.E.T.:”</td><td>Diameter at the large end of the taper.</td></tr>
+      <tr><td>“L.E.T.:”</td><td>Diameter at the L.E.T. (large end of taper).</td></tr>
       <tr><td>“S.E.T.:”</td><td>Diameter at the small end of the taper.</td></tr>
       <tr><td>“Length:”</td><td>Taper length.</td></tr>
       <tr><td>“KW:”</td><td>Taper keyway, width × depth × length.</td></tr>
       <tr><td>“Thread:”</td><td>Major Ø × threads per inch × length (a metric thread prints its designation × length).</td></tr>
       <tr><td>“Customer:” “Vessel:” “Job #:” “Item:” “Date:”</td><td>The job. Item prints only when the office filled it in. The date is the day the sheet was printed.</td></tr>
       <tr><td>“Body:”</td><td>The diameters of the bodies the office drew as their own components (not bare shaft), smallest first.</td></tr>
-      <tr><td>Side badge</td><td>“PORT”, “STBD” or “CENTER”, in bold under the job block.</td></tr>
+      <tr><td>Side badge</td><td>“PORT”, “STBD” (starboard) or “CENTER”, in bold under the job block.</td></tr>
     </tbody>
   </table>
   <p>Extra lines appear when the shaft has the feature. Each prints in the column for the half of the shaft the feature sits in:</p>
@@ -172,7 +172,7 @@
   </figure>
 
   <h3>Threads</h3>
-  <p>A thread draws as a rectangle at its major diameter filled with slanted hatch lines. The hatch is a symbol: its lean suggests the pitch, but the lines are not a thread count. Read the size from the footer's “Thread:” line — “Thread: 3.500″ × 4 TPI × 4″” is a 3 1/2″ major diameter, 4 threads per inch, 4″ long. A thread excluded from the overall length sits outside the OAL bracket.</p>
+  <p>A thread draws as a rectangle at its major diameter filled with slanted hatch lines. The hatch is a symbol: its lean suggests the pitch, but the lines are not a thread count. Read the size from the footer's “Thread:” line — “Thread: 3.500″ × 4 TPI × 4″” is a 3 1/2″ major diameter, 4 TPI (threads per inch), 4″ long. A thread excluded from the overall length sits outside the OAL bracket.</p>
 
   <h3>Thread relief</h3>
   <figure class="detail">
@@ -202,7 +202,7 @@
   <p><strong>Clocking.</strong> When a shaft has two or more keyways and the office has set how they are clocked, the AFT-most keyway draws face-on and the other draws as you would see it from the same side:</p>
   <ul>
     <li><strong>180° apart</strong> — the second keyway is on the far side, drawn with dashed (hidden) lines. Footer: “Keyways 180° apart”.</li>
-    <li><strong>90° apart</strong> — the second keyway is edge-on, drawn as a notch cut into the outline: in the bottom edge for “Keyways 90° apart (CW from aft)”, in the top edge for “Keyways 90° apart (CCW from aft)”.</li>
+    <li><strong>90° apart</strong> — the second keyway is edge-on, drawn as a notch cut into the outline: in the bottom edge for “Keyways 90° apart (CW from aft)”, in the top edge for “Keyways 90° apart (CCW from aft)” — CW (clockwise) and CCW (counter-clockwise) as seen from aft.</li>
   </ul>
   <p>A shaft with one keyway, or keyways with no clocking set, prints no clocking note.</p>
 

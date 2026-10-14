@@ -18,7 +18,7 @@
     <dt>Schematic</dt>
     <dd>The dimensioned drawing of the shaft as it came in: overall length, every component's position and length, diameters, keyways and threads, with the job details and component list in the footer. It is the record of what arrived and the sheet the rest of the job refers back to.</dd>
     <dt>Runout Sheet</dt>
-    <dd>The shaft profile with a numbered bubble at each dial-indicator station. The machinist writes (or the app prints) the TIR in each bubble and marks the high spot as a clock position. It can also carry the coupling face end view. This is the sheet the shaft is set up and indicated against.</dd>
+    <dd>The shaft profile with a numbered bubble at each dial-indicator station. The machinist writes (or the app prints) the TIR (total indicated runout) in each bubble and marks the high spot as a clock position. It can also carry the coupling face end view. This is the sheet the shaft is set up and indicated against.</dd>
     <dt>Wear Document</dt>
     <dd>Where the inspection is recorded: worn areas on liners, pits and dye-penetrant failures marked with an X, and measured diameters at stations along the shaft. It tells the repair planner where the shaft is worn and by how much.</dd>
     <dt>Undercut Drawing</dt>
@@ -56,11 +56,11 @@
   <p>AFT is the propeller end; FWD is the engine end. <strong>AFT is always the left end of every drawing</strong>, on every sheet and on screen, so a shaft never appears reversed between two pieces of paper. Many components let you choose which end a position is measured from — the <span class="ui">Measure From</span> chips — because a print may dimension a liner from either end. The component is the same; only the quoted distance differs.</p>
 
   <h3 id="intro-oal">OAL — overall length</h3>
-  <p>The OAL is the shaft's length end to end, and every drawing is laid out against it. You always type it yourself; the app never fills it in or changes it. The field takes your value when you tap the green ✓, press Done on the keyboard, or leave the field after changing it; the red ✗ puts the old value back. The drawing does not chase each keystroke, because a half-typed length (36″ on the way to 367 3/4″) would briefly collapse the drawing. See <a href="#editor-oal">The overall length</a>.</p>
+  <p>The OAL (overall length) is the shaft's length end to end, and every drawing is laid out against it. You always type it yourself; the app never fills it in or changes it. The field takes your value when you tap the green ✓, press Done on the keyboard, or leave the field after changing it; the red ✗ puts the old value back. The drawing does not chase each keystroke, because a half-typed length (36″ on the way to 367 3/4″) would briefly collapse the drawing. See <a href="#editor-oal">The overall length</a>.</p>
   <p>When you change the OAL, components measured from FWD keep their FWD distance and move with the end; components measured from AFT stay put.</p>
 
   <h3 id="intro-set-let">S.E.T. and L.E.T.</h3>
-  <p>S.E.T. is the small end of a taper and L.E.T. the large end — named by diameter, not by which way they face. Both diameters print in the footer for every taper. Several measurements, such as undercut and worn-section distances, can be quoted from an S.E.T., the datum the shop actually measures from.</p>
+  <p>S.E.T. (small end of taper) and L.E.T. (large end of taper) are the two ends of a taper — named by diameter, not by which way they face. Both diameters print in the footer for every taper. Several measurements, such as undercut and worn-section distances, can be quoted from an S.E.T., the datum the shop actually measures from.</p>
 
   <h3 id="intro-auto-bodies">Components and bare shaft</h3>
   <p>You add the features the shaft has — tapers, threads, liners, bodies, keyways, bolt holes — as <strong>components</strong>. Any length you don't cover is filled automatically with <strong>bare shaft</strong> — plain round bar, shown in the editor as a <span class="ui">Body (auto)</span> card and called an <strong>auto-body</strong> in this manual — so the drawing is always one continuous shaft. Bare shaft resizes itself whenever you move or change a component; you never have to keep the gaps in step by hand. You can set the bare-shaft diameter section by section, and you can turn one into a body of its own with the <span class="ui">Explicit body</span> checkbox when it needs a keyway or a name. A body may run under a liner or up to a taper; that is normal, not a conflict.</p>

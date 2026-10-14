@@ -83,14 +83,14 @@
     <li><strong>Metric</strong>: one <span class="ui">Thread designation</span> field, such as “M20×2.5”. You may type “x”, “X” or “*” for the ×. The designation carries both the major Ø and the pitch, so no other diameter field is shown. A metric thread prints in millimeters even on an inch drawing.</li>
   </ul>
   <aside class="note"><p>A coarse designation with no pitch, such as “M20”, is accepted and prints as typed, but the thread then has no pitch and the card warns <span class="ui">Zero pitch — thread renders flat</span>. Include the pitch.</p></aside>
-  <aside class="tip"><p>There is no Imperial/Metric switch on the card. To change a thread from TPI to a metric designation, or back, remove it and add it again.</p></aside>
+  <aside class="tip"><p>There is no Imperial/Metric switch on the card. To change a thread from TPI (threads per inch) to a metric designation, or back, remove it and add it again.</p></aside>
 
   <h3>Thread fields</h3>
   <table class="ref">
     <thead><tr><th>Field / control</th><th>What it means</th></tr></thead>
     <tbody>
       <tr><td><span class="ui">Include thread in OAL</span></td><td>On (default): the thread is part of the overall length and is placed by its Start. Off: the thread sits outside the OAL, beyond the end of the shaft.</td></tr>
-      <tr><td><span class="ui">Start</span></td><td>Distance from the AFT end to the start of the thread. Shown only while the thread counts in the OAL.</td></tr>
+      <tr><td><span class="ui">Start</span></td><td>Distance from the AFT end to the start of the thread. Shown only while the thread counts in the OAL (overall length).</td></tr>
       <tr><td><span class="ui">Thread end:</span> <span class="ui">AFT</span> | <span class="ui">FWD</span></td><td>Replaces Start when the thread is excluded from the OAL: which end of the shaft the thread hangs off. Default AFT.</td></tr>
       <tr><td><span class="ui">Major Ø</span>, <span class="ui">TPI</span></td><td>Imperial threads only. TPI accepts decimals and fractions.</td></tr>
       <tr><td><span class="ui">Thread designation</span></td><td>Metric threads only, for example “M20×2.5”.</td></tr>
@@ -142,7 +142,7 @@
       <tr><td><span class="ui">Measure From:</span> <span class="ui">AFT</span> | <span class="ui">FWD</span></td><td>Which shaft end you measure the liner from. Display and entry only; switching it never moves the liner. Default AFT.</td></tr>
       <tr><td><span class="ui">Start from AFT</span> / <span class="ui">Start from FWD</span></td><td>Distance from the chosen shaft end to the near edge of the liner.</td></tr>
       <tr><td><span class="ui">Length</span></td><td>Axial length. On a FWD-measured liner, the FWD edge stays put and the liner grows toward AFT.</td></tr>
-      <tr><td><span class="ui">Outer Ø</span></td><td>The liner OD.</td></tr>
+      <tr><td><span class="ui">Outer Ø</span></td><td>The liner OD (outside diameter).</td></tr>
       <tr><td><span class="ui">Shoulders</span> section</td><td>Optional stepped ends; see below. Hidden unless switched on in Settings.</td></tr>
     </tbody>
   </table>
@@ -282,7 +282,7 @@
   <aside class="note"><p>Turning <span class="ui">Captured keyway</span> off sets the inset to zero, which is what makes the keyway open. Turning it back on while the card is open restores the inset you had. Typing a blank or zero inset does not un-capture the keyway; only the switch does.</p></aside>
 
   <h3 id="components-standard-size">Standard size…</h3>
-  <p>Tap <span class="ui">Standard size…</span> to pick from a standard key-stock table. Inch keyways use ANSI B17.1 plain parallel keys; metric keyways use DIN 6885-1. When the host diameter falls within the table, the first entry is marked with a check and <span class="ui">Suggested for Ø …</span>: the size for the body Ø on a body, or for the L.E.T. on a taper. Every other size stays in the list, because the shop fits the key it has.</p>
+  <p>Tap <span class="ui">Standard size…</span> to pick from a standard key-stock table. Inch keyways use ANSI (American National Standards Institute) B17.1 plain parallel keys; metric keyways use DIN (Deutsches Institut für Normung) 6885-1. When the host diameter falls within the table, the first entry is marked with a check and <span class="ui">Suggested for Ø …</span>: the size for the body Ø on a body, or for the L.E.T. on a taper. Every other size stays in the list, because the shop fits the key it has.</p>
   <ul>
     <li>A pick fills <span class="ui">KW W</span> and <span class="ui">KW D</span> exactly as if you had typed them. From then on they are ordinary typed values.</li>
     <li>D is the <strong>keyseat depth in the shaft</strong>, not the key height. For ANSI keys it is half the key height.</li>
@@ -308,8 +308,8 @@
   <h3>What prints for a keyway</h3>
   <ul>
     <li><strong>The slot in plan view</strong> on the shaft, at its true width relative to the drawn shaft. A body keyway and the stretch around it are never shortened on the drawing, even when the rest of the body is.</li>
-    <li><strong>Clocking</strong>: at 180° the other keyways draw as dashed hidden slots. At 90° they draw as a notch in the shaft outline: on the bottom edge for CW, the top edge for CCW. A footer note reads “Keyways 180° apart”, “Keyways 90° apart (CW from aft)” or “Keyways 90° apart (CCW from aft)”.</li>
-    <li><strong>Footer size line</strong> in that end's column: “KW: W × D × L” for a taper, “Body KW: W × D × L” for a body, in the keyway's own unit.</li>
+    <li><strong>Clocking</strong>: at 180° the other keyways draw as dashed hidden slots. At 90° they draw as a notch in the shaft outline: on the bottom edge for CW (clockwise), the top edge for CCW (counter-clockwise). A footer note reads “Keyways 180° apart”, “Keyways 90° apart (CW from aft)” or “Keyways 90° apart (CCW from aft)”.</li>
+    <li><strong>Footer size line</strong> in that end's column — KW (keyway) is the footer's shorthand: “KW: W × D × L” for a taper, “Body KW: W × D × L” for a body, in the keyway's own unit.</li>
     <li><strong>Captured</strong>: a line below it, “Captured KW: inset &lt;distance&gt; from S.E.T.” (taper) or “… from AFT” / “… from FWD” (body). The slot draws closed at both ends.</li>
     <li><strong>Spooned</strong>: “(spooned)” after the size, and a note “KW length to base of spoon (mill end)”. The slot draws normally, with an enlarged spoon around its closed end; the mill end stays visible inside the spoon.</li>
   </ul>

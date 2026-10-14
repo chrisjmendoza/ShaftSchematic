@@ -46,8 +46,8 @@ class HelpGlossaryTest {
         hostHelp()
 
         rule.onNode(hasScrollAction())
-            .performScrollToNode(hasText("TIR (total indicator reading)"))
-        rule.onNodeWithText("TIR (total indicator reading)").performClick()
+            .performScrollToNode(hasText("TIR (total indicated runout)"))
+        rule.onNodeWithText("TIR (total indicated runout)").performClick()
 
         rule.onNodeWithText("high and low readings", substring = true).assertIsDisplayed()
     }

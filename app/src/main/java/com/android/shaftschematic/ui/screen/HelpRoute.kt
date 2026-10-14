@@ -423,7 +423,7 @@ internal val helpSections: List<HelpSection> = listOf(
                     "the size the Default drawing size setting picks."
             ),
             HelpTopic(
-                "TIR (total indicator reading)",
+                "TIR (total indicated runout)",
                 "The full sweep an indicator shows at one station — the difference between its " +
                     "high and low readings as the shaft is turned. It is typed into that " +
                     "station's bubble, with the high spot marked as a clock position; the sheet " +
