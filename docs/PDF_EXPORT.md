@@ -410,6 +410,16 @@ counts toward the measured footer height like any other row. The drawing itself 
 groove as a reduced, unhatched rectangle at the relief end (see `docs/contracts/Rendering.md`,
 threads bullet — the PDF sites share `drawThreadPdf`).
 
+A **liner shoulder's edge radius** prints as ONE footer line per shouldered liner — its only
+printed value (no leader, no rail). A shoulder at one end prints `Liner shoulder R: <r>` in the
+column of that end's physical half, byte-identical to before; shoulders at both ends share the
+line in the column of the liner's midpoint — `Liner shoulder R: <r>` when the two radii agree,
+`Liner shoulder R: AFT <r>, FWD <r>` when they differ (two identical lines with nothing telling
+them apart was an on-device report). With more than one shouldered liner on the shaft the label
+takes the liner's carousel title (`buildLinerTitleById`): `AFT Liner shoulder R: …`,
+`SKF sleeve shoulder R: …`. A sharp corner (radius 0) prints nothing. Pinned by
+`LinerShoulderFooterTest`.
+
 Unaffected: the 90°-clocked **silhouette** notch (`drawKeywaySilhouetteNotchPdf`) was always
 radial and always used the diameter scale; and the true-scale pin on a body keyway's window
 (`keywayPinnedBodySpans`) still protects the slot's **length**, which is the axial term.
@@ -695,6 +705,17 @@ Rules (shared helpers in `pdf/BlankFormText.kt`):
   `ShaftViewModel.pdfBlankDraft`, runout/wear: local screen state) — a forgotten sticky
   toggle would silently blank every future export. Blank exports get a `_BlankDraft`
   filename suffix.
+- **Export filenames** share ONE base and ONE join. The base is
+  `DocumentNaming.suggestedBaseName(jobNumber, customer, vessel, side)` — `Job - Customer -
+  Vessel - SIDE`, every part through `DocumentNaming.sanitizePart` so a `/`, `:` or `*` in a
+  customer name never reaches a filename — and the join is `util/ExportFilename.kt`
+  (`<base><suffix>[_BlankDraft].pdf`). Every document of the set goes through
+  `buildOutputFilename` (`ui/screen/OutputDoc.kt`) with its historical suffix — `_schematic`,
+  `_runout`, `_wear`, `_undercuts`, `_consolidated` — the Schematic tab's own export included,
+  so that export and "Export all" name the schematic identically; with no job information the
+  document's fallback base (`Schematic`, `RunoutSheet`, …) stands in. The Final drawing keeps
+  its `_Final*` suffixes through the same join (`docs/contracts/FinalSchematic.md`). Pinned by
+  `OutputDocTest` and `ExportFilenameTest`.
 - On the schematic PDF preview the toggle surfaces **twice from one state**: an
   always-visible `FilterChip` overlaid top-center on the preview itself (testTag
   `pdf_blank_toggle` — added because the options-sheet control alone was too hard to find,

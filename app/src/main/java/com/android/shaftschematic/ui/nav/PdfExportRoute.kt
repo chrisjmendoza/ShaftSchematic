@@ -27,6 +27,8 @@ import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.SpecTarget
 import com.android.shaftschematic.ui.viewmodel.unlockAchievement
 import com.android.shaftschematic.util.Achievements
+import com.android.shaftschematic.ui.screen.OutputDoc
+import com.android.shaftschematic.ui.screen.buildOutputFilename
 import com.android.shaftschematic.util.DocumentNaming
 import com.android.shaftschematic.util.exportPdfFilename
 import com.android.shaftschematic.util.buildOpenPdfIntent
@@ -272,6 +274,11 @@ private fun defaultFilename(
     /** Names which drawing this is — "_Final" for the final schematic, blank for the original. */
     drawingSuffix: String = "",
 ): String {
+    // The original schematic is ONE of the document set: its name comes from the same
+    // builder Export all uses, so the two exports of it can never differ.
+    if (drawingSuffix.isEmpty()) {
+        return buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.SCHEMATIC, blankDraft)
+    }
     val stamp = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())
     val suggested = DocumentNaming.suggestedBaseName(
         jobNumber = jobNumber,

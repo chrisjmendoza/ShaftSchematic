@@ -97,7 +97,7 @@ internal fun LinerPagerCard(
         debugText = if (showComponentDebugLabels) "id=${ln.id} • startMm=${f1(ln.startFromAftMm)} • endMm=${f1(ln.startFromAftMm + ln.lengthMm)}" else null,
         errorMessage = startOverlapErrorMm(spec, ln.id, ComponentKind.LINER, ln.lengthMm, ln.startFromAftMm)
             ?: if (ln.id in collidingComponentIds) "Overlaps another component" else null,
-        warningMessage = linerWarningMessages(spec, ln).joinToString("; ").ifEmpty { null },
+        warningMessage = linerWarningMessages(spec, ln, unit).joinToString("; ").ifEmpty { null },
         componentId = ln.id, componentKind = ComponentKind.LINER,
         outerPaddingHorizontal = outerPaddingHorizontal,
         onRemove = {

@@ -35,12 +35,12 @@
   <table class="ref">
     <thead><tr><th>Field / control</th><th>What it means</th></tr></thead>
     <tbody>
-      <tr><td><span class="ui">Measure From:</span> <span class="ui">AFT</span> | <span class="ui">FWD</span><br>(in the dialog: <span class="ui">Direction:</span>)</td><td>Which end of the shaft you are measuring the start from. It changes how the position is typed and shown, never where the taper sits. Default AFT.</td></tr>
+      <tr><td><span class="ui">Measure From:</span> <span class="ui">AFT</span> | <span class="ui">FWD</span></td><td>Which end of the shaft you are measuring the start from. It changes how the position is typed and shown, never where the taper sits. Default AFT.</td></tr>
       <tr><td><span class="ui">Start from AFT</span> / <span class="ui">Start from FWD</span></td><td>Distance from the chosen shaft end to the near end of the taper. A propeller taper flush with the AFT end is “0” from AFT; a coupling taper flush with the FWD end is “0” from FWD.</td></tr>
       <tr><td><span class="ui">Length</span></td><td>Axial length of the taper. On a FWD-measured taper, a length change keeps the FWD end where it was and the taper grows toward AFT.</td></tr>
       <tr><td><span class="ui">S.E.T. Ø</span>, <span class="ui">L.E.T. Ø</span></td><td>Small-end and large-end diameters. On the card the two fields are listed in shaft order, AFT end first, so an aft-half taper shows S.E.T. then L.E.T., and a forward-half taper shows L.E.T. then S.E.T.</td></tr>
       <tr><td><span class="ui">Rate mode:</span> <span class="ui">Auto</span> | <span class="ui">Manual</span></td><td>Auto works the rate out from Length, S.E.T. and L.E.T. Manual lets you type it. Default Auto.</td></tr>
-      <tr><td><span class="ui">Rate (1:12, 3/4, or decimal)</span><br>(in the dialog: <span class="ui">Taper Rate (1:12, 3/4, decimal)</span>)</td><td>The taper rate as diameter change over length. Greyed out in Auto, where it shows the computed rate. Editable in Manual.</td></tr>
+      <tr><td><span class="ui">Rate (1:12, 3/4"/ft, or decimal)</span></td><td>The taper rate: a ratio (1:12), inches per foot (3/4"/ft — the shop's 1:16) or a decimal; a bare fraction like 3/4 is refused as ambiguous and the message names the forms to write. Greyed out in Auto, where it shows the computed rate. Editable in Manual.</td></tr>
       <tr><td><span class="ui">Keyway</span> checkbox and section</td><td>See <a href="#components-keyways">Keyways</a>.</td></tr>
     </tbody>
   </table>
@@ -57,7 +57,7 @@
   <h3>Adding a taper from S.E.T. and rate</h3>
   <ol class="steps">
     <li>Tap <span class="ui">+ Add Component</span>, then <span class="ui">Taper</span>.</li>
-    <li>Choose <span class="ui">Direction:</span> <span class="ui">AFT</span> or <span class="ui">FWD</span> and enter the start and <span class="ui">Length</span>.</li>
+    <li>Choose <span class="ui">Measure From:</span> <span class="ui">AFT</span> or <span class="ui">FWD</span> and enter the start and <span class="ui">Length</span>.</li>
     <li>Enter <span class="ui">S.E.T. Ø</span>. Leave <span class="ui">L.E.T. Ø</span> blank.</li>
     <li>Tap <span class="ui">Manual</span> and enter the rate, for example “1:12” (the dialog starts with “1:12”).</li>
     <li>Tap <span class="ui">Add</span>. The app works out the L.E.T. from the length and rate.</li>
@@ -89,7 +89,7 @@
   <table class="ref">
     <thead><tr><th>Field / control</th><th>What it means</th></tr></thead>
     <tbody>
-      <tr><td><span class="ui">Include thread in OAL</span> (card)<br><span class="ui">Count in OAL</span> (dialog)</td><td>On (default): the thread is part of the overall length and is placed by its Start. Off: the thread sits outside the OAL, beyond the end of the shaft.</td></tr>
+      <tr><td><span class="ui">Include thread in OAL</span></td><td>On (default): the thread is part of the overall length and is placed by its Start. Off: the thread sits outside the OAL, beyond the end of the shaft.</td></tr>
       <tr><td><span class="ui">Start</span></td><td>Distance from the AFT end to the start of the thread. Shown only while the thread counts in the OAL.</td></tr>
       <tr><td><span class="ui">Thread end:</span> <span class="ui">AFT</span> | <span class="ui">FWD</span></td><td>Replaces Start when the thread is excluded from the OAL: which end of the shaft the thread hangs off. Default AFT.</td></tr>
       <tr><td><span class="ui">Major Ø</span>, <span class="ui">TPI</span></td><td>Imperial threads only. TPI accepts decimals and fractions.</td></tr>
@@ -171,7 +171,7 @@
     <li>The liner outline over the shaft, with any shoulders stepped in.</li>
     <li>Two dimensions above the shaft: the distance from the nearer S.E.T. to the liner's near edge (left out when the liner sits right on the S.E.T.), and the liner length. Which S.E.T. is used follows <span class="path">Settings → PDF Export Options → Measurement reference</span>, not the liner's own Measure From chip.</li>
     <li>An OD callout below the shaft (on by default; see <a href="#components-drawing-toggles">Show Ø on drawing</a>).</li>
-    <li>For a shoulder with a radius: a footer line “Liner shoulder R: &lt;radius&gt;”. A sharp corner prints nothing.</li>
+    <li>For a shoulder with a radius: one footer line per liner, “Liner shoulder R: &lt;radius&gt;” (“AFT r, FWD r” when the two ends differ). A sharp corner prints nothing.</li>
   </ul>
   <aside class="shop"><p>On a long shaft a liner may be drawn shorter than scale so the sheet fits the page; the dimension still gives the true length. The shoulder step is drawn to scale but its length and reduced Ø are not dimensioned on the sheet; only the edge radius prints, in the footer.</p></aside>
 

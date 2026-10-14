@@ -1,6 +1,7 @@
 package com.android.shaftschematic.util
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
@@ -9,6 +10,33 @@ import org.junit.Test
  * value fits the runout bubble and reads like a hand-written shop value).
  */
 class RunoutValueFormatTest {
+
+    // ── parseRunoutValueInput — what the bubble editor's Save reads ───────────────────────
+
+    @Test fun `a fraction saves as its mm value in inches`() {
+        // The reported case: the field admitted "1/64" and Save dropped it.
+        assertEquals(25.4f / 64f, parseRunoutValueInput("1/64", UnitSystem.INCHES)!!, 1e-5f)
+        assertEquals(25.4f * 1.5f, parseRunoutValueInput("1 1/2", UnitSystem.INCHES)!!, 1e-4f)
+    }
+
+    @Test fun `a decimal saves in either unit`() {
+        assertEquals(0.254f, parseRunoutValueInput(".010", UnitSystem.INCHES)!!, 1e-5f)
+        assertEquals(0.01f, parseRunoutValueInput("0.010", UnitSystem.MILLIMETERS)!!, 1e-6f)
+    }
+
+    @Test fun `blank and unreadable text read as nothing`() {
+        assertNull(parseRunoutValueInput("", UnitSystem.INCHES))
+        assertNull(parseRunoutValueInput("   ", UnitSystem.INCHES))
+        assertNull(parseRunoutValueInput("1/", UnitSystem.INCHES))
+        assertNull(parseRunoutValueInput("abc", UnitSystem.MILLIMETERS))
+    }
+
+    @Test fun `a saved fraction formats back the way it was read`() {
+        val mm = parseRunoutValueInput("1/64", UnitSystem.INCHES)!!
+        assertEquals(".016", formatRunoutValue(mm, UnitSystem.INCHES))
+    }
+
+    // ── formatRunoutValue ────────────────────────────────────────────────────────────────
 
     @Test fun `mm value drops the leading zero`() {
         assertEquals(".003", formatRunoutValue(0.003f, UnitSystem.MILLIMETERS))

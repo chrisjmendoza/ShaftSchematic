@@ -4,8 +4,8 @@ import org.junit.Test
 import org.junit.Assert.*
 
 /**
- * Taper rate text: `parseRateText`'s accepted spellings (`1:12`, `3/4`, a bare decimal) and the
- * derivation that fills in a missing end diameter from the rate over the taper's length.
+ * Taper rate text: `parseRateText`'s accepted spellings (`1:12`, `3/4"/ft`, a bare decimal) and
+ * the derivation that fills in a missing end diameter from the rate over the taper's length.
  */
 class TaperRateTest {
 
@@ -19,10 +19,17 @@ class TaperRateTest {
         assertEquals(1f / 12f, r!!, 1e-5f)
     }
 
-    @Test fun parseRateText_slash() {
-        val r = ShaftViewModel.parseRateText("3/4")
+    @Test fun parseRateText_perFoot() {
+        // 3/4" per foot is the shop's 1:16.
+        val r = ShaftViewModel.parseRateText("3/4\"/ft")
         assertNotNull(r)
-        assertEquals(0.75f, r!!, 1e-5f)
+        assertEquals(1f / 16f, r!!, 1e-5f)
+    }
+
+    @Test fun parseRateText_bareFraction_isAmbiguous() {
+        // "3/4" once read as a 0.75 slope; it is now unreadable on every path, lenient included,
+        // because the typist almost certainly meant 3/4" per foot. The UI gates say so.
+        assertNull(ShaftViewModel.parseRateText("3/4"))
     }
 
     @Test fun parseRateText_decimal() {

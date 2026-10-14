@@ -70,9 +70,10 @@ internal fun DrawingProfilesSection(
         Text("Profiles", style = MaterialTheme.typography.titleSmall)
         Text(
             "A profile stores the whole drawing look: everything in this section, the line " +
-                "thickness, and the PDF Export page's shading, component titles and tiering " +
-                "reference. It applies to every shaft you draw — a drawing never remembers " +
-                "which profile made it.",
+                "thickness, the PDF Export page's shading, component titles, measurement " +
+                "reference and undercut line-art print setting, and the runout sheets' bubble " +
+                "size and height. It applies to every shaft you draw — a drawing never " +
+                "remembers which profile made it.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -181,8 +182,9 @@ internal fun DrawingProfilesSection(
             text = {
                 Text(
                     "Every drawing-look setting goes back to its original value — this " +
-                        "section, the line thickness, and the PDF Export page's shading, " +
-                        "titles and tiering. Your saved profiles are not affected."
+                        "section, the line thickness, the PDF Export page's shading, titles, " +
+                        "measurement reference and undercut line art, and the runout bubble " +
+                        "size and height. Your saved profiles are not affected."
                 )
             },
             confirmButton = {

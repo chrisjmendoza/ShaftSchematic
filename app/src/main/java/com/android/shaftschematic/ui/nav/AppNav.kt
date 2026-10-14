@@ -185,7 +185,7 @@ fun AppNav(vm: ShaftViewModel) {
                                 attachments = emptyList()
                             )
                             try {
-                                ctx.startActivity(Intent.createChooser(intent, "Send Feedback"))
+                                ctx.startActivity(Intent.createChooser(intent, "Send feedback"))
                             } catch (_: ActivityNotFoundException) {
                                 scope.launch { snackbarHostState.showSnackbar("No email app found.") }
                             }

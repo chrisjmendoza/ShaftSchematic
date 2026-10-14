@@ -270,8 +270,9 @@ Superseded by the Auto/Manual rate-mode system — authoritative contract in the
   derived diameter must be ≥ 0); a manual rate disagreeing with complete geometry
   shows a **warning**, it is not silently ignored.
 - Missing both SET and LET with no usable rate → **blocking**.
-- Bare `1` is blocked as ambiguous; common-rate snapping uses a 3% tolerance
-  (confirmed product decision).
+- Bare `1` and any bare slash fraction (`3/4` — slope or inches per foot?) are blocked as
+  ambiguous; the explicit forms are a ratio (`1:16`) or inches per foot (`3/4"/ft`).
+  Common-rate snapping uses a 3% tolerance (confirmed product decision).
 - Slope validation/derivation (`autoTaperRate`, `manualTaperRateWarning`, and
   `manualTaperRateBlockingMessage`'s derive-prompt) is inert at `lengthMm <= 0` — no
   rate is computed or demanded for a zero/negative-length taper. Pure-syntax checks
