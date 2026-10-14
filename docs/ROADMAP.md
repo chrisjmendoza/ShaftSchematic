@@ -13,7 +13,7 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
 - Snap engine + tap-to-add pipeline *(both removed in v0.5.x — the gesture fired
   unintentionally and was never used on purpose, and nothing else snapped)*
 - OAL window + excluded thread logic
-- Taper rate input (all formats: 1:12, 3/4, decimal)
+- Taper rate input (ratio 1:12, inches per foot 3/4"/ft, decimal; a bare fraction is ambiguous and blocked)
 - Full single-page PDF export (landscape, theme-safe, dimension tiers, footer)
 - PDF label collision avoidance, measurement tiering system
 - Internal save/open, autosave/draft restore

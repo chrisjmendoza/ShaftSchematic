@@ -19,7 +19,7 @@ Invariants
 
 Route graph (AppNav.kt NavHost)
 - `start` → StartScreen (New Drawing / Open / Unsaved drafts list (up to 3) / Settings /
-  Help & FAQ / Send Feedback)
+  Help & FAQ / Send feedback — sentence case, like every other multi-word menu item)
 - `editor` → **ShaftEditorRoute** — the editor container. Owns the sidebar and the `EditorTab`
   state. **The sidebar's placement follows the window width** (`Adaptive.md`): COMPACT/MEDIUM
   keep the modal `EditorSidebarOverlay` (scrim, 200 dp panel, slides in over full-width

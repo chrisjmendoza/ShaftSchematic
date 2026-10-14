@@ -189,6 +189,15 @@ Invariants
     default). It never blocks switching units in the UI — **functionally inert** for
     "can the user change units on this file".
   - Legacy bare spec: current Settings default unit is used; doc treated as unlocked.
+- New drawing (`ShaftViewModel.newDocument()`): `_unit` seeds from the Settings → Units
+  default as last collected into `ShaftViewModel._defaultUnit` (never a synchronous
+  DataStore read) and `_unitLocked` is set true, so the document owns its unit from birth and
+  a later change of the setting never flips it; `_dualUnits` seeds the same way from
+  `_dualUnitsDefault` (the "Dual-unit display" default). `applyTemplate` keeps the
+  template's own `preferred_unit`/`unit_locked` (the geometry was authored in it) and seeds
+  only the dual flag. The Settings → Units chips persist the default whether or not the open
+  document is locked — the lock stops the stored default from flipping the document, not the
+  user from setting the default.
 - The final drawing: `final_spec` (`ShaftDocV1.finalSpec: ShaftSpec?`, `@SerialName("final_spec")`)
   is the document's **second whole `ShaftSpec`** — the shaft as it leaves — sibling of `spec`,
   not a reference mark inside it. `null` (the default) = this document has no final drawing,

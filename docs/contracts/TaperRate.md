@@ -24,8 +24,19 @@ Invariants
 - **Common-rate snapping tolerance is 3% relative slope error**
   (`DEFAULT_SLOPE_ERROR_TOLERANCE = 0.03f`). This is a **confirmed product decision —
   do not change without product approval.**
+- **Accepted spellings** (`parseTaperRateText`, deterministic — it never guesses): a ratio
+  `1:12`; **inches per foot** `3/4"/ft` (also `3/4″/ft`, `3/4 in/ft`, `3/4/ft`, a mixed number
+  `1 1/4"/ft`, a decimal `0.75"/ft`), read as value ÷ 12 so `3/4"/ft` = 1:16; a decimal (`12`
+  reads as 1:12, a value under 1 as the slope itself). The footer's `1"/ft` / `3/4"/ft`
+  notation therefore round-trips through the field, and every auto-rate text (`1:N`) parses.
+- **A bare slash fraction is blocked as ambiguous** (`3/4`, `1/16`, `1/1`): a machinist
+  writing `3/4` means 3/4" per foot (1:16), while a slope reader would make it 0.75 — an absurd
+  taper. `manualTaperRateBlockingMessage` answers `Write 3/4"/ft or a ratio like 1:16; a bare
+  fraction is ambiguous`, and `parseTaperRateText` returns null for it in BOTH modes (the
+  lenient flag covers the legacy bare `1` only). The card and dialog labels advertise the real
+  forms: `Rate (1:12, 3/4"/ft, or decimal)`.
 - **Bare `1` is blocked as ambiguous** manual rate text; must be rewritten as a full
-  ratio or fraction (`1:1`, `1/1` are fine).
+  ratio or inches per foot (`1:1` is fine).
 - **Exact fallback format** is `1:N.NNN` (3 decimals, not trimmed) when no common rate
   is within tolerance; a *snapped* common rate is formatted with trailing zeros trimmed
   (e.g. `1:16`, not `1:16.000`).

@@ -5,6 +5,7 @@ import com.android.shaftschematic.model.Liner
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Taper
 import com.android.shaftschematic.model.Threads
+import com.android.shaftschematic.util.UnitSystem
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -14,7 +15,7 @@ class CollisionWarningsTest {
     @Test
     fun `empty spec returns no warnings`() {
         val spec = ShaftSpec(overallLengthMm = 1000f)
-        assertTrue(collectAddWarnings(spec, 100f, 200f).isEmpty())
+        assertTrue(collectAddWarnings(spec, 100f, 200f, UnitSystem.MILLIMETERS).isEmpty())
     }
 
     @Test
@@ -25,7 +26,7 @@ class CollisionWarningsTest {
             liners = listOf(Liner(startFromAftMm = 500f, lengthMm = 200f, odMm = 90f)),
         )
         // 200–400 mm — clear of both components
-        assertTrue(collectAddWarnings(spec, 200f, 200f).isEmpty())
+        assertTrue(collectAddWarnings(spec, 200f, 200f, UnitSystem.MILLIMETERS).isEmpty())
     }
 
     @Test
@@ -34,7 +35,7 @@ class CollisionWarningsTest {
             overallLengthMm = 1000f,
             tapers = listOf(Taper(startFromAftMm = 0f, lengthMm = 200f, startDiaMm = 80f, endDiaMm = 60f))
         )
-        val w = collectAddWarnings(spec, 100f, 200f)
+        val w = collectAddWarnings(spec, 100f, 200f, UnitSystem.MILLIMETERS)
         assertTrue(w.any { it.contains("Taper") })
     }
 
@@ -46,7 +47,7 @@ class CollisionWarningsTest {
                 Threads(startFromAftMm = 200f, lengthMm = 100f, majorDiaMm = 60f, pitchMm = 2f, excludeFromOAL = false)
             )
         )
-        val w = collectAddWarnings(spec, 250f, 100f)
+        val w = collectAddWarnings(spec, 250f, 100f, UnitSystem.MILLIMETERS)
         assertTrue(w.any { it.contains("Thread") })
     }
 
@@ -60,7 +61,7 @@ class CollisionWarningsTest {
             )
         )
         // Proposed overlaps the excluded thread's position but it must not be flagged
-        val w = collectAddWarnings(spec, -50f, 200f)
+        val w = collectAddWarnings(spec, -50f, 200f, UnitSystem.MILLIMETERS)
         assertFalse(w.any { it.contains("Thread") })
     }
 
@@ -70,7 +71,7 @@ class CollisionWarningsTest {
             overallLengthMm = 1000f,
             liners = listOf(Liner(startFromAftMm = 300f, lengthMm = 200f, odMm = 90f))
         )
-        val w = collectAddWarnings(spec, 400f, 100f)
+        val w = collectAddWarnings(spec, 400f, 100f, UnitSystem.MILLIMETERS)
         assertTrue(w.any { it.contains("Liner") })
     }
 
@@ -81,7 +82,7 @@ class CollisionWarningsTest {
             bodies = listOf(Body(startFromAftMm = 0f, lengthMm = 1000f, diaMm = 80f))
         )
         // Proposed sits entirely inside the body — should be clean
-        assertTrue(collectAddWarnings(spec, 100f, 200f).isEmpty())
+        assertTrue(collectAddWarnings(spec, 100f, 200f, UnitSystem.MILLIMETERS).isEmpty())
     }
 
     @Test
@@ -91,13 +92,13 @@ class CollisionWarningsTest {
             tapers = listOf(Taper(startFromAftMm = 0f, lengthMm = 100f, startDiaMm = 80f, endDiaMm = 60f))
         )
         // Proposed starts exactly where taper ends (touching, not overlapping)
-        assertTrue(collectAddWarnings(spec, 100f, 200f).isEmpty())
+        assertTrue(collectAddWarnings(spec, 100f, 200f, UnitSystem.MILLIMETERS).isEmpty())
     }
 
     @Test
     fun `out of bounds produces bounds warning`() {
         val spec = ShaftSpec(overallLengthMm = 500f)
-        val w = collectAddWarnings(spec, 400f, 200f)
+        val w = collectAddWarnings(spec, 400f, 200f, UnitSystem.MILLIMETERS)
         assertTrue(w.any { it.contains("outside shaft span") })
     }
 
@@ -106,14 +107,14 @@ class CollisionWarningsTest {
         // OAL 0 means "not typed yet", not "zero-length shaft" — there is no span to fall
         // outside of, so the bounds check stays silent until a length is authored.
         val spec = ShaftSpec(overallLengthMm = 0f)
-        val w = collectAddWarnings(spec, 400f, 200f)
+        val w = collectAddWarnings(spec, 400f, 200f, UnitSystem.MILLIMETERS)
         assertFalse(w.any { it.contains("outside shaft span") })
     }
 
     @Test
     fun `within bounds produces no bounds warning`() {
         val spec = ShaftSpec(overallLengthMm = 1000f)
-        val w = collectAddWarnings(spec, 100f, 200f)
+        val w = collectAddWarnings(spec, 100f, 200f, UnitSystem.MILLIMETERS)
         assertFalse(w.any { it.contains("outside shaft span") })
     }
 
@@ -124,19 +125,19 @@ class CollisionWarningsTest {
             tapers = listOf(Taper(startFromAftMm = 0f, lengthMm = 200f, startDiaMm = 80f, endDiaMm = 60f)),
             liners = listOf(Liner(startFromAftMm = 100f, lengthMm = 200f, odMm = 90f)),
         )
-        val w = collectAddWarnings(spec, 50f, 200f)
+        val w = collectAddWarnings(spec, 50f, 200f, UnitSystem.MILLIMETERS)
         assertTrue(w.size >= 2)
     }
 
     @Test
     fun `invalid startMm negative returns empty`() {
         val spec = ShaftSpec(overallLengthMm = 1000f)
-        assertTrue(collectAddWarnings(spec, -1f, 100f).isEmpty())
+        assertTrue(collectAddWarnings(spec, -1f, 100f, UnitSystem.MILLIMETERS).isEmpty())
     }
 
     @Test
     fun `invalid lengthMm zero returns empty`() {
         val spec = ShaftSpec(overallLengthMm = 1000f)
-        assertTrue(collectAddWarnings(spec, 0f, 0f).isEmpty())
+        assertTrue(collectAddWarnings(spec, 0f, 0f, UnitSystem.MILLIMETERS).isEmpty())
     }
 }

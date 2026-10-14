@@ -194,7 +194,7 @@ private fun invalidFields(issue: TaperCalcIssue): List<TaperCalcField> = when (i
 private fun issueMessage(issue: TaperCalcIssue): String = when (issue) {
     TaperCalcIssue.NON_POSITIVE_LENGTH -> "Length must be greater than 0."
     TaperCalcIssue.NON_POSITIVE_DIA -> "Both diameters must be greater than 0."
-    TaperCalcIssue.NON_POSITIVE_RATE -> "Enter a rate like 1:12, 1/12, or 12."
+    TaperCalcIssue.NON_POSITIVE_RATE -> "Enter a rate like 1:12, 1\"/ft, or 12."
     TaperCalcIssue.SET_NOT_SMALLER ->
         "The small end must be smaller than the large end — equal ends are a straight shaft, " +
             "which has no taper rate."

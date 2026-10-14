@@ -12,7 +12,12 @@ Invariants
 - Exposed state uses StateFlow; UI reads snapshots.
 
 Responsibilities
-- Hold `ShaftSpec`, `UnitSystem`, `showGrid`, and project meta fields.  
+- Hold `ShaftSpec`, `UnitSystem`, `showGrid`, and project meta fields. The unit is per
+  document: `newDocument()` seeds `_unit` from the Settings → Units default as last collected
+  into `_defaultUnit` (never a synchronous DataStore read) and locks it (`_unitLocked`), so a
+  later change of the setting never flips an open or saved drawing; `_dualUnits` seeds from
+  `_dualUnitsDefault` the same way (`applyTemplate` seeds only the dual flag — the unit
+  travels with the template). Detail in `Persistence.md`.  
 - Commit APIs accept raw text (e.g., `onSetOverallLengthRaw`), parse, convert, clamp, and update.  
 - Expose derived values (e.g., `coverageEndMm`) from the model.  
 - `updateBodyBlend(index, blendAftMm, blendFwdMm, profile)` — sets a body's blended faces.

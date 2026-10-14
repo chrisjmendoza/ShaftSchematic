@@ -101,7 +101,7 @@ still authored in inches on an inch document. That asymmetry is a known follow-u
 |-----------------|-----------|
 | Start | Always |
 | Length | Always |
-| Diameter (Ø) | Always |
+| Diameter | Always — labelled "Diameter (unit)" on the dialog AND on both body cards (auto and explicit); the cards once said a bare "Ø (unit)", which a new user has nothing to read against |
 | Keyway checkbox | Always. The gate for the whole keyway section (shared `KeywayGateRow`, `KeywaySection.kt`); default OFF in the dialog. On the card it seeds from `hasAnyKeywayValue` so a half-typed keyway keeps its section open, and unticking a card with any value opens "Remove keyway?" (`kw_remove_confirm`) before clearing W/D/L/inset/spooned |
 | KW from: AFT \| FWD chips | Only while the Keyway checkbox is ON (keyway end-face reference). Default seeded by `ShaftSpec.suggestedBodyKeywayEnd`: opposite the shaft's existing keyway when exactly one side is taken (an aft taper keyway suggests FWD, and vice versa); both/neither → AFT. The SAME seed drives the card's chips for a not-yet-real keyway (parity of behavior, on-device report: a new body keyway defaulting onto the taken side read as a second aft keyway). A seed only — the chips always win, and nothing stored is ever rewritten by it |
 | KW W / KW D / KW L | Only while the Keyway checkbox is ON (blank = 0 = no keyway; while OFF the dialog submits 0 whatever the hidden fields hold) |
@@ -156,7 +156,7 @@ by definition, so there is nothing to toggle. This is intentional and not a pari
 | Relief length | Only while the relief switch is on |
 | Relief Ø | Only while the relief switch is on |
 | Relief at: AFT \| FWD chips (`add_thread_relief_end`) | Only while the relief switch is on |
-| Count in OAL toggle | Always |
+| "Include thread in OAL" switch | Always — the card's label, verbatim (the dialog once said "Count in OAL"; one control, one name on both surfaces) |
 
 The Start field is **replaced** by the AFT/FWD chips when excluded from OAL — it is
 not hidden in addition to them. Matches `ThreadPagerCard.kt`,
@@ -197,7 +197,7 @@ switch is the one control that clears. The "Relief at" chips are `thread_relief_
 ### AddTaperDialog
 | Field / control | Condition |
 |-----------------|-----------|
-| Measure From: AFT \| FWD chips | Always |
+| Measure From: AFT \| FWD chips | Always — the row label is the card's "Measure From:" (the dialog once said "Direction:") |
 | Start from SET / LET | Always (label follows chip) |
 | Length | Always |
 | SET Ø / LET Ø | Always (labels swap for FWD) |
@@ -229,9 +229,12 @@ Submit ordering (SET/LET → the stored pair):
 - Pinned by `TaperAddOrientationTest` (all four half × measure-from combinations) and
   `TaperAuthoredReferencePersistenceTest`.
 
-Manual taper-rate rules:
-- Bare `1` is invalid/ambiguous and must be rewritten as a full ratio or fraction.
-- `1/1` is allowed.
+Manual taper-rate rules (both surfaces carry the one label `Rate (1:12, 3/4"/ft, or decimal)`):
+- Accepted: a ratio (`1:12`), inches per foot (`3/4"/ft` and its spellings — `TaperRate.md`),
+  or a decimal.
+- A bare slash fraction (`3/4`, `1/1`) is ambiguous between a slope and inches per foot and is
+  blocked with a message naming the explicit forms; the parser never guesses.
+- Bare `1` is invalid/ambiguous and must be rewritten as a full ratio or inches per foot.
 - When only one taper end is present, Manual mode requires a valid rate so the
   missing end can be derived.
 - When Length + SET + LET are all present, a typed manual rate that disagrees with

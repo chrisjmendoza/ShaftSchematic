@@ -116,7 +116,7 @@ internal fun TaperPagerCard(
         },
         debugText = if (showComponentDebugLabels) "id=${t.id} • startMm=${f1(t.startFromAftMm)} • endMm=${f1(t.startFromAftMm + t.lengthMm)}" else null,
         errorMessage = if (t.id in collidingComponentIds) "Overlaps another component" else null,
-        warningMessage = taperWarningMessages(spec, t).joinToString("; ").ifEmpty { null },
+        warningMessage = taperWarningMessages(spec, t, unit).joinToString("; ").ifEmpty { null },
         componentId = t.id, componentKind = ComponentKind.TAPER,
         outerPaddingHorizontal = outerPaddingHorizontal,
         onRemove = {
@@ -240,7 +240,7 @@ internal fun TaperPagerCard(
                 border = if (!autoRate) BorderStroke(1.dp, Color.Black) else null)
         }
         CommitNum(
-            label = "Rate (1:12, 3/4, or decimal)",
+            label = "Rate (1:12, 3/4\"/ft, or decimal)",
             initialDisplay = if (autoRate) computedRateText.orEmpty() else t.taperRateText.ifBlank { "" },
             keyboardType = KeyboardType.Ascii,
             allowColon = true,

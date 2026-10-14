@@ -281,9 +281,12 @@ fun ShaftViewModel.applyTemplate(raw: String) {
     _runoutReadings.value = RunoutReadings()
     _runoutStationPlacements.value = RunoutStationPlacements()
     _undercutRecord.value = UndercutRecord()
-    // Overrides describe authoring and travel with the template; dual is per-job.
+    // Overrides describe authoring and travel with the template; dual is per-job, so a drawing
+    // started from a template takes the Settings default like a blank one does. (The unit
+    // itself travels WITH the template — `preferredUnit`/`unitLocked` above — because the
+    // geometry was authored in it; the Settings default seeds only blank drawings.)
     _unitOverrides.value = decoded.unitOverrides
-    _dualUnits.value = false
+    _dualUnits.value = _dualUnitsDefault.value
 
     // Deliberately NOT markDocumentSaved() — see the KDoc. The baseline stays where it
     // was, so the session reads as unsaved work and autosave keeps a draft of it.
@@ -364,9 +367,13 @@ fun ShaftViewModel.newDocument() {
     // job's geometry behind a blank original.
     _finalSpec.value = null
 
-    // Mirror envelope defaults used by the existing start/new seed path.
+    // A new drawing starts in the Settings → Units default (a metric shop sets millimeters
+    // once and every new drawing is metric — on-device report: new drawings ignored the
+    // setting) and is unit-locked from birth: the document owns its unit, so the setting
+    // changing later never flips it. The default is the latest collected value, never a
+    // synchronous DataStore read.
     _unitLocked.value = true
-    setUnit(UnitSystem.INCHES, persist = false)
+    setUnit(_defaultUnit.value, persist = false)
 
     _jobNumber.value = ""
     _customer.value = ""
@@ -379,7 +386,9 @@ fun ShaftViewModel.newDocument() {
     _runoutStationPlacements.value = RunoutStationPlacements()
     _undercutRecord.value = UndercutRecord()
     _unitOverrides.value = emptyMap()
-    _dualUnits.value = false
+    // The Settings "Dual-unit display" DEFAULT is exactly that: the value a new drawing starts
+    // with. The document persists its own from then on.
+    _dualUnits.value = _dualUnitsDefault.value
     _notes.value = ""
 
     _currentDocumentName.value = null

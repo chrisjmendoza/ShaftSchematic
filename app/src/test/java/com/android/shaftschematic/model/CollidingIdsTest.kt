@@ -1,5 +1,6 @@
 package com.android.shaftschematic.model
 
+import com.android.shaftschematic.util.UnitSystem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -10,7 +11,7 @@ import org.junit.Test
  *
  * collidingIds() returns the IDs of every component that participates in at least
  * one illegal overlap *within the current spec*.  This is distinct from
- * collectAddWarnings(), which checks whether a *new* proposed component would collide.
+ * collectAddWarnings(, UnitSystem.MILLIMETERS), which checks whether a *new* proposed component would collide.
  *
  * Bodies are intentionally NOT checked (a body legitimately runs under a liner or up against
  * a taper; the resolve layer trims the drawn body around those, so a stored body span across

@@ -127,10 +127,12 @@ import kotlinx.coroutines.launch
  * ShaftScreen — Editor surface
  *
  * Responsibilities
- * • Header row (unit selector + grid toggle; unit selector disables when locked)
+ * • Top app bar (title, undo/redo, the More menu) — the document's unit is set in Settings →
+ *   Units, not here; there is no header unit selector.
  * • Preview drawing (white square; optional grid; fixed-height band)
- * • Overall length input (always user-typed; commits on every parseable keystroke —
- *   see `docs/contracts/OverallLength.md`)
+ * • Overall length input (always user-typed; commits on ACCEPT only — the ✓ beside the
+ *   field, IME Done, or a blur after the text changed; ✗ reverts and commits nothing; never
+ *   per keystroke — see `docs/contracts/OverallLength.md`)
  * • Project fields (commit-on-blur / IME Done)
  * • Component carousel (edit & remove) — rows in physical order along the shaft
  * • Full-width "+ Add Component" button in the scroll column — the single add entry point

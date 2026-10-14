@@ -2,13 +2,16 @@ package com.android.shaftschematic.ui.screen
 
 import com.android.shaftschematic.model.ShaftPosition
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Test
 
 /**
- * [OutputDoc] filename shape: `{customer_vessel_job[_SIDE] | fallback}_{suffix}
- * [_BlankDraft].pdf` — the same shape every document's own tab has always produced. See
- * `OutputDoc.kt`.
+ * [OutputDoc] filename shape: `{<DocumentNaming base> | fallback}_{suffix}[_BlankDraft].pdf`.
+ * The base is the ONE the document is named by — `Job - Customer - Vessel - SIDE`, every part
+ * sanitized — so the schematic exported from its own tab and from Export all share a name, and
+ * a `/` in a customer name never reaches a filename (a second, raw `_`-joined scheme once
+ * lived here). See `OutputDoc.kt`.
  */
 class OutputDocTest {
 
@@ -17,25 +20,42 @@ class OutputDocTest {
     @Test
     fun `each doc produces its own filename suffix`() {
         assertEquals(
-            "A_B_C_consolidated.pdf",
+            "C - A - B_consolidated.pdf",
             buildOutputFilename("A", "B", "C", noSide, OutputDoc.CONSOLIDATED),
         )
         assertEquals(
-            "A_B_C_runout.pdf",
+            "C - A - B_runout.pdf",
             buildOutputFilename("A", "B", "C", noSide, OutputDoc.RUNOUT),
         )
         assertEquals(
-            "A_B_C_schematic.pdf",
+            "C - A - B_schematic.pdf",
             buildOutputFilename("A", "B", "C", noSide, OutputDoc.SCHEMATIC),
         )
         assertEquals(
-            "A_B_C_wear.pdf",
+            "C - A - B_wear.pdf",
             buildOutputFilename("A", "B", "C", noSide, OutputDoc.WEAR),
         )
         assertEquals(
-            "A_B_C_undercuts.pdf",
+            "C - A - B_undercuts.pdf",
             buildOutputFilename("A", "B", "C", noSide, OutputDoc.UNDERCUT),
         )
+    }
+
+    @Test
+    fun `the base is DocumentNaming's - job first then customer then vessel`() {
+        // The same order and separators the saved document itself is named with.
+        assertEquals(
+            "J-1 - Acme - Tidewater_schematic.pdf",
+            buildOutputFilename("Acme", "Tidewater", "J-1", noSide, OutputDoc.SCHEMATIC),
+        )
+    }
+
+    @Test
+    fun `every part is sanitized before it reaches the filename`() {
+        // The reported case: a slash, colon or star in a customer name went straight into the name.
+        val name = buildOutputFilename("Acme/Marine: *", "M/V Tide?", "J:1", noSide, OutputDoc.RUNOUT)
+        assertEquals("J_1 - Acme_Marine_ _ - M_V Tide__runout.pdf", name)
+        assertFalse(name.any { it in "\\/:*?\"<>|" })
     }
 
     @Test
@@ -69,7 +89,7 @@ class OutputDocTest {
             buildOutputFilename("Acme", "", "", noSide, OutputDoc.RUNOUT),
         )
         assertEquals(
-            "Acme_Tidewater_wear.pdf",
+            "Acme - Tidewater_wear.pdf",
             buildOutputFilename("Acme", "Tidewater", "", noSide, OutputDoc.WEAR),
         )
     }
@@ -77,7 +97,7 @@ class OutputDocTest {
     @Test
     fun `blankDraft appends _BlankDraft before the extension`() {
         assertEquals(
-            "A_B_C_consolidated_BlankDraft.pdf",
+            "C - A - B_consolidated_BlankDraft.pdf",
             buildOutputFilename("A", "B", "C", noSide, OutputDoc.CONSOLIDATED, blankDraft = true),
         )
         assertEquals(
@@ -91,15 +111,15 @@ class OutputDocTest {
     @Test
     fun `a printable side lands last in the base`() {
         assertEquals(
-            "Acme_Tidewater_J-1_PORT_runout.pdf",
+            "J-1 - Acme - Tidewater - PORT_runout.pdf",
             buildOutputFilename("Acme", "Tidewater", "J-1", ShaftPosition.PORT, OutputDoc.RUNOUT),
         )
         assertEquals(
-            "Acme_Tidewater_J-1_STBD_runout.pdf",
+            "J-1 - Acme - Tidewater - STBD_runout.pdf",
             buildOutputFilename("Acme", "Tidewater", "J-1", ShaftPosition.STBD, OutputDoc.RUNOUT),
         )
         assertEquals(
-            "Acme_Tidewater_J-1_CENTER_wear.pdf",
+            "J-1 - Acme - Tidewater - CENTER_wear.pdf",
             buildOutputFilename("Acme", "Tidewater", "J-1", ShaftPosition.CENTER, OutputDoc.WEAR),
         )
     }
@@ -118,7 +138,7 @@ class OutputDocTest {
     @Test
     fun `a side that prints nothing leaves the name exactly as it was`() {
         assertEquals(
-            "A_B_C_undercuts.pdf",
+            "C - A - B_undercuts.pdf",
             buildOutputFilename("A", "B", "C", ShaftPosition.OTHER, OutputDoc.UNDERCUT),
         )
     }
@@ -136,7 +156,7 @@ class OutputDocTest {
     @Test
     fun `side and blank draft compose`() {
         assertEquals(
-            "A_B_C_STBD_schematic_BlankDraft.pdf",
+            "C - A - B - STBD_schematic_BlankDraft.pdf",
             buildOutputFilename(
                 "A", "B", "C", ShaftPosition.STBD, OutputDoc.SCHEMATIC, blankDraft = true,
             ),

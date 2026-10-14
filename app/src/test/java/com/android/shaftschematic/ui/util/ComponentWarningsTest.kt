@@ -7,6 +7,7 @@ import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Taper
 import com.android.shaftschematic.model.Threads
+import com.android.shaftschematic.util.UnitSystem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -37,8 +38,8 @@ class ComponentWarningsTest {
         val a = Body(startFromAftMm = 0f, lengthMm = 100f, diaMm = 50f)
         val b = Body(startFromAftMm = 100f, lengthMm = 100f, diaMm = 100f)
         val spec = ShaftSpec(overallLengthMm = 1000f, bodies = listOf(a, b))
-        assertTrue(bodyWarningMessages(spec, a).contains(STEP))
-        assertTrue(bodyWarningMessages(spec, b).contains(STEP))
+        assertTrue(bodyWarningMessages(spec, a, UnitSystem.MILLIMETERS).contains(STEP))
+        assertTrue(bodyWarningMessages(spec, b, UnitSystem.MILLIMETERS).contains(STEP))
     }
 
     @Test
@@ -46,7 +47,7 @@ class ComponentWarningsTest {
         val a = Body(startFromAftMm = 0f, lengthMm = 100f, diaMm = 100f)
         val b = Body(startFromAftMm = 100f, lengthMm = 100f, diaMm = 140f)
         val spec = ShaftSpec(overallLengthMm = 1000f, bodies = listOf(a, b))
-        assertFalse(bodyWarningMessages(spec, a).contains(STEP))
+        assertFalse(bodyWarningMessages(spec, a, UnitSystem.MILLIMETERS).contains(STEP))
     }
 
     @Test
@@ -54,7 +55,7 @@ class ComponentWarningsTest {
         val a = Body(startFromAftMm = 0f, lengthMm = 100f, diaMm = 100f)
         val b = Body(startFromAftMm = 100f, lengthMm = 100f, diaMm = 150f)
         val spec = ShaftSpec(overallLengthMm = 1000f, bodies = listOf(a, b))
-        assertFalse(bodyWarningMessages(spec, a).contains(STEP))
+        assertFalse(bodyWarningMessages(spec, a, UnitSystem.MILLIMETERS).contains(STEP))
     }
 
     @Test
@@ -63,11 +64,11 @@ class ComponentWarningsTest {
         // gap of exactly 0.5 mm — still adjacent
         val near = Body(startFromAftMm = 100.5f, lengthMm = 100f, diaMm = 100f)
         val nearSpec = ShaftSpec(overallLengthMm = 1000f, bodies = listOf(a, near))
-        assertTrue(bodyWarningMessages(nearSpec, a).contains(STEP))
+        assertTrue(bodyWarningMessages(nearSpec, a, UnitSystem.MILLIMETERS).contains(STEP))
         // gap of 0.6 mm — no longer adjacent
         val far = Body(startFromAftMm = 100.6f, lengthMm = 100f, diaMm = 100f)
         val farSpec = ShaftSpec(overallLengthMm = 1000f, bodies = listOf(a, far))
-        assertFalse(bodyWarningMessages(farSpec, a).contains(STEP))
+        assertFalse(bodyWarningMessages(farSpec, a, UnitSystem.MILLIMETERS).contains(STEP))
     }
 
     @Test
@@ -75,15 +76,15 @@ class ComponentWarningsTest {
         val a = Body(startFromAftMm = 0f, lengthMm = 100f, diaMm = 100f)
         val b = Body(startFromAftMm = 100f, lengthMm = 100f, diaMm = 0f)
         val spec = ShaftSpec(overallLengthMm = 1000f, bodies = listOf(a, b))
-        assertFalse(bodyWarningMessages(spec, a).contains(STEP))
-        assertFalse(bodyWarningMessages(spec, b).contains(STEP))
+        assertFalse(bodyWarningMessages(spec, a, UnitSystem.MILLIMETERS).contains(STEP))
+        assertFalse(bodyWarningMessages(spec, b, UnitSystem.MILLIMETERS).contains(STEP))
     }
 
     @Test
     fun `body short segment still warns`() {
         val a = Body(startFromAftMm = 0f, lengthMm = 0.5f, diaMm = 50f)
         val spec = ShaftSpec(overallLengthMm = 1000f, bodies = listOf(a))
-        assertTrue(bodyWarningMessages(spec, a).contains(SHORT))
+        assertTrue(bodyWarningMessages(spec, a, UnitSystem.MILLIMETERS).contains(SHORT))
     }
 
     /* ── §3.3 Taper warnings ────────────────────────────────────────────────── */
@@ -92,7 +93,7 @@ class ComponentWarningsTest {
     fun `taper short segment warns`() {
         val taper = Taper(startFromAftMm = 0f, lengthMm = 0.5f, startDiaMm = 80f, endDiaMm = 60f)
         val spec = ShaftSpec(overallLengthMm = 1000f, tapers = listOf(taper))
-        assertTrue(taperWarningMessages(spec, taper).contains(SHORT))
+        assertTrue(taperWarningMessages(spec, taper, UnitSystem.MILLIMETERS).contains(SHORT))
     }
 
     // Pins the removal of the taper-vs-body Ø mismatch advisory: a large
@@ -102,7 +103,7 @@ class ComponentWarningsTest {
         val body = Body(startFromAftMm = 0f, lengthMm = 100f, diaMm = 100f)
         val taper = Taper(startFromAftMm = 100f, lengthMm = 100f, startDiaMm = 80f, endDiaMm = 60f)
         val spec = ShaftSpec(overallLengthMm = 1000f, bodies = listOf(body), tapers = listOf(taper))
-        assertTrue(taperWarningMessages(spec, taper).isEmpty())
+        assertTrue(taperWarningMessages(spec, taper, UnitSystem.MILLIMETERS).isEmpty())
     }
 
     /* ── §3.5 Liner OD below underlying body ────────────────────────────────── */
@@ -112,7 +113,7 @@ class ComponentWarningsTest {
         val body = Body(startFromAftMm = 0f, lengthMm = 500f, diaMm = 100f)
         val liner = Liner(startFromAftMm = 100f, lengthMm = 200f, odMm = 80f)
         val spec = ShaftSpec(overallLengthMm = 1000f, bodies = listOf(body), liners = listOf(liner))
-        assertTrue(linerWarningMessages(spec, liner).contains(LINER_UNDER))
+        assertTrue(linerWarningMessages(spec, liner, UnitSystem.MILLIMETERS).contains(LINER_UNDER))
     }
 
     @Test
@@ -120,7 +121,7 @@ class ComponentWarningsTest {
         val body = Body(startFromAftMm = 0f, lengthMm = 500f, diaMm = 100f)
         val liner = Liner(startFromAftMm = 600f, lengthMm = 100f, odMm = 80f)
         val spec = ShaftSpec(overallLengthMm = 1000f, bodies = listOf(body), liners = listOf(liner))
-        assertFalse(linerWarningMessages(spec, liner).contains(LINER_UNDER))
+        assertFalse(linerWarningMessages(spec, liner, UnitSystem.MILLIMETERS).contains(LINER_UNDER))
     }
 
     @Test
@@ -128,7 +129,7 @@ class ComponentWarningsTest {
         val body = Body(startFromAftMm = 0f, lengthMm = 500f, diaMm = 100f)
         val liner = Liner(startFromAftMm = 100f, lengthMm = 200f, odMm = 100f)
         val spec = ShaftSpec(overallLengthMm = 1000f, bodies = listOf(body), liners = listOf(liner))
-        assertFalse(linerWarningMessages(spec, liner).contains(LINER_UNDER))
+        assertFalse(linerWarningMessages(spec, liner, UnitSystem.MILLIMETERS).contains(LINER_UNDER))
     }
 
     @Test
@@ -136,7 +137,7 @@ class ComponentWarningsTest {
         val body = Body(startFromAftMm = 0f, lengthMm = 500f, diaMm = 0f)
         val liner = Liner(startFromAftMm = 100f, lengthMm = 200f, odMm = 80f)
         val spec = ShaftSpec(overallLengthMm = 1000f, bodies = listOf(body), liners = listOf(liner))
-        assertFalse(linerWarningMessages(spec, liner).contains(LINER_UNDER))
+        assertFalse(linerWarningMessages(spec, liner, UnitSystem.MILLIMETERS).contains(LINER_UNDER))
     }
 
     /* ── Threads unchanged ──────────────────────────────────────────────────── */
@@ -145,14 +146,14 @@ class ComponentWarningsTest {
     fun `thread zero pitch warns`() {
         val th = Threads(startFromAftMm = 0f, lengthMm = 50f, majorDiaMm = 40f, pitchMm = 0f)
         val spec = ShaftSpec(overallLengthMm = 1000f, threads = listOf(th))
-        assertTrue(threadWarningMessages(spec, th).contains("Zero pitch — thread renders flat"))
+        assertTrue(threadWarningMessages(spec, th, UnitSystem.MILLIMETERS).contains("Zero pitch — thread renders flat"))
     }
 
     @Test
     fun `thread short segment warns`() {
         val th = Threads(startFromAftMm = 0f, lengthMm = 0.5f, majorDiaMm = 40f, pitchMm = 2f)
         val spec = ShaftSpec(overallLengthMm = 1000f, threads = listOf(th))
-        assertTrue(threadWarningMessages(spec, th).contains(SHORT))
+        assertTrue(threadWarningMessages(spec, th, UnitSystem.MILLIMETERS).contains(SHORT))
     }
 
     /* ── §2.1 Implausible length/diameter sanity checks ────────────────────── */
@@ -161,28 +162,28 @@ class ComponentWarningsTest {
     fun `body warns on implausible length`() {
         val a = Body(startFromAftMm = 0f, lengthMm = MAX_LEN + 1f, diaMm = 50f)
         val spec = ShaftSpec(overallLengthMm = MAX_LEN + 1000f, bodies = listOf(a))
-        assertTrue(bodyWarningMessages(spec, a).contains(LENGTH_SANITY))
+        assertTrue(bodyWarningMessages(spec, a, UnitSystem.MILLIMETERS).contains(LENGTH_SANITY))
     }
 
     @Test
     fun `body silent on length exactly at threshold`() {
         val a = Body(startFromAftMm = 0f, lengthMm = MAX_LEN, diaMm = 50f)
         val spec = ShaftSpec(overallLengthMm = MAX_LEN, bodies = listOf(a))
-        assertFalse(bodyWarningMessages(spec, a).contains(LENGTH_SANITY))
+        assertFalse(bodyWarningMessages(spec, a, UnitSystem.MILLIMETERS).contains(LENGTH_SANITY))
     }
 
     @Test
     fun `body warns on implausible diameter`() {
         val a = Body(startFromAftMm = 0f, lengthMm = 100f, diaMm = MAX_DIA + 1f)
         val spec = ShaftSpec(overallLengthMm = 1000f, bodies = listOf(a))
-        assertTrue(bodyWarningMessages(spec, a).contains(DIA_SANITY))
+        assertTrue(bodyWarningMessages(spec, a, UnitSystem.MILLIMETERS).contains(DIA_SANITY))
     }
 
     @Test
     fun `body silent on diameter exactly at threshold`() {
         val a = Body(startFromAftMm = 0f, lengthMm = 100f, diaMm = MAX_DIA)
         val spec = ShaftSpec(overallLengthMm = 1000f, bodies = listOf(a))
-        assertFalse(bodyWarningMessages(spec, a).contains(DIA_SANITY))
+        assertFalse(bodyWarningMessages(spec, a, UnitSystem.MILLIMETERS).contains(DIA_SANITY))
     }
 
     @Test
@@ -190,7 +191,7 @@ class ComponentWarningsTest {
         val a = Body(startFromAftMm = 0f, lengthMm = 100f, diaMm = MAX_DIA + 1f)
         val b = Body(startFromAftMm = 100f, lengthMm = 100f, diaMm = 50f)
         val spec = ShaftSpec(overallLengthMm = 1000f, bodies = listOf(a, b))
-        val warnings = bodyWarningMessages(spec, a)
+        val warnings = bodyWarningMessages(spec, a, UnitSystem.MILLIMETERS)
         assertEquals(setOf(DIA_SANITY, STEP), warnings.toSet())
     }
 
@@ -198,14 +199,14 @@ class ComponentWarningsTest {
     fun `taper warns on implausible length`() {
         val t = Taper(startFromAftMm = 0f, lengthMm = MAX_LEN + 1f, startDiaMm = 80f, endDiaMm = 60f)
         val spec = ShaftSpec(overallLengthMm = MAX_LEN + 1000f, tapers = listOf(t))
-        assertTrue(taperWarningMessages(spec, t).contains(LENGTH_SANITY))
+        assertTrue(taperWarningMessages(spec, t, UnitSystem.MILLIMETERS).contains(LENGTH_SANITY))
     }
 
     @Test
     fun `taper silent on length exactly at threshold`() {
         val t = Taper(startFromAftMm = 0f, lengthMm = MAX_LEN, startDiaMm = 80f, endDiaMm = 60f)
         val spec = ShaftSpec(overallLengthMm = MAX_LEN, tapers = listOf(t))
-        assertFalse(taperWarningMessages(spec, t).contains(LENGTH_SANITY))
+        assertFalse(taperWarningMessages(spec, t, UnitSystem.MILLIMETERS).contains(LENGTH_SANITY))
     }
 
     @Test
@@ -213,43 +214,43 @@ class ComponentWarningsTest {
         val setEnd = Taper(startFromAftMm = 0f, lengthMm = 100f, startDiaMm = MAX_DIA + 1f, endDiaMm = 60f)
         val letEnd = Taper(startFromAftMm = 0f, lengthMm = 100f, startDiaMm = 60f, endDiaMm = MAX_DIA + 1f)
         val spec = ShaftSpec(overallLengthMm = 1000f)
-        assertTrue(taperWarningMessages(spec, setEnd).contains(DIA_SANITY))
-        assertTrue(taperWarningMessages(spec, letEnd).contains(DIA_SANITY))
+        assertTrue(taperWarningMessages(spec, setEnd, UnitSystem.MILLIMETERS).contains(DIA_SANITY))
+        assertTrue(taperWarningMessages(spec, letEnd, UnitSystem.MILLIMETERS).contains(DIA_SANITY))
     }
 
     @Test
     fun `taper silent on diameter exactly at threshold`() {
         val t = Taper(startFromAftMm = 0f, lengthMm = 100f, startDiaMm = MAX_DIA, endDiaMm = 60f)
         val spec = ShaftSpec(overallLengthMm = 1000f, tapers = listOf(t))
-        assertFalse(taperWarningMessages(spec, t).contains(DIA_SANITY))
+        assertFalse(taperWarningMessages(spec, t, UnitSystem.MILLIMETERS).contains(DIA_SANITY))
     }
 
     @Test
     fun `liner warns on implausible length`() {
         val ln = Liner(startFromAftMm = 0f, lengthMm = MAX_LEN + 1f, odMm = 80f)
         val spec = ShaftSpec(overallLengthMm = MAX_LEN + 1000f, liners = listOf(ln))
-        assertTrue(linerWarningMessages(spec, ln).contains(LENGTH_SANITY))
+        assertTrue(linerWarningMessages(spec, ln, UnitSystem.MILLIMETERS).contains(LENGTH_SANITY))
     }
 
     @Test
     fun `liner silent on length exactly at threshold`() {
         val ln = Liner(startFromAftMm = 0f, lengthMm = MAX_LEN, odMm = 80f)
         val spec = ShaftSpec(overallLengthMm = MAX_LEN, liners = listOf(ln))
-        assertFalse(linerWarningMessages(spec, ln).contains(LENGTH_SANITY))
+        assertFalse(linerWarningMessages(spec, ln, UnitSystem.MILLIMETERS).contains(LENGTH_SANITY))
     }
 
     @Test
     fun `liner warns on implausible od`() {
         val ln = Liner(startFromAftMm = 0f, lengthMm = 100f, odMm = MAX_DIA + 1f)
         val spec = ShaftSpec(overallLengthMm = 1000f, liners = listOf(ln))
-        assertTrue(linerWarningMessages(spec, ln).contains(DIA_SANITY))
+        assertTrue(linerWarningMessages(spec, ln, UnitSystem.MILLIMETERS).contains(DIA_SANITY))
     }
 
     @Test
     fun `liner silent on od exactly at threshold`() {
         val ln = Liner(startFromAftMm = 0f, lengthMm = 100f, odMm = MAX_DIA)
         val spec = ShaftSpec(overallLengthMm = 1000f, liners = listOf(ln))
-        assertFalse(linerWarningMessages(spec, ln).contains(DIA_SANITY))
+        assertFalse(linerWarningMessages(spec, ln, UnitSystem.MILLIMETERS).contains(DIA_SANITY))
     }
 
     @Test
@@ -257,7 +258,7 @@ class ComponentWarningsTest {
         val body = Body(startFromAftMm = 0f, lengthMm = 500f, diaMm = MAX_DIA + 500f)
         val ln = Liner(startFromAftMm = 100f, lengthMm = 200f, odMm = MAX_DIA + 1f)
         val spec = ShaftSpec(overallLengthMm = 1000f, bodies = listOf(body), liners = listOf(ln))
-        val warnings = linerWarningMessages(spec, ln)
+        val warnings = linerWarningMessages(spec, ln, UnitSystem.MILLIMETERS)
         assertEquals(setOf(DIA_SANITY, LINER_UNDER), warnings.toSet())
     }
 
@@ -265,35 +266,35 @@ class ComponentWarningsTest {
     fun `thread warns on implausible length`() {
         val th = Threads(startFromAftMm = 0f, lengthMm = MAX_LEN + 1f, majorDiaMm = 40f, pitchMm = 2f)
         val spec = ShaftSpec(overallLengthMm = MAX_LEN + 1000f, threads = listOf(th))
-        assertTrue(threadWarningMessages(spec, th).contains(LENGTH_SANITY))
+        assertTrue(threadWarningMessages(spec, th, UnitSystem.MILLIMETERS).contains(LENGTH_SANITY))
     }
 
     @Test
     fun `thread silent on length exactly at threshold`() {
         val th = Threads(startFromAftMm = 0f, lengthMm = MAX_LEN, majorDiaMm = 40f, pitchMm = 2f)
         val spec = ShaftSpec(overallLengthMm = MAX_LEN, threads = listOf(th))
-        assertFalse(threadWarningMessages(spec, th).contains(LENGTH_SANITY))
+        assertFalse(threadWarningMessages(spec, th, UnitSystem.MILLIMETERS).contains(LENGTH_SANITY))
     }
 
     @Test
     fun `thread warns on implausible major diameter`() {
         val th = Threads(startFromAftMm = 0f, lengthMm = 50f, majorDiaMm = MAX_DIA + 1f, pitchMm = 2f)
         val spec = ShaftSpec(overallLengthMm = 1000f, threads = listOf(th))
-        assertTrue(threadWarningMessages(spec, th).contains(DIA_SANITY))
+        assertTrue(threadWarningMessages(spec, th, UnitSystem.MILLIMETERS).contains(DIA_SANITY))
     }
 
     @Test
     fun `thread silent on major diameter exactly at threshold`() {
         val th = Threads(startFromAftMm = 0f, lengthMm = 50f, majorDiaMm = MAX_DIA, pitchMm = 2f)
         val spec = ShaftSpec(overallLengthMm = 1000f, threads = listOf(th))
-        assertFalse(threadWarningMessages(spec, th).contains(DIA_SANITY))
+        assertFalse(threadWarningMessages(spec, th, UnitSystem.MILLIMETERS).contains(DIA_SANITY))
     }
 
     @Test
     fun `thread implausible dia produces sanity warning plus legitimate zero-pitch warning only`() {
         val th = Threads(startFromAftMm = 0f, lengthMm = 50f, majorDiaMm = MAX_DIA + 1f, pitchMm = 0f)
         val spec = ShaftSpec(overallLengthMm = 1000f, threads = listOf(th))
-        val warnings = threadWarningMessages(spec, th)
+        val warnings = threadWarningMessages(spec, th, UnitSystem.MILLIMETERS)
         assertEquals(setOf(DIA_SANITY, "Zero pitch — thread renders flat"), warnings.toSet())
     }
 
@@ -371,7 +372,7 @@ class ComponentWarningsTest {
     fun `a span inside the shaft is not outside`() {
         val spec = ShaftSpec(overallLengthMm = 1000f)
         assertFalse(outsideShaftSpan(spec, 100f, 200f))
-        assertNull(pastShaftEndMessage(spec, 100f, 200f))
+        assertNull(pastShaftEndMessage(spec, 100f, 200f, UnitSystem.MILLIMETERS))
     }
 
     @Test
@@ -380,7 +381,7 @@ class ComponentWarningsTest {
         assertTrue(outsideShaftSpan(spec, 900f, 200f))
         assertEquals(
             "Extends past shaft length (OAL 1000 mm)",
-            pastShaftEndMessage(spec, 900f, 200f),
+            pastShaftEndMessage(spec, 900f, 200f, UnitSystem.MILLIMETERS),
         )
     }
 
@@ -395,7 +396,7 @@ class ComponentWarningsTest {
     fun `a not-yet-set overall length has no bounds`() {
         val spec = ShaftSpec(overallLengthMm = 0f)
         assertFalse(outsideShaftSpan(spec, 900f, 500f))
-        assertNull(pastShaftEndMessage(spec, 900f, 500f))
+        assertNull(pastShaftEndMessage(spec, 900f, 500f, UnitSystem.MILLIMETERS))
     }
 
     @Test
@@ -434,38 +435,67 @@ class ComponentWarningsTest {
     @Test
     fun `dialog and card messages agree on when but not on wording`() {
         val spec = ShaftSpec(overallLengthMm = 500f)
-        assertEquals("Falls outside shaft span (OAL 500 mm)", outsideShaftSpanMessage(spec, 400f, 200f))
-        assertEquals("Extends past shaft length (OAL 500 mm)", pastShaftEndMessage(spec, 400f, 200f))
-        assertNull(outsideShaftSpanMessage(spec, 100f, 200f))
-        assertNull(pastShaftEndMessage(spec, 100f, 200f))
+        assertEquals("Falls outside shaft span (OAL 500 mm)", outsideShaftSpanMessage(spec, 400f, 200f, UnitSystem.MILLIMETERS))
+        assertEquals("Extends past shaft length (OAL 500 mm)", pastShaftEndMessage(spec, 400f, 200f, UnitSystem.MILLIMETERS))
+        assertNull(outsideShaftSpanMessage(spec, 100f, 200f, UnitSystem.MILLIMETERS))
+        assertNull(pastShaftEndMessage(spec, 100f, 200f, UnitSystem.MILLIMETERS))
     }
 
     @Test
     fun `body past the shaft end gets the card chip`() {
         val b = Body(startFromAftMm = 900f, lengthMm = 200f, diaMm = 50f)
         val spec = ShaftSpec(overallLengthMm = 1000f, bodies = listOf(b))
-        assertTrue(bodyWarningMessages(spec, b).contains(PAST_OAL_1000))
+        assertTrue(bodyWarningMessages(spec, b, UnitSystem.MILLIMETERS).contains(PAST_OAL_1000))
+    }
+
+    /**
+     * The OAL in the message prints in the document's display unit through the footer's length
+     * formatter — an inch drawing quoted its OAL in millimeters (on-device report). Canonical
+     * geometry stays mm; only the quoted number converts.
+     */
+    @Test
+    fun `an inch document quotes its OAL in inches`() {
+        val spec = ShaftSpec(overallLengthMm = 120f * 25.4f)
+        assertEquals("Falls outside shaft span (OAL 120\")", outsideShaftSpanMessage(spec, 3000f, 100f, UnitSystem.INCHES))
+        assertEquals("Extends past shaft length (OAL 120\")", pastShaftEndMessage(spec, 3000f, 100f, UnitSystem.INCHES))
+
+        // A fractional inch OAL takes the footer's smart inch spelling, never a raw mm number.
+        val fractional = ShaftSpec(overallLengthMm = 100.5f * 25.4f)
+        assertEquals("Extends past shaft length (OAL 100 1/2\")", pastShaftEndMessage(fractional, 3000f, 100f, UnitSystem.INCHES))
+
+        // Every card chip carries the same quoted unit.
+        val b = Body(startFromAftMm = 3000f, lengthMm = 200f, diaMm = 50f)
+        val t = Taper(startFromAftMm = 3000f, lengthMm = 200f, startDiaMm = 50f, endDiaMm = 40f)
+        val l = Liner(startFromAftMm = 3000f, lengthMm = 200f, odMm = 60f)
+        val th = Threads(startFromAftMm = 3000f, lengthMm = 200f, majorDiaMm = 40f, pitchMm = 2f)
+        val built = spec.copy(bodies = listOf(b), tapers = listOf(t), liners = listOf(l), threads = listOf(th))
+        val expected = "Extends past shaft length (OAL 120\")"
+        assertTrue(bodyWarningMessages(built, b, UnitSystem.INCHES).contains(expected))
+        assertTrue(taperWarningMessages(built, t, UnitSystem.INCHES).contains(expected))
+        assertTrue(linerWarningMessages(built, l, UnitSystem.INCHES).contains(expected))
+        assertTrue(threadWarningMessages(built, th, UnitSystem.INCHES).contains(expected))
+        assertTrue(collectAddWarnings(built, 3000f, 100f, UnitSystem.INCHES).contains("Falls outside shaft span (OAL 120\")"))
     }
 
     @Test
     fun `taper past the shaft end gets the card chip`() {
         val t = Taper(startFromAftMm = 900f, lengthMm = 200f, startDiaMm = 80f, endDiaMm = 60f)
         val spec = ShaftSpec(overallLengthMm = 1000f, tapers = listOf(t))
-        assertTrue(taperWarningMessages(spec, t).contains(PAST_OAL_1000))
+        assertTrue(taperWarningMessages(spec, t, UnitSystem.MILLIMETERS).contains(PAST_OAL_1000))
     }
 
     @Test
     fun `liner past the shaft end gets the card chip`() {
         val ln = Liner(startFromAftMm = 900f, lengthMm = 200f, odMm = 80f)
         val spec = ShaftSpec(overallLengthMm = 1000f, liners = listOf(ln))
-        assertTrue(linerWarningMessages(spec, ln).contains(PAST_OAL_1000))
+        assertTrue(linerWarningMessages(spec, ln, UnitSystem.MILLIMETERS).contains(PAST_OAL_1000))
     }
 
     @Test
     fun `included thread past the shaft end gets the card chip`() {
         val th = Threads(startFromAftMm = 900f, lengthMm = 200f, majorDiaMm = 40f, pitchMm = 2f)
         val spec = ShaftSpec(overallLengthMm = 1000f, threads = listOf(th))
-        assertTrue(threadWarningMessages(spec, th).contains(PAST_OAL_1000))
+        assertTrue(threadWarningMessages(spec, th, UnitSystem.MILLIMETERS).contains(PAST_OAL_1000))
     }
 
     /** An excluded thread sits outside the envelope by design — flagging it would fire always. */
@@ -476,7 +506,7 @@ class ComponentWarningsTest {
             excludeFromOAL = true, isAftEnd = false,
         )
         val spec = ShaftSpec(overallLengthMm = 1000f, threads = listOf(th))
-        assertFalse(threadWarningMessages(spec, th).any { it.contains("past shaft length") })
+        assertFalse(threadWarningMessages(spec, th, UnitSystem.MILLIMETERS).any { it.contains("past shaft length") })
     }
 
     @Test
@@ -549,8 +579,8 @@ class ComponentWarningsTest {
         val fwdRef = aftRef.copy(id = "t-fwd", authoredReference = LinerAuthoredReference.FWD)
         val spec = ShaftSpec(overallLengthMm = 1000f, tapers = listOf(aftRef, fwdRef))
 
-        assertTrue(taperWarningMessages(spec, aftRef).contains(PAST_OAL_1000))
-        assertTrue(taperWarningMessages(spec, fwdRef).contains(PAST_OAL_1000))
+        assertTrue(taperWarningMessages(spec, aftRef, UnitSystem.MILLIMETERS).contains(PAST_OAL_1000))
+        assertTrue(taperWarningMessages(spec, fwdRef, UnitSystem.MILLIMETERS).contains(PAST_OAL_1000))
         assertTrue(specWarningMessages(spec).contains("2 components extend past shaft length"))
     }
 
@@ -562,7 +592,7 @@ class ComponentWarningsTest {
     )
 
     private fun threadWarnings(th: Threads) =
-        threadWarningMessages(ShaftSpec(overallLengthMm = 1000f, threads = listOf(th)), th)
+        threadWarningMessages(ShaftSpec(overallLengthMm = 1000f, threads = listOf(th)), th, UnitSystem.MILLIMETERS)
 
     @Test
     fun `a sound relief raises no advisory`() {
