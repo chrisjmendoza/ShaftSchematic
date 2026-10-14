@@ -35,7 +35,7 @@ Implements `Segment`. Stored on `ShaftSpec.couplerBoltSlots: List<CouplerBoltSlo
 | `authoredReference` | `SlotAuthoredReference` AFT / **FWD** (default FWD) — UI display only |
 | `holeStyle` | `BoltHoleStyle` **SEAM** (default) / CROSS — **draw-only**; see "Hole style" below |
 | `clocking` | `BoltHoleClocking` **DEG_90** (default) / IN_LINE — a CROSS hole's position around the shaft relative to the keyway; ignored for SEAM. Draw + footer text only |
-| `showDimensionRail` | Per-slot dimension-rail opt-in — **deferred**, off by default, not drawn in v1 |
+| `showDimensionRail` | Per-slot dimension-rail opt-in — off by default; ON prints ONE span from the `authoredReference` shaft end to the nearest hole center, labelled `authoredCenterMm` (see "Dimension rail" below) |
 | `label` | Optional display label |
 
 Derived: `lengthMm = (count − 1) · spacingMm + holeDiaMm` (axial footprint),
@@ -120,7 +120,27 @@ and the clocking note `90° from keyway` / `In line with keyway` — the note pr
 shaft carries at least one keyway ("from keyway" says nothing without one, the
 `keywayClockingFooterNote` rule). Values resolve the row's own display unit and honor dual
 display; blank drafts keep the labels and rule the values. **SEAM rows still print nothing**
-(existing sheets byte-identical). No dimension rail for either style, as before.
+(existing sheets byte-identical). Either style may additionally opt into the dimension rail
+below.
+
+---
+
+## Dimension rail (`showDimensionRail`, card-only, off by default)
+
+The card's "Show dimension rail" switch adds **ONE `DimSpan`** (kind LOCAL) to the schematic
+AND the consolidated sheet's rail set, through the one shared builder `buildCouplerSlotSpans`
+(`pdf/ShaftPdfComposer.kt`, beside `buildTaperLengthSpans`; `RunoutPdfComposer`'s consolidated
+branch calls the same function). The span runs from the **shaft end** the row was measured from
+(`authoredReference`: AFT = the AFT face at 0, FWD = the FWD face at OAL — the shaft end, never a
+SET) to the **nearest hole center** (the fwd-most center under FWD, the aft-most under AFT), and
+its label is the stored distance `authoredCenterMm` through `formatLenDimDualLabel` in the row's
+own display unit (`displayUnits.unitFor(slot.id)` — the slot's id is its resolved id, so a
+`unit_overrides` entry keys to it), honoring dual display. The planner tiers it like any other
+span; blank drafts rule the value like every other span. OFF contributes nothing, so a sheet that
+never touched the switch prints byte-identically. A hole centered on its face (distance 0) prints
+no span. Draw-only — the span moves no geometry, and the row stays outside OAL, body resolution
+and collision. The switch stays **card-only** (the add-dialog-parity carve-out: a post-hoc print
+choice with a stable default, reached for after looking at a printed sheet).
 
 ---
 
@@ -142,8 +162,36 @@ Drawn everywhere the shaft is drawn:
   whole-shaft fallback profile — a sheet with any detail strip prints no slots; see the
   known-gap note in the tracking docs).
 
-**v1 deferrals:** no dimension rail is drawn (`showDimensionRail` persists but is unused);
-through vs blind render identically.
+### Compression: the row's window never compresses
+
+The hole circles are sized on the **diameter** scale (`rPx(holeDiaMm)`) while their centers ride
+the compressed axial map, so inside a foreshortened body a 1″-on-3″ row printed as an
+overlapping chain and the S-break gap could land on the row (manual-figure report). The fix is
+the body-keyway WINDOW rule (CLAUDE.md "A body keyway's WINDOW never compresses"), applied to
+bolt rows:
+
+- **Pinned window.** `boltRowProtectedSpansMm` (`geom/ProfileFeatureSpans.kt`) is each row's
+  footprint — first hole center − hole radius … last hole center + hole radius — padded by one
+  hole diameter at each end and clamped to the shaft; a cross-drilled hole's window is the same
+  construction (its circle or hidden bore is one hole wide). `boltRowPinnedSpans` turns it into a
+  `Float.MAX_VALUE` feature span in the ONE builder `profileFeatureSpans`, so both composers and
+  the height-slider estimator pin the span the holes draw in. The window — never the host body —
+  pins; the drawn height yields to it like any pin.
+- **The S-break gap steers clear of it.** The same windows join the keyway windows and seal areas
+  as `breakGapCenter` avoid ranges (`drawBodyRunsWithBreaks(boltRowAvoidSpansMm)`); a run with no
+  clear placement prints plain, as for a keyway window.
+- **Centers off the row's own mapped span.** `boltHoleCentersX` (`geom/BoltHoleMath.kt`) places
+  every hole off the row's own mapped window — `xAt(first center − r)` plus `(r + i·spacing)` at
+  the window's local pt/mm — the way `drawKeywayNotchBodyPdf` derives a slot's axial scale from
+  its pinned window. Pinned, that local scale IS the diameter scale, so the drawn pitch is the
+  true pitch and the holes stay round and correctly spaced. Both draw sites take their centers
+  from it; on the preview's linear map it reduces to `xPx(center)` exactly, so only the PDF's
+  spacing changed.
+
+Reference-feature posture is untouched: the window reaches neither OAL, body resolution nor
+collision — it is a drawing decision only.
+
+**Still identical:** through vs blind render the same on the seam style.
 
 ---
 
@@ -174,13 +222,19 @@ which of the document's two geometries the edit lands on; see `docs/contracts/Fi
 Hole (Seam | Cross-drilled), From keyway (90° | In line — only when Cross-drilled), Measure
 From (AFT | FWD), hole Ø, count, spacing (only when `count > 1`), through/blind toggle, and
 depth (only when blind). The carousel card
-additionally has the deferred "show dimension rail" toggle. The add chooser's button reads
-"Coupler Bolt Slot / Hole" so the cross-drilled case is findable.
+additionally has the card-only "show dimension rail" toggle (see "Dimension rail" above). The
+add chooser's button reads "Coupler Bolt Slot / Hole" so the cross-drilled case is findable.
 
 ---
 
 ## Change Log
 **v1.0 (2026-07-11)** — Initial contract. Feature implemented on `feature/coupler-bolt-slots`.
+
+**2026-10-13** — `showDimensionRail` implemented (ONE LOCAL span from the authored shaft end to
+the nearest hole center, both rail sheets, `buildCouplerSlotSpans`); the row's padded window
+pins at true scale through `profileFeatureSpans` (`boltRowPinnedSpans`), the S-break gap avoids
+it, and both draw sites place hole centers off the window's own scale (`boltHoleCentersX`) —
+manual-figure report: overlapping holes inside a compressed body.
 
 **2026-09-17** — `holeStyle` (SEAM / CROSS): the cross-drilled coupling-end bolt hole, drawn
 as one circle on the centerline; additive, draw-only, mirrored on dialog and card. Same day:

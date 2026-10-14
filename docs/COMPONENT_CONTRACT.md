@@ -60,7 +60,7 @@ Features:
   - A first-class list in `ShaftSpec` (`couplerBoltSlots`) and implements `Segment`, but it is a **pure reference marker**, not a geometric span.
   - Draws a row of `count` cutouts (pitch `spacingMm`, diameter `holeDiaMm`) straddling the shaft outline; `through`/`depthMm` distinguish through vs blind.
   - Excluded from OAL/`coverageEndMm`, excluded from collision detection (`collisionGroup()` → null), and never splits or merges bodies.
-  - Position authored from AFT/FWD (default FWD); `showDimensionRail` is deferred (no rail drawn in v1). See DATA_MODEL.md for the full field list.
+  - Position authored from AFT/FWD (default FWD); `showDimensionRail` (card-only, off by default) prints one rail span from that end to the nearest hole center. The row's padded window pins at true scale on the compressed sheets and the S-break gap avoids it (draw-only; see `docs/contracts/CouplerBoltSlot.md`). See DATA_MODEL.md for the full field list.
 
 - **Not components — envelope records**: wear spots, wear pits, measured-Ø readings, worn
   sections, runout readings, and undercuts are reference-only *inspection records* stored in

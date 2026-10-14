@@ -501,6 +501,11 @@ internal val helpSections: List<HelpSection> = listOf(
                     "the shaft, since the keyway faces you) or \"In line\" (drawn as one " +
                     "circle on the centerline). The footer prints the Ø, the center distance " +
                     "and the clocking.\n\n" +
+                    "The card's \"Show dimension rail\" switch prints one dimension from the end " +
+                    "of the shaft the row was measured from to the nearest hole center, on the " +
+                    "schematic and consolidated sheets. On paper a row is never shortened: its " +
+                    "holes keep their true spacing inside a compressed body, and the body's " +
+                    "S-break is placed clear of them.\n\n" +
                     "Slots are reference features: they are drawn, but they never change the " +
                     "overall length, never split a body, and never collide with anything else."
             ),

@@ -58,6 +58,14 @@ internal fun drawBodyRunsWithBreaks(
      */
     keywayAvoidSpansMm: List<KeywaySpan> = emptyList(),
     /**
+     * Protected coupler bolt-row windows ([boltRowProtectedSpansMm], absolute mm) — the third
+     * avoid source, under the keyway-window rule: the row is pinned at true scale so its holes
+     * read as real geometry, and a break gap cut through a hole row or a cross-bore would put
+     * the paper gap where the bolts are (manual-figure report). Same treatment as the keyway
+     * windows: the gap shifts off, and only a run with no clear placement prints plain.
+     */
+    boltRowAvoidSpansMm: List<KeywaySpan> = emptyList(),
+    /**
      * Run ids whose shade is suppressed while the rest of [bodies] keeps [fill] — the kind's
      * checkbox, the "explicit bodies only" narrowing, and each authored body's own tri-state
      * override, all resolved to ids by `ui/resolved/unshadedBodyRunIds`. Decided per run INSIDE
@@ -67,7 +75,7 @@ internal fun drawBodyRunsWithBreaks(
     unfilledBodyIds: Set<String> = emptySet(),
 ) {
     val capPaint = Paint(outline).apply { style = Paint.Style.STROKE }
-    val avoidX = keywayAvoidSpansMm.map {
+    val avoidX = (keywayAvoidSpansMm + boltRowAvoidSpansMm).map {
         val a = xAt(it.loMm); val b2 = xAt(it.hiMm)
         minOf(a, b2)..maxOf(a, b2)
     }
@@ -105,8 +113,8 @@ internal fun drawBodyRunsWithBreaks(
         drawBlendCurvePdf(c, edges.aftCurve, cy, outline, runFill)
         drawBlendCurvePdf(c, edges.fwdCurve, cy, outline, runFill)
 
-        // Break layout first: the gap steers clear of any protected keyway window AND this
-        // run's seal areas (a dashed seal line floating in the paper gap would be nonsense),
+        // Break layout first: the gap steers clear of any protected keyway window, any bolt-row
+        // window, AND this run's seal areas (a dashed seal line floating in the paper gap would be nonsense),
         // and a run with no clear placement falls back to the plain rectangle. The gap is
         // sized on the flat span, ramp to ramp — seal areas do not shrink it.
         val flatLenPt = abs(fx1 - fx0)

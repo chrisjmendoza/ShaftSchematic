@@ -26,6 +26,7 @@ import com.android.shaftschematic.geom.PROFILE_TAPER_MIN_FRAC_OF_TRUE
 import com.android.shaftschematic.geom.PROFILE_MIN_THREAD_PT
 import com.android.shaftschematic.geom.ProfileFeatureSpan
 import com.android.shaftschematic.geom.bodyKeywayProtectedSpansMm
+import com.android.shaftschematic.geom.boltRowProtectedSpansMm
 import com.android.shaftschematic.geom.profileFeatureSpans
 import com.android.shaftschematic.geom.defaultVisualScale
 import com.android.shaftschematic.geom.buildCompressedProfileXMap
@@ -384,7 +385,8 @@ internal fun composeRunoutPdfOnCanvas(
             unit = unit,
             measureFrom = measureFromMode,
             displayUnits = displayUnits,
-        ) + buildTaperLengthSpans(spec, oalWindow, unit, displayUnits)
+        ) + buildTaperLengthSpans(spec, oalWindow, unit, displayUnits) +
+            buildCouplerSlotSpans(spec, oalWindow, unit, displayUnits)
         RailPlanner().assignAll(dimSpans, tierOriginMmFor(measureFromMode, oalWindow.oalMm))
     } else emptyList()
     val maxRail = railAssignments.maxOfOrNull { it.rail } ?: -1
@@ -1357,6 +1359,7 @@ internal fun drawShaftProfile(
         breakMinFracOfTrue = breakMinFracOfTrue,
         blends = blends,
         keywayAvoidSpansMm = bodyKeywayProtectedSpansMm(authoredSpec),
+        boltRowAvoidSpansMm = boltRowProtectedSpansMm(authoredSpec),
         unfilledBodyIds = unfilledBodyIds,
     )
     // Body keyways, from the SAME pass the schematic draws (`drawBodyKeywaysPdf`) so a slot
