@@ -1,0 +1,179 @@
+<section class="chapter" id="ch-settings" data-audience="both">
+  <h1>Settings Reference</h1>
+  <p class="lede">Every setting the app offers, page by page, in the order Settings shows them: the default, the range, and what each one changes on screen and on paper. Use it to set the app up for your shop, or to find out why a sheet prints the way it does.</p>
+
+  <h2 id="settings-overview">How Settings works</h2>
+  <p>Open Settings from any of three places: the <span class="ui">Settings</span> button on the home screen, the <span class="ui">Settings</span> entry in the navigation menu, or the <span class="ui">Settings</span> item in the editor's <span class="ui">More options</span> menu. The main page is one long scrolling list divided into sections. Two rows on it open their own pages: <span class="ui">PDF Export Options</span> and <span class="ui">Preview Colors</span>. The back arrow returns you from either page to the main list.</p>
+  <p>Everything in Settings is app-wide: it belongs to this tablet or phone, not to a shaft. Change a setting once and every document you open or print follows it. The one exception is <span class="ui">Units</span>, which the open document remembers (see below).</p>
+  <p>Settings fall into two kinds:</p>
+  <dl class="terms">
+    <dt>Screen-only</dt><dd>Changes what you see in the app — the theme, the preview colors, the editor's grid and arrows. Never reaches a printed sheet.</dd>
+    <dt>Drawing</dt><dd>Changes the printed sheets — shaft height, S-breaks, arrowheads, fonts, shading. A few of these also restyle the on-screen previews; the tables say which.</dd>
+  </dl>
+  <aside class="note"><p>Many drawing settings are also on the PDF options panel that opens over each document's preview. Where a table says “Also on the PDF options panel”, the two controls are the same single setting reached from two places: move it on the panel and Settings shows the new value, and the reverse. The panel exists so you can tune the look while watching the sheet change. See <a href="#documents-options">The PDF options panel</a>.</p></aside>
+  <p>A slider in Settings saves when you let go of it, not while you drag. Chips and switches save the moment you tap them. Each slider has a <span class="ui">Default (…)</span> or <span class="ui">Standard (…)</span> button beside its title; the button greys out while the setting is already at its default.</p>
+
+  <h2 id="settings-units">Units</h2>
+  <p><span class="path">Settings → Units</span> — sets how values are shown and typed in the open document.</p>
+  <table class="ref">
+    <thead><tr><th>Setting</th><th>Default</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><span class="ui">Millimeters</span> | <span class="ui">Inches</span></td><td>Inches for a new shaft</td><td>Every field, badge, drawing and printed sheet shows values in the chosen unit. Inch fields accept fractions such as 3 1/2. The choice is saved with the document, so a shaft reopens in the unit it was drawn in.</td></tr>
+    </tbody>
+  </table>
+  <aside class="note"><p>Switching units never changes a number; see <a href="#intro-units">Millimeters and inches</a>.</p></aside>
+  <p>To print one component in a different unit from the rest of the shaft — a metric thread on an inch shaft, for example — switch on <span class="ui">Per-component units</span> under Drawing (<a href="#settings-capabilities">below</a>).</p>
+
+  <h2 id="settings-appearance">Appearance</h2>
+  <p><span class="path">Settings → Appearance</span> — the app's color scheme. Screen-only: drawing sheets and printed PDFs are always white paper with dark ink, whatever you choose here.</p>
+  <table class="ref">
+    <thead><tr><th>Setting</th><th>Default</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><span class="ui">System</span> | <span class="ui">Light</span> | <span class="ui">Dark</span></td><td>Light</td><td>Picks the app theme. <span class="ui">System</span> follows the device's own dark-mode setting. Sheet canvases (runout, wear, undercut) stay white in every theme so ink always reads.</td></tr>
+      <tr><td><span class="ui">High contrast</span></td><td>Off</td><td>Boosts figure/ground separation for bright sunlight or low-vision use. Works with any of the three themes.</td></tr>
+    </tbody>
+  </table>
+  <aside class="tip"><p>On a tablet at the lathe under shop lights, try <span class="ui">Light</span> with <span class="ui">High contrast</span> on.</p></aside>
+
+  <h2 id="settings-drawing">Drawing</h2>
+  <p><span class="path">Settings → Drawing</span> — what every printed sheet looks like. These settings apply to every document; a document never stores its own copy of them. The section runs from shaft size, through the wear document, to lines, threads and text, and ends with four switches that reveal extra controls in the editor.</p>
+
+  <h3 id="settings-drawing-size">Shaft size and S-breaks</h3>
+  <table class="ref">
+    <thead><tr><th>Setting</th><th>Default</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><span class="ui">Default drawing size</span>: <span class="ui">4″ shaft draws</span></td><td>0.5″</td><td>How tall a 4″ shaft draws on paper at 100% <span class="ui">Shaft height</span>. Slider 0.25″ to 1.5″ in 1/16″ steps.</td></tr>
+      <tr><td><span class="ui">Default drawing size</span>: <span class="ui">8″ shaft draws</span></td><td>1″</td><td>How tall an 8″ shaft draws. Same range and steps. Every other diameter follows the straight line through the two points; the line under the sliders shows the result live (for example, <span class="ui">Example: a 6″ shaft draws 0.75″.</span>). <span class="ui">Standard (0.5″ / 1″)</span> restores the standard pair.</td></tr>
+      <tr><td><span class="ui">Body S-break</span></td><td>below 50%</td><td>How much a body run must be shortened before it prints the S-break symbol. Slider from <span class="ui">Never</span> to <span class="ui">Always</span> in 5% steps; the readout shows <span class="ui">Never</span> or <span class="ui">below 50%</span> (or your value). <span class="ui">Default (50%)</span> resets it. Also on the PDF options panel (schematic, runout and consolidated sheets).</td></tr>
+    </tbody>
+  </table>
+  <p>If you set the 8″ value below the 4″ value, a red warning appears and drawings flatten at the 4″ height, because a larger shaft never draws smaller than a smaller one. The per-job <span class="ui">Shaft height</span> slider works on top of this default, and a very long body run breaks at every S-break setting, <span class="ui">Never</span> included. See <a href="#documents-height">Shaft height and compression</a>.</p>
+
+  <h3 id="settings-drawing-wear">Wear document</h3>
+  <p>These three shape the wear document's detail strips. They change the drawing only; printed Ø values never change.</p>
+  <table class="ref">
+    <thead><tr><th>Setting</th><th>Default</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><span class="ui">Wear depth exaggeration</span></td><td>25%</td><td>The default for how deep the worn-profile trace draws, as a fraction of the liner radius. Slider 5% to 25% in 1% steps; <span class="ui">Default (25%)</span> resets it. A job can set its own value with <span class="ui">Trace depth exaggeration</span>, whose <span class="ui">Save as default</span> writes back here (see <a href="#recording-trace">The worn-profile trace</a>).</td></tr>
+      <tr><td><span class="ui">Wear area shade</span></td><td>16%</td><td>Grey of a measured wear area in the detail strips. Slider 5% to 35% in 1% steps. The range stops where a heavier grey would bury the pit marks drawn into the band, printed or by hand. Also on the PDF options panel (wear sheet).</td></tr>
+      <tr><td><span class="ui">Taper–liner join</span></td><td>3″</td><td>A taper and the liner beside it share one detail strip. This is how much bare shaft may sit between them before the strip breaks the gap instead of drawing it true. Slider 0″ to 12″ in 1/2″ steps (10 mm steps when working in millimeters). At 0 any gap breaks; touching components always draw joined. Also on the PDF options panel (wear sheet).</td></tr>
+    </tbody>
+  </table>
+
+  <h3 id="settings-drawing-lines">Lines, threads and text</h3>
+  <table class="ref">
+    <thead><tr><th>Setting</th><th>Default</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><span class="ui">Dimension arrows</span></td><td>Small</td><td>Arrowhead size on the dimension rails: <span class="ui">Small</span>, <span class="ui">Medium</span> or <span class="ui">Large</span>. Heads point inward unless the span is too narrow to hold both. A smaller head lets more values sit inside the dimension line. Also on the PDF options panel (schematic and consolidated sheets).</td></tr>
+      <tr><td><span class="ui">Thread slant</span></td><td>3×</td><td>How far the thread hatch leans. It follows each thread's own pitch; 1× is the true crest angle and higher values lean it further so the thread reads at print size. Slider from <span class="ui">1× true</span> to 10× in 0.5× steps; <span class="ui">Default (3×)</span> resets it. Restyles the on-screen previews too. Also on the PDF options panel (Thread section, shown when the shaft has a thread).</td></tr>
+      <tr><td><span class="ui">Thread density</span></td><td>50%</td><td>How many of the thread's crests the hatch draws. Slider from <span class="ui">Sparse</span> (15%) to <span class="ui">100% true</span> (every crest at true pitch) in 5% steps; <span class="ui">Default (50%)</span> resets it. Fine threads stay at a legible minimum spacing. Also on the PDF options panel (Thread section).</td></tr>
+      <tr><td><span class="ui">Output font</span></td><td>Standard</td><td>The typeface every printed sheet is set in: <span class="ui">Standard</span>, <span class="ui">Condensed</span>, <span class="ui">Serif</span> or <span class="ui">Monospace</span>. Each chip is labeled in its own face. Condensed fits more values inside the dimension line; Monospace lines digits up in columns. Paper only — app screens are unaffected. Settings only; it is not on the PDF options panel. A device that lacks a face prints in Standard.</td></tr>
+      <tr><td><span class="ui">Fractions</span></td><td>Diagonal</td><td>How a fraction is set: <span class="ui">Stacked</span> (numerator over denominator with a bar, the shop-ruler fraction), <span class="ui">Diagonal</span> (raised numerator, slanted divider) or <span class="ui">Plain</span> (3/16 on one line). Applies to the on-screen sheets and the printed sheets alike. Also on the PDF options panel (Lines &amp; text section).</td></tr>
+      <tr><td><span class="ui">Dual-unit layout</span></td><td>Inline</td><td>How a value printed in both units is set: <span class="ui">Inline</span> puts both on one line — 1 1/2″ [38.1 mm]; <span class="ui">Stacked</span> puts the second unit under the first. Stacked is about half as wide, so more values sit in the dimension line; a sheet too tight for the taller value falls back to Inline for the whole sheet. Has an effect only on a document with dual units on. Also on the PDF options panel (Units section, greyed out while that document's dual units are off).</td></tr>
+    </tbody>
+  </table>
+  <aside class="note"><p>Changing the font, fraction style or dual-unit layout never makes text collide. Every rail break and label is measured from the text as it will actually print.</p></aside>
+
+  <h3 id="settings-capabilities">Switches that reveal extra controls</h3>
+  <p>The last four rows in Drawing are switches. Most shops never need the controls behind them, so they stay hidden until you switch them on. Switching one off again only hides the controls — anything you already set with them keeps printing.</p>
+  <table class="ref">
+    <thead><tr><th>Setting</th><th>Default</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><span class="ui">Per-component units</span></td><td>Off</td><td>Lets one component print in a different unit from the document. Reveals a <span class="ui">Prints in:</span> <span class="ui">in</span> | <span class="ui">mm</span> chip at the foot of each body, taper, thread and liner card, and a <span class="ui">Keyway in:</span> chip with the keyway fields on body and taper cards and in the Add Body and Add Taper dialogs. <span class="ui">Prints in:</span> changes printing only — you still type in the document unit. <span class="ui">Keyway in:</span> sets the unit you type the keyway in as well as the unit it prints in, so a 20 × 12 mm keyway is entered as millimeters, not as converted decimals.</td></tr>
+      <tr><td><span class="ui">Dual-unit display</span></td><td>Off</td><td>Prints both units on the sheets, for example 1 1/2″ [38.1 mm]. Flipping it switches dual units for the document that is open; each saved job reopens with its own choice. To change one job, use the <span class="ui">Dual units</span> switch in the Units section of its PDF options panel.</td></tr>
+      <tr><td><span class="ui">Liner shoulders</span></td><td>Off</td><td>Reveals the stepped-shoulder fields (length, Ø, edge radius) on the liner card and in the Add Liner dialog. A liner that already has shoulder values keeps its controls and always draws its shoulders, whatever this switch says. See <a href="#components-liner-shoulders">Liner shoulders</a>.</td></tr>
+      <tr><td><span class="ui">Unit converter in Add dialogs</span></td><td>Off</td><td>Adds a mm ↔ in converter button to the title of every Add dialog, for converting a value from a print in the other unit before you type it. The <span class="ui">Unit converter</span> in the side menu's tools is always available either way.</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="settings-profiles">Profiles</h2>
+  <p><span class="path">Settings → Drawing → Profiles</span> — save the whole drawing look under a name and switch between looks in one tap. App-wide, like the settings they hold.</p>
+  <p>Type a <span class="ui">Profile name</span> and tap <span class="ui">Save</span> (it reads <span class="ui">Update</span> when the name exists) to keep the current look; tap <span class="ui">Apply</span> beside a profile to copy it back into your settings; use ⋮ → <span class="ui">Rename…</span> / <span class="ui">Delete…</span> to manage it. <span class="ui">Restore Drawing defaults</span> puts every setting a profile stores back to its new-install value, after the <span class="ui">Restore Drawing defaults?</span> confirmation. Up to 20 profiles, names up to 40 characters. What a profile captures, and why per-job values stay out, is in <a href="#documents-profiles">Drawing profiles</a>.</p>
+
+  <h2 id="settings-editor">Editor Screen</h2>
+  <p><span class="path">Settings → Editor Screen</span> — how the editor and its preview look. Everything here is screen-only except <span class="ui">Line Thickness</span>, which also prints.</p>
+  <table class="ref">
+    <thead><tr><th>Setting</th><th>Default</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><span class="ui">Line Thickness</span></td><td>100%</td><td>Line weight on the preview and on every printed sheet. Slider 50% to 200%, with a typed % box beside it and a <span class="ui">Default (100%)</span> button. 100% is the standard thin weight; 200% the heavier original weight. Letting go of the slider near 100% snaps exactly to it; a number you type is used exactly as typed (limited to 50–200). Also on the PDF options panel (Lines &amp; text section).</td></tr>
+      <tr><td><span class="ui">Preview Colors</span></td><td>—</td><td>Opens the Preview Colors page (<a href="#settings-preview-colors">below</a>).</td></tr>
+      <tr><td><span class="ui">Show Grid in Preview</span></td><td>Off</td><td>Draws a background grid behind the shaft in the editor preview. Never printed.</td></tr>
+      <tr><td><span class="ui">Highlight Selected Component in Preview</span></td><td>On</td><td>Highlights the component whose card you are editing, so you can see which part of the shaft you are changing.</td></tr>
+      <tr><td><span class="ui">Show Left/Right Arrows on Component Cards</span></td><td>Off</td><td>Adds arrow buttons at the edges of the component cards for stepping from one component to the next, as an alternative to swiping.</td></tr>
+      <tr><td><span class="ui">Small</span> | <span class="ui">Medium</span> | <span class="ui">Large</span></td><td>Medium</td><td>Size of those arrow buttons. Selectable only while the arrows switch is on.</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="settings-preview-colors">Preview Colors</h2>
+  <p><span class="path">Settings → Editor Screen → Preview Colors</span> — the colors of the editor preview and the on-screen Undercut Drawing. Screen-only: the page header reads <span class="ui">Applies to Preview only</span>, and printed sheets keep their standard black-ink drawing.</p>
+  <h3>Editor preview</h3>
+  <table class="ref">
+    <thead><tr><th>Setting</th><th>Default</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><span class="ui">Black/White Only</span></td><td>Off</td><td>Turns every fill off and forces outlines to black. The color rows below are disabled while it is on.</td></tr>
+      <tr><td><span class="ui">Outline</span></td><td>Steel</td><td>Color of every component outline.</td></tr>
+      <tr><td><span class="ui">Body Fill</span></td><td>Transparent</td><td>Fill inside bodies.</td></tr>
+      <tr><td><span class="ui">Taper Fill</span></td><td>Steel</td><td>Fill inside tapers.</td></tr>
+      <tr><td><span class="ui">Liner Fill</span></td><td>Bronze</td><td>Fill inside liners.</td></tr>
+      <tr><td><span class="ui">Thread Fill</span></td><td>Transparent</td><td>Fill behind the thread hatch.</td></tr>
+      <tr><td><span class="ui">Thread Hatch</span></td><td>Steel</td><td>Color of the thread hatch lines.</td></tr>
+    </tbody>
+  </table>
+  <p>Each color row has a button that offers <span class="ui">Stainless</span>, <span class="ui">Steel</span>, <span class="ui">Bronze</span>, <span class="ui">Transparent</span> or <span class="ui">Custom</span>. Choosing <span class="ui">Custom</span> adds a <span class="ui">Palette</span> button with exact shades: <span class="ui">Transparent</span>, <span class="ui">Monochrome</span>, <span class="ui">Primary</span>, <span class="ui">Secondary</span>, <span class="ui">Tertiary</span>, <span class="ui">Surface Variant</span>, <span class="ui">Outline</span>, <span class="ui">On Surface</span> and <span class="ui">Error</span>. The presets follow the app theme, so they stay readable in light and dark.</p>
+  <h3>Undercut Drawing</h3>
+  <p>Styles the on-screen Undercut Drawing tab only. The printed undercut sheet has its own line-art setting on the PDF Export Options page.</p>
+  <table class="ref">
+    <thead><tr><th>Setting</th><th>Default</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><span class="ui">Line art (no shading)</span></td><td>Off</td><td>Everything draws white with black outlines only. The two rows below are disabled while it is on.</td></tr>
+      <tr><td><span class="ui">Shade color</span></td><td>Grey</td><td><span class="ui">Grey</span>, <span class="ui">Bronze</span> or <span class="ui">Blue</span> shading for liners, bodies and the cut sections.</td></tr>
+      <tr><td><span class="ui">Shade intensity</span></td><td>Standard</td><td><span class="ui">Light</span>, <span class="ui">Standard</span> or <span class="ui">Dark</span>. At every intensity the cut section's core shades one step lighter than the liner, so the cut always stands out from the liner around it.</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="settings-pdf-export">PDF Export Options</h2>
+  <p><span class="path">Settings → PDF Export Options</span> — printing choices that apply to every document you export, print or share. The page opens from the <span class="ui">PDF Export Options</span> row on the main list, just above Drawing.</p>
+  <table class="ref">
+    <thead><tr><th>Setting</th><th>Default</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><span class="ui">Open PDF after export</span></td><td>Off</td><td>Opens the finished file in your PDF viewer as soon as it is written.</td></tr>
+      <tr><td><span class="ui">Show component titles in PDF</span></td><td>On</td><td>The default for component names on the schematic. A component's own <span class="ui">Show name on drawing</span> toggle on its card overrides this either way: switched on there, the name prints even with this off; switched off, it stays hidden even with this on. Also on the PDF options panel as the <span class="ui">Labels</span> chip (schematic sheet).</td></tr>
+      <tr><td><span class="ui">Shade in Components</span>: <span class="ui">Bodies</span></td><td>Off</td><td>Fills bodies with light grey instead of leaving them outlined. Also on the PDF options panel (Shade in Components section).</td></tr>
+      <tr><td><span class="ui">Explicit bodies only</span></td><td>Off</td><td>Under <span class="ui">Bodies</span>. Shades only the body sections you added; auto (bare-shaft) sections stay unshaded. Works only while <span class="ui">Bodies</span> is checked. Also on the PDF options panel, except on the wear and undercut sheets, which shade every body the same way.</td></tr>
+      <tr><td><span class="ui">Tapers</span></td><td>Off</td><td>Fills tapers with light grey. Also on the PDF options panel.</td></tr>
+      <tr><td><span class="ui">Liners</span></td><td>Off</td><td>Fills liners with light grey. Also on the PDF options panel. Liners print unshaded on a consolidated sheet that carries Ø values inside the profile; your setting returns on every other sheet.</td></tr>
+      <tr><td><span class="ui">Undercut drawing: line art (no shading)</span></td><td>Off</td><td>The printed undercut sheet drops every fill, including the detail strips' grey liner; the cut sections read from their faces and floor lines. Affects that one document only, and is separate from the on-screen Undercut Drawing style. Also on the PDF options panel (undercut sheet).</td></tr>
+      <tr><td><span class="ui">Template (shaft only)</span></td><td>Off</td><td>Prints the schematic as the shaft outline alone — no dimensions, no component names, no footer — for marking up by hand. Settings only. (A blank draft, which keeps the dimension lines and leaves the values empty, is chosen per sheet on the PDF options panel instead.)</td></tr>
+      <tr><td><span class="ui">Measurement reference</span></td><td><span class="ui">Auto (closest end)</span></td><td>Which end printed dimensions measure from: <span class="ui">Auto (closest end)</span>, <span class="ui">AFT (force AFT SET)</span> or <span class="ui">FWD (force FWD SET)</span>. Auto measures each dimension from whichever end is closer. Also on the PDF options panel (schematic and consolidated sheets), where the choices read <span class="ui">Auto (closest end)</span>, <span class="ui">AFT</span> and <span class="ui">FWD</span>.</td></tr>
+    </tbody>
+  </table>
+  <p>Each shading checkbox is the default for its kind of component. The <span class="ui">Shade on drawing</span> toggle on an individual body, taper or liner card overrides it for that one component — shade a named section without shading every body, or keep one unshaded while the rest are filled. See <a href="#components-shade">Shade on drawing</a>.</p>
+
+  <h2 id="settings-per-job">Settings saved with the job</h2>
+  <p>Some controls that look like settings belong to one job and travel with it, so a reopened shaft prints exactly as it did. You will not find them in Settings: <span class="ui">Shaft height</span> (1/2″ to 1 1/2″), the liner and taper compression pair, <span class="ui">Dual units</span>, <span class="ui">Trace depth exaggeration</span>, the wear strip choices, <span class="ui">Coupling face</span> and <span class="ui">Cut depth exaggeration</span>. They live on each document's PDF options panel and its tab, and their captions say so (see <a href="#documents-options">The PDF options panel</a>).</p>
+  <p>The <span class="ui">Bubble size</span> and <span class="ui">Bubble height</span> sliders on the runout and consolidated panels are the reverse case: app-wide settings with no Settings row, because they only mean something on a runout drawing. See <a href="#documents-options">The PDF options panel</a> for every panel control.</p>
+
+  <h2 id="settings-achievements">Achievements</h2>
+  <p><span class="path">Settings → Achievements</span> — <span class="ui">Enable Achievements</span> (default off) turns on the app's unlockable milestones; <span class="ui">View Achievements</span> opens the list and stays greyed out until achievements are enabled.</p>
+
+  <h2 id="settings-data">Data</h2>
+  <p><span class="path">Settings → Data</span> — getting your shafts off the device and back again, and sending a log to support. Saved shafts otherwise live inside the app; these rows are how you protect them against a lost, broken or replaced tablet.</p>
+  <table class="ref">
+    <thead><tr><th>Row</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><span class="ui">Back up all shafts…</span></td><td>Saves every saved shaft into one zip file at a location you choose — Drive, Downloads, an SD card. The suggested name is <span class="ui">ShaftSchematic-backup-</span> followed by the date.</td></tr>
+      <tr><td><span class="ui">Restore from backup…</span></td><td>Imports shafts from a backup zip. It never overwrites: a shaft identical to one you already have is skipped, and a different shaft with the same name comes in as <span class="ui">(restored)</span> after its name.</td></tr>
+      <tr><td><span class="ui">Mirror saves to folder</span></td><td>Off until you pick a folder. From then on every shaft you save is also copied there, so your off-device backup is always current. Deleting or renaming a shaft in the app does the same in the folder. The row shows the folder and the result of the last copy; <span class="ui">Stop</span> turns mirroring off. A copy that fails never interrupts the save — the row says so, and your saved shaft is fine.</td></tr>
+      <tr><td><span class="ui">Mirror all now</span></td><td>Shown once a folder is picked. Copies every saved shaft to the folder now, catching up anything saved before you picked it, and reports how many went through.</td></tr>
+      <tr><td><span class="ui">Restore sample shafts</span></td><td>Re-adds the bundled example shafts to Saved. It won't overwrite your files.</td></tr>
+      <tr><td><span class="ui">Share diagnostic logs</span></td><td>Opens your email app with the app's event log attached, for sending to support when something goes wrong.</td></tr>
+    </tbody>
+  </table>
+  <aside class="tip"><p>Point <span class="ui">Mirror saves to folder</span> at a cloud-synced folder (Google Drive, for example) and tap <span class="ui">Mirror all now</span> once. After that, every save is backed up with no further steps.</p></aside>
+  <p>The diagnostic log records events, never the values in your drawings; see <a href="#help-logs">Sharing diagnostic logs</a>.</p>
+
+  <h2 id="settings-help-about">Help &amp; FAQ and About</h2>
+  <p><span class="path">Settings → Help &amp; FAQ</span> opens the in-app help, with search at the top. The Runout, Wear, Undercut and Consolidated Output tabs also open it directly at their own topic.</p>
+  <p><span class="path">Settings → About ShaftSchematic</span> shows the app version under the row. The About page lists the app version and package name, and the note that all geometry is stored in millimeters. Quote the version when you contact support.</p>
+  <p>A <span class="ui">Developer Options</span> row can appear at the end of the list. It exists for support use; nothing on it is needed for shop work, and it never changes a drawing.</p>
+</section>

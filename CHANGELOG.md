@@ -6,6 +6,31 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-10-13
+
+### docs(manual): printed User Manual + stale Help topics corrected
+
+- **User Manual** — `docs/manual/`: eight chapters for office and shop users (HTML fragments in
+  `src/`), real sheet figures rendered by the app's own composers through the gated
+  `ManualFiguresTest` (skipped unless `MANUAL_FIGURES_DIR` is set), and `build.py`, which prints
+  the book through headless Edge in two passes so the contents carry page numbers. See
+  `docs/manual/README.md`.
+- **Help & FAQ corrections** (`HelpRoute.kt`): "Create your first shaft" names the "New
+  Drawing" button, no longer says the preview follows the OAL as you type (it commits on ✓ /
+  Done), and names the one "+ Add Component" button; "Undo and redo" says History covers the
+  whole job (Final drawing, readings, bubble moves, station counts, wear, undercuts), not just
+  the shaft; "Bodies and auto-bodies" describes the per-section bare-shaft Ø instead of
+  one shared value; "Record runout" gives the length-based station defaults (one per 20″ on a
+  body, at least two on a liner, two on a taper) instead of "three per body"; "Coupler bolt
+  slots and holes" drops the promise that the card's "show dimension rail" toggle dimensions the
+  row — no sheet draws that rail yet; "Drawing controls that live on the document" no longer
+  lists the Consolidated tab's "Sheet content" as saved with the job (it resets to All three
+  each session); "Export, print, and blank templates" points to the PDF Options panels and
+  Settings → Drawing, not only Settings → PDF Export Options; "Liners and threads" quotes the
+  real switch labels ("Include thread in OAL" / "Count in OAL") instead of a label that does not
+  exist; the "Runout station / bubble" glossary entry no longer calls a bubble "numbered" (it
+  carries the reading, not a station number).
+
 ## 2026-10-09
 
 ### feat(runout): Move mode — touch-to-drag bubbles, tap-to-select, −/+ on the selection

@@ -1,0 +1,473 @@
+<section class="chapter" id="ch-reading" data-audience="shop">
+  <h1>Reading the Printed Sheets</h1>
+  <p class="lede">A guided tour of every sheet ShaftSchematic prints — the schematic, the runout sheet, the consolidated sheet, the wear and undercut records, the Final schematic and the blank write-in drafts — for the machinist and foreman holding the paper. Every figure in this chapter is a real sheet, produced by the app's own print engine.</p>
+
+  <h2 id="reading-basics">How to read any sheet</h2>
+
+  <h3>AFT is on the left</h3>
+  <p>Every sheet is printed landscape, with the AFT end of the shaft on the left and the FWD end on the right. The wear and undercut records spell it out with “← AFT” and “FWD →” above the drawing; the schematic and runout sheets follow the same rule without the label. A taper on the left of the page is always the AFT taper.</p>
+
+  <h3>The drawing is fitted; the numbers are true</h3>
+  <p>A 168″ tailshaft has to fit across a sheet of paper, so the drawing is not to scale. Bare shaft and long body runs give up the most length, and a run shortened past a set point carries an S-break pair (see <a href="#reading-sbreak">S-breaks</a>). Liners and tapers are shortened less, never with a break symbol, and a longer taper always draws longer than a shorter one. Keyways stay in proportion to the drawn shaft, and a bigger diameter always draws taller.</p>
+  <p>The dimensions, callouts and footer always print the true values. Never scale a length off the paper — read the number.</p>
+  <aside class="shop"><p>Two liners that look the same length on the paper may not be. The dimension rail is the only authority on a length; the drawing only tells you what comes after what.</p></aside>
+
+  <h3>How values are printed</h3>
+  <p>Every value is printed exactly as the office typed it (see <a href="#intro-sacred">What you type is what prints</a>). The sheet only chooses how to write the value out:</p>
+  <table class="ref">
+    <thead><tr><th>Kind of value</th><th>How it prints</th><th>Example</th></tr></thead>
+    <tbody>
+      <tr><td>Length, inches</td><td>Whole numbers bare; a value that lands on a sixteenth as a fraction; anything else to three decimals.</td><td>14″ · 11 1/2″ · 2 1/2″</td></tr>
+      <tr><td>Diameter, inches</td><td>Whole numbers bare; every other value at exactly three decimals.</td><td>Ø 8″ · Ø 5.750″ · 3.833″</td></tr>
+      <tr><td>Millimeters</td><td>Dimension rails to three decimals; footer lines and Ø callouts to one decimal, trailing zero dropped. Always with the unit.</td><td>38.1 mm</td></tr>
+      <tr><td>Runout (TIR)</td><td>Thousandths, leading zero dropped, the way a TIR is hand-written.</td><td>.001 · .002 · .010</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Fractions</h3>
+  <p>Fractions are set as built-up fractions. The standard style is <strong>diagonal</strong>: a small raised numerator, a slanted bar and the denominator on the line, as in the keyway line “KW: 1 1/4″ × 7/16″ × 11 1/2″” on the schematic below. The office can switch every sheet to <strong>stacked</strong> fractions (numerator over denominator, the shop-ruler look) or <strong>plain</strong> ones (3/16 on one line) under <span class="path">Settings → Drawing → Fractions</span>. Dates and job numbers are never turned into fractions.</p>
+
+  <h3>Units, mixed units and dual values</h3>
+  <ul>
+    <li><strong>Every value carries its unit mark</strong> (″ or mm). A sheet can mix units: a single component, or a single keyway, can be set to print in millimeters on an inch drawing. Read the mark on each value, not the sheet's general unit.</li>
+    <li><strong>Metric threads</strong> print their designation exactly as written, for example M20×2.5.</li>
+    <li><strong>Dual values</strong> appear when the office turns on dual units for a job. Each value prints twice: the drawing's own unit first, then the converted value in square brackets — “1 1/2″ [38.1 mm]” — or, in the stacked layout, the converted value directly under the first. The converted value is a courtesy, rounded for reading. Machine to the first value.</li>
+  </ul>
+
+  <h3>What is never on paper</h3>
+  <p>The editor's on-screen colors, the highlight on a selected component, overlap warnings and the app's light or dark theme never reach a sheet. Paper is black ink on white, with light grey shading where the office has turned it on and one exception: the high-spot marks on the runout sheets print red. Grey shading on a body, taper or liner is a look, not a feature — it says nothing about material or finish.</p>
+
+  <h2 id="reading-schematic">The schematic</h2>
+  <p>The schematic is the master drawing of the shaft: every component, its dimensions, the diameters that matter and the taper, keyway and thread specification in the title block. The sheet below is a complete schematic of a 168″ tailshaft for the FV <em>Tern Point</em>.</p>
+
+  <figure class="wide">
+    <div class="annotated">
+      <img src="figures/schematic.png" alt="Schematic of a 168 inch tailshaft: threaded and tapered ends with keyways, a stern tube liner and a seal liner, dimension rails above, diameter callouts and names below, and a three-column title block.">
+      <span class="mark" style="left:45.2%;top:35.9%">1</span>
+      <span class="mark" style="left:12.2%;top:40.9%">2</span>
+      <span class="mark" style="left:26.7%;top:45.8%">3</span>
+      <span class="mark" style="left:83.2%;top:45.8%">4</span>
+      <span class="mark" style="left:6%;top:51.5%">5</span>
+      <span class="mark" style="left:13.25%;top:61.2%">6</span>
+      <span class="mark" style="left:52.75%;top:49.2%">7</span>
+      <span class="mark" style="left:39.5%;top:63.8%">8</span>
+      <span class="mark" style="left:24.5%;top:67.1%">9</span>
+      <span class="mark" style="left:13.5%;top:74.2%">10</span>
+      <span class="mark" style="left:64.5%;top:74.2%">11</span>
+      <span class="mark" style="left:47.5%;top:88.2%">12</span>
+    </div>
+    <figcaption>The schematic. Each numbered marker is explained in the list below.</figcaption>
+  </figure>
+  <ol class="legend">
+    <li>OAL rail — the typed overall length, here S.E.T. to S.E.T.</li>
+    <li>Datum dimension — AFT S.E.T. to the near edge of the Stern tube liner.</li>
+    <li>Liner length — the Stern tube liner's own length.</li>
+    <li>Taper length — the FWD taper, S.E.T. to large end.</li>
+    <li>Thread — hatched, outside the OAL bracket because it is excluded from OAL.</li>
+    <li>AFT taper with its open keyway running out the small end.</li>
+    <li>S-break pair — bare shaft shortened on paper.</li>
+    <li>Ø callout — the liner OD, on a leader below the shaft.</li>
+    <li>Component name, printed below the shaft.</li>
+    <li>AFT Taper column — rate, L.E.T., S.E.T., length, keyway, thread.</li>
+    <li>Job block — customer, vessel, job, item, date.</li>
+    <li>Side badge — which shaft of the vessel this is.</li>
+  </ol>
+
+  <h3 id="reading-rails">Dimension rails</h3>
+  <figure class="strip">
+    <img src="figures/schematic-rails.png" alt="Close-up of the dimension rails: OAL 168 inches on top; 22 and 24 inch datum dimensions; 14 inch taper lengths and the 30 and 16 inch liner lengths on the lowest rail.">
+    <figcaption>The rails stack from the shortest dimension, closest to the shaft, to the overall length on top.</figcaption>
+  </figure>
+  <p>The dimensions sit in rows — rails — above the shaft.</p>
+  <ul>
+    <li><strong>The top rail is the overall length.</strong> It always prints the OAL exactly as typed, prefixed “OAL”. Where its bracket lands tells you how the threads were counted: when the end threads are excluded from OAL, the bracket runs S.E.T. to S.E.T. and the threads hang outside it, as on the tailshaft above. When a thread counts toward OAL, that end of the bracket moves out to the end of the thread.</li>
+    <li><strong>The rails below carry the liners and the end tapers.</strong> Each end taper gets its length. Each liner gets two dimensions: a datum dimension locating it, and its length (see the next section).</li>
+    <li><strong>Shorter dimensions sit lower.</strong> A dimension that sits inside a longer one takes the rail below it. On the tailshaft, the 14″ AFT taper sits under the 22″ datum that contains it, and the 22″ sits under the OAL.</li>
+    <li><strong>Bodies and bare shaft carry no rail dimension.</strong> Their length is whatever the liners and tapers leave between them.</li>
+  </ul>
+  <p>How a dimension is drawn:</p>
+  <ul>
+    <li>The value sits in a break in the dimension line, centered on the line, with an arrowhead pointing inward at each extension line.</li>
+    <li>A span too short to hold its value prints the value just above an unbroken line instead.</li>
+    <li>A span too narrow for two inward arrowheads gets outward-pointing heads outside its extension lines.</li>
+    <li>A value may sit off-center to clear a neighbor. It still belongs to the span whose extension lines bracket it.</li>
+  </ul>
+
+  <h3 id="reading-datum">Datum and length dimensions</h3>
+  <p>A liner is located by a <strong>datum dimension</strong> from an S.E.T. to the liner's near edge, then sized by a <strong>length dimension</strong> across the liner. By default each liner is measured from whichever S.E.T. is closer:</p>
+  <ul>
+    <li>The Stern tube liner is nearer the AFT end: 22″ from the AFT S.E.T. to its AFT edge, then 30″ long.</li>
+    <li>The Seal liner is nearer the FWD end: 24″ from the FWD S.E.T. to its FWD edge, then 16″ long.</li>
+  </ul>
+  <p>A liner that starts right at an S.E.T. needs no datum, so it prints only its length.</p>
+  <p>The office can instead quote every liner from one end, with the <span class="ui">Measurement reference</span> setting (<span class="ui">AFT (force AFT SET)</span> or <span class="ui">FWD (force FWD SET)</span>; see <a href="#settings-pdf-export">PDF Export Options</a>). The sheet then switches to <strong>baseline dimensioning</strong>: the datum still reads the distance from that S.E.T. to the liner's near edge, but the second number becomes the running distance from the same S.E.T. to the liner's far edge. On the tailshaft above, forced to AFT, the Stern tube liner would read 22″ and 52″ instead of 22″ and 30″.</p>
+  <aside class="warn"><p>On a baseline sheet the second number of a liner is not its length. If the numbers on the rails keep growing from one end to the other, you are reading a baseline sheet: subtract to get a liner's length, or lay everything out from the one S.E.T.</p></aside>
+
+  <h3 id="reading-dia">Diameter callouts</h3>
+  <p>Diameters that matter on the floor hang <strong>below</strong> the shaft, each on an L-shaped leader that touches the component it belongs to: “Ø 5.750″” for the Stern tube liner, “Ø 5.500″” for the Seal liner. When two callouts would crowd each other, one drops to a second row.</p>
+  <ul>
+    <li><strong>Liner ODs</strong> print by default.</li>
+    <li><strong>Body and bare-shaft diameters</strong> print only where the office has switched them on for that body (<span class="ui">Show Ø on drawing</span>). A clean schematic with no body callouts is normal.</li>
+    <li>Whatever the callouts show, the footer's “Body:” line lists the diameter of every named body on the shaft (see <a href="#reading-footer">The footer</a>).</li>
+  </ul>
+
+  <h3>Component names</h3>
+  <p>Names such as “AFT Taper”, “Stern tube liner” and “Seal liner” print below the shaft, under their own component. A name slides along its component, or drops to a lower row, to stay clear of a Ø callout — so on the tailshaft “Stern tube liner” sits a row below “AFT Thread  AFT Taper”, and “Seal liner” sits beside its callout. A name always lies somewhere over its own component. Which components print a name is the office's choice.</p>
+
+  <h3 id="reading-footer">The footer (title block)</h3>
+  <figure class="strip">
+    <img src="figures/schematic-footer.png" alt="The footer: AFT Taper column on the left, job information and the PORT badge in the middle, FWD Taper column on the right.">
+    <figcaption>The footer: the AFT end's specification, the job block, and the FWD end's specification.</figcaption>
+  </figure>
+  <p>The footer runs in three columns: everything about the AFT end on the left, the job in the middle, everything about the FWD end on the right.</p>
+  <table class="ref">
+    <thead><tr><th>Line</th><th>What it means</th></tr></thead>
+    <tbody>
+      <tr><td>“AFT Taper” / “FWD Taper”</td><td>Column heading. A shaft end without a taper has no heading.</td></tr>
+      <tr><td>“Rate:”</td><td>The taper. A 1:12 taper prints as “1″/ft” and a 1:16 taper as “3/4″/ft”; any other taper prints as a ratio.</td></tr>
+      <tr><td>“L.E.T.:”</td><td>Diameter at the large end of the taper.</td></tr>
+      <tr><td>“S.E.T.:”</td><td>Diameter at the small end of the taper.</td></tr>
+      <tr><td>“Length:”</td><td>Taper length.</td></tr>
+      <tr><td>“KW:”</td><td>Taper keyway, width × depth × length.</td></tr>
+      <tr><td>“Thread:”</td><td>Major Ø × threads per inch × length (a metric thread prints its designation × length).</td></tr>
+      <tr><td>“Customer:” “Vessel:” “Job #:” “Item:” “Date:”</td><td>The job. Item prints only when the office filled it in. The date is the day the sheet was printed.</td></tr>
+      <tr><td>“Body:”</td><td>The diameters of the bodies the office drew as their own components (not bare shaft), smallest first.</td></tr>
+      <tr><td>Side badge</td><td>“PORT”, “STBD” or “CENTER”, in bold under the job block.</td></tr>
+    </tbody>
+  </table>
+  <p>Extra lines appear when the shaft has the feature. Each prints in the column for the half of the shaft the feature sits in:</p>
+  <table class="ref">
+    <thead><tr><th>Line</th><th>When it appears</th></tr></thead>
+    <tbody>
+      <tr><td>“(spooned)” after the KW line, plus “KW length to base of spoon (mill end)”</td><td>A spooned open keyway.</td></tr>
+      <tr><td>“Captured KW: inset … from S.E.T.” (taper) or “… from AFT” / “… from FWD” (body)</td><td>A captured keyway: the distance from that face to the start of the slot.</td></tr>
+      <tr><td>“Body KW:”</td><td>A keyway in a body, width × depth × length.</td></tr>
+      <tr><td>“Keyways 180° apart”, “Keyways 90° apart (CW from aft)”, “Keyways 90° apart (CCW from aft)”</td><td>Two or more keyways with a set clocking (middle column).</td></tr>
+      <tr><td>“Thread relief:”</td><td>A relieved thread: relief length × relief Ø, directly under its Thread line.</td></tr>
+      <tr><td>“Liner shoulder R:”</td><td>One line per shouldered liner end with a corner radius.</td></tr>
+      <tr><td>“Bolt hole:”, “Hole center from FWD:” / “from AFT:”, “90° from keyway” / “In line with keyway”</td><td>A cross-drilled coupling bolt hole (see <a href="#reading-bolts">Coupler bolt holes</a>).</td></tr>
+    </tbody>
+  </table>
+
+  <h3 id="reading-sbreak">S-breaks</h3>
+  <figure class="detail">
+    <img src="figures/feature-sbreak.png" alt="An S-break pair: two S-shaped break edges facing each other across a gap, each with a grey half-lobe.">
+    <figcaption>An S-break pair. Length has been taken out of this run on the paper, not on the shaft.</figcaption>
+  </figure>
+  <p>An S-break pair cut into a body run means the run is drawn much shorter than true. The run's real length comes from the dimensions around it, never from the paper. Some things to know:</p>
+  <ul>
+    <li>Only bodies and bare shaft break. Liners and tapers are shortened in proportion with no symbol, because their lengths are dimensioned and must still read in order.</li>
+    <li>A run prints the break once it is drawn at less than a set fraction of its true length — half, by default. The office sets the fraction under <span class="path">Settings → Drawing → Body S-break</span>, down to <span class="ui">Never</span>. A very long run breaks at every setting, because nobody would mistake it for true scale.</li>
+    <li>A run that is shortened only a little prints a plain outline, no break.</li>
+    <li>A body the office has set not to compress prints at true length and never breaks.</li>
+    <li>The break never lands on a keyway or a seal area: the gap is placed clear of them.</li>
+  </ul>
+
+  <h2 id="reading-details">Drawing details</h2>
+  <p>The sheet below is a second shaft — a 180″ line shaft for the MV <em>Halyard Point</em> — carrying most of the features the app can draw. The close-ups that follow show how each one looks and what the footer says about it.</p>
+  <figure class="wide">
+    <img src="figures/schematic-features.png" alt="Schematic of a 180 inch line shaft with a relieved thread, a spooned taper keyway, a shouldered stern tube liner, a blended seal journal with seal grooves, a seal liner, an intermediate body with a captured keyway, a cross-drilled bolt hole and a coupling end with a seam bolt row.">
+    <figcaption>A feature-rich line shaft. Its FWD end has no taper, so the right-hand footer column lists the bolt hole and body keyway instead of a taper.</figcaption>
+  </figure>
+
+  <h3>Threads</h3>
+  <p>A thread draws as a rectangle at its major diameter filled with slanted hatch lines. The hatch is a symbol: its lean suggests the pitch, but the lines are not a thread count. Read the size from the footer's “Thread:” line — “Thread: 3.500″ × 4 TPI × 4″” is a 3 1/2″ major diameter, 4 threads per inch, 4″ long. A thread excluded from the overall length sits outside the OAL bracket.</p>
+
+  <h3>Thread relief</h3>
+  <figure class="detail">
+    <img src="figures/feature-thread-relief.png" alt="Close-up of a thread with a narrow unhatched groove between the hatched thread and the taper.">
+    <figcaption>A thread relief: the narrow, unhatched groove at the shoulder end of the thread.</figcaption>
+  </figure>
+  <p>A relief groove draws as a short, narrower, unhatched step at the end where the thread runs up to its shoulder. The relief is part of the thread's length, not added to it. The footer states it directly under the thread: “Thread relief: 3/4″ × Ø 4″” means a groove 3/4″ long, cut to Ø 4″.</p>
+
+  <h3>Keyways</h3>
+  <p>A keyway is drawn face-on, as a slot inside the taper or body outline. Its size is in the footer — “KW:” for a taper, “Body KW:” for a body — always width × depth × length. There are three forms:</p>
+  <dl class="terms">
+    <dt>Open</dt>
+    <dd>The slot runs out through the small end of the taper and stops in a rounded mill end, as on both tapers of the tailshaft schematic. The KW length is measured from the S.E.T. face to the end of the mill.</dd>
+    <dt>Spooned</dt>
+    <dd>An open keyway with a spoon at its closed end, drawn as an oval bowl around the mill end. The mill end still shows inside the bowl as a reference line. The footer adds “(spooned)” to the KW line and the note “KW length to base of spoon (mill end)”: the length runs to where the mill stops, not to the edge of the spoon.</dd>
+    <dt>Captured</dt>
+    <dd>A slot closed at both ends, sitting inside the taper or body. The footer adds a “Captured KW:” line giving the inset from its face — “Captured KW: inset 4″ from AFT” means the slot starts 4″ in from the body's AFT end.</dd>
+  </dl>
+  <figure class="detail half">
+    <img src="figures/feature-keyway-spooned.png" alt="Close-up of a taper keyway ending in an oval spoon bowl around the rounded mill end.">
+    <figcaption>A spooned open keyway: the bowl surrounds the closed end; the inner arc marks where the mill stops.</figcaption>
+  </figure>
+  <figure class="detail half">
+    <img src="figures/feature-keyway-captured.png" alt="Close-up of a rounded slot closed at both ends inside a body.">
+    <figcaption>A captured keyway, closed at both ends.</figcaption>
+  </figure>
+  <p><strong>Clocking.</strong> When a shaft has two or more keyways and the office has set how they are clocked, the AFT-most keyway draws face-on and the other draws as you would see it from the same side:</p>
+  <ul>
+    <li><strong>180° apart</strong> — the second keyway is on the far side, drawn with dashed (hidden) lines. Footer: “Keyways 180° apart”.</li>
+    <li><strong>90° apart</strong> — the second keyway is edge-on, drawn as a notch cut into the outline: in the bottom edge for “Keyways 90° apart (CW from aft)”, in the top edge for “Keyways 90° apart (CCW from aft)”.</li>
+  </ul>
+  <p>A shaft with one keyway, or keyways with no clocking set, prints no clocking note.</p>
+
+  <h3>Liner shoulders</h3>
+  <figure class="detail">
+    <img src="figures/feature-liner-shoulder.png" alt="Close-up of a liner whose ends step down to a smaller diameter through a small rounded corner.">
+    <figcaption>A liner with a shoulder at each end.</figcaption>
+  </figure>
+  <p>A shouldered liner steps down to a smaller diameter for a short length at its end, with a rounded corner at the step. The step is drawn to the sheet's scale; the corner radius is the one value the sheet prints, as a footer line per shouldered end — “Liner shoulder R: 1/4″”. Shoulders appear only on jobs where the office uses them; they are switched on in Settings.</p>
+
+  <h3>Blends and seal areas</h3>
+  <figure class="detail">
+    <img src="figures/feature-blend-seal.png" alt="Close-up of a body whose outline curves smoothly up from the neighboring diameter at each face, with three dashed vertical lines near its FWD face.">
+    <figcaption>A body with a blend at each face and a seal area at its FWD face.</figcaption>
+  </figure>
+  <dl class="terms">
+    <dt>Blend</dt>
+    <dd>A smooth machined transition cut into a body at its face. The outline leaves the neighboring diameter at the face and curves to the body's own diameter a short way in. Nothing else moves: the face is where the dimensions say it is. A blend prints no dimension and no footer line, and on a long shaft its curve is drawn wider than scale so it stays visible. The sheet tells you that the face is blended; the blend itself is not a value to scale off the paper.</dd>
+    <dt>Seal area</dt>
+    <dd>The stretch of a body where the seal runs, measured from the face. It draws as three fine dashed lines across the body near that face. The dashes show where the seal grooves go; they are a cue, not a groove count. The outline stays straight through a seal area, and a seal area can sit on a square face or a blended one in the same place.</dd>
+  </dl>
+  <aside class="note"><p>On the schematic, a solid line straight across the shaft is a component face. The seal-area lines are dashed, and finer than hidden-keyway dashes, so they cannot be mistaken for either.</p></aside>
+
+  <h3 id="reading-bolts">Coupler bolt holes</h3>
+  <figure class="detail">
+    <img src="figures/feature-bolt-holes.png" alt="Close-up of the coupling end: two dashed vertical lines across the shaft, and a row of three circles straddling the top outline and three straddling the bottom outline.">
+    <figcaption>A cross-drilled hole drawn hidden (the two dashed lines) and a seam bolt row (the circles on the outline).</figcaption>
+  </figure>
+  <dl class="terms">
+    <dt>Seam holes (muff coupling)</dt>
+    <dd>A row of circles straddling the top and bottom outline of the shaft, one per bolt at its spacing. These are reference marks: they print no footer line and no dimension.</dd>
+    <dt>Cross-drilled hole</dt>
+    <dd>A bolt hole drilled through the coupling end. When it is clocked 90° from the keyway — the usual case, since a bolt in line with the keyway would pass through the key — it is out of sight and draws as two dashed lines one hole width apart. When it is in line with the keyway it draws as a circle on the centerline. The footer gives “Bolt hole: Ø 0.875″” (with × count for more than one), “Hole center from FWD: 16″” (measured from that end of the shaft to the hole center, with the spacing for more than one), and “90° from keyway” or “In line with keyway” when the shaft has a keyway.</dd>
+  </dl>
+
+  <h2 id="reading-runout">The runout sheet</h2>
+  <p>The runout sheet is the shaft outline with a bubble for every place a TIR is taken. The sheet below is the classic runout sheet for the <em>Tern Point</em> tailshaft with readings recorded.</p>
+
+  <figure class="wide">
+    <div class="annotated">
+      <img src="figures/runout-classic.png" alt="Runout sheet: job header, OAL 168 inches, the shaft outline with fourteen bubbles below in two rows, TIR values and red high-spot ticks, the TIR viewing direction and a coupling end view.">
+      <span class="mark" style="left:67.25%;top:7.25%">1</span>
+      <span class="mark" style="left:44.9%;top:22.8%">2</span>
+      <span class="mark" style="left:2.75%;top:36.9%">3</span>
+      <span class="mark" style="left:3%;top:52.6%">4</span>
+      <span class="mark" style="left:30.9%;top:47.4%">5</span>
+      <span class="mark" style="left:41.75%;top:50.2%">6</span>
+      <span class="mark" style="left:18%;top:64.7%">7</span>
+      <span class="mark" style="left:33.6%;top:58.6%">8</span>
+      <span class="mark" style="left:50%;top:36.2%">9</span>
+      <span class="mark" style="left:23.5%;top:90.3%">10</span>
+      <span class="mark" style="left:84%;top:80.9%">11</span>
+    </div>
+    <figcaption>The classic runout sheet with readings.</figcaption>
+  </figure>
+  <ol class="legend">
+    <li>Header — job information and side.</li>
+    <li>OAL — the typed overall length, S.E.T. to S.E.T.</li>
+    <li>Thread — drawn for reference; threads get no stations.</li>
+    <li>TIR value inside the bubble.</li>
+    <li>Keyway slot — the 12 o'clock reference.</li>
+    <li>Red tick — the high spot, here at 9 o'clock.</li>
+    <li>Second row — bubbles alternate rows to make room.</li>
+    <li>Empty bubble — not measured yet; write it in.</li>
+    <li>S-break — the same shortening as the schematic.</li>
+    <li>Viewing direction for every reading on the sheet.</li>
+    <li>Coupling end view with the pilot runout.</li>
+  </ol>
+  <p>The classic sheet has a one-line job header and the OAL, and nothing else from the schematic: no rails, no callouts, no footer. It is the sheet you take to the lathe. The same bubbles also print on the consolidated sheet, together with the full dimensions (see <a href="#reading-consolidated">The consolidated sheet</a>).</p>
+
+  <h3>Stations and bubbles</h3>
+  <figure class="detail">
+    <img src="figures/runout-bubbles.png" alt="Close-up of the AFT end of the runout sheet: bubbles with values .002, .001, .003, .002, an empty bubble, .001 and .002, each on a leader line to the shaft, with red ticks on their rims.">
+    <figcaption>Each bubble hangs on a leader from its station. Follow the leader, not the bubble's position in the row.</figcaption>
+  </figure>
+  <p>Each bubble is one <strong>station</strong> — one place on the shaft where an indicator reading is taken. A leader line runs from the station on the shaft surface to the bubble's rim. Bubbles never touch and leaders never cross, so every bubble traces back to one spot. The bubble's position in its row means nothing; where its leader meets the shaft is the station.</p>
+  <p>By default, tapers get two stations set in 1″ from each end, liners one per 20″ (at least two, inset the same way), bodies and bare shaft one per 20″ spaced evenly, and threads none. A body split into pieces by a liner or taper is still one body, numbered straight through (see <a href="#recording-stations">Stations and bubbles</a>). Stations can be added, removed or dragged, so a sheet may differ from these defaults. The sheet carries no station dimensions: the leader shows where the reading belongs along the component.</p>
+  <aside class="tip"><p>Bubbles alternate between a row close to the shaft and a row further down. The two rows are only for room; read the sheet AFT to FWD by following the leaders along the shaft, and the bubbles come in order.</p></aside>
+
+  <h3>The value</h3>
+  <p>The recorded TIR prints in the middle of the bubble in thousandths with the leading zero dropped: “.002”. Every value on the sheet carries the same three decimals, so “.010” stays “.010”. An empty bubble has no reading recorded yet — it is the place to write one.</p>
+
+  <h3 id="reading-clock">Reading the high spot</h3>
+  <p>Every bubble is a picture of the shaft's cross-section at that station, seen looking in the direction printed on the “TIR's taken looking:” line.</p>
+  <ul>
+    <li><strong>The slot at the top of the bubble is the keyway.</strong> It is always at 12 o'clock. Clock positions on the sheet are read from the keyway.</li>
+    <li><strong>The short red tick across the rim is the high spot.</strong> Read it as a clock hand: straight up is 12, the right side is 3, the bottom is 6, the left side is 9, counted clockwise as you look in the stated direction. Positions are recorded in half-hour steps.</li>
+    <li><strong>No tick</strong> means no high spot was recorded for that station.</li>
+  </ul>
+  <p>In the close-up above, the first bubble on the AFT taper reads .002 with its tick at upper right — half past one. The second-row .001 under the bare shaft beyond the Stern tube liner has its tick straight down — 6 o'clock — and the .002 just to its right has its tick on the left — 9 o'clock.</p>
+  <p>The viewing direction prints at the bottom left: “TIR's taken looking: FORWARD” means the clock faces are drawn as seen standing aft of the station looking toward the bow; “AFT” means the reverse. When the office has not set a direction the line prints a blank to write it in. Write it in before you record a single high spot: the same tick means opposite sides of the shaft depending on which way you were looking.</p>
+  <aside class="warn"><p>A high spot read without the viewing direction is a guess. If the “TIR's taken looking:” line is blank, fill it in at the lathe.</p></aside>
+
+  <h3>The coupling end view</h3>
+  <figure class="detail">
+    <img src="figures/runout-coupling-face.png" alt="Coupling end view: a large outer circle, a smaller inner circle with a small keyseat box at the top, the value .001 inside and a red tick at 3 o'clock, captioned Coupling — looking fwd.">
+    <figcaption>The coupling end view: pilot runout .001 with the high spot at 3 o'clock.</figcaption>
+  </figure>
+  <p>When the office includes it, the coupling end view prints at the bottom right of the sheet:</p>
+  <ul>
+    <li>The outer circle is the coupling. The inner circle is the pilot (register) bore, with the coupling's keyseat drawn as a small box standing out from the bore at 12 o'clock.</li>
+    <li>The value inside the bore is the pilot runout, and the red tick on the bore is its high spot, read on the same clock as the bubbles.</li>
+    <li>When the shaft has a seam bolt row, a dashed bolt circle with the bolt holes is drawn between the two circles. A shaft without one, like the tailshaft, prints the plain two-circle face.</li>
+    <li>The caption “Coupling — looking fwd” is fixed: the coupling face is always viewed looking forward.</li>
+  </ul>
+
+  <h2 id="reading-consolidated">The consolidated sheet</h2>
+  <p>The consolidated sheet puts the whole inspection on one page: the schematic's dimension rails and footer, the runout bubbles, and the wear information drawn right on the shaft.</p>
+  <figure class="wide">
+    <img src="figures/consolidated.png" alt="Consolidated sheet: dimension rails above the shaft, rotated diameter values printed inside the stern tube and seal liners, two pit X marks, runout bubbles below, the TIR line, a coupling end view and the full footer.">
+    <figcaption>The consolidated sheet, All three: dimensions, runout and wear on one page.</figcaption>
+  </figure>
+  <p>It comes in three versions, chosen by the office:</p>
+  <table class="ref">
+    <thead><tr><th>Version</th><th>What prints</th></tr></thead>
+    <tbody>
+      <tr><td><span class="ui">All three</span></td><td>Dimensions and footer, runout bubbles with the TIR line (and the coupling face when the office includes it), and the wear information. The standard version.</td></tr>
+      <tr><td><span class="ui">Schematic + Runout</span></td><td>Dimensions and footer with the bubbles. No wear marks.</td></tr>
+      <tr><td><span class="ui">Schematic + Wear</span></td><td>Dimensions and footer with the wear information. No bubbles, no TIR line, no coupling face.</td></tr>
+    </tbody>
+  </table>
+  <p>The rails, footer and bubbles read exactly as on the schematic and the runout sheet. What is new is the wear information on the profile:</p>
+  <ul>
+    <li><strong>Measured diameters print inside the shaft</strong>, turned on end at the station where they were taken: “Ø5.747″” on the Stern tube liner and “Ø5.494″” on the Seal liner of the sheet above. Each value sits on a small patch of clear paper so no line runs through a number.</li>
+    <li><strong>Worn sections</strong> — a measured area the office has marked — draw as a pair of lines across the shaft at the section's ends, with the measured diameters printed between them in the order they were taken. The “Ø5.738″”, “Ø5.734″” and “Ø5.741″” on the Stern tube liner are one worn section.</li>
+    <li><strong>Pits</strong> print as X marks where they were found: a large X for a larger cavity, a small x for a small pit (see <a href="#reading-wear">The wear document</a>).</li>
+    <li>Values shrink to fit the shaft but never below a readable size.</li>
+  </ul>
+  <aside class="note"><p>On a sheet that prints values inside the liners, the liners always print unshaded, whatever the shading setting: a white patch on a grey liner would read as a pasted-on label.</p></aside>
+
+  <h2 id="reading-wear">The wear document</h2>
+  <p>The wear document — titled “WEAR / INSPECTION RECORD” — is the inspection form for the shaft's wearing surfaces: where the wear is, how deep it is, where the pits are, and the dye pen result.</p>
+  <figure class="wide">
+    <div class="annotated">
+      <img src="figures/wear.png" alt="Wear record: job header and title, OAL 168 inches over a simplified shaft profile with a marked wear band and pits on the stern tube liner, a zoomed stern tube liner strip with a grey wear band, three pit marks and four measured diameters, a seal liner strip with one measured diameter, and the dye pen inspection line.">
+      <span class="mark" style="left:60%;top:9.26%">1</span>
+      <span class="mark" style="left:44.9%;top:17.3%">2</span>
+      <span class="mark" style="left:28.25%;top:22.65%">3</span>
+      <span class="mark" style="left:10%;top:31.6%">4</span>
+      <span class="mark" style="left:67.2%;top:40.9%">5</span>
+      <span class="mark" style="left:60.75%;top:51.8%">6</span>
+      <span class="mark" style="left:67%;top:46.9%">7</span>
+      <span class="mark" style="left:70%;top:60.2%">8</span>
+      <span class="mark" style="left:25.5%;top:59.2%">9</span>
+      <span class="mark" style="left:23.7%;top:85.0%">10</span>
+      <span class="mark" style="left:77.25%;top:84.8%">11</span>
+    </div>
+    <figcaption>The wear document.</figcaption>
+  </figure>
+  <ol class="legend">
+    <li>Title, under the job header.</li>
+    <li>OAL line, S.E.T. to S.E.T.</li>
+    <li>Wear band and pits on the whole-shaft profile.</li>
+    <li>Orientation: AFT left, FWD right.</li>
+    <li>Strip rail: liner edge to band, band, band to liner edge.</li>
+    <li>Grey wear band with the worn-profile trace.</li>
+    <li>Large pit X.</li>
+    <li>Measured Ø on a leader to its station.</li>
+    <li>Strip title: which liner, and how far it sits from the S.E.T.</li>
+    <li>Dye pen inspection result — FAIL marked.</li>
+    <li>A FWD-referenced strip's title prints on the right.</li>
+  </ol>
+
+  <h3>The profile</h3>
+  <p>At the top is the whole shaft as a simple outline, with the OAL line and the liner names. It is simplified on purpose: faces are square, and keyways, thread reliefs and blends are left off, because this sheet is about surfaces, not machining. Wear bands show on the profile as a set of fine vertical lines across the liner, and pits as X marks.</p>
+
+  <h3>Detail strips</h3>
+  <p>Below the profile, each liner gets a zoomed <strong>detail strip</strong> — every liner, as standard, whether or not it has wear. The office can add strips for tapers and bodies too. Each strip shows the whole liner with a sliver of the shaft beyond each end.</p>
+  <ul>
+    <li><strong>The title</strong> under the strip names the liner and locates it: “Stern tube liner — 22″ FROM AFT S.E.T.” is the distance from the AFT S.E.T. to the liner's near edge. A liner measured from the AFT S.E.T. has its title on the left; one measured from the FWD S.E.T. has it on the right, as the Seal liner does.</li>
+    <li><strong>The rail</strong> above the strip chains across the liner from edge to edge: on the Stern tube liner above, 18″ from the liner's AFT edge to the wear band, 8″ of band, and 4″ from the band to the FWD edge. The three add up to the liner's length.</li>
+    <li><strong>The wear band</strong> is shaded grey.</li>
+  </ul>
+
+  <h3>Measured diameters</h3>
+  <p>Each measured diameter prints below the strip on a leader to a tick at its station: “5.748″”, “5.738″”, “5.731″”, “5.736″”. Values print with their unit and no Ø sign; crowded values step onto a second row with a dog-leg leader. A diameter on a component with no strip prints under the profile instead.</p>
+
+  <h3>The worn-profile trace</h3>
+  <p>Inside a wear band, the liner's surface line dips through the measured diameters, so the shape of the wear can be seen at a glance. Real wear is a few thousandths and would be invisible at true scale, so the trace is <strong>drawn deeper than true</strong>: the deepest reading on the sheet draws at a set fraction of the liner's drawn radius (25% by default). A trace is never drawn shallower than true. The drawn depth is for the eye; the printed numbers are the measurements.</p>
+
+  <h3>Pits and dye failures</h3>
+  <p>Each pit or dye-pen failure prints as an X where it was found. There are two sizes: a <strong>large X</strong> for a bigger cavity and a <strong>small x</strong> for a small pit or hole. The size is a symbol, not the pit's real size. An X's height across the liner only shows roughly where it was seen; it is not a clock position.</p>
+
+  <h3>Dye pen inspection and notes</h3>
+  <p>The bottom line reads “Dye pen inspection:” with a “PASS” box and a “FAIL” box. An X in a box is the recorded result; both boxes empty means the result has not been recorded — mark it by hand. The “Notes:” rule is for anything else.</p>
+
+  <h2 id="reading-undercut">The undercut drawing</h2>
+  <p>The undercut drawing — titled “UNDERCUT RECORD” — records every section machined below the surface: where each cut starts, how long it is and the diameter it was taken to.</p>
+  <figure class="wide">
+    <img src="figures/undercut.png" alt="Undercut record: the stern tube liner strip with one 6 inch cut to 5.625 inches, dimensioned 17, 6 and 7 inches; the seal liner strip with an 8 inch cut to 5.440 inches containing a deeper 3 inch cut to 5.375 inches, dimensioned 3, 8 and 5 inches with a second row of 2 1/2, 3 and 2 1/2 inches.">
+    <figcaption>The undercut drawing: one cut on the Stern tube liner, a nested pair on the Seal liner.</figcaption>
+  </figure>
+  <p>There is no whole-shaft view. Below the header and the “← AFT” / “FWD →” row, each liner holding a cut gets its own strip showing the whole liner and a sliver of shaft beyond each end. Cuts on bare shaft get a strip around the cut.</p>
+
+  <h3>Reading a cut</h3>
+  <ul>
+    <li><strong>The cut is an open step in the liner.</strong> It is drawn as a reduced-diameter section: a full-height face at each end, a floor line, and a lighter grey core than the liner around it (no shading at all when the sheet is printed as line art). The top is left open — there is no lid line across the cut.</li>
+    <li><strong>Depth is drawn deeper than true.</strong> A real undercut is too shallow to see at the strip's scale, so the drawn depth is exaggerated (the deepest cut on the sheet sets the scale). The diameter printed under the cut is the true, measured value.</li>
+    <li><strong>The diameter</strong> prints below the cut on a leader: “5.625″” on the Stern tube liner. As on the wear document, it carries its unit and no Ø sign.</li>
+    <li><strong>The rail</strong> chains across the liner: 17″ from the liner's AFT edge to the cut, 6″ of cut, and 7″ from the cut to the FWD edge. The three add up to the liner's length.</li>
+    <li><strong>The title</strong> at the bottom names the liner and its distance from the S.E.T., as on the wear strips: “Stern tube liner — 22″ FROM AFT S.E.T.”.</li>
+  </ul>
+
+  <h3>Nested cuts</h3>
+  <p>A wide relief with a smaller, deeper cut inside it — a corroded patch taken down further — draws as a stair: the inner cut steps down from the outer cut's floor. The Seal liner above has an 8″ cut to “5.440″” holding a 3″ cut to “5.375″”. The inner cut gets its own rail row under the main one, measured from the outer cut's edges: 2 1/2″, 3″, 2 1/2″. When the inner cut runs right up to the outer cut's end, the shared end prints as one continuous face.</p>
+  <p>The “Notes:” rule at the bottom is for anything the drawing doesn't say.</p>
+
+  <h2 id="reading-final">The Final schematic</h2>
+  <p>A job can carry two schematics. The <strong>original</strong> is the shaft as it came in; it is the drawing the runout, wear and undercut records refer to. The <strong>Final</strong> is the shaft as it leaves, after the work — a liner renewed, moved, lengthened or shortened. The two are independent drawings: changing one never changes the other.</p>
+  <figure class="wide">
+    <img src="figures/schematic-final.png" alt="Final schematic of the same tailshaft: the seal liner now 18 inches long, the footer job block showing Drawing: Final and the badge PORT FINAL.">
+    <figcaption>The Final schematic. Compare the Seal liner with the original schematic at the start of this chapter.</figcaption>
+  </figure>
+
+  <h3>How to recognize a Final sheet</h3>
+  <ul>
+    <li>The footer's job block has a “Drawing: Final” line between Item and Date.</li>
+    <li>A bold “FINAL” badge prints beside the side badge: “PORT  FINAL”.</li>
+    <li>On a final runout sheet, the job header carries “Drawing: Final”.</li>
+    <li>The file name ends in “_Final” (or “_Final_Runout” for a Final schematic with runout bubbles, and “_Final_RunoutSheet” for the final runout sheet).</li>
+  </ul>
+  <p>An original sheet carries none of these marks.</p>
+
+  <h3>What it means on the floor</h3>
+  <p>On this Final the Seal liner has been renewed at 18″ instead of 16″. Its FWD edge did not move, so its datum still reads 24″ from the FWD S.E.T., and only its length changed. Everything else matches the original.</p>
+  <ul>
+    <li>Machine and fit new work — the new liner, its position — from the Final.</li>
+    <li>Read the inspection history — the runout, wear and undercut readings — against the original.</li>
+    <li>The final runout sheet is a fresh measurement sheet for the shaft as finished: empty bubbles at the default stations, for the last check before the shaft ships.</li>
+  </ul>
+  <aside class="warn"><p>When a job has a Final, check the badge before you machine. A liner laid out from the original schematic goes on where the old one was.</p></aside>
+
+  <h2 id="reading-blank">Blank drafts</h2>
+  <p>A blank draft is a sheet with the drawing kept and the values taken out, for filling in by hand — a fresh inspection form, or a layout reused for a similar shaft. Its file name ends in “_BlankDraft”. Blanking happens only on the paper: nothing recorded in the app is erased.</p>
+
+  <h3>The blank schematic</h3>
+  <figure class="wide">
+    <img src="figures/schematic-blank.png" alt="Blank schematic: the same shaft drawing with empty gaps in every dimension line, Ø symbols with writing rules, component names, and a footer of labels followed by writing rules.">
+    <figcaption>A blank schematic, ready to fill in.</figcaption>
+  </figure>
+  <p>What stays printed: the whole drawing, every extension and dimension line, the component names, the keyways and every footer label. Where to write:</p>
+  <ul>
+    <li><strong>Dimensions</strong> — in the empty gap cut into each dimension line, OAL included. A short span gets a narrower gap; the shortest spans keep an unbroken line with no gap.</li>
+    <li><strong>Diameters</strong> — on the rule after each “Ø”. The office can print a blank draft without Ø callouts, for annotating freehand.</li>
+    <li><strong>Footer</strong> — on the rule after each label: “Rate:”, “L.E.T.:”, “S.E.T.:”, “Length:”, “KW:”, “Thread:” in the end columns; “Customer:”, “Vessel:”, “Job #:”, “Item:”, “Date:” and “Side:” in the middle. The rules run to the edge of the column, spaced for handwriting.</li>
+  </ul>
+  <p>A keyway clocking note still prints, since it describes the drawing rather than a measured value. A thread relief line does not.</p>
+
+  <h3>The blank runout sheet</h3>
+  <figure class="wide">
+    <img src="figures/runout-blank.png" alt="Blank runout sheet: header labels with writing rules, an OAL line with an empty gap, fourteen empty bubbles, a blank TIR's taken looking line and an empty coupling end view.">
+    <figcaption>A blank runout sheet.</figcaption>
+  </figure>
+  <ul>
+    <li><strong>Header</strong> — write the job information on the rules after “Customer:”, “Vessel:”, “Job #:”, “Item:”, “Date:” and “Side:”.</li>
+    <li><strong>OAL</strong> — in the gap in the OAL line.</li>
+    <li><strong>Bubbles</strong> — write the TIR inside the bubble, and mark the high spot with a short stroke across the rim at its clock position, keyway slot at 12.</li>
+    <li><strong>“TIR's taken looking:”</strong> — always blank on a draft. Write “FORWARD” or “AFT” before you record anything.</li>
+    <li><strong>Coupling end view</strong> — write the pilot runout inside the bore and mark its high spot on the bore's rim.</li>
+  </ul>
+
+  <h3>Other blank sheets</h3>
+  <ul>
+    <li><strong>Consolidated:</strong> the rails, bubbles and footer blank as above. Worn-section boundary lines stay, as areas to write the diameters in; recorded wear marks are left off.</li>
+    <li><strong>Wear:</strong> the profile and every liner strip print with their dimension lines but no values, wear bands, pits or readings. Each strip title reads “FROM  AFT / FWD  S.E.T.” after a writing rule — write the distance and circle the end you measured from. Both dye pen boxes are empty.</li>
+    <li><strong>Undercut:</strong> each liner strip prints only the liner's two end faces and the shaft beyond them, leaving the middle clear to sketch the cuts and write their dimensions.</li>
+  </ul>
+  <aside class="tip"><p>Readings written on a blank draft can be typed into the job afterwards, on a tablet or phone, so the next printed sheet carries them. See <a href="#recording-paper">Working from paper</a>.</p></aside>
+</section>

@@ -1,0 +1,446 @@
+<section class="chapter" id="ch-documents" data-audience="office">
+  <h1>Documents, Printing &amp; Export</h1>
+  <p class="lede">This chapter covers how to turn a finished shaft into paper: which tab produces which sheet, how to preview and tune a page before it prints, how to print directly or save a PDF, and how to produce blank write-in drafts, the consolidated sheet, and the Final schematic. It is written for the office user who produces the sheets. For how each sheet reads at the lathe, see <a href="#ch-reading">Reading the Printed Sheets</a>; for typing readings into the app, see <a href="#ch-recording">Recording Shop Measurements</a>.</p>
+
+  <!-- ─────────────────────────────────────────────────────────── -->
+  <h2 id="documents-set">The document set</h2>
+  <p>Every job can produce six documents. Each one comes from its own tab in the editor's navigation menu, in this order:</p>
+  <table class="ref">
+    <thead><tr><th>Tab</th><th>Document it produces</th><th>What it carries</th></tr></thead>
+    <tbody>
+      <tr><td><span class="ui">Schematic</span></td><td>Schematic</td><td>The dimensioned shaft drawing: dimension rails, Ø callouts, component names and the spec footer (tapers, keyways, threads, job information).</td></tr>
+      <tr><td><span class="ui">Runout Sheet</span></td><td>Runout Sheet</td><td>The shaft profile with numbered runout bubbles, recorded TIR values and high spots, and the optional coupling face end view.</td></tr>
+      <tr><td><span class="ui">Wear Document</span></td><td>Wear Document</td><td>The shaft outline and liner detail strips with wear areas, pit marks and measured Ø readings.</td></tr>
+      <tr><td><span class="ui">Undercut Drawing</span></td><td>Undercut Drawing</td><td>Machined-below-surface sections, shown in zoomed detail strips with their lengths and Ø.</td></tr>
+      <tr><td><span class="ui">Final Schematic</span></td><td>Final schematic and a blank final runout sheet</td><td>The drawing the shaft leaves with, after the wear and undercut work. Every sheet is marked Final. See <a href="#documents-final">The Final Schematic tab</a>.</td></tr>
+      <tr><td><span class="ui">Consolidated Output</span></td><td>Consolidated Sheet</td><td>One sheet that combines the schematic's dimensions with the runout bubbles, the wear information, or both. This tab also holds <span class="ui">Export all</span>. See <a href="#documents-consolidated">The Consolidated Output tab</a>.</td></tr>
+    </tbody>
+  </table>
+  <p>The <span class="ui">Schematic</span> tab is always available. The other five tabs stay greyed out (with the hint <span class="ui">Add components first</span>) until the shaft is built: at least one component and an overall length.</p>
+
+  <h3>Where the output buttons are</h3>
+  <dl class="terms">
+    <dt>Schematic and Final Schematic tabs</dt>
+    <dd>Tap the <span class="ui">PDF preview</span> icon in the editor's top bar. It opens the preview, and Print and Export both live there. On the Final tab the same icon opens the <span class="ui">Final PDF Preview</span>.</dd>
+    <dt>Runout, Wear, Undercut and Consolidated Output tabs</dt>
+    <dd>Each tab carries three full-width buttons, always in the same order: <span class="ui">Print &lt;document&gt;</span> (filled, the main action), <span class="ui">Preview &lt;document&gt;</span> and <span class="ui">Export &lt;document&gt; PDF</span>. For example, the Runout tab shows <span class="ui">Print Runout Sheet</span>, <span class="ui">Preview Runout Sheet</span> and <span class="ui">Export Runout Sheet PDF</span>. A <span class="ui">Blank draft (write-in)</span> switch sits directly above the buttons.</dd>
+    <dt>Final runout sheet</dt>
+    <dd>On the Final tab, open the ⋮ menu on the Final banner and choose <span class="ui">Print final runout sheet</span> or <span class="ui">Export final runout sheet…</span>.</dd>
+  </dl>
+  <p>Print comes first because most shops work from paper. The PDF file is the archive or email copy.</p>
+
+  <h3>What each document needs</h3>
+  <table class="ref">
+    <thead><tr><th>Document</th><th>Needs</th><th>Prints without it</th></tr></thead>
+    <tbody>
+      <tr><td>Schematic</td><td>At least one component (body, taper, thread or liner) and no overlapping components.</td><td>The OAL. A shaft with no OAL typed yet draws to the end of its last component.</td></tr>
+      <tr><td>Runout Sheet</td><td>A built shaft.</td><td>Readings. Stations without a value print as empty bubbles, ready to fill by hand.</td></tr>
+      <tr><td>Wear Document</td><td>A built shaft.</td><td>A wear record. Without one it prints a clean inspection form.</td></tr>
+      <tr><td>Undercut Drawing</td><td>A built shaft.</td><td>Recorded undercuts.</td></tr>
+      <tr><td>Consolidated Sheet</td><td>A built shaft with no overlapping components.</td><td>Readings, wear data and worn sections. The parts with no data simply print empty.</td></tr>
+      <tr><td>Final schematic</td><td>A Final drawing started on the Final tab.</td><td>Not applicable.</td></tr>
+    </tbody>
+  </table>
+  <aside class="note"><p>Coupler bolt slots don't count as a component here. A shaft that has only bolt slots has nothing to dimension, so export stays off.</p></aside>
+
+  <!-- ─────────────────────────────────────────────────────────── -->
+  <h2 id="documents-preview">Previewing a sheet</h2>
+  <p>The preview shows the real page: the same drawing code builds the preview, the printed sheet and the PDF file, so what you see is exactly what prints. Open it with the <span class="ui">PDF preview</span> icon on the Schematic or Final tab, or with the <span class="ui">Preview …</span> button on any other document tab.</p>
+
+  <h3>Looking around the page</h3>
+  <ul>
+    <li><strong>Pinch</strong> to zoom (from half size up to 8×). <strong>Drag</strong> to pan.</li>
+    <li>On the schematic and Final previews, <strong>double-tap</strong> the page or tap the <span class="ui">Reset zoom</span> icon to return to the whole page.</li>
+    <li><strong>Turn the device sideways.</strong> Previews unlock rotation even on a phone that is normally held upright, so you can view the landscape sheet full width. Leaving the preview restores the normal orientation.</li>
+    <li>On the schematic preview, the floating <span class="ui">Blank draft (write-in)</span> chip at the top of the page switches the page between printed values and a write-in draft. The page redraws immediately.</li>
+  </ul>
+  <p>The preview's top bar carries, from left to right: Back or <span class="ui">Close preview</span>, the title (for example <span class="ui">Runout Sheet Preview</span>), the <span class="ui">PDF options</span> icon, a labeled <span class="ui">Print</span> button, and the <span class="ui">Export PDF</span> icon.</p>
+
+  <h3>The options panel never covers the page</h3>
+  <p>Tap the <span class="ui">PDF options</span> icon (the slider icon) to open the <span class="ui">PDF options</span> panel at the bottom of the screen. The panel does not block the page:</p>
+  <ul>
+    <li>The page moves into a strip pinned under the top bar and is cropped to the drawing itself, so blank margin takes no room. The panel fills the space below the strip.</li>
+    <li>You can still pinch and pan the strip while the panel is open. A zoom stays in place while the page redraws, so you can zoom in on a thread and watch it change as you move the thread sliders.</li>
+    <li>Close the panel with its ✗, by tapping the <span class="ui">PDF options</span> icon again, or with Back. While the panel is open, Back closes the panel first and leaves the preview up.</li>
+    <li>Opening or closing the panel resets the zoom, because the strip and the full page are fitted differently.</li>
+  </ul>
+  <aside class="note"><p>The undercut preview behaves a little differently. Its options don't reshape the page, so the page stays full size and centered behind the panel.</p></aside>
+
+  <h3>Live sliders, saved on release</h3>
+  <p>Four sliders redraw the page while you drag: <span class="ui">Shaft height</span>, <span class="ui">Body S-break</span>, <span class="ui">Liner &amp; taper compression</span> and <span class="ui">Line thickness</span>. During the drag the preview shows a quick lower-resolution page. When you lift your finger the value is saved and the page redraws sharp. Every other control (chips, checkboxes, and the thread, bubble and wear sliders) is saved when you tap it or let go, and then the page redraws. While a new page renders, the old page stays on screen and a small spinner turns in the top-right corner.</p>
+  <aside class="tip"><p>A drag never changes the job by itself. Only the release saves, so you can try a slider and drag it back without leaving anything behind.</p></aside>
+
+  <!-- ─────────────────────────────────────────────────────────── -->
+  <h2 id="documents-options">The PDF options panel</h2>
+  <p>Every document's options panel has the same layout. A short scope note sits at the top, then a <span class="ui">Content</span> row of chips, then a set of collapsible sections. Tap a section heading to open or close it. Some headings show the current value on the right (for example <span class="ui">Lines &amp; text</span> shows the line weight, and <span class="ui">Units</span> shows <span class="ui">Single</span> or <span class="ui">Dual · Inline</span>).</p>
+
+  <h3>App-wide settings and per-job settings</h3>
+  <p>The scope note reads: <span class="ui">Drawing settings here are app-wide — the same ones as Settings → Drawing — so every document follows them. Controls saved with this job say so.</span> The panel holds two kinds of control:</p>
+  <dl class="terms">
+    <dt>App-wide (a look setting)</dt>
+    <dd>A shortcut to the same setting found in Settings. Changing it changes every document, on every job, from now on. Line thickness, fractions, shading, arrowheads, thread hatch and bubble size are all app-wide. There is no per-document copy of a look setting.</dd>
+    <dt>Saved with this job</dt>
+    <dd>Stored in the job file. It changes only this job, and a reopened job prints exactly as it did. These controls end their caption with <span class="ui">Saved with this job</span>: <span class="ui">Shaft height</span>, the liner and taper compression pair, <span class="ui">Coupling face</span>, and the wear sheet's strip and trace controls. <span class="ui">Dual units</span> is stored with the document too (its caption reads <span class="ui">Saved with the document</span>).</dd>
+  </dl>
+  <p><span class="ui">Blank draft</span> is neither. It is never saved: it is off each time the app starts. See <a href="#documents-blank">Blank drafts and Template mode</a>.</p>
+
+  <h3>The Content chips</h3>
+  <p>The chips choose what the sheet prints. A selected chip shows a check mark.</p>
+  <table class="ref">
+    <thead><tr><th>Chip</th><th>Default</th><th>Where</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><span class="ui">Blank draft</span></td><td>Off</td><td>Every sheet</td><td>Prints the drawing with every value blanked for handwriting. Off each time the app starts.</td></tr>
+      <tr><td><span class="ui">Ø callouts</span></td><td>On</td><td>Schematic, Final</td><td>Can be tapped only while Blank draft is on. On: the blank sheet keeps its Ø leaders with a write-in rule. Off: the leaders are left out so diameters can be written in wherever they belong.</td></tr>
+      <tr><td><span class="ui">Labels</span></td><td>On</td><td>Schematic, Final</td><td>Component names under the shaft. This is the default for every component; a card's <span class="ui">Show name on drawing</span> toggle overrides it in either direction (see <a href="#components-show-name">Show name on drawing</a>). The same setting appears as <span class="path">Settings → PDF Export Options → Show component titles in PDF</span>.</td></tr>
+      <tr><td><span class="ui">Coupling face</span></td><td>Off</td><td>Runout, Consolidated</td><td>Prints the coupling end view, looking forward, at the bottom right. Saved with this job and shared with the Runout tab.</td></tr>
+      <tr><td><span class="ui">Runout bubbles</span></td><td>Off</td><td>Final only</td><td>Turns the Final schematic into a Schematic + Runout sheet. See <a href="#documents-final">The Final Schematic tab</a>.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>The sections, in order</h3>
+  <p>The sections always appear in the same order on every sheet, with the most-used first. A sheet leaves out any section it has nothing for. <span class="ui">Shaft</span> and <span class="ui">Wear</span> start open; the rest start folded, and they fold again each time the panel is reopened.</p>
+  <ol>
+    <li><span class="ui">Shaft</span>: <span class="ui">Shaft height</span>, <span class="ui">Body S-break</span>, <span class="ui">Keep liners and tapers proportional lengthwise</span>, <span class="ui">Liner &amp; taper compression</span>.</li>
+    <li><span class="ui">Wear</span> (wear sheet only): <span class="ui">Components</span>, <span class="ui">Strip size</span>, <span class="ui">Trace depth exaggeration</span>, <span class="ui">Wear area shade</span>, <span class="ui">Taper–liner join</span>.</li>
+    <li><span class="ui">Runout bubbles</span>: <span class="ui">Bubble size</span>, <span class="ui">Bubble height</span>.</li>
+    <li><span class="ui">Thread</span> (only when the shaft has a thread): <span class="ui">Thread slant</span>, <span class="ui">Thread density</span>.</li>
+    <li><span class="ui">Lines &amp; text</span>: <span class="ui">Line thickness</span>, <span class="ui">Dimension arrows</span>, <span class="ui">Fractions</span>.</li>
+    <li><span class="ui">Shade in Components</span>: <span class="ui">Bodies</span> (with <span class="ui">Explicit bodies only</span>), <span class="ui">Tapers</span>, <span class="ui">Liners</span>, and on the undercut sheet <span class="ui">Undercut drawing: line art (no shading)</span>.</li>
+    <li><span class="ui">Measurement reference</span>: <span class="ui">Auto (closest end)</span>, <span class="ui">AFT</span>, <span class="ui">FWD</span>.</li>
+    <li><span class="ui">Units</span>: the <span class="ui">Dual units</span> switch and <span class="ui">Dual-unit layout</span>.</li>
+  </ol>
+
+  <h3>Which sheet shows which controls</h3>
+  <p>Each panel offers only the controls its sheet actually uses.</p>
+  <table class="ref">
+    <thead><tr><th>Sheet</th><th>Content chips</th><th>Sections and controls</th></tr></thead>
+    <tbody>
+      <tr><td>Schematic / Final</td><td>Blank draft, Ø callouts, Labels (+ Runout bubbles on Final)</td><td>Shaft (all four controls) · Thread · Lines &amp; text (all three) · Shade in Components · Measurement reference · Units</td></tr>
+      <tr><td>Runout Sheet</td><td>Blank draft, Coupling face</td><td>Shaft (all four) · Runout bubbles · Thread · Lines &amp; text (Line thickness, Fractions) · Shade in Components · Units</td></tr>
+      <tr><td>Consolidated Sheet</td><td>Blank draft, Coupling face</td><td>Every section except Wear. The fullest panel.</td></tr>
+      <tr><td>Wear Document</td><td>Blank draft</td><td>Shaft (Shaft height only) · Wear · Thread · Lines &amp; text (Line thickness, Fractions) · Shade in Components (no Explicit bodies only) · Units</td></tr>
+      <tr><td>Undercut Drawing</td><td>Blank draft</td><td>Thread · Lines &amp; text (Line thickness, Fractions) · Shade in Components (with the line-art row, no Explicit bodies only) · Units</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Shaft section</h3>
+  <table class="ref">
+    <thead><tr><th>Control</th><th>Default</th><th>Scope</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><span class="ui">Shaft height</span></td><td>Standard (the default drawing size)</td><td>This job</td><td>Sets how tall the shaft draws on paper, by value in inches, from 1/2″ to 1 1/2″. <span class="ui">Standard (…)</span> returns to the default size, and a release near the standard height snaps to it. The setting is one value for the job, used by the schematic, runout, consolidated and wear sheets. See <a href="#documents-height">Shaft height and compression</a>.</td></tr>
+      <tr><td><span class="ui">Body S-break</span></td><td>below 50%</td><td>App-wide</td><td>How far a body run may be shortened before it prints the S-break symbol. Runs from <span class="ui">Never</span> to <span class="ui">Always</span> in 5% steps. <span class="ui">Default (50%)</span> resets it. Not on the wear or undercut sheets, which never break.</td></tr>
+      <tr><td><span class="ui">Keep liners and tapers proportional lengthwise</span></td><td>Off</td><td>This job</td><td>Asks for liners and tapers at true length. While it is ticked the compression slider is greyed out.</td></tr>
+      <tr><td><span class="ui">Liner &amp; taper compression</span></td><td>100%</td><td>This job</td><td>How far liners and tapers may shorten when the page needs the room. 100% gives the most room; 0% asks for none. A line under the slider reports how much true length they actually keep at this height.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Wear section (Wear Document only)</h3>
+  <table class="ref">
+    <thead><tr><th>Control</th><th>Default</th><th>Scope</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><span class="ui">Components</span>: <span class="ui">Complete shaft</span></td><td>On</td><td>This job</td><td>Prints the whole-shaft profile. Turning it off gives its height to the detail strips.</td></tr>
+      <tr><td><span class="ui">Compact strips</span></td><td>Off</td><td>This job</td><td>Strips print at the shaft's own scale instead of stretching to the page.</td></tr>
+      <tr><td>Component checkboxes, <span class="ui">Default (all liners)</span>, <span class="ui">All</span>, <span class="ui">None</span></td><td>All liners</td><td>This job</td><td>Choose which components get a detail strip.</td></tr>
+      <tr><td><span class="ui">Strip size</span></td><td>100%</td><td>This job</td><td>How tall the detail strips draw, 50% to 200% in 10% steps. It changes the layout only, never a value.</td></tr>
+      <tr><td><span class="ui">Trace depth exaggeration</span></td><td>25%</td><td>This job</td><td>How deep the drawn worn profile dips, 5% to 25% of the liner radius. <span class="ui">Save as default</span> makes the current value the app-wide default. The printed Ø values never change.</td></tr>
+      <tr><td><span class="ui">Wear area shade</span></td><td>16%</td><td>App-wide</td><td>How grey the wear bands print, 5% to 35%. The cap keeps the pit marks readable.</td></tr>
+      <tr><td><span class="ui">Taper–liner join</span></td><td>3″</td><td>App-wide</td><td>How much bare shaft may lie between a taper and a liner that share a strip before the gap breaks, 0″ to 12″ in 1/2″ steps (10 mm steps on a metric job).</td></tr>
+    </tbody>
+  </table>
+  <p>The Wear tab itself carries the same trace-depth row. For recording the wear data, see <a href="#recording-wear">Wear</a>.</p>
+
+  <h3>Runout bubbles section</h3>
+  <table class="ref">
+    <thead><tr><th>Control</th><th>Default</th><th>Scope</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><span class="ui">Bubble size</span></td><td>100%</td><td>App-wide</td><td>Size of the runout bubbles, 60% to 150% in 5% steps. The spacing between bubbles scales with them. <span class="ui">Standard (100%)</span> resets it.</td></tr>
+      <tr><td><span class="ui">Bubble height</span></td><td>100%</td><td>App-wide</td><td>How far the first row of bubbles hangs below the shaft, 50% to 200%. The panel marks it <span class="ui">Experimental</span>.</td></tr>
+    </tbody>
+  </table>
+  <p>Both sliders also change the bubbles on the Runout tab's on-screen drawing. They have no row in Settings.</p>
+
+  <h3>Thread section</h3>
+  <table class="ref">
+    <thead><tr><th>Control</th><th>Default</th><th>Scope</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><span class="ui">Thread slant</span></td><td>3×</td><td>App-wide</td><td>How far the thread hatch leans, from <span class="ui">1× true</span> to 10×.</td></tr>
+      <tr><td><span class="ui">Thread density</span></td><td>50%</td><td>App-wide</td><td>How many of the true crests the hatch draws, from <span class="ui">Sparse</span> (15%) to <span class="ui">100% true</span>.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Lines &amp; text section</h3>
+  <table class="ref">
+    <thead><tr><th>Control</th><th>Default</th><th>Scope</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><span class="ui">Line thickness</span></td><td>100%</td><td>App-wide</td><td>Weight of every line, 50% to 200%.</td></tr>
+      <tr><td><span class="ui">Dimension arrows</span></td><td><span class="ui">Small</span></td><td>App-wide</td><td><span class="ui">Small</span>, <span class="ui">Medium</span> or <span class="ui">Large</span> arrowheads. Schematic and consolidated sheets only (the sheets with dimension rails).</td></tr>
+      <tr><td><span class="ui">Fractions</span></td><td><span class="ui">Diagonal</span></td><td>App-wide</td><td><span class="ui">Stacked</span>, <span class="ui">Diagonal</span> or <span class="ui">Plain</span>.</td></tr>
+    </tbody>
+  </table>
+  <p>Each of these is described in full in <a href="#settings-drawing-lines">Lines, threads and text</a>, along with <span class="path">Settings → Drawing → Output font</span>, which is not on the options panel.</p>
+
+  <h3>Shade in Components section</h3>
+  <table class="ref">
+    <thead><tr><th>Control</th><th>Default</th><th>Scope</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><span class="ui">Bodies</span></td><td>Off</td><td>App-wide</td><td>Fills bodies light grey instead of outline only.</td></tr>
+      <tr><td><span class="ui">Explicit bodies only</span></td><td>Off</td><td>App-wide</td><td>Can be ticked only while Bodies is on. Shades only bodies you added; bare-shaft (auto) sections stay unshaded. Hidden on the wear and undercut sheets, which shade every body run alike.</td></tr>
+      <tr><td><span class="ui">Tapers</span></td><td>Off</td><td>App-wide</td><td>Fills tapers.</td></tr>
+      <tr><td><span class="ui">Liners</span></td><td>Off</td><td>App-wide</td><td>Fills liners. On a consolidated sheet that prints Ø values inside the profile, this box shows unchecked and greyed with the note <span class="ui">Ø values print inside the profile on this sheet</span>, so the values stay readable. Your setting returns on every other sheet.</td></tr>
+      <tr><td><span class="ui">Undercut drawing: line art (no shading)</span></td><td>Off</td><td>App-wide</td><td>Undercut sheet only. Drops every fill on the printed undercut sheet; the cuts read from their faces and floor lines.</td></tr>
+    </tbody>
+  </table>
+  <p>A card's <span class="ui">Shade on drawing</span> toggle can shade or unshade one component against these defaults (see <a href="#components-shade">Shade on drawing</a>). The liner lock above still applies over it.</p>
+
+  <h3>Measurement reference and Units</h3>
+  <table class="ref">
+    <thead><tr><th>Control</th><th>Default</th><th>Scope</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><span class="ui">Measurement reference</span></td><td><span class="ui">Auto (closest end)</span></td><td>App-wide</td><td>Which end the dimension rails measure from: each from its closer end, or all from <span class="ui">AFT</span> or <span class="ui">FWD</span> (see <a href="#reading-datum">Datum and length dimensions</a>). Schematic and consolidated sheets.</td></tr>
+      <tr><td><span class="ui">Dual units</span></td><td>Off</td><td>This document</td><td>Prints every dimension in both inches and millimeters.</td></tr>
+      <tr><td><span class="ui">Dual-unit layout</span></td><td><span class="ui">Inline</span></td><td>App-wide</td><td><span class="ui">Inline</span> (1 1/2″ [38.1 mm] on one line) or <span class="ui">Stacked</span> (the second unit under the first; see <a href="#settings-drawing-lines">Lines, threads and text</a>). Greyed out while Dual units is off.</td></tr>
+    </tbody>
+  </table>
+
+  <!-- ─────────────────────────────────────────────────────────── -->
+  <h2 id="documents-blank">Blank drafts and Template mode</h2>
+  <p>The app has two ways to produce a sheet for marking up by hand. They answer different needs.</p>
+
+  <h3>Blank draft (write-in)</h3>
+  <p>A blank draft prints the full drawing and form layout with every value left empty. Dimension lines still cut their break, which becomes a space to write in. The footer keeps every label (“Rate:”, “L.E.T.:”, “KW:”, “Customer:” …) followed by a writing rule, and the lines are spaced wider to suit handwriting. Component names and S.E.T. markers still print, because they identify parts rather than measure them.</p>
+  <figure class="wide">
+    <img src="figures/schematic-blank.png" alt="A blank-draft schematic: the shaft outline with dimension lines broken for write-in values, a Ø leader with a writing rule, component names, and a footer of labeled writing rules for both tapers and the job information.">
+    <figcaption>A blank-draft schematic. Each dimension break, the Ø leader and every footer line is a write-in spot.</figcaption>
+  </figure>
+  <p>What each document blanks:</p>
+  <table class="ref">
+    <thead><tr><th>Document</th><th>On the blank draft</th></tr></thead>
+    <tbody>
+      <tr><td>Schematic</td><td>Dimension values, Ø callout values (write-in rule after the Ø), footer specs, job information and the side stamp. The <span class="ui">Ø callouts</span> chip decides whether the Ø leaders print at all.</td></tr>
+      <tr><td>Runout Sheet</td><td>Job information, OAL and TIR values. The bubbles stay; they are the write-in circles.</td></tr>
+      <tr><td>Wear Document</td><td>Job information and OAL. Recorded wear is left out, giving a fresh inspection form; the profile and the liner detail strips still print.</td></tr>
+      <tr><td>Undercut Drawing</td><td>Job information and OAL. Recorded undercuts are left out.</td></tr>
+      <tr><td>Consolidated Sheet</td><td>Job information, dimensions and recorded values.</td></tr>
+    </tbody>
+  </table>
+  <p>To turn it on, tap the floating <span class="ui">Blank draft (write-in)</span> chip on the Schematic and Final previews, or use the <span class="ui">Blank draft (write-in)</span> switch above the Print button on the other document tabs. The <span class="ui">Blank draft</span> chip in each options panel is the same switch. How each blank sheet reads is shown in <a href="#reading-blank">Blank drafts</a>.</p>
+  <p>The data you recorded is never touched. Blanking changes only the printed page. A blank export adds _BlankDraft to its filename.</p>
+  <aside class="warn"><p>Blank draft is never saved. It is off each time the app starts, so a forgotten switch cannot quietly blank future jobs. Check the preview before you print a stack of forms.</p></aside>
+  <aside class="shop"><p>Blank drafts are meant for the floor: reusing a similar shaft's layout for a new inspection, or keeping blank forms where phones aren't allowed. Every write-in break is sized for a mixed-number dimension written on a clipboard.</p></aside>
+
+  <h3>Template mode</h3>
+  <p>Template mode prints the schematic as the <strong>shaft outline only</strong>, centered on the page, with no dimension rails, no labels and no footer. Turn it on with <span class="path">Settings → PDF Export Options → Template (shaft only)</span>.</p>
+  <ul>
+    <li>It affects the schematic only, including the schematic file written by <span class="ui">Export all</span>. It does not reach the consolidated sheet or the Final schematic with runout bubbles.</li>
+    <li>Unlike Blank draft, Template mode <strong>is</strong> remembered. It stays on for every job until you switch it off.</li>
+  </ul>
+  <aside class="warn"><p>If a schematic preview shows a bare outline with no dimensions, Template mode is still on. Switch it off before you print.</p></aside>
+
+  <h3>Which one to use</h3>
+  <table class="ref">
+    <thead><tr><th>Need</th><th>Use</th></tr></thead>
+    <tbody>
+      <tr><td>A form with the dimension lines laid out, for the machinist to write measured values into</td><td>Blank draft</td></tr>
+      <tr><td>A clean outline to sketch on freely, with no rails or footer in the way</td><td>Template mode</td></tr>
+      <tr><td>A write-in schematic without Ø leaders, so diameters can go where they belong</td><td>Blank draft with <span class="ui">Ø callouts</span> off</td></tr>
+      <tr><td>Blank runout, wear or undercut forms</td><td>Blank draft on that tab</td></tr>
+    </tbody>
+  </table>
+
+  <!-- ─────────────────────────────────────────────────────────── -->
+  <h2 id="documents-print-export">Printing and exporting</h2>
+
+  <h3>Print directly</h3>
+  <ol class="steps">
+    <li>Tap <span class="ui">Print &lt;document&gt;</span> on the tab, or <span class="ui">Print</span> in the preview's top bar.</li>
+    <li>In the Android print dialog, choose your printer (or Save as PDF).</li>
+    <li>Print. The sheet is a single US Letter page, landscape.</li>
+  </ol>
+  <p>A printed sheet and an exported PDF of the same document come from the same drawing step, so they are identical. The print job is named like the export file, so a print queue shows which job and drawing each sheet is; a blank schematic job adds “(blank draft)”.</p>
+
+  <h3>Export a PDF</h3>
+  <ol class="steps">
+    <li>Tap <span class="ui">Export &lt;document&gt; PDF</span> on the tab, or the <span class="ui">Export PDF</span> icon in the preview.</li>
+    <li>The system file picker opens with a suggested filename. Choose a folder (on the device, an SD card, or a cloud drive such as Google Drive) and change the name if you want.</li>
+    <li>Tap Save.</li>
+  </ol>
+  <p>To have the file open in your PDF viewer as soon as it is written, turn on <span class="path">Settings → PDF Export Options → Open PDF after export</span> (off by default). It applies to single exports; <span class="ui">Export all</span> never opens anything.</p>
+  <aside class="note"><p>If something goes wrong while the sheet is being drawn, the app still writes a valid PDF that shows a “PDF export failed” page instead of a damaged or empty file. Re-export after fixing the cause.</p></aside>
+
+  <h3>File names</h3>
+  <p>The suggested name is built from the job information (Customer, Vessel, Job #) and the shaft side. A side of PORT, STBD or CENTER is added; Other adds nothing. Blank job fields are skipped.</p>
+  <table class="ref">
+    <thead><tr><th>Document</th><th>Suggested filename (example: Job 814201, NorthSound Marine, FV Tern Point, PORT)</th></tr></thead>
+    <tbody>
+      <tr><td>Schematic (Schematic tab)</td><td>814201 - NorthSound Marine - FV Tern Point - PORT.pdf<br>No job information at all: Shaft_&lt;date&gt;_&lt;time&gt;.pdf</td></tr>
+      <tr><td>Final schematic</td><td>…PORT_Final.pdf</td></tr>
+      <tr><td>Final schematic with Runout bubbles</td><td>…PORT_Final_Runout.pdf</td></tr>
+      <tr><td>Final runout sheet (Final banner)</td><td>…PORT_Final_RunoutSheet.pdf</td></tr>
+      <tr><td>Runout Sheet</td><td>NorthSound Marine_FV Tern Point_814201_PORT_runout.pdf</td></tr>
+      <tr><td>Wear Document</td><td>…_PORT_wear.pdf</td></tr>
+      <tr><td>Undercut Drawing</td><td>…_PORT_undercuts.pdf</td></tr>
+      <tr><td>Consolidated Sheet</td><td>…_PORT_consolidated.pdf</td></tr>
+      <tr><td>Schematic written by <span class="ui">Export all</span></td><td>…_PORT_schematic.pdf</td></tr>
+      <tr><td>Any blank draft</td><td>adds _BlankDraft at the end, for example …_Final_BlankDraft.pdf</td></tr>
+    </tbody>
+  </table>
+  <p>The three Final names are deliberately different, so the welding copy, the pre-ship measurement sheet and the blank final runout sheet never overwrite each other. The side is part of every name, so the PORT and STBD shafts of a twin-screw job don't overwrite each other either.</p>
+
+  <h3 id="documents-blocked">Why Print and Export are greyed out</h3>
+  <p>Printing and exporting are blocked until the drawing can be trusted. The tab shows the reason in red above the buttons. On the Schematic tab, tapping the greyed <span class="ui">PDF preview</span> icon shows it as a message.</p>
+  <table class="ref">
+    <thead><tr><th>Message</th><th>Fix</th></tr></thead>
+    <tbody>
+      <tr><td><span class="ui">Please add at least 1 component before export is active.</span></td><td>Add a body, taper, thread or liner.</td></tr>
+      <tr><td><span class="ui">Fix component collisions before exporting.</span></td><td>Two components overlap. Find the card with the overlap warning and correct its position or length. Bodies never count as overlapping; see <a href="#editor-overlaps">Overlaps and the print gate</a>.</td></tr>
+      <tr><td><span class="ui">Cannot export PDF</span> dialog</td><td>A component starts before the AFT end or overlaps another of its kind. The dialog names the problem.</td></tr>
+    </tbody>
+  </table>
+
+  <!-- ─────────────────────────────────────────────────────────── -->
+  <h2 id="documents-consolidated">The Consolidated Output tab</h2>
+  <p>The consolidated sheet puts the inspection on one page: the schematic's dimension rails and spec footer, plus the runout bubbles and TIR values, the wear information (wear areas, pit marks, worn sections, and measured Ø values printed inside the profile), or both. The Schematic, Runout, Wear and Undercut tabs still produce their own standalone documents.</p>
+  <figure class="wide">
+    <img src="figures/consolidated.png" alt="A consolidated sheet: the dimensioned shaft with OAL and component rails, measured Ø values printed vertically inside the liners, a pit mark, two rows of runout bubbles with TIR values and red high-spot ticks, the coupling face end view at bottom right, and the taper and job footer.">
+    <figcaption>A consolidated sheet with all three kinds of information. Measured Ø values print inside the stern tube liner, and the coupling face appears at the bottom right.</figcaption>
+  </figure>
+
+  <h3>What's on the tab, top to bottom</h3>
+  <ol>
+    <li><span class="ui">Sheet content</span>: three chips. <span class="ui">All three</span> (the default), <span class="ui">Schematic + Runout</span> or <span class="ui">Schematic + Wear</span>. Leaving the bubbles out gives their space back to the shaft. The choice is not saved and returns to All three, so a forgotten partial choice can't quietly print less on a later job.</li>
+    <li><span class="ui">Coupling face</span> switch: the coupling end view, looking forward. It works only while the sheet carries runouts. It is saved with this job and shared with the Runout tab.</li>
+    <li><span class="ui">Blank draft (write-in)</span> switch, then <span class="ui">Print Consolidated Sheet</span>, <span class="ui">Preview Consolidated Sheet</span> and <span class="ui">Export Consolidated Sheet PDF</span>.</li>
+    <li><span class="ui">Runout bubbles</span> (folded; shown when the sheet carries runouts): the per-component station counts, the same rows as on the Runout tab. <span class="ui">Runout sheet →</span> opens the Runout tab for entering TIR values. See <a href="#recording-runout">Runout</a>.</li>
+    <li><span class="ui">Shaft height</span> and the liner and taper compression controls. These are the same per-job values the options panels carry.</li>
+    <li><span class="ui">Worn sections</span>: measured areas whose Ø values print inside the profile, with no line drawn through the numbers. Tap a row to edit it, or tap <span class="ui">Add worn section</span>. How to enter them is covered in <a href="#recording-worn">Worn sections</a>.</li>
+    <li><span class="ui">Export all</span> (below).</li>
+  </ol>
+
+  <h3>Export all</h3>
+  <p><span class="ui">Export all</span> writes the whole document package to one folder in a single step.</p>
+  <ol class="steps">
+    <li>Under <span class="ui">Export all</span>, untick any document you don't want: <span class="ui">Consolidated</span>, <span class="ui">Runout</span>, <span class="ui">Schematic</span>, <span class="ui">Wear</span>, <span class="ui">Undercut</span>. All five are ticked to start.</li>
+    <li>Tap <span class="ui">Export all to folder…</span>.</li>
+    <li>Pick a folder in the system picker and allow access.</li>
+    <li>Read the result line, for example <span class="ui">5 of 5 PDFs written.</span></li>
+  </ol>
+  <ul>
+    <li>The consolidated file uses the <span class="ui">Sheet content</span> choice above it.</li>
+    <li>This tab's <span class="ui">Blank draft (write-in)</span> switch applies to every file in the batch.</li>
+    <li>The schematic in the batch follows Template mode and the <span class="ui">Ø callouts</span> choice.</li>
+    <li>Files take the names in the table above. If a file of that name is already in the folder, the system may add a number such as “(1)” instead of replacing it.</li>
+    <li>A document that fails still produces a file, with an error page inside. The result line says how many failed.</li>
+    <li>The Final schematic is not part of Export all. Produce it from the Final tab.</li>
+  </ul>
+  <aside class="tip"><p>Print has no batch version: the Android print system runs one print job at a time. To print a whole package, export it to a folder, or print each tab in turn.</p></aside>
+
+  <!-- ─────────────────────────────────────────────────────────── -->
+  <h2 id="documents-height">Shaft height and compression</h2>
+  <p>A propeller shaft is long and thin: a 25′ shaft drawn to true scale across a sheet of paper would be a pencil line. So the drawing stretches the shaft's height and shortens its long plain runs to fit the page. The <strong>printed dimensions are always your typed values</strong>, whatever the drawing does to fit.</p>
+
+  <h3>The default size</h3>
+  <p>At 100% (<span class="ui">Standard</span>), the drawn height follows a straight line through two settings: a 4″ shaft draws <strong>1/2″</strong> tall and an 8″ shaft draws <strong>1″</strong> tall, so a 6″ shaft draws 3/4″. This is the proportion of a hand-drawn shop sheet. Change it in <span class="path">Settings → Drawing → Default drawing size</span> (<span class="ui">4″ shaft draws</span> and <span class="ui">8″ shaft draws</span>, from 1/4″ up to 1 1/2″). A larger shaft never draws smaller than a smaller one.</p>
+
+  <h3>The Shaft height slider</h3>
+  <p><span class="ui">Shaft height</span> picks the drawn height directly, in inches on paper, from <strong>1/2″ to 1 1/2″</strong>. Both limits are paper measurements. Shrink a large shaft to uncramp a crowded schematic, or grow one for more room to write in. A small shaft whose standard height is already under 1/2″ is never enlarged by the lower limit.</p>
+  <ul>
+    <li>It is saved with the job, and one setting drives the schematic, runout, consolidated and wear sheets.</li>
+    <li>The runout and consolidated sheets also stretch the shaft to the full page width, so a short shaft can stand taller there than on the schematic. The inches the slider shows may therefore differ between the schematic preview and the runout preview for the same job.</li>
+    <li>On a shaft that can't reach 1 1/2″, the caption tells you the most this shaft reaches.</li>
+  </ul>
+
+  <h3>Long bodies compress and print an S-break</h3>
+  <p>To fit the page, long body runs are drawn shorter than true length. When a run is shortened below the <span class="ui">Body S-break</span> setting (half its true length by default), it prints the S-break symbol, the conventional sign that a length is not drawn to scale. Milder shortening prints a plain outline. A body run long enough to fill a large part of the page always breaks, even with the setting at <span class="ui">Never</span>. The S-break itself is the notice; no footer note repeats it.</p>
+  <ul>
+    <li><strong>Bare shaft always compresses.</strong> Auto (bare-shaft) sections are what gives up length first.</li>
+    <li><strong>Explicit bodies start uncompressed.</strong> A body you add draws at true proportion, with no S-break. To let a very long explicit body compress, tick <span class="ui">Compress on drawing</span> on its card (see <a href="#components-compress">Compress on drawing</a>). Bodies in older saved jobs keep compressing until you untick it.</li>
+    <li><strong>Keyways stay true size.</strong> The stretch of a body around its keyway never shortens, and the break is placed clear of it. The keyway's width scales with the drawn height, so it stays in proportion at any height.</li>
+  </ul>
+
+  <h3>Liners and tapers keep their proportions</h3>
+  <p>Liners and tapers are what an inspection measures, so they get special treatment.</p>
+  <ul>
+    <li>They shorten in length only and never print an S-break.</li>
+    <li>Tapers aim to keep at least 70% of their true length, and when the page is tight every taper shortens by the same factor. Two tapers of different lengths therefore never print the same size.</li>
+    <li>Liners and tapers shorten together, so they keep the same share of true length and read evenly against each other. Body runs between them keep their relative lengths too.</li>
+    <li><span class="ui">Keep liners and tapers proportional lengthwise</span> asks for true length; <span class="ui">Liner &amp; taper compression</span> sets how far they may shorten. Neither ever changes the drawn shaft height: they take whatever room the page has at the chosen height, and the line under the slider reports what they actually keep, for example <span class="ui">Liners and tapers keep at least ~85% of true length.</span></li>
+  </ul>
+
+  <!-- ─────────────────────────────────────────────────────────── -->
+  <h2 id="documents-final">The Final Schematic tab</h2>
+  <p>The original schematic records the shaft as it came in. The <strong>Final schematic</strong> is the drawing the shaft leaves with, after the wear and undercut work has moved, lengthened or shortened a liner. The two are the before and the after of the same job, saved in the same job file.</p>
+
+  <h3>Start the Final drawing</h3>
+  <ol class="steps">
+    <li>Open the <span class="ui">Final Schematic</span> tab. (It is available once the shaft is built.)</li>
+    <li>Read the short explanation, then tap <span class="ui">Start from original schematic</span>.</li>
+    <li>The tab becomes the familiar shaft editor, under the banner <span class="ui">Final drawing — the original schematic is untouched</span>.</li>
+  </ol>
+  <p>The Final drawing starts as an exact copy of the original. From then on the two are independent: edit the Final with the same cards, Add dialogs and OAL field as the Schematic tab, and nothing you change on one ever reaches the other. Moving a liner on the original later does not move it on the Final. Per-component print units apply to both drawings.</p>
+  <ul>
+    <li>Runout readings, wear and undercut records stay with the original drawing. The Runout, Wear, Undercut and Consolidated Output tabs always print the original.</li>
+    <li>A job has one Final drawing. It is not carried into templates or mate duplicates.</li>
+  </ul>
+
+  <h3>Reset or discard</h3>
+  <p>Open the ⋮ menu on the Final banner:</p>
+  <dl class="terms">
+    <dt><span class="ui">Reset to original</span></dt>
+    <dd>Replaces the Final drawing with a fresh copy of the original schematic. It asks first (<span class="ui">Reset to original?</span>), because every edit made on the Final tab is lost.</dd>
+    <dt><span class="ui">Discard final drawing</span></dt>
+    <dd>Removes the Final drawing. It asks first (<span class="ui">Discard final drawing?</span>). The original is unaffected.</dd>
+  </dl>
+  <p>Both can be undone with the editor's Undo, like any other drawing edit.</p>
+
+  <h3>What the Final tab prints</h3>
+  <table class="ref">
+    <thead><tr><th>Sheet</th><th>How to produce it</th><th>Use</th></tr></thead>
+    <tbody>
+      <tr><td>Final schematic</td><td><span class="ui">PDF preview</span> icon → <span class="ui">Final PDF Preview</span> → <span class="ui">Print</span> or <span class="ui">Export PDF</span></td><td>The welding and machining copy, with the liner positions updated.</td></tr>
+      <tr><td>Final schematic with <span class="ui">Runout bubbles</span></td><td>Same preview; tick the <span class="ui">Runout bubbles</span> chip in its options panel</td><td>The pre-ship measurement sheet: a Schematic + Runout sheet over the Final geometry, with empty bubbles at the default station counts. <span class="ui">Ø callouts</span> and Template mode don't apply to it. The chip is off each time the app starts.</td></tr>
+      <tr><td>Final runout sheet</td><td>Banner ⋮ → <span class="ui">Print final runout sheet</span> or <span class="ui">Export final runout sheet…</span></td><td>A blank classic runout sheet over the Final geometry, with no readings and default stations, for taking the final runouts before the job ships. It follows the job's Shaft height and compression settings. It has no preview.</td></tr>
+    </tbody>
+  </table>
+  <p>Every Final sheet is marked so it can never be handed out as the original: “Drawing: Final” in the footer job block (or the runout sheet's header), a bold FINAL stamp beside the side stamp, and _Final, _Final_Runout or _Final_RunoutSheet in the file and print job name (see <a href="#reading-final">Reading the Printed Sheets</a>).</p>
+  <figure class="wide">
+    <img src="figures/schematic-final.png" alt="A Final schematic: the same shaft with the seal liner now 18 inches long, Drawing: Final in the footer job block, and a bold PORT FINAL stamp.">
+    <figcaption>A Final schematic. The seal liner was lengthened to 18″ after the repair; the footer reads “Drawing: Final” and the stamp reads PORT FINAL.</figcaption>
+  </figure>
+  <p>If the Final drawing has overlapping components, the final runout sheet is blocked with the dialog <span class="ui">Cannot print final runout sheet</span>. Fix the overlap on the Final tab.</p>
+
+  <!-- ─────────────────────────────────────────────────────────── -->
+  <h2 id="documents-profiles">Drawing profiles</h2>
+  <p>A drawing profile saves the whole drawing look under a name, so you can switch the whole shop's sheets between, say, a “Customer” look and a “Floor copy” look in one tap. Profiles live in <span class="path">Settings → Drawing → Profiles</span>.</p>
+
+  <h3>Save, apply, rename, delete</h3>
+  <ol class="steps">
+    <li>Set up the drawing the way you want it (in Settings or on any options panel).</li>
+    <li>In <span class="ui">Profiles</span>, type a name in <span class="ui">Profile name</span> (up to 40 characters).</li>
+    <li>Tap <span class="ui">Save</span>. If the name already exists the button reads <span class="ui">Update</span> and overwrites that profile.</li>
+  </ol>
+  <ul>
+    <li>Tap <span class="ui">Apply</span> beside a profile to copy its look into your current settings. Apply doesn't ask first, so save the current look as a profile if you may want it back.</li>
+    <li>Tap the ⋮ (<span class="ui">Profile options</span>) beside a profile for <span class="ui">Rename…</span> or <span class="ui">Delete…</span>. Deleting a profile leaves the current settings as they are.</li>
+    <li>Up to 20 profiles can be saved.</li>
+    <li><span class="ui">Restore Drawing defaults</span> puts the whole drawing look back to what a new install starts with, after a confirmation. Saved profiles, the theme and the preview colors are kept.</li>
+  </ul>
+
+  <h3>Profiles are device settings</h3>
+  <p>A profile is a one-shot copy into this device's settings, nothing more. The app doesn't track which profile is “active”, and a job never remembers which profile drew it. Reopening a job prints it in whatever look the device has now. A profile applied on one tablet does not reach another tablet.</p>
+
+  <h3>What a profile captures</h3>
+  <table class="ref">
+    <thead><tr><th>Captured</th><th>Not captured</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>
+          Line thickness · Body S-break · Default drawing size · Dimension arrows · Fractions · Output font · Dual-unit layout · Thread slant and density · Bubble size and height · Shade in Components (Bodies, Explicit bodies only, Tapers, Liners) · Undercut drawing line art · Show component titles · Measurement reference · Wear trace depth default · Wear area shade · Taper–liner join
+        </td>
+        <td>
+          Per-job settings (Shaft height, liner and taper compression, coupling face, wear strip choices) · Dual units on a document and the <span class="ui">Dual-unit display</span> switch · Which controls exist (Per-component units, Liner shoulders, Unit converter in Add dialogs) · Template mode · Open PDF after export · Theme, preview colors and on-screen undercut styles
+        </td>
+      </tr>
+    </tbody>
+  </table>
+  <aside class="note"><p>Per-job settings stay out on purpose. Shaft height and compression fit one particular shaft's proportions; they are not a look, so they belong to the job.</p></aside>
+</section>
