@@ -4,6 +4,7 @@ package com.android.shaftschematic.ui.nav
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -41,6 +42,7 @@ import com.android.shaftschematic.doc.stripShaftDocExtension
 import com.android.shaftschematic.ui.screen.DeveloperOptionsRoute
 import com.android.shaftschematic.ui.screen.DuplicateForMateDialog
 import com.android.shaftschematic.ui.screen.HelpRoute
+import com.android.shaftschematic.ui.screen.ManualRoute
 import com.android.shaftschematic.ui.screen.PdfPreviewScreen
 import com.android.shaftschematic.ui.screen.RenameShaftDocumentDialog
 import com.android.shaftschematic.ui.screen.SettingsRoute
@@ -75,6 +77,27 @@ const val HELP_ROUTE_PATTERN = "help?$HELP_TOPIC_ARG={$HELP_TOPIC_ARG}"
  */
 fun helpRoute(topicKey: String? = null): String =
     if (topicKey.isNullOrBlank()) "help" else "help?$HELP_TOPIC_ARG=$topicKey"
+
+/** The `manual` route's optional arguments — a section id to open at, and a find query. */
+const val MANUAL_ANCHOR_ARG = "anchor"
+const val MANUAL_FIND_ARG = "find"
+
+/** The NavHost pattern for the User Manual. Built here so the query syntax lives in one place. */
+const val MANUAL_ROUTE_PATTERN = "manual?$MANUAL_ANCHOR_ARG={$MANUAL_ANCHOR_ARG}&$MANUAL_FIND_ARG={$MANUAL_FIND_ARG}"
+
+/**
+ * The route string for the User Manual, optionally opened at section [anchor] or with the
+ * find bar on [find]. [find] is free text from the Help search field, so it is URL-encoded;
+ * an anchor is a slug and needs none, but is encoded the same way so neither can break the
+ * query.
+ */
+fun manualRoute(anchor: String? = null, find: String? = null): String {
+    val args = buildList {
+        if (!anchor.isNullOrBlank()) add("$MANUAL_ANCHOR_ARG=${Uri.encode(anchor)}")
+        if (!find.isNullOrBlank()) add("$MANUAL_FIND_ARG=${Uri.encode(find)}")
+    }
+    return if (args.isEmpty()) "manual" else "manual?" + args.joinToString("&")
+}
 
 /**
  * AppNav
@@ -439,6 +462,31 @@ fun AppNav(vm: ShaftViewModel) {
             HelpRoute(
                 onBack = { nav.popBackStack() },
                 initialTopicKey = entry.arguments?.getString(HELP_TOPIC_ARG)?.ifBlank { null },
+                onOpenManual = { anchor, find -> nav.navigate(manualRoute(anchor, find)) },
+            )
+        }
+
+        /* ───────── User Manual ─────────
+           Reached from Help only. Both arguments default to empty, so the bare `manual` route
+           opens the bundled manual at its cover.
+        */
+        composable(
+            MANUAL_ROUTE_PATTERN,
+            arguments = listOf(
+                navArgument(MANUAL_ANCHOR_ARG) {
+                    type = NavType.StringType
+                    defaultValue = ""
+                },
+                navArgument(MANUAL_FIND_ARG) {
+                    type = NavType.StringType
+                    defaultValue = ""
+                },
+            ),
+        ) { entry ->
+            ManualRoute(
+                onBack = { nav.popBackStack() },
+                initialAnchor = entry.arguments?.getString(MANUAL_ANCHOR_ARG)?.ifBlank { null },
+                initialFind = entry.arguments?.getString(MANUAL_FIND_ARG)?.ifBlank { null },
             )
         }
 

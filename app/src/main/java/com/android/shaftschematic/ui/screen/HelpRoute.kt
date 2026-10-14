@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -28,6 +29,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -74,10 +76,23 @@ import com.android.shaftschematic.ui.adaptive.readableWidth
  * [initialTopicKey] is the `topic` query argument of the `help` route: the document tabs'
  * "?" buttons open this screen on their own how-to topic, expanded and scrolled to. An
  * unknown key is ignored rather than guessed at.
+ *
+ * The User Manual
+ * Help is the short answer; the bundled User Manual (`ManualRoute`) is the full one, and Help
+ * links into it rather than repeating it. With [onOpenManual] wired, the list opens on a "User
+ * manual" card, each topic with a [HelpTopic.manualAnchor] ends in "Read more in the manual"
+ * (opening the manual at that section), and a search closes with "Search the user manual",
+ * which opens the manual's find bar on the same words. `ManualAssetsTest` fails when an
+ * anchor names a section the bundled manual no longer has. Null [onOpenManual] shows none of
+ * the three.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HelpRoute(onBack: () -> Unit, initialTopicKey: String? = null) {
+fun HelpRoute(
+    onBack: () -> Unit,
+    initialTopicKey: String? = null,
+    onOpenManual: ((anchor: String?, find: String?) -> Unit)? = null,
+) {
     var query by rememberSaveable { mutableStateOf("") }
     val searching = query.isNotBlank()
     val shown = remember(query) { filterHelpSections(helpSections, query) }
@@ -85,8 +100,10 @@ fun HelpRoute(onBack: () -> Unit, initialTopicKey: String? = null) {
 
     // The deep link is honoured once per key, against the UNFILTERED list — the screen opens
     // with an empty query, so the two indices agree.
+    // The manual card is the list's first item, ahead of the first section header.
+    val leadItems = if (onOpenManual != null) 1 else 0
     LaunchedEffect(initialTopicKey) {
-        helpTopicItemIndex(helpSections, initialTopicKey)?.let { listState.scrollToItem(it) }
+        helpTopicItemIndex(helpSections, initialTopicKey)?.let { listState.scrollToItem(it + leadItems) }
     }
 
     Scaffold(
@@ -135,6 +152,11 @@ fun HelpRoute(onBack: () -> Unit, initialTopicKey: String? = null) {
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                if (onOpenManual != null && !searching) {
+                    item(key = "user_manual") {
+                        ManualEntryCard(onClick = { onOpenManual(null, null) })
+                    }
+                }
                 if (shown.isEmpty()) {
                     item(key = "no_matches") {
                         Text(
@@ -157,7 +179,25 @@ fun HelpRoute(onBack: () -> Unit, initialTopicKey: String? = null) {
                             topic = topic,
                             searching = searching,
                             openOnFirstShow = topic.key == initialTopicKey,
+                            onReadMore = onOpenManual?.let { open ->
+                                topic.manualAnchor?.let { anchor -> { open(anchor, null) } }
+                            },
                         )
+                    }
+                }
+                if (onOpenManual != null && searching) {
+                    item(key = "search_manual") {
+                        TextButton(
+                            onClick = { onOpenManual(null, query.trim()) },
+                            modifier = Modifier.testTag(HELP_SEARCH_MANUAL_TAG),
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Outlined.MenuBook,
+                                contentDescription = null,
+                                modifier = Modifier.padding(end = 8.dp),
+                            )
+                            Text("Search the user manual for \"${query.trim()}\"")
+                        }
                     }
                 }
             }
@@ -167,6 +207,46 @@ fun HelpRoute(onBack: () -> Unit, initialTopicKey: String? = null) {
 
 /** Test tag for the search field pinned above the topic list. */
 const val HELP_SEARCH_TAG = "help_search"
+
+/** Test tag for the "User manual" card at the top of the Help list. */
+const val HELP_MANUAL_CARD_TAG = "help_manual_card"
+
+/** Test tag for the "Search the user manual" button under a Help search. */
+const val HELP_SEARCH_MANUAL_TAG = "help_search_manual"
+
+/** Test tag for a topic's "Read more in the manual" link. */
+const val HELP_READ_MORE_TAG = "help_read_more"
+
+/** The card that opens the User Manual at its contents. */
+@Composable
+private fun ManualEntryCard(onClick: () -> Unit) {
+    Card(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(HELP_MANUAL_CARD_TAG),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+        ) {
+            Icon(
+                Icons.AutoMirrored.Outlined.MenuBook,
+                contentDescription = null,
+                modifier = Modifier.padding(end = 16.dp),
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text("User manual", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "The full illustrated manual: every control, how to read each printed " +
+                        "sheet, and the glossary. Works offline.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
 
 /** Test tag for a document tab's "?" button, stable across every hosting tab. */
 const val TAB_HELP_TAG = "tab_help"
@@ -200,11 +280,16 @@ internal fun TabHelpButton(topicKey: String, onOpenHelpTopic: (String) -> Unit) 
  * [key] is the slug every reference to this topic uses — list item key, saved-expansion key,
  * and the `help` route's `topic` argument. It is derived from [title] rather than authored,
  * so the two can never disagree.
+ *
+ * [manualAnchor] is the id of the User Manual section that covers the topic in full; the card
+ * then ends in "Read more in the manual". `ManualAssetsTest` pins every anchor to a section
+ * the bundled manual still has.
  */
 internal data class HelpTopic(
     val title: String,
     val body: String,
     val illustration: (@Composable () -> Unit)? = null,
+    val manualAnchor: String? = null,
 ) {
     val key: String = helpTopicKey(title)
 }
@@ -216,12 +301,14 @@ internal data class HelpSection(val title: String, val topics: List<HelpTopic>)
  *                        expansion, so clearing the query restores the card's own state.
  * @param openOnFirstShow this card is the deep link's target — it SEEDS the saved expansion
  *                        rather than forcing it, so the reader can still collapse it.
+ * @param onReadMore      opens the manual at the topic's section; null shows no link.
  */
 @Composable
 private fun HelpTopicCard(
     topic: HelpTopic,
     searching: Boolean = false,
     openOnFirstShow: Boolean = false,
+    onReadMore: (() -> Unit)? = null,
 ) {
     var expanded by rememberSaveable(topic.key) { mutableStateOf(openOnFirstShow) }
     val showBody = expanded || searching
@@ -259,6 +346,14 @@ private fun HelpTopicCard(
                     modifier = Modifier.padding(top = 8.dp),
                 )
                 topic.illustration?.invoke()
+                if (onReadMore != null) {
+                    TextButton(
+                        onClick = onReadMore,
+                        modifier = Modifier.testTag(HELP_READ_MORE_TAG),
+                    ) {
+                        Text("Read more in the manual")
+                    }
+                }
             }
         }
     }
@@ -283,6 +378,7 @@ internal val helpSections: List<HelpSection> = listOf(
                     "filled automatically with bare shaft (an \"auto-body\"), so the drawing " +
                     "is always continuous.",
                 illustration = { AftFwdFigure() },
+                manualAnchor = "editor-start",
             ),
             HelpTopic(
                 "Millimeters and inches",
@@ -290,14 +386,16 @@ internal val helpSections: List<HelpSection> = listOf(
                     "drawing's values are displayed and typed. Internally every " +
                     "value is stored in millimeters, so switching units never changes your " +
                     "numbers — it only changes how they are shown. Inch fields accept " +
-                    "fractions like 3 1/2."
+                    "fractions like 3 1/2.",
+                manualAnchor = "intro-units",
             ),
             HelpTopic(
                 "Saving, drafts, and the asterisk",
                 "Save keeps your shaft inside the app; use Back up in Settings to get files " +
                     "out. An asterisk in the title bar means unsaved changes. The app also " +
                     "autosaves a rolling draft ring in the background — if you leave without " +
-                    "saving, the home screen offers to continue where you left off."
+                    "saving, the home screen offers to continue where you left off.",
+                manualAnchor = "intro-saving",
             ),
             HelpTopic(
                 "Undo and redo",
@@ -308,7 +406,8 @@ internal val helpSections: List<HelpSection> = listOf(
                     "character at a time. History covers the whole job — the shaft and its " +
                     "Final drawing, runout readings and bubble moves, station counts, wear " +
                     "marks, and undercuts — and lasts for the editing session; it is not saved " +
-                    "with the file and starts fresh when you open a document."
+                    "with the file and starts fresh when you open a document.",
+                manualAnchor = "editor-history",
             ),
         )
     ),
@@ -321,12 +420,14 @@ internal val helpSections: List<HelpSection> = listOf(
                     "right. \"Measure From\" chips on a component pick which end its distance is " +
                     "quoted from — the same component, described from either side.",
                 illustration = { AftFwdFigure() },
+                manualAnchor = "intro-aft-fwd",
             ),
             HelpTopic(
                 "Blank draft",
                 "The write-in mode: the drawing prints with its dimension lines but the values " +
                     "left empty, so measurements can be filled in by hand on the job. It is a " +
-                    "per-sheet choice that resets each session, and it never changes the data."
+                    "per-sheet choice that resets each session, and it never changes the data.",
+                manualAnchor = "documents-blank",
             ),
             HelpTopic(
                 "Body S-break",
@@ -336,6 +437,7 @@ internal val helpSections: List<HelpSection> = listOf(
                     "S-break\" sets how much squeeze earns it. Dimension values always print the " +
                     "true lengths.",
                 illustration = { SBreakFigure() },
+                manualAnchor = "reading-sbreak",
             ),
             HelpTopic(
                 "Captured keyway",
@@ -343,21 +445,24 @@ internal val helpSections: List<HelpSection> = listOf(
                     "inset from the S.E.T. (taper) or the chosen end face (body), so both ends " +
                     "are rounded by the mill. Switch on \"Captured keyway\" on the card or in the " +
                     "Add dialog to enter the inset; the footer prints it under the KW line. A " +
-                    "captured keyway cannot be spooned."
+                    "captured keyway cannot be spooned.",
+                manualAnchor = "components-keyways",
             ),
             HelpTopic(
                 "Coupling face",
                 "The end view shops hand-sketch on a runout sheet, taken looking forward: the " +
                     "coupling OD, the pilot bore with its keyseat, and the bolt circle with its " +
                     "holes. Elect it onto the runout and consolidated sheets from their options; " +
-                    "the pilot runout is recorded inside the bore like any other reading."
+                    "the pilot runout is recorded inside the bore like any other reading.",
+                manualAnchor = "recording-coupling",
             ),
             HelpTopic(
                 "Dual units",
                 "Prints every dimension in both units — the primary value with the converted one " +
                     "beside it or stacked under it (Settings → Drawing → \"Dual-unit layout\"). " +
                     "Both terms always carry their unit, and the converted one is a courtesy " +
-                    "reading, never a second measurement."
+                    "reading, never a second measurement.",
+                manualAnchor = "reading-units",
             ),
             HelpTopic(
                 "Final Schematic",
@@ -368,14 +473,16 @@ internal val helpSections: List<HelpSection> = listOf(
                     "the after. It prints its own schematic — with runout bubbles if you " +
                     "elect them on its PDF options sheet — and a blank runout sheet to take " +
                     "the finished shaft's readings on, all marked Final; every other " +
-                    "document keeps drawing the original."
+                    "document keeps drawing the original.",
+                manualAnchor = "documents-final",
             ),
             HelpTopic(
                 "L.E.T. / S.E.T.",
                 "Large End of Taper and Small End of Taper — the two ends of a taper, by " +
                     "diameter rather than by which way they face. Both diameters print in the " +
                     "footer for each taper, and the S.E.T. datums are what undercut and worn " +
-                    "section distances can be quoted from."
+                    "section distances can be quoted from.",
+                manualAnchor = "intro-set-let",
             ),
             HelpTopic(
                 "Liner & taper compression",
@@ -385,34 +492,39 @@ internal val helpSections: List<HelpSection> = listOf(
                     "move together, so the measured components stay in proportion with each " +
                     "other; tapers never shorten past 70% of true length whatever the slider " +
                     "says. The page keeps as much true length as fits; the request never " +
-                    "changes the drawn shaft height."
+                    "changes the drawn shaft height.",
+                manualAnchor = "documents-height",
             ),
             HelpTopic(
                 "Measurement reference",
                 "Which end printed dimensions measure from — \"Auto (closest end)\" (the " +
                     "default, anchoring each dimension to whichever end is nearer), \"AFT (force " +
                     "AFT SET)\", or \"FWD (force FWD SET)\". Same name in Settings → PDF Export " +
-                    "Options and on the schematic and consolidated PDF Options sheets."
+                    "Options and on the schematic and consolidated PDF Options sheets.",
+                manualAnchor = "settings-pdf-export",
             ),
             HelpTopic(
                 "OAL (overall length)",
                 "The shaft's overall length, end to end, and the span every drawing is laid out " +
                     "against. Any part of it you don't cover with a component is filled with " +
-                    "bare shaft (an auto-body), so the drawing is always continuous."
+                    "bare shaft (an auto-body), so the drawing is always continuous.",
+                manualAnchor = "editor-oal",
             ),
             HelpTopic(
                 "Runout station / bubble",
                 "A station is one dial-indicator position on a component; its bubble is the " +
                     "circle drawn under the shaft where the reading is written. " +
                     "Stations are per component, not per drawn run, so a body split by liners " +
-                    "still numbers straight through AFT to FWD."
+                    "still numbers straight through AFT to FWD.",
+                manualAnchor = "recording-stations",
             ),
             HelpTopic(
                 "Shade in Components",
                 "The PDF option group that fills bodies, tapers, or liners with light grey " +
                     "instead of leaving them outlined. It is the default for each kind; a " +
                     "component card's \"Shade on drawing\" toggle overrides it for that one " +
-                    "component, in either direction."
+                    "component, in either direction.",
+                manualAnchor = "settings-pdf-export",
             ),
             HelpTopic(
                 "Shaft height",
@@ -420,7 +532,8 @@ internal val helpSections: List<HelpSection> = listOf(
                     "from $HEIGHT_FLOOR_LABEL_IN to $HEIGHT_CAP_LABEL_IN — shrink a long shaft to uncramp the sheet, " +
                     "or grow it for room to write in. It is a drawing size only: no diameter, " +
                     "length, or printed value changes with it, and \"Standard (…)\" returns to " +
-                    "the size the Default drawing size setting picks."
+                    "the size the Default drawing size setting picks.",
+                manualAnchor = "documents-height",
             ),
             HelpTopic(
                 "TIR (total indicated runout)",
@@ -428,7 +541,8 @@ internal val helpSections: List<HelpSection> = listOf(
                     "high and low readings as the shaft is turned. It is typed into that " +
                     "station's bubble, with the high spot marked as a clock position; the sheet " +
                     "prints which way the indicator was read (\"TIR's taken looking AFT / " +
-                    "FORWARD\")."
+                    "FORWARD\").",
+                manualAnchor = "recording-runout",
             ),
             HelpTopic(
                 "Trace depth exaggeration",
@@ -436,7 +550,8 @@ internal val helpSections: List<HelpSection> = listOf(
                     "diameters. Real wear is far too shallow to see at drawing scale, so the dip " +
                     "is drawn deeper than true (never shallower) — set the amount per job on the " +
                     "Wear sheet, or its default in Settings → Drawing. The printed Ø values are " +
-                    "always the measured numbers you typed."
+                    "always the measured numbers you typed.",
+                manualAnchor = "recording-trace",
             ),
         )
     ),
@@ -448,7 +563,8 @@ internal val helpSections: List<HelpSection> = listOf(
                 "Values commit when you leave a field (tap elsewhere or Done) — not on every " +
                     "keystroke. Tapping into a field and leaving without editing changes " +
                     "nothing. The Add dialog for each component shows the same controls as its " +
-                    "carousel card, so anything you can set at add time you can also edit later."
+                    "carousel card, so anything you can set at add time you can also edit later.",
+                manualAnchor = "editor-carousel",
             ),
             HelpTopic(
                 "Bodies and auto-bodies",
@@ -457,7 +573,8 @@ internal val helpSections: List<HelpSection> = listOf(
                     "auto-body card for that section of bare shaft alone. Tick \"Explicit body\" on an auto-body " +
                     "card to promote it to a real, editable body; untick it on an explicit body " +
                     "to make it automatic again. Adding a taper, thread, or liner over a body " +
-                    "splits it; deleting one merges the fragments back."
+                    "splits it; deleting one merges the fragments back.",
+                manualAnchor = "editor-bodies",
             ),
             HelpTopic(
                 "Tapers, keyways, and spooned ends",
@@ -477,6 +594,7 @@ internal val helpSections: List<HelpSection> = listOf(
                     "keyway's dimensions. With two or more keyways, clocking toggles " +
                     "(180°/90°, CW/CCW) appear on the keyway cards.",
                 illustration = { SpoonedKeywayFigure() },
+                manualAnchor = "components-tapers",
             ),
             HelpTopic(
                 "Liners and threads",
@@ -484,7 +602,8 @@ internal val helpSections: List<HelpSection> = listOf(
                     "can be left out of the overall length (switch off \"Include thread in OAL\" " +
                     "on the card or in the Add dialog) — " +
                     "useful when the OAL is quoted to the shoulder; an excluded thread just " +
-                    "picks which end it hangs off."
+                    "picks which end it hangs off.",
+                manualAnchor = "components-liners",
             ),
             HelpTopic(
                 "Coupler bolt slots and holes",
@@ -511,7 +630,8 @@ internal val helpSections: List<HelpSection> = listOf(
                     "holes keep their true spacing inside a compressed body, and the body's " +
                     "S-break is placed clear of them.\n\n" +
                     "Slots are reference features: they are drawn, but they never change the " +
-                    "overall length, never split a body, and never collide with anything else."
+                    "overall length, never split a body, and never collide with anything else.",
+                manualAnchor = "components-bolt-slots",
             ),
             HelpTopic(
                 "Record wear readings",
@@ -519,7 +639,8 @@ internal val helpSections: List<HelpSection> = listOf(
                     "measured diameters. Tap a liner strip to zoom in, then place marks and " +
                     "type measured Ø values. These are reference marks only — they never " +
                     "change the shaft's geometry. Blank mode prints a write-in template with " +
-                    "the drawing but no values, for taking measurements on the job."
+                    "the drawing but no values, for taking measurements on the job.",
+                manualAnchor = "recording-wear",
             ),
             HelpTopic(
                 "Record runout",
@@ -545,7 +666,8 @@ internal val helpSections: List<HelpSection> = listOf(
                     "watch the bubbles move as you change a component's station count. The " +
                     "orientation setting and the Print / Preview / Export buttons sit directly " +
                     "under it; the station editor is at the bottom, since it is only needed " +
-                    "when the sheet needs adjusting."
+                    "when the sheet needs adjusting.",
+                manualAnchor = "recording-runout",
             ),
             HelpTopic(
                 "Record undercut sections",
@@ -554,7 +676,8 @@ internal val helpSections: List<HelpSection> = listOf(
                     "or highlighted section to zoom in and add cuts. Cut depth on the drawing " +
                     "is exaggerated for visibility (real cuts are hairline-thin at scale) — " +
                     "the printed Ø values are always your typed numbers. The exaggeration " +
-                    "slider on the sheet only changes the drawing, never the data."
+                    "slider on the sheet only changes the drawing, never the data.",
+                manualAnchor = "recording-undercut",
             ),
             HelpTopic(
                 "Export, print, and blank templates",
@@ -565,7 +688,8 @@ internal val helpSections: List<HelpSection> = listOf(
                     "document's PDF Options panel, and also in Settings → Drawing and " +
                     "Settings → PDF Export Options. The Final " +
                     "Schematic tab prints the same two ways from the shaft's finished " +
-                    "geometry, and its sheets are marked Final."
+                    "geometry, and its sheets are marked Final.",
+                manualAnchor = "documents-print-export",
             ),
             HelpTopic(
                 "Consolidated output and Export all",
@@ -589,14 +713,16 @@ internal val helpSections: List<HelpSection> = listOf(
                     "the runs between them always keep their relative " +
                     "lengths readable. Settings → Drawing → Body S-break sets how far a " +
                     "body run may be shortened before it prints the S-break symbol — set " +
-                    "it to Never to hide compression entirely, or higher to mark it sooner."
+                    "it to Never to hide compression entirely, or higher to mark it sooner.",
+                manualAnchor = "documents-consolidated",
             ),
             HelpTopic(
                 "Back up and restore",
                 "Settings → Data → \"Back up all shafts\" saves every shaft as one zip " +
                     "wherever you choose (Drive, Downloads, SD card). \"Restore from backup\" " +
                     "imports a zip without ever overwriting — name collisions are renamed. " +
-                    "\"Restore sample shafts\" re-adds the bundled examples."
+                    "\"Restore sample shafts\" re-adds the bundled examples.",
+                manualAnchor = "help-backup",
             ),
             HelpTopic(
                 "Customize colors and theme",
@@ -606,7 +732,8 @@ internal val helpSections: List<HelpSection> = listOf(
                     "Undercut Drawing (shade color, intensity, or full line art). Drawing " +
                     "sheets and printed PDFs always stay white with dark ink, whatever the " +
                     "app theme. Every Settings field is listed in the Settings Reference " +
-                    "section below."
+                    "section below.",
+                manualAnchor = "settings-appearance",
             ),
         )
     ),
@@ -623,7 +750,8 @@ internal val helpSections: List<HelpSection> = listOf(
                     "typed: fields, badges, drawings, and PDFs. " +
                     "Nothing in the file is converted — the model is always millimeters — so " +
                     "you can switch back and forth as often as you like with no drift. Inch " +
-                    "fields also accept fractions like 3 1/2."
+                    "fields also accept fractions like 3 1/2.",
+                manualAnchor = "settings-units",
             ),
             HelpTopic(
                 "Appearance",
@@ -632,7 +760,8 @@ internal val helpSections: List<HelpSection> = listOf(
                     "• \"System\" / \"Light\" / \"Dark\" — default Light, which is the app's " +
                     "original look. System follows the device's own dark-mode switch.\n" +
                     "• \"High contrast\" — default off. Boosts figure/ground separation for " +
-                    "bright sunlight or low-vision use."
+                    "bright sunlight or low-vision use.",
+                manualAnchor = "settings-appearance",
             ),
             HelpTopic(
                 "Drawing — Default drawing size",
@@ -648,7 +777,8 @@ internal val helpSections: List<HelpSection> = listOf(
                     "proportional hand-sheet rule. If you set the 8 in value below the 4 in " +
                     "value a warning appears and drawings simply flatten at the 4 in height — " +
                     "a larger shaft never draws smaller than a smaller one. The per-job " +
-                    "\"Shaft height\" slider works on top of this default."
+                    "\"Shaft height\" slider works on top of this default.",
+                manualAnchor = "settings-drawing-size",
             ),
             HelpTopic(
                 "Drawing — Body S-break",
@@ -668,7 +798,8 @@ internal val helpSections: List<HelpSection> = listOf(
                     "• The same slider sits on the PDF Options sheet of the schematic and " +
                     "runout/consolidated previews, so the threshold can be set against the " +
                     "drawing it changes — one setting, wherever you move it.\n" +
-                    "• Dimension values always print true lengths, whatever the drawing does."
+                    "• Dimension values always print true lengths, whatever the drawing does.",
+                manualAnchor = "settings-drawing-size",
             ),
             HelpTopic(
                 "Drawing — Output font",
@@ -687,7 +818,8 @@ internal val helpSections: List<HelpSection> = listOf(
                     "dual-unit stacks and every rail break are measured from the face as it " +
                     "will actually print, not from a fixed width. A device that does not carry " +
                     "one of these families simply prints in Standard.\n" +
-                    "App screens are unaffected; this styles the paper only."
+                    "App screens are unaffected; this styles the paper only.",
+                manualAnchor = "settings-drawing-lines",
             ),
             HelpTopic(
                 "Editor Screen",
@@ -707,7 +839,8 @@ internal val helpSections: List<HelpSection> = listOf(
                     "• \"Show Left/Right Arrows on Component Cards\" — default off. Adds arrow " +
                     "buttons to the carousel cards for stepping between components.\n" +
                     "• \"Small\" / \"Medium\" / \"Large\" — arrow size, default Medium. " +
-                    "Selectable only while the arrows switch is on."
+                    "Selectable only while the arrows switch is on.",
+                manualAnchor = "settings-editor",
             ),
             HelpTopic(
                 "Preview Colors",
@@ -721,7 +854,8 @@ internal val helpSections: List<HelpSection> = listOf(
                     "• Choosing Custom adds a \"Palette\" button for picking the exact shade " +
                     "(Monochrome, Primary, Secondary, Tertiary, Surface Variant, Outline, On " +
                     "Surface, Error, or Transparent). Presets follow the app theme, so they " +
-                    "stay sensible in light and dark."
+                    "stay sensible in light and dark.",
+                manualAnchor = "settings-preview-colors",
             ),
             HelpTopic(
                 "Undercut Drawing style",
@@ -734,7 +868,8 @@ internal val helpSections: List<HelpSection> = listOf(
                     "section's core always shades one step lighter than the liner, at every " +
                     "intensity.\n\n" +
                     "The printed sheet has its own separate line-art setting in Settings → PDF " +
-                    "Export; turning line art on here changes the screen only."
+                    "Export; turning line art on here changes the screen only.",
+                manualAnchor = "settings-undercut-style",
             ),
             HelpTopic(
                 "PDF Export — printing and shading",
@@ -761,7 +896,8 @@ internal val helpSections: List<HelpSection> = listOf(
                     "undercut sheet drops every fill, including the detail strips' grey liner, " +
                     "and the cut sections read from their faces and floor lines. It changes " +
                     "that one document, and it is separate from the on-screen Undercut Drawing " +
-                    "line-art style in Preview Colors."
+                    "line-art style in Preview Colors.",
+                manualAnchor = "settings-pdf-export",
             ),
             HelpTopic(
                 "PDF Export — Template mode and dimension reference",
@@ -773,14 +909,16 @@ internal val helpSections: List<HelpSection> = listOf(
                     "\"AFT (force AFT SET)\", or \"FWD (force FWD SET)\". Picks which end " +
                     "printed dimensions measure from. Auto anchors each dimension to whichever " +
                     "end is closer. The same choice appears under that name in the schematic " +
-                    "and consolidated PDF Options sheets."
+                    "and consolidated PDF Options sheets.",
+                manualAnchor = "settings-pdf-export",
             ),
             HelpTopic(
                 "Achievements",
                 "• \"Enable Achievements\" — default off. Turns on the app's unlockable " +
                     "milestones.\n" +
                     "• \"View Achievements\" — opens the list. It stays greyed out, with a " +
-                    "note, until achievements are enabled."
+                    "note, until achievements are enabled.",
+                manualAnchor = "settings-achievements",
             ),
             HelpTopic(
                 "Data — back up, restore, samples",
@@ -789,7 +927,8 @@ internal val helpSections: List<HelpSection> = listOf(
                     "• \"Restore from backup…\" — imports shafts from a backup zip. It never " +
                     "overwrites: a name that already exists is brought in under a new name.\n" +
                     "• \"Restore sample shafts\" — re-adds the bundled examples to Saved, " +
-                    "again without overwriting anything of yours."
+                    "again without overwriting anything of yours.",
+                manualAnchor = "settings-data",
             ),
             HelpTopic(
                 "Help, About, and Developer Options",
@@ -805,7 +944,8 @@ internal val helpSections: List<HelpSection> = listOf(
                     "unlocked. Debug overlays (OAL labels and helper lines, component labels, " +
                     "render layout and OAL markers) and verbose logging switches for render, " +
                     "OAL, PDF, and storage. Nothing there changes a drawing's data, and " +
-                    "turning the master switch off hides the row and clears the debug flags."
+                    "turning the master switch off hides the row and clears the debug flags.",
+                manualAnchor = "settings-help-about",
             ),
             HelpTopic(
                 "Drawing controls that live on the document",
@@ -874,7 +1014,8 @@ internal val helpSections: List<HelpSection> = listOf(
                     "screen — trimmed to the drawing itself, so blank paper doesn't take up " +
                     "the room — and the menu stops just below it. Any zoom you had is reset " +
                     "so the strip is in view; close the menu and the whole page fills the " +
-                    "screen again, pinch and double-tap as before."
+                    "screen again, pinch and double-tap as before.",
+                manualAnchor = "settings-per-job",
             ),
         )
     ),
@@ -886,7 +1027,8 @@ internal val helpSections: List<HelpSection> = listOf(
                 "By design. A value you type is never rounded, snapped, or \"helpfully\" " +
                     "adjusted — down to .001. Components sit exactly where you put them, and " +
                     "the automatic bare-shaft spans absorb the consequences. Only derived " +
-                    "values (auto-body spans, auto taper rate text) move on their own."
+                    "values (auto-body spans, auto taper rate text) move on their own.",
+                manualAnchor = "intro-sacred",
             ),
             HelpTopic(
                 "Why don't wear marks, runout readings, or undercuts change my shaft?",
@@ -895,7 +1037,8 @@ internal val helpSections: List<HelpSection> = listOf(
                     "collision checks, and deleting a component never deletes your record of " +
                     "what was measured — orphaned marks simply stop drawing. Coupler bolt " +
                     "slots work the same way: drawn, but never part of the length or the " +
-                    "collision check."
+                    "collision check.",
+                manualAnchor = "intro-reference",
             ),
             HelpTopic(
                 "Why is Export PDF greyed out?",
@@ -905,7 +1048,8 @@ internal val helpSections: List<HelpSection> = listOf(
                     "overlap. Overlapping cards are flagged in the carousel; fix the " +
                     "positions and export re-enables itself. Bodies never trigger this: a body " +
                     "running under a liner or up against a taper is normal, and the drawing " +
-                    "trims it around them."
+                    "trims it around them.",
+                manualAnchor = "documents-blocked",
             ),
             HelpTopic(
                 "Why does the undercut look deeper than its numbers?",
@@ -914,6 +1058,7 @@ internal val helpSections: List<HelpSection> = listOf(
                     "exaggeration setting, never shallower than true) so the cut can be seen " +
                     "and tapped. Printed values are always the measured numbers you typed.",
                 illustration = { UndercutDepthFigure() },
+                manualAnchor = "recording-cut-depth",
             ),
             HelpTopic(
                 "Why does a body print with a break symbol through it?",
@@ -924,6 +1069,7 @@ internal val helpSections: List<HelpSection> = listOf(
                     "lengths. Settings → Drawing → \"Body S-break\" sets how much squeeze " +
                     "earns the symbol, from Never (compression stays hidden) to Always.",
                 illustration = { SBreakFigure() },
+                manualAnchor = "reading-sbreak",
             ),
             HelpTopic(
                 "Why did a slider on one document's PDF Options change my other documents?",
@@ -938,26 +1084,30 @@ internal val helpSections: List<HelpSection> = listOf(
                     "There is deliberately no per-page copy of a look setting. When a control " +
                     "genuinely needs to differ between jobs it is moved to the job instead, " +
                     "the way trace depth already works: the slider pins this job, and " +
-                    "\"Save as default\" writes the app-wide setting."
+                    "\"Save as default\" writes the app-wide setting.",
+                manualAnchor = "documents-options",
             ),
             HelpTopic(
                 "Why can't this auto-body host a keyway?",
                 "Auto-bodies are derived filler — they can move or vanish as neighbors " +
                     "change, which would silently move or delete a keyway. Promote the span " +
                     "to an explicit body first (tick \"Explicit body\"), then add the keyway. " +
-                    "A body with a keyway is protected from being split into fragments."
+                    "A body with a keyway is protected from being split into fragments.",
+                manualAnchor = "editor-bodies",
             ),
             HelpTopic(
                 "Where are my files?",
                 "Shafts live in the app's private storage (they survive app updates but not " +
                     "an uninstall). Use Settings → Data → Back up to write a zip anywhere, " +
-                    "including cloud drives. PDFs export wherever you choose at export time."
+                    "including cloud drives. PDFs export wherever you choose at export time.",
+                manualAnchor = "help-data",
             ),
             HelpTopic(
                 "Does switching units convert my numbers?",
                 "No — it only changes the display. The model is always millimeters, so " +
                     "3 in shows as 76.2 mm and back with no drift, no matter how many times " +
-                    "you switch."
+                    "you switch.",
+                manualAnchor = "intro-units",
             ),
         )
     ),

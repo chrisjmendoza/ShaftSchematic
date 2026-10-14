@@ -108,6 +108,15 @@ android {
             // Robolectric needs real merged resources and a real manifest to inflate the
             // host activity that Compose UI tests render into.
             isIncludeAndroidResources = true
+            // ManualAssetsTest fingerprints the manual's sources; declaring them as inputs
+            // re-runs it after an edit under docs/manual/ instead of reporting up to date.
+            all { test ->
+                test.inputs.files(
+                    fileTree(rootProject.file("docs/manual")) {
+                        include("src/**", "figures/*.png", "style.css", "web.css", "build.py")
+                    },
+                ).withPropertyName("manualSources").withPathSensitivity(PathSensitivity.RELATIVE)
+            }
         }
     }
 }

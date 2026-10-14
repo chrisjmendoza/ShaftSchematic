@@ -3,12 +3,13 @@ Navigation Contracts
 
 Files: AppNav.kt, InternalDocRoutes.kt, PdfExportRoute.kt (ui/nav/);
 ShaftEditorRoute.kt, ShaftRoute.kt, StartScreen.kt, RunoutRoute.kt, WearRoute.kt,
-UndercutRoute.kt, OutputRoute.kt, HelpRoute.kt, HelpSearch.kt, EditorDocumentTitle.kt,
-RenameShaftDocumentDialog.kt (ui/screen/)  
+UndercutRoute.kt, OutputRoute.kt, HelpRoute.kt, HelpSearch.kt, ManualRoute.kt,
+EditorDocumentTitle.kt, RenameShaftDocumentDialog.kt (ui/screen/)  
 Layer: UI → Nav
 
-Version: v0.13 (2026-09-16 — the editor sidebar becomes permanent in an EXPANDED window,
-through the shared `EditorSidebarPanel`; `LocalSidebarPermanent` hides the tab hamburgers.
+Version: v0.14 (2026-10-14 — the User Manual in the app: `manual` route, Help links into it.
+v0.13 2026-09-16 — the editor sidebar becomes permanent in an EXPANDED window,
+through the shared `EditorSidebarPanel`; `LocalSidebarPermanent` hides the tab hamburgers;
 v0.12 2026-09-15 — Help search, topic deep links, per-tab "?" buttons)
 
 Invariants
@@ -105,6 +106,32 @@ Route graph (AppNav.kt NavHost)
   Reference section carries the same obligation for **every user-visible Settings
   control**: adding, renaming, or re-defaulting a control on any Settings page (main,
   Preview Colors, PDF Export) must update its entry in the same change.
+  - **Links into the User Manual** — Help is the short answer, the bundled manual the full
+    one, and Help links into it rather than repeating it. `HelpRoute(onOpenManual)` (AppNav
+    wires it; null shows none of the three, the pre-manual screen): a **"User manual" card**
+    as the list's first item while no query is active (testTag `help_manual_card`; the deep
+    link adds one to `helpTopicItemIndex` for it, which still counts only headers and topics);
+    **"Read more in the manual"** at the foot of an expanded topic that carries a
+    `HelpTopic.manualAnchor` (testTag `help_read_more`); and **"Search the user manual for
+    "<query>""** as the last item while a query is active, hits or none (testTag
+    `help_search_manual`), handing the trimmed query to the manual's find bar.
+- `manual?anchor={anchor}&find={find}` → ManualRoute — the User Manual, bundled as
+  `app/src/main/assets/manual/` (one reflowing page written by `docs/manual/build.py --web`
+  from the same chapters as the printed PDF) and shown in a `WebView`. Both arguments optional
+  (default `""`); every caller builds the route through **`manualRoute(anchor, find)`**
+  (AppNav.kt, `Uri.encode` on both — `find` is free text). Reached from Help only. Offline by
+  construction: JavaScript off, file access off (assets load regardless), and a link that is
+  not under `file:///android_asset/manual/` is handed to another app (`isManualUrl`). Toolbar:
+  **Contents** (loads `#contents`), **Find in manual** (WebView `findAllAsync`/`findNext`, a
+  field with "n of m", previous/next, close; testTag `manual_find`), **Print manual**
+  (`createPrintDocumentAdapter` — the print stylesheet lays it out, Letter pages). Back closes
+  the find bar, then steps back through the page's history (a cross-reference jump is an
+  entry), then leaves. The WebView's history survives a rotation through a `Saver` that calls
+  `saveState`. The page stays light in a dark theme, like the white sheet canvases.
+  `ManualAssetsTest` is the drift guard: the bundled page's `source.sha256` must equal the
+  fingerprint of `docs/manual/` (chapters, both stylesheets, `build.py`, figures), every
+  `manualAnchor` must name an id the page has, and every cross-reference, image and
+  stylesheet must resolve inside the bundle.
 - `developerOptions` → DeveloperOptionsRoute
 - `achievements` → AchievementsRoute
 - `openLocal` / `saveLocal` → internal-storage document pickers (InternalDocRoutes.kt)

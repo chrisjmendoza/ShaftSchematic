@@ -1,13 +1,38 @@
 # ShaftSchematic User Manual — source
 
-The printed manual for office and shop users. `ShaftSchematic_User_Manual.pdf` is built from:
+The manual for office and shop users, built twice from one set of chapters:
+`ShaftSchematic_User_Manual.pdf` (the printed book) and the in-app manual under
+`app/src/main/assets/manual/` (Help & FAQ → User manual). Both come from:
 
 | Path | What it is |
 |---|---|
 | `src/NN-*.html` | One HTML fragment per chapter, in order. Each is a `<section class="chapter" id="ch-…" data-audience="office\|shop\|both">` with one `<h1>` and `<h2>` topics. The build numbers chapters and writes the contents. |
+| `web.css` | The in-app (screen) stylesheet, loaded after `style.css`: reflows the page for a phone. Print rules stay in `style.css`, so printing from the app keeps the book layout. |
 | `style.css` | The print stylesheet — the only building blocks a chapter may use are the classes it styles (`.ui`, `.path`, `ol.steps`, `aside.tip/.note/.warn/.shop`, `table.ref`, `dl.terms` / `dl.terms.glossary`, `figure.wide/.strip/.detail/.detail.half`, `.annotated` + `.mark` + `ol.legend`). |
 | `figures/` | Sheet images rendered by the app's real PDF composers. Never hand-edited. |
-| `build.py` | Assembles `manual.html`, prints it through headless Microsoft Edge and lays it out: see below. |
+| `build.py` | Assembles `manual.html`, prints it through headless Microsoft Edge and lays it out (see below), then writes the in-app manual. `--web` writes only the in-app manual. |
+
+## Rebuild the in-app manual
+
+```
+python docs/manual/build.py --web
+```
+
+Takes seconds and needs no Edge — only Python 3 with Pillow (`pip install pillow`, for the
+figures). It rewrites `app/src/main/assets/manual/` from scratch: `index.html` (the chapters as one
+page, with contents but no page numbers, figures where they were written), both stylesheets,
+the figures as lossless WebP (about a quarter of the PNGs' size; lossless so a sheet zooms
+cleanly) and `source.sha256`, a fingerprint of everything it was built from.
+
+**Run it after any change under `docs/manual/`** — a chapter, a stylesheet, a figure, or
+`build.py` itself — and commit the assets with the change. `ManualAssetsTest` recomputes the
+fingerprint and fails until you do. The same test fails when a Help topic's `manualAnchor`
+names an id the page no longer has (rename a heading id and Help's "Read more in the manual"
+would otherwise land at the top), and when a cross-reference, image or stylesheet does not
+resolve inside the bundle. A full PDF build runs the web build at its end.
+
+Help links to `h2` ids (`<chapter>-<slug>`, generated) and to the explicit `id` on an `h3`; give an
+`h3` an id when a Help topic needs to land on it.
 
 ## Rebuild the PDF
 
@@ -57,11 +82,13 @@ $env:MANUAL_FIGURES_DIR = "$PWD\docs\manual\figures"
 `--rerun` matters: Gradle does not count the environment variable as a task input, so without it
 the test task can report up to date and write nothing.
 
-Regenerate after any change to how a sheet draws, then rebuild the PDF.
+Regenerate after any change to how a sheet draws, then rebuild the PDF (which also rebuilds the
+in-app manual).
 
 ## Keeping it true
 
 The manual describes shipping behavior in the app's own on-screen words. When a feature or a
 label changes, update the chapter that covers it in the same change, the way contract docs and
 `CHANGELOG.md` are updated. The in-app Help (`ui/screen/HelpRoute.kt`) covers the same ground
-more briefly; the two must not contradict each other.
+more briefly and links into the manual (`HelpTopic.manualAnchor`); the two must not contradict
+each other.

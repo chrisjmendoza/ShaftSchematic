@@ -18,6 +18,13 @@ Read the relevant doc before editing a subsystem. Key files:
 - `CouplerBoltSlot.md` — coupler bolt slot feature contract (reference-only cutouts)
 - `FinalSchematic.md` — the document's second drawing (`final_spec`), one editor / two targets
 
+The User Manual (`docs/manual/`) ships twice: the PDF, and the in-app copy under
+`app/src/main/assets/manual/` (Help → User manual, `ManualRoute`). Any edit under `docs/manual/`
+— chapter, stylesheet, figure, `build.py` — is followed by `python docs/manual/build.py --web`
+with the regenerated assets committed alongside; `ManualAssetsTest` fails on a stale copy and on
+a Help topic `manualAnchor` that names a section the page no longer has. See
+`docs/manual/README.md`.
+
 ## Comment conventions
 No date stamps and no prior-code narratives in `.kt` comments — comments state current
 behavior and constraints only; git history, `CHANGELOG.md`, and `docs/*.md` own the
