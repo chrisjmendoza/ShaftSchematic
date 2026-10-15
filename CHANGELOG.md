@@ -6,6 +6,16 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-10-15
+
+### ui(help): How-To Guides above the Glossary
+
+- Help's sections now read Getting Started, How-To Guides, **Glossary**, Settings Reference,
+  FAQ — the guides are what a reader opens Help for, the glossary the reference behind them
+  (on-device request; the Glossary had sat second). Topic content is unchanged; search,
+  deep links from the tabs' "?" buttons and manual links all resolve by topic key, not
+  position. `HelpGlossaryTest` pins the new section order; `Navigation.md` updated.
+
 ## 2026-10-14
 
 ### feat: the User Manual in the app

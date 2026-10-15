@@ -56,9 +56,9 @@ import com.android.shaftschematic.ui.adaptive.readableWidth
  * the same PR (same posture as the contract docs; this screen is the user-facing summary
  * of them).
  *
- * The "Glossary" section sits second, right after Getting Started, so a term can be looked
- * up without reading past the guides; its entries define shop and app vocabulary in the
- * wording the controls themselves use.
+ * The "Glossary" section sits third, after the How-To Guides: the guides are what a reader
+ * opens Help for, and the glossary is the reference behind them (on-device request). Its
+ * entries define shop and app vocabulary in the wording the controls themselves use.
  *
  * The "Settings Reference" section carries that obligation control by control: every
  * user-visible control on every Settings page (main, Preview Colors, PDF Export) has an
@@ -412,150 +412,6 @@ internal val helpSections: List<HelpSection> = listOf(
         )
     ),
     HelpSection(
-        "Glossary",
-        listOf(
-            HelpTopic(
-                "AFT / FWD",
-                "The two ends of the shaft. AFT is always the left end of the drawing, FWD the " +
-                    "right. \"Measure From\" chips on a component pick which end its distance is " +
-                    "quoted from — the same component, described from either side.",
-                illustration = { AftFwdFigure() },
-                manualAnchor = "intro-aft-fwd",
-            ),
-            HelpTopic(
-                "Blank draft",
-                "The write-in mode: the drawing prints with its dimension lines but the values " +
-                    "left empty, so measurements can be filled in by hand on the job. It is a " +
-                    "per-sheet choice that resets each session, and it never changes the data.",
-                manualAnchor = "documents-blank",
-            ),
-            HelpTopic(
-                "Body S-break",
-                "The pair of curved breaks drawn through a body run, the drafting symbol for " +
-                    "\"length removed here\". It appears when a run had to be shortened on paper " +
-                    "so the whole shaft fits at a readable height; Settings → Drawing → \"Body " +
-                    "S-break\" sets how much squeeze earns it. Dimension values always print the " +
-                    "true lengths.",
-                illustration = { SBreakFigure() },
-                manualAnchor = "reading-sbreak",
-            ),
-            HelpTopic(
-                "Captured keyway",
-                "A keyway that does not run out the end of its host as an open slot: it is " +
-                    "inset from the S.E.T. (taper) or the chosen end face (body), so both ends " +
-                    "are rounded by the mill. Switch on \"Captured keyway\" on the card or in the " +
-                    "Add dialog to enter the inset; the footer prints it under the KW line. A " +
-                    "captured keyway cannot be spooned.",
-                manualAnchor = "components-keyways",
-            ),
-            HelpTopic(
-                "Coupling face",
-                "The end view shops hand-sketch on a runout sheet, taken looking forward: the " +
-                    "coupling OD, the pilot bore with its keyseat, and the bolt circle with its " +
-                    "holes. Elect it onto the runout and consolidated sheets from their options; " +
-                    "the pilot runout is recorded inside the bore like any other reading.",
-                manualAnchor = "recording-coupling",
-            ),
-            HelpTopic(
-                "Dual units",
-                "Prints every dimension in both units — the primary value with the converted one " +
-                    "beside it or stacked under it (Settings → Drawing → \"Dual-unit layout\"). " +
-                    "Both terms always carry their unit, and the converted one is a courtesy " +
-                    "reading, never a second measurement.",
-                manualAnchor = "reading-units",
-            ),
-            HelpTopic(
-                "Final Schematic",
-                "The drawing the shaft leaves with — a second schematic of the same job, " +
-                    "started as a copy of the original and then adjusted: a liner moved, " +
-                    "lengthened, or shortened once the wear and undercut work is known. " +
-                    "Editing it never changes the original, so the two read as the before and " +
-                    "the after. It prints its own schematic — with runout bubbles if you " +
-                    "elect them on its PDF options sheet — and a blank runout sheet to take " +
-                    "the finished shaft's readings on, all marked Final; every other " +
-                    "document keeps drawing the original.",
-                manualAnchor = "documents-final",
-            ),
-            HelpTopic(
-                "L.E.T. / S.E.T.",
-                "Large End of Taper and Small End of Taper — the two ends of a taper, by " +
-                    "diameter rather than by which way they face. Both diameters print in the " +
-                    "footer for each taper, and the S.E.T. datums are what undercut and worn " +
-                    "section distances can be quoted from.",
-                manualAnchor = "intro-set-let",
-            ),
-            HelpTopic(
-                "Liner & taper compression",
-                "The per-job pair beside the Shaft height slider that asks for liners and " +
-                    "tapers at true length: check \"Keep liners and tapers proportional " +
-                    "lengthwise\", or set with the slider how far they may shorten. Both kinds " +
-                    "move together, so the measured components stay in proportion with each " +
-                    "other; tapers never shorten past 70% of true length whatever the slider " +
-                    "says. The page keeps as much true length as fits; the request never " +
-                    "changes the drawn shaft height.",
-                manualAnchor = "documents-height",
-            ),
-            HelpTopic(
-                "Measurement reference",
-                "Which end printed dimensions measure from — \"Auto (closest end)\" (the " +
-                    "default, anchoring each dimension to whichever end is nearer), \"AFT (force " +
-                    "AFT SET)\", or \"FWD (force FWD SET)\". Same name in Settings → PDF Export " +
-                    "Options and on the schematic and consolidated PDF Options sheets.",
-                manualAnchor = "settings-pdf-export",
-            ),
-            HelpTopic(
-                "OAL (overall length)",
-                "The shaft's overall length, end to end, and the span every drawing is laid out " +
-                    "against. Any part of it you don't cover with a component is filled with " +
-                    "bare shaft (an auto-body), so the drawing is always continuous.",
-                manualAnchor = "editor-oal",
-            ),
-            HelpTopic(
-                "Runout station / bubble",
-                "A station is one dial-indicator position on a component; its bubble is the " +
-                    "circle drawn under the shaft where the reading is written. " +
-                    "Stations are per component, not per drawn run, so a body split by liners " +
-                    "still numbers straight through AFT to FWD.",
-                manualAnchor = "recording-stations",
-            ),
-            HelpTopic(
-                "Shade in Components",
-                "The PDF option group that fills bodies, tapers, or liners with light grey " +
-                    "instead of leaving them outlined. It is the default for each kind; a " +
-                    "component card's \"Shade on drawing\" toggle overrides it for that one " +
-                    "component, in either direction.",
-                manualAnchor = "settings-pdf-export",
-            ),
-            HelpTopic(
-                "Shaft height",
-                "The per-job slider that sets how tall the shaft draws on paper, in inches, " +
-                    "from $HEIGHT_FLOOR_LABEL_IN to $HEIGHT_CAP_LABEL_IN — shrink a long shaft to uncramp the sheet, " +
-                    "or grow it for room to write in. It is a drawing size only: no diameter, " +
-                    "length, or printed value changes with it, and \"Standard (…)\" returns to " +
-                    "the size the Default drawing size setting picks.",
-                manualAnchor = "documents-height",
-            ),
-            HelpTopic(
-                "TIR (total indicated runout)",
-                "The full sweep an indicator shows at one station — the difference between its " +
-                    "high and low readings as the shaft is turned. It is typed into that " +
-                    "station's bubble, with the high spot marked as a clock position; the sheet " +
-                    "prints which way the indicator was read (\"TIR's taken looking AFT / " +
-                    "FORWARD\").",
-                manualAnchor = "recording-runout",
-            ),
-            HelpTopic(
-                "Trace depth exaggeration",
-                "Wear measured on a liner dips the drawn surface line through the measured " +
-                    "diameters. Real wear is far too shallow to see at drawing scale, so the dip " +
-                    "is drawn deeper than true (never shallower) — set the amount per job on the " +
-                    "Wear sheet, or its default in Settings → Drawing. The printed Ø values are " +
-                    "always the measured numbers you typed.",
-                manualAnchor = "recording-trace",
-            ),
-        )
-    ),
-    HelpSection(
         "How-To Guides",
         listOf(
             HelpTopic(
@@ -734,6 +590,150 @@ internal val helpSections: List<HelpSection> = listOf(
                     "app theme. Every Settings field is listed in the Settings Reference " +
                     "section below.",
                 manualAnchor = "settings-appearance",
+            ),
+        )
+    ),
+    HelpSection(
+        "Glossary",
+        listOf(
+            HelpTopic(
+                "AFT / FWD",
+                "The two ends of the shaft. AFT is always the left end of the drawing, FWD the " +
+                    "right. \"Measure From\" chips on a component pick which end its distance is " +
+                    "quoted from — the same component, described from either side.",
+                illustration = { AftFwdFigure() },
+                manualAnchor = "intro-aft-fwd",
+            ),
+            HelpTopic(
+                "Blank draft",
+                "The write-in mode: the drawing prints with its dimension lines but the values " +
+                    "left empty, so measurements can be filled in by hand on the job. It is a " +
+                    "per-sheet choice that resets each session, and it never changes the data.",
+                manualAnchor = "documents-blank",
+            ),
+            HelpTopic(
+                "Body S-break",
+                "The pair of curved breaks drawn through a body run, the drafting symbol for " +
+                    "\"length removed here\". It appears when a run had to be shortened on paper " +
+                    "so the whole shaft fits at a readable height; Settings → Drawing → \"Body " +
+                    "S-break\" sets how much squeeze earns it. Dimension values always print the " +
+                    "true lengths.",
+                illustration = { SBreakFigure() },
+                manualAnchor = "reading-sbreak",
+            ),
+            HelpTopic(
+                "Captured keyway",
+                "A keyway that does not run out the end of its host as an open slot: it is " +
+                    "inset from the S.E.T. (taper) or the chosen end face (body), so both ends " +
+                    "are rounded by the mill. Switch on \"Captured keyway\" on the card or in the " +
+                    "Add dialog to enter the inset; the footer prints it under the KW line. A " +
+                    "captured keyway cannot be spooned.",
+                manualAnchor = "components-keyways",
+            ),
+            HelpTopic(
+                "Coupling face",
+                "The end view shops hand-sketch on a runout sheet, taken looking forward: the " +
+                    "coupling OD, the pilot bore with its keyseat, and the bolt circle with its " +
+                    "holes. Elect it onto the runout and consolidated sheets from their options; " +
+                    "the pilot runout is recorded inside the bore like any other reading.",
+                manualAnchor = "recording-coupling",
+            ),
+            HelpTopic(
+                "Dual units",
+                "Prints every dimension in both units — the primary value with the converted one " +
+                    "beside it or stacked under it (Settings → Drawing → \"Dual-unit layout\"). " +
+                    "Both terms always carry their unit, and the converted one is a courtesy " +
+                    "reading, never a second measurement.",
+                manualAnchor = "reading-units",
+            ),
+            HelpTopic(
+                "Final Schematic",
+                "The drawing the shaft leaves with — a second schematic of the same job, " +
+                    "started as a copy of the original and then adjusted: a liner moved, " +
+                    "lengthened, or shortened once the wear and undercut work is known. " +
+                    "Editing it never changes the original, so the two read as the before and " +
+                    "the after. It prints its own schematic — with runout bubbles if you " +
+                    "elect them on its PDF options sheet — and a blank runout sheet to take " +
+                    "the finished shaft's readings on, all marked Final; every other " +
+                    "document keeps drawing the original.",
+                manualAnchor = "documents-final",
+            ),
+            HelpTopic(
+                "L.E.T. / S.E.T.",
+                "Large End of Taper and Small End of Taper — the two ends of a taper, by " +
+                    "diameter rather than by which way they face. Both diameters print in the " +
+                    "footer for each taper, and the S.E.T. datums are what undercut and worn " +
+                    "section distances can be quoted from.",
+                manualAnchor = "intro-set-let",
+            ),
+            HelpTopic(
+                "Liner & taper compression",
+                "The per-job pair beside the Shaft height slider that asks for liners and " +
+                    "tapers at true length: check \"Keep liners and tapers proportional " +
+                    "lengthwise\", or set with the slider how far they may shorten. Both kinds " +
+                    "move together, so the measured components stay in proportion with each " +
+                    "other; tapers never shorten past 70% of true length whatever the slider " +
+                    "says. The page keeps as much true length as fits; the request never " +
+                    "changes the drawn shaft height.",
+                manualAnchor = "documents-height",
+            ),
+            HelpTopic(
+                "Measurement reference",
+                "Which end printed dimensions measure from — \"Auto (closest end)\" (the " +
+                    "default, anchoring each dimension to whichever end is nearer), \"AFT (force " +
+                    "AFT SET)\", or \"FWD (force FWD SET)\". Same name in Settings → PDF Export " +
+                    "Options and on the schematic and consolidated PDF Options sheets.",
+                manualAnchor = "settings-pdf-export",
+            ),
+            HelpTopic(
+                "OAL (overall length)",
+                "The shaft's overall length, end to end, and the span every drawing is laid out " +
+                    "against. Any part of it you don't cover with a component is filled with " +
+                    "bare shaft (an auto-body), so the drawing is always continuous.",
+                manualAnchor = "editor-oal",
+            ),
+            HelpTopic(
+                "Runout station / bubble",
+                "A station is one dial-indicator position on a component; its bubble is the " +
+                    "circle drawn under the shaft where the reading is written. " +
+                    "Stations are per component, not per drawn run, so a body split by liners " +
+                    "still numbers straight through AFT to FWD.",
+                manualAnchor = "recording-stations",
+            ),
+            HelpTopic(
+                "Shade in Components",
+                "The PDF option group that fills bodies, tapers, or liners with light grey " +
+                    "instead of leaving them outlined. It is the default for each kind; a " +
+                    "component card's \"Shade on drawing\" toggle overrides it for that one " +
+                    "component, in either direction.",
+                manualAnchor = "settings-pdf-export",
+            ),
+            HelpTopic(
+                "Shaft height",
+                "The per-job slider that sets how tall the shaft draws on paper, in inches, " +
+                    "from $HEIGHT_FLOOR_LABEL_IN to $HEIGHT_CAP_LABEL_IN — shrink a long shaft to uncramp the sheet, " +
+                    "or grow it for room to write in. It is a drawing size only: no diameter, " +
+                    "length, or printed value changes with it, and \"Standard (…)\" returns to " +
+                    "the size the Default drawing size setting picks.",
+                manualAnchor = "documents-height",
+            ),
+            HelpTopic(
+                "TIR (total indicated runout)",
+                "The full sweep an indicator shows at one station — the difference between its " +
+                    "high and low readings as the shaft is turned. It is typed into that " +
+                    "station's bubble, with the high spot marked as a clock position; the sheet " +
+                    "prints which way the indicator was read (\"TIR's taken looking AFT / " +
+                    "FORWARD\").",
+                manualAnchor = "recording-runout",
+            ),
+            HelpTopic(
+                "Trace depth exaggeration",
+                "Wear measured on a liner dips the drawn surface line through the measured " +
+                    "diameters. Real wear is far too shallow to see at drawing scale, so the dip " +
+                    "is drawn deeper than true (never shallower) — set the amount per job on the " +
+                    "Wear sheet, or its default in Settings → Drawing. The printed Ø values are " +
+                    "always the measured numbers you typed.",
+                manualAnchor = "recording-trace",
             ),
         )
     ),
