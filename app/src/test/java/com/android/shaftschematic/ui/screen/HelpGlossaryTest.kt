@@ -8,6 +8,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -15,8 +16,8 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * Help's Glossary section. It sits second, right after Getting Started, so a shop term can
- * be looked up without reading past the how-to guides, and its topics expand like any other.
+ * Help's Glossary section. It sits after the How-To Guides — the guides are what a reader opens
+ * Help for, the glossary the reference behind them — and its topics expand like any other.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], qualifiers = "w400dp-h800dp")
@@ -34,11 +35,11 @@ class HelpGlossaryTest {
     }
 
     @Test
-    fun `Glossary is the section after Getting Started`() {
-        hostHelp()
-
-        rule.onNodeWithText("Getting Started").assertIsDisplayed()
-        rule.onNodeWithText("Glossary").assertIsDisplayed()
+    fun `Glossary is the section after the How-To Guides`() {
+        assertEquals(
+            listOf("Getting Started", "How-To Guides", "Glossary", "Settings Reference", "FAQ"),
+            helpSections.map { it.title },
+        )
     }
 
     @Test

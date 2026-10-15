@@ -95,9 +95,10 @@ Route graph (AppNav.kt NavHost)
     EXPANDED** — a search hit that still needs a tap to read is the failing state — as an
     `expanded || searching` read at the card, never a write to the saved expansion, so
     clearing the query restores every card's own state.
-  Five sections: Getting Started, **Glossary**, How-To
-  Guides, **Settings Reference**, FAQ. The Glossary sits second so a term can be looked up
-  without reading past the guides; it defines shop and app vocabulary (AFT/FWD, blank draft,
+  Five sections: Getting Started, How-To Guides, **Glossary**,
+  **Settings Reference**, FAQ. The Glossary sits after the guides — the guides are what a
+  reader opens Help for, the glossary the reference behind them (on-device request, 2026-10-15;
+  it sat second before); it defines shop and app vocabulary (AFT/FWD, blank draft,
   S-break, coupling face, dual units, L.E.T./S.E.T., liner compression, measurement
   reference, OAL, runout station/bubble, Shade in Components, shaft height, TIR, trace depth
   exaggeration) in the wording of `docs/DESIGN_INTENT.md` §4. Topics
