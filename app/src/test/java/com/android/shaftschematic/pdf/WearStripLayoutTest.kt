@@ -1,6 +1,7 @@
 package com.android.shaftschematic.pdf
 
 import com.android.shaftschematic.geom.SetPositions
+import com.android.shaftschematic.geom.BREAK_EDGE_OUTWARD_REACH_FRAC
 import com.android.shaftschematic.model.Body
 import com.android.shaftschematic.model.Liner
 import com.android.shaftschematic.model.ShaftSpec

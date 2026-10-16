@@ -75,6 +75,15 @@ private fun logTapSelect(message: String) {
 }
 
 /**
+ * Extra stroke width (px) the selection ring adds beyond the outline weight. The ring is stroked
+ * centred on the silhouette, so half of `outline + extra` lies INSIDE the component; a short
+ * component on a long shaft draws only a dozen pixels wide in the preview box, and a 12 px ring
+ * swallowed a thread whole and most of a taper (on-device report). The ring scales with the
+ * preview's pinch zoom along with everything else, so it keeps the same proportion at any zoom.
+ */
+private const val SELECTION_GLOW_EXTRA_PX = 4f
+
+/**
  * ShaftDrawing
  *
  * Layer: UI → Compose
@@ -196,9 +205,8 @@ fun ShaftDrawing(
         highlightEnabled = highlightEnabled,
         highlightId = highlightId,
         highlightGlowColor = themeGlow,
-        // slightly louder defaults so it’s unmistakable in testing
         highlightGlowAlpha = 0.75f,
-        highlightGlowExtraPx = 12f,
+        highlightGlowExtraPx = SELECTION_GLOW_EXTRA_PX,
     ) }
 
     // Preview-safe spec: if OAL is zero but parts exist, extend to last occupied end.

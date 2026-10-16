@@ -1,5 +1,6 @@
 package com.android.shaftschematic.pdf
 
+import com.android.shaftschematic.geom.BREAK_PAIR_REACH_FRAC
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test

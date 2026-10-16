@@ -73,6 +73,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.DiaCalloutStation
+import com.android.shaftschematic.geom.UNDERCUT_BREAK_AMP_FRAC_OF_R
 import com.android.shaftschematic.geom.THREAD_DENSITY_DEFAULT
 import com.android.shaftschematic.geom.THREAD_SLANT_DEFAULT
 import com.android.shaftschematic.geom.SurfaceSeg
@@ -291,8 +292,8 @@ fun UndercutWindowDetailOverlay(
     // strip's stored range (a cut overhanging the liner edge mid-edit — on-device report)
     // widens the drawing live, with the standard pad of neighbour stock beyond it — the same
     // range a confirmed overhang gets when the strip rebuilds. Never narrows while editing.
-    val (drawStartMm, drawEndMm) = remember(strip, spans, oalMm) {
-        undercutPreviewDrawRange(strip, spans, oalMm)
+    val (drawStartMm, drawEndMm) = remember(strip, spans, oalMm, segs) {
+        undercutPreviewDrawRange(strip, spans, oalMm, segs = segs)
     }
     // Confirm-blocking status of the previewed draft: its notch draws dashed in the selection
     // color while valid, in the error color while this is non-null, and the status pill states
@@ -697,7 +698,7 @@ fun UndercutWindowDetailOverlay(
                             } else {
                                 drawBreakEdgeCompose(
                                     x = lay.startPx, yTop = cy - rAft, yBot = cy + rAft,
-                                    amplitude = rAft * 0.6f, color = outlineColor,
+                                    amplitude = rAft * UNDERCUT_BREAK_AMP_FRAC_OF_R, color = outlineColor,
                                     strokeWidthPx = outlineWidthPx, eyeAtTop = true,
                                 )
                             }
@@ -711,7 +712,7 @@ fun UndercutWindowDetailOverlay(
                             } else {
                                 drawBreakEdgeCompose(
                                     x = lay.endPx, yTop = cy - rFwd, yBot = cy + rFwd,
-                                    amplitude = rFwd * 0.6f, color = outlineColor,
+                                    amplitude = rFwd * UNDERCUT_BREAK_AMP_FRAC_OF_R, color = outlineColor,
                                     strokeWidthPx = outlineWidthPx, eyeAtTop = false,
                                 )
                             }

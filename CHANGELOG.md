@@ -6,6 +6,45 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-10-16
+
+### fix(undercut): window-end S-breaks get room
+
+- An undercut detail strip's window end that is not the shaft's physical end draws an
+  S-break whose amplitude scales with the drawn radius — on the detail canvas `0.3 × Ø` in
+  shaft mm, about 2.5" on an 8.26" shaft, against a 1" pad. Whenever a component face sat
+  inside the glyph's reach on the window's interior side, the lobes were drawn across it
+  (on-device report: a liner strip's AFT end landed 0.75" inside the taper, and the break
+  tangled with the taper face, a 1/4" body and the liner face).
+- The window end now sits in stock with room for its break. `undercutBreakRoomMm(Ø)` =
+  `Ø/2 · 0.6 · (glyph reach ≈ 0.433 + 0.25 clearance)`; `withUndercutBreakRoom` widens a draw
+  range outward only, on the outer-surface envelope, walking over any piece too short to host
+  the break (a stub body, a blend's sampled sub-pieces) and turning an end that reaches the
+  shaft end into the flat physical end. `UNDERCUT_WINDOW_PAD_MM` is now the minimum pad.
+  Applied in every strip-range builder (`linerStripFor`, `buildUndercutStrips`,
+  `undercutPreviewDrawRange`, each with a defaulted `segs` parameter) and re-applied in the
+  PDF after the points-based `computeUndercutStripDrawRange` widening, so the overview, the
+  detail canvas and the PDF strips agree by construction. Draw ranges only: chain datums never
+  move, and a free strip keeps its window as the chain while only its draw range grows.
+- The glyph reach constants (`RETURN_SWEEP_FULLNESS`, `BREAK_PAIR_REACH_FRAC`,
+  `BREAK_EDGE_OUTWARD_REACH_FRAC`) moved from `pdf/BreakSymbol.kt` to `geom/BreakGlyphMath.kt`
+  so `geom` can reserve room without importing `pdf`; the window-end amplitude fraction is the
+  one constant `UNDERCUT_BREAK_AMP_FRAC_OF_R` read by both draw sites and the room math.
+- `UndercutMathTest` covers the room formula, empty segs, the unchanged long-body case, the
+  on-device taper/stub/liner case, walking a chain of short pieces, both flat physical ends,
+  idempotence, a body under a liner, the preview range and the free-strip chain;
+  `UndercutStripSvgPreviewTest` renders the on-device case
+  (`k-short-body-stub-before-liner.svg`). `UndercutDrawing.md` updated.
+
+### fix(preview): thinner selection ring
+
+- The Schematic tab's preview highlights the selected component with a coloured ring stroked
+  centred on its outline, so half the ring's width lands inside the component. At 12 px of extra
+  width a 5¼" thread on a 368" shaft — a dozen pixels wide in the box — drew as a solid purple
+  block, and a taper was mostly covered (on-device report). The extra width is now the named
+  `SELECTION_GLOW_EXTRA_PX` = 4 px (`ui/drawing/compose/ShaftDrawing.kt`); colour and alpha are
+  unchanged, and the ring still scales with the pinch zoom along with the drawing.
+
 ## 2026-10-15
 
 ### ui(help): How-To Guides above the Glossary

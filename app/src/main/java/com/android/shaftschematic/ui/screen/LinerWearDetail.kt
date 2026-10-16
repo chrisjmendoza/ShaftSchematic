@@ -102,7 +102,7 @@ import com.android.shaftschematic.model.WearPit
 import com.android.shaftschematic.model.WearRecord
 import com.android.shaftschematic.model.WearSpot
 import com.android.shaftschematic.model.WearSpotReference
-import com.android.shaftschematic.pdf.RETURN_SWEEP_FULLNESS
+import com.android.shaftschematic.geom.RETURN_SWEEP_FULLNESS
 import com.android.shaftschematic.pdf.formatDiaWithUnit
 import com.android.shaftschematic.ui.input.NumericInputField
 import com.android.shaftschematic.ui.resolved.ResolvedBody

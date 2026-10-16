@@ -20,6 +20,8 @@ import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
 import com.android.shaftschematic.geom.linerStripFor
 import com.android.shaftschematic.geom.NOTCH_FACE_MIN_STEP_PX
 import com.android.shaftschematic.geom.UNDERCUT_SECTION_FILL_ALPHA
+import com.android.shaftschematic.geom.UNDERCUT_BREAK_AMP_FRAC_OF_R
+import com.android.shaftschematic.geom.withUndercutBreakRoom
 import com.android.shaftschematic.geom.maxOuterDiaOver
 import com.android.shaftschematic.geom.outerDiaAt
 import com.android.shaftschematic.geom.planDiaCallouts
@@ -270,14 +272,14 @@ fun composeUndercutPdf(
     val linerSpans = docSpec.liners
         .filter { it.lengthMm > 0f && it.odMm > 0f }
         .map { ln -> UndercutLinerSpan(ln.id, ln.startFromAftMm, ln.startFromAftMm + ln.lengthMm) }
-    val cutStrips = buildUndercutStrips(liveSpans, linerSpans, shaftExtentMm)
+    val cutStrips = buildUndercutStrips(liveSpans, linerSpans, shaftExtentMm, segs = surfaceSegs)
     // Nothing recorded (blank template, or an export of an empty record): every drawable liner
     // gets a STARTED strip — drawn to scale, left empty for hand sketching. `linerStripFor`
     // with no assigned cuts is exactly what the overlay uses to zoom an undercut-free liner,
     // so a started strip and a real one are the same figure at the same scale.
     val startedStrips: List<UndercutStrip> =
         if (cutStrips.isNotEmpty()) emptyList()
-        else linerSpans.sortedBy { it.startMm }.map { linerStripFor(it, emptyList(), shaftExtentMm) }
+        else linerSpans.sortedBy { it.startMm }.map { linerStripFor(it, emptyList(), shaftExtentMm, segs = surfaceSegs) }
     val pageStrips = cutStrips.ifEmpty { startedStrips }
     // Started strips carry no cuts to dimension: rails, notches and printed values all drop out.
     val startedPage = cutStrips.isEmpty()
@@ -748,12 +750,15 @@ private fun drawUndercutDetailStrip(
     // Draw range, widened at layout time so the undimensioned pad outside each chain datum
     // prints with real air whatever the strip's scale is — the mm pad alone reads as cramped in
     // a grid cell (see `computeUndercutStripDrawRange`). Datums and dimensions are untouched.
+    // That widening is blind to the profile and can carry an end onto a short seg again (a stub
+    // body between a taper and the liner), so the break-room rule runs once more on its result:
+    // each window-end S-break sits in stock with room for its lobes before the next face.
     val drawRange = computeUndercutStripDrawRange(
         strip.drawStartMm, strip.drawEndMm, strip.chainStartMm, strip.chainEndMm,
         stripLeft, stripRight, shaftExtentMm,
     )
-    val drawStartMm = drawRange.startMm
-    val drawEndMm = drawRange.endMm
+    val (drawStartMm, drawEndMm) =
+        withUndercutBreakRoom(drawRange.startMm, drawRange.endMm, segs, shaftExtentMm)
     val drawLengthMm = drawEndMm - drawStartMm
     if (drawLengthMm <= 0f) return
 
@@ -1148,7 +1153,7 @@ private fun drawUndercutWindowEnd(
         // is capped absolutely: uncapped, a tall strip's lobes sprawl past the cylinder corners
         // and read as ears hung off the end (on-device report). See UNDERCUT_BREAK_AMP_MAX_PT
         // for the deviation-vs-inset check.
-        val amp = min(r * 0.6f, UNDERCUT_BREAK_AMP_MAX_PT)
+        val amp = min(r * UNDERCUT_BREAK_AMP_FRAC_OF_R, UNDERCUT_BREAK_AMP_MAX_PT)
         drawBreakEdge(c, x, cy - r, cy + r, amp, outline, eyeAtTop = eyeAtTop)
     }
 }

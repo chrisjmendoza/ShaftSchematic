@@ -33,8 +33,113 @@ internal const val UNDERCUT_SPAN_EPS_MM = 1e-3f
  */
 const val UNDERCUT_CLUSTER_GAP_MM = 152.4f
 
-/** Context padding added on each side of a cluster's span to form its zoom window. */
+/**
+ * Context padding added on each side of a cluster's span to form its zoom window — the
+ * MINIMUM pad. A window end that is not the shaft's physical end draws an S-break whose lobes
+ * scale with the stock's diameter, so on a wide shaft this pad cannot host them; the strip
+ * builders then widen the draw range by [withUndercutBreakRoom], and the break room is what a
+ * wide shaft actually gets.
+ */
 const val UNDERCUT_WINDOW_PAD_MM = 25.4f
+
+/**
+ * Clearance past the window-end break glyph's reach, as a fraction of its amplitude, so the lobe
+ * never kisses the next component face.
+ */
+const val UNDERCUT_BREAK_CLEAR_FRAC_OF_AMP = 0.25f
+
+/**
+ * Uniform stock a window-end break needs on its INTERIOR side — from the break line to the next
+ * face — for stock of outer Ø [diaMm]. The amplitude in shaft mm is
+ * `(dia/2)·`[UNDERCUT_BREAK_AMP_FRAC_OF_R] because the detail canvas maps x and r through one
+ * scale; the PDF caps its amplitude lower (`UNDERCUT_BREAK_AMP_MAX_PT`), so this room is
+ * sufficient on both surfaces. The reach is the glyph's widest excursion to either side of its
+ * line ([BREAK_EDGE_OUTWARD_REACH_FRAC]) plus [UNDERCUT_BREAK_CLEAR_FRAC_OF_AMP] of daylight.
+ */
+fun undercutBreakRoomMm(diaMm: Float): Float =
+    diaMm * 0.5f * UNDERCUT_BREAK_AMP_FRAC_OF_R *
+        (BREAK_EDGE_OUTWARD_REACH_FRAC + UNDERCUT_BREAK_CLEAR_FRAC_OF_AMP)
+
+/**
+ * Widen the draw range `[startMm, endMm]` OUTWARD — never inward — until each end that is not
+ * the shaft's physical end sits in stock with [undercutBreakRoomMm] of that stock between its
+ * break line and the next face on the window's interior side (on-device report: a liner strip's
+ * 1" pad landed a hair inside a taper, and the window-end S-break tangled with the taper face,
+ * a 1/4" body and the liner face).
+ *
+ * Works on the outer-surface envelope of [segs] ([buildSurfaceEnvelope]), so a body running
+ * under a liner never hides the liner's face. A piece too short to host the break is walked
+ * over to the next piece outward — a blend's sampled sub-pieces included, so a break never sits
+ * inside a ramp. An end that reaches `0` / [oalMm] becomes that exact value: the flat physical
+ * end. A piece's room is sized off its LARGER end Ø (conservative on a taper). An end over
+ * uncovered x (no seg) stays put. Empty [segs] returns the input unchanged. Idempotent.
+ *
+ * Chain datums are never passed here: only the drawn context outside them grows.
+ */
+fun withUndercutBreakRoom(
+    startMm: Float,
+    endMm: Float,
+    segs: List<SurfaceSeg>,
+    oalMm: Float,
+): Pair<Float, Float> {
+    if (segs.isEmpty()) return startMm to endMm
+    val eps = UNDERCUT_SPAN_EPS_MM
+    val hi = oalMm.coerceAtLeast(0f)
+    val lo = segs.minOf { it.startMm }
+    val top = segs.maxOf { it.endMm }
+    val pieces = buildSurfaceEnvelope(segs, lo, top)
+    if (pieces.isEmpty()) return startMm to endMm
+    fun room(p: EnvelopePiece) = undercutBreakRoomMm(max(p.dia0Mm, p.dia1Mm))
+    fun contiguous(a: EnvelopePiece, b: EnvelopePiece) = abs(a.x1Mm - b.x0Mm) <= eps
+
+    // AFT end: interior is +x, the face ahead of the break is the piece's x1.
+    var start = startMm
+    if (start <= eps) {
+        start = min(0f, startMm)
+    } else {
+        // Half-open: a start on a face belongs to the piece beginning there.
+        var i = pieces.indexOfFirst { start >= it.x0Mm - eps && start < it.x1Mm - eps }
+        var guard = pieces.size + 1
+        while (i >= 0 && guard-- > 0) {
+            val p = pieces[i]
+            val r = room(p)
+            if (p.x1Mm - start >= r - eps) break
+            val candidate = p.x1Mm - r
+            if (candidate >= p.x0Mm - eps) {
+                start = min(start, candidate)
+                break
+            }
+            // Too short to host the break: walk over it to the piece ending at its AFT face.
+            start = min(start, p.x0Mm)
+            i = if (i > 0 && contiguous(pieces[i - 1], p)) i - 1 else -1
+        }
+        if (start <= eps) start = min(0f, startMm)
+    }
+
+    // FWD end: the mirror — interior is −x, the face behind the break is the piece's x0.
+    var end = endMm
+    if (end >= hi - eps) {
+        end = max(hi, endMm)
+    } else {
+        // Half-open the other way: an end on a face belongs to the piece ending there.
+        var i = pieces.indexOfFirst { end > it.x0Mm + eps && end <= it.x1Mm + eps }
+        var guard = pieces.size + 1
+        while (i >= 0 && guard-- > 0) {
+            val p = pieces[i]
+            val r = room(p)
+            if (end - p.x0Mm >= r - eps) break
+            val candidate = p.x0Mm + r
+            if (candidate <= p.x1Mm + eps) {
+                end = max(end, candidate)
+                break
+            }
+            end = max(end, p.x1Mm)
+            i = if (i < pieces.size - 1 && contiguous(p, pieces[i + 1])) i + 1 else -1
+        }
+        if (end >= hi - eps) end = max(hi, endMm)
+    }
+    return start to end
+}
 
 /**
  * When an undercut has no entered Ø yet (`diaMm == 0` — placed but empty), the overlay
@@ -527,9 +632,17 @@ sealed class UndercutStrip {
         override val undercutIds: List<String>,
     ) : UndercutStrip()
 
-    data class FreeStrip(val window: UndercutWindow) : UndercutStrip() {
-        override val drawStartMm: Float get() = window.startMm
-        override val drawEndMm: Float get() = window.endMm
+    /**
+     * The window is the chain (its edges are the outer witness datums); the draw range starts
+     * as the window and only grows OUTWARD past it — by [withUndercutBreakRoom] in
+     * [buildUndercutStrips] — so the extra stock prints undimensioned beyond the window edge
+     * and the window's pad spans keep their value.
+     */
+    data class FreeStrip(
+        val window: UndercutWindow,
+        override val drawStartMm: Float = window.startMm,
+        override val drawEndMm: Float = window.endMm,
+    ) : UndercutStrip() {
         override val chainStartMm: Float get() = window.startMm
         override val chainEndMm: Float get() = window.endMm
         override val undercutIds: List<String> get() = window.undercutIds
@@ -552,7 +665,8 @@ fun assignUndercutLiner(span: UndercutSpanMm, liners: List<UndercutLinerSpan>): 
  * Build one [UndercutStrip.LinerStrip] for [liner] and the cuts assigned to it (may be
  * empty — the overlay uses this to zoom an undercut-free liner for authoring). The draw
  * range is the liner's full span, expanded by any cut overhang past its edges, then
- * padded by [padMm] each side and clamped to `[0, oalMm]`; the chain range is the liner
+ * padded by [padMm] each side and clamped to `[0, oalMm]`, then given break room against
+ * [segs] ([withUndercutBreakRoom] — empty [segs] skips it); the chain range is the liner
  * span expanded by overhang only (no pad), so the rail's outer witness lines sit on real
  * datums — liner edges or cut shoulders, never the arbitrary pad edge.
  */
@@ -561,18 +675,22 @@ fun linerStripFor(
     assignedSpans: List<UndercutSpanMm>,
     oalMm: Float,
     padMm: Float = UNDERCUT_WINDOW_PAD_MM,
+    segs: List<SurfaceSeg> = emptyList(),
 ): UndercutStrip.LinerStrip {
     val hi = oalMm.coerceAtLeast(0f)
     val cutsMin = assignedSpans.minOfOrNull { it.startMm } ?: liner.startMm
     val cutsMax = assignedSpans.maxOfOrNull { it.endMm } ?: liner.endMm
     val chainStart = min(liner.startMm, cutsMin)
     val chainEnd = max(liner.endMm, cutsMax)
+    val (drawStart, drawEnd) = withUndercutBreakRoom(
+        (chainStart - padMm).coerceIn(0f, hi), (chainEnd + padMm).coerceIn(0f, hi), segs, oalMm,
+    )
     return UndercutStrip.LinerStrip(
         linerId = liner.id,
         linerStartMm = liner.startMm,
         linerEndMm = liner.endMm,
-        drawStartMm = (chainStart - padMm).coerceIn(0f, hi),
-        drawEndMm = (chainEnd + padMm).coerceIn(0f, hi),
+        drawStartMm = drawStart,
+        drawEndMm = drawEnd,
         chainStartMm = chainStart.coerceIn(0f, hi),
         chainEndMm = chainEnd.coerceIn(0f, hi),
         undercutIds = assignedSpans.sortedBy { it.startMm }.map { it.id },
@@ -587,29 +705,38 @@ fun linerStripFor(
  * beyond it — the same range a confirmed overhang gets when [linerStripFor] /
  * [clusterUndercuts] rebuild the strip on commit. Never narrowing keeps the window stable
  * while a draft shrinks a cut that had extended it; the rebuild on confirm re-tightens.
- * Clamped to `[0, oalMm]`. Spans must already be render-clamped ([clampUndercutSpan]).
+ * Clamped to `[0, oalMm]`, then given break room against [segs] ([withUndercutBreakRoom] —
+ * widening only, so the never-narrow rule holds; empty [segs] skips it). Spans must already be
+ * render-clamped ([clampUndercutSpan]).
  */
 fun undercutPreviewDrawRange(
     strip: UndercutStrip,
     previewSpans: List<UndercutSpanMm>,
     oalMm: Float,
     padMm: Float = UNDERCUT_WINDOW_PAD_MM,
+    segs: List<SurfaceSeg> = emptyList(),
 ): Pair<Float, Float> {
     val hi = oalMm.coerceAtLeast(0f)
     val spansMin = previewSpans.minOfOrNull { it.startMm }
-        ?: return strip.drawStartMm to strip.drawEndMm
+        ?: return withUndercutBreakRoom(strip.drawStartMm, strip.drawEndMm, segs, oalMm)
     val spansMax = previewSpans.maxOf { it.endMm }
-    return min(strip.drawStartMm, spansMin - padMm).coerceIn(0f, hi) to
-        max(strip.drawEndMm, spansMax + padMm).coerceIn(0f, hi)
+    return withUndercutBreakRoom(
+        min(strip.drawStartMm, spansMin - padMm).coerceIn(0f, hi),
+        max(strip.drawEndMm, spansMax + padMm).coerceIn(0f, hi),
+        segs, oalMm,
+    )
 }
 
 /**
  * Group cuts into detail strips: every cut overlapping a liner joins that liner's
  * [UndercutStrip.LinerStrip] (one strip per liner with ≥1 cut, covering the whole liner);
  * the remaining bare-shaft cuts cluster into [UndercutStrip.FreeStrip] windows via
- * [clusterUndercuts]. Result is sorted aft → fwd by draw start. Consumed by the overview
- * affordances, the detail overlay, and the PDF strips, so all three agree by
- * construction. Empty spans are skipped, as in [clusterUndercuts].
+ * [clusterUndercuts]. Every strip's DRAW range gets break room against [segs]
+ * ([withUndercutBreakRoom]; chain datums never move — a free strip's window stays its chain
+ * and only its draw range grows). Result is sorted aft → fwd by draw start. Consumed by the
+ * overview affordances, the detail overlay, and the PDF strips, so all three agree by
+ * construction. Empty spans are skipped, as in [clusterUndercuts]. Empty [segs] skips the
+ * break room.
  */
 fun buildUndercutStrips(
     spans: List<UndercutSpanMm>,
@@ -617,16 +744,18 @@ fun buildUndercutStrips(
     oalMm: Float,
     gapMm: Float = UNDERCUT_CLUSTER_GAP_MM,
     padMm: Float = UNDERCUT_WINDOW_PAD_MM,
+    segs: List<SurfaceSeg> = emptyList(),
 ): List<UndercutStrip> {
     val live = spans.filter { it.endMm > it.startMm }
     val byLiner = live.groupBy { assignUndercutLiner(it, liners) }
     val strips = mutableListOf<UndercutStrip>()
     for (liner in liners) {
         val assigned = byLiner[liner.id] ?: continue
-        strips += linerStripFor(liner, assigned, oalMm, padMm)
+        strips += linerStripFor(liner, assigned, oalMm, padMm, segs)
     }
     for (window in clusterUndercuts(byLiner[null].orEmpty(), oalMm, gapMm, padMm)) {
-        strips += UndercutStrip.FreeStrip(window)
+        val (drawStart, drawEnd) = withUndercutBreakRoom(window.startMm, window.endMm, segs, oalMm)
+        strips += UndercutStrip.FreeStrip(window, drawStart, drawEnd)
     }
     return strips.sortedBy { it.drawStartMm }
 }

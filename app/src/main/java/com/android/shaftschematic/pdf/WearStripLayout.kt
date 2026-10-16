@@ -4,6 +4,7 @@ package com.android.shaftschematic.pdf
 import android.graphics.Paint
 
 import com.android.shaftschematic.geom.DimensionRailLayout
+import com.android.shaftschematic.geom.BREAK_EDGE_OUTWARD_REACH_FRAC
 import com.android.shaftschematic.util.DualLabel
 import com.android.shaftschematic.util.dualStackMetrics
 import com.android.shaftschematic.geom.SetPositions

@@ -192,6 +192,27 @@ data class UndercutRecord(val undercuts: List<Undercut> = emptyList())
      Returns disjoint, sorted `UndercutWindow(startMm, endMm, undercutIds)` — consumed by the
      overview affordances, the detail overlay, and the PDF strips, so all three windowing
      decisions agree by construction.
+- **Window-end break room** — `UNDERCUT_WINDOW_PAD_MM` is the **minimum** pad. A window end
+  that is not the shaft's physical end draws an S-break whose amplitude scales with the drawn
+  radius (`UNDERCUT_BREAK_AMP_FRAC_OF_R`, `geom/BreakGlyphMath.kt`), and on the detail canvas x
+  and r share one scale, so the amplitude in shaft mm is `0.3 × Ø` — about 2.5 in on an 8.26 in
+  shaft, far wider than the 1 in pad. Whenever a component face sat within the glyph's reach
+  on the window's interior side, the S lobes were drawn across it (on-device report: a liner
+  strip's AFT end landed 0.75 in inside a taper, and the break tangled with the taper face, a
+  1/4 in body and the liner face). `undercutBreakRoomMm(diaMm)` =
+  `Ø/2 · UNDERCUT_BREAK_AMP_FRAC_OF_R · (BREAK_EDGE_OUTWARD_REACH_FRAC +
+  UNDERCUT_BREAK_CLEAR_FRAC_OF_AMP)` is the uniform stock a break needs between its line and
+  the next face (glyph reach ≈ 0.433 × amp plus 0.25 × amp of daylight; the PDF caps its
+  amplitude lower, so the same room suffices there). `withUndercutBreakRoom(startMm, endMm,
+  segs, oalMm)` widens a draw range **outward only** until each non-physical end sits in a piece
+  of the outer-surface envelope (`buildSurfaceEnvelope`, so a body under a liner never hides the
+  liner's face) with that room before the piece's interior face; a piece too short to host the
+  break (a stub body, a blend's sampled sub-pieces) is walked over to the next piece outward, and
+  an end that reaches `0` / `oalMm` becomes the flat physical end. Room is sized off the piece's
+  larger end Ø (conservative on a taper). Empty `segs` leaves the range unchanged; the rule is
+  idempotent. Every strip-range builder takes `segs` (default empty, so callers without a
+  profile are byte-identical) and applies it to the **draw range only** — chain datums never
+  move.
 - **Hit-tests**: `pickUndercutWindowAt(xMm, windows)` (which window a tap landed in) and
   `pickUndercutAt(xMm, spans, padMm)` (which undercut inside an open window — inside-span
   candidates win over pad-only candidates; among several containing the tap the **innermost**
@@ -344,26 +365,32 @@ data class UndercutRecord(val undercuts: List<Undercut> = emptyList())
     liner edges printed/rendered as an anonymous grey slab). `chainStartMm`/`chainEndMm` are
     the liner's own edges extended only by overhang — **no pad** — so the rail's outer witness
     lines land on a real datum, leaving the pad between it and the break edge undimensioned.
-  - `UndercutStrip.FreeStrip(window)` — bare-shaft cuts, no liner involved: draw range and
-    chain range both equal the padded `UndercutWindow` from `clusterUndercuts` (the original,
-    unchanged strip behavior).
+  - `UndercutStrip.FreeStrip(window, drawStartMm, drawEndMm)` — bare-shaft cuts, no liner
+    involved: the chain range is the padded `UndercutWindow` from `clusterUndercuts` (the
+    original window-edge chain); the draw range defaults to the window and only grows outward
+    past it by break room (`buildUndercutStrips`), so the extra stock prints undimensioned
+    beyond the window edge and the window's pad spans keep their value.
   - `assignUndercutLiner(span, liners)` — the liner a cut belongs to for strip purposes: the
     one overlapping the largest share of the cut's span (`null` if none overlaps at all); an
     exact tie breaks to the AFT-most liner.
-  - `linerStripFor(liner, assignedSpans, oalMm, padMm)` — builds one `LinerStrip` for a liner
-    and its assigned cuts (`assignedSpans` may be empty — used to zoom an undercut-free liner
-    for authoring, in which case the chain/draw range is just the liner's own span, padded).
-  - `undercutPreviewDrawRange(strip, previewSpans, oalMm, padMm)` — the range the **detail
+  - `linerStripFor(liner, assignedSpans, oalMm, padMm, segs)` — builds one `LinerStrip` for a
+    liner and its assigned cuts (`assignedSpans` may be empty — used to zoom an undercut-free
+    liner for authoring, in which case the chain/draw range is just the liner's own span,
+    padded). The padded draw range then gets break room against `segs`.
+  - `undercutPreviewDrawRange(strip, previewSpans, oalMm, padMm, segs)` — the range the **detail
     overlay** actually renders: the strip's draw range **widened, never narrowed**, to hold the
     previewed spans (stored cuts with the live draft substituted). A draft edited past the
     strip's stored range — a cut overhanging a liner edge mid-edit (on-device report) — stays
     inside the drawing with the standard pad beyond it, the same range a confirmed overhang
     gets when the strip rebuilds on commit; never narrowing keeps the window stable while a
-    draft shrinks a cut that had extended it. PDF strips don't need this (they only ever see
-    confirmed cuts, which `linerStripFor`/`clusterUndercuts` already extend for).
-  - `buildUndercutStrips(spans, liners, oalMm, gapMm, padMm)` — every cut overlapping a liner
-    joins that liner's `LinerStrip` (one strip per liner holding ≥1 cut); the remaining
-    bare-shaft cuts cluster into `FreeStrip`s via `clusterUndercuts`. Result sorted aft → fwd by
+    draft shrinks a cut that had extended it. The widened range gets break room against `segs`
+    (widening only, so the never-narrow rule holds). PDF strips don't need this (they only ever
+    see confirmed cuts, which `linerStripFor`/`clusterUndercuts` already extend for).
+  - `buildUndercutStrips(spans, liners, oalMm, gapMm, padMm, segs)` — every cut overlapping a
+    liner joins that liner's `LinerStrip` (one strip per liner holding ≥1 cut); the remaining
+    bare-shaft cuts cluster into `FreeStrip`s via `clusterUndercuts`. Every strip's draw range
+    gets break room against `segs` (the route, the detail overlay and the PDF composer all pass
+    their real surface segs). Result sorted aft → fwd by
     draw start. This is the single source of truth the overview, the detail overlay, and the
     PDF composer all call, so the three cannot disagree about what one zoomed view covers.
   - `pickUndercutStripAt(xMm, strips)` — the strip containing a shaft-space tap, first-hit-wins
@@ -665,8 +692,9 @@ trivially the nearer datum.
 ### Overlay canvas contents
 Aft → fwd: a **dimension rail above** — the strip total on the upper line when ≥ 2 undercuts,
 the chained run below it. The chain runs over the strip's **chain range**
-(`strip.chainStartMm`/`chainEndMm`), not its draw range: on a `FreeStrip` the two coincide (the
-original window-edge chain); on a `LinerStrip` the chain anchors on the **liner's own edges**
+(`strip.chainStartMm`/`chainEndMm`), not its draw range: on a `FreeStrip` the chain is the
+window (the original window-edge chain; the draw range may extend past it by break room,
+undimensioned); on a `LinerStrip` the chain anchors on the **liner's own edges**
 (extended only by cut overhang), so the pad between a break edge and the liner edge is never
 dimensioned. Below the rail, the **strip profile** (every resolved component clipped to the draw
 range, liners painted last so a liner over a body reads as the surface — matching the notch
@@ -792,8 +820,10 @@ strips minus a 22 pt orientation row, so a lone full-width strip owns ≈ 414 pt
   stacking the leftover at the top), half as air above the rails. An even split also
   holds the cylinder's centre line still whatever the cap is. A band short enough that the cylinder
   never reaches the cap (a 4-up grid cell) comes out bit-identical to the plain delegation.
-- **Strip end breaks** — `amp = min(r × 0.6, UNDERCUT_BREAK_AMP_MAX_PT)` (18 pt) in
-  `drawUndercutWindowEnd`. The radius term keeps a small section's symbol legible; the absolute cap
+- **Strip end breaks** — `amp = min(r × UNDERCUT_BREAK_AMP_FRAC_OF_R, UNDERCUT_BREAK_AMP_MAX_PT)`
+  (0.6 × r, capped at 18 pt) in `drawUndercutWindowEnd`; the detail canvas's two window-end
+  breaks read the same `UNDERCUT_BREAK_AMP_FRAC_OF_R` (uncapped), and so does the break-room
+  math (`undercutBreakRoomMm`), so a retune moves the glyph and the room it gets together. The radius term keeps a small section's symbol legible; the absolute cap
   stops a tall strip's lobes from sprawling across the cylinder corners as heavy "ears". Peak
   lateral deviation is ≈ 0.29 × amp (the S) and ≈ 0.43 × amp (the return sweep), so ≈ 8 pt at the
   cap — inside the 16 pt `UNDERCUT_STRIP_EDGE_INSET_PT`. The profile-form page's mid-run
@@ -835,19 +865,23 @@ strips minus a 22 pt orientation row, so a lone full-width strip owns ≈ 414 pt
     in. On a `LinerStrip` the draw range is the **whole liner** plus any cut overhang, padded
     each side, so the liner's true edges are always visible and a neighbor sliver shows before
     the break edge (on-device report: a padded window with no visible liner edges printed as an
-    anonymous grey slab). On a `FreeStrip` the draw range is just the padded cluster window, as
-    before. Both are then widened at layout time by `computeUndercutStripDrawRange` until the
+    anonymous grey slab). On a `FreeStrip` the draw range is the padded cluster window. Both carry
+    break room (`withUndercutBreakRoom`, see the cluster-window rules above) and are then widened
+    at layout time by `computeUndercutStripDrawRange` until the
     stock outside each **chain datum** prints at least `UNDERCUT_STRIP_MIN_PAD_PT` (24 pt) wide —
     the mm pad is scale-blind, so the same 1 in reads as ~36 pt beside a short liner on a
     full-width strip and under 9 pt in a grid cell, where the break edge sat all but against the
     liner's end face (on-device report: "oddly cramped"). It only ever widens, only outward, and
     stays clamped to `[0, oalMm]`, so no datum moves, no dimension changes, and a cut at a shaft
-    end keeps its flat physical end;
+    end keeps its flat physical end. That widening is blind to the profile and can carry an end
+    onto a short piece again, so `drawUndercutDetailStrip` runs `withUndercutBreakRoom` once
+    more on its result before drawing;
   - **chained dimension rail** (`buildUndercutRailSpans`), run over the strip's **chain range**
     (`strip.chainStartMm`/`chainEndMm`) — **not** the draw range: chain AFT datum → first
     shoulder, each undercut's own length, each inter-cut gap, remainder to chain FWD datum. On a
-    `FreeStrip` the chain range equals the draw range (the original window-edge chain, so the
-    pad spans **are labelled** — they locate the cluster inside its zoom window). On a
+    `FreeStrip` the chain range equals the cluster window (the original window-edge chain, so the
+    pad spans **are labelled** — they locate the cluster inside its zoom window; any break room
+    past the window edge is drawn but not dimensioned). On a
     `LinerStrip` the chain range is the liner's own edges (extended only by overhang), so the
     rail's outer witness lines land on a real datum and the **pad between it and the break edge
     is deliberately left undimensioned** — an arbitrary zoom margin is not a figure worth
@@ -991,4 +1025,7 @@ strips minus a 22 pt orientation row, so a lone full-width strip owns ≈ 414 pt
   each a one-line change (see `docs/archive/UndercutDrawing_PLAN.md` §11 for the original defaults list).
   `UNDERCUT_WINDOW_PAD_MM` also sizes the **on-screen** overview affordances and the detail
   overlay's zoom windows, so it stays at 1 in; how wide the PDF's pad *prints* is the PDF's own
-  `UNDERCUT_STRIP_MIN_PAD_PT` floor, tunable independently.
+  `UNDERCUT_STRIP_MIN_PAD_PT` floor, tunable independently. The pad is a minimum: on a wide
+  shaft the window-end break room (`undercutBreakRoomMm`, tuned by
+  `UNDERCUT_BREAK_CLEAR_FRAC_OF_AMP` = 0.25 and `UNDERCUT_BREAK_AMP_FRAC_OF_R` = 0.6) is what
+  the draw range actually gets.
