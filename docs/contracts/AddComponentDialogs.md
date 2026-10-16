@@ -53,7 +53,7 @@ missing from `AddThreadDialog` for several versions (restored 2026-06-23).
 ## Units — what is shared, and the one card-only control
 
 **Under the parity rule (both surfaces):** the Add Thread dialog's **Imperial (TPI) |
-Metric (M-designation)** mode. It decides what a thread *is* — a metric thread stores a
+Metric (mm)** mode. It decides what a thread *is* — a metric thread stores a
 designation (`Threads.metricDesignation`, e.g. `M20×2.5`) and its major Ø and pitch are
 parsed from that designation rather than typed — so it is value entry, not display. The
 thread card is its counterpart: a thread stored with a designation shows a **Thread
@@ -149,7 +149,7 @@ by definition, so there is nothing to toggle. This is intentional and not a pari
 |-----------------|-----------|
 | Start | Only when `countInOal = true` |
 | Thread end: AFT \| FWD chips | Only when `countInOal = false` |
-| Thread spec mode: Imperial (TPI) \| Metric (M-designation) chips | Always |
+| Thread spec mode: Imperial (TPI) \| Metric (mm) chips | Always |
 | Major Ø | Only in Imperial mode |
 | TPI | Only in Imperial mode |
 | Thread designation (`M20×2.5`) | Only in Metric mode |
@@ -399,7 +399,7 @@ the aft-most center as `startFromAftMm = OAL − enteredFwd − (count−1)·spa
   outside the parity rule.
 
 **v1.8 (2026-08-18)**
-- Add Thread dialog gains the **Imperial (TPI) | Metric (M-designation)** spec-mode chips: a
+- Add Thread dialog gains the **Imperial (TPI) | Metric (mm)** spec-mode chips: a
   metric thread stores a designation (`Threads.metricDesignation`, e.g. `M20×2.5`) with major Ø
   and pitch parsed from it. Value entry, so it sits under the parity rule (mirrored on the
   thread card by the field the stored mode selects); the mixed-units wave. This entry was added

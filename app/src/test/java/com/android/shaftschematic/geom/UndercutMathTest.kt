@@ -123,6 +123,104 @@ class UndercutMathTest {
         assertEquals(canonical + 304.8f, newCanonical + 254f, 1e-3f)
     }
 
+    // ── Liner extensions ──
+
+    @Test
+    fun `a span inside the liner extends past neither edge`() {
+        val (aft, fwd) = undercutLinerExtensionsMm(
+            startMm = 650f, lengthMm = 200f, linerStartMm = 600f, linerEndMm = 1000f,
+        )
+        assertEquals(0f, aft, 1e-4f)
+        assertEquals(0f, fwd, 1e-4f)
+    }
+
+    @Test
+    fun `a span overhanging both liner edges reports both overhangs`() {
+        val (aft, fwd) = undercutLinerExtensionsMm(
+            startMm = 550f, lengthMm = 480f, linerStartMm = 600f, linerEndMm = 1000f,
+        )
+        assertEquals(50f, aft, 1e-4f)
+        assertEquals(30f, fwd, 1e-4f)
+    }
+
+    @Test
+    fun `an AFT extension on a mid-liner cut moves the start past the edge and pins the FWD end`() {
+        val (start, len) = undercutSpanWithAftExtension(
+            startMm = 700f, lengthMm = 100f, linerStartMm = 600f, extMm = 50f,
+        )
+        assertEquals(550f, start, 1e-4f)
+        assertEquals(800f, start + len, 1e-4f)
+    }
+
+    @Test
+    fun `a zero AFT extension pulls a start aft of the liner edge back to the edge`() {
+        val (start, len) = undercutSpanWithAftExtension(
+            startMm = 550f, lengthMm = 250f, linerStartMm = 600f, extMm = 0f,
+        )
+        assertEquals(600f, start, 1e-4f)
+        assertEquals(800f, start + len, 1e-4f)
+    }
+
+    @Test
+    fun `a zero AFT extension leaves a start inside the liner where it is`() {
+        val (start, len) = undercutSpanWithAftExtension(
+            startMm = 700f, lengthMm = 100f, linerStartMm = 600f, extMm = 0f,
+        )
+        assertEquals(700f, start, 1e-4f)
+        assertEquals(100f, len, 1e-4f)
+    }
+
+    @Test
+    fun `a negative extension is treated as zero`() {
+        assertEquals(
+            undercutSpanWithAftExtension(550f, 250f, 600f, 0f),
+            undercutSpanWithAftExtension(550f, 250f, 600f, -10f),
+        )
+        assertEquals(
+            undercutSpanWithFwdExtension(700f, 350f, 1000f, 0f),
+            undercutSpanWithFwdExtension(700f, 350f, 1000f, -10f),
+        )
+    }
+
+    @Test
+    fun `a FWD extension moves the FWD end past the edge and pins the AFT end`() {
+        val (start, len) = undercutSpanWithFwdExtension(
+            startMm = 700f, lengthMm = 100f, linerEndMm = 1000f, extMm = 50f,
+        )
+        assertEquals(700f, start, 1e-4f)
+        assertEquals(1050f, start + len, 1e-4f)
+    }
+
+    @Test
+    fun `a zero FWD extension pulls an end past the liner edge back and leaves one inside alone`() {
+        val (pulledStart, pulledLen) = undercutSpanWithFwdExtension(
+            startMm = 700f, lengthMm = 350f, linerEndMm = 1000f, extMm = 0f,
+        )
+        assertEquals(700f, pulledStart, 1e-4f)
+        assertEquals(1000f, pulledStart + pulledLen, 1e-4f)
+
+        val (keptStart, keptLen) = undercutSpanWithFwdExtension(
+            startMm = 700f, lengthMm = 100f, linerEndMm = 1000f, extMm = 0f,
+        )
+        assertEquals(700f, keptStart, 1e-4f)
+        assertEquals(100f, keptLen, 1e-4f)
+    }
+
+    @Test
+    fun `whole-liner predicate holds within eps and fails past it`() {
+        assertTrue(undercutIsWholeLiner(600f, 400f, linerStartMm = 600f, linerEndMm = 1000f))
+        assertTrue(
+            undercutIsWholeLiner(
+                600f + UNDERCUT_SPAN_EPS_MM * 0.5f, 400f - UNDERCUT_SPAN_EPS_MM * 0.5f,
+                linerStartMm = 600f, linerEndMm = 1000f,
+            ),
+        )
+        assertFalse(undercutIsWholeLiner(601f, 399f, linerStartMm = 600f, linerEndMm = 1000f))
+        assertFalse(undercutIsWholeLiner(600f, 450f, linerStartMm = 600f, linerEndMm = 1000f))
+        assertTrue(undercutIsWholeLiner(600f, 400f, 600f, 1000f, epsMm = 2f))
+        assertTrue(undercutIsWholeLiner(601f, 400f, 600f, 1000f, epsMm = 2f))
+    }
+
     // ── Nearest-SET default for bare-shaft cuts ──
 
     @Test

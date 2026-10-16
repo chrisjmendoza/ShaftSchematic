@@ -93,12 +93,16 @@ import com.android.shaftschematic.geom.planDiaCallouts
 import com.android.shaftschematic.geom.resolveUndercutFloors
 import com.android.shaftschematic.geom.undercutCalloutAnchorsMm
 import com.android.shaftschematic.geom.undercutCanonicalForNewLength
+import com.android.shaftschematic.geom.undercutIsWholeLiner
+import com.android.shaftschematic.geom.undercutLinerExtensionsMm
 import com.android.shaftschematic.geom.undercutOverlapIssue
 import com.android.shaftschematic.geom.undercutPreviewDrawRange
 import com.android.shaftschematic.geom.undercutReferenceLabel
 import com.android.shaftschematic.geom.undercutReferenceLinerFor
 import com.android.shaftschematic.geom.undercutSetPositions
 import com.android.shaftschematic.geom.undercutSpanIssue
+import com.android.shaftschematic.geom.undercutSpanWithAftExtension
+import com.android.shaftschematic.geom.undercutSpanWithFwdExtension
 import com.android.shaftschematic.geom.undercutStartToCanonicalMm
 import com.android.shaftschematic.geom.shoulderEndMm
 import com.android.shaftschematic.geom.threadHatchSpan
@@ -1120,6 +1124,34 @@ internal fun UndercutDraft.toUndercut(): Undercut = Undercut(
 )
 
 /**
+ * The card's "Whole liner" preset: the draft spans exactly [liner] and authors its Distance from
+ * that liner's AFT edge, so the Distance field then reads 0. A one-tap preset applied only on the
+ * tap, never on its own.
+ */
+internal fun UndercutDraft.withWholeLiner(liner: UndercutLinerSpan): UndercutDraft = copy(
+    startFromAftMm = liner.startMm,
+    lengthMm = liner.endMm - liner.startMm,
+    reference = UndercutReference.LINER_AFT,
+    referenceLinerId = liner.id,
+)
+
+/**
+ * The draft after typing an "Extend past liner" AFT value of [extMm] against [liner] — FWD end
+ * pinned ([undercutSpanWithAftExtension]). The reference is untouched: the extension is another
+ * view of the same span, not a datum.
+ */
+internal fun UndercutDraft.withAftLinerExtension(liner: UndercutLinerSpan, extMm: Float): UndercutDraft {
+    val (s, l) = undercutSpanWithAftExtension(startFromAftMm, lengthMm, liner.startMm, extMm)
+    return copy(startFromAftMm = s, lengthMm = l)
+}
+
+/** Mirror of [withAftLinerExtension] for the FWD edge — AFT end pinned ([undercutSpanWithFwdExtension]). */
+internal fun UndercutDraft.withFwdLinerExtension(liner: UndercutLinerSpan, extMm: Float): UndercutDraft {
+    val (s, l) = undercutSpanWithFwdExtension(startFromAftMm, lengthMm, liner.endMm, extMm)
+    return copy(startFromAftMm = s, lengthMm = l)
+}
+
+/**
  * [list] with [draft] substituted for the cut it shadows — or appended when it is the add flow's
  * pending card, which has no stored counterpart. Result is aft → fwd, so notches, the chained
  * rail, and the Ø callouts all read the previewed position. Display-only: the caller passes the
@@ -1424,6 +1456,78 @@ private fun UndercutDraftCard(
                 }
             }
 
+            // Span against the reference liner — "Whole liner" plus "Extend past liner" AFT/FWD
+            // (on-device request: a cut that covers the liner and runs on into the adjacent body).
+            // Nothing new is stored: the extensions are a VIEW of the stored shaft-space span
+            // against the reference liner's edges, the "Distance from Liner AFT" relation with the
+            // sign flipped, and nothing derived ever writes back into them. A typed extension maps
+            // to canonical through the authored liner edge exactly as a typed Distance does, the
+            // opposite end of the cut stays where it was, and the Distance/Length fields re-seed
+            // from the new draft — golden rule. "Whole liner" is a one-tap preset applied only on
+            // the tap; it also sets the Liner AFT reference, so Distance then reads 0.
+            if (refLiner != null) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        "Span:", style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Box(Modifier.testTag("undercut_whole_liner")) {
+                        WearChip(
+                            "Whole liner",
+                            undercutIsWholeLiner(
+                                draft.startFromAftMm, draft.lengthMm,
+                                refLiner.startMm, refLiner.endMm,
+                            ),
+                        ) {
+                            onDraftChange(draft.withWholeLiner(refLiner))
+                        }
+                    }
+                }
+
+                val (extAftMm, extFwdMm) = undercutLinerExtensionsMm(
+                    draft.startFromAftMm, draft.lengthMm, refLiner.startMm, refLiner.endMm,
+                )
+                Text(
+                    "Extend past liner (${abbr(unit)})", style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    WearNum(
+                        label = "AFT",
+                        initialDisplay = disp(extAftMm, unit),
+                        validator = { raw ->
+                            val extMm = toMmOrNull(raw, unit) ?: return@WearNum "Invalid number"
+                            val (s, l) = undercutSpanWithAftExtension(
+                                draft.startFromAftMm, draft.lengthMm, refLiner.startMm, extMm,
+                            )
+                            undercutSpanIssue(s, l, oalMm)
+                        },
+                        modifier = Modifier.weight(1f).testTag("undercut_extend_aft"),
+                    ) { raw ->
+                        val extMm = toMmOrNull(raw, unit) ?: return@WearNum
+                        onDraftChange(draft.withAftLinerExtension(refLiner, extMm))
+                    }
+                    WearNum(
+                        label = "FWD",
+                        initialDisplay = disp(extFwdMm, unit),
+                        validator = { raw ->
+                            val extMm = toMmOrNull(raw, unit) ?: return@WearNum "Invalid number"
+                            val (s, l) = undercutSpanWithFwdExtension(
+                                draft.startFromAftMm, draft.lengthMm, refLiner.endMm, extMm,
+                            )
+                            undercutSpanIssue(s, l, oalMm)
+                        },
+                        modifier = Modifier.weight(1f).testTag("undercut_extend_fwd"),
+                    ) { raw ->
+                        val extMm = toMmOrNull(raw, unit) ?: return@WearNum
+                        onDraftChange(draft.withFwdLinerExtension(refLiner, extMm))
+                    }
+                }
+            }
+
             val displayedStartMm = canonicalToUndercutStartMm(
                 reference = draft.reference,
                 canonicalStartMm = draft.startFromAftMm,
@@ -1433,9 +1537,12 @@ private fun UndercutDraftCard(
                 linerStartMm = refLinerStartMm,
                 linerEndMm = refLinerEndMm,
             )
+            // Negative is a real value here: a cut overhanging the datum's edge (the "Extend past
+            // liner" case under a Liner reference) reads below zero and must be retypable as such.
             WearNum(
                 label = "Distance from ${undercutReferenceLabel(draft.reference)} (${abbr(unit)})",
                 initialDisplay = disp(displayedStartMm, unit),
+                allowNegative = true,
                 validator = { raw ->
                     val enteredMm = toMmOrNull(raw, unit) ?: return@WearNum "Invalid number"
                     val canonicalMm = undercutStartToCanonicalMm(

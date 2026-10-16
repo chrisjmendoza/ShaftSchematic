@@ -147,6 +147,14 @@ data class UndercutRecord(val undercuts: List<Undercut> = emptyList())
     `fwdSetXMm − enteredMm − lengthMm` (entered locates the FWD edge).
   - `canonicalToUndercutStartMm(reference, canonicalStartMm, lengthMm, aftSetXMm, fwdSetXMm)` —
     the inverse, used to re-display the "Distance" field.
+- **Liner extensions** (the card's Whole liner / Extend past liner view — see the overlay's
+  Default section): `undercutLinerExtensionsMm(start, length, linerStart, linerEnd)` → `(aft, fwd)`
+  overhang past each liner edge, each ≥ 0; `undercutSpanWithAftExtension(start, length,
+  linerStart, ext)` / `undercutSpanWithFwdExtension(start, length, linerEnd, ext)` → the
+  `(start, length)` after a typed extension, the opposite end pinned (negative `ext` = 0; `ext ==
+  0` pulls an overhanging end back to the edge, leaves an inside end alone);
+  `undercutIsWholeLiner(start, length, linerStart, linerEnd, eps)` — the span is the liner's own
+  within ε.
 - **Blocking entry validation** `undercutSpanIssue(canonicalStartMm, lengthMm, oalMm)`: length
   must be `> ε`, and `[start, start+length]` must lie in `[0, oalMm]` (ε = `1e-3` mm,
   boundary-exact accepted). Wired as a `NumericInputField` validator on the Distance and Length
@@ -688,6 +696,24 @@ delegates to `nearestSetReference` for the side) to anchor the printed bare-shaf
 so the card's default Distance and the sheet's anchor always read from the same SET. Midpoint
 tie breaks AFT. The route's global "Add undercut" seeds AT the AFT SET, where AFT_SET is
 trivially the nearer datum.
+
+Whole liner / Extend past liner (on-device request: a cut that covers the whole liner and runs on
+into the adjacent body). Shown on a card only while it has a reference liner (the draft's own,
+else the strip's), between the Measure From chips and the Distance field. **"Span: Whole liner"**
+(`testTag "undercut_whole_liner"`, selected while `undercutIsWholeLiner` holds) is a one-tap
+preset, applied only on the tap: the draft takes the liner's span and the `LINER_AFT` reference
+for that liner, so Distance then reads 0. **"Extend past liner" AFT / FWD** (`undercut_extend_aft`
+/ `undercut_extend_fwd`) show how far the span runs past each liner edge
+(`undercutLinerExtensionsMm`, 0 for an end inside the liner). Typing an AFT value moves the AFT
+end to `linerStart − ext` with the **FWD end pinned** (`undercutSpanWithAftExtension`); FWD is the
+mirror with the **AFT end pinned** (`undercutSpanWithFwdExtension`). A typed 0 pulls an end that
+overhangs the edge back to it and leaves an end inside the liner alone. Neither field changes the
+reference, and both validate through `undercutSpanIssue`. **Nothing is stored**: the extensions are
+a view of the stored shaft-space span against the authored liner edges — the "Distance from Liner
+AFT" relation with the sign flipped — and nothing derived writes back into them. The golden rule
+holds because a typed extension maps to canonical through the authored liner edge exactly as a
+typed Distance does; the Distance and Length fields re-seed from the new draft (`NumericInputField`
+keys its remembered text on `initialText`).
 
 ### Overlay canvas contents
 Aft → fwd: a **dimension rail above** — the strip total on the upper line when ≥ 2 undercuts,

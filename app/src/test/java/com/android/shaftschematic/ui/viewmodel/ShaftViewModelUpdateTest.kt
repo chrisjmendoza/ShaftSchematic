@@ -212,6 +212,35 @@ class ShaftViewModelUpdateTest {
         assertOal(300f, vm)
     }
 
+    @Test
+    fun `adding an excluded aft thread places it off the aft end whatever start the dialog held`() {
+        val vm = vm(300f)
+        vm.addTaperAt(startMm = 0f, lengthMm = 100f, startDiaMm = 40f, endDiaMm = 50f)
+        // The dialog's Start field is hidden while the thread is excluded and submits 0.
+        vm.addThreadAt(
+            startMm = 0f, lengthMm = 50f, majorDiaMm = 45f, pitchMm = 2f,
+            excludeFromOAL = true, isAftEnd = true,
+        )
+
+        val s = vm.spec.value
+        assertEquals("excluded AFT thread ends flush with the AFT face",
+            -50f, s.threads[0].startFromAftMm, 0.001f)
+        assertEquals("taper untouched", 0f, s.tapers[0].startFromAftMm, 0.001f)
+        assertOal(300f, vm)
+    }
+
+    @Test
+    fun `adding an excluded fwd thread places it off the fwd end`() {
+        val vm = vm(300f)
+        vm.addThreadAt(
+            startMm = 0f, lengthMm = 50f, majorDiaMm = 45f, pitchMm = 2f,
+            excludeFromOAL = true, isAftEnd = false,
+        )
+        assertEquals("excluded FWD thread starts at the FWD face",
+            300f, vm.spec.value.threads[0].startFromAftMm, 0.001f)
+        assertOal(300f, vm)
+    }
+
     // ── Multi-component stability ─────────────────────────────────────────────
 
     @Test

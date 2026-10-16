@@ -240,6 +240,91 @@ fun undercutCanonicalForNewLength(
     )
 }
 
+// ── Liner extensions ──
+//
+// A cut that covers a liner and runs on into the neighbouring body is the stored shaft-space
+// span `[startMm, startMm + lengthMm]` read against the reference liner's edges — the relation
+// "Distance from Liner AFT" already expresses, with the sign flipped. Nothing here is stored:
+// the extensions are a view of the span, and a typed extension maps back to canonical through
+// the authored liner edge exactly as a typed Distance does.
+
+/**
+ * How far the span `[startMm, startMm + lengthMm]` runs past the reference liner's edges into
+ * the neighbouring stock, as `(aft, fwd)`. Each term is ≥ 0, and 0 when that end lies inside
+ * the liner (or exactly on its edge).
+ */
+fun undercutLinerExtensionsMm(
+    startMm: Float,
+    lengthMm: Float,
+    linerStartMm: Float,
+    linerEndMm: Float,
+): Pair<Float, Float> {
+    val endMm = startMm + lengthMm
+    return max(0f, linerStartMm - startMm) to max(0f, endMm - linerEndMm)
+}
+
+/**
+ * The span after typing an AFT extension of [extMm] past the liner's AFT edge [linerStartMm],
+ * as `(start, length)`. The span's FWD end stays pinned. `extMm > 0` puts the start at
+ * `linerStartMm − extMm`; `extMm == 0` pulls a start that lies AFT of the liner edge back to
+ * the edge and leaves a start inside the liner where it is (zero extension means "does not run
+ * past the edge", not "starts at the edge"). A negative [extMm] is treated as 0.
+ *
+ * Pure; does not validate — the caller runs [undercutSpanIssue] on the result (a span whose
+ * FWD end lies AFT of the liner edge comes back with a non-positive length, which that check
+ * blocks).
+ */
+fun undercutSpanWithAftExtension(
+    startMm: Float,
+    lengthMm: Float,
+    linerStartMm: Float,
+    extMm: Float,
+): Pair<Float, Float> {
+    val endMm = startMm + lengthMm
+    val ext = max(0f, extMm)
+    val newStartMm = when {
+        ext > 0f -> linerStartMm - ext
+        startMm < linerStartMm -> linerStartMm
+        else -> startMm
+    }
+    return newStartMm to (endMm - newStartMm)
+}
+
+/**
+ * Mirror of [undercutSpanWithAftExtension] for the liner's FWD edge [linerEndMm]: the span's
+ * AFT end stays pinned. `extMm > 0` puts the FWD end at `linerEndMm + extMm`; `extMm == 0`
+ * pulls a FWD end that lies past the liner edge back to it and leaves one inside the liner
+ * where it is. A negative [extMm] is treated as 0. Returns `(start, length)`.
+ */
+fun undercutSpanWithFwdExtension(
+    startMm: Float,
+    lengthMm: Float,
+    linerEndMm: Float,
+    extMm: Float,
+): Pair<Float, Float> {
+    val endMm = startMm + lengthMm
+    val ext = max(0f, extMm)
+    val newEndMm = when {
+        ext > 0f -> linerEndMm + ext
+        endMm > linerEndMm -> linerEndMm
+        else -> endMm
+    }
+    return startMm to (newEndMm - startMm)
+}
+
+/**
+ * True when the span `[startMm, startMm + lengthMm]` is the liner's own span
+ * `[linerStartMm, linerEndMm]`, both ends within [epsMm].
+ */
+fun undercutIsWholeLiner(
+    startMm: Float,
+    lengthMm: Float,
+    linerStartMm: Float,
+    linerEndMm: Float,
+    epsMm: Float = UNDERCUT_SPAN_EPS_MM,
+): Boolean =
+    abs(startMm - linerStartMm) <= epsMm && abs(startMm + lengthMm - linerEndMm) <= epsMm
+
 /**
  * The S.E.T. a **bare-shaft** (body-only) cut authors its Distance against by default:
  * the nearer one — [UndercutReference.AFT_SET] when the span's midpoint sits in the AFT

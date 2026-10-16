@@ -918,7 +918,10 @@ fun AddThreadDialog(
             }
         },
         text = {
-            Column(Modifier.padding(top = 4.dp)) {
+            // Scrollable like every other add dialog: with Thread relief on, its three rows push
+            // "Include thread in OAL" and the buttons below the dialog's bounds, and under the
+            // keyboard the bottom fields were unreachable (on-device report).
+            Column(Modifier.padding(top = 4.dp).verticalScroll(rememberScrollState())) {
                 if (countInOal) {
                     CommitNumField("Start (${abbr(unit)})", start, errorText = startError) { start = it }
                     Spacer(Modifier.height(8.dp))
@@ -941,7 +944,7 @@ fun AddThreadDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     DirectionChip("Imperial (TPI)", selected = !metricMode) { metricMode = false }
-                    DirectionChip("Metric (M-designation)", selected = metricMode) { metricMode = true }
+                    DirectionChip("Metric (mm)", selected = metricMode) { metricMode = true }
                 }
                 if (metricMode) {
                     CommitNumField(

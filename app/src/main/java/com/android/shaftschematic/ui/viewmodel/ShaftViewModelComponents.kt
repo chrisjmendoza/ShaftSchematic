@@ -462,6 +462,12 @@ fun ShaftViewModel.addThreadAt(
                 )
             ) + split.spec.threads
         )
+        // An excluded thread is positioned by its end, never by the dialog's Start field (hidden
+        // while "Include thread in OAL" is off, so it submits whatever it held — 0 — and the
+        // thread then lay inside the shaft over the AFT taper until the end chip or the OAL
+        // toggle re-synced it; on-device report). The toggle and end-chip mutators sync the same
+        // way, so an added thread and a re-toggled one land on the same position.
+        .syncExcludedThreadPositions()
     }
     // A metric-designation thread keeps its native units — register an implicit mm override
     // so every formatting site resolves it to mm uniformly (see DisplayUnits).

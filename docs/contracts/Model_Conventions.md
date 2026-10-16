@@ -62,7 +62,7 @@ Notes
 - `ShaftSpec` hosts aggregate helpers: `coverageEndMm`, `maxOuterDiaMm`.
   `overallLengthMm` is always user-typed and `0` means "not set yet" — see
   `docs/contracts/OverallLength.md`.
-- `syncExcludedThreadPositions()` must be called after any OAL change or excluded-thread topology change.
+- `syncExcludedThreadPositions()` must be called after any OAL change or excluded-thread topology change — adding an already-excluded thread included (`addThreadAt`): the dialog's Start field is hidden in that branch and submits whatever it held, so an unsynced add lands the thread inside the shaft.
 
 Change Log
 

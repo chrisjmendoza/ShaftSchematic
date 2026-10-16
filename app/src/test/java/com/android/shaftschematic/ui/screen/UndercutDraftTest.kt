@@ -4,6 +4,8 @@ import com.android.shaftschematic.geom.UndercutLinerSpan
 import com.android.shaftschematic.geom.UndercutSpanMm
 import com.android.shaftschematic.model.Undercut
 import com.android.shaftschematic.model.UndercutReference
+import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.util.toMmOrNull
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -184,6 +186,42 @@ class UndercutDraftTest {
         val sheet = listOf(cut("a", 100f), cut("b", 400f), cut("c", 700f, lengthMm = 0f))
         val pool = undercutOtherSpans(sheet, excludeId = "a", oalMm = 1000f)
         assertEquals(listOf("b"), pool.map { it.id })
+    }
+
+    // ── Whole liner / Extend past liner ──────────────────────────────────────
+
+    @Test
+    fun `whole liner sets the draft to the liner span authored from Liner AFT`() {
+        val liner = UndercutLinerSpan("L1", 600f, 1000f)
+        val draft = draftOf("x", 700f, 50f, diaMm = 180f, note = "weld").withWholeLiner(liner)
+        assertEquals(600f, draft.startFromAftMm, 1e-4f)
+        assertEquals(400f, draft.lengthMm, 1e-4f)
+        assertEquals(UndercutReference.LINER_AFT, draft.reference)
+        assertEquals("L1", draft.referenceLinerId)
+        // The measurement and the note ride along untouched.
+        assertEquals(180f, draft.diaMm, 1e-4f)
+        assertEquals("weld", draft.note)
+    }
+
+    @Test
+    fun `a typed 2 inch AFT extension on a whole-liner draft runs into the body and pins the FWD end`() {
+        val liner = UndercutLinerSpan("L1", 600f, 1000f)
+        val whole = draftOf("x", 700f, 50f).withWholeLiner(liner)
+        val extMm = toMmOrNull("2", UnitSystem.INCHES)!!
+        val extended = whole.withAftLinerExtension(liner, extMm)
+        assertEquals(600f - 50.8f, extended.startFromAftMm, 1e-3f)
+        assertEquals(1000f, extended.startFromAftMm + extended.lengthMm, 1e-3f)
+        // An extension is a view of the span, never a datum: the reference stays put.
+        assertEquals(UndercutReference.LINER_AFT, extended.reference)
+        assertEquals("L1", extended.referenceLinerId)
+    }
+
+    @Test
+    fun `a FWD extension pins the AFT end`() {
+        val liner = UndercutLinerSpan("L1", 600f, 1000f)
+        val extended = draftOf("x", 700f, 50f).withFwdLinerExtension(liner, 25.4f)
+        assertEquals(700f, extended.startFromAftMm, 1e-4f)
+        assertEquals(1025.4f, extended.startFromAftMm + extended.lengthMm, 1e-3f)
     }
 
     // ── Leaving a card ───────────────────────────────────────────────────────
