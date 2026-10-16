@@ -8,6 +8,40 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-16
 
+### feat(undercut): "Whole liner" preset and "Extend past liner" AFT/FWD fields
+
+- On a liner's undercut page the card gains a **Span: Whole liner** chip (one tap sets the cut
+  to the liner's full span and authors its Distance from the liner's AFT edge, so Distance reads
+  0) and an **Extend past liner (AFT | FWD)** pair that runs the cut a typed distance into the
+  neighbouring body — the opposite end stays pinned (on-device request: a cut that covers the
+  liner and continues into the adjacent body). Nothing new is stored: the extensions are a view
+  of the shaft-space span against the reference liner's edges, the Distance-from-Liner relation
+  with the sign flipped, and a typed extension maps to canonical through the authored liner edge
+  exactly as a typed Distance does (golden rule). The Distance field now accepts a minus sign,
+  since a cut overhanging its datum's edge legitimately reads below zero. Pure math
+  `undercutLinerExtensionsMm` / `undercutSpanWithAftExtension` / `undercutSpanWithFwdExtension` /
+  `undercutIsWholeLiner` (`geom/UndercutMath.kt`); `UndercutMathTest` + `UndercutDraftTest`;
+  `UndercutDrawing.md` updated.
+
+### fix(thread): an excluded thread added from the dialog hangs off the shaft end
+
+- Adding a thread with "Include thread in OAL" off stored the dialog's hidden Start field (0),
+  so the thread drew inside the shaft over the AFT taper until the end chip or the OAL toggle
+  happened to re-sync it (on-device report, a recurrence). `addThreadAt` now runs
+  `syncExcludedThreadPositions()` like the toggle and end-chip mutators, so an added thread and a
+  re-toggled one land on the same position (AFT: `−lengthMm`; FWD: `overallLengthMm`).
+  `ShaftViewModelUpdateTest` pins both ends; `Model_Conventions.md` updated.
+
+### fix(thread-dialog): scrollable, and a chip that fits
+
+- The Add Thread dialog's column now scrolls like every other add dialog. With Thread relief on,
+  its three rows pushed "Include thread in OAL" and the Add/Cancel buttons below the dialog's
+  bounds (the toggle looked like it had vanished), and under the keyboard the lowest fields could
+  not be reached (on-device reports).
+- The spec-mode chip reads **Metric (mm)** instead of "Metric (M-designation)", which wrapped to
+  three lines on a phone (on-device request: "simply mm is enough"). Same behaviour.
+  `AddComponentDialogs.md` updated.
+
 ### fix(undercut): window-end S-breaks get room
 
 - An undercut detail strip's window end that is not the shaft's physical end draws an

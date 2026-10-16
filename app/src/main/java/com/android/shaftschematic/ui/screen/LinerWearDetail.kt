@@ -1203,13 +1203,20 @@ internal fun WearNum(
     label: String,
     initialDisplay: String,
     validator: ((String) -> String?)? = null,
+    modifier: Modifier = Modifier.fillMaxWidth(),
+    /**
+     * Measurements are never negative; a POSITION against a datum can be — the undercut card's
+     * Distance reads below zero for a cut that overhangs its reference liner's edge, and the
+     * field has to take that value back as typed.
+     */
+    allowNegative: Boolean = false,
     onCommit: (String) -> Unit,
 ) {
     NumericInputField(
         label = label,
         initialText = initialDisplay,
-        modifier = Modifier.fillMaxWidth(),
-        allowNegative = false,
+        modifier = modifier,
+        allowNegative = allowNegative,
         allowFraction = true,
         parseValid = { parseFractionOrDecimal(it) != null },
         validator = validator,
