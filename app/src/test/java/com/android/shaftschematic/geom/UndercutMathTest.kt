@@ -8,6 +8,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.max
 
 /**
  * Tests for `geom/UndercutMath.kt` — reference conversion, span validation, cluster
@@ -184,6 +185,160 @@ class UndercutMathTest {
         val (s2, e2) = undercutPreviewDrawRange(strip, emptyList(), oalMm = 2000f)
         assertEquals(strip.drawStartMm, s2, 1e-4f)
         assertEquals(strip.drawEndMm, e2, 1e-4f)
+    }
+
+    // ── Window-end break room ──
+
+    /** Constant-Ø seg. */
+    private fun seg(startMm: Float, endMm: Float, diaMm: Float) = SurfaceSeg(startMm, endMm, diaMm, diaMm)
+
+    /**
+     * The on-device shaft: a taper 0 → 25-3/16" (Ø 180 → S.E.T. Ø 8.26"), a 1/4" body, the AFT
+     * liner, then body to the 368.5" OAL.
+     */
+    private val stubSegs = listOf(
+        SurfaceSeg(0f, 639.76f, 180f, 209.8f),
+        seg(639.76f, 646.11f, 209.8f),
+        seg(646.11f, 1500f, 228.6f),
+        seg(1500f, 9360f, 209.8f),
+    )
+
+    @Test
+    fun `break room is the glyph reach plus clearance at the canvas amplitude`() {
+        val dia = 150f
+        val amp = dia * 0.5f * UNDERCUT_BREAK_AMP_FRAC_OF_R
+        assertEquals(
+            amp * (BREAK_EDGE_OUTWARD_REACH_FRAC + UNDERCUT_BREAK_CLEAR_FRAC_OF_AMP),
+            undercutBreakRoomMm(dia), 1e-4f,
+        )
+        // A wide shaft outgrows the 1" pad; a small one does not.
+        assertTrue(undercutBreakRoomMm(210f) > UNDERCUT_WINDOW_PAD_MM)
+        assertFalse(undercutBreakRoomMm(100f) > UNDERCUT_WINDOW_PAD_MM)
+    }
+
+    @Test
+    fun `no segs leaves the range unchanged`() {
+        assertEquals(620.71f to 1525.4f, withUndercutBreakRoom(620.71f, 1525.4f, emptyList(), 9360f))
+    }
+
+    @Test
+    fun `an end with room in a long uniform body is unchanged`() {
+        val segs = listOf(seg(0f, 1000f, 100f), seg(1000f, 2000f, 120f), seg(2000f, 4000f, 100f))
+        // 100 mm of interior stock each side, far more than the ~20 mm room at Ø 100.
+        val (s, e) = withUndercutBreakRoom(900f, 2100f, segs, 4000f)
+        assertEquals(900f, s, 1e-4f)
+        assertEquals(2100f, e, 1e-4f)
+    }
+
+    @Test
+    fun `on-device case - the AFT break leaves the stub and sits in the taper with room`() {
+        val liner = UndercutLinerSpan("ln", 646.11f, 1500f)
+        val strip = linerStripFor(liner, emptyList(), 9360f, segs = stubSegs)
+        // The 1" pad landed 0.75" inside the taper; the break now sits a full room before the
+        // taper face, and the 6 mm body stub between the taper and the liner is walked over.
+        assertEquals(639.76f - undercutBreakRoomMm(209.8f), strip.drawStartMm, 1e-3f)
+        // FWD: the 1" pad leaves less than a room of body before the liner face, so the end
+        // moves out to a full room past it.
+        val fwd = max(1500f + UNDERCUT_WINDOW_PAD_MM, 1500f + undercutBreakRoomMm(209.8f))
+        assertEquals(fwd, strip.drawEndMm, 1e-3f)
+        // Chain datums never move.
+        assertEquals(646.11f, strip.chainStartMm, 1e-4f)
+        assertEquals(1500f, strip.chainEndMm, 1e-4f)
+        // Without segs the old padded range is unchanged.
+        val plain = linerStripFor(liner, emptyList(), 9360f)
+        assertEquals(646.11f - UNDERCUT_WINDOW_PAD_MM, plain.drawStartMm, 1e-3f)
+        assertEquals(1500f + UNDERCUT_WINDOW_PAD_MM, plain.drawEndMm, 1e-3f)
+    }
+
+    @Test
+    fun `a chain of short segs is walked over to the first that can host the break`() {
+        val room = undercutBreakRoomMm(200f)
+        val short = room * 0.4f
+        // Long body, then three short collars (each shorter than room), then the liner.
+        val c1 = 1000f
+        val segs = listOf(
+            seg(0f, c1, 200f),
+            seg(c1, c1 + short, 200f),
+            seg(c1 + short, c1 + 2 * short, 200f),
+            seg(c1 + 2 * short, c1 + 3 * short, 200f),
+            seg(c1 + 3 * short, 2000f, 220f),
+        )
+        val (s, _) = withUndercutBreakRoom(c1 + 2.5f * short, 1900f, segs, 3000f)
+        assertEquals(c1 - room, s, 1e-3f)
+        // Mirror on the FWD side: collars after the liner, then a long body.
+        val f0 = 1000f
+        val fwdSegs = listOf(
+            seg(0f, f0, 220f),
+            seg(f0, f0 + short, 200f),
+            seg(f0 + short, f0 + 2 * short, 200f),
+            seg(f0 + 2 * short, 3000f, 200f),
+        )
+        val (_, e) = withUndercutBreakRoom(100f, f0 + 0.5f * short, fwdSegs, 3000f)
+        assertEquals(f0 + 2 * short + room, e, 1e-3f)
+    }
+
+    @Test
+    fun `walking off either shaft end gives the flat physical end`() {
+        val room = undercutBreakRoomMm(200f)
+        val segs = listOf(
+            seg(0f, room * 0.5f, 200f),
+            seg(room * 0.5f, 500f, 220f),
+            seg(500f, 1000f - room * 0.5f, 220f),
+            seg(1000f - room * 0.5f, 1000f, 200f),
+        )
+        val (s, e) = withUndercutBreakRoom(room * 0.3f, 1000f - room * 0.3f, segs, 1000f)
+        assertEquals(0f, s, 0f)
+        assertEquals(1000f, e, 0f)
+    }
+
+    @Test
+    fun `break room is idempotent`() {
+        val once = withUndercutBreakRoom(620.71f, 1525.4f, stubSegs, 9360f)
+        val twice = withUndercutBreakRoom(once.first, once.second, stubSegs, 9360f)
+        assertEquals(once.first, twice.first, 1e-4f)
+        assertEquals(once.second, twice.second, 1e-4f)
+    }
+
+    @Test
+    fun `a body under a liner never hides the liner face`() {
+        // The body runs the whole shaft under the liner; the envelope's liner face still counts.
+        val segs = listOf(seg(0f, 2000f, 200f), seg(600f, 1000f, 220f))
+        val (s, e) = withUndercutBreakRoom(600f - UNDERCUT_WINDOW_PAD_MM, 1000f + UNDERCUT_WINDOW_PAD_MM, segs, 2000f)
+        assertEquals(600f - undercutBreakRoomMm(200f), s, 1e-3f)
+        assertEquals(1000f + undercutBreakRoomMm(200f), e, 1e-3f)
+    }
+
+    @Test
+    fun `preview range with segs never narrows and gets break room`() {
+        val liner = UndercutLinerSpan("ln", 646.11f, 1500f)
+        val strip = linerStripFor(liner, listOf(UndercutSpanMm("u1", 900f, 1020f)), 9360f, segs = stubSegs)
+        val (s, e) = undercutPreviewDrawRange(
+            strip, listOf(UndercutSpanMm("u1", 1000f, 1010f)), 9360f, segs = stubSegs,
+        )
+        assertEquals(strip.drawStartMm, s, 1e-4f)
+        assertEquals(strip.drawEndMm, e, 1e-4f)
+        // A draft overhanging the liner's FWD edge widens the range — and gets room past it.
+        val (_, e2) = undercutPreviewDrawRange(
+            strip, listOf(UndercutSpanMm("u1", 1480f, 1520f)), 9360f, segs = stubSegs,
+        )
+        assertTrue(e2 >= 1520f + UNDERCUT_WINDOW_PAD_MM - 1e-3f)
+        assertTrue(e2 >= strip.drawEndMm)
+    }
+
+    @Test
+    fun `free strips keep their window as the chain and grow only the draw range`() {
+        // A bare-shaft cut whose 1" pad lands 10.4 mm before a taper's FWD face.
+        val segs = listOf(SurfaceSeg(0f, 515f, 180f, 210f), seg(515f, 3000f, 210f))
+        val strips = buildUndercutStrips(
+            listOf(UndercutSpanMm("u", 530f, 600f)), emptyList(), 3000f, segs = segs,
+        )
+        val free = strips.single() as UndercutStrip.FreeStrip
+        assertEquals(530f - UNDERCUT_WINDOW_PAD_MM, free.chainStartMm, 1e-4f)
+        assertEquals(600f + UNDERCUT_WINDOW_PAD_MM, free.chainEndMm, 1e-4f)
+        // The break cannot sit 10.4 mm short of the taper face: it moves back into the taper
+        // with a full room before the face; the window (and its dimensioned pad) stays put.
+        assertEquals(515f - undercutBreakRoomMm(210f), free.drawStartMm, 1e-3f)
+        assertEquals(600f + UNDERCUT_WINDOW_PAD_MM, free.drawEndMm, 1e-3f)
     }
 
     // ── Validation ──

@@ -3,9 +3,15 @@ package com.android.shaftschematic.pdf
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
+import com.android.shaftschematic.geom.BREAK_PAIR_REACH_FRAC
+import com.android.shaftschematic.geom.RETURN_SWEEP_FULLNESS
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Round-stock break symbol (shared by Shaft/Runout/Wear PDF composers)
+//
+// The glyph's reach constants (RETURN_SWEEP_FULLNESS, BREAK_PAIR_REACH_FRAC,
+// BREAK_EDGE_OUTWARD_REACH_FRAC) live in geom/BreakGlyphMath.kt, so layout math in `geom`
+// can reserve room for the curves drawn here without importing `pdf`.
 // ──────────────────────────────────────────────────────────────────────────────
 
 /**
@@ -126,42 +132,12 @@ internal fun drawBreakEdge(
     c.drawPath(sweep, stroke)
 }
 
-/**
- * Return-sweep width relative to the S's own lobe; 1 = exact mirror. Internal because the
- * Compose port of this glyph (`ui/screen/LinerWearDetail.kt`'s `drawBreakEdgeCompose`) reads it
- * rather than keeping a copy that can be tuned out of step.
- */
-internal const val RETURN_SWEEP_FULLNESS = 1.5f
-
 /** Light translucent wash inside the eye (~18% black; matches shaded-body recipe). */
 private const val EYE_SHADE_COLOR = 0x2E000000
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Paired-break layout — the two edges must never overlap
 // ──────────────────────────────────────────────────────────────────────────────
-
-/**
- * How far a break edge's curves reach horizontally INWARD toward its partner, as a
- * fraction of the amplitude — the pair's combined reach in each half of the shaft.
- * Derived from the cubics in [drawBreakEdge]: the main S peaks at √3/6 of its ±amplitude
- * controls, and the return sweep (controls at [RETURN_SWEEP_FULLNESS]·amp/2 and /4) at
- * [RETURN_SWEEP_FULLNESS]·√3/6; one edge contributes its S while the other contributes
- * its sweep in the same half, so the pair closes (1 + fullness)·√3/6 of the amplitude.
- * Changing the glyph's control geometry changes this fraction.
- */
-internal val BREAK_PAIR_REACH_FRAC = (1f + RETURN_SWEEP_FULLNESS) * (kotlin.math.sqrt(3f) / 6f)
-
-/**
- * How far a break edge's curves reach horizontally OUTWARD past its x — into the void
- * side — as a fraction of the amplitude. The return sweep is the far reacher: its cubic
- * (controls at [RETURN_SWEEP_FULLNESS]·amp/2 and /4) simplifies to
- * `(3k/4)·t(1−t)(2−t)·amp`, which peaks at `k·√3/6·amp` — past the main S's own `√3/6`.
- * Two packed wear strips' facing break stubs each bulge this far into their shared
- * gutter, so the gutter must host both reaches plus daylight — see
- * `spreadWearStripRowGutters` / `wearStripBreakAmplitudePt` (`WearStripLayout.kt`).
- * Changing the glyph's control geometry changes this fraction.
- */
-internal val BREAK_EDGE_OUTWARD_REACH_FRAC = RETURN_SWEEP_FULLNESS * (kotlin.math.sqrt(3f) / 6f)
 
 /** Minimum daylight between the pair's nearest curves ("at worst 1px" — on-device report). */
 internal const val BREAK_PAIR_MIN_CLEAR_PT = 1f

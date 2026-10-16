@@ -6,6 +6,7 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.pdf.PdfDocument
 import com.android.shaftschematic.model.*
+import com.android.shaftschematic.geom.BREAK_EDGE_OUTWARD_REACH_FRAC
 import com.android.shaftschematic.geom.DiaCalloutStation
 import com.android.shaftschematic.geom.PlacedDiaCallout
 import com.android.shaftschematic.geom.SetPositions

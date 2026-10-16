@@ -1,7 +1,10 @@
 package com.android.shaftschematic.pdf
 
 import com.android.shaftschematic.geom.NOTCH_FACE_MIN_STEP_PX
+import com.android.shaftschematic.geom.UNDERCUT_BREAK_AMP_FRAC_OF_R
 import com.android.shaftschematic.geom.UNDERCUT_SECTION_FILL_ALPHA
+import com.android.shaftschematic.geom.undercutBreakRoomMm
+import com.android.shaftschematic.geom.withUndercutBreakRoom
 import com.android.shaftschematic.geom.SurfaceSeg
 import com.android.shaftschematic.geom.UndercutLinerSpan
 import com.android.shaftschematic.geom.UndercutSpanMm
@@ -122,6 +125,74 @@ class UndercutStripSvgPreviewTest {
         .map { ln -> UndercutLinerSpan(ln.id, ln.startFromAftMm, ln.startFromAftMm + ln.lengthMm) }
 
     private val linerTitles = buildLinerTitleById(spec)
+
+    /** One shaft a strip is rendered from — the resolved profile plus the spec its titles read. */
+    private class Scenario(
+        val components: List<com.android.shaftschematic.ui.resolved.ResolvedComponent>,
+        val spec: ShaftSpec,
+        val oalMm: Float,
+        val aftSetMm: Float,
+        val fwdSetMm: Float,
+    ) {
+        val linerSpans = spec.liners
+            .filter { it.lengthMm > 0f && it.odMm > 0f }
+            .map { ln -> UndercutLinerSpan(ln.id, ln.startFromAftMm, ln.startFromAftMm + ln.lengthMm) }
+        val linerTitles = buildLinerTitleById(spec)
+    }
+
+    private val baseScenario = Scenario(components, spec, oalMm, aftSetMm, fwdSetMm)
+
+    /**
+     * The on-device case: a taper 0 → 25-3/16" (S.E.T. Ø 8.26"), a 1/4" body, then the AFT
+     * liner. The liner strip's 1" pad lands inside the taper, so the AFT window end sits a
+     * hair from the taper face with the 1/4" body and the liner face just beyond it.
+     */
+    private val shortBodyStubScenario: Scenario = run {
+        val taperEnd = 639.76f
+        val bodyEnd = 646.11f
+        val linerEnd = 1500f
+        val oal = 9360f
+        val setDia = 209.8f
+        val linerOd = 228.6f
+        Scenario(
+            components = listOf(
+                com.android.shaftschematic.ui.resolved.ResolvedTaper(
+                    id = "taper", startMmPhysical = 0f, endMmPhysical = taperEnd,
+                    startDiaMm = 180f, endDiaMm = setDia,
+                ),
+                ResolvedBody(
+                    id = "stub", type = ResolvedComponentType.BODY, source = ResolvedComponentSource.EXPLICIT,
+                    startMmPhysical = taperEnd, endMmPhysical = bodyEnd, diaMm = setDia,
+                ),
+                ResolvedLiner(id = "liner", startMmPhysical = bodyEnd, endMmPhysical = linerEnd, odMm = linerOd),
+                ResolvedBody(
+                    id = "rest", type = ResolvedComponentType.BODY, source = ResolvedComponentSource.AUTO,
+                    startMmPhysical = linerEnd, endMmPhysical = oal, diaMm = setDia,
+                ),
+            ),
+            spec = ShaftSpec(
+                overallLengthMm = oal,
+                tapers = listOf(
+                    com.android.shaftschematic.model.Taper(
+                        id = "taper", startFromAftMm = 0f, lengthMm = taperEnd,
+                        startDiaMm = 180f, endDiaMm = setDia,
+                    ),
+                ),
+                bodies = listOf(
+                    Body(id = "stub", startFromAftMm = taperEnd, lengthMm = bodyEnd - taperEnd, diaMm = setDia),
+                ),
+                liners = listOf(
+                    Liner(
+                        id = "liner", startFromAftMm = bodyEnd, lengthMm = linerEnd - bodyEnd,
+                        odMm = linerOd, endMmPhysical = linerEnd,
+                    ),
+                ),
+            ),
+            oalMm = oal,
+            aftSetMm = taperEnd,
+            fwdSetMm = oal,
+        )
+    }
 
     /** Three cuts inside the liner, the last one overhanging its FWD edge at 1000 mm. */
     private fun linerUndercuts(thirdDiaMm: Float, secondDiaMm: Float) = listOf(
@@ -318,7 +389,15 @@ class UndercutStripSvgPreviewTest {
         stripRight: Float = PAGE_W - PAGE_MARGIN,
         stripTop: Float = BAND_TOP,
         stripBottom: Float = BAND_BOTTOM,
+        sc: Scenario = baseScenario,
     ): StripResult {
+        val components = sc.components
+        val spec = sc.spec
+        val oalMm = sc.oalMm
+        val aftSetMm = sc.aftSetMm
+        val fwdSetMm = sc.fwdSetMm
+        val linerSpans = sc.linerSpans
+        val linerTitles = sc.linerTitles
         val segs: List<SurfaceSeg> = surfaceSegsFrom(components)
         val clampedById = undercuts.associate { it.id to clampUndercutSpan(it.startFromAftMm, it.lengthMm, oalMm) }
         val liveSpans = undercuts.mapNotNull { u ->
@@ -329,13 +408,13 @@ class UndercutStripSvgPreviewTest {
         // clamped spans, the containment forest, true floors, and the per-sheet drawn-depth
         // normalization — so a nested cut arrives already cut against its parent's floor.
         val sheetNotches = buildUndercutNotches(undercuts, segs, oalMm, exaggerationFrac)
-        val strips = buildUndercutStrips(liveSpans, linerSpans, oalMm)
+        val strips = buildUndercutStrips(liveSpans, linerSpans, oalMm, segs = segs)
         // Nothing recorded ⇒ the STARTED-strip page: one `linerStripFor` per drawable liner,
         // drawn to scale but dimensioned nowhere, for the machinist to sketch into.
         val started = undercuts.isEmpty()
         val strip: UndercutStrip = if (started) {
             assertTrue("an empty record yields no cut-derived strips", strips.isEmpty())
-            linerStripFor(linerSpans.single(), emptyList(), oalMm)
+            linerStripFor(linerSpans.single(), emptyList(), oalMm, segs = segs)
         } else {
             assertEquals("the scenario must read as one detail strip", 1, strips.size)
             strips[0]
@@ -343,14 +422,13 @@ class UndercutStripSvgPreviewTest {
         val linerTitle = (strip as? UndercutStrip.LinerStrip)?.let { linerTitles[it.linerId] }
         val spans = liveSpans.filter { it.id in strip.undercutIds }.sortedBy { it.startMm }
 
-        // Draw range widened to the pt pad floor exactly as the composer does, so a preview
-        // shows the real end air for the cell it is laid out in.
+        // Draw range widened to the pt pad floor exactly as the composer does, then given break
+        // room again, so a preview shows the real end air for the cell it is laid out in.
         val range = computeUndercutStripDrawRange(
             strip.drawStartMm, strip.drawEndMm, strip.chainStartMm, strip.chainEndMm,
             stripLeft, stripRight, oalMm,
         )
-        val drawStartMm = range.startMm
-        val drawEndMm = range.endMm
+        val (drawStartMm, drawEndMm) = withUndercutBreakRoom(range.startMm, range.endMm, segs, oalMm)
         val drawLenMm = drawEndMm - drawStartMm
         val h = computeWearStripHorizontalLayout(
             stripLeft, stripRight, drawLenMm, stubWidthPt = UNDERCUT_STRIP_EDGE_INSET_PT,
@@ -409,11 +487,29 @@ class UndercutStripSvgPreviewTest {
                 drawStartMm to blankLiner.linerStartMm.coerceIn(drawStartMm, drawEndMm),
                 blankLiner.linerEndMm.coerceIn(drawStartMm, drawEndMm) to drawEndMm,
             )
-        val linerMidMm = (linerAftMm + linerFwdMm) / 2f
+        val linerMidMm = linerSpans.firstOrNull()?.let { (it.startMm + it.endMm) / 2f } ?: -1f
         var surfaceLinesAtLinerMid = 0
         var linerFills = 0
         profileBands.forEach { (bandStartMm, bandEndMm) ->
             components.forEach { comp ->
+                // A taper draws its two sloped surface lines and its end caps at the local Ø.
+                if (comp is com.android.shaftschematic.ui.resolved.ResolvedTaper) {
+                    val a = maxOf(comp.startMmPhysical, bandStartMm)
+                    val b = minOf(comp.endMmPhysical, bandEndMm)
+                    if (b <= a) return@forEach
+                    val seg = SurfaceSeg(comp.startMmPhysical, comp.endMmPhysical, comp.startDiaMm, comp.endDiaMm)
+                    val ra = rAt(seg.diaAt(a))
+                    val rb = rAt(seg.diaAt(b))
+                    svg.line(xAt(a), cy - ra, xAt(b), cy - rb)
+                    svg.line(xAt(a), cy + ra, xAt(b), cy + rb)
+                    listOf(comp.startMmPhysical, comp.endMmPhysical).forEach { edge ->
+                        if (edge > bandStartMm + 0.001f && edge < bandEndMm - 0.001f) {
+                            val re = rAt(seg.diaAt(edge))
+                            svg.line(xAt(edge), cy - re, xAt(edge), cy + re, w = 0.9f)
+                        }
+                    }
+                    return@forEach
+                }
                 val dia = when (comp) {
                     is ResolvedBody -> comp.diaMm
                     is ResolvedLiner -> comp.odMm
@@ -456,7 +552,7 @@ class UndercutStripSvgPreviewTest {
         // shows the real lobe size rather than an ear the PDF no longer draws.
         listOf(drawStartMm to true, drawEndMm to false).forEach { (atMm, eyeAtTop) ->
             val r = rAt(outerDiaAt(segs, atMm))
-            svg.breakEdge(xAt(atMm), cy - r, cy + r, minOf(r * 0.6f, UNDERCUT_BREAK_AMP_MAX_PT), eyeAtTop)
+            svg.breakEdge(xAt(atMm), cy - r, cy + r, minOf(r * UNDERCUT_BREAK_AMP_FRAC_OF_R, UNDERCUT_BREAK_AMP_MAX_PT), eyeAtTop)
         }
 
         // Notches — white void from surface to floor, mirrored (mouth stays OPEN — no lid),
@@ -770,7 +866,26 @@ class UndercutStripSvgPreviewTest {
             j.drawnFloorById.getValue("relief"), flushEnds.last(), 1e-3f,
         )
 
+        // K) THE ON-DEVICE CASE: a taper, a 1/4" body, then the liner holding one cut. The 1" pad
+        //    puts the AFT window end in the taper a hair from its face, so the strip-end S-break
+        //    must find stock with room for its lobes rather than tangle with the taper face,
+        //    the 1/4" body and the liner face.
+        val k = renderStrip(
+            listOf(Undercut(id = "k1", startFromAftMm = 900f, lengthMm = 120f, diaMm = 215f)),
+            sc = shortBodyStubScenario,
+        )
+        File(outDir, "k-short-body-stub-before-liner.svg").writeText(k.svg)
+        val kLiner = k.strip as UndercutStrip.LinerStrip
+        assertEquals("chain anchors on the liner's AFT edge", 646.11f, kLiner.chainStartMm, 1e-3f)
+        assertEquals("chain anchors on the liner's FWD edge", 1500f, kLiner.chainEndMm, 1e-3f)
+        // The AFT break sits in the taper with its full room before the taper face; the 1/4"
+        // body is walked over, never broken through.
+        assertEquals(
+            "AFT window end gets break room inside the taper",
+            639.76f - undercutBreakRoomMm(209.8f), kLiner.drawStartMm, 1e-2f,
+        )
+
         assertNotNull(outDir.listFiles())
-        assertEquals(10, outDir.listFiles()!!.count { it.name.endsWith(".svg") })
+        assertEquals(11, outDir.listFiles()!!.count { it.name.endsWith(".svg") })
     }
 }

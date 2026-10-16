@@ -428,7 +428,15 @@ is different: it re-derives canonical at the new length (`undercutCanonicalForNe
 so the authored Distance never rewrites itself — under a FWD reference the cut's FWD end
 stays pinned and the cut grows AFT-ward). Detail strips are liner-anchored: a cut inside a liner draws
 that liner's whole span (`buildUndercutStrips`), not just a padded window; bare-shaft cuts still
-cluster into padded windows. `diaMm` is a typed
+cluster into padded windows. **A strip's window end always has room for its S-break**:
+`UNDERCUT_WINDOW_PAD_MM` is the MINIMUM pad, and every strip-range builder widens the DRAW range
+outward through the ONE pure `withUndercutBreakRoom` (`geom/UndercutMath.kt`) until the end sits
+in a piece of the outer-surface envelope with `undercutBreakRoomMm(Ø)` of stock before the next
+face — pieces too short to host the glyph (a stub body, a blend's samples) are walked over, and an
+end that reaches the shaft end goes flat. The detail canvas maps x and r through one scale, so
+the glyph's amplitude in shaft mm is 0.3 × Ø and a 1" pad on an 8" shaft put the lobes across the
+taper face, a 1/4" body and the liner face (on-device report). Chain datums never move; the PDF
+re-applies the rule after its points-based `computeUndercutStripDrawRange` widening. `diaMm` is a typed
 measurement — stored **verbatim** (golden rule); `0` = placed-but-empty, drawn with a
 symbolic shallow floor in the overlay, never printed. Notch **depth is display-exaggerated**
 (`normalizedNotchFloorDiaMm` — drawn depth normalized to the sheet's deepest cut

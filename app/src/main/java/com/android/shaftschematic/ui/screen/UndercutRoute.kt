@@ -268,8 +268,8 @@ fun UndercutRoute(
             UndercutSpanMm(u.id, c.startMm, c.endMm)
         }.filter { it.endMm > it.startMm }
     }
-    val strips = remember(spans, linerSpans, oalMm) {
-        buildUndercutStrips(spans, linerSpans, oalMm)
+    val strips = remember(spans, linerSpans, oalMm, segs) {
+        buildUndercutStrips(spans, linerSpans, oalMm, segs = segs)
     }
     val freeWindows = remember(strips) {
         strips.filterIsInstance<UndercutStrip.FreeStrip>().map { it.window }
@@ -281,7 +281,7 @@ fun UndercutRoute(
     // One liner's strip, cuts included — the same construction `buildUndercutStrips` uses, so a
     // liner tapped with zero cuts and the same liner tapped later with three read identically.
     fun stripForLiner(liner: UndercutLinerSpan): UndercutStrip.LinerStrip = linerStripFor(
-        liner, spans.filter { assignUndercutLiner(it, linerSpans) == liner.id }, oalMm,
+        liner, spans.filter { assignUndercutLiner(it, linerSpans) == liner.id }, oalMm, segs = segs,
     )
 
     // An anchor that no longer resolves (the undercut was deleted, the liner removed, or the
