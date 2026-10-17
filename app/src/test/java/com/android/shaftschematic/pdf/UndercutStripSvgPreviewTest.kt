@@ -23,9 +23,6 @@ import com.android.shaftschematic.geom.outerDiaAt
 import com.android.shaftschematic.geom.planDiaCallouts
 import com.android.shaftschematic.geom.undercutCalloutAnchorMm
 import com.android.shaftschematic.geom.undercutNestingForest
-import com.android.shaftschematic.geom.UndercutCutNumberPlacement
-import com.android.shaftschematic.geom.undercutCutNumberPlacements
-import com.android.shaftschematic.geom.undercutSheetNumbers
 import com.android.shaftschematic.pdf.formatDiaWithUnit
 import com.android.shaftschematic.model.Body
 import com.android.shaftschematic.model.Liner
@@ -453,13 +450,8 @@ class UndercutStripSvgPreviewTest {
         val railLabels: List<String>,
         /** Strip ends drawn as a flat physical end (the shaft's own end) rather than an S-break. */
         val flatEnds: Int,
-        /** The cut numbers drawn on the strip (`PdfPrefs.undercutCutNumbers`), in shaft mm. */
-        val cutNumbers: List<UndercutCutNumberPlacement>,
         /** The strip's printed title. */
         val title: String,
-        /** The strip's vertical scale (pt of radius per mm of Ø) and centreline, page space. */
-        val ptPerDiaMm: Float,
-        val cy: Float,
     )
 
     private fun renderStrip(
@@ -473,8 +465,6 @@ class UndercutStripSvgPreviewTest {
         reachToSetMm: Float = 0f,
         /** `PdfPrefs.undercutSplitAtLinerEdge`: feed the buried liner edges as chain nodes. */
         splitAtLinerEdge: Boolean = false,
-        /** `PdfPrefs.undercutCutNumbers`: draw each cut's sheet number. */
-        cutNumbers: Boolean = true,
     ): StripResult {
         val components = sc.components
         val spec = sc.spec
@@ -694,24 +684,6 @@ class UndercutStripSvgPreviewTest {
             }
         }
 
-        // Cut numbers — the composer's `drawUndercutCutNumbersPdf`: the sheet numbering, placed
-        // by the ONE pure placement over the strip's own scales (unclamped Ø map, so an outside
-        // number clears the tallest surface), drawn after the notches.
-        val ptPerDiaMm = rCap / stripMaxDia
-        val numberPad = textH * 0.3f
-        val numberPlacements = if (!cutNumbers) emptyList() else undercutCutNumberPlacements(
-            notches = stripNotches,
-            numbers = undercutSheetNumbers(undercuts, oalMm),
-            glyphWidthMm = { labelW(it) / h.ptPerMm },
-            glyphHeightMm = textH * 0.7f / ptPerDiaMm,
-            padMm = numberPad / h.ptPerMm,
-            padDiaMm = numberPad / ptPerDiaMm,
-        )
-        numberPlacements.forEach { p ->
-            val r = p.baselineDiaMm * ptPerDiaMm
-            svg.text(xAt(p.xMm), if (p.inside) cy + r else cy - r, p.label)
-        }
-
         // Ø callouts: leader from each notch floor down to the value — the notch's OWN drawn
         // floor, nested cuts included, never a re-derived one.
         if (plan != null) {
@@ -825,10 +797,7 @@ class UndercutStripSvgPreviewTest {
                 },
             railLabels = railSpans.map { it.label.inline() },
             flatEnds = flatEnds,
-            cutNumbers = numberPlacements,
             title = printedTitle,
-            ptPerDiaMm = ptPerDiaMm,
-            cy = cy,
         )
     }
 
@@ -1071,41 +1040,13 @@ class UndercutStripSvgPreviewTest {
         assertFalse("12 3/4\"" in plain.railLabels)
         assertEquals(0, plain.flatEnds)
 
-        // O) THE ON-DEVICE JOB's cut numbers: every cut carries its list number, AFT → FWD, and
-        //    the cut machined inside the 12 5/8" relief prints its number inside its OWN span —
-        //    the relief's number sits on the relief's widest free stretch beside it. The liner's
-        //    OD rides in the strip title after its name.
+        // O) THE ON-DEVICE JOB's liner strip: the liner's OD rides in the strip title after its
+        //    name, and no cut carries a number — cut numbers are an input aid on the detail canvas
+        //    and print on no sheet (on-device ruling).
         val o = renderStrip(jobCuts, sc = jobScenario)
-        File(outDir, "o-job-cut-numbers.svg").writeText(o.svg)
-        assertEquals(listOf("1", "2", "2", "3", "4", "5"), o.cutNumbers.map { it.label }.sorted())
-        val numbers = undercutSheetNumbers(jobCuts, jobScenario.oalMm)
-        val clamped = jobCuts.associate { it.id to clampUndercutSpan(it.startFromAftMm, it.lengthMm, jobScenario.oalMm) }
-        val childId = "748c4863-7f2a-4120-9ee5-1feee97075fd"
-        val parentId = "ce3aa5f1-1433-444d-a6a5-c326c3583176"
-        val child = o.cutNumbers.single { it.id == childId }
-        val childSpan = clamped.getValue(childId)
-        assertTrue("the nested cut's number is inside the cut", child.inside)
-        assertTrue(
-            "the nested cut's number sits inside its own span",
-            child.xMm > childSpan.startMm && child.xMm < childSpan.endMm,
-        )
-        assertEquals("3", child.label)
-        assertEquals(numbers.getValue(childId).toString(), child.label)
-        // The 9.760 relief is split by the nested 9.650 cut (4 3/4" from its AFT end, 5 1/2" to
-        // its FWD end): BOTH pieces carry the relief's number, so they read as one section.
-        val parentPieces = o.cutNumbers.filter { it.id == parentId }
-        val parentSpan = clamped.getValue(parentId)
-        assertEquals(2, parentPieces.size)
-        assertTrue(parentPieces.all { it.inside && it.label == "2" })
-        assertEquals(1, parentPieces.count { it.xMm > parentSpan.startMm && it.xMm < childSpan.startMm })
-        assertEquals(1, parentPieces.count { it.xMm > childSpan.endMm && it.xMm < parentSpan.endMm })
-        // Inside numbers centre on the shaft centreline: baseline half a glyph below it.
-        o.cutNumbers.filter { it.inside }.forEach { p ->
-            assertEquals("${p.label} baseline is half a glyph below the centreline", textH * 0.35f, p.baselineDiaMm * o.ptPerDiaMm, 1e-3f)
-        }
+        File(outDir, "o-job-liner-od-title.svg").writeText(o.svg)
         assertTrue("the liner OD follows the liner's name (${o.title})", Regex("Liner Ø10\"").containsMatchIn(o.title))
-        // The pref off: no number anywhere on the strip.
-        assertTrue(renderStrip(jobCuts, sc = jobScenario, cutNumbers = false).cutNumbers.isEmpty())
+        assertFalse("no cut number is drawn on the strip", Regex(">[1-9]</text>").containsMatchIn(o.svg))
 
         assertNotNull(outDir.listFiles())
         assertEquals(15, outDir.listFiles()!!.count { it.name.endsWith(".svg") })

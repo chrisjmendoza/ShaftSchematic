@@ -3,10 +3,12 @@ package com.android.shaftschematic.geom
 import com.android.shaftschematic.model.Undercut
 
 /**
- * The ONE cut numbering every surface shows — the printed sheet's cut numbers, the Undercut tab's
- * list rows, and any message that names a cut: **AFT → FWD by render-clamped start**, ties in
- * record order, 1-based. Spatial rather than record order because the sheet is read left to
- * right and the cuts are rarely recorded in that order (on-device request). Display only — the
+ * The ONE cut numbering every authoring surface shows — the Undercut tab's list rows, the numbers
+ * inside each section on the detail canvas, and any message that names a cut: **AFT → FWD by
+ * render-clamped start**, ties in record order, 1-based. An input aid only: no sheet prints it and
+ * the overview canvas does not draw it (on-device ruling). Spatial rather than record order because
+ * the drawing is read left to right and the cuts are rarely recorded in that order (on-device
+ * request). Display only — the
  * record keeps its own order (Undo restores by index), and ids stay the only reference between
  * cuts. Every cut gets a number, a zero-length or out-of-shaft one included, so a list row never
  * goes unnumbered.

@@ -182,8 +182,6 @@ object SettingsStore {
     private val KEY_PDF_UNDERCUT_LINE_ART = booleanPreferencesKey("pdf_undercut_line_art")
     // Dotted retrace of each liner's original edges over the cuts on the undercut drawing.
     private val KEY_PDF_UNDERCUT_LINER_OUTLINE = booleanPreferencesKey("pdf_undercut_liner_outline")
-    // Each cut's list number on the undercut drawing and its two canvases.
-    private val KEY_PDF_UNDERCUT_CUT_NUMBERS = booleanPreferencesKey("pdf_undercut_cut_numbers")
     // Chain-rail node at each liner edge a cut runs past, on the undercut drawing's strips.
     private val KEY_PDF_UNDERCUT_SPLIT_AT_LINER_EDGE = booleanPreferencesKey("pdf_undercut_split_at_liner_edge")
     private val KEY_PDF_CURVE_LO_HEIGHT_IN = floatPreferencesKey("pdf_curve_lo_height_in")
@@ -285,13 +283,6 @@ object SettingsStore {
         ctx.settingsPrefs.map { p -> p[KEY_PDF_UNDERCUT_LINER_OUTLINE] ?: PdfPrefs().undercutLinerOutline }
     suspend fun setPdfUndercutLinerOutline(ctx: Context, v: Boolean) {
         ctx.editSettings { it[KEY_PDF_UNDERCUT_LINER_OUTLINE] = v }
-    }
-
-    /** The undercut drawing's cut numbers — see the key's comment. */
-    fun pdfUndercutCutNumbersFlow(ctx: Context): Flow<Boolean> =
-        ctx.settingsPrefs.map { p -> p[KEY_PDF_UNDERCUT_CUT_NUMBERS] ?: PdfPrefs().undercutCutNumbers }
-    suspend fun setPdfUndercutCutNumbers(ctx: Context, v: Boolean) {
-        ctx.editSettings { it[KEY_PDF_UNDERCUT_CUT_NUMBERS] = v }
     }
 
     /** The undercut drawing's split-at-liner-edge chain nodes — see the key's comment. */

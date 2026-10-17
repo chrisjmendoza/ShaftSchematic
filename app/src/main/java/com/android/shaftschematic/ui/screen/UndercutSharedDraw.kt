@@ -190,14 +190,13 @@ internal fun DrawScope.drawLinerOutlines(
 }
 
 /**
- * Cut numbers (`PdfPrefs.undercutCutNumbers`): each cut's sheet number ([numbers] —
- * `undercutSheetNumbers`, the Undercut tab list's numbering) drawn where the ONE pure placement
- * [undercutCutNumberPlacements] puts it — inside the cut's section core centred on the shaft
- * centreline, or above the surface
- * when the core is too narrow — the same placement the PDF composer prints. A notch with no
- * number (a draft not yet in the record) draws nothing. Plain sheet-ink text, no background.
- * Called after the notch passes and the liner outline, before rails and callouts. The caller
- * gates it on the pref.
+ * Cut numbers on the undercut detail canvas — an authoring aid, always drawn there: each cut's
+ * number ([numbers] — `undercutSheetNumbers`, the Undercut tab list's numbering) where the ONE pure
+ * placement [undercutCutNumberPlacements] puts it — inside the cut's section core centred on the
+ * shaft centreline, or above the surface when the core is too narrow. Cut numbers print on no
+ * sheet and draw on no overview (on-device ruling); the detail canvas is the only caller. A notch
+ * with no number (a draft not yet in the record) draws nothing. Plain sheet-ink text, no
+ * background. Called after the notch passes and the liner outline, before rails and callouts.
  */
 internal fun DrawScope.drawUndercutCutNumbers(
     notches: List<UndercutNotch>,

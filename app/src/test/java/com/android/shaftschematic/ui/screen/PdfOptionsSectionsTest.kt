@@ -108,9 +108,9 @@ class PdfOptionsSectionsTest {
 
         rule.onNodeWithTag("pdf_undercut_line_art").assertExists()
         rule.onNodeWithTag("pdf_undercut_liner_outline").assertExists()
-        rule.onNodeWithTag("pdf_undercut_cut_numbers").assertExists()
-        rule.onNodeWithText("Cut numbers").assertExists()
-        rule.onNodeWithText(UNDERCUT_CUT_NUMBERS_CAPTION).assertExists()
+        // Cut numbers print on no sheet, so the sheet offers no row for them.
+        rule.onNodeWithTag("pdf_undercut_cut_numbers").assertDoesNotExist()
+        rule.onNodeWithText("Cut numbers").assertDoesNotExist()
         rule.onNodeWithTag("pdf_undercut_split_at_liner_edge").assertExists()
     }
 
