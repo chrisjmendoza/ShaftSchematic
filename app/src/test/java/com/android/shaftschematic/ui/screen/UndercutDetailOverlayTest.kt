@@ -15,6 +15,7 @@ import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -30,6 +31,7 @@ import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeRight
+import com.android.shaftschematic.doc.ShaftDocCodec
 import com.android.shaftschematic.geom.UndercutLinerSpan
 import com.android.shaftschematic.geom.UndercutSpanMm
 import com.android.shaftschematic.geom.linerStripFor
@@ -76,6 +78,7 @@ class UndercutDetailOverlayTest {
     private val added = mutableListOf<Float>()
     private val addedRefs = mutableListOf<UndercutReference>()
     private val updated = mutableListOf<String>()
+    private var closed = 0
 
     private fun cut(id: String, start: Float, len: Float = 50f) = Undercut(
         id = id, startFromAftMm = start, lengthMm = len,
@@ -113,7 +116,7 @@ class UndercutDetailOverlayTest {
                         removed += id
                         record = record.copy(undercuts = record.undercuts.filterNot { it.id == id })
                     },
-                    onClose = {},
+                    onClose = { closed++ },
                     initialSelectedId = initialSelectedId,
                 )
             }
@@ -483,5 +486,416 @@ class UndercutDetailOverlayTest {
         show(listOf(cut("u1", 900f)))
         assertTrue(rule.onAllNodesWithTag("undercut_ref_parent_aft").fetchSemanticsNodes().isEmpty())
         assertTrue(rule.onAllNodesWithTag("undercut_ref_parent_fwd").fetchSemanticsNodes().isEmpty())
+    }
+
+    // ── The on-device job (fixture `undercut_polar_ranger_stbd.shaft`) ──
+    // Its FWD liner carries five cuts, every Distance from the FWD S.E.T.: E straddles the liner's
+    // AFT edge and ends where C (the relief parent) starts; D sits inside C; B butts on C's FWD
+    // end; A crosses the liner's FWD edge. E is last in the record — it was added last.
+
+    private val jobDoc by lazy {
+        val raw = requireNotNull(javaClass.classLoader?.getResource("fixtures/undercut_polar_ranger_stbd.shaft"))
+            .readText()
+        ShaftDocCodec.decode(raw)
+    }
+    private val jobSpec get() = jobDoc.spec
+    private val jobCuts get() = jobDoc.undercutRecord.undercuts
+    private fun jobCut(prefix: String) = jobCuts.single { it.id.startsWith(prefix) }
+    private val jobLiner get() = jobSpec.liners.single { it.id.startsWith("02d0b768") }
+    private val jobLinerSpan get() = UndercutLinerSpan(
+        jobLiner.id, jobLiner.startFromAftMm, jobLiner.startFromAftMm + jobLiner.lengthMm,
+    )
+    private val cutE get() = jobCut("de3bedb8")
+    private val cutC get() = jobCut("ce3aa5f1")
+
+    private val past = ArrayDeque<UndercutRecord>()
+    private val future = ArrayDeque<UndercutRecord>()
+    private var nextId = 0
+
+    /** Every record write the ViewModel makes, with one undo history behind the top bar. */
+    private fun write(next: UndercutRecord) {
+        past.addLast(record)
+        future.clear()
+        record = next
+    }
+
+    /** The job's FWD-liner page over [cuts], with a host that writes back every callback. */
+    private fun showJob(cuts: List<Undercut>, initialSelectedId: String? = null) {
+        record = UndercutRecord(cuts)
+        val spec = jobSpec
+        val oalMm = spec.overallLengthMm
+        val linerSpan = jobLinerSpan
+        val resolved = resolveComponents(spec)
+        rule.setContent {
+            MaterialTheme {
+                val spans = record.undercuts.map {
+                    UndercutSpanMm(it.id, it.startFromAftMm, it.startFromAftMm + it.lengthMm)
+                }
+                UndercutWindowDetailOverlay(
+                    strip = linerStripFor(linerSpan, spans, oalMm),
+                    stripKey = "liner:${linerSpan.id}",
+                    spec = spec,
+                    resolvedComponents = resolved,
+                    unit = UnitSystem.INCHES,
+                    undercutRecord = record,
+                    onAddUndercut = { start, len, ref, refLinerId, refCutId ->
+                        added += start
+                        addedRefs += ref
+                        val u = Undercut(
+                            id = "added-${++nextId}", startFromAftMm = start, lengthMm = len,
+                            authoredReference = ref, referenceLinerId = refLinerId,
+                            referenceCutId = refCutId,
+                        )
+                        write(record.copy(undercuts = record.undercuts + u))
+                        u.id
+                    },
+                    onUpdateUndercut = { id, start, len, dia, note ->
+                        updated += id
+                        write(
+                            record.copy(
+                                undercuts = record.undercuts.map {
+                                    if (it.id != id) it
+                                    else it.copy(startFromAftMm = start, lengthMm = len, diaMm = dia, note = note)
+                                },
+                            ),
+                        )
+                    },
+                    onUpdateReference = { id, ref, refLinerId, refCutId ->
+                        write(
+                            record.copy(
+                                undercuts = record.undercuts.map {
+                                    if (it.id != id) it
+                                    else it.copy(
+                                        authoredReference = ref, referenceLinerId = refLinerId,
+                                        referenceCutId = refCutId,
+                                    )
+                                },
+                            ),
+                        )
+                    },
+                    onRemoveUndercut = { id ->
+                        removed += id
+                        write(record.copy(undercuts = record.undercuts.filterNot { it.id == id }))
+                    },
+                    onRestoreUndercut = { u, index ->
+                        if (record.undercuts.none { it.id == u.id }) {
+                            val list = record.undercuts.toMutableList()
+                            if (index in 0..list.size) list.add(index, u) else list.add(u)
+                            write(record.copy(undercuts = list))
+                        }
+                    },
+                    canUndo = true,
+                    canRedo = true,
+                    onUndo = {
+                        past.removeLastOrNull()?.let { prev ->
+                            future.addLast(record)
+                            record = prev
+                        }
+                    },
+                    onRedo = {
+                        future.removeLastOrNull()?.let { next ->
+                            past.addLast(record)
+                            record = next
+                        }
+                    },
+                    onClose = {},
+                    initialSelectedId = initialSelectedId,
+                )
+            }
+        }
+        settle()
+    }
+
+    private val pendingCard = hasAnyAncestor(hasTestTag("undercut_card_$PENDING_UNDERCUT_ID"))
+    private fun onCard(id: String) = hasAnyAncestor(hasTestTag("undercut_card_$id"))
+    private val pill get() = rule.onNodeWithTag("undercut_status_pill", useUnmergedTree = true)
+    private fun assertPillSaved() = pill.assert(hasAnyDescendant(hasText("Saved")))
+    private fun assertNoOverlapNamed(n: Int) = assertTrue(
+        "\"Overlaps cut $n\" is on screen",
+        rule.onAllNodesWithText("Overlaps cut $n", substring = true, useUnmergedTree = true)
+            .fetchSemanticsNodes().isEmpty(),
+    )
+    private fun assertNoLeavePrompt() = assertTrue(
+        "a leave prompt is up",
+        rule.onAllNodesWithText("Undercut can't be saved").fetchSemanticsNodes().isEmpty(),
+    )
+    private fun swipe(left: Boolean) {
+        rule.onNodeWithTag("undercut_card_pager").performTouchInput { if (left) swipeLeft() else swipeRight() }
+        settle()
+    }
+    private fun typeAndCommit(field: SemanticsMatcher, text: String) {
+        rule.onNode(field).performScrollTo().performTextReplacement(text)
+        rule.onNode(field).performImeAction()
+        settle()
+    }
+
+    /**
+     * The add flow E came from: with A–D recorded, "Add undercut in this liner", the FWD S.E.T.
+     * chip, "End at start of" C, Length 1.25 in (the FWD reference keeps the FWD end on C's AFT
+     * shoulder, so the cut grows past the liner's AFT edge and the overhang question is accepted),
+     * and a Ø typed into its field but NOT committed — the field still holds focus when the card
+     * is confirmed or left.
+     */
+    private fun draftCutEWithDiaInFlight(dia: String) {
+        val stored = jobCuts.filterNot { it.id == cutE.id }
+        showJob(stored)
+        rule.onNodeWithTag("undercut_add_in_liner").performClick()
+        settle()
+        rule.onNode(hasText("FWD S.E.T.") and pendingCard).performScrollTo().performClick()
+        settle()
+        // "End at start of" numbers C by its page position, the pending card's seed included.
+        val seed = defaultUndercutSpan(
+            jobLinerSpan.startMm, jobLinerSpan.endMm,
+            stored.map { UndercutSpanMm(it.id, it.startFromAftMm, it.startFromAftMm + it.lengthMm) },
+            jobSpec.overallLengthMm,
+        )
+        val cPosition = buildUndercutPageIds(stored.sortedBy { it.startFromAftMm }, seed.startMm)
+            .indexOf(cutC.id) + 1
+        rule.onNode(hasTestTag("undercut_butt_before_$cPosition") and pendingCard).performScrollTo().performClick()
+        settle()
+        typeAndCommit(hasText("Length (in)") and pendingCard, "1.25")
+        if (rule.onAllNodesWithTag("undercut_overhang_accept").fetchSemanticsNodes().isNotEmpty()) {
+            rule.onNodeWithTag("undercut_overhang_accept").performClick()
+            settle()
+        }
+        rule.onNode(hasText("Measured Ø (in)") and pendingCard).performScrollTo().performTextReplacement(dia)
+        rule.waitForIdle()
+    }
+
+    private fun recordedCutE(): Undercut = record.undercuts.single { it.id.startsWith("added-") }
+
+    /** Card 1 is the recorded E, an edit to it is clear, and nothing names cut 1 or prompts. */
+    private fun assertCardOneIsCleanAndEditable(eId: String) {
+        rule.onNode(hasText(undercutCardTitle(1, 5)) and onCard(eId)).assertExists()
+        assertNoLeavePrompt()
+        assertPillSaved()
+        assertNoOverlapNamed(1)
+        typeAndCommit(hasText("Measured Ø (in)") and onCard(eId), "9.25")
+        assertNoOverlapNamed(1)
+        rule.onNodeWithTag("undercut_confirm", useUnmergedTree = true).assertExists()
+    }
+
+    @Test
+    fun `the recorded job opens clean on every card`() {
+        showJob(jobCuts, initialSelectedId = cutE.id)
+        rule.onNode(hasText(undercutCardTitle(1, 5)) and onCard(cutE.id)).assertExists()
+        assertPillSaved()
+        repeat(4) {
+            swipe(left = true)
+            assertPillSaved()
+            assertNoLeavePrompt()
+        }
+        assertNoOverlapNamed(1)
+        rule.onNodeWithTag("undercut_add_in_liner").assertIsEnabled()
+    }
+
+    @Test
+    fun `confirming a new cut with a value still in its field leaves no ghost draft behind`() {
+        draftCutEWithDiaInFlight("9.5")
+        rule.onNodeWithTag("undercut_confirm", useUnmergedTree = true).performClick()
+        settle()
+
+        val e = recordedCutE()
+        assertEquals(cutE.startFromAftMm, e.startFromAftMm, 0.01f)
+        assertEquals(cutE.lengthMm, e.lengthMm, 0.01f)
+        // The Ø was in the box when Confirm was tapped: it is part of what was confirmed.
+        assertEquals(9.5f * 25.4f, e.diaMm, 0.01f)
+        // No pending draft survives the record: the add entry point is live again.
+        rule.onNodeWithTag("undercut_add_in_liner").assertIsEnabled()
+
+        swipe(left = true)
+        assertNoLeavePrompt()
+        swipe(left = false)
+        assertCardOneIsCleanAndEditable(e.id)
+    }
+
+    @Test
+    fun `swiping off a new cut with a value still in its field records it and leaves no ghost`() {
+        draftCutEWithDiaInFlight("9.5")
+        // E's seed sits on the liner's AFT edge, so the pending card is the first page.
+        swipe(left = true)
+        assertNoLeavePrompt()
+
+        val e = recordedCutE()
+        assertEquals(cutE.lengthMm, e.lengthMm, 0.01f)
+        assertEquals(9.5f * 25.4f, e.diaMm, 0.01f)
+        rule.onNodeWithTag("undercut_add_in_liner").assertIsEnabled()
+
+        repeat(4) {
+            swipe(left = true)
+            assertNoLeavePrompt()
+        }
+        repeat(5) {
+            swipe(left = false)
+            assertNoLeavePrompt()
+        }
+        assertCardOneIsCleanAndEditable(e.id)
+    }
+
+    @Test
+    fun `an undo and redo of the add leave card 1 clean and never self-overlapping`() {
+        draftCutEWithDiaInFlight("9.5")
+        rule.onNodeWithTag("undercut_confirm", useUnmergedTree = true).performClick()
+        settle()
+        val eId = recordedCutE().id
+
+        rule.onNodeWithContentDescription("Undo").performClick()
+        settle()
+        rule.onNodeWithContentDescription("Redo").performClick()
+        settle()
+        assertNoLeavePrompt()
+        rule.onNodeWithTag("undercut_add_in_liner").assertIsEnabled()
+        repeat(4) { swipe(left = false) }
+        assertCardOneIsCleanAndEditable(eId)
+    }
+
+    @Test
+    fun `a delete and its snackbar undo leave card 1 clean and never self-overlapping`() {
+        showJob(jobCuts, initialSelectedId = cutE.id)
+        rule.onNodeWithContentDescription("Delete ${undercutCardTitle(1, 5)}").performClick()
+        settle()
+        rule.onNodeWithText("Undo").performClick()
+        settle()
+        assertEquals(5, record.undercuts.size)
+        assertCardOneIsCleanAndEditable(cutE.id)
+    }
+
+    @Test
+    fun `discarding a new cut with a value still in its field leaves no ghost draft behind`() {
+        // Discard flushes nothing: the field's blur lands after the pending card is gone, from a
+        // card with no page, and must not resurrect the add flow's draft.
+        draftCutEWithDiaInFlight("9.5")
+        rule.onNodeWithContentDescription("Discard change").performClick()
+        settle()
+        assertTrue("a discarded add was recorded at $added", added.isEmpty())
+        rule.onNodeWithTag("undercut_add_in_liner").assertIsEnabled()
+        repeat(4) {
+            swipe(left = true)
+            assertNoLeavePrompt()
+        }
+        assertNoOverlapNamed(1)
+    }
+
+    // ── Confirm re-checks the draft after the flush lands a typed value ──
+
+    /** u2 dirty and confirmable (a committed Ø), then [field] typed to [value] but NOT committed. */
+    private fun confirmWithInFlight(field: String, value: String) {
+        show(listOf(cut("u1", 600f, len = 100f), cut("u2", 900f)), initialSelectedId = "u2")
+        val inU2 = hasAnyAncestor(hasTestTag("undercut_card_u2"))
+        rule.onNode(hasText("Measured Ø (in)") and inU2).performScrollTo().performTextReplacement("7")
+        rule.onNode(hasText("Measured Ø (in)") and inU2).performImeAction()
+        settle()
+        rule.onNodeWithTag("undercut_confirm", useUnmergedTree = true).assertExists()
+        rule.onNode(hasText(field) and inU2).performScrollTo().performTextReplacement(value)
+        rule.waitForIdle()
+        rule.onNodeWithTag("undercut_confirm", useUnmergedTree = true).performClick()
+        settle()
+    }
+
+    private fun assertBlockedWith(reason: String) {
+        rule.onNodeWithTag("undercut_status_pill", useUnmergedTree = true)
+            .assert(hasAnyDescendant(hasText(reason, substring = true)))
+        assertTrue("an invalid draft reached the record: $updated", updated.isEmpty())
+    }
+
+    @Test
+    fun `confirm with an in-flight overlapping Distance records nothing and blocks`() {
+        confirmWithInFlight("Distance from Liner AFT (in)", "3")
+        assertBlockedWith("Overlaps cut 1")
+    }
+
+    @Test
+    fun `confirm with an in-flight Distance past the shaft end records nothing and blocks`() {
+        confirmWithInFlight("Distance from Liner AFT (in)", "60")
+        assertBlockedWith("past the shaft")
+    }
+
+    @Test
+    fun `confirm with an in-flight zero length records nothing and blocks`() {
+        confirmWithInFlight("Length (in)", "0")
+        assertBlockedWith("Length must be greater than zero")
+    }
+
+    // ── A flush blurs only the card being left ──
+
+    @Test
+    fun `moving to the card that holds focus keeps its field focused`() {
+        show(listOf(cut("u1", 600f, len = 100f), cut("u2", 900f)), initialSelectedId = "u1")
+        val length = hasText("Length (in)") and hasAnyAncestor(hasTestTag("undercut_card_u2"))
+        rule.onNode(length).performSemanticsAction(SemanticsActions.RequestFocus)
+        settle()
+        rule.onNodeWithTag("undercut_card_pager").performTouchInput { swipeLeft() }
+        settle()
+        rule.onNode(length).assertIsFocused()
+    }
+
+    // ── "Past the liner edge" for an overhang the flush lands ──
+
+    /** The add flow's card with a 40 in Length typed but not committed: its FWD end runs off the liner. */
+    private fun pendingWithInFlightOverhang() {
+        show(listOf(cut("u1", 600f)))
+        rule.onNodeWithTag("undercut_add_in_liner").performClick()
+        settle()
+        val length = hasText("Length (in)") and
+            hasAnyAncestor(hasTestTag("undercut_card_$PENDING_UNDERCUT_ID"))
+        rule.onNode(length).performScrollTo().performTextReplacement("40")
+        rule.waitForIdle()
+    }
+
+    private fun assertRecordedAsTyped() {
+        val cutNew = record.undercuts.single { it.id == "new" }
+        assertEquals(40f * 25.4f, cutNew.lengthMm, 0.01f)
+    }
+
+    @Test
+    fun `confirming a new cut with an in-flight overhang asks first, and Add extension records it`() {
+        pendingWithInFlightOverhang()
+        rule.onNodeWithTag("undercut_confirm", useUnmergedTree = true).performClick()
+        settle()
+        rule.onNodeWithTag("undercut_overhang_dialog").assertIsDisplayed()
+        assertTrue("recorded before the answer", added.isEmpty())
+        rule.onNodeWithTag("undercut_overhang_accept").performClick()
+        settle()
+        assertRecordedAsTyped()
+    }
+
+    @Test
+    fun `confirming a new cut with an in-flight overhang asks first, and No records it too`() {
+        pendingWithInFlightOverhang()
+        rule.onNodeWithTag("undercut_confirm", useUnmergedTree = true).performClick()
+        settle()
+        rule.onNodeWithTag("undercut_overhang_dialog").assertIsDisplayed()
+        rule.onNodeWithTag("undercut_overhang_decline").performClick()
+        settle()
+        assertRecordedAsTyped()
+        rule.onNodeWithTag("undercut_overhang_dialog").assertDoesNotExist()
+    }
+
+    @Test
+    fun `closing with an in-flight overhang asks first, then records and closes`() {
+        pendingWithInFlightOverhang()
+        rule.onNodeWithContentDescription("Back to Undercut Drawing").performClick()
+        settle()
+        rule.onNodeWithTag("undercut_overhang_dialog").assertIsDisplayed()
+        assertEquals("closed before the answer", 0, closed)
+        rule.onNodeWithTag("undercut_overhang_accept").performClick()
+        settle()
+        assertRecordedAsTyped()
+        assertEquals(1, closed)
+    }
+
+    // ── A refused late write says so ──
+
+    @Test
+    fun `an undo that takes away a card with a typed value still in its field says it was discarded`() {
+        show(listOf(cut("u1", 900f)))
+        rule.onNodeWithText("Length (in)").performTextReplacement("3")
+        rule.waitForIdle()
+
+        record = record.copy(undercuts = emptyList())
+        settle()
+
+        rule.onNodeWithText(UNDERCUT_DISCARDED_DRAFT_MSG).assertIsDisplayed()
+        assertTrue("an undone card's value reached the record", updated.isEmpty())
     }
 }

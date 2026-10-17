@@ -38,6 +38,7 @@ via SAF, delegating drawing to `composeShaftPdf`.
 | `wearJoinGapMaxMm` | `76.2` (3") | Taper–liner join threshold: bare shaft between two components in one wear detail strip that still draws true, in canonical mm (0–304.8; `0` = break on any gap) |
 | `runoutBubbleScale` | `1.0` | Multiplier on the runout bubble radius (`BUBBLE_RADIUS_PT`), read by both bubble draw sites — the sheet composer and the Runout tab's canvas preview. Stored clamp 0.5–2.0 (defensive, wider than the UI); UI range 60–150%, 5% steps |
 | `runoutBubbleDropScale` | `1.0` | Multiplier on the drop from the shaft surface to the first bubble row (`SHORT_LEADER_PT` / `RunoutBubbleGeometry.shortLeader`), same two draw sites as `runoutBubbleScale`. Stored clamp 0.5–2.0; UI range 50–200%. Experimental — exists to find where the pointer lines land best and may be retired |
+| `undercutLinerOutline` | `true` | Faint dotted outline of each liner's original OD and end faces over the stretches an undercut erased, on the UNDERCUT document's profile and detail strips (`geom/LinerOutlineMath.kt`). Reaches the undercut composer only (Settings → PDF Export and the undercut options sheet); drawing-profile captured |
 | `shadeExplicitBodiesOnly` | `false` | With `shadedBodies` on, narrows the body fill to explicit bodies only — auto (bare-shaft) runs draw unfilled. Consumed by the single `drawBodyRunsWithBreaks` pass (schematic + runout/consolidated); never reaches the wear/undercut documents (their `SimpleShaftProfile` body pass takes one fill for every run), so those two sheets hide the sub-checkbox (`showShadeExplicitBodiesOnly = false`). The kind checkboxes and this narrowing are additionally the DEFAULT for the per-component tri-state `shadeOnDrawing` card toggles (explicit `Body`/`Taper`/`Liner`), which override them per component in either direction — resolved by the pure `unshaded*Ids` builders, same wear/undercut boundary |
 
 All fields are also reachable in the preview screen's Tune sheet, except the sizing-curve
@@ -49,7 +50,8 @@ schematic Tune sheet this section otherwise describes. `runoutBubbleScale` /
 `runoutBubbleDropScale` are a third: they govern only the runout bubble draw sites, so — unlike
 every other pref in this table — they have no Settings → Drawing control at all; they surface
 only in the runout/consolidated PDF Options sheets, in their "Runout bubbles" section, not on
-the schematic or wear/undercut sheets, whose composers never read them. `undercutLineArt` is
+the schematic or wear/undercut sheets, whose composers never read them. `undercutLineArt` (and
+`undercutLinerOutline` with it) is
 the fourth, the mirror image of that: it reaches only the undercut composer, so it lives in
 Settings → PDF Export and the **undercut** preview's options sheet and nowhere else.
 

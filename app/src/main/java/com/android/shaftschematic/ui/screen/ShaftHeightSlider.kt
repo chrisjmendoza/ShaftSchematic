@@ -1147,6 +1147,8 @@ internal fun ShadeInPdfChecks(
     showUndercutLineArt: Boolean = false,
     undercutLineArt: Boolean = false,
     onSetUndercutLineArt: (Boolean) -> Unit = {},
+    undercutLinerOutline: Boolean = true,
+    onSetUndercutLinerOutline: (Boolean) -> Unit = {},
 ) {
     OptionsSectionExpander(OptionsSection.SHADING) {
         ShadeInPdfCheckRows(
@@ -1163,6 +1165,8 @@ internal fun ShadeInPdfChecks(
             showUndercutLineArt = showUndercutLineArt,
             undercutLineArt = undercutLineArt,
             onSetUndercutLineArt = onSetUndercutLineArt,
+            undercutLinerOutline = undercutLinerOutline,
+            onSetUndercutLinerOutline = onSetUndercutLinerOutline,
         )
     }
 }
@@ -1189,7 +1193,8 @@ internal fun ShadeInPdfChecks(
  *
  * [showUndercutLineArt] adds the undercut document's print line-art row at the FOOT of the group
  * — the rarely-reached option trails, and it is shown only on the sheet it governs, so the other
- * documents are not offered a control their composers ignore.
+ * documents are not offered a control their composers ignore — and the liner-outline row beside
+ * it, which governs the same document.
  */
 @Composable
 internal fun ShadeInPdfCheckRows(
@@ -1207,6 +1212,9 @@ internal fun ShadeInPdfCheckRows(
     /** The app-wide `PdfPrefs.undercutLineArt`; read only when [showUndercutLineArt]. */
     undercutLineArt: Boolean = false,
     onSetUndercutLineArt: (Boolean) -> Unit = {},
+    /** The app-wide `PdfPrefs.undercutLinerOutline`; read only when [showUndercutLineArt]. */
+    undercutLinerOutline: Boolean = true,
+    onSetUndercutLinerOutline: (Boolean) -> Unit = {},
 ) {
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1279,8 +1287,28 @@ internal fun ShadeInPdfCheckRows(
                 )
             }
         }
+        if (showUndercutLineArt) Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(
+                checked = undercutLinerOutline,
+                onCheckedChange = onSetUndercutLinerOutline,
+                modifier = Modifier.testTag("pdf_undercut_liner_outline"),
+            )
+            Spacer(Modifier.width(8.dp))
+            Column {
+                Text("Liner outline", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    UNDERCUT_LINER_OUTLINE_CAPTION,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }
+
+/** The liner-outline row's caption — the options sheet and Settings say the same thing. */
+internal const val UNDERCUT_LINER_OUTLINE_CAPTION =
+    "Dotted outline of each liner's original edges and OD over the cuts"
 
 /**
  * The runout bubble SIZE range this control offers: 60–150% of the shipped circle.

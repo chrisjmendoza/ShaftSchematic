@@ -6,12 +6,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import com.android.shaftschematic.geom.LinerOutlineEdge
 import com.android.shaftschematic.geom.NOTCH_FACE_MIN_STEP_PX
+import com.android.shaftschematic.geom.SurfaceSeg
 import com.android.shaftschematic.geom.UNDERCUT_SECTION_FILL_ALPHA
+import com.android.shaftschematic.geom.UndercutLinerOd
 import com.android.shaftschematic.geom.UndercutLinerSpan
 import com.android.shaftschematic.geom.UndercutNotch
+import com.android.shaftschematic.geom.linerOutlineSegments
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.ResolvedLiner
+import com.android.shaftschematic.ui.resolved.linerSurfaceSegs
 
 /**
  * The undercut helpers the detail overlay (`ui/screen/UndercutDetail.kt`) and the undercut
@@ -30,6 +35,18 @@ internal fun linerSpansOf(resolvedComponents: List<ResolvedComponent>): List<Und
         .filterIsInstance<ResolvedLiner>()
         .sortedBy { it.startMmPhysical }
         .map { UndercutLinerSpan(it.id, it.startMmPhysical, it.endMmPhysical) }
+
+/** Every resolved liner with its OD, aft → fwd — the liner-outline pass's input. */
+internal fun linerOdsOf(resolvedComponents: List<ResolvedComponent>): List<UndercutLinerOd> =
+    resolvedComponents
+        .filterIsInstance<ResolvedLiner>()
+        .sortedBy { it.startMmPhysical }
+        .map {
+            UndercutLinerOd(
+                it.id, it.startMmPhysical, it.endMmPhysical, it.odMm,
+                surface = linerSurfaceSegs(it.startMmPhysical, it.endMmPhysical, it.odMm, it.shoulderAft, it.shoulderFwd),
+            )
+        }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Notch pipeline — shared by the overview canvas and the detail overlay
@@ -119,6 +136,47 @@ internal fun DrawScope.drawUndercutNotches(
             }
             drawLine(outlineColor, Offset(x0, cy - rFloor), Offset(x1, cy - rFloor), strokeWidthPx, pathEffect = pathEffect)
             drawLine(outlineColor, Offset(x0, cy + rFloor), Offset(x1, cy + rFloor), strokeWidthPx, pathEffect = pathEffect)
+        }
+    }
+}
+
+/** The liner outline's ink alpha on the white-sheet canvases (over `SheetInk.Outline`). */
+internal const val LINER_OUTLINE_CANVAS_ALPHA = 0.4f
+
+/**
+ * The liner outline (`PdfPrefs.undercutLinerOutline`): a fine DOTTED retrace of each liner's
+ * original OD and end faces over the stretches [notches] erased, mirrored about [cy] — the
+ * pieces come from the ONE pure builder the PDF composer also runs ([linerOutlineSegments]).
+ * Called AFTER the notch passes, so the dots lie over the voids, and before rails and callouts.
+ */
+internal fun DrawScope.drawLinerOutlines(
+    liners: List<UndercutLinerOd>,
+    notches: List<UndercutNotch>,
+    segs: List<SurfaceSeg>,
+    xPx: (Float) -> Float,
+    rPx: (Float) -> Float,
+    cy: Float,
+    color: Color,
+    strokeWidthPx: Float,
+) {
+    val dots = PathEffect.dashPathEffect(floatArrayOf(2f, 4f))
+    liners.forEach { liner ->
+        linerOutlineSegments(liner, notches, segs).forEach { seg ->
+            val r0 = rPx(seg.dia0Mm)
+            val r1 = rPx(seg.dia1Mm)
+            when (seg.edge) {
+                LinerOutlineEdge.SURFACE -> {
+                    val x0 = xPx(seg.x0Mm)
+                    val x1 = xPx(seg.x1Mm)
+                    drawLine(color, Offset(x0, cy - r0), Offset(x1, cy - r0), strokeWidthPx, pathEffect = dots)
+                    drawLine(color, Offset(x0, cy + r0), Offset(x1, cy + r0), strokeWidthPx, pathEffect = dots)
+                }
+                else -> {
+                    val x = xPx(seg.x0Mm)
+                    drawLine(color, Offset(x, cy - r1), Offset(x, cy - r0), strokeWidthPx, pathEffect = dots)
+                    drawLine(color, Offset(x, cy + r0), Offset(x, cy + r1), strokeWidthPx, pathEffect = dots)
+                }
+            }
         }
     }
 }

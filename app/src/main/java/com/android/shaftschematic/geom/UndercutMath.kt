@@ -84,20 +84,35 @@ fun undercutBreakRoomMm(diaMm: Float): Float =
  * uncovered x (no seg) stays put. Empty [segs] returns the input unchanged. Idempotent.
  *
  * Chain datums are never passed here: only the drawn context outside them grows.
+ *
+ * [cutSpans] are the STRIP's own cuts (its members, chained cuts included — never another strip's,
+ * which the strip draws as plain stock): each cut's shoulders are faces in the same walk, and the
+ * stretch a cut spans never hosts a break (on-device request: cuts run past a liner into the body
+ * crashed into the window-end S-break). An end landing inside a cut, or within the room of a
+ * cut's shoulder on the interior side, therefore moves outward past it. Empty [cutSpans] walks the
+ * component faces alone.
  */
 fun withUndercutBreakRoom(
     startMm: Float,
     endMm: Float,
     segs: List<SurfaceSeg>,
     oalMm: Float,
+    cutSpans: List<UndercutSpanMm> = emptyList(),
 ): Pair<Float, Float> {
     if (segs.isEmpty()) return startMm to endMm
     val eps = UNDERCUT_SPAN_EPS_MM
     val hi = oalMm.coerceAtLeast(0f)
     val lo = segs.minOf { it.startMm }
     val top = segs.maxOf { it.endMm }
-    val pieces = buildSurfaceEnvelope(segs, lo, top)
-    if (pieces.isEmpty()) return startMm to endMm
+    val envelope = buildSurfaceEnvelope(segs, lo, top)
+    if (envelope.isEmpty()) return startMm to endMm
+    val cuts = cutSpans.filter { it.endMm > it.startMm }
+    val pieces = splitEnvelopeAtCutShoulders(envelope, cuts, eps)
+    fun inCut(p: EnvelopePiece): Boolean {
+        val mid = (p.x0Mm + p.x1Mm) * 0.5f
+        return cuts.any { mid > it.startMm && mid < it.endMm }
+    }
+    val cutPiece = BooleanArray(pieces.size) { inCut(pieces[it]) }
     fun room(p: EnvelopePiece) = undercutBreakRoomMm(max(p.dia0Mm, p.dia1Mm))
     fun contiguous(a: EnvelopePiece, b: EnvelopePiece) = abs(a.x1Mm - b.x0Mm) <= eps
 
@@ -112,9 +127,9 @@ fun withUndercutBreakRoom(
         while (i >= 0 && guard-- > 0) {
             val p = pieces[i]
             val r = room(p)
-            if (p.x1Mm - start >= r - eps) break
+            if (!cutPiece[i] && p.x1Mm - start >= r - eps) break
             val candidate = p.x1Mm - r
-            if (candidate >= p.x0Mm - eps) {
+            if (!cutPiece[i] && candidate >= p.x0Mm - eps) {
                 start = min(start, candidate)
                 break
             }
@@ -136,9 +151,9 @@ fun withUndercutBreakRoom(
         while (i >= 0 && guard-- > 0) {
             val p = pieces[i]
             val r = room(p)
-            if (end - p.x0Mm >= r - eps) break
+            if (!cutPiece[i] && end - p.x0Mm >= r - eps) break
             val candidate = p.x0Mm + r
-            if (candidate <= p.x1Mm + eps) {
+            if (!cutPiece[i] && candidate <= p.x1Mm + eps) {
                 end = max(end, candidate)
                 break
             }
@@ -148,6 +163,39 @@ fun withUndercutBreakRoom(
         if (end >= hi - eps) end = max(hi, endMm)
     }
     return start to end
+}
+
+/**
+ * [pieces] cut at every shoulder of [cuts] that falls strictly inside a piece, the Ø interpolated
+ * linearly to the split — the walk in [withUndercutBreakRoom] then meets each shoulder as a face.
+ * No cuts returns [pieces] itself.
+ */
+private fun splitEnvelopeAtCutShoulders(
+    pieces: List<EnvelopePiece>,
+    cuts: List<UndercutSpanMm>,
+    epsMm: Float,
+): List<EnvelopePiece> {
+    if (cuts.isEmpty()) return pieces
+    val shoulders = cuts.flatMap { listOf(it.startMm, it.endMm) }.distinct().sorted()
+    val out = mutableListOf<EnvelopePiece>()
+    for (p in pieces) {
+        val inside = shoulders.filter { it > p.x0Mm + epsMm && it < p.x1Mm - epsMm }
+        if (inside.isEmpty()) {
+            out += p
+            continue
+        }
+        fun diaAt(x: Float): Float {
+            val w = p.x1Mm - p.x0Mm
+            return if (w <= 0f) p.dia0Mm else p.dia0Mm + (p.dia1Mm - p.dia0Mm) * ((x - p.x0Mm) / w)
+        }
+        val cuts1 = listOf(p.x0Mm) + inside + p.x1Mm
+        for (k in 0 until cuts1.size - 1) {
+            val a = cuts1[k]
+            val b = cuts1[k + 1]
+            out += EnvelopePiece(a, b, diaAt(a), diaAt(b))
+        }
+    }
+    return out
 }
 
 /**
@@ -947,6 +995,46 @@ fun assignUndercutLiner(span: UndercutSpanMm, liners: List<UndercutLinerSpan>): 
         ?.first?.id
 
 /**
+ * Every span's liner for strip purposes, id → liner id (`null` = a bare-shaft cut): the
+ * overlap-share rule ([assignUndercutLiner]) first, then CHAINING — a bare-shaft cut touching
+ * (within [epsMm]), overlapping or nested with a cut assigned to liner L joins L too, repeated
+ * to a fixed point, so a run of cuts machined on from a liner's edge into the body stays on that
+ * liner's strip rather than splitting off into a free window (on-device request). A cut that
+ * overlaps a liner keeps its overlap-share liner; a bare-shaft cut reaching two liners' chains in
+ * the same pass joins the AFT-most. Each pass reads only the previous pass's result, so the
+ * outcome does not depend on [spans] order.
+ */
+fun assignUndercutLiners(
+    spans: List<UndercutSpanMm>,
+    liners: List<UndercutLinerSpan>,
+    epsMm: Float = UNDERCUT_TOUCH_EPS_MM,
+): Map<String, String?> {
+    val assigned = LinkedHashMap<String, String?>()
+    spans.forEach { assigned[it.id] = assignUndercutLiner(it, liners) }
+    val linerStart = liners.associate { it.id to it.startMm }
+    fun inContact(a: UndercutSpanMm, b: UndercutSpanMm) =
+        a.startMm <= b.endMm + epsMm && b.startMm <= a.endMm + epsMm
+    var guard = spans.size + 1
+    while (guard-- > 0) {
+        val prev = HashMap(assigned)
+        var changed = false
+        for (s in spans) {
+            if (prev[s.id] != null) continue
+            val joined = spans
+                .filter { o -> o.id != s.id && prev[o.id] != null && inContact(s, o) }
+                .mapNotNull { prev[it.id] }
+                .distinct()
+                .minByOrNull { linerStart[it] ?: Float.MAX_VALUE }
+                ?: continue
+            assigned[s.id] = joined
+            changed = true
+        }
+        if (!changed) break
+    }
+    return assigned
+}
+
+/**
  * Build one [UndercutStrip.LinerStrip] for [liner] and the cuts assigned to it (may be
  * empty — the overlay uses this to zoom an undercut-free liner for authoring). The draw
  * range is the liner's full span, expanded by any cut overhang past its edges, then
@@ -961,6 +1049,8 @@ fun linerStripFor(
     oalMm: Float,
     padMm: Float = UNDERCUT_WINDOW_PAD_MM,
     segs: List<SurfaceSeg> = emptyList(),
+    /** The strip's own cuts, whose shoulders the window-end breaks also clear ([withUndercutBreakRoom]). */
+    cutSpans: List<UndercutSpanMm> = emptyList(),
 ): UndercutStrip.LinerStrip {
     val hi = oalMm.coerceAtLeast(0f)
     val cutsMin = assignedSpans.minOfOrNull { it.startMm } ?: liner.startMm
@@ -969,6 +1059,7 @@ fun linerStripFor(
     val chainEnd = max(liner.endMm, cutsMax)
     val (drawStart, drawEnd) = withUndercutBreakRoom(
         (chainStart - padMm).coerceIn(0f, hi), (chainEnd + padMm).coerceIn(0f, hi), segs, oalMm,
+        cutSpans,
     )
     return UndercutStrip.LinerStrip(
         linerId = liner.id,
@@ -1000,22 +1091,25 @@ fun undercutPreviewDrawRange(
     oalMm: Float,
     padMm: Float = UNDERCUT_WINDOW_PAD_MM,
     segs: List<SurfaceSeg> = emptyList(),
+    /** The strip's own previewed cuts, whose shoulders the window-end breaks also clear. */
+    cutSpans: List<UndercutSpanMm> = emptyList(),
 ): Pair<Float, Float> {
     val hi = oalMm.coerceAtLeast(0f)
     val spansMin = previewSpans.minOfOrNull { it.startMm }
-        ?: return withUndercutBreakRoom(strip.drawStartMm, strip.drawEndMm, segs, oalMm)
+        ?: return withUndercutBreakRoom(strip.drawStartMm, strip.drawEndMm, segs, oalMm, cutSpans)
     val spansMax = previewSpans.maxOf { it.endMm }
     return withUndercutBreakRoom(
         min(strip.drawStartMm, spansMin - padMm).coerceIn(0f, hi),
         max(strip.drawEndMm, spansMax + padMm).coerceIn(0f, hi),
-        segs, oalMm,
+        segs, oalMm, cutSpans,
     )
 }
 
 /**
- * Group cuts into detail strips: every cut overlapping a liner joins that liner's
- * [UndercutStrip.LinerStrip] (one strip per liner with ≥1 cut, covering the whole liner);
- * the remaining bare-shaft cuts cluster into [UndercutStrip.FreeStrip] windows via
+ * Group cuts into detail strips: every cut overlapping a liner — or chained to one that does,
+ * [assignUndercutLiners] — joins that liner's [UndercutStrip.LinerStrip] (one strip per liner
+ * with ≥1 cut, covering the whole liner and every chained cut); the remaining bare-shaft cuts
+ * cluster into [UndercutStrip.FreeStrip] windows via
  * [clusterUndercuts]. Every strip's DRAW range gets break room against [segs]
  * ([withUndercutBreakRoom]; chain datums never move — a free strip's window stays its chain
  * and only its draw range grows). Result is sorted aft → fwd by draw start. Consumed by the
@@ -1032,14 +1126,17 @@ fun buildUndercutStrips(
     segs: List<SurfaceSeg> = emptyList(),
 ): List<UndercutStrip> {
     val live = spans.filter { it.endMm > it.startMm }
-    val byLiner = live.groupBy { assignUndercutLiner(it, liners) }
+    val linerOf = assignUndercutLiners(live, liners)
+    val byLiner = live.groupBy { linerOf[it.id] }
     val strips = mutableListOf<UndercutStrip>()
     for (liner in liners) {
         val assigned = byLiner[liner.id] ?: continue
-        strips += linerStripFor(liner, assigned, oalMm, padMm, segs)
+        strips += linerStripFor(liner, assigned, oalMm, padMm, segs, cutSpans = assigned)
     }
     for (window in clusterUndercuts(byLiner[null].orEmpty(), oalMm, gapMm, padMm)) {
-        val (drawStart, drawEnd) = withUndercutBreakRoom(window.startMm, window.endMm, segs, oalMm)
+        val members = live.filter { it.id in window.undercutIds }
+        val (drawStart, drawEnd) =
+            withUndercutBreakRoom(window.startMm, window.endMm, segs, oalMm, cutSpans = members)
         strips += UndercutStrip.FreeStrip(window, drawStart, drawEnd)
     }
     return strips.sortedBy { it.drawStartMm }

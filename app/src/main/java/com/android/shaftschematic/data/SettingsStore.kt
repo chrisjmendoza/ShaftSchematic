@@ -180,6 +180,8 @@ object SettingsStore {
     // strips' always-shaded liner and the section core included. Independent of the screen-side
     // UndercutStyle line-art mode, which never reaches a composer.
     private val KEY_PDF_UNDERCUT_LINE_ART = booleanPreferencesKey("pdf_undercut_line_art")
+    // Dotted retrace of each liner's original edges over the cuts on the undercut drawing.
+    private val KEY_PDF_UNDERCUT_LINER_OUTLINE = booleanPreferencesKey("pdf_undercut_liner_outline")
     private val KEY_PDF_CURVE_LO_HEIGHT_IN = floatPreferencesKey("pdf_curve_lo_height_in")
     private val KEY_PDF_CURVE_HI_HEIGHT_IN = floatPreferencesKey("pdf_curve_hi_height_in")
     private val KEY_PDF_SBREAK_THRESHOLD_FRAC = floatPreferencesKey("pdf_sbreak_threshold_frac")
@@ -272,6 +274,13 @@ object SettingsStore {
         ctx.settingsPrefs.map { p -> p[KEY_PDF_UNDERCUT_LINE_ART] ?: false }
     suspend fun setPdfUndercutLineArt(ctx: Context, v: Boolean) {
         ctx.editSettings { it[KEY_PDF_UNDERCUT_LINE_ART] = v }
+    }
+
+    /** The undercut drawing's liner outline — see the key's comment. */
+    fun pdfUndercutLinerOutlineFlow(ctx: Context): Flow<Boolean> =
+        ctx.settingsPrefs.map { p -> p[KEY_PDF_UNDERCUT_LINER_OUTLINE] ?: PdfPrefs().undercutLinerOutline }
+    suspend fun setPdfUndercutLinerOutline(ctx: Context, v: Boolean) {
+        ctx.editSettings { it[KEY_PDF_UNDERCUT_LINER_OUTLINE] = v }
     }
 
     // Sizing-curve anchor heights (paper inches): what a 4" / 8" shaft draws by default.

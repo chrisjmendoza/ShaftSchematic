@@ -69,7 +69,9 @@ The undercut sheets' component fills are additionally user-styled via `UndercutS
 (see `UndercutDrawing.md`) — still fixed ink colors, never theme roles. That style is
 **screen-only and never reaches a composer**; the printed undercut drawing has its own
 independent line-art preference, `PdfPrefs.undercutLineArt` (drawing-profile captured), so the
-two surfaces are set separately and neither reads the other.
+two surfaces are set separately and neither reads the other. The faint dotted liner outline drawn
+over the cuts is fixed `SheetInk` on the canvases (theme-independent) and driven by its own app-wide
+`PdfPrefs.undercutLinerOutline` on both surfaces.
 
 **Interactive affordances stay theme-driven** — tap tints, selection highlights, draft
 notch outlines, badges use `colorScheme.primary`/`error`. They are UI, not ink. The

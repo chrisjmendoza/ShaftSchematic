@@ -336,6 +336,11 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     internal val _pdfUndercutLineArt = MutableStateFlow(PdfPrefs().undercutLineArt)
     val pdfUndercutLineArt: StateFlow<Boolean> = _pdfUndercutLineArt.asStateFlow()
 
+    // Dotted liner outline over the cuts on the undercut drawing and its two canvases. Also a
+    // preview re-render key on the Undercut tab.
+    internal val _pdfUndercutLinerOutline = MutableStateFlow(PdfPrefs().undercutLinerOutline)
+    val pdfUndercutLinerOutline: StateFlow<Boolean> = _pdfUndercutLinerOutline.asStateFlow()
+
     // Narrows the body shade to authored sections (auto/bare-shaft runs draw unfilled). Also a
     // preview re-render key on every tab that rasterizes with the current PdfPrefs.
     internal val _pdfShadeExplicitBodiesOnly = MutableStateFlow(PdfPrefs().shadeExplicitBodiesOnly)
@@ -1021,6 +1026,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             SettingsStore.pdfUndercutLineArtFlow(getApplication()).collectLatest { persisted ->
                 _pdfUndercutLineArt.value = persisted
                 SettingsStore.updatePdfPrefs { it.copy(undercutLineArt = persisted) }
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.pdfUndercutLinerOutlineFlow(getApplication()).collectLatest { persisted ->
+                _pdfUndercutLinerOutline.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(undercutLinerOutline = persisted) }
             }
         }
         viewModelScope.launch {

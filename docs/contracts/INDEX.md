@@ -53,7 +53,8 @@ work ships they move to `docs/archive/`; each is listed under the contract it be
   options. Design plan: `docs/archive/WearDiaMeasurements_PLAN.md`.
 - **UndercutDrawing.md** — Undercut Drawing tab/PDF: shaft-space (not component-keyed)
   undercut sections, cluster-window zoom, notch geometry against the local outer surface,
-  chained + total dimension rails. Design plan: `docs/archive/UndercutDrawing_PLAN.md`.
+  chained + total dimension rails, Distance datums (S.E.T., liner edge unless buried, parent cut),
+  nested cuts, confirm-time validation, Undo, the liner outline. Design plan: `docs/archive/UndercutDrawing_PLAN.md`.
 - **PdfExport.md** — export route (SAF, Letter landscape 792×612) and PDF preview
   screen (options sheet, orientation unlock). Composer pipeline: `docs/PDF_EXPORT.md`.
 - **FractionTypography.md** — how a fraction is SET wherever the app draws one: the pure

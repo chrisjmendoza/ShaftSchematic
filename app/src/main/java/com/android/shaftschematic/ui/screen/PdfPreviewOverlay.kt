@@ -95,6 +95,7 @@ import com.android.shaftschematic.ui.viewmodel.setPdfShadeExplicitBodiesOnly
 import com.android.shaftschematic.ui.viewmodel.setPdfShadedBodies
 import com.android.shaftschematic.ui.viewmodel.setPdfShadedLiners
 import com.android.shaftschematic.ui.viewmodel.setPdfUndercutLineArt
+import com.android.shaftschematic.ui.viewmodel.setPdfUndercutLinerOutline
 import com.android.shaftschematic.ui.viewmodel.setPdfShadedTapers
 import com.android.shaftschematic.ui.viewmodel.setPdfTieringMode
 import com.android.shaftschematic.ui.viewmodel.setPdfWearBandShadeFrac
@@ -403,6 +404,8 @@ internal fun RunoutWearOptionsSheet(
     showUndercutLineArt: Boolean = false,
     /** The app-wide `PdfPrefs.undercutLineArt`; read only when [showUndercutLineArt]. */
     undercutLineArt: Boolean = false,
+    /** The app-wide `PdfPrefs.undercutLinerOutline`; read only when [showUndercutLineArt]. */
+    undercutLinerOutline: Boolean = true,
     /**
      * Shows the per-job "Coupling face" election. On for the runout and consolidated sheets,
      * the two documents that can draw the end view; off for the wear and undercut sheets,
@@ -748,6 +751,8 @@ internal fun RunoutWearOptionsSheet(
                 showUndercutLineArt = showUndercutLineArt,
                 undercutLineArt = undercutLineArt,
                 onSetUndercutLineArt = { vm.setPdfUndercutLineArt(it) },
+                undercutLinerOutline = undercutLinerOutline,
+                onSetUndercutLinerOutline = { vm.setPdfUndercutLinerOutline(it) },
             )
         }
 

@@ -466,7 +466,14 @@ a stored cut, displayed from the nearer S.E.T. once that parent is gone or no lo
 (canonical untouched). Two butted top-level cuts draw ONE step between their floors (a touching
 end's face top is the neighbour's DRAWN floor; a deeper neighbour leaves no face); an UNTOUCHED
 "New undercut" is discarded on leave, never recorded; the overlap message names the partner cut;
-containment, touching and duplicates share `UNDERCUT_TOUCH_EPS_MM`. The notch (void fill erasing surface stroke and fill — the mouth stays **OPEN**,
+containment, touching and duplicates share `UNDERCUT_TOUCH_EPS_MM`. A draft's id ALWAYS equals its card's page id (`writeDraft` refuses a write
+from a card with no page; Confirm and every leave flush the focused field first — a field still
+holding focus on a disposed "New undercut" card resurrected an invisible PENDING draft and lost
+its typed Ø, on-device report). Cuts chained to a liner's cuts by touching/nesting
+(`assignUndercutLiners`, transitive) belong to that liner's strip, and `withUndercutBreakRoom`
+also clears cut shoulders. `PdfPrefs.undercutLinerOutline` (app-wide look pref, default on)
+draws each liner's ERASED edges/OD as a dotted outline over the cuts from the ONE pure
+`geom/LinerOutlineMath.kt`, identically on canvas and PDF. The notch (void fill erasing surface stroke and fill — the mouth stays **OPEN**,
 never closed by a lid — plus a full-height **section face** at each end and the floor lines,
 so each cut is its own reduced-Ø rectangle **step in the silhouette**, cut against the
 **local outer-surface envelope**; the section's core fills one step **lighter** than the
