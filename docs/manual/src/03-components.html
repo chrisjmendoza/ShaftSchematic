@@ -373,7 +373,7 @@
       <tr><td><span class="ui">Show Ø on drawing</span></td><td>Explicit bodies, liners</td><td>Bodies off, liners on</td></tr>
       <tr><td><span class="ui">Show bare-shaft Ø on drawing</span></td><td>Bare-shaft cards (one switch for all bare shaft)</td><td>Off</td></tr>
       <tr><td><span class="ui">Shade on drawing</span></td><td>Explicit bodies, tapers, liners</td><td>Follows the Settings checkbox for that kind</td></tr>
-      <tr><td><span class="ui">Show name on drawing</span></td><td>Explicit bodies, tapers, threads, liners</td><td>Follows <span class="ui">Show component titles in PDF</span></td></tr>
+      <tr><td><span class="ui">Show name on drawing</span></td><td>Explicit bodies, tapers, threads, liners</td><td>Follows <span class="ui">Component names on drawing</span> (Settings → Drawing)</td></tr>
       <tr><td><span class="ui">Compress on drawing</span></td><td>Explicit bodies</td><td>Off for new bodies</td></tr>
       <tr><td><span class="ui">Prints in:</span> <span class="ui">in</span> | <span class="ui">mm</span></td><td>Explicit bodies, tapers, threads, liners</td><td>The document unit</td></tr>
       <tr><td><span class="ui">Show dimension rail</span></td><td>Coupler bolt slots and holes</td><td>Off</td></tr>
@@ -396,7 +396,7 @@
   <aside class="note"><p>On a consolidated sheet that prints measured diameters inside the profile, liners always print unshaded, whatever this switch says, so the values stay readable.</p></aside>
 
   <h3 id="components-show-name">Show name on drawing</h3>
-  <p>Controls whether this component's name prints below the shaft. It works the same three ways as shading: untouched, it follows <span class="path">Settings → PDF Export Options → Show component titles in PDF</span> (on by default); switched on, the name prints even with that setting off; switched off, it is hidden even with the setting on. Hiding one name never renumbers the others. Bare shaft never prints a name.</p>
+  <p>Controls whether this component's name prints below the shaft. It works the same three ways as shading: untouched, it follows <span class="path">Settings → Drawing → Component names on drawing</span> (on by default), and the line under the switch reads <span class="ui">Following Settings → Drawing → Component names</span>; switched on, the name prints even with that setting off; switched off, it is hidden even with the setting on. Hiding one name never renumbers the others. Bare shaft never prints a name.</p>
 
   <h3 id="components-compress">Compress on drawing</h3>
   <p>On a long shaft the sheet shortens plain body runs so everything fits the page, and draws an S-break in a run that is shortened a lot. <span class="ui">Compress on drawing</span> decides whether this explicit body may be shortened.</p>
@@ -438,7 +438,7 @@
     <li>Names print below the shaft, centered under their component.</li>
     <li>Names share the space below the shaft with the Ø callouts. If a name would collide with a callout or another name, it first slides along its own component, then drops to another row only if it must. Callouts never move to make room.</li>
     <li>On a crowded sheet the names shrink a point at a time, down to 7 pt. A name is never left off.</li>
-    <li>Whether a name prints at all is set by <span class="ui">Show name on drawing</span> and the <span class="ui">Show component titles in PDF</span> setting; see <a href="#components-drawing-toggles">above</a>. Template mode prints no names.</li>
+    <li>Whether a name prints at all is set by <span class="ui">Show name on drawing</span> and the <span class="ui">Component names on drawing</span> setting; see <a href="#components-drawing-toggles">above</a>. Template mode prints no names.</li>
   </ul>
   <aside class="tip"><p>A short name reads best. A name much wider than its component may slide off-center to stay clear of the callouts.</p></aside>
 </section>

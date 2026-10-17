@@ -183,9 +183,13 @@ Switching it on with nothing typed seeds Relief length = 1.5 × pitch
 (`AddDefaultsConfig.THREAD_RELIEF_LEN_PITCHES`; 4 TPI → 0.375″; the hatch's 2.5 mm fallback
 pitch when there is none) and Relief Ø = major Ø − 1.3 × pitch
 (`THREAD_RELIEF_DIA_BELOW_MAJOR_PITCHES`, just under a 60° thread's root), both through the
-pure `threadReliefForSwitch`, and seeds the end ONCE from `suggestedThreadReliefAtAft` (the
-thread's INBOARD end: an AFT-end thread → FWD, a FWD-end thread → AFT, mid-shaft → FWD) read
-from the dialog's start / Count-in-OAL / Thread-end state at that moment. Values are typed in
+pure `threadReliefForSwitch`. The END follows `suggestedThreadReliefAtAft` (the thread's
+INBOARD end: an AFT-end thread → FWD, a FWD-end thread → AFT, mid-shaft → FWD) read LIVE from
+the dialog's start / Count-in-OAL / Thread-end state until the "Relief at" chips are tapped; a
+tapped chip is kept (`reliefEndChoice`). Seeding it once left the relief on the shaft-end side
+after the thread end or the OAL switch changed (on-device report). The card's "Thread end" and
+OAL switches carry a relief still at the suggested end the same way
+(`Threads.withReliefEndFollowing`, in `setThreadEndPosition` / `setThreadExcludeFromOal`). Values are typed in
 the document unit. While the switch is OFF the dialog submits relief 0/0 whatever the hidden
 fields hold (`threadReliefSubmitValues`). `reliefLenMm, reliefDiaMm, reliefAtAft` ride
 `onSubmit → ShaftScreen.onAddThread → ShaftRoute → ShaftViewModel.addThreadAt` verbatim.

@@ -888,7 +888,7 @@
       <tr class="short"><td><span class="ui">Show Ø on drawing</span></td><td>Explicit bodies, liners</td><td>Bodies off, liners on</td></tr>
       <tr><td><span class="ui">Show bare-shaft Ø on drawing</span></td><td>Bare-shaft cards (one switch for all bare shaft)</td><td>Off</td></tr>
       <tr><td><span class="ui">Shade on drawing</span></td><td>Explicit bodies, tapers, liners</td><td>Follows the Settings checkbox for that kind</td></tr>
-      <tr><td><span class="ui">Show name on drawing</span></td><td>Explicit bodies, tapers, threads, liners</td><td>Follows <span class="ui">Show component titles in PDF</span></td></tr>
+      <tr><td><span class="ui">Show name on drawing</span></td><td>Explicit bodies, tapers, threads, liners</td><td>Follows <span class="ui">Component names on drawing</span> (Settings → Drawing)</td></tr>
       <tr><td><span class="ui">Compress on drawing</span></td><td>Explicit bodies</td><td>Off for new bodies</td></tr>
       <tr><td><span class="ui">Prints in:</span> <span class="ui">in</span> | <span class="ui">mm</span></td><td>Explicit bodies, tapers, threads, liners</td><td>The document unit</td></tr>
       <tr><td><span class="ui">Show dimension rail</span></td><td>Coupler bolt slots and holes</td><td>Off</td></tr>
@@ -911,7 +911,7 @@
   <aside class="note"><p  class="keep">On a consolidated sheet that prints measured diameters inside the profile, liners always print unshaded, whatever this switch says, so the values stay readable.</p></aside>
 
   <h3 id="components-show-name">Show name on drawing</h3>
-  <p  class="keep">Controls whether this component's name prints below the shaft. It works the same three ways as shading: untouched, it follows <span class="path">Settings → PDF Export Options → Show component titles in PDF</span> (on by default); switched on, the name prints even with that setting off; switched off, it is hidden even with the setting on. Hiding one name never renumbers the others. Bare shaft never prints a name.</p>
+  <p  class="keep">Controls whether this component's name prints below the shaft. It works the same three ways as shading: untouched, it follows <span class="path">Settings → Drawing → Component names on drawing</span> (on by default), and the line under the switch reads <span class="ui">Following Settings → Drawing → Component names</span>; switched on, the name prints even with that setting off; switched off, it is hidden even with the setting on. Hiding one name never renumbers the others. Bare shaft never prints a name.</p>
 
   <h3 id="components-compress">Compress on drawing</h3>
   <p  class="keep">On a long shaft the sheet shortens plain body runs so everything fits the page, and draws an S-break in a run that is shortened a lot. <span class="ui">Compress on drawing</span> decides whether this explicit body may be shortened.</p>
@@ -953,7 +953,7 @@
     <li  class="keep">Names print below the shaft, centered under their component.</li>
     <li  class="keep">Names share the space below the shaft with the Ø callouts. If a name would collide with a callout or another name, it first slides along its own component, then drops to another row only if it must. Callouts never move to make room.</li>
     <li  class="keep">On a crowded sheet the names shrink a point at a time, down to 7 pt. A name is never left off.</li>
-    <li  class="keep">Whether a name prints at all is set by <span class="ui">Show name on drawing</span> and the <span class="ui">Show component titles in PDF</span> setting; see <a href="#components-drawing-toggles">above</a>. Template mode prints no names.</li>
+    <li  class="keep">Whether a name prints at all is set by <span class="ui">Show name on drawing</span> and the <span class="ui">Component names on drawing</span> setting; see <a href="#components-drawing-toggles">above</a>. Template mode prints no names.</li>
   </ul>
   <aside class="tip"><p  class="keep">A short name reads best. A name much wider than its component may slide off-center to stay clear of the callouts.</p></aside>
 </section>
@@ -1052,7 +1052,7 @@
     <tbody>
       <tr class="short"><td><span class="ui">Blank draft</span></td><td>Off</td><td>Every sheet</td><td>Prints the drawing with every value blanked for handwriting. Off each time the app starts.</td></tr>
       <tr><td><span class="ui">Ø callouts</span></td><td>On</td><td>Schematic, Final</td><td>Can be tapped only while Blank draft is on. On: the blank sheet keeps its Ø leaders with a write-in rule. Off: the leaders are left out so diameters can be written in wherever they belong.</td></tr>
-      <tr><td><span class="ui">Labels</span></td><td>On</td><td>Schematic, Final</td><td>Component names under the shaft. This is the default for every component; a card's <span class="ui">Show name on drawing</span> toggle overrides it in either direction (see <a href="#components-show-name">Show name on drawing</a>). The same setting appears as <span class="path">Settings → PDF Export Options → Show component titles in PDF</span>.</td></tr>
+      <tr><td><span class="ui">Component names</span></td><td>On</td><td>Schematic, Final</td><td>Component names under the shaft. This is the default for every component; a card's <span class="ui">Show name on drawing</span> toggle overrides it in either direction (see <a href="#components-show-name">Show name on drawing</a>). The same setting is <span class="path">Settings → Drawing → Component names on drawing</span> (see <a href="#settings-component-names">Component names</a>).</td></tr>
       <tr><td><span class="ui">Coupling face</span></td><td>Off</td><td>Runout, Consolidated</td><td>Prints the coupling end view, looking forward, at the bottom right. Saved with this job and shared with the Runout tab.</td></tr>
       <tr><td><span class="ui">Runout bubbles</span></td><td>Off</td><td>Final only</td><td>Turns the Final schematic into a Schematic + Runout sheet. See <a href="#documents-final">The Final Schematic tab</a>.</td></tr>
     </tbody>
@@ -1076,7 +1076,7 @@
   <table class="ref">
     <thead><tr><th>Sheet</th><th>Content chips</th><th>Sections and controls</th></tr></thead>
     <tbody>
-      <tr class="short"><td>Schematic / Final</td><td>Blank draft, Ø callouts, Labels (+ Runout bubbles on Final)</td><td>Shaft (all four controls) · Thread · Lines &amp; text (all three) · Shade in Components · Measurement reference · Units</td></tr>
+      <tr class="short"><td>Schematic / Final</td><td>Blank draft, Ø callouts, Component names (+ Runout bubbles on Final)</td><td>Shaft (all four controls) · Thread · Lines &amp; text (all three) · Shade in Components · Measurement reference · Units</td></tr>
       <tr><td>Runout Sheet</td><td>Blank draft, Coupling face</td><td>Shaft (all four) · Runout bubbles · Thread · Lines &amp; text (Line thickness, Fractions) · Shade in Components · Units</td></tr>
       <tr><td>Consolidated Sheet</td><td>Blank draft, Coupling face</td><td>Every section except Wear. The fullest panel.</td></tr>
       <tr><td>Wear Document</td><td>Blank draft</td><td>Shaft (Shaft height only) · Wear · Thread · Lines &amp; text (Line thickness, Fractions) · Shade in Components (no Explicit bodies only) · Units</td></tr>
@@ -1395,7 +1395,7 @@
     <tbody>
       <tr>
         <td>
-          Line thickness · Body S-break · Default drawing size · Dimension arrows · Fractions · Output font · Dual-unit layout · Thread slant and density · Bubble size and height · Shade in Components (Bodies, Explicit bodies only, Tapers, Liners) · Undercut drawing line art · Show component titles · Measurement reference · Wear trace depth default · Wear area shade · Taper–liner join
+          Line thickness · Body S-break · Default drawing size · Dimension arrows · Fractions · Output font · Dual-unit layout · Thread slant and density · Bubble size and height · Shade in Components (Bodies, Explicit bodies only, Tapers, Liners) · Undercut drawing line art, liner outline, cut numbers and split cuts at liner edges · Component names on drawing · Measurement reference · Wear trace depth default · Wear area shade · Taper–liner join
         </td>
         <td>
           Per-job settings (Shaft height, liner and taper compression, coupling face, wear strip choices) · Dual units on a document and the <span class="ui">Dual-unit display</span> switch · Which controls exist (Per-component units, Liner shoulders, Unit converter in Add dialogs) · Template mode · Open PDF after export · Theme, preview colors and on-screen undercut styles
@@ -2296,7 +2296,10 @@
   <aside class="tip"><p  class="keep">On a tablet at the lathe under shop lights, try <span class="ui">Light</span> with <span class="ui">High contrast</span> on.</p></aside>
 
   <h2 id="settings-drawing">Drawing</h2>
-  <p  class="keep"><span class="path">Settings → Drawing</span> — what every printed sheet looks like. These settings apply to every document; a document never stores its own copy of them. The section runs from shaft size, through the wear document, to lines, threads and text, and ends with four switches that reveal extra controls in the editor.</p>
+  <p  class="keep"><span class="path">Settings → Drawing</span> — what every printed sheet looks like. These settings apply to every document; a document never stores its own copy of them. The section opens with component names, runs from shaft size, through the wear document, to lines, threads and text, and ends with four switches that reveal extra controls in the editor.</p>
+
+  <h3 id="settings-component-names">Component names</h3>
+  <p><span class="ui">Component names on drawing</span> (on by default) is the default for every component's <span class="ui">Show name on drawing</span> switch. A card that has not been set follows it, and says so under its switch: <span class="ui">Following Settings → Drawing → Component names</span>. A card you set yourself keeps its choice either way: switched on there, the name prints even with this off; switched off, it stays hidden even with this on. Turn it off if your drawings normally go out without names and you only name the odd section. The same setting is the <span class="ui">Component names</span> chip on the schematic's PDF options.</p>
 
   <h3 id="settings-drawing-size">Shaft size and S-breaks</h3>
   <table class="ref">
@@ -2397,7 +2400,6 @@
     <thead><tr><th>Setting</th><th>Default</th><th>What it does</th></tr></thead>
     <tbody>
       <tr class="short"><td><span class="ui">Open PDF after export</span></td><td>Off</td><td>Opens the finished file in your PDF viewer as soon as it is written.</td></tr>
-      <tr><td><span class="ui">Show component titles in PDF</span></td><td>On</td><td>The default for component names on the schematic. A component's own <span class="ui">Show name on drawing</span> toggle on its card overrides this either way: switched on there, the name prints even with this off; switched off, it stays hidden even with this on. Also on the PDF options panel as the <span class="ui">Labels</span> chip (schematic sheet).</td></tr>
       <tr><td><span class="ui">Shade in Components</span>: <span class="ui">Bodies</span></td><td>Off</td><td>Fills bodies with light grey instead of leaving them outlined. Also on the PDF options panel (Shade in Components section).</td></tr>
       <tr><td><span class="ui">Explicit bodies only</span></td><td>Off</td><td>Under <span class="ui">Bodies</span>. Shades only the body sections you added; auto (bare-shaft) sections stay unshaded. Works only while <span class="ui">Bodies</span> is checked. Also on the PDF options panel, except on the wear and undercut sheets, which shade every body the same way.</td></tr>
       <tr><td><span class="ui">Tapers</span></td><td>Off</td><td>Fills tapers with light grey. Also on the PDF options panel.</td></tr>
@@ -2535,7 +2537,7 @@
   <p  class="keep">When several bodies share a diameter, the value prints once, on the longest one that is switched on; the footer's “Body:” list always shows every body Ø. See <a href="#components-drawing-toggles">Per-component drawing switches</a>.</p>
 
   <h3>A component's name is missing from the sheet</h3>
-  <p  class="keep">Check the card's <span class="ui">Show name on drawing</span> switch. Until you set it, it follows the <span class="ui">Labels</span> chip on the schematic's PDF options (the same setting as <span class="path">Settings → PDF Export Options → Show component titles in PDF</span>); set on the card, your choice wins either way. Bare shaft never prints a name, and Template mode prints none. See <a href="#components-show-name">Show name on drawing</a>.</p>
+  <p  class="keep">Check the card's <span class="ui">Show name on drawing</span> switch. Until you set it, it follows <span class="path">Settings → Drawing → Component names on drawing</span> (the <span class="ui">Component names</span> chip on the schematic's PDF options is the same setting), and the line under the switch says so; set on the card, your choice wins either way. Bare shaft never prints a name, and Template mode prints none. See <a href="#components-show-name">Show name on drawing</a>.</p>
 
   <h3>My blank draft has no Ø leaders to write on</h3>
   <p  class="keep">On a blank draft, Ø callouts are a separate choice. In the schematic's PDF options, under <span class="ui">Content</span>, turn on <span class="ui">Ø callouts</span> beside <span class="ui">Blank draft</span>. The chip can only be tapped while <span class="ui">Blank draft</span> is on. Blank draft itself is off each time the app starts.</p>

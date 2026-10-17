@@ -296,6 +296,27 @@ fun SettingsRoute(
                     HorizontalDivider()
                     Text("Drawing", style = MaterialTheme.typography.titleMedium)
 
+                    // The default under every card's tri-state "Show name on drawing" switch. It
+                    // leads the Drawing section because it is reached for from a card, not while
+                    // exporting (on-device report: on the PDF Export sub-page it could not be
+                    // found). Same pref as the schematic options sheet's chip.
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Switch(
+                            checked = pdfShowComponentTitles,
+                            onCheckedChange = { vm.setPdfShowComponentTitles(it) },
+                            modifier = Modifier.testTag("settings_component_names_switch"),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Column {
+                            Text(COMPONENT_NAMES_SETTING_LABEL)
+                            Text(
+                                COMPONENT_NAMES_SETTING_CAPTION,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+
                     Text(
                         "Default drawing size",
                         style = MaterialTheme.typography.titleSmall,
@@ -514,7 +535,7 @@ fun SettingsRoute(
                     // one reset for all of it. A profile and the reset cover the SAME set — the
                     // whole `PdfPrefs` plus line thickness — so a profile can always be undone.
                     // That set reaches past this heading (line thickness sits under Editor
-                    // Screen, shading / titles / tiering on the PDF Export page) because it is
+                    // Screen, shading / tiering on the PDF Export page) because it is
                     // defined by what styles a sheet, not by where a control was placed.
                     HorizontalDivider()
                     DrawingProfilesSection(
@@ -886,15 +907,6 @@ fun SettingsRoute(
                         )
                         Spacer(Modifier.width(8.dp))
                         Text("Open PDF after export")
-                    }
-
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Switch(
-                            checked = pdfShowComponentTitles,
-                            onCheckedChange = { vm.setPdfShowComponentTitles(it) }
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text("Show component titles in PDF")
                     }
 
                     // Deliberately not the shared `ShadeInPdfChecks` block the two PDF

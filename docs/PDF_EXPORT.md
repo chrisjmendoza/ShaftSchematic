@@ -504,7 +504,9 @@ preference and never re-derive it.
 The schematic's below-shaft component-name labels (`drawComponentLabelsPdf`, entries built by
 the pure `componentLabelSpans`) are gated per component: `showNameOnDrawing` on `Body` /
 `Taper` / `Threads` / `Liner`, **tri-state**. Unset (the default — what every pre-flag
-document decodes to) follows the global Settings switch (`PdfPrefs.showComponentTitles`), so
+document decodes to) follows the global Settings switch (`PdfPrefs.showComponentTitles` —
+"Component names on drawing", the first row of Settings → Drawing, and the schematic options'
+"Component names" chip), so
 untouched documents print exactly as their setting says; an explicit `true` prints that one
 name even with the switch off (a checked card toggle must never be silently dead under a
 forgotten global off — on-device report); an explicit `false` hides it even with the switch

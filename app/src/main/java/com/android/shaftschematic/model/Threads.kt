@@ -133,8 +133,10 @@ private const val THREAD_AT_SHAFT_END_EPS_MM = 0.5f
  * - a FWD-end thread (end ≈ [overallLengthMm], or excluded with `!isAftEnd`) → `true`;
  * - a mid-shaft thread → `false`.
  *
- * A seed only: both authoring surfaces read it at the moment the relief is switched on, and it
- * is never applied to a stored thread (the `suggestedBodyKeywayEnd` posture).
+ * A suggestion, never a rule: the Add dialog follows it live until its end chips are tapped,
+ * and a stored relief follows it across a change of the thread's position only while it still
+ * sits where the suggestion put it ([withReliefEndFollowing]). A relief put at the other end is
+ * never moved.
  */
 fun suggestedThreadReliefAtAft(
     startFromAftMm: Float,
@@ -147,4 +149,25 @@ fun suggestedThreadReliefAtAft(
     if (startFromAftMm <= THREAD_AT_SHAFT_END_EPS_MM) return false
     if (overallLengthMm > 0f && startFromAftMm + lengthMm >= overallLengthMm - THREAD_AT_SHAFT_END_EPS_MM) return true
     return false
+}
+
+/**
+ * This thread after a change of position (its "Thread end" or its OAL inclusion) that moved it
+ * from [before]: a relief still sitting at the end [suggestedThreadReliefAtAft] picked for
+ * [before] follows to the end it picks now, so a groove placed at the inboard end stays inboard
+ * when the thread changes ends (on-device report: switching the thread's end left the relief on
+ * the shaft-end side). The stored `reliefAtAft` is an absolute AFT/FWD, which is why a move has
+ * to carry it.
+ *
+ * A relief at the OTHER end — deliberately put where the suggestion would not — is left alone,
+ * as is a thread with no relief or a move that leaves the suggestion where it was. Length and Ø
+ * never change.
+ */
+fun Threads.withReliefEndFollowing(before: Threads, overallLengthMm: Float): Threads {
+    if (reliefLenMm <= 0f) return this
+    val was = suggestedThreadReliefAtAft(
+        before.startFromAftMm, before.lengthMm, before.excludeFromOAL, before.isAftEnd, overallLengthMm,
+    )
+    val now = suggestedThreadReliefAtAft(startFromAftMm, lengthMm, excludeFromOAL, isAftEnd, overallLengthMm)
+    return if (reliefAtAft == was && was != now) copy(reliefAtAft = now) else this
 }

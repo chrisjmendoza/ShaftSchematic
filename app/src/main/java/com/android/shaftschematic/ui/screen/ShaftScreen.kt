@@ -190,7 +190,7 @@ fun ShaftScreen(
     showRenderOalMarkers: Boolean,
     showDimDebugOverlay: Boolean = false,
     pdfTieringMode: PdfTieringMode = PdfTieringMode.AUTO,
-    /** The Settings "Show component titles" switch — the default a card's unset name toggle follows. */
+    /** The Settings "Component names on drawing" switch — the default a card's unset name toggle follows. */
     componentTitlesDefault: Boolean = true,
     /** The kind-level shade checkboxes — the default a card's unset shade toggle follows. */
     componentShadeDefaults: ComponentShadeDefaults = ComponentShadeDefaults(),

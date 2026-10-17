@@ -797,9 +797,10 @@ internal fun PdfOptionsSheet(
             // The global default under each component's tri-state "Show name on drawing"
             // gate — an authored per-component choice still wins over it.
             ContentChip(
-                label = "Labels",
+                label = "Component names",
                 selected = pdfShowComponentTitles,
                 onClick = { vm.setPdfShowComponentTitles(!pdfShowComponentTitles) },
+                modifier = Modifier.testTag("pdf_component_names_chip"),
             )
             // Content, not styling — it decides which sheet this is — so it sits with the
             // chips rather than at the foot of the sheet with the rarely-used options.
