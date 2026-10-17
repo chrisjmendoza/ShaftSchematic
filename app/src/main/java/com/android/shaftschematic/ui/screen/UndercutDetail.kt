@@ -1225,7 +1225,6 @@ fun UndercutWindowDetailOverlay(
                                 drawLinerOutlines(
                                     liners = linerOds,
                                     notches = notches,
-                                    segs = segs,
                                     xPx = xPx,
                                     rPx = rPx,
                                     cy = cy,

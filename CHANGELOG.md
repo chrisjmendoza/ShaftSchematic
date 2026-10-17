@@ -6,6 +6,16 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-10-17
+
+### fix(undercut): liner outline end faces show the whole erased height
+
+- The dotted liner outline's end face at an edge a cut has run across is now one continuous
+  dotted vertical from the liner's top OD to its bottom OD, straight through the body, so the
+  liner's placement reads at a glance; it used to stop at the body's seat Ø, which on a shaft
+  whose seat sits 1/8" under the liner OD left a face a few pixels tall that read as missing
+  (on-device report and request). `LinerOutlineMathTest`; `UndercutDrawing.md` updated.
+
 ## 2026-10-16
 
 ### fix(undercut): a card can no longer be told it overlaps itself; cuts past the liner own the window; liner outline; stacked rail labels

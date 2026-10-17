@@ -474,14 +474,19 @@ data class UndercutRecord(val undercuts: List<Undercut> = emptyList())
   over the cuts"; captured by drawing profiles). On-device request: a cut split between the body
   and a liner left no sign of where the liner had been. A fine **dotted** retrace of each liner's
   original OD and end faces over the stretches the cuts ERASED — never over intact outline, so a
-  liner no cut touches gets nothing. ONE pure builder, `linerOutlineSegments(liner, notches,
-  segs)` (`geom/LinerOutlineMath.kt`, `LinerOutlineMathTest`): the OD as the union of the notch
+  liner no cut touches gets nothing. ONE pure builder, `linerOutlineSegments(liner, notches)` (`geom/LinerOutlineMath.kt`, `LinerOutlineMathTest`): the OD as the union of the notch
   spans clipped to the liner, split over the liner's OWN surface (`UndercutLinerOd.surface`, from
   `linerSurfaceSegs` — the reduced shoulder OD over a shoulder, modelled square), so a retraced
   stretch sits at the shoulder OD there and a stretch running across a shoulder step retraces the
-  step; an end face only where a notch runs ACROSS that edge, from the higher of the deepest
-  crossing notch's drawn floor and the stock's Ø just outside the edge (the step the face stood
-  on) up to the liner's surface at that end (the shoulder OD on a shouldered end). Drawn AFTER the notch passes and before the Ø callouts
+  step; an end face only where a notch runs ACROSS that edge (a notch merely ending at the edge
+  leaves the real face standing, and an edge no cut crosses keeps its real face), retraced as ONE
+  full-height dotted line (`LinerOutlineEdge.FULL_FACE`) from the top OD to the bottom OD at that
+  station — the liner's surface Ø at that end, the shoulder OD on a shouldered end — straight
+  through the body cross-section, so the liner's actual end placement reads at a glance
+  (on-device request). Neither the cut floors nor the stock's Ø just outside the edge bound it: a
+  face trimmed to the seat was a few pixels tall on a seat a hair under the OD and read as
+  missing (on-device report). Both draw sites stroke a `FULL_FACE` as a single line
+  `cy − r(OD) → cy + r(OD)`; the OD stretches and shoulder steps stay mirrored pairs. Drawn AFTER the notch passes and before the Ø callouts
   and rails at every undercut site: the route overview and the detail overlay
   (`drawLinerOutlines`, `ui/screen/UndercutSharedDraw.kt` — `SheetInk.Outline` at
   `LINER_OUTLINE_CANVAS_ALPHA` 0.4, `dashPathEffect(2, 4)`, 1 dp) and the PDF main profile and

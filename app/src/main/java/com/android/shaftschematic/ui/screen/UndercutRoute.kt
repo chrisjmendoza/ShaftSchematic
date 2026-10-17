@@ -522,7 +522,6 @@ fun UndercutRoute(
                         drawLinerOutlines(
                             liners = linerOds,
                             notches = notches,
-                            segs = segs,
                             xPx = { mm -> layout.xPx(mm) },
                             rPx = { dia -> layout.rPx(dia) },
                             cy = layout.centerlineYPx,
