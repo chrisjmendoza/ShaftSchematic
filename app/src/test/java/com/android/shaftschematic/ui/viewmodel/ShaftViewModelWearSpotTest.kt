@@ -45,7 +45,7 @@ class ShaftViewModelWearSpotTest {
     ): WearRecord = record.copy(
         spots = record.spots.map { spot ->
             if (spot.id != id) spot else spot.copy(
-                startMm = maxOf(0f, startMm),
+                startMm = startMm,
                 lengthMm = maxOf(0f, lengthMm),
                 minDiaMm = maxOf(0f, minDiaMm),
                 note = note,
@@ -166,14 +166,30 @@ class ShaftViewModelWearSpotTest {
     }
 
     @Test
-    fun `updateWearSpot clamps negative values to zero`() {
+    fun `updateWearSpot stores an out-of-span start verbatim`() {
+        // A Start typed against a SET or the liner's FWD edge can land AFT of the liner (a
+        // negative canonical start) or past it: the record keeps it exactly as converted, and
+        // the card states the problem instead (wearSpotSpanProblem, display-only).
         val spot = WearSpot(id = "s1", linerId = "ln1", startMm = 10f, lengthMm = 10f, minDiaMm = 10f)
         val record = WearRecord(spots = listOf(spot))
 
-        val result = updateWearSpot(record, id = "s1", startMm = -5f, lengthMm = -1f, minDiaMm = -2f, note = "")
+        val before = updateWearSpot(record, id = "s1", startMm = -5f, lengthMm = 20f, minDiaMm = 10f, note = "")
+        assertEquals(-5f, before.spots.single().startMm, 0.0f)
+
+        val past = updateWearSpot(record, id = "s1", startMm = 9999f, lengthMm = 20f, minDiaMm = 10f, note = "")
+        assertEquals(9999f, past.spots.single().startMm, 0.0f)
+    }
+
+    @Test
+    fun `updateWearSpot floors a negative length and diameter at zero`() {
+        // Not reachable from a typed value: the Length field refuses a minus sign and
+        // minDiaMm has no field (it passes through verbatim for older files).
+        val spot = WearSpot(id = "s1", linerId = "ln1", startMm = 10f, lengthMm = 10f, minDiaMm = 10f)
+        val record = WearRecord(spots = listOf(spot))
+
+        val result = updateWearSpot(record, id = "s1", startMm = 10f, lengthMm = -1f, minDiaMm = -2f, note = "")
 
         val updated = result.spots.single()
-        assertEquals(0f, updated.startMm, 0.001f)
         assertEquals(0f, updated.lengthMm, 0.001f)
         assertEquals(0f, updated.minDiaMm, 0.001f)
     }

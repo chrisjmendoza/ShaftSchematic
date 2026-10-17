@@ -47,7 +47,8 @@ Invariants
   notice wiped that way is never read. A revert with only the rule beside it reads as if the OLD value were at fault — a
   typed value gone with no word of it (on-device report). A caller whose value must survive an
   error does not reject it here: it commits and gates downstream (the undercut card,
-  `UndercutDrawing.md`). The revert still settles the field for `onDirtyChange`.
+  `UndercutDrawing.md`; the wear-spot card's Start/Length, `RunoutSheet.md` — verbatim commit,
+  `wearSpotSpanIssue` shown, band clamped for display only). The revert still settles the field for `onDirtyChange`.
 - Field displays formatted text; callback receives raw text.
 - **IME Done commits unconditionally**, even with no edit — a deliberate asymmetry with
   blur. Done is an explicit "I mean this" gesture; blur is passive. Pinned by test.

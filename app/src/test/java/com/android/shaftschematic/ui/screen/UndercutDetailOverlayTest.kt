@@ -36,6 +36,7 @@ import com.android.shaftschematic.geom.UndercutLinerSpan
 import com.android.shaftschematic.geom.UndercutSpanMm
 import com.android.shaftschematic.geom.linerStripFor
 import com.android.shaftschematic.geom.nearestSetReference
+import com.android.shaftschematic.geom.undercutAddSeedSpan
 import com.android.shaftschematic.geom.undercutReferenceLabel
 import com.android.shaftschematic.geom.undercutSetPositions
 import com.android.shaftschematic.model.Liner
@@ -166,14 +167,14 @@ class UndercutDetailOverlayTest {
     @Test
     fun `leaving an untouched new undercut card discards it`() {
         // The seeded default span nobody typed into: committing it on the way out recorded stray
-        // cuts on the device. The pending page sits AFT of u1 (the default goes in the aft-most
-        // gap), so a swipe left leaves it for u1's card.
+        // cuts on the device. The pending page sits FWD of u1 (the seed butts on u1's FWD end),
+        // so a swipe right leaves it for u1's card.
         show(listOf(cut("u1", 900f)))
         rule.onNodeWithTag("undercut_add_in_liner").performClick()
         settle()
         rule.onNodeWithText("New undercut").assertIsDisplayed()
 
-        rule.onNodeWithTag("undercut_card_pager").performTouchInput { swipeLeft() }
+        rule.onNodeWithTag("undercut_card_pager").performTouchInput { swipeRight() }
         settle()
 
         assertTrue("an untouched add was recorded at $added", added.isEmpty())
@@ -308,15 +309,12 @@ class UndercutDetailOverlayTest {
         rule.waitForIdle()
     }
 
-    /** The S.E.T. the add flow's default span sits nearer, from the overlay's own SETs. */
+    /** The S.E.T. the add flow's seed (butted on [stored]) sits nearer, from the overlay's own SETs. */
     private fun nearerSetForDefaultSpan(stored: Undercut): UndercutReference {
-        val span = defaultUndercutSpan(
-            500f, 1500f,
-            listOf(UndercutSpanMm(stored.id, stored.startFromAftMm, stored.startFromAftMm + stored.lengthMm)),
-            oal,
-        )
+        val spans = listOf(UndercutSpanMm(stored.id, stored.startFromAftMm, stored.startFromAftMm + stored.lengthMm))
+        val seed = requireNotNull(undercutAddSeedSpan(spans, spans, oal))
         val (aftSet, fwdSet) = undercutSetPositions(spec)
-        return nearestSetReference(span.startMm, span.startMm + span.lengthMm, aftSet, fwdSet)
+        return nearestSetReference(seed.startMm, seed.startMm + seed.lengthMm, aftSet, fwdSet)
     }
 
     @Test
@@ -644,12 +642,7 @@ class UndercutDetailOverlayTest {
         rule.onNode(hasText("FWD S.E.T.") and pendingCard).performScrollTo().performClick()
         settle()
         // "End at start of" numbers C by its page position, the pending card's seed included.
-        val seed = defaultUndercutSpan(
-            jobLinerSpan.startMm, jobLinerSpan.endMm,
-            stored.map { UndercutSpanMm(it.id, it.startFromAftMm, it.startFromAftMm + it.lengthMm) },
-            jobSpec.overallLengthMm,
-        )
-        val cPosition = buildUndercutPageIds(stored.sortedBy { it.startFromAftMm }, seed.startMm)
+        val cPosition = buildUndercutPageIds(stored.sortedBy { it.startFromAftMm }, jobSeedStartMm(stored))
             .indexOf(cutC.id) + 1
         rule.onNode(hasTestTag("undercut_butt_before_$cPosition") and pendingCard).performScrollTo().performClick()
         settle()
@@ -663,6 +656,12 @@ class UndercutDetailOverlayTest {
     }
 
     private fun recordedCutE(): Undercut = record.undercuts.single { it.id.startsWith("added-") }
+
+    /** Where "Add undercut in this liner" seeds over [stored]: butted on the strip's cuts. */
+    private fun jobSeedStartMm(stored: List<Undercut>): Float {
+        val spans = stored.map { UndercutSpanMm(it.id, it.startFromAftMm, it.startFromAftMm + it.lengthMm) }
+        return requireNotNull(undercutAddSeedSpan(spans, spans, jobSpec.overallLengthMm)).startMm
+    }
 
     /** Card 1 is the recorded E, an edit to it is clear, and nothing names cut 1 or prompts. */
     private fun assertCardOneIsCleanAndEditable(eId: String) {
@@ -712,8 +711,15 @@ class UndercutDetailOverlayTest {
     @Test
     fun `swiping off a new cut with a value still in its field records it and leaves no ghost`() {
         draftCutEWithDiaInFlight("9.5")
-        // E's seed sits on the liner's AFT edge, so the pending card is the first page.
-        swipe(left = true)
+        // E's seed butts on the FWD end of the strip's FWD-most cut, so the pending card is the
+        // last page: swiping right leaves it.
+        val stored = jobCuts.filterNot { it.id == cutE.id }
+        assertEquals(
+            stored.size,
+            buildUndercutPageIds(stored.sortedBy { it.startFromAftMm }, jobSeedStartMm(stored))
+                .indexOf(PENDING_UNDERCUT_ID),
+        )
+        swipe(left = false)
         assertNoLeavePrompt()
 
         val e = recordedCutE()
@@ -897,5 +903,76 @@ class UndercutDetailOverlayTest {
 
         rule.onNodeWithText(UNDERCUT_DISCARDED_DRAFT_MSG).assertIsDisplayed()
         assertTrue("an undone card's value reached the record", updated.isEmpty())
+    }
+
+    // ── "Next cut" ──
+
+    private fun nextCutOn(id: String) = hasTestTag("undercut_next_cut") and onCard(id)
+
+    private fun editableIs(text: String) = SemanticsMatcher("editable text is $text") {
+        it.config.getOrNull(SemanticsProperties.EditableText)?.text == text
+    }
+
+    @Test
+    fun `next cut records the card and opens a new cut butted on its FWD end`() {
+        show(listOf(cut("u1", 600f), cut("u2", 900f)), initialSelectedId = "u1")
+        typeAndCommit(hasText("Measured Ø (in)") and onCard("u1"), "7")
+        rule.onNode(nextCutOn("u1")).performScrollTo().assertIsEnabled().performClick()
+        settle()
+
+        // The current draft went through Confirm.
+        assertEquals(listOf("u1"), updated)
+        assertTrue("the seed is a draft, not a record write", added.isEmpty())
+        // The new card is the one in front, starting on u1's FWD end: 650 mm = 150 mm past the
+        // liner's AFT edge = 5.9055 in, under u1's own Liner AFT datum, Ø empty.
+        rule.onNodeWithText("New undercut").assertIsDisplayed()
+        rule.onNode(hasText("Distance from Liner AFT (in)") and pendingCard).assertExists()
+        assertTrue(rule.onAllNodes(editableStartsWith("5.905") and pendingCard).fetchSemanticsNodes().isNotEmpty())
+        assertTrue(rule.onAllNodes(editableIs("1") and pendingCard).fetchSemanticsNodes().isNotEmpty())
+        assertTrue(rule.onAllNodes(editableStartsWith("7") and pendingCard).fetchSemanticsNodes().isEmpty())
+        rule.onNodeWithTag("undercut_status_pill", useUnmergedTree = true)
+            .assert(hasAnyDescendant(hasText("Confirm change")))
+    }
+
+    @Test
+    fun `next cut on a new cut records it and opens the cut after it`() {
+        show(listOf(cut("u1", 900f)))
+        rule.onNodeWithTag("undercut_add_in_liner").performClick()
+        settle()
+        typeAndCommit(hasText("Measured Ø (in)") and pendingCard, "6")
+        rule.onNode(nextCutOn(PENDING_UNDERCUT_ID)).performScrollTo().performClick()
+        settle()
+
+        // The first add (butted on u1 at 950 mm) is recorded; the next opens at 975.4 mm.
+        assertEquals(1, added.size)
+        assertEquals(950f, added.single(), 0.01f)
+        rule.onNodeWithText("New undercut").assertIsDisplayed()
+        // 975.4 − 500 = 475.4 mm = 18.7165 in from the liner's AFT edge.
+        assertTrue(rule.onAllNodes(editableStartsWith("18.71") and pendingCard).fetchSemanticsNodes().isNotEmpty())
+        assertTrue(rule.onAllNodes(editableStartsWith("6") and pendingCard).fetchSemanticsNodes().isEmpty())
+    }
+
+    @Test
+    fun `next cut is disabled while the card's draft cannot be confirmed`() {
+        show(listOf(cut("u1", 600f, len = 100f), cut("u2", 900f)), initialSelectedId = "u2")
+        typeAndCommit(hasText("Distance from Liner AFT (in)") and onCard("u2"), "3")
+        rule.onNode(nextCutOn("u2")).assertIsNotEnabled()
+        assertTrue(
+            "a blocked draft explains itself on the pill, not with a stock caption",
+            rule.onAllNodesWithTag("undercut_next_cut_caption", useUnmergedTree = true)
+                .fetchSemanticsNodes().isEmpty(),
+        )
+        assertTrue("a blocked draft reached the record", updated.isEmpty())
+    }
+
+    @Test
+    fun `next cut is disabled with a caption when no stock remains FWD`() {
+        // 1400–1990 mm on the 2000 mm shaft: a 1 in cut after it would leave the shaft.
+        show(listOf(cut("u1", 1400f, len = 590f)))
+        rule.onNode(nextCutOn("u1")).assertIsNotEnabled()
+        rule.onNode(
+            hasText(UNDERCUT_NO_STOCK_FWD_MSG) and onCard("u1"),
+            useUnmergedTree = true,
+        ).assertExists()
     }
 }

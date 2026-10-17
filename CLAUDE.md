@@ -450,7 +450,9 @@ detail page's confirm-free delete offers a snackbar Undo that restores the exact
 `restoreUndercut` (verbatim, original index, no-op when the id is already back) — never a
 history step, which could fold in an edit coalesced with the delete. **No undercut field ever reverts a typed value**: Distance, Length and the Extend fields commit
 to the draft verbatim, and ALL span validity (bounds, length, overlap) is confirm-time — shown
-under the fields and on the pill, with the Keep-editing/Discard prompt on leave. Elsewhere, a
+under the fields and on the pill, with the Keep-editing/Discard prompt on leave. The Wear tab's
+wear-spot Start/Length fields follow the same rule (verbatim commit, `wearSpotSpanIssue` shown under
+the fields and on the row, band clamped for DISPLAY only). Elsewhere, a
 `NumericInputField` that cannot accept a value restores the previous one but SAYS SO ("20 not
 applied — <reason>") until the next focus; a silent swap of a typed value is the violation
 (on-device report). **A liner edge a cut has crossed into the body is not a datum**
@@ -479,7 +481,18 @@ only under `PdfPrefs.undercutSplitAtLinerEdge` (app-wide look pref, default OFF)
 (per-job — a fit for this shaft's geometry, not a look) extends a liner strip whose chain ends within
 `UNDERCUT_SET_REACH_MM` (24") of its S.E.T. out to the shaft end (chain to the S.E.T.) — flat physical end, no break — and the
 chain gains the span to it (the sketch's "12 3/4 to the S.E.T."); liner strips only, the total span
-unchanged. The notch (void fill erasing surface stroke and fill — the mouth stays **OPEN**,
+unchanged. **ONE cut numbering on every surface** — `undercutSheetNumbers` (`geom/UndercutNumbering.kt`,
+AFT → FWD by clamped start, 1-based, display-only; the record keeps its own order): the sheet and both
+canvases print it centred inside each section — on EVERY free piece of a parent that nested cuts split,
+so the pieces read as one section (on-device direction); outside, above the surface, when too narrow —
+placement in the pure `geom/UndercutCutNumberMath.kt`; `PdfPrefs.undercutCutNumbers`, app-wide, default on), the tab's
+list sorts and numbers its rows by it, and messages name cuts by it. Liner strip titles carry the
+liner's OD in its display unit. "Next cut" confirms the card through the ONE confirm path and seeds a
+PENDING cut butted to its FWD end (same datum, Ø empty; disabled while unconfirmable or with no stock
+FWD); an add on a strip with cuts seeds butted to the FWD-most cut (`undercutAddSeedSpan`); the tab's
+list delete offers the same `restoreUndercut` snackbar Undo as the detail page; a cut with no Ø is
+flagged on its row, counted above the list, and the tab's Print/Export confirm first
+(`undercutsMissingDia`; blank drafts exempt). The notch (void fill erasing surface stroke and fill — the mouth stays **OPEN**,
 never closed by a lid — plus a full-height **section face** at each end and the floor lines,
 so each cut is its own reduced-Ø rectangle **step in the silhouette**, cut against the
 **local outer-surface envelope**; the section's core fills one step **lighter** than the

@@ -113,7 +113,9 @@ import com.android.shaftschematic.geom.outerDiaAt
 import com.android.shaftschematic.geom.pickUndercutAt
 import com.android.shaftschematic.geom.planDiaCallouts
 import com.android.shaftschematic.geom.resolveUndercutFloors
+import com.android.shaftschematic.geom.undercutAddSeedSpan
 import com.android.shaftschematic.geom.undercutCalloutAnchorsMm
+import com.android.shaftschematic.geom.undercutNextCutSeed
 import com.android.shaftschematic.geom.undercutCanonicalForNewLength
 import com.android.shaftschematic.geom.undercutIsWholeLiner
 import com.android.shaftschematic.geom.undercutLinerEdgeBuried
@@ -143,6 +145,9 @@ import com.android.shaftschematic.model.Undercut
 import com.android.shaftschematic.model.UndercutRecord
 import com.android.shaftschematic.model.UndercutReference
 import com.android.shaftschematic.pdf.formatDiaWithUnit
+import com.android.shaftschematic.pdf.buildUndercutStripTitle
+import com.android.shaftschematic.geom.undercutSheetNumbers
+import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.measureRichText
 import com.android.shaftschematic.pdf.layoutWearStripRail
 import com.android.shaftschematic.pdf.WearRailSpanLayout
@@ -318,6 +323,13 @@ fun UndercutWindowDetailOverlay(
      * over the cuts, drawn here as on the printed sheet. Passed in so a change recomposes this canvas.
      */
     linerOutline: Boolean = true,
+    /**
+     * App-wide `PdfPrefs.undercutCutNumbers`: each cut's sheet number on this canvas, as on the
+     * printed sheet. Passed in so a change recomposes this canvas.
+     */
+    cutNumbers: Boolean = true,
+    /** Per-component display units: the strip title prints its liner's OD in the liner's own unit. */
+    displayUnits: DisplayUnits = DisplayUnits.single(unit),
     /**
      * App-wide `PdfPrefs.undercutSplitAtLinerEdge`: whether the chain rail takes a node at each
      * buried liner edge, as on the printed sheet. Passed in so a change restyles the rail.
@@ -852,6 +864,57 @@ fun UndercutWindowDetailOverlay(
         if (ask != null) overlayOverhang = ask else confirmDraft(draft)
     }
 
+    // "Next cut"'s seed: a PENDING card butted on the FWD end of [current] (the cut just
+    // confirmed, as confirmed), reading from its datum, opened as the selected card. The pending
+    // page is fresh state — the card keys on the seed — and an untouched seed is discarded on
+    // leave like any other add.
+    fun plantNextCutSeed(current: UndercutDraft) {
+        val next = undercutNextCutSeed(current.toUndercut(), oalMm, DEFAULT_UNDERCUT_LENGTH_MM) ?: return
+        val pool = applyUndercutDraft(undercutRecord.undercuts, current).map { u ->
+            val c = clampUndercutSpan(u.startFromAftMm, u.lengthMm, oalMm)
+            UndercutSpanMm(u.id, c.startMm, c.endMm)
+        }
+        val seed = undercutSeedInheriting(
+            startMm = next.startFromAftMm,
+            lengthMm = next.lengthMm,
+            from = current,
+            linerSpans = linerSpans,
+            sheetSpans = pool,
+            aftSetXMm = aftSetXMm,
+            fwdSetXMm = fwdSetXMm,
+        )
+        drafts = drafts + (PENDING_UNDERCUT_ID to seed)
+        pendingSeed = seed
+        selectedId = PENDING_UNDERCUT_ID
+    }
+
+    // The card's "Next cut": the pill's Confirm path for the card (flush, re-check, the "Past the
+    // liner edge" question), then the next cut's seed. A clean card has nothing to confirm and
+    // seeds straight away. A draft the flush turned blocked, or one left with no stock FWD of it,
+    // records nothing and seeds nothing — the pill and the button's caption say why.
+    fun nextCutFrom(id: String) {
+        // Only the SELECTED card acts, once the pager has settled on it — the trash's rule.
+        if (id != selectedId || pagerState.isScrollInProgress) {
+            val selPage = pageIdsLive.value.indexOf(selectedId)
+            if (selPage >= 0) snackbarScope.launch { pagerState.scrollToPage(selPage) }
+            return
+        }
+        val before = drafts[id] ?: baselines[id]
+        flushFocusedField { it == id }
+        val draft = drafts[id]?.takeIf { it != baselines[id] }
+        val current = draft ?: baselines[id] ?: return
+        if (undercutNextCutSeed(current.toUndercut(), oalMm, DEFAULT_UNDERCUT_LENGTH_MM) == null) return
+        if (draft != null) {
+            if (confirmIssueOf(id, draft) != null) return
+            overhangAskFor(id, before, draft, UndercutAfterOverhang.NextCut)?.let {
+                overlayOverhang = it
+                return
+            }
+            confirmDraft(draft, follow = false)
+        }
+        plantNextCutSeed(current)
+    }
+
     // An answer to the overlay's "Past the liner edge" question, then the action it held up. A
     // STORED card takes the answer into its own flag (its warning shows under the fields while the
     // end stays off the liner); the add flow's card does not outlive its confirm — the recorded cut
@@ -865,6 +928,12 @@ fun UndercutWindowDetailOverlay(
             UndercutAfterOverhang.Confirm -> {
                 val draft = drafts[ask.draftId]?.takeIf { it != baselines[ask.draftId] } ?: return
                 if (confirmIssueOf(ask.draftId, draft) == null) confirmDraft(draft)
+            }
+            UndercutAfterOverhang.NextCut -> {
+                val draft = drafts[ask.draftId]?.takeIf { it != baselines[ask.draftId] } ?: return
+                if (confirmIssueOf(ask.draftId, draft) != null) return
+                confirmDraft(draft, follow = false)
+                plantNextCutSeed(draft)
             }
             is UndercutAfterOverhang.Settle ->
                 finishSettle(settleDraftsExcept(then.keepId, then.closing), then.closing)
@@ -928,7 +997,7 @@ fun UndercutWindowDetailOverlay(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to Undercut Drawing")
                     }
                     Text(
-                        text = undercutStripTitle(strip, spec, unit),
+                        text = undercutStripTitle(strip, spec, unit, displayUnits),
                         style = MaterialTheme.typography.titleMedium,
                         modifier = Modifier.padding(start = 4.dp).weight(1f),
                     )
@@ -1240,6 +1309,17 @@ fun UndercutWindowDetailOverlay(
                                     strokeWidthPx = 1.dp.toPx(),
                                 )
                             }
+                            // ── Cut numbers — the record's sheet numbering; a pending draft has none ──
+                            if (cutNumbers) {
+                                drawUndercutCutNumbers(
+                                    notches = notches,
+                                    numbers = undercutSheetNumbers(undercutRecord.undercuts, oalMm),
+                                    xPx = xPx,
+                                    rPx = rPx,
+                                    cy = cy,
+                                    textSizePx = textPaint.textSize,
+                                )
+                            }
 
                             // ── Overlap bands — where a blocked draft collides with a neighbour ──
                             // Over the notches (so the band reads on top of the cut it intrudes into)
@@ -1432,13 +1512,36 @@ fun UndercutWindowDetailOverlay(
                                 val c = clampUndercutSpan(u.startFromAftMm, u.lengthMm, oalMm)
                                 UndercutSpanMm(u.id, c.startMm, c.endMm)
                             }
+                            // A strip that already holds cuts seeds the new one butted against them
+                            // (FWD of the FWD-most, else AFT of the AFT-most), reading from that
+                            // neighbour's datum — a run of cuts is recorded one after the next
+                            // (on-device request). An empty strip, or one with no clear stock on
+                            // either side, takes the default span below.
+                            val butted = undercutAddSeedSpan(
+                                stripCuts = undercuts.map { u ->
+                                    val c = clampUndercutSpan(u.startFromAftMm, u.lengthMm, oalMm)
+                                    UndercutSpanMm(u.id, c.startMm, c.endMm)
+                                },
+                                occupied = occupied,
+                                oalMm = oalMm,
+                                lengthMm = DEFAULT_UNDERCUT_LENGTH_MM,
+                            )
+                            val neighbour = butted?.let { b -> baselines[b.neighbourId] }
                             val span = defaultUndercutSpan(addRange.first, addRange.second, occupied, oalMm)
                             // A liner whose AFT edge an existing cut already runs past into the
                             // body has no step left there to measure from, so the new cut authors
                             // against the nearer S.E.T. instead (on-device request).
                             val seedFromLiner = stripLiner != null &&
                                 !undercutLinerEdgeBuried(stripLiner.startMm, occupied)
-                            val seed = UndercutDraft(
+                            val seed = if (butted != null && neighbour != null) undercutSeedInheriting(
+                                startMm = butted.startMm,
+                                lengthMm = butted.lengthMm,
+                                from = neighbour,
+                                linerSpans = linerSpans,
+                                sheetSpans = occupied,
+                                aftSetXMm = aftSetXMm,
+                                fwdSetXMm = fwdSetXMm,
+                            ) else UndercutDraft(
                                     id = PENDING_UNDERCUT_ID,
                                     startFromAftMm = span.startMm,
                                     lengthMm = span.lengthMm,
@@ -1501,72 +1604,85 @@ fun UndercutWindowDetailOverlay(
                         val id = pageIds.getOrNull(page) ?: return@HorizontalPager
                         val baseline = baselines[id]
                         val draft = drafts[id] ?: baseline ?: return@HorizontalPager
-                        UndercutDraftCard(
-                            title = if (draft.isPending) "New undercut"
-                                    else undercutCardTitle(page + 1, pageIds.size),
-                            draft = draft,
-                            dirty = draft != baseline,
-                            selected = id == selectedId,
-                            unit = unit,
-                            oalMm = oalMm,
-                            segs = segs,
-                            aftSetXMm = aftSetXMm,
-                            fwdSetXMm = fwdSetXMm,
-                            linerSpans = linerSpans,
-                            stripLiner = stripLiner,
-                            sheetUndercuts = undercutRecord.undercuts,
-                            buttTargets = pageButtTargets.filter { (_, s) -> s.id != id },
-                            pagePositionById = pagePositionById,
-                            onDraftChange = { updated -> writeDraft(id, updated) },
-                            flushActive = { flushGate.active },
-                            overhangAnswer = overhangAnswers[id],
-                            onOverhangAnswerTaken = { overhangAnswers = overhangAnswers - id },
-                            modifier = Modifier.onFocusChanged { f ->
-                                if (f.hasFocus) focusedCardId = id
-                                else if (focusedCardId == id) focusedCardId = null
-                            },
-                            onDelete = if (draft.isPending) null else {
-                                deleteCard@{
-                                    // The trash deletes only the SELECTED card, and only once the
-                                    // pager has settled on it: a card still sliding in or out is
-                                    // not the one in front of the machinist. Otherwise it brings
-                                    // the selected card back to the front and deletes nothing.
-                                    if (id != selectedId || pagerState.isScrollInProgress) {
-                                        val selPage = pageIdsLive.value.indexOf(selectedId)
-                                        if (selPage >= 0) {
-                                            snackbarScope.launch { pagerState.scrollToPage(selPage) }
+                        // "Next cut" can replace one pending card with the next under the same page
+                        // id; keying the pending card on its seed gives the new cut fresh card state
+                        // (scroll, the "Past the liner edge" flags) rather than the last one's.
+                        key(if (draft.isPending) pendingSeed else null) {
+                            UndercutDraftCard(
+                                title = if (draft.isPending) "New undercut"
+                                        else undercutCardTitle(page + 1, pageIds.size),
+                                draft = draft,
+                                dirty = draft != baseline,
+                                selected = id == selectedId,
+                                unit = unit,
+                                oalMm = oalMm,
+                                segs = segs,
+                                aftSetXMm = aftSetXMm,
+                                fwdSetXMm = fwdSetXMm,
+                                linerSpans = linerSpans,
+                                stripLiner = stripLiner,
+                                sheetUndercuts = undercutRecord.undercuts,
+                                buttTargets = pageButtTargets.filter { (_, s) -> s.id != id },
+                                pagePositionById = pagePositionById,
+                                nextCut = undercutNextCutState(
+                                    draft = draft,
+                                    blocked = draft != baseline && confirmIssueOf(id, draft) != null,
+                                    otherPendingOpen = !draft.isPending &&
+                                        (pendingSeed != null || PENDING_UNDERCUT_ID in drafts),
+                                    oalMm = oalMm,
+                                ),
+                                onNextCut = { nextCutFrom(id) },
+                                onDraftChange = { updated -> writeDraft(id, updated) },
+                                flushActive = { flushGate.active },
+                                overhangAnswer = overhangAnswers[id],
+                                onOverhangAnswerTaken = { overhangAnswers = overhangAnswers - id },
+                                modifier = Modifier.onFocusChanged { f ->
+                                    if (f.hasFocus) focusedCardId = id
+                                    else if (focusedCardId == id) focusedCardId = null
+                                },
+                                onDelete = if (draft.isPending) null else {
+                                    deleteCard@{
+                                        // The trash deletes only the SELECTED card, and only once the
+                                        // pager has settled on it: a card still sliding in or out is
+                                        // not the one in front of the machinist. Otherwise it brings
+                                        // the selected card back to the front and deletes nothing.
+                                        if (id != selectedId || pagerState.isScrollInProgress) {
+                                            val selPage = pageIdsLive.value.indexOf(selectedId)
+                                            if (selPage >= 0) {
+                                                snackbarScope.launch { pagerState.scrollToPage(selPage) }
+                                            }
+                                            return@deleteCard
                                         }
-                                        return@deleteCard
-                                    }
-                                    // Captured BEFORE the removal: the Undo puts back this exact cut
-                                    // at this exact record position.
-                                    val index = undercutRecord.undercuts.indexOfFirst { it.id == id }
-                                    val removed = undercutRecord.undercuts.getOrNull(index)
-                                    drafts = drafts - id
-                                    // The selection is left alone: the heal adopts the card the
-                                    // pager shows once the page goes. Clearing it would run the
-                                    // leave sweep over every OTHER draft as if the machinist had
-                                    // left them all, committing or prompting on cards never left.
-                                    onRemoveUndercut(id)
-                                    if (removed != null) {
-                                        snackbarScope.launch {
-                                            // One pending delete at a time: a second delete replaces
-                                            // the first's offer rather than queueing behind it.
-                                            deleteSnackbar.currentSnackbarData?.dismiss()
-                                            val result = deleteSnackbar.showSnackbar(
-                                                message = "Undercut deleted",
-                                                actionLabel = "Undo",
-                                                duration = SnackbarDuration.Long,
-                                            )
-                                            if (result == SnackbarResult.ActionPerformed) {
-                                                onRestoreUndercut(removed, index)
-                                                reselectAfterRestoreId = removed.id
+                                        // Captured BEFORE the removal: the Undo puts back this exact cut
+                                        // at this exact record position.
+                                        val index = undercutRecord.undercuts.indexOfFirst { it.id == id }
+                                        val removed = undercutRecord.undercuts.getOrNull(index)
+                                        drafts = drafts - id
+                                        // The selection is left alone: the heal adopts the card the
+                                        // pager shows once the page goes. Clearing it would run the
+                                        // leave sweep over every OTHER draft as if the machinist had
+                                        // left them all, committing or prompting on cards never left.
+                                        onRemoveUndercut(id)
+                                        if (removed != null) {
+                                            snackbarScope.launch {
+                                                // One pending delete at a time: a second delete replaces
+                                                // the first's offer rather than queueing behind it.
+                                                deleteSnackbar.currentSnackbarData?.dismiss()
+                                                val result = deleteSnackbar.showSnackbar(
+                                                    message = "Undercut deleted",
+                                                    actionLabel = "Undo",
+                                                    duration = SnackbarDuration.Long,
+                                                )
+                                                if (result == SnackbarResult.ActionPerformed) {
+                                                    onRestoreUndercut(removed, index)
+                                                    reselectAfterRestoreId = removed.id
+                                                }
                                             }
                                         }
                                     }
-                                }
-                            },
-                        )
+                                },
+                            )
+                        }
                     }
                 }
             }
@@ -1751,6 +1867,72 @@ internal fun UndercutDraft.startingAtEndOf(other: UndercutSpanMm): UndercutDraft
 internal fun UndercutDraft.endingAtStartOf(other: UndercutSpanMm): UndercutDraft = copy(
     startFromAftMm = undercutEndAtStartOf(other.startMm, lengthMm),
 )
+
+/** Whether a card's "Next cut" can act, and the caption under it when stock is what stops it. */
+internal data class UndercutNextCutState(val enabled: Boolean, val caption: String?)
+
+/** The "Next cut" caption when the shaft ends before a default-length cut fits FWD of this one. */
+internal const val UNDERCUT_NO_STOCK_FWD_MSG = "No stock FWD of this cut"
+
+/**
+ * A card's "Next cut" state for [draft] as it stands: disabled while the draft is [blocked] (the
+ * pill already says why — no second validator here), while ANOTHER card holds the one pending add
+ * ([otherPendingOpen]), and when no default-length cut fits FWD of the draft on the shaft
+ * ([undercutNextCutSeed]) — the one case it explains itself, [UNDERCUT_NO_STOCK_FWD_MSG].
+ */
+internal fun undercutNextCutState(
+    draft: UndercutDraft,
+    blocked: Boolean,
+    otherPendingOpen: Boolean,
+    oalMm: Float,
+): UndercutNextCutState {
+    val noStock = undercutNextCutSeed(draft.toUndercut(), oalMm, DEFAULT_UNDERCUT_LENGTH_MM) == null
+    return UndercutNextCutState(
+        enabled = !blocked && !noStock && !otherPendingOpen,
+        caption = if (noStock && !blocked) UNDERCUT_NO_STOCK_FWD_MSG else null,
+    )
+}
+
+/**
+ * A PENDING draft for a new cut at `[startMm, startMm + lengthMm]` that reads from [from]'s datum —
+ * the butted "Add undercut…" seed and the "Next cut" seed. The datum is taken as it DISPLAYS at the
+ * new span ([effectiveUndercutReference] over [sheetSpans], every cut on the sheet render-clamped):
+ * a liner edge some cut has buried, or a parent cut that does not contain the new span, gives way
+ * to the nearer S.E.T., so the seed never stores a datum its own card cannot show. Ø unentered,
+ * no note. A draft only — nothing is recorded until it is confirmed.
+ */
+internal fun undercutSeedInheriting(
+    startMm: Float,
+    lengthMm: Float,
+    from: UndercutDraft,
+    linerSpans: List<UndercutLinerSpan>,
+    sheetSpans: List<UndercutSpanMm>,
+    aftSetXMm: Float,
+    fwdSetXMm: Float,
+): UndercutDraft {
+    val probe = UndercutDraft(
+        id = PENDING_UNDERCUT_ID,
+        startFromAftMm = startMm,
+        lengthMm = lengthMm,
+        diaMm = 0f,
+        note = "",
+        reference = from.reference,
+        referenceLinerId = from.referenceLinerId,
+        referenceCutId = from.referenceCutId,
+    )
+    val pool = sheetSpans.filter { it.id != PENDING_UNDERCUT_ID } +
+        UndercutSpanMm(PENDING_UNDERCUT_ID, startMm, startMm + lengthMm)
+    val ref = effectiveUndercutReference(probe.toUndercut(), linerSpans, pool, aftSetXMm, fwdSetXMm)
+    return probe.copy(
+        reference = ref,
+        referenceLinerId = if (ref == UndercutReference.LINER_AFT || ref == UndercutReference.LINER_FWD) {
+            from.referenceLinerId
+        } else {
+            ""
+        },
+        referenceCutId = if (isParentUndercutReference(ref)) from.referenceCutId else "",
+    )
+}
 
 /**
  * A stored cut's card title. The number is the cut's POSITION aft → fwd on this strip (the
@@ -2060,7 +2242,8 @@ private fun undercutAddRangeOf(
  * the overlay's floating [UndercutStatusPill], and leaving the card commits a clear draft by
  * itself — a Confirm/Cancel row inside this scroll was easy to miss and easy to forget (on-device
  * report). [onDelete] is the card's one immediate record action, and is null on the add flow's
- * pending card (nothing recorded to delete).
+ * pending card (nothing recorded to delete). "Next cut" ([onNextCut]) is the one exception to "no
+ * save controls": it runs the pill's own Confirm for this card, then opens the next cut's seed.
  *
  * Numeric fields keep the commit-on-blur contract (`docs/contracts/NumberField.md`); the commit lands in the
  * draft rather than the ViewModel. **No field on this card ever reverts a typed value**: the fields
@@ -2095,6 +2278,9 @@ private fun UndercutDraftCard(
     buttTargets: List<Pair<Int, UndercutSpanMm>>,
     /** Every stored cut's page position, so an overlap reason names its partner. */
     pagePositionById: Map<String, Int>,
+    /** The "Next cut" button's state ([undercutNextCutState]); [onNextCut] runs it. */
+    nextCut: UndercutNextCutState,
+    onNextCut: () -> Unit,
     onDraftChange: (UndercutDraft) -> Unit,
     onDelete: (() -> Unit)?,
     /** True while the overlay is flushing focus — it asks "Past the liner edge" for that commit itself. */
@@ -2235,13 +2421,23 @@ private fun UndercutDraftCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(title, style = MaterialTheme.typography.titleSmall)
+                Text(title, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                // "Next cut": confirm this card and open a new cut butted on its FWD end — the
+                // run-of-cuts workflow, at the top of the card so it never needs a scroll.
+                TextButton(
+                    onClick = onNextCut,
+                    enabled = nextCut.enabled,
+                    modifier = Modifier.testTag("undercut_next_cut"),
+                ) {
+                    Text("Next cut")
+                }
                 if (onDelete != null) {
                     IconButton(onClick = onDelete) {
                         Icon(Icons.Filled.Delete, contentDescription = "Delete $title")
                     }
                 }
             }
+            nextCut.caption?.let { UndercutCaption(it, Modifier.testTag("undercut_next_cut_caption")) }
 
             // A STORED cut the shaft no longer holds (the OAL moved under it). A dirty draft with
             // the same problem states the precise reason in the confirm-issue line instead — "re-
@@ -2687,6 +2883,9 @@ internal sealed interface UndercutAfterOverhang {
     /** The pill's Confirm of the selected card. */
     object Confirm : UndercutAfterOverhang
 
+    /** The card's "Next cut": confirm the selected card, then seed the cut after it. */
+    object NextCut : UndercutAfterOverhang
+
     /** A leave sweep (or the close), resumed with the same arguments. */
     data class Settle(val keepId: String?, val closing: Boolean) : UndercutAfterOverhang
 }
@@ -3084,14 +3283,27 @@ internal fun planUndercutCanvasRail(
 
 /**
  * Strip title: a liner strip is named after its liner (`buildLinerTitleById`, the same positional
- * names the wear document uses), a free strip states its zoom range in shaft space. A liner the
- * spec no longer holds falls back to the range text.
+ * names the wear document uses) followed by its OD in the liner's own display unit
+ * (`buildUndercutStripTitle`, the printed strip title's construction); a free strip states its
+ * zoom range in shaft space. A liner the spec no longer holds falls back to the range text.
  */
-private fun undercutStripTitle(strip: UndercutStrip, spec: ShaftSpec, unit: UnitSystem): String {
+private fun undercutStripTitle(
+    strip: UndercutStrip,
+    spec: ShaftSpec,
+    unit: UnitSystem,
+    displayUnits: DisplayUnits = DisplayUnits.single(unit),
+): String {
     val rangeText =
         "Undercuts ${disp(strip.drawStartMm, unit)}–${disp(strip.drawEndMm, unit)} ${abbr(unit)} from AFT"
     return when (strip) {
         is UndercutStrip.FreeStrip -> rangeText
-        is UndercutStrip.LinerStrip -> buildLinerTitleById(spec)[strip.linerId] ?: rangeText
+        is UndercutStrip.LinerStrip -> buildLinerTitleById(spec)[strip.linerId]?.let { name ->
+            // The liner's OD after its name, in the liner's own unit — the printed strip title's rule.
+            val odMm = spec.liners.firstOrNull { it.id == strip.linerId }?.odMm?.takeIf { it > 0f }
+            buildUndercutStripTitle(
+                name, "",
+                odMm?.let { "Ø" + formatDiaWithUnit(it.toDouble(), displayUnits.unitFor(strip.linerId)) },
+            )
+        } ?: rangeText
     }
 }

@@ -51,11 +51,20 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
   constant): drives `UndercutRecord.drawToSet` through `ShaftViewModel.setUndercutDrawToSet`
   (the record-update path the exaggeration commit uses, so it rides the one undo history and
   the dirty mark). See "Draw to the shaft end" under the strip builders below.
+- **"Split cuts at liner edges" switch** (directly under "Draw to the shaft end", same visibility;
+  testTag `undercut_split_at_liner_edge_switch`, caption `UNDERCUT_SPLIT_AT_LINER_EDGE_CAPTION`
+  + " App-wide."): bound to the app-wide `PdfPrefs.undercutSplitAtLinerEdge` through
+  `ShaftViewModel.setPdfUndercutSplitAtLinerEdge` — the SAME value as the options-sheet and
+  Settings rows, offered here because the chain-rail rule is reached for from this tab
+  (on-device request). Not a per-job field: no undo step, no dirty mark. See "Split cuts at liner
+  edges" below.
 - **"Recorded undercuts" list** below the canvas: a read-only summary + delete row per cut,
-  aft → fwd — not an edit card (see "UI contract").
+  numbered and ordered by the sheet's cut numbers (`undercutSheetNumbers`, AFT → FWD) — not an
+  edit card (see "UI contract").
 - Blank-draft (write-in) toggle, PDF Preview (`PdfPreviewOverlay` + `RunoutWearOptionsSheet`),
   Export (SAF `CreateDocument`), Print (`printShaftPdfPage`) — straight ports of the wear tab's
-  flows, all calling `composeUndercutPdf`.
+  flows, all calling `composeUndercutPdf`. Print and Export ask first while a cut has no Ø (see
+  "Missing Ø before print/export").
 
 ### UndercutWindowDetailOverlay (`UndercutDetail.kt`)
 - Full-screen "zoom in" on one detail strip — a whole liner (plus overhang/pad) when the cuts
@@ -511,9 +520,54 @@ data class UndercutRecord(
   The canvases read the same pref (the route collects it and passes it to the overlay's
   `linerOutline`), and it is an Undercut-tab preview re-render key.
 
+  **Cut numbers — `PdfPrefs.undercutCutNumbers`** (default `true`; Settings → PDF Export
+  "Undercut drawing: cut numbers" beside the liner-outline row, and the undercut preview's PDF
+  options sheet "Cut numbers" under it, testTag `pdf_undercut_cut_numbers`, caption "Each cut
+  carries its number from the Undercut tab's list, AFT to FWD, so the sheet and the list name the
+  same cut." (`UNDERCUT_CUT_NUMBERS_CAPTION`, shared by both rows); settings key
+  `pdf_undercut_cut_numbers`; captured by drawing profiles). Each cut prints its number from the
+  ONE sheet numbering, `undercutSheetNumbers` (`geom/UndercutNumbering.kt` — AFT → FWD by clamped
+  start, 1-based, the number the Undercut tab's list shows), sheet-wide: a cut carries the same
+  number on every strip and on both canvases. Plain text, no background. ONE pure placement,
+  `undercutCutNumberPlacements(notches, numbers, …)` (`geom/UndercutCutNumberMath.kt`,
+  `UndercutCutNumberMathTest`), over the notches the draw site already built:
+  - **Inside** by default — in the section core, horizontally centred on an UNCUT stretch of the
+    cut's own floor and vertically centred on the shaft CENTRELINE (baseline half a glyph
+    below it, `cy + r(glyph / 2)`). The core runs floor to floor through the centreline, so it
+    always has room, and a label there stays clear of the Ø callout leaders that leave the floor
+    lines (a label against the lower floor sat on them — on-device review of the job preview).
+    A plain cut has one stretch, its whole span, and one label. A parent's floor is split into
+    pieces by the cuts nested inside it (a child's void and core paint over the parent's core
+    there): EVERY piece — the gaps between its ends and its children, and between consecutive
+    children — wide enough for the label plus a pad each side carries the parent's number, so the
+    reader sees the pieces are one section (on-device request); a piece too narrow gets none. A
+    nested cut's own number sits inside the child, never on top of its parent's. A placement's id
+    may therefore repeat, and neither draw site de-duplicates by id.
+  - **Outside** when NO stretch fits the label plus a pad each side — width alone decides: ONE
+    label centred on the cut, the baseline a pad above the highest outer
+    surface over its top-level cut (`cy − r(surface + pad)` — a nested cut's own surface points sit
+    on its parent's floor, never the shaft's outside). Outside labels that would overlap are spread
+    apart by the least total movement that clears them (an isotonic fit), keeping their AFT → FWD
+    order.
+  A placement carries `xMm`, `baselineDiaMm` (the baseline's distance from the centreline) and
+  `inside` (below vs above it); both draw sites build the baseline from those fields alone.
+  Horizontal sizes are axial mm, vertical ones Ø units — each draw site converts its paint metrics
+  through its own two scales (the strips' Ø map is unclamped for this, so an outside number clears
+  the tallest surface instead of being pulled back onto the cylinder top). A notch with no number —
+  the detail overlay's pending draft, not yet in the record — draws nothing. Drawn AFTER the notch
+  passes and the liner outline, before the Ø callouts and rails, at every site: the PDF main
+  profile and every detail strip (`drawUndercutCutNumbersPdf`, the sheet's `text` paint — the
+  strips at their dim size), and the route overview and the detail overlay
+  (`drawUndercutCutNumbers`, `ui/screen/UndercutSharedDraw.kt` — `SheetInk.Outline`; the detail
+  canvas draws the PREVIEWED set, a draft of a recorded cut keeping that cut's number). The route
+  collects the pref, passes it to the overlay's `cutNumbers`, and it is an Undercut-tab preview
+  re-render key. Off, nothing is drawn at any site.
+
   **Split cuts at liner edges — `PdfPrefs.undercutSplitAtLinerEdge`** (default `false`; Settings →
-  PDF Export beside the liner-outline row, and the undercut preview's PDF options sheet under it,
-  testTag `pdf_undercut_split_at_liner_edge`, caption "A cut machined past a liner edge is
+  PDF Export beside the liner-outline row, the undercut preview's PDF options sheet under it,
+  testTag `pdf_undercut_split_at_liner_edge`, and the Undercut tab's own options block under
+  "Draw to the shaft end", testTag `undercut_split_at_liner_edge_switch`, caption suffixed
+  " App-wide." there — three surfaces, one value; caption "A cut machined past a liner edge is
   dimensioned as two spans meeting at the edge. Off: every cut prints its full length."; captured
   by drawing profiles, settings key `pdf_undercut_split_at_liner_edge`). On-device direction: the
   shop measures the LENGTH of each cut, so by default every cut — one machined past a liner edge
@@ -724,19 +778,43 @@ nothing to open when the sidebar is already laid out beside the tabs.
   dropping the drafts and the selection those edits came from.
 - **"Add undercut"** button (global — see "Add default" below) sets `anchorUndercutId` to the
   new undercut's id (clearing `anchorLinerId`), opening its strip immediately on that cut's card.
-- **"Recorded undercuts" list**, below the canvas (`UndercutListRow`, one row per cut, aft →
-  fwd, only shown once ≥ 1 undercut exists): a distance summary under its *effective* reference
-  (`"<distance> from <tag>"`, where a `LINER_*` reference reads `"<liner title> AFT/FWD edge"`
-  via `effectiveUndercutReference`/`undercutReferenceLinerFor`), a second line
-  (`"L … · Ø …"`, Ø shown as `"—"` while unmeasured), and a stale-overrun warning icon
-  (`isUndercutStaleOverrun`) when applicable. **This is a read-only summary + delete row, not
-  an edit card** — tapping the row body (`testTag "undercut_row_<id>"`) calls `anchorToUndercut`
-  to open the cut's owning strip (where the real edit card lives, per "Undercut cards" below)
-  **on that cut's own card** — the overlay's `initialSelectedId`, which seeds the selection and
-  the pager's initial page (opening on page 0 showed the strip's aft-most cut instead); the
-  trailing delete icon (`testTag "undercut_delete_<id>"`) removes the cut outright,
-  confirm-free, without opening anything (no snackbar on this row; the tab's top-bar Undo takes it
-  back, see "Undo").
+- **"Recorded undercuts" list**, below the canvas (`UndercutListRow`, one row per cut, only shown
+  once ≥ 1 undercut exists). Rows are **numbered and ordered by the sheet's cut numbers**
+  (`undercutSheetNumbers` — AFT → FWD by clamped start, ties in record order, 1-based — the ONE
+  numbering every surface shows), so row N is the cut the printed sheet labels N
+  (`"N. <distance> from <tag>"`). Display-only: the record keeps its own order. Each row is a
+  distance summary under its *effective* reference (where a `LINER_*` reference reads
+  `"<liner title> AFT/FWD edge"` via `effectiveUndercutReference`/`undercutReferenceLinerFor`),
+  a second line (`"L … · Ø …"`, Ø shown as `"—"` while unmeasured), an **"Ø not entered"** line
+  in the error color under it for a cut with `diaMm <= 0` (`testTag
+  "undercut_row_no_dia_<id>"` — such a cut prints with no diameter), and a stale-overrun warning
+  icon (`isUndercutStaleOverrun`) when applicable. While any recorded cut has no Ø, the list
+  opens with one warning line, `undercutMissingDiaMessage(n)` — "N cuts have no diameter and
+  will print without one." ("1 cut has …" for one; `testTag "undercut_missing_dia_note"`).
+  **This is a read-only summary + delete row, not an edit card** — tapping the row body
+  (`testTag "undercut_row_<id>"`) calls `anchorToUndercut` to open the cut's owning strip (where
+  the real edit card lives, per "Undercut cards" below) **on that cut's own card** — the
+  overlay's `initialSelectedId`, which seeds the selection and the pager's initial page (opening
+  on page 0 showed the strip's aft-most cut instead); the trailing delete icon (`testTag
+  "undercut_delete_<id>"`) removes the cut outright, confirm-free, without opening or navigating
+  anything, and raises the detail page's Undo: a **"Cut N deleted" snackbar** (N its sheet number
+  before the removal; action "Undo", Long, a second delete replaces the first's offer; the tab's
+  own `SnackbarHost` at the bottom of the tab body, `testTag "undercut_list_delete_snackbar"`)
+  whose Undo calls `restoreUndercut(u, index)` with the cut and its record index captured BEFORE
+  the removal — verbatim, at its original index, a no-op when the id is already back. The
+  top-bar Undo still walks the history too (see "Undo").
+
+### Missing Ø before print/export
+The tab's **Print** and **Export** (tab body and the preview overlay's actions alike) first raise
+an AlertDialog **"Print without diameters?"** while any recorded cut has no Ø
+(`undercutsMissingDia(undercuts)` — `diaMm <= 0`, in record order), body
+`undercutMissingDiaMessage(n)`, buttons **"Print anyway"** (**"Export anyway"** for an export) /
+**"Cancel"** (`testTag "undercut_missing_dia_dialog"`, `"undercut_missing_dia_proceed"`,
+`"undercut_missing_dia_cancel"`). Cancel, back and tap-outside print and export nothing; the
+proceed button runs the same action the button would have run. Not asked when a **blank draft**
+is elected (a blank draft prints no values by design), and **Preview is never gated**. It wraps
+the actions inside the collision export gate (which still disables them outright). The Output
+tab's **Export all** is not gated — its batch has no per-document question.
 
 ### Add default
 `vm.addUndercut(startFromAftMm, lengthMm, reference = AFT_SET, referenceLinerId = "")` records
@@ -764,8 +842,10 @@ vertical card stack forced scrolling between the drawing and the fields.
   when a draft is **confirmed**; typing a new Distance never slides the card out from under the
   field being typed in (`buildUndercutPageIds`).
 - **The title number is positional**: a stored cut's card reads `"Undercut N of M · aft → fwd"`
-  (`undercutCardTitle`) — N is the cut's position in that aft → fwd page order, not an identity
-  (the printed sheet carries no cut numbers), and the suffix puts the convention on the card
+  (`undercutCardTitle`) — N is the cut's position in that STRIP's aft → fwd page order, not an
+  identity and not the sheet's cut number (`undercutSheetNumbers` numbers the whole sheet, so on a
+  multi-strip sheet the card's N and the number printed on the cut can differ; the tab's list and
+  the printed numbers agree), and the suffix puts the convention on the card
   (on-device report: a third cut added between two others read "Undercut 2 of 3" and was taken
   for the wrong cut). The pending card reads "New undercut". The Butt-against chips number cuts
   the same way.
@@ -995,6 +1075,28 @@ Each card:
   when it is out of range, and a **no-op when that id is already present** (a history Undo got
   there first). The carousel then returns to the restored card. On-device report: a cut deleted
   to restart it was lost with no way back.
+- **"Next cut"** button (`TextButton`, `testTag "undercut_next_cut"`) in the card's title row,
+  before the Delete icon, so it never needs a scroll — the run-of-cuts workflow (on-device
+  request). On the SELECTED, settled card only (the trash's rule; another card's tap brings the
+  selected one back to the front). A tap runs the pill's Confirm path for this card — flush the
+  focused field, re-check `undercutConfirmIssue`, ask "Past the liner edge" for an overhang the
+  flush landed (`UndercutAfterOverhang.NextCut` resumes on the answer), then `confirmDraft(draft,
+  follow = false)`; a clean card has nothing to confirm — and then seeds a new **PENDING** card
+  butted on the FWD end of the cut as confirmed: `undercutNextCutSeed(current, oalMm)` (pure,
+  `geom/UndercutMath.kt`) — start = the cut's FWD end, length `DEFAULT_UNDERCUT_LENGTH_MM`, Ø 0,
+  no note, the cut's reference / reference liner / reference cut carried over — passed through
+  `undercutSeedInheriting` so a datum that cannot display at the new span (a buried liner edge,
+  a parent that does not contain it) seeds as the nearer S.E.T. The seed goes through the
+  pending-seed path exactly as an "Add undercut…" does (`drafts` + `pendingSeed` +
+  `selectedId = PENDING_UNDERCUT_ID`), so the new card is selected and scrolled to, its
+  Distance/Length show the seed, its Ø is empty, and an untouched seed is **discarded on leave**.
+  The pending card is keyed on its seed, so a Next cut from one pending card to the next starts
+  the new card's own state fresh. **Disabled** (`undercutNextCutState`) while the card's draft is
+  blocked (the pill already says why — no second validator), while ANOTHER card holds the one
+  pending add, and when less than the default length of shaft remains FWD of the cut — then with
+  the caption **"No stock FWD of this cut"** (`UNDERCUT_NO_STOCK_FWD_MSG`, `testTag
+  "undercut_next_cut_caption"`); a seed is never placed past the shaft end. The "Start at end
+  of" / "End at start of" chips are unchanged.
 
 - **Warnings** (non-blocking, both can show together): "Extends past shaft end — re-measure"
   (`isUndercutStaleOverrun`, unedited card only — see "Draft editing") and "Ø meets or exceeds shaft surface here" (`diaMm > 0` and `diaMm
@@ -1039,6 +1141,21 @@ aft → fwd position, the canvas previews the cut, and `vm.addUndercut` runs onl
 draft also carries a Ø or a note — `addUndercut` lands only the span and reference). The pill's ✕
 discards the page outright, so does "Discard" on a blocked leave, and so does leaving the page
 untouched, so a discarded add leaves **no ghost cut** in the record.
+
+**A strip that already holds cuts seeds the new one butted against them** (on-device request: a
+run of cuts is recorded one after the next) — `undercutAddSeedSpan(stripCuts, occupied, oalMm)`
+(pure, `geom/UndercutMath.kt`), over the strip's member cuts and every cut on the sheet, all
+render-clamped: start on the FWD end of the FWD-most cut (largest end, ties to the outermost —
+never a nested child) while `DEFAULT_UNDERCUT_LENGTH_MM` of shaft remains FWD of it, else end on
+the AFT end of the AFT-most cut while that much remains AFT of it — each side taken only when the
+seed lands in **clear stock** (no cut on the sheet reaches into it by more than
+`UNDERCUT_TOUCH_EPS_MM`; touching is clear), so the seed opens confirmable. The seed reads from
+that neighbour's datum (`undercutSeedInheriting` over the neighbour's baseline: its reference,
+reference liner and reference cut, with the displayed-reference fallbacks applied at the new
+span — a buried liner edge or a non-containing parent seeds the nearer S.E.T.), so a
+FWD-referenced chain stays FWD-referenced. Neither side fitting, or an empty strip, takes the
+default section below, unchanged. Either way the page is the same PENDING "New undercut" draft —
+untouched on leave, it is discarded.
 
 Default section (`defaultUndercutSpan`): centred in the aft-most free gap of the strip's range
 (the liner's span, else the window) wide enough for `DEFAULT_UNDERCUT_LENGTH_MM`, else centred in
@@ -1410,10 +1527,16 @@ strips minus a 22 pt orientation row, so a lone full-width strip owns ≈ 414 pt
     **skipped entirely** on the printed callouts (no placeholder for an unrecorded value) — its
     notch still draws (at the symbolic floor) and still gets dimensioned on the rail, so the
     section isn't lost from the sheet, only its Ø value is absent;
-  - **title at the bottom** (`buildUndercutStripTitle(linerTitle, anchorLabel)`): a `LinerStrip`
-    prints `"<liner title> — <dist> FROM AFT/FWD S.E.T."` (e.g. `"AFT Liner — 250.0 FROM AFT
-    S.E.T."`) — the same `name — anchor` construction the wear sheet uses for that liner, so it
-    reads identically wherever the liner is named. The distance is the **liner's own**
+  - **title at the bottom** (`buildUndercutStripTitle(linerTitle, anchorLabel, linerOdLabel)`): a
+    `LinerStrip` prints `"<liner title> Ø<OD> — <dist> FROM AFT/FWD S.E.T."` (e.g.
+    `"FWD Liner Ø10.000" — 18 1/4" FROM FWD S.E.T."`) — the `name — anchor` construction the wear
+    sheet uses for that liner, with the liner's OD after the name so the stock the cuts were taken
+    from reads without turning to the schematic. The OD is `Ø` + `formatDiaWithUnitDual` in the
+    liner's own display unit (`DisplayUnits.unitFor(linerId)`, the unit the strip's values print
+    in; dual-aware like every value on the sheet). The detail overlay's top-bar title prints the
+    same name + OD (`formatDiaWithUnit` in `unitFor(linerId)`; the overlay takes the route's
+    `displayUnits`). A bare-shaft strip passes no OD and prints as before; the blank write-in title
+    is unchanged (no OD). The distance is the **liner's own**
     edge-to-SET datum (`buildLinerAnchorLabel` + `linerAnchorForPdf`, the exact figure the
     schematic and wear sheet print for this liner), **never a cut's shoulder** — a title that
     names the liner but measures to a cut reads as the liner sitting at the cut's position
@@ -1424,7 +1547,7 @@ strips minus a 22 pt orientation row, so a lone full-width strip owns ≈ 414 pt
     SET-to-SET midpoint), distance measured to the strip's **near** shoulder — reported as a
     magnitude even when the strip sits outboard of its chosen SET. Either way the title aligns
     toward its SET (left for AFT, right for FWD). A liner strip with zero drawable cuts (every
-    assigned span clamped away) still prints the liner name and its anchor. Blank mode: a
+    assigned span clamped away) still prints the liner name, its OD and its anchor. Blank mode: a
     writing rule + both directions printed for the machinist to circle one, always
     left-aligned (a write-in sheet has no presumed measurement direction).
 - **Blank/template mode** (`blankValues = true`): `effectiveRecord = UndercutRecord()` — the

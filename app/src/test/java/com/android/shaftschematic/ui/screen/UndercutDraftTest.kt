@@ -665,4 +665,58 @@ class UndercutDraftTest {
         assertEquals(a.size, b.size)
         a.zip(b).forEach { (x, y) -> assertTrue(y.x0Pt > x.x0Pt) }
     }
+
+    // ── New-cut seeds ────────────────────────────────────────────────────────
+
+    @Test
+    fun `a seed inherits its neighbour's datum while that datum stands`() {
+        val liner = UndercutLinerSpan("L1", 500f, 1500f)
+        val from = draftOf("u1", 600f, 50f, diaMm = 180f, note = "weld",
+            reference = UndercutReference.LINER_FWD, referenceLinerId = "L1")
+        val seed = undercutSeedInheriting(
+            startMm = 650f, lengthMm = 25.4f, from = from,
+            linerSpans = listOf(liner), sheetSpans = listOf(UndercutSpanMm("u1", 600f, 650f)),
+            aftSetXMm = 0f, fwdSetXMm = 2000f,
+        )
+        assertTrue(seed.isPending)
+        assertEquals(650f, seed.startFromAftMm, 0f)
+        assertEquals(25.4f, seed.lengthMm, 0f)
+        assertEquals(0f, seed.diaMm, 0f)
+        assertEquals("", seed.note)
+        assertEquals(UndercutReference.LINER_FWD, seed.reference)
+        assertEquals("L1", seed.referenceLinerId)
+    }
+
+    @Test
+    fun `a seed whose inherited liner edge is buried reads from the nearer SET`() {
+        val liner = UndercutLinerSpan("L1", 500f, 1500f)
+        // u1 crosses the liner's AFT edge, so Liner AFT is no datum for the seed beside it.
+        val from = draftOf("u1", 450f, 150f, reference = UndercutReference.LINER_AFT, referenceLinerId = "L1")
+        val seed = undercutSeedInheriting(
+            startMm = 600f, lengthMm = 25.4f, from = from,
+            linerSpans = listOf(liner), sheetSpans = listOf(UndercutSpanMm("u1", 450f, 600f)),
+            aftSetXMm = 0f, fwdSetXMm = 2000f,
+        )
+        assertEquals(UndercutReference.AFT_SET, seed.reference)
+        assertEquals("", seed.referenceLinerId)
+        assertEquals("", seed.referenceCutId)
+    }
+
+    @Test
+    fun `next cut is enabled on a clear card and says why only when stock runs out`() {
+        val clear = undercutNextCutState(draftOf("u1", 600f, 50f), blocked = false, otherPendingOpen = false, oalMm = 2000f)
+        assertTrue(clear.enabled)
+        assertNull(clear.caption)
+
+        val blocked = undercutNextCutState(draftOf("u1", 600f, 50f), blocked = true, otherPendingOpen = false, oalMm = 2000f)
+        assertFalse(blocked.enabled)
+        assertNull(blocked.caption)
+
+        val otherAdd = undercutNextCutState(draftOf("u1", 600f, 50f), blocked = false, otherPendingOpen = true, oalMm = 2000f)
+        assertFalse(otherAdd.enabled)
+
+        val atEnd = undercutNextCutState(draftOf("u1", 1950f, 40f), blocked = false, otherPendingOpen = false, oalMm = 2000f)
+        assertFalse(atEnd.enabled)
+        assertEquals(UNDERCUT_NO_STOCK_FWD_MSG, atEnd.caption)
+    }
 }

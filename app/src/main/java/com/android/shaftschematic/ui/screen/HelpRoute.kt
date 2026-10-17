@@ -536,7 +536,13 @@ internal val helpSections: List<HelpSection> = listOf(
                     "changed: a value that would put a cut off the shaft or partly over " +
                     "another cut (sit fully inside it or fully clear) stays in the card, and " +
                     "the status pill says why it cannot be saved yet. Undo and Redo sit in the " +
-                    "top bar, and deleting a cut offers Undo. Cut depth on the drawing " +
+                    "top bar, and deleting a cut offers Undo — from the open cut's card and " +
+                    "from the tab's list alike. \"Next cut\" on the card confirms the cut and " +
+                    "opens a new one butted to its far end. The list below the drawing " +
+                    "numbers the cuts from the aft end — the same numbers the printed sheet " +
+                    "carries — and flags a cut with no Ø (\"Ø not entered\"); printing or " +
+                    "exporting while one has no Ø asks first (\"Print without diameters?\"). " +
+                    "Cut depth on the drawing " +
                     "is exaggerated for visibility (real cuts are hairline-thin at scale) — " +
                     "the printed Ø values are always your typed numbers. The exaggeration " +
                     "slider on the sheet only changes the drawing, never the data.",
@@ -909,11 +915,18 @@ internal val helpSections: List<HelpSection> = listOf(
                     "the cuts, so a cut that runs from the liner into the body still shows " +
                     "where the liner was. It applies to the printed undercut sheet and the " +
                     "Undercut Drawing screens.\n" +
+                    "• \"Cut numbers\" — default on, beside \"Liner outline\". Each cut " +
+                    "carries its number from the Undercut tab's list, AFT to FWD, centred " +
+                    "inside its section (above the surface when the cut is too narrow; a " +
+                    "parent split by a nested cut carries its number on each piece), so " +
+                    "the sheet and the list name the same cut. Off hides the drawn numbers; " +
+                    "the list keeps them.\n" +
                     "• \"Undercut drawing: split cuts at liner edges\" — default off, beside " +
                     "the liner outline row. The chain of dimensions prints each cut's full " +
                     "length, because the shop measures cut lengths. Turn it on and a cut " +
                     "machined past a liner edge is dimensioned as two spans that meet at " +
-                    "the edge.",
+                    "the edge. Also on the Undercut tab beside \"Draw to the shaft end\" — " +
+                    "the same app-wide value.",
                 manualAnchor = "settings-pdf-export",
             ),
             HelpTopic(

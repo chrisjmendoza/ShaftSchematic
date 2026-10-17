@@ -34,20 +34,27 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -71,6 +78,7 @@ import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.SurfaceSeg
+import com.android.shaftschematic.geom.UNDERCUT_DEFAULT_LENGTH_MM
 import com.android.shaftschematic.geom.UNDERCUT_EXAGGERATION_MAX_FRAC
 import com.android.shaftschematic.geom.UndercutLinerSpan
 import com.android.shaftschematic.geom.UndercutSpanMm
@@ -92,6 +100,9 @@ import com.android.shaftschematic.geom.undercutReferenceParentSpan
 import com.android.shaftschematic.geom.undercutReferenceLabel
 import com.android.shaftschematic.geom.undercutReferenceLinerFor
 import com.android.shaftschematic.geom.undercutSetPositions
+import com.android.shaftschematic.geom.undercutSheetNumbers
+import com.android.shaftschematic.geom.undercutMissingDiaMessage
+import com.android.shaftschematic.geom.undercutsMissingDia
 import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.model.Undercut
 import com.android.shaftschematic.model.UndercutReference
@@ -112,6 +123,7 @@ import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.addUndercut
 import com.android.shaftschematic.ui.viewmodel.removeUndercut
 import com.android.shaftschematic.ui.viewmodel.restoreUndercut
+import com.android.shaftschematic.ui.viewmodel.setPdfUndercutSplitAtLinerEdge
 import com.android.shaftschematic.ui.viewmodel.setUndercutDrawToSet
 import com.android.shaftschematic.ui.viewmodel.setUndercutExaggeration
 import com.android.shaftschematic.ui.viewmodel.updateUndercut
@@ -125,6 +137,7 @@ import com.android.shaftschematic.util.printShaftPdfPage
 import com.android.shaftschematic.util.renderPdfPageBitmap
 import com.android.shaftschematic.util.writeShaftPdfToUri
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
@@ -149,11 +162,14 @@ import kotlin.math.roundToInt
  * - **Cut depth exaggeration** — a slider (0 – `UNDERCUT_EXAGGERATION_MAX_FRAC`) storing the
  *   sheet's drawn-depth setting in the record. Display-only styling for every notch draw site;
  *   it never touches a stored or printed Ø.
- * - **Undercut list** — one compact row per recorded cut, aft → fwd: its distance under its own
- *   authored reference, length, Ø, and a stale-overrun warning. Tapping a row opens that cut's
- *   strip; the trailing icon deletes it (confirm-free, the wear-spot posture).
+ * - **Undercut list** — one compact row per recorded cut, numbered and ordered as the printed
+ *   sheet numbers them (`undercutSheetNumbers`, AFT → FWD): its distance under its own authored
+ *   reference, length, Ø ("Ø not entered" when unmeasured), and a stale-overrun warning. Tapping a
+ *   row opens that cut's strip; the trailing icon deletes it confirm-free, with a "Cut N deleted"
+ *   snackbar Undo (`restoreUndercut`).
  * - Blank-draft toggle, Preview, Print, Export — straight ports of the wear document's flows,
- *   all calling `composeUndercutPdf`.
+ *   all calling `composeUndercutPdf`. Print and Export (tab body and preview alike) first ask
+ *   "Print without diameters?" while any cut has no Ø and no blank draft is elected.
  *
  * Undercuts are reference-only data: nothing on this screen touches geometry, OAL, or
  * collision.
@@ -191,6 +207,9 @@ fun UndercutRoute(
     // The dotted liner outline over the cuts: a preview re-render key, an options-sheet control,
     // and read by the overview canvas and the detail overlay alike.
     val pdfUndercutLinerOutline by vm.pdfUndercutLinerOutline.collectAsState()
+    // Cut numbers on the drawing: a preview re-render key, an options-sheet control, and read by
+    // the overview canvas and the detail overlay alike.
+    val pdfUndercutCutNumbers by vm.pdfUndercutCutNumbers.collectAsState()
     // Chain-rail nodes at buried liner edges: a preview re-render key, an options-sheet control,
     // and read by the detail overlay's rail.
     val pdfUndercutSplitAtLinerEdge by vm.pdfUndercutSplitAtLinerEdge.collectAsState()
@@ -352,6 +371,45 @@ fun UndercutRoute(
         }
     }
 
+    // The cut numbers every surface shows (AFT → FWD), and the cuts that would print with no Ø.
+    val sheetNumbers = remember(undercutRecord, oalMm) { undercutSheetNumbers(undercutRecord.undercuts, oalMm) }
+    val missingDia = remember(undercutRecord) { undercutsMissingDia(undercutRecord.undercuts) }
+
+    // The list's delete: confirm-free, with the detail page's snackbar Undo — the removed cut and
+    // its record index are captured BEFORE the removal, so the Undo puts back that exact cut at
+    // that exact position (`restoreUndercut`, verbatim; a no-op when a history Undo already
+    // restored it). Nothing navigates: the list stays where it is.
+    val listSnackbar = remember { SnackbarHostState() }
+    val listSnackbarScope = rememberCoroutineScope()
+    fun deleteFromList(u: Undercut, number: Int) {
+        val index = undercutRecord.undercuts.indexOfFirst { it.id == u.id }
+        if (index < 0) return
+        val removed = undercutRecord.undercuts[index]
+        vm.removeUndercut(u.id)
+        listSnackbarScope.launch {
+            // One pending delete at a time: a second delete replaces the first's offer.
+            listSnackbar.currentSnackbarData?.dismiss()
+            val result = listSnackbar.showSnackbar(
+                message = "Cut $number deleted",
+                actionLabel = "Undo",
+                duration = SnackbarDuration.Long,
+            )
+            if (result == SnackbarResult.ActionPerformed) vm.restoreUndercut(removed, index)
+        }
+    }
+
+    // Print / Export with cuts that have no Ø: asked first, unless a blank draft is elected (a
+    // blank draft prints no values by design). [missingDiaAsk] holds the action waiting on the
+    // answer; Preview is never gated.
+    var missingDiaAsk by remember { mutableStateOf<UndercutMissingDiaAsk?>(null) }
+    fun guardMissingDia(export: Boolean, action: () -> Unit) {
+        if (!blankDraft && missingDia.isNotEmpty()) {
+            missingDiaAsk = UndercutMissingDiaAsk(count = missingDia.size, export = export, action = action)
+        } else {
+            action()
+        }
+    }
+
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/pdf")
     ) { uri ->
@@ -389,7 +447,7 @@ fun UndercutRoute(
     LaunchedEffect(showPreview, spec, unit, resolvedComponents,
                    lineThicknessScale, pdfShadedBodies, pdfShadedTapers, pdfShadedLiners,
                    pdfUndercutLineArt, pdfUndercutLinerOutline, pdfUndercutSplitAtLinerEdge,
-                   undercutRecord, blankDraft, pdfFractionStyle, pdfOutputFont, pdfThreadSlant, unitOverrides,
+                   pdfUndercutCutNumbers, undercutRecord, blankDraft, pdfFractionStyle, pdfOutputFont, pdfThreadSlant, unitOverrides,
                    dualUnits, pdfDualUnitLayout, pdfThreadDensity) {
         if (!showPreview) { previewBitmap = null; return@LaunchedEffect }
         previewLoading = true
@@ -546,6 +604,16 @@ fun UndercutRoute(
                             strokeWidthPx = 1.dp.toPx(),
                         )
                     }
+                    if (pdfUndercutCutNumbers) {
+                        drawUndercutCutNumbers(
+                            notches = notches,
+                            numbers = undercutSheetNumbers(undercutRecord.undercuts, oalMm),
+                            xPx = { mm -> layout.xPx(mm) },
+                            rPx = { dia -> layout.rPx(dia) },
+                            cy = layout.centerlineYPx,
+                            textSizePx = 11.dp.toPx(),
+                        )
+                    }
                     drawUndercutStripAffordances(
                         layout = layout,
                         liners = linerSpans,
@@ -664,6 +732,28 @@ fun UndercutRoute(
                         modifier = Modifier.testTag("undercut_draw_to_set_switch"),
                     )
                 }
+                // App-wide look pref, offered here because the chain-rail rule is reached for from
+                // this tab (on-device request); the options-sheet and Settings rows are the same
+                // value.
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Split cuts at liner edges", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            "$UNDERCUT_SPLIT_AT_LINER_EDGE_CAPTION App-wide.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Switch(
+                        checked = pdfUndercutSplitAtLinerEdge,
+                        onCheckedChange = { vm.setPdfUndercutSplitAtLinerEdge(it) },
+                        modifier = Modifier.testTag("undercut_split_at_liner_edge_switch"),
+                    )
+                }
             }
 
             // Own spacing: the surrounding 16 dp rhythm would read as separate blocks
@@ -674,13 +764,35 @@ fun UndercutRoute(
                     style = MaterialTheme.typography.titleSmall,
                     modifier = Modifier.padding(bottom = 4.dp),
                 )
+                // Cuts with no measured Ø print without one — said here once, and on each row.
+                if (missingDia.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier.padding(bottom = 4.dp).testTag("undercut_missing_dia_note"),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            Icons.Filled.Warning,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(end = 6.dp),
+                        )
+                        Text(
+                            undercutMissingDiaMessage(missingDia.size),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
                 val setPositions = undercutSetPositions(spec)
                 val linerTitles = buildLinerTitleById(spec)
+                // The sheet's own numbering (`undercutSheetNumbers`, AFT → FWD), so row N is the cut
+                // printed as N. Display order only — the record keeps its own.
                 undercutRecord.undercuts
-                    .sortedBy { it.startFromAftMm }
-                    .forEachIndexed { i, u ->
+                    .sortedBy { sheetNumbers[it.id] ?: Int.MAX_VALUE }
+                    .forEach { u ->
+                        val number = sheetNumbers[u.id] ?: 0
                         UndercutListRow(
-                            index = i,
+                            number = number,
                             undercut = u,
                             unit = unit,
                             oalMm = oalMm,
@@ -690,7 +802,7 @@ fun UndercutRoute(
                             aftSetXMm = setPositions.first,
                             fwdSetXMm = setPositions.second,
                             onOpen = { anchorToUndercut(u.id) },
-                            onDelete = { vm.removeUndercut(u.id) },
+                            onDelete = { deleteFromList(u, number) },
                         )
                     }
             }
@@ -722,116 +834,131 @@ fun UndercutRoute(
 
         DocumentActionButtons(
             documentName = "Undercut Drawing",
-            onPrint = { printUndercutDrawing() },
+            onPrint = { guardMissingDia(export = false) { printUndercutDrawing() } },
             onPreview = { showPreview = true },
             onExport = {
-                launcher.launchPicker(
-                    buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.UNDERCUT, blankDraft),
-                    what = "undercut export",
-                )
+                guardMissingDia(export = true) {
+                    launcher.launchPicker(
+                        buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.UNDERCUT, blankDraft),
+                        what = "undercut export",
+                    )
+                }
             },
             enabled = gate.enabled,
         )
     }
 
     // ── Main UI ─────────────────────────────────────────────────────────────
-    Column(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
+    // A Box only so the list delete's snackbar can float over the tab body.
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
 
-        // ── Document title strip ─────────────────────────────────────────────
-        // Adding or editing an undercut here is unsaved work exactly like a spec edit,
-        // so the asterisk belongs on this tab too.
-        EditorDocumentTitle(
-            documentName = currentDocumentName,
-            hasUnsavedChanges = hasUnsavedChanges,
-            onClick = onTitleClick,
-        )
-
-        // ── Toolbar ──────────────────────────────────────────────────────────
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surface)
-                .padding(horizontal = 4.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // Nothing to open when the sidebar is already laid out beside the tabs.
-            if (!LocalSidebarPermanent.current) {
-                IconButton(onClick = onOpenSidebar) {
-                    Icon(Icons.Filled.Menu, contentDescription = "Open navigation")
-                }
-            }
-            Text(
-                text = "Undercut Drawing",
-                style = MaterialTheme.typography.titleLarge,
-                // Weighted so the actions are measured first: on a phone the title yields
-                // (ellipsized) rather than squeezing the trailing Save / Help icons to nothing.
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(start = 4.dp).weight(1f),
+            // ── Document title strip ─────────────────────────────────────────────
+            // Adding or editing an undercut here is unsaved work exactly like a spec edit,
+            // so the asterisk belongs on this tab too.
+            EditorDocumentTitle(
+                documentName = currentDocumentName,
+                hasUnsavedChanges = hasUnsavedChanges,
+                onClick = onTitleClick,
             )
-            IconButton(
-                onClick = vm::undoEdit,
-                enabled = canUndo,
-                modifier = Modifier.testTag("undercut_undo"),
-            ) {
-                Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = "Undo")
-            }
-            IconButton(
-                onClick = vm::redoEdit,
-                enabled = canRedo,
-                modifier = Modifier.testTag("undercut_redo"),
-            ) {
-                Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = "Redo")
-            }
-            IconButton(
-                onClick = onSave,
-                modifier = Modifier.testTag("toolbar_save"),
-            ) {
-                Icon(Icons.Filled.Save, contentDescription = "Save")
-            }
-            TabHelpButton(HELP_TOPIC_RECORD_UNDERCUT, onOpenHelpTopic)
-        }
 
-        HorizontalDivider()
+            // ── Toolbar ──────────────────────────────────────────────────────────
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surface)
+                    .padding(horizontal = 4.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // Nothing to open when the sidebar is already laid out beside the tabs.
+                if (!LocalSidebarPermanent.current) {
+                    IconButton(onClick = onOpenSidebar) {
+                        Icon(Icons.Filled.Menu, contentDescription = "Open navigation")
+                    }
+                }
+                Text(
+                    text = "Undercut Drawing",
+                    style = MaterialTheme.typography.titleLarge,
+                    // Weighted so the actions are measured first: on a phone the title yields
+                    // (ellipsized) rather than squeezing the trailing Save / Help icons to nothing.
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(start = 4.dp).weight(1f),
+                )
+                IconButton(
+                    onClick = vm::undoEdit,
+                    enabled = canUndo,
+                    modifier = Modifier.testTag("undercut_undo"),
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = "Undo")
+                }
+                IconButton(
+                    onClick = vm::redoEdit,
+                    enabled = canRedo,
+                    modifier = Modifier.testTag("undercut_redo"),
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = "Redo")
+                }
+                IconButton(
+                    onClick = onSave,
+                    modifier = Modifier.testTag("toolbar_save"),
+                ) {
+                    Icon(Icons.Filled.Save, contentDescription = "Save")
+                }
+                TabHelpButton(HELP_TOPIC_RECORD_UNDERCUT, onOpenHelpTopic)
+            }
 
-        // ── Tab body ──────────────────────────────────────────────────────────
-        // One column on a phone or a MEDIUM window; two panes on an EXPANDED one. The
-        // blocks are the same composables either way (see their declarations above), so
-        // the two skeletons can never drift apart.
-        if (widthClass == WindowWidthClass.EXPANDED) {
-            SheetTwoPane(
-                // The drawing and the actions that print it. The canvas is pinned out of
-                // the pane's scroll: the cut list opposite it reshapes what it draws.
-                pinnedCanvas = canvasBlock,
-                canvasPaneScrolling = {
+            HorizontalDivider()
+
+            // ── Tab body ──────────────────────────────────────────────────────────
+            // One column on a phone or a MEDIUM window; two panes on an EXPANDED one. The
+            // blocks are the same composables either way (see their declarations above), so
+            // the two skeletons can never drift apart.
+            if (widthClass == WindowWidthClass.EXPANDED) {
+                SheetTwoPane(
+                    // The drawing and the actions that print it. The canvas is pinned out of
+                    // the pane's scroll: the cut list opposite it reshapes what it draws.
+                    pinnedCanvas = canvasBlock,
+                    canvasPaneScrolling = {
+                        introText()
+                        printGroup()
+                    },
+                    // Authoring: adding cuts, exaggerating their drawn depth, listing them.
+                    controlsPane = {
+                        addButton()
+                        recordSection()
+                    },
+                )
+            } else {
+                // ── Scrollable content ────────────────────────────────────────────
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
                     introText()
-                    printGroup()
-                },
-                // Authoring: adding cuts, exaggerating their drawn depth, listing them.
-                controlsPane = {
+                    canvasBlock()
                     addButton()
                     recordSection()
-                },
-            )
-        } else {
-            // ── Scrollable content ────────────────────────────────────────────
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                introText()
-                canvasBlock()
-                addButton()
-                recordSection()
 
-                HorizontalDivider()
+                    HorizontalDivider()
 
-                printGroup()
+                    printGroup()
+                }
             }
         }
+
+        // The list delete's Undo, at the bottom of the tab clear of the top bar.
+        SnackbarHost(
+            hostState = listSnackbar,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .systemBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .testTag("undercut_list_delete_snackbar"),
+        )
     }
 
     BackHandler(enabled = showPreview) { showPreview = false }
@@ -842,14 +969,17 @@ fun UndercutRoute(
             title = "Undercut Drawing Preview",
             onClose = { showPreview = false },
             onExport = {
-                showPreview = false
-                launcher.launchPicker(
-                    buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.UNDERCUT, blankDraft),
-                    what = "undercut export",
-                )
+                guardMissingDia(export = true) {
+                    showPreview = false
+                    launcher.launchPicker(
+                        buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.UNDERCUT, blankDraft),
+                        what = "undercut export",
+                    )
+                }
             },
-            // The tab body's Print action, unchanged — one function behind both.
-            onPrint = { printUndercutDrawing() },
+            // The tab body's Print action, unchanged — one function behind both, behind the same
+            // missing-Ø question.
+            onPrint = { guardMissingDia(export = false) { printUndercutDrawing() } },
             optionsSheet = {
                 // Same blank-draft state as the tab body's switch — ONE state behind both, so
                 // the tab and the sheet can never disagree about what the preview is showing.
@@ -870,6 +1000,7 @@ fun UndercutRoute(
                     showUndercutLineArt = true,
                     undercutLineArt = pdfUndercutLineArt,
                     undercutLinerOutline = pdfUndercutLinerOutline,
+                    undercutCutNumbers = pdfUndercutCutNumbers,
                     undercutSplitAtLinerEdge = pdfUndercutSplitAtLinerEdge,
                     vm = vm,
                     fractionStyle = pdfFractionStyle,
@@ -879,6 +1010,37 @@ fun UndercutRoute(
                     blankDraft = blankDraft,
                     onSetBlankDraft = { blankDraft = it },
                 )
+            },
+        )
+    }
+
+    // ── "Print without diameters?" ───────────────────────────────────────────
+    // Cuts placed but never measured print with no Ø; the machinist decides whether that sheet
+    // goes out. Cancel, back and tap-outside all leave nothing printed or exported.
+    missingDiaAsk?.let { ask ->
+        AlertDialog(
+            onDismissRequest = { missingDiaAsk = null },
+            modifier = Modifier.testTag("undercut_missing_dia_dialog"),
+            title = { Text("Print without diameters?") },
+            text = { Text(undercutMissingDiaMessage(ask.count)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        missingDiaAsk = null
+                        ask.action()
+                    },
+                    modifier = Modifier.testTag("undercut_missing_dia_proceed"),
+                ) {
+                    Text(if (ask.export) "Export anyway" else "Print anyway")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { missingDiaAsk = null },
+                    modifier = Modifier.testTag("undercut_missing_dia_cancel"),
+                ) {
+                    Text("Cancel")
+                }
             },
         )
     }
@@ -919,6 +1081,8 @@ fun UndercutRoute(
             onClose = { openOverlay(linerId = null, undercutId = null, selectId = null) },
             onRestoreUndercut = vm::restoreUndercut,
             linerOutline = pdfUndercutLinerOutline,
+            cutNumbers = pdfUndercutCutNumbers,
+            displayUnits = DisplayUnits(unit, unitOverrides, dualUnits),
             splitAtLinerEdge = pdfUndercutSplitAtLinerEdge,
             canUndo = canUndo,
             canRedo = canRedo,
@@ -929,7 +1093,10 @@ fun UndercutRoute(
 }
 
 /** Default length of a newly added undercut (1 in), clamped to the remaining shaft extent. */
-internal const val DEFAULT_UNDERCUT_LENGTH_MM = 25.4f
+internal const val DEFAULT_UNDERCUT_LENGTH_MM = UNDERCUT_DEFAULT_LENGTH_MM
+
+/** A Print ([export] false) or Export waiting on "Print without diameters?" — [count] cuts lack a Ø. */
+private class UndercutMissingDiaAsk(val count: Int, val export: Boolean, val action: () -> Unit)
 
 private fun openUndercutPdf(context: Context, uri: Uri) {
     val intent = buildOpenPdfIntent(context, uri)
@@ -950,17 +1117,19 @@ private fun openUndercutPdf(context: Context, uri: Uri) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * One recorded undercut, summarized: its distance under the reference it was authored against
- * (with that reference's short tag), its length, and its Ø — "—" while unmeasured. A cut whose
- * span no longer fits the shaft (`isUndercutStaleOverrun`) leads with a warning icon, the same
- * non-blocking classifier the card shows in full.
+ * One recorded undercut, summarized: its sheet [number] (`undercutSheetNumbers`, the number the
+ * printed sheet carries), its distance under the reference it was authored against (with that
+ * reference's short tag), its length, and its Ø — "—" while unmeasured, with a "Ø not entered" note
+ * under it, since such a cut prints with no diameter. A cut whose span no longer fits the shaft
+ * (`isUndercutStaleOverrun`) leads with a warning icon, the same non-blocking classifier the card
+ * shows in full.
  *
- * The whole row opens the cut's strip; the trailing icon deletes it outright — confirm-free, the
- * wear-spot posture. Neither path touches canonical values.
+ * The whole row opens the cut's strip; the trailing icon deletes it outright — confirm-free, with a
+ * snackbar Undo from the caller. Neither path touches canonical values.
  */
 @Composable
 private fun UndercutListRow(
-    index: Int,
+    number: Int,
     undercut: Undercut,
     unit: UnitSystem,
     oalMm: Float,
@@ -1011,7 +1180,7 @@ private fun UndercutListRow(
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "${index + 1}. ${disp(distanceMm, unit)}${abbr(unit)} from $referenceTag",
+                text = "$number. ${disp(distanceMm, unit)}${abbr(unit)} from $referenceTag",
                 style = MaterialTheme.typography.bodyMedium,
             )
             Text(
@@ -1019,12 +1188,20 @@ private fun UndercutListRow(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            if (undercut.diaMm <= 0f) {
+                Text(
+                    text = "Ø not entered",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.testTag("undercut_row_no_dia_${undercut.id}"),
+                )
+            }
         }
         IconButton(
             onClick = onDelete,
             modifier = Modifier.testTag("undercut_delete_${undercut.id}"),
         ) {
-            Icon(Icons.Filled.Delete, contentDescription = "Delete undercut ${index + 1}")
+            Icon(Icons.Filled.Delete, contentDescription = "Delete undercut $number")
         }
     }
 }

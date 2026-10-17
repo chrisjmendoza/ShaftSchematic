@@ -463,6 +463,24 @@ class UndercutStripLayoutTest {
         assertEquals("AFT Liner", buildUndercutStripTitle("AFT Liner", ""))
     }
 
+    @Test
+    fun `a liner strip title carries the liner OD after its name`() {
+        val anchor = buildUndercutAnchorLabel(UndercutAnchor(UndercutAnchorSide.FWD_SET, 463.55f), UnitSystem.INCHES)
+        val od = "Ø" + formatDiaWithUnit(254.0, UnitSystem.INCHES)
+        assertEquals("Ø10\"", od)
+        assertEquals("FWD Liner Ø10\" — $anchor", buildUndercutStripTitle("FWD Liner", anchor, od))
+        // The liner's own display unit prints its OD.
+        assertEquals(
+            "FWD Liner Ø254 mm — $anchor",
+            buildUndercutStripTitle("FWD Liner", anchor, "Ø" + formatDiaWithUnit(254.0, UnitSystem.MILLIMETERS)),
+        )
+        // Name only (no anchor to state) keeps the OD; a blank OD label prints as before.
+        assertEquals("FWD Liner Ø10\"", buildUndercutStripTitle("FWD Liner", "", od))
+        assertEquals("FWD Liner — $anchor", buildUndercutStripTitle("FWD Liner", anchor, " "))
+        // A bare-shaft strip is unchanged.
+        assertEquals(anchor, buildUndercutStripTitle(null, anchor, null))
+    }
+
     // ── Total span ────────────────────────────────────────────────────────────
 
     @Test

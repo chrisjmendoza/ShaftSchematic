@@ -341,6 +341,11 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     internal val _pdfUndercutLinerOutline = MutableStateFlow(PdfPrefs().undercutLinerOutline)
     val pdfUndercutLinerOutline: StateFlow<Boolean> = _pdfUndercutLinerOutline.asStateFlow()
 
+    // Each cut's list number on the undercut drawing and its two canvases. Also a preview
+    // re-render key on the Undercut tab.
+    internal val _pdfUndercutCutNumbers = MutableStateFlow(PdfPrefs().undercutCutNumbers)
+    val pdfUndercutCutNumbers: StateFlow<Boolean> = _pdfUndercutCutNumbers.asStateFlow()
+
     // Chain-rail node at each liner edge a cut runs past, on the undercut drawing and its detail
     // canvas. Also a preview re-render key on the Undercut tab.
     internal val _pdfUndercutSplitAtLinerEdge = MutableStateFlow(PdfPrefs().undercutSplitAtLinerEdge)
@@ -1037,6 +1042,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             SettingsStore.pdfUndercutLinerOutlineFlow(getApplication()).collectLatest { persisted ->
                 _pdfUndercutLinerOutline.value = persisted
                 SettingsStore.updatePdfPrefs { it.copy(undercutLinerOutline = persisted) }
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.pdfUndercutCutNumbersFlow(getApplication()).collectLatest { persisted ->
+                _pdfUndercutCutNumbers.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(undercutCutNumbers = persisted) }
             }
         }
         viewModelScope.launch {

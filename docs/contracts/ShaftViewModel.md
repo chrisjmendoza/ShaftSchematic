@@ -112,7 +112,7 @@ Responsibilities
     (belt-and-suspenders — `SessionHistory.record`'s identical-state no-op is the
     authoritative backstop).
   - Undercuts ride this history and the Undercuts tab and each liner/window page carry Undo/Redo in
-    their top bar. A card's delete is also restorable as the exact cut: `restoreUndercut(u, index)`
+    their top bar. A card's delete, and the tab list's delete, is also restorable as the exact cut: `restoreUndercut(u, index)`
     puts it back at its prior index, a no-op when the id is already present (see
     `UndercutDrawing.md`, Undo).
   - `canUndo` / `canRedo`: `StateFlow<Boolean>` mirroring `editHistory.canUndo` /

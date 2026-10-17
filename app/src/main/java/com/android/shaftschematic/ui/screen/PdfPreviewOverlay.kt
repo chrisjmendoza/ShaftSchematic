@@ -96,6 +96,7 @@ import com.android.shaftschematic.ui.viewmodel.setPdfShadedBodies
 import com.android.shaftschematic.ui.viewmodel.setPdfShadedLiners
 import com.android.shaftschematic.ui.viewmodel.setPdfUndercutLineArt
 import com.android.shaftschematic.ui.viewmodel.setPdfUndercutLinerOutline
+import com.android.shaftschematic.ui.viewmodel.setPdfUndercutCutNumbers
 import com.android.shaftschematic.ui.viewmodel.setPdfUndercutSplitAtLinerEdge
 import com.android.shaftschematic.ui.viewmodel.setPdfShadedTapers
 import com.android.shaftschematic.ui.viewmodel.setPdfTieringMode
@@ -407,6 +408,8 @@ internal fun RunoutWearOptionsSheet(
     undercutLineArt: Boolean = false,
     /** The app-wide `PdfPrefs.undercutLinerOutline`; read only when [showUndercutLineArt]. */
     undercutLinerOutline: Boolean = true,
+    /** The app-wide `PdfPrefs.undercutCutNumbers`; read only when [showUndercutLineArt]. */
+    undercutCutNumbers: Boolean = true,
     /** The app-wide `PdfPrefs.undercutSplitAtLinerEdge`; read only when [showUndercutLineArt]. */
     undercutSplitAtLinerEdge: Boolean = false,
     /**
@@ -756,6 +759,8 @@ internal fun RunoutWearOptionsSheet(
                 onSetUndercutLineArt = { vm.setPdfUndercutLineArt(it) },
                 undercutLinerOutline = undercutLinerOutline,
                 onSetUndercutLinerOutline = { vm.setPdfUndercutLinerOutline(it) },
+                undercutCutNumbers = undercutCutNumbers,
+                onSetUndercutCutNumbers = { vm.setPdfUndercutCutNumbers(it) },
                 undercutSplitAtLinerEdge = undercutSplitAtLinerEdge,
                 onSetUndercutSplitAtLinerEdge = { vm.setPdfUndercutSplitAtLinerEdge(it) },
             )

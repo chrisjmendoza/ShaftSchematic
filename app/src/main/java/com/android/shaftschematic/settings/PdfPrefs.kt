@@ -169,6 +169,14 @@ data class PdfPrefs(
      */
     val undercutLinerOutline: Boolean = true,
     /**
+     * Cut numbers on the undercut document: each cut carries its number from the Undercut tab's
+     * list (`geom/UndercutNumbering.kt`), placed inside its section core or above the surface
+     * when the core is too narrow (`geom/UndercutCutNumberMath.kt`), so the sheet and the list
+     * name the same cut. Part of the drawing look, so profiles capture it; the undercut PDF and
+     * both undercut canvases read it. On by default.
+     */
+    val undercutCutNumbers: Boolean = true,
+    /**
      * Whether the undercut detail strips' chain rail splits a cut machined past a liner edge into
      * two spans meeting at that edge (`geom/UndercutMath.kt`'s `buriedUndercutLinerEdgesMm`, fed
      * as `buildUndercutRailSpans`' `splitAtMm`). Off by default: the shop measures the length of
