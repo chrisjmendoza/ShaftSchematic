@@ -271,10 +271,19 @@
   <dl class="terms">
     <dt><span class="ui">Saved</span> (green tick)</dt><dd>The card matches what is recorded. Nothing to do.</dd>
     <dt><span class="ui">Confirm change</span></dt><dd>The card has changes that can be saved. Tap to save them. The <span class="ui">✗</span> beside it (<span class="ui">Discard change</span>) throws the changes away.</dd>
-    <dt>A warning and a reason</dt><dd>The changes cannot be saved as they stand — for example <span class="ui">Overlaps an adjacent undercut — a cut must sit fully inside or fully clear of another</span>. Fix the numbers, or tap <span class="ui">✗</span> to discard.</dd>
+    <dt>A warning and a reason</dt><dd>The changes cannot be saved as they stand — for example <span class="ui">Overlaps another cut — sit fully inside it or fully clear</span>. Fix the numbers, or tap <span class="ui">✗</span> to discard.</dd>
   </dl>
   <p>You do not have to tap the pill every time. Swiping to another card, tapping another cut on the drawing, or leaving the detail view saves a card whose changes are valid. If a card's changes cannot be saved, the app asks first — <span class="ui">Undercut can't be saved</span>, with the reason — and you choose <span class="ui">Keep editing</span> or <span class="ui">Discard</span>. Tapping outside the question keeps editing, so a stray tap never loses work.</p>
-  <p>Swipe left and right through the cards (<span class="ui">Undercut 1 of 3</span>, and so on), AFT to FWD, or tap a cut on the drawing to jump to its card. Delete a recorded cut with the bin icon on its card. Pinch to zoom the drawing for a closer look.</p>
+  <p>Swipe left and right through the cards (<span class="ui">Undercut 1 of 3 · aft → fwd</span>, and so on), or tap a cut on the drawing to jump to its card. The number is the cut's position on the strip from AFT to FWD, not the order you added it, so a cut added between two others reads as <span class="ui">2 of 3</span>. Delete a recorded cut with the bin icon on its card; a <span class="ui">Undercut deleted</span> message with <span class="ui">Undo</span> follows, and the Undo and Redo arrows in the bar at the top of this page (and of the Undercuts tab) step the job's whole edit history, cuts included. Pinch to zoom the drawing for a closer look.</p>
+  <p>While a card's changes are blocked for overlapping another cut, the overlapping stretch itself is painted on the drawing in the warning colour, edge to edge, so you can see exactly where the two cuts cross.</p>
+
+  <h3>Quick spans: whole liner, extensions, butting</h3>
+  <p>Three shortcuts set a cut's span without measuring it by hand. Each one is applied the moment you tap or type it, and the Distance and Length fields update to show the result; nothing changes on its own afterwards.</p>
+  <dl class="terms">
+    <dt><span class="ui">Span: Whole liner</span></dt><dd>On a liner's page, sets the cut to the liner's full length, measured from <span class="ui">Liner AFT</span>, so Distance reads 0.</dd>
+    <dt><span class="ui">Extend past liner (in)</span> — <span class="ui">AFT</span> / <span class="ui">FWD</span></dt><dd>Runs the cut that far past the liner's edge into the neighbouring body; the other end stays where it is. The fields show how far the cut already overhangs each edge (0 for an end inside the liner). An extension can only run into stock that exists: a value larger than the run to the shaft's end is set to that maximum, with a note under the field, and a side with no stock at all is greyed out.</dd>
+    <dt><span class="ui">Butt against:</span> — <span class="ui">After cut 1</span>, <span class="ui">Before cut 3</span>, …</dt><dd>Starts this cut exactly at the end of another cut on the page (or ends it exactly at the start of one), length unchanged. Touching cuts are not an overlap. A result that would leave the shaft is refused with the reason under the row.</dd>
+  </dl>
 
   <h3>Measure From: the four datums</h3>
   <table class="ref">
@@ -295,7 +304,7 @@
 
   <h3>Nested cuts and overlaps</h3>
   <p>A <strong>nested cut</strong> is a smaller, deeper cut inside a wider relief — the shop deepening a corroded patch of an earlier undercut. Record it as its own cut whose span sits entirely inside the wider one; it may run right up to the wider cut's end. The drawing shows it as a second step below the relief's floor, and the dimensions add a row for it.</p>
-  <p>A cut that sits partly inside another, or exactly on top of one, is blocked with <span class="ui">Overlaps an adjacent undercut — a cut must sit fully inside or fully clear of another</span>. Move it fully inside or fully clear of its neighbor.</p>
+  <p>A cut that sits partly inside another, or exactly on top of one, is blocked with <span class="ui">Overlaps another cut — sit fully inside it or fully clear</span>. Move it fully inside or fully clear of its neighbor.</p>
   <p>Two warnings flag a diameter that looks wrong without changing it: <span class="ui">Ø meets or exceeds shaft surface here</span> (a cut no smaller than the surface it was cut into), and for a nested cut, <span class="ui">Ø meets or exceeds the surrounding cut's floor here</span>.</p>
 
   <h3 id="recording-cut-depth">Cut depth exaggeration</h3>
