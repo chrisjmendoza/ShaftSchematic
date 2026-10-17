@@ -1,5 +1,6 @@
 package com.android.shaftschematic.ui.screen
 
+import com.android.shaftschematic.geom.UNDERCUT_PARTIAL_OVERLAP_MSG
 import com.android.shaftschematic.geom.UndercutLinerSpan
 import com.android.shaftschematic.geom.UndercutSpanMm
 import com.android.shaftschematic.model.Undercut
@@ -291,9 +292,35 @@ class UndercutDraftTest {
             UndercutLeaveAction.PROMPT,
             undercutLeaveAction(
                 draftOf("a", 150f), draftOf("a", 100f),
-                confirmIssue = "Overlaps an adjacent undercut",
+                confirmIssue = UNDERCUT_PARTIAL_OVERLAP_MSG,
             ),
         )
+    }
+
+    // ── Card title + Butt against ────────────────────────────────────────────
+
+    @Test
+    fun `the card title states the aft to fwd position convention`() {
+        assertEquals("Undercut 2 of 3 · aft → fwd", undercutCardTitle(2, 3))
+    }
+
+    @Test
+    fun `butting after a cut starts the draft at its end, length and reference untouched`() {
+        val draft = draftOf(
+            "d", 300f, lengthMm = 40f,
+            reference = UndercutReference.LINER_FWD, referenceLinerId = "L1",
+        )
+        val moved = draft.buttingAgainst(UndercutSpanMm("o", 100f, 150f))
+        assertEquals(150f, moved.startFromAftMm, 0f)
+        assertEquals(draft.copy(startFromAftMm = 150f), moved)
+    }
+
+    @Test
+    fun `butting before a cut ends the draft at its start, length and reference untouched`() {
+        val draft = draftOf("d", 20f, lengthMm = 40f, reference = UndercutReference.FWD_SET)
+        val moved = draft.buttingAgainst(UndercutSpanMm("o", 100f, 150f))
+        assertEquals(60f, moved.startFromAftMm, 0f)
+        assertEquals(draft.copy(startFromAftMm = 60f), moved)
     }
 
     @Test

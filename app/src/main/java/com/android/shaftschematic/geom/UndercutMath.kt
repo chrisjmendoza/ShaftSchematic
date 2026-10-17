@@ -26,6 +26,15 @@ import kotlin.math.sqrt
 internal const val UNDERCUT_SPAN_EPS_MM = 1e-3f
 
 /**
+ * Slop for "do two edges TOUCH" — the clear test of the partial-overlap predicate and the
+ * whole-liner match. A preset computes its edge in `Float` (`other.start − L`, then `start + L`;
+ * `end − start`, then `start + L`), and at 8–16 m of shaft one ulp is about 1e-3 mm — as large as
+ * [UNDERCUT_SPAN_EPS_MM] — so a butted cut could read as overlapping its neighbour and the
+ * whole-liner chip as unselected. 0.01 mm is 0.0004": no real overlap is that thin.
+ */
+const val UNDERCUT_TOUCH_EPS_MM = 0.01f
+
+/**
  * Undercuts whose clamped spans are separated by a gap of at most this many mm share one
  * zoomed detail window (the reference sketch's three weld undercuts read as one view).
  * Tunable product constant; keep it ≥ `2 × UNDERCUT_WINDOW_PAD_MM` or adjacent padded
@@ -351,14 +360,15 @@ fun clampUndercutExtension(typedMm: Float, maxMm: Float): UndercutExtensionClamp
 
 /**
  * True when the span `[startMm, startMm + lengthMm]` is the liner's own span
- * `[linerStartMm, linerEndMm]`, both ends within [epsMm].
+ * `[linerStartMm, linerEndMm]`, both ends within [epsMm] ([UNDERCUT_TOUCH_EPS_MM] by default, so
+ * the "Whole liner" preset's own `Float` round trip still reads as the whole liner on a long shaft).
  */
 fun undercutIsWholeLiner(
     startMm: Float,
     lengthMm: Float,
     linerStartMm: Float,
     linerEndMm: Float,
-    epsMm: Float = UNDERCUT_SPAN_EPS_MM,
+    epsMm: Float = UNDERCUT_TOUCH_EPS_MM,
 ): Boolean =
     abs(startMm - linerStartMm) <= epsMm && abs(startMm + lengthMm - linerEndMm) <= epsMm
 
@@ -428,21 +438,79 @@ fun undercutOverlapIssue(
     lengthMm: Float,
     otherSpans: List<UndercutSpanMm>,
 ): String? {
-    val eps = UNDERCUT_SPAN_EPS_MM
     val draft = UndercutSpanMm("", canonicalStartMm, canonicalStartMm + lengthMm)
-    val hit = otherSpans.firstOrNull { o ->
-        val clear = o.endMm <= draft.startMm + eps || o.startMm >= draft.endMm - eps
-        !clear && !undercutSpanContains(draft, o) && !undercutSpanContains(o, draft)
-    }
+    val hit = otherSpans.firstOrNull { o -> undercutSpansPartiallyOverlap(draft, o) }
     return if (hit != null) UNDERCUT_PARTIAL_OVERLAP_MSG else null
+}
+
+/**
+ * The blocked-overlap predicate behind [undercutOverlapIssue] and [undercutPartialOverlapsMm]:
+ * [a] and [b] are neither clear of each other (touching edge-to-edge counts as clear, within
+ * [UNDERCUT_TOUCH_EPS_MM] — a "Butt against" preset's `Float` edge drifts by an ulp on a long
+ * shaft) nor nested either way ([undercutSpanContains]). Two identical spans satisfy it — one cut
+ * entered twice is blocked like a partial intrusion. The confirm check and the canvas overlap
+ * band both read this one predicate, so they share the slop.
+ */
+private fun undercutSpansPartiallyOverlap(a: UndercutSpanMm, b: UndercutSpanMm): Boolean {
+    val eps = UNDERCUT_TOUCH_EPS_MM
+    val clear = b.endMm <= a.startMm + eps || b.startMm >= a.endMm - eps
+    return !clear && !undercutSpanContains(a, b) && !undercutSpanContains(b, a)
+}
+
+/**
+ * The shaft-space intervals `[max(starts), min(ends)]` where the draft span
+ * `[draftStartMm, draftStartMm + draftLengthMm]` partially overlaps one of [otherSpans] — the
+ * same partners [undercutOverlapIssue] blocks on, one interval per partner in [otherSpans]
+ * order. Touching and nested partners contribute nothing. The overlay paints these as the
+ * visible reason a blocked draft cannot be confirmed.
+ */
+fun undercutPartialOverlapsMm(
+    draftStartMm: Float,
+    draftLengthMm: Float,
+    otherSpans: List<UndercutSpanMm>,
+): List<Pair<Float, Float>> {
+    val draft = UndercutSpanMm("", draftStartMm, draftStartMm + draftLengthMm)
+    return otherSpans
+        .filter { o -> undercutSpansPartiallyOverlap(draft, o) }
+        .map { o -> max(draft.startMm, o.startMm) to min(draft.endMm, o.endMm) }
 }
 
 /**
  * The one blocked-overlap wording: a partial intrusion and a duplicate span read the same,
  * because the fix is the same — move the cut fully inside its neighbour or fully clear of it.
+ * Short enough to fit the status pill in two lines on a phone.
  */
 const val UNDERCUT_PARTIAL_OVERLAP_MSG =
-    "Overlaps an adjacent undercut — a cut must sit fully inside or fully clear of another"
+    "Overlaps another cut — sit fully inside it or fully clear"
+
+// ── Butt-against preset ──
+
+/**
+ * True when a cut butted against the other span `[otherStartMm, otherEndMm]` goes on its FWD
+ * side ("After cut N"): the other span's midpoint lies AFT of the draft's. Equal midpoints read
+ * as "Before".
+ */
+fun undercutButtsAfter(
+    otherStartMm: Float,
+    otherEndMm: Float,
+    draftStartMm: Float,
+    draftLengthMm: Float,
+): Boolean = (otherStartMm + otherEndMm) * 0.5f < draftStartMm + draftLengthMm * 0.5f
+
+/**
+ * The start that butts a draft of [draftLengthMm] against the other span — edge to edge, which
+ * [undercutOverlapIssue] counts as clear. AFTER the other cut ([undercutButtsAfter]) the draft
+ * starts at its FWD end; BEFORE it, the draft ends at its AFT end. The length is never touched.
+ * Shaft bounds are the caller's check ([undercutSpanIssue]).
+ */
+fun undercutStartButting(
+    otherStartMm: Float,
+    otherEndMm: Float,
+    draftStartMm: Float,
+    draftLengthMm: Float,
+): Float =
+    if (undercutButtsAfter(otherStartMm, otherEndMm, draftStartMm, draftLengthMm)) otherEndMm
+    else otherStartMm - draftLengthMm
 
 /**
  * True when a **previously recorded** undercut no longer fits within the shaft's current

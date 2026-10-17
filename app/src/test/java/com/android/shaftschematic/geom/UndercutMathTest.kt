@@ -521,6 +521,46 @@ class UndercutMathTest {
     }
 
     @Test
+    fun `edges touching within the touch eps are clear on both sides`() {
+        val others = listOf(UndercutSpanMm("other", 200f, 260f))
+        // 0.005 mm into the neighbour from the FWD side, then from the AFT side.
+        assertNull(undercutOverlapIssue(canonicalStartMm = 259.995f, lengthMm = 40f, otherSpans = others))
+        assertNull(undercutOverlapIssue(canonicalStartMm = 160.005f, lengthMm = 40f, otherSpans = others))
+        // The overlap band agrees with the confirm check.
+        assertTrue(undercutPartialOverlapsMm(259.995f, 40f, others).isEmpty())
+        assertTrue(undercutPartialOverlapsMm(160.005f, 40f, others).isEmpty())
+        // A real intrusion, well past the slop, is still blocked.
+        assertNotNull(undercutOverlapIssue(canonicalStartMm = 259.9f, lengthMm = 40f, otherSpans = others))
+        assertTrue(UNDERCUT_TOUCH_EPS_MM > UNDERCUT_SPAN_EPS_MM)
+    }
+
+    @Test
+    fun `a butt-before preset on a long shaft clears the overlap check`() {
+        // 12 m out, one Float ulp is ~1e-3 mm — the old touch slop — so the preset's own
+        // `other.start - L` then `start + L` round trip could land inside the neighbour.
+        val others = listOf(UndercutSpanMm("other", 12_000.37f, 12_254.37f))
+        val lengthMm = 254f
+        val start = undercutStartButting(
+            otherStartMm = 12_000.37f, otherEndMm = 12_254.37f,
+            draftStartMm = 11_000f, draftLengthMm = lengthMm,
+        )
+        assertNull(undercutOverlapIssue(canonicalStartMm = start, lengthMm = lengthMm, otherSpans = others))
+        // And with a drift larger than one ulp on the shared edge.
+        assertNull(
+            undercutOverlapIssue(
+                canonicalStartMm = 12_000.37f - lengthMm + 0.004f, lengthMm = lengthMm, otherSpans = others,
+            ),
+        )
+    }
+
+    @Test
+    fun `whole-liner predicate holds through Float drift on a long shaft`() {
+        assertTrue(undercutIsWholeLiner(12_000f + 1e-3f, 400f - 1e-3f, 12_000f, 12_400f))
+        assertTrue(undercutIsWholeLiner(12_000f + 4e-3f, 400f, 12_000f, 12_400f))
+        assertFalse(undercutIsWholeLiner(12_000.5f, 400f, 12_000f, 12_400f))
+    }
+
+    @Test
     fun `containment is legal in both directions and partial overlap stays blocked`() {
         val others = listOf(UndercutSpanMm("other", 200f, 300f))
         // A cut machined INSIDE the other one, and one machined AROUND it — both legal.
@@ -1192,6 +1232,82 @@ class UndercutMathTest {
 
     /** The pad parameter is mm in shaft space; named helper only for test readability. */
     private fun padPx(mm: Float): Float = mm
+
+    // ── Butt-against preset ──
+
+    @Test
+    fun `butting decides after or before by midpoints`() {
+        // Other cut 100..150 (mid 125). A draft whose midpoint is FWD of it goes after.
+        assertTrue(undercutButtsAfter(100f, 150f, draftStartMm = 200f, draftLengthMm = 20f))
+        // A draft whose midpoint is AFT of it goes before — even one that overlaps its AFT end.
+        assertFalse(undercutButtsAfter(100f, 150f, draftStartMm = 40f, draftLengthMm = 20f))
+        assertFalse(undercutButtsAfter(100f, 150f, draftStartMm = 90f, draftLengthMm = 30f))
+        // Midpoints decide, not starts: a long draft starting AFT of the other but centred FWD.
+        assertTrue(undercutButtsAfter(100f, 150f, draftStartMm = 80f, draftLengthMm = 200f))
+    }
+
+    @Test
+    fun `butting after starts the draft at the other cut's end`() {
+        assertEquals(150f, undercutStartButting(100f, 150f, draftStartMm = 300f, draftLengthMm = 20f), 0f)
+    }
+
+    @Test
+    fun `butting before ends the draft at the other cut's start`() {
+        assertEquals(80f, undercutStartButting(100f, 150f, draftStartMm = 10f, draftLengthMm = 20f), 0f)
+    }
+
+    @Test
+    fun `a butted draft touches its neighbour and clears the overlap check`() {
+        val others = listOf(UndercutSpanMm("other", 100f, 150f))
+        val after = undercutStartButting(100f, 150f, draftStartMm = 140f, draftLengthMm = 30f)
+        assertNull(undercutOverlapIssue(after, 30f, others))
+        val before = undercutStartButting(100f, 150f, draftStartMm = 90f, draftLengthMm = 30f)
+        assertNull(undercutOverlapIssue(before, 30f, others))
+        // Both started out intruding — the preset is what made them clear.
+        assertNotNull(undercutOverlapIssue(140f, 30f, others))
+        assertNotNull(undercutOverlapIssue(90f, 30f, others))
+    }
+
+    // ── Overlap bands ──
+
+    @Test
+    fun `no overlap gives no band`() {
+        val others = listOf(UndercutSpanMm("a", 100f, 150f))
+        assertTrue(undercutPartialOverlapsMm(200f, 20f, others).isEmpty())
+        assertTrue(undercutPartialOverlapsMm(200f, 20f, emptyList()).isEmpty())
+    }
+
+    @Test
+    fun `a partial overlap gives the intersection`() {
+        val others = listOf(UndercutSpanMm("a", 100f, 150f))
+        assertEquals(listOf(130f to 150f), undercutPartialOverlapsMm(130f, 40f, others))
+        assertEquals(listOf(100f to 110f), undercutPartialOverlapsMm(80f, 30f, others))
+    }
+
+    @Test
+    fun `containment either way and touching give no band`() {
+        val others = listOf(UndercutSpanMm("a", 100f, 150f))
+        assertTrue(undercutPartialOverlapsMm(110f, 20f, others).isEmpty())   // inside
+        assertTrue(undercutPartialOverlapsMm(50f, 200f, others).isEmpty())   // around
+        assertTrue(undercutPartialOverlapsMm(150f, 20f, others).isEmpty())   // touching FWD
+        assertTrue(undercutPartialOverlapsMm(80f, 20f, others).isEmpty())    // touching AFT
+    }
+
+    @Test
+    fun `two partners give two bands`() {
+        val others = listOf(UndercutSpanMm("a", 100f, 150f), UndercutSpanMm("b", 200f, 250f))
+        assertEquals(
+            listOf(140f to 150f, 200f to 210f),
+            undercutPartialOverlapsMm(140f, 70f, others),
+        )
+    }
+
+    @Test
+    fun `bands and the blocking check agree on a duplicate span`() {
+        val others = listOf(UndercutSpanMm("a", 100f, 150f))
+        assertNotNull(undercutOverlapIssue(100f, 50f, others))
+        assertEquals(listOf(100f to 150f), undercutPartialOverlapsMm(100f, 50f, others))
+    }
 
     private companion object {
         /** Shaft extent used by the exaggeration scenarios (long enough for several cuts). */

@@ -8,6 +8,54 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-16
 
+### fix(undercut): the trash deletes the cut you selected
+
+- On a liner's page, tapping a cut on the drawing two or more cards away could cancel its own
+  scroll: the pager's half-way page flip re-adopted an intermediate card as the selection, the
+  animation was cancelled, and the pager stopped between two cards with only the card being
+  LEFT showing a trash icon — one tap deleted the wrong cut (on-device report). A confirm that
+  reordered the cuts had a related race (the scroll measured against a stale page), which could
+  also commit a just-added default cut without the card ever appearing.
+- The card now jumps straight to the selected cut (no intermediate pages), the swipe → selection
+  link adopts only SETTLED pages, and the trash acts only on the selected card while the pager is
+  at rest (otherwise it brings the selected card back and does nothing). Deleting no longer runs
+  the leave-sweep over the other cards. Opening a cut from the "Recorded undercuts" list now
+  lands on that cut, not the first card; a selection that leaves the strip (a confirm that moved
+  the cut to another liner) is healed to the card in front; a bare-shaft strip's identity key is
+  stable across add/delete, so an open draft or prompt is no longer silently dropped; the
+  Whole-liner / Extend presets act on the strip's own liner; and a 0.01 mm touch tolerance keeps
+  butted or whole-liner cuts from reading as overlaps on long shafts. `UndercutMathTest`;
+  `UndercutDrawing.md` updated.
+
+### feat(undercut): Undo on the undercut screens, and a delete you can take back
+
+- Undo and Redo arrows now sit in the top bar of the Undercuts tab and of each liner/window
+  page, bound to the job's one edit history (cuts were already in it; only the Schematic tab had
+  the buttons). Deleting a cut from its card raises an "Undercut deleted" snackbar whose Undo
+  puts that exact cut back at its original position (`restoreUndercut`), never a history step
+  that could fold in an edit coalesced with the delete (on-device report: a cut deleted to
+  restart it was gone for good). An Undo that removes or moves the cut whose card is open no
+  longer leaves a stale draft or a dead selection behind: such drafts are dropped and the
+  pager's current card is adopted. `ShaftViewModelUndercutRestoreTest`; `UndercutDrawing.md`
+  and the User Manual updated (in-app copy rebuilt).
+
+### feat(undercut): butt a cut against another, see the overlap, positional card titles
+
+- **Butt against** — a new chip row on the undercut card lists every other cut on the page as
+  "After cut N" / "Before cut N"; one tap starts this cut at that cut's end (or ends it at that
+  cut's start), length and reference untouched, so a chain of cuts no longer needs each Distance
+  measured from the previous cut's end by hand (on-device request). A preset applied on the tap
+  only; a result that would leave the shaft is refused with the span issue shown under the row.
+  Pure `undercutStartButting` / `undercutButtsAfter` (`geom/UndercutMath.kt`).
+- **The overlap is drawn** — while the previewed draft is blocked for partially overlapping
+  another cut, the overlapping region itself is painted on the canvas as a translucent
+  error-colour band with a hairline at each edge, so the exact collision is visible rather than
+  only named in the pill (on-device report). Pure `undercutPartialOverlapsMm`. The pill wording is
+  shorter so it no longer clips at two lines.
+- **Card titles say the order** — "Undercut 2 of 3 · aft → fwd": the number is the cut's
+  position on the strip AFT → FWD, not the order it was added (on-device report: a third cut
+  landing between two others read as "2 of 3"). `UndercutDrawing.md` updated.
+
 ### feat(undercut): liner extensions stop at the shaft end
 
 - "Extend past liner" AFT / FWD now extend only into stock that exists: a typed value larger
