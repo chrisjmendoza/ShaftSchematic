@@ -3,7 +3,9 @@ package com.android.shaftschematic.geom
 import kotlin.math.max
 
 /**
- * Where one cut's number prints on an undercut drawing (`PdfPrefs.undercutCutNumbers`).
+ * Where one cut's number draws on the undercut detail canvas — an authoring aid that matches the
+ * drawing to the cards and the Undercut tab's list. Cut numbers print on no sheet and draw on no
+ * overview (on-device ruling); the detail canvas is this placement's only draw site.
  *
  * [xMm] is the label's horizontal CENTRE in shaft space. [baselineDiaMm] is the baseline's
  * distance from the centreline, in the draw site's own Ø→radius map. An [inside] label is
@@ -25,9 +27,9 @@ internal data class UndercutCutNumberPlacement(
 )
 
 /**
- * Places each cut's number — the ONE sheet numbering, [undercutSheetNumbers], handed in as
- * [numbers] — on the notches a draw site already built (`buildUndercutNotches`), so the PDF and
- * both canvases print the same number in the same place relative to the cut.
+ * Places each cut's number — the ONE cut numbering, [undercutSheetNumbers], handed in as
+ * [numbers] — on the notches the detail canvas already built (`buildUndercutNotches`), so each
+ * number sits in the same place relative to its cut whatever the strip's scale.
  *
  * - **Inside** by default, vertically on the shaft centreline (the section core runs floor to
  *   floor through it, so the centreline always has room) and horizontally centred on an UNCUT

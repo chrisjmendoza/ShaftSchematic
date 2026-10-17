@@ -8,23 +8,42 @@ import com.android.shaftschematic.doc.ShaftDocCodec
 import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.ui.resolved.resolveComponents
+import com.android.shaftschematic.util.FractionStyle
+import com.android.shaftschematic.util.FractionTypography
 import com.android.shaftschematic.util.UnitSystem
-import org.junit.Assert.assertEquals
+import org.junit.After
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * The printed undercut sheet's cut numbers (`PdfPrefs.undercutCutNumbers`) on the on-device job
- * (fixture `undercut_polar_ranger_stbd.shaft`, five cuts on one liner strip): with the pref on
- * the composer prints "1".."5" — "2" on both pieces of the relief its nested cut splits — on top
- * of everything else the sheet draws, with it off it does not; and the liner strip's title carries the liner's OD after its name.
+ * The printed undercut sheet carries no cut numbers — they are an input aid on the Undercut tab's
+ * list and detail canvas only (on-device ruling). Pinned on the on-device job (fixture
+ * `undercut_polar_ranger_stbd.shaft`, five cuts on one liner strip, a relief split by the cut
+ * nested inside it): no standalone "1".."5" reaches the page. Fractions are set inline for the
+ * run, so every dimension reaches `drawText` as ONE string — a built-up fraction would hand its
+ * numerator and denominator over as separate digit pieces. The liner strip's title still carries
+ * the liner's OD after its name.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
-class UndercutCutNumbersPdfTest {
+class UndercutSheetNoCutNumbersTest {
+
+    private var styleBefore = FractionTypography.active.style
+
+    @Before
+    fun setUp() {
+        styleBefore = FractionTypography.active.style
+        FractionTypography.setStyle(FractionStyle.INLINE)
+    }
+
+    @After
+    fun tearDown() {
+        FractionTypography.setStyle(styleBefore)
+    }
 
     /** Records every string drawn through `drawText(String, …)`. */
     private class TextRecordingCanvas(bmp: Bitmap) : Canvas(bmp) {
@@ -57,22 +76,17 @@ class UndercutCutNumbersPdfTest {
     }
 
     @Test
-    fun `the job's five cuts are numbered with the pref on and not at all with it off`() {
-        val on = drawnTexts(PdfPrefs(undercutCutNumbers = true))
-        val off = drawnTexts(PdfPrefs(undercutCutNumbers = false))
-
-        // Exactly the numbers separate the two pages: everything else draws identically. The
-        // relief (#2) is split in two by the cut machined inside it (#3), so it prints on both pieces.
-        val extra = on.toMutableList()
-        off.forEach { extra.remove(it) }
-        assertEquals(listOf("1", "2", "2", "3", "4", "5"), extra.sorted())
-        assertEquals(on.size - 6, off.size)
+    fun `the printed sheet draws no cut numbers`() {
+        val texts = drawnTexts(PdfPrefs())
+        val cutLabels = setOf("1", "2", "3", "4", "5")
+        val numbers = texts.filter { it in cutLabels }
+        assertTrue("cut numbers reached the sheet: $numbers (all: $texts)", numbers.isEmpty())
     }
 
     @Test
     fun `the liner strip title carries the liner OD after its name`() {
         val texts = drawnTexts(PdfPrefs())
-        // The title is rich text: its plain runs reach drawText as pieces, the name and OD first.
+        // The title is rich text; with inline fractions it reaches drawText whole, name and OD first.
         assertTrue("no title run carries the OD: $texts", texts.any { "Liner Ø10\"" in it })
     }
 }

@@ -487,12 +487,13 @@ only under `PdfPrefs.undercutSplitAtLinerEdge` (app-wide look pref, default OFF)
 (per-job — a fit for this shaft's geometry, not a look) extends a liner strip whose chain ends within
 `UNDERCUT_SET_REACH_MM` (24") of its S.E.T. out to the shaft end (chain to the S.E.T.) — flat physical end, no break — and the
 chain gains the span to it (the sketch's "12 3/4 to the S.E.T."); liner strips only, the total span
-unchanged. **ONE cut numbering on every surface** — `undercutSheetNumbers` (`geom/UndercutNumbering.kt`,
-AFT → FWD by clamped start, 1-based, display-only; the record keeps its own order): the sheet and both
-canvases print it centred inside each section — on EVERY free piece of a parent that nested cuts split,
-so the pieces read as one section (on-device direction); outside, above the surface, when too narrow —
-placement in the pure `geom/UndercutCutNumberMath.kt`; `PdfPrefs.undercutCutNumbers`, app-wide, default on), the tab's
-list sorts and numbers its rows by it, and messages name cuts by it. Liner strip titles carry the
+unchanged. **ONE cut numbering, an INPUT aid only** — `undercutSheetNumbers` (`geom/UndercutNumbering.kt`,
+AFT → FWD by clamped start, 1-based, display-only; the record keeps its own order): the tab list sorts
+and numbers its rows by it, messages name cuts by it, and the zoomed DETAIL canvas draws it centred
+inside each section — on EVERY free piece of a parent that nested cuts split, so the pieces read as one
+section; outside, above the surface, when too narrow (placement in the pure
+`geom/UndercutCutNumberMath.kt`). It prints on NO sheet and draws on no whole-shaft overview, and has
+no pref (on-device ruling: "the cut counts are for input purposes only, no output on any sheet"). Liner strip titles carry the
 liner's OD in its display unit. "Next cut" confirms the card through the ONE confirm path and seeds a
 PENDING cut butted to its FWD end (same datum, Ø empty; disabled while unconfirmable or with no stock
 FWD); an add on a strip with cuts seeds butted to the FWD-most cut (`undercutAddSeedSpan`); the tab's

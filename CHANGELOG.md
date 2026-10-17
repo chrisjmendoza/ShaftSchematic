@@ -6,8 +6,19 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
-## 2026-10-17
-
+## 2026-10-17
+
+### fix(undercut): cut numbers are an input aid only — never printed
+
+- Cut numbers no longer draw on the Undercut tab's whole-shaft overview, where a liner's cuts sit a
+  few pixels apart and the numbers piled up under the strip badge, and no longer print on any
+  sheet (on-device ruling: "the cut counts are for input purposes only, no output on any sheet").
+  They stay on the zoomed detail page and on the tab's list, to match the drawing to the cards.
+- The "Cut numbers" option (`PdfPrefs.undercutCutNumbers`) is removed from the undercut sheet's
+  options, Settings → PDF Export Options and drawing profiles; saved profiles that carry it still
+  load.
+- The changelog's own 2026-10-17 heading had picked up a stray carriage return; fixed.
+
 ### fix(thread): the relief end follows the thread; component names setting is findable
 
 - Thread relief: the Add Thread dialog's "Relief at" end now follows the thread's inboard end

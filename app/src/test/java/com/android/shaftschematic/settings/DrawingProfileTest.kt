@@ -113,7 +113,7 @@ class DrawingProfileTest {
 
         listOf(
             "tieringMode", "showComponentTitles", "shadedBodies", "shadedTapers", "shadedLiners",
-            "undercutLineArt", "undercutLinerOutline", "undercutCutNumbers", "undercutSplitAtLinerEdge", "curveLoHeightIn", "curveHiHeightIn", "sBreakThresholdFrac", "arrowSizePt",
+            "undercutLineArt", "undercutLinerOutline", "undercutSplitAtLinerEdge", "curveLoHeightIn", "curveHiHeightIn", "sBreakThresholdFrac", "arrowSizePt",
             "threadSlant", "threadDensity", "fractionStyle", "outputFont", "dualUnitLayout", "wearTraceDepthFrac", "wearBandShadeFrac",
             "wearJoinGapMaxMm", "lineThicknessScale",
         ).forEach { field ->
@@ -148,19 +148,18 @@ class DrawingProfileTest {
         assertTrue(profile.toPdfPrefs().undercutLinerOutline)
         // Split-at-liner-edge ships off, so an older preset prints whole cut lengths.
         assertFalse(profile.toPdfPrefs().undercutSplitAtLinerEdge)
-        // Cut numbers ship on, so an older preset numbers its cuts.
-        assertTrue(profile.toPdfPrefs().undercutCutNumbers)
     }
 
     @Test
-    fun `undercut cut numbers are captured, applied and defaulted`() {
-        assertTrue(PdfPrefs().undercutCutNumbers)
-        assertTrue(DrawingProfile().toPdfPrefs().undercutCutNumbers)
-        val profile = DrawingProfile.of(PdfPrefs(undercutCutNumbers = false), lineThicknessScale = 1f)
-        assertFalse(profile.undercutCutNumbers)
-        val decoded = decodeDrawingProfiles(encodeDrawingProfiles(mapOf("No numbers" to profile)))
+    fun `a profile saved with the retired cut-numbers key still loads`() {
+        // Cut numbers print on no sheet, so the pref is gone; profiles saved while it existed
+        // carry the key, and the decoder skips it rather than dropping the whole preset.
+        val raw = """{"Numbered":{"undercutCutNumbers":false,"undercutLinerOutline":false,"lineThicknessScale":1.25}}"""
 
-        assertFalse(decoded.getValue("No numbers").toPdfPrefs().undercutCutNumbers)
+        val profile = decodeDrawingProfiles(raw).getValue("Numbered")
+
+        assertFalse(profile.toPdfPrefs().undercutLinerOutline)
+        assertEquals(1.25f, profile.lineThicknessScale, 1e-6f)
     }
 
     @Test

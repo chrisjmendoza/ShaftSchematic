@@ -162,9 +162,9 @@ import kotlin.math.roundToInt
  * - **Cut depth exaggeration** — a slider (0 – `UNDERCUT_EXAGGERATION_MAX_FRAC`) storing the
  *   sheet's drawn-depth setting in the record. Display-only styling for every notch draw site;
  *   it never touches a stored or printed Ø.
- * - **Undercut list** — one compact row per recorded cut, numbered and ordered as the printed
- *   sheet numbers them (`undercutSheetNumbers`, AFT → FWD): its distance under its own authored
- *   reference, length, Ø ("Ø not entered" when unmeasured), and a stale-overrun warning. Tapping a
+ * - **Undercut list** — one compact row per recorded cut, numbered and ordered AFT → FWD
+ *   (`undercutSheetNumbers` — the numbers the detail page shows; they print on no sheet): its
+ *   distance under its own authored reference, length, Ø ("Ø not entered" when unmeasured), and a stale-overrun warning. Tapping a
  *   row opens that cut's strip; the trailing icon deletes it confirm-free, with a "Cut N deleted"
  *   snackbar Undo (`restoreUndercut`).
  * - Blank-draft toggle, Preview, Print, Export — straight ports of the wear document's flows,
@@ -207,9 +207,6 @@ fun UndercutRoute(
     // The dotted liner outline over the cuts: a preview re-render key, an options-sheet control,
     // and read by the overview canvas and the detail overlay alike.
     val pdfUndercutLinerOutline by vm.pdfUndercutLinerOutline.collectAsState()
-    // Cut numbers on the drawing: a preview re-render key, an options-sheet control, and read by
-    // the overview canvas and the detail overlay alike.
-    val pdfUndercutCutNumbers by vm.pdfUndercutCutNumbers.collectAsState()
     // Chain-rail nodes at buried liner edges: a preview re-render key, an options-sheet control,
     // and read by the detail overlay's rail.
     val pdfUndercutSplitAtLinerEdge by vm.pdfUndercutSplitAtLinerEdge.collectAsState()
@@ -371,7 +368,7 @@ fun UndercutRoute(
         }
     }
 
-    // The cut numbers every surface shows (AFT → FWD), and the cuts that would print with no Ø.
+    // The cut numbers the list and the detail page show (AFT → FWD), and the cuts that would print with no Ø.
     val sheetNumbers = remember(undercutRecord, oalMm) { undercutSheetNumbers(undercutRecord.undercuts, oalMm) }
     val missingDia = remember(undercutRecord) { undercutsMissingDia(undercutRecord.undercuts) }
 
@@ -447,7 +444,7 @@ fun UndercutRoute(
     LaunchedEffect(showPreview, spec, unit, resolvedComponents,
                    lineThicknessScale, pdfShadedBodies, pdfShadedTapers, pdfShadedLiners,
                    pdfUndercutLineArt, pdfUndercutLinerOutline, pdfUndercutSplitAtLinerEdge,
-                   pdfUndercutCutNumbers, undercutRecord, blankDraft, pdfFractionStyle, pdfOutputFont, pdfThreadSlant, unitOverrides,
+                   undercutRecord, blankDraft, pdfFractionStyle, pdfOutputFont, pdfThreadSlant, unitOverrides,
                    dualUnits, pdfDualUnitLayout, pdfThreadDensity) {
         if (!showPreview) { previewBitmap = null; return@LaunchedEffect }
         previewLoading = true
@@ -604,16 +601,10 @@ fun UndercutRoute(
                             strokeWidthPx = 1.dp.toPx(),
                         )
                     }
-                    if (pdfUndercutCutNumbers) {
-                        drawUndercutCutNumbers(
-                            notches = notches,
-                            numbers = undercutSheetNumbers(undercutRecord.undercuts, oalMm),
-                            xPx = { mm -> layout.xPx(mm) },
-                            rPx = { dia -> layout.rPx(dia) },
-                            cy = layout.centerlineYPx,
-                            textSizePx = 11.dp.toPx(),
-                        )
-                    }
+                    // No cut numbers on this whole-shaft overview: they are an input aid on the
+                    // zoomed detail page only, and print on no sheet (on-device ruling). At shaft
+                    // scale a liner's cuts sit a few pixels apart, so numbers here would pile up
+                    // under the strip badge and name nothing.
                     drawUndercutStripAffordances(
                         layout = layout,
                         liners = linerSpans,
@@ -785,8 +776,8 @@ fun UndercutRoute(
                 }
                 val setPositions = undercutSetPositions(spec)
                 val linerTitles = buildLinerTitleById(spec)
-                // The sheet's own numbering (`undercutSheetNumbers`, AFT → FWD), so row N is the cut
-                // printed as N. Display order only — the record keeps its own.
+                // The one numbering (`undercutSheetNumbers`, AFT → FWD), so row N is the cut the
+                // detail page labels N. Display order only — the record keeps its own.
                 undercutRecord.undercuts
                     .sortedBy { sheetNumbers[it.id] ?: Int.MAX_VALUE }
                     .forEach { u ->
@@ -1000,7 +991,6 @@ fun UndercutRoute(
                     showUndercutLineArt = true,
                     undercutLineArt = pdfUndercutLineArt,
                     undercutLinerOutline = pdfUndercutLinerOutline,
-                    undercutCutNumbers = pdfUndercutCutNumbers,
                     undercutSplitAtLinerEdge = pdfUndercutSplitAtLinerEdge,
                     vm = vm,
                     fractionStyle = pdfFractionStyle,
@@ -1081,7 +1071,6 @@ fun UndercutRoute(
             onClose = { openOverlay(linerId = null, undercutId = null, selectId = null) },
             onRestoreUndercut = vm::restoreUndercut,
             linerOutline = pdfUndercutLinerOutline,
-            cutNumbers = pdfUndercutCutNumbers,
             displayUnits = DisplayUnits(unit, unitOverrides, dualUnits),
             splitAtLinerEdge = pdfUndercutSplitAtLinerEdge,
             canUndo = canUndo,
@@ -1117,8 +1106,8 @@ private fun openUndercutPdf(context: Context, uri: Uri) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * One recorded undercut, summarized: its sheet [number] (`undercutSheetNumbers`, the number the
- * printed sheet carries), its distance under the reference it was authored against (with that
+ * One recorded undercut, summarized: its [number] (`undercutSheetNumbers`, the number the detail
+ * page shows inside its section — an input aid, never printed), its distance under the reference it was authored against (with that
  * reference's short tag), its length, and its Ø — "—" while unmeasured, with a "Ø not entered" note
  * under it, since such a cut prints with no diameter. A cut whose span no longer fits the shaft
  * (`isUndercutStaleOverrun`) leads with a warning icon, the same non-blocking classifier the card

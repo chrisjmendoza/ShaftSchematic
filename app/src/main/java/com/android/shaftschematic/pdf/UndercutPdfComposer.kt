@@ -36,8 +36,6 @@ import com.android.shaftschematic.geom.reliefSpan
 import com.android.shaftschematic.geom.shoulderEndMm
 import com.android.shaftschematic.geom.threadSurfaceSegs
 import com.android.shaftschematic.geom.undercutNestingForest
-import com.android.shaftschematic.geom.undercutCutNumberPlacements
-import com.android.shaftschematic.geom.undercutSheetNumbers
 import com.android.shaftschematic.model.*
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
@@ -320,15 +318,6 @@ fun composeUndercutPdf(
     val overflowNoteH = if (overflow.isNotEmpty()) UC_OVERFLOW_NOTE_HEIGHT_PT else 0f
 
     val undercutById = effectiveRecord.undercuts.associateBy { it.id }
-    // Cut numbers (`PdfPrefs.undercutCutNumbers`): the ONE sheet numbering the Undercut tab's
-    // list shows, sheet-wide, so a strip's cut carries the same number as on every other strip.
-    // Empty = nothing drawn (the pref off, or a blank draft with no record).
-    val cutNumbers: Map<String, Int> =
-        if (pdfPrefs.undercutCutNumbers) {
-            undercutSheetNumbers(effectiveRecord.undercuts, spec.overallLengthMm.coerceAtLeast(0f))
-        } else {
-            emptyMap()
-        }
 
     // ── Header ───────────────────────────────────────────────────────────────
     drawSheetHeader(
@@ -425,7 +414,6 @@ fun composeUndercutPdf(
             sectionCoreFill = fills.sectionCore,
         )
         drawLinerOutlinesPdf(c, docSpec, sheetNotches, shaftCy, ::xAt, ::rPx, linerOutlinePaint)
-        drawUndercutCutNumbersPdf(c, sheetNotches, cutNumbers, shaftCy, ::xAt, ::rPx, text)
         drawUndercutDirectionRow(
             c, text, contentLeft, contentRight,
             (shaftCy + rPx(maxDiaMm) + text.textSize + 12f).coerceAtMost(profileBottom - 2f),
@@ -490,7 +478,6 @@ fun composeUndercutPdf(
             notches = sheetNotches.filter { it.id in strip.undercutIds },
             sectionCoreFill = fills.sectionCore,
             linerOutlinePaint = linerOutlinePaint,
-            cutNumbers = cutNumbers,
             linerOdLabel = stripLiner
                 ?.let { "Ø" + formatDiaWithUnitDual(it.odMm.toDouble(), stripUnit, displayUnits.dual) },
             dual = displayUnits.dual,
@@ -687,42 +674,6 @@ private fun drawLinerOutlinesPdf(
     }
 }
 
-/**
- * Cut numbers on the printed sheet (`PdfPrefs.undercutCutNumbers`): each cut's sheet number
- * ([numbers]) where the ONE pure placement [undercutCutNumberPlacements] puts it — the placement
- * both canvases also run — in [textPaint]'s face and size, centred, plain text. Drawn after the
- * notch pass and the liner outline, before the Ø callouts and rails. [rAt] must be linear
- * through the origin (every sheet map is); an empty [numbers] draws nothing.
- */
-private fun drawUndercutCutNumbersPdf(
-    c: Canvas,
-    notches: List<UndercutNotch>,
-    numbers: Map<String, Int>,
-    cy: Float,
-    xAt: (Float) -> Float,
-    rAt: (Float) -> Float,
-    textPaint: Paint,
-) {
-    if (notches.isEmpty() || numbers.isEmpty()) return
-    val paint = Paint(textPaint).apply { textAlign = Paint.Align.CENTER }
-    val ptPerMmX = (xAt(1000f) - xAt(0f)) / 1000f
-    val ptPerDiaMm = (rAt(1000f) - rAt(0f)) / 1000f
-    if (ptPerMmX <= 0f || ptPerDiaMm <= 0f) return
-    val padPt = paint.textSize * 0.3f
-    val capHeightPt = -paint.fontMetrics.ascent * 0.75f
-    undercutCutNumberPlacements(
-        notches = notches,
-        numbers = numbers,
-        glyphWidthMm = { paint.measureText(it) / ptPerMmX },
-        glyphHeightMm = capHeightPt / ptPerDiaMm,
-        padMm = padPt / ptPerMmX,
-        padDiaMm = padPt / ptPerDiaMm,
-    ).forEach { p ->
-        val y = if (p.inside) cy + rAt(p.baselineDiaMm) else cy - rAt(p.baselineDiaMm)
-        c.drawText(p.label, xAt(p.xMm), y, paint)
-    }
-}
-
 private fun drawUndercutNotches(
     c: Canvas,
     notches: List<UndercutNotch>,
@@ -878,8 +829,6 @@ private fun drawUndercutDetailStrip(
     sectionCoreFill: Boolean,
     /** The liner outline's dotted paint; null when `PdfPrefs.undercutLinerOutline` is off. */
     linerOutlinePaint: Paint? = null,
-    /** The sheet's cut numbering ([undercutSheetNumbers]); empty when `PdfPrefs.undercutCutNumbers` is off. */
-    cutNumbers: Map<String, Int> = emptyMap(),
     /**
      * The strip liner's OD as printed in its title (`Ø10.000"`, in the strip's own unit); null on a
      * bare-shaft strip. Ignored by the blank write-in title.
@@ -1036,11 +985,6 @@ private fun drawUndercutDetailStrip(
         sectionCoreFill = sectionCoreFill,
     )
     drawLinerOutlinesPdf(c, docSpec, notches, cy, ::xAtStrip, ::rStrip, linerOutlinePaint)
-    // Unclamped twin of [rStrip]: an outside number sits a pad ABOVE the tallest surface, which
-    // the strip's clamp would pull back onto the cylinder top.
-    drawUndercutCutNumbersPdf(
-        c, notches, cutNumbers, cy, ::xAtStrip, { d -> rCap * (d / stripMaxDiaMm) }, dimText,
-    )
 
     // ── Measured-Ø callouts: leader from each notch floor down to the printed value ──
     if (diaPlan != null) {

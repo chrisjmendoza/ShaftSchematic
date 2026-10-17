@@ -323,11 +323,6 @@ fun UndercutWindowDetailOverlay(
      * over the cuts, drawn here as on the printed sheet. Passed in so a change recomposes this canvas.
      */
     linerOutline: Boolean = true,
-    /**
-     * App-wide `PdfPrefs.undercutCutNumbers`: each cut's sheet number on this canvas, as on the
-     * printed sheet. Passed in so a change recomposes this canvas.
-     */
-    cutNumbers: Boolean = true,
     /** Per-component display units: the strip title prints its liner's OD in the liner's own unit. */
     displayUnits: DisplayUnits = DisplayUnits.single(unit),
     /**
@@ -1309,17 +1304,16 @@ fun UndercutWindowDetailOverlay(
                                     strokeWidthPx = 1.dp.toPx(),
                                 )
                             }
-                            // ── Cut numbers — the record's sheet numbering; a pending draft has none ──
-                            if (cutNumbers) {
-                                drawUndercutCutNumbers(
-                                    notches = notches,
-                                    numbers = undercutSheetNumbers(undercutRecord.undercuts, oalMm),
-                                    xPx = xPx,
-                                    rPx = rPx,
-                                    cy = cy,
-                                    textSizePx = textPaint.textSize,
-                                )
-                            }
+                            // ── Cut numbers — an input aid, always drawn here and printed on no
+                            // sheet (on-device ruling); a pending draft has none ──
+                            drawUndercutCutNumbers(
+                                notches = notches,
+                                numbers = undercutSheetNumbers(undercutRecord.undercuts, oalMm),
+                                xPx = xPx,
+                                rPx = rPx,
+                                cy = cy,
+                                textSizePx = textPaint.textSize,
+                            )
 
                             // ── Overlap bands — where a blocked draft collides with a neighbour ──
                             // Over the notches (so the band reads on top of the cut it intrudes into)

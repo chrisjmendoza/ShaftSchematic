@@ -121,17 +121,6 @@ fun ShaftViewModel.setPdfUndercutLinerOutline(v: Boolean, persist: Boolean = tru
 }
 
 /**
- * Wired to the "Undercut drawing: cut numbers" row in Settings → PDF Export and the "Cut numbers"
- * row on the undercut preview's options sheet: each cut's list number, on the printed undercut
- * document and both undercut canvases.
- */
-fun ShaftViewModel.setPdfUndercutCutNumbers(v: Boolean, persist: Boolean = true) {
-    _pdfUndercutCutNumbers.value = v
-    SettingsStore.updatePdfPrefs { it.copy(undercutCutNumbers = v) }
-    if (persist) viewModelScope.launch { SettingsStore.setPdfUndercutCutNumbers(getApplication(), v) }
-}
-
-/**
  * Wired to the "Split cuts at liner edges" row in Settings → PDF Export and on the undercut
  * preview's options sheet: a chain-rail node at each liner edge a cut runs past, on the printed
  * undercut document and the detail canvas. Off, every cut prints its full length.
@@ -431,7 +420,6 @@ fun ShaftViewModel.applyDrawingProfile(profile: DrawingProfile) {
     setPdfShadeExplicitBodiesOnly(prefs.shadeExplicitBodiesOnly)
     setPdfUndercutLineArt(prefs.undercutLineArt)
     setPdfUndercutLinerOutline(prefs.undercutLinerOutline)
-    setPdfUndercutCutNumbers(prefs.undercutCutNumbers)
     setPdfUndercutSplitAtLinerEdge(prefs.undercutSplitAtLinerEdge)
     setPdfCurveLoHeightIn(prefs.curveLoHeightIn)
     setPdfCurveHiHeightIn(prefs.curveHiHeightIn)

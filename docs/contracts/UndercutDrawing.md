@@ -59,7 +59,7 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
   (on-device request). Not a per-job field: no undo step, no dirty mark. See "Split cuts at liner
   edges" below.
 - **"Recorded undercuts" list** below the canvas: a read-only summary + delete row per cut,
-  numbered and ordered by the sheet's cut numbers (`undercutSheetNumbers`, AFT → FWD) — not an
+  numbered and ordered by the cut numbers (`undercutSheetNumbers`, AFT → FWD) — not an
   edit card (see "UI contract").
 - Blank-draft (write-in) toggle, PDF Preview (`PdfPreviewOverlay` + `RunoutWearOptionsSheet`),
   Export (SAF `CreateDocument`), Print (`printShaftPdfPage`) — straight ports of the wear tab's
@@ -520,29 +520,29 @@ data class UndercutRecord(
   The canvases read the same pref (the route collects it and passes it to the overlay's
   `linerOutline`), and it is an Undercut-tab preview re-render key.
 
-  **Cut numbers — `PdfPrefs.undercutCutNumbers`** (default `true`; Settings → PDF Export
-  "Undercut drawing: cut numbers" beside the liner-outline row, and the undercut preview's PDF
-  options sheet "Cut numbers" under it, testTag `pdf_undercut_cut_numbers`, caption "Each cut
-  carries its number from the Undercut tab's list, AFT to FWD, so the sheet and the list name the
-  same cut." (`UNDERCUT_CUT_NUMBERS_CAPTION`, shared by both rows); settings key
-  `pdf_undercut_cut_numbers`; captured by drawing profiles). Each cut prints its number from the
-  ONE sheet numbering, `undercutSheetNumbers` (`geom/UndercutNumbering.kt` — AFT → FWD by clamped
-  start, 1-based, the number the Undercut tab's list shows), sheet-wide: a cut carries the same
-  number on every strip and on both canvases. Plain text, no background. ONE pure placement,
-  `undercutCutNumberPlacements(notches, numbers, …)` (`geom/UndercutCutNumberMath.kt`,
-  `UndercutCutNumberMathTest`), over the notches the draw site already built:
+  **Cut numbers — an input aid, never printed** (on-device ruling: "the cut counts are for input
+  purposes only, no output on any sheet"). The ONE numbering, `undercutSheetNumbers`
+  (`geom/UndercutNumbering.kt` — AFT → FWD by clamped start, ties in record order, 1-based), shows
+  in exactly two places: the Undercut tab's "Recorded undercuts" list (row N, below) and the zoomed
+  detail canvas, which ALWAYS draws each cut's number inside its section so the drawing can be
+  matched to the cards and the list. There is no pref and no options-sheet or Settings row. The
+  printed undercut sheet (main profile and detail strips alike) carries no cut numbers, and the
+  route's whole-shaft overview canvas draws none either — at shaft scale a liner's cuts sit a few
+  pixels apart, so numbers there pile up under the strip badge and name nothing. Plain text, no
+  background. ONE pure placement, `undercutCutNumberPlacements(notches, numbers, …)`
+  (`geom/UndercutCutNumberMath.kt`, `UndercutCutNumberMathTest`), over the notches the detail
+  canvas already built:
   - **Inside** by default — in the section core, horizontally centred on an UNCUT stretch of the
     cut's own floor and vertically centred on the shaft CENTRELINE (baseline half a glyph
     below it, `cy + r(glyph / 2)`). The core runs floor to floor through the centreline, so it
     always has room, and a label there stays clear of the Ø callout leaders that leave the floor
-    lines (a label against the lower floor sat on them — on-device review of the job preview).
-    A plain cut has one stretch, its whole span, and one label. A parent's floor is split into
-    pieces by the cuts nested inside it (a child's void and core paint over the parent's core
+    lines. A plain cut has one stretch, its whole span, and one label. A parent's floor is split
+    into pieces by the cuts nested inside it (a child's void and core paint over the parent's core
     there): EVERY piece — the gaps between its ends and its children, and between consecutive
     children — wide enough for the label plus a pad each side carries the parent's number, so the
     reader sees the pieces are one section (on-device request); a piece too narrow gets none. A
     nested cut's own number sits inside the child, never on top of its parent's. A placement's id
-    may therefore repeat, and neither draw site de-duplicates by id.
+    may therefore repeat, and the draw site never de-duplicates by id.
   - **Outside** when NO stretch fits the label plus a pad each side — width alone decides: ONE
     label centred on the cut, the baseline a pad above the highest outer
     surface over its top-level cut (`cy − r(surface + pad)` — a nested cut's own surface points sit
@@ -550,18 +550,14 @@ data class UndercutRecord(
     apart by the least total movement that clears them (an isotonic fit), keeping their AFT → FWD
     order.
   A placement carries `xMm`, `baselineDiaMm` (the baseline's distance from the centreline) and
-  `inside` (below vs above it); both draw sites build the baseline from those fields alone.
-  Horizontal sizes are axial mm, vertical ones Ø units — each draw site converts its paint metrics
-  through its own two scales (the strips' Ø map is unclamped for this, so an outside number clears
-  the tallest surface instead of being pulled back onto the cylinder top). A notch with no number —
-  the detail overlay's pending draft, not yet in the record — draws nothing. Drawn AFTER the notch
-  passes and the liner outline, before the Ø callouts and rails, at every site: the PDF main
-  profile and every detail strip (`drawUndercutCutNumbersPdf`, the sheet's `text` paint — the
-  strips at their dim size), and the route overview and the detail overlay
-  (`drawUndercutCutNumbers`, `ui/screen/UndercutSharedDraw.kt` — `SheetInk.Outline`; the detail
-  canvas draws the PREVIEWED set, a draft of a recorded cut keeping that cut's number). The route
-  collects the pref, passes it to the overlay's `cutNumbers`, and it is an Undercut-tab preview
-  re-render key. Off, nothing is drawn at any site.
+  `inside` (below vs above it); the draw site builds the baseline from those fields alone.
+  Horizontal sizes are axial mm, vertical ones Ø units — the canvas converts its paint metrics
+  through its own two scales. A notch with no number — the detail overlay's pending draft, not yet
+  in the record — draws nothing. Drawn AFTER the notch passes and the liner outline, before the Ø
+  callouts and rails (`drawUndercutCutNumbers`, `ui/screen/UndercutSharedDraw.kt` —
+  `SheetInk.Outline`; the detail canvas draws the PREVIEWED set, a draft of a recorded cut keeping
+  that cut's number). `UndercutSheetNoCutNumbersTest` pins the printed sheet: the on-device job's
+  page draws none of its five cuts' numbers.
 
   **Split cuts at liner edges — `PdfPrefs.undercutSplitAtLinerEdge`** (default `false`; Settings →
   PDF Export beside the liner-outline row, the undercut preview's PDF options sheet under it,
@@ -779,9 +775,10 @@ nothing to open when the sidebar is already laid out beside the tabs.
 - **"Add undercut"** button (global — see "Add default" below) sets `anchorUndercutId` to the
   new undercut's id (clearing `anchorLinerId`), opening its strip immediately on that cut's card.
 - **"Recorded undercuts" list**, below the canvas (`UndercutListRow`, one row per cut, only shown
-  once ≥ 1 undercut exists). Rows are **numbered and ordered by the sheet's cut numbers**
+  once ≥ 1 undercut exists). Rows are **numbered and ordered by the cut numbers**
   (`undercutSheetNumbers` — AFT → FWD by clamped start, ties in record order, 1-based — the ONE
-  numbering every surface shows), so row N is the cut the printed sheet labels N
+  numbering the detail canvas also shows; no sheet prints it), so row N is the cut the detail
+  canvas labels N
   (`"N. <distance> from <tag>"`). Display-only: the record keeps its own order. Each row is a
   distance summary under its *effective* reference (where a `LINER_*` reference reads
   `"<liner title> AFT/FWD edge"` via `effectiveUndercutReference`/`undercutReferenceLinerFor`),
@@ -797,7 +794,7 @@ nothing to open when the sidebar is already laid out beside the tabs.
   overlay's `initialSelectedId`, which seeds the selection and the pager's initial page (opening
   on page 0 showed the strip's aft-most cut instead); the trailing delete icon (`testTag
   "undercut_delete_<id>"`) removes the cut outright, confirm-free, without opening or navigating
-  anything, and raises the detail page's Undo: a **"Cut N deleted" snackbar** (N its sheet number
+  anything, and raises the detail page's Undo: a **"Cut N deleted" snackbar** (N its list number
   before the removal; action "Undo", Long, a second delete replaces the first's offer; the tab's
   own `SnackbarHost` at the bottom of the tab body, `testTag "undercut_list_delete_snackbar"`)
   whose Undo calls `restoreUndercut(u, index)` with the cut and its record index captured BEFORE
@@ -843,9 +840,9 @@ vertical card stack forced scrolling between the drawing and the fields.
   field being typed in (`buildUndercutPageIds`).
 - **The title number is positional**: a stored cut's card reads `"Undercut N of M · aft → fwd"`
   (`undercutCardTitle`) — N is the cut's position in that STRIP's aft → fwd page order, not an
-  identity and not the sheet's cut number (`undercutSheetNumbers` numbers the whole sheet, so on a
-  multi-strip sheet the card's N and the number printed on the cut can differ; the tab's list and
-  the printed numbers agree), and the suffix puts the convention on the card
+  identity and not the cut number (`undercutSheetNumbers` numbers the whole shaft, so on a
+  multi-strip shaft the card's N and the number drawn inside the cut can differ; the tab's list and
+  the detail canvas's numbers agree), and the suffix puts the convention on the card
   (on-device report: a third cut added between two others read "Undercut 2 of 3" and was taken
   for the wrong cut). The pending card reads "New undercut". The Butt-against chips number cuts
   the same way.
