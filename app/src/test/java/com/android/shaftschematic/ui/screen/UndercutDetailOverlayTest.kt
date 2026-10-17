@@ -12,6 +12,9 @@ import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -25,6 +28,9 @@ import androidx.compose.ui.test.performTextReplacement
 import com.android.shaftschematic.geom.UndercutLinerSpan
 import com.android.shaftschematic.geom.UndercutSpanMm
 import com.android.shaftschematic.geom.linerStripFor
+import com.android.shaftschematic.geom.nearestSetReference
+import com.android.shaftschematic.geom.undercutReferenceLabel
+import com.android.shaftschematic.geom.undercutSetPositions
 import com.android.shaftschematic.model.Liner
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Undercut
@@ -63,6 +69,7 @@ class UndercutDetailOverlayTest {
     private var record by mutableStateOf(UndercutRecord())
     private val removed = mutableListOf<String>()
     private val added = mutableListOf<Float>()
+    private val addedRefs = mutableListOf<UndercutReference>()
     private val updated = mutableListOf<String>()
 
     private fun cut(id: String, start: Float, len: Float = 50f) = Undercut(
@@ -87,6 +94,7 @@ class UndercutDetailOverlayTest {
                     undercutRecord = record,
                     onAddUndercut = { start, len, ref, refLinerId ->
                         added += start
+                        addedRefs += ref
                         val u = Undercut(
                             id = "new", startFromAftMm = start, lengthMm = len,
                             authoredReference = ref, referenceLinerId = refLinerId,
@@ -197,6 +205,105 @@ class UndercutDetailOverlayTest {
         assertTrue(
             rule.onAllNodesWithText(UNDERCUT_DISCARDED_DRAFT_MSG).fetchSemanticsNodes().isEmpty(),
         )
+    }
+
+    // ── Buried liner edge: a cut run past the liner into the body takes the edge away ──
+
+    /** Opens the strip over [stored] and drafts a new cut with "Add undercut in this liner". */
+    private fun addInLinerOver(stored: Undercut) {
+        show(listOf(stored))
+        rule.onNodeWithTag("undercut_add_in_liner").performClick()
+        rule.waitForIdle()
+        rule.mainClock.advanceTimeBy(1_000)
+        rule.waitForIdle()
+    }
+
+    /** The S.E.T. the add flow's default span sits nearer, from the overlay's own SETs. */
+    private fun nearerSetForDefaultSpan(stored: Undercut): UndercutReference {
+        val span = defaultUndercutSpan(
+            500f, 1500f,
+            listOf(UndercutSpanMm(stored.id, stored.startFromAftMm, stored.startFromAftMm + stored.lengthMm)),
+            oal,
+        )
+        val (aftSet, fwdSet) = undercutSetPositions(spec)
+        return nearestSetReference(span.startMm, span.startMm + span.lengthMm, aftSet, fwdSet)
+    }
+
+    @Test
+    fun `a buried AFT edge seeds a new cut from the nearer SET and disables Liner AFT`() {
+        val stored = cut("u1", 450f, len = 150f)   // 450–600: crosses the liner's AFT edge at 500
+        addInLinerOver(stored)
+        val expected = nearerSetForDefaultSpan(stored)
+
+        rule.onNodeWithText("New undercut").assertIsDisplayed()
+        assertTrue(
+            "the new card's Distance must read from ${undercutReferenceLabel(expected)}",
+            rule.onAllNodesWithText("Distance from ${undercutReferenceLabel(expected)} (in)")
+                .fetchSemanticsNodes().isNotEmpty(),
+        )
+        val chips = rule.onAllNodesWithTag("undercut_ref_liner_aft")
+        assertTrue(chips.fetchSemanticsNodes().isNotEmpty())
+        repeat(chips.fetchSemanticsNodes().size) { chips[it].assertIsNotEnabled() }
+        assertTrue(
+            rule.onAllNodesWithTag("undercut_ref_liner_aft_buried", useUnmergedTree = true)
+                .fetchSemanticsNodes().isNotEmpty(),
+        )
+        assertTrue(
+            rule.onAllNodesWithText(undercutBuriedEdgeCaption("AFT"), useUnmergedTree = true)
+                .fetchSemanticsNodes().isNotEmpty(),
+        )
+
+        rule.onNodeWithTag("undercut_confirm", useUnmergedTree = true).performClick()
+        rule.waitForIdle()
+        assertEquals(listOf(expected), addedRefs)
+    }
+
+    @Test
+    fun `a cut ending at the AFT edge leaves Liner AFT enabled and the seed`() {
+        val stored = cut("u1", 500f, len = 100f)   // 500–600: ends at the edge, never crosses it
+        addInLinerOver(stored)
+
+        rule.onNodeWithText("New undercut").assertIsDisplayed()
+        val chips = rule.onAllNodesWithTag("undercut_ref_liner_aft")
+        assertTrue(chips.fetchSemanticsNodes().isNotEmpty())
+        repeat(chips.fetchSemanticsNodes().size) { chips[it].assertIsEnabled() }
+        assertTrue(
+            rule.onAllNodesWithTag("undercut_ref_liner_aft_buried", useUnmergedTree = true)
+                .fetchSemanticsNodes().isEmpty(),
+        )
+        assertTrue(
+            rule.onAllNodesWithText("Distance from Liner AFT (in)").fetchSemanticsNodes().isNotEmpty(),
+        )
+
+        rule.onNodeWithTag("undercut_confirm", useUnmergedTree = true).performClick()
+        rule.waitForIdle()
+        assertEquals(listOf(UndercutReference.LINER_AFT), addedRefs)
+    }
+
+    @Test
+    fun `a Distance that carries the cut across its own liner edge re-reads from the SET`() {
+        // 1350–1500 against the liner's FWD edge; −2 in puts its FWD end 50.8 mm past that edge
+        // while the AFT end stays on the liner, so the cut now crosses the edge it measured from.
+        show(
+            listOf(
+                Undercut(
+                    id = "u1", startFromAftMm = 1350f, lengthMm = 150f,
+                    authoredReference = UndercutReference.LINER_FWD, referenceLinerId = "L1",
+                ),
+            ),
+        )
+        rule.onNodeWithText("Distance from Liner FWD (in)").performTextReplacement("-2")
+        rule.onNodeWithText("Distance from Liner FWD (in)").performImeAction()
+        rule.waitForIdle()
+        rule.onNodeWithTag("undercut_overhang_accept").performClick()
+        rule.waitForIdle()
+
+        val (aftSet, fwdSet) = undercutSetPositions(spec)
+        val expected = nearestSetReference(1400.8f, 1550.8f, aftSet, fwdSet)
+        rule.onNodeWithText("Distance from ${undercutReferenceLabel(expected)} (in)").assertExists()
+        rule.onNodeWithTag("undercut_ref_liner_fwd").assertIsNotEnabled()
+        rule.onNodeWithTag("undercut_ref_liner_fwd_buried", useUnmergedTree = true).assertExists()
+        assertTrue("an unconfirmed draft reached the record", updated.isEmpty())
     }
 
     // ── "Past the liner edge" ──

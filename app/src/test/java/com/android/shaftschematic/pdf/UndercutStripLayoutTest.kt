@@ -6,6 +6,7 @@ import com.android.shaftschematic.geom.UndercutSpanMm
 import com.android.shaftschematic.geom.UndercutStrip
 import com.android.shaftschematic.geom.UndercutWindow
 import com.android.shaftschematic.geom.buildUndercutStrips
+import com.android.shaftschematic.geom.buriedUndercutLinerEdgesMm
 import com.android.shaftschematic.geom.linerStripFor
 import com.android.shaftschematic.model.Undercut
 import com.android.shaftschematic.util.UnitSystem
@@ -53,6 +54,50 @@ class UndercutStripLayoutTest {
         assertEquals(w.lengthMm, rail.totalLengthMm(), 1e-2f)
         // Chain is contiguous: every span starts where the previous ended.
         rail.zipWithNext().forEach { (p, n) -> assertEquals(p.endMm, n.startMm, 1e-3f) }
+    }
+
+    // ── Buried liner edge: a chain node where a cut runs past the liner into the body ──
+
+    @Test
+    fun `a cut overhanging the AFT edge is split at the buried edge`() {
+        val liner = UndercutLinerSpan("liner", 500f, 1500f)
+        val spans = listOf(span("a", 450f, 600f))
+        val strip = linerStripFor(liner, spans, 3000f)
+        val edges = buriedUndercutLinerEdgesMm(strip.linerStartMm, strip.linerEndMm, spans)
+        assertEquals(listOf(500f), edges)
+
+        val rail = buildUndercutRailSpans(strip.chainStartMm, strip.chainEndMm, spans, mm, splitAtMm = edges)
+        // shoulder → liner edge (the 50 mm overhang), liner edge → cut end, cut end → liner FWD.
+        assertEquals(3, rail.size)
+        assertEquals(450f, rail[0].startMm, 1e-3f)
+        assertEquals(500f, rail[0].endMm, 1e-3f)
+        assertEquals(500f, rail[1].startMm, 1e-3f)
+        assertEquals(600f, rail[1].endMm, 1e-3f)
+        assertEquals(600f, rail[2].startMm, 1e-3f)
+        assertEquals(1500f, rail[2].endMm, 1e-3f)
+        assertEquals(strip.chainEndMm - strip.chainStartMm, rail.totalLengthMm(), 1e-3f)
+    }
+
+    @Test
+    fun `no split when the liner edge is not buried`() {
+        val liner = UndercutLinerSpan("liner", 500f, 1500f)
+        val spans = listOf(span("a", 500f, 600f))
+        val strip = linerStripFor(liner, spans, 3000f)
+        val edges = buriedUndercutLinerEdgesMm(strip.linerStartMm, strip.linerEndMm, spans)
+        assertTrue(edges.isEmpty())
+        assertEquals(
+            buildUndercutRailSpans(strip.chainStartMm, strip.chainEndMm, spans, mm),
+            buildUndercutRailSpans(strip.chainStartMm, strip.chainEndMm, spans, mm, splitAtMm = edges),
+        )
+    }
+
+    @Test
+    fun `a split station outside every span or on a node is ignored`() {
+        val spans = listOf(span("a", 500f, 600f))
+        val plain = buildUndercutRailSpans(500f, 1500f, spans, mm)
+        // Outside the chain, and exactly on existing nodes.
+        assertEquals(plain, buildUndercutRailSpans(500f, 1500f, spans, mm, splitAtMm = listOf(100f, 2000f)))
+        assertEquals(plain, buildUndercutRailSpans(500f, 1500f, spans, mm, splitAtMm = listOf(500f, 600f, 1500f)))
     }
 
     @Test

@@ -113,6 +113,15 @@ data class UndercutRecord(val undercuts: List<Undercut> = emptyList())
   display (canonical untouched, and the stored reference is never rewritten behind the
   machinist's back — `effectiveUndercutReference` in `geom/UndercutOverlayMath.kt`). Empty for
   SET-authored undercuts. Selecting a SET chip clears it back to `""`.
+- **Buried liner edge** (on-device request): a liner edge that some cut on the sheet runs
+  *past* into the body — `cut.start < edge − ε && cut.end > edge + ε`, ε =
+  `UNDERCUT_TOUCH_EPS_MM`, every cut counted, the one being edited included at its previewed
+  span (`undercutLinerEdgeBuried`) — has no step left to measure from, so a `LINER_*` reference
+  to that edge displays as the **nearer S.E.T.** for the cut's own span (`nearestSetReference`,
+  the schematic's convention). Display-only, the deleted-liner fallback's posture: canonical
+  never moves and the stored reference is never rewritten. A cut that merely ends at the edge, or
+  trims the liner's end without crossing into the body, leaves a different Ø from the body next
+  to it — that edge is still a datum.
 - **Back-compat**: `LINER_AFT`/`LINER_FWD` are additive enum values (added this iteration) — a
   document that uses one will not decode in an app build that predates them, the same rule
   every envelope enum carries. Files that stick to `AFT_SET`/`FWD_SET` are unaffected.
@@ -158,6 +167,14 @@ data class UndercutRecord(val undercuts: List<Undercut> = emptyList())
   the stock between the liner edge and that shaft end, ≥ 0; `clampUndercutExtension(typed, max)` →
   `UndercutExtensionClamp(appliedMm, limited)` (typed above max → max, limited; at or under →
   unchanged; negative → 0, not limited).
+- **Buried liner edges**: `undercutLinerEdgeBuried(edgeMm, spans, eps = UNDERCUT_TOUCH_EPS_MM)` —
+  true when some span strictly crosses the edge, more than ε past it on BOTH sides (ending at the
+  edge, or covering the liner's end without crossing, is not buried);
+  `buriedUndercutLinerEdgesMm(linerStart, linerEnd, spans)` — the buried edges of one liner, AFT
+  first, the rail's split nodes. `effectiveUndercutReference(undercut, linerSpans, spans,
+  aftSetXMm, fwdSetXMm)` (`geom/UndercutOverlayMath.kt`) applies them: a `LINER_*` reference to a
+  buried edge resolves to `nearestSetReference` for the cut's own span; the default empty
+  `spans` skips the check, so the two-argument form is the deleted-liner fallback alone.
 - **Blocking confirm validation (span)** `undercutSpanIssue(canonicalStartMm, lengthMm, oalMm)`:
   length must be `> ε`, and `[start, start+length]` must lie in `[0, oalMm]` (ε = `1e-3` mm,
   boundary-exact accepted). It is **never a field validator**: every undercut field commits the
@@ -712,6 +729,21 @@ Each card:
   stored `LINER_*` reference whose liner has been deleted displays as if `AFT_SET` were selected
   (`effectiveUndercutReference`) until a chip is tapped again — the stored value is not silently
   rewritten.
+
+  **Buried edge** (see the data model): a Liner chip whose edge some cut on the sheet runs past
+  into the body is **disabled** (`WearChip(enabled = false)` — dimmed, a tap does nothing;
+  `testTag "undercut_ref_liner_aft"` / `"undercut_ref_liner_fwd"`), with the caption `"Liner AFT
+  edge is cut into the body — measure from a S.E.T."` (FWD mirror, both when both) under the row
+  (`testTag "undercut_ref_liner_aft_buried"` / `"_fwd_buried"`). The pool is every stored cut
+  with this card's draft substituted, so the card's OWN typed Distance or Length crossing the
+  edge counts the moment it lands — after the "Past the liner edge" question, whichever answer.
+  The selected chip, the Distance label/value/entry conversion, and the Length edit's re-anchor
+  all use the **effective** reference (`effectiveUndercutReference` over that pool), so the
+  Distance re-reads from the nearer S.E.T. at once; canonical never moves, the draft's own
+  reference is untouched (the baseline keeps the stored one — `undercutDraftOf` applies only the
+  deleted-liner fallback, since burial depends on the previewed spans), and nothing reaches the
+  record unless a chip is tapped and confirmed. The recorded-undercuts list row on the tab reads
+  through the same rule over the stored spans.
 - **Distance** field (`WearNum`, shared wrapper around `NumericInputField`): label shows the
   active reference (`undercutReferenceLabel`); the commit converts the entered value to
   canonical via `undercutStartToCanonicalMm` (passing the resolved reference liner's edges when
@@ -806,7 +838,10 @@ the datum the machinist is standing at); on a free strip the **nearer S.E.T.**
 are its only datums, and the proximity rule is the same one `undercutAnchorFor` uses (it
 delegates to `nearestSetReference` for the side) to anchor the printed bare-shaft strip's title,
 so the card's default Distance and the sheet's anchor always read from the same SET. Midpoint
-tie breaks AFT. The route's global "Add undercut" seeds AT the AFT SET, where AFT_SET is
+tie breaks AFT. A liner strip whose **AFT edge** a recorded cut already runs past into the body
+(`undercutLinerEdgeBuried`) seeds the nearer S.E.T. for the default span instead of `LINER_AFT`,
+with `referenceLinerId` `""` (the edge has no step left to measure from); a buried FWD edge alone
+leaves the `LINER_AFT` seed. The route's global "Add undercut" seeds AT the AFT SET, where AFT_SET is
 trivially the nearer datum.
 
 Whole liner / Extend past liner (on-device request: a cut that covers the whole liner and runs on
@@ -896,7 +931,9 @@ the chained run below it. The chain runs over the strip's **chain range**
 window (the original window-edge chain; the draw range may extend past it by break room,
 undimensioned); on a `LinerStrip` the chain anchors on the **liner's own edges**
 (extended only by cut overhang), so the pad between a break edge and the liner edge is never
-dimensioned. Below the rail, the **strip profile** (every resolved component clipped to the draw
+dimensioned. A **buried** liner edge (some previewed cut on the sheet runs past it,
+`buriedUndercutLinerEdgesMm`) is an extra chain node inserted inside the span that crosses it —
+the printed strip's `splitAtMm` rule, applied to the canvas's own stop list. Below the rail, the **strip profile** (every resolved component clipped to the draw
 range, liners painted last so a liner over a body reads as the surface — matching the notch
 math's max-wins envelope) with **notches** cut in, and **Ø callouts below** via the shared
 `planDiaCallouts` engine (one station per undercut at its axial centre, leader to the notch
@@ -1098,6 +1135,15 @@ strips minus a 22 pt orientation row, so a lone full-width strip owns ≈ 414 pt
     strip's **TOP-LEVEL spans only**: the forward cursor pulls an overlapping span's start up to
     itself, which collapses a fully NESTED cut to zero width and drops it silently. (That absorb
     rule stays — it is what keeps a legacy partially-overlapping pair from double-counting;)
+    **Buried liner edge node**: a `LinerStrip` passes its buried edges
+    (`buriedUndercutLinerEdgesMm` over every live cut on the sheet) as `splitAtMm`, and a chained
+    span strictly containing one is dimensioned as two spans meeting there — a cut overhanging
+    the AFT edge reads `[shoulder → liner edge]` then `[liner edge → next node]`. Without the
+    node, the overhang is dimensioned only from its own shoulder in the body, which nothing on
+    the sheet ties to a datum; with it, the overhang reads against the liner edge's position and
+    the strip title's liner-to-S.E.T. figure stays the locating datum. Lengths still sum to the
+    chain; a station outside every span or on an existing node changes nothing; the default
+    empty list is byte-identical. Nested rows are untouched;
   - **one extra chain row per nesting level ≥ 1**, stacked UNDER the level-0 chain
     (`buildNestedUndercutRailRows`) — chained dimensions run most-detailed nearest the part. Each
     level-k cut is chained against its **parent's own edges**: `parentStart → child`, `child`,

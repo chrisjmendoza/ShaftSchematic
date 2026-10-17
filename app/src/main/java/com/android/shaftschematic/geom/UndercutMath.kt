@@ -415,6 +415,38 @@ fun nearestSetReference(
     if ((startMm + endMm) * 0.5f <= (aftSetXMm + fwdSetXMm) * 0.5f) UndercutReference.AFT_SET
     else UndercutReference.FWD_SET
 
+/**
+ * True when the liner edge at [edgeMm] is **buried**: some span in [spans] strictly crosses it,
+ * running more than [epsMm] past it on BOTH sides — the cut is machined past the liner's end and
+ * on into the body, so the step the edge used to make is gone and there is nothing at that
+ * station a machinist can measure from (on-device request: such a cut measures from a S.E.T.).
+ *
+ * A cut that merely ENDS at the edge, or covers the liner's end without running past it, leaves a
+ * step in the silhouette there — the trimmed liner is still a different Ø from the body beside it
+ * — so that edge stays a datum and this returns false. [spans] is every cut on the sheet, the one
+ * being edited included (its previewed span), since any of them can take the edge away.
+ */
+fun undercutLinerEdgeBuried(
+    edgeMm: Float,
+    spans: List<UndercutSpanMm>,
+    epsMm: Float = UNDERCUT_TOUCH_EPS_MM,
+): Boolean = spans.any { it.startMm < edgeMm - epsMm && it.endMm > edgeMm + epsMm }
+
+/**
+ * The edges of the liner `[linerStartMm, linerEndMm]` that [spans] bury
+ * ([undercutLinerEdgeBuried]), AFT first — the stations where a liner strip's chained rail takes
+ * an extra node (`pdf/UndercutStripLayout.kt`'s `buildUndercutRailSpans`). Empty when both edges
+ * still stand.
+ */
+fun buriedUndercutLinerEdgesMm(
+    linerStartMm: Float,
+    linerEndMm: Float,
+    spans: List<UndercutSpanMm>,
+    epsMm: Float = UNDERCUT_TOUCH_EPS_MM,
+): List<Float> = listOf(linerStartMm, linerEndMm)
+    .distinct()
+    .filter { undercutLinerEdgeBuried(it, spans, epsMm) }
+
 // ── Validation ──
 
 /**

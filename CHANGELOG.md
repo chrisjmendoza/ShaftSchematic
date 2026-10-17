@@ -8,6 +8,24 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-16
 
+### feat(undercut): a liner edge cut into the body is no longer a datum
+
+- A liner edge counts as **buried** when a cut crosses it into the body: one continuous floor runs
+  across it, so there is no step to put a rule on. A cut that merely ends at the edge, or trims the
+  liner's end without crossing, leaves the step, and the edge stays a datum (on-device request).
+  A buried edge is replaced by the nearer S.E.T., the schematic's convention: the card's Liner
+  AFT/FWD chip for that edge is disabled with "Liner AFT edge is cut into the body — measure from a
+  S.E.T.", the Distance field re-reads from the S.E.T. (display-only, like the missing-liner
+  fallback — the stored reference and the cut's position never move), and a new cut on that liner
+  is seeded from the S.E.T. instead of the liner edge. The cut's own typed Length counts, so after
+  the "Past the liner edge" question the datum follows.
+- The printed rail gains a chain node at a buried edge: the overhanging cut dimensions as
+  "shoulder → liner edge" plus "liner edge → next", so the overhang is located against the liner
+  edge whose S.E.T. distance the strip title prints; without it nothing tied that shoulder to a
+  findable datum. Pure `undercutLinerEdgeBuried`; `effectiveUndercutReference` takes the sheet's
+  cuts and the S.E.T. positions. `UndercutMathTest`, `UndercutStripLayoutTest`,
+  `UndercutDetailOverlayTest`; `UndercutDrawing.md` and the manual updated.
+
 ### fix(undercut): a typed value is never reverted; every refusal says so
 
 - Undercut Distance, Length and Extend fields no longer run the shaft-bounds check at the

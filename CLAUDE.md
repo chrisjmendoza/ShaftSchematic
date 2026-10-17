@@ -453,7 +453,13 @@ to the draft verbatim, and ALL span validity (bounds, length, overlap) is confir
 under the fields and on the pill, with the Keep-editing/Discard prompt on leave. Elsewhere, a
 `NumericInputField` that cannot accept a value restores the previous one but SAYS SO ("20 not
 applied — <reason>") until the next focus; a silent swap of a typed value is the violation
-(on-device report). The notch (void fill erasing surface stroke and fill — the mouth stays **OPEN**,
+(on-device report). **A liner edge a cut has crossed into the body is not a datum**
+(`undercutLinerEdgeBuried`: a cut strictly spanning the edge — one floor runs across it, so there
+is no step; a cut that ends AT the edge leaves the step and the edge stays): the card disables
+that Liner chip, `effectiveUndercutReference` falls back DISPLAY-ONLY to the nearer S.E.T.
+(stored reference and canonical untouched, the missing-liner posture), a new cut seeds from the
+S.E.T., and the printed chain gets a node at the buried edge so the overhanging cut's shoulder is
+located against the liner edge the strip title places from the S.E.T. (on-device request). The notch (void fill erasing surface stroke and fill — the mouth stays **OPEN**,
 never closed by a lid — plus a full-height **section face** at each end and the floor lines,
 so each cut is its own reduced-Ø rectangle **step in the silhouette**, cut against the
 **local outer-surface envelope**; the section's core fills one step **lighter** than the

@@ -26,24 +26,43 @@ internal fun undercutReferenceLabel(reference: UndercutReference): String = when
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * The reference actually used to display/convert an undercut's Distance. A `LINER_*` reference
- * whose [Undercut.referenceLinerId] no longer resolves falls back to
- * [UndercutReference.AFT_SET] — the model's documented display rule. Canonical storage is never
- * touched by the fallback, and the stored reference is never rewritten behind the machinist's
- * back; the card just shows the AFT S.E.T. chip selected until a reference is picked again.
+ * The reference actually used to display/convert an undercut's Distance. Two display-only
+ * fallbacks apply to a `LINER_*` reference:
+ *
+ * - its [Undercut.referenceLinerId] no longer resolves → [UndercutReference.AFT_SET], the model's
+ *   documented display rule;
+ * - the referenced liner EDGE is buried — some cut in [spans] runs past it into the body
+ *   ([undercutLinerEdgeBuried]) → the S.E.T. nearer the cut's own span ([nearestSetReference]
+ *   against [aftSetXMm]/[fwdSetXMm], the schematic's convention). The step that edge made is
+ *   machined away, so nothing is left there to measure from (on-device request).
+ *
+ * [spans] is every cut on the sheet, this cut included (its previewed span while it is being
+ * edited); the default empty list skips the buried-edge check entirely. Canonical storage is
+ * never touched by either fallback, and the stored reference is never rewritten behind the
+ * machinist's back; the card just shows the S.E.T. chip selected until a reference is picked
+ * again.
  */
 internal fun effectiveUndercutReference(
     undercut: Undercut,
     linerSpans: List<UndercutLinerSpan>,
-): UndercutReference =
-    if (undercut.authoredReference == UndercutReference.LINER_AFT ||
-        undercut.authoredReference == UndercutReference.LINER_FWD
-    ) {
-        if (linerSpans.any { it.id == undercut.referenceLinerId }) undercut.authoredReference
-        else UndercutReference.AFT_SET
+    spans: List<UndercutSpanMm> = emptyList(),
+    aftSetXMm: Float = 0f,
+    fwdSetXMm: Float = 0f,
+): UndercutReference {
+    val ref = undercut.authoredReference
+    if (ref != UndercutReference.LINER_AFT && ref != UndercutReference.LINER_FWD) return ref
+    val liner = linerSpans.firstOrNull { it.id == undercut.referenceLinerId }
+        ?: return UndercutReference.AFT_SET
+    val edgeMm = if (ref == UndercutReference.LINER_AFT) liner.startMm else liner.endMm
+    return if (spans.isNotEmpty() && undercutLinerEdgeBuried(edgeMm, spans)) {
+        nearestSetReference(
+            undercut.startFromAftMm, undercut.startFromAftMm + undercut.lengthMm,
+            aftSetXMm, fwdSetXMm,
+        )
     } else {
-        undercut.authoredReference
+        ref
     }
+}
 
 /**
  * The liner an undercut's `LINER_*` chips convert against, or `null` when no liner is available

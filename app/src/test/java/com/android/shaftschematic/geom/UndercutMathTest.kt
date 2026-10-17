@@ -1360,6 +1360,124 @@ class UndercutMathTest {
         assertEquals(listOf(100f to 150f), undercutPartialOverlapsMm(100f, 50f, others))
     }
 
+    // ── Buried liner edges (a cut run past the liner's end into the body) ──
+
+    @Test
+    fun `a cut ending at the liner edge leaves the edge a datum`() {
+        assertFalse(undercutLinerEdgeBuried(500f, listOf(UndercutSpanMm("a", 500f, 600f))))
+        assertFalse(undercutLinerEdgeBuried(1500f, listOf(UndercutSpanMm("a", 1400f, 1500f))))
+    }
+
+    @Test
+    fun `a cut covering the liner end without crossing it leaves the edge a datum`() {
+        // The whole liner trimmed: both ends sit exactly on the edges, still a step to the body.
+        assertFalse(undercutLinerEdgeBuried(500f, listOf(UndercutSpanMm("a", 500f, 1500f))))
+        assertFalse(undercutLinerEdgeBuried(1500f, listOf(UndercutSpanMm("a", 500f, 1500f))))
+    }
+
+    @Test
+    fun `a cut crossing the liner edge buries it`() {
+        assertTrue(undercutLinerEdgeBuried(500f, listOf(UndercutSpanMm("a", 450f, 600f))))
+        assertTrue(undercutLinerEdgeBuried(1500f, listOf(UndercutSpanMm("a", 1400f, 1550f))))
+    }
+
+    @Test
+    fun `a crossing within eps does not bury the edge`() {
+        val tiny = UNDERCUT_TOUCH_EPS_MM * 0.5f
+        assertFalse(undercutLinerEdgeBuried(500f, listOf(UndercutSpanMm("a", 500f - tiny, 600f))))
+        assertFalse(undercutLinerEdgeBuried(1500f, listOf(UndercutSpanMm("a", 1400f, 1500f + tiny))))
+    }
+
+    @Test
+    fun `buried edges are listed aft first and only when buried`() {
+        val spans = listOf(UndercutSpanMm("a", 450f, 600f), UndercutSpanMm("b", 1400f, 1550f))
+        assertEquals(listOf(500f, 1500f), buriedUndercutLinerEdgesMm(500f, 1500f, spans))
+        assertEquals(emptyList<Float>(), buriedUndercutLinerEdgesMm(500f, 1500f, listOf(UndercutSpanMm("a", 500f, 600f))))
+    }
+
+    @Test
+    fun `a buried referenced edge falls back to the nearer SET`() {
+        val liner = UndercutLinerSpan("L", 500f, 1500f)
+        // AFT edge buried by the cut itself; its span sits in the AFT half of SET 100..1900.
+        val aftCut = Undercut(
+            id = "u", startFromAftMm = 450f, lengthMm = 150f, diaMm = 0f,
+            authoredReference = UndercutReference.LINER_AFT, referenceLinerId = "L",
+        )
+        val aftSpans = listOf(UndercutSpanMm("u", 450f, 600f))
+        assertEquals(
+            UndercutReference.AFT_SET,
+            effectiveUndercutReference(aftCut, listOf(liner), aftSpans, aftSetXMm = 100f, fwdSetXMm = 1900f),
+        )
+        // The same rule picks the FWD S.E.T. when the cut sits nearer it.
+        val fwdLiner = UndercutLinerSpan("L", 1200f, 1700f)
+        val fwdCut = aftCut.copy(startFromAftMm = 1150f, lengthMm = 150f)
+        assertEquals(
+            UndercutReference.FWD_SET,
+            effectiveUndercutReference(
+                fwdCut, listOf(fwdLiner), listOf(UndercutSpanMm("u", 1150f, 1300f)),
+                aftSetXMm = 100f, fwdSetXMm = 1900f,
+            ),
+        )
+        // A LINER_FWD reference reads its own (FWD) edge: buried by ANOTHER cut on the sheet.
+        val fwdRefCut = aftCut.copy(
+            startFromAftMm = 1300f, lengthMm = 100f, authoredReference = UndercutReference.LINER_FWD,
+        )
+        assertEquals(
+            UndercutReference.FWD_SET,
+            effectiveUndercutReference(
+                fwdRefCut, listOf(liner),
+                listOf(UndercutSpanMm("u", 1300f, 1400f), UndercutSpanMm("o", 1450f, 1600f)),
+                aftSetXMm = 100f, fwdSetXMm = 1900f,
+            ),
+        )
+    }
+
+    @Test
+    fun `an intact referenced edge keeps the liner reference`() {
+        val liner = UndercutLinerSpan("L", 500f, 1500f)
+        val cut = Undercut(
+            id = "u", startFromAftMm = 500f, lengthMm = 100f, diaMm = 0f,
+            authoredReference = UndercutReference.LINER_AFT, referenceLinerId = "L",
+        )
+        assertEquals(
+            UndercutReference.LINER_AFT,
+            effectiveUndercutReference(
+                cut, listOf(liner), listOf(UndercutSpanMm("u", 500f, 600f)),
+                aftSetXMm = 100f, fwdSetXMm = 1900f,
+            ),
+        )
+        // The FWD edge buried does not touch a LINER_AFT reference.
+        assertEquals(
+            UndercutReference.LINER_AFT,
+            effectiveUndercutReference(
+                cut, listOf(liner),
+                listOf(UndercutSpanMm("u", 500f, 600f), UndercutSpanMm("o", 1400f, 1600f)),
+                aftSetXMm = 100f, fwdSetXMm = 1900f,
+            ),
+        )
+        // No spans (the default) skips the check: the two-argument form is unchanged.
+        assertEquals(
+            UndercutReference.LINER_AFT,
+            effectiveUndercutReference(cut.copy(startFromAftMm = 450f, lengthMm = 150f), listOf(liner)),
+        )
+    }
+
+    @Test
+    fun `SET references are unchanged by a buried edge`() {
+        val liner = UndercutLinerSpan("L", 500f, 1500f)
+        val spans = listOf(UndercutSpanMm("u", 450f, 600f))
+        listOf(UndercutReference.AFT_SET, UndercutReference.FWD_SET).forEach { ref ->
+            val cut = Undercut(
+                id = "u", startFromAftMm = 450f, lengthMm = 150f, diaMm = 0f,
+                authoredReference = ref, referenceLinerId = "",
+            )
+            assertEquals(
+                ref,
+                effectiveUndercutReference(cut, listOf(liner), spans, aftSetXMm = 100f, fwdSetXMm = 1900f),
+            )
+        }
+    }
+
     private companion object {
         /** Shaft extent used by the exaggeration scenarios (long enough for several cuts). */
         const val EX_OAL_MM = 2000f

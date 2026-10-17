@@ -519,24 +519,42 @@ fun buildUndercutRailSpans(
     /** The strip's resolved unit (liner override, else the document unit for a bare-shaft
      *  strip) is already picked by the caller; this only carries the sheet-wide dual flag. */
     dual: Boolean = false,
+    /**
+     * Extra chain NODES: every chained span strictly containing one of these stations (more than
+     * the rail epsilon inside it on both sides) is dimensioned as two spans meeting there, so the
+     * lengths still sum to the chain. A liner strip passes its BURIED edges
+     * (`geom/UndercutMath.kt`'s `buriedUndercutLinerEdgesMm`): a cut machined past the liner's
+     * end into the body has taken away the step that edge made, and without a node there the
+     * overhanging cut is dimensioned only from its own shoulder in the body, which nothing else
+     * on the sheet ties to a datum. Split at the edge, the overhang reads against the liner
+     * edge's position, and the strip title's liner-to-S.E.T. figure stays the locating datum. A
+     * station outside every span, or on an existing node, changes nothing; the default empty
+     * list leaves the chain exactly as it was.
+     */
+    splitAtMm: List<Float> = emptyList(),
 ): List<WearRailSpan> {
     val out = mutableListOf<WearRailSpan>()
+    val nodes = splitAtMm.sorted()
+    fun emit(a: Float, b: Float) {
+        var from = a
+        nodes.forEach { n ->
+            if (n - from > UNDERCUT_RAIL_SPAN_EPS_MM && b - n > UNDERCUT_RAIL_SPAN_EPS_MM) {
+                out += WearRailSpan(from, n, formatLenDimDualLabel((n - from).toDouble(), unit, dual))
+                from = n
+            }
+        }
+        out += WearRailSpan(from, b, formatLenDimDualLabel((b - from).toDouble(), unit, dual))
+    }
     var cursor = chainStartMm
     spans.forEach { s ->
         if (s.endMm - s.startMm <= UNDERCUT_RAIL_SPAN_EPS_MM) return@forEach
         val effStart = maxOf(s.startMm, cursor)
-        if (effStart - cursor > UNDERCUT_RAIL_SPAN_EPS_MM) {
-            out += WearRailSpan(cursor, effStart, formatLenDimDualLabel((effStart - cursor).toDouble(), unit, dual))
-        }
+        if (effStart - cursor > UNDERCUT_RAIL_SPAN_EPS_MM) emit(cursor, effStart)
         val end = maxOf(s.endMm, effStart)
-        if (end - effStart > UNDERCUT_RAIL_SPAN_EPS_MM) {
-            out += WearRailSpan(effStart, end, formatLenDimDualLabel((end - effStart).toDouble(), unit, dual))
-        }
+        if (end - effStart > UNDERCUT_RAIL_SPAN_EPS_MM) emit(effStart, end)
         cursor = maxOf(cursor, end)
     }
-    if (chainEndMm - cursor > UNDERCUT_RAIL_SPAN_EPS_MM) {
-        out += WearRailSpan(cursor, chainEndMm, formatLenDimDualLabel((chainEndMm - cursor).toDouble(), unit, dual))
-    }
+    if (chainEndMm - cursor > UNDERCUT_RAIL_SPAN_EPS_MM) emit(cursor, chainEndMm)
     return out
 }
 
