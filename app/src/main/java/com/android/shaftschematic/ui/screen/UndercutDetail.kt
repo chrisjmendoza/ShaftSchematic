@@ -80,6 +80,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -141,6 +143,12 @@ import com.android.shaftschematic.model.Undercut
 import com.android.shaftschematic.model.UndercutRecord
 import com.android.shaftschematic.model.UndercutReference
 import com.android.shaftschematic.pdf.formatDiaWithUnit
+import com.android.shaftschematic.util.measureRichText
+import com.android.shaftschematic.pdf.layoutWearStripRail
+import com.android.shaftschematic.pdf.WearRailSpanLayout
+import com.android.shaftschematic.pdf.WearRailSpan
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.ResolvedCouplerBoltSlot
@@ -149,6 +157,9 @@ import com.android.shaftschematic.ui.resolved.ResolvedTaper
 import com.android.shaftschematic.ui.resolved.ResolvedThread
 import com.android.shaftschematic.ui.resolved.bodyBlends
 import com.android.shaftschematic.ui.resolved.surfaceSegsFrom
+import com.android.shaftschematic.ui.theme.SheetInk
+import com.android.shaftschematic.util.AppLog
+import com.android.shaftschematic.util.FractionTypography
 import com.android.shaftschematic.util.UndercutStyle
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.DualLabel
@@ -302,18 +313,25 @@ fun UndercutWindowDetailOverlay(
      * null opens on the aft-most card. A cut that is not on this strip is healed away.
      */
     initialSelectedId: String? = null,
+    /**
+     * App-wide `PdfPrefs.undercutLinerOutline`: the dotted retrace of each liner's original edges
+     * over the cuts, drawn here as on the printed sheet. Passed in so a change recomposes this canvas.
+     */
+    linerOutline: Boolean = true,
 ) {
     val oalMm = spec.overallLengthMm.coerceAtLeast(0f)
     val segs = remember(resolvedComponents, spec) { surfaceSegsFrom(resolvedComponents, bodyBlends(spec, resolvedComponents)) }
 
     // Every liner on the shaft, in strip space — the pool the cards' liner references draw from.
     val linerSpans = remember(resolvedComponents) { linerSpansOf(resolvedComponents) }
+    val linerOds = remember(resolvedComponents) { linerOdsOf(resolvedComponents) }
     val stripLiner = (strip as? UndercutStrip.LinerStrip)
         ?.let { UndercutLinerSpan(it.linerId, it.linerStartMm, it.linerEndMm) }
 
     // The strip's member undercuts, aft → fwd. Ids the record no longer holds simply drop out.
     val undercuts = remember(undercutRecord, strip) {
         strip.undercutIds
+            .distinct()
             .mapNotNull { id -> undercutRecord.undercuts.firstOrNull { it.id == id } }
             .sortedBy { it.startFromAftMm }
     }
@@ -323,7 +341,8 @@ fun UndercutWindowDetailOverlay(
     // ids and its draw range, so every record edit yields a new (unequal) strip — keying on it
     // would wipe drafts and selection the instant a card was confirmed.
     // Per-card local edits; a card with no entry here shows stored values. The add flow's
-    // not-yet-recorded page lives under [PENDING_UNDERCUT_ID].
+    // not-yet-recorded page lives under [PENDING_UNDERCUT_ID]. Every entry is keyed by its own
+    // draft's id, and only a card that has a page here can write one (`writeDraft` below).
     var drafts by remember(stripKey) { mutableStateOf(emptyMap<String, UndercutDraft>()) }
     // The add draft exactly as it was seeded. Its start is the pending card's ordering key, fixed
     // at creation — a pending card must not slide between pages while its Distance is being typed,
@@ -352,6 +371,13 @@ fun UndercutWindowDetailOverlay(
     // leaving the card they were moved to, so the next selection change skips leave handling
     // (without this, snapping back off a pending add page would auto-commit the add).
     var skipLeaveOnce by remember(stripKey) { mutableStateOf(false) }
+    // The card a focused field sits on, or null — the one card a flush may blur.
+    var focusedCardId by remember(stripKey) { mutableStateOf<String?>(null) }
+    val flushGate = remember { UndercutFlushGate() }
+    // The overlay's own "Past the liner edge" question, raised for an overhang a flush landed.
+    var overlayOverhang by remember(stripKey) { mutableStateOf<UndercutOverlayOverhangAsk?>(null) }
+    // Answers given at overlay level for stored cards, each waiting for its card to take it.
+    var overhangAnswers by remember(stripKey) { mutableStateOf(emptyMap<String, UndercutOverhangAnswer>()) }
 
     val pageIds = remember(undercuts, pendingSeedStartMm) {
         buildUndercutPageIds(undercuts, pendingSeedStartMm)
@@ -400,45 +426,48 @@ fun UndercutWindowDetailOverlay(
             UndercutSpanMm(u.id, c.startMm, c.endMm)
         }.filter { it.endMm > it.startMm }
     }
+    // Every cut on the sheet as previewed, render-clamped.
+    val sheetSpans = remember(sheetUndercuts, oalMm) {
+        sheetUndercuts.map { u ->
+            val c = clampUndercutSpan(u.startFromAftMm, u.lengthMm, oalMm)
+            UndercutSpanMm(u.id, c.startMm, c.endMm)
+        }.filter { it.endMm > it.startMm }
+    }
     // The strip liner's edges a cut on the sheet runs past into the body — the previewed draft
     // included — each one an extra node on the chain rail below, the printed strip's rule
     // (`buildUndercutRailSpans`' `splitAtMm`).
-    val railSplitAtMm = remember(sheetUndercuts, oalMm, stripLiner) {
-        stripLiner?.let { l ->
-            val sheetSpans = sheetUndercuts.map { u ->
-                val c = clampUndercutSpan(u.startFromAftMm, u.lengthMm, oalMm)
-                UndercutSpanMm(u.id, c.startMm, c.endMm)
-            }.filter { it.endMm > it.startMm }
-            buriedUndercutLinerEdgesMm(l.startMm, l.endMm, sheetSpans)
-        } ?: emptyList()
+    val railSplitAtMm = remember(sheetSpans, stripLiner) {
+        stripLiner?.let { l -> buriedUndercutLinerEdgesMm(l.startMm, l.endMm, sheetSpans) } ?: emptyList()
     }
     // The window follows what is PREVIEWED, not just what is stored: a draft edited past the
     // strip's stored range (a cut overhanging the liner edge mid-edit — on-device report)
     // widens the drawing live, with the standard pad of neighbour stock beyond it — the same
     // range a confirmed overhang gets when the strip rebuilds. Never narrows while editing.
     val (drawStartMm, drawEndMm) = remember(strip, spans, oalMm, segs) {
-        undercutPreviewDrawRange(strip, spans, oalMm, segs = segs)
+        undercutPreviewDrawRange(strip, spans, oalMm, segs = segs, cutSpans = spans)
     }
     // Confirm-blocking status of the previewed draft: its notch draws dashed in the selection
     // color while valid, in the error color while this is non-null, and the status pill states
     // the same reason — one check over the whole sheet, so the drawing, the pill, and what
     // leaving the card does can never disagree.
-    val activeDraftIssue = remember(activeDraft, oalMm, undercutRecord, pagePositionById) {
+    val activeDraftIssue = remember(activeDraft, selectedId, oalMm, undercutRecord, pagePositionById) {
         activeDraft?.let { d ->
             undercutConfirmIssue(
-                d, oalMm, undercutOtherSpans(undercutRecord.undercuts, d.id, oalMm), pagePositionById,
+                d, oalMm, undercutDraftPool(undercutRecord.undercuts, d, selectedId, oalMm),
+                pagePositionById,
             )
         }
     }
     // The overlap itself, while that is what blocks the draft (on-device report: the message
     // alone did not show where the cuts collide) — one shaft-space interval per partner the
     // draft partially overlaps, the same partners the confirm check blocks on.
-    val activeOverlapBandsMm = remember(activeDraft, oalMm, undercutRecord) {
+    val activeOverlapBandsMm = remember(activeDraft, selectedId, oalMm, undercutRecord) {
         val d = activeDraft
         // The shaft-bounds check outranks the overlap check, exactly as in [undercutConfirmIssue].
         if (d == null || undercutSpanIssue(d.startFromAftMm, d.lengthMm, oalMm) != null) emptyList()
         else undercutPartialOverlapsMm(
-            d.startFromAftMm, d.lengthMm, undercutOtherSpans(undercutRecord.undercuts, d.id, oalMm),
+            d.startFromAftMm, d.lengthMm,
+            undercutDraftPool(undercutRecord.undercuts, d, selectedId, oalMm),
         )
     }
 
@@ -535,7 +564,16 @@ fun UndercutWindowDetailOverlay(
     // draft that held an EDIT says so — typed values never vanish without a word (on-device
     // report). Its baseline is the cut as this strip last held it, so [lastSeenUndercuts] is
     // advanced only here.
-    LaunchedEffect(undercuts) {
+    //
+    // A PENDING draft with no pending page (its cut recorded, discarded or cancelled) is a ghost:
+    // no card shows it, yet the sweep would check it against the cut it became and ask about an
+    // overlap with that card on every leave (on-device report). It goes without a word — whatever
+    // was typed into it reached the record through the confirm that retired its page.
+    LaunchedEffect(undercuts, pendingSeed) {
+        if (pendingSeed == null && PENDING_UNDERCUT_ID in drafts) {
+            AppLog.w(UNDERCUT_DETAIL_LOG_TAG, "dropped a pending draft with no pending page")
+            drafts = drafts - PENDING_UNDERCUT_ID
+        }
         val live = undercuts.mapTo(HashSet()) { it.id }
         val dropped = drafts.filterKeys { it != PENDING_UNDERCUT_ID && it !in live }
         if (dropped.isNotEmpty()) {
@@ -555,6 +593,97 @@ fun UndercutWindowDetailOverlay(
         }
         lastSeenUndercuts = undercuts
     }
+
+    // The ONE writer of a card's edit into [drafts]. A card delivers its edits under its page id,
+    // and a field commits on BLUR — which can arrive after the card's page is gone, when the
+    // disposed field loses focus: the add flow's card after its cut was recorded, or a card an Undo
+    // took away. Such a write has no card to show it, and keeping it left a draft no page shadows
+    // (the add flow's draft resurrected as an invisible duplicate of the cut it had just become,
+    // blocking every leave with an overlap naming card 1 — on-device report). The entry carries
+    // the page id it is keyed by, so a draft's id, its map key and its card are one value.
+    //
+    // A refused write that carried an EDIT says so, like the stale-draft drop above (a value typed
+    // into a card an Undo then took away — typed values never vanish without a word). The add
+    // flow's card is the exception: its page goes only when it is confirmed (the flush has already
+    // landed its text) or deliberately cancelled.
+    fun writeDraft(pageId: String, updated: UndercutDraft) {
+        val hasPage = pageId in pageIdsLive.value &&
+            (pageId != PENDING_UNDERCUT_ID || pendingSeed != null)
+        if (!hasPage) {
+            AppLog.w(UNDERCUT_DETAIL_LOG_TAG, "ignored a draft edit from a card with no page")
+            if (pageId != PENDING_UNDERCUT_ID) {
+                val prior = lastSeenUndercuts.firstOrNull { it.id == pageId }
+                if (prior == null || updated.copy(id = pageId) != undercutDraftOf(prior, linerSpans)) {
+                    snackbarScope.launch {
+                        deleteSnackbar.showSnackbar(
+                            message = UNDERCUT_DISCARDED_DRAFT_MSG,
+                            duration = SnackbarDuration.Short,
+                        )
+                    }
+                }
+            }
+            return
+        }
+        drafts = drafts + (pageId to updated.copy(id = pageId))
+    }
+
+    // Lands the focused field's typed text in its card's draft before anything reads the drafts.
+    // The numeric fields commit on blur, and neither a pill tap nor a swipe takes focus, so a value
+    // still in the box when its card is confirmed or left would otherwise arrive only afterwards:
+    // missing from what was confirmed, and — on the add flow's card — written to a page that no
+    // longer exists (on-device report: the new cut's typed Ø was lost).
+    //
+    // Only the card holding focus is flushed, and only when it is a card being confirmed or left:
+    // a field just focused on the card the machinist is moving TO keeps its focus (keyboard and
+    // TalkBack navigation land there first). [flushGate] is up while the flush runs, so the card's
+    // own "Past the liner edge" question stays quiet for a commit the overlay asks about itself.
+    val focusManager = LocalFocusManager.current
+    fun flushFocusedField(cardIsLeft: (String) -> Boolean) {
+        val focused = focusedCardId ?: return
+        if (!cardIsLeft(focused)) return
+        flushGate.active = true
+        try {
+            focusManager.clearFocus(force = true)
+        } finally {
+            flushGate.active = false
+        }
+    }
+
+    // Whether a flushed edit newly runs [after] past a liner edge [before] stayed on — the card's
+    // own "Past the liner edge" rule ([newLinerOverhangs] against the strip's liner, else the
+    // cut's reference liner), asked at overlay level because the card may not outlive the commit.
+    fun overhangAskFor(
+        id: String,
+        before: UndercutDraft?,
+        after: UndercutDraft,
+        then: UndercutAfterOverhang,
+    ): UndercutOverlayOverhangAsk? {
+        if (before == null) return null
+        val liner = stripLiner
+            ?: undercutReferenceLinerFor(before.toUndercut(), linerSpans, null, oalMm)
+            ?: return null
+        val (aft, fwd) = newLinerOverhangs(
+            before.startFromAftMm, before.lengthMm, after.startFromAftMm, after.lengthMm,
+            liner.startMm, liner.endMm,
+        )
+        if (!aft && !fwd) return null
+        val (aftMm, fwdMm) = undercutLinerExtensionsMm(
+            after.startFromAftMm, after.lengthMm, liner.startMm, liner.endMm,
+        )
+        fun amount(mm: Float) = "${disp(mm, unit)} ${abbr(unit)}"
+        return UndercutOverlayOverhangAsk(
+            draftId = id,
+            ends = UndercutLinerEnds(aft, fwd),
+            aftAmount = if (aft) amount(aftMm) else null,
+            fwdAmount = if (fwd) amount(fwdMm) else null,
+            then = then,
+        )
+    }
+
+    // The confirm check, run on the draft as it stands NOW — after a flush landed a typed value.
+    fun confirmIssueOf(id: String, draft: UndercutDraft): String? = undercutConfirmIssue(
+        draft, oalMm, undercutDraftPool(undercutRecord.undercuts, draft, id, oalMm), pagePositionById,
+    )
 
     fun cancelDraft(id: String) {
         drafts = drafts - id
@@ -610,7 +739,7 @@ fun UndercutWindowDetailOverlay(
         val draft = drafts[id]
         val issue = draft?.let {
             undercutConfirmIssue(
-                it, oalMm, undercutOtherSpans(undercutRecord.undercuts, it.id, oalMm), pagePositionById,
+                it, oalMm, undercutDraftPool(undercutRecord.undercuts, it, id, oalMm), pagePositionById,
             )
         }
         val seed = if (id == PENDING_UNDERCUT_ID) pendingSeed else null
@@ -627,27 +756,48 @@ fun UndercutWindowDetailOverlay(
      * card would strand such an edit — dirty, unsaved, and invisible (the pill only ever states
      * the SELECTED card).
      */
-    fun settleDraftsExcept(keepId: String?, closing: Boolean): UndercutLeavePrompt? {
+    fun settleDraftsExcept(keepId: String?, closing: Boolean): UndercutSettleResult {
+        // The card being left loses its focus first, so its typed text is in the draft the
+        // decision below reads; every draft is read after the flush has landed.
+        val flushedId = focusedCardId?.takeIf { it != keepId }
+        val beforeFlush = flushedId?.let { drafts[it] ?: baselines[it] }
+        flushFocusedField { it != keepId }
+        val livePages = pageIdsLive.value
         drafts.entries.toList().forEach { (id, draft) ->
             if (id == keepId) return@forEach
+            // A draft with no page is nobody's card to settle or ask about; the stale-draft effect
+            // above retires it.
+            if (id !in livePages || (id == PENDING_UNDERCUT_ID && pendingSeed == null)) return@forEach
             val (action, issue) = leaveActionOf(id)
             when (action) {
                 UndercutLeaveAction.NONE -> Unit
                 // `follow = false` is what keeps the carousel on the card being moved TO: the
                 // confirmed cut may take a new aft → fwd index, and the pager's id keys carry the
                 // open page along, but the SELECTION must not be dragged back to a settled card.
-                UndercutLeaveAction.COMMIT -> confirmDraft(draft, follow = false)
+                // A flushed edit that newly runs past a liner edge is asked about first; the sweep
+                // resumes on the answer.
+                UndercutLeaveAction.COMMIT -> {
+                    if (id == flushedId) {
+                        overhangAskFor(id, beforeFlush, draft, UndercutAfterOverhang.Settle(keepId, closing))
+                            ?.let {
+                                overlayOverhang = it
+                                return UndercutSettleResult.Asking
+                            }
+                    }
+                    confirmDraft(draft, follow = false)
+                }
                 // An untouched add goes without a word: nothing was typed into it. The selection
                 // is left alone — it already belongs to the card being moved to.
                 UndercutLeaveAction.DISCARD -> {
                     drafts = drafts - id
                     if (id == PENDING_UNDERCUT_ID) pendingSeed = null
                 }
-                UndercutLeaveAction.PROMPT ->
-                    return UndercutLeavePrompt(draftId = id, reason = issue.orEmpty(), closing = closing)
+                UndercutLeaveAction.PROMPT -> return UndercutSettleResult.Prompt(
+                    UndercutLeavePrompt(draftId = id, reason = issue.orEmpty(), closing = closing),
+                )
             }
         }
-        return null
+        return UndercutSettleResult.Done
     }
 
     // Selection changed → every card the machinist is no longer on is settled. A clear draft
@@ -658,17 +808,62 @@ fun UndercutWindowDetailOverlay(
             skipLeaveOnce = false
             return@LaunchedEffect
         }
-        settleDraftsExcept(keepId = selectedId, closing = false)?.let { leavePrompt = it }
+        (settleDraftsExcept(keepId = selectedId, closing = false) as? UndercutSettleResult.Prompt)
+            ?.let { leavePrompt = it.prompt }
     }
 
     // Closing is a leave too — the back arrow and the system back run through here, so a dirty
-    // draft can never be lost by walking out of the overlay.
-    fun requestClose() {
-        val prompt = settleDraftsExcept(keepId = null, closing = true)
-        if (prompt != null) leavePrompt = prompt else onClose()
+    // draft can never be lost by walking out of the overlay. A question raised on the way out
+    // (blocked draft, or a flushed overhang) holds the overlay open until it is answered.
+    fun finishSettle(result: UndercutSettleResult, closing: Boolean) {
+        when (result) {
+            UndercutSettleResult.Done -> {
+                leavePrompt = null
+                if (closing) onClose()
+            }
+            is UndercutSettleResult.Prompt -> leavePrompt = result.prompt
+            UndercutSettleResult.Asking -> leavePrompt = null
+        }
     }
 
-    BackHandler(enabled = leavePrompt == null) { requestClose() }
+    fun requestClose() {
+        finishSettle(settleDraftsExcept(keepId = null, closing = true), closing = true)
+    }
+
+    // The pill's Confirm: flush the selected card's focused field, re-check the draft as it now
+    // stands (the pill offered Confirm for the value BEFORE the flush — a typed Length that
+    // overlaps, leaves the shaft or is zero must not be recorded; the pill recomposes to Blocked
+    // with the reason), ask about a newly overhung liner edge, then commit.
+    fun confirmSelected() {
+        val id = selectedId ?: return
+        val before = drafts[id] ?: baselines[id]
+        flushFocusedField { it == id }
+        val draft = drafts[id]?.takeIf { it != baselines[id] } ?: return
+        if (confirmIssueOf(id, draft) != null) return
+        val ask = overhangAskFor(id, before, draft, UndercutAfterOverhang.Confirm)
+        if (ask != null) overlayOverhang = ask else confirmDraft(draft)
+    }
+
+    // An answer to the overlay's "Past the liner edge" question, then the action it held up. A
+    // STORED card takes the answer into its own flag (its warning shows under the fields while the
+    // end stays off the liner); the add flow's card does not outlive its confirm — the recorded cut
+    // opens a new card — so there the answer is an acknowledgement only.
+    fun answerOverlayOverhang(ask: UndercutOverlayOverhangAsk, declined: Boolean) {
+        overlayOverhang = null
+        if (ask.draftId != PENDING_UNDERCUT_ID) {
+            overhangAnswers = overhangAnswers + (ask.draftId to UndercutOverhangAnswer(ask.ends, declined))
+        }
+        when (val then = ask.then) {
+            UndercutAfterOverhang.Confirm -> {
+                val draft = drafts[ask.draftId]?.takeIf { it != baselines[ask.draftId] } ?: return
+                if (confirmIssueOf(ask.draftId, draft) == null) confirmDraft(draft)
+            }
+            is UndercutAfterOverhang.Settle ->
+                finishSettle(settleDraftsExcept(then.keepId, then.closing), then.closing)
+        }
+    }
+
+    BackHandler(enabled = leavePrompt == null && overlayOverhang == null) { requestClose() }
 
     // ── Colors captured here — the Canvas draw scope must not read MaterialTheme ──
     // Sheet ink is FIXED black, never theme onSurface: the strip canvas is a paper-white
@@ -700,6 +895,9 @@ fun UndercutWindowDetailOverlay(
     // Pinch-to-zoom + two-finger pan — the ComponentWearDetailOverlay transform pattern:
     // transformable state drives the Canvas graphicsLayer, and the tap handler inverts it.
     var zoomScale by remember(stripKey) { mutableFloatStateOf(1f) }
+    // The drawing Box's laid-out width, so the chain rail can be planned (and its band sized)
+    // before the canvas draws.
+    var canvasWidthPx by remember { mutableIntStateOf(0) }
     var zoomOffset by remember(stripKey) { mutableStateOf(Offset.Zero) }
     val zoomTransformState = rememberTransformableState { zoomChange, panChange, _ ->
         zoomScale = (zoomScale * zoomChange).coerceIn(0.5f, 6f)
@@ -754,18 +952,51 @@ fun UndercutWindowDetailOverlay(
                     // on-device report). Same rule as the PDF's buildUndercutTotalSpan; the row
                     // collapses so the canvas doesn't keep a blank band.
                     val totalRailRowDp = if (spans.size >= 2) 30.dp else 0.dp
-                    val chainRailRowDp = 30.dp
                     val profileRowDp = UNDERCUT_PROFILE_ROW_DP
                     // Fixed band for the Ø callouts (leader + up to two staggered label rows), so the
                     // canvas height doesn't jump between one and two rows.
                     val diaBandDp = if (drawUndercuts.isEmpty()) 0.dp else 44.dp
-                    val canvasHeightDp = totalRailRowDp + chainRailRowDp + profileRowDp + diaBandDp
 
                     val winLenMm = (drawEndMm - drawStartMm).coerceAtLeast(0.001f)
                     val maxOdMm = remember(segs, drawStartMm, drawEndMm) {
                         val env = maxOuterDiaOver(segs, drawStartMm, drawEndMm)
                         if (env > 0f) env else 1f
                     }
+
+                    // The chain rail's labels, placed by the printed strip's planner
+                    // (`layoutWearStripRail`): a label that would collide with its neighbour
+                    // stacks one row up (on-device report: the values ran into each other), and
+                    // the band grows by one label row for each extra row the plan used. Planned
+                    // here, off the same x map the canvas draws with, so the reserved height and
+                    // the drawn rows are one number.
+                    val density = LocalDensity.current
+                    val railStops = remember(strip, spans, railSplitAtMm) {
+                        undercutCanvasRailStops(strip.chainStartMm, strip.chainEndMm, spans, railSplitAtMm)
+                    }
+                    // Every input of the plan is one record, and the record is the remember key, so
+                    // no input can be left out of the key.
+                    val railInputs = with(density) {
+                        UndercutCanvasRailInputs(
+                            stops = railStops,
+                            unit = unit,
+                            widthPx = canvasWidthPx.toFloat(),
+                            profileRowHeightPx = profileRowDp.toPx(),
+                            edgePadPx = UNDERCUT_EDGE_PAD_DP.dp.toPx(),
+                            drawStartMm = drawStartMm,
+                            windowLengthMm = winLenMm,
+                            maxOdMm = maxOdMm,
+                            textPadPx = 4.dp.toPx(),
+                            arrowPx = 5.dp.toPx(),
+                            fractionStyle = FractionTypography.active,
+                        )
+                    }
+                    val railPlan = remember(railInputs) {
+                        planUndercutCanvasRail(railInputs) { textPaint.measureRichText(it) }
+                    }
+                    val railLabelRows = (railPlan.maxOfOrNull { it.labelRow } ?: 0) + 1
+                    val railLabelRowDp = with(density) { (textPaint.textSize + 6f).toDp() }
+                    val chainRailRowDp = UNDERCUT_CHAIN_RAIL_ROW_DP + railLabelRowDp * (railLabelRows - 1)
+                    val canvasHeightDp = totalRailRowDp + chainRailRowDp + profileRowDp + diaBandDp
 
                     // Read live inside the tap pointerInput without re-keying it on every pinch.
                     val scaleForTap = rememberUpdatedState(zoomScale)
@@ -774,6 +1005,7 @@ fun UndercutWindowDetailOverlay(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(canvasHeightDp)
+                            .onSizeChanged { canvasWidthPx = it.width }
                             .clip(cardShape)
                             .background(Color.White)
                             .semantics {
@@ -988,6 +1220,19 @@ fun UndercutWindowDetailOverlay(
                                     pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f)),
                                 )
                             }
+                            // ── Liner outline — the liner's original edges, dotted over the cuts ──
+                            if (linerOutline) {
+                                drawLinerOutlines(
+                                    liners = linerOds,
+                                    notches = notches,
+                                    segs = segs,
+                                    xPx = xPx,
+                                    rPx = rPx,
+                                    cy = cy,
+                                    color = SheetInk.Outline.copy(alpha = LINER_OUTLINE_CANVAS_ALPHA),
+                                    strokeWidthPx = 1.dp.toPx(),
+                                )
+                            }
 
                             // ── Overlap bands — where a blocked draft collides with a neighbour ──
                             // Over the notches (so the band reads on top of the cut it intrudes into)
@@ -1031,7 +1276,11 @@ fun UndercutWindowDetailOverlay(
                             }
 
                             // ── Dimension rail above: chained run + cluster total ──
-                            val chainRailY = totalRailRowDp.toPx() + chainRailRowDp.toPx() * 0.62f
+                            // The line keeps its distance off the profile; extra label rows stack
+                            // above it, into the band they grew.
+                            val chainRailY = (totalRailRowDp + chainRailRowDp).toPx() -
+                                UNDERCUT_CHAIN_RAIL_ROW_DP.toPx() * 0.38f
+                            val railLabelRowPx = railLabelRowDp.toPx()
                             val totalRailY = totalRailRowDp.toPx() * 0.62f
                             val witnessBottomY = cy - rPx(maxOdMm) - 4f
 
@@ -1041,30 +1290,20 @@ fun UndercutWindowDetailOverlay(
                             // the identical rule the PDF strips apply.
                             // A buried liner edge is a node inside the span that crosses it, so the
                             // overhang reads against the edge's position.
-                            val stops = buildList {
-                                add(strip.chainStartMm)
-                                spans.forEach { add(it.startMm); add(it.endMm) }
-                                add(strip.chainEndMm)
-                            }.toMutableList()
-                            railSplitAtMm.forEach { n ->
-                                val at = (0 until stops.size - 1).firstOrNull { i ->
-                                    n - stops[i] > eps && stops[i + 1] - n > eps
-                                }
-                                if (at != null) stops.add(at + 1, n)
-                            }
-                            stops.forEach { mm ->
+                            railStops.forEach { mm ->
                                 drawLine(
                                     witnessColor, Offset(xPx(mm), chainRailY - 3f),
                                     Offset(xPx(mm), witnessBottomY), 1f,
                                 )
                             }
-                            for (i in 0 until stops.size - 1) {
-                                val a = stops[i]
-                                val b = stops[i + 1]
-                                if (b - a <= eps) continue
+                            // The plan's x map is this canvas's own; a label lifts one row per
+                            // stacked row the planner assigned it.
+                            railPlan.forEach { r ->
                                 drawUndercutDimSpan(
-                                    xPx(a), xPx(b), chainRailY,
-                                    undercutDimLabel(b - a, unit), textPaint, railColor,
+                                    r.x0Pt, r.x1Pt, chainRailY,
+                                    r.label.primary, textPaint, railColor,
+                                    labelCx = r.labelCxPt,
+                                    labelLiftPx = r.labelRow * railLabelRowPx,
                                 )
                             }
                             if (spans.size >= 2) {
@@ -1166,7 +1405,7 @@ fun UndercutWindowDetailOverlay(
                                 activeDraftIssue != null -> UndercutPillState.Blocked(activeDraftIssue)
                                 else -> UndercutPillState.Unsaved
                             },
-                            onConfirm = { activeDraft?.let { confirmDraft(it) } },
+                            onConfirm = { confirmSelected() },
                             onDiscard = { activeDraft?.let { cancelDraft(it.id) } },
                             modifier = Modifier
                                 .align(Alignment.Center)
@@ -1271,7 +1510,14 @@ fun UndercutWindowDetailOverlay(
                             sheetUndercuts = undercutRecord.undercuts,
                             buttTargets = pageButtTargets.filter { (_, s) -> s.id != id },
                             pagePositionById = pagePositionById,
-                            onDraftChange = { updated -> drafts = drafts + (id to updated) },
+                            onDraftChange = { updated -> writeDraft(id, updated) },
+                            flushActive = { flushGate.active },
+                            overhangAnswer = overhangAnswers[id],
+                            onOverhangAnswerTaken = { overhangAnswers = overhangAnswers - id },
+                            modifier = Modifier.onFocusChanged { f ->
+                                if (f.hasFocus) focusedCardId = id
+                                else if (focusedCardId == id) focusedCardId = null
+                            },
                             onDelete = if (draft.isPending) null else {
                                 deleteCard@{
                                     // The trash deletes only the SELECTED card, and only once the
@@ -1334,6 +1580,19 @@ fun UndercutWindowDetailOverlay(
         }
     }
 
+    // ── "Past the liner edge", for an overhang a flush landed ────────────────
+    // The card's own question, raised here because the commit or close it holds up can take the
+    // card away (the add flow's card on Confirm, every card on Close). Same strings, same tags,
+    // answerable only by its two buttons.
+    overlayOverhang?.let { ask ->
+        UndercutOverhangDialog(
+            aftAmount = ask.aftAmount,
+            fwdAmount = ask.fwdAmount,
+            onAccept = { answerOverlayOverhang(ask, declined = false) },
+            onDecline = { answerOverlayOverhang(ask, declined = true) },
+        )
+    }
+
     // ── Blocked draft on the way out ─────────────────────────────────────────
     // The one case a leave cannot resolve by itself. Neither button is destructive by default:
     // dismissing (tap-outside / system back) is "Keep editing", so an edit is never lost to a
@@ -1345,7 +1604,7 @@ fun UndercutWindowDetailOverlay(
             // them LEAVING the card they were taken to, so that selection change must not be
             // handled as one — otherwise stepping back off a pending add page would commit the
             // add nobody asked for.
-            if (selectedId != prompt.draftId) {
+            if (selectedId != prompt.draftId && prompt.draftId in pageIdsLive.value) {
                 skipLeaveOnce = true
                 selectedId = prompt.draftId
             }
@@ -1365,12 +1624,13 @@ fun UndercutWindowDetailOverlay(
                         cancelDraft(prompt.draftId)
                         // Dropping this one RESUMES the sweep it interrupted: a second unsettled
                         // draft gets its own question rather than riding out on this answer.
-                        val next = settleDraftsExcept(
-                            keepId = if (prompt.closing) null else selectedId,
-                            closing = prompt.closing,
+                        finishSettle(
+                            settleDraftsExcept(
+                                keepId = if (prompt.closing) null else selectedId,
+                                closing = prompt.closing,
+                            ),
+                            prompt.closing,
                         )
-                        leavePrompt = next
-                        if (next == null && prompt.closing) onClose()
                     },
                     modifier = Modifier.testTag("undercut_leave_discard"),
                 ) {
@@ -1714,6 +1974,28 @@ internal fun undercutOtherSpans(
     }
     .filter { it.endMm > it.startMm }
 
+/**
+ * The adjacency pool for [draft] held under the page id [heldUnderId]: [undercutOtherSpans] less
+ * the draft's own cut. A draft's id IS its page id (the overlay's `writeDraft` keys every entry by
+ * it), so the second exclusion is a last line of defence: a draft held under a page whose own cut
+ * is in its pool would be checked against itself and block with an overlap naming the card it is
+ * shown on (on-device report). Such a pool is stale; the self entry is dropped and breadcrumbed.
+ */
+internal fun undercutDraftPool(
+    all: List<Undercut>,
+    draft: UndercutDraft,
+    heldUnderId: String?,
+    oalMm: Float,
+): List<UndercutSpanMm> {
+    val pool = undercutOtherSpans(all, draft.id, oalMm)
+    if (heldUnderId == null || heldUnderId == draft.id || pool.none { it.id == heldUnderId }) return pool
+    AppLog.w(UNDERCUT_DETAIL_LOG_TAG, "a draft's overlap pool held its own card's cut")
+    return pool.filterNot { it.id == heldUnderId }
+}
+
+/** Breadcrumb tag for the undercut detail page (`util/AppLog` — events only, never values). */
+internal const val UNDERCUT_DETAIL_LOG_TAG = "UndercutDetail"
+
 /** What leaving a card does with its draft. */
 internal enum class UndercutLeaveAction {
     /** Nothing to save — no draft, or one that still equals stored values. */
@@ -1808,6 +2090,12 @@ private fun UndercutDraftCard(
     pagePositionById: Map<String, Int>,
     onDraftChange: (UndercutDraft) -> Unit,
     onDelete: (() -> Unit)?,
+    /** True while the overlay is flushing focus — it asks "Past the liner edge" for that commit itself. */
+    flushActive: () -> Boolean = { false },
+    /** The overlay's answer to its own "Past the liner edge" question for this card, to take. */
+    overhangAnswer: UndercutOverhangAnswer? = null,
+    onOverhangAnswerTaken: () -> Unit = {},
+    modifier: Modifier = Modifier,
 ) {
     // Which liner the LINER_* chips convert against: the draft's own reference liner while it
     // resolves, else the strip's liner, else whichever liner holds most of this cut.
@@ -1872,8 +2160,20 @@ private fun UndercutDraftCard(
         overhangFlagged = overhangFlagged.without(onLiner)
         overhangAcknowledged = overhangAcknowledged.without(onLiner)
     }
+    LaunchedEffect(overhangAnswer) {
+        val answer = overhangAnswer ?: return@LaunchedEffect
+        if (answer.declined) {
+            overhangFlagged = overhangFlagged.with(answer.ends)
+            overhangAcknowledged = overhangAcknowledged.without(answer.ends)
+        } else {
+            overhangAcknowledged = overhangAcknowledged.with(answer.ends)
+            overhangFlagged = overhangFlagged.without(answer.ends)
+        }
+        onOverhangAnswerTaken()
+    }
     fun commitSpanEdit(updated: UndercutDraft) {
-        overhangLiner?.let { l ->
+        // A commit the overlay's flush drove is asked about at overlay level instead.
+        if (!flushActive()) overhangLiner?.let { l ->
             val (aft, fwd) = newLinerOverhangs(
                 draft.startFromAftMm, draft.lengthMm,
                 updated.startFromAftMm, updated.lengthMm,
@@ -1912,7 +2212,7 @@ private fun UndercutDraftCard(
     val confirmIssue = undercutConfirmIssue(draft, oalMm, otherSpans, pagePositionById)
 
     OutlinedCard(
-        modifier = Modifier.fillMaxSize().testTag("undercut_card_${draft.id}"),
+        modifier = modifier.fillMaxSize().testTag("undercut_card_${draft.id}"),
         border = if (selected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
                  else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
@@ -2317,41 +2617,87 @@ private fun UndercutDraftCard(
     // Answerable only by its two buttons: a tap outside or Back would have to pick one, and
     // either silent pick is the decision the machinist was asked to make.
     overhangQuestion?.let { ask ->
-        AlertDialog(
-            onDismissRequest = {},
-            properties = DialogProperties(dismissOnClickOutside = false, dismissOnBackPress = false),
-            modifier = Modifier.testTag("undercut_overhang_dialog"),
-            title = { Text("Past the liner edge") },
-            text = {
-                Text(
-                    undercutOverhangQuestion(
-                        aft = if (ask.aft) overhangAmount(overhangAftMm) else null,
-                        fwd = if (ask.fwd) overhangAmount(overhangFwdMm) else null,
-                    ),
-                )
+        UndercutOverhangDialog(
+            aftAmount = if (ask.aft) overhangAmount(overhangAftMm) else null,
+            fwdAmount = if (ask.fwd) overhangAmount(overhangFwdMm) else null,
+            onAccept = {
+                overhangAcknowledged = overhangAcknowledged.with(ask)
+                overhangFlagged = overhangFlagged.without(ask)
+                overhangQuestion = null
             },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        overhangAcknowledged = overhangAcknowledged.with(ask)
-                        overhangFlagged = overhangFlagged.without(ask)
-                        overhangQuestion = null
-                    },
-                    modifier = Modifier.testTag("undercut_overhang_accept"),
-                ) { Text("Add extension") }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        overhangFlagged = overhangFlagged.with(ask)
-                        overhangAcknowledged = overhangAcknowledged.without(ask)
-                        overhangQuestion = null
-                    },
-                    modifier = Modifier.testTag("undercut_overhang_decline"),
-                ) { Text("No") }
+            onDecline = {
+                overhangFlagged = overhangFlagged.with(ask)
+                overhangAcknowledged = overhangAcknowledged.without(ask)
+                overhangQuestion = null
             },
         )
     }
+}
+
+/**
+ * The "Past the liner edge" question — ONE dialog for the card's own field commits and the
+ * overlay's flushed ones, so both read and test the same. Answerable only by its two buttons: a tap
+ * outside or Back would have to pick one, and either silent pick is the decision the machinist was
+ * asked to make. [aftAmount]/[fwdAmount] are the overhang past each end, null for an end that is
+ * not newly off the liner.
+ */
+@Composable
+private fun UndercutOverhangDialog(
+    aftAmount: String?,
+    fwdAmount: String?,
+    onAccept: () -> Unit,
+    onDecline: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = {},
+        properties = DialogProperties(dismissOnClickOutside = false, dismissOnBackPress = false),
+        modifier = Modifier.testTag("undercut_overhang_dialog"),
+        title = { Text("Past the liner edge") },
+        text = { Text(undercutOverhangQuestion(aft = aftAmount, fwd = fwdAmount)) },
+        confirmButton = {
+            TextButton(onClick = onAccept, modifier = Modifier.testTag("undercut_overhang_accept")) {
+                Text("Add extension")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDecline, modifier = Modifier.testTag("undercut_overhang_decline")) {
+                Text("No")
+            }
+        },
+    )
+}
+
+/** Raised while the overlay flushes focus; a card's own overhang question stays quiet under it. */
+internal class UndercutFlushGate {
+    var active: Boolean = false
+}
+
+/** The overlay's answer to "Past the liner edge" for a stored card, for that card to take. */
+internal data class UndercutOverhangAnswer(val ends: UndercutLinerEnds, val declined: Boolean)
+
+/** What the overlay's "Past the liner edge" question is holding up. */
+internal sealed interface UndercutAfterOverhang {
+    /** The pill's Confirm of the selected card. */
+    object Confirm : UndercutAfterOverhang
+
+    /** A leave sweep (or the close), resumed with the same arguments. */
+    data class Settle(val keepId: String?, val closing: Boolean) : UndercutAfterOverhang
+}
+
+/** The overlay-level question: which card, which ends, how far past each, and what waits on it. */
+internal data class UndercutOverlayOverhangAsk(
+    val draftId: String,
+    val ends: UndercutLinerEnds,
+    val aftAmount: String?,
+    val fwdAmount: String?,
+    val then: UndercutAfterOverhang,
+)
+
+/** How a leave sweep ended: everything settled, a blocked draft to ask about, or an overhang asked. */
+private sealed interface UndercutSettleResult {
+    object Done : UndercutSettleResult
+    data class Prompt(val prompt: UndercutLeavePrompt) : UndercutSettleResult
+    object Asking : UndercutSettleResult
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2596,6 +2942,10 @@ internal fun DrawScope.drawUndercutDimSpan(
     label: String,
     paint: android.graphics.Paint,
     color: Color,
+    /** Where the value is centred; the span's midpoint unless a rail planner placed it. */
+    labelCx: Float = (x0 + x1) / 2f,
+    /** How far above the default label row the value sits — a stacked row's lift. */
+    labelLiftPx: Float = 0f,
 ) {
     val lo = min(x0, x1)
     val hi = max(x0, x1)
@@ -2618,7 +2968,109 @@ internal fun DrawScope.drawUndercutDimSpan(
         head(lo, -1f)
         head(hi, 1f)
     }
-    drawContext.canvas.nativeCanvas.drawRichText(label, (lo + hi) / 2f, y - 6.dp.toPx(), paint)
+    drawContext.canvas.nativeCanvas.drawRichText(label, labelCx, y - 6.dp.toPx() - labelLiftPx, paint)
+}
+
+/** Height of the detail canvas's chain-rail band with every label on one row. */
+private val UNDERCUT_CHAIN_RAIL_ROW_DP = 30.dp
+
+/**
+ * The detail canvas's chain-rail stations, aft → fwd: the chain datums (a liner strip's liner
+ * edges extended by overhang, a free strip's window edges — never the draw range, the identical
+ * rule the PDF strips apply), every cut's two shoulders, and each buried liner edge in
+ * [splitAtMm] that falls strictly inside a span, so an overhang reads against the edge's
+ * position.
+ */
+internal fun undercutCanvasRailStops(
+    chainStartMm: Float,
+    chainEndMm: Float,
+    spans: List<UndercutSpanMm>,
+    splitAtMm: List<Float>,
+    epsMm: Float = 1e-3f,
+): List<Float> {
+    val stops = buildList {
+        add(chainStartMm)
+        spans.forEach { add(it.startMm); add(it.endMm) }
+        add(chainEndMm)
+    }.toMutableList()
+    splitAtMm.forEach { n ->
+        val at = (0 until stops.size - 1).firstOrNull { i ->
+            n - stops[i] > epsMm && stops[i + 1] - n > epsMm
+        }
+        if (at != null) stops.add(at + 1, n)
+    }
+    return stops
+}
+
+/**
+ * The detail canvas's chain rail as placed spans: one span per pair of consecutive [stops] longer
+ * than [epsMm], labelled as the canvas labels them ([undercutDimLabel]), run through the printed
+ * strip's ONE label planner ([layoutWearStripRail]) — a value is centred on its span, slid inside
+ * it when it fits, and a value that would overlap an already-placed one takes the next row up.
+ * [xPx] is the canvas's x map; [labelWidthPx] measures a value as the canvas draws it.
+ */
+internal data class UndercutCanvasRailInputs(
+    val stops: List<Float>,
+    val unit: UnitSystem,
+    /** The drawing Box's laid-out width; 0 before the first layout (no plan yet). */
+    val widthPx: Float,
+    val profileRowHeightPx: Float,
+    val edgePadPx: Float,
+    val drawStartMm: Float,
+    val windowLengthMm: Float,
+    val maxOdMm: Float,
+    val textPadPx: Float,
+    val arrowPx: Float,
+    /** The label measure depends on it, so a style change re-plans. */
+    val fractionStyle: Any?,
+)
+
+/**
+ * The detail canvas's chain-rail plan from [inputs] — the canvas's own x map
+ * ([computeUndercutWindowLayout] at the Box width) fed to [planUndercutCanvasRail]. Empty until the
+ * Box has a width.
+ */
+internal fun planUndercutCanvasRail(
+    inputs: UndercutCanvasRailInputs,
+    labelWidthPx: (String) -> Float,
+): List<WearRailSpanLayout> {
+    if (inputs.widthPx <= 0f) return emptyList()
+    val lay = computeUndercutWindowLayout(
+        widthPx = inputs.widthPx,
+        profileTopPx = 0f,
+        profileRowHeightPx = inputs.profileRowHeightPx,
+        windowLengthMm = inputs.windowLengthMm,
+        maxOdMm = inputs.maxOdMm,
+        edgePadPx = inputs.edgePadPx,
+    )
+    return planUndercutCanvasRail(
+        stops = inputs.stops,
+        unit = inputs.unit,
+        xPx = { mm -> lay.startPx + (mm - inputs.drawStartMm) * lay.pxPerMm },
+        labelWidthPx = labelWidthPx,
+        textPadPx = inputs.textPadPx,
+        arrowPx = inputs.arrowPx,
+    )
+}
+
+internal fun planUndercutCanvasRail(
+    stops: List<Float>,
+    unit: UnitSystem,
+    xPx: (Float) -> Float,
+    labelWidthPx: (String) -> Float,
+    textPadPx: Float,
+    arrowPx: Float,
+    epsMm: Float = 1e-3f,
+): List<WearRailSpanLayout> {
+    val railSpans = (0 until stops.size - 1).mapNotNull { i ->
+        val a = stops[i]
+        val b = stops[i + 1]
+        if (b - a <= epsMm) null else WearRailSpan(a, b, DualLabel.single(undercutDimLabel(b - a, unit)))
+    }
+    return layoutWearStripRail(
+        railSpans, xPx, { labelWidthPx(it.primary) },
+        textPadPt = textPadPx, arrowSizePt = arrowPx, minLabelGapPt = textPadPx,
+    )
 }
 
 /**

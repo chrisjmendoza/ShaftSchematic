@@ -62,8 +62,8 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
 - Cards edit a **local draft** that previews on the canvas and reaches the record only when
   **confirmed**. The previewed draft's notch draws **dashed** in the selection (primary) color —
   provisional, unmistakable against the liner and the settled cuts — and switches to the
-  **error color** while its confirm check fails (out of shaft bounds, or overlapping an
-  adjacent cut: the same `undercutConfirmIssue` the status pill reads, so the drawing and the
+  **error color** while its confirm check fails (out of shaft bounds, or partially overlapping
+  another cut: the same `undercutConfirmIssue` the status pill reads, so the drawing and the
   pill never disagree). Confirming settles it into the normal solid
   outline. Cards are editable here only — there is no card on `UndercutRoute` itself and no
   carousel card / Add dialog anywhere (see "Contracts & Invariants").
@@ -295,7 +295,17 @@ data class UndercutRecord(val undercuts: List<Undercut> = emptyList())
   larger end Ø (conservative on a taper). Empty `segs` leaves the range unchanged; the rule is
   idempotent. Every strip-range builder takes `segs` (default empty, so callers without a
   profile are byte-identical) and applies it to the **draw range only** — chain datums never
-  move.
+  move. **Cuts are faces too** (on-device request: cuts run past a liner into the body crashed
+  into the window-end S-break): the optional `cutSpans` (default empty, byte-identical) split the
+  envelope at every cut shoulder, and a stretch a cut spans never hosts a break, so an end landing
+  inside a cut, or within the room of a cut's shoulder on the interior side, moves outward past
+  it. They are the STRIP's OWN cuts — its members, chained cuts included — never every cut on the
+  sheet: a strip draws another strip's cut as plain stock, and walking its window past that cut
+  would only widen overlapping draw ranges. The route (`buildUndercutStrips` per strip,
+  `linerStripFor` with the liner's members), the detail overlay's preview range
+  (`undercutPreviewDrawRange`, the strip's previewed spans) and the PDF strip's re-application
+  after `computeUndercutStripDrawRange` (the strip's `undercutIds`) all pass them, so a free
+  strip's draw range now also grows past its window when its pad is narrower than the room.
 - **Hit-tests**: `pickUndercutWindowAt(xMm, windows)` (which window a tap landed in) and
   `pickUndercutAt(xMm, spans, padMm)` (which undercut inside an open window — inside-span
   candidates win over pad-only candidates; among several containing the tap the **innermost**
@@ -458,6 +468,27 @@ data class UndercutRecord(val undercuts: List<Undercut> = emptyList())
   the same meaning on two surfaces, neither reading the other, because a style meant for the
   canvases must not leak into a composer. Turning one on does not turn the other on.
 
+  **Liner outline — `PdfPrefs.undercutLinerOutline`** (default `true`; Settings → PDF Export
+  beside the line-art row, and the undercut preview's PDF options sheet under it, testTag
+  `pdf_undercut_liner_outline`, caption "Dotted outline of each liner's original edges and OD
+  over the cuts"; captured by drawing profiles). On-device request: a cut split between the body
+  and a liner left no sign of where the liner had been. A fine **dotted** retrace of each liner's
+  original OD and end faces over the stretches the cuts ERASED — never over intact outline, so a
+  liner no cut touches gets nothing. ONE pure builder, `linerOutlineSegments(liner, notches,
+  segs)` (`geom/LinerOutlineMath.kt`, `LinerOutlineMathTest`): the OD as the union of the notch
+  spans clipped to the liner, split over the liner's OWN surface (`UndercutLinerOd.surface`, from
+  `linerSurfaceSegs` — the reduced shoulder OD over a shoulder, modelled square), so a retraced
+  stretch sits at the shoulder OD there and a stretch running across a shoulder step retraces the
+  step; an end face only where a notch runs ACROSS that edge, from the higher of the deepest
+  crossing notch's drawn floor and the stock's Ø just outside the edge (the step the face stood
+  on) up to the liner's surface at that end (the shoulder OD on a shouldered end). Drawn AFTER the notch passes and before the Ø callouts
+  and rails at every undercut site: the route overview and the detail overlay
+  (`drawLinerOutlines`, `ui/screen/UndercutSharedDraw.kt` — `SheetInk.Outline` at
+  `LINER_OUTLINE_CANVAS_ALPHA` 0.4, `dashPathEffect(2, 4)`, 1 dp) and the PDF main profile and
+  detail strips (`drawLinerOutlinesPdf` — the dimension weight, grey, `DashPathEffect(1.5, 3)`).
+  The canvases read the same pref (the route collects it and passes it to the overlay's
+  `linerOutline`), and it is an Undercut-tab preview re-render key.
+
 - **Strips — liner-anchored vs free windows.** The zoomed-view unit consumed by the overview
   affordances, the detail overlay, and the PDF is a sealed `UndercutStrip`, not a bare
   `UndercutWindow`:
@@ -477,6 +508,15 @@ data class UndercutRecord(val undercuts: List<Undercut> = emptyList())
   - `assignUndercutLiner(span, liners)` — the liner a cut belongs to for strip purposes: the
     one overlapping the largest share of the cut's span (`null` if none overlaps at all); an
     exact tie breaks to the AFT-most liner.
+  - `assignUndercutLiners(spans, liners)` — every cut's liner for strip purposes, with
+    **chaining** (on-device request): after the overlap-share rule, a bare-shaft cut touching
+    (within `UNDERCUT_TOUCH_EPS_MM`), overlapping or nested with a cut assigned to liner L joins
+    L too, repeated to a fixed point, so a run of cuts machined on from a liner's edge into the
+    body stays on that liner's strip. A cut that overlaps a liner keeps its overlap-share liner;
+    a bare-shaft cut reaching two liners' chains in one pass joins the AFT-most. Each pass reads
+    the previous pass only, so the result does not depend on input order. `buildUndercutStrips`
+    and the route's per-liner strip and cut counts all use it; the strip's chain range extends to
+    the outermost chained shoulder like any other overhang.
   - `linerStripFor(liner, assignedSpans, oalMm, padMm, segs)` — builds one `LinerStrip` for a
     liner and its assigned cuts (`assignedSpans` may be empty — used to zoom an undercut-free
     liner for authoring, in which case the chain/draw range is just the liner's own span,
@@ -491,7 +531,8 @@ data class UndercutRecord(val undercuts: List<Undercut> = emptyList())
     (widening only, so the never-narrow rule holds). PDF strips don't need this (they only ever
     see confirmed cuts, which `linerStripFor`/`clusterUndercuts` already extend for).
   - `buildUndercutStrips(spans, liners, oalMm, gapMm, padMm, segs)` — every cut overlapping a
-    liner joins that liner's `LinerStrip` (one strip per liner holding ≥1 cut); the remaining
+    liner, or chained to one that does (`assignUndercutLiners`), joins that liner's `LinerStrip`
+    (one strip per liner holding ≥1 cut); the remaining
     bare-shaft cuts cluster into `FreeStrip`s via `clusterUndercuts`. Every strip's draw range
     gets break room against `segs` (the route, the detail overlay and the PDF composer all pass
     their real surface segs). Result sorted aft → fwd by
@@ -627,7 +668,8 @@ nothing to open when the sidebar is already laid out beside the tabs.
   **on that cut's own card** — the overlay's `initialSelectedId`, which seeds the selection and
   the pager's initial page (opening on page 0 showed the strip's aft-most cut instead); the
   trailing delete icon (`testTag "undercut_delete_<id>"`) removes the cut outright,
-  confirm-free, without opening anything.
+  confirm-free, without opening anything (no snackbar on this row; the tab's top-bar Undo takes it
+  back, see "Undo").
 
 ### Add default
 `vm.addUndercut(startFromAftMm, lengthMm, reference = AFT_SET, referenceLinerId = "")` records
@@ -703,7 +745,36 @@ cuts); every other card renders stored values.
   **verbatim** (golden rule), plus `updateUndercutReference` only when the chips actually moved
   (so a card merely displaying its `LINER_*`→`AFT_SET` fallback never rewrites the stored
   reference). There is exactly **one** confirm path (`confirmDraft`), taken by both the pill's tap
-  and every auto-save-on-leave.
+  and every auto-save-on-leave. Both first **flush the focused field** (`clearFocus`), so a value
+  still in its box when the card is confirmed or left is part of what is confirmed — and only the
+  field on the card being confirmed or LEFT (the overlay tracks the card holding focus,
+  `focusedCardId`): a field just focused on the card the machinist is moving to keeps its focus.
+  The decision then reads the draft **as it stands after the flush**: the pill's Confirm re-runs
+  `undercutConfirmIssue` on it and records nothing while it fails (a typed Length that overlaps,
+  leaves the shaft or is zero — the pill recomposes to Blocked with the reason), and the leave
+  sweep evaluates every draft after the flush landed.
+- **"Past the liner edge" for a flushed edit** is asked at overlay level, because the commit or
+  close it holds up can take the card away (the add flow's card on Confirm, every card on Close):
+  after the flush the overlay runs the card's own rule (`newLinerOverhangs`, pre-flush draft or
+  baseline → flushed draft, against the strip's liner else the reference liner) and, when an end
+  newly runs off, shows the SAME non-dismissable dialog (same strings and tags,
+  `UndercutOverhangDialog`) before the Confirm, the sweep's commit of that card, or the close
+  proceeds — on either answer the value is recorded as typed. On a stored card the answer is handed
+  to the card (`overhangAnswers`), so "No" leaves its warning under the fields; the add flow's card
+  does not outlive its confirm (the recorded cut opens a new card), so there "No" is an
+  acknowledgement only and no warning carries over. The card's own question stays for ordinary
+  field commits and stays quiet while the overlay flushes (`UndercutFlushGate`).
+- **A draft's id is its map key and its card's page id.** The ONE writer (`writeDraft`) keys each
+  entry by the page id and refuses a write from a card with no page — a disposed field's late
+  blur, above all the add flow's card after its cut was recorded, which otherwise resurrected the
+  pending draft as an invisible duplicate of the cut it had become and blocked every leave with
+  "Overlaps cut 1" (on-device report). A PENDING draft with no pending page is dropped when the
+  record publishes, the leave sweep skips any draft without a page, "Keep editing" never selects
+  a card with no page, and the overlap pool (`undercutDraftPool`) never holds the cut of the card
+  the draft is held under, so a reason can never name the card it is shown on. A refused write
+  from a STORED card that carried an edit (a value typed into a card an Undo then took away)
+  raises the `UNDERCUT_DISCARDED_DRAFT_MSG` snackbar, like the stale-draft drop; the add flow's
+  card is exempt (its page goes only when it is confirmed, flush included, or cancelled).
 - **No field on this card ever reverts a typed value.** Distance, Length, the two "Extend past
   liner" fields and Measured Ø carry no validator: anything that parses lands in the draft
   verbatim and the canvas previews it (the notch pass draws the render-clamped span, so a draft
@@ -1011,7 +1082,19 @@ undimensioned); on a `LinerStrip` the chain anchors on the **liner's own edges**
 (extended only by cut overhang), so the pad between a break edge and the liner edge is never
 dimensioned. A **buried** liner edge (some previewed cut on the sheet runs past it,
 `buriedUndercutLinerEdgesMm`) is an extra chain node inserted inside the span that crosses it —
-the printed strip's `splitAtMm` rule, applied to the canvas's own stop list. Below the rail, the **strip profile** (every resolved component clipped to the draw
+the printed strip's `splitAtMm` rule, applied to the canvas's own stop list
+(`undercutCanvasRailStops`). The chain's **labels stack** (on-device report: "I do want the
+dimensions to stack"): `planUndercutCanvasRail` runs the stops' spans through the printed strip's
+ONE label planner, `layoutWearStripRail` — a value centred on its span, slid inside it when it
+fits, and a value that would overlap an already-placed one taking the next row up — and each
+label lifts one text row per row it was assigned; the line and arrowheads keep the canvas's own
+drawing (`drawUndercutDimSpan`). The plan is made before the canvas draws, off the same x map
+(`computeUndercutWindowLayout` at the drawing Box's laid-out width; every input — stops, width,
+window start and length, scale inputs, fraction style — is one `UndercutCanvasRailInputs` record
+that is itself the `remember` key, so no input can drop out of the key), and the chain band grows by
+one label row for every row past the first, so the reserved height and the drawn rows are one
+number; the rail line keeps its distance off the profile and the extra rows stack above it.
+Below the rail, the **strip profile** (every resolved component clipped to the draw
 range, liners painted last so a liner over a body reads as the surface — matching the notch
 math's max-wins envelope) with **notches** cut in, and **Ø callouts below** via the shared
 `planDiaCallouts` engine (one station per undercut at its axial centre, leader to the notch

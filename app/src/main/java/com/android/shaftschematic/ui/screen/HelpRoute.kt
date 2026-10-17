@@ -528,8 +528,15 @@ internal val helpSections: List<HelpSection> = listOf(
             HelpTopic(
                 "Record undercut sections",
                 "The Undercut Drawing records machined-below-surface spans: distance from a " +
-                    "shaft end (S.E.T.) or a liner edge, length, and measured Ø. Tap a liner " +
-                    "or highlighted section to zoom in and add cuts. Cut depth on the drawing " +
+                    "shaft end (S.E.T.), a liner edge, or — for a cut inside another — that " +
+                    "parent cut's shoulder (Parent AFT / Parent FWD), plus length and measured " +
+                    "Ø. A liner edge that a cut has been machined across into the body is no " +
+                    "longer offered; measure from the nearer S.E.T. instead. Tap a liner " +
+                    "or highlighted section to zoom in and add cuts. What you type is never " +
+                    "changed: a value that would put a cut off the shaft or partly over " +
+                    "another cut (sit fully inside it or fully clear) stays in the card, and " +
+                    "the status pill says why it cannot be saved yet. Undo and Redo sit in the " +
+                    "top bar, and deleting a cut offers Undo. Cut depth on the drawing " +
                     "is exaggerated for visibility (real cuts are hairline-thin at scale) — " +
                     "the printed Ø values are always your typed numbers. The exaggeration " +
                     "slider on the sheet only changes the drawing, never the data.",
@@ -896,7 +903,12 @@ internal val helpSections: List<HelpSection> = listOf(
                     "undercut sheet drops every fill, including the detail strips' grey liner, " +
                     "and the cut sections read from their faces and floor lines. It changes " +
                     "that one document, and it is separate from the on-screen Undercut Drawing " +
-                    "line-art style in Preview Colors.",
+                    "line-art style in Preview Colors.\n" +
+                    "• \"Liner outline\" — default on, beside the line-art row. A faint dotted " +
+                    "outline of each liner's original edges and outside diameter is drawn over " +
+                    "the cuts, so a cut that runs from the liner into the body still shows " +
+                    "where the liner was. It applies to the printed undercut sheet and the " +
+                    "Undercut Drawing screens.",
                 manualAnchor = "settings-pdf-export",
             ),
             HelpTopic(

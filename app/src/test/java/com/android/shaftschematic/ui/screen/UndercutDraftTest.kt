@@ -567,4 +567,102 @@ class UndercutDraftTest {
         assertEquals(null, com.android.shaftschematic.geom.undercutParentCandidate("beside", spans))
         assertEquals(null, com.android.shaftschematic.geom.undercutParentCandidate("relief", spans))
     }
+
+    // ── Overlap pool: a draft is never checked against its own card's cut ──
+
+    @Test
+    fun `a draft's pool excludes its own cut and keeps every other`() {
+        val all = listOf(cut("a", 100f), cut("b", 200f))
+        val pool = undercutDraftPool(all, draftOf("a", 100f), heldUnderId = "a", oalMm = 1000f)
+        assertEquals(listOf("b"), pool.map { it.id })
+    }
+
+    @Test
+    fun `a draft held under another card's id never overlaps that card`() {
+        // The stale state the on-device loop came from: a draft (here the add flow's id) on top of
+        // the very cut it duplicates. Checked against a pool holding that cut it blocks as
+        // "Overlaps cut 1" — the card it is shown on; the guard drops the self entry.
+        val all = listOf(cut("a", 100f), cut("b", 200f))
+        val stale = draftOf(PENDING_UNDERCUT_ID, 100f)
+        val pool = undercutDraftPool(all, stale, heldUnderId = "a", oalMm = 1000f)
+        assertEquals(listOf("b"), pool.map { it.id })
+        assertNull(undercutConfirmIssue(stale, 1000f, pool, mapOf("a" to 1, "b" to 2)))
+    }
+
+    @Test
+    fun `a pending draft's pool is the whole sheet`() {
+        val all = listOf(cut("a", 100f), cut("b", 200f))
+        val pool = undercutDraftPool(all, draftOf(PENDING_UNDERCUT_ID, 400f), PENDING_UNDERCUT_ID, 1000f)
+        assertEquals(listOf("a", "b"), pool.map { it.id })
+    }
+
+    // ── Detail canvas rail: labels stack instead of colliding ──
+
+    @Test
+    fun `the job's chain stacks its short labels and no two labels on a row overlap`() {
+        val raw = requireNotNull(javaClass.classLoader?.getResource("fixtures/undercut_polar_ranger_stbd.shaft"))
+            .readText()
+        val doc = com.android.shaftschematic.doc.ShaftDocCodec.decode(raw)
+        val liner = doc.spec.liners.single { it.id.startsWith("02d0b768") }
+        val linerStart = liner.startFromAftMm
+        val linerEnd = liner.startFromAftMm + liner.lengthMm
+        val spans = doc.undercutRecord.undercuts
+            .map { UndercutSpanMm(it.id, it.startFromAftMm, it.startFromAftMm + it.lengthMm) }
+            .sortedBy { it.startMm }
+        val chainStart = minOf(linerStart, spans.minOf { it.startMm })
+        val chainEnd = maxOf(linerEnd, spans.maxOf { it.endMm })
+        val buried = com.android.shaftschematic.geom.buriedUndercutLinerEdgesMm(linerStart, linerEnd, spans)
+        val stops = undercutCanvasRailStops(chainStart, chainEnd, spans, buried)
+
+        // A phone-width canvas over the strip's draw range, 26 px text (~14 px a character).
+        val drawStart = chainStart - 60f
+        val drawEnd = chainEnd + 60f
+        val lay = computeUndercutWindowLayout(
+            widthPx = 1000f, profileTopPx = 0f, profileRowHeightPx = 367f,
+            windowLengthMm = drawEnd - drawStart, maxOdMm = 254f, edgePadPx = 21f,
+        )
+        val xPx: (Float) -> Float = { mm -> lay.startPx + (mm - drawStart) * lay.pxPerMm }
+        val widthOf: (String) -> Float = { it.length * 14f }
+        val plan = planUndercutCanvasRail(stops, UnitSystem.INCHES, xPx, widthOf, textPadPx = 10f, arrowPx = 13f)
+
+        assertTrue("a colliding label must stack onto a second row", plan.any { it.labelRow >= 1 })
+        // The 0.3125 in sliver past the liner's AFT edge is one of the stacked short spans.
+        val sliver = plan.single { kotlin.math.abs((it.x1Pt - it.x0Pt) / lay.pxPerMm - 0.3125f * 25.4f) < 0.05f }
+        val aftOfSliver = plan.first { it.x1Pt <= sliver.x0Pt + 1e-3f }
+        assertTrue(sliver.labelRow != aftOfSliver.labelRow)
+        plan.groupBy { it.labelRow }.forEach { (_, row) ->
+            val boxes = row.map { r ->
+                val half = widthOf(r.label.primary) / 2f
+                (r.labelCxPt - half) to (r.labelCxPt + half)
+            }.sortedBy { it.first }
+            for (i in 1 until boxes.size) {
+                assertTrue("two labels overlap on one row", boxes[i].first >= boxes[i - 1].second)
+            }
+        }
+    }
+
+    @Test
+    fun `a window shift with unchanged stops and length re-plans the rail's x`() {
+        val base = UndercutCanvasRailInputs(
+            stops = listOf(1000f, 1030f, 1100f, 1500f),
+            unit = UnitSystem.INCHES,
+            widthPx = 1000f,
+            profileRowHeightPx = 367f,
+            edgePadPx = 21f,
+            drawStartMm = 950f,
+            windowLengthMm = 600f,
+            maxOdMm = 254f,
+            textPadPx = 10f,
+            arrowPx = 13f,
+            fractionStyle = null,
+        )
+        val shifted = base.copy(drawStartMm = 900f)
+        // The plan's remember key is the inputs record, so a moved window is a different key...
+        assertTrue(base != shifted)
+        val a = planUndercutCanvasRail(base) { it.length * 14f }
+        val b = planUndercutCanvasRail(shifted) { it.length * 14f }
+        // ...and a different plan: every span sits further right on the page.
+        assertEquals(a.size, b.size)
+        a.zip(b).forEach { (x, y) -> assertTrue(y.x0Pt > x.x0Pt) }
+    }
 }

@@ -2,6 +2,7 @@ package com.android.shaftschematic.pdf
 
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.DashPathEffect
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
@@ -13,6 +14,9 @@ import com.android.shaftschematic.geom.UndercutNotch
 import com.android.shaftschematic.geom.UndercutSpanMm
 import com.android.shaftschematic.geom.UndercutStrip
 import com.android.shaftschematic.geom.buildUndercutNotches
+import com.android.shaftschematic.geom.LinerOutlineEdge
+import com.android.shaftschematic.geom.UndercutLinerOd
+import com.android.shaftschematic.geom.linerOutlineSegments
 import com.android.shaftschematic.geom.buildUndercutStrips
 import com.android.shaftschematic.geom.buriedUndercutLinerEdgesMm
 import com.android.shaftschematic.geom.clampUndercutSpan
@@ -191,6 +195,16 @@ fun composeUndercutPdf(
     }
     fun shadeFill() = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL; color = Color.argb(40, 0, 0, 0)
+    }
+    // The liner outline (`PdfPrefs.undercutLinerOutline`): a fine grey dotted retrace of each
+    // liner's original edges over its cuts, at the dimension weight. Null = not drawn.
+    val linerOutlinePaint: Paint? = if (pdfPrefs.undercutLinerOutline) {
+        Paint(dim).apply {
+            color = Color.argb(150, 0, 0, 0)
+            pathEffect = DashPathEffect(floatArrayOf(1.5f, 3f), 0f)
+        }
+    } else {
+        null
     }
     // §7 degradation: stacked dual values only if the tightest strip on the page can carry the
     // taller rail rows AND still draw its cut — decided once, for the whole sheet.
@@ -386,6 +400,7 @@ fun composeUndercutPdf(
             c, sheetNotches, shaftCy, ::xAt, ::rPx, outline, voidFill,
             sectionCoreFill = fills.sectionCore,
         )
+        drawLinerOutlinesPdf(c, docSpec, sheetNotches, surfaceSegs, shaftCy, ::xAt, ::rPx, linerOutlinePaint)
         drawUndercutDirectionRow(
             c, text, contentLeft, contentRight,
             (shaftCy + rPx(maxDiaMm) + text.textSize + 12f).coerceAtMost(profileBottom - 2f),
@@ -449,6 +464,7 @@ fun composeUndercutPdf(
             // order — never rebuilt here, so a strip's staircase is the sheet's staircase.
             notches = sheetNotches.filter { it.id in strip.undercutIds },
             sectionCoreFill = fills.sectionCore,
+            linerOutlinePaint = linerOutlinePaint,
             dual = displayUnits.dual,
             dualStacked = dualStacked,
             // A liner edge some cut on the sheet runs past into the body takes a chain node, so
@@ -591,6 +607,52 @@ private fun surfaceSegsFromSpec(spec: ShaftSpec): List<SurfaceSeg> = buildList {
  * with no code of its own: a child notch simply arrives with its parent's DRAWN floor as its
  * surface, paints over the relief around it, and reads as the next step down the staircase.
  */
+/**
+ * The liner outline on the printed sheet — the dotted retrace of each liner's original OD and end
+ * faces over the stretches [notches] erased, mirrored about [cy], from the ONE pure builder the
+ * canvases also run ([linerOutlineSegments]). Drawn after the notch pass and before the Ø
+ * callouts and rails. A null [paint] (the pref off) draws nothing.
+ */
+private fun drawLinerOutlinesPdf(
+    c: Canvas,
+    docSpec: ShaftSpec,
+    notches: List<UndercutNotch>,
+    segs: List<SurfaceSeg>,
+    cy: Float,
+    xAt: (Float) -> Float,
+    rAt: (Float) -> Float,
+    paint: Paint?,
+) {
+    if (paint == null || notches.isEmpty()) return
+    docSpec.liners.forEach { ln ->
+        val endMm = ln.startFromAftMm + ln.lengthMm
+        val liner = UndercutLinerOd(
+            ln.id, ln.startFromAftMm, endMm, ln.odMm,
+            surface = linerSurfaceSegs(
+                ln.startFromAftMm, endMm, ln.odMm,
+                ln.shoulderOn(LinerAuthoredReference.AFT), ln.shoulderOn(LinerAuthoredReference.FWD),
+            ),
+        )
+        linerOutlineSegments(liner, notches, segs).forEach { seg ->
+            val r0 = rAt(seg.dia0Mm)
+            val r1 = rAt(seg.dia1Mm)
+            when (seg.edge) {
+                LinerOutlineEdge.SURFACE -> {
+                    val x0 = xAt(seg.x0Mm)
+                    val x1 = xAt(seg.x1Mm)
+                    c.drawLine(x0, cy - r0, x1, cy - r0, paint)
+                    c.drawLine(x0, cy + r0, x1, cy + r0, paint)
+                }
+                else -> {
+                    val x = xAt(seg.x0Mm)
+                    c.drawLine(x, cy - r1, x, cy - r0, paint)
+                    c.drawLine(x, cy + r0, x, cy + r1, paint)
+                }
+            }
+        }
+    }
+}
+
 private fun drawUndercutNotches(
     c: Canvas,
     notches: List<UndercutNotch>,
@@ -744,6 +806,8 @@ private fun drawUndercutDetailStrip(
     notches: List<UndercutNotch>,
     /** Whether the section cores take their light fill — [undercutPdfFillPlan]'s decision. */
     sectionCoreFill: Boolean,
+    /** The liner outline's dotted paint; null when `PdfPrefs.undercutLinerOutline` is off. */
+    linerOutlinePaint: Paint? = null,
     /** [unit] is already this strip's resolved unit (liner override, else the document unit);
      *  this only carries the sheet-wide dual (inline "primary [secondary]") flag through. */
     dual: Boolean = false,
@@ -765,8 +829,12 @@ private fun drawUndercutDetailStrip(
         strip.drawStartMm, strip.drawEndMm, strip.chainStartMm, strip.chainEndMm,
         stripLeft, stripRight, shaftExtentMm,
     )
+    // The strip's own cuts only: another strip's cut in this window draws as plain stock here.
+    val memberCutSpans = strip.undercutIds.mapNotNull { id ->
+        clampedById[id]?.takeIf { !it.isEmpty }?.let { cs -> UndercutSpanMm(id, cs.startMm, cs.endMm) }
+    }
     val (drawStartMm, drawEndMm) =
-        withUndercutBreakRoom(drawRange.startMm, drawRange.endMm, segs, shaftExtentMm)
+        withUndercutBreakRoom(drawRange.startMm, drawRange.endMm, segs, shaftExtentMm, memberCutSpans)
     val drawLengthMm = drawEndMm - drawStartMm
     if (drawLengthMm <= 0f) return
 
@@ -887,6 +955,7 @@ private fun drawUndercutDetailStrip(
         c, notches, cy, ::xAtStrip, ::rStrip, outline, voidFill,
         sectionCoreFill = sectionCoreFill,
     )
+    drawLinerOutlinesPdf(c, docSpec, notches, segs, cy, ::xAtStrip, ::rStrip, linerOutlinePaint)
 
     // ── Measured-Ø callouts: leader from each notch floor down to the printed value ──
     if (diaPlan != null) {

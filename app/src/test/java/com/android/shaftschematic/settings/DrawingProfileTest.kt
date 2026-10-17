@@ -113,7 +113,7 @@ class DrawingProfileTest {
 
         listOf(
             "tieringMode", "showComponentTitles", "shadedBodies", "shadedTapers", "shadedLiners",
-            "undercutLineArt", "curveLoHeightIn", "curveHiHeightIn", "sBreakThresholdFrac", "arrowSizePt",
+            "undercutLineArt", "undercutLinerOutline", "curveLoHeightIn", "curveHiHeightIn", "sBreakThresholdFrac", "arrowSizePt",
             "threadSlant", "threadDensity", "fractionStyle", "outputFont", "dualUnitLayout", "wearTraceDepthFrac", "wearBandShadeFrac",
             "wearJoinGapMaxMm", "lineThicknessScale",
         ).forEach { field ->
@@ -144,6 +144,16 @@ class DrawingProfileTest {
         assertEquals(THREAD_DENSITY_DEFAULT, profile.toPdfPrefs().threadDensity, 1e-6f)
         // Same posture for the undercut sheet's print line art: an older preset keeps shading.
         assertFalse(profile.toPdfPrefs().undercutLineArt)
+        // The liner outline ships on, so an older preset draws it.
+        assertTrue(profile.toPdfPrefs().undercutLinerOutline)
+    }
+
+    @Test
+    fun `undercut liner outline survives a round trip`() {
+        val profile = DrawingProfile.of(PdfPrefs(undercutLinerOutline = false), lineThicknessScale = 1f)
+        val decoded = decodeDrawingProfiles(encodeDrawingProfiles(mapOf("No outline" to profile)))
+
+        assertFalse(decoded.getValue("No outline").toPdfPrefs().undercutLinerOutline)
     }
 
     @Test

@@ -151,6 +151,7 @@ fun SettingsRoute(
     val pdfShadedTapers by vm.pdfShadedTapers.collectAsState()
     val pdfShadedLiners by vm.pdfShadedLiners.collectAsState()
     val pdfUndercutLineArt by vm.pdfUndercutLineArt.collectAsState()
+    val pdfUndercutLinerOutline by vm.pdfUndercutLinerOutline.collectAsState()
     val pdfShadeExplicitBodiesOnly by vm.pdfShadeExplicitBodiesOnly.collectAsState()
     val pdfExportMode by vm.pdfExportMode.collectAsState()
     val lineThicknessScale by vm.lineThicknessScale.collectAsState()
@@ -959,6 +960,22 @@ fun SettingsRoute(
                             Text(
                                 "The printed undercut sheet drops every fill; the cut sections " +
                                     "read from their faces and floor lines.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = pdfUndercutLinerOutline,
+                            onCheckedChange = { vm.setPdfUndercutLinerOutline(it) },
+                            modifier = Modifier.testTag("pdf_undercut_liner_outline"),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Column {
+                            Text("Undercut drawing: liner outline")
+                            Text(
+                                UNDERCUT_LINER_OUTLINE_CAPTION,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )

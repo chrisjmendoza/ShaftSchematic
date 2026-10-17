@@ -107,6 +107,7 @@ class PdfOptionsSectionsTest {
         rule.onNodeWithTag("options_shade_expander").performClick()
 
         rule.onNodeWithTag("pdf_undercut_line_art").assertExists()
+        rule.onNodeWithTag("pdf_undercut_liner_outline").assertExists()
     }
 
     @Test
@@ -116,6 +117,7 @@ class PdfOptionsSectionsTest {
 
         rule.onNodeWithText("Liners").assertExists()
         rule.onNodeWithTag("pdf_undercut_line_art").assertDoesNotExist()
+        rule.onNodeWithTag("pdf_undercut_liner_outline").assertDoesNotExist()
     }
 
     @Test

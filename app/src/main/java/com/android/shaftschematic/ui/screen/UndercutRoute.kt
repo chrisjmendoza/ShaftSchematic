@@ -76,7 +76,7 @@ import com.android.shaftschematic.geom.UndercutLinerSpan
 import com.android.shaftschematic.geom.UndercutSpanMm
 import com.android.shaftschematic.geom.UndercutStrip
 import com.android.shaftschematic.geom.UndercutWindow
-import com.android.shaftschematic.geom.assignUndercutLiner
+import com.android.shaftschematic.geom.assignUndercutLiners
 import com.android.shaftschematic.geom.buildUndercutNotches
 import com.android.shaftschematic.geom.buildUndercutStrips
 import com.android.shaftschematic.geom.clampUndercutSpan
@@ -104,6 +104,7 @@ import com.android.shaftschematic.ui.drawing.render.ShaftRenderer
 import com.android.shaftschematic.ui.resolved.bodyBlends
 import com.android.shaftschematic.ui.resolved.surfaceSegsFrom
 import com.android.shaftschematic.ui.util.exportPdfGate
+import com.android.shaftschematic.ui.theme.SheetInk
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.addUndercut
 import com.android.shaftschematic.ui.viewmodel.removeUndercut
@@ -183,6 +184,9 @@ fun UndercutRoute(
     // Print line art for THIS document: it suppresses every fill on the sheet, so it is both an
     // options-sheet control and a preview re-render key.
     val pdfUndercutLineArt by vm.pdfUndercutLineArt.collectAsState()
+    // The dotted liner outline over the cuts: a preview re-render key, an options-sheet control,
+    // and read by the overview canvas and the detail overlay alike.
+    val pdfUndercutLinerOutline by vm.pdfUndercutLinerOutline.collectAsState()
     val pdfFractionStyle   by vm.pdfFractionStyle.collectAsState()
     val pdfOutputFont      by vm.pdfOutputFont.collectAsState()
     val pdfThreadSlant     by vm.pdfThreadSlant.collectAsState()
@@ -284,6 +288,7 @@ fun UndercutRoute(
         )
     }
     val linerSpans = remember(resolvedComponents) { linerSpansOf(resolvedComponents) }
+    val linerOds = remember(resolvedComponents) { linerOdsOf(resolvedComponents) }
     val spans = remember(undercutRecord, oalMm) {
         undercutRecord.undercuts.map { u ->
             val c = clampUndercutSpan(u.startFromAftMm, u.lengthMm, oalMm)
@@ -296,15 +301,18 @@ fun UndercutRoute(
     val freeWindows = remember(strips) {
         strips.filterIsInstance<UndercutStrip.FreeStrip>().map { it.window }
     }
-    val cutCountByLiner = remember(spans, linerSpans) {
-        spans.mapNotNull { assignUndercutLiner(it, linerSpans) }.groupingBy { it }.eachCount()
+    // Each cut's liner, chained cuts included — the assignment `buildUndercutStrips` makes.
+    val linerOfCut = remember(spans, linerSpans) { assignUndercutLiners(spans, linerSpans) }
+    val cutCountByLiner = remember(linerOfCut) {
+        linerOfCut.values.filterNotNull().groupingBy { it }.eachCount()
     }
 
     // One liner's strip, cuts included — the same construction `buildUndercutStrips` uses, so a
     // liner tapped with zero cuts and the same liner tapped later with three read identically.
-    fun stripForLiner(liner: UndercutLinerSpan): UndercutStrip.LinerStrip = linerStripFor(
-        liner, spans.filter { assignUndercutLiner(it, linerSpans) == liner.id }, oalMm, segs = segs,
-    )
+    fun stripForLiner(liner: UndercutLinerSpan): UndercutStrip.LinerStrip {
+        val members = spans.filter { linerOfCut[it.id] == liner.id }
+        return linerStripFor(liner, members, oalMm, segs = segs, cutSpans = members)
+    }
 
     // An anchor that no longer resolves (the undercut was deleted, the liner removed, or the
     // shaft shrank past the cut) simply yields no overlay — an anchor is never auto-cleared,
@@ -363,7 +371,7 @@ fun UndercutRoute(
     // pdfThreadDensity, which reach the hatch through ThreadHatchStyle.
     LaunchedEffect(showPreview, spec, unit, resolvedComponents,
                    lineThicknessScale, pdfShadedBodies, pdfShadedTapers, pdfShadedLiners,
-                   pdfUndercutLineArt,
+                   pdfUndercutLineArt, pdfUndercutLinerOutline,
                    undercutRecord, blankDraft, pdfFractionStyle, pdfOutputFont, pdfThreadSlant, unitOverrides,
                    dualUnits, pdfDualUnitLayout, pdfThreadDensity) {
         if (!showPreview) { previewBitmap = null; return@LaunchedEffect }
@@ -403,6 +411,8 @@ fun UndercutRoute(
     val linerFillArgb  = undercutStyle.linerFill().toArgb()
     val hatchArgb      = Color.Black.copy(alpha = 0.55f).toArgb()
     val outlineColor   = Color.Black
+    // The liner outline's fixed ink: sheet black, dimmed — a retrace, never a component edge.
+    val linerOutlineColor = SheetInk.Outline.copy(alpha = LINER_OUTLINE_CANVAS_ALPHA)
     val tapTintColor   = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
     val tapBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.65f)
     val badgeColor     = MaterialTheme.colorScheme.primary
@@ -508,6 +518,18 @@ fun UndercutRoute(
                         strokeWidthPx = 1.5f,
                         sectionFillColor = undercutStyle.sectionFill(),
                     )
+                    if (pdfUndercutLinerOutline) {
+                        drawLinerOutlines(
+                            liners = linerOds,
+                            notches = notches,
+                            segs = segs,
+                            xPx = { mm -> layout.xPx(mm) },
+                            rPx = { dia -> layout.rPx(dia) },
+                            cy = layout.centerlineYPx,
+                            color = linerOutlineColor,
+                            strokeWidthPx = 1.dp.toPx(),
+                        )
+                    }
                     drawUndercutStripAffordances(
                         layout = layout,
                         liners = linerSpans,
@@ -806,6 +828,7 @@ fun UndercutRoute(
                     // here and nowhere else.
                     showUndercutLineArt = true,
                     undercutLineArt = pdfUndercutLineArt,
+                    undercutLinerOutline = pdfUndercutLinerOutline,
                     vm = vm,
                     fractionStyle = pdfFractionStyle,
                     hasThreads = hasDrawnThreads(spec),
@@ -853,6 +876,7 @@ fun UndercutRoute(
             },
             onClose = { openOverlay(linerId = null, undercutId = null, selectId = null) },
             onRestoreUndercut = vm::restoreUndercut,
+            linerOutline = pdfUndercutLinerOutline,
             canUndo = canUndo,
             canRedo = canRedo,
             onUndo = vm::undoEdit,

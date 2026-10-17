@@ -4,6 +4,7 @@ import com.android.shaftschematic.geom.NOTCH_FACE_MIN_STEP_PX
 import com.android.shaftschematic.geom.UNDERCUT_BREAK_AMP_FRAC_OF_R
 import com.android.shaftschematic.geom.UNDERCUT_SECTION_FILL_ALPHA
 import com.android.shaftschematic.geom.undercutBreakRoomMm
+import com.android.shaftschematic.geom.UNDERCUT_WINDOW_PAD_MM
 import com.android.shaftschematic.geom.withUndercutBreakRoom
 import com.android.shaftschematic.geom.SurfaceSeg
 import com.android.shaftschematic.geom.UndercutLinerSpan
@@ -470,7 +471,8 @@ class UndercutStripSvgPreviewTest {
             strip.drawStartMm, strip.drawEndMm, strip.chainStartMm, strip.chainEndMm,
             stripLeft, stripRight, oalMm,
         )
-        val (drawStartMm, drawEndMm) = withUndercutBreakRoom(range.startMm, range.endMm, segs, oalMm)
+        val memberSpans = liveSpans.filter { it.id in strip.undercutIds }
+        val (drawStartMm, drawEndMm) = withUndercutBreakRoom(range.startMm, range.endMm, segs, oalMm, memberSpans)
         val drawLenMm = drawEndMm - drawStartMm
         val h = computeWearStripHorizontalLayout(
             stripLeft, stripRight, drawLenMm, stubWidthPt = UNDERCUT_STRIP_EDGE_INSET_PT,
@@ -798,8 +800,12 @@ class UndercutStripSvgPreviewTest {
         )
         File(outDir, "d-bareshaft-freestrip-gridcell.svg").writeText(d.svg)
         val dFree = d.strip as UndercutStrip.FreeStrip
-        assertEquals("a free strip dimensions its whole window", dFree.drawStartMm, dFree.chainStartMm, 1e-3f)
-        assertEquals(dFree.drawEndMm, dFree.chainEndMm, 1e-3f)
+        // The window (the chain) stays the padded cluster; the draw range grows outward only as
+        // far as a window-end break needs to clear the cuts' outer shoulders.
+        assertTrue("a free strip's draw range never cuts into its window", dFree.drawStartMm <= dFree.chainStartMm + 1e-3f)
+        assertTrue(dFree.drawEndMm >= dFree.chainEndMm - 1e-3f)
+        assertEquals(240f - UNDERCUT_WINDOW_PAD_MM, dFree.chainStartMm, 1e-3f)
+        assertEquals(380f + UNDERCUT_WINDOW_PAD_MM, dFree.chainEndMm, 1e-3f)
         assertTrue(d.chainCoversStrip)
         assertTrue(d.hasTotal)
         // The window edge IS the chain datum here, so all of the drawn end air comes from the pt

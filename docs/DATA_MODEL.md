@@ -451,8 +451,10 @@ can never affect geometry resolution:
   machined-below-surface span stored in **shaft space** (`startFromAftMm` + `lengthMm`) — a
   cut may sit inside a liner or straddle a component edge, so undercuts are deliberately
   **not** component-keyed: there are no orphans and nothing is pruned at decode. The
-  authored Distance reference (AFT/FWD SET or a reference liner's edge) is display-only
-  metadata; canonical geometry never moves on a reference switch. `diaMm` is a typed
+  authored Distance reference (AFT/FWD SET, a reference liner's edge, or — for a cut sitting fully
+  inside another — that parent cut's AFT/FWD shoulder: `UndercutReference.PARENT_AFT`/`PARENT_FWD`
+  with the parent's id in the additive `Undercut.referenceCutId`, empty for every other reference)
+  is display-only metadata; canonical geometry never moves on a reference switch. `diaMm` is a typed
   measurement stored verbatim (`0` = placed-but-empty, never printed).
   `exaggerationFrac` (`0..UNDERCUT_EXAGGERATION_MAX_FRAC` = 0.25, default 0.25) is a
   per-sheet **drawn-depth** exaggeration only — printed Ø values stay the stored numbers.

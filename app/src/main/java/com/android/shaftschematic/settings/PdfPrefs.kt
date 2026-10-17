@@ -161,6 +161,14 @@ data class PdfPrefs(
      */
     val undercutLineArt: Boolean = false,
     /**
+     * Liner outline on the undercut document (on-device request: a cut split between the body
+     * and a liner left no sign of where the liner had been): a fine DOTTED retrace of each
+     * liner's original OD and end faces over the stretches its cuts erased
+     * (`geom/LinerOutlineMath.kt`). Part of the drawing look, so profiles capture it; the undercut
+     * PDF and both undercut canvases read it. On by default.
+     */
+    val undercutLinerOutline: Boolean = true,
+    /**
      * Default sizing-curve anchor heights (paper inches of drawn height at 100% on the
      * "Shaft height" slider): a 4" shaft draws [curveLoHeightIn] tall, an 8" shaft
      * [curveHiHeightIn]; sizes between and beyond follow the line

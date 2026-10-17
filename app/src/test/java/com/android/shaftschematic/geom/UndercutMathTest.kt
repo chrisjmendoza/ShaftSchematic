@@ -527,7 +527,8 @@ class UndercutMathTest {
         // The break cannot sit 10.4 mm short of the taper face: it moves back into the taper
         // with a full room before the face; the window (and its dimensioned pad) stays put.
         assertEquals(515f - undercutBreakRoomMm(210f), free.drawStartMm, 1e-3f)
-        assertEquals(600f + UNDERCUT_WINDOW_PAD_MM, free.drawEndMm, 1e-3f)
+        // The FWD break clears the cut's own FWD shoulder by the same room, never less than the pad.
+        assertEquals(600f + max(UNDERCUT_WINDOW_PAD_MM, undercutBreakRoomMm(210f)), free.drawEndMm, 1e-3f)
     }
 
     // ── Validation ──
@@ -1568,5 +1569,140 @@ class UndercutMathTest {
             parentStartMm = 600f, parentEndMm = 800f,
         )
         assertEquals(660f, aft, 1e-4f)
+    }
+
+    // ── The on-device job (fixture `undercut_polar_ranger_stbd.shaft`) ──
+
+    @Test
+    fun `the on-device job's five cuts are each clear or nested against every other`() {
+        val raw = requireNotNull(javaClass.classLoader?.getResource("fixtures/undercut_polar_ranger_stbd.shaft"))
+            .readText()
+        val cuts = com.android.shaftschematic.doc.ShaftDocCodec.decode(raw).undercutRecord.undercuts
+        assertEquals(5, cuts.size)
+        val spans = cuts.map { UndercutSpanMm(it.id, it.startFromAftMm, it.startFromAftMm + it.lengthMm) }
+        cuts.forEach { u ->
+            val others = spans.filter { it.id != u.id }
+            assertNull(
+                "cut ${u.id} must not be blocked against the others",
+                undercutOverlapIssue(u.startFromAftMm, u.lengthMm, others),
+            )
+            assertNull(undercutOverlapPartnerId(u.startFromAftMm, u.lengthMm, others))
+            assertTrue(undercutPartialOverlapsMm(u.startFromAftMm, u.lengthMm, others).isEmpty())
+        }
+        // E ends where its parent C starts (touch within eps), D sits inside C.
+        val e = spans.single { it.id.startsWith("de3bedb8") }
+        val c = spans.single { it.id.startsWith("ce3aa5f1") }
+        val d = spans.single { it.id.startsWith("748c4863") }
+        assertEquals(c.startMm, e.endMm, UNDERCUT_TOUCH_EPS_MM)
+        assertTrue(undercutSpanContains(c, d))
+    }
+
+    // ── Chained cuts ride their liner's strip; window-end breaks clear cut shoulders ──
+
+    private fun jobFixture() = com.android.shaftschematic.doc.ShaftDocCodec.decode(
+        requireNotNull(javaClass.classLoader?.getResource("fixtures/undercut_polar_ranger_stbd.shaft")).readText(),
+    )
+
+    private fun jobSpans(): List<UndercutSpanMm> = jobFixture().undercutRecord.undercuts
+        .map { UndercutSpanMm(it.id, it.startFromAftMm, it.startFromAftMm + it.lengthMm) }
+
+    private fun jobLiners(): List<UndercutLinerSpan> = jobFixture().spec.liners
+        .map { UndercutLinerSpan(it.id, it.startFromAftMm, it.startFromAftMm + it.lengthMm) }
+
+    private fun jobSegs(): List<SurfaceSeg> {
+        val spec = jobFixture().spec
+        val resolved = com.android.shaftschematic.ui.resolved.resolveComponents(spec)
+        return com.android.shaftschematic.ui.resolved.surfaceSegsFrom(
+            resolved, com.android.shaftschematic.ui.resolved.bodyBlends(spec, resolved),
+        )
+    }
+
+    private val fwdLinerPrefix = "02d0b768"
+
+    @Test
+    fun `the job's edge-crossing cuts ride the FWD liner's strip`() {
+        val spec = jobFixture().spec
+        val strips = buildUndercutStrips(jobSpans(), jobLiners(), spec.overallLengthMm, segs = jobSegs())
+        val strip = strips.filterIsInstance<UndercutStrip.LinerStrip>()
+            .single { it.linerId.startsWith(fwdLinerPrefix) }
+        assertEquals(jobSpans().map { it.id }.toSet(), strip.undercutIds.toSet())
+        assertTrue(strips.none { it is UndercutStrip.FreeStrip })
+    }
+
+    @Test
+    fun `a body cut chained to a liner's cut joins that liner, a far one does not`() {
+        val spans = jobSpans()
+        val e = spans.single { it.id.startsWith("de3bedb8") }
+        val touching = UndercutSpanMm("touch", e.startMm - 40f, e.startMm)
+        val chained = UndercutSpanMm("chain", touching.startMm - 30f, touching.startMm + 0.005f)
+        val far = UndercutSpanMm("far", e.startMm - 1000f, e.startMm - 980f)
+        val all = spans + listOf(far, chained, touching)
+        val linerOf = assignUndercutLiners(all, jobLiners())
+        val fwdLiner = jobLiners().single { it.id.startsWith(fwdLinerPrefix) }.id
+        assertEquals(fwdLiner, linerOf["touch"])
+        assertEquals(fwdLiner, linerOf["chain"])
+        assertNull(linerOf["far"])
+
+        val oal = jobFixture().spec.overallLengthMm
+        val strip = buildUndercutStrips(all, jobLiners(), oal, segs = jobSegs())
+            .filterIsInstance<UndercutStrip.LinerStrip>().single { it.linerId == fwdLiner }
+        assertTrue("touch" in strip.undercutIds && "chain" in strip.undercutIds)
+        assertTrue("far" !in strip.undercutIds)
+        assertEquals(chained.startMm, strip.chainStartMm, 1e-3f)
+    }
+
+    @Test
+    fun `the job's strip clears A's FWD shoulder and E's AFT shoulder by the break room`() {
+        val oal = jobFixture().spec.overallLengthMm
+        val segs = jobSegs()
+        val strip = buildUndercutStrips(jobSpans(), jobLiners(), oal, segs = segs)
+            .filterIsInstance<UndercutStrip.LinerStrip>().single { it.linerId.startsWith(fwdLinerPrefix) }
+        val a = jobSpans().single { it.id.startsWith("eb9709da") }
+        val e = jobSpans().single { it.id.startsWith("de3bedb8") }
+        val bodyDia = 228.6f
+        assertTrue(strip.drawEndMm - a.endMm >= undercutBreakRoomMm(bodyDia) - 0.01f)
+        assertTrue(e.startMm - strip.drawStartMm >= undercutBreakRoomMm(bodyDia) - 0.01f)
+    }
+
+    @Test
+    fun `a window end inside a cut moves outward past the cut's shoulder`() {
+        val segs = listOf(seg(0f, 2000f, 228.6f))
+        val room = undercutBreakRoomMm(228.6f)
+        val cut = listOf(UndercutSpanMm("c", 1000f, 1100f))
+        // Without cuts the body hosts the break where it is.
+        assertEquals(1050f to 1900f, withUndercutBreakRoom(1050f, 1900f, segs, 2000f))
+        val (s, _) = withUndercutBreakRoom(1050f, 1900f, segs, 2000f, cut)
+        assertEquals(1000f - room, s, 1e-3f)
+        val (_, e) = withUndercutBreakRoom(100f, 1050f, segs, 2000f, cut)
+        assertEquals(1100f + room, e, 1e-3f)
+    }
+
+    @Test
+    fun `a window end within the room of a cut's shoulder moves outward to clear it`() {
+        val segs = listOf(seg(0f, 2000f, 228.6f))
+        val room = undercutBreakRoomMm(228.6f)
+        val cut = listOf(UndercutSpanMm("c", 1000f, 1100f))
+        val (s, _) = withUndercutBreakRoom(1000f - room * 0.5f, 1900f, segs, 2000f, cut)
+        assertEquals(1000f - room, s, 1e-3f)
+        val (_, e) = withUndercutBreakRoom(100f, 1100f + room * 0.5f, segs, 2000f, cut)
+        assertEquals(1100f + room, e, 1e-3f)
+        // Already clear: unchanged.
+        assertEquals(800f to 1300f, withUndercutBreakRoom(800f, 1300f, segs, 2000f, cut))
+    }
+
+    @Test
+    fun `a liner strip's window is not walked past another strip's cut`() {
+        val liner = UndercutLinerSpan("L", 1000f, 1500f)
+        val segs = listOf(seg(0f, 1000f, 228.6f), seg(1000f, 1500f, 254f), seg(1500f, 3000f, 228.6f))
+        val own = UndercutSpanMm("own", 1100f, 1200f)
+        // A bare-shaft cut in the strip's FWD pad, clear of the liner's chain (not touching it).
+        val foreign = UndercutSpanMm("foreign", 1510f, 1530f)
+        val strips = buildUndercutStrips(listOf(own, foreign), listOf(liner), 3000f, segs = segs)
+        val ls = strips.filterIsInstance<UndercutStrip.LinerStrip>().single()
+        assertEquals(listOf("own"), ls.undercutIds)
+        // The FWD end clears the liner face by the room and is not walked on past the foreign
+        // cut's shoulder (which would put it at 1530 + room).
+        assertEquals(1500f + max(UNDERCUT_WINDOW_PAD_MM, undercutBreakRoomMm(228.6f)), ls.drawEndMm, 1e-3f)
+        assertTrue(strips.any { it is UndercutStrip.FreeStrip && "foreign" in it.undercutIds })
     }
 }

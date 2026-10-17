@@ -8,6 +8,36 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-16
 
+### fix(undercut): a card can no longer be told it overlaps itself; cuts past the liner own the window; liner outline; stacked rail labels
+
+- **Self-overlap, and a Ø that went missing** — a liner page could show "Overlaps cut 1" on
+  card 1 and block every leave (on-device report with a screen recording and the saved job).
+  Cause: a field still holding focus on the "New undercut" card committed AFTER that card was
+  gone, resurrecting an invisible pending draft — checked against the recorded copy of itself on
+  every leave — and the value in that field (the Ø) never reached the record. Confirm and every
+  leave now flush the focused field first, so a value still in its box is part of what is saved;
+  a draft without a page is refused and dropped; a draft's id always equals its card's page id;
+  and the overlap pool can never contain the card's own cut. Regression tests replay the add,
+  undo, delete-and-restore and discard sequences on the reported job's own file
+  (`fixtures/undercut_polar_ranger_stbd.shaft`). The job's 1 1/4" cut will need its Ø re-entered.
+- **Cuts past the liner own the window** — a cut chained to a liner's cuts (touching, even if it
+  lies mostly in the body) belongs to that liner's strip; the window covers it and the S-break
+  keeps its room from the cut's outer shoulder, so a cut never runs into a break (on-device
+  request). Chain datums extend to the outermost chained shoulder.
+- **Liner outline** — a faint dotted outline of the liner's original edges and OD is drawn over
+  the cuts on the canvas and on the printed strip, so a cut split between body and liner reads
+  as such afterwards (on-device request). One app-wide look toggle, "Liner outline", on the
+  Undercut options sheet and in Settings → Drawing, default on; theme-independent sheet ink.
+- **Stacked rail labels on the canvas** — the on-screen rail now staggers labels that would
+  collide onto a second row, the printed sheet's rule (on-device report: labels piled up over
+  several short spans).
+- From the batch's own review: Confirm re-checks the draft after the focused field is flushed,
+  so a value typed and confirmed in one motion that overlaps, leaves the shaft or zeroes the
+  length is blocked rather than recorded; the flush touches only the card being left; the
+  "Past the liner edge" question is still asked when the overhang arrives through that flush;
+  a typed value refused because its card vanished under an Undo is announced; the window's break
+  room clears the strip's own cuts only; the liner outline follows a shouldered liner end.
+
 ### fix(undercut): no spike where two butted cuts meet
 
 - Two top-level cuts butted end to end with different floors each drew a section face from
@@ -63,7 +93,7 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
   (on-device report: "undercut inputs are not sacred and are getting modified on error").
 - App-wide, a number field that cannot accept a value still restores the previous one but now
   says exactly what it did — "20 not applied — Undercut extends past the shaft's FWD end" — in red
-  under the field until the next focus or edit; a parse failure reads "… not applied — not a
+  under the field until the field is edited; a parse failure reads "… not applied — not a
   number", and stays until you edit the field. The restored value is now the last COMMITTED one:
   the field used to put back the last keystroke that merely parsed, so a rejected value could stay
   in the box with nothing behind it, and a blank entry could show a number the card never received.

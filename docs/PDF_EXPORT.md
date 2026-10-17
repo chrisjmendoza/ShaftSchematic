@@ -801,6 +801,14 @@ offered on that one options sheet; it is part of the drawing LOOK and rides Draw
 surfaces, neither reading the other, because a preview style never leaks into a composer
 (`docs/contracts/Appearance.md`).
 
+**Undercut drawing: liner outline** (`PdfPrefs.undercutLinerOutline`, default `true`; Settings →
+PDF Export and the undercut preview's options sheet under the line-art row, testTag
+`pdf_undercut_liner_outline`): a faint dotted retrace of each liner's original OD and end faces
+over the stretches the cuts erased, on the main profile and the detail strips, so a cut split
+between body and liner still shows where the liner was. One pure builder
+(`geom/LinerOutlineMath.kt`), part of the drawing LOOK (rides Drawing profiles), and like line art
+it reaches only this composer. See `docs/contracts/UndercutDrawing.md`.
+
 **Direct print** (`util/PdfPrint.kt`, `printShaftPdfPage`) wraps the same composers in a
 `PrintDocumentAdapter` (US Letter landscape, 1 page) and hands them to the Android print
 framework. A print and an export of the same document are composed by the same call and are
@@ -892,7 +900,8 @@ gated off by what their composer actually reads (a section left with nothing is 
   form draws no whole-shaft profile, so none of the sizing/compression/bubble controls
   apply, and it has no Shaft section — plus the one row nothing else gets: **"Undercut
   drawing: line art (no shading)"** (`showUndercutLineArt = true`) at the foot of the shade
-  group, since `PdfPrefs.undercutLineArt` reaches this composer alone.
+  group, since `PdfPrefs.undercutLineArt` reaches this composer alone — and **"Liner outline"**
+  beneath it, same reasoning for `PdfPrefs.undercutLinerOutline`.
 
 Every instance keeps Lines & text (Line thickness + Fractions ungated — every document here
 prints lengths), Shade in Components and Units (ungated) at their fixed spots in the order;
