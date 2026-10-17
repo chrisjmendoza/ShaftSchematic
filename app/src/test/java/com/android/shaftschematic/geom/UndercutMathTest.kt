@@ -586,15 +586,12 @@ class UndercutMathTest {
     }
 
     @Test
-    fun `a butt-before preset on a long shaft clears the overlap check`() {
+    fun `an end-at-start-of preset on a long shaft clears the overlap check`() {
         // 12 m out, one Float ulp is ~1e-3 mm — the old touch slop — so the preset's own
         // `other.start - L` then `start + L` round trip could land inside the neighbour.
         val others = listOf(UndercutSpanMm("other", 12_000.37f, 12_254.37f))
         val lengthMm = 254f
-        val start = undercutStartButting(
-            otherStartMm = 12_000.37f, otherEndMm = 12_254.37f,
-            draftStartMm = 11_000f, draftLengthMm = lengthMm,
-        )
+        val start = undercutEndAtStartOf(otherStartMm = 12_000.37f, lengthMm = lengthMm)
         assertNull(undercutOverlapIssue(canonicalStartMm = start, lengthMm = lengthMm, otherSpans = others))
         // And with a drift larger than one ulp on the shared edge.
         assertNull(
@@ -1284,39 +1281,75 @@ class UndercutMathTest {
     /** The pad parameter is mm in shaft space; named helper only for test readability. */
     private fun padPx(mm: Float): Float = mm
 
-    // ── Butt-against preset ──
+    // ── Butt-against presets ──
 
     @Test
-    fun `butting decides after or before by midpoints`() {
-        // Other cut 100..150 (mid 125). A draft whose midpoint is FWD of it goes after.
-        assertTrue(undercutButtsAfter(100f, 150f, draftStartMm = 200f, draftLengthMm = 20f))
-        // A draft whose midpoint is AFT of it goes before — even one that overlaps its AFT end.
-        assertFalse(undercutButtsAfter(100f, 150f, draftStartMm = 40f, draftLengthMm = 20f))
-        assertFalse(undercutButtsAfter(100f, 150f, draftStartMm = 90f, draftLengthMm = 30f))
-        // Midpoints decide, not starts: a long draft starting AFT of the other but centred FWD.
-        assertTrue(undercutButtsAfter(100f, 150f, draftStartMm = 80f, draftLengthMm = 200f))
+    fun `start at end of puts the draft's AFT end on the other cut's FWD end`() {
+        assertEquals(150f, undercutStartAtEndOf(otherEndMm = 150f), 0f)
     }
 
     @Test
-    fun `butting after starts the draft at the other cut's end`() {
-        assertEquals(150f, undercutStartButting(100f, 150f, draftStartMm = 300f, draftLengthMm = 20f), 0f)
-    }
-
-    @Test
-    fun `butting before ends the draft at the other cut's start`() {
-        assertEquals(80f, undercutStartButting(100f, 150f, draftStartMm = 10f, draftLengthMm = 20f), 0f)
+    fun `end at start of puts the draft's FWD end on the other cut's AFT end`() {
+        assertEquals(80f, undercutEndAtStartOf(otherStartMm = 100f, lengthMm = 20f), 0f)
     }
 
     @Test
     fun `a butted draft touches its neighbour and clears the overlap check`() {
         val others = listOf(UndercutSpanMm("other", 100f, 150f))
-        val after = undercutStartButting(100f, 150f, draftStartMm = 140f, draftLengthMm = 30f)
-        assertNull(undercutOverlapIssue(after, 30f, others))
-        val before = undercutStartButting(100f, 150f, draftStartMm = 90f, draftLengthMm = 30f)
-        assertNull(undercutOverlapIssue(before, 30f, others))
+        assertNull(undercutOverlapIssue(undercutStartAtEndOf(150f), 30f, others))
+        assertNull(undercutOverlapIssue(undercutEndAtStartOf(100f, 30f), 30f, others))
         // Both started out intruding — the preset is what made them clear.
         assertNotNull(undercutOverlapIssue(140f, 30f, others))
         assertNotNull(undercutOverlapIssue(90f, 30f, others))
+    }
+
+    // ── Naming the overlap partner ──
+
+    @Test
+    fun `the overlap partner is the first cut the span partially overlaps`() {
+        val others = listOf(
+            UndercutSpanMm("clear", 0f, 50f),
+            UndercutSpanMm("host", 100f, 600f),
+            UndercutSpanMm("hit", 450f, 550f),
+        )
+        // Nested in "host", partially into "hit": only "hit" blocks.
+        assertEquals("hit", undercutOverlapPartnerId(500f, 80f, others))
+        assertEquals("hit", undercutOverlapPartnerId(500f, 100f, others))
+        assertNull(undercutOverlapPartnerId(200f, 50f, others))
+        assertNull(undercutOverlapPartnerId(50f, 50f, others))
+    }
+
+    @Test
+    fun `the overlap message names the partner or says it is off this strip`() {
+        assertEquals("Overlaps cut 3 — sit fully inside it or fully clear", undercutOverlapMessage(3))
+        assertEquals(
+            "Overlaps a cut outside this strip — sit fully inside it or fully clear",
+            undercutOverlapMessage(null),
+        )
+    }
+
+    // ── One tolerance for containment and touching ──
+
+    @Test
+    fun `containment holds through sub-touch-eps drift`() {
+        val outer = UndercutSpanMm("o", 200f, 300f)
+        // 0.005 mm past the outer's AFT shoulder: more than the bounds eps, inside the touch eps.
+        val drifted = UndercutSpanMm("i", 199.995f, 240f)
+        assertTrue(undercutSpanContains(outer, drifted))
+        assertEquals("o", undercutNestingForest(listOf(outer, drifted)).first { it.id == "i" }.parentId)
+        // The confirm check and the overlap band agree: nested, so neither blocks.
+        assertNull(undercutOverlapIssue(199.995f, 40.005f, listOf(outer)))
+        assertTrue(undercutPartialOverlapsMm(199.995f, 40.005f, listOf(outer)).isEmpty())
+        // A real intrusion past the slop is still a partial overlap.
+        assertNotNull(undercutOverlapIssue(199.9f, 40.1f, listOf(outer)))
+        assertTrue(undercutPartialOverlapsMm(199.9f, 40.1f, listOf(outer)).isNotEmpty())
+    }
+
+    @Test
+    fun `a duplicate span within the touch eps stays blocked`() {
+        val outer = UndercutSpanMm("o", 200f, 300f)
+        assertFalse(undercutSpanContains(outer, UndercutSpanMm("d", 200.005f, 299.995f)))
+        assertNotNull(undercutOverlapIssue(200.005f, 99.99f, listOf(outer)))
     }
 
     // ── Overlap bands ──
@@ -1481,5 +1514,59 @@ class UndercutMathTest {
     private companion object {
         /** Shaft extent used by the exaggeration scenarios (long enough for several cuts). */
         const val EX_OAL_MM = 2000f
+    }
+
+    // ── Parent-cut datum ──
+
+    @Test
+    fun `parent AFT and FWD conversions round trip against the parent's span`() {
+        val ps = 600f
+        val pe = 800f
+        val aft = undercutStartToCanonicalMm(
+            UndercutReference.PARENT_AFT, 60f, 50f, 100f, 1900f, parentStartMm = ps, parentEndMm = pe,
+        )
+        assertEquals(660f, aft, 1e-4f)
+        assertEquals(
+            60f,
+            canonicalToUndercutStartMm(
+                UndercutReference.PARENT_AFT, aft, 50f, 100f, 1900f, parentStartMm = ps, parentEndMm = pe,
+            ),
+            1e-4f,
+        )
+        val fwd = undercutStartToCanonicalMm(
+            UndercutReference.PARENT_FWD, 90f, 50f, 100f, 1900f, parentStartMm = ps, parentEndMm = pe,
+        )
+        assertEquals(660f, fwd, 1e-4f)
+        assertEquals(
+            90f,
+            canonicalToUndercutStartMm(
+                UndercutReference.PARENT_FWD, fwd, 50f, 100f, 1900f, parentStartMm = ps, parentEndMm = pe,
+            ),
+            1e-4f,
+        )
+        // The liner terms are not read by the parent references, and vice versa.
+        assertEquals(
+            660f,
+            undercutStartToCanonicalMm(
+                UndercutReference.PARENT_AFT, 60f, 50f, 100f, 1900f,
+                linerStartMm = 9999f, linerEndMm = 9999f, parentStartMm = ps, parentEndMm = pe,
+            ),
+            1e-4f,
+        )
+    }
+
+    @Test
+    fun `a length change under Parent FWD pins the FWD end and under Parent AFT the AFT end`() {
+        // Cut 660..710 inside the parent 600..800, re-lengthened to 80.
+        val fwd = undercutCanonicalForNewLength(
+            UndercutReference.PARENT_FWD, 660f, 50f, 80f, 100f, 1900f,
+            parentStartMm = 600f, parentEndMm = 800f,
+        )
+        assertEquals("the FWD end stays at 710", 710f, fwd + 80f, 1e-4f)
+        val aft = undercutCanonicalForNewLength(
+            UndercutReference.PARENT_AFT, 660f, 50f, 80f, 100f, 1900f,
+            parentStartMm = 600f, parentEndMm = 800f,
+        )
+        assertEquals(660f, aft, 1e-4f)
     }
 }

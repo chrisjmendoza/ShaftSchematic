@@ -86,6 +86,7 @@ import com.android.shaftschematic.geom.linerStripFor
 import com.android.shaftschematic.geom.maxOuterDiaOver
 import com.android.shaftschematic.geom.pickUndercutStripAt
 import com.android.shaftschematic.geom.undercutDisplayedDistanceMm
+import com.android.shaftschematic.geom.undercutReferenceParentSpan
 import com.android.shaftschematic.geom.undercutReferenceLabel
 import com.android.shaftschematic.geom.undercutReferenceLinerFor
 import com.android.shaftschematic.geom.undercutSetPositions
@@ -832,12 +833,12 @@ fun UndercutRoute(
             style = undercutStyle,
             threadSlant = pdfThreadSlant,
             threadDensity = pdfThreadDensity,
-            onAddUndercut = { startMm, lengthMm, reference, referenceLinerId ->
+            onAddUndercut = { startMm, lengthMm, reference, referenceLinerId, referenceCutId ->
                 // Called when the overlay CONFIRMS a drafted new cut (a cancelled draft never
                 // reaches here, so the record gains no ghosts). The returned id lets the overlay
                 // land the draft's Ø/note and follow the new card; the open anchor already covers
                 // this strip, so no re-anchoring is needed.
-                vm.addUndercut(startMm, lengthMm, reference, referenceLinerId)
+                vm.addUndercut(startMm, lengthMm, reference, referenceLinerId, referenceCutId)
             },
             onUpdateUndercut = vm::updateUndercut,
             onUpdateReference = vm::updateUndercutReference,
@@ -907,7 +908,10 @@ private fun UndercutListRow(
 ) {
     val reference = effectiveUndercutReference(undercut, linerSpans, sheetSpans, aftSetXMm, fwdSetXMm)
     val refLiner = undercutReferenceLinerFor(undercut, linerSpans, stripLiner = null, oalMm = oalMm)
-    val distanceMm = undercutDisplayedDistanceMm(undercut, reference, refLiner, aftSetXMm, fwdSetXMm)
+    val refParent = undercutReferenceParentSpan(undercut, sheetSpans)
+    val distanceMm = undercutDisplayedDistanceMm(
+        undercut, reference, refLiner, aftSetXMm, fwdSetXMm, refParent = refParent,
+    )
     val stale = isUndercutStaleOverrun(undercut.startFromAftMm, undercut.lengthMm, oalMm)
 
     // A liner reference names its liner, so two cuts in different liners never read alike.

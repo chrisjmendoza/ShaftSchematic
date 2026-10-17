@@ -266,4 +266,59 @@ class UndercutRecordPersistenceTest {
         assertEquals(2, decoded.undercutRecord.undercuts.size)
         assertEquals(listOf("u1", "u2"), decoded.undercutRecord.undercuts.map { it.id })
     }
+
+    @Test
+    fun `PARENT_FWD reference with referenceCutId round trips through the envelope`() {
+        val undercut = Undercut(
+            id = "c", startFromAftMm = 660f, lengthMm = 50f,
+            authoredReference = UndercutReference.PARENT_FWD,
+            referenceCutId = "p",
+        )
+        val doc = ShaftDocCodec.ShaftDocV1(
+            spec = spec(),
+            undercutRecord = UndercutRecord(undercuts = listOf(undercut)),
+        )
+
+        val decoded = ShaftDocCodec.decode(ShaftDocCodec.encodeV1(doc))
+
+        val d = decoded.undercutRecord.undercuts.single()
+        assertEquals(UndercutReference.PARENT_FWD, d.authoredReference)
+        assertEquals("p", d.referenceCutId)
+        assertEquals(undercut, d)
+    }
+
+    @Test
+    fun `older JSON without referenceCutId decodes to empty string`() {
+        val raw = """
+            {
+              "version": 1,
+              "preferred_unit": "INCHES",
+              "unit_locked": true,
+              "job_number": "",
+              "customer": "",
+              "vessel": "",
+              "shaft_position": "OTHER",
+              "notes": "",
+              "spec": { "overallLengthMm": 500.0 },
+              "undercut_record": {
+                "undercuts": [
+                  {
+                    "id": "u1",
+                    "startFromAftMm": 10.0,
+                    "lengthMm": 5.0,
+                    "diaMm": 0.0,
+                    "authoredReference": "LINER_AFT",
+                    "referenceLinerId": "L1",
+                    "note": ""
+                  }
+                ]
+              }
+            }
+        """.trimIndent()
+
+        val d = ShaftDocCodec.decode(raw).undercutRecord.undercuts.single()
+        assertEquals(UndercutReference.LINER_AFT, d.authoredReference)
+        assertEquals("L1", d.referenceLinerId)
+        assertEquals("", d.referenceCutId)
+    }
 }

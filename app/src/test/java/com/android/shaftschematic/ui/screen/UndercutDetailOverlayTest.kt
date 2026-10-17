@@ -9,7 +9,9 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasAnyDescendant
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
@@ -25,6 +27,9 @@ import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.test.swipeRight
 import com.android.shaftschematic.geom.UndercutLinerSpan
 import com.android.shaftschematic.geom.UndercutSpanMm
 import com.android.shaftschematic.geom.linerStripFor
@@ -92,7 +97,7 @@ class UndercutDetailOverlayTest {
                     resolvedComponents = resolved,
                     unit = UnitSystem.INCHES,
                     undercutRecord = record,
-                    onAddUndercut = { start, len, ref, refLinerId ->
+                    onAddUndercut = { start, len, ref, refLinerId, _ ->
                         added += start
                         addedRefs += ref
                         val u = Undercut(
@@ -103,7 +108,7 @@ class UndercutDetailOverlayTest {
                         u.id
                     },
                     onUpdateUndercut = { id, _, _, _, _ -> updated += id },
-                    onUpdateReference = { _, _, _ -> },
+                    onUpdateReference = { _, _, _, _ -> },
                     onRemoveUndercut = { id ->
                         removed += id
                         record = record.copy(undercuts = record.undercuts.filterNot { it.id == id })
@@ -147,6 +152,88 @@ class UndercutDetailOverlayTest {
         rule.onNodeWithText("New undercut").assertIsDisplayed()
         assertTrue("the pending cut was recorded at $added", added.isEmpty())
         assertEquals(listOf("u1"), record.undercuts.map { it.id })
+    }
+
+    private fun settle() {
+        rule.waitForIdle()
+        rule.mainClock.advanceTimeBy(1_000)
+        rule.waitForIdle()
+    }
+
+    @Test
+    fun `leaving an untouched new undercut card discards it`() {
+        // The seeded default span nobody typed into: committing it on the way out recorded stray
+        // cuts on the device. The pending page sits AFT of u1 (the default goes in the aft-most
+        // gap), so a swipe left leaves it for u1's card.
+        show(listOf(cut("u1", 900f)))
+        rule.onNodeWithTag("undercut_add_in_liner").performClick()
+        settle()
+        rule.onNodeWithText("New undercut").assertIsDisplayed()
+
+        rule.onNodeWithTag("undercut_card_pager").performTouchInput { swipeLeft() }
+        settle()
+
+        assertTrue("an untouched add was recorded at $added", added.isEmpty())
+        assertEquals(listOf("u1"), record.undercuts.map { it.id })
+        assertTrue(
+            "the pending card must be gone",
+            rule.onAllNodesWithText("New undercut").fetchSemanticsNodes().isEmpty(),
+        )
+        rule.onNodeWithTag("undercut_add_in_liner").assertIsEnabled()
+    }
+
+    @Test
+    fun `an overlap names its partner on the pill, the card and the leave prompt`() {
+        // u2 moved to 3 in from the liner's AFT edge (576.2–626.2 mm) runs half into u1
+        // (600–700 mm), which is the FIRST card on this page.
+        show(listOf(cut("u1", 600f, len = 100f), cut("u2", 900f)), initialSelectedId = "u2")
+        val distance = hasText("Distance from Liner AFT (in)") and hasAnyAncestor(hasTestTag("undercut_card_u2"))
+        rule.onNode(distance).performTextReplacement("3")
+        rule.onNode(distance).performImeAction()
+        settle()
+
+        val msg = "Overlaps cut 1 — sit fully inside it or fully clear"
+        rule.onNodeWithTag("undercut_status_pill", useUnmergedTree = true)
+            .assert(hasAnyDescendant(hasText(msg)))
+        assertTrue(
+            "the card's inline reason must read the same",
+            rule.onAllNodes(hasText(msg) and hasAnyAncestor(hasTestTag("undercut_card_u2")), useUnmergedTree = true)
+                .fetchSemanticsNodes().isNotEmpty(),
+        )
+
+        rule.onNodeWithTag("undercut_card_pager").performTouchInput { swipeRight() }
+        settle()
+        rule.onNodeWithText("Undercut can't be saved").assertIsDisplayed()
+        assertTrue(
+            "the leave prompt must state the same reason",
+            rule.onAllNodesWithText(msg, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty(),
+        )
+        rule.onNodeWithTag("undercut_leave_discard").assertIsDisplayed()
+        assertTrue("a blocked draft reached the record", updated.isEmpty())
+    }
+
+    @Test
+    fun `start at end of and end at start of move the draft to either side of a cut`() {
+        show(listOf(cut("u1", 600f, len = 100f), cut("u2", 900f)), initialSelectedId = "u2")
+        rule.onNode(hasTestTag("undercut_butt_after_1") and hasAnyAncestor(hasTestTag("undercut_card_u2")))
+            .performScrollTo().performClick()
+        settle()
+        // 700 mm = 200 mm past the liner's AFT edge = 7.874 in.
+        assertTrue(
+            rule.onAllNodes(
+                editableStartsWith("7.87") and hasAnyAncestor(hasTestTag("undercut_card_u2")),
+            ).fetchSemanticsNodes().isNotEmpty(),
+        )
+        rule.onNode(hasTestTag("undercut_butt_before_1") and hasAnyAncestor(hasTestTag("undercut_card_u2")))
+            .performScrollTo().performClick()
+        settle()
+        // 600 − 50 = 550 mm = 50 mm past the liner's AFT edge = 1.969 in.
+        assertTrue(
+            rule.onAllNodes(
+                editableStartsWith("1.96") and hasAnyAncestor(hasTestTag("undercut_card_u2")),
+            ).fetchSemanticsNodes().isNotEmpty(),
+        )
+        assertTrue("a preset is a draft edit, not a record write", updated.isEmpty())
     }
 
     private fun editableStartsWith(prefix: String) = SemanticsMatcher("editable text starts with $prefix") {
@@ -365,5 +452,36 @@ class UndercutDetailOverlayTest {
         rule.waitForIdle()
 
         rule.onNodeWithTag("undercut_overhang_dialog").assertDoesNotExist()
+    }
+
+    // ── Parent-cut datum ──
+
+    @Test
+    fun `a cut inside another offers the Parent chips and measures from its shoulders`() {
+        // Parent 600–800 mm, child 660–710 mm inside it.
+        show(listOf(cut("p", 600f, len = 200f), cut("c", 660f)), initialSelectedId = "c")
+        val inChild = hasAnyAncestor(hasTestTag("undercut_card_c"))
+        rule.onNode(hasTestTag("undercut_ref_parent_aft") and inChild).assertExists()
+        rule.onNode(hasTestTag("undercut_ref_parent_fwd") and inChild).assertExists()
+
+        rule.onNode(hasTestTag("undercut_ref_parent_aft") and inChild).performScrollTo().performClick()
+        settle()
+        rule.onNode(hasText("Distance from Parent AFT (in)") and inChild).assertExists()
+        // 660 − 600 = 60 mm = 2.362 in from the parent's AFT shoulder.
+        assertTrue(rule.onAllNodes(editableStartsWith("2.362") and inChild).fetchSemanticsNodes().isNotEmpty())
+
+        rule.onNode(hasTestTag("undercut_ref_parent_fwd") and inChild).performScrollTo().performClick()
+        settle()
+        rule.onNode(hasText("Distance from Parent FWD (in)") and inChild).assertExists()
+        // 800 − 710 = 90 mm = 3.543 in from the parent's FWD shoulder.
+        assertTrue(rule.onAllNodes(editableStartsWith("3.543") and inChild).fetchSemanticsNodes().isNotEmpty())
+        assertTrue("a reference switch is a draft edit, not a record write", updated.isEmpty())
+    }
+
+    @Test
+    fun `a cut inside no other shows no Parent chips`() {
+        show(listOf(cut("u1", 900f)))
+        assertTrue(rule.onAllNodesWithTag("undercut_ref_parent_aft").fetchSemanticsNodes().isEmpty())
+        assertTrue(rule.onAllNodesWithTag("undercut_ref_parent_fwd").fetchSemanticsNodes().isEmpty())
     }
 }

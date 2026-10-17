@@ -8,6 +8,33 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-16
 
+### fix(undercut): no spike where two butted cuts meet
+
+- Two top-level cuts butted end to end with different floors each drew a section face from
+  their own floor up to the liner's outer surface at the shared boundary, and the pair read as a
+  hairline sliver of full-size liner between the cuts (on-device report, right after butting a
+  cut against its neighbour). At an end that touches another top-level cut (within the 0.01 mm
+  touch tolerance) the face now rises only to the neighbour's drawn floor — the step between the
+  two floors, which is the real silhouette — and a neighbour whose floor is deeper leaves no face
+  on this side at all, since the step belongs to it. Same resolver feeds the canvas, the PDF and
+  the SVG preview, so all three agree. `UndercutNotchBuildTest`, SVG preview case.
+- **Clearer chaining.** "Butt against" becomes two rows, "Start at end of:" and "End at start
+  of:", each listing every other cut on the page as "Cut N" — "After cut 5" had read as AFT of
+  cut 5 (on-device report), and each cut had offered only one direction.
+- **The overlap message names the other cut**: "Overlaps cut 3 — sit fully inside it or fully
+  clear", or "Overlaps a cut outside this strip …" when it is recorded elsewhere (on-device
+  report: no way to tell which cut was in the way).
+- **An untouched "New undercut" is dropped on leave**, never recorded: the seeded default span
+  is a placeholder, and silently committing it is how stray 1" cuts appeared in a job. The
+  pill's Confirm still records it on purpose.
+- **Nested cuts can be located from their parent**: "Parent AFT" / "Parent FWD" join Measure
+  From when a cut sits fully inside another (the sheet already dimensions it that way), for a
+  liner whose own edges have been cut away (on-device request). Stored as a new additive
+  reference with the parent's id; older documents load unchanged; a parent that goes away falls
+  back display-only to the nearer S.E.T.
+- Containment, touching and duplicates share one 0.01 mm tolerance, so a cut sitting on another
+  within float drift reads as nested rather than as a partial overlap. The manual is updated.
+
 ### feat(undercut): a liner edge cut into the body is no longer a datum
 
 - A liner edge counts as **buried** when a cut crosses it into the body: one continuous floor runs

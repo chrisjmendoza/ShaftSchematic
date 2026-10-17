@@ -327,7 +327,7 @@ class UndercutDraftTest {
         )
     }
 
-    // ── Card title + Butt against ────────────────────────────────────────────
+    // ── Card title + edge-to-edge presets ────────────────────────────────────────────
 
     @Test
     fun `the card title states the aft to fwd position convention`() {
@@ -371,36 +371,200 @@ class UndercutDraftTest {
     }
 
     @Test
-    fun `butting after a cut starts the draft at its end, length and reference untouched`() {
+    fun `start at end of a cut puts the draft after it, length and reference untouched`() {
         val draft = draftOf(
             "d", 300f, lengthMm = 40f,
             reference = UndercutReference.LINER_FWD, referenceLinerId = "L1",
         )
-        val moved = draft.buttingAgainst(UndercutSpanMm("o", 100f, 150f))
-        assertEquals(150f, moved.startFromAftMm, 0f)
+        val moved = draft.startingAtEndOf(UndercutSpanMm("o", 100f, 150f))
         assertEquals(draft.copy(startFromAftMm = 150f), moved)
     }
 
     @Test
-    fun `butting before a cut ends the draft at its start, length and reference untouched`() {
+    fun `end at start of a cut puts the draft before it, length and reference untouched`() {
         val draft = draftOf("d", 20f, lengthMm = 40f, reference = UndercutReference.FWD_SET)
-        val moved = draft.buttingAgainst(UndercutSpanMm("o", 100f, 150f))
-        assertEquals(60f, moved.startFromAftMm, 0f)
+        val moved = draft.endingAtStartOf(UndercutSpanMm("o", 100f, 150f))
         assertEquals(draft.copy(startFromAftMm = 60f), moved)
     }
 
     @Test
-    fun `a pending add card has no baseline, so leaving it always resolves`() {
-        // Nothing stored to equal, so the add page is dirty by construction: it commits on the
-        // way out when it is clear, and prompts when it is not — it never evaporates silently.
-        val pending = draftOf(PENDING_UNDERCUT_ID, 250f)
+    fun `both presets go where they say whichever side the draft starts on`() {
+        // The midpoint rule is gone: a draft sitting FWD of the other cut can still be put
+        // BEFORE it, and one sitting AFT of it can be put AFTER it.
+        val other = UndercutSpanMm("o", 100f, 150f)
+        assertEquals(60f, draftOf("d", 400f, lengthMm = 40f).endingAtStartOf(other).startFromAftMm, 0f)
+        assertEquals(150f, draftOf("d", 0f, lengthMm = 40f).startingAtEndOf(other).startFromAftMm, 0f)
+    }
+
+    @Test
+    fun `a preset chip names the other cut by its page position`() {
+        assertEquals("Cut 4", undercutButtChipLabel(4))
+    }
+
+    // ── Naming the overlap partner ──
+
+    @Test
+    fun `the confirm issue names a partner on this page`() {
+        val others = listOf(UndercutSpanMm("u3", 200f, 300f))
+        assertEquals(
+            "Overlaps cut 3 — sit fully inside it or fully clear",
+            undercutConfirmIssue(draftOf("x", 250f, 100f), 1000f, others, mapOf("u3" to 3)),
+        )
+        assertEquals(
+            "Overlaps a cut outside this strip — sit fully inside it or fully clear",
+            undercutConfirmIssue(draftOf("x", 250f, 100f), 1000f, others, mapOf("u1" to 1)),
+        )
+        // No page context: the generic wording.
+        assertEquals(
+            UNDERCUT_PARTIAL_OVERLAP_MSG,
+            undercutConfirmIssue(draftOf("x", 250f, 100f), 1000f, others),
+        )
+        // Shaft bounds still outrank the overlap.
+        assertEquals(
+            "Undercut extends past the shaft's FWD end",
+            undercutConfirmIssue(draftOf("x", 250f, 800f), 1000f, others, mapOf("u3" to 3)),
+        )
+        assertNull(undercutConfirmIssue(draftOf("x", 300f, 50f), 1000f, others, mapOf("u3" to 3)))
+    }
+
+    @Test
+    fun `an edited pending add card commits or prompts on the way out`() {
+        // Nothing stored to equal, so an add page the machinist changed is dirty by construction:
+        // it commits on the way out when it is clear, and prompts when it is not.
+        val seed = draftOf(PENDING_UNDERCUT_ID, 250f)
+        val edited = seed.copy(diaMm = 180f)
         assertEquals(
             UndercutLeaveAction.COMMIT,
-            undercutLeaveAction(pending, baseline = null, confirmIssue = null),
+            undercutLeaveAction(edited, baseline = null, confirmIssue = null, pendingSeed = seed),
         )
         assertEquals(
             UndercutLeaveAction.PROMPT,
-            undercutLeaveAction(pending, baseline = null, confirmIssue = "Extends past the shaft"),
+            undercutLeaveAction(
+                edited, baseline = null, confirmIssue = "Extends past the shaft", pendingSeed = seed,
+            ),
         )
+        // Any one field counts as an edit.
+        listOf(
+            seed.copy(startFromAftMm = 251f),
+            seed.copy(lengthMm = 10f),
+            seed.copy(note = "pitted"),
+            seed.copy(reference = UndercutReference.FWD_SET),
+        ).forEach {
+            assertEquals(
+                UndercutLeaveAction.COMMIT,
+                undercutLeaveAction(it, baseline = null, confirmIssue = null, pendingSeed = seed),
+            )
+        }
+    }
+
+    @Test
+    fun `an untouched pending add card is discarded on the way out`() {
+        // The seeded default span nobody typed into: committing it recorded stray cuts.
+        val seed = draftOf(PENDING_UNDERCUT_ID, 250f)
+        assertEquals(
+            UndercutLeaveAction.DISCARD,
+            undercutLeaveAction(seed, baseline = null, confirmIssue = null, pendingSeed = seed),
+        )
+        // …even when the seed itself is blocked: there is nothing to ask about keeping.
+        assertEquals(
+            UndercutLeaveAction.DISCARD,
+            undercutLeaveAction(
+                seed, baseline = null, confirmIssue = UNDERCUT_PARTIAL_OVERLAP_MSG, pendingSeed = seed,
+            ),
+        )
+        // A STORED card equal to a pending seed's values is not pending: the seed never applies.
+        val stored = seed.copy(id = "a")
+        assertEquals(
+            UndercutLeaveAction.COMMIT,
+            undercutLeaveAction(stored, draftOf("a", 100f), confirmIssue = null, pendingSeed = stored),
+        )
+    }
+
+    // ── Parent-cut datum ──
+
+    @Test
+    fun `a parent chip sets the reference and the parent id and never moves canonical`() {
+        val draft = draftOf("c", 660f, lengthMm = 50f, reference = UndercutReference.LINER_AFT, referenceLinerId = "L1")
+        val parent = UndercutSpanMm("p", 600f, 800f)
+        val aft = draft.measuredFromParent(UndercutReference.PARENT_AFT, parent)
+        assertEquals(
+            draft.copy(reference = UndercutReference.PARENT_AFT, referenceCutId = "p", referenceLinerId = ""),
+            aft,
+        )
+        val fwd = draft.measuredFromParent(UndercutReference.PARENT_FWD, parent)
+        assertEquals(660f, fwd.startFromAftMm, 0f)
+        assertEquals(50f, fwd.lengthMm, 0f)
+        assertEquals("p", fwd.referenceCutId)
+    }
+
+    @Test
+    fun `a parent reference displays while its cut still contains this one`() {
+        val u = Undercut(
+            id = "c", startFromAftMm = 660f, lengthMm = 50f,
+            authoredReference = UndercutReference.PARENT_FWD, referenceCutId = "p",
+        )
+        val spans = listOf(UndercutSpanMm("p", 600f, 800f), UndercutSpanMm("c", 660f, 710f))
+        assertEquals(
+            UndercutReference.PARENT_FWD,
+            com.android.shaftschematic.geom.effectiveUndercutReference(u, emptyList(), spans, 100f, 1900f),
+        )
+    }
+
+    @Test
+    fun `a parent reference whose cut is gone or no longer contains it falls back to the nearer SET`() {
+        val u = Undercut(
+            id = "c", startFromAftMm = 660f, lengthMm = 50f,
+            authoredReference = UndercutReference.PARENT_AFT, referenceCutId = "p",
+        )
+        val effective = { spans: List<UndercutSpanMm> ->
+            com.android.shaftschematic.geom.effectiveUndercutReference(u, emptyList(), spans, 100f, 1900f)
+        }
+        // Parent deleted: 660..710 sits nearer the AFT S.E.T. at 100.
+        assertEquals(UndercutReference.AFT_SET, effective(listOf(UndercutSpanMm("c", 660f, 710f))))
+        // Parent shortened so the cut now runs past its FWD shoulder.
+        assertEquals(
+            UndercutReference.AFT_SET,
+            effective(listOf(UndercutSpanMm("p", 600f, 700f), UndercutSpanMm("c", 660f, 710f))),
+        )
+        // Near the FWD S.E.T. the fallback is the FWD one.
+        val far = u.copy(startFromAftMm = 1700f)
+        assertEquals(
+            UndercutReference.FWD_SET,
+            com.android.shaftschematic.geom.effectiveUndercutReference(
+                far, emptyList(), listOf(UndercutSpanMm("c", 1700f, 1750f)), 100f, 1900f,
+            ),
+        )
+        // Display-only: the stored values are untouched, and with no sheet to resolve against
+        // (the baseline) the reference passes through.
+        assertEquals(UndercutReference.PARENT_AFT, u.authoredReference)
+        assertEquals("p", u.referenceCutId)
+        assertEquals(UndercutReference.PARENT_AFT, com.android.shaftschematic.geom.effectiveUndercutReference(u, emptyList()))
+    }
+
+    @Test
+    fun `the baseline keeps a parent id only under a parent reference`() {
+        val parentRef = Undercut(
+            id = "c", startFromAftMm = 660f, lengthMm = 50f,
+            authoredReference = UndercutReference.PARENT_AFT, referenceCutId = "p",
+        )
+        assertEquals("p", undercutDraftOf(parentRef, emptyList()).referenceCutId)
+        assertEquals(UndercutReference.PARENT_AFT, undercutDraftOf(parentRef, emptyList()).reference)
+        val stale = parentRef.copy(authoredReference = UndercutReference.FWD_SET)
+        assertEquals("", undercutDraftOf(stale, emptyList()).referenceCutId)
+        // The draft carries it back out to the preview cut.
+        assertEquals("p", undercutDraftOf(parentRef, emptyList()).toUndercut().referenceCutId)
+    }
+
+    @Test
+    fun `the parent candidate is the smallest cut fully containing the draft`() {
+        val spans = listOf(
+            UndercutSpanMm("relief", 500f, 1000f),
+            UndercutSpanMm("inner", 600f, 800f),
+            UndercutSpanMm("d", 650f, 700f),
+            UndercutSpanMm("beside", 1000f, 1100f),
+        )
+        assertEquals("inner", com.android.shaftschematic.geom.undercutParentCandidate("d", spans)?.id)
+        assertEquals(null, com.android.shaftschematic.geom.undercutParentCandidate("beside", spans))
+        assertEquals(null, com.android.shaftschematic.geom.undercutParentCandidate("relief", spans))
     }
 }
