@@ -142,3 +142,16 @@ fun ShaftViewModel.setUndercutExaggeration(frac: Float) {
         if (rec.exaggerationFrac == clamped) rec else rec.copy(exaggerationFrac = clamped)
     }
 }
+
+/**
+ * Set this sheet's "Draw to the shaft end" fit ([UndercutRecord.drawToSet]): a liner strip within
+ * `UNDERCUT_SET_REACH_MM` of an S.E.T. chains out to it, draws on to the shaft's physical end, and
+ * dimensions the run from the last cut to the S.E.T. Display/dimensioning only — no stored cut
+ * moves — and per-document, so it lives in the
+ * record rather than in app prefs.
+ */
+fun ShaftViewModel.setUndercutDrawToSet(v: Boolean) {
+    _undercutRecord.update { rec ->
+        if (rec.drawToSet == v) rec else rec.copy(drawToSet = v)
+    }
+}

@@ -83,6 +83,8 @@ import com.android.shaftschematic.geom.clampUndercutSpan
 import com.android.shaftschematic.geom.effectiveUndercutReference
 import com.android.shaftschematic.geom.isUndercutStaleOverrun
 import com.android.shaftschematic.geom.linerStripFor
+import com.android.shaftschematic.geom.UNDERCUT_SET_REACH_MM
+import com.android.shaftschematic.geom.undercutSetReachMm
 import com.android.shaftschematic.geom.maxOuterDiaOver
 import com.android.shaftschematic.geom.pickUndercutStripAt
 import com.android.shaftschematic.geom.undercutDisplayedDistanceMm
@@ -95,6 +97,7 @@ import com.android.shaftschematic.model.Undercut
 import com.android.shaftschematic.model.UndercutReference
 import com.android.shaftschematic.model.collidingIds
 import com.android.shaftschematic.pdf.composeUndercutPdf
+import com.android.shaftschematic.pdf.formatLenWithUnit
 import com.android.shaftschematic.ui.adaptive.LocalSidebarPermanent
 import com.android.shaftschematic.ui.adaptive.WindowWidthClass
 import com.android.shaftschematic.ui.adaptive.currentWindowWidthClass
@@ -109,6 +112,7 @@ import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.addUndercut
 import com.android.shaftschematic.ui.viewmodel.removeUndercut
 import com.android.shaftschematic.ui.viewmodel.restoreUndercut
+import com.android.shaftschematic.ui.viewmodel.setUndercutDrawToSet
 import com.android.shaftschematic.ui.viewmodel.setUndercutExaggeration
 import com.android.shaftschematic.ui.viewmodel.updateUndercut
 import com.android.shaftschematic.ui.viewmodel.updateUndercutReference
@@ -187,6 +191,9 @@ fun UndercutRoute(
     // The dotted liner outline over the cuts: a preview re-render key, an options-sheet control,
     // and read by the overview canvas and the detail overlay alike.
     val pdfUndercutLinerOutline by vm.pdfUndercutLinerOutline.collectAsState()
+    // Chain-rail nodes at buried liner edges: a preview re-render key, an options-sheet control,
+    // and read by the detail overlay's rail.
+    val pdfUndercutSplitAtLinerEdge by vm.pdfUndercutSplitAtLinerEdge.collectAsState()
     val pdfFractionStyle   by vm.pdfFractionStyle.collectAsState()
     val pdfOutputFont      by vm.pdfOutputFont.collectAsState()
     val pdfThreadSlant     by vm.pdfThreadSlant.collectAsState()
@@ -295,8 +302,15 @@ fun UndercutRoute(
             UndercutSpanMm(u.id, c.startMm, c.endMm)
         }.filter { it.endMm > it.startMm }
     }
-    val strips = remember(spans, linerSpans, oalMm, segs) {
-        buildUndercutStrips(spans, linerSpans, oalMm, segs = segs)
+    // "Draw to the shaft end" (per-job): a liner strip near an S.E.T. chains out to it and draws
+    // on to the shaft's physical end.
+    val setReachMm = undercutSetReachMm(undercutRecord.drawToSet)
+    val (stripAftSetMm, stripFwdSetMm) = remember(spec) { undercutSetPositions(spec) }
+    val strips = remember(spans, linerSpans, oalMm, segs, setReachMm, stripAftSetMm, stripFwdSetMm) {
+        buildUndercutStrips(
+            spans, linerSpans, oalMm, segs = segs,
+            reachToSetMm = setReachMm, aftSetMm = stripAftSetMm, fwdSetMm = stripFwdSetMm,
+        )
     }
     val freeWindows = remember(strips) {
         strips.filterIsInstance<UndercutStrip.FreeStrip>().map { it.window }
@@ -311,7 +325,10 @@ fun UndercutRoute(
     // liner tapped with zero cuts and the same liner tapped later with three read identically.
     fun stripForLiner(liner: UndercutLinerSpan): UndercutStrip.LinerStrip {
         val members = spans.filter { linerOfCut[it.id] == liner.id }
-        return linerStripFor(liner, members, oalMm, segs = segs, cutSpans = members)
+        return linerStripFor(
+            liner, members, oalMm, segs = segs, cutSpans = members,
+            reachToSetMm = setReachMm, aftSetMm = stripAftSetMm, fwdSetMm = stripFwdSetMm,
+        )
     }
 
     // An anchor that no longer resolves (the undercut was deleted, the liner removed, or the
@@ -371,7 +388,7 @@ fun UndercutRoute(
     // pdfThreadDensity, which reach the hatch through ThreadHatchStyle.
     LaunchedEffect(showPreview, spec, unit, resolvedComponents,
                    lineThicknessScale, pdfShadedBodies, pdfShadedTapers, pdfShadedLiners,
-                   pdfUndercutLineArt, pdfUndercutLinerOutline,
+                   pdfUndercutLineArt, pdfUndercutLinerOutline, pdfUndercutSplitAtLinerEdge,
                    undercutRecord, blankDraft, pdfFractionStyle, pdfOutputFont, pdfThreadSlant, unitOverrides,
                    dualUnits, pdfDualUnitLayout, pdfThreadDensity) {
         if (!showPreview) { previewBitmap = null; return@LaunchedEffect }
@@ -622,6 +639,31 @@ fun UndercutRoute(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                // Per-job fit, not a look: a liner strip near a shaft end draws out to the S.E.T.
+                // and its chain dimensions the run to it. The reach in the caption is the constant
+                // itself, so the text cannot drift from what the strips do.
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Draw to the shaft end", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            "A liner strip within " +
+                                formatLenWithUnit(UNDERCUT_SET_REACH_MM.toDouble(), unit) +
+                                " of its S.E.T. draws out to the shaft end and dimensions the run " +
+                                "to it. Saved with this job.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Switch(
+                        checked = undercutRecord.drawToSet,
+                        onCheckedChange = { vm.setUndercutDrawToSet(it) },
+                        modifier = Modifier.testTag("undercut_draw_to_set_switch"),
+                    )
+                }
             }
 
             // Own spacing: the surrounding 16 dp rhythm would read as separate blocks
@@ -828,6 +870,7 @@ fun UndercutRoute(
                     showUndercutLineArt = true,
                     undercutLineArt = pdfUndercutLineArt,
                     undercutLinerOutline = pdfUndercutLinerOutline,
+                    undercutSplitAtLinerEdge = pdfUndercutSplitAtLinerEdge,
                     vm = vm,
                     fractionStyle = pdfFractionStyle,
                     hasThreads = hasDrawnThreads(spec),
@@ -876,6 +919,7 @@ fun UndercutRoute(
             onClose = { openOverlay(linerId = null, undercutId = null, selectId = null) },
             onRestoreUndercut = vm::restoreUndercut,
             linerOutline = pdfUndercutLinerOutline,
+            splitAtLinerEdge = pdfUndercutSplitAtLinerEdge,
             canUndo = canUndo,
             canRedo = canRedo,
             onUndo = vm::undoEdit,

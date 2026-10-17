@@ -473,7 +473,13 @@ its typed Ø, on-device report). Cuts chained to a liner's cuts by touching/nest
 (`assignUndercutLiners`, transitive) belong to that liner's strip, and `withUndercutBreakRoom`
 also clears cut shoulders. `PdfPrefs.undercutLinerOutline` (app-wide look pref, default on)
 draws each liner's ERASED edges/OD as a dotted outline over the cuts from the ONE pure
-`geom/LinerOutlineMath.kt`, identically on canvas and PDF. The notch (void fill erasing surface stroke and fill — the mouth stays **OPEN**,
+`geom/LinerOutlineMath.kt`, identically on canvas and PDF. **The chain rail prints each cut's FULL
+length** (the shop measures cut lengths — on-device ruling); a buried liner edge becomes a chain node
+only under `PdfPrefs.undercutSplitAtLinerEdge` (app-wide look pref, default OFF). `UndercutRecord.drawToSet`
+(per-job — a fit for this shaft's geometry, not a look) extends a liner strip whose chain ends within
+`UNDERCUT_SET_REACH_MM` (24") of its S.E.T. out to the shaft end (chain to the S.E.T.) — flat physical end, no break — and the
+chain gains the span to it (the sketch's "12 3/4 to the S.E.T."); liner strips only, the total span
+unchanged. The notch (void fill erasing surface stroke and fill — the mouth stays **OPEN**,
 never closed by a lid — plus a full-height **section face** at each end and the floor lines,
 so each cut is its own reduced-Ø rectangle **step in the silhouette**, cut against the
 **local outer-surface envelope**; the section's core fills one step **lighter** than the

@@ -71,7 +71,8 @@ The undercut sheets' component fills are additionally user-styled via `UndercutS
 independent line-art preference, `PdfPrefs.undercutLineArt` (drawing-profile captured), so the
 two surfaces are set separately and neither reads the other. The faint dotted liner outline drawn
 over the cuts is fixed `SheetInk` on the canvases (theme-independent) and driven by its own app-wide
-`PdfPrefs.undercutLinerOutline` on both surfaces.
+`PdfPrefs.undercutLinerOutline` on both surfaces. Its sibling `PdfPrefs.undercutSplitAtLinerEdge`
+(default off) decides whether the chain rail splits a cut at a liner edge it crosses.
 
 **Interactive affordances stay theme-driven** — tap tints, selection highlights, draft
 notch outlines, badges use `colorScheme.primary`/`error`. They are UI, not ink. The

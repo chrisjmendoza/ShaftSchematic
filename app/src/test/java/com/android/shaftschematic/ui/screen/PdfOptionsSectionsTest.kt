@@ -108,6 +108,7 @@ class PdfOptionsSectionsTest {
 
         rule.onNodeWithTag("pdf_undercut_line_art").assertExists()
         rule.onNodeWithTag("pdf_undercut_liner_outline").assertExists()
+        rule.onNodeWithTag("pdf_undercut_split_at_liner_edge").assertExists()
     }
 
     @Test
@@ -118,6 +119,7 @@ class PdfOptionsSectionsTest {
         rule.onNodeWithText("Liners").assertExists()
         rule.onNodeWithTag("pdf_undercut_line_art").assertDoesNotExist()
         rule.onNodeWithTag("pdf_undercut_liner_outline").assertDoesNotExist()
+        rule.onNodeWithTag("pdf_undercut_split_at_liner_edge").assertDoesNotExist()
     }
 
     @Test

@@ -908,7 +908,12 @@ internal val helpSections: List<HelpSection> = listOf(
                     "outline of each liner's original edges and outside diameter is drawn over " +
                     "the cuts, so a cut that runs from the liner into the body still shows " +
                     "where the liner was. It applies to the printed undercut sheet and the " +
-                    "Undercut Drawing screens.",
+                    "Undercut Drawing screens.\n" +
+                    "• \"Undercut drawing: split cuts at liner edges\" — default off, beside " +
+                    "the liner outline row. The chain of dimensions prints each cut's full " +
+                    "length, because the shop measures cut lengths. Turn it on and a cut " +
+                    "machined past a liner edge is dimensioned as two spans that meet at " +
+                    "the edge.",
                 manualAnchor = "settings-pdf-export",
             ),
             HelpTopic(
@@ -992,6 +997,10 @@ internal val helpSections: List<HelpSection> = listOf(
                     "still carries Ø leaders to fill in.\n" +
                     "• \"Cut depth exaggeration\" — on the Undercut Drawing. Changes only how " +
                     "deep cuts look, never the printed numbers.\n" +
+                    "• \"Draw to the shaft end\" — on the Undercut Drawing, under the depth " +
+                    "slider. A liner strip whose cuts end within 24 in of the S.E.T. draws " +
+                    "out to the shaft end, and its dimension chain finishes with the run from the " +
+                    "last cut to the S.E.T. Saved with this job.\n" +
                     "• Worn sections — on the Consolidated Output tab. (That tab's \"Sheet " +
                     "content\" choice is not saved: it starts at All three each session.)\n\n" +
                     "App-wide — one setting, wherever you move it (also in Settings → " +

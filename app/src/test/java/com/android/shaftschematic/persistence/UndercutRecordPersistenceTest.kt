@@ -6,6 +6,7 @@ import com.android.shaftschematic.model.Undercut
 import com.android.shaftschematic.model.UndercutRecord
 import com.android.shaftschematic.model.UndercutReference
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -214,6 +215,25 @@ class UndercutRecordPersistenceTest {
         val decoded = ShaftDocCodec.decode(raw)
 
         assertEquals(0.25f, decoded.undercutRecord.exaggerationFrac, 0f)
+        // "Draw to the shaft end" postdates this payload too: it decodes off.
+        assertFalse(decoded.undercutRecord.drawToSet)
+    }
+
+    @Test
+    fun `drawToSet round trips through the envelope`() {
+        // A per-job fit for this shaft's geometry, so it rides the record rather than app prefs.
+        val doc = ShaftDocCodec.ShaftDocV1(
+            spec = spec(),
+            undercutRecord = UndercutRecord(
+                undercuts = listOf(Undercut(id = "u1", startFromAftMm = 10f, lengthMm = 5f)),
+                drawToSet = true,
+            ),
+        )
+
+        val decoded = ShaftDocCodec.decode(ShaftDocCodec.encodeV1(doc))
+
+        assertTrue(decoded.undercutRecord.drawToSet)
+        assertFalse(UndercutRecord().drawToSet)
     }
 
     @Test

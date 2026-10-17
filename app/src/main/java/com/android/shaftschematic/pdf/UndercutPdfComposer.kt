@@ -23,6 +23,7 @@ import com.android.shaftschematic.geom.clampUndercutSpan
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
 import com.android.shaftschematic.geom.linerStripFor
+import com.android.shaftschematic.geom.undercutSetReachMm
 import com.android.shaftschematic.geom.NOTCH_FACE_MIN_STEP_PX
 import com.android.shaftschematic.geom.UNDERCUT_SECTION_FILL_ALPHA
 import com.android.shaftschematic.geom.UNDERCUT_BREAK_AMP_FRAC_OF_R
@@ -287,14 +288,26 @@ fun composeUndercutPdf(
     val linerSpans = docSpec.liners
         .filter { it.lengthMm > 0f && it.odMm > 0f }
         .map { ln -> UndercutLinerSpan(ln.id, ln.startFromAftMm, ln.startFromAftMm + ln.lengthMm) }
-    val cutStrips = buildUndercutStrips(liveSpans, linerSpans, shaftExtentMm, segs = surfaceSegs)
+    // "Draw to the shaft end" (per-job): a liner strip near an S.E.T. chains out to it and draws
+    // on to the shaft's physical end. The S.E.T.s are the page's own (`computeSetPositionsInMeasureSpace`,
+    // the source `undercutSetPositions` reads), so the chain ends on the datum the sheet titles from.
+    val setReachMm = undercutSetReachMm(effectiveRecord.drawToSet)
+    val cutStrips = buildUndercutStrips(
+        liveSpans, linerSpans, shaftExtentMm, segs = surfaceSegs,
+        reachToSetMm = setReachMm, aftSetMm = aftSetMm, fwdSetMm = fwdSetMm,
+    )
     // Nothing recorded (blank template, or an export of an empty record): every drawable liner
     // gets a STARTED strip — drawn to scale, left empty for hand sketching. `linerStripFor`
     // with no assigned cuts is exactly what the overlay uses to zoom an undercut-free liner,
     // so a started strip and a real one are the same figure at the same scale.
     val startedStrips: List<UndercutStrip> =
         if (cutStrips.isNotEmpty()) emptyList()
-        else linerSpans.sortedBy { it.startMm }.map { linerStripFor(it, emptyList(), shaftExtentMm, segs = surfaceSegs) }
+        else linerSpans.sortedBy { it.startMm }.map {
+            linerStripFor(
+                it, emptyList(), shaftExtentMm, segs = surfaceSegs,
+                reachToSetMm = setReachMm, aftSetMm = aftSetMm, fwdSetMm = fwdSetMm,
+            )
+        }
     val pageStrips = cutStrips.ifEmpty { startedStrips }
     // Started strips carry no cuts to dimension: rails, notches and printed values all drop out.
     val startedPage = cutStrips.isEmpty()
@@ -467,9 +480,11 @@ fun composeUndercutPdf(
             linerOutlinePaint = linerOutlinePaint,
             dual = displayUnits.dual,
             dualStacked = dualStacked,
-            // A liner edge some cut on the sheet runs past into the body takes a chain node, so
-            // the overhang is dimensioned against the edge's position (`buildUndercutRailSpans`).
+            // With `PdfPrefs.undercutSplitAtLinerEdge` on, a liner edge some cut on the sheet runs
+            // past into the body takes a chain node, so the overhang is dimensioned against the
+            // edge's position (`buildUndercutRailSpans`); off, every cut prints its full length.
             railSplitAtMm = (strip as? UndercutStrip.LinerStrip)
+                ?.takeIf { pdfPrefs.undercutSplitAtLinerEdge }
                 ?.let { buriedUndercutLinerEdgesMm(it.linerStartMm, it.linerEndMm, liveSpans) }
                 ?: emptyList(),
         )
@@ -820,7 +835,10 @@ private fun drawUndercutDetailStrip(
      * composer (the tightest strip must still afford the taller rail rows), never re-derived here.
      */
     dualStacked: Boolean = false,
-    /** Buried liner edges — extra chain nodes for the level-0 rail ([buildUndercutRailSpans]). */
+    /**
+     * Buried liner edges — extra chain nodes for the level-0 rail ([buildUndercutRailSpans]);
+     * empty unless `PdfPrefs.undercutSplitAtLinerEdge` is on.
+     */
     railSplitAtMm: List<Float> = emptyList(),
 ) {
     // Draw range, widened at layout time so the undimensioned pad outside each chain datum

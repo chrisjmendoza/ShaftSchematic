@@ -119,9 +119,17 @@ data class Undercut(
  *   alike. `0` = true scale. Display-only styling for the drawing — it never changes a
  *   stored or printed Ø — but it is per-document (a sheet keeps its chosen look), so it
  *   lives here rather than in app prefs. Additive + defaulted; older files get 0.25.
+ * @property drawToSet "Draw to the shaft end": a liner strip whose chain ends within
+ *   `UNDERCUT_SET_REACH_MM` of an S.E.T. chains out to that S.E.T. and draws on to the shaft's
+ *   physical end (a flat end), so its chain rail dimensions the run from the last cut to the
+ *   S.E.T. (on-device request: the shop
+ *   sketch's "to the S.E.T." figure). Display/dimensioning only — no stored value moves — but it
+ *   is a FIT for this shaft's geometry, never a look pref, so it is per-document and lives
+ *   here. Additive + defaulted; older files get `false`.
  */
 @Serializable
 data class UndercutRecord(
     val undercuts: List<Undercut> = emptyList(),
     val exaggerationFrac: Float = 0.25f,
+    val drawToSet: Boolean = false,
 )

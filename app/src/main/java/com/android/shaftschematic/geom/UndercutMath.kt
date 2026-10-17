@@ -52,6 +52,18 @@ const val UNDERCUT_CLUSTER_GAP_MM = 152.4f
 const val UNDERCUT_WINDOW_PAD_MM = 25.4f
 
 /**
+ * "Draw to the shaft end" reach (`UndercutRecord.drawToSet`, 24 in): a liner strip whose chain
+ * ends within this many mm of an S.E.T. extends its chain to that S.E.T. and its draw range to
+ * the shaft's physical end beyond it, so the chain dimensions the run from the last cut to the
+ * S.E.T. (on-device request). The knob: one value behind the route, the detail overlay, the PDF
+ * strips and the Undercut tab's caption.
+ */
+const val UNDERCUT_SET_REACH_MM = 609.6f
+
+/** The strip builders' `reachToSetMm` for a record's `drawToSet` flag — [UNDERCUT_SET_REACH_MM] or `0` (off). */
+fun undercutSetReachMm(drawToSet: Boolean): Float = if (drawToSet) UNDERCUT_SET_REACH_MM else 0f
+
+/**
  * Clearance past the window-end break glyph's reach, as a fraction of its amplitude, so the lobe
  * never kisses the next component face.
  */
@@ -1042,6 +1054,14 @@ fun assignUndercutLiners(
  * [segs] ([withUndercutBreakRoom] — empty [segs] skips it); the chain range is the liner
  * span expanded by overhang only (no pad), so the rail's outer witness lines sit on real
  * datums — liner edges or cut shoulders, never the arbitrary pad edge.
+ *
+ * [reachToSetMm] > 0 ("Draw to the shaft end", [UNDERCUT_SET_REACH_MM]): a chain end at or
+ * inboard of the FWD S.E.T. ([fwdSetMm]) and within the reach of it moves onto the S.E.T. — a
+ * real datum — so the chain rail's trailing span dimensions the run from the last cut to it,
+ * while the DRAW range runs on to the shaft's physical end ([oalMm]: a flat end, no break), so
+ * a FWD thread counted in the OAL draws beyond the S.E.T. undimensioned. The AFT end mirrors it
+ * against [aftSetMm] and `0`. A chain already past its S.E.T. (a cut into the thread) is left
+ * alone. `0` leaves the chain on the liner.
  */
 fun linerStripFor(
     liner: UndercutLinerSpan,
@@ -1051,15 +1071,34 @@ fun linerStripFor(
     segs: List<SurfaceSeg> = emptyList(),
     /** The strip's own cuts, whose shoulders the window-end breaks also clear ([withUndercutBreakRoom]). */
     cutSpans: List<UndercutSpanMm> = emptyList(),
+    /** "Draw to the shaft end" reach; `0` = off (see the KDoc). */
+    reachToSetMm: Float = 0f,
+    /** AFT S.E.T. x (physical mm) the reach measures from and the chain moves onto. */
+    aftSetMm: Float = 0f,
+    /** FWD S.E.T. x (physical mm) the reach measures from and the chain moves onto. */
+    fwdSetMm: Float = oalMm,
 ): UndercutStrip.LinerStrip {
     val hi = oalMm.coerceAtLeast(0f)
     val cutsMin = assignedSpans.minOfOrNull { it.startMm } ?: liner.startMm
     val cutsMax = assignedSpans.maxOfOrNull { it.endMm } ?: liner.endMm
-    val chainStart = min(liner.startMm, cutsMin)
-    val chainEnd = max(liner.endMm, cutsMax)
+    var chainStart = min(liner.startMm, cutsMin)
+    var chainEnd = max(liner.endMm, cutsMax)
+    var drawToAftEnd = false
+    var drawToFwdEnd = false
+    if (reachToSetMm > 0f) {
+        if (chainEnd <= fwdSetMm && fwdSetMm - chainEnd <= reachToSetMm) {
+            chainEnd = fwdSetMm
+            drawToFwdEnd = true
+        }
+        if (chainStart >= aftSetMm && chainStart - aftSetMm <= reachToSetMm) {
+            chainStart = aftSetMm
+            drawToAftEnd = true
+        }
+    }
     val (drawStart, drawEnd) = withUndercutBreakRoom(
-        (chainStart - padMm).coerceIn(0f, hi), (chainEnd + padMm).coerceIn(0f, hi), segs, oalMm,
-        cutSpans,
+        if (drawToAftEnd) 0f else (chainStart - padMm).coerceIn(0f, hi),
+        if (drawToFwdEnd) hi else (chainEnd + padMm).coerceIn(0f, hi),
+        segs, oalMm, cutSpans,
     )
     return UndercutStrip.LinerStrip(
         linerId = liner.id,
@@ -1115,7 +1154,8 @@ fun undercutPreviewDrawRange(
  * and only its draw range grows). Result is sorted aft → fwd by draw start. Consumed by the
  * overview affordances, the detail overlay, and the PDF strips, so all three agree by
  * construction. Empty spans are skipped, as in [clusterUndercuts]. Empty [segs] skips the
- * break room.
+ * break room. [reachToSetMm], [aftSetMm] and [fwdSetMm] are forwarded to every liner strip
+ * ([linerStripFor]'s "Draw to the shaft end"); free strips ignore them.
  */
 fun buildUndercutStrips(
     spans: List<UndercutSpanMm>,
@@ -1124,6 +1164,9 @@ fun buildUndercutStrips(
     gapMm: Float = UNDERCUT_CLUSTER_GAP_MM,
     padMm: Float = UNDERCUT_WINDOW_PAD_MM,
     segs: List<SurfaceSeg> = emptyList(),
+    reachToSetMm: Float = 0f,
+    aftSetMm: Float = 0f,
+    fwdSetMm: Float = oalMm,
 ): List<UndercutStrip> {
     val live = spans.filter { it.endMm > it.startMm }
     val linerOf = assignUndercutLiners(live, liners)
@@ -1131,7 +1174,10 @@ fun buildUndercutStrips(
     val strips = mutableListOf<UndercutStrip>()
     for (liner in liners) {
         val assigned = byLiner[liner.id] ?: continue
-        strips += linerStripFor(liner, assigned, oalMm, padMm, segs, cutSpans = assigned)
+        strips += linerStripFor(
+            liner, assigned, oalMm, padMm, segs, cutSpans = assigned,
+            reachToSetMm = reachToSetMm, aftSetMm = aftSetMm, fwdSetMm = fwdSetMm,
+        )
     }
     for (window in clusterUndercuts(byLiner[null].orEmpty(), oalMm, gapMm, padMm)) {
         val members = live.filter { it.id in window.undercutIds }

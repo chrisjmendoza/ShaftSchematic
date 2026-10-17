@@ -121,6 +121,17 @@ fun ShaftViewModel.setPdfUndercutLinerOutline(v: Boolean, persist: Boolean = tru
 }
 
 /**
+ * Wired to the "Split cuts at liner edges" row in Settings → PDF Export and on the undercut
+ * preview's options sheet: a chain-rail node at each liner edge a cut runs past, on the printed
+ * undercut document and the detail canvas. Off, every cut prints its full length.
+ */
+fun ShaftViewModel.setPdfUndercutSplitAtLinerEdge(v: Boolean, persist: Boolean = true) {
+    _pdfUndercutSplitAtLinerEdge.value = v
+    SettingsStore.updatePdfPrefs { it.copy(undercutSplitAtLinerEdge = v) }
+    if (persist) viewModelScope.launch { SettingsStore.setPdfUndercutSplitAtLinerEdge(getApplication(), v) }
+}
+
+/**
  * Wired to the "Shade in Components" block in Settings and both PDF options sheets — narrows
  * the body shade to authored sections, leaving auto (bare-shaft) runs unfilled. Subtractive:
  * it changes nothing while [setPdfShadedBodies] is off.
@@ -409,6 +420,7 @@ fun ShaftViewModel.applyDrawingProfile(profile: DrawingProfile) {
     setPdfShadeExplicitBodiesOnly(prefs.shadeExplicitBodiesOnly)
     setPdfUndercutLineArt(prefs.undercutLineArt)
     setPdfUndercutLinerOutline(prefs.undercutLinerOutline)
+    setPdfUndercutSplitAtLinerEdge(prefs.undercutSplitAtLinerEdge)
     setPdfCurveLoHeightIn(prefs.curveLoHeightIn)
     setPdfCurveHiHeightIn(prefs.curveHiHeightIn)
     setPdfSBreakThresholdFrac(prefs.sBreakThresholdFrac)

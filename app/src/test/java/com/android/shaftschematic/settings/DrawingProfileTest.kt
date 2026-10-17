@@ -113,7 +113,7 @@ class DrawingProfileTest {
 
         listOf(
             "tieringMode", "showComponentTitles", "shadedBodies", "shadedTapers", "shadedLiners",
-            "undercutLineArt", "undercutLinerOutline", "curveLoHeightIn", "curveHiHeightIn", "sBreakThresholdFrac", "arrowSizePt",
+            "undercutLineArt", "undercutLinerOutline", "undercutSplitAtLinerEdge", "curveLoHeightIn", "curveHiHeightIn", "sBreakThresholdFrac", "arrowSizePt",
             "threadSlant", "threadDensity", "fractionStyle", "outputFont", "dualUnitLayout", "wearTraceDepthFrac", "wearBandShadeFrac",
             "wearJoinGapMaxMm", "lineThicknessScale",
         ).forEach { field ->
@@ -146,6 +146,8 @@ class DrawingProfileTest {
         assertFalse(profile.toPdfPrefs().undercutLineArt)
         // The liner outline ships on, so an older preset draws it.
         assertTrue(profile.toPdfPrefs().undercutLinerOutline)
+        // Split-at-liner-edge ships off, so an older preset prints whole cut lengths.
+        assertFalse(profile.toPdfPrefs().undercutSplitAtLinerEdge)
     }
 
     @Test
@@ -154,6 +156,16 @@ class DrawingProfileTest {
         val decoded = decodeDrawingProfiles(encodeDrawingProfiles(mapOf("No outline" to profile)))
 
         assertFalse(decoded.getValue("No outline").toPdfPrefs().undercutLinerOutline)
+    }
+
+    @Test
+    fun `undercut split at liner edge is captured, applied and defaulted`() {
+        assertFalse(DrawingProfile().toPdfPrefs().undercutSplitAtLinerEdge)
+        val profile = DrawingProfile.of(PdfPrefs(undercutSplitAtLinerEdge = true), lineThicknessScale = 1f)
+        assertTrue(profile.undercutSplitAtLinerEdge)
+        val decoded = decodeDrawingProfiles(encodeDrawingProfiles(mapOf("Split" to profile)))
+
+        assertTrue(decoded.getValue("Split").toPdfPrefs().undercutSplitAtLinerEdge)
     }
 
     @Test

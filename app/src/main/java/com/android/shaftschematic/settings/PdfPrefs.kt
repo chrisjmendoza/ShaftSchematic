@@ -169,6 +169,15 @@ data class PdfPrefs(
      */
     val undercutLinerOutline: Boolean = true,
     /**
+     * Whether the undercut detail strips' chain rail splits a cut machined past a liner edge into
+     * two spans meeting at that edge (`geom/UndercutMath.kt`'s `buriedUndercutLinerEdgesMm`, fed
+     * as `buildUndercutRailSpans`' `splitAtMm`). Off by default: the shop measures the length of
+     * each cut, so every cut prints its full length (on-device direction); on, the overhang reads
+     * against the liner edge's position. Part of the drawing look, so profiles capture it; the
+     * undercut PDF and the detail canvas read it.
+     */
+    val undercutSplitAtLinerEdge: Boolean = false,
+    /**
      * Default sizing-curve anchor heights (paper inches of drawn height at 100% on the
      * "Shaft height" slider): a 4" shaft draws [curveLoHeightIn] tall, an 8" shaft
      * [curveHiHeightIn]; sizes between and beyond follow the line

@@ -8,6 +8,7 @@ import com.android.shaftschematic.geom.UndercutWindow
 import com.android.shaftschematic.geom.buildUndercutStrips
 import com.android.shaftschematic.geom.buriedUndercutLinerEdgesMm
 import com.android.shaftschematic.geom.linerStripFor
+import com.android.shaftschematic.geom.UNDERCUT_SET_REACH_MM
 import com.android.shaftschematic.model.Undercut
 import com.android.shaftschematic.util.UnitSystem
 import org.junit.Assert.assertEquals
@@ -98,6 +99,35 @@ class UndercutStripLayoutTest {
         // Outside the chain, and exactly on existing nodes.
         assertEquals(plain, buildUndercutRailSpans(500f, 1500f, spans, mm, splitAtMm = listOf(100f, 2000f)))
         assertEquals(plain, buildUndercutRailSpans(500f, 1500f, spans, mm, splitAtMm = listOf(500f, 600f, 1500f)))
+    }
+
+    // ── "Draw to the shaft end": the chain runs on to the S.E.T. ──
+
+    @Test
+    fun `a chain ending at the shaft end dimensions the run from the last cut to it`() {
+        val oal = 3000f
+        val liner = UndercutLinerSpan("liner", 2000f, 2600f)
+        val spans = listOf(span("a", 2100f, 2200f), span("b", 2500f, 2700f))
+        val strip = linerStripFor(liner, spans, oal, reachToSetMm = UNDERCUT_SET_REACH_MM)
+        assertEquals(oal, strip.chainEndMm, 1e-3f)
+        val rail = buildUndercutRailSpans(strip.chainStartMm, strip.chainEndMm, spans, mm)
+        // liner AFT → a, a, a → b, b, b → FWD S.E.T.
+        assertEquals(5, rail.size)
+        assertEquals(2700f, rail.last().startMm, 1e-3f)
+        assertEquals(oal, rail.last().endMm, 1e-3f)
+        assertEquals(oal - 2000f, rail.totalLengthMm(), 1e-3f)
+        // The total span stays the run across the cuts.
+        assertEquals(600f, buildUndercutTotalSpan(spans, mm)!!.let { it.endMm - it.startMm }, 1e-3f)
+
+        // The buried-edge node still splits cut b at the liner's FWD edge when supplied.
+        val edges = buriedUndercutLinerEdgesMm(strip.linerStartMm, strip.linerEndMm, spans)
+        assertEquals(listOf(2600f), edges)
+        val split = buildUndercutRailSpans(strip.chainStartMm, strip.chainEndMm, spans, mm, splitAtMm = edges)
+        assertEquals(6, split.size)
+        assertEquals(2600f, split[3].endMm, 1e-3f)
+        assertEquals(2600f, split[4].startMm, 1e-3f)
+        assertEquals(2700f, split[4].endMm, 1e-3f)
+        assertEquals(oal, split.last().endMm, 1e-3f)
     }
 
     @Test

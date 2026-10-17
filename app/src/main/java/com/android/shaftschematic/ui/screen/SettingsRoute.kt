@@ -152,6 +152,7 @@ fun SettingsRoute(
     val pdfShadedLiners by vm.pdfShadedLiners.collectAsState()
     val pdfUndercutLineArt by vm.pdfUndercutLineArt.collectAsState()
     val pdfUndercutLinerOutline by vm.pdfUndercutLinerOutline.collectAsState()
+    val pdfUndercutSplitAtLinerEdge by vm.pdfUndercutSplitAtLinerEdge.collectAsState()
     val pdfShadeExplicitBodiesOnly by vm.pdfShadeExplicitBodiesOnly.collectAsState()
     val pdfExportMode by vm.pdfExportMode.collectAsState()
     val lineThicknessScale by vm.lineThicknessScale.collectAsState()
@@ -976,6 +977,22 @@ fun SettingsRoute(
                             Text("Undercut drawing: liner outline")
                             Text(
                                 UNDERCUT_LINER_OUTLINE_CAPTION,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = pdfUndercutSplitAtLinerEdge,
+                            onCheckedChange = { vm.setPdfUndercutSplitAtLinerEdge(it) },
+                            modifier = Modifier.testTag("pdf_undercut_split_at_liner_edge"),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Column {
+                            Text("Undercut drawing: split cuts at liner edges")
+                            Text(
+                                UNDERCUT_SPLIT_AT_LINER_EDGE_CAPTION,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
