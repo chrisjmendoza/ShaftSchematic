@@ -157,7 +157,7 @@ class StartOverlapValidationTest {
         assertEquals("Must be > 0", positiveLengthErrorMm(-1f))
     }
 
-    /** Unparseable text is the field's own "Invalid number", not a too-short length. */
+    /** Unparseable text is the field's own "not a number" notice, not a too-short length. */
     @Test
     fun `an unparsed value is deferred to the field's parse check`() {
         assertNull(positiveLengthErrorMm(null))

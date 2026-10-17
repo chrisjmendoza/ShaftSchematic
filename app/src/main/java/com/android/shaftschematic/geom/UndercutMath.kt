@@ -273,6 +273,30 @@ fun undercutLinerExtensionsMm(
 }
 
 /**
+ * Which liner edges an edit has newly carried the span past, as `(aft, fwd)`: an end is "new"
+ * when its extension ([undercutLinerExtensionsMm]) was within [epsMm] BEFORE the edit and is
+ * beyond it AFTER. An end that already overhung and grows further, or one pulled back inside, is
+ * not new. Pure; it decides only whether to ASK — the card's "Past the liner edge" question after
+ * a Distance or Length commit (on-device request: the machinist may not know the typed numbers
+ * run the cut off the liner, or the measurement may be wrong). Nothing is rewritten either way.
+ */
+fun newLinerOverhangs(
+    beforeStartMm: Float,
+    beforeLengthMm: Float,
+    afterStartMm: Float,
+    afterLengthMm: Float,
+    linerStartMm: Float,
+    linerEndMm: Float,
+    epsMm: Float = UNDERCUT_TOUCH_EPS_MM,
+): Pair<Boolean, Boolean> {
+    val (beforeAft, beforeFwd) =
+        undercutLinerExtensionsMm(beforeStartMm, beforeLengthMm, linerStartMm, linerEndMm)
+    val (afterAft, afterFwd) =
+        undercutLinerExtensionsMm(afterStartMm, afterLengthMm, linerStartMm, linerEndMm)
+    return (beforeAft <= epsMm && afterAft > epsMm) to (beforeFwd <= epsMm && afterFwd > epsMm)
+}
+
+/**
  * The span after typing an AFT extension of [extMm] past the liner's AFT edge [linerStartMm],
  * as `(start, length)`. The span's FWD end stays pinned. `extMm > 0` puts the start at
  * `linerStartMm − extMm`; `extMm == 0` pulls a start that lies AFT of the liner edge back to

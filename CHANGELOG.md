@@ -8,6 +8,32 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-16
 
+### fix(undercut): a typed value is never reverted; every refusal says so
+
+- Undercut Distance, Length and Extend fields no longer run the shaft-bounds check at the
+  field, where a failing value was silently replaced by the previous one on blur. The typed
+  value now lands in the card exactly as entered (golden rule), the drawing previews it to the
+  shaft's end, and ALL span validity — bounds, length, overlap — is decided at confirm, shown
+  under the fields and on the status pill, with the Keep-editing / Discard prompt on leave
+  (on-device report: "undercut inputs are not sacred and are getting modified on error").
+- App-wide, a number field that cannot accept a value still restores the previous one but now
+  says exactly what it did — "20 not applied — Undercut extends past the shaft's FWD end" — in red
+  under the field until the next focus or edit; a parse failure reads "… not applied — not a
+  number", and stays until you edit the field. The restored value is now the last COMMITTED one:
+  the field used to put back the last keystroke that merely parsed, so a rejected value could stay
+  in the box with nothing behind it, and a blank entry could show a number the card never received.
+  A dirty draft dropped because an Undo removed its cut is announced in a snackbar.
+- **Past the liner edge, asked first.** On a liner's card, a typed Distance or Length that makes
+  the cut run past a liner edge it did not cross before opens a question — "This undercut will run
+  2.000 in past the liner's FWD edge. Add that as an extension past the liner?" "Add extension"
+  keeps the values and the Extend field shows the overhang; "No" also keeps the values (nothing is
+  rewritten either way) and the card warns "Runs 2.000 in past the liner's FWD edge — double-check
+  Distance and Length" until the overhang is gone (on-device request: the machinist may not be
+  aware, or a measurement may be wrong). The Extend fields, Whole liner, Butt-against and Measure
+  From never ask: those are explicit. Pure `newLinerOverhangs` (`geom/UndercutMath.kt`).
+  `NumericInputFieldBlurTest`, `UndercutDetailOverlayTest`; `NumberField.md`, `UndercutDrawing.md`
+  and the manual updated.
+
 ### fix(undercut): the trash deletes the cut you selected
 
 - On a liner's page, tapping a cut on the drawing two or more cards away could cancel its own

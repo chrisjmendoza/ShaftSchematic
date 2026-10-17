@@ -143,6 +143,57 @@ class UndercutMathTest {
         assertEquals(30f, fwd, 1e-4f)
     }
 
+    // ── "Past the liner edge" trigger ──
+
+    @Test
+    fun `an edit that leaves the span inside the liner overhangs nothing new`() {
+        assertEquals(
+            false to false,
+            newLinerOverhangs(650f, 200f, 700f, 250f, linerStartMm = 600f, linerEndMm = 1000f),
+        )
+    }
+
+    @Test
+    fun `a length that grows past the FWD edge is a new FWD overhang`() {
+        assertEquals(
+            false to true,
+            newLinerOverhangs(650f, 200f, 650f, 400f, linerStartMm = 600f, linerEndMm = 1000f),
+        )
+    }
+
+    @Test
+    fun `a distance that moves the start past the AFT edge is a new AFT overhang`() {
+        assertEquals(
+            true to false,
+            newLinerOverhangs(650f, 200f, 550f, 200f, linerStartMm = 600f, linerEndMm = 1000f),
+        )
+    }
+
+    @Test
+    fun `a span already past the edge that grows further is not new`() {
+        assertEquals(
+            false to false,
+            newLinerOverhangs(650f, 400f, 650f, 500f, linerStartMm = 600f, linerEndMm = 1000f),
+        )
+    }
+
+    @Test
+    fun `a span pulled back inside the liner overhangs nothing new`() {
+        assertEquals(
+            false to false,
+            newLinerOverhangs(550f, 500f, 650f, 200f, linerStartMm = 600f, linerEndMm = 1000f),
+        )
+    }
+
+    @Test
+    fun `an overhang within the touch slop is not an overhang`() {
+        // Float round trips at a long shaft's FWD end leave sub-slop residue; that is the edge.
+        assertEquals(
+            false to false,
+            newLinerOverhangs(650f, 200f, 650f, 350.005f, linerStartMm = 600f, linerEndMm = 1000f),
+        )
+    }
+
     @Test
     fun `an AFT extension on a mid-liner cut moves the start past the edge and pins the FWD end`() {
         val (start, len) = undercutSpanWithAftExtension(
