@@ -1210,12 +1210,15 @@ internal fun WearNum(
      * field has to take that value back as typed.
      */
     allowNegative: Boolean = false,
+    /** False greys the field out; the caller says why next to it. */
+    enabled: Boolean = true,
     onCommit: (String) -> Unit,
 ) {
     NumericInputField(
         label = label,
         initialText = initialDisplay,
         modifier = modifier,
+        enabled = enabled,
         allowNegative = allowNegative,
         allowFraction = true,
         parseValid = { parseFractionOrDecimal(it) != null },

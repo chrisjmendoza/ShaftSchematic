@@ -270,9 +270,9 @@ fun undercutLinerExtensionsMm(
  * the edge and leaves a start inside the liner where it is (zero extension means "does not run
  * past the edge", not "starts at the edge"). A negative [extMm] is treated as 0.
  *
- * Pure; does not validate — the caller runs [undercutSpanIssue] on the result (a span whose
- * FWD end lies AFT of the liner edge comes back with a non-positive length, which that check
- * blocks).
+ * Pure; does not validate or clamp — the caller limits [extMm] to the stock that exists
+ * ([clampUndercutExtension]) and checks the result's length (a span whose FWD end lies AFT of
+ * the liner edge comes back with a non-positive length).
  */
 fun undercutSpanWithAftExtension(
     startMm: Float,
@@ -310,6 +310,43 @@ fun undercutSpanWithFwdExtension(
         else -> endMm
     }
     return startMm to (newEndMm - startMm)
+}
+
+/**
+ * Stock available AFT of the liner for an extension: from the shaft's AFT end (0) to the liner's
+ * AFT edge [linerStartMm]; never negative. A cut can only run past the liner into stock that is
+ * there (on-device request), so this is the most the AFT "Extend past liner" field can apply.
+ */
+fun maxUndercutAftExtensionMm(linerStartMm: Float): Float = max(0f, linerStartMm)
+
+/**
+ * Stock available FWD of the liner: from the liner's FWD edge [linerEndMm] to the shaft's FWD
+ * end [oalMm]; never negative. Mirror of [maxUndercutAftExtensionMm].
+ */
+fun maxUndercutFwdExtensionMm(linerEndMm: Float, oalMm: Float): Float = max(0f, oalMm - linerEndMm)
+
+/**
+ * A typed extension limited to the stock that exists: [appliedMm] is the value the span is built
+ * from, and [limited] is true when the typed value asked for more than the shaft has.
+ */
+data class UndercutExtensionClamp(val appliedMm: Float, val limited: Boolean)
+
+/**
+ * Limits a typed extension [typedMm] to [maxMm] (from [maxUndercutAftExtensionMm] /
+ * [maxUndercutFwdExtensionMm]). A value at or under the maximum passes through unchanged; a
+ * larger one applies the maximum and reports `limited`. A negative [typedMm] applies 0 and is not
+ * limited — the extension functions already read a negative as 0.
+ *
+ * This is a deliberate carve-out from the golden rule, for a DERIVED field only: the extension is
+ * a view of the stored shaft-space span, nothing stores it, and a cut running past the shaft's
+ * end is a limit of the shaft rather than a measurement to keep. The clamp applies at the moment
+ * of typing; a stored span is never clamped after the fact.
+ */
+fun clampUndercutExtension(typedMm: Float, maxMm: Float): UndercutExtensionClamp {
+    val typed = max(0f, typedMm)
+    val cap = max(0f, maxMm)
+    return if (typed > cap) UndercutExtensionClamp(cap, limited = true)
+    else UndercutExtensionClamp(typed, limited = false)
 }
 
 /**

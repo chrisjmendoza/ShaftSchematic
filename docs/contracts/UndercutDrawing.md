@@ -154,7 +154,10 @@ data class UndercutRecord(val undercuts: List<Undercut> = emptyList())
   `(start, length)` after a typed extension, the opposite end pinned (negative `ext` = 0; `ext ==
   0` pulls an overhanging end back to the edge, leaves an inside end alone);
   `undercutIsWholeLiner(start, length, linerStart, linerEnd, eps)` — the span is the liner's own
-  within ε.
+  within ε; `maxUndercutAftExtensionMm(linerStart)` / `maxUndercutFwdExtensionMm(linerEnd, oal)` —
+  the stock between the liner edge and that shaft end, ≥ 0; `clampUndercutExtension(typed, max)` →
+  `UndercutExtensionClamp(appliedMm, limited)` (typed above max → max, limited; at or under →
+  unchanged; negative → 0, not limited).
 - **Blocking entry validation** `undercutSpanIssue(canonicalStartMm, lengthMm, oalMm)`: length
   must be `> ε`, and `[start, start+length]` must lie in `[0, oalMm]` (ε = `1e-3` mm,
   boundary-exact accepted). Wired as a `NumericInputField` validator on the Distance and Length
@@ -708,7 +711,22 @@ for that liner, so Distance then reads 0. **"Extend past liner" AFT / FWD** (`un
 end to `linerStart − ext` with the **FWD end pinned** (`undercutSpanWithAftExtension`); FWD is the
 mirror with the **AFT end pinned** (`undercutSpanWithFwdExtension`). A typed 0 pulls an end that
 overhangs the edge back to it and leaves an end inside the liner alone. Neither field changes the
-reference, and both validate through `undercutSpanIssue`. **Nothing is stored**: the extensions are
+reference. **An extension only runs into stock that is there** (on-device request): the most a side
+can apply is the stock between the liner edge and that shaft end (`maxUndercutAftExtensionMm` = the
+liner's AFT edge, `maxUndercutFwdExtensionMm` = `oalMm − linerEnd`), and a typed value past it is
+not blocked — `clampUndercutExtension` applies the maximum and the card shows "Extension past the
+shaft's AFT|FWD end isn't allowed — set to the maximum, …" under the row
+(`undercut_extend_aft_note` / `undercut_extend_fwd_note`; it clears on that side's next un-limited
+commit, and is shown only while the field still reads the applied maximum). The field re-seeds to
+the applied value — a per-side counter re-keys it on every limited commit, since a repeat overrun
+leaves the draft, and so `initialText`, unchanged. A side with no stock (the liner sits at that
+shaft end) is disabled with the caption "Liner is at the shaft's AFT|FWD end — nothing to extend
+into". A clamped span cannot leave the shaft, so these two validators run no `undercutSpanIssue`;
+they block only an unparseable value and a result with no length (the Distance/Length validators
+are unchanged). The clamp is a **deliberate carve-out from the golden rule for a derived view field
+only**: nothing stores the extension, and a cut past the shaft's end is a limit of the shaft, not a
+measurement to keep; it applies at the moment of typing, and a stored span is never clamped after
+the fact. **Nothing is stored**: the extensions are
 a view of the stored shaft-space span against the authored liner edges — the "Distance from Liner
 AFT" relation with the sign flipped — and nothing derived writes back into them. The golden rule
 holds because a typed extension maps to canonical through the authored liner edge exactly as a

@@ -8,6 +8,17 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-16
 
+### feat(undercut): liner extensions stop at the shaft end
+
+- "Extend past liner" AFT / FWD now extend only into stock that exists: a typed value larger
+  than the run from the liner's edge to the shaft's end is set to that maximum, and a note under
+  the field says an extension past the shaft's start or end isn't allowed (on-device request).
+  A side with no stock at all — the liner sits at that shaft end — is disabled with a caption
+  saying so. A deliberate carve-out from the golden rule for a derived view field only: the
+  extension is not a stored value, and the stored span is never clamped after the fact. Pure
+  `maxUndercutAftExtensionMm` / `maxUndercutFwdExtensionMm` / `clampUndercutExtension`
+  (`geom/UndercutMath.kt`); `UndercutMathTest` + `UndercutDraftTest`; `UndercutDrawing.md` updated.
+
 ### feat(undercut): "Whole liner" preset and "Extend past liner" AFT/FWD fields
 
 - On a liner's undercut page the card gains a **Span: Whole liner** chip (one tap sets the cut
