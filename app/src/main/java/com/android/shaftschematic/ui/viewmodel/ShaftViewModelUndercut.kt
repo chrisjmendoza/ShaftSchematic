@@ -90,9 +90,32 @@ fun ShaftViewModel.updateUndercutReference(
     }
 }
 
-/** Remove an undercut by [id]. Confirm-free, as authored in its edit card. */
+/**
+ * Remove an undercut by [id]. Confirm-free, as authored in its edit card — the detail page's
+ * delete offers an Undo snackbar that hands the removed cut to [restoreUndercut].
+ */
 fun ShaftViewModel.removeUndercut(id: String) {
     _undercutRecord.update { rec -> rec.copy(undercuts = rec.undercuts.filterNot { it.id == id }) }
+}
+
+/**
+ * Put a deleted undercut back **verbatim** — the same [Undercut] object, id and every stored
+ * value included (golden rule) — at [index], its position in the record before removal, or at
+ * the end when [index] is out of range. A no-op when a cut with [u]'s id is already present, so a
+ * snackbar Undo that lands after a history Undo already restored the cut cannot duplicate it.
+ *
+ * This restores the CUT, not a history step: the session history coalesces edits that land
+ * within its window, so stepping back could also revert an edit made just before the delete.
+ */
+fun ShaftViewModel.restoreUndercut(u: Undercut, index: Int) {
+    _undercutRecord.update { rec ->
+        if (rec.undercuts.any { it.id == u.id }) rec
+        else {
+            val list = rec.undercuts.toMutableList()
+            if (index in 0..list.size) list.add(index, u) else list.add(u)
+            rec.copy(undercuts = list)
+        }
+    }
 }
 
 /**

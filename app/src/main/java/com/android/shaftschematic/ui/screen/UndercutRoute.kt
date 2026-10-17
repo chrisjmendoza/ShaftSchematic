@@ -27,6 +27,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Redo
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Menu
@@ -66,6 +68,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.ExperimentalTextApi
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.SurfaceSeg
 import com.android.shaftschematic.geom.UNDERCUT_EXAGGERATION_MAX_FRAC
@@ -103,6 +106,7 @@ import com.android.shaftschematic.ui.util.exportPdfGate
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.addUndercut
 import com.android.shaftschematic.ui.viewmodel.removeUndercut
+import com.android.shaftschematic.ui.viewmodel.restoreUndercut
 import com.android.shaftschematic.ui.viewmodel.setUndercutExaggeration
 import com.android.shaftschematic.ui.viewmodel.updateUndercut
 import com.android.shaftschematic.ui.viewmodel.updateUndercutReference
@@ -193,6 +197,9 @@ fun UndercutRoute(
     // along as explicit LaunchedEffect keys below.
     val unitOverrides      by vm.unitOverrides.collectAsState()
     val dualUnits          by vm.dualUnits.collectAsState()
+    // The document's ONE undo history — the same steps the Schematic tab's Undo walks.
+    val canUndo            by vm.canUndo.collectAsState()
+    val canRedo            by vm.canRedo.collectAsState()
 
     val ctx = LocalContext.current
     var showPreview by rememberSaveable { mutableStateOf(false) }
@@ -209,6 +216,20 @@ fun UndercutRoute(
     // **undercut** id anchors a bare-shaft cluster. The liner anchor wins when both are set.
     var anchorLinerId by rememberSaveable { mutableStateOf<String?>(null) }
     var anchorUndercutId by rememberSaveable { mutableStateOf<String?>(null) }
+    // The open overlay's identity and the cut it opens on, both fixed at OPEN time. The free-strip
+    // anchor moves to a sibling when its own cut is deleted, so the overlay's state cannot key on
+    // the anchor itself — the identity outlives every edit made inside the overlay.
+    var overlayKey by rememberSaveable { mutableStateOf<String?>(null) }
+    var overlayInitialSelectedId by rememberSaveable { mutableStateOf<String?>(null) }
+
+    // Every way the overlay opens comes through here, so the identity is always set with the
+    // anchor. [selectId] is the card to open on; null opens on the strip's aft-most card.
+    fun openOverlay(linerId: String?, undercutId: String?, selectId: String?) {
+        anchorLinerId = linerId
+        anchorUndercutId = undercutId
+        overlayInitialSelectedId = selectId
+        overlayKey = linerId?.let { "liner:$it" } ?: undercutId?.let { "free:$it" }
+    }
 
     // Collisions corrupt any drawing, so the shared export gate guards this surface too —
     // the same posture as the runout and schematic surfaces.
@@ -297,11 +318,11 @@ fun UndercutRoute(
         else -> null
     }
 
-    // Open the strip an undercut belongs to, from the list below the canvas.
+    // Open the strip an undercut belongs to, from the list below the canvas — on that cut's card.
     fun anchorToUndercut(id: String) {
         when (val s = strips.firstOrNull { id in it.undercutIds }) {
-            is UndercutStrip.LinerStrip -> { anchorLinerId = s.linerId; anchorUndercutId = null }
-            else -> { anchorLinerId = null; anchorUndercutId = id }
+            is UndercutStrip.LinerStrip -> openOverlay(linerId = s.linerId, undercutId = null, selectId = id)
+            else -> openOverlay(linerId = null, undercutId = id, selectId = id)
         }
     }
 
@@ -448,14 +469,13 @@ fun UndercutRoute(
                                 )?.let { id -> linerSpans.firstOrNull { it.id == id } }
                                     ?.let { ln -> stripForLiner(ln) }
                             when (hit) {
-                                is UndercutStrip.LinerStrip -> {
-                                    anchorLinerId = hit.linerId
-                                    anchorUndercutId = null
-                                }
-                                is UndercutStrip.FreeStrip -> {
-                                    anchorLinerId = null
-                                    anchorUndercutId = hit.window.undercutIds.firstOrNull()
-                                }
+                                is UndercutStrip.LinerStrip ->
+                                    openOverlay(linerId = hit.linerId, undercutId = null, selectId = null)
+                                is UndercutStrip.FreeStrip -> openOverlay(
+                                    linerId = null,
+                                    undercutId = hit.window.undercutIds.firstOrNull(),
+                                    selectId = null,
+                                )
                                 null -> Unit
                             }
                         }
@@ -522,8 +542,8 @@ fun UndercutRoute(
                 val start = aftSetXMm.coerceIn(0f, oalMm)
                 val length = DEFAULT_UNDERCUT_LENGTH_MM
                     .coerceAtMost((oalMm - start).coerceAtLeast(0.1f))
-                anchorLinerId = null
-                anchorUndercutId = vm.addUndercut(start, length)
+                val newId = vm.addUndercut(start, length)
+                openOverlay(linerId = null, undercutId = newId, selectId = newId)
             },
             enabled = oalMm > 0f,
             modifier = Modifier.fillMaxWidth(),
@@ -678,9 +698,26 @@ fun UndercutRoute(
             Text(
                 text = "Undercut Drawing",
                 style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(start = 4.dp),
+                // Weighted so the actions are measured first: on a phone the title yields
+                // (ellipsized) rather than squeezing the trailing Save / Help icons to nothing.
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 4.dp).weight(1f),
             )
-            Spacer(Modifier.weight(1f))
+            IconButton(
+                onClick = vm::undoEdit,
+                enabled = canUndo,
+                modifier = Modifier.testTag("undercut_undo"),
+            ) {
+                Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = "Undo")
+            }
+            IconButton(
+                onClick = vm::redoEdit,
+                enabled = canRedo,
+                modifier = Modifier.testTag("undercut_redo"),
+            ) {
+                Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = "Redo")
+            }
             IconButton(
                 onClick = onSave,
                 modifier = Modifier.testTag("toolbar_save"),
@@ -785,6 +822,8 @@ fun UndercutRoute(
     activeStrip?.let { s ->
         UndercutWindowDetailOverlay(
             strip = s,
+            stripKey = overlayKey ?: anchorLinerId?.let { "liner:$it" } ?: "free:$anchorUndercutId",
+            initialSelectedId = overlayInitialSelectedId,
             spec = spec,
             resolvedComponents = resolvedComponents,
             unit = unit,
@@ -810,7 +849,12 @@ fun UndercutRoute(
                 }
                 vm.removeUndercut(id)
             },
-            onClose = { anchorLinerId = null; anchorUndercutId = null },
+            onClose = { openOverlay(linerId = null, undercutId = null, selectId = null) },
+            onRestoreUndercut = vm::restoreUndercut,
+            canUndo = canUndo,
+            canRedo = canRedo,
+            onUndo = vm::undoEdit,
+            onRedo = vm::redoEdit,
         )
     }
 }

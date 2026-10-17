@@ -445,7 +445,10 @@ symbolic shallow floor in the overlay, never printed. Notch **depth is display-e
 shallower than true, region topology from the TRUE floor) because real cuts are hairline-thin
 at scale; printed Ø values stay the stored numbers. No carousel card and no Add dialog —
 undercuts are authored only on their tab, keeping them outside the add-dialog-parity
-invariant. The notch (void fill erasing surface stroke and fill — the mouth stays **OPEN**,
+invariant. Both undercut surfaces carry Undo/Redo bound to the ONE document history; the
+detail page's confirm-free delete offers a snackbar Undo that restores the exact cut via
+`restoreUndercut` (verbatim, original index, no-op when the id is already back) — never a
+history step, which could fold in an edit coalesced with the delete. The notch (void fill erasing surface stroke and fill — the mouth stays **OPEN**,
 never closed by a lid — plus a full-height **section face** at each end and the floor lines,
 so each cut is its own reduced-Ø rectangle **step in the silhouette**, cut against the
 **local outer-surface envelope**; the section's core fills one step **lighter** than the
