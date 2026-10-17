@@ -101,7 +101,6 @@ import com.android.shaftschematic.geom.effectiveUndercutReference
 import com.android.shaftschematic.geom.isUndercutStaleOverrun
 import com.android.shaftschematic.geom.maxOuterDiaOver
 import com.android.shaftschematic.geom.nearestSetReference
-import com.android.shaftschematic.geom.UNDERCUT_PARTIAL_OVERLAP_MSG
 import com.android.shaftschematic.geom.UNDERCUT_SPAN_EPS_MM
 import com.android.shaftschematic.geom.UNDERCUT_TOUCH_EPS_MM
 import com.android.shaftschematic.geom.clampUndercutExtension
@@ -117,7 +116,6 @@ import com.android.shaftschematic.geom.undercutCanonicalForNewLength
 import com.android.shaftschematic.geom.undercutIsWholeLiner
 import com.android.shaftschematic.geom.undercutLinerEdgeBuried
 import com.android.shaftschematic.geom.undercutLinerExtensionsMm
-import com.android.shaftschematic.geom.undercutButtsAfter
 import com.android.shaftschematic.geom.undercutOverlapIssue
 import com.android.shaftschematic.geom.undercutPartialOverlapsMm
 import com.android.shaftschematic.geom.undercutPreviewDrawRange
@@ -127,7 +125,13 @@ import com.android.shaftschematic.geom.undercutSetPositions
 import com.android.shaftschematic.geom.undercutSpanIssue
 import com.android.shaftschematic.geom.undercutSpanWithAftExtension
 import com.android.shaftschematic.geom.undercutSpanWithFwdExtension
-import com.android.shaftschematic.geom.undercutStartButting
+import com.android.shaftschematic.geom.undercutStartAtEndOf
+import com.android.shaftschematic.geom.undercutEndAtStartOf
+import com.android.shaftschematic.geom.undercutOverlapMessage
+import com.android.shaftschematic.geom.undercutOverlapPartnerId
+import com.android.shaftschematic.geom.isParentUndercutReference
+import com.android.shaftschematic.geom.undercutParentCandidate
+import com.android.shaftschematic.geom.undercutReferenceParentSpan
 import com.android.shaftschematic.geom.undercutStartToCanonicalMm
 import com.android.shaftschematic.geom.shoulderEndMm
 import com.android.shaftschematic.geom.threadHatchSpan
@@ -210,7 +214,10 @@ import kotlin.math.min
  * leaves its card: swiping to another page, tapping another notch, or closing the overlay. A
  * BLOCKED draft is never silently committed and never silently dropped — the leave raises an
  * AlertDialog stating the blocking reason, with **Keep editing** (return to the card, cancelling
- * the close) and **Discard** (drop the draft and go). [undercutLeaveAction] is that decision.
+ * the close) and **Discard** (drop the draft and go). An "Add undercut" card left exactly as it
+ * was seeded is DISCARDED, never committed: the machinist typed nothing, and committing the seeded
+ * default span recorded stray cuts nobody authored (on-device report). Only the pill's explicit
+ * Confirm records an untouched add. [undercutLeaveAction] is that decision.
  *
  * Selection and paging are one thing: swiping a card highlights its notch, and tapping a notch
  * pages the carousel to its card. A swipe changes the selection only once the pager SETTLES (a
@@ -269,9 +276,15 @@ fun UndercutWindowDetailOverlay(
         lengthMm: Float,
         reference: UndercutReference,
         referenceLinerId: String,
+        referenceCutId: String,
     ) -> String,
     onUpdateUndercut: (id: String, startFromAftMm: Float, lengthMm: Float, diaMm: Float, note: String) -> Unit,
-    onUpdateReference: (id: String, reference: UndercutReference, referenceLinerId: String) -> Unit,
+    onUpdateReference: (
+        id: String,
+        reference: UndercutReference,
+        referenceLinerId: String,
+        referenceCutId: String,
+    ) -> Unit,
     onRemoveUndercut: (id: String) -> Unit,
     onClose: () -> Unit,
     /**
@@ -312,10 +325,12 @@ fun UndercutWindowDetailOverlay(
     // Per-card local edits; a card with no entry here shows stored values. The add flow's
     // not-yet-recorded page lives under [PENDING_UNDERCUT_ID].
     var drafts by remember(stripKey) { mutableStateOf(emptyMap<String, UndercutDraft>()) }
-    // The add draft's ordering key, fixed at creation — a pending card must not slide between
-    // pages while its Distance is being typed, the same "reorder only on confirm" rule the
-    // recorded cards follow.
-    var pendingSeedStartMm by remember(stripKey) { mutableStateOf<Float?>(null) }
+    // The add draft exactly as it was seeded. Its start is the pending card's ordering key, fixed
+    // at creation — a pending card must not slide between pages while its Distance is being typed,
+    // the same "reorder only on confirm" rule the recorded cards follow — and the whole draft is
+    // what tells an untouched add (discarded on leave) from an edited one.
+    var pendingSeed by remember(stripKey) { mutableStateOf<UndercutDraft?>(null) }
+    val pendingSeedStartMm = pendingSeed?.startFromAftMm
     var selectedId by remember(stripKey) { mutableStateOf(initialSelectedId) }
     // The cut Confirm just added, until the record publishes it: the selection already names it,
     // but it has no page yet, and healing or adopting in that frame would drop the card the
@@ -344,9 +359,16 @@ fun UndercutWindowDetailOverlay(
     val baselines = remember(undercuts, linerSpans) {
         undercuts.associate { it.id to undercutDraftOf(it, linerSpans) }
     }
+    // Every STORED cut's 1-based page position — the number its card title carries — so an overlap
+    // can name its partner. The pending card is not stored, so it is never anyone's partner.
+    val pagePositionById = remember(pageIds) {
+        pageIds.withIndex()
+            .filter { it.value != PENDING_UNDERCUT_ID }
+            .associate { it.value to it.index + 1 }
+    }
     // This page's STORED cuts as (1-based position in [pageIds], clamped span) — the targets of
-    // each card's "Butt against" chips, numbered as the card titles number them. The pending
-    // card is not stored, so it is never a target.
+    // each card's "Start at end of" / "End at start of" chips, numbered as the card titles number
+    // them. The pending card is not stored, so it is never a target.
     val pageButtTargets = remember(pageIds, undercuts, oalMm) {
         pageIds.mapIndexedNotNull { i, id ->
             undercuts.firstOrNull { it.id == id }?.let { u ->
@@ -401,17 +423,20 @@ fun UndercutWindowDetailOverlay(
     // color while valid, in the error color while this is non-null, and the status pill states
     // the same reason — one check over the whole sheet, so the drawing, the pill, and what
     // leaving the card does can never disagree.
-    val activeDraftIssue = remember(activeDraft, oalMm, undercutRecord) {
+    val activeDraftIssue = remember(activeDraft, oalMm, undercutRecord, pagePositionById) {
         activeDraft?.let { d ->
-            undercutConfirmIssue(d, oalMm, undercutOtherSpans(undercutRecord.undercuts, d.id, oalMm))
+            undercutConfirmIssue(
+                d, oalMm, undercutOtherSpans(undercutRecord.undercuts, d.id, oalMm), pagePositionById,
+            )
         }
     }
     // The overlap itself, while that is what blocks the draft (on-device report: the message
     // alone did not show where the cuts collide) — one shaft-space interval per partner the
     // draft partially overlaps, the same partners the confirm check blocks on.
-    val activeOverlapBandsMm = remember(activeDraft, activeDraftIssue, oalMm, undercutRecord) {
+    val activeOverlapBandsMm = remember(activeDraft, oalMm, undercutRecord) {
         val d = activeDraft
-        if (d == null || activeDraftIssue != UNDERCUT_PARTIAL_OVERLAP_MSG) emptyList()
+        // The shaft-bounds check outranks the overlap check, exactly as in [undercutConfirmIssue].
+        if (d == null || undercutSpanIssue(d.startFromAftMm, d.lengthMm, oalMm) != null) emptyList()
         else undercutPartialOverlapsMm(
             d.startFromAftMm, d.lengthMm, undercutOtherSpans(undercutRecord.undercuts, d.id, oalMm),
         )
@@ -534,7 +559,7 @@ fun UndercutWindowDetailOverlay(
     fun cancelDraft(id: String) {
         drafts = drafts - id
         if (id == PENDING_UNDERCUT_ID) {
-            pendingSeedStartMm = null
+            pendingSeed = null
             selectedId = null
         }
     }
@@ -552,13 +577,14 @@ fun UndercutWindowDetailOverlay(
         if (draft.isPending) {
             val newId = onAddUndercut(
                 draft.startFromAftMm, draft.lengthMm, draft.reference, draft.referenceLinerId,
+                draft.referenceCutId,
             )
             // addUndercut lands the span + reference; Ø and note ride the update op.
             if (draft.diaMm > 0f || draft.note.isNotBlank()) {
                 onUpdateUndercut(newId, draft.startFromAftMm, draft.lengthMm, draft.diaMm, draft.note)
             }
             drafts = drafts - PENDING_UNDERCUT_ID
-            pendingSeedStartMm = null
+            pendingSeed = null
             if (follow) {
                 awaitingRecordId = newId
                 selectedId = newId
@@ -567,9 +593,11 @@ fun UndercutWindowDetailOverlay(
             onUpdateUndercut(draft.id, draft.startFromAftMm, draft.lengthMm, draft.diaMm, draft.note)
             val base = baselines[draft.id]
             if (base != null &&
-                (base.reference != draft.reference || base.referenceLinerId != draft.referenceLinerId)
+                (base.reference != draft.reference ||
+                    base.referenceLinerId != draft.referenceLinerId ||
+                    base.referenceCutId != draft.referenceCutId)
             ) {
-                onUpdateReference(draft.id, draft.reference, draft.referenceLinerId)
+                onUpdateReference(draft.id, draft.reference, draft.referenceLinerId, draft.referenceCutId)
             }
             drafts = drafts - draft.id
             if (follow) selectedId = draft.id
@@ -581,9 +609,12 @@ fun UndercutWindowDetailOverlay(
     fun leaveActionOf(id: String): Pair<UndercutLeaveAction, String?> {
         val draft = drafts[id]
         val issue = draft?.let {
-            undercutConfirmIssue(it, oalMm, undercutOtherSpans(undercutRecord.undercuts, it.id, oalMm))
+            undercutConfirmIssue(
+                it, oalMm, undercutOtherSpans(undercutRecord.undercuts, it.id, oalMm), pagePositionById,
+            )
         }
-        return undercutLeaveAction(draft, baselines[id], issue) to issue
+        val seed = if (id == PENDING_UNDERCUT_ID) pendingSeed else null
+        return undercutLeaveAction(draft, baselines[id], issue, pendingSeed = seed) to issue
     }
 
     /**
@@ -606,6 +637,12 @@ fun UndercutWindowDetailOverlay(
                 // confirmed cut may take a new aft → fwd index, and the pager's id keys carry the
                 // open page along, but the SELECTION must not be dragged back to a settled card.
                 UndercutLeaveAction.COMMIT -> confirmDraft(draft, follow = false)
+                // An untouched add goes without a word: nothing was typed into it. The selection
+                // is left alone — it already belongs to the card being moved to.
+                UndercutLeaveAction.DISCARD -> {
+                    drafts = drafts - id
+                    if (id == PENDING_UNDERCUT_ID) pendingSeed = null
+                }
                 UndercutLeaveAction.PROMPT ->
                     return UndercutLeavePrompt(draftId = id, reason = issue.orEmpty(), closing = closing)
             }
@@ -1155,8 +1192,7 @@ fun UndercutWindowDetailOverlay(
                             // against the nearer S.E.T. instead (on-device request).
                             val seedFromLiner = stripLiner != null &&
                                 !undercutLinerEdgeBuried(stripLiner.startMm, occupied)
-                            drafts = drafts + (
-                                PENDING_UNDERCUT_ID to UndercutDraft(
+                            val seed = UndercutDraft(
                                     id = PENDING_UNDERCUT_ID,
                                     startFromAftMm = span.startMm,
                                     lengthMm = span.lengthMm,
@@ -1175,8 +1211,8 @@ fun UndercutWindowDetailOverlay(
                                                 ),
                                     referenceLinerId = if (seedFromLiner) stripLiner?.id.orEmpty() else "",
                                 )
-                                )
-                            pendingSeedStartMm = span.startMm
+                            drafts = drafts + (PENDING_UNDERCUT_ID to seed)
+                            pendingSeed = seed
                             selectedId = PENDING_UNDERCUT_ID
                         },
                         enabled = PENDING_UNDERCUT_ID !in drafts,
@@ -1234,6 +1270,7 @@ fun UndercutWindowDetailOverlay(
                             stripLiner = stripLiner,
                             sheetUndercuts = undercutRecord.undercuts,
                             buttTargets = pageButtTargets.filter { (_, s) -> s.id != id },
+                            pagePositionById = pagePositionById,
                             onDraftChange = { updated -> drafts = drafts + (id to updated) },
                             onDelete = if (draft.isPending) null else {
                                 deleteCard@{
@@ -1371,6 +1408,8 @@ internal data class UndercutDraft(
     val note: String,
     val reference: UndercutReference,
     val referenceLinerId: String,
+    /** The parent cut a `PARENT_*` reference measures from; empty for every other reference. */
+    val referenceCutId: String = "",
 ) {
     val isPending: Boolean get() = id == PENDING_UNDERCUT_ID
 }
@@ -1384,7 +1423,9 @@ internal data class UndercutDraft(
  *
  * The buried-liner-edge fallback is deliberately NOT applied here: it depends on the spans being
  * previewed (the card's own typed Length can bury or uncover its edge), so the card applies it
- * live on top of the draft's reference and the baseline keeps the stored one.
+ * live on top of the draft's reference and the baseline keeps the stored one. The parent-cut
+ * fallback (parent gone, or no longer containing the cut) is span-dependent too, and is likewise
+ * left to the card.
  */
 internal fun undercutDraftOf(u: Undercut, linerSpans: List<UndercutLinerSpan>): UndercutDraft {
     val ref = effectiveUndercutReference(u, linerSpans)
@@ -1397,6 +1438,7 @@ internal fun undercutDraftOf(u: Undercut, linerSpans: List<UndercutLinerSpan>): 
         note = u.note,
         reference = ref,
         referenceLinerId = if (usesLiner) u.referenceLinerId else "",
+        referenceCutId = if (isParentUndercutReference(ref)) u.referenceCutId else "",
     )
 }
 
@@ -1409,6 +1451,7 @@ internal fun UndercutDraft.toUndercut(): Undercut = Undercut(
     authoredReference = reference,
     referenceLinerId = referenceLinerId,
     note = note,
+    referenceCutId = referenceCutId,
 )
 
 /**
@@ -1421,16 +1464,25 @@ internal fun UndercutDraft.withWholeLiner(liner: UndercutLinerSpan): UndercutDra
     lengthMm = liner.endMm - liner.startMm,
     reference = UndercutReference.LINER_AFT,
     referenceLinerId = liner.id,
+    referenceCutId = "",
 )
 
 /**
- * The card's "Butt against" preset: the draft moved edge to edge against [other] — after it
- * when [other] lies AFT of the draft, before it otherwise ([undercutStartButting]). Length and
- * reference are untouched, so the Distance field re-seeds to the new position under the same
- * datum. A one-tap preset applied only on the tap; shaft bounds are the card's check.
+ * The card's "Start at end of cut N" preset: the draft's AFT end moved onto [other]'s FWD end
+ * ([undercutStartAtEndOf]). Length and reference are untouched, so the Distance field re-seeds to
+ * the new position under the same datum. A one-tap preset applied only on the tap; shaft bounds
+ * are the card's check.
  */
-internal fun UndercutDraft.buttingAgainst(other: UndercutSpanMm): UndercutDraft = copy(
-    startFromAftMm = undercutStartButting(other.startMm, other.endMm, startFromAftMm, lengthMm),
+internal fun UndercutDraft.startingAtEndOf(other: UndercutSpanMm): UndercutDraft = copy(
+    startFromAftMm = undercutStartAtEndOf(other.endMm),
+)
+
+/**
+ * The card's "End at start of cut N" preset: the draft's FWD end moved onto [other]'s AFT end
+ * ([undercutEndAtStartOf]), length and reference untouched — the mirror of [startingAtEndOf].
+ */
+internal fun UndercutDraft.endingAtStartOf(other: UndercutSpanMm): UndercutDraft = copy(
+    startFromAftMm = undercutEndAtStartOf(other.startMm, lengthMm),
 )
 
 /**
@@ -1440,6 +1492,19 @@ internal fun UndercutDraft.buttingAgainst(other: UndercutSpanMm): UndercutDraft 
  */
 internal fun undercutCardTitle(position: Int, count: Int): String =
     "Undercut $position of $count · aft → fwd"
+
+/**
+ * The card's Parent AFT / Parent FWD chip: the Distance re-authored from [parent]'s shoulder
+ * ([reference] is `PARENT_AFT` or `PARENT_FWD`). The liner key is dropped; canonical never moves —
+ * a reference switch re-projects the displayed Distance only.
+ */
+internal fun UndercutDraft.measuredFromParent(
+    reference: UndercutReference,
+    parent: UndercutSpanMm,
+): UndercutDraft = copy(reference = reference, referenceCutId = parent.id, referenceLinerId = "")
+
+/** An edge-to-edge preset chip: the other cut by its page position, the card title's number. */
+internal fun undercutButtChipLabel(position: Int): String = "Cut $position"
 
 /** What a refused one-tap preset says: it changed nothing, and why. */
 internal fun undercutPresetRefusal(reason: String): String = "Not applied — $reason"
@@ -1611,13 +1676,26 @@ internal const val MIN_UNDERCUT_DRAFT_LENGTH_MM = 0.1f
  * OTHER cut on the sheet — which passes a cut sitting fully INSIDE another (a nested relief) or
  * fully clear of it, and blocks only a partial intrusion. Both are confirm-time gates on new
  * values only — nothing already stored is retroactively rejected.
+ *
+ * With [pagePositionById] (each stored cut's 1-based page position) the overlap reason NAMES the
+ * partner ([undercutOverlapMessage] — "Overlaps cut 3 …", or "a cut outside this strip" when the
+ * partner has no page here). The pill, the card's inline warning and the leave prompt all read
+ * this one result, so all three say the same thing. Without it, the generic wording.
  */
 internal fun undercutConfirmIssue(
     draft: UndercutDraft,
     oalMm: Float,
     otherSpans: List<UndercutSpanMm>,
-): String? = undercutSpanIssue(draft.startFromAftMm, draft.lengthMm, oalMm)
-    ?: undercutOverlapIssue(draft.startFromAftMm, draft.lengthMm, otherSpans)
+    pagePositionById: Map<String, Int>? = null,
+): String? {
+    undercutSpanIssue(draft.startFromAftMm, draft.lengthMm, oalMm)?.let { return it }
+    if (pagePositionById == null) {
+        return undercutOverlapIssue(draft.startFromAftMm, draft.lengthMm, otherSpans)
+    }
+    val partnerId = undercutOverlapPartnerId(draft.startFromAftMm, draft.lengthMm, otherSpans)
+        ?: return null
+    return undercutOverlapMessage(pagePositionById[partnerId])
+}
 
 /**
  * Every cut on the sheet EXCEPT [excludeId], as render-clamped spans — the adjacency pool
@@ -1644,6 +1722,9 @@ internal enum class UndercutLeaveAction {
     /** Commit it, through the same path the pill's tap takes (values verbatim, golden rule). */
     COMMIT,
 
+    /** Drop it silently: an "Add undercut" card left exactly as seeded — nothing was typed. */
+    DISCARD,
+
     /** Ask: a blocked draft is neither committed nor dropped behind the machinist's back. */
     PROMPT,
 }
@@ -1653,13 +1734,20 @@ internal enum class UndercutLeaveAction {
  * has none), [baseline] the stored values it shadows (null for the add flow's pending card, which
  * is therefore always dirty), and [confirmIssue] the result of [undercutConfirmIssue] on that
  * draft. Pure, so the swipe, the notch tap, and the overlay close all resolve identically.
+ *
+ * [pendingSeed] is the add flow's draft exactly as it was seeded: a PENDING draft still equal to
+ * it is DISCARDED, never committed and never asked about — the machinist typed nothing, and
+ * committing the seeded default recorded cuts nobody authored (on-device report). A pending draft
+ * changed in any field resolves like any other dirty draft.
  */
 internal fun undercutLeaveAction(
     draft: UndercutDraft?,
     baseline: UndercutDraft?,
     confirmIssue: String?,
+    pendingSeed: UndercutDraft? = null,
 ): UndercutLeaveAction = when {
     draft == null || draft == baseline -> UndercutLeaveAction.NONE
+    draft.isPending && draft == pendingSeed -> UndercutLeaveAction.DISCARD
     confirmIssue != null -> UndercutLeaveAction.PROMPT
     else -> UndercutLeaveAction.COMMIT
 }
@@ -1712,9 +1800,12 @@ private fun UndercutDraftCard(
     sheetUndercuts: List<Undercut>,
     /**
      * The OTHER stored cuts on this page as (1-based position aft → fwd, clamped span) — the
-     * "Butt against" chips, numbered as the card titles are. Empty hides the row.
+     * "Start at end of" / "End at start of" chips, numbered as the card titles are. Empty hides
+     * both rows.
      */
     buttTargets: List<Pair<Int, UndercutSpanMm>>,
+    /** Every stored cut's page position, so an overlap reason names its partner. */
+    pagePositionById: Map<String, Int>,
     onDraftChange: (UndercutDraft) -> Unit,
     onDelete: (() -> Unit)?,
 ) {
@@ -1741,6 +1832,19 @@ private fun UndercutDraftCard(
     val shownReference = effectiveUndercutReference(
         previewUndercut, linerSpans, buriedPool, aftSetXMm, fwdSetXMm,
     )
+    // The cut this draft sits fully inside on the sheet (the forest's smallest container) — the
+    // Parent chips' datum, offered only while there is one (on-device request: a nested cut in a
+    // relief that buried its liner's edges could otherwise be placed only from a S.E.T.). The
+    // shoulders a PARENT_* Distance converts against are the cut it names, while that cut still
+    // contains this one; otherwise the reference displays from a S.E.T. ([effectiveUndercutReference]).
+    val parentCandidate = remember(buriedPool, draft.id) { undercutParentCandidate(draft.id, buriedPool) }
+    val refParent = if (isParentUndercutReference(shownReference)) {
+        undercutReferenceParentSpan(previewUndercut, buriedPool)
+    } else {
+        null
+    }
+    val refParentStartMm = refParent?.startMm ?: 0f
+    val refParentEndMm = refParent?.endMm ?: 0f
 
     // ── "Past the liner edge" (on-device request) ────────────────────────────────────────
     // A Distance or Length commit that carries the cut past a liner edge it did not overhang
@@ -1805,10 +1909,10 @@ private fun UndercutDraftCard(
     val otherSpans = remember(sheetUndercuts, oalMm, draft.id) {
         undercutOtherSpans(sheetUndercuts, draft.id, oalMm)
     }
-    val confirmIssue = undercutConfirmIssue(draft, oalMm, otherSpans)
+    val confirmIssue = undercutConfirmIssue(draft, oalMm, otherSpans, pagePositionById)
 
     OutlinedCard(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().testTag("undercut_card_${draft.id}"),
         border = if (selected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
                  else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
@@ -1845,9 +1949,9 @@ private fun UndercutDraftCard(
                 )
             }
 
-            // "Measure From" — which datum the Distance value is authored against, the wear
-            // overlay's four-reference set: both S.E.T.s always, plus the reference liner's
-            // edges while such a liner exists. Tapping a chip re-projects the DISPLAYED distance
+            // "Measure From" — which datum the Distance value is authored against: both S.E.T.s
+            // always, the reference liner's edges while such a liner exists, and the shoulders of
+            // the cut this one sits inside while it sits inside one. Tapping a chip re-projects the DISPLAYED distance
             // immediately (canonical `startFromAftMm` never moves) but persists only on Confirm,
             // so Cancel reverts the chip too.
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -1858,12 +1962,20 @@ private fun UndercutDraftCard(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     WearChip("AFT S.E.T.", shownReference == UndercutReference.AFT_SET) {
                         onDraftChange(
-                            draft.copy(reference = UndercutReference.AFT_SET, referenceLinerId = ""),
+                            draft.copy(
+                                reference = UndercutReference.AFT_SET,
+                                referenceLinerId = "",
+                                referenceCutId = "",
+                            ),
                         )
                     }
                     WearChip("FWD S.E.T.", shownReference == UndercutReference.FWD_SET) {
                         onDraftChange(
-                            draft.copy(reference = UndercutReference.FWD_SET, referenceLinerId = ""),
+                            draft.copy(
+                                reference = UndercutReference.FWD_SET,
+                                referenceLinerId = "",
+                                referenceCutId = "",
+                            ),
                         )
                     }
                 }
@@ -1879,6 +1991,7 @@ private fun UndercutDraftCard(
                                 draft.copy(
                                     reference = UndercutReference.LINER_AFT,
                                     referenceLinerId = refLiner.id,
+                                    referenceCutId = "",
                                 ),
                             )
                         }
@@ -1892,6 +2005,7 @@ private fun UndercutDraftCard(
                                 draft.copy(
                                     reference = UndercutReference.LINER_FWD,
                                     referenceLinerId = refLiner.id,
+                                    referenceCutId = "",
                                 ),
                             )
                         }
@@ -1907,6 +2021,26 @@ private fun UndercutDraftCard(
                             undercutBuriedEdgeCaption("FWD"),
                             Modifier.testTag("undercut_ref_liner_fwd_buried"),
                         )
+                    }
+                }
+                // The shoulders of the cut this one sits fully inside — the datum the printed
+                // nested rail row dimensions it from.
+                if (parentCandidate != null) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        WearChip(
+                            "Parent AFT",
+                            shownReference == UndercutReference.PARENT_AFT,
+                            modifier = Modifier.testTag("undercut_ref_parent_aft"),
+                        ) {
+                            onDraftChange(draft.measuredFromParent(UndercutReference.PARENT_AFT, parentCandidate))
+                        }
+                        WearChip(
+                            "Parent FWD",
+                            shownReference == UndercutReference.PARENT_FWD,
+                            modifier = Modifier.testTag("undercut_ref_parent_fwd"),
+                        ) {
+                            onDraftChange(draft.measuredFromParent(UndercutReference.PARENT_FWD, parentCandidate))
+                        }
                     }
                 }
             }
@@ -2036,33 +2170,44 @@ private fun UndercutDraftCard(
                 }
             }
 
-            // "Butt against" — start this cut edge to edge with another cut on the page
-            // (on-device request: measuring each new cut's Distance off the previous cut's end).
-            // A one-tap preset: it sets the canonical start and nothing else, so Distance
-            // re-seeds under the same reference; never "selected". A result that would leave
-            // the shaft changes nothing and says so ("Not applied — <reason>") until the next
-            // tap or draft change — nothing was typed, so refusing the preset loses no value.
+            // Edge-to-edge presets against another cut on the page (on-device request: measuring
+            // each new cut's Distance off the previous cut's end). Two explicit rows, every other
+            // cut in both — one "After/Before cut N" chip that picked its side from the cuts'
+            // midpoints read "After cut 5" as AFT of cut 5 (on-device report). A one-tap preset: it
+            // sets the canonical start and nothing else, so Distance re-seeds under the same
+            // reference; never "selected". A result that would leave the shaft changes nothing and
+            // says so ("Not applied — <reason>") until the next tap or draft change — nothing was
+            // typed, so refusing the preset loses no value.
             if (buttTargets.isNotEmpty()) {
                 var buttIssue by remember(draft) { mutableStateOf<String?>(null) }
+                fun applyPreset(moved: UndercutDraft) {
+                    val issue = undercutSpanIssue(moved.startFromAftMm, moved.lengthMm, oalMm)
+                    if (issue != null) buttIssue = undercutPresetRefusal(issue)
+                    else onDraftChange(moved)
+                }
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
-                        "Butt against:", style = MaterialTheme.typography.bodyMedium,
+                        "Start at end of:", style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         buttTargets.forEach { (position, other) ->
-                            val after = undercutButtsAfter(
-                                other.startMm, other.endMm, draft.startFromAftMm, draft.lengthMm,
-                            )
-                            Box(Modifier.testTag("undercut_butt_$position")) {
-                                WearChip(
-                                    if (after) "After cut $position" else "Before cut $position",
-                                    selected = false,
-                                ) {
-                                    val moved = draft.buttingAgainst(other)
-                                    val issue = undercutSpanIssue(moved.startFromAftMm, moved.lengthMm, oalMm)
-                                    if (issue != null) buttIssue = undercutPresetRefusal(issue)
-                                    else onDraftChange(moved)
+                            Box(Modifier.testTag("undercut_butt_after_$position")) {
+                                WearChip(undercutButtChipLabel(position), selected = false) {
+                                    applyPreset(draft.startingAtEndOf(other))
+                                }
+                            }
+                        }
+                    }
+                    Text(
+                        "End at start of:", style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        buttTargets.forEach { (position, other) ->
+                            Box(Modifier.testTag("undercut_butt_before_$position")) {
+                                WearChip(undercutButtChipLabel(position), selected = false) {
+                                    applyPreset(draft.endingAtStartOf(other))
                                 }
                             }
                         }
@@ -2079,6 +2224,8 @@ private fun UndercutDraftCard(
                 fwdSetXMm = fwdSetXMm,
                 linerStartMm = refLinerStartMm,
                 linerEndMm = refLinerEndMm,
+                parentStartMm = refParentStartMm,
+                parentEndMm = refParentEndMm,
             )
             // Negative is a real value here: a cut overhanging the datum's edge (the "Extend past
             // liner" case under a Liner reference) reads below zero and must be retypable as such.
@@ -2092,7 +2239,7 @@ private fun UndercutDraftCard(
                 val enteredMm = toMmOrNull(s, unit) ?: return@WearNum
                 val canonicalMm = undercutStartToCanonicalMm(
                     shownReference, enteredMm, draft.lengthMm, aftSetXMm, fwdSetXMm,
-                    refLinerStartMm, refLinerEndMm,
+                    refLinerStartMm, refLinerEndMm, refParentStartMm, refParentEndMm,
                 )
                 commitSpanEdit(draft.copy(startFromAftMm = canonicalMm))
             }
@@ -2106,7 +2253,7 @@ private fun UndercutDraftCard(
             // lands in the draft verbatim and Confirm blocks it with the reason.
             fun canonicalAtLength(newLenMm: Float): Float = undercutCanonicalForNewLength(
                 shownReference, draft.startFromAftMm, draft.lengthMm, newLenMm,
-                aftSetXMm, fwdSetXMm, refLinerStartMm, refLinerEndMm,
+                aftSetXMm, fwdSetXMm, refLinerStartMm, refLinerEndMm, refParentStartMm, refParentEndMm,
             )
             WearNum(
                 label = "Length (${abbr(unit)})",

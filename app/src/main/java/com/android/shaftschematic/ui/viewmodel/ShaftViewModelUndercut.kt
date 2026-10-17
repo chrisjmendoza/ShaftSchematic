@@ -25,13 +25,15 @@ import kotlinx.coroutines.flow.update
  * against — display metadata only, stored verbatim. They default to the SET-based
  * posture ([UndercutReference.AFT_SET], no liner) used by the tab's global "Add
  * undercut" button; adding from inside a liner's detail strip passes that liner's
- * `LINER_*` reference instead.
+ * `LINER_*` reference instead, and a new cut measured from the cut it sits inside passes a
+ * `PARENT_*` reference with that cut's id as [referenceCutId] (stored verbatim).
  */
 fun ShaftViewModel.addUndercut(
     startFromAftMm: Float,
     lengthMm: Float,
     reference: UndercutReference = UndercutReference.AFT_SET,
     referenceLinerId: String = "",
+    referenceCutId: String = "",
 ): String {
     val undercut = Undercut(
         startFromAftMm = startFromAftMm,
@@ -39,6 +41,7 @@ fun ShaftViewModel.addUndercut(
         diaMm = 0f,
         authoredReference = reference,
         referenceLinerId = referenceLinerId,
+        referenceCutId = referenceCutId,
     )
     _undercutRecord.update { rec -> rec.copy(undercuts = rec.undercuts + undercut) }
     return undercut.id
@@ -70,21 +73,28 @@ fun ShaftViewModel.updateUndercut(id: String, startFromAftMm: Float, lengthMm: F
  * only which reference point the "Distance" field re-projects against.
  *
  * [referenceLinerId] is the liner the distance converts against for the `LINER_*`
- * references; both values are stored **verbatim**. Callers pass an empty id for the
- * SET references, so switching back to a S.E.T. also drops the stale liner key.
+ * references and [referenceCutId] the cut it converts against for the `PARENT_*` ones; all
+ * three values are stored **verbatim**. Callers pass empty ids for the references that do not
+ * use them, so switching to a S.E.T. also drops a stale liner or parent key.
  */
 fun ShaftViewModel.updateUndercutReference(
     id: String,
     reference: UndercutReference,
     referenceLinerId: String = "",
+    referenceCutId: String = "",
 ) {
     _undercutRecord.update { rec ->
         rec.copy(
             undercuts = rec.undercuts.map { u ->
                 if (u.id != id ||
-                    (u.authoredReference == reference && u.referenceLinerId == referenceLinerId)
+                    (u.authoredReference == reference && u.referenceLinerId == referenceLinerId &&
+                        u.referenceCutId == referenceCutId)
                 ) u
-                else u.copy(authoredReference = reference, referenceLinerId = referenceLinerId)
+                else u.copy(
+                    authoredReference = reference,
+                    referenceLinerId = referenceLinerId,
+                    referenceCutId = referenceCutId,
+                )
             }
         )
     }

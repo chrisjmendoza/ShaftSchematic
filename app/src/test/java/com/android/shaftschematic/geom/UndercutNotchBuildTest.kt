@@ -178,4 +178,166 @@ class UndercutNotchBuildTest {
         val withChild = notches(parent, child).first { it.id == "p" }.floorDiaMm
         assertEquals(lone, withChild, eps)
     }
+
+    // ── Butted top-level cuts ────────────────────────────────────────────────
+
+    private fun NotchProfile.aftFaceTop() = surface.first().diaMm
+    private fun NotchProfile.fwdFaceTop() = surface.last().diaMm
+
+    @Test
+    fun `butted cuts deeper AFT print ONE step from the deeper floor to the shallower`() {
+        // The on-device case: an edge-to-edge preset at different floors drew each cut's face up to the
+        // full OD at the shared station — a hairline of full-size liner between two cuts.
+        val deep = cut("deep", 200f, 100f, diaMm = 186f)
+        val shallow = cut("shallow", 300f, 100f, diaMm = 192f)
+        val built = notches(deep, shallow).associateBy { it.id }
+        val d = built.getValue("deep")
+        val s = built.getValue("shallow")
+        assertTrue("the floors differ, so there is a step", d.floorDiaMm < s.floorDiaMm - eps)
+
+        val dp = d.profiles.single()
+        val sp = s.profiles.single()
+        assertEquals("the deeper cut's FWD face rises only to its neighbour's floor",
+            s.floorDiaMm, dp.fwdFaceTop(), eps)
+        // …as a zero-width step: the void still reaches the surface across the whole mouth.
+        assertEquals(dp.surface.last().xMm, dp.surface[dp.surface.size - 2].xMm, eps)
+        assertEquals(surfaceDiaMm, dp.surface[dp.surface.size - 2].diaMm, eps)
+        assertTrue("the shallower cut draws no face at the shared station",
+            sp.aftFaceTop() <= s.floorDiaMm + eps)
+        // The outer ends touch nothing and keep their surface faces.
+        assertEquals(surfaceDiaMm, dp.aftFaceTop(), eps)
+        assertEquals(surfaceDiaMm, sp.fwdFaceTop(), eps)
+
+        val floors = resolveUndercutFloors(listOf(deep, shallow), segs, oalMm, ex).associateBy { it.span.id }
+        assertTrue(floors.getValue("deep").fwdButted)
+        assertTrue(floors.getValue("shallow").aftButted)
+        assertEquals(s.floorDiaMm, floors.getValue("deep").fwdFaceTopDiaMm, eps)
+        assertTrue(floors.getValue("shallow").aftFaceTopDiaMm <= s.floorDiaMm + eps)
+    }
+
+    @Test
+    fun `butted cuts shallower AFT mirror the step onto the FWD cut`() {
+        val shallow = cut("shallow", 200f, 100f, diaMm = 192f)
+        val deep = cut("deep", 300f, 100f, diaMm = 186f)
+        val built = notches(shallow, deep).associateBy { it.id }
+        val s = built.getValue("shallow")
+        val d = built.getValue("deep")
+
+        assertTrue("the shallower cut draws no face at the shared station",
+            s.profiles.single().fwdFaceTop() <= s.floorDiaMm + eps)
+        assertEquals("the deeper cut's AFT face rises only to its neighbour's floor",
+            s.floorDiaMm, d.profiles.single().aftFaceTop(), eps)
+    }
+
+    @Test
+    fun `the deeper cut of a butted pair paints last so its step face survives`() {
+        val deep = cut("deep", 200f, 100f, diaMm = 186f)
+        val shallow = cut("shallow", 300f, 100f, diaMm = 192f)
+        assertEquals(listOf("shallow", "deep"), notches(deep, shallow).map { it.id })
+        assertEquals(listOf("shallow", "deep"), notches(cut("shallow", 200f, 100f, 192f), cut("deep", 300f, 100f, 186f)).map { it.id })
+    }
+
+    @Test
+    fun `a sub-tolerance gap still counts as butted`() {
+        // An edge-to-edge preset's Float edge can drift by an ulp on a long shaft.
+        val deep = cut("deep", 200f, 100f, diaMm = 186f)
+        val shallow = cut("shallow", 300.005f, 100f, diaMm = 192f)
+        val built = notches(deep, shallow).associateBy { it.id }
+        val s = built.getValue("shallow")
+        assertEquals(s.floorDiaMm, built.getValue("deep").profiles.single().fwdFaceTop(), eps)
+        assertTrue(s.profiles.single().aftFaceTop() <= s.floorDiaMm + eps)
+    }
+
+    @Test
+    fun `a real gap leaves both faces rising to the surface`() {
+        val deep = cut("deep", 200f, 100f, diaMm = 186f)
+        val shallow = cut("shallow", 301f, 100f, diaMm = 192f)
+        val built = notches(deep, shallow).associateBy { it.id }
+        assertEquals(surfaceDiaMm, built.getValue("deep").profiles.single().fwdFaceTop(), eps)
+        assertEquals(surfaceDiaMm, built.getValue("shallow").profiles.single().aftFaceTop(), eps)
+        assertTrue(built.getValue("deep").profiles.single().surface.all { kotlin.math.abs(it.diaMm - surfaceDiaMm) < eps })
+        assertEquals("cuts that touch nothing keep aft → fwd", listOf("deep", "shallow"),
+            notches(deep, shallow).map { it.id })
+    }
+
+    @Test
+    fun `butted cuts at equal floors draw no face between them`() {
+        val a = cut("a", 200f, 100f, diaMm = 190f)
+        val b = cut("b", 300f, 100f, diaMm = 190f)
+        val built = notches(a, b).associateBy { it.id }
+        val an = built.getValue("a")
+        val bn = built.getValue("b")
+        assertEquals(an.floorDiaMm, bn.floorDiaMm, eps)
+        assertTrue(an.profiles.single().fwdFaceTop() <= an.floorDiaMm + eps)
+        assertTrue(bn.profiles.single().aftFaceTop() <= bn.floorDiaMm + eps)
+    }
+
+    @Test
+    fun `three butted cuts chain the rule pairwise`() {
+        val a = cut("a", 200f, 100f, diaMm = 186f)
+        val b = cut("b", 300f, 100f, diaMm = 192f)
+        val c = cut("c", 400f, 100f, diaMm = 189f)
+        val built = notches(a, b, c).associateBy { it.id }
+        val an = built.getValue("a")
+        val bn = built.getValue("b")
+        val cn = built.getValue("c")
+        assertEquals(bn.floorDiaMm, an.profiles.single().fwdFaceTop(), eps)
+        assertTrue(bn.profiles.single().aftFaceTop() <= bn.floorDiaMm + eps)
+        assertTrue(bn.profiles.single().fwdFaceTop() <= bn.floorDiaMm + eps)
+        assertEquals(bn.floorDiaMm, cn.profiles.single().aftFaceTop(), eps)
+        assertEquals(surfaceDiaMm, an.profiles.single().aftFaceTop(), eps)
+        assertEquals(surfaceDiaMm, cn.profiles.single().fwdFaceTop(), eps)
+        assertEquals("b paints first; the deeper two land on top of it", "b",
+            notches(a, b, c).first().id)
+    }
+
+    @Test
+    fun `a cut touching a liner edge keeps the surface face top`() {
+        // Liner 500–1500 Ø200 over a Ø180 body: the cut's AFT end sits on the liner's own edge,
+        // which is not a cut — the face there rises to the liner OD as before.
+        val linerSegs = listOf(
+            SurfaceSeg(0f, oalMm, 180f, 180f),
+            SurfaceSeg(500f, 1500f, 200f, 200f),
+        )
+        val a = cut("a", 500f, 100f, diaMm = 190f)
+        val b = cut("b", 600f, 100f, diaMm = 194f)
+        val built = buildUndercutNotches(listOf(a, b), linerSegs, oalMm, exaggerationFrac = ex)
+            .associateBy { it.id }
+        assertEquals(200f, built.getValue("a").profiles.single().aftFaceTop(), eps)
+        assertEquals(built.getValue("b").floorDiaMm, built.getValue("a").profiles.single().fwdFaceTop(), eps)
+    }
+
+    @Test
+    fun `a cut overhanging onto smaller stock still steps up to its butted neighbour`() {
+        // The FWD cut runs off the liner onto the body, so its span-wide minimum surface is the
+        // body — but the face at the shared station stands on the liner and must reach the AFT
+        // cut's floor there, not stop at the body Ø.
+        val linerSegs = listOf(
+            SurfaceSeg(0f, oalMm, 180f, 180f),
+            SurfaceSeg(500f, 1500f, 200f, 200f),
+        )
+        val a = cut("a", 1300f, 100f, diaMm = 199f)
+        val b = cut("b", 1400f, 150f, diaMm = 170f)
+        val built = buildUndercutNotches(listOf(a, b), linerSegs, oalMm, exaggerationFrac = ex)
+            .associateBy { it.id }
+        val an = built.getValue("a")
+        val bn = built.getValue("b")
+        assertTrue("the overhanging cut is the deeper one", bn.floorDiaMm < an.floorDiaMm - eps)
+        assertTrue("its neighbour's floor stands above the body", an.floorDiaMm > 180f + eps)
+        assertEquals(an.floorDiaMm, bn.profiles.first().aftFaceTop(), eps)
+        assertTrue(an.profiles.single().fwdFaceTop() <= an.floorDiaMm + eps)
+    }
+
+    @Test
+    fun `a child flush with a butted shoulder inherits the stepped face top`() {
+        // Parent p butted FWD against a shallower q, child c flush with p's FWD shoulder: the
+        // child's shared face reaches q's floor — the material at that station — not the surface.
+        val p = cut("p", 200f, 100f, diaMm = 190f)
+        val q = cut("q", 300f, 100f, diaMm = 194f)
+        val c = cut("c", 260f, 40f, diaMm = 186f)
+        val built = notches(p, q, c).associateBy { it.id }
+        val cp = built.getValue("c").profiles.single()
+        assertEquals(built.getValue("q").floorDiaMm, cp.fwdFaceTop(), eps)
+        assertEquals("children still paint after every top-level cut", "c", notches(p, q, c).last().id)
+    }
 }

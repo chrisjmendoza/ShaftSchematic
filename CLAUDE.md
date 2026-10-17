@@ -459,7 +459,14 @@ is no step; a cut that ends AT the edge leaves the step and the edge stays): the
 that Liner chip, `effectiveUndercutReference` falls back DISPLAY-ONLY to the nearer S.E.T.
 (stored reference and canonical untouched, the missing-liner posture), a new cut seeds from the
 S.E.T., and the printed chain gets a node at the buried edge so the overhanging cut's shoulder is
-located against the liner edge the strip title places from the S.E.T. (on-device request). The notch (void fill erasing surface stroke and fill — the mouth stays **OPEN**,
+located against the liner edge the strip title places from the S.E.T. (on-device request). A nested cut may also author its Distance from its PARENT cut's shoulders
+(`PARENT_AFT`/`PARENT_FWD` + `Undercut.referenceCutId`, display metadata stored verbatim and never
+pruned) — the liner formulas with the parent's span, offered only while the cut sits fully inside
+a stored cut, displayed from the nearer S.E.T. once that parent is gone or no longer contains it
+(canonical untouched). Two butted top-level cuts draw ONE step between their floors (a touching
+end's face top is the neighbour's DRAWN floor; a deeper neighbour leaves no face); an UNTOUCHED
+"New undercut" is discarded on leave, never recorded; the overlap message names the partner cut;
+containment, touching and duplicates share `UNDERCUT_TOUCH_EPS_MM`. The notch (void fill erasing surface stroke and fill — the mouth stays **OPEN**,
 never closed by a lid — plus a full-height **section face** at each end and the floor lines,
 so each cut is its own reduced-Ø rectangle **step in the silhouette**, cut against the
 **local outer-surface envelope**; the section's core fills one step **lighter** than the

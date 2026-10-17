@@ -4,6 +4,7 @@ import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Undercut
 import com.android.shaftschematic.model.UndercutReference
 import kotlin.math.abs
+import kotlin.math.min
 
 /**
  * Pure math behind the undercut authoring surface — liner-reference resolution, the notch
@@ -19,15 +20,25 @@ internal fun undercutReferenceLabel(reference: UndercutReference): String = when
     UndercutReference.FWD_SET -> "FWD S.E.T."
     UndercutReference.LINER_AFT -> "Liner AFT"
     UndercutReference.LINER_FWD -> "Liner FWD"
+    UndercutReference.PARENT_AFT -> "Parent AFT"
+    UndercutReference.PARENT_FWD -> "Parent FWD"
 }
+
+/** Whether [reference] measures from the shoulders of the cut the undercut is nested in. */
+internal fun isParentUndercutReference(reference: UndercutReference): Boolean =
+    reference == UndercutReference.PARENT_AFT || reference == UndercutReference.PARENT_FWD
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Liner references — shared by the overlay's cards and the route's undercut list
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * The reference actually used to display/convert an undercut's Distance. Two display-only
- * fallbacks apply to a `LINER_*` reference:
+ * The reference actually used to display/convert an undercut's Distance. A `PARENT_*` reference
+ * whose [Undercut.referenceCutId] no longer resolves in [spans], or whose cut no longer contains
+ * this one ([undercutSpanContains]), displays from the S.E.T. nearer the cut's own span — the
+ * parent's shoulders are the datum, and a cut it does not sit inside has none. With the default
+ * empty [spans] a `PARENT_*` reference passes through unchecked (nothing to resolve it against),
+ * as the buried-edge check does. Two display-only fallbacks apply to a `LINER_*` reference:
  *
  * - its [Undercut.referenceLinerId] no longer resolves → [UndercutReference.AFT_SET], the model's
  *   documented display rule;
@@ -50,6 +61,14 @@ internal fun effectiveUndercutReference(
     fwdSetXMm: Float = 0f,
 ): UndercutReference {
     val ref = undercut.authoredReference
+    if (isParentUndercutReference(ref)) {
+        if (spans.isEmpty()) return ref
+        return if (undercutReferenceParentSpan(undercut, spans) != null) ref
+        else nearestSetReference(
+            undercut.startFromAftMm, undercut.startFromAftMm + undercut.lengthMm,
+            aftSetXMm, fwdSetXMm,
+        )
+    }
     if (ref != UndercutReference.LINER_AFT && ref != UndercutReference.LINER_FWD) return ref
     val liner = linerSpans.firstOrNull { it.id == undercut.referenceLinerId }
         ?: return UndercutReference.AFT_SET
@@ -62,6 +81,35 @@ internal fun effectiveUndercutReference(
     } else {
         ref
     }
+}
+
+/**
+ * The span of the cut [undercut]'s `PARENT_*` Distance converts against — the cut named by
+ * [Undercut.referenceCutId], found in [spans] (every cut on the sheet, render-clamped), and only
+ * while it still contains this cut ([undercutSpanContains], the containment forest's rule; this
+ * cut's own span is its entry in [spans], else its stored span). `null` when the id is empty or
+ * names this cut, the cut is gone, or it no longer contains this one.
+ */
+internal fun undercutReferenceParentSpan(
+    undercut: Undercut,
+    spans: List<UndercutSpanMm>,
+): UndercutSpanMm? {
+    val parentId = undercut.referenceCutId
+    if (parentId.isEmpty() || parentId == undercut.id) return null
+    val parent = spans.firstOrNull { it.id == parentId } ?: return null
+    val self = spans.firstOrNull { it.id == undercut.id }
+        ?: UndercutSpanMm(undercut.id, undercut.startFromAftMm, undercut.startFromAftMm + undercut.lengthMm)
+    return parent.takeIf { undercutSpanContains(it, self) }
+}
+
+/**
+ * The cut the span [id] sits FULLY inside on the sheet [spans] — the smallest container, the
+ * containment forest's parent rule ([undercutNestingForest]) — or `null` when it sits inside
+ * none. What the card's Parent AFT / Parent FWD chips measure from.
+ */
+internal fun undercutParentCandidate(id: String, spans: List<UndercutSpanMm>): UndercutSpanMm? {
+    val parentId = undercutNestingForest(spans).firstOrNull { it.id == id }?.parentId ?: return null
+    return spans.firstOrNull { it.id == parentId }
 }
 
 /**
@@ -97,6 +145,8 @@ internal fun undercutDisplayedDistanceMm(
     refLiner: UndercutLinerSpan?,
     aftSetXMm: Float,
     fwdSetXMm: Float,
+    /** The `PARENT_*` datum's span ([undercutReferenceParentSpan]); read only by those references. */
+    refParent: UndercutSpanMm? = null,
 ): Float = canonicalToUndercutStartMm(
     reference = reference,
     canonicalStartMm = undercut.startFromAftMm,
@@ -105,6 +155,8 @@ internal fun undercutDisplayedDistanceMm(
     fwdSetXMm = fwdSetXMm,
     linerStartMm = refLiner?.startMm ?: 0f,
     linerEndMm = refLiner?.endMm ?: 0f,
+    parentStartMm = refParent?.startMm ?: 0f,
+    parentEndMm = refParent?.endMm ?: 0f,
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -148,9 +200,22 @@ internal data class UndercutFloors(
      * the face runs from the OUTER surface straight down to this cut's floor — the parent's
      * face top, carried down the chain. That is exactly the silhouette two separately-authored
      * adjacent sections would print.
+     *
+     * A top-level end BUTTED against another top-level cut ([aftButted]/[fwdButted]) instead
+     * rises to that neighbour's DRAWN floor — the material left at the boundary is the
+     * neighbour's floor, not the surface — so the pair prints ONE step between the two floors.
+     * At or below this cut's own drawn floor it is no face at all (the neighbour is the deeper
+     * cut and owns the step).
      */
     val aftFaceTopDiaMm: Float,
     val fwdFaceTopDiaMm: Float,
+    /**
+     * Whether another top-level cut's FWD end touches this cut's AFT end (and the mirror), within
+     * [UNDERCUT_TOUCH_EPS_MM] — the edge-to-edge preset's posture. Always false on a nested cut, whose
+     * faces run against its parent instead.
+     */
+    val aftButted: Boolean = false,
+    val fwdButted: Boolean = false,
 )
 
 /**
@@ -162,6 +227,15 @@ internal data class UndercutFloors(
  * against its PARENT's floor instead — that floor is its local surface — and its drawn depth
  * stacks below the parent's drawn floor ([nestedNotchFloorDiaMm]). Cuts whose clamped span is
  * empty are dropped.
+ *
+ * Two TOP-LEVEL cuts whose ends touch ([withButtedSiblingFaces]) share their boundary face:
+ * each end's face top becomes the neighbour's drawn floor, so the boundary prints one step from
+ * the deeper floor up to the shallower one, never a sliver of full-height surface between them.
+ * That runs before the nested cuts resolve, so a child flush with a butted shoulder inherits
+ * the stepped face top rather than the surface.
+ *
+ * The result is in PAINT order: level-0 cuts first, each run of butted cuts shallowest first
+ * ([inButtedPaintOrder]), then nested cuts by level and aft → fwd.
  *
  * [exaggerationFrac] is the sheet's drawn-depth setting and [sheetUndercuts] the whole sheet's
  * list, since the normalization reference ([deepestUndercutDepthMm]) is per sheet.
@@ -185,12 +259,11 @@ internal fun resolveUndercutFloors(
     )
 
     val resolvedById = HashMap<String, UndercutFloors>()
-    val out = mutableListOf<UndercutFloors>()
-    for (span in ordered) {
-        val u = byId[span.id] ?: continue
+    fun resolve(span: UndercutSpanMm): UndercutFloors? {
+        val u = byId[span.id] ?: return null
         val nesting = nestingById[span.id] ?: UndercutNesting(span.id, 0, null)
         val parent = nesting.parentId?.let { resolvedById[it] }
-        val floors = if (parent == null) {
+        return if (parent == null) {
             val minSurface = minOuterDiaOver(segs, span.startMm, span.endMm)
             UndercutFloors(
                 nesting = nesting,
@@ -208,8 +281,10 @@ internal fun resolveUndercutFloors(
             // A face shared with the parent's own shoulder rises to whatever the parent's face
             // rises to (recursively, so a level-2 cut flush through both levels still reaches the
             // shaft surface); a face inboard of the parent steps off the parent's floor.
-            val sharesAft = abs(span.startMm - parent.span.startMm) <= UNDERCUT_SPAN_EPS_MM
-            val sharesFwd = abs(span.endMm - parent.span.endMm) <= UNDERCUT_SPAN_EPS_MM
+            // Same slop as containment ([undercutSpanContains]): a child the forest nests on its
+            // parent's shoulder within Float drift shares that shoulder's face.
+            val sharesAft = abs(span.startMm - parent.span.startMm) <= UNDERCUT_TOUCH_EPS_MM
+            val sharesFwd = abs(span.endMm - parent.span.endMm) <= UNDERCUT_TOUCH_EPS_MM
             UndercutFloors(
                 nesting = nesting,
                 span = span,
@@ -227,10 +302,58 @@ internal fun resolveUndercutFloors(
                 fwdFaceTopDiaMm = if (sharesFwd) parent.fwdFaceTopDiaMm else parent.drawnFloorDiaMm,
             )
         }
-        resolvedById[span.id] = floors
-        out += floors
     }
-    return out
+
+    // Top level first and all at once: a butted face needs its neighbour's drawn floor, and a
+    // child flush with a butted shoulder needs the stepped face top.
+    val (topSpans, nestedSpans) = ordered.partition { nestingById[it.id]?.parentId == null }
+    val top = withButtedSiblingFaces(topSpans.mapNotNull(::resolve))
+    top.forEach { resolvedById[it.span.id] = it }
+    val nested = nestedSpans.mapNotNull { span ->
+        resolve(span)?.also { resolvedById[span.id] = it }
+    }
+    return inButtedPaintOrder(top) + nested
+}
+
+private fun undercutEndsTouch(endMm: Float, startMm: Float): Boolean =
+    abs(endMm - startMm) <= UNDERCUT_TOUCH_EPS_MM
+
+/**
+ * Re-top every butted end of the top-level cuts [top]: an end that another top-level cut's
+ * opposite end touches rises to the lowest such neighbour's drawn floor. Drawn floors, because
+ * the faces are drawn at the exaggerated depth; true floors are untouched. A run of three or
+ * more butted cuts chains pairwise. An end touching a liner edge, the shaft end, or nothing
+ * keeps its surface face top.
+ */
+private fun withButtedSiblingFaces(top: List<UndercutFloors>): List<UndercutFloors> = top.map { f ->
+    val aftNeighbourFloor = top
+        .filter { it !== f && undercutEndsTouch(it.span.endMm, f.span.startMm) }
+        .minOfOrNull { it.drawnFloorDiaMm }
+    val fwdNeighbourFloor = top
+        .filter { it !== f && undercutEndsTouch(f.span.endMm, it.span.startMm) }
+        .minOfOrNull { it.drawnFloorDiaMm }
+    if (aftNeighbourFloor == null && fwdNeighbourFloor == null) f
+    else f.copy(
+        aftFaceTopDiaMm = aftNeighbourFloor ?: f.aftFaceTopDiaMm,
+        fwdFaceTopDiaMm = fwdNeighbourFloor ?: f.fwdFaceTopDiaMm,
+        aftButted = aftNeighbourFloor != null,
+        fwdButted = fwdNeighbourFloor != null,
+    )
+}
+
+/**
+ * Paint order for the top-level cuts [top] (already aft → fwd): each run of butted cuts paints
+ * shallowest drawn floor first, so at every shared boundary the DEEPER cut — the one whose face
+ * carries the step — paints last. Painted the other way, the later cut's core erase would wipe
+ * half the stroke of the face it no longer draws. Cuts that touch nothing keep aft → fwd.
+ */
+private fun inButtedPaintOrder(top: List<UndercutFloors>): List<UndercutFloors> {
+    val runs = mutableListOf<MutableList<UndercutFloors>>()
+    for (f in top) {
+        val run = runs.firstOrNull { r -> r.any { undercutEndsTouch(it.span.endMm, f.span.startMm) } }
+        if (run != null) run += f else runs += mutableListOf(f)
+    }
+    return runs.flatMap { r -> r.sortedByDescending { it.drawnFloorDiaMm } }
 }
 
 /**
@@ -257,9 +380,15 @@ internal fun resolveUndercutFloors(
  * there ([nestedSurfacePoints]), so a shared edge prints as one continuous face — the
  * silhouette two separately-authored adjacent sections would give.
  *
- * The result is ordered **parents before children** (by nesting level, then aft → fwd), so the
- * later-painted child always lands on top of the relief around it — paint-over correctness no
- * longer depends on start-coordinate luck.
+ * ## Butted cuts
+ * Two top-level cuts whose ends touch print ONE step at the boundary: the shallower cut's face
+ * there is dropped and the deeper cut's face rises only to the shallower cut's drawn floor
+ * ([buttedSurfacePoints]). Equal floors draw no face at all — one continuous floor.
+ *
+ * The result is ordered **parents before children** (by nesting level, then aft → fwd, except
+ * that a run of butted cuts paints shallowest first so the deeper cut's step face lands on top),
+ * so the later-painted child always lands on top of the relief around it — paint-over
+ * correctness no longer depends on start-coordinate luck.
  *
  * [exaggerationFrac] is the sheet's drawn-depth setting
  * ([com.android.shaftschematic.model.UndercutRecord.exaggerationFrac]) and
@@ -283,7 +412,10 @@ internal fun buildUndercutNotches(
             else listOf(SurfaceSeg(span.startMm, span.endMm, f.surfaceDiaMm, f.surfaceDiaMm))
         val profiles = notchProfiles(localSegs, span.startMm, span.endMm, f.trueFloorDiaMm)
             .map { p ->
-                if (!nested) p.copy(floorDiaMm = f.drawnFloorDiaMm)
+                if (!nested) p.copy(
+                    floorDiaMm = f.drawnFloorDiaMm,
+                    surface = buttedSurfacePoints(p, f),
+                )
                 else p.copy(
                     floorDiaMm = f.drawnFloorDiaMm,
                     surface = nestedSurfacePoints(p, f),
@@ -297,6 +429,37 @@ internal fun buildUndercutNotches(
             profiles = profiles,
         )
     }
+
+/**
+ * A top-level notch region's surface polyline for DRAWING, with a **duplicated-x step point**
+ * prepended/appended at an end butted against a sibling cut — the [nestedSurfacePoints]
+ * construction. The step point sits at the sibling's drawn floor, so the face both draw sites
+ * take from the first/last surface point runs from that floor down to this cut's floor: the one
+ * real step at the boundary. It is clamped to the surface actually standing at that end, never
+ * the span-wide minimum, so a cut overhanging onto smaller stock still steps up to its neighbour.
+ * Where the sibling is as deep or deeper the step point lands ON this cut's floor — a
+ * zero-height face, which every draw site's `NOTCH_FACE_MIN_STEP_PX` test already skips. The
+ * step has zero axial width, so the void fill still erases the whole mouth.
+ */
+private fun buttedSurfacePoints(p: NotchProfile, f: UndercutFloors): List<SurfacePoint> {
+    val eps = UNDERCUT_SPAN_EPS_MM
+    val atAft = f.aftButted && abs(p.startMm - f.span.startMm) <= eps
+    val atFwd = f.fwdButted && abs(p.endMm - f.span.endMm) <= eps
+    if (!atAft && !atFwd) return p.surface
+    fun faceTop(surfaceDiaMm: Float, neighbourFloorDiaMm: Float): Float =
+        min(surfaceDiaMm, neighbourFloorDiaMm).coerceAtLeast(f.drawnFloorDiaMm)
+    return buildList {
+        if (atAft) {
+            val s = p.surface.first()
+            add(SurfacePoint(s.xMm, faceTop(s.diaMm, f.aftFaceTopDiaMm)))
+        }
+        addAll(p.surface)
+        if (atFwd) {
+            val s = p.surface.last()
+            add(SurfacePoint(s.xMm, faceTop(s.diaMm, f.fwdFaceTopDiaMm)))
+        }
+    }
+}
 
 /**
  * A nested notch region's surface polyline for DRAWING: every point on the parent's drawn floor

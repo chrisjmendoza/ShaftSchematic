@@ -10,9 +10,13 @@ import java.util.UUID
  *
  * Same role as [WearSpotReference]: it never changes canonical storage
  * ([Undercut.startFromAftMm]), only how the "Distance" field is entered and re-displayed.
- * The four references mirror the wear spot's set — two S.E.T. (Small End of Taper) datums
- * plus the edges of an associated liner ([Undercut.referenceLinerId]); the liner pair is
- * offered only while such a liner exists, since converting against it needs its edges.
+ * Four references mirror the wear spot's set — two S.E.T. (Small End of Taper) datums plus the
+ * edges of an associated liner ([Undercut.referenceLinerId]); the liner pair is offered only
+ * while such a liner exists, since converting against it needs its edges. The parent pair
+ * measures a NESTED cut from the shoulders of the cut it sits inside ([Undercut.referenceCutId]),
+ * offered only while the cut is fully inside another — the datum the printed nested rail row
+ * already dimensions from, and the only edge left once a relief has buried its liner's edges
+ * (on-device request).
  * - [AFT_SET]: the entered value locates the undercut's **AFT edge**, measured FWD from
  *   the AFT taper's SET.
  * - [FWD_SET]: the entered value locates the undercut's **FWD edge**, measured AFT from
@@ -21,13 +25,18 @@ import java.util.UUID
  *   the reference liner's AFT edge.
  * - [LINER_FWD]: the entered value locates the undercut's **FWD edge**, measured AFT from
  *   the reference liner's FWD edge.
+ * - [PARENT_AFT]: the entered value locates the undercut's **AFT edge**, measured FWD from
+ *   the AFT shoulder of the cut it is nested in.
+ * - [PARENT_FWD]: the entered value locates the undercut's **FWD edge**, measured AFT from
+ *   the FWD shoulder of the cut it is nested in.
  *
- * Back-compat note: [LINER_AFT]/[LINER_FWD] are additive enum values — a document that
- * uses them will not decode in app builds that predate them (the same additive-enum rule
- * every envelope enum carries); files that stick to the SET references are unaffected.
+ * Back-compat note: [LINER_AFT]/[LINER_FWD] and [PARENT_AFT]/[PARENT_FWD] are additive enum
+ * values — a document that uses them will not decode in app builds that predate them (the same
+ * additive-enum rule every envelope enum carries); files that stick to the older references are
+ * unaffected.
  */
 @Serializable
-enum class UndercutReference { AFT_SET, FWD_SET, LINER_AFT, LINER_FWD }
+enum class UndercutReference { AFT_SET, FWD_SET, LINER_AFT, LINER_FWD, PARENT_AFT, PARENT_FWD }
 
 /**
  * A recorded undercut section — an axial span machined below the surrounding shaft
@@ -75,6 +84,11 @@ enum class UndercutReference { AFT_SET, FWD_SET, LINER_AFT, LINER_FWD }
  *   of this liner. If the liner is later deleted, the Distance field falls back to the
  *   [UndercutReference.AFT_SET] projection (canonical untouched); empty for SET-authored
  *   undercuts.
+ * @property referenceCutId The id of the cut this one is nested in, which the distance converts
+ *   against when [authoredReference] is a `PARENT_*` value — display metadata only, like
+ *   [referenceLinerId]. If that cut is later deleted, or no longer contains this one, the
+ *   Distance field displays from the nearer S.E.T. (canonical untouched, the stored value never
+ *   rewritten); empty for every other reference. Additive + defaulted: older files decode to "".
  * @property note Free-text note (e.g. "weld undercut", "cleanup pass").
  */
 @Serializable
@@ -86,6 +100,7 @@ data class Undercut(
     val authoredReference: UndercutReference = UndercutReference.AFT_SET,
     val referenceLinerId: String = "",
     val note: String = "",
+    val referenceCutId: String = "",
 )
 
 /**

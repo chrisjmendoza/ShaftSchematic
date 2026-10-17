@@ -194,6 +194,48 @@ class UndercutStripSvgPreviewTest {
         )
     }
 
+    /**
+     * The on-device butted-cuts shape: a 9.760"-OD liner over a 9" body, two cuts butted end to
+     * end (the card's edge-to-edge preset) at different floors, and a third butted to the second that overhangs
+     * the liner's FWD edge onto the body. At each shared boundary the silhouette is ONE step
+     * between the two floors — never a face rising to the liner OD.
+     */
+    private val buttedCutsScenario: Scenario = run {
+        val oal = 3000f
+        val body = 228.6f
+        val linerAft = 500f
+        val linerFwd = 1500f
+        val linerOd = 248f
+        Scenario(
+            components = listOf(
+                ResolvedBody(
+                    id = "body", type = ResolvedComponentType.BODY, source = ResolvedComponentSource.EXPLICIT,
+                    startMmPhysical = 0f, endMmPhysical = oal, diaMm = body,
+                ),
+                ResolvedLiner(id = "liner", startMmPhysical = linerAft, endMmPhysical = linerFwd, odMm = linerOd),
+            ),
+            spec = ShaftSpec(
+                overallLengthMm = oal,
+                bodies = listOf(Body(id = "body", startFromAftMm = 0f, lengthMm = oal, diaMm = body)),
+                liners = listOf(
+                    Liner(
+                        id = "liner", startFromAftMm = linerAft, lengthMm = linerFwd - linerAft,
+                        odMm = linerOd, endMmPhysical = linerFwd,
+                    ),
+                ),
+            ),
+            oalMm = oal,
+            aftSetMm = 100f,
+            fwdSetMm = 2900f,
+        )
+    }
+
+    private fun buttedLinerUndercuts() = listOf(
+        Undercut(id = "ba", startFromAftMm = 700f, lengthMm = 140f, diaMm = 230.5f),
+        Undercut(id = "bb", startFromAftMm = 840f, lengthMm = 94f, diaMm = 236.2f),
+        Undercut(id = "bc", startFromAftMm = 934f, lengthMm = 616f, diaMm = 236f),
+    )
+
     /** Three cuts inside the liner, the last one overhanging its FWD edge at 1000 mm. */
     private fun linerUndercuts(thirdDiaMm: Float, secondDiaMm: Float) = listOf(
         Undercut(id = "u1", startFromAftMm = 700f, lengthMm = 60f, diaMm = 200f),
@@ -885,7 +927,23 @@ class UndercutStripSvgPreviewTest {
             639.76f - undercutBreakRoomMm(209.8f), kLiner.drawStartMm, 1e-2f,
         )
 
+        // L) THE ON-DEVICE BUTTED CASE: two cuts butted end to end at different floors, and a
+        //    third butted to the second overhanging the liner's FWD edge. The rail prints no gap
+        //    span (the cuts touch), and each shared boundary must draw ONE step between the two
+        //    floors — a face rising to the liner OD there read as a full-size sliver of liner.
+        val l = renderStrip(buttedLinerUndercuts(), sc = buttedCutsScenario)
+        File(outDir, "l-butted-cuts-different-floors.svg").writeText(l.svg)
+        assertTrue(l.chainCoversStrip)
+        val lEnds = l.nestedSurfaceEndDias
+        listOf(
+            lEnds.getValue("ba").last(), lEnds.getValue("bb").first(),
+            lEnds.getValue("bb").last(), lEnds.getValue("bc").first(),
+        ).forEach { faceTop ->
+            assertTrue("no face at a butted station rises to the liner OD ($faceTop)", faceTop < 248f - 1e-3f)
+        }
+        assertEquals("the outer AFT face still rises to the liner OD", 248f, lEnds.getValue("ba").first(), 1e-3f)
+
         assertNotNull(outDir.listFiles())
-        assertEquals(11, outDir.listFiles()!!.count { it.name.endsWith(".svg") })
+        assertEquals(12, outDir.listFiles()!!.count { it.name.endsWith(".svg") })
     }
 }

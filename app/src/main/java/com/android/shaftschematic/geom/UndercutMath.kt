@@ -173,11 +173,16 @@ const val UNDERCUT_PLACEHOLDER_DEPTH_FRAC = 0.85f
  *   the reference liner's AFT edge: canonical = `linerStartMm + enteredMm`.
  * - [UndercutReference.LINER_FWD] locates the undercut's **FWD edge**, measured AFT from
  *   the reference liner's FWD edge: canonical = `linerEndMm − enteredMm − lengthMm`.
+ * - [UndercutReference.PARENT_AFT] / [UndercutReference.PARENT_FWD]: the liner formulas with
+ *   the PARENT cut's span — canonical = `parentStartMm + enteredMm` /
+ *   `parentEndMm − enteredMm − lengthMm`.
  *
  * [linerStartMm]/[linerEndMm] are the reference liner's shaft-space edges (the liner
  * named by `Undercut.referenceLinerId`); they are read only by the `LINER_*` branches, so
  * SET-authored call sites may pass zeros. Callers offer the liner references only while
  * that liner exists — a deleted reference liner falls back to the AFT_SET projection.
+ * [parentStartMm]/[parentEndMm] are the parent cut's span (`Undercut.referenceCutId`), read
+ * only by the `PARENT_*` branches.
  *
  * Pure and side-effect-free; does not clamp or validate — see [undercutSpanIssue] for
  * the blocking in-span check applied at commit time.
@@ -190,11 +195,15 @@ fun undercutStartToCanonicalMm(
     fwdSetXMm: Float,
     linerStartMm: Float = 0f,
     linerEndMm: Float = 0f,
+    parentStartMm: Float = 0f,
+    parentEndMm: Float = 0f,
 ): Float = when (reference) {
     UndercutReference.AFT_SET -> aftSetXMm + enteredMm
     UndercutReference.FWD_SET -> fwdSetXMm - enteredMm - lengthMm
     UndercutReference.LINER_AFT -> linerStartMm + enteredMm
     UndercutReference.LINER_FWD -> linerEndMm - enteredMm - lengthMm
+    UndercutReference.PARENT_AFT -> parentStartMm + enteredMm
+    UndercutReference.PARENT_FWD -> parentEndMm - enteredMm - lengthMm
 }
 
 /**
@@ -210,11 +219,15 @@ fun canonicalToUndercutStartMm(
     fwdSetXMm: Float,
     linerStartMm: Float = 0f,
     linerEndMm: Float = 0f,
+    parentStartMm: Float = 0f,
+    parentEndMm: Float = 0f,
 ): Float = when (reference) {
     UndercutReference.AFT_SET -> canonicalStartMm - aftSetXMm
     UndercutReference.FWD_SET -> fwdSetXMm - canonicalStartMm - lengthMm
     UndercutReference.LINER_AFT -> canonicalStartMm - linerStartMm
     UndercutReference.LINER_FWD -> linerEndMm - canonicalStartMm - lengthMm
+    UndercutReference.PARENT_AFT -> canonicalStartMm - parentStartMm
+    UndercutReference.PARENT_FWD -> parentEndMm - canonicalStartMm - lengthMm
 }
 
 /**
@@ -240,12 +253,16 @@ fun undercutCanonicalForNewLength(
     fwdSetXMm: Float,
     linerStartMm: Float = 0f,
     linerEndMm: Float = 0f,
+    parentStartMm: Float = 0f,
+    parentEndMm: Float = 0f,
 ): Float {
     val distanceMm = canonicalToUndercutStartMm(
         reference, canonicalStartMm, oldLengthMm, aftSetXMm, fwdSetXMm, linerStartMm, linerEndMm,
+        parentStartMm, parentEndMm,
     )
     return undercutStartToCanonicalMm(
         reference, distanceMm, newLengthMm, aftSetXMm, fwdSetXMm, linerStartMm, linerEndMm,
+        parentStartMm, parentEndMm,
     )
 }
 
@@ -493,16 +510,32 @@ fun undercutOverlapIssue(
     canonicalStartMm: Float,
     lengthMm: Float,
     otherSpans: List<UndercutSpanMm>,
+): String? =
+    if (undercutOverlapPartnerId(canonicalStartMm, lengthMm, otherSpans) != null) {
+        UNDERCUT_PARTIAL_OVERLAP_MSG
+    } else {
+        null
+    }
+
+/**
+ * The id of the first cut in [otherSpans] the span `[canonicalStartMm, canonicalStartMm +
+ * lengthMm]` partially overlaps (or duplicates), or `null` when it overlaps none — the partner
+ * [undercutOverlapIssue] blocks on, so a caller that knows where that cut sits can NAME it
+ * ([undercutOverlapMessage]).
+ */
+fun undercutOverlapPartnerId(
+    canonicalStartMm: Float,
+    lengthMm: Float,
+    otherSpans: List<UndercutSpanMm>,
 ): String? {
     val draft = UndercutSpanMm("", canonicalStartMm, canonicalStartMm + lengthMm)
-    val hit = otherSpans.firstOrNull { o -> undercutSpansPartiallyOverlap(draft, o) }
-    return if (hit != null) UNDERCUT_PARTIAL_OVERLAP_MSG else null
+    return otherSpans.firstOrNull { o -> undercutSpansPartiallyOverlap(draft, o) }?.id
 }
 
 /**
  * The blocked-overlap predicate behind [undercutOverlapIssue] and [undercutPartialOverlapsMm]:
  * [a] and [b] are neither clear of each other (touching edge-to-edge counts as clear, within
- * [UNDERCUT_TOUCH_EPS_MM] — a "Butt against" preset's `Float` edge drifts by an ulp on a long
+ * [UNDERCUT_TOUCH_EPS_MM] — an edge-to-edge preset's `Float` edge drifts by an ulp on a long
  * shaft) nor nested either way ([undercutSpanContains]). Two identical spans satisfy it — one cut
  * entered twice is blocked like a partial intrusion. The confirm check and the canvas overlap
  * band both read this one predicate, so they share the slop.
@@ -532,41 +565,42 @@ fun undercutPartialOverlapsMm(
 }
 
 /**
- * The one blocked-overlap wording: a partial intrusion and a duplicate span read the same,
- * because the fix is the same — move the cut fully inside its neighbour or fully clear of it.
- * Short enough to fit the status pill in two lines on a phone.
+ * The generic blocked-overlap wording, for a caller with no page to number the partner against.
+ * A partial intrusion and a duplicate span read the same, because the fix is the same — move the
+ * cut fully inside its neighbour or fully clear of it. Short enough to fit the status pill in two
+ * lines on a phone.
  */
 const val UNDERCUT_PARTIAL_OVERLAP_MSG =
     "Overlaps another cut — sit fully inside it or fully clear"
 
-// ── Butt-against preset ──
+/**
+ * The blocked-overlap wording that NAMES the partner (on-device report: the generic text did not
+ * say which cut the draft collided with): `"Overlaps cut N — …"` with [partnerPosition] the
+ * partner's 1-based page position (the number its card title carries), or "a cut outside this
+ * strip" when the partner is on no page here (`null`).
+ */
+fun undercutOverlapMessage(partnerPosition: Int?): String =
+    if (partnerPosition != null) {
+        "Overlaps cut $partnerPosition — sit fully inside it or fully clear"
+    } else {
+        "Overlaps a cut outside this strip — sit fully inside it or fully clear"
+    }
+
+// ── Butt-against presets ──
 
 /**
- * True when a cut butted against the other span `[otherStartMm, otherEndMm]` goes on its FWD
- * side ("After cut N"): the other span's midpoint lies AFT of the draft's. Equal midpoints read
- * as "Before".
+ * "Start at end of cut N": the canonical start that puts a draft's AFT end on the other cut's
+ * FWD end [otherEndMm] — edge to edge, which [undercutOverlapIssue] counts as clear. The length
+ * is never touched; shaft bounds are the caller's check ([undercutSpanIssue]).
  */
-fun undercutButtsAfter(
-    otherStartMm: Float,
-    otherEndMm: Float,
-    draftStartMm: Float,
-    draftLengthMm: Float,
-): Boolean = (otherStartMm + otherEndMm) * 0.5f < draftStartMm + draftLengthMm * 0.5f
+fun undercutStartAtEndOf(otherEndMm: Float): Float = otherEndMm
 
 /**
- * The start that butts a draft of [draftLengthMm] against the other span — edge to edge, which
- * [undercutOverlapIssue] counts as clear. AFTER the other cut ([undercutButtsAfter]) the draft
- * starts at its FWD end; BEFORE it, the draft ends at its AFT end. The length is never touched.
- * Shaft bounds are the caller's check ([undercutSpanIssue]).
+ * "End at start of cut N": the canonical start that puts the FWD end of a draft of [lengthMm] on
+ * the other cut's AFT end [otherStartMm]. The length is never touched; shaft bounds are the
+ * caller's check ([undercutSpanIssue]).
  */
-fun undercutStartButting(
-    otherStartMm: Float,
-    otherEndMm: Float,
-    draftStartMm: Float,
-    draftLengthMm: Float,
-): Float =
-    if (undercutButtsAfter(otherStartMm, otherEndMm, draftStartMm, draftLengthMm)) otherEndMm
-    else otherStartMm - draftLengthMm
+fun undercutEndAtStartOf(otherStartMm: Float, lengthMm: Float): Float = otherStartMm - lengthMm
 
 /**
  * True when a **previously recorded** undercut no longer fits within the shaft's current
@@ -615,6 +649,11 @@ data class UndercutNesting(val id: String, val level: Int, val parentId: String?
  * True when [outer] contains [inner] — the inner span inside both outer edges within [epsMm],
  * and the two not the SAME span (both edges coincident within [epsMm]).
  *
+ * [epsMm] defaults to [UNDERCUT_TOUCH_EPS_MM], the slop the clear test of the overlap predicate
+ * uses: a cut sitting on another's edge within `Float` drift must read as nested or as clear,
+ * never as a partial overlap in the gap between two tolerances. The containment forest, the
+ * confirm check and the overlap band all go through here, so they agree.
+ *
  * A shared edge IS containment: the shop machines the original relief and then deepens a
  * corroded section of it that may run right up to the relief's own shoulder (on-device
  * intent), and that must print exactly as separately-authored adjacent sections would — one
@@ -624,7 +663,7 @@ data class UndercutNesting(val id: String, val level: Int, val parentId: String?
 fun undercutSpanContains(
     outer: UndercutSpanMm,
     inner: UndercutSpanMm,
-    epsMm: Float = UNDERCUT_SPAN_EPS_MM,
+    epsMm: Float = UNDERCUT_TOUCH_EPS_MM,
 ): Boolean {
     val within = inner.startMm >= outer.startMm - epsMm && inner.endMm <= outer.endMm + epsMm
     val sameSpan = abs(inner.startMm - outer.startMm) <= epsMm &&
@@ -704,7 +743,7 @@ fun undercutNestingForest(spans: List<UndercutSpanMm>): List<UndercutNesting> {
 fun undercutCalloutAnchorMm(
     span: UndercutSpanMm,
     others: List<UndercutSpanMm>,
-    epsMm: Float = UNDERCUT_SPAN_EPS_MM,
+    epsMm: Float = UNDERCUT_TOUCH_EPS_MM,
 ): Float {
     val mid = (span.startMm + span.endMm) * 0.5f
     if (span.endMm - span.startMm <= epsMm) return mid
@@ -736,7 +775,7 @@ fun undercutCalloutAnchorMm(
  */
 fun undercutCalloutAnchorsMm(
     spans: List<UndercutSpanMm>,
-    epsMm: Float = UNDERCUT_SPAN_EPS_MM,
+    epsMm: Float = UNDERCUT_TOUCH_EPS_MM,
 ): Map<String, Float> = spans.associate { it.id to undercutCalloutAnchorMm(it, spans, epsMm) }
 
 /**
