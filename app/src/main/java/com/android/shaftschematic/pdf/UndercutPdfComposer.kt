@@ -400,7 +400,7 @@ fun composeUndercutPdf(
             c, sheetNotches, shaftCy, ::xAt, ::rPx, outline, voidFill,
             sectionCoreFill = fills.sectionCore,
         )
-        drawLinerOutlinesPdf(c, docSpec, sheetNotches, surfaceSegs, shaftCy, ::xAt, ::rPx, linerOutlinePaint)
+        drawLinerOutlinesPdf(c, docSpec, sheetNotches, shaftCy, ::xAt, ::rPx, linerOutlinePaint)
         drawUndercutDirectionRow(
             c, text, contentLeft, contentRight,
             (shaftCy + rPx(maxDiaMm) + text.textSize + 12f).coerceAtMost(profileBottom - 2f),
@@ -609,15 +609,15 @@ private fun surfaceSegsFromSpec(spec: ShaftSpec): List<SurfaceSeg> = buildList {
  */
 /**
  * The liner outline on the printed sheet — the dotted retrace of each liner's original OD and end
- * faces over the stretches [notches] erased, mirrored about [cy], from the ONE pure builder the
- * canvases also run ([linerOutlineSegments]). Drawn after the notch pass and before the Ø
+ * faces over the stretches [notches] erased — the OD and shoulder steps mirrored about [cy], an
+ * end face ONE full-height line from top OD to bottom OD through the body — from the ONE pure
+ * builder the canvases also run ([linerOutlineSegments]). Drawn after the notch pass and before the Ø
  * callouts and rails. A null [paint] (the pref off) draws nothing.
  */
 private fun drawLinerOutlinesPdf(
     c: Canvas,
     docSpec: ShaftSpec,
     notches: List<UndercutNotch>,
-    segs: List<SurfaceSeg>,
     cy: Float,
     xAt: (Float) -> Float,
     rAt: (Float) -> Float,
@@ -633,7 +633,7 @@ private fun drawLinerOutlinesPdf(
                 ln.shoulderOn(LinerAuthoredReference.AFT), ln.shoulderOn(LinerAuthoredReference.FWD),
             ),
         )
-        linerOutlineSegments(liner, notches, segs).forEach { seg ->
+        linerOutlineSegments(liner, notches).forEach { seg ->
             val r0 = rAt(seg.dia0Mm)
             val r1 = rAt(seg.dia1Mm)
             when (seg.edge) {
@@ -643,7 +643,11 @@ private fun drawLinerOutlinesPdf(
                     c.drawLine(x0, cy - r0, x1, cy - r0, paint)
                     c.drawLine(x0, cy + r0, x1, cy + r0, paint)
                 }
-                else -> {
+                LinerOutlineEdge.FULL_FACE -> {
+                    val x = xAt(seg.x0Mm)
+                    c.drawLine(x, cy - r1, x, cy + r1, paint)
+                }
+                LinerOutlineEdge.STEP -> {
                     val x = xAt(seg.x0Mm)
                     c.drawLine(x, cy - r1, x, cy - r0, paint)
                     c.drawLine(x, cy + r0, x, cy + r1, paint)
@@ -955,7 +959,7 @@ private fun drawUndercutDetailStrip(
         c, notches, cy, ::xAtStrip, ::rStrip, outline, voidFill,
         sectionCoreFill = sectionCoreFill,
     )
-    drawLinerOutlinesPdf(c, docSpec, notches, segs, cy, ::xAtStrip, ::rStrip, linerOutlinePaint)
+    drawLinerOutlinesPdf(c, docSpec, notches, cy, ::xAtStrip, ::rStrip, linerOutlinePaint)
 
     // ── Measured-Ø callouts: leader from each notch floor down to the printed value ──
     if (diaPlan != null) {

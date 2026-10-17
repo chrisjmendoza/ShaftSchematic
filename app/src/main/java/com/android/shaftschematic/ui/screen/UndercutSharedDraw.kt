@@ -8,7 +8,6 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import com.android.shaftschematic.geom.LinerOutlineEdge
 import com.android.shaftschematic.geom.NOTCH_FACE_MIN_STEP_PX
-import com.android.shaftschematic.geom.SurfaceSeg
 import com.android.shaftschematic.geom.UNDERCUT_SECTION_FILL_ALPHA
 import com.android.shaftschematic.geom.UndercutLinerOd
 import com.android.shaftschematic.geom.UndercutLinerSpan
@@ -145,14 +144,15 @@ internal const val LINER_OUTLINE_CANVAS_ALPHA = 0.4f
 
 /**
  * The liner outline (`PdfPrefs.undercutLinerOutline`): a fine DOTTED retrace of each liner's
- * original OD and end faces over the stretches [notches] erased, mirrored about [cy] — the
- * pieces come from the ONE pure builder the PDF composer also runs ([linerOutlineSegments]).
+ * original OD and end faces over the stretches [notches] erased — the OD and shoulder steps
+ * mirrored about [cy], an end face ONE full-height line from top OD to bottom OD through the
+ * body — the pieces come from the ONE pure builder the PDF composer also runs
+ * ([linerOutlineSegments]).
  * Called AFTER the notch passes, so the dots lie over the voids, and before rails and callouts.
  */
 internal fun DrawScope.drawLinerOutlines(
     liners: List<UndercutLinerOd>,
     notches: List<UndercutNotch>,
-    segs: List<SurfaceSeg>,
     xPx: (Float) -> Float,
     rPx: (Float) -> Float,
     cy: Float,
@@ -161,7 +161,7 @@ internal fun DrawScope.drawLinerOutlines(
 ) {
     val dots = PathEffect.dashPathEffect(floatArrayOf(2f, 4f))
     liners.forEach { liner ->
-        linerOutlineSegments(liner, notches, segs).forEach { seg ->
+        linerOutlineSegments(liner, notches).forEach { seg ->
             val r0 = rPx(seg.dia0Mm)
             val r1 = rPx(seg.dia1Mm)
             when (seg.edge) {
@@ -171,7 +171,11 @@ internal fun DrawScope.drawLinerOutlines(
                     drawLine(color, Offset(x0, cy - r0), Offset(x1, cy - r0), strokeWidthPx, pathEffect = dots)
                     drawLine(color, Offset(x0, cy + r0), Offset(x1, cy + r0), strokeWidthPx, pathEffect = dots)
                 }
-                else -> {
+                LinerOutlineEdge.FULL_FACE -> {
+                    val x = xPx(seg.x0Mm)
+                    drawLine(color, Offset(x, cy - r1), Offset(x, cy + r1), strokeWidthPx, pathEffect = dots)
+                }
+                LinerOutlineEdge.STEP -> {
                     val x = xPx(seg.x0Mm)
                     drawLine(color, Offset(x, cy - r1), Offset(x, cy - r0), strokeWidthPx, pathEffect = dots)
                     drawLine(color, Offset(x, cy + r0), Offset(x, cy + r1), strokeWidthPx, pathEffect = dots)
