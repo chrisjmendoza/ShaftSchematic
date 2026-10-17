@@ -87,8 +87,8 @@ fun wearBandToPx(band: ClampedWearBandMm, linerOriginPx: Float, pxPerMm: Float):
  * `computeSetPositionsInMeasureSpace` (its `measureStartMm` is always `0.0`, so its
  * measure-space output already *is* physical shaft-space mm).
  *
- * Pure and side-effect-free; does not clamp or validate — see [wearSpotSpanIssue] for the
- * blocking in-span check applied at commit time.
+ * Pure and side-effect-free; does not clamp or validate — see [wearSpotSpanProblem] for the
+ * display-only in-span classification the card shows.
  */
 fun wearStartToCanonicalMm(
     reference: WearSpotReference,
@@ -125,42 +125,86 @@ fun canonicalToWearStartMm(
     WearSpotReference.FWD_SET -> fwdSetXMm - (linerStartFromAftMm + canonicalStartMm + lengthMm)
 }
 
+/**
+ * The canonical start that keeps the DISPLAYED Start fixed when a spot's length changes from
+ * [oldLengthMm] to [newLengthMm] under [reference] — the conversion pair composed. Identity
+ * under an AFT-flavored reference; under a FWD-flavored one the band's FWD edge (the point the
+ * Start was authored against) stays put and the band grows/shrinks AFT-ward. Committing a new
+ * length against the old canonical start would rewrite the displayed Start by the length delta,
+ * a typed value changing under the user (the undercut card's `undercutCanonicalForNewLength`
+ * rule).
+ */
+fun wearSpotCanonicalForNewLength(
+    reference: WearSpotReference,
+    canonicalStartMm: Float,
+    oldLengthMm: Float,
+    newLengthMm: Float,
+    linerStartFromAftMm: Float,
+    linerLengthMm: Float,
+    aftSetXMm: Float,
+    fwdSetXMm: Float,
+): Float {
+    val displayedMm = canonicalToWearStartMm(
+        reference, canonicalStartMm, oldLengthMm, linerStartFromAftMm, linerLengthMm, aftSetXMm, fwdSetXMm,
+    )
+    return wearStartToCanonicalMm(
+        reference, displayedMm, newLengthMm, linerStartFromAftMm, linerLengthMm, aftSetXMm, fwdSetXMm,
+    )
+}
+
 /** Epsilon for wear-span in-bounds checks — matches the app's other bounds-check tolerance. */
 private const val WEAR_SPAN_EPS_MM = 1e-3f
 
 /**
- * Blocking in-span validation (post-review spec): the band
- * `[canonicalStartMm, canonicalStartMm + lengthMm]` must lie entirely within
- * `[0, linerLengthMm]`. Returns a short message describing the violation, or `null` when
- * the band is in-span (boundary-exact bands are accepted — epsilon [WEAR_SPAN_EPS_MM],
- * same tolerance convention as the app's other bounds checks, e.g. `CouplerBoltSlot.isValid`).
- *
- * Called at ENTRY (both the Start field, after converting to canonical via
- * [wearStartToCanonicalMm], and the Length field) to reject an out-of-span commit before it
- * ever reaches the model — see `docs/contracts/NumberField.md`'s validator contract. This is deliberately
- * separate from [isWearSpotStaleOverrun], which classifies already-stored (possibly stale)
- * data for display rather than blocking new entry.
+ * Why a wear spot's stored span does not fit, with the full [message] shown under the card's
+ * fields and the [shortNote] shown beside the card's title.
  */
-fun wearSpotSpanIssue(canonicalStartMm: Float, lengthMm: Float, linerLengthMm: Float): String? {
+enum class WearSpotSpanProblem(val message: String, val shortNote: String) {
+    ZERO_LENGTH("Length must be greater than zero", "No length"),
+    PAST_LINER_AFT("Wear spot extends past the liner's AFT edge", "Extends past liner end"),
+    PAST_LINER_FWD("Wear spot extends past the liner's FWD edge", "Extends past liner end"),
+    PAST_SHAFT_FWD("Wear spot extends past the shaft's FWD end", "Extends past shaft end"),
+}
+
+/**
+ * Classifies a wear spot's canonical liner-local band `[canonicalStartMm, canonicalStartMm +
+ * lengthMm]` against its liner `[0, linerLengthMm]` and, when [oalMm] > 0, against the shaft's
+ * FWD end (the band's shaft-space FWD edge is `linerStartFromAftMm + canonicalStartMm +
+ * lengthMm`; `oalMm == 0` means the OAL is not typed yet and skips that check). Boundary-exact
+ * bands are accepted (epsilon [WEAR_SPAN_EPS_MM], the app's bounds-check tolerance).
+ *
+ * DISPLAY-ONLY: the Start and Length fields commit a typed value verbatim whatever this says,
+ * and the card states the problem (on-device ruling: no wear-spot field reverts a typed value).
+ * The same classification covers a spot the liner was shortened under after it was recorded.
+ * The drawing clamps the band to the liner ([clampWearBandToLiner]); the stored spot is never
+ * rewritten.
+ */
+fun wearSpotSpanProblem(
+    canonicalStartMm: Float,
+    lengthMm: Float,
+    linerLengthMm: Float,
+    linerStartFromAftMm: Float = 0f,
+    oalMm: Float = 0f,
+): WearSpotSpanProblem? {
     val eps = WEAR_SPAN_EPS_MM
+    val endMm = canonicalStartMm + lengthMm
     return when {
-        canonicalStartMm < -eps -> "Start is before the liner's AFT edge"
-        canonicalStartMm > linerLengthMm + eps -> "Start is past the liner's FWD edge"
-        canonicalStartMm + lengthMm > linerLengthMm + eps -> "Band extends past the liner's FWD edge"
+        lengthMm <= eps -> WearSpotSpanProblem.ZERO_LENGTH
+        canonicalStartMm < -eps -> WearSpotSpanProblem.PAST_LINER_AFT
+        endMm > linerLengthMm + eps -> WearSpotSpanProblem.PAST_LINER_FWD
+        oalMm > 0f && linerStartFromAftMm + endMm > oalMm + eps -> WearSpotSpanProblem.PAST_SHAFT_FWD
         else -> null
     }
 }
 
-/**
- * True when a **previously recorded** wear spot's canonical band no longer fits within the
- * liner's current length — e.g. the liner was shortened after the spot was recorded. This is
- * a non-blocking, display-only classifier: the caller should still render the band via the
- * existing [clampWearBandToLiner] safety net and show a small warning on the spot's card
- * ("extends past liner end — re-measure") rather than retroactively rejecting stored data
- * (only new entry is blocked, via [wearSpotSpanIssue]).
- */
-fun isWearSpotStaleOverrun(canonicalStartMm: Float, lengthMm: Float, linerLengthMm: Float): Boolean =
-    wearSpotSpanIssue(canonicalStartMm, lengthMm, linerLengthMm) != null
+/** [wearSpotSpanProblem]'s full message, or `null` when the band fits. */
+fun wearSpotSpanIssue(
+    canonicalStartMm: Float,
+    lengthMm: Float,
+    linerLengthMm: Float,
+    linerStartFromAftMm: Float = 0f,
+    oalMm: Float = 0f,
+): String? = wearSpotSpanProblem(canonicalStartMm, lengthMm, linerLengthMm, linerStartFromAftMm, oalMm)?.message
 
 /**
  * Scale (px per mm) for the liner detail canvas. Fills the available width, but capped so a very

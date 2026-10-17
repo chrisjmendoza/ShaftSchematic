@@ -662,6 +662,98 @@ fun undercutStartAtEndOf(otherEndMm: Float): Float = otherEndMm
  */
 fun undercutEndAtStartOf(otherStartMm: Float, lengthMm: Float): Float = otherStartMm - lengthMm
 
+// ── New-cut seeds ──
+
+/** Length a newly drafted or added undercut starts at (1 in). */
+const val UNDERCUT_DEFAULT_LENGTH_MM = 25.4f
+
+/**
+ * A new cut's seed butted against a cut already on the strip: the span `[startMm, startMm +
+ * lengthMm]` touches [neighbourId] edge to edge. The caller seeds the new card's reference from
+ * that neighbour, so a chain authored from one datum keeps reading from it.
+ */
+data class UndercutButtedSeed(val startMm: Float, val lengthMm: Float, val neighbourId: String)
+
+/**
+ * Where an "Add undercut…" on a strip seeds its new cut when the strip already holds cuts
+ * ([stripCuts], render-clamped): butted on the FWD end of the FWD-most cut while
+ * [lengthMm] of shaft remains FWD of it, else butted on the AFT end of the AFT-most cut while
+ * [lengthMm] of shaft remains AFT of it — the shop records a run of cuts one after the next, so
+ * the next one usually starts where the last one ends (on-device request). `null` when the strip
+ * has no cuts or neither side fits; the caller then seeds the strip's default span.
+ *
+ * A side is taken only when the seed lands in CLEAR stock — no cut in [occupied] (every cut on
+ * the sheet, render-clamped) reaches into it by more than [UNDERCUT_TOUCH_EPS_MM] — so a seed
+ * never opens already blocked by a cut on a neighbouring strip. The FWD-most cut is the one with
+ * the largest end (ties to the outermost, a parent over a child sharing its shoulder), the
+ * AFT-most the one with the smallest start; a nested cut never ends past its parent, so the
+ * neighbour is always a top-level cut. Pure: nothing is recorded — the seed is a draft.
+ */
+fun undercutAddSeedSpan(
+    stripCuts: List<UndercutSpanMm>,
+    occupied: List<UndercutSpanMm>,
+    oalMm: Float,
+    lengthMm: Float = UNDERCUT_DEFAULT_LENGTH_MM,
+): UndercutButtedSeed? {
+    val cuts = stripCuts.filter { it.endMm > it.startMm }
+    if (cuts.isEmpty() || lengthMm <= 0f) return null
+    val eps = UNDERCUT_TOUCH_EPS_MM
+    fun clear(startMm: Float): Boolean = occupied.none { o ->
+        o.startMm < startMm + lengthMm - eps && o.endMm > startMm + eps
+    }
+
+    val fwdMost = cuts.sortedWith(compareByDescending<UndercutSpanMm> { it.endMm }.thenBy { it.startMm }).first()
+    val fwdStart = undercutStartAtEndOf(fwdMost.endMm)
+    if (fwdStart + lengthMm <= oalMm + UNDERCUT_SPAN_EPS_MM && clear(fwdStart)) {
+        return UndercutButtedSeed(fwdStart, lengthMm, fwdMost.id)
+    }
+    val aftMost = cuts.sortedWith(compareBy<UndercutSpanMm> { it.startMm }.thenByDescending { it.endMm }).first()
+    val aftStart = undercutEndAtStartOf(aftMost.startMm, lengthMm)
+    if (aftStart >= -UNDERCUT_SPAN_EPS_MM && clear(aftStart)) {
+        return UndercutButtedSeed(aftStart, lengthMm, aftMost.id)
+    }
+    return null
+}
+
+/**
+ * The card's "Next cut" seed after [current]: a cut of [lengthMm] starting on [current]'s FWD end,
+ * Ø unentered (0), no note, with [current]'s authored reference, reference liner and reference cut
+ * carried over verbatim — the next cut of a run reads from the same datum. `null` when the shaft
+ * has less than [lengthMm] of stock FWD of [current] (the button is then disabled; a seed is never
+ * placed past the shaft end). The returned id is fresh and meaningless: the caller keys the seed
+ * as its pending draft. Pure: nothing is recorded.
+ */
+fun undercutNextCutSeed(
+    current: Undercut,
+    oalMm: Float,
+    lengthMm: Float = UNDERCUT_DEFAULT_LENGTH_MM,
+): Undercut? {
+    val startMm = undercutStartAtEndOf(current.startFromAftMm + current.lengthMm)
+    if (lengthMm <= 0f || startMm + lengthMm > oalMm + UNDERCUT_SPAN_EPS_MM) return null
+    return Undercut(
+        startFromAftMm = startMm,
+        lengthMm = lengthMm,
+        diaMm = 0f,
+        authoredReference = current.authoredReference,
+        referenceLinerId = current.referenceLinerId,
+        referenceCutId = current.referenceCutId,
+    )
+}
+
+// ── Missing diameters ──
+
+/**
+ * The recorded cuts with no measured Ø (`diaMm <= 0` — placed but not yet measured), in record
+ * order. Such a cut prints with no diameter, so the tab flags it on its list row and asks before
+ * printing or exporting a sheet that carries values.
+ */
+fun undercutsMissingDia(undercuts: List<Undercut>): List<Undercut> = undercuts.filter { it.diaMm <= 0f }
+
+/** The tab's statement of [count] cuts with no Ø — its list note and the print/export question. */
+fun undercutMissingDiaMessage(count: Int): String =
+    if (count == 1) "1 cut has no diameter and will print without one."
+    else "$count cuts have no diameter and will print without one."
+
 /**
  * True when a **previously recorded** undercut no longer fits within the shaft's current
  * extent (e.g. OAL was reduced after it was recorded). Non-blocking, display-only: the

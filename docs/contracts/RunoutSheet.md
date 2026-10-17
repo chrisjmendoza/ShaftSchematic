@@ -444,7 +444,7 @@ rects at `clampWearBandToLiner` positions (visual clamp only; the underlying `We
 mutated) with a small per-spot dimension rail below (offset from the liner's AFT edge, then band
 length, formatted via the existing `disp`/`abbr` helpers in the active unit). Spot cards below
 the canvas use `NumericInputField` for Start/Length (commit-on-blur, tap-and-leave no-op,
-per `NumberField.md`) plus a same-discipline Notes field, a delete icon per card, and an
+per `NumberField.md`; no validator — see "never revert" below) plus a same-discipline Notes field, a delete icon per card, and an
 "Add spot" button wired to `ShaftViewModel.addWearSpot`/`updateWearSpot`/`removeWearSpot`.
 
 **Break-edge eye orientation (2026-07-18 fix):** `drawBreakEdgeCompose`'s `eyeAtTop` must be
@@ -481,19 +481,33 @@ value only and persists the reference immediately via `ShaftViewModel.updateWear
 (mirrors `updateLinerAuthoredReference`/`updateCouplerBoltSlotReference`) — canonical `startMm`
 never moves as a result, same rule as the Liner/CouplerBoltSlot AFT/FWD chips.
 
-**Blocking in-span validation (Change 2)** — a wear band's canonical span
-`[startMm, startMm + lengthMm]` must lie entirely within `[0, linerLengthMm]`. This is enforced
-at **entry** via `NumericInputField`'s `validator`/`externalIssueText` (per `NumberField.md`):
-an out-of-span commit is rejected, the field reverts, and the model is never touched. Checked
-for both the Start field (after converting to canonical via the active reference) and the
-Length field (existing canonical start + new length must fit) using the pure
-`wearSpotSpanIssue(...)` classifier (epsilon `1e-3mm`, boundary-exact bands accepted). Stale
-data — a spot that was valid when recorded but no longer fits because the liner was later
-shortened — is **not** retroactively blocked: the render clamp (`clampWearBandToLiner`) remains
-the safety net, and the spot's card shows a small warning icon + "Extends past liner end —
-re-measure" text instead, driven by the separate non-blocking `isWearSpotStaleOverrun(...)`
-classifier. `ShaftViewModel.addWearSpot`'s default 25.4mm (1in) band length is clamped to the
-liner's own length so the default is never rejected on a tiny liner.
+**The Start and Length fields never revert a typed value; span validity is display-only** (the
+undercut card's rule, `UndercutDrawing.md`; on-device ruling) — neither field carries a
+`validator`. A commit converts the entered value to canonical and writes it straight to the record
+**verbatim** through `updateWearSpot` (there is no draft — a spot commits on blur as before), even
+when the band no longer fits; `updateWearSpot` stores `startMm` as given, negative included (a
+Start typed against a SET or the liner's FWD edge can land AFT of the liner). Only text that does
+not parse is turned back, and the shared field names it (`NumberField.md`). A **Length** edit
+keeps the displayed Start fixed — `wearSpotCanonicalForNewLength` (the conversion pair composed):
+identity under an AFT-flavored reference, and under a FWD-flavored one the band's FWD edge stays
+put and the band grows AFT-ward, so the Start the user typed is never rewritten by the length
+delta (the `undercutCanonicalForNewLength` rule).
+
+The pure `wearSpotSpanProblem(...)` (`ui/screen/LinerWearMath.kt`; `wearSpotSpanIssue` returns
+its message) classifies the STORED span `[startMm, startMm + lengthMm]` against the liner
+`[0, linerLengthMm]` and, when the OAL is typed, the band's shaft-space FWD edge against the
+OAL, in this order: "Length must be greater than zero", "Wear spot extends past the liner's AFT
+edge", "Wear spot extends past the liner's FWD edge", "Wear spot extends past the shaft's FWD
+end" (epsilon `1e-3mm`, boundary-exact bands accepted). The card shows the message under the
+fields in the error colour (`wear_spot_issue_<id>`) and a short note with a warning icon beside
+its title (`wear_spot_note_<id>`: "Extends past liner end" / "Extends past shaft end" / "No
+length"). The same reading covers a value just typed and a spot that was valid when recorded but
+no longer fits because the liner was later shortened — nothing is ever retroactively rejected.
+**The drawing clamps, the record never does**: every band draw site (this overlay's canvas and
+trace, the wear PDF's profile and strips, the consolidated sheet) goes through
+`clampWearBandToLiner`, so an out-of-span band draws inside its liner and a zero-length band
+draws nothing. `ShaftViewModel.addWearSpot`'s default 25.4mm (1in) band length is clamped to the
+liner's own length so a new card never opens with a warning on a tiny liner.
 
 ---
 

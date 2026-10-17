@@ -8,6 +8,36 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-17
 
+### feat(undercut): cut numbers on the sheet, Next cut, butted seeds, list Undo, empty-Ø gate, liner OD in the strip title
+
+- ONE cut numbering on every surface (`geom/UndercutNumbering.kt`, `undercutSheetNumbers`): AFT → FWD
+  by position, 1-based. The printed sheet and both canvases print each cut's number centred inside
+  its section — on every piece of a parent that nested cuts split, so the pieces read as one
+  section (outside, above the surface, when a cut is too narrow) — the Undercut tab's list sorts
+  and numbers its rows the same way, and the app-wide option "Cut numbers" (default on, beside
+  "Liner outline") turns the drawn numbers off (on-device request).
+- "Next cut" on the undercut card confirms the cut and opens a new one butted to its FWD end,
+  same datum, Ø empty; disabled while the card cannot be confirmed or no stock remains FWD.
+- A new cut added on a strip that already has cuts seeds butted to the FWD end of its FWD-most cut
+  (AFT of the AFT-most when nothing fits FWD), instead of the first free gap.
+- The Undercut tab's list delete offers the same snackbar Undo as the detail page (exact cut,
+  original index).
+- A cut with no diameter is flagged on its list row ("Ø not entered"), counted above the list, and
+  Print/Export on the Undercut tab ask "Print without diameters?" first (blank drafts exempt;
+  Export all on the Output tab is not gated).
+- Liner strip titles carry the liner's OD: "FWD Liner Ø10.000" — 18 1/4" FROM FWD S.E.T.", in the
+  liner's display unit, on the PDF and the detail canvas.
+- "Split cuts at liner edges" also sits on the Undercut tab beside "Draw to the shaft end" — the
+  same app-wide value as the sheet options and Settings rows (on-device request: a function-specific
+  control was hidden in the PDF preview's options).
+
+### fix(wear): wear-spot Start and Length never revert
+
+- The Wear tab's spot Start/Length fields commit the typed value verbatim; a span past the liner or
+  the shaft end is shown under the fields and on the spot's row instead of being put back
+  (on-device ruling — a reverted input is a rewritten input). The drawing clamps the band for
+  display only; nothing stored moves.
+
 ### feat(undercut): cut lengths on the chain rail; draw to the shaft end
 
 - The undercut sheet's chain rail now prints each cut's full length, the way the shop measures

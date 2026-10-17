@@ -1821,4 +1821,101 @@ class UndercutMathTest {
             on.filterIsInstance<UndercutStrip.FreeStrip>(),
         )
     }
+
+    // ── New-cut seeds ──
+
+    @Test
+    fun `an add seed with no cuts on the strip falls back to the default span`() {
+        assertNull(undercutAddSeedSpan(emptyList(), emptyList(), oalMm = 2000f))
+        // A degenerate (zero-width) member counts as no cut.
+        assertNull(undercutAddSeedSpan(listOf(UndercutSpanMm("z", 700f, 700f)), emptyList(), 2000f))
+    }
+
+    @Test
+    fun `an add seed butts on the FWD end of the FWD-most cut`() {
+        val parent = UndercutSpanMm("p", 600f, 800f)
+        val child = UndercutSpanMm("c", 700f, 800f)   // shares the parent's FWD shoulder
+        val aft = UndercutSpanMm("a", 500f, 550f)
+        val strip = listOf(aft, child, parent)
+        val seed = undercutAddSeedSpan(strip, strip, oalMm = 2000f)
+        assertNotNull(seed)
+        assertEquals(800f, seed!!.startMm, 1e-4f)
+        assertEquals(UNDERCUT_DEFAULT_LENGTH_MM, seed.lengthMm, 1e-4f)
+        // Ties on the end go to the outermost cut — the parent, never the nested child.
+        assertEquals("p", seed.neighbourId)
+        // Touching counts as clear, so the seed opens confirmable.
+        assertNull(undercutOverlapIssue(seed.startMm, seed.lengthMm, strip))
+    }
+
+    @Test
+    fun `an add seed with no stock FWD butts on the AFT end of the AFT-most cut`() {
+        val a = UndercutSpanMm("a", 900f, 950f)
+        val b = UndercutSpanMm("b", 960f, 1990f)
+        val seed = undercutAddSeedSpan(listOf(a, b), listOf(a, b), oalMm = 2000f)
+        assertNotNull(seed)
+        assertEquals(900f - UNDERCUT_DEFAULT_LENGTH_MM, seed!!.startMm, 1e-4f)
+        assertEquals("a", seed.neighbourId)
+        // A cut on another strip in the FWD stock also sends the seed AFT.
+        val s = UndercutSpanMm("s", 900f, 1000f)
+        val foreign = UndercutSpanMm("f", 1010f, 1050f)
+        val aftSeed = undercutAddSeedSpan(listOf(s), listOf(s, foreign), oalMm = 2000f)
+        assertEquals(900f - UNDERCUT_DEFAULT_LENGTH_MM, aftSeed!!.startMm, 1e-4f)
+        assertEquals("s", aftSeed.neighbourId)
+    }
+
+    @Test
+    fun `an add seed with no stock on either side falls back to the default span`() {
+        val only = UndercutSpanMm("u", 10f, 1990f)
+        assertNull(undercutAddSeedSpan(listOf(only), listOf(only), oalMm = 2000f))
+        // Exactly the default length of stock FWD still fits.
+        val flush = UndercutSpanMm("f", 10f, 2000f - UNDERCUT_DEFAULT_LENGTH_MM)
+        assertEquals(
+            2000f - UNDERCUT_DEFAULT_LENGTH_MM,
+            undercutAddSeedSpan(listOf(flush), listOf(flush), oalMm = 2000f)!!.startMm,
+            1e-4f,
+        )
+    }
+
+    @Test
+    fun `the next cut seed starts on the current cut's FWD end and carries its datum`() {
+        val current = Undercut(
+            id = "cur", startFromAftMm = 600f, lengthMm = 100f, diaMm = 180f, note = "weld",
+            authoredReference = UndercutReference.LINER_FWD, referenceLinerId = "L1",
+            referenceCutId = "",
+        )
+        val seed = undercutNextCutSeed(current, oalMm = 2000f)
+        assertNotNull(seed)
+        assertEquals(700f, seed!!.startFromAftMm, 1e-4f)
+        assertEquals(UNDERCUT_DEFAULT_LENGTH_MM, seed.lengthMm, 1e-4f)
+        assertEquals(0f, seed.diaMm, 0f)
+        assertEquals("", seed.note)
+        assertEquals(UndercutReference.LINER_FWD, seed.authoredReference)
+        assertEquals("L1", seed.referenceLinerId)
+        assertTrue(seed.id != current.id)
+        // The current cut is untouched — the seed is a new value.
+        assertEquals(180f, current.diaMm, 0f)
+    }
+
+    @Test
+    fun `the next cut seed is refused when the shaft ends before it`() {
+        val nearEnd = Undercut(id = "e", startFromAftMm = 1900f, lengthMm = 90f)
+        assertNull(undercutNextCutSeed(nearEnd, oalMm = 2000f))
+        val exact = Undercut(id = "x", startFromAftMm = 1900f, lengthMm = 100f - UNDERCUT_DEFAULT_LENGTH_MM)
+        assertNotNull(undercutNextCutSeed(exact, oalMm = 2000f))
+    }
+
+    // ── Missing diameters ──
+
+    @Test
+    fun `cuts with no measured diameter are listed in record order`() {
+        val cuts = listOf(
+            Undercut(id = "a", diaMm = 0f),
+            Undercut(id = "b", diaMm = 150f),
+            Undercut(id = "c", diaMm = -1f),
+        )
+        assertEquals(listOf("a", "c"), undercutsMissingDia(cuts).map { it.id })
+        assertTrue(undercutsMissingDia(listOf(Undercut(id = "m", diaMm = 1f))).isEmpty())
+        assertEquals("1 cut has no diameter and will print without one.", undercutMissingDiaMessage(1))
+        assertEquals("3 cuts have no diameter and will print without one.", undercutMissingDiaMessage(3))
+    }
 }

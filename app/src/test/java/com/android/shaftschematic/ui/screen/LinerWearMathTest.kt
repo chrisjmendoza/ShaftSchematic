@@ -2,7 +2,6 @@ package com.android.shaftschematic.ui.screen
 
 import com.android.shaftschematic.model.WearSpotReference
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -11,7 +10,7 @@ import org.junit.Test
  * Unit tests for the pure liner-wear math helpers in `LinerWearMath.kt`:
  * tap-x→liner selection (incl. the tie case), liner-local→px band mapping, clamping of a
  * wear spot that extends past its liner's current length, and (post-review spec)
- * the four "Measure from" reference conversions plus blocking in-span validation.
+ * the four "Measure from" reference conversions plus the display-only span classification.
  *
  * See `docs/archive/LinerWearAreas_Proposal.md` §2, §6.1, §7.
  */
@@ -258,75 +257,134 @@ class LinerWearMathTest {
         assertEquals(3f, canonicalAft, 0.001f)
     }
 
-    // ── wearSpotSpanIssue (blocking in-span validation) ─────────────────────────────
+    // ── wearSpotSpanProblem / wearSpotSpanIssue (display-only span classification) ─────
 
     private val IN_TO_MM = 25.4f
 
     @Test
-    fun `start beyond the liner's own length is rejected (37in-on-a-36in-liner example)`() {
-        val linerLenMm = 36f * IN_TO_MM
-        val startMm = 37f * IN_TO_MM
-        assertTrue(wearSpotSpanIssue(startMm, lengthMm = 10f, linerLengthMm = linerLenMm) != null)
+    fun `a band comfortably inside the liner has no issue`() {
+        assertNull(wearSpotSpanIssue(canonicalStartMm = 50f, lengthMm = 100f, linerLengthMm = 300f))
+        assertNull(
+            wearSpotSpanIssue(
+                canonicalStartMm = 50f, lengthMm = 100f, linerLengthMm = 300f,
+                linerStartFromAftMm = 500f, oalMm = 2000f,
+            )
+        )
     }
 
     @Test
-    fun `start plus length beyond the liner's length is rejected (30in start + 12in example)`() {
-        val linerLenMm = 36f * IN_TO_MM
-        val startMm = 30f * IN_TO_MM
-        val lengthMm = 12f * IN_TO_MM
-        assertTrue(wearSpotSpanIssue(startMm, lengthMm, linerLenMm) != null)
-    }
-
-    @Test
-    fun `boundary-exact band spanning the full liner is accepted`() {
+    fun `boundary-exact band spanning the full liner has no issue`() {
         val linerLenMm = 36f * IN_TO_MM
         assertNull(wearSpotSpanIssue(canonicalStartMm = 0f, lengthMm = linerLenMm, linerLengthMm = linerLenMm))
     }
 
     @Test
-    fun `boundary-exact band ending exactly at the liner's FWD edge is accepted`() {
-        val linerLenMm = 300f
-        assertNull(wearSpotSpanIssue(canonicalStartMm = 260f, lengthMm = 40f, linerLengthMm = linerLenMm))
+    fun `boundary-exact band ending exactly at the liner's FWD edge has no issue`() {
+        assertNull(wearSpotSpanIssue(canonicalStartMm = 260f, lengthMm = 40f, linerLengthMm = 300f))
     }
 
     @Test
-    fun `a band comfortably inside the liner is accepted`() {
-        assertNull(wearSpotSpanIssue(canonicalStartMm = 50f, lengthMm = 100f, linerLengthMm = 300f))
-    }
-
-    @Test
-    fun `a negative start is rejected`() {
-        assertTrue(wearSpotSpanIssue(canonicalStartMm = -5f, lengthMm = 10f, linerLengthMm = 300f) != null)
-    }
-
-    // ── isWearSpotStaleOverrun (non-blocking display classifier) ────────────────────────────
-
-    @Test
-    fun `a spot that fit when recorded is not flagged stale`() {
-        assertFalse(isWearSpotStaleOverrun(canonicalStartMm = 50f, lengthMm = 100f, linerLengthMm = 300f))
-    }
-
-    @Test
-    fun `a spot that no longer fits after the liner was shortened is flagged stale, not blocked`() {
-        // Recorded when the liner was 300mm long (band comfortably inside); liner later
-        // shortened to 120mm — the classifier must flag it (for a warning), never throw or
-        // otherwise "block" (there is no commit path here — it's a pure boolean read).
-        assertTrue(isWearSpotStaleOverrun(canonicalStartMm = 50f, lengthMm = 100f, linerLengthMm = 120f))
-    }
-
-    @Test
-    fun `stale classifier agrees with the span-issue function it wraps`() {
-        val cases = listOf(
-            Triple(0f, 300f, 300f),
-            Triple(0f, 301f, 300f),
-            Triple(-1f, 10f, 300f),
-            Triple(299f, 2f, 300f),
+    fun `start plus length beyond the liner's length is past the FWD edge (30in start + 12in example)`() {
+        val linerLenMm = 36f * IN_TO_MM
+        assertEquals(
+            "Wear spot extends past the liner's FWD edge",
+            wearSpotSpanIssue(30f * IN_TO_MM, 12f * IN_TO_MM, linerLenMm),
         )
-        for ((startMm, lengthMm, linerLenMm) in cases) {
-            assertEquals(
-                wearSpotSpanIssue(startMm, lengthMm, linerLenMm) != null,
-                isWearSpotStaleOverrun(startMm, lengthMm, linerLenMm),
+    }
+
+    @Test
+    fun `start beyond the liner's own length is past the FWD edge (37in-on-a-36in-liner example)`() {
+        assertEquals(
+            WearSpotSpanProblem.PAST_LINER_FWD,
+            wearSpotSpanProblem(37f * IN_TO_MM, lengthMm = 10f, linerLengthMm = 36f * IN_TO_MM),
+        )
+    }
+
+    @Test
+    fun `a negative start is past the AFT edge`() {
+        assertEquals(
+            "Wear spot extends past the liner's AFT edge",
+            wearSpotSpanIssue(canonicalStartMm = -5f, lengthMm = 10f, linerLengthMm = 300f),
+        )
+    }
+
+    @Test
+    fun `a zero length is reported before any bound`() {
+        assertEquals(
+            "Length must be greater than zero",
+            wearSpotSpanIssue(canonicalStartMm = 50f, lengthMm = 0f, linerLengthMm = 300f),
+        )
+        assertEquals(
+            WearSpotSpanProblem.ZERO_LENGTH,
+            wearSpotSpanProblem(canonicalStartMm = -5f, lengthMm = 0f, linerLengthMm = 300f),
+        )
+    }
+
+    @Test
+    fun `a band inside its liner but past the typed OAL is past the shaft's FWD end`() {
+        // A liner running off the shaft end (1800 + 300 on a 2000 shaft): the band fits the
+        // liner but its shaft-space FWD edge (2050) is past the OAL.
+        assertEquals(
+            "Wear spot extends past the shaft's FWD end",
+            wearSpotSpanIssue(
+                canonicalStartMm = 200f, lengthMm = 50f, linerLengthMm = 300f,
+                linerStartFromAftMm = 1800f, oalMm = 2000f,
+            ),
+        )
+    }
+
+    @Test
+    fun `an untyped OAL skips the shaft-end check`() {
+        assertNull(
+            wearSpotSpanIssue(
+                canonicalStartMm = 200f, lengthMm = 50f, linerLengthMm = 300f,
+                linerStartFromAftMm = 1800f, oalMm = 0f,
             )
+        )
+    }
+
+    @Test
+    fun `a spot the liner was shortened under is classified, never thrown`() {
+        // Recorded when the liner was 300 mm long; liner later shortened to 120 mm.
+        assertEquals(
+            WearSpotSpanProblem.PAST_LINER_FWD,
+            wearSpotSpanProblem(canonicalStartMm = 50f, lengthMm = 100f, linerLengthMm = 120f),
+        )
+    }
+
+    @Test
+    fun `an out-of-span band still draws clamped inside the liner`() {
+        // The drawing never leaves the liner whatever the stored span says.
+        val pastFwd = clampWearBandToLiner(spotStartMm = 250f, spotLengthMm = 200f, linerLengthMm = 300f)
+        assertEquals(250f, pastFwd.startMm, 0.001f)
+        assertEquals(300f, pastFwd.endMm, 0.001f)
+        val pastAft = clampWearBandToLiner(spotStartMm = -80f, spotLengthMm = 100f, linerLengthMm = 300f)
+        assertEquals(0f, pastAft.startMm, 0.001f)
+        assertEquals(20f, pastAft.endMm, 0.001f)
+        val zero = clampWearBandToLiner(spotStartMm = 50f, spotLengthMm = 0f, linerLengthMm = 300f)
+        assertTrue(zero.isEmpty)
+    }
+
+    // ── wearSpotCanonicalForNewLength (a length edit keeps the displayed Start) ─────
+
+    @Test
+    fun `a length edit under an AFT reference keeps the canonical start`() {
+        for (ref in listOf(WearSpotReference.LINER_AFT, WearSpotReference.AFT_SET)) {
+            assertEquals(
+                40f,
+                wearSpotCanonicalForNewLength(ref, 40f, 30f, 60f, 500f, 300f, 100f, 1900f),
+                0.001f,
+            )
+        }
+    }
+
+    @Test
+    fun `a length edit under a FWD reference keeps the displayed Start and the FWD edge`() {
+        for (ref in listOf(WearSpotReference.LINER_FWD, WearSpotReference.FWD_SET)) {
+            val before = canonicalToWearStartMm(ref, 40f, 30f, 500f, 300f, 100f, 1900f)
+            val canonical = wearSpotCanonicalForNewLength(ref, 40f, 30f, 60f, 500f, 300f, 100f, 1900f)
+            assertEquals(10f, canonical, 0.001f) // FWD edge 70 stays: 70 − 60
+            assertEquals(before, canonicalToWearStartMm(ref, canonical, 60f, 500f, 300f, 100f, 1900f), 0.001f)
         }
     }
 }

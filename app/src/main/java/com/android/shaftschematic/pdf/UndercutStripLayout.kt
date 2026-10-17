@@ -764,11 +764,19 @@ fun buildUndercutAnchorLabel(anchor: UndercutAnchor, unit: UnitSystem, dual: Boo
  * sheet, and the runout sheet already show for that liner. A bare-shaft strip has nothing to
  * name (an auto-body span carries no shop identity), so it prints the anchor alone.
  *
+ * [linerOdLabel] is the strip liner's OD as printed (`Ø10.000"`, formatted in the liner's own
+ * display unit — the unit the strip's values print in), set after the name with a space:
+ * `FWD Liner Ø10.000" — 18 1/4" FROM FWD S.E.T.`, so the machinist reads the stock the cuts
+ * were taken from without turning to the schematic. Null/blank on a bare-shaft strip, which
+ * prints as before.
+ *
  * [linerTitle] null/blank ⇒ anchor only; likewise a blank [anchorLabel] leaves just the name,
  * so neither side ever prints a dangling separator.
  */
-fun buildUndercutStripTitle(linerTitle: String?, anchorLabel: String): String {
-    val name = linerTitle?.trim().orEmpty()
+fun buildUndercutStripTitle(linerTitle: String?, anchorLabel: String, linerOdLabel: String? = null): String {
+    val name = listOf(linerTitle?.trim().orEmpty(), linerOdLabel?.trim().orEmpty())
+        .filter { it.isNotEmpty() }
+        .joinToString(" ")
     val anchor = anchorLabel.trim()
     return when {
         name.isEmpty() -> anchor

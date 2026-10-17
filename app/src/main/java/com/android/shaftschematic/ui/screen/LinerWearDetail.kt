@@ -68,6 +68,7 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
@@ -824,6 +825,7 @@ fun ComponentWearDetailOverlay(
                             linerLengthMm = lenMm,
                             aftSetXMm = aftSetXMm,
                             fwdSetXMm = fwdSetXMm,
+                            oalMm = spec.overallLengthMm,
                             onCommit = { s, l, d, n -> onUpdateSpot(spot.id, s, l, d, n) },
                             onUpdateReference = { ref -> onUpdateSpotReference(spot.id, ref) },
                             onDelete = { onRemoveSpot(spot.id) },
@@ -1014,7 +1016,7 @@ private fun componentWearTitle(spec: ShaftSpec, rc: ResolvedComponent): String =
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Spot card (liner wear bands — unchanged)
+// Spot card (liner wear bands)
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
@@ -1026,44 +1028,55 @@ private fun WearSpotCard(
     linerLengthMm: Float,
     aftSetXMm: Float,
     fwdSetXMm: Float,
+    /** The shaft's typed OAL; `0` (not typed yet) skips the shaft-end check. */
+    oalMm: Float,
     onCommit: (startMm: Float, lengthMm: Float, minDiaMm: Float, note: String) -> Unit,
     onUpdateReference: (WearSpotReference) -> Unit,
     onDelete: () -> Unit,
 ) {
     val reference = spot.authoredReference
 
-    // Stale-overrun classifier (Change 2, post-review spec): a spot recorded when
-    // the liner was longer can become out-of-span after the liner is shortened. This never
-    // blocks — the canvas above already renders the safety-net clamp (`clampWearBandToLiner`)
-    // — it only surfaces a warning so the machinist knows to re-measure.
-    val staleOverrun = isWearSpotStaleOverrun(spot.startMm, spot.lengthMm, linerLengthMm)
+    // No field on this card reverts a typed value (on-device ruling): Start and Length commit
+    // verbatim and the STORED span is classified for display — the same reading covers a value
+    // just typed and a spot the liner was shortened under after it was recorded. The canvas
+    // draws the band clamped to the liner (`clampWearBandToLiner`); the spot is never rewritten.
+    val spanProblem = wearSpotSpanProblem(
+        spot.startMm, spot.lengthMm, linerLengthMm, linerStartFromAftMm, oalMm,
+    )
 
-    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+    OutlinedCard(modifier = Modifier.fillMaxWidth().testTag("wear_spot_card_${spot.id}")) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("Spot ${index + 1}", style = MaterialTheme.typography.titleSmall)
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Spot ${index + 1}", style = MaterialTheme.typography.titleSmall)
+                    if (spanProblem != null) {
+                        Row(
+                            modifier = Modifier.padding(start = 12.dp).testTag("wear_spot_note_${spot.id}"),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                Icons.Filled.Warning,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.padding(end = 4.dp),
+                            )
+                            Text(
+                                spanProblem.shortNote,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    }
+                }
                 IconButton(onClick = onDelete) {
                     Icon(Icons.Filled.Delete, contentDescription = "Delete spot ${index + 1}")
-                }
-            }
-
-            if (staleOverrun) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Filled.Warning,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(end = 6.dp),
-                    )
-                    Text(
-                        "Extends past liner end — re-measure",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                    )
                 }
             }
 
@@ -1106,13 +1119,6 @@ private fun WearSpotCard(
             WearNum(
                 label = "Start from ${wearReferenceLabel(reference)} (${abbr(unit)})",
                 initialDisplay = disp(displayedStartMm, unit),
-                validator = { raw ->
-                    val enteredMm = toMmOrNull(raw, unit) ?: return@WearNum "Invalid number"
-                    val canonicalMm = wearStartToCanonicalMm(
-                        reference, enteredMm, spot.lengthMm, linerStartFromAftMm, linerLengthMm, aftSetXMm, fwdSetXMm,
-                    )
-                    wearSpotSpanIssue(canonicalMm, spot.lengthMm, linerLengthMm)
-                },
             ) { s ->
                 val enteredMm = toMmOrNull(s, unit) ?: return@WearNum
                 val canonicalMm = wearStartToCanonicalMm(
@@ -1121,14 +1127,28 @@ private fun WearSpotCard(
                 onCommit(canonicalMm, spot.lengthMm, spot.minDiaMm, spot.note)
             }
 
+            // A length edit keeps the displayed Start fixed: under a FWD-flavored reference the
+            // band's FWD edge stays put and the band grows AFT-ward.
             WearNum(
                 label = "Length (${abbr(unit)})",
                 initialDisplay = disp(spot.lengthMm, unit),
-                validator = { raw ->
-                    val enteredLenMm = toMmOrNull(raw, unit) ?: return@WearNum "Invalid number"
-                    wearSpotSpanIssue(spot.startMm, enteredLenMm, linerLengthMm)
-                },
-            ) { s -> toMmOrNull(s, unit)?.let { onCommit(spot.startMm, it, spot.minDiaMm, spot.note) } }
+            ) { s ->
+                val newLenMm = toMmOrNull(s, unit) ?: return@WearNum
+                val canonicalMm = wearSpotCanonicalForNewLength(
+                    reference, spot.startMm, spot.lengthMm, newLenMm,
+                    linerStartFromAftMm, linerLengthMm, aftSetXMm, fwdSetXMm,
+                )
+                onCommit(canonicalMm, newLenMm, spot.minDiaMm, spot.note)
+            }
+
+            if (spanProblem != null) {
+                Text(
+                    spanProblem.message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.testTag("wear_spot_issue_${spot.id}"),
+                )
+            }
 
             // No min-Ø field: the Diameter measurements tool (measured-Ø readings at exact
             // stations) owns diameter entry — a per-band value would print into the same

@@ -1149,6 +1149,8 @@ internal fun ShadeInPdfChecks(
     onSetUndercutLineArt: (Boolean) -> Unit = {},
     undercutLinerOutline: Boolean = true,
     onSetUndercutLinerOutline: (Boolean) -> Unit = {},
+    undercutCutNumbers: Boolean = true,
+    onSetUndercutCutNumbers: (Boolean) -> Unit = {},
     undercutSplitAtLinerEdge: Boolean = false,
     onSetUndercutSplitAtLinerEdge: (Boolean) -> Unit = {},
 ) {
@@ -1169,6 +1171,8 @@ internal fun ShadeInPdfChecks(
             onSetUndercutLineArt = onSetUndercutLineArt,
             undercutLinerOutline = undercutLinerOutline,
             onSetUndercutLinerOutline = onSetUndercutLinerOutline,
+            undercutCutNumbers = undercutCutNumbers,
+            onSetUndercutCutNumbers = onSetUndercutCutNumbers,
             undercutSplitAtLinerEdge = undercutSplitAtLinerEdge,
             onSetUndercutSplitAtLinerEdge = onSetUndercutSplitAtLinerEdge,
         )
@@ -1197,8 +1201,8 @@ internal fun ShadeInPdfChecks(
  *
  * [showUndercutLineArt] adds the undercut document's print line-art row at the FOOT of the group
  * — the rarely-reached option trails, and it is shown only on the sheet it governs, so the other
- * documents are not offered a control their composers ignore — and the liner-outline row beside
- * it, which governs the same document.
+ * documents are not offered a control their composers ignore — and the liner-outline and
+ * cut-numbers rows beside it, which govern the same document.
  */
 @Composable
 internal fun ShadeInPdfCheckRows(
@@ -1219,6 +1223,9 @@ internal fun ShadeInPdfCheckRows(
     /** The app-wide `PdfPrefs.undercutLinerOutline`; read only when [showUndercutLineArt]. */
     undercutLinerOutline: Boolean = true,
     onSetUndercutLinerOutline: (Boolean) -> Unit = {},
+    /** The app-wide `PdfPrefs.undercutCutNumbers`; read only when [showUndercutLineArt]. */
+    undercutCutNumbers: Boolean = true,
+    onSetUndercutCutNumbers: (Boolean) -> Unit = {},
     /** The app-wide `PdfPrefs.undercutSplitAtLinerEdge`; read only when [showUndercutLineArt]. */
     undercutSplitAtLinerEdge: Boolean = false,
     onSetUndercutSplitAtLinerEdge: (Boolean) -> Unit = {},
@@ -1312,6 +1319,22 @@ internal fun ShadeInPdfCheckRows(
         }
         if (showUndercutLineArt) Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox(
+                checked = undercutCutNumbers,
+                onCheckedChange = onSetUndercutCutNumbers,
+                modifier = Modifier.testTag("pdf_undercut_cut_numbers"),
+            )
+            Spacer(Modifier.width(8.dp))
+            Column {
+                Text("Cut numbers", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    UNDERCUT_CUT_NUMBERS_CAPTION,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        if (showUndercutLineArt) Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(
                 checked = undercutSplitAtLinerEdge,
                 onCheckedChange = onSetUndercutSplitAtLinerEdge,
                 modifier = Modifier.testTag("pdf_undercut_split_at_liner_edge"),
@@ -1332,6 +1355,11 @@ internal fun ShadeInPdfCheckRows(
 /** The liner-outline row's caption — the options sheet and Settings say the same thing. */
 internal const val UNDERCUT_LINER_OUTLINE_CAPTION =
     "Dotted outline of each liner's original edges and OD over the cuts"
+
+/** The cut-numbers row's caption — the options sheet and Settings say the same thing. */
+internal const val UNDERCUT_CUT_NUMBERS_CAPTION =
+    "Each cut carries its number from the Undercut tab's list, AFT to FWD, so the sheet and " +
+        "the list name the same cut."
 
 /** The split-at-liner-edge row's caption — the options sheet and Settings say the same thing. */
 internal const val UNDERCUT_SPLIT_AT_LINER_EDGE_CAPTION =

@@ -32,7 +32,7 @@ import kotlin.math.min
 /**
  * Add a new wear spot on [linerId] with sensible defaults (start 0, no reading). The
  * default length is 1in (25.4mm), clamped to the liner's own length for tiny liners so
- * the default band is never rejected by [wearSpotSpanIssue] at first render/edit.
+ * a new card never opens with an out-of-span warning (`wearSpotSpanProblem`).
  */
 fun ShaftViewModel.addWearSpot(linerId: String) {
     val linerLengthMm = _spec.value.liners.firstOrNull { it.id == linerId }?.lengthMm ?: 25.4f
@@ -55,16 +55,19 @@ fun ShaftViewModel.addWearSpot(linerId: String) {
  *
  * [startMm]/[lengthMm] are always canonical (liner-local AFT-edge mm) — reference
  * conversion happens in the UI (`LinerWearMath.kt`'s `wearStartToCanonicalMm`) before
- * this is called, and blocking in-span validation (`wearSpotSpanIssue`) happens at the
- * `NumericInputField` layer, so a rejected entry never reaches here. See
- * [updateWearSpotReference] for the separate, geometry-free "Measure from" setter.
+ * this is called. [startMm] is stored VERBATIM, out-of-span or negative included (a Start
+ * typed against a SET or the liner's FWD edge can land AFT of the liner): no wear-spot field
+ * reverts a typed value (on-device ruling) — the card states the problem
+ * (`wearSpotSpanProblem`, display-only) and the drawing clamps the band to the liner. The
+ * Length field refuses a minus sign and [minDiaMm] has no field (it passes through for older
+ * files), so their non-negative floor never touches a typed value. See [updateWearSpotReference] for the separate, geometry-free "Measure from" setter.
  */
 fun ShaftViewModel.updateWearSpot(id: String, startMm: Float, lengthMm: Float, minDiaMm: Float, note: String) {
     _wearRecord.update { rec ->
         rec.copy(
             spots = rec.spots.map { spot ->
                 if (spot.id != id) spot else spot.copy(
-                    startMm = max(0f, startMm),
+                    startMm = startMm,
                     lengthMm = max(0f, lengthMm),
                     minDiaMm = max(0f, minDiaMm),
                     note = note,

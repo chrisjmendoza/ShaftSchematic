@@ -809,9 +809,18 @@ between body and liner still shows where the liner was. One pure builder
 (`geom/LinerOutlineMath.kt`), part of the drawing LOOK (rides Drawing profiles), and like line art
 it reaches only this composer. See `docs/contracts/UndercutDrawing.md`.
 
+**Undercut drawing: cut numbers** (`PdfPrefs.undercutCutNumbers`, default `true`; Settings → PDF
+Export and the undercut options sheet's Shading section beside "Liner outline", testTag
+`pdf_undercut_cut_numbers`): each cut prints its number from the Undercut tab's list
+(`undercutSheetNumbers`, AFT → FWD), inside its section core — a nested cut inside its own span,
+every piece of a parent it splits carrying the parent's number — or above the surface when the core is too narrow,
+from ONE pure placement (`geom/UndercutCutNumberMath.kt`) behind the PDF and both canvases.
+App-wide look pref (rides Drawing profiles). See `docs/contracts/UndercutDrawing.md`.
+
 **Undercut drawing: split cuts at liner edges** (`PdfPrefs.undercutSplitAtLinerEdge`, default
 `false`; Settings → PDF Export "Undercut drawing: split cuts at liner edges" and the undercut
-options sheet's Shading section beside "Liner outline"): the detail strips' chain rail prints each
+options sheet's Shading section beside "Liner outline", and — the same value — the Undercut
+tab's own options block under "Draw to the shaft end", caption ending "App-wide."): the detail strips' chain rail prints each
 cut's FULL length (the shop measures cut lengths); on, a cut machined past a liner edge is
 dimensioned as two spans meeting at that edge. App-wide look pref (rides Drawing profiles).
 The per-job `UndercutRecord.drawToSet` ("Draw to the shaft end" on the Undercut tab) is separate:
@@ -911,8 +920,9 @@ gated off by what their composer actually reads (a section left with nothing is 
   apply, and it has no Shaft section — plus the one row nothing else gets: **"Undercut
   drawing: line art (no shading)"** (`showUndercutLineArt = true`) at the foot of the shade
   group, since `PdfPrefs.undercutLineArt` reaches this composer alone — and **"Liner outline"**
-  beneath it, same reasoning for `PdfPrefs.undercutLinerOutline` — and **"Split cuts at liner
-  edges"** beside it for `PdfPrefs.undercutSplitAtLinerEdge`.
+  beneath it, same reasoning for `PdfPrefs.undercutLinerOutline` — then **"Cut numbers"** for
+  `PdfPrefs.undercutCutNumbers` — and **"Split cuts at liner edges"** beside them for
+  `PdfPrefs.undercutSplitAtLinerEdge`.
 
 Every instance keeps Lines & text (Line thickness + Fractions ungated — every document here
 prints lengths), Shade in Components and Units (ungated) at their fixed spots in the order;
