@@ -1179,11 +1179,16 @@ private fun wearReferenceLabel(reference: WearSpotReference): String = when (ref
 internal fun WearChip(
     label: String,
     selected: Boolean,
+    /** False dims the chip and makes a tap a no-op; the caller says why beside it. */
+    enabled: Boolean = true,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     FilterChip(
         selected = selected,
         onClick = onClick,
+        enabled = enabled,
+        modifier = modifier,
         label = { Text(label) },
         colors = FilterChipDefaults.filterChipColors(
             selectedContainerColor = Color.Black, selectedLabelColor = Color.White,

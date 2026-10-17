@@ -14,6 +14,7 @@ import com.android.shaftschematic.geom.UndercutSpanMm
 import com.android.shaftschematic.geom.UndercutStrip
 import com.android.shaftschematic.geom.buildUndercutNotches
 import com.android.shaftschematic.geom.buildUndercutStrips
+import com.android.shaftschematic.geom.buriedUndercutLinerEdgesMm
 import com.android.shaftschematic.geom.clampUndercutSpan
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
@@ -450,6 +451,11 @@ fun composeUndercutPdf(
             sectionCoreFill = fills.sectionCore,
             dual = displayUnits.dual,
             dualStacked = dualStacked,
+            // A liner edge some cut on the sheet runs past into the body takes a chain node, so
+            // the overhang is dimensioned against the edge's position (`buildUndercutRailSpans`).
+            railSplitAtMm = (strip as? UndercutStrip.LinerStrip)
+                ?.let { buriedUndercutLinerEdgesMm(it.linerStartMm, it.linerEndMm, liveSpans) }
+                ?: emptyList(),
         )
     }
     if (overflow.isNotEmpty()) {
@@ -746,6 +752,8 @@ private fun drawUndercutDetailStrip(
      * composer (the tightest strip must still afford the taller rail rows), never re-derived here.
      */
     dualStacked: Boolean = false,
+    /** Buried liner edges — extra chain nodes for the level-0 rail ([buildUndercutRailSpans]). */
+    railSplitAtMm: List<Float> = emptyList(),
 ) {
     // Draw range, widened at layout time so the undimensioned pad outside each chain datum
     // prints with real air whatever the strip's scale is — the mm pad alone reads as cramped in
@@ -796,7 +804,9 @@ private fun drawUndercutDetailStrip(
     val nestingById = undercutNestingForest(spans).associateBy { it.id }
     val topSpans = spans.filter { (nestingById[it.id]?.level ?: 0) == 0 }
     val railSpans = if (startedStrip) emptyList()
-    else buildUndercutRailSpans(strip.chainStartMm, strip.chainEndMm, topSpans, unit, dual)
+    else buildUndercutRailSpans(
+        strip.chainStartMm, strip.chainEndMm, topSpans, unit, dual, splitAtMm = railSplitAtMm,
+    )
     // The total is the run across the TOP-LEVEL cuts: a lone parent holding one child would
     // otherwise re-state its own length, which the chain below already carries.
     val totalSpan = if (startedStrip) null else buildUndercutTotalSpan(topSpans, unit, dual)

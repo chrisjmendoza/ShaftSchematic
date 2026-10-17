@@ -94,6 +94,7 @@ import com.android.shaftschematic.geom.UndercutLinerSpan
 import com.android.shaftschematic.geom.UndercutSpanMm
 import com.android.shaftschematic.geom.UndercutStrip
 import com.android.shaftschematic.geom.buildUndercutNotches
+import com.android.shaftschematic.geom.buriedUndercutLinerEdgesMm
 import com.android.shaftschematic.geom.canonicalToUndercutStartMm
 import com.android.shaftschematic.geom.clampUndercutSpan
 import com.android.shaftschematic.geom.effectiveUndercutReference
@@ -114,6 +115,7 @@ import com.android.shaftschematic.geom.resolveUndercutFloors
 import com.android.shaftschematic.geom.undercutCalloutAnchorsMm
 import com.android.shaftschematic.geom.undercutCanonicalForNewLength
 import com.android.shaftschematic.geom.undercutIsWholeLiner
+import com.android.shaftschematic.geom.undercutLinerEdgeBuried
 import com.android.shaftschematic.geom.undercutLinerExtensionsMm
 import com.android.shaftschematic.geom.undercutButtsAfter
 import com.android.shaftschematic.geom.undercutOverlapIssue
@@ -375,6 +377,18 @@ fun UndercutWindowDetailOverlay(
             val c = clampUndercutSpan(u.startFromAftMm, u.lengthMm, oalMm)
             UndercutSpanMm(u.id, c.startMm, c.endMm)
         }.filter { it.endMm > it.startMm }
+    }
+    // The strip liner's edges a cut on the sheet runs past into the body — the previewed draft
+    // included — each one an extra node on the chain rail below, the printed strip's rule
+    // (`buildUndercutRailSpans`' `splitAtMm`).
+    val railSplitAtMm = remember(sheetUndercuts, oalMm, stripLiner) {
+        stripLiner?.let { l ->
+            val sheetSpans = sheetUndercuts.map { u ->
+                val c = clampUndercutSpan(u.startFromAftMm, u.lengthMm, oalMm)
+                UndercutSpanMm(u.id, c.startMm, c.endMm)
+            }.filter { it.endMm > it.startMm }
+            buriedUndercutLinerEdgesMm(l.startMm, l.endMm, sheetSpans)
+        } ?: emptyList()
     }
     // The window follows what is PREVIEWED, not just what is stored: a draft edited past the
     // strip's stored range (a cut overhanging the liner edge mid-edit — on-device report)
@@ -988,10 +1002,18 @@ fun UndercutWindowDetailOverlay(
                             // liner's own edges (extended by any cut overhang), a free strip on its
                             // window edges. The pad outside the chain range is never dimensioned —
                             // the identical rule the PDF strips apply.
+                            // A buried liner edge is a node inside the span that crosses it, so the
+                            // overhang reads against the edge's position.
                             val stops = buildList {
                                 add(strip.chainStartMm)
                                 spans.forEach { add(it.startMm); add(it.endMm) }
                                 add(strip.chainEndMm)
+                            }.toMutableList()
+                            railSplitAtMm.forEach { n ->
+                                val at = (0 until stops.size - 1).firstOrNull { i ->
+                                    n - stops[i] > eps && stops[i + 1] - n > eps
+                                }
+                                if (at != null) stops.add(at + 1, n)
                             }
                             stops.forEach { mm ->
                                 drawLine(
@@ -1128,6 +1150,11 @@ fun UndercutWindowDetailOverlay(
                                 UndercutSpanMm(u.id, c.startMm, c.endMm)
                             }
                             val span = defaultUndercutSpan(addRange.first, addRange.second, occupied, oalMm)
+                            // A liner whose AFT edge an existing cut already runs past into the
+                            // body has no step left there to measure from, so the new cut authors
+                            // against the nearer S.E.T. instead (on-device request).
+                            val seedFromLiner = stripLiner != null &&
+                                !undercutLinerEdgeBuried(stripLiner.startMm, occupied)
                             drafts = drafts + (
                                 PENDING_UNDERCUT_ID to UndercutDraft(
                                     id = PENDING_UNDERCUT_ID,
@@ -1141,12 +1168,12 @@ fun UndercutWindowDetailOverlay(
                                     // has no liner edge — its only datums are the SETs, so the
                                     // nearer one wins (the same proximity rule the printed strip's
                                     // title anchor uses, so card and sheet read from the same SET).
-                                    reference = if (stripLiner != null) UndercutReference.LINER_AFT
+                                    reference = if (seedFromLiner) UndercutReference.LINER_AFT
                                                 else nearestSetReference(
                                                     span.startMm, span.startMm + span.lengthMm,
                                                     aftSetXMm, fwdSetXMm,
                                                 ),
-                                    referenceLinerId = stripLiner?.id ?: "",
+                                    referenceLinerId = if (seedFromLiner) stripLiner?.id.orEmpty() else "",
                                 )
                                 )
                             pendingSeedStartMm = span.startMm
@@ -1354,6 +1381,10 @@ internal data class UndercutDraft(
  * fallback). Equality against this baseline is the card's dirty test, which is why the fallback
  * belongs here: a card that only displays the fallback is NOT dirty and never rewrites the stored
  * reference behind the machinist's back.
+ *
+ * The buried-liner-edge fallback is deliberately NOT applied here: it depends on the spans being
+ * previewed (the card's own typed Length can bury or uncover its edge), so the card applies it
+ * live on top of the draft's reference and the baseline keeps the stored one.
  */
 internal fun undercutDraftOf(u: Undercut, linerSpans: List<UndercutLinerSpan>): UndercutDraft {
     val ref = effectiveUndercutReference(u, linerSpans)
@@ -1439,6 +1470,10 @@ internal fun undercutOverhangQuestion(aft: String?, fwd: String?): String {
         "${lines.firstOrNull().orEmpty()} Add that as an extension past the liner?"
     }
 }
+
+/** The Measure From caption under a disabled liner-edge chip — [end] AFT or FWD. */
+internal fun undercutBuriedEdgeCaption(end: String): String =
+    "Liner $end edge is cut into the body — measure from a S.E.T."
 
 /** The card's standing warning after "No" — [amount] formatted with its unit, [end] AFT or FWD. */
 internal fun undercutOverhangWarning(amount: String, end: String): String =
@@ -1690,6 +1725,23 @@ private fun UndercutDraftCard(
     val refLinerStartMm = refLiner?.startMm ?: 0f
     val refLinerEndMm = refLiner?.endMm ?: 0f
 
+    // A liner edge some cut on the sheet runs past into the body — this card's own previewed
+    // span included, so a Length typed across the edge counts the moment it lands — has no step
+    // left to measure from (on-device request): its chip is disabled with the reason under the
+    // row, and a draft authored against it reads from the nearer S.E.T. ([effectiveUndercutReference],
+    // display-only: the draft's own reference and canonical start never move for it).
+    val buriedPool = remember(sheetUndercuts, draft, oalMm) {
+        applyUndercutDraft(sheetUndercuts, draft).map { u ->
+            val c = clampUndercutSpan(u.startFromAftMm, u.lengthMm, oalMm)
+            UndercutSpanMm(u.id, c.startMm, c.endMm)
+        }.filter { it.endMm > it.startMm }
+    }
+    val linerAftBuried = refLiner != null && undercutLinerEdgeBuried(refLiner.startMm, buriedPool)
+    val linerFwdBuried = refLiner != null && undercutLinerEdgeBuried(refLiner.endMm, buriedPool)
+    val shownReference = effectiveUndercutReference(
+        previewUndercut, linerSpans, buriedPool, aftSetXMm, fwdSetXMm,
+    )
+
     // ── "Past the liner edge" (on-device request) ────────────────────────────────────────
     // A Distance or Length commit that carries the cut past a liner edge it did not overhang
     // before is ASKED about: the machinist may not know the typed numbers run the cut off the
@@ -1804,12 +1856,12 @@ private fun UndercutDraftCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    WearChip("AFT S.E.T.", draft.reference == UndercutReference.AFT_SET) {
+                    WearChip("AFT S.E.T.", shownReference == UndercutReference.AFT_SET) {
                         onDraftChange(
                             draft.copy(reference = UndercutReference.AFT_SET, referenceLinerId = ""),
                         )
                     }
-                    WearChip("FWD S.E.T.", draft.reference == UndercutReference.FWD_SET) {
+                    WearChip("FWD S.E.T.", shownReference == UndercutReference.FWD_SET) {
                         onDraftChange(
                             draft.copy(reference = UndercutReference.FWD_SET, referenceLinerId = ""),
                         )
@@ -1817,7 +1869,12 @@ private fun UndercutDraftCard(
                 }
                 if (refLiner != null) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        WearChip("Liner AFT", draft.reference == UndercutReference.LINER_AFT) {
+                        WearChip(
+                            "Liner AFT",
+                            shownReference == UndercutReference.LINER_AFT,
+                            enabled = !linerAftBuried,
+                            modifier = Modifier.testTag("undercut_ref_liner_aft"),
+                        ) {
                             onDraftChange(
                                 draft.copy(
                                     reference = UndercutReference.LINER_AFT,
@@ -1825,7 +1882,12 @@ private fun UndercutDraftCard(
                                 ),
                             )
                         }
-                        WearChip("Liner FWD", draft.reference == UndercutReference.LINER_FWD) {
+                        WearChip(
+                            "Liner FWD",
+                            shownReference == UndercutReference.LINER_FWD,
+                            enabled = !linerFwdBuried,
+                            modifier = Modifier.testTag("undercut_ref_liner_fwd"),
+                        ) {
                             onDraftChange(
                                 draft.copy(
                                     reference = UndercutReference.LINER_FWD,
@@ -1833,6 +1895,18 @@ private fun UndercutDraftCard(
                                 ),
                             )
                         }
+                    }
+                    if (linerAftBuried) {
+                        UndercutCaption(
+                            undercutBuriedEdgeCaption("AFT"),
+                            Modifier.testTag("undercut_ref_liner_aft_buried"),
+                        )
+                    }
+                    if (linerFwdBuried) {
+                        UndercutCaption(
+                            undercutBuriedEdgeCaption("FWD"),
+                            Modifier.testTag("undercut_ref_liner_fwd_buried"),
+                        )
                     }
                 }
             }
@@ -1998,7 +2072,7 @@ private fun UndercutDraftCard(
             }
 
             val displayedStartMm = canonicalToUndercutStartMm(
-                reference = draft.reference,
+                reference = shownReference,
                 canonicalStartMm = draft.startFromAftMm,
                 lengthMm = draft.lengthMm,
                 aftSetXMm = aftSetXMm,
@@ -2011,13 +2085,13 @@ private fun UndercutDraftCard(
             // No validator: a Distance that puts the cut off the shaft still lands in the draft
             // verbatim, and Confirm blocks it with the reason.
             WearNum(
-                label = "Distance from ${undercutReferenceLabel(draft.reference)} (${abbr(unit)})",
+                label = "Distance from ${undercutReferenceLabel(shownReference)} (${abbr(unit)})",
                 initialDisplay = disp(displayedStartMm, unit),
                 allowNegative = true,
             ) { s ->
                 val enteredMm = toMmOrNull(s, unit) ?: return@WearNum
                 val canonicalMm = undercutStartToCanonicalMm(
-                    draft.reference, enteredMm, draft.lengthMm, aftSetXMm, fwdSetXMm,
+                    shownReference, enteredMm, draft.lengthMm, aftSetXMm, fwdSetXMm,
                     refLinerStartMm, refLinerEndMm,
                 )
                 commitSpanEdit(draft.copy(startFromAftMm = canonicalMm))
@@ -2031,7 +2105,7 @@ private fun UndercutDraftCard(
             // report). No validator, as for Distance: a length that leaves the shaft (or is zero)
             // lands in the draft verbatim and Confirm blocks it with the reason.
             fun canonicalAtLength(newLenMm: Float): Float = undercutCanonicalForNewLength(
-                draft.reference, draft.startFromAftMm, draft.lengthMm, newLenMm,
+                shownReference, draft.startFromAftMm, draft.lengthMm, newLenMm,
                 aftSetXMm, fwdSetXMm, refLinerStartMm, refLinerEndMm,
             )
             WearNum(
@@ -2266,9 +2340,10 @@ private const val EXTENSION_NOTE_MATCH_MM = UNDERCUT_TOUCH_EPS_MM
 
 /** A muted explanatory line under a control — why it is disabled, not a problem to fix. */
 @Composable
-private fun UndercutCaption(text: String) {
+private fun UndercutCaption(text: String, modifier: Modifier = Modifier) {
     Text(
         text,
+        modifier = modifier,
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )

@@ -621,6 +621,7 @@ fun UndercutRoute(
                             unit = unit,
                             oalMm = oalMm,
                             linerSpans = linerSpans,
+                            sheetSpans = spans,
                             linerTitles = linerTitles,
                             aftSetXMm = setPositions.first,
                             fwdSetXMm = setPositions.second,
@@ -896,13 +897,15 @@ private fun UndercutListRow(
     unit: UnitSystem,
     oalMm: Float,
     linerSpans: List<UndercutLinerSpan>,
+    /** Every cut on the sheet, render-clamped — what can bury a liner-edge reference. */
+    sheetSpans: List<UndercutSpanMm>,
     linerTitles: Map<String, String>,
     aftSetXMm: Float,
     fwdSetXMm: Float,
     onOpen: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    val reference = effectiveUndercutReference(undercut, linerSpans)
+    val reference = effectiveUndercutReference(undercut, linerSpans, sheetSpans, aftSetXMm, fwdSetXMm)
     val refLiner = undercutReferenceLinerFor(undercut, linerSpans, stripLiner = null, oalMm = oalMm)
     val distanceMm = undercutDisplayedDistanceMm(undercut, reference, refLiner, aftSetXMm, fwdSetXMm)
     val stale = isUndercutStaleOverrun(undercut.startFromAftMm, undercut.lengthMm, oalMm)
