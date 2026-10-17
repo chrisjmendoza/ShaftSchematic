@@ -48,6 +48,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -87,6 +89,10 @@ import com.android.shaftschematic.geom.effectiveUndercutReference
 import com.android.shaftschematic.geom.isUndercutStaleOverrun
 import com.android.shaftschematic.geom.maxOuterDiaOver
 import com.android.shaftschematic.geom.nearestSetReference
+import com.android.shaftschematic.geom.UNDERCUT_SPAN_EPS_MM
+import com.android.shaftschematic.geom.clampUndercutExtension
+import com.android.shaftschematic.geom.maxUndercutAftExtensionMm
+import com.android.shaftschematic.geom.maxUndercutFwdExtensionMm
 import com.android.shaftschematic.geom.outerDiaAt
 import com.android.shaftschematic.geom.pickUndercutAt
 import com.android.shaftschematic.geom.planDiaCallouts
@@ -126,6 +132,7 @@ import com.android.shaftschematic.util.DualLabel
 import com.android.shaftschematic.util.drawRichText
 import com.android.shaftschematic.util.buildLinerTitleById
 import com.android.shaftschematic.util.toMmOrNull
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
@@ -1136,19 +1143,46 @@ internal fun UndercutDraft.withWholeLiner(liner: UndercutLinerSpan): UndercutDra
 )
 
 /**
+ * The result of typing an "Extend past liner" value: the new [draft], the extension actually
+ * applied ([appliedMm], what the field re-seeds to), and whether the typed value asked for more
+ * stock than the shaft has ([limited] — the card then says so).
+ */
+internal data class UndercutExtensionEdit(
+    val draft: UndercutDraft,
+    val appliedMm: Float,
+    val limited: Boolean,
+)
+
+/**
  * The draft after typing an "Extend past liner" AFT value of [extMm] against [liner] — FWD end
- * pinned ([undercutSpanWithAftExtension]). The reference is untouched: the extension is another
+ * pinned ([undercutSpanWithAftExtension]). The extension is limited to the stock between the
+ * shaft's AFT end and the liner ([maxUndercutAftExtensionMm] / [clampUndercutExtension]): a cut
+ * can only run into material that is there. The reference is untouched: the extension is another
  * view of the same span, not a datum.
  */
-internal fun UndercutDraft.withAftLinerExtension(liner: UndercutLinerSpan, extMm: Float): UndercutDraft {
-    val (s, l) = undercutSpanWithAftExtension(startFromAftMm, lengthMm, liner.startMm, extMm)
-    return copy(startFromAftMm = s, lengthMm = l)
+internal fun UndercutDraft.withAftLinerExtension(
+    liner: UndercutLinerSpan,
+    extMm: Float,
+    @Suppress("UNUSED_PARAMETER") oalMm: Float,
+): UndercutExtensionEdit {
+    val clamp = clampUndercutExtension(extMm, maxUndercutAftExtensionMm(liner.startMm))
+    val (s, l) = undercutSpanWithAftExtension(startFromAftMm, lengthMm, liner.startMm, clamp.appliedMm)
+    return UndercutExtensionEdit(copy(startFromAftMm = s, lengthMm = l), clamp.appliedMm, clamp.limited)
 }
 
-/** Mirror of [withAftLinerExtension] for the FWD edge — AFT end pinned ([undercutSpanWithFwdExtension]). */
-internal fun UndercutDraft.withFwdLinerExtension(liner: UndercutLinerSpan, extMm: Float): UndercutDraft {
-    val (s, l) = undercutSpanWithFwdExtension(startFromAftMm, lengthMm, liner.endMm, extMm)
-    return copy(startFromAftMm = s, lengthMm = l)
+/**
+ * Mirror of [withAftLinerExtension] for the FWD edge — AFT end pinned
+ * ([undercutSpanWithFwdExtension]), limited to the stock between the liner and [oalMm]
+ * ([maxUndercutFwdExtensionMm]).
+ */
+internal fun UndercutDraft.withFwdLinerExtension(
+    liner: UndercutLinerSpan,
+    extMm: Float,
+    oalMm: Float,
+): UndercutExtensionEdit {
+    val clamp = clampUndercutExtension(extMm, maxUndercutFwdExtensionMm(liner.endMm, oalMm))
+    val (s, l) = undercutSpanWithFwdExtension(startFromAftMm, lengthMm, liner.endMm, clamp.appliedMm)
+    return UndercutExtensionEdit(copy(startFromAftMm = s, lengthMm = l), clamp.appliedMm, clamp.limited)
 }
 
 /**
@@ -1494,37 +1528,99 @@ private fun UndercutDraftCard(
                     "Extend past liner (${abbr(unit)})", style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                // An extension can only run into stock that is there (on-device request): a typed
+                // value past the shaft's end applies the maximum and says so, rather than blocking —
+                // the field is a derived view of the span, so limiting it to the shaft is not a
+                // rewrite of a measurement. A clamped span cannot leave the shaft, so these
+                // validators carry no shaft-end check; they block only an unparseable value and a
+                // span that would come back with no length. A side with no stock at all (the liner
+                // sits at that shaft end) is disabled with a caption saying why.
+                val maxAftMm = maxUndercutAftExtensionMm(refLiner.startMm)
+                val maxFwdMm = maxUndercutFwdExtensionMm(refLiner.endMm, oalMm)
+                val aftHasStock = maxAftMm > UNDERCUT_SPAN_EPS_MM
+                val fwdHasStock = maxFwdMm > UNDERCUT_SPAN_EPS_MM
+                // A limited commit can leave the draft — and so `initialDisplay` — unchanged (typing
+                // 4" twice against 2" of stock), and the field keys its text on `initialDisplay`, so
+                // a per-side counter bumped on every limited commit forces the re-seed to the
+                // applied value.
+                // The note holds the applied maximum and shows only while the field still reads
+                // it, so a later Whole-liner tap or Distance edit retires a note that no longer
+                // describes the span.
+                var aftLimitedMm by remember { mutableStateOf<Float?>(null) }
+                var fwdLimitedMm by remember { mutableStateOf<Float?>(null) }
+                var aftReseed by remember { mutableIntStateOf(0) }
+                var fwdReseed by remember { mutableIntStateOf(0) }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    WearNum(
-                        label = "AFT",
-                        initialDisplay = disp(extAftMm, unit),
-                        validator = { raw ->
-                            val extMm = toMmOrNull(raw, unit) ?: return@WearNum "Invalid number"
-                            val (s, l) = undercutSpanWithAftExtension(
-                                draft.startFromAftMm, draft.lengthMm, refLiner.startMm, extMm,
-                            )
-                            undercutSpanIssue(s, l, oalMm)
-                        },
-                        modifier = Modifier.weight(1f).testTag("undercut_extend_aft"),
-                    ) { raw ->
-                        val extMm = toMmOrNull(raw, unit) ?: return@WearNum
-                        onDraftChange(draft.withAftLinerExtension(refLiner, extMm))
+                    key(aftReseed) {
+                        WearNum(
+                            label = "AFT",
+                            initialDisplay = disp(extAftMm, unit),
+                            enabled = aftHasStock,
+                            validator = { raw ->
+                                val extMm = toMmOrNull(raw, unit) ?: return@WearNum "Invalid number"
+                                val edit = draft.withAftLinerExtension(refLiner, extMm, oalMm)
+                                if (edit.draft.lengthMm <= UNDERCUT_SPAN_EPS_MM) {
+                                    "Length must be greater than zero"
+                                } else null
+                            },
+                            modifier = Modifier.weight(1f).testTag("undercut_extend_aft"),
+                        ) { raw ->
+                            val extMm = toMmOrNull(raw, unit) ?: return@WearNum
+                            val edit = draft.withAftLinerExtension(refLiner, extMm, oalMm)
+                            onDraftChange(edit.draft)
+                            if (edit.limited) {
+                                aftLimitedMm = edit.appliedMm
+                                aftReseed++
+                            } else {
+                                aftLimitedMm = null
+                            }
+                        }
                     }
-                    WearNum(
-                        label = "FWD",
-                        initialDisplay = disp(extFwdMm, unit),
-                        validator = { raw ->
-                            val extMm = toMmOrNull(raw, unit) ?: return@WearNum "Invalid number"
-                            val (s, l) = undercutSpanWithFwdExtension(
-                                draft.startFromAftMm, draft.lengthMm, refLiner.endMm, extMm,
-                            )
-                            undercutSpanIssue(s, l, oalMm)
-                        },
-                        modifier = Modifier.weight(1f).testTag("undercut_extend_fwd"),
-                    ) { raw ->
-                        val extMm = toMmOrNull(raw, unit) ?: return@WearNum
-                        onDraftChange(draft.withFwdLinerExtension(refLiner, extMm))
+                    key(fwdReseed) {
+                        WearNum(
+                            label = "FWD",
+                            initialDisplay = disp(extFwdMm, unit),
+                            enabled = fwdHasStock,
+                            validator = { raw ->
+                                val extMm = toMmOrNull(raw, unit) ?: return@WearNum "Invalid number"
+                                val edit = draft.withFwdLinerExtension(refLiner, extMm, oalMm)
+                                if (edit.draft.lengthMm <= UNDERCUT_SPAN_EPS_MM) {
+                                    "Length must be greater than zero"
+                                } else null
+                            },
+                            modifier = Modifier.weight(1f).testTag("undercut_extend_fwd"),
+                        ) { raw ->
+                            val extMm = toMmOrNull(raw, unit) ?: return@WearNum
+                            val edit = draft.withFwdLinerExtension(refLiner, extMm, oalMm)
+                            onDraftChange(edit.draft)
+                            if (edit.limited) {
+                                fwdLimitedMm = edit.appliedMm
+                                fwdReseed++
+                            } else {
+                                fwdLimitedMm = null
+                            }
+                        }
                     }
+                }
+                if (!aftHasStock) {
+                    UndercutCaption("Liner is at the shaft's AFT end — nothing to extend into")
+                }
+                if (!fwdHasStock) {
+                    UndercutCaption("Liner is at the shaft's FWD end — nothing to extend into")
+                }
+                aftLimitedMm?.takeIf { abs(it - extAftMm) <= EXTENSION_NOTE_MATCH_MM }?.let {
+                    UndercutWarning(
+                        "Extension past the shaft's AFT end isn't allowed — " +
+                            "set to the maximum, ${disp(it, unit)} ${abbr(unit)}",
+                        Modifier.testTag("undercut_extend_aft_note"),
+                    )
+                }
+                fwdLimitedMm?.takeIf { abs(it - extFwdMm) <= EXTENSION_NOTE_MATCH_MM }?.let {
+                    UndercutWarning(
+                        "Extension past the shaft's FWD end isn't allowed — " +
+                            "set to the maximum, ${disp(it, unit)} ${abbr(unit)}",
+                        Modifier.testTag("undercut_extend_fwd_note"),
+                    )
                 }
             }
 
@@ -1743,9 +1839,27 @@ private fun UndercutStatusPill(
 /** Green check on the "Saved" pill — a settled state reads at a glance, outside the theme ramp. */
 private val UNDERCUT_SAVED_TINT = Color(0xFF2E7D32)
 
+/**
+ * How close the field's re-derived extension must sit to a limited commit's applied maximum for
+ * the card to keep its "set to the maximum" note. Looser than the span eps: the extension is
+ * re-derived through a Float shaft-space end, whose rounding at a long shaft's FWD end exceeds
+ * 1e-3 mm.
+ */
+private const val EXTENSION_NOTE_MATCH_MM = 0.01f
+
+/** A muted explanatory line under a control — why it is disabled, not a problem to fix. */
 @Composable
-private fun UndercutWarning(text: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
+private fun UndercutCaption(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
+@Composable
+private fun UndercutWarning(text: String, modifier: Modifier = Modifier) {
+    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
         Icon(
             Icons.Filled.Warning,
             contentDescription = null,

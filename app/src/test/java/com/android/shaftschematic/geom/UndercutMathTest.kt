@@ -206,6 +206,46 @@ class UndercutMathTest {
         assertEquals(100f, keptLen, 1e-4f)
     }
 
+    // ── Extension clamp: only into stock that exists ──
+
+    @Test
+    fun `max AFT extension is the stock from the shaft's AFT end to the liner`() {
+        assertEquals(600f, maxUndercutAftExtensionMm(linerStartMm = 600f), 1e-4f)
+    }
+
+    @Test
+    fun `max FWD extension is the stock from the liner to the shaft's FWD end`() {
+        assertEquals(900f, maxUndercutFwdExtensionMm(linerEndMm = 1000f, oalMm = 1900f), 1e-4f)
+    }
+
+    @Test
+    fun `a liner at the shaft end leaves no stock on that side`() {
+        assertEquals(0f, maxUndercutAftExtensionMm(linerStartMm = 0f), 1e-4f)
+        assertEquals(0f, maxUndercutFwdExtensionMm(linerEndMm = 1900f, oalMm = 1900f), 1e-4f)
+        // A stale liner past the end still never reports negative stock.
+        assertEquals(0f, maxUndercutFwdExtensionMm(linerEndMm = 2000f, oalMm = 1900f), 1e-4f)
+    }
+
+    @Test
+    fun `an extension below the maximum is applied unchanged and not limited`() {
+        assertEquals(UndercutExtensionClamp(30f, limited = false), clampUndercutExtension(30f, 50f))
+    }
+
+    @Test
+    fun `an extension above the maximum applies the maximum and is limited`() {
+        assertEquals(UndercutExtensionClamp(50.8f, limited = true), clampUndercutExtension(101.6f, 50.8f))
+    }
+
+    @Test
+    fun `an extension exactly at the maximum is not limited`() {
+        assertEquals(UndercutExtensionClamp(50f, limited = false), clampUndercutExtension(50f, 50f))
+    }
+
+    @Test
+    fun `a negative extension applies zero and is not limited`() {
+        assertEquals(UndercutExtensionClamp(0f, limited = false), clampUndercutExtension(-10f, 50f))
+    }
+
     @Test
     fun `whole-liner predicate holds within eps and fails past it`() {
         assertTrue(undercutIsWholeLiner(600f, 400f, linerStartMm = 600f, linerEndMm = 1000f))
