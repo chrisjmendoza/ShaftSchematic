@@ -358,6 +358,7 @@ internal fun BodyPagerCard(
         ShowDiaToggleRow(
             label = "Show name on drawing",
             checked = b.showNameOnDrawing ?: componentTitlesDefault,
+            caption = if (b.showNameOnDrawing == null) COMPONENT_NAMES_DEFAULT_CAPTION else null,
             testTag = "body_show_label_toggle",
             onCheckedChange = { onUpdateBodyShowLabel(idx, it) },
         )

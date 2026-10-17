@@ -777,6 +777,19 @@ internal val helpSections: List<HelpSection> = listOf(
                 manualAnchor = "settings-appearance",
             ),
             HelpTopic(
+                "Drawing — Component names on drawing",
+                "Settings → Drawing, first row. Default on. The DEFAULT for every " +
+                    "component's \"Show name on drawing\" switch: a card you haven't set " +
+                    "follows it, and the line under that switch says \"Following Settings → " +
+                    "Drawing → Component names\". A card you set yourself overrides it in " +
+                    "either direction — a name switched on there prints even with this off, " +
+                    "and one switched off stays hidden even with this on. Turn it off when " +
+                    "drawings normally go out without names and you only name the odd " +
+                    "section. The schematic's PDF options carry the same setting as the " +
+                    "\"Component names\" chip.",
+                manualAnchor = "settings-component-names",
+            ),
+            HelpTopic(
                 "Drawing — Default drawing size",
                 "Settings → Drawing. How tall the shaft prints on paper before any per-job " +
                     "adjustment. Two sliders set the sizing line, each adjustable from 0.25 " +
@@ -890,12 +903,6 @@ internal val helpSections: List<HelpSection> = listOf(
                     "print.\n\n" +
                     "• \"Open PDF after export\" — default off. Hands the finished file to your " +
                     "PDF viewer as soon as it is written.\n" +
-                    "• \"Show component titles in PDF\" — default on. The DEFAULT for " +
-                    "component names on the schematic: components you haven't decided about " +
-                    "follow it. Each card's \"Show name on drawing\" toggle overrides it for " +
-                    "that one component, in either direction — a name switched on there " +
-                    "prints even with this off, and one switched off stays hidden even with " +
-                    "this on.\n" +
                     "• \"Shade in Components\": \"Bodies\", \"Tapers\", \"Liners\" — all off by " +
                     "default. Fills those sections with light grey instead of leaving them " +
                     "outlined. \"Explicit bodies only\", under \"Bodies\", narrows the fill to " +

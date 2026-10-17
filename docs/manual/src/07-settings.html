@@ -36,7 +36,10 @@
   <aside class="tip"><p>On a tablet at the lathe under shop lights, try <span class="ui">Light</span> with <span class="ui">High contrast</span> on.</p></aside>
 
   <h2 id="settings-drawing">Drawing</h2>
-  <p><span class="path">Settings → Drawing</span> — what every printed sheet looks like. These settings apply to every document; a document never stores its own copy of them. The section runs from shaft size, through the wear document, to lines, threads and text, and ends with four switches that reveal extra controls in the editor.</p>
+  <p><span class="path">Settings → Drawing</span> — what every printed sheet looks like. These settings apply to every document; a document never stores its own copy of them. The section opens with component names, runs from shaft size, through the wear document, to lines, threads and text, and ends with four switches that reveal extra controls in the editor.</p>
+
+  <h3 id="settings-component-names">Component names</h3>
+  <p><span class="ui">Component names on drawing</span> (on by default) is the default for every component's <span class="ui">Show name on drawing</span> switch. A card that has not been set follows it, and says so under its switch: <span class="ui">Following Settings → Drawing → Component names</span>. A card you set yourself keeps its choice either way: switched on there, the name prints even with this off; switched off, it stays hidden even with this on. Turn it off if your drawings normally go out without names and you only name the odd section. The same setting is the <span class="ui">Component names</span> chip on the schematic's PDF options.</p>
 
   <h3 id="settings-drawing-size">Shaft size and S-breaks</h3>
   <table class="ref">
@@ -137,7 +140,6 @@
     <thead><tr><th>Setting</th><th>Default</th><th>What it does</th></tr></thead>
     <tbody>
       <tr><td><span class="ui">Open PDF after export</span></td><td>Off</td><td>Opens the finished file in your PDF viewer as soon as it is written.</td></tr>
-      <tr><td><span class="ui">Show component titles in PDF</span></td><td>On</td><td>The default for component names on the schematic. A component's own <span class="ui">Show name on drawing</span> toggle on its card overrides this either way: switched on there, the name prints even with this off; switched off, it stays hidden even with this on. Also on the PDF options panel as the <span class="ui">Labels</span> chip (schematic sheet).</td></tr>
       <tr><td><span class="ui">Shade in Components</span>: <span class="ui">Bodies</span></td><td>Off</td><td>Fills bodies with light grey instead of leaving them outlined. Also on the PDF options panel (Shade in Components section).</td></tr>
       <tr><td><span class="ui">Explicit bodies only</span></td><td>Off</td><td>Under <span class="ui">Bodies</span>. Shades only the body sections you added; auto (bare-shaft) sections stay unshaded. Works only while <span class="ui">Bodies</span> is checked. Also on the PDF options panel, except on the wear and undercut sheets, which shade every body the same way.</td></tr>
       <tr><td><span class="ui">Tapers</span></td><td>Off</td><td>Fills tapers with light grey. Also on the PDF options panel.</td></tr>

@@ -91,7 +91,7 @@
     <tbody>
       <tr><td><span class="ui">Blank draft</span></td><td>Off</td><td>Every sheet</td><td>Prints the drawing with every value blanked for handwriting. Off each time the app starts.</td></tr>
       <tr><td><span class="ui">Ø callouts</span></td><td>On</td><td>Schematic, Final</td><td>Can be tapped only while Blank draft is on. On: the blank sheet keeps its Ø leaders with a write-in rule. Off: the leaders are left out so diameters can be written in wherever they belong.</td></tr>
-      <tr><td><span class="ui">Labels</span></td><td>On</td><td>Schematic, Final</td><td>Component names under the shaft. This is the default for every component; a card's <span class="ui">Show name on drawing</span> toggle overrides it in either direction (see <a href="#components-show-name">Show name on drawing</a>). The same setting appears as <span class="path">Settings → PDF Export Options → Show component titles in PDF</span>.</td></tr>
+      <tr><td><span class="ui">Component names</span></td><td>On</td><td>Schematic, Final</td><td>Component names under the shaft. This is the default for every component; a card's <span class="ui">Show name on drawing</span> toggle overrides it in either direction (see <a href="#components-show-name">Show name on drawing</a>). The same setting is <span class="path">Settings → Drawing → Component names on drawing</span> (see <a href="#settings-component-names">Component names</a>).</td></tr>
       <tr><td><span class="ui">Coupling face</span></td><td>Off</td><td>Runout, Consolidated</td><td>Prints the coupling end view, looking forward, at the bottom right. Saved with this job and shared with the Runout tab.</td></tr>
       <tr><td><span class="ui">Runout bubbles</span></td><td>Off</td><td>Final only</td><td>Turns the Final schematic into a Schematic + Runout sheet. See <a href="#documents-final">The Final Schematic tab</a>.</td></tr>
     </tbody>
@@ -115,7 +115,7 @@
   <table class="ref">
     <thead><tr><th>Sheet</th><th>Content chips</th><th>Sections and controls</th></tr></thead>
     <tbody>
-      <tr><td>Schematic / Final</td><td>Blank draft, Ø callouts, Labels (+ Runout bubbles on Final)</td><td>Shaft (all four controls) · Thread · Lines &amp; text (all three) · Shade in Components · Measurement reference · Units</td></tr>
+      <tr><td>Schematic / Final</td><td>Blank draft, Ø callouts, Component names (+ Runout bubbles on Final)</td><td>Shaft (all four controls) · Thread · Lines &amp; text (all three) · Shade in Components · Measurement reference · Units</td></tr>
       <tr><td>Runout Sheet</td><td>Blank draft, Coupling face</td><td>Shaft (all four) · Runout bubbles · Thread · Lines &amp; text (Line thickness, Fractions) · Shade in Components · Units</td></tr>
       <tr><td>Consolidated Sheet</td><td>Blank draft, Coupling face</td><td>Every section except Wear. The fullest panel.</td></tr>
       <tr><td>Wear Document</td><td>Blank draft</td><td>Shaft (Shaft height only) · Wear · Thread · Lines &amp; text (Line thickness, Fractions) · Shade in Components (no Explicit bodies only) · Units</td></tr>
@@ -434,7 +434,7 @@
     <tbody>
       <tr>
         <td>
-          Line thickness · Body S-break · Default drawing size · Dimension arrows · Fractions · Output font · Dual-unit layout · Thread slant and density · Bubble size and height · Shade in Components (Bodies, Explicit bodies only, Tapers, Liners) · Undercut drawing line art · Show component titles · Measurement reference · Wear trace depth default · Wear area shade · Taper–liner join
+          Line thickness · Body S-break · Default drawing size · Dimension arrows · Fractions · Output font · Dual-unit layout · Thread slant and density · Bubble size and height · Shade in Components (Bodies, Explicit bodies only, Tapers, Liners) · Undercut drawing line art, liner outline, cut numbers and split cuts at liner edges · Component names on drawing · Measurement reference · Wear trace depth default · Wear area shade · Taper–liner join
         </td>
         <td>
           Per-job settings (Shaft height, liner and taper compression, coupling face, wear strip choices) · Dual units on a document and the <span class="ui">Dual-unit display</span> switch · Which controls exist (Per-component units, Liner shoulders, Unit converter in Add dialogs) · Template mode · Open PDF after export · Theme, preview colors and on-screen undercut styles

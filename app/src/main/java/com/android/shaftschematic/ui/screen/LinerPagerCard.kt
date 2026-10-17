@@ -162,6 +162,7 @@ internal fun LinerPagerCard(
         ShowDiaToggleRow(
             label = "Show name on drawing",
             checked = ln.showNameOnDrawing ?: componentTitlesDefault,
+            caption = if (ln.showNameOnDrawing == null) COMPONENT_NAMES_DEFAULT_CAPTION else null,
             testTag = "liner_show_label_toggle",
             onCheckedChange = { onUpdateLinerShowLabel(idx, it) },
         )

@@ -6,7 +6,23 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
-## 2026-10-17
+## 2026-10-17
+
+### fix(thread): the relief end follows the thread; component names setting is findable
+
+- Thread relief: the Add Thread dialog's "Relief at" end now follows the thread's inboard end
+  live, until the end chips are tapped. It was seeded once when the relief switch went on, so
+  changing "Thread end" or "Include thread in OAL" afterwards left the relief on the shaft-end
+  side (on-device report). On the thread card, switching "Thread end" or the OAL switch carries
+  a relief still at the inboard end to the new inboard end, in the same undo step; a relief put
+  at the other end on purpose stays put (`Threads.withReliefEndFollowing`).
+- The app-wide default for component names moved to the first row of Settings → Drawing as
+  "Component names on drawing", with a caption. It was "Show component titles in PDF" on the PDF
+  Export sub-page and could not be found (on-device report). The schematic options chip is now
+  "Component names" (was "Labels"), and each card's "Show name on drawing" row reads "Following
+  Settings → Drawing → Component names" while it follows the default.
+- The printed manual rebuilt; its settings chapter has a Component names section, and its
+  profile list names the undercut drawing options profiles capture.
 
 ### feat(undercut): cut numbers on the sheet, Next cut, butted seeds, list Undo, empty-Ø gate, liner OD in the strip title
 

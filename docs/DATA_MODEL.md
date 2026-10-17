@@ -296,7 +296,9 @@ by an advisory (`threadWarningMessages`), and clamped only where DRAWN
 (`geom/ThreadReliefMath.kt`). The three fields are additive and defaulted, so every document
 saved before them decodes with no relief (`ThreadReliefCodecTest`); templates keep the relief
 (it is geometry). `reliefAtAft` is seeded on the authoring surfaces from
-`suggestedThreadReliefAtAft` (the thread's INBOARD end) — never applied to a stored thread.
+`suggestedThreadReliefAtAft` (the thread's INBOARD end). A stored relief still at that suggested
+end follows the thread when its "Thread end" or OAL switch changes
+(`Threads.withReliefEndFollowing`); one put at the other end never moves.
 `ResolvedThread` carries the three values verbatim (threads never fragment).
 
 `isAftEnd` only matters when `excludeFromOAL = true`: true pins the thread's derived position

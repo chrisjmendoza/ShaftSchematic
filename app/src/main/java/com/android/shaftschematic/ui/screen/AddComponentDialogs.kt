@@ -849,13 +849,14 @@ fun AddThreadDialog(
     var isAftEnd by remember { mutableStateOf(true) }
 
     // Thread relief: local switch (default OFF) revealing the two fields and the end chips. While
-    // it is off the dialog submits relief 0/0 whatever the hidden fields hold. The end is seeded
-    // once, when the switch is first turned on, from the thread's position at that moment.
+    // it is off the dialog submits relief 0/0 whatever the hidden fields hold. The end FOLLOWS the
+    // thread's position ([suggestedThreadReliefAtAft], read live) until the end chips are tapped:
+    // seeding it once left it on the shaft-end side after "Thread end" or "Include thread in OAL"
+    // changed (on-device report). A tapped chip is the user's choice and is kept.
     var reliefOn by remember { mutableStateOf(false) }
     var reliefLenText by remember { mutableStateOf("") }
     var reliefDiaText by remember { mutableStateOf("") }
-    var reliefAtAft by remember { mutableStateOf(false) }
-    var reliefEndSeeded by remember { mutableStateOf(false) }
+    var reliefEndChoice by remember { mutableStateOf<Boolean?>(null) }
 
     // Imperial (TPI, entered in the session unit) vs Metric (a self-declaring M-designation
     // that always names its own mm values — see `ThreadDesignation`).
@@ -874,6 +875,10 @@ fun AddThreadDialog(
     // Metric gate: a real tpi-shaped value only when the designation parses, so the shared
     // gate's `tpi > 0f` check reads the same pass/fail without a second gate function.
     val tpiGate = if (metricMode) (if (parsedDesignation != null) 1f else -1f) else tpi
+    val reliefAtAft = reliefEndChoice ?: suggestedThreadReliefAtAft(
+        startFromAftMm = startMm, lengthMm = lengthMm, excludeFromOAL = !countInOal,
+        isAftEnd = isAftEnd, overallLengthMm = spec.overallLengthMm,
+    )
 
     val startError = if (!countInOal) null
                      else if (startMm >= 0f && lengthMm > 0f)
@@ -979,13 +984,6 @@ fun AddThreadDialog(
                         )
                         if (reliefLenText.isBlank()) reliefLenText = toDisplayString(seed.lenMm, unit)
                         if (reliefDiaText.isBlank() && seed.diaMm > 0f) reliefDiaText = toDisplayString(seed.diaMm, unit)
-                        if (!reliefEndSeeded) {
-                            reliefAtAft = suggestedThreadReliefAtAft(
-                                startFromAftMm = startMm, lengthMm = lengthMm, excludeFromOAL = !countInOal,
-                                isAftEnd = isAftEnd, overallLengthMm = spec.overallLengthMm,
-                            )
-                            reliefEndSeeded = true
-                        }
                     }
                 }
                 if (reliefOn) {
@@ -993,7 +991,7 @@ fun AddThreadDialog(
                     Spacer(Modifier.height(8.dp))
                     CommitNumField("Relief Ø (${abbr(unit)})", reliefDiaText) { reliefDiaText = it }
                     Spacer(Modifier.height(8.dp))
-                    ThreadReliefEndChips(atAft = reliefAtAft, testTag = "add_thread_relief_end") { reliefAtAft = it }
+                    ThreadReliefEndChips(atAft = reliefAtAft, testTag = "add_thread_relief_end") { reliefEndChoice = it }
                 }
                 Spacer(Modifier.height(8.dp))
                 Row(

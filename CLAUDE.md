@@ -76,7 +76,11 @@ Specifically:
   `ui/screen/ThreadReliefSection.kt`). Relief ⇔ `reliefLenMm > 0 && reliefDiaMm > 0` — no
   stored flag; the card derives the switch from the stored length, the dialog holds it as local
   state and submits 0/0 while off. The relief is PART of the thread's stored span: adding one
-  moves nothing. Drawn by every thread site from ONE split, `geom/ThreadReliefMath.kt`.
+  moves nothing. Drawn by every thread site from ONE split, `geom/ThreadReliefMath.kt`. The
+  relief END follows the thread's position on BOTH surfaces: the dialog reads
+  `suggestedThreadReliefAtAft` live until its end chips are tapped, and the card's "Thread end"
+  / OAL switches carry a relief still at the suggested end to the new one
+  (`Threads.withReliefEndFollowing`, same undo step); a relief put at the other end stays put.
 - **Captured keyway**: the taper card and `AddTaperDialog` both carry the "Captured keyway"
   toggle + the "KW Inset from SET" field shown only while it is on (same on the body pair,
   above). Captured ⇔ inset > 0 — no stored flag; the cards derive the toggle from the offset,
@@ -111,7 +115,9 @@ onSurface-tinted overlay on the preview fills (a print-decision marker, not prin
 on-device report: a checked Shade toggle changed nothing in the preview box), so the box and
 the composers can never disagree about what shades), **"Show name on drawing"** (`showNameOnDrawing`, all four explicit component cards —
 TRI-STATE per-component gate on the schematic's name label: unset follows the global
-`showComponentTitles` pref, an explicit ON prints even with that pref off, an explicit OFF
+`showComponentTitles` pref ("Component names on drawing", Settings → Drawing's FIRST row and the
+schematic options' "Component names" chip — moved off the PDF Export sub-page, where it could not
+be found; the card's row says "Following Settings → Drawing → Component names" while unset), an explicit ON prints even with that pref off, an explicit OFF
 hides even with it on — the pref is the default, never a master gate over an authored
 choice. The field name is fresh: the retired `showLabelOnDrawing` key is IGNORED at decode,
 because the flag's first build blanket-serialized `true` under it on every component and

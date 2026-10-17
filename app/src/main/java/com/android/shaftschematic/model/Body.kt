@@ -33,7 +33,7 @@ import java.util.UUID
  *   bodies share a Ø, the callout anchors at the longest of them.
  * @property showNameOnDrawing Whether this body's name prints as a component label under the
  *   schematic. Tri-state, draw-only (never rewrites [label]): `null` — the default — follows
- *   the Settings switch ("Show component titles in PDF"), so a document saved before the flag
+ *   the Settings switch ("Component names on drawing", Settings → Drawing), so a document saved before the flag
  *   existed prints exactly as its setting says; an explicit `true` prints THIS name even with
  *   that switch off (on-device report: a freshly checked card toggle did nothing under a
  *   global switch turned off long before); an explicit `false` hides this name even with it

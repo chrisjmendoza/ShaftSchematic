@@ -12,6 +12,7 @@ import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.SlotAuthoredReference
 import com.android.shaftschematic.model.Taper
 import com.android.shaftschematic.model.Threads
+import com.android.shaftschematic.model.withReliefEndFollowing
 import com.android.shaftschematic.model.mergeBodiesAround
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.splitBodiesAround
@@ -555,12 +556,14 @@ fun ShaftViewModel.setThreadExcludeFromOal(
 ) = updateSpec(target) { s ->
     val idx = s.threads.indexOfFirst { it.id == id }
     if (idx == -1) s
-    else s.copy(
-        threads = s.threads.toMutableList().also { l ->
-            val old = l[idx]
-            l[idx] = old.copy(excludeFromOAL = excludeFromOAL)
-        }
-    ).syncExcludedThreadPositions()
+    else {
+        val before = s.threads[idx]
+        s.copy(
+            threads = s.threads.toMutableList().also { l ->
+                l[idx] = before.copy(excludeFromOAL = excludeFromOAL)
+            }
+        ).syncExcludedThreadPositions().withThreadReliefFollowing(id, before)
+    }
 }
 
 fun ShaftViewModel.setThreadEndPosition(
@@ -570,11 +573,28 @@ fun ShaftViewModel.setThreadEndPosition(
 ) = updateSpec(target) { s ->
     val idx = s.threads.indexOfFirst { it.id == id }
     if (idx == -1) s
-    else s.copy(
-        threads = s.threads.toMutableList().also { l ->
-            l[idx] = l[idx].copy(isAftEnd = isAft)
-        }
-    ).syncExcludedThreadPositions()
+    else {
+        val before = s.threads[idx]
+        s.copy(
+            threads = s.threads.toMutableList().also { l ->
+                l[idx] = before.copy(isAftEnd = isAft)
+            }
+        ).syncExcludedThreadPositions().withThreadReliefFollowing(id, before)
+    }
+}
+
+/**
+ * The thread [id]'s relief end carried across a position change from [before]
+ * ([withReliefEndFollowing]) — applied AFTER `syncExcludedThreadPositions`, so it reads the
+ * thread's settled start. Part of the same user action, so it is one undo step with it.
+ */
+private fun ShaftSpec.withThreadReliefFollowing(id: String, before: Threads): ShaftSpec {
+    val idx = threads.indexOfFirst { it.id == id }
+    if (idx == -1) return this
+    val moved = threads[idx]
+    val followed = moved.withReliefEndFollowing(before, overallLengthMm)
+    return if (followed === moved) this
+    else copy(threads = threads.toMutableList().also { it[idx] = followed })
 }
 
 /**

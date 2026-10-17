@@ -206,8 +206,11 @@ waits for the button.
 - **"Shade in Components"** — the component shading group (renamed from "Shade in PDF").
 - **"Measurement reference"** — the AFT/FWD/Auto tiering choice, same label on sheets and
   in Settings (formerly "Dimension tiering reference" in Settings).
-- **"Labels"** — the global component-name default (`showComponentTitles`); the per-card
-  tri-state override keeps its own "Show name on drawing" wording.
+- **"Component names"** — the global component-name default (`showComponentTitles`): the
+  schematic options chip, and "Component names on drawing" as Settings → Drawing's first row
+  (renamed from "Labels" / "Show component titles in PDF" and moved off the PDF Export sub-page —
+  on-device report: it could not be found). The per-card tri-state override keeps its own "Show
+  name on drawing" wording and names the default's location while unset.
 - **"Blank draft"** — the write-in mode, one term everywhere.
 - Control captions are one line or absent; sentences belong in Help.
 

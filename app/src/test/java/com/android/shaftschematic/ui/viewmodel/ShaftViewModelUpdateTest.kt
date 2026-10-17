@@ -241,6 +241,39 @@ class ShaftViewModelUpdateTest {
         assertOal(300f, vm)
     }
 
+    @Test
+    fun `switching an excluded thread's end carries its inboard relief with it`() {
+        val vm = vm(300f)
+        // AFT-end thread with its relief at the inboard (FWD) end, as the dialog seeds it.
+        vm.addThreadAt(
+            startMm = 0f, lengthMm = 50f, majorDiaMm = 45f, pitchMm = 2f,
+            excludeFromOAL = true, isAftEnd = true,
+            reliefLenMm = 6f, reliefDiaMm = 40f, reliefAtAft = false,
+        )
+        val id = vm.spec.value.threads[0].id
+        vm.setThreadEndPosition(id, isAft = false)
+
+        val t = vm.spec.value.threads[0]
+        assertEquals("thread moved to the FWD face", 300f, t.startFromAftMm, 0.001f)
+        assertEquals("relief followed to the inboard (AFT) end", true, t.reliefAtAft)
+        assertEquals("relief length verbatim", 6f, t.reliefLenMm, 0f)
+        assertEquals("relief Ø verbatim", 40f, t.reliefDiaMm, 0f)
+        assertOal(300f, vm)
+    }
+
+    @Test
+    fun `switching an excluded thread's end leaves a relief put at the outboard end alone`() {
+        val vm = vm(300f)
+        vm.addThreadAt(
+            startMm = 0f, lengthMm = 50f, majorDiaMm = 45f, pitchMm = 2f,
+            excludeFromOAL = true, isAftEnd = true,
+            reliefLenMm = 6f, reliefDiaMm = 40f, reliefAtAft = true,
+        )
+        val id = vm.spec.value.threads[0].id
+        vm.setThreadEndPosition(id, isAft = false)
+        assertEquals(true, vm.spec.value.threads[0].reliefAtAft)
+    }
+
     // ── Multi-component stability ─────────────────────────────────────────────
 
     @Test

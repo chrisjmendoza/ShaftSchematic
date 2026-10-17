@@ -180,6 +180,7 @@ internal fun ThreadPagerCard(
         ShowDiaToggleRow(
             label = "Show name on drawing",
             checked = th.showNameOnDrawing ?: componentTitlesDefault,
+            caption = if (th.showNameOnDrawing == null) COMPONENT_NAMES_DEFAULT_CAPTION else null,
             testTag = "thread_show_label_toggle",
             onCheckedChange = { onUpdateThreadShowLabel(idx, it) },
         )

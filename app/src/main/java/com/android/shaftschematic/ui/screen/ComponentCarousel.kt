@@ -150,7 +150,7 @@ internal fun ComponentCarouselPager(
     showEdgeArrows: Boolean,
     edgeArrowWidthDp: Int,
     showComponentDebugLabels: Boolean,
-    /** The Settings "Show component titles" switch — what an UNSET per-component name toggle follows. */
+    /** The Settings "Component names on drawing" switch — what an UNSET per-component name toggle follows. */
     componentTitlesDefault: Boolean = true,
     /** The kind-level shade checkboxes — what an UNSET per-component shade toggle follows. */
     componentShadeDefaults: ComponentShadeDefaults = ComponentShadeDefaults(),
@@ -824,18 +824,45 @@ data class ComponentShadeDefaults(
     val liners: Boolean = false,
 )
 
+/**
+ * The "Show name on drawing" row's caption while the card follows the app-wide default (its
+ * tri-state flag unset) — it names where that default lives, so the setting can be found from the
+ * place a name is switched (on-device report: the default could not be found). The Settings row
+ * and the schematic options chip carry the same name.
+ */
+internal const val COMPONENT_NAMES_DEFAULT_CAPTION = "Following Settings → Drawing → Component names"
+
+/** The Settings row's and the options chip's name for `PdfPrefs.showComponentTitles`. */
+internal const val COMPONENT_NAMES_SETTING_LABEL = "Component names on drawing"
+
+/** The Settings row's caption for [COMPONENT_NAMES_SETTING_LABEL]. */
+internal const val COMPONENT_NAMES_SETTING_CAPTION =
+    "The default for every component's \"Show name on drawing\" switch. A component you set on " +
+        "its own card keeps its choice."
+
 @Composable
 internal fun ShowDiaToggleRow(
     label: String,
     checked: Boolean,
     testTag: String,
+    /** A line under the label — the name toggle's [COMPONENT_NAMES_DEFAULT_CAPTION]; null for none. */
+    caption: String? = null,
     onCheckedChange: (Boolean) -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(label, modifier = Modifier.weight(1f))
+        Column(Modifier.weight(1f)) {
+            Text(label)
+            if (caption != null) {
+                Text(
+                    caption,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
         // The tag rides on the Switch — the clickable control — so a test's performClick on
         // it toggles instead of landing on an inert Row.
         androidx.compose.material3.Switch(
