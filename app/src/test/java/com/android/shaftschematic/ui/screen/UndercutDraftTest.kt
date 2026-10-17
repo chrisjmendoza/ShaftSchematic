@@ -170,6 +170,36 @@ class UndercutDraftTest {
     }
 
     @Test
+    fun `confirm is the one gate on every span problem the fields no longer refuse`() {
+        // The card's fields commit whatever parses, so each of these reaches the draft as typed —
+        // and Confirm (and the leave prompt) must be what stops it, with the reason.
+        assertEquals(
+            "Length must be greater than zero",
+            undercutConfirmIssue(draftOf("x", 100f, 0f), 1000f, emptyList()),
+        )
+        assertEquals(
+            "Length must be greater than zero",
+            undercutConfirmIssue(draftOf("x", 100f, -20f), 1000f, emptyList()),
+        )
+        assertEquals(
+            "Start is before the shaft's AFT end",
+            undercutConfirmIssue(draftOf("x", -5f, 50f), 1000f, emptyList()),
+        )
+        assertEquals(
+            "Undercut extends past the shaft's FWD end",
+            undercutConfirmIssue(draftOf("x", 980f, 50f), 1000f, emptyList()),
+        )
+        val stored = draftOf("x", 900f, 50f)
+        assertEquals(
+            UndercutLeaveAction.PROMPT,
+            undercutLeaveAction(
+                draftOf("x", 980f, 50f), stored,
+                undercutConfirmIssue(draftOf("x", 980f, 50f), 1000f, emptyList()),
+            ),
+        )
+    }
+
+    @Test
     fun `confirm passes a cut drafted fully inside another and still blocks a partial overlap`() {
         val others = listOf(UndercutSpanMm("relief", 200f, 400f))
         // A smaller, deeper cut inside the relief — the nested case, now legal.
@@ -302,6 +332,42 @@ class UndercutDraftTest {
     @Test
     fun `the card title states the aft to fwd position convention`() {
         assertEquals("Undercut 2 of 3 · aft → fwd", undercutCardTitle(2, 3))
+    }
+
+    @Test
+    fun `the past-the-liner-edge question names the end and the amount`() {
+        assertEquals(
+            "This undercut will run 0.5 in past the liner's FWD edge. " +
+                "Add that as an extension past the liner?",
+            undercutOverhangQuestion(aft = null, fwd = "0.5 in"),
+        )
+        assertEquals(
+            "This undercut will run 1 in past the liner's AFT edge.\n" +
+                "This undercut will run 0.5 in past the liner's FWD edge.\n" +
+                "Add those as extensions past the liner?",
+            undercutOverhangQuestion(aft = "1 in", fwd = "0.5 in"),
+        )
+        assertEquals(
+            "Runs 0.5 in past the liner's FWD edge — double-check Distance and Length",
+            undercutOverhangWarning("0.5 in", "FWD"),
+        )
+    }
+
+    @Test
+    fun `liner end flags combine and clear per end`() {
+        val aft = UndercutLinerEnds(aft = true, fwd = false)
+        val fwd = UndercutLinerEnds(aft = false, fwd = true)
+        assertEquals(UndercutLinerEnds(aft = true, fwd = true), aft.with(fwd))
+        assertEquals(fwd, aft.with(fwd).without(aft))
+        assertEquals(UndercutLinerEnds.NONE, fwd.without(fwd))
+    }
+
+    @Test
+    fun `a refused preset says it changed nothing`() {
+        assertEquals(
+            "Not applied — Undercut extends past the shaft's FWD end",
+            undercutPresetRefusal("Undercut extends past the shaft's FWD end"),
+        )
     }
 
     @Test

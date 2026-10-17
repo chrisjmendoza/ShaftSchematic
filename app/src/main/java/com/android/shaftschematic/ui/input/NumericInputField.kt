@@ -20,11 +20,23 @@ import androidx.compose.ui.text.input.TextFieldValue
 import com.android.shaftschematic.util.filterNumericInput
 
 /**
- * Shared numeric input with filtering, last-valid tracking, and commit/revert behavior.
+ * Shared numeric input with filtering, settled-value tracking, and commit/revert behavior.
  *
  * NOTE:
  * - Numeric input is filtered and reverted at the UI boundary.
  * - Future numeric fields must use this composable (filter + parser) before committing.
+ *
+ * **A rejected value is never swapped out silently.** When a commit fails — the text does not
+ * parse, or [validator] returns a reason — the box goes back to the value the caller still holds
+ * (the last committed text, or the incoming [initialText]) and the field states what it threw
+ * away: `"<typed> not applied — <reason>"` as error supporting text, until the text in the box is
+ * EDITED. Focus does not clear it: a focus change can arrive without the machinist touching the
+ * field (a cleared focus is handed straight back to the first focusable in non-touch mode —
+ * hardware keyboards, ChromeOS), and a notice wiped that way is a notice never read. A revert without that notice would leave the old value in the box under an
+ * error naming the rule but not the value, which reads as if the OLD value were at fault — a
+ * typed value gone with no word of it (on-device report). A
+ * caller that wants a value to survive an error must not reject it here: let it commit and
+ * gate it downstream instead.
  *
  * [onDirtyChange] reports whether the field currently holds an **uncommitted** edit — its text
  * against the baseline a blur-with-no-edit would keep. It fires `true` the moment the text
@@ -43,7 +55,6 @@ fun NumericInputField(
     allowNegative: Boolean = false,
     allowFraction: Boolean = true,
     allowColon: Boolean = false,
-    showValidationErrors: Boolean = true,
     singleLine: Boolean = true,
     maxLines: Int = if (singleLine) 1 else 5,
     keyboardType: KeyboardType = KeyboardType.Decimal,
@@ -52,27 +63,15 @@ fun NumericInputField(
     parseValid: (String) -> Boolean,
     onCommit: (String) -> Unit
 ) {
-    val initialIsValid = remember(initialText) { parseValid(initialText) }
     var text by remember(initialText) { mutableStateOf(TextFieldValue(initialText)) }
-    var lastValidText by remember(initialText) {
-        mutableStateOf(if (initialIsValid) initialText else "")
-    }
-    var showError by remember(initialText) { mutableStateOf(false) }
-    var errorText by remember(initialText) { mutableStateOf<String?>(null) }
 
-    fun validate(raw: String, updateError: Boolean): Boolean {
-        if (!parseValid(raw)) {
-            if (updateError) errorText = "Invalid number"
-            return false
-        }
-        val extra = validator?.invoke(raw)
-        if (extra != null) {
-            if (updateError) errorText = extra
-            return false
-        }
-        if (updateError) errorText = null
-        return true
-    }
+    // Why the last commit was refused, naming the value that was not applied; null when there is
+    // nothing to report. Cleared only by an edit to the text, never by focus.
+    var rejectedNotice by remember(initialText) { mutableStateOf<String?>(null) }
+
+    /** The reason [raw] cannot be committed, or null when it can. */
+    fun rejectionReason(raw: String): String? =
+        if (!parseValid(raw)) NOT_A_NUMBER_REASON else validator?.invoke(raw)
 
     // Null when not focused; set to the text value at the moment focus was gained.
     // Used to skip commits when the user tapped a field but didn't change its value.
@@ -80,19 +79,20 @@ fun NumericInputField(
 
     // The text the field would be left holding if the user walked away right now: the
     // incoming value, then whatever a commit or a revert settled on. Anything else in the
-    // box is an edit that has not landed yet.
+    // box is an edit that has not landed yet. It is also the revert target: the value the
+    // caller actually holds, never an intermediate the caller was never handed.
     var settledText by remember(initialText) { mutableStateOf(initialText) }
 
     fun commitOrRevert() {
-        val ok = validate(text.text, updateError = true)
-        if (ok) {
-            showError = false
-            settledText = text.text
-            onCommit(text.text)
+        val typed = text.text
+        val reason = rejectionReason(typed)
+        if (reason == null) {
+            rejectedNotice = null
+            settledText = typed
+            onCommit(typed)
         } else {
-            if (showValidationErrors) showError = true
-            text = TextFieldValue(lastValidText)
-            settledText = lastValidText
+            rejectedNotice = rejectedValueNotice(typed, reason)
+            text = TextFieldValue(settledText)
         }
     }
 
@@ -113,21 +113,17 @@ fun NumericInputField(
                 allowFraction = allowFraction,
                 allowColon = allowColon
             )
+            // A new edit supersedes the report about the old one; a cursor move is not an edit.
+            if (filtered != text.text) rejectedNotice = null
             text = if (filtered == raw.text) raw else raw.copy(text = filtered)
-
-            if (parseValid(filtered)) {
-                lastValidText = filtered
-                if (showError && validate(filtered, updateError = false)) {
-                    showError = false
-                }
-            }
         },
         label = { Text(label) },
         enabled = enabled,
-        isError = (showError && errorText != null) || externalIssueText != null,
+        isError = rejectedNotice != null || externalIssueText != null,
         supportingText = {
-            if (showError && errorText != null) {
-                Text(errorText!!)
+            val notice = rejectedNotice
+            if (notice != null) {
+                Text(notice)
             } else if (externalIssueText != null) {
                 Text(externalIssueText)
             }
@@ -150,4 +146,17 @@ fun NumericInputField(
             }
         }
     )
+}
+
+/** The reason a [NumericInputField] notice gives for text that does not parse. */
+internal const val NOT_A_NUMBER_REASON = "not a number"
+
+/**
+ * The supporting text a [NumericInputField] shows after refusing [typed] for [reason] — the
+ * value that was NOT applied, then why. A blank entry is named as such, since an empty quote
+ * says nothing.
+ */
+internal fun rejectedValueNotice(typed: String, reason: String): String {
+    val shown = typed.trim().ifEmpty { "Blank entry" }
+    return "$shown not applied — $reason"
 }

@@ -6,7 +6,9 @@ File: `ui/input/NumericInputField.kt` (composable `NumericInputField`; wrapped b
 `CommitNum` in `ComponentCarousel.kt` and `CommitNumField` in `AddComponentDialogs.kt`)  
 Purpose: Single-line numeric field that holds local text; commits on blur/IME Done via callback.
 
-Version: v0.5 (2026-08-29; the edge-trigger and external-refresh edges of `onDirtyChange` are now
+Version: v0.6 (2026-10-16; a rejected value is reverted to the caller's value AND named in a
+`"<typed> not applied — <reason>"` notice that only an edit clears; the unused `showValidationErrors` switch was removed).
+v0.5 (2026-08-29; the edge-trigger and external-refresh edges of `onDirtyChange` are now
 pinned by tests). v0.4 (2026-08-29) added the `onDirtyChange` contract behind the carousel card's
 Save button, and the Length "> 0" validator convention. v0.3 2026-07-26 added the focus-baseline
 rule and test coverage. v0.2 2026-07-18 superseded v0.1 "NumberField" — the composable was
@@ -31,7 +33,21 @@ Invariants
   baseline is null" rule.
 - The baseline is re-captured on **each** focus gain, not once at composition — otherwise
   a second visit to the field compares against stale text and commits spuriously.
-- Invalid input reverts on blur to the last valid text instead of committing.
+- **Invalid input reverts AND names what it threw away — the field never silently swaps a
+  value.** On a failed commit (blur or IME Done; the text does not parse, or `validator` returns
+  a reason) the box goes back to the value the caller holds — the last committed text, or the
+  incoming `initialText` — never to a half-typed intermediate the caller was never handed (`3`
+  on the way to `3/`). The field then shows, as error supporting text (`isError`),
+  `"<typed> not applied — <reason>"`: the validator's own text as the reason, `not a number` for
+  a parse failure, and `Blank entry` in place of an empty value (`rejectedValueNotice`). The
+  notice takes precedence over `externalIssueText` and persists until the text is **edited** (a
+  real text change — a cursor move or the select-all on focus is not one). **Focus never clears
+  it**: a focus change can arrive with nobody touching the field (in non-touch mode — hardware
+  keyboards, ChromeOS — a cleared focus is handed straight back to the first focusable), and a
+  notice wiped that way is never read. A revert with only the rule beside it reads as if the OLD value were at fault — a
+  typed value gone with no word of it (on-device report). A caller whose value must survive an
+  error does not reject it here: it commits and gates downstream (the undercut card,
+  `UndercutDrawing.md`). The revert still settles the field for `onDirtyChange`.
 - Field displays formatted text; callback receives raw text.
 - **IME Done commits unconditionally**, even with no edit — a deliberate asymmetry with
   blur. Done is an explicit "I mean this" gesture; blur is passive. Pinned by test.
@@ -50,8 +66,8 @@ Length validator convention
 - Every carousel card's **Length** field carries
   `validator = { positiveLengthErrorMm(toMmOrNull(raw, unit)) }`
   (`ui/util/StartOverlapValidation.kt`) — one shared helper on all four cards, message
-  "Must be > 0". A rejected value takes the standard validator path: the field shows the
-  error, reverts, and **does not commit**, so a zero length stops at the card instead of
+  "Must be > 0". A rejected value takes the standard validator path: the field reverts, names
+  the refused value ("0 not applied — Must be > 0"), and **does not commit**, so a zero length stops at the card instead of
   silently landing a component with no span (the short-segment advisory starts *above* 0, so
   nothing downstream would have said a word). This is a gate on an *entry*, not a rewrite of a
   stored value — the golden rule is untouched.
@@ -62,7 +78,11 @@ Length validator convention
 Test coverage
 - `ui/input/BlurCommitPolicyTest` — the predicate, pure JVM.
 - `ui/input/NumericInputFieldBlurTest` — the predicate actually wired into the field:
-  real focus/blur/IME events, re-focus baseline, invalid-input revert, and the
+  real focus/blur/IME events, re-focus baseline, invalid-input revert (to the caller's value,
+  never a half-typed intermediate) with its `"<typed> not applied — <reason>"` notice for a
+  validator rejection, a parse failure and a blank entry, the notice surviving a re-focus (both a
+  deliberate one and the unasked-for refocus a cleared focus gets in non-touch mode) and clearing
+  on an edit, and the
   `onDirtyChange` edges (clean on compose, dirty on divergence, clean again after a commit,
   a revert, and a validator rejection). Two further edges are pinned as of 2026-08-29: a RUN of
   divergent edits still reports exactly once (edge-triggered, not per keystroke), and an
@@ -95,7 +115,8 @@ Responsibilities
   Instant-commit controls (chips, checkboxes, switches, sliders) never register — they have no
   uncommitted state.
 - Support decimals and shop fractions in display.
-- Optional `validator` and `externalIssueText` parameters surface inline field issues.
+- Optional `validator` and `externalIssueText` parameters surface inline field issues. There is
+  no switch to suppress the rejection notice: a refused value is always reported.
 
 Do Nots
 - Do not mutate ViewModel directly.

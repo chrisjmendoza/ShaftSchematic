@@ -3,19 +3,27 @@ package com.android.shaftschematic.ui.input
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.text.AnnotatedString
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -69,12 +77,22 @@ class NumericInputFieldBlurTest {
                     onClick = { focusManager.clearFocus() },
                     modifier = Modifier.testTag(AWAY)
                 ) { Text("away") }
+                // A second focus target: a blur that stays a blur. Under Robolectric a cleared
+                // focus is handed straight back to the first focusable (non-touch mode), so the
+                // "away" button's blur is immediately followed by a re-focus of the field.
+                var other by remember { mutableStateOf("") }
+                OutlinedTextField(
+                    value = other,
+                    onValueChange = { other = it },
+                    modifier = Modifier.testTag(OTHER)
+                )
             }
         }
     }
 
     private fun focusField() = rule.onNodeWithTag(FIELD).performClick()
     private fun blurField() = rule.onNodeWithTag(AWAY).performClick()
+    private fun focusElsewhere() = rule.onNodeWithTag(OTHER).performClick()
 
     @Test
     fun `merely composing the field does not commit`() {
@@ -160,6 +178,116 @@ class NumericInputFieldBlurTest {
         rule.onNodeWithTag(FIELD).performImeAction()
 
         assertEquals(listOf("12.5"), commits)
+    }
+
+    /* ── A refused value is reported, never swapped out silently ───────────────── */
+
+    private fun fieldHolds(value: String) = rule.onNodeWithTag(FIELD).assert(
+        SemanticsMatcher.expectValue(SemanticsProperties.EditableText, AnnotatedString(value))
+    )
+
+    private fun notice(text: String) = rule.onNodeWithText(text, useUnmergedTree = true)
+
+    @Test
+    fun `a validator rejection names the refused value and the rule, and the box reverts`() {
+        rule.setContent { Host(validator = { raw -> if (raw.toFloatOrNull() == 0f) "Must be > 0" else null }) }
+        focusField()
+        rule.onNodeWithTag(FIELD).performTextReplacement("0")
+        focusElsewhere()
+        rule.waitForIdle()
+
+        assertEquals(emptyList<String>(), commits)
+        fieldHolds("12.5")
+        notice("0 not applied — Must be > 0").assertIsDisplayed()
+    }
+
+    @Test
+    fun `an unparseable value is named as not a number`() {
+        rule.setContent { Host() }
+        focusField()
+        rule.onNodeWithTag(FIELD).performTextReplacement("1/")
+        rule.onNodeWithTag(FIELD).performImeAction()
+        rule.waitForIdle()
+
+        assertEquals(emptyList<String>(), commits)
+        fieldHolds("12.5")
+        notice("1/ not applied — not a number").assertIsDisplayed()
+    }
+
+    @Test
+    fun `a cleared field is named as a blank entry`() {
+        rule.setContent { Host() }
+        focusField()
+        rule.onNodeWithTag(FIELD).performTextReplacement("")
+        focusElsewhere()
+        rule.waitForIdle()
+
+        fieldHolds("12.5")
+        notice("Blank entry not applied — not a number").assertIsDisplayed()
+    }
+
+    @Test
+    fun `the revert goes to the value the caller holds, not a half-typed intermediate`() {
+        // "3" parses on the way to "3/" — but it was never committed, so putting it in the box
+        // would show a value the caller does not hold.
+        rule.setContent { Host() }
+        focusField()
+        rule.onNodeWithTag(FIELD).performTextReplacement("3")
+        rule.onNodeWithTag(FIELD).performTextReplacement("3/")
+        focusElsewhere()
+        rule.waitForIdle()
+
+        assertEquals(emptyList<String>(), commits)
+        fieldHolds("12.5")
+    }
+
+    @Test
+    fun `focusing the field again keeps the notice and typing clears it`() {
+        rule.setContent { Host(validator = { raw -> if (raw.toFloatOrNull() == 0f) "Must be > 0" else null }) }
+        focusField()
+        rule.onNodeWithTag(FIELD).performTextReplacement("0")
+        focusElsewhere()
+        rule.waitForIdle()
+        notice("0 not applied — Must be > 0").assertIsDisplayed()
+
+        focusField()
+        rule.waitForIdle()
+        notice("0 not applied — Must be > 0").assertIsDisplayed()
+
+        rule.onNodeWithTag(FIELD).performTextReplacement("13")
+        rule.waitForIdle()
+        notice("0 not applied — Must be > 0").assertDoesNotExist()
+    }
+
+    @Test
+    fun `a focus change nobody asked for does not wipe the notice`() {
+        // The "away" button's clearFocus is handed straight back to the field under Robolectric
+        // (non-touch mode, as with a hardware keyboard): the field is re-focused without the
+        // machinist touching it, and the notice must still be there to read.
+        rule.setContent { Host(validator = { raw -> if (raw.toFloatOrNull() == 0f) "Must be > 0" else null }) }
+        focusField()
+        rule.onNodeWithTag(FIELD).performTextReplacement("0")
+        blurField()
+        rule.waitForIdle()
+
+        fieldHolds("12.5")
+        notice("0 not applied — Must be > 0").assertIsDisplayed()
+    }
+
+    @Test
+    fun `an edit after an IME Done rejection clears the notice`() {
+        // Done keeps focus; the next real edit retires the report.
+        rule.setContent { Host() }
+        focusField()
+        rule.onNodeWithTag(FIELD).performTextReplacement("1/")
+        rule.onNodeWithTag(FIELD).performImeAction()
+        rule.waitForIdle()
+        notice("1/ not applied — not a number").assertIsDisplayed()
+
+        rule.onNodeWithTag(FIELD).performTextReplacement("14")
+        rule.waitForIdle()
+
+        notice("1/ not applied — not a number").assertDoesNotExist()
     }
 
     /* ── onDirtyChange — what the carousel card's Save button is enabled off ──── */
@@ -269,5 +397,6 @@ class NumericInputFieldBlurTest {
     private companion object {
         const val FIELD = "numeric_field"
         const val AWAY = "away_button"
+        const val OTHER = "other_field"
     }
 }

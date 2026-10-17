@@ -84,6 +84,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
 import com.android.shaftschematic.geom.DiaCalloutStation
 import com.android.shaftschematic.geom.UNDERCUT_BREAK_AMP_FRAC_OF_R
 import com.android.shaftschematic.geom.THREAD_DENSITY_DEFAULT
@@ -105,6 +106,7 @@ import com.android.shaftschematic.geom.UNDERCUT_TOUCH_EPS_MM
 import com.android.shaftschematic.geom.clampUndercutExtension
 import com.android.shaftschematic.geom.maxUndercutAftExtensionMm
 import com.android.shaftschematic.geom.maxUndercutFwdExtensionMm
+import com.android.shaftschematic.geom.newLinerOverhangs
 import com.android.shaftschematic.geom.outerDiaAt
 import com.android.shaftschematic.geom.pickUndercutAt
 import com.android.shaftschematic.geom.planDiaCallouts
@@ -322,6 +324,8 @@ fun UndercutWindowDetailOverlay(
     // would find no page to follow.
     val deleteSnackbar = remember { SnackbarHostState() }
     val snackbarScope = rememberCoroutineScope()
+    // The strip's members as the stale-draft sweep last saw them — see that effect below.
+    var lastSeenUndercuts by remember(stripKey) { mutableStateOf(undercuts) }
     var reselectAfterRestoreId by remember { mutableStateOf<String?>(null) }
 
     // ── Leave handling: the card being left is the card being saved ───────────
@@ -488,11 +492,29 @@ fun UndercutWindowDetailOverlay(
     }
     // A draft whose cut no longer has a page here (an Undo removed it, or moved it off this
     // strip) is dropped: it is invisible, and the leave sweep would otherwise commit it over the
-    // undone state, or raise a "can't be saved" prompt for a card that no longer exists.
+    // undone state, or raise a "can't be saved" prompt for a card that no longer exists. A dropped
+    // draft that held an EDIT says so — typed values never vanish without a word (on-device
+    // report). Its baseline is the cut as this strip last held it, so [lastSeenUndercuts] is
+    // advanced only here.
     LaunchedEffect(undercuts) {
         val live = undercuts.mapTo(HashSet()) { it.id }
-        val kept = drafts.filterKeys { it == PENDING_UNDERCUT_ID || it in live }
-        if (kept.size != drafts.size) drafts = kept
+        val dropped = drafts.filterKeys { it != PENDING_UNDERCUT_ID && it !in live }
+        if (dropped.isNotEmpty()) {
+            drafts = drafts - dropped.keys
+            val editLost = dropped.any { (id, d) ->
+                val prior = lastSeenUndercuts.firstOrNull { it.id == id }
+                prior == null || d != undercutDraftOf(prior, linerSpans)
+            }
+            if (editLost) {
+                snackbarScope.launch {
+                    deleteSnackbar.showSnackbar(
+                        message = UNDERCUT_DISCARDED_DRAFT_MSG,
+                        duration = SnackbarDuration.Short,
+                    )
+                }
+            }
+        }
+        lastSeenUndercuts = undercuts
     }
 
     fun cancelDraft(id: String) {
@@ -1388,6 +1410,43 @@ internal fun UndercutDraft.buttingAgainst(other: UndercutSpanMm): UndercutDraft 
 internal fun undercutCardTitle(position: Int, count: Int): String =
     "Undercut $position of $count · aft → fwd"
 
+/** What a refused one-tap preset says: it changed nothing, and why. */
+internal fun undercutPresetRefusal(reason: String): String = "Not applied — $reason"
+
+/** A per-end pair of flags against a liner's two edges — the "Past the liner edge" state. */
+internal data class UndercutLinerEnds(val aft: Boolean, val fwd: Boolean) {
+    fun with(other: UndercutLinerEnds) = UndercutLinerEnds(aft || other.aft, fwd || other.fwd)
+    fun without(other: UndercutLinerEnds) = UndercutLinerEnds(aft && !other.aft, fwd && !other.fwd)
+
+    companion object {
+        val NONE = UndercutLinerEnds(aft = false, fwd = false)
+    }
+}
+
+/**
+ * The "Past the liner edge" question for the ends a commit newly carried off the liner — [aft]
+ * and [fwd] are the formatted overhangs ("0.500 in"), null for an end not being asked about.
+ * One line per end, then the question.
+ */
+internal fun undercutOverhangQuestion(aft: String?, fwd: String?): String {
+    val lines = listOfNotNull(
+        aft?.let { "This undercut will run $it past the liner's AFT edge." },
+        fwd?.let { "This undercut will run $it past the liner's FWD edge." },
+    )
+    return if (lines.size > 1) {
+        lines.joinToString("\n") + "\nAdd those as extensions past the liner?"
+    } else {
+        "${lines.firstOrNull().orEmpty()} Add that as an extension past the liner?"
+    }
+}
+
+/** The card's standing warning after "No" — [amount] formatted with its unit, [end] AFT or FWD. */
+internal fun undercutOverhangWarning(amount: String, end: String): String =
+    "Runs $amount past the liner's $end edge — double-check Distance and Length"
+
+/** The notice when an Undo takes away a cut whose card held unsaved edits. */
+internal const val UNDERCUT_DISCARDED_DRAFT_MSG = "Unsaved changes to a removed cut were discarded"
+
 /**
  * The result of typing an "Extend past liner" value: the new [draft], the extension actually
  * applied ([appliedMm], what the field re-seeds to), and whether the typed value asked for more
@@ -1592,10 +1651,14 @@ private fun undercutAddRangeOf(
  * pending card (nothing recorded to delete).
  *
  * Numeric fields keep the commit-on-blur contract (`docs/contracts/NumberField.md`); the commit lands in the
- * draft rather than the ViewModel. The Distance/Length validators still block a span that leaves
- * the shaft — a value that could never be confirmed has no business reaching the draft — while the
- * adjacency check is confirm-time only, since a cut is legitimately dragged past a neighbour by
- * two separate field edits.
+ * draft rather than the ViewModel. **No field on this card ever reverts a typed value**: the fields
+ * carry no validator, so anything that parses lands in the draft verbatim and the canvas previews
+ * it. ALL span validity — shaft bounds, a positive length, no partial overlap — is confirm-time
+ * ([undercutConfirmIssue]): stated inline under the fields and on the pill, and leaving the card
+ * raises the Keep editing / Discard prompt. A field-level refusal would put the previous value back
+ * in the box with only the rule beside it — an input modified on error with no notification
+ * (on-device report). Only text that does not parse is refused, and the field names it
+ * (`"<typed> not applied — not a number"`).
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -1626,6 +1689,45 @@ private fun UndercutDraftCard(
     val refLiner = undercutReferenceLinerFor(previewUndercut, linerSpans, stripLiner, oalMm)
     val refLinerStartMm = refLiner?.startMm ?: 0f
     val refLinerEndMm = refLiner?.endMm ?: 0f
+
+    // ── "Past the liner edge" (on-device request) ────────────────────────────────────────
+    // A Distance or Length commit that carries the cut past a liner edge it did not overhang
+    // before is ASKED about: the machinist may not know the typed numbers run the cut off the
+    // liner, or a measurement may be wrong. Nothing is rewritten either way — the draft is the
+    // typed value from the moment of the commit; the answer only decides whether the overhang
+    // reads as intended ("Add extension": the Extend field already shows it) or stays flagged
+    // with a warning until that end is back on the liner ("No"). Confirm is never blocked: the
+    // geometry is legal. Only those two fields ask — the Extend fields, Whole liner, Butt
+    // against and the Measure From chips are explicit span choices or no span change at all.
+    // Card-local, keyed on the cut's identity, so field re-seeds keep it.
+    val overhangLiner = stripLiner ?: refLiner
+    val (overhangAftMm, overhangFwdMm) = overhangLiner?.let {
+        undercutLinerExtensionsMm(draft.startFromAftMm, draft.lengthMm, it.startMm, it.endMm)
+    } ?: (0f to 0f)
+    val overhangsAft = overhangAftMm > UNDERCUT_TOUCH_EPS_MM
+    val overhangsFwd = overhangFwdMm > UNDERCUT_TOUCH_EPS_MM
+    var overhangQuestion by remember(draft.id) { mutableStateOf<UndercutLinerEnds?>(null) }
+    var overhangAcknowledged by remember(draft.id) { mutableStateOf(UndercutLinerEnds.NONE) }
+    var overhangFlagged by remember(draft.id) { mutableStateOf(UndercutLinerEnds.NONE) }
+    // An end back on the liner retires both its flag and its acknowledgement, so the next time
+    // it runs off it is a new overhang and is asked about again.
+    LaunchedEffect(draft.id, overhangsAft, overhangsFwd) {
+        val onLiner = UndercutLinerEnds(aft = !overhangsAft, fwd = !overhangsFwd)
+        overhangFlagged = overhangFlagged.without(onLiner)
+        overhangAcknowledged = overhangAcknowledged.without(onLiner)
+    }
+    fun commitSpanEdit(updated: UndercutDraft) {
+        overhangLiner?.let { l ->
+            val (aft, fwd) = newLinerOverhangs(
+                draft.startFromAftMm, draft.lengthMm,
+                updated.startFromAftMm, updated.lengthMm,
+                l.startMm, l.endMm,
+            )
+            if (aft || fwd) overhangQuestion = UndercutLinerEnds(aft, fwd)
+        }
+        onDraftChange(updated)
+    }
+    fun overhangAmount(mm: Float): String = "${disp(mm, unit)} ${abbr(unit)}"
 
     // Non-blocking classifiers, read off the DRAFT so the card warns about what the canvas is
     // previewing. Neither rewrites anything: the canvas renders the clamped span, and an
@@ -1678,7 +1780,10 @@ private fun UndercutDraftCard(
                 }
             }
 
-            if (staleOverrun) {
+            // A STORED cut the shaft no longer holds (the OAL moved under it). A dirty draft with
+            // the same problem states the precise reason in the confirm-issue line instead — "re-
+            // measure" is advice about a recorded value, not about one just typed.
+            if (staleOverrun && !dirty) {
                 UndercutWarning("Extends past shaft end — re-measure")
             }
             if (diaAtOrAboveSurface) {
@@ -1778,10 +1883,10 @@ private fun UndercutDraftCard(
                 // An extension can only run into stock that is there (on-device request): a typed
                 // value past the shaft's end applies the maximum and says so, rather than blocking —
                 // the field is a derived view of the span, so limiting it to the shaft is not a
-                // rewrite of a measurement. A clamped span cannot leave the shaft, so these
-                // validators carry no shaft-end check; they block only an unparseable value and a
-                // span that would come back with no length. A side with no stock at all (the liner
-                // sits at that shaft end) is disabled with a caption saying why.
+                // rewrite of a measurement. Like every field on this card the extensions carry no
+                // validator: a result with no length lands in the draft as computed and Confirm
+                // blocks it with the reason ([undercutConfirmIssue]). A side with no stock at all
+                // (the liner sits at that shaft end) is disabled with a caption saying why.
                 val maxAftMm = maxUndercutAftExtensionMm(spanLiner.startMm)
                 val maxFwdMm = maxUndercutFwdExtensionMm(spanLiner.endMm, oalMm)
                 val aftHasStock = maxAftMm > UNDERCUT_SPAN_EPS_MM
@@ -1803,13 +1908,6 @@ private fun UndercutDraftCard(
                             label = "AFT",
                             initialDisplay = disp(extAftMm, unit),
                             enabled = aftHasStock,
-                            validator = { raw ->
-                                val extMm = toMmOrNull(raw, unit) ?: return@WearNum "Invalid number"
-                                val edit = draft.withAftLinerExtension(spanLiner, extMm, oalMm)
-                                if (edit.draft.lengthMm <= UNDERCUT_SPAN_EPS_MM) {
-                                    "Length must be greater than zero"
-                                } else null
-                            },
                             modifier = Modifier.weight(1f).testTag("undercut_extend_aft"),
                         ) { raw ->
                             val extMm = toMmOrNull(raw, unit) ?: return@WearNum
@@ -1828,13 +1926,6 @@ private fun UndercutDraftCard(
                             label = "FWD",
                             initialDisplay = disp(extFwdMm, unit),
                             enabled = fwdHasStock,
-                            validator = { raw ->
-                                val extMm = toMmOrNull(raw, unit) ?: return@WearNum "Invalid number"
-                                val edit = draft.withFwdLinerExtension(spanLiner, extMm, oalMm)
-                                if (edit.draft.lengthMm <= UNDERCUT_SPAN_EPS_MM) {
-                                    "Length must be greater than zero"
-                                } else null
-                            },
                             modifier = Modifier.weight(1f).testTag("undercut_extend_fwd"),
                         ) { raw ->
                             val extMm = toMmOrNull(raw, unit) ?: return@WearNum
@@ -1875,7 +1966,8 @@ private fun UndercutDraftCard(
             // (on-device request: measuring each new cut's Distance off the previous cut's end).
             // A one-tap preset: it sets the canonical start and nothing else, so Distance
             // re-seeds under the same reference; never "selected". A result that would leave
-            // the shaft changes nothing and says why until the next tap or draft change.
+            // the shaft changes nothing and says so ("Not applied — <reason>") until the next
+            // tap or draft change — nothing was typed, so refusing the preset loses no value.
             if (buttTargets.isNotEmpty()) {
                 var buttIssue by remember(draft) { mutableStateOf<String?>(null) }
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -1895,7 +1987,7 @@ private fun UndercutDraftCard(
                                 ) {
                                     val moved = draft.buttingAgainst(other)
                                     val issue = undercutSpanIssue(moved.startFromAftMm, moved.lengthMm, oalMm)
-                                    if (issue != null) buttIssue = issue
+                                    if (issue != null) buttIssue = undercutPresetRefusal(issue)
                                     else onDraftChange(moved)
                                 }
                             }
@@ -1916,25 +2008,19 @@ private fun UndercutDraftCard(
             )
             // Negative is a real value here: a cut overhanging the datum's edge (the "Extend past
             // liner" case under a Liner reference) reads below zero and must be retypable as such.
+            // No validator: a Distance that puts the cut off the shaft still lands in the draft
+            // verbatim, and Confirm blocks it with the reason.
             WearNum(
                 label = "Distance from ${undercutReferenceLabel(draft.reference)} (${abbr(unit)})",
                 initialDisplay = disp(displayedStartMm, unit),
                 allowNegative = true,
-                validator = { raw ->
-                    val enteredMm = toMmOrNull(raw, unit) ?: return@WearNum "Invalid number"
-                    val canonicalMm = undercutStartToCanonicalMm(
-                        draft.reference, enteredMm, draft.lengthMm, aftSetXMm, fwdSetXMm,
-                        refLinerStartMm, refLinerEndMm,
-                    )
-                    undercutSpanIssue(canonicalMm, draft.lengthMm, oalMm)
-                },
             ) { s ->
                 val enteredMm = toMmOrNull(s, unit) ?: return@WearNum
                 val canonicalMm = undercutStartToCanonicalMm(
                     draft.reference, enteredMm, draft.lengthMm, aftSetXMm, fwdSetXMm,
                     refLinerStartMm, refLinerEndMm,
                 )
-                onDraftChange(draft.copy(startFromAftMm = canonicalMm))
+                commitSpanEdit(draft.copy(startFromAftMm = canonicalMm))
             }
 
             // A length edit keeps the AUTHORED Distance fixed: canonical start is re-derived
@@ -1942,7 +2028,8 @@ private fun UndercutDraftCard(
             // under a FWD reference the cut's FWD end stays pinned and the cut grows/shrinks
             // AFT-ward). Committing the new length against the old canonical would rewrite
             // the displayed Distance by the length delta — golden-rule violation (on-device
-            // report). Validation runs against the same recomputed canonical.
+            // report). No validator, as for Distance: a length that leaves the shaft (or is zero)
+            // lands in the draft verbatim and Confirm blocks it with the reason.
             fun canonicalAtLength(newLenMm: Float): Float = undercutCanonicalForNewLength(
                 draft.reference, draft.startFromAftMm, draft.lengthMm, newLenMm,
                 aftSetXMm, fwdSetXMm, refLinerStartMm, refLinerEndMm,
@@ -1950,19 +2037,29 @@ private fun UndercutDraftCard(
             WearNum(
                 label = "Length (${abbr(unit)})",
                 initialDisplay = disp(draft.lengthMm, unit),
-                validator = { raw ->
-                    val enteredLenMm = toMmOrNull(raw, unit) ?: return@WearNum "Invalid number"
-                    undercutSpanIssue(canonicalAtLength(enteredLenMm), enteredLenMm, oalMm)
-                },
             ) { s ->
                 toMmOrNull(s, unit)?.let { newLenMm ->
-                    onDraftChange(
+                    commitSpanEdit(
                         draft.copy(
                             startFromAftMm = canonicalAtLength(newLenMm),
                             lengthMm = newLenMm,
                         ),
                     )
                 }
+            }
+            // A declined "Past the liner edge" question, beside the numbers it is about — shown
+            // while that end still runs off the liner.
+            if (overhangFlagged.aft && overhangsAft) {
+                UndercutWarning(
+                    undercutOverhangWarning(overhangAmount(overhangAftMm), "AFT"),
+                    Modifier.testTag("undercut_overhang_warning"),
+                )
+            }
+            if (overhangFlagged.fwd && overhangsFwd) {
+                UndercutWarning(
+                    undercutOverhangWarning(overhangAmount(overhangFwdMm), "FWD"),
+                    Modifier.testTag("undercut_overhang_warning"),
+                )
             }
 
             // Measured Ø — a measurement, so any parseable value ≥ 0 lands **verbatim**
@@ -1994,6 +2091,45 @@ private fun UndercutDraftCard(
                 UndercutWarning(confirmIssue)
             }
         }
+    }
+
+    // Answerable only by its two buttons: a tap outside or Back would have to pick one, and
+    // either silent pick is the decision the machinist was asked to make.
+    overhangQuestion?.let { ask ->
+        AlertDialog(
+            onDismissRequest = {},
+            properties = DialogProperties(dismissOnClickOutside = false, dismissOnBackPress = false),
+            modifier = Modifier.testTag("undercut_overhang_dialog"),
+            title = { Text("Past the liner edge") },
+            text = {
+                Text(
+                    undercutOverhangQuestion(
+                        aft = if (ask.aft) overhangAmount(overhangAftMm) else null,
+                        fwd = if (ask.fwd) overhangAmount(overhangFwdMm) else null,
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        overhangAcknowledged = overhangAcknowledged.with(ask)
+                        overhangFlagged = overhangFlagged.without(ask)
+                        overhangQuestion = null
+                    },
+                    modifier = Modifier.testTag("undercut_overhang_accept"),
+                ) { Text("Add extension") }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        overhangFlagged = overhangFlagged.with(ask)
+                        overhangAcknowledged = overhangAcknowledged.without(ask)
+                        overhangQuestion = null
+                    },
+                    modifier = Modifier.testTag("undercut_overhang_decline"),
+                ) { Text("No") }
+            },
+        )
     }
 }
 

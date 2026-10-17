@@ -15,13 +15,14 @@ fun ComponentKind.collisionGroup(): CollisionGroup? = when (this) {
 /**
  * Field-level gate on a carousel card's **Length**: a zero or negative length is not a shape.
  *
- * Returned as a `NumericInputField` validator message, so the field shows the error, reverts
- * its text, and never calls `onCommit` — the value stops at the card rather than reaching the
+ * Returned as a `NumericInputField` validator message, so the field reverts its text, names the
+ * refused value ("0 not applied — Must be > 0"), and never calls `onCommit` — the value stops at
+ * the card rather than reaching the
  * model. This is a gate on an *entry*, not a rewrite of a stored one: nothing clamps or
  * adjusts a committed value (the golden rule).
  *
- * A `null` [mm] is deferred to the field's own parse check — text that did not parse is an
- * "Invalid number", not a too-short length. All four component cards share this one helper so
+ * A `null` [mm] is deferred to the field's own parse check — text that did not parse is
+ * "not a number", not a too-short length. All four component cards share this one helper so
  * the rule cannot drift between them. Deliberately NOT applied to diameter fields (an
  * auto-body Ø of `≤ 0` clears that section's override, a documented feature) nor to keyway
  * fields (blank/0 clears a keyway), and not to the Add dialogs, whose Submit gates already

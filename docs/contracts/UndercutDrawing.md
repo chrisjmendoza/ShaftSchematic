@@ -158,12 +158,15 @@ data class UndercutRecord(val undercuts: List<Undercut> = emptyList())
   the stock between the liner edge and that shaft end, ≥ 0; `clampUndercutExtension(typed, max)` →
   `UndercutExtensionClamp(appliedMm, limited)` (typed above max → max, limited; at or under →
   unchanged; negative → 0, not limited).
-- **Blocking entry validation** `undercutSpanIssue(canonicalStartMm, lengthMm, oalMm)`: length
-  must be `> ε`, and `[start, start+length]` must lie in `[0, oalMm]` (ε = `1e-3` mm,
-  boundary-exact accepted). Wired as a `NumericInputField` validator on the Distance and Length
-  fields — a violation reverts the field and never touches the model. The Ø field has **no**
-  span validator: a measurement is sacred (golden rule); an implausible Ø is a non-blocking
-  card warning instead.
+- **Blocking confirm validation (span)** `undercutSpanIssue(canonicalStartMm, lengthMm, oalMm)`:
+  length must be `> ε`, and `[start, start+length]` must lie in `[0, oalMm]` (ε = `1e-3` mm,
+  boundary-exact accepted). It is **never a field validator**: every undercut field commits the
+  typed value to the draft verbatim, and this check runs at **confirm** time inside
+  `undercutConfirmIssue` (see "Undercut cards" below) — stated inline on the card and on the
+  status pill, with the Keep editing / Discard prompt on leave. A field validator would revert
+  the box to the previous value with only the rule beside it — a typed input modified on error
+  with no notification (on-device report). The Ø field has no span check at all: a measurement is
+  sacred (golden rule); an implausible Ø is a non-blocking card warning instead.
 - **Blocking confirm validation** `undercutOverlapIssue(canonicalStartMm, lengthMm, otherSpans)`:
   a draft must be either fully **clear** of every other cut (disjoint; touching edge-to-edge is
   legal, within `UNDERCUT_TOUCH_EPS_MM` = 0.01 mm) or fully **nested** with it — inside another cut, or containing one. A *partial*
@@ -192,7 +195,9 @@ data class UndercutRecord(val undercuts: List<Undercut> = emptyList())
   draftLength)` — true when the other span's midpoint lies AFT of the draft's (equal midpoints
   read as before); `undercutStartButting(...)` → the new canonical start: `otherEnd` when butting
   after, `otherStart − draftLength` when butting before. Edge to edge, which the overlap check
-  counts as clear; shaft bounds are the caller's `undercutSpanIssue` check.
+  counts as clear; shaft bounds are the caller's `undercutSpanIssue` check (the card refuses an
+  off-shaft result as "Not applied — <reason>", `undercutPresetRefusal` — a preset, so nothing
+  typed is lost).
 - **Containment forest** `undercutNestingForest(spans)` → per span, its nesting `level` and the
   id of the smallest span containing it (`parentId`). Containment = `undercutSpanContains`: the
   child inside **both** parent edges within ε, and the two not the same span. A **shared edge is
@@ -630,9 +635,19 @@ cuts); every other card renders stored values.
   (so a card merely displaying its `LINER_*`→`AFT_SET` fallback never rewrites the stored
   reference). There is exactly **one** confirm path (`confirmDraft`), taken by both the pill's tap
   and every auto-save-on-leave.
-- The blocking reason shows inline on the card while it is dirty; the non-blocking stale and
-  Ø-vs-surface warnings still show, read off the **draft** so they describe what the canvas
-  is previewing.
+- **No field on this card ever reverts a typed value.** Distance, Length, the two "Extend past
+  liner" fields and Measured Ø carry no validator: anything that parses lands in the draft
+  verbatim and the canvas previews it (the notch pass draws the render-clamped span, so a draft
+  past the shaft end draws to the end). ALL span validity — shaft bounds, a positive length, no
+  partial overlap — is confirm-time (`undercutConfirmIssue`), and so is every reason a value can
+  be refused. Only text that does not parse is turned back, and the shared field names it
+  (`"<typed> not applied — not a number"`, `NumberField.md`). The one clamp on a typed value — an
+  extension past the shaft end — applies the maximum and says so under the field.
+- The blocking reason shows inline on the card while it is dirty (under the fields, and on the
+  pill); the non-blocking Ø-vs-surface warning still shows, read off the **draft** so it describes
+  what the canvas is previewing. The stale-overrun warning shows only on an UNEDITED card — on a
+  dirty draft the blocking reason already states the precise bound, and "re-measure" is advice
+  about a recorded value, not one just typed.
 
 **Saving: the status pill + leaving a card.** Cards have **no Confirm/Cancel buttons** — such a
 row lived inside the card's own vertical scroll and was easy to miss and easy to forget
@@ -698,12 +713,13 @@ Each card:
   (`effectiveUndercutReference`) until a chip is tapped again — the stored value is not silently
   rewritten.
 - **Distance** field (`WearNum`, shared wrapper around `NumericInputField`): label shows the
-  active reference (`undercutReferenceLabel`); validator converts the entered value to
+  active reference (`undercutReferenceLabel`); the commit converts the entered value to
   canonical via `undercutStartToCanonicalMm` (passing the resolved reference liner's edges when
-  applicable) then runs `undercutSpanIssue`. The **span** check stays a field validator (a value
-  that could never be confirmed has no business entering the draft) while the **overlap** check
-  is confirm-time only — a cut is legitimately moved past a neighbour by two separate field
-  edits.
+  applicable) and lands it in the draft **verbatim** — no validator. A Distance that puts the cut
+  off the shaft is held in the draft, previewed, and blocked at confirm with its reason
+  (`undercutSpanIssue` inside `undercutConfirmIssue`), exactly like an overlap — which is
+  confirm-time for its own reason too: a cut is legitimately moved past a neighbour by two
+  separate field edits.
 - **Length** field: a length edit keeps the **authored Distance** fixed — the commit re-derives
   canonical `startFromAftMm` from the active reference at the new length
   (`undercutCanonicalForNewLength`, the conversion pair composed). Identity under an AFT-flavored
@@ -712,14 +728,17 @@ Each card:
   the old canonical would rewrite the displayed Distance by the length delta (on-device report:
   Distance 5 / Length 12 under Liner FWD became Distance 7 after shortening to 10) — a
   golden-rule violation. The "canonical never moves" rule covers reference *switching* only.
-  The validator runs `undercutSpanIssue` against the same recomputed canonical.
+  No validator: a length that leaves the shaft, or a zero length, lands in the draft verbatim and
+  confirm blocks it ("Undercut extends past the shaft's FWD end" / "Length must be greater than
+  zero").
 - **Measured Ø** field: **no validator** — any parseable value ≥ 0 enters the draft verbatim
   (golden rule). Initial display is blank when `diaMm == 0` (unentered), else the formatted value.
   Because the underlying `NumericInputField` requires `parseValid` to accept the text to commit
   and an empty string does not parse, **a Ø typed once cannot be cleared back to blank/0 through
-  this field** — the field reverts to the last committed non-blank value on blur instead of
-  committing an empty edit. (A known as-built limitation, not a design intent; deleting the
-  whole undercut is the only way to remove a Ø today.)
+  this field** — the field reverts to the last committed value on blur instead of committing an
+  empty edit, and says so ("Blank entry not applied — not a number"). (A known as-built
+  limitation, not a design intent; deleting the whole undercut is the only way to remove a Ø
+  today.)
 - **Notes**: free text straight into the draft (Confirm/Cancel own persistence, so the numeric
   fields' capture-on-focus discipline buys nothing here).
 - **Delete** icon (confirm-free, **immediate** — deletion is not drafted; the page goes with it).
@@ -734,7 +753,7 @@ Each card:
   to restart it was lost with no way back.
 
 - **Warnings** (non-blocking, both can show together): "Extends past shaft end — re-measure"
-  (`isUndercutStaleOverrun`) and "Ø meets or exceeds shaft surface here" (`diaMm > 0` and `diaMm
+  (`isUndercutStaleOverrun`, unedited card only — see "Draft editing") and "Ø meets or exceeds shaft surface here" (`diaMm > 0` and `diaMm
   >=` the local surface Ø). For a draft that is **nested** inside another cut, the comparison is
   against the **surrounding cut's floor** and the wording becomes "Ø meets or exceeds the
   surrounding cut's floor here" — a nested cut removes material from its parent's floor, so the
@@ -757,8 +776,11 @@ overlay heals around it: a selection whose page vanished adopts the card the pag
 (the same healing a deleted or cancelled card gets), and a draft whose cut no longer has a page on
 this strip is **dropped** — the one case a dirty draft goes without the leave prompt, because it
 has nothing left to shadow (committing it would write over the undone state; prompting would
-raise "can't be saved" for a card that no longer exists). A free strip whose anchoring cut an
-Undo removes closes, like any anchor that stops resolving.
+raise "can't be saved" for a card that no longer exists). It is never dropped **silently**: when
+the dropped draft held an edit (it differs from the cut as this strip last held it), the overlay's
+snackbar host shows "Unsaved changes to a removed cut were discarded" (`UNDERCUT_DISCARDED_DRAFT_MSG`,
+Short); a draft equal to its baseline goes without a notice, since nothing typed was lost. A free
+strip whose anchoring cut an Undo removes closes, like any anchor that stops resolving.
 
 ### Overlay "Add undercut…"
 Between the canvas and the carousel: **"Add undercut in this liner"** on a `LinerStrip`
@@ -812,9 +834,9 @@ commit, and is shown only while the field still reads the applied maximum). The 
 the applied value — a per-side counter re-keys it on every limited commit, since a repeat overrun
 leaves the draft, and so `initialText`, unchanged. A side with no stock (the liner sits at that
 shaft end) is disabled with the caption "Liner is at the shaft's AFT|FWD end — nothing to extend
-into". A clamped span cannot leave the shaft, so these two validators run no `undercutSpanIssue`;
-they block only an unparseable value and a result with no length (the Distance/Length validators
-are unchanged). The clamp is a **deliberate carve-out from the golden rule for a derived view field
+into". Like every field on the card the two extension fields carry **no validator**: a clamped
+span cannot leave the shaft, and a result with no length (an end pulled back past the other) lands
+in the draft as computed and is blocked at confirm ("Length must be greater than zero"). The clamp is a **deliberate carve-out from the golden rule for a derived view field
 only**: nothing stores the extension, and a cut past the shaft's end is a limit of the shaft, not a
 measurement to keep; it applies at the moment of typing, and a stored span is never clamped after
 the fact. **Nothing is stored**: the extensions are
@@ -823,6 +845,32 @@ AFT" relation with the sign flipped — and nothing derived writes back into the
 holds because a typed extension maps to canonical through the authored liner edge exactly as a
 typed Distance does; the Distance and Length fields re-seed from the new draft (`NumericInputField`
 keys its remembered text on `initialText`).
+
+**"Past the liner edge" — an overhang typed by accident is asked about** (on-device request: the
+machinist may not know the typed numbers run the cut off the liner, or a measurement may be
+wrong). On a liner card (`stripLiner ?: refLiner`), a **Distance or Length commit** whose result
+overhangs a liner edge it did not overhang before that commit (`newLinerOverhangs` in
+`geom/UndercutMath.kt`: per end, `undercutLinerExtensionsMm` ≤ `UNDERCUT_TOUCH_EPS_MM` before and
+> it after; an end already past that grows further, or one pulled back inside, is not new) opens
+an AlertDialog (`undercut_overhang_dialog`) titled **"Past the liner edge"**: "This undercut will
+run <amount> <unit> past the liner's AFT|FWD edge. Add that as an extension past the liner?" — one
+line per end when both newly overhang, then "Add those as extensions past the liner?"
+(`undercutOverhangQuestion`). Its two buttons are the ONLY way out (`DialogProperties(
+dismissOnClickOutside = false, dismissOnBackPress = false)`): a tap outside would have to pick an
+answer silently.
+- **"Add extension"** (`undercut_overhang_accept`) — the overhang is intended; the Extend field
+  already shows it. The end is recorded as acknowledged, and nothing more is shown.
+- **"No"** (`undercut_overhang_decline`) — the end is flagged, and the card shows a standing
+  warning under the Length field (`undercut_overhang_warning`): "Runs <amount> <unit> past the
+  liner's AFT|FWD edge — double-check Distance and Length" (`undercutOverhangWarning`).
+- **Nothing is rewritten either way**: the draft holds the typed value from the commit on, and the
+  answer changes only what the card says. Confirm is never blocked — the geometry is legal.
+- When that end's overhang returns to ≤ ε, its flag and its acknowledgement both clear, so the
+  next overhang there is asked about afresh. The state (`UndercutLinerEnds`) is card-local,
+  `remember(draft.id)`: it survives field re-seeds and resets when the card's cut changes
+  identity — and, being card-local, it is not kept once the card leaves composition.
+- Only Distance and Length ask. The Extend fields, Whole liner, Butt against and the Measure From
+  chips never do: the first three are explicit span choices, and the chips change no span.
 
 Butt against (on-device request: measuring each new cut's Distance from the previous cut's end is
 tedious). Directly below the Span / Extend past liner block (below the Measure From chips when the
@@ -835,8 +883,10 @@ applied only on the tap and never shown selected: "After" sets the canonical sta
 cut's FWD end, "Before" to its AFT end minus the draft's length (`UndercutDraft.buttingAgainst` →
 `undercutStartButting`). Length and reference are untouched, so Distance re-seeds to the new
 position under the same datum. The result is validated with `undercutSpanIssue`; a cut that would
-leave the shaft does **not** change the draft — the issue shows as a card warning under the row
-(`undercut_butt_issue`) until the next tap or draft change. A butted cut touches its neighbour,
+leave the shaft does **not** change the draft — the issue shows as a card warning under the row,
+worded "Not applied — <reason>" (`undercutPresetRefusal`, `undercut_butt_issue`), until the next
+tap or draft change. Refusing a preset is the one refusal on this card, and it loses nothing: no
+value was typed. A butted cut touches its neighbour,
 which the overlap check counts as clear.
 
 ### Overlay canvas contents

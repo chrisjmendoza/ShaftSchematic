@@ -448,7 +448,12 @@ undercuts are authored only on their tab, keeping them outside the add-dialog-pa
 invariant. Both undercut surfaces carry Undo/Redo bound to the ONE document history; the
 detail page's confirm-free delete offers a snackbar Undo that restores the exact cut via
 `restoreUndercut` (verbatim, original index, no-op when the id is already back) — never a
-history step, which could fold in an edit coalesced with the delete. The notch (void fill erasing surface stroke and fill — the mouth stays **OPEN**,
+history step, which could fold in an edit coalesced with the delete. **No undercut field ever reverts a typed value**: Distance, Length and the Extend fields commit
+to the draft verbatim, and ALL span validity (bounds, length, overlap) is confirm-time — shown
+under the fields and on the pill, with the Keep-editing/Discard prompt on leave. Elsewhere, a
+`NumericInputField` that cannot accept a value restores the previous one but SAYS SO ("20 not
+applied — <reason>") until the next focus; a silent swap of a typed value is the violation
+(on-device report). The notch (void fill erasing surface stroke and fill — the mouth stays **OPEN**,
 never closed by a lid — plus a full-height **section face** at each end and the floor lines,
 so each cut is its own reduced-Ø rectangle **step in the silhouette**, cut against the
 **local outer-surface envelope**; the section's core fills one step **lighter** than the
