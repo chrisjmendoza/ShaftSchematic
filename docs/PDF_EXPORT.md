@@ -809,6 +809,16 @@ between body and liner still shows where the liner was. One pure builder
 (`geom/LinerOutlineMath.kt`), part of the drawing LOOK (rides Drawing profiles), and like line art
 it reaches only this composer. See `docs/contracts/UndercutDrawing.md`.
 
+**Undercut drawing: split cuts at liner edges** (`PdfPrefs.undercutSplitAtLinerEdge`, default
+`false`; Settings → PDF Export "Undercut drawing: split cuts at liner edges" and the undercut
+options sheet's Shading section beside "Liner outline"): the detail strips' chain rail prints each
+cut's FULL length (the shop measures cut lengths); on, a cut machined past a liner edge is
+dimensioned as two spans meeting at that edge. App-wide look pref (rides Drawing profiles).
+The per-job `UndercutRecord.drawToSet` ("Draw to the shaft end" on the Undercut tab) is separate:
+a liner strip whose chain ends within `UNDERCUT_SET_REACH_MM` (24 in) of its S.E.T. draws out to
+the physical shaft end with a flat end (no S-break) and its chain rail ends at the S.E.T.; liner
+strips only, total span unchanged.
+
 **Direct print** (`util/PdfPrint.kt`, `printShaftPdfPage`) wraps the same composers in a
 `PrintDocumentAdapter` (US Letter landscape, 1 page) and hands them to the Android print
 framework. A print and an export of the same document are composed by the same call and are
@@ -901,7 +911,8 @@ gated off by what their composer actually reads (a section left with nothing is 
   apply, and it has no Shaft section — plus the one row nothing else gets: **"Undercut
   drawing: line art (no shading)"** (`showUndercutLineArt = true`) at the foot of the shade
   group, since `PdfPrefs.undercutLineArt` reaches this composer alone — and **"Liner outline"**
-  beneath it, same reasoning for `PdfPrefs.undercutLinerOutline`.
+  beneath it, same reasoning for `PdfPrefs.undercutLinerOutline` — and **"Split cuts at liner
+  edges"** beside it for `PdfPrefs.undercutSplitAtLinerEdge`.
 
 Every instance keeps Lines & text (Line thickness + Fractions ungated — every document here
 prints lengths), Shade in Components and Units (ungated) at their fixed spots in the order;

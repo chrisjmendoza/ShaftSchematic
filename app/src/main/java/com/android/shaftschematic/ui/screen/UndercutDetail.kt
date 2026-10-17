@@ -318,6 +318,11 @@ fun UndercutWindowDetailOverlay(
      * over the cuts, drawn here as on the printed sheet. Passed in so a change recomposes this canvas.
      */
     linerOutline: Boolean = true,
+    /**
+     * App-wide `PdfPrefs.undercutSplitAtLinerEdge`: whether the chain rail takes a node at each
+     * buried liner edge, as on the printed sheet. Passed in so a change restyles the rail.
+     */
+    splitAtLinerEdge: Boolean = false,
 ) {
     val oalMm = spec.overallLengthMm.coerceAtLeast(0f)
     val segs = remember(resolvedComponents, spec) { surfaceSegsFrom(resolvedComponents, bodyBlends(spec, resolvedComponents)) }
@@ -433,11 +438,14 @@ fun UndercutWindowDetailOverlay(
             UndercutSpanMm(u.id, c.startMm, c.endMm)
         }.filter { it.endMm > it.startMm }
     }
-    // The strip liner's edges a cut on the sheet runs past into the body — the previewed draft
-    // included — each one an extra node on the chain rail below, the printed strip's rule
-    // (`buildUndercutRailSpans`' `splitAtMm`).
-    val railSplitAtMm = remember(sheetSpans, stripLiner) {
-        stripLiner?.let { l -> buriedUndercutLinerEdgesMm(l.startMm, l.endMm, sheetSpans) } ?: emptyList()
+    // With [splitAtLinerEdge] on, the strip liner's edges a cut on the sheet runs past into the
+    // body — the previewed draft included — each become an extra node on the chain rail below,
+    // the printed strip's rule (`buildUndercutRailSpans`' `splitAtMm`); off, none, so every cut
+    // reads its full length.
+    val railSplitAtMm = remember(sheetSpans, stripLiner, splitAtLinerEdge) {
+        stripLiner?.takeIf { splitAtLinerEdge }
+            ?.let { l -> buriedUndercutLinerEdgesMm(l.startMm, l.endMm, sheetSpans) }
+            ?: emptyList()
     }
     // The window follows what is PREVIEWED, not just what is stored: a draft edited past the
     // strip's stored range (a cut overhanging the liner edge mid-edit — on-device report)
@@ -2978,7 +2986,9 @@ private val UNDERCUT_CHAIN_RAIL_ROW_DP = 30.dp
  * edges extended by overhang, a free strip's window edges — never the draw range, the identical
  * rule the PDF strips apply), every cut's two shoulders, and each buried liner edge in
  * [splitAtMm] that falls strictly inside a span, so an overhang reads against the edge's
- * position.
+ * position. The caller feeds [splitAtMm] only while `PdfPrefs.undercutSplitAtLinerEdge` is on
+ * (default off: the shop measures each cut's length, so a cut reads whole — on-device
+ * direction); empty adds no node.
  */
 internal fun undercutCanvasRailStops(
     chainStartMm: Float,

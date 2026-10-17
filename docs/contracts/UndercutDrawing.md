@@ -44,6 +44,13 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
   committing continuously through `ShaftViewModel.setUndercutExaggeration` — the OAL field's
   live-update posture, not commit-on-blur (it is a `Slider`, not a `NumericInputField`). It
   drives `UndercutRecord.exaggerationFrac`; see "Drawn depth exaggeration" below.
+- **"Draw to the shaft end" switch** (directly under the exaggeration slider, same visibility;
+  testTag `undercut_draw_to_set_switch`, caption "A liner strip within 24" of its S.E.T. draws
+  out to the shaft end and dimensions the run to it. Saved with this job." — the reach is formatted
+  from `UNDERCUT_SET_REACH_MM` in the document unit, so the caption cannot drift from the
+  constant): drives `UndercutRecord.drawToSet` through `ShaftViewModel.setUndercutDrawToSet`
+  (the record-update path the exaggeration commit uses, so it rides the one undo history and
+  the dirty mark). See "Draw to the shaft end" under the strip builders below.
 - **"Recorded undercuts" list** below the canvas: a read-only summary + delete row per cut,
   aft → fwd — not an edit card (see "UI contract").
 - Blank-draft (write-in) toggle, PDF Preview (`PdfPreviewOverlay` + `RunoutWearOptionsSheet`),
@@ -91,8 +98,17 @@ data class Undercut(
     val referenceCutId: String = "",
 )
 
-data class UndercutRecord(val undercuts: List<Undercut> = emptyList())
+data class UndercutRecord(
+    val undercuts: List<Undercut> = emptyList(),
+    val exaggerationFrac: Float = 0.25f,
+    val drawToSet: Boolean = false,
+)
 ```
+
+- **`drawToSet`** ("Draw to the shaft end", default `false`, additive + defaulted — older files
+  decode off): per-document because it is a FIT for this shaft's geometry (how close a liner sits
+  to a shaft end), never a look pref — the `exaggerationFrac` posture, not `PdfPrefs`. Display and
+  dimensioning only: no stored cut moves.
 
 - **Canonical storage is shaft-space mm** (`startFromAftMm`, from the AFT face) — the same
   space as `Segment.startFromAftMm` and `computeSetPositionsInMeasureSpace`'s output (its
@@ -188,7 +204,8 @@ data class UndercutRecord(val undercuts: List<Undercut> = emptyList())
   true when some span strictly crosses the edge, more than ε past it on BOTH sides (ending at the
   edge, or covering the liner's end without crossing, is not buried);
   `buriedUndercutLinerEdgesMm(linerStart, linerEnd, spans)` — the buried edges of one liner, AFT
-  first, the rail's split nodes. `effectiveUndercutReference(undercut, linerSpans, spans,
+  first, the rail's split nodes while `PdfPrefs.undercutSplitAtLinerEdge` is on (see "Split cuts
+  at liner edges" below). `effectiveUndercutReference(undercut, linerSpans, spans,
   aftSetXMm, fwdSetXMm)` (`geom/UndercutOverlayMath.kt`) applies them: a `LINER_*` reference to a
   buried edge resolves to `nearestSetReference` for the cut's own span; the default empty
   `spans` skips the check, so the two-argument form is the deleted-liner fallback alone.
@@ -494,6 +511,22 @@ data class UndercutRecord(val undercuts: List<Undercut> = emptyList())
   The canvases read the same pref (the route collects it and passes it to the overlay's
   `linerOutline`), and it is an Undercut-tab preview re-render key.
 
+  **Split cuts at liner edges — `PdfPrefs.undercutSplitAtLinerEdge`** (default `false`; Settings →
+  PDF Export beside the liner-outline row, and the undercut preview's PDF options sheet under it,
+  testTag `pdf_undercut_split_at_liner_edge`, caption "A cut machined past a liner edge is
+  dimensioned as two spans meeting at the edge. Off: every cut prints its full length."; captured
+  by drawing profiles, settings key `pdf_undercut_split_at_liner_edge`). On-device direction: the
+  shop measures the LENGTH of each cut, so by default every cut — one machined past a liner edge
+  into the body included — prints its whole length as one chain value. On, a liner strip feeds
+  its buried edges (`buriedUndercutLinerEdgesMm`) to the chain as nodes, so such a cut prints as
+  two spans meeting at the edge (the "Buried liner edge node" rule under the PDF chained rail).
+  The pref only decides whether the node list is fed: off, `railSplitAtMm` is empty at both sites
+  — the PDF composer (`pdfPrefs.undercutSplitAtLinerEdge`) and the detail canvas (the route
+  passes the VM mirror to the overlay's `splitAtLinerEdge`, a key of its `railSplitAtMm`
+  `remember`, so the rail restyles on toggle); on, the chain is byte-identical to the node rule.
+  `buildUndercutRailSpans(splitAtMm)` and `undercutCanvasRailStops` are unchanged. An
+  Undercut-tab preview re-render key.
+
 - **Strips — liner-anchored vs free windows.** The zoomed-view unit consumed by the overview
   affordances, the detail overlay, and the PDF is a sealed `UndercutStrip`, not a bare
   `UndercutWindow`:
@@ -522,10 +555,38 @@ data class UndercutRecord(val undercuts: List<Undercut> = emptyList())
     the previous pass only, so the result does not depend on input order. `buildUndercutStrips`
     and the route's per-liner strip and cut counts all use it; the strip's chain range extends to
     the outermost chained shoulder like any other overhang.
-  - `linerStripFor(liner, assignedSpans, oalMm, padMm, segs)` — builds one `LinerStrip` for a
-    liner and its assigned cuts (`assignedSpans` may be empty — used to zoom an undercut-free
-    liner for authoring, in which case the chain/draw range is just the liner's own span,
-    padded). The padded draw range then gets break room against `segs`.
+  - `linerStripFor(liner, assignedSpans, oalMm, padMm, segs, cutSpans, reachToSetMm, aftSetMm,
+    fwdSetMm)` — builds
+    one `LinerStrip` for a liner and its assigned cuts (`assignedSpans` may be empty — used to
+    zoom an undercut-free liner for authoring, in which case the chain/draw range is just the
+    liner's own span, padded). The padded draw range then gets break room against `segs`.
+  - **Draw to the shaft end** (`reachToSetMm`, default `0` = off; on-device request: when a liner
+    sits close to a shaft end the shop sketch dimensions the run from the last cut to the S.E.T.,
+    "12 3/4 to the S.E.T."). Every caller passes `undercutSetReachMm(record.drawToSet)` —
+    `UNDERCUT_SET_REACH_MM` (609.6 mm = 24 in, the knob) or `0` — and the shaft's S.E.T.
+    positions in physical mm (`aftSetMm`/`fwdSetMm`, defaults `0`/`oalMm`: the route passes
+    `undercutSetPositions(spec)`, the PDF composer its own `computeSetPositionsInMeasureSpace`
+    values, which are the same computation). **The chain ends at the S.E.T.; the draw range runs
+    to the physical end.** After the chain range is taken from the liner span + overhang, a chain
+    END at or inboard of the FWD S.E.T. and within the reach of it (`chainEnd ≤ fwdSet` and
+    `fwdSet − chainEnd ≤ reach`) moves onto it (`chainEnd = fwdSet`) and the draw end is forced
+    to the OAL; the AFT end mirrors it (`chainStart ≥ aftSet`, `chainStart − aftSet ≤ reach` →
+    `chainStart = aftSet`, draw start forced to `0`). A FWD thread counted in the OAL therefore
+    draws beyond the S.E.T., undimensioned, and the chain's last span is cut-to-S.E.T. A chain
+    already past its S.E.T. (a cut run into the thread) is left alone. The forced end is the
+    shaft's physical end (`withUndercutBreakRoom` leaves an end at `0` / the OAL alone), so it
+    draws **flat** — no S-break — at both draw sites (the PDF's `drawUndercutWindowEnd` and the
+    detail canvas's strip-end pass both draw flat at `0` / the shaft extent;
+    `computeUndercutStripDrawRange` never pushes past it).
+    The level-0 chain then needs no new rule: `buildUndercutRailSpans`' trailing cursor → chain-end
+    span **is** the run from the last top-level cut to the FWD S.E.T. (and the leading span the run
+    from the AFT S.E.T.), and the canvas rail stops inherit it from the strip's chain range. The
+    **total span is unchanged** — still the run across the top-level cuts — and so is the strip
+    title. **Liner strips only**: `buildUndercutStrips(…, reachToSetMm, aftSetMm, fwdSetMm)`
+    forwards them to every `linerStripFor` call; free strips ignore them. The route's strips (and its per-liner
+    `stripForLiner`), the detail overlay (which receives the route's strip, rebuilt on every record
+    change and keyed on the flag through the strips `remember`), and the PDF composer
+    (`effectiveRecord.drawToSet`, cut strips and started strips alike) all pass it.
   - `undercutPreviewDrawRange(strip, previewSpans, oalMm, padMm, segs)` — the range the **detail
     overlay** actually renders: the strip's draw range **widened, never narrowed**, to hold the
     previewed spans (stored cuts with the live draft substituted). A draft edited past the
@@ -535,7 +596,8 @@ data class UndercutRecord(val undercuts: List<Undercut> = emptyList())
     draft shrinks a cut that had extended it. The widened range gets break room against `segs`
     (widening only, so the never-narrow rule holds). PDF strips don't need this (they only ever
     see confirmed cuts, which `linerStripFor`/`clusterUndercuts` already extend for).
-  - `buildUndercutStrips(spans, liners, oalMm, gapMm, padMm, segs)` — every cut overlapping a
+  - `buildUndercutStrips(spans, liners, oalMm, gapMm, padMm, segs, reachToSetMm, aftSetMm,
+    fwdSetMm)` — every cut overlapping a
     liner, or chained to one that does (`assignUndercutLiners`), joins that liner's `LinerStrip`
     (one strip per liner holding ≥1 cut); the remaining
     bare-shaft cuts cluster into `FreeStrip`s via `clusterUndercuts`. Every strip's draw range
@@ -1085,10 +1147,12 @@ the chained run below it. The chain runs over the strip's **chain range**
 window (the original window-edge chain; the draw range may extend past it by break room,
 undimensioned); on a `LinerStrip` the chain anchors on the **liner's own edges**
 (extended only by cut overhang), so the pad between a break edge and the liner edge is never
-dimensioned. A **buried** liner edge (some previewed cut on the sheet runs past it,
-`buriedUndercutLinerEdgesMm`) is an extra chain node inserted inside the span that crosses it —
+dimensioned; with "Draw to the shaft end" on, a liner strip's chain range may end at an S.E.T.
+(its draw range at the shaft end beyond it), and the stops inherit it. While `PdfPrefs.undercutSplitAtLinerEdge` is on (default off — the
+overlay's `splitAtLinerEdge`), a **buried** liner edge (some previewed cut on the sheet runs past
+it, `buriedUndercutLinerEdgesMm`) is an extra chain node inserted inside the span that crosses it —
 the printed strip's `splitAtMm` rule, applied to the canvas's own stop list
-(`undercutCanvasRailStops`). The chain's **labels stack** (on-device report: "I do want the
+(`undercutCanvasRailStops`); off, no node, so every cut reads its full length. The chain's **labels stack** (on-device report: "I do want the
 dimensions to stack"): `planUndercutCanvasRail` runs the stops' spans through the printed strip's
 ONE label planner, `layoutWearStripRail` — a value centred on its span, slid inside it when it
 fits, and a value that would overlap an already-placed one taking the next row up — and each
@@ -1301,7 +1365,13 @@ strips minus a 22 pt orientation row, so a lone full-width strip owns ≈ 414 pt
     strip's **TOP-LEVEL spans only**: the forward cursor pulls an overlapping span's start up to
     itself, which collapses a fully NESTED cut to zero width and drops it silently. (That absorb
     rule stays — it is what keeps a legacy partially-overlapping pair from double-counting;)
-    **Buried liner edge node**: a `LinerStrip` passes its buried edges
+    **Draw to the shaft end** (`UndercutRecord.drawToSet`): a `LinerStrip` whose chain range was
+    carried to an S.E.T. (`linerStripFor`'s `reachToSetMm`) gets its trailing span — last
+    top-level cut → FWD S.E.T. — (or its leading span from the AFT S.E.T.) from the same cursor
+    walk, with no new rail rule; any stock past the S.E.T. (a thread) draws out to the shaft end
+    undimensioned, and the total span above stays the run across the cuts.
+    **Buried liner edge node** (only while `PdfPrefs.undercutSplitAtLinerEdge` is on — default
+    off, so every cut prints its full length): a `LinerStrip` passes its buried edges
     (`buriedUndercutLinerEdgesMm` over every live cut on the sheet) as `splitAtMm`, and a chained
     span strictly containing one is dimensioned as two spans meeting there — a cut overhanging
     the AFT edge reads `[shoulder → liner edge]` then `[liner edge → next node]`. Without the
@@ -1430,6 +1500,15 @@ strips minus a 22 pt orientation row, so a lone full-width strip owns ≈ 414 pt
   assignment (`assignUndercutLiner`), and the chain range are all decided by the undercut's
   actual shaft-space span versus the liner's actual span; the stored reference liner only
   affects what the Distance field shows and converts against.
+- **A cut prints its whole length unless the split pref asks otherwise** — the buried-edge chain
+  node is fed only while `PdfPrefs.undercutSplitAtLinerEdge` is on (default off), at BOTH draw
+  sites from the same `buriedUndercutLinerEdgesMm`; the pref never reaches `buildUndercutRailSpans`
+  or `undercutCanvasRailStops` themselves.
+- **"Draw to the shaft end" moves only the chain/draw range of a liner strip** —
+  `UndercutRecord.drawToSet` → `linerStripFor(reachToSetMm = UNDERCUT_SET_REACH_MM, aftSetMm,
+  fwdSetMm)` at every strip builder call site; the chain ends at the S.E.T., the draw range at the
+  physical end, which draws flat; no stored cut, no total span, no strip title and no free strip
+  changes, and a chain already past its S.E.T. is untouched.
 
 ---
 

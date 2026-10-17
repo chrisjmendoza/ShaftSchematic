@@ -16,6 +16,8 @@ import com.android.shaftschematic.geom.clampUndercutSpan
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
 import com.android.shaftschematic.geom.linerStripFor
+import com.android.shaftschematic.geom.buriedUndercutLinerEdgesMm
+import com.android.shaftschematic.geom.UNDERCUT_SET_REACH_MM
 import com.android.shaftschematic.geom.maxOuterDiaOver
 import com.android.shaftschematic.geom.outerDiaAt
 import com.android.shaftschematic.geom.planDiaCallouts
@@ -142,6 +144,25 @@ class UndercutStripSvgPreviewTest {
     }
 
     private val baseScenario = Scenario(components, spec, oalMm, aftSetMm, fwdSetMm)
+
+    /** The on-device job (fixture `undercut_polar_ranger_stbd.shaft`) and its five cuts. */
+    private val jobDoc by lazy {
+        com.android.shaftschematic.doc.ShaftDocCodec.decode(
+            requireNotNull(javaClass.classLoader?.getResource("fixtures/undercut_polar_ranger_stbd.shaft")).readText(),
+        )
+    }
+
+    private val jobScenario: Scenario by lazy {
+        val spec = jobDoc.spec
+        val sets = computeSetPositionsInMeasureSpace(computeOalWindow(spec), spec)
+        Scenario(
+            components = com.android.shaftschematic.ui.resolved.resolveComponents(spec),
+            spec = spec,
+            oalMm = spec.overallLengthMm,
+            aftSetMm = sets.aftSETxMm.toFloat(),
+            fwdSetMm = sets.fwdSETxMm.toFloat(),
+        )
+    }
 
     /**
      * The on-device case: a taper 0 → 25-3/16" (S.E.T. Ø 8.26"), a 1/4" body, then the AFT
@@ -424,6 +445,10 @@ class UndercutStripSvgPreviewTest {
          * surface; an inboard face steps off the parent's drawn floor.
          */
         val nestedSurfaceEndDias: Map<String, List<Float>>,
+        /** The level-0 chain's labels, aft → fwd, as one-line strings. */
+        val railLabels: List<String>,
+        /** Strip ends drawn as a flat physical end (the shaft's own end) rather than an S-break. */
+        val flatEnds: Int,
     )
 
     private fun renderStrip(
@@ -433,6 +458,10 @@ class UndercutStripSvgPreviewTest {
         stripTop: Float = BAND_TOP,
         stripBottom: Float = BAND_BOTTOM,
         sc: Scenario = baseScenario,
+        /** "Draw to the shaft end" — the strip builders' `reachToSetMm` (`UndercutRecord.drawToSet`). */
+        reachToSetMm: Float = 0f,
+        /** `PdfPrefs.undercutSplitAtLinerEdge`: feed the buried liner edges as chain nodes. */
+        splitAtLinerEdge: Boolean = false,
     ): StripResult {
         val components = sc.components
         val spec = sc.spec
@@ -451,13 +480,19 @@ class UndercutStripSvgPreviewTest {
         // clamped spans, the containment forest, true floors, and the per-sheet drawn-depth
         // normalization — so a nested cut arrives already cut against its parent's floor.
         val sheetNotches = buildUndercutNotches(undercuts, segs, oalMm, exaggerationFrac)
-        val strips = buildUndercutStrips(liveSpans, linerSpans, oalMm, segs = segs)
+        val strips = buildUndercutStrips(
+            liveSpans, linerSpans, oalMm, segs = segs,
+            reachToSetMm = reachToSetMm, aftSetMm = aftSetMm, fwdSetMm = fwdSetMm,
+        )
         // Nothing recorded ⇒ the STARTED-strip page: one `linerStripFor` per drawable liner,
         // drawn to scale but dimensioned nowhere, for the machinist to sketch into.
         val started = undercuts.isEmpty()
         val strip: UndercutStrip = if (started) {
             assertTrue("an empty record yields no cut-derived strips", strips.isEmpty())
-            linerStripFor(linerSpans.single(), emptyList(), oalMm, segs = segs)
+            linerStripFor(
+                linerSpans.single(), emptyList(), oalMm, segs = segs,
+                reachToSetMm = reachToSetMm, aftSetMm = aftSetMm, fwdSetMm = fwdSetMm,
+            )
         } else {
             assertEquals("the scenario must read as one detail strip", 1, strips.size)
             strips[0]
@@ -487,8 +522,13 @@ class UndercutStripSvgPreviewTest {
         // anchored at their parent's edges — the composer's split, exactly.
         val nestingById = undercutNestingForest(spans).associateBy { it.id }
         val topSpans = spans.filter { (nestingById[it.id]?.level ?: 0) == 0 }
+        // The composer's split-node rule: buried edges only while the pref is on.
+        val railSplitAtMm = (strip as? UndercutStrip.LinerStrip)
+            ?.takeIf { splitAtLinerEdge }
+            ?.let { buriedUndercutLinerEdgesMm(it.linerStartMm, it.linerEndMm, liveSpans) }
+            ?: emptyList()
         val railSpans = if (started) emptyList()
-        else buildUndercutRailSpans(strip.chainStartMm, strip.chainEndMm, topSpans, unit)
+        else buildUndercutRailSpans(strip.chainStartMm, strip.chainEndMm, topSpans, unit, splitAtMm = railSplitAtMm)
         val totalSpan = if (started) null else buildUndercutTotalSpan(topSpans, unit)
         val nestedRows = if (started) emptyList() else buildNestedUndercutRailRows(spans, unit)
         // Chain before the vertical split, composer order: the split reserves the rows used,
@@ -593,10 +633,17 @@ class UndercutStripSvgPreviewTest {
             }
         }
         // Cut ends — amplitude capped exactly as `drawUndercutWindowEnd` caps it, so the preview
-        // shows the real lobe size rather than an ear the PDF no longer draws.
+        // shows the real lobe size rather than an ear the PDF no longer draws. A draw-range end
+        // that IS the shaft's physical end is a flat edge, the composer's rule.
+        var flatEnds = 0
         listOf(drawStartMm to true, drawEndMm to false).forEach { (atMm, eyeAtTop) ->
             val r = rAt(outerDiaAt(segs, atMm))
-            svg.breakEdge(xAt(atMm), cy - r, cy + r, minOf(r * UNDERCUT_BREAK_AMP_FRAC_OF_R, UNDERCUT_BREAK_AMP_MAX_PT), eyeAtTop)
+            if (atMm <= 1e-3f || atMm >= oalMm - 1e-3f) {
+                svg.line(xAt(atMm), cy - r, xAt(atMm), cy + r, w = 1.2f)
+                flatEnds++
+            } else {
+                svg.breakEdge(xAt(atMm), cy - r, cy + r, minOf(r * UNDERCUT_BREAK_AMP_FRAC_OF_R, UNDERCUT_BREAK_AMP_MAX_PT), eyeAtTop)
+            }
         }
 
         // Notches — white void from surface to floor, mirrored (mouth stays OPEN — no lid),
@@ -741,6 +788,8 @@ class UndercutStripSvgPreviewTest {
                     val p = n.profiles.first()
                     n.id to listOf(p.surface.first().diaMm, p.surface.last().diaMm)
                 },
+            railLabels = railSpans.map { it.label.inline() },
+            flatEnds = flatEnds,
         )
     }
 
@@ -949,7 +998,41 @@ class UndercutStripSvgPreviewTest {
         }
         assertEquals("the outer AFT face still rises to the liner OD", 248f, lEnds.getValue("ba").first(), 1e-3f)
 
+        // M) THE ON-DEVICE JOB with "Draw to the shaft end": the FWD liner sits 18 1/4" from the
+        //    FWD S.E.T., so its strip draws out to the shaft end (a flat end, no break) and the
+        //    chain carries the run from the last cut to the S.E.T. — the sketch's 12 3/4". With
+        //    the split pref OFF (the default) the 9 1/4" cut machined past the liner's FWD edge
+        //    prints its whole length as ONE value.
+        val jobCuts = jobDoc.undercutRecord.undercuts
+        val m = renderStrip(jobCuts, sc = jobScenario, reachToSetMm = UNDERCUT_SET_REACH_MM)
+        File(outDir, "m-job-draw-to-set.svg").writeText(m.svg)
+        // This shaft's FWD S.E.T. is its shaft end (the FWD taper ends at the OAL).
+        assertEquals("the chain runs on to the FWD S.E.T.", jobScenario.fwdSetMm, m.strip.chainEndMm, 1e-3f)
+        assertEquals(jobScenario.oalMm, jobScenario.fwdSetMm, 1e-3f)
+        assertEquals("the strip draws out to the shaft end", jobScenario.oalMm, m.strip.drawEndMm, 1e-3f)
+        assertEquals("the shaft end draws flat, no break", 1, m.flatEnds)
+        assertTrue("the run to the S.E.T. is dimensioned (${m.railLabels})", "12 3/4\"" in m.railLabels)
+        assertEquals("the run to the S.E.T. closes the chain", "12 3/4\"", m.railLabels.last())
+        assertTrue("the edge-crossing cut prints whole (${m.railLabels})", "9 1/4\"" in m.railLabels)
+        assertFalse(m.railLabels.any { it == "3 3/4\"" || it == "5 1/2\"" })
+        assertTrue(m.chainCoversStrip)
+
+        // N) The same with "Split cuts at liner edges" ON: the 9 1/4" cut reads 3 3/4" inside the
+        //    liner and 5 1/2" past its FWD edge, the chain still closing on the 12 3/4" run.
+        val n = renderStrip(jobCuts, sc = jobScenario, reachToSetMm = UNDERCUT_SET_REACH_MM, splitAtLinerEdge = true)
+        File(outDir, "n-job-draw-to-set-split.svg").writeText(n.svg)
+        assertTrue("split at the buried FWD edge (${n.railLabels})", "3 3/4\"" in n.railLabels && "5 1/2\"" in n.railLabels)
+        assertFalse("9 1/4\"" in n.railLabels)
+        assertEquals("12 3/4\"", n.railLabels.last())
+        assertTrue(n.chainCoversStrip)
+
+        // Without the reach the strip stops at the liner's own chain: no run to the S.E.T.
+        val plain = renderStrip(jobCuts, sc = jobScenario)
+        assertTrue(plain.strip.chainEndMm < jobScenario.oalMm - 1f)
+        assertFalse("12 3/4\"" in plain.railLabels)
+        assertEquals(0, plain.flatEnds)
+
         assertNotNull(outDir.listFiles())
-        assertEquals(12, outDir.listFiles()!!.count { it.name.endsWith(".svg") })
+        assertEquals(14, outDir.listFiles()!!.count { it.name.endsWith(".svg") })
     }
 }

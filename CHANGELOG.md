@@ -8,6 +8,20 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-17
 
+### feat(undercut): cut lengths on the chain rail; draw to the shaft end
+
+- The undercut sheet's chain rail now prints each cut's full length, the way the shop measures
+  it. A cut machined past a liner edge was dimensioned as two spans meeting at the edge
+  (1 1/4" printed as 15/16" + 5/16"); that split is now the app-wide drawing option "Split cuts
+  at liner edges" (`PdfPrefs.undercutSplitAtLinerEdge`, off by default), beside "Liner outline"
+  on the undercut sheet's options and in Settings → PDF Export Options (on-device direction).
+- New per-job switch "Draw to the shaft end" on the Undercut tab under the depth slider
+  (`UndercutRecord.drawToSet`): a liner strip whose chain ends within 24" of its S.E.T.
+  (`UNDERCUT_SET_REACH_MM`) draws out to the shaft end with a flat end and the chain gains the run
+  from the last cut to the S.E.T., so a sketch's "12 3/4 to the S.E.T." lands on the sheet (on-device
+  request). Liner strips only; the total span is unchanged. `UndercutMathTest`,
+  `UndercutStripSvgPreviewTest`, `UndercutRecordPersistenceTest`; `UndercutDrawing.md`.
+
 ### fix(undercut): liner outline end faces show the whole erased height
 
 - The dotted liner outline's end face at an edge a cut has run across is now one continuous

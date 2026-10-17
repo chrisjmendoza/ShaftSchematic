@@ -458,6 +458,10 @@ can never affect geometry resolution:
   measurement stored verbatim (`0` = placed-but-empty, never printed).
   `exaggerationFrac` (`0..UNDERCUT_EXAGGERATION_MAX_FRAC` = 0.25, default 0.25) is a
   per-sheet **drawn-depth** exaggeration only — printed Ø values stay the stored numbers.
+  `drawToSet` (`Boolean`, default `false`, additive — older files read `false`) is the per-job
+  "Draw to the shaft end" switch: a liner strip whose chain ends within `UNDERCUT_SET_REACH_MM`
+  (24 in) of its S.E.T. draws out to the shaft end and its chain rail ends at the S.E.T. Display and
+  dimensioning only; no stored value moves.
 
 **Orphan policy** differs by key type: wear *spots* (liner-id-keyed, ids the codec knows)
 are pruned at **decode**; pits, measured-Ø readings, runout readings, and runout station

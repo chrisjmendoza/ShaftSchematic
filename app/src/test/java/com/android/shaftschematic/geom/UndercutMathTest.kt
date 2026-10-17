@@ -1705,4 +1705,120 @@ class UndercutMathTest {
         assertEquals(1500f + max(UNDERCUT_WINDOW_PAD_MM, undercutBreakRoomMm(228.6f)), ls.drawEndMm, 1e-3f)
         assertTrue(strips.any { it is UndercutStrip.FreeStrip && "foreign" in it.undercutIds })
     }
+
+    // ── "Draw to the shaft end" (UndercutRecord.drawToSet → linerStripFor's reachToSetMm) ──
+
+    @Test
+    fun `a chain end within the reach moves onto the FWD shaft end and the draw range ends there`() {
+        val oal = 3000f
+        val liner = UndercutLinerSpan("L", 2000f, 2600f)
+        val segs = listOf(seg(0f, 2000f, 228.6f), seg(2000f, 2600f, 254f), seg(2600f, oal, 228.6f))
+        val cut = listOf(UndercutSpanMm("c", 2500f, 2700f))
+        val s = linerStripFor(liner, cut, oal, segs = segs, cutSpans = cut, reachToSetMm = UNDERCUT_SET_REACH_MM)
+        assertEquals(oal, s.chainEndMm, 1e-3f)
+        assertEquals(oal, s.drawEndMm, 1e-3f)
+        // The AFT edge is 2000 mm from the AFT end — beyond the reach, so it stays on the liner.
+        assertEquals(2000f, s.chainStartMm, 1e-3f)
+        assertTrue(s.drawStartMm < 2000f)
+    }
+
+    @Test
+    fun `a chain end beyond the reach is unchanged`() {
+        val oal = 3000f
+        val liner = UndercutLinerSpan("L", 1000f, 1600f)
+        val cut = listOf(UndercutSpanMm("c", 1100f, 1200f))
+        val on = linerStripFor(liner, cut, oal, reachToSetMm = UNDERCUT_SET_REACH_MM)
+        val off = linerStripFor(liner, cut, oal)
+        assertEquals(off, on)
+        assertEquals(1600f, on.chainEndMm, 1e-3f)
+    }
+
+    @Test
+    fun `an AFT chain start within the reach moves onto the AFT shaft end`() {
+        val liner = UndercutLinerSpan("L", 400f, 1000f)
+        val cut = listOf(UndercutSpanMm("c", 500f, 600f))
+        val s = linerStripFor(liner, cut, 3000f, reachToSetMm = UNDERCUT_SET_REACH_MM)
+        assertEquals(0f, s.chainStartMm, 1e-3f)
+        assertEquals(0f, s.drawStartMm, 1e-3f)
+        assertEquals(1000f, s.chainEndMm, 1e-3f)
+    }
+
+    @Test
+    fun `reach zero is byte-identical to the default strip`() {
+        val oal = 3000f
+        val liner = UndercutLinerSpan("L", 2000f, 2900f)
+        val segs = listOf(seg(0f, 2000f, 228.6f), seg(2000f, 2900f, 254f), seg(2900f, oal, 228.6f))
+        val cut = listOf(UndercutSpanMm("c", 2100f, 2200f))
+        assertEquals(
+            linerStripFor(liner, cut, oal, segs = segs, cutSpans = cut),
+            linerStripFor(liner, cut, oal, segs = segs, cutSpans = cut, reachToSetMm = 0f),
+        )
+        assertEquals(0f, undercutSetReachMm(false), 0f)
+        assertEquals(UNDERCUT_SET_REACH_MM, undercutSetReachMm(true), 0f)
+    }
+
+    @Test
+    fun `the chain ends at the FWD SET while the draw range runs on to the shaft end`() {
+        // A FWD thread counted in the OAL: the S.E.T. (1900) sits inboard of the shaft end (2000).
+        val oal = 2000f
+        val liner = UndercutLinerSpan("L", 1000f, 1500f)
+        val cut = listOf(UndercutSpanMm("c", 1450f, 1600f))
+        val s = linerStripFor(
+            liner, cut, oal, cutSpans = cut,
+            reachToSetMm = UNDERCUT_SET_REACH_MM, aftSetMm = 100f, fwdSetMm = 1900f,
+        )
+        assertEquals(1900f, s.chainEndMm, 1e-3f)
+        assertEquals(oal, s.drawEndMm, 1e-3f)
+        // The AFT edge is 900 mm from the AFT S.E.T. — beyond the reach.
+        assertEquals(1000f, s.chainStartMm, 1e-3f)
+    }
+
+    @Test
+    fun `a chain already past the SET is left alone`() {
+        // A cut run into the FWD thread, beyond the S.E.T. at 1900.
+        val oal = 2000f
+        val liner = UndercutLinerSpan("L", 1400f, 1800f)
+        val cut = listOf(UndercutSpanMm("c", 1700f, 1950f))
+        val on = linerStripFor(
+            liner, cut, oal, reachToSetMm = UNDERCUT_SET_REACH_MM, aftSetMm = 100f, fwdSetMm = 1900f,
+        )
+        val off = linerStripFor(liner, cut, oal)
+        assertEquals(off, on)
+        assertEquals(1950f, on.chainEndMm, 1e-3f)
+    }
+
+    @Test
+    fun `the AFT SET mirror moves the chain onto it and the draw range to zero`() {
+        val liner = UndercutLinerSpan("L", 400f, 1000f)
+        val cut = listOf(UndercutSpanMm("c", 500f, 600f))
+        val s = linerStripFor(
+            liner, cut, 3000f, reachToSetMm = UNDERCUT_SET_REACH_MM, aftSetMm = 150f, fwdSetMm = 3000f,
+        )
+        assertEquals(150f, s.chainStartMm, 1e-3f)
+        assertEquals(0f, s.drawStartMm, 1e-3f)
+    }
+
+    @Test
+    fun `buildUndercutStrips forwards the reach to liner strips only`() {
+        val oal = 3000f
+        val liner = UndercutLinerSpan("L", 2000f, 2500f)
+        val inLiner = UndercutSpanMm("in", 2100f, 2200f)
+        // A bare-shaft cut near the FWD end, well clear of the liner's chain.
+        val bare = UndercutSpanMm("bare", 2800f, 2850f)
+        val off = buildUndercutStrips(listOf(inLiner, bare), listOf(liner), oal)
+        val on = buildUndercutStrips(listOf(inLiner, bare), listOf(liner), oal, reachToSetMm = UNDERCUT_SET_REACH_MM)
+        val linerOn = on.filterIsInstance<UndercutStrip.LinerStrip>().single()
+        assertEquals(oal, linerOn.chainEndMm, 1e-3f)
+        // The S.E.T.s are forwarded too.
+        val setOn = buildUndercutStrips(
+            listOf(inLiner, bare), listOf(liner), oal,
+            reachToSetMm = UNDERCUT_SET_REACH_MM, aftSetMm = 50f, fwdSetMm = 2950f,
+        ).filterIsInstance<UndercutStrip.LinerStrip>().single()
+        assertEquals(2950f, setOn.chainEndMm, 1e-3f)
+        assertEquals(oal, setOn.drawEndMm, 1e-3f)
+        assertEquals(
+            off.filterIsInstance<UndercutStrip.FreeStrip>(),
+            on.filterIsInstance<UndercutStrip.FreeStrip>(),
+        )
+    }
 }

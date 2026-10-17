@@ -182,6 +182,8 @@ object SettingsStore {
     private val KEY_PDF_UNDERCUT_LINE_ART = booleanPreferencesKey("pdf_undercut_line_art")
     // Dotted retrace of each liner's original edges over the cuts on the undercut drawing.
     private val KEY_PDF_UNDERCUT_LINER_OUTLINE = booleanPreferencesKey("pdf_undercut_liner_outline")
+    // Chain-rail node at each liner edge a cut runs past, on the undercut drawing's strips.
+    private val KEY_PDF_UNDERCUT_SPLIT_AT_LINER_EDGE = booleanPreferencesKey("pdf_undercut_split_at_liner_edge")
     private val KEY_PDF_CURVE_LO_HEIGHT_IN = floatPreferencesKey("pdf_curve_lo_height_in")
     private val KEY_PDF_CURVE_HI_HEIGHT_IN = floatPreferencesKey("pdf_curve_hi_height_in")
     private val KEY_PDF_SBREAK_THRESHOLD_FRAC = floatPreferencesKey("pdf_sbreak_threshold_frac")
@@ -281,6 +283,13 @@ object SettingsStore {
         ctx.settingsPrefs.map { p -> p[KEY_PDF_UNDERCUT_LINER_OUTLINE] ?: PdfPrefs().undercutLinerOutline }
     suspend fun setPdfUndercutLinerOutline(ctx: Context, v: Boolean) {
         ctx.editSettings { it[KEY_PDF_UNDERCUT_LINER_OUTLINE] = v }
+    }
+
+    /** The undercut drawing's split-at-liner-edge chain nodes — see the key's comment. */
+    fun pdfUndercutSplitAtLinerEdgeFlow(ctx: Context): Flow<Boolean> =
+        ctx.settingsPrefs.map { p -> p[KEY_PDF_UNDERCUT_SPLIT_AT_LINER_EDGE] ?: PdfPrefs().undercutSplitAtLinerEdge }
+    suspend fun setPdfUndercutSplitAtLinerEdge(ctx: Context, v: Boolean) {
+        ctx.editSettings { it[KEY_PDF_UNDERCUT_SPLIT_AT_LINER_EDGE] = v }
     }
 
     // Sizing-curve anchor heights (paper inches): what a 4" / 8" shaft draws by default.

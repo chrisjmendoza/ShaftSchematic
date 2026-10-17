@@ -523,13 +523,13 @@ fun buildUndercutRailSpans(
      * Extra chain NODES: every chained span strictly containing one of these stations (more than
      * the rail epsilon inside it on both sides) is dimensioned as two spans meeting there, so the
      * lengths still sum to the chain. A liner strip passes its BURIED edges
-     * (`geom/UndercutMath.kt`'s `buriedUndercutLinerEdgesMm`): a cut machined past the liner's
-     * end into the body has taken away the step that edge made, and without a node there the
-     * overhanging cut is dimensioned only from its own shoulder in the body, which nothing else
-     * on the sheet ties to a datum. Split at the edge, the overhang reads against the liner
-     * edge's position, and the strip title's liner-to-S.E.T. figure stays the locating datum. A
-     * station outside every span, or on an existing node, changes nothing; the default empty
-     * list leaves the chain exactly as it was.
+     * (`geom/UndercutMath.kt`'s `buriedUndercutLinerEdgesMm`) only while
+     * `PdfPrefs.undercutSplitAtLinerEdge` is on ("Split cuts at liner edges"): split at the
+     * edge, a cut machined past the liner's end into the body reads against the liner edge's
+     * position, and the strip title's liner-to-S.E.T. figure stays the locating datum. The pref
+     * is off by default because the shop measures the length of each cut, so a cut prints whole
+     * (on-device direction). A station outside every span, or on an existing node, changes
+     * nothing; the default empty list leaves the chain exactly as it was.
      */
     splitAtMm: List<Float> = emptyList(),
 ): List<WearRailSpan> {
