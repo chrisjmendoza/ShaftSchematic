@@ -33,9 +33,11 @@ private const val UNDERCUT_RAIL_HALO_PAD_Y_PT = 0.5f
  * vertically centred — the schematic's value-in-a-break convention. A label wider than its span
  * falls back to the stacked rows `layoutWearStripRail` assigned, clamped to [maxLabelRows].
  * [fallbackLabelAbove] stacks those rows ABOVE the line instead of below — the total-span rail
- * (whose space below is the chained rail's) and a single-level chain with no total above it
+ * (whose space below is the chained rail's), a single-level chain with no total above it
  * (`planUndercutRailRows`: a small value pushed under the span line reads as orphaned when
- * nothing sits above the rail — on-device report).
+ * nothing sits above the rail — on-device report), and every nested row (below its line a value
+ * would land on the shaft's top surface — on-device report). Baselines come from
+ * [undercutRailFallbackBaselineY].
  *
  * [drawLabels] = false (blank write-in draft) keeps every line and arrowhead but skips the
  * values — the lines-in/values-out template rule.
@@ -67,7 +69,6 @@ internal fun drawUndercutRail(
 ) {
     if (layout.isEmpty()) return
     val arrow = UNDERCUT_RAIL_ARROW_PT * scale
-    val labelGap = UNDERCUT_RAIL_LABEL_GAP_PT * scale
     // Row pitch comes from the LAYOUT constant, not the text size, so the rows drawn here and
     // the rows `computeUndercutStripInnerLayout` budgeted cannot drift apart.
     val rowStep = undercutRailRowHeightPt(dimText, dualStacked, scale)
@@ -119,16 +120,9 @@ internal fun drawUndercutRail(
         }
         val row = s.labelRow.coerceAtMost(maxLabelRows - 1)
         if (row < 0) return@forEach
-        val baselineY = if (fallbackLabelAbove) {
-            // Above the line, clear of the arrowheads straddling it, stacking upward. On the
-            // total-span rail (always one span) row 0 is the whole band
-            // ([UNDERCUT_TOTAL_RAIL_ABOVE_PT] is sized to hold exactly it); on a single-level
-            // chain the rows come from the reserved `chainAboveBandPt`.
-            railY - arrow * 0.5f - labelGap - fm.descent - row * rowStep
-        } else {
-            // First row starts clear of the outward arrowheads straddling the rail line.
-            railY + arrow + labelGap + dimText.textSize + row * rowStep
-        }
+        val baselineY = undercutRailFallbackBaselineY(
+            railY, row, fallbackLabelAbove, rowStep, dimText.textSize, fm.descent, scale,
+        )
         // The halo covers the WHOLE value, both lines of a stack included, or a line would run
         // through the term it did not cover.
         val stackH = if (s.label.setsStacked(dualStacked)) dimText.dualStackMetrics().advance else 0f
@@ -142,6 +136,54 @@ internal fun drawUndercutRail(
 }
 
 /**
+ * Baseline of a rail value that falls back off its line, in row [row] (0 nearest the line).
+ * [above] stacks the rows upward from just over the arrowheads straddling the line; otherwise
+ * row 0 starts clear of the arrowheads below it. On the total-span rail (always one span) row 0
+ * above is the whole band ([UNDERCUT_TOTAL_RAIL_ABOVE_PT] is sized to hold exactly it); on a
+ * single-level chain and on a nested row the rows above come from the band reserved over that
+ * line. [textSize] and [descent] are the label paint's (descent positive); [scale] is
+ * `drawUndercutRail`'s.
+ */
+internal fun undercutRailFallbackBaselineY(
+    railY: Float,
+    row: Int,
+    above: Boolean,
+    rowStep: Float,
+    textSize: Float,
+    descent: Float,
+    scale: Float = 1f,
+): Float {
+    val arrow = UNDERCUT_RAIL_ARROW_PT * scale
+    val labelGap = UNDERCUT_RAIL_LABEL_GAP_PT * scale
+    return if (above) railY - arrow * 0.5f - labelGap - descent - row * rowStep
+    else railY + arrow + labelGap + textSize + row * rowStep
+}
+
+/**
+ * Y of each nesting level's rail line, in [UndercutStripRails.nested] order — the ONE stepping
+ * behind [drawUndercutStripRails] and every test that checks it. The levels stack under the
+ * chain's own label rows (what the strip granted, [railLabelRows] less the plan's `nestedRows`);
+ * each level claims its fallback rows ([undercutRailFallbackRows]) and then one row for its line,
+ * so its fallback values sit ABOVE the line, between the previous line's labels and this one. The
+ * band is the one `planUndercutRailRows` reserved — only the order within it is fixed here — and
+ * a line never drops below [witnessBottomY].
+ */
+internal fun undercutNestedRailLineYs(
+    rails: UndercutStripRails,
+    chainRailY: Float,
+    railLabelRows: Int,
+    rowStep: Float,
+    witnessBottomY: Float,
+): List<Float> {
+    val chainBelowRows = (railLabelRows - rails.rows.nestedRows).coerceAtLeast(0)
+    var rowY = chainRailY + chainBelowRows * rowStep
+    return rails.nested.map { lay ->
+        rowY += (1 + undercutRailFallbackRows(lay)) * rowStep
+        rowY.coerceAtMost(witnessBottomY)
+    }
+}
+
+/**
  * Draws one strip's whole rail stack from its plan ([planUndercutStripRails]) — the level-0
  * chain, one extra row per nesting level stacked UNDER it, and the total above it — the ONE
  * sequence the printed strip and the detail canvas both run.
@@ -149,7 +191,8 @@ internal fun drawUndercutRail(
  * Chained dimensions run most-detailed nearest the part, and a nested cut is located against its
  * PARENT's edges, not the strip's datums. Parents at one level are disjoint, so a level always
  * lays out on a single row. Rows step by the ONE row-height metric the reserved band was budgeted
- * with (`planUndercutRailRows`), each line clearing the fallback labels of the row above it.
+ * with (`planUndercutRailRows`, [undercutNestedRailLineYs]); a nested row's fallback values sit
+ * above its own line, clear of the chain's labels and of the shaft below.
  *
  * [railLabelRows] is the label rows the strip actually granted below the chain — the plan's
  * `belowRows`, or fewer where a short band clamps it — and the nested rows follow it down.
@@ -187,23 +230,21 @@ internal fun drawUndercutStripRails(
     )
     if (rails.nested.isNotEmpty()) {
         val rowStep = undercutRailRowHeightPt(dimText, dualStacked, scale)
-        // Rows the chain's own labels occupy, off what the strip actually granted.
-        val chainBelowRows = (railLabelRows - plan.nestedRows).coerceAtLeast(0)
-        var rowY = chainRailY + chainBelowRows * rowStep
-        rails.nested.forEach { lay ->
-            rowY += rowStep
+        val lineYs = undercutNestedRailLineYs(rails, chainRailY, railLabelRows, rowStep, witnessBottomY)
+        rails.nested.forEachIndexed { i, lay ->
             drawUndercutRail(
                 c, dim, dimText, lay,
                 witnessBottomY = witnessBottomY,
-                railY = rowY.coerceAtMost(witnessBottomY),
-                maxLabelRows = WEAR_RAIL_MAX_LABEL_ROWS,
+                railY = lineYs[i],
+                maxLabelRows = undercutRailFallbackRows(lay).coerceAtLeast(1),
                 drawLabels = drawLabels,
-                fallbackLabelAbove = false,
+                // A nested row's fallbacks sit ABOVE its line, in the rows reserved over it: below
+                // it they would land on the shaft's top surface (on-device report).
+                fallbackLabelAbove = true,
                 dualStacked = dualStacked,
                 scale = scale,
                 haloColor = haloColor,
             )
-            rowY += undercutRailFallbackRows(lay) * rowStep
         }
     }
     drawUndercutRail(

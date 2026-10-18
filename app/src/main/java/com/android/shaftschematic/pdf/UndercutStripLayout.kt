@@ -356,8 +356,9 @@ fun undercutRailFallbackRows(layout: List<WearRailSpanLayout>): Int =
  *
  * [nestedLayouts] are the resolved nested chain rows ([buildNestedUndercutRailRows], one per
  * nesting level) that stack UNDER the level-0 chain. Each claims a row for its own rail line
- * plus the rows its fallback labels land on, so the strip reserves the height the extra
- * physical rails actually need instead of drawing them into the cylinder.
+ * plus the rows its fallback labels land on — ABOVE that line (`undercutNestedRailLineYs`) — so
+ * the strip reserves the height the extra physical rails actually need instead of drawing them
+ * into the cylinder.
  */
 fun planUndercutRailRows(
     chainLayout: List<WearRailSpanLayout>,

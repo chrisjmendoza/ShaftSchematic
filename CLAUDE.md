@@ -496,7 +496,7 @@ beside the sheet (on-device report) — do not reintroduce one. **ONE cut number
 AFT → FWD by clamped start, 1-based, display-only; the record keeps its own order): the tab list sorts
 and numbers its rows by it, messages name cuts by it, and the zoomed DETAIL canvas draws it centred
 inside each section — on EVERY free piece of a parent that nested cuts split, so the pieces read as one
-section; outside, above the surface, when too narrow (placement in the pure
+section; below the shaft on a white halo when too narrow, clear of the rail (placement in the pure
 `geom/UndercutCutNumberMath.kt`). It prints on NO sheet and draws on no whole-shaft overview, and has
 no pref (on-device ruling: "the cut counts are for input purposes only, no output on any sheet"). Liner strip titles carry the
 liner's OD in its display unit. "Next cut" confirms the card through the ONE confirm path and seeds a

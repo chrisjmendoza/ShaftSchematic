@@ -8,6 +8,15 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-17
 
+### fix(undercut): nested-row values above their line; narrow cuts' numbers below the shaft
+
+- A nested cut's row value too short to sit in its line (the 2 3/8" inside the 9.760 relief) now
+  stands above that line instead of dropping onto the shaft and the cut numbers. The rail band is
+  the same height; the printed strip changes the same way, since both draw the one rail.
+- On the detail page, a cut too narrow to hold its number inside now carries it just below the
+  shaft, on a small white patch over any Ø leader, instead of above the shaft among the rail's
+  witness lines (on-device report).
+
 ### fix(undercut): the detail page's dimension rail is the printed strip's rail
 
 - The undercut detail page drew its own chain rail: every cut shoulder, nested cuts included, on

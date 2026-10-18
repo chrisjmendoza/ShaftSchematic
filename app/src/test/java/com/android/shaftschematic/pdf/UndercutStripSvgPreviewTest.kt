@@ -447,6 +447,12 @@ class UndercutStripSvgPreviewTest {
         val nestedSurfaceEndDias: Map<String, List<Float>>,
         /** The level-0 chain's labels, aft → fwd, as one-line strings. */
         val railLabels: List<String>,
+        /** Each nesting level's rail line Y, level 1 first (`undercutNestedRailLineYs`). */
+        val nestedLineYs: List<Float>,
+        /** Baseline of every nested-row value that falls back off its line, by label. */
+        val nestedFallbackBaselines: Map<String, Float>,
+        /** Baseline of the chain's lowest below-line fallback row; null when none falls back below. */
+        val chainLowestBelowBaseline: Float?,
         /** Strip ends drawn as a flat physical end (the shaft's own end) rather than an S-break. */
         val flatEnds: Int,
         /** The strip's printed title. */
@@ -707,15 +713,22 @@ class UndercutStripSvgPreviewTest {
         }
         chain.forEach { svg.railSpan(it, inner.cylTop - 3f, inner.chainRailY, labelAbove = railPlan.aboveRows > 0) }
         // One extra chain row per nesting level, stacked UNDER the level-0 chain, each anchored
-        // at its parent's edges — the composer's stepping, off the same row-height metric.
-        var nestedRowY = inner.chainRailY +
-            (inner.railLabelRows - railPlan.nestedRows).coerceAtLeast(0) * UNDERCUT_RAIL_ROW_HEIGHT_PT
-        nestedChains.forEach { lay ->
-            nestedRowY += UNDERCUT_RAIL_ROW_HEIGHT_PT
-            val y = minOf(nestedRowY, inner.cylTop - 3f)
-            lay.forEach { svg.railSpan(it, inner.cylTop - 3f, y, labelAbove = false) }
-            nestedRowY += undercutRailFallbackRows(lay) * UNDERCUT_RAIL_ROW_HEIGHT_PT
+        // at its parent's edges — the composer's ONE stepping (`undercutNestedRailLineYs`), its
+        // fallback values above its own line.
+        val nestedLineYs = undercutNestedRailLineYs(
+            rails, inner.chainRailY, inner.railLabelRows, UNDERCUT_RAIL_ROW_HEIGHT_PT, inner.cylTop - 3f,
+        )
+        val nestedFallbackBaselines = mutableMapOf<String, Float>()
+        nestedChains.forEachIndexed { i, lay ->
+            lay.forEach { svg.railSpan(it, inner.cylTop - 3f, nestedLineYs[i], labelAbove = true) }
+            lay.filter { !it.seatsInBreak }.forEach {
+                nestedFallbackBaselines[it.label.inline()] = nestedLineYs[i] - 4f * 0.5f - 5f - textH * 0.25f -
+                    it.labelRow.coerceIn(0, WEAR_RAIL_MAX_LABEL_ROWS - 1) * UNDERCUT_RAIL_ROW_HEIGHT_PT
+            }
         }
+        val chainLowestBelowBaseline = chain.filter { !it.seatsInBreak }.maxOfOrNull { it.labelRow }
+            ?.takeIf { railPlan.aboveRows == 0 }
+            ?.let { row -> inner.chainRailY + 4f + 5f + textH + row * UNDERCUT_RAIL_ROW_HEIGHT_PT }
         rails.total.forEach { svg.railSpan(it, inner.chainRailY, inner.totalRailY, labelAbove = true) }
 
         // Title: "<liner name> — <dist> FROM … S.E.T.", or the anchor alone on bare stock. A
@@ -787,6 +800,9 @@ class UndercutStripSvgPreviewTest {
                     n.id to listOf(p.surface.first().diaMm, p.surface.last().diaMm)
                 },
             railLabels = railSpans.map { it.label.inline() },
+            nestedLineYs = nestedLineYs,
+            nestedFallbackBaselines = nestedFallbackBaselines,
+            chainLowestBelowBaseline = chainLowestBelowBaseline,
             flatEnds = flatEnds,
             title = printedTitle,
         )
@@ -1015,6 +1031,17 @@ class UndercutStripSvgPreviewTest {
         assertTrue("the edge-crossing cut prints whole (${m.railLabels})", "9 1/4\"" in m.railLabels)
         assertFalse(m.railLabels.any { it == "3 3/4\"" || it == "5 1/2\"" })
         assertTrue(m.chainCoversStrip)
+        // The 9.760 parent's nested row: its 2 3/8" middle span is too short to seat its value,
+        // which falls back ABOVE the nested line — below it, it landed on the shaft's top surface
+        // (on-device report) — and still clears the chain's own lowest label row.
+        val mShort = m.nestedFallbackBaselines.getValue("2 3/8\"")
+        val mLine = m.nestedLineYs.single()
+        assertTrue("the 2 3/8\" value sits above its line ($mShort vs $mLine)", mShort < mLine - 2f)
+        val mChainLowest = requireNotNull(m.chainLowestBelowBaseline)
+        assertTrue(
+            "the 2 3/8\" value sits below the chain's lowest label row ($mShort vs $mChainLowest)",
+            mShort - textH > mChainLowest + textH * 0.25f,
+        )
 
         // N) The same with "Split cuts at liner edges" ON: the 9 1/4" cut reads 3 3/4" inside the
         //    liner and 5 1/2" past its FWD edge, the chain still closing on the 12 3/4" run.
