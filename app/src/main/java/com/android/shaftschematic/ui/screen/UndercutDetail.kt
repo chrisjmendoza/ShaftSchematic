@@ -10,6 +10,9 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -37,7 +40,9 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.outlined.Preview
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
@@ -86,6 +91,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
+import com.android.shaftschematic.settings.PDF_ARROW_SIZE_DEFAULT_PT
 import com.android.shaftschematic.geom.DiaCalloutStation
 import com.android.shaftschematic.geom.UNDERCUT_BREAK_AMP_FRAC_OF_R
 import com.android.shaftschematic.geom.THREAD_DENSITY_DEFAULT
@@ -156,7 +162,10 @@ import com.android.shaftschematic.pdf.planUndercutStripRails
 import com.android.shaftschematic.pdf.undercutRailRowHeightPt
 import com.android.shaftschematic.util.OutputTypography
 import com.android.shaftschematic.util.measureDualLabel
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
@@ -197,6 +206,10 @@ import kotlin.math.min
  *   the window edges.
  *
  * Contents, top to bottom:
+ * - a **top bar** — back, the strip title, Undo / Redo, and the drawing's **Preview** and
+ *   **Drawing options** ([onPreview], [optionsSheet]; on-device request: both within reach of the
+ *   zoomed page). Preview settles every card the way the back arrow does and then opens the tab's
+ *   PDF preview over this page; Options opens the undercut options panel over it.
  * - a **fixed canvas** — a **dimension rail above**, the printed strip's rails by construction
  *   (its ONE planner `planUndercutStripRails` and draw sequence `drawUndercutStripRails` at canvas
  *   scale: the total on the upper line, the chain across the strip's chain range over the
@@ -335,6 +348,25 @@ fun UndercutWindowDetailOverlay(
      * buried liner edge, as on the printed sheet. Passed in so a change restyles the rail.
      */
     splitAtLinerEdge: Boolean = false,
+    /**
+     * App-wide `PdfPrefs.arrowSizePt` ("Dimension arrows"): the rail heads, and with them which
+     * values seat in their break — the printed strip's rule. Passed in so a change re-plans the rail.
+     */
+    arrowSizePt: Float = PDF_ARROW_SIZE_DEFAULT_PT,
+    /**
+     * Opens the undercut drawing's PDF preview — the Undercut tab's own preview, drawn over this
+     * page. Called only after every card has been settled the way the back arrow settles them, so
+     * the preview shows the record as it stands. Null hides the top bar's Preview icon.
+     */
+    onPreview: (() -> Unit)? = null,
+    /** The tab's export gate, which its own Preview button shares. */
+    previewEnabled: Boolean = true,
+    /**
+     * The undercut preview's options sheet, hosted here in the same non-modal
+     * [PreviewOptionsPanel] — a remote control for the same app-wide prefs, so a change restyles
+     * this canvas where it draws that element. Null hides the top bar's Options icon.
+     */
+    optionsSheet: (@Composable () -> Unit)? = null,
 ) {
     val oalMm = spec.overallLengthMm.coerceAtLeast(0f)
     val segs = remember(resolvedComponents, spec) { surfaceSegsFrom(resolvedComponents, bodyBlends(spec, resolvedComponents)) }
@@ -395,6 +427,11 @@ fun UndercutWindowDetailOverlay(
     var overlayOverhang by remember(stripKey) { mutableStateOf<UndercutOverlayOverhangAsk?>(null) }
     // Answers given at overlay level for stored cards, each waiting for its card to take it.
     var overhangAnswers by remember(stripKey) { mutableStateOf(emptyMap<String, UndercutOverhangAnswer>()) }
+    // Where a settle-everything leave goes once every draft is settled: out of the overlay (the
+    // back arrow, system Back), or to the PDF preview drawn over it (the top bar's Preview).
+    var exitTo by remember(stripKey) { mutableStateOf(UndercutOverlayExit.CLOSE) }
+    // The options panel over this page (the top bar's Options icon) — screen state only.
+    var showOptions by remember(stripKey) { mutableStateOf(false) }
 
     val pageIds = remember(undercuts, pendingSeedStartMm) {
         buildUndercutPageIds(undercuts, pendingSeedStartMm)
@@ -804,7 +841,12 @@ fun UndercutWindowDetailOverlay(
                                 return UndercutSettleResult.Asking
                             }
                     }
-                    confirmDraft(draft, follow = false)
+                    // Going to the preview leaves the overlay open underneath it, so the selected
+                    // card follows its own commit — an add's new cut — rather than losing its page.
+                    confirmDraft(
+                        draft,
+                        follow = closing && exitTo == UndercutOverlayExit.PREVIEW && id == selectedId,
+                    )
                 }
                 // An untouched add goes without a word: nothing was typed into it. The selection
                 // is left alone — it already belongs to the card being moved to.
@@ -839,7 +881,10 @@ fun UndercutWindowDetailOverlay(
         when (result) {
             UndercutSettleResult.Done -> {
                 leavePrompt = null
-                if (closing) onClose()
+                if (closing) when (exitTo) {
+                    UndercutOverlayExit.CLOSE -> onClose()
+                    UndercutOverlayExit.PREVIEW -> onPreview?.invoke()
+                }
             }
             is UndercutSettleResult.Prompt -> leavePrompt = result.prompt
             UndercutSettleResult.Asking -> leavePrompt = null
@@ -847,6 +892,16 @@ fun UndercutWindowDetailOverlay(
     }
 
     fun requestClose() {
+        exitTo = UndercutOverlayExit.CLOSE
+        finishSettle(settleDraftsExcept(keepId = null, closing = true), closing = true)
+    }
+
+    // The top bar's Preview: the same settle-everything leave as the back arrow — every typed
+    // value flushed and committed, a blocked draft asked about with Keep editing / Discard — but
+    // it ends on the PDF preview, with this page still open beneath it for when the preview closes.
+    fun requestPreview() {
+        showOptions = false
+        exitTo = UndercutOverlayExit.PREVIEW
         finishSettle(settleDraftsExcept(keepId = null, closing = true), closing = true)
     }
 
@@ -979,6 +1034,16 @@ fun UndercutWindowDetailOverlay(
         zoomOffset = if (zoomScale <= 1f) Offset.Zero else zoomOffset + panChange
     }
 
+    // Where the drawing block (canvas + save pill) ends, root px — the options panel's ceiling.
+    var drawingBottomPx by remember { mutableFloatStateOf(0f) }
+    val screenHeightDp = LocalConfiguration.current.screenHeightDp.toFloat()
+    val navBottomDp = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding().value
+    val optionsMaxHeightDp = undercutDetailOptionsMaxHeightDp(
+        screenHeightDp = screenHeightDp,
+        drawingBottomDp = with(LocalDensity.current) { drawingBottomPx.toDp().value },
+        chromeDp = TUNING_SHEET_CHROME_DP + navBottomDp,
+    )
+
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Box(modifier = Modifier.fillMaxSize()) {
             Column(modifier = Modifier.fillMaxSize().systemBarsPadding().imePadding()) {
@@ -1013,6 +1078,32 @@ fun UndercutWindowDetailOverlay(
                         modifier = Modifier.testTag("undercut_detail_redo"),
                     ) {
                         Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = "Redo")
+                    }
+                    // The drawing's preview and its options without leaving this page or
+                    // scrolling the tab to its foot (on-device request).
+                    if (onPreview != null) {
+                        IconButton(
+                            onClick = { requestPreview() },
+                            enabled = previewEnabled,
+                            modifier = Modifier.testTag("undercut_detail_preview"),
+                        ) {
+                            Icon(Icons.Outlined.Preview, contentDescription = "Preview")
+                        }
+                    }
+                    if (optionsSheet != null) {
+                        // A toggle, like the preview's own Tune icon: the panel is non-modal, so
+                        // this bar stays reachable while it is open.
+                        IconButton(
+                            onClick = {
+                                // The keyboard would sit over the panel. A blur commits only into
+                                // the card's draft, exactly as tapping the canvas does.
+                                if (!showOptions) focusManager.clearFocus()
+                                showOptions = !showOptions
+                            },
+                            modifier = Modifier.testTag("undercut_detail_options"),
+                        ) {
+                            Icon(Icons.Filled.Tune, contentDescription = "Drawing options")
+                        }
                     }
                 }
                 HorizontalDivider()
@@ -1078,6 +1169,7 @@ fun UndercutWindowDetailOverlay(
                             textSizePx = railTextPaint.textSize,
                             typeface = railTypeface,
                             fractionStyle = FractionTypography.active,
+                            arrowSizePt = arrowSizePt,
                         )
                     }
                     val rails = remember(railInputs) {
@@ -1421,6 +1513,7 @@ fun UndercutWindowDetailOverlay(
                                     railLabelRows = plan.rows.belowRows,
                                     drawLabels = true,
                                     scale = railScale,
+                                    arrowSizePt = arrowSizePt,
                                 )
                             }
 
@@ -1493,7 +1586,13 @@ fun UndercutWindowDetailOverlay(
                     // inside the canvas: bottom-anchored inside it, the pill would sit on top of the
                     // Ø callouts, and inside a card it would scroll out of reach (the reason the
                     // per-card Confirm/Cancel row was missed on-device).
-                    Box(modifier = Modifier.fillMaxWidth()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            // The options panel stops here, so the drawing and the pill stay in
+                            // view above it.
+                            .onGloballyPositioned { drawingBottomPx = it.boundsInRoot().bottom },
+                    ) {
                         Row(
                             modifier = Modifier.fillMaxWidth().align(Alignment.Center),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -1724,6 +1823,22 @@ fun UndercutWindowDetailOverlay(
                     .padding(horizontal = 16.dp, vertical = 8.dp)
                     .testTag("undercut_delete_snackbar"),
             )
+
+            // ── Drawing options — the undercut preview's panel, over this page ──────────
+            // Composed last so it sits over the cards and takes the touches that land on it,
+            // with no scrim: the canvas above it stays live and restyles as the options change.
+            // Its own Back handler, registered after this overlay's, closes it first.
+            if (showOptions && optionsSheet != null) {
+                Box(Modifier.fillMaxSize().systemBarsPadding()) {
+                    PreviewOptionsPanel(
+                        onClose = { showOptions = false },
+                        maxHeightDp = optionsMaxHeightDp.dp,
+                        modifier = Modifier.align(Alignment.BottomCenter),
+                    ) {
+                        optionsSheet()
+                    }
+                }
+            }
         }
     }
 
@@ -1794,6 +1909,25 @@ fun UndercutWindowDetailOverlay(
 
 /** Page id of the add flow's not-yet-recorded card; no `Undercut` ever carries it. */
 internal const val PENDING_UNDERCUT_ID = "__undercut_draft__"
+
+/** Where the overlay's settle-everything leave ends: out of the overlay, or on the PDF preview over it. */
+private enum class UndercutOverlayExit { CLOSE, PREVIEW }
+
+/**
+ * Content cap for the detail page's options panel, dp: the screen below the drawing block (canvas
+ * and save pill, whose bottom is [drawingBottomDp]) less the panel's [chromeDp] — its header row
+ * and the navigation-bar inset — so the drawing being restyled stays in view above the panel.
+ * Clamped between the tuning panel's [TUNING_SHEET_MIN_FRAC] floor (a usable panel on a short
+ * screen, which then overlaps the drawing's foot) and the preview's [PREVIEW_SHEET_MAX_FRAC]
+ * ceiling. Before the drawing block has been measured ([drawingBottomDp] 0) the ceiling applies.
+ */
+internal fun undercutDetailOptionsMaxHeightDp(
+    screenHeightDp: Float,
+    drawingBottomDp: Float,
+    chromeDp: Float,
+): Float = (screenHeightDp - drawingBottomDp - chromeDp)
+    .coerceAtLeast(screenHeightDp * TUNING_SHEET_MIN_FRAC)
+    .coerceAtMost(screenHeightDp * PREVIEW_SHEET_MAX_FRAC)
 
 /** Height of the strip profile band; the rails and Ø callouts add their own rows above/below. */
 private val UNDERCUT_PROFILE_ROW_DP = 140.dp
@@ -3211,6 +3345,8 @@ internal data class UndercutDetailRailInputs(
     val textSizePx: Float,
     val typeface: Any?,
     val fractionStyle: Any?,
+    /** The "Dimension arrows" head, printed points — the seat-in-break decisions depend on it. */
+    val arrowSizePt: Float = PDF_ARROW_SIZE_DEFAULT_PT,
 )
 
 /**
@@ -3240,6 +3376,7 @@ internal fun planUndercutDetailRails(
         xAt = { mm -> lay.startPx + (mm - inputs.drawStartMm) * lay.pxPerMm },
         labelWidth = labelWidthPx,
         scale = inputs.scale,
+        arrowSizePt = inputs.arrowSizePt,
     )
 }
 

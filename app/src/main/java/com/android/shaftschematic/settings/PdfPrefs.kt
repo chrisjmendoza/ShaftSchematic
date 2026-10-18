@@ -199,11 +199,13 @@ data class PdfPrefs(
     val sBreakThresholdFrac: Float = PDF_SBREAK_THRESHOLD_DEFAULT,
     /**
      * Arrowhead size on the DIMENSION RAILS (`pdf/render/PdfDimensionRenderer.kt`) — the
-     * schematic's stacked rails and the CONSOLIDATED sheet's. Adjustable in either
-     * PDF options sheet and in Settings → Drawing → "Dimension arrows"; one of
-     * [PDF_ARROW_SIZES_PT]. The wear / undercut strip rails keep their own fixed head (they
-     * are chained inside a strip, not stacked over the drawing), and so does the classic
-     * standalone runout sheet's lone OAL line — it carries no dimension rails at all.
+     * schematic's stacked rails and the CONSOLIDATED sheet's — and on the undercut drawing's
+     * strip rails (`drawUndercutRail`, the printed strips and the Undercut tab's detail canvas
+     * alike), where it also decides which values seat in their break. Adjustable in the PDF
+     * options sheets that draw such rails and in Settings → Drawing → "Dimension arrows"; one of
+     * [PDF_ARROW_SIZES_PT]. The wear strip rails keep their own fixed head, and so do the classic
+     * standalone runout sheet's lone OAL line and the undercut sheet's whole-shaft fallback OAL
+     * line.
      */
     val arrowSizePt: Float = PDF_ARROW_SIZE_DEFAULT_PT,
     /**

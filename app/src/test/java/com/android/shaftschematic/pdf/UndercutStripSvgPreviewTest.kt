@@ -28,6 +28,7 @@ import com.android.shaftschematic.model.Liner
 import com.android.shaftschematic.model.LinerAnchor
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Undercut
+import com.android.shaftschematic.settings.PDF_ARROW_SIZE_DEFAULT_PT
 import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponentType
 import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
@@ -356,10 +357,20 @@ class UndercutStripSvgPreviewTest {
      * One arrowed rail span with its value seated in a break, mirroring `drawUndercutRail` —
      * including its label spacing: a fallback label clears the arrowheads by
      * `UC_RAIL_LABEL_GAP_PT` and stacks by [UNDERCUT_RAIL_ROW_HEIGHT_PT], the same pitch the
-     * inner layout budgets.
+     * inner layout budgets, and carries its leader to the line ([undercutRailLeader], the
+     * composer's own endpoints) off its near halo edge. [arrow] is the drawn head — the composer's
+     * `PdfPrefs.arrowSizePt`; the label rows clear the fixed [UNDERCUT_RAIL_LABEL_CLEAR_ARROW_PT]
+     * whatever the head. Each drawn leader is recorded in [leaders] by label, with its rail line Y.
      */
-    private fun Svg.railSpan(s: WearRailSpanLayout, witnessBottomY: Float, railY: Float, labelAbove: Boolean) {
-        val arrow = 4f
+    private fun Svg.railSpan(
+        s: WearRailSpanLayout,
+        witnessBottomY: Float,
+        railY: Float,
+        labelAbove: Boolean,
+        arrow: Float = PDF_ARROW_SIZE_DEFAULT_PT,
+        leaders: MutableMap<String, Pair<UndercutRailLeader, Float>>? = null,
+    ) {
+        val clear = UNDERCUT_RAIL_LABEL_CLEAR_ARROW_PT
         val labelGap = 5f
         line(s.x0Pt, witnessBottomY, s.x0Pt, railY - 3f, w = 0.6f)
         line(s.x1Pt, witnessBottomY, s.x1Pt, railY - 3f, w = 0.6f)
@@ -372,15 +383,19 @@ class UndercutStripSvgPreviewTest {
         } else {
             line(s.x0Pt, railY, s.x1Pt, railY, w = 0.7f)
             val row = s.labelRow.coerceIn(0, WEAR_RAIL_MAX_LABEL_ROWS - 1)
-            if (labelAbove) {
-                text(
-                    s.labelCxPt,
-                    railY - arrow * 0.5f - labelGap - textH * 0.25f - row * UNDERCUT_RAIL_ROW_HEIGHT_PT,
-                    s.label.inline(),
-                )
+            // Stand-in metrics: descent ≈ a quarter of the text height, ascent ≈ 0.9 of it, and the
+            // composer's 0.5 pt vertical halo pad.
+            val baseline = if (labelAbove) {
+                railY - clear * 0.5f - labelGap - textH * 0.25f - row * UNDERCUT_RAIL_ROW_HEIGHT_PT
             } else {
-                text(s.labelCxPt, railY + arrow + labelGap + textH + row * UNDERCUT_RAIL_ROW_HEIGHT_PT, s.label.inline())
+                railY + clear + labelGap + textH + row * UNDERCUT_RAIL_ROW_HEIGHT_PT
             }
+            val nearEdge = if (labelAbove) baseline + textH * 0.25f + 0.5f else baseline - textH * 0.9f - 0.5f
+            undercutRailLeader(s.x0Pt, s.x1Pt, s.labelCxPt, arrow, railY, nearEdge)?.let { l ->
+                line(l.x, l.fromY, l.x, l.toY, w = 0.6f)
+                leaders?.put(s.label.inline(), l to railY)
+            }
+            text(s.labelCxPt, baseline, s.label.inline())
         }
         val dl = if (s.arrowInward) 1f else -1f
         val dr = if (s.arrowInward) -1f else 1f
@@ -457,6 +472,10 @@ class UndercutStripSvgPreviewTest {
         val flatEnds: Int,
         /** The strip's printed title. */
         val title: String,
+        /** Each drawn fallback leader by its value's label, with the Y of the rail line it serves. */
+        val leaders: Map<String, Pair<UndercutRailLeader, Float>> = emptyMap(),
+        /** Every rail span whose value fell back off its line, by label. */
+        val fallbackSpans: Map<String, WearRailSpanLayout> = emptyMap(),
     )
 
     private fun renderStrip(
@@ -711,7 +730,10 @@ class UndercutStripSvgPreviewTest {
                 svg.line(xAt(mm), inner.cylTop - 3f, xAt(mm), inner.chainRailY, w = 0.6f)
             }
         }
-        chain.forEach { svg.railSpan(it, inner.cylTop - 3f, inner.chainRailY, labelAbove = railPlan.aboveRows > 0) }
+        val leaders = mutableMapOf<String, Pair<UndercutRailLeader, Float>>()
+        chain.forEach {
+            svg.railSpan(it, inner.cylTop - 3f, inner.chainRailY, labelAbove = railPlan.aboveRows > 0, leaders = leaders)
+        }
         // One extra chain row per nesting level, stacked UNDER the level-0 chain, each anchored
         // at its parent's edges — the composer's ONE stepping (`undercutNestedRailLineYs`), its
         // fallback values above its own line.
@@ -720,7 +742,7 @@ class UndercutStripSvgPreviewTest {
         )
         val nestedFallbackBaselines = mutableMapOf<String, Float>()
         nestedChains.forEachIndexed { i, lay ->
-            lay.forEach { svg.railSpan(it, inner.cylTop - 3f, nestedLineYs[i], labelAbove = true) }
+            lay.forEach { svg.railSpan(it, inner.cylTop - 3f, nestedLineYs[i], labelAbove = true, leaders = leaders) }
             lay.filter { !it.seatsInBreak }.forEach {
                 nestedFallbackBaselines[it.label.inline()] = nestedLineYs[i] - 4f * 0.5f - 5f - textH * 0.25f -
                     it.labelRow.coerceIn(0, WEAR_RAIL_MAX_LABEL_ROWS - 1) * UNDERCUT_RAIL_ROW_HEIGHT_PT
@@ -729,7 +751,11 @@ class UndercutStripSvgPreviewTest {
         val chainLowestBelowBaseline = chain.filter { !it.seatsInBreak }.maxOfOrNull { it.labelRow }
             ?.takeIf { railPlan.aboveRows == 0 }
             ?.let { row -> inner.chainRailY + 4f + 5f + textH + row * UNDERCUT_RAIL_ROW_HEIGHT_PT }
-        rails.total.forEach { svg.railSpan(it, inner.chainRailY, inner.totalRailY, labelAbove = true) }
+        rails.total.forEach { svg.railSpan(it, inner.chainRailY, inner.totalRailY, labelAbove = true, leaders = leaders) }
+        // Every value that fell off its line, every rail: the labels a leader must serve.
+        val fallbackSpans = (chain + nestedChains.flatten() + rails.total)
+            .filter { !it.seatsInBreak }
+            .associateBy { it.label.inline() }
 
         // Title: "<liner name> — <dist> FROM … S.E.T.", or the anchor alone on bare stock. A
         // started strip prints the write-in form instead: name, a rule for the distance, and
@@ -805,6 +831,8 @@ class UndercutStripSvgPreviewTest {
             chainLowestBelowBaseline = chainLowestBelowBaseline,
             flatEnds = flatEnds,
             title = printedTitle,
+            leaders = leaders,
+            fallbackSpans = fallbackSpans,
         )
     }
 
@@ -1042,6 +1070,27 @@ class UndercutStripSvgPreviewTest {
             "the 2 3/8\" value sits below the chain's lowest label row ($mShort vs $mChainLowest)",
             mShort - textH > mChainLowest + textH * 0.25f,
         )
+
+        // Every value lifted off its line carries a leader that lands ON its own rail line, between
+        // its arrowheads (on-device request: the raised 2 3/8" read as belonging to nothing).
+        assertTrue("the 2 3/8\" value falls back (${m.fallbackSpans.keys})", "2 3/8\"" in m.fallbackSpans)
+        assertTrue(
+            "the chain carries fallbacks of its own (${m.fallbackSpans.keys})",
+            m.fallbackSpans.keys.any { it != "2 3/8\"" },
+        )
+        m.fallbackSpans.forEach { (label, span) ->
+            val (leader, lineY) = requireNotNull(m.leaders[label]) { "$label has no leader" }
+            assertEquals("$label's leader ends on its rail line", lineY, leader.toY, 1e-3f)
+            assertTrue(
+                "$label's leader lands between its arrowheads (${leader.x} in ${span.x0Pt}..${span.x1Pt})",
+                leader.x >= span.x0Pt + PDF_ARROW_SIZE_DEFAULT_PT - 1e-3f &&
+                    leader.x <= span.x1Pt - PDF_ARROW_SIZE_DEFAULT_PT + 1e-3f,
+            )
+        }
+        val mShortLeader = m.leaders.getValue("2 3/8\"").first
+        assertEquals("the nested value's leader drops to the nested line", mLine, mShortLeader.toY, 1e-3f)
+        assertTrue("…from below the value", mShortLeader.fromY > mShort && mShortLeader.fromY < mLine)
+        assertEquals("a seated value draws no leader", m.fallbackSpans.keys, m.leaders.keys)
 
         // N) The same with "Split cuts at liner edges" ON: the 9 1/4" cut reads 3 3/4" inside the
         //    liner and 5 1/2" past its FWD edge, the chain still closing on the 12 3/4" run.

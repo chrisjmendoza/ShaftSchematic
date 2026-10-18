@@ -597,9 +597,11 @@ hand-drafting convention `|←—— 237 1/2" ——→|` — instead of floatin
   one shape at every rail draw site. The length is user-set: `PdfPrefs.arrowSizePt`,
   **Small 3 (default) / Medium 4 / Large 5 pt**, from either PDF options sheet or
   Settings → Drawing → "Dimension arrows". It reaches the schematic and consolidated
-  composers (the two that build a `PdfDimensionRenderer`); the wear/undercut strip rails
-  keep their own fixed 4 pt head. A smaller head also widens inline eligibility slightly,
-  since the stub requirement is `arrowSize`.
+  composers (the two that build a `PdfDimensionRenderer`) and the undercut drawing's strip
+  rails (`planUndercutStripRails` + `drawUndercutRail`, so the printed strips and the Undercut
+  tab's detail canvas alike — the undercut options sheet carries the chips too); the wear
+  strip rails keep their own fixed 4 pt head. A smaller head also widens inline eligibility
+  slightly, since the stub requirement is `arrowSize`.
 - **One collision space (`geom/DimensionRailLayout.kt`).** A floating value lives in the
   vertical band of the *next rail up*, so labels and rail lines from different tiers
   cannot be resolved rail by rail. A pure planner places **every** span at once — the top

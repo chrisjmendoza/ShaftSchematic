@@ -467,4 +467,20 @@ class PdfOptionsSectionsTest {
             "options_units_expander",
         )
     }
+
+    @Test
+    fun `the undercut sheet offers the dimension arrow sizes its strip rails follow`() {
+        val vm = vm()
+        rule.setContent {
+            MaterialTheme {
+                UndercutOptionsSheet(vm = vm, blankDraft = false, onSetBlankDraft = {})
+            }
+        }
+
+        rule.onNodeWithTag("options_shaft_expander").assertDoesNotExist()
+        rule.onNodeWithTag("options_lines_expander").performScrollTo().performClick()
+        rule.onNodeWithText("Dimension arrows").assertExists()
+        rule.onNodeWithText("Line thickness", substring = true).assertExists()
+        rule.onNodeWithText("Fractions").assertExists()
+    }
 }
