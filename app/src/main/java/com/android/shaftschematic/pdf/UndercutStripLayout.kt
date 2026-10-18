@@ -5,6 +5,7 @@ import android.graphics.Paint
 
 import com.android.shaftschematic.geom.ClampedUndercutSpanMm
 import com.android.shaftschematic.geom.DiaCalloutStation
+import com.android.shaftschematic.geom.DimensionRailLayout
 import com.android.shaftschematic.geom.UndercutSpanMm
 import com.android.shaftschematic.geom.nearestSetReference
 import com.android.shaftschematic.geom.undercutCalloutAnchorMm
@@ -164,10 +165,14 @@ const val UNDERCUT_RAIL_ROW_HEIGHT_PT = 17f
  * ONE definition, read by the reserved band ([computeUndercutStripInnerLayout] via its
  * `rowHeightPt`, and the composer's `chainAboveBandPt`) and by `drawUndercutRail`'s stepping — the
  * budgeted row and the drawn row must never drift apart.
+ *
+ * [scale] converts the fixed point sizes to a canvas drawing the same rail at another size (the
+ * undercut detail canvas, in px per pt); [dimText] is already in that canvas's unit. The page
+ * passes 1.
  */
-fun undercutRailRowHeightPt(dimText: Paint, dualStacked: Boolean): Float =
-    if (!dualStacked) UNDERCUT_RAIL_ROW_HEIGHT_PT
-    else maxOf(UNDERCUT_RAIL_ROW_HEIGHT_PT, dimText.dualStackMetrics().height + 3f)
+fun undercutRailRowHeightPt(dimText: Paint, dualStacked: Boolean, scale: Float = 1f): Float =
+    if (!dualStacked) UNDERCUT_RAIL_ROW_HEIGHT_PT * scale
+    else maxOf(UNDERCUT_RAIL_ROW_HEIGHT_PT * scale, dimText.dualStackMetrics().height + 3f * scale)
 
 /**
  * Ceiling on the drawn cylinder's height, as a fraction of the strip's own band. Without the
@@ -371,6 +376,89 @@ fun planUndercutRailRows(
         UndercutRailRowPlan(belowRows = 1 + nestedRows, aboveRows = used, nestedRows = nestedRows)
     }
 }
+
+/**
+ * One strip's dimension rails, planned: the raw spans (strip mm) and their resolved layouts for
+ * the level-0 chain, each nesting level's row, and the total, plus the fallback-row reservation
+ * ([planUndercutRailRows]) the vertical split is sized from. Built only by
+ * [planUndercutStripRails].
+ */
+data class UndercutStripRails(
+    /** The level-0 chain over the strip's TOP-LEVEL cuts ([buildUndercutRailSpans]). */
+    val chainSpans: List<WearRailSpan>,
+    /** One row per nesting level ≥ 1, located against the parents' edges ([buildNestedUndercutRailRows]). */
+    val nestedSpans: List<List<WearRailSpan>>,
+    /** The run across the top-level cuts ([buildUndercutTotalSpan]); null with fewer than two. */
+    val totalSpan: WearRailSpan?,
+    val chain: List<WearRailSpanLayout>,
+    val nested: List<List<WearRailSpanLayout>>,
+    /** The total's one-span layout; empty when [totalSpan] is null. */
+    val total: List<WearRailSpanLayout>,
+    val rows: UndercutRailRowPlan,
+)
+
+/**
+ * The ONE rail plan behind both undercut strip draw sites — the printed strip
+ * (`UndercutPdfComposer`) and the Undercut tab's detail canvas (`UndercutWindowDetailOverlay`) —
+ * so the canvas rail is the printed rail by construction.
+ *
+ * Nesting decides what the level-0 chain carries: a cut machined INSIDE another one is
+ * dimensioned on its own row against its PARENT's edges ([buildNestedUndercutRailRows]), never in
+ * the top chain's forward-cursor walk, where a fully nested cut collapses to zero width and
+ * vanishes. The total is the run across the TOP-LEVEL cuts: a lone parent holding one child would
+ * otherwise re-state its own length. Every rail is resolved before the vertical split (it is pure
+ * horizontal geometry), so the split reserves only the fallback rows these labels actually use,
+ * on the side of the line the plan puts them.
+ *
+ * [spans] are the strip's render-clamped spans, every nesting level, in any order. A
+ * [startedStrip] dimensions nothing: with no cuts the chain would degenerate to a single
+ * liner-length span nobody measured. [xAt] maps strip mm to the caller's drawing x and
+ * [labelWidth] measures a value as that caller draws it — measure and draw must convert together.
+ * [scale] multiplies the layout's fixed point sizes (text pad, arrowhead, label gap, arrow
+ * clearance) for a caller drawing in another unit; the page passes 1, and at 1 every value is the
+ * page's own.
+ */
+fun planUndercutStripRails(
+    chainStartMm: Float,
+    chainEndMm: Float,
+    spans: List<UndercutSpanMm>,
+    unit: UnitSystem,
+    dual: Boolean,
+    splitAtMm: List<Float>,
+    startedStrip: Boolean,
+    xAt: (Float) -> Float,
+    labelWidth: (DualLabel) -> Float,
+    scale: Float = 1f,
+): UndercutStripRails {
+    val sorted = spans.sortedBy { it.startMm }
+    val nestingById = undercutNestingForest(sorted).associateBy { it.id }
+    val topSpans = sorted.filter { (nestingById[it.id]?.level ?: 0) == 0 }
+    val chainSpans = if (startedStrip) emptyList()
+    else buildUndercutRailSpans(chainStartMm, chainEndMm, topSpans, unit, dual, splitAtMm = splitAtMm)
+    val totalSpan = if (startedStrip) null else buildUndercutTotalSpan(topSpans, unit, dual)
+    val nestedSpans = if (startedStrip) emptyList() else buildNestedUndercutRailRows(sorted, unit, dual)
+
+    fun layout(rail: List<WearRailSpan>) = layoutWearStripRail(
+        rail,
+        xAtStripMm = xAt,
+        labelWidthPt = labelWidth,
+        textPadPt = DIM_BREAK_TEXT_PAD_PT * scale,
+        arrowSizePt = UNDERCUT_RAIL_ARROW_PT * scale,
+        minLabelGapPt = UNDERCUT_RAIL_MIN_LABEL_GAP_PT * scale,
+        arrowClearPt = DimensionRailLayout.ARROW_CLEAR * scale,
+    )
+    val chain = layout(chainSpans)
+    val nested = nestedSpans.map { layout(it) }
+    val total = totalSpan?.let { layout(listOf(it)) } ?: emptyList()
+    val rows = planUndercutRailRows(chain, startedStrip, hasTotalRail = totalSpan != null, nestedLayouts = nested)
+    return UndercutStripRails(chainSpans, nestedSpans, totalSpan, chain, nested, total, rows)
+}
+
+/** The undercut rails' arrowhead length, points — the layout's seat test and the drawn head. */
+const val UNDERCUT_RAIL_ARROW_PT = 4f
+
+/** Least horizontal gap between two fallback values on one row, points. */
+const val UNDERCUT_RAIL_MIN_LABEL_GAP_PT = 4f
 
 /**
  * Splits one strip's vertical band, reserving [totalRailBandPt] at the top for the

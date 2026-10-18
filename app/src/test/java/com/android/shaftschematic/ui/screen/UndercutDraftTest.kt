@@ -596,74 +596,103 @@ class UndercutDraftTest {
         assertEquals(listOf("a", "b"), pool.map { it.id })
     }
 
-    // ── Detail canvas rail: labels stack instead of colliding ──
+    // ── Detail canvas rail: the printed strip's plan at canvas scale ──
+
+    private fun detailRailInputs(
+        spans: List<UndercutSpanMm>,
+        chainStart: Float,
+        chainEnd: Float,
+        drawStart: Float = chainStart - 60f,
+        drawEnd: Float = chainEnd + 60f,
+    ) = UndercutDetailRailInputs(
+        spans = spans,
+        chainStartMm = chainStart,
+        chainEndMm = chainEnd,
+        splitAtMm = emptyList(),
+        unit = UnitSystem.INCHES,
+        startedStrip = spans.isEmpty(),
+        widthPx = 1000f,
+        profileRowHeightPx = 367f,
+        edgePadPx = 84f,
+        drawStartMm = drawStart,
+        windowLengthMm = drawEnd - drawStart,
+        maxOdMm = 254f,
+        scale = 3.28f,
+        textSizePx = 26.25f,
+        typeface = null,
+        fractionStyle = null,
+    )
 
     @Test
-    fun `the job's chain stacks its short labels and no two labels on a row overlap`() {
+    fun `the detail canvas runs the printed strip's rail plan over the job`() {
         val raw = requireNotNull(javaClass.classLoader?.getResource("fixtures/undercut_polar_ranger_stbd.shaft"))
             .readText()
         val doc = com.android.shaftschematic.doc.ShaftDocCodec.decode(raw)
         val liner = doc.spec.liners.single { it.id.startsWith("02d0b768") }
-        val linerStart = liner.startFromAftMm
-        val linerEnd = liner.startFromAftMm + liner.lengthMm
         val spans = doc.undercutRecord.undercuts
             .map { UndercutSpanMm(it.id, it.startFromAftMm, it.startFromAftMm + it.lengthMm) }
-            .sortedBy { it.startMm }
-        val chainStart = minOf(linerStart, spans.minOf { it.startMm })
-        val chainEnd = maxOf(linerEnd, spans.maxOf { it.endMm })
-        val buried = com.android.shaftschematic.geom.buriedUndercutLinerEdgesMm(linerStart, linerEnd, spans)
-        val stops = undercutCanvasRailStops(chainStart, chainEnd, spans, buried)
+        val chainStart = minOf(liner.startFromAftMm, spans.minOf { it.startMm })
+        val chainEnd = maxOf(liner.startFromAftMm + liner.lengthMm, spans.maxOf { it.endMm })
+        val inputs = detailRailInputs(spans, chainStart, chainEnd)
+        val widthOf: (com.android.shaftschematic.util.DualLabel) -> Float = { it.inline().length * 14f }
+        val rails = requireNotNull(planUndercutDetailRails(inputs, widthOf))
 
-        // A phone-width canvas over the strip's draw range, 26 px text (~14 px a character).
-        val drawStart = chainStart - 60f
-        val drawEnd = chainEnd + 60f
-        val lay = computeUndercutWindowLayout(
-            widthPx = 1000f, profileTopPx = 0f, profileRowHeightPx = 367f,
-            windowLengthMm = drawEnd - drawStart, maxOdMm = 254f, edgePadPx = 21f,
+        // The top-level chain: the nested 2 3/8" cut is not on it — it has its own row, against
+        // its parent's shoulders.
+        assertEquals(
+            listOf("1 1/4\"", "12 5/8\"", "3 11/16\"", "9 1/4\""),
+            rails.chainSpans.map { it.label.inline() },
         )
-        val xPx: (Float) -> Float = { mm -> lay.startPx + (mm - drawStart) * lay.pxPerMm }
-        val widthOf: (String) -> Float = { it.length * 14f }
-        val plan = planUndercutCanvasRail(stops, UnitSystem.INCHES, xPx, widthOf, textPadPx = 10f, arrowPx = 13f)
+        assertEquals(listOf("5.080\"", "2 3/8\"", "5.170\""), rails.nestedSpans.single().map { it.label.inline() })
+        assertNotNull(rails.totalSpan)
 
-        assertTrue("a colliding label must stack onto a second row", plan.any { it.labelRow >= 1 })
-        // The 0.3125 in sliver past the liner's AFT edge is one of the stacked short spans.
-        val sliver = plan.single { kotlin.math.abs((it.x1Pt - it.x0Pt) / lay.pxPerMm - 0.3125f * 25.4f) < 0.05f }
-        val aftOfSliver = plan.first { it.x1Pt <= sliver.x0Pt + 1e-3f }
-        assertTrue(sliver.labelRow != aftOfSliver.labelRow)
-        plan.groupBy { it.labelRow }.forEach { (_, row) ->
-            val boxes = row.map { r ->
-                val half = widthOf(r.label.primary) / 2f
-                (r.labelCxPt - half) to (r.labelCxPt + half)
-            }.sortedBy { it.first }
-            for (i in 1 until boxes.size) {
-                assertTrue("two labels overlap on one row", boxes[i].first >= boxes[i - 1].second)
-            }
-        }
+        // It IS the printed strip's planner, over the canvas's own x map at the canvas scale.
+        val lay = computeUndercutWindowLayout(
+            widthPx = inputs.widthPx, profileTopPx = 0f, profileRowHeightPx = inputs.profileRowHeightPx,
+            windowLengthMm = inputs.windowLengthMm, maxOdMm = inputs.maxOdMm, edgePadPx = inputs.edgePadPx,
+        )
+        val direct = com.android.shaftschematic.pdf.planUndercutStripRails(
+            chainStart, chainEnd, spans, UnitSystem.INCHES, dual = false, splitAtMm = emptyList(),
+            startedStrip = false,
+            xAt = { mm -> lay.startPx + (mm - inputs.drawStartMm) * lay.pxPerMm },
+            labelWidth = widthOf,
+            scale = inputs.scale,
+        )
+        assertEquals(direct, rails)
+
+        // The band is the printed strip's: total line, the chain the rest of the total band
+        // below it, then the plan's below-rows and the rail headroom down to the cylinder top.
+        val rowStep = 17f * inputs.scale
+        val band = undercutDetailRailBand(rails, inputs.scale, rowStep)
+        assertEquals(20f * inputs.scale, band.chainRailY - band.totalRailY, 1e-3f)
+        assertEquals(
+            band.chainRailY + rails.rows.belowRows * rowStep + UNDERCUT_DETAIL_RAIL_HEADROOM_PT * inputs.scale,
+            band.cylTopPx, 1e-3f,
+        )
     }
 
     @Test
-    fun `a window shift with unchanged stops and length re-plans the rail's x`() {
-        val base = UndercutCanvasRailInputs(
-            stops = listOf(1000f, 1030f, 1100f, 1500f),
-            unit = UnitSystem.INCHES,
-            widthPx = 1000f,
-            profileRowHeightPx = 367f,
-            edgePadPx = 21f,
-            drawStartMm = 950f,
-            windowLengthMm = 600f,
-            maxOdMm = 254f,
-            textPadPx = 10f,
-            arrowPx = 13f,
-            fractionStyle = null,
-        )
+    fun `a window shift with unchanged cuts re-plans the rail's x`() {
+        val spans = listOf(UndercutSpanMm("a", 1030f, 1100f), UndercutSpanMm("b", 1200f, 1300f))
+        val base = detailRailInputs(spans, 1000f, 1500f, drawStart = 950f, drawEnd = 1550f)
         val shifted = base.copy(drawStartMm = 900f)
         // The plan's remember key is the inputs record, so a moved window is a different key...
         assertTrue(base != shifted)
-        val a = planUndercutCanvasRail(base) { it.length * 14f }
-        val b = planUndercutCanvasRail(shifted) { it.length * 14f }
-        // ...and a different plan: every span sits further right on the page.
-        assertEquals(a.size, b.size)
-        a.zip(b).forEach { (x, y) -> assertTrue(y.x0Pt > x.x0Pt) }
+        val a = requireNotNull(planUndercutDetailRails(base) { it.inline().length * 14f })
+        val b = requireNotNull(planUndercutDetailRails(shifted) { it.inline().length * 14f })
+        // ...and a different plan: every span sits further right on the canvas.
+        assertEquals(a.chain.size, b.chain.size)
+        a.chain.zip(b.chain).forEach { (x, y) -> assertTrue(y.x0Pt > x.x0Pt) }
+    }
+
+    @Test
+    fun `an empty strip draws no rail and the canvas has no plan before its first layout`() {
+        val started = detailRailInputs(emptyList(), 1000f, 1500f)
+        val rails = requireNotNull(planUndercutDetailRails(started) { 10f })
+        assertTrue(rails.chain.isEmpty() && rails.nested.isEmpty() && rails.total.isEmpty())
+        val band = undercutDetailRailBand(rails, started.scale, 17f * started.scale)
+        assertEquals("only the top pad", band.chainRailY, band.cylTopPx, 1e-3f)
+        assertNull(planUndercutDetailRails(started.copy(widthPx = 0f)) { 10f })
     }
 
     // ── New-cut seeds ────────────────────────────────────────────────────────

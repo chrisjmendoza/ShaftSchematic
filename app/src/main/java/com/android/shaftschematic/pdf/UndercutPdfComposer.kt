@@ -35,7 +35,6 @@ import com.android.shaftschematic.geom.hatchSpan
 import com.android.shaftschematic.geom.reliefSpan
 import com.android.shaftschematic.geom.shoulderEndMm
 import com.android.shaftschematic.geom.threadSurfaceSegs
-import com.android.shaftschematic.geom.undercutNestingForest
 import com.android.shaftschematic.model.*
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
@@ -48,9 +47,7 @@ import com.android.shaftschematic.util.VerboseLog
 import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.OutputTypography
 import com.android.shaftschematic.util.drawDualLabelCentered
-import com.android.shaftschematic.util.dualStackMetrics
 import com.android.shaftschematic.util.measureDualLabel
-import com.android.shaftschematic.util.setsStacked
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.buildLinerTitleById
 import com.android.shaftschematic.util.drawRichText
@@ -891,44 +888,20 @@ private fun drawUndercutDetailStrip(
         planDiaCallouts(diaStations, stripLeft + 2f, stripRight - 2f, UC_DIA_MIN_GAP_PT)
     val diaBandPt = diaPlan?.let { it.labelsHeightPt(diaText.textSize, UC_DIA_ROW_GAP_PT) + 2f } ?: 0f
 
-    // A started strip dimensions nothing: with no cuts the chain would degenerate to a single
-    // liner-length span, which is a figure the machinist has not measured and did not ask for.
-    //
-    // Nesting decides what the level-0 chain carries: a cut machined INSIDE another one is
-    // dimensioned on its own row against its PARENT's edges ([buildNestedUndercutRailRows]),
-    // never in the top chain's forward-cursor walk — where a fully nested cut collapses to zero
-    // width and vanishes from the chain entirely.
-    val nestingById = undercutNestingForest(spans).associateBy { it.id }
-    val topSpans = spans.filter { (nestingById[it.id]?.level ?: 0) == 0 }
-    val railSpans = if (startedStrip) emptyList()
-    else buildUndercutRailSpans(
-        strip.chainStartMm, strip.chainEndMm, topSpans, unit, dual, splitAtMm = railSplitAtMm,
+    // The rails — level-0 chain over the top-level cuts, one row per nesting level located
+    // against the parent's edges, the total across the top-level cuts — from the ONE plan the
+    // detail canvas runs too. Resolved before the vertical split (pure horizontal geometry), so
+    // the split reserves only the fallback rows these labels actually use.
+    val rails = planUndercutStripRails(
+        strip.chainStartMm, strip.chainEndMm, spans, unit, dual, railSplitAtMm, startedStrip,
+        xAt = { mm -> xAtStrip(mm) },
+        labelWidth = { s: DualLabel -> dimText.measureDualLabel(s, dualStacked) },
     )
-    // The total is the run across the TOP-LEVEL cuts: a lone parent holding one child would
-    // otherwise re-state its own length, which the chain below already carries.
-    val totalSpan = if (startedStrip) null else buildUndercutTotalSpan(topSpans, unit, dual)
-    val nestedRailRows = if (startedStrip) emptyList() else buildNestedUndercutRailRows(spans, unit, dual)
-
-    // Chain resolved before the vertical split (it is pure horizontal geometry), so the split
-    // reserves only the fallback rows these labels actually use, on the side of the line the
-    // plan puts them — see `planUndercutRailRows`. The nested rows are resolved with it, since
-    // they claim reserved rows of their own beneath the chain.
-    val labelWidth = { s: DualLabel -> dimText.measureDualLabel(s, dualStacked) }
-    val railLayout = layoutWearStripRail(
-        railSpans,
-        xAtStripMm = { mm -> xAtStrip(mm) },
-        labelWidthPt = labelWidth,
-    )
-    val nestedLayouts = nestedRailRows.map { row ->
-        layoutWearStripRail(row, xAtStripMm = { mm -> xAtStrip(mm) }, labelWidthPt = labelWidth)
-    }
-    val railPlan = planUndercutRailRows(
-        railLayout, startedStrip, hasTotalRail = totalSpan != null, nestedLayouts = nestedLayouts,
-    )
+    val railPlan = rails.rows
     val inner = computeUndercutStripInnerLayout(
         stripTop, stripBottom,
         titleHeightPt = titleText.textSize,
-        hasTotalRail = totalSpan != null,
+        hasTotalRail = rails.totalSpan != null,
         diaBandPt = diaBandPt,
         maxLabelRows = railPlan.belowRows,
         chainAboveBandPt = railPlan.aboveRows * undercutRailRowHeightPt(dimText, dualStacked),
@@ -1014,63 +987,20 @@ private fun drawUndercutDetailStrip(
         // the space above the cylinder belongs to the machinist.
         listOf(strip.chainStartMm, strip.chainEndMm).forEach { mm ->
             val x = xAtStrip(mm)
-            c.drawLine(x, inner.cylTop - UC_RAIL_WITNESS_GAP_PT, x, inner.chainRailY, dim)
+            c.drawLine(x, inner.cylTop - UNDERCUT_RAIL_WITNESS_GAP_PT, x, inner.chainRailY, dim)
         }
     }
-    drawUndercutRail(
-        c, dim, dimText, railLayout,
-        witnessBottomY = inner.cylTop - UC_RAIL_WITNESS_GAP_PT,
-        railY = inner.chainRailY,
-        // The chain's own label rows stop where the nested rows begin: the rest of the reserved
-        // band belongs to the levels stacked under it.
-        maxLabelRows = if (railPlan.aboveRows > 0) railPlan.aboveRows
-        else (inner.railLabelRows - railPlan.nestedRows).coerceAtLeast(1),
+    // The chain, the nested levels under it, then the total above it — the ONE rail sequence the
+    // Undercut tab's detail canvas draws too (`drawUndercutStripRails`).
+    drawUndercutStripRails(
+        c, dim, dimText, rails,
+        chainRailY = inner.chainRailY,
+        totalRailY = inner.totalRailY,
+        witnessBottomY = inner.cylTop - UNDERCUT_RAIL_WITNESS_GAP_PT,
+        railLabelRows = inner.railLabelRows,
         drawLabels = !blankValues,
-        fallbackLabelAbove = railPlan.aboveRows > 0,
         dualStacked = dualStacked,
     )
-    // One extra chain row per nesting level, stacked UNDER the level-0 chain — chained
-    // dimensions run most-detailed nearest the part, and a nested cut is located against its
-    // PARENT's edges, not the strip's datums. Parents at one level are disjoint, so a level
-    // always lays out on a single row. Rows step by the ONE row-height metric the reserved
-    // band was budgeted with (`planUndercutRailRows`), each line clearing the fallback labels
-    // of the row above it.
-    if (nestedLayouts.isNotEmpty()) {
-        val rowStepPt = undercutRailRowHeightPt(dimText, dualStacked)
-        // Rows the chain's own labels occupy, off what the strip actually granted — a short band
-        // clamps `railLabelRows` below the plan, and the nested rows follow it down.
-        val chainBelowRows = (inner.railLabelRows - railPlan.nestedRows).coerceAtLeast(0)
-        var rowY = inner.chainRailY + chainBelowRows * rowStepPt
-        nestedLayouts.forEach { lay ->
-            rowY += rowStepPt
-            drawUndercutRail(
-                c, dim, dimText, lay,
-                witnessBottomY = inner.cylTop - UC_RAIL_WITNESS_GAP_PT,
-                railY = rowY.coerceAtMost(inner.cylTop - UC_RAIL_WITNESS_GAP_PT),
-                maxLabelRows = WEAR_RAIL_MAX_LABEL_ROWS,
-                drawLabels = !blankValues,
-                fallbackLabelAbove = false,
-                dualStacked = dualStacked,
-            )
-            rowY += undercutRailFallbackRows(lay) * rowStepPt
-        }
-    }
-    if (totalSpan != null) {
-        val totalLayout = layoutWearStripRail(
-            listOf(totalSpan),
-            xAtStripMm = { mm -> xAtStrip(mm) },
-            labelWidthPt = { s -> dimText.measureDualLabel(s, dualStacked) },
-        )
-        drawUndercutRail(
-            c, dim, dimText, totalLayout,
-            witnessBottomY = inner.chainRailY,
-            railY = inner.totalRailY,
-            maxLabelRows = 1,
-            drawLabels = !blankValues,
-            fallbackLabelAbove = true,
-            dualStacked = dualStacked,
-        )
-    }
 
     // ── Title at the bottom: "<liner name> — <dist> FROM … S.E.T." ──
     val titleBaselineY = (stripBottom - 2f).coerceAtLeast(inner.cylBottom + titleText.textSize)
@@ -1269,113 +1199,6 @@ private fun drawUndercutWindowEnd(
     }
 }
 
-/**
- * Draws one dimension rail: witness lines from [witnessBottomY] up past [railY], an arrowed
- * dimension line per span, and each span's value. A label that fits inside its own span
- * (the inward-arrow test, which also guarantees stub room at [DIM_BREAK_TEXT_PAD_PT])
- * **seats in a break cut in the line**, vertically centred — the schematic's
- * value-in-a-break convention. A label wider than its span falls back to the stacked rows
- * `layoutWearStripRail` assigned, clamped to [maxLabelRows]. [fallbackLabelAbove] stacks
- * those rows ABOVE the line instead of below — the total-span rail (whose space below is
- * the chained rail's) and a single-level chain with no total above it (`planUndercutRailRows`:
- * a small value pushed under the span line reads as orphaned when nothing sits above the
- * rail — on-device report).
- *
- * [drawLabels] = false (blank write-in draft) keeps every line and arrowhead but skips the
- * values — the lines-in/values-out template rule.
- *
- * This mirrors the wear sheet's `drawWearStripRail` rather than calling it: that function
- * is private to `WearPdfComposer.kt`, and this one additionally needs the
- * [witnessBottomY]/[fallbackLabelAbove] freedom the second (total) rail line requires. The
- * shared part — where labels seat, how arrows flip, how rows stack — is the pure
- * `layoutWearStripRail` both call.
- */
-private fun drawUndercutRail(
-    c: Canvas,
-    dim: Paint,
-    dimText: Paint,
-    layout: List<WearRailSpanLayout>,
-    witnessBottomY: Float,
-    railY: Float,
-    maxLabelRows: Int,
-    drawLabels: Boolean,
-    fallbackLabelAbove: Boolean = false,
-    /** Set dual values as two-line stacks — decided once for the sheet by the composer. */
-    dualStacked: Boolean = false,
-) {
-    if (layout.isEmpty()) return
-    val arrow = 4f
-    val labelGapPt = UC_RAIL_LABEL_GAP_PT
-    // Row pitch comes from the LAYOUT constant, not the text size, so the rows drawn here and
-    // the rows `computeUndercutStripInnerLayout` budgeted cannot drift apart.
-    val rowStepPt = undercutRailRowHeightPt(dimText, dualStacked)
-    val witnessExt = 3f
-
-    // Two passes: every line first, every label second. A fallback label for a span too
-    // narrow to seat its value inevitably crosses its own (and often a neighbour's)
-    // witness lines — the label pass paints a small page-colour halo behind each such
-    // label, and running it after ALL lines means no later span can strike back through
-    // (on-device report: the gap value between two cuts had lines running through it).
-    layout.forEach { s ->
-        c.drawLine(s.x0Pt, witnessBottomY, s.x0Pt, railY - witnessExt, dim)
-        c.drawLine(s.x1Pt, witnessBottomY, s.x1Pt, railY - witnessExt, dim)
-
-        val lw = dimText.measureDualLabel(s.label, dualStacked)
-        val seatsInBreak = drawLabels && s.seatsInBreak
-        if (seatsInBreak) {
-            val gapHalf = lw * 0.5f + DIM_BREAK_TEXT_PAD_PT
-            c.drawLine(s.x0Pt, railY, s.labelCxPt - gapHalf, railY, dim)
-            c.drawLine(s.labelCxPt + gapHalf, railY, s.x1Pt, railY, dim)
-        } else {
-            c.drawLine(s.x0Pt, railY, s.x1Pt, railY, dim)
-        }
-
-        val dirLeft = if (s.arrowInward) 1f else -1f
-        val dirRight = if (s.arrowInward) -1f else 1f
-        c.drawLine(s.x0Pt, railY, s.x0Pt + dirLeft * arrow, railY - arrow * 0.5f, dim)
-        c.drawLine(s.x0Pt, railY, s.x0Pt + dirLeft * arrow, railY + arrow * 0.5f, dim)
-        c.drawLine(s.x1Pt, railY, s.x1Pt + dirRight * arrow, railY - arrow * 0.5f, dim)
-        c.drawLine(s.x1Pt, railY, s.x1Pt + dirRight * arrow, railY + arrow * 0.5f, dim)
-    }
-    if (!drawLabels) return
-    val halo = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL; color = Color.WHITE }
-    val fm = dimText.fontMetrics
-    layout.forEach { s ->
-        val lw = dimText.measureDualLabel(s.label, dualStacked)
-        if (s.seatsInBreak) {
-            // Break-seated: the gap already isolates the value from every line. A stack straddles
-            // the rail — primary above it, secondary below — so the stubs point into the seam.
-            val seatBaseline =
-                if (s.label.setsStacked(dualStacked))
-                    railY - dimText.dualStackMetrics().height * 0.5f - fm.ascent
-                else railY - (fm.ascent + fm.descent) * 0.5f
-            c.drawDualLabelCentered(s.label, s.labelCxPt, seatBaseline, dimText, dualStacked)
-            return@forEach
-        }
-        val row = s.labelRow.coerceAtMost(maxLabelRows - 1)
-        if (row < 0) return@forEach
-        val baselineY = if (fallbackLabelAbove) {
-            // Above the line, clear of the arrowheads straddling it, stacking upward. On the
-            // total-span rail (always one span) row 0 is the whole band
-            // ([UNDERCUT_TOTAL_RAIL_ABOVE_PT] is sized to hold exactly it); on a single-level
-            // chain the rows come from the reserved `chainAboveBandPt`.
-            railY - arrow * 0.5f - labelGapPt - fm.descent - row * rowStepPt
-        } else {
-            // First row starts clear of the outward arrowheads straddling the rail line.
-            railY + arrow + labelGapPt + dimText.textSize + row * rowStepPt
-        }
-        // The halo covers the WHOLE value, both lines of a stack included, or a line would run
-        // through the term it did not cover.
-        val stackH = if (s.label.setsStacked(dualStacked)) dimText.dualStackMetrics().advance else 0f
-        c.drawRect(
-            s.labelCxPt - lw * 0.5f - 1.5f, baselineY + fm.ascent - 0.5f,
-            s.labelCxPt + lw * 0.5f + 1.5f, baselineY + fm.descent + stackH + 0.5f,
-            halo,
-        )
-        c.drawDualLabelCentered(s.label, s.labelCxPt, baselineY, dimText, dualStacked)
-    }
-}
-
 /** Text note for detail strips that didn't fit on this page. */
 private fun drawUndercutOverflowNote(
     c: Canvas, text: Paint, left: Float, right: Float, bandTop: Float, bandBottom: Float, count: Int,
@@ -1417,8 +1240,6 @@ private const val UC_OVERFLOW_NOTE_HEIGHT_PT = 16f   // reserved band for the "+
 private const val UC_PROFILE_RADIUS_MARGIN_PT = 8f   // headroom above/below the shaft's drawn radius
 
 
-private const val UC_RAIL_WITNESS_GAP_PT = 3f        // clear gap between the drawn surface and a witness line
-private const val UC_RAIL_LABEL_GAP_PT = 5f          // rail arrowheads → a fallback label's nearest edge
 
 private const val UC_DIA_TEXT_PT = 8f                // measured-Ø value text size
 private const val UC_DIA_MIN_GAP_PT = 5f             // min clear gap between label edges / leader drops
