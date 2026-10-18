@@ -487,7 +487,12 @@ only under `PdfPrefs.undercutSplitAtLinerEdge` (app-wide look pref, default OFF)
 (per-job — a fit for this shaft's geometry, not a look) extends a liner strip whose chain ends within
 `UNDERCUT_SET_REACH_MM` (24") of its S.E.T. out to the shaft end (chain to the S.E.T.) — flat physical end, no break — and the
 chain gains the span to it (the sketch's "12 3/4 to the S.E.T."); liner strips only, the total span
-unchanged. **ONE cut numbering, an INPUT aid only** — `undercutSheetNumbers` (`geom/UndercutNumbering.kt`,
+unchanged. **The detail canvas's rail IS the printed strip's rail**: both run the ONE planner
+`planUndercutStripRails` (`pdf/UndercutStripLayout.kt` — top-level chain, nested rows against the
+parent, total, row plan) and the ONE draw routine `drawUndercutStripRails` (`pdf/UndercutRailDraw.kt`), the
+canvas at `UNDERCUT_DETAIL_DP_PER_PT` through `scale` parameters that default to 1 (PDF byte-identical). A
+canvas-only rail (every shoulder on one chain, decimal labels above an unbroken line) read congested
+beside the sheet (on-device report) — do not reintroduce one. **ONE cut numbering, an INPUT aid only** — `undercutSheetNumbers` (`geom/UndercutNumbering.kt`,
 AFT → FWD by clamped start, 1-based, display-only; the record keeps its own order): the tab list sorts
 and numbers its rows by it, messages name cuts by it, and the zoomed DETAIL canvas draws it centred
 inside each section — on EVERY free piece of a parent that nested cuts split, so the pieces read as one

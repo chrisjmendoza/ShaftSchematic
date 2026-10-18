@@ -74,7 +74,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
@@ -148,10 +147,15 @@ import com.android.shaftschematic.pdf.formatDiaWithUnit
 import com.android.shaftschematic.pdf.buildUndercutStripTitle
 import com.android.shaftschematic.geom.undercutSheetNumbers
 import com.android.shaftschematic.util.DisplayUnits
-import com.android.shaftschematic.util.measureRichText
-import com.android.shaftschematic.pdf.layoutWearStripRail
-import com.android.shaftschematic.pdf.WearRailSpanLayout
-import com.android.shaftschematic.pdf.WearRailSpan
+import com.android.shaftschematic.pdf.UNDERCUT_RAIL_WITNESS_GAP_PT
+import com.android.shaftschematic.pdf.UNDERCUT_TOTAL_RAIL_ABOVE_PT
+import com.android.shaftschematic.pdf.UNDERCUT_TOTAL_RAIL_BAND_PT
+import com.android.shaftschematic.pdf.UndercutStripRails
+import com.android.shaftschematic.pdf.drawUndercutStripRails
+import com.android.shaftschematic.pdf.planUndercutStripRails
+import com.android.shaftschematic.pdf.undercutRailRowHeightPt
+import com.android.shaftschematic.util.OutputTypography
+import com.android.shaftschematic.util.measureDualLabel
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import com.android.shaftschematic.ui.resolved.ResolvedBody
@@ -168,7 +172,6 @@ import com.android.shaftschematic.util.FractionTypography
 import com.android.shaftschematic.util.UndercutStyle
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.DualLabel
-import com.android.shaftschematic.util.drawRichText
 import com.android.shaftschematic.util.buildLinerTitleById
 import com.android.shaftschematic.util.toMmOrNull
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -194,10 +197,12 @@ import kotlin.math.min
  *   the window edges.
  *
  * Contents, top to bottom:
- * - a **fixed canvas** — a **dimension rail above** (the cluster total span on the upper line,
- *   and below it the chained run across the strip's chain range: chain AFT datum → each shoulder
- *   → each gap → chain FWD datum; nothing outside the chain range is labelled, so the drawing
- *   never dimensions the arbitrary pad); the **strip profile** with the undercut **notches** cut
+ * - a **fixed canvas** — a **dimension rail above**, the printed strip's rails by construction
+ *   (its ONE planner `planUndercutStripRails` and draw sequence `drawUndercutStripRails` at canvas
+ *   scale: the total on the upper line, the chain across the strip's chain range over the
+ *   top-level cuts, a row under it per nesting level against the parent's shoulders; nothing
+ *   outside the chain range is labelled, so the drawing never dimensions the arbitrary pad); the
+ *   **strip profile** with the undercut **notches** cut
  *   into it (`geom/SurfaceProfileMath.kt` via [buildUndercutNotches], the identical pipeline the
  *   PDF composer uses, so the two draw the same notch by construction); and **Ø callouts below**
  *   through the shared `planDiaCallouts` engine — one station per undercut at its axial centre,
@@ -949,8 +954,6 @@ fun UndercutWindowDetailOverlay(
     // on-screen strip and the printed strip alike: grey liner, white cut sections (on-device
     // request). Line art empties the fill entirely.
     val linerFillColor = style.linerFill()
-    val railColor = outlineColor.copy(alpha = 0.65f)
-    val witnessColor = outlineColor.copy(alpha = 0.35f)
     val selectColor = MaterialTheme.colorScheme.primary
     val errorColor = MaterialTheme.colorScheme.error
     val textColorArgb = outlineColor.toArgb()
@@ -1019,11 +1022,6 @@ fun UndercutWindowDetailOverlay(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    // The cluster-total rail exists only with ≥ 2 drawable cuts — for a single
-                    // cut it would restate that cut's own chain figure (a duplicate value, per
-                    // on-device report). Same rule as the PDF's buildUndercutTotalSpan; the row
-                    // collapses so the canvas doesn't keep a blank band.
-                    val totalRailRowDp = if (spans.size >= 2) 30.dp else 0.dp
                     val profileRowDp = UNDERCUT_PROFILE_ROW_DP
                     // Fixed band for the Ø callouts (leader + up to two staggered label rows), so the
                     // canvas height doesn't jump between one and two rows.
@@ -1035,44 +1033,82 @@ fun UndercutWindowDetailOverlay(
                         if (env > 0f) env else 1f
                     }
 
-                    // The chain rail's labels, placed by the printed strip's planner
-                    // (`layoutWearStripRail`): a label that would collide with its neighbour
-                    // stacks one row up (on-device report: the values ran into each other), and
-                    // the band grows by one label row for each extra row the plan used. Planned
-                    // here, off the same x map the canvas draws with, so the reserved height and
-                    // the drawn rows are one number.
+                    // The rail band runs the printed strip's ONE planner (`planUndercutStripRails`)
+                    // and ONE draw routine (`drawUndercutStripRails`) at canvas scale: the level-0 chain
+                    // over the top-level cuts, each nesting level on its own row against its
+                    // parent's edges, the total across the top-level cuts, values seated in a break
+                    // when they fit. Planned here, off the same x map the canvas draws with, so the
+                    // reserved height and the drawn rows are one number. The authoring overlay stays
+                    // single-unit, so no value is dual.
                     val density = LocalDensity.current
-                    val railStops = remember(strip, spans, railSplitAtMm) {
-                        undercutCanvasRailStops(strip.chainStartMm, strip.chainEndMm, spans, railSplitAtMm)
+                    val railScale = density.density * UNDERCUT_DETAIL_DP_PER_PT
+                    val railTypeface = OutputTypography.active
+                    val railTextPaint = remember(textColorArgb, railScale, railTypeface) {
+                        android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                            this.style = android.graphics.Paint.Style.FILL
+                            color = textColorArgb
+                            textSize = UNDERCUT_DETAIL_RAIL_TEXT_PT * railScale
+                            typeface = railTypeface
+                        }
+                    }
+                    val railDimPaint = remember(textColorArgb, density) {
+                        android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                            this.style = android.graphics.Paint.Style.STROKE
+                            color = textColorArgb
+                            strokeWidth = with(density) { UNDERCUT_DETAIL_RAIL_STROKE_DP.dp.toPx() }
+                        }
                     }
                     // Every input of the plan is one record, and the record is the remember key, so
                     // no input can be left out of the key.
                     val railInputs = with(density) {
-                        UndercutCanvasRailInputs(
-                            stops = railStops,
+                        UndercutDetailRailInputs(
+                            spans = spans,
+                            chainStartMm = strip.chainStartMm,
+                            chainEndMm = strip.chainEndMm,
+                            splitAtMm = railSplitAtMm,
                             unit = unit,
+                            startedStrip = spans.isEmpty(),
                             widthPx = canvasWidthPx.toFloat(),
                             profileRowHeightPx = profileRowDp.toPx(),
                             edgePadPx = UNDERCUT_EDGE_PAD_DP.dp.toPx(),
                             drawStartMm = drawStartMm,
                             windowLengthMm = winLenMm,
                             maxOdMm = maxOdMm,
-                            textPadPx = 4.dp.toPx(),
-                            arrowPx = 5.dp.toPx(),
+                            scale = railScale,
+                            textSizePx = railTextPaint.textSize,
+                            typeface = railTypeface,
                             fractionStyle = FractionTypography.active,
                         )
                     }
-                    val railPlan = remember(railInputs) {
-                        planUndercutCanvasRail(railInputs) { textPaint.measureRichText(it) }
+                    val rails = remember(railInputs) {
+                        planUndercutDetailRails(railInputs) { railTextPaint.measureDualLabel(it, false) }
                     }
-                    val railLabelRows = (railPlan.maxOfOrNull { it.labelRow } ?: 0) + 1
-                    val railLabelRowDp = with(density) { (textPaint.textSize + 6f).toDp() }
-                    val chainRailRowDp = UNDERCUT_CHAIN_RAIL_ROW_DP + railLabelRowDp * (railLabelRows - 1)
-                    val canvasHeightDp = totalRailRowDp + chainRailRowDp + profileRowDp + diaBandDp
+                    val railBand = remember(rails, railScale, railTextPaint) {
+                        undercutDetailRailBand(rails, railScale, undercutRailRowHeightPt(railTextPaint, false, railScale))
+                    }
+                    // The cylinder's top sits on the rail band's bottom, the printed strip's
+                    // `cylTop = chainRailY + belowRows × row + headroom`: the profile row starts
+                    // above it by the row's own slack over the drawn cylinder.
+                    val profileTopPx = with(density) {
+                        val lay0 = computeUndercutWindowLayout(
+                            widthPx = canvasWidthPx.toFloat(),
+                            profileTopPx = 0f,
+                            profileRowHeightPx = profileRowDp.toPx(),
+                            windowLengthMm = winLenMm,
+                            maxOdMm = maxOdMm,
+                            edgePadPx = UNDERCUT_EDGE_PAD_DP.dp.toPx(),
+                        )
+                        val slackPx = (lay0.cy - maxOdMm * 0.5f * lay0.pxPerMm).coerceAtLeast(0f)
+                        railBand.cylTopPx - slackPx
+                    }
+                    val canvasHeightDp = with(density) {
+                        (profileTopPx + profileRowDp.toPx()).coerceAtLeast(0f).toDp()
+                    } + diaBandDp
 
                     // Read live inside the tap pointerInput without re-keying it on every pinch.
                     val scaleForTap = rememberUpdatedState(zoomScale)
                     val offsetForTap = rememberUpdatedState(zoomOffset)
+                    val profileTopForTap = rememberUpdatedState(profileTopPx)
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1093,7 +1129,7 @@ fun UndercutWindowDetailOverlay(
                                     )
                                     val lay = computeUndercutWindowLayout(
                                         widthPx = size.width.toFloat(),
-                                        profileTopPx = (totalRailRowDp + chainRailRowDp).toPx(),
+                                        profileTopPx = profileTopForTap.value,
                                         profileRowHeightPx = profileRowDp.toPx(),
                                         windowLengthMm = winLenMm,
                                         maxOdMm = maxOdMm,
@@ -1119,7 +1155,6 @@ fun UndercutWindowDetailOverlay(
                                 ),
                         ) {
                             val outlineWidthPx = 1.5.dp.toPx()
-                            val profileTopPx = (totalRailRowDp + chainRailRowDp).toPx()
                             val profileRowPx = profileRowDp.toPx()
                             val lay = computeUndercutWindowLayout(
                                 widthPx = size.width,
@@ -1356,54 +1391,20 @@ fun UndercutWindowDetailOverlay(
                                 }
                             }
 
-                            // ── Dimension rail above: chained run + cluster total ──
-                            // The line keeps its distance off the profile; extra label rows stack
-                            // above it, into the band they grew.
-                            val chainRailY = (totalRailRowDp + chainRailRowDp).toPx() -
-                                UNDERCUT_CHAIN_RAIL_ROW_DP.toPx() * 0.38f
-                            val railLabelRowPx = railLabelRowDp.toPx()
-                            val totalRailY = totalRailRowDp.toPx() * 0.62f
-                            val witnessBottomY = cy - rPx(maxOdMm) - 4f
-
+                            // ── Dimension rails above: the printed strip's rails at canvas scale ──
                             // Chain datums, not the draw range: a liner strip anchors the rail on the
                             // liner's own edges (extended by any cut overhang), a free strip on its
-                            // window edges. The pad outside the chain range is never dimensioned —
-                            // the identical rule the PDF strips apply.
-                            // A buried liner edge is a node inside the span that crosses it, so the
-                            // overhang reads against the edge's position.
-                            railStops.forEach { mm ->
-                                drawLine(
-                                    witnessColor, Offset(xPx(mm), chainRailY - 3f),
-                                    Offset(xPx(mm), witnessBottomY), 1f,
+                            // window edges — the pad outside the chain range is never dimensioned.
+                            rails?.let { plan ->
+                                drawUndercutStripRails(
+                                    drawContext.canvas.nativeCanvas, railDimPaint, railTextPaint, plan,
+                                    chainRailY = railBand.chainRailY,
+                                    totalRailY = railBand.totalRailY,
+                                    witnessBottomY = cy - rPx(maxOdMm) - UNDERCUT_RAIL_WITNESS_GAP_PT * railScale,
+                                    railLabelRows = plan.rows.belowRows,
+                                    drawLabels = true,
+                                    scale = railScale,
                                 )
-                            }
-                            // The plan's x map is this canvas's own; a label lifts one row per
-                            // stacked row the planner assigned it.
-                            railPlan.forEach { r ->
-                                drawUndercutDimSpan(
-                                    r.x0Pt, r.x1Pt, chainRailY,
-                                    r.label.primary, textPaint, railColor,
-                                    labelCx = r.labelCxPt,
-                                    labelLiftPx = r.labelRow * railLabelRowPx,
-                                )
-                            }
-                            if (spans.size >= 2) {
-                                val first = spans.first().startMm
-                                val last = spans.last().endMm
-                                if (last - first > eps) {
-                                    drawLine(
-                                        witnessColor, Offset(xPx(first), totalRailY - 3f),
-                                        Offset(xPx(first), chainRailY), 1f,
-                                    )
-                                    drawLine(
-                                        witnessColor, Offset(xPx(last), totalRailY - 3f),
-                                        Offset(xPx(last), chainRailY), 1f,
-                                    )
-                                    drawUndercutDimSpan(
-                                        xPx(first), xPx(last), totalRailY,
-                                        undercutDimLabel(last - first, unit), textPaint, railColor,
-                                    )
-                                }
                             }
 
                             // ── Ø callouts below (shared planDiaCallouts engine) ──
@@ -3127,93 +3128,44 @@ internal fun componentDiaAt(rc: ResolvedComponent, xMm: Float): Float = when (rc
 // Canvas helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** A dimension value in the active unit, e.g. `7.688in` — the wear overlay's rail convention. */
-internal fun undercutDimLabel(mm: Float, unit: UnitSystem): String = disp(mm, unit) + abbr(unit)
+/**
+ * Size of one printed point on the detail canvas, dp. The canvas draws the printed strip's rails
+ * through the same plan and draw routine as the page, with every fixed point size multiplied by
+ * `density × this`: at 1.25 the rail's 8 pt values set at 10 dp — the size the canvas's other
+ * labels read at — and its 4 pt arrowheads at 5 dp.
+ */
+internal const val UNDERCUT_DETAIL_DP_PER_PT = 1.25f
+
+/** The rail values' size in printed points — the printed strip's dimension text (sheet text − 2). */
+internal const val UNDERCUT_DETAIL_RAIL_TEXT_PT = 8f
+
+/** Rail stroke, dp — the printed dimension-to-outline weight ratio (1.2 : 2) on the 1.5 dp outline. */
+internal const val UNDERCUT_DETAIL_RAIL_STROKE_DP = 0.9f
+
+/** Clear air above the top rail line inside the canvas, in printed points. */
+internal const val UNDERCUT_DETAIL_RAIL_TOP_PAD_PT = 8f
 
 /**
- * One dimension span on the rail: a line between [x0] and [x1] with arrowheads (inward when the
- * span can host them, outward otherwise) and the value centred above. The canvas twin of the
- * PDF strip rail — modest by design; the PDF owns the printed typography.
+ * Air between the last reserved rail row and the cylinder top, in printed points — the printed
+ * strip's surplus rail headroom (`UNDERCUT_RAIL_EXTRA_HEADROOM_MAX_PT`, up to 15 pt), fixed: the
+ * canvas has no band surplus to spend, and without it a fallback value on the lowest row stands
+ * on the cylinder outline.
  */
-internal fun DrawScope.drawUndercutDimSpan(
-    x0: Float,
-    x1: Float,
-    y: Float,
-    label: String,
-    paint: android.graphics.Paint,
-    color: Color,
-    /** Where the value is centred; the span's midpoint unless a rail planner placed it. */
-    labelCx: Float = (x0 + x1) / 2f,
-    /** How far above the default label row the value sits — a stacked row's lift. */
-    labelLiftPx: Float = 0f,
-) {
-    val lo = min(x0, x1)
-    val hi = max(x0, x1)
-    if (hi - lo < 1f) return
-    val w = 1f
-    val arrow = 5.dp.toPx()
-    drawLine(color, Offset(lo, y), Offset(hi, y), w)
-
-    fun head(x: Float, dir: Float) {
-        drawLine(color, Offset(x, y), Offset(x + dir * arrow, y - arrow * 0.4f), w)
-        drawLine(color, Offset(x, y), Offset(x + dir * arrow, y + arrow * 0.4f), w)
-    }
-    if (hi - lo > arrow * 3f) {
-        head(lo, 1f)
-        head(hi, -1f)
-    } else {
-        // Too tight for inward arrows: extend the line past each end and point in from outside.
-        drawLine(color, Offset(lo - arrow, y), Offset(lo, y), w)
-        drawLine(color, Offset(hi, y), Offset(hi + arrow, y), w)
-        head(lo, -1f)
-        head(hi, 1f)
-    }
-    drawContext.canvas.nativeCanvas.drawRichText(label, labelCx, y - 6.dp.toPx() - labelLiftPx, paint)
-}
-
-/** Height of the detail canvas's chain-rail band with every label on one row. */
-private val UNDERCUT_CHAIN_RAIL_ROW_DP = 30.dp
+internal const val UNDERCUT_DETAIL_RAIL_HEADROOM_PT = 6f
 
 /**
- * The detail canvas's chain-rail stations, aft → fwd: the chain datums (a liner strip's liner
- * edges extended by overhang, a free strip's window edges — never the draw range, the identical
- * rule the PDF strips apply), every cut's two shoulders, and each buried liner edge in
- * [splitAtMm] that falls strictly inside a span, so an overhang reads against the edge's
- * position. The caller feeds [splitAtMm] only while `PdfPrefs.undercutSplitAtLinerEdge` is on
- * (default off: the shop measures each cut's length, so a cut reads whole — on-device
- * direction); empty adds no node.
+ * Every input of the detail canvas's rail plan in one record — the `remember` key, so no input
+ * can be left out of it. [spans] are the PREVIEWED spans (stored cuts with the live draft applied),
+ * render-clamped.
  */
-internal fun undercutCanvasRailStops(
-    chainStartMm: Float,
-    chainEndMm: Float,
-    spans: List<UndercutSpanMm>,
-    splitAtMm: List<Float>,
-    epsMm: Float = 1e-3f,
-): List<Float> {
-    val stops = buildList {
-        add(chainStartMm)
-        spans.forEach { add(it.startMm); add(it.endMm) }
-        add(chainEndMm)
-    }.toMutableList()
-    splitAtMm.forEach { n ->
-        val at = (0 until stops.size - 1).firstOrNull { i ->
-            n - stops[i] > epsMm && stops[i + 1] - n > epsMm
-        }
-        if (at != null) stops.add(at + 1, n)
-    }
-    return stops
-}
-
-/**
- * The detail canvas's chain rail as placed spans: one span per pair of consecutive [stops] longer
- * than [epsMm], labelled as the canvas labels them ([undercutDimLabel]), run through the printed
- * strip's ONE label planner ([layoutWearStripRail]) — a value is centred on its span, slid inside
- * it when it fits, and a value that would overlap an already-placed one takes the next row up.
- * [xPx] is the canvas's x map; [labelWidthPx] measures a value as the canvas draws it.
- */
-internal data class UndercutCanvasRailInputs(
-    val stops: List<Float>,
+internal data class UndercutDetailRailInputs(
+    val spans: List<UndercutSpanMm>,
+    val chainStartMm: Float,
+    val chainEndMm: Float,
+    val splitAtMm: List<Float>,
     val unit: UnitSystem,
+    /** No cuts on the strip: the canvas draws no rail. */
+    val startedStrip: Boolean,
     /** The drawing Box's laid-out width; 0 before the first layout (no plan yet). */
     val widthPx: Float,
     val profileRowHeightPx: Float,
@@ -3221,22 +3173,25 @@ internal data class UndercutCanvasRailInputs(
     val drawStartMm: Float,
     val windowLengthMm: Float,
     val maxOdMm: Float,
-    val textPadPx: Float,
-    val arrowPx: Float,
-    /** The label measure depends on it, so a style change re-plans. */
+    /** Canvas px per printed point ([UNDERCUT_DETAIL_DP_PER_PT] × density). */
+    val scale: Float,
+    /** The label measure depends on these, so a change re-plans. */
+    val textSizePx: Float,
+    val typeface: Any?,
     val fractionStyle: Any?,
 )
 
 /**
- * The detail canvas's chain-rail plan from [inputs] — the canvas's own x map
- * ([computeUndercutWindowLayout] at the Box width) fed to [planUndercutCanvasRail]. Empty until the
- * Box has a width.
+ * The detail canvas's rails: the printed strip's ONE planner ([planUndercutStripRails]) over the
+ * canvas's own x map ([computeUndercutWindowLayout] at the Box width), single-unit, at the canvas
+ * [UndercutDetailRailInputs.scale]. [labelWidthPx] measures a value as the canvas draws it. Null
+ * until the Box has a width.
  */
-internal fun planUndercutCanvasRail(
-    inputs: UndercutCanvasRailInputs,
-    labelWidthPx: (String) -> Float,
-): List<WearRailSpanLayout> {
-    if (inputs.widthPx <= 0f) return emptyList()
+internal fun planUndercutDetailRails(
+    inputs: UndercutDetailRailInputs,
+    labelWidthPx: (DualLabel) -> Float,
+): UndercutStripRails? {
+    if (inputs.widthPx <= 0f) return null
     val lay = computeUndercutWindowLayout(
         widthPx = inputs.widthPx,
         profileTopPx = 0f,
@@ -3245,33 +3200,53 @@ internal fun planUndercutCanvasRail(
         maxOdMm = inputs.maxOdMm,
         edgePadPx = inputs.edgePadPx,
     )
-    return planUndercutCanvasRail(
-        stops = inputs.stops,
-        unit = inputs.unit,
-        xPx = { mm -> lay.startPx + (mm - inputs.drawStartMm) * lay.pxPerMm },
-        labelWidthPx = labelWidthPx,
-        textPadPx = inputs.textPadPx,
-        arrowPx = inputs.arrowPx,
+    return planUndercutStripRails(
+        inputs.chainStartMm, inputs.chainEndMm, inputs.spans, inputs.unit,
+        dual = false,
+        splitAtMm = inputs.splitAtMm,
+        startedStrip = inputs.startedStrip,
+        xAt = { mm -> lay.startPx + (mm - inputs.drawStartMm) * lay.pxPerMm },
+        labelWidth = labelWidthPx,
+        scale = inputs.scale,
     )
 }
 
-internal fun planUndercutCanvasRail(
-    stops: List<Float>,
-    unit: UnitSystem,
-    xPx: (Float) -> Float,
-    labelWidthPx: (String) -> Float,
-    textPadPx: Float,
-    arrowPx: Float,
-    epsMm: Float = 1e-3f,
-): List<WearRailSpanLayout> {
-    val railSpans = (0 until stops.size - 1).mapNotNull { i ->
-        val a = stops[i]
-        val b = stops[i + 1]
-        if (b - a <= epsMm) null else WearRailSpan(a, b, DualLabel.single(undercutDimLabel(b - a, unit)))
+/** The detail canvas's rail band, px from the canvas top — see [undercutDetailRailBand]. */
+internal data class UndercutDetailRailBand(
+    val totalRailY: Float,
+    val chainRailY: Float,
+    /** Where the drawn cylinder's top sits: the band's bottom. */
+    val cylTopPx: Float,
+)
+
+/**
+ * The detail canvas's rail band, built the printed strip's way (`computeUndercutStripInnerLayout`)
+ * at canvas [scale]: a top pad, then the total rail line [UNDERCUT_TOTAL_RAIL_ABOVE_PT] down with
+ * the rest of [UNDERCUT_TOTAL_RAIL_BAND_PT] below it when a total exists — else the chain's
+ * above-the-line fallback rows — then the chain line, then the plan's `belowRows` rows (clear air,
+ * the chain's below-line fallbacks and every nested row) and [UNDERCUT_DETAIL_RAIL_HEADROOM_PT],
+ * ending on the cylinder top. A strip with no rail (no plan yet, or no cuts) keeps only the top
+ * pad.
+ */
+internal fun undercutDetailRailBand(
+    rails: UndercutStripRails?,
+    scale: Float,
+    rowStepPx: Float,
+): UndercutDetailRailBand {
+    val topPad = UNDERCUT_DETAIL_RAIL_TOP_PAD_PT * scale
+    if (rails == null || rails.chainSpans.isEmpty()) return UndercutDetailRailBand(topPad, topPad, topPad)
+    val totalY: Float
+    val chainY: Float
+    if (rails.totalSpan != null) {
+        totalY = topPad + UNDERCUT_TOTAL_RAIL_ABOVE_PT * scale
+        chainY = totalY + (UNDERCUT_TOTAL_RAIL_BAND_PT - UNDERCUT_TOTAL_RAIL_ABOVE_PT) * scale
+    } else {
+        chainY = topPad + rails.rows.aboveRows * rowStepPx
+        totalY = chainY
     }
-    return layoutWearStripRail(
-        railSpans, xPx, { labelWidthPx(it.primary) },
-        textPadPt = textPadPx, arrowSizePt = arrowPx, minLabelGapPt = textPadPx,
+    return UndercutDetailRailBand(
+        totalY, chainY,
+        chainY + rails.rows.belowRows * rowStepPx + UNDERCUT_DETAIL_RAIL_HEADROOM_PT * scale,
     )
 }
 

@@ -329,13 +329,16 @@ object DimensionRailLayout {
      *
      * @param seatsInBreak the value sits in a break in this line, whose stubs the break was cut
      *   to keep arrow-wide — such a span always keeps inward heads.
+     * @param arrowClear the daylight left between two inward heads, in the same unit as [xa]/[xb]
+     *   — [ARROW_CLEAR] on the page; a caller laying out at another scale passes it scaled.
      */
     fun arrowsPointInward(
         xa: Float,
         xb: Float,
         seatsInBreak: Boolean,
         arrowSize: Float,
-    ): Boolean = seatsInBreak || (xb - xa) >= 2f * arrowSize + ARROW_CLEAR
+        arrowClear: Float = ARROW_CLEAR,
+    ): Boolean = seatsInBreak || (xb - xa) >= 2f * arrowSize + arrowClear
 
     private class Row(
         val inline: Boolean,

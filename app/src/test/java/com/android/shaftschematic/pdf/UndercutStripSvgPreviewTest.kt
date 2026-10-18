@@ -22,7 +22,6 @@ import com.android.shaftschematic.geom.maxOuterDiaOver
 import com.android.shaftschematic.geom.outerDiaAt
 import com.android.shaftschematic.geom.planDiaCallouts
 import com.android.shaftschematic.geom.undercutCalloutAnchorMm
-import com.android.shaftschematic.geom.undercutNestingForest
 import com.android.shaftschematic.pdf.formatDiaWithUnit
 import com.android.shaftschematic.model.Body
 import com.android.shaftschematic.model.Liner
@@ -49,8 +48,8 @@ import java.io.File
  * on-device round trip: drives the REAL layout and geometry code —
  * `surfaceSegsFrom`/`minOuterDiaOver`/`effectiveNotchDiaMm`/`notchProfiles`,
  * `buildUndercutStrips`, `computeWearStripHorizontalLayout`,
- * `computeUndercutStripInnerLayout`, `buildUndercutRailSpans`/`buildUndercutTotalSpan`/
- * `layoutWearStripRail`, `buildUndercutDiaStations`/`planDiaCallouts`, `undercutAnchorFor`,
+ * `computeUndercutStripInnerLayout`, `planUndercutStripRails` (the ONE rail plan the composer
+ * and the detail canvas run), `buildUndercutDiaStations`/`planDiaCallouts`, `undercutAnchorFor`,
  * `buildLinerTitleById`/`buildUndercutStripTitle` — and writes what `UndercutPdfComposer`
  * would draw as SVG into `app/build/reports/undercut-preview/`. Only text width is
  * approximated (no `Paint.measureText` on the JVM; a fixed per-char factor stands in), which
@@ -521,28 +520,23 @@ class UndercutStripSvgPreviewTest {
         val plan = if (stations.isEmpty()) null else planDiaCallouts(stations, stripLeft + 2f, stripRight - 2f, minGap)
         val diaBand = plan?.let { it.labelsHeightPt(textH, rowGap) + 2f } ?: 0f
 
-        // Nesting decides what the level-0 chain carries; nested levels get their own rows,
-        // anchored at their parent's edges — the composer's split, exactly.
-        val nestingById = undercutNestingForest(spans).associateBy { it.id }
-        val topSpans = spans.filter { (nestingById[it.id]?.level ?: 0) == 0 }
         // The composer's split-node rule: buried edges only while the pref is on.
         val railSplitAtMm = (strip as? UndercutStrip.LinerStrip)
             ?.takeIf { splitAtLinerEdge }
             ?.let { buriedUndercutLinerEdgesMm(it.linerStartMm, it.linerEndMm, liveSpans) }
             ?: emptyList()
-        val railSpans = if (started) emptyList()
-        else buildUndercutRailSpans(strip.chainStartMm, strip.chainEndMm, topSpans, unit, splitAtMm = railSplitAtMm)
-        val totalSpan = if (started) null else buildUndercutTotalSpan(topSpans, unit)
-        val nestedRows = if (started) emptyList() else buildNestedUndercutRailRows(spans, unit)
-        // Chain before the vertical split, composer order: the split reserves the rows used,
-        // on the side of the line the plan puts them.
-        val chain = layoutWearStripRail(railSpans, xAtStripMm = ::xAt, labelWidthPt = { labelW(it.inline()) })
-        val nestedChains = nestedRows.map {
-            layoutWearStripRail(it, xAtStripMm = ::xAt, labelWidthPt = { l -> labelW(l.inline()) })
-        }
-        val railPlan = planUndercutRailRows(
-            chain, started, hasTotalRail = totalSpan != null, nestedLayouts = nestedChains,
+        // The ONE rail plan the composer and the detail canvas run: level-0 chain over the
+        // top-level cuts, nested levels on their own rows against their parent's edges, the total.
+        val rails = planUndercutStripRails(
+            strip.chainStartMm, strip.chainEndMm, spans, unit, dual = false, splitAtMm = railSplitAtMm,
+            startedStrip = started, xAt = ::xAt, labelWidth = { labelW(it.inline()) },
         )
+        val railSpans = rails.chainSpans
+        val totalSpan = rails.totalSpan
+        val nestedRows = rails.nestedSpans
+        val chain = rails.chain
+        val nestedChains = rails.nested
+        val railPlan = rails.rows
         val inner = computeUndercutStripInnerLayout(
             stripTop, stripBottom, titleHeightPt = titleH, hasTotalRail = totalSpan != null, diaBandPt = diaBand,
             maxLabelRows = railPlan.belowRows,
@@ -722,10 +716,7 @@ class UndercutStripSvgPreviewTest {
             lay.forEach { svg.railSpan(it, inner.cylTop - 3f, y, labelAbove = false) }
             nestedRowY += undercutRailFallbackRows(lay) * UNDERCUT_RAIL_ROW_HEIGHT_PT
         }
-        totalSpan?.let { ts ->
-            layoutWearStripRail(listOf(ts), xAtStripMm = ::xAt, labelWidthPt = { labelW(it.inline()) })
-                .forEach { svg.railSpan(it, inner.chainRailY, inner.totalRailY, labelAbove = true) }
-        }
+        rails.total.forEach { svg.railSpan(it, inner.chainRailY, inner.totalRailY, labelAbove = true) }
 
         // Title: "<liner name> — <dist> FROM … S.E.T.", or the anchor alone on bare stock. A
         // started strip prints the write-in form instead: name, a rule for the distance, and

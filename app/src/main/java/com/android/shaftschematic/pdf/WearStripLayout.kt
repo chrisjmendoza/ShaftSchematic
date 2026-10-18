@@ -1644,6 +1644,9 @@ fun layoutWearStripRail(
     textPadPt: Float = 4f,
     arrowSizePt: Float = 4f,
     minLabelGapPt: Float = 4f,
+    /** Daylight between two inward heads ([DimensionRailLayout.ARROW_CLEAR] on the page) — a
+     *  caller laying the rail out at another scale passes it scaled with the three above. */
+    arrowClearPt: Float = DimensionRailLayout.ARROW_CLEAR,
 ): List<WearRailSpanLayout> {
     val rowIntervals = mutableListOf<MutableList<Pair<Float, Float>>>()
     return spans.map { span ->
@@ -1664,7 +1667,7 @@ fun layoutWearStripRail(
         val leftRoom = (cx - half - textPadPt) - xa
         val rightRoom = xb - (cx + half + textPadPt)
         val seatsInBreak = leftRoom >= arrowSizePt && rightRoom >= arrowSizePt
-        val inward = DimensionRailLayout.arrowsPointInward(xa, xb, seatsInBreak, arrowSizePt)
+        val inward = DimensionRailLayout.arrowsPointInward(xa, xb, seatsInBreak, arrowSizePt, arrowClearPt)
 
         val left = cx - half
         val right = cx + half

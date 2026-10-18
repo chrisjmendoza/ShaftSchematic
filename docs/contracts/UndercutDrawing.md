@@ -574,8 +574,8 @@ data class UndercutRecord(
   — the PDF composer (`pdfPrefs.undercutSplitAtLinerEdge`) and the detail canvas (the route
   passes the VM mirror to the overlay's `splitAtLinerEdge`, a key of its `railSplitAtMm`
   `remember`, so the rail restyles on toggle); on, the chain is byte-identical to the node rule.
-  `buildUndercutRailSpans(splitAtMm)` and `undercutCanvasRailStops` are unchanged. An
-  Undercut-tab preview re-render key.
+  `buildUndercutRailSpans(splitAtMm)` is unchanged; both sites reach it through the ONE rail
+  plan, `planUndercutStripRails`. An Undercut-tab preview re-render key.
 
 - **Strips — liner-anchored vs free windows.** The zoomed-view unit consumed by the overview
   affordances, the detail overlay, and the PDF is a sealed `UndercutStrip`, not a bare
@@ -630,7 +630,8 @@ data class UndercutRecord(
     `computeUndercutStripDrawRange` never pushes past it).
     The level-0 chain then needs no new rule: `buildUndercutRailSpans`' trailing cursor → chain-end
     span **is** the run from the last top-level cut to the FWD S.E.T. (and the leading span the run
-    from the AFT S.E.T.), and the canvas rail stops inherit it from the strip's chain range. The
+    from the AFT S.E.T.), and the detail canvas inherits it, since it runs the same planner
+    (`planUndercutStripRails`) over the strip's chain range. The
     **total span is unchanged** — still the run across the top-level cuts — and so is the strip
     title. **Liner strips only**: `buildUndercutStrips(…, reachToSetMm, aftSetMm, fwdSetMm)`
     forwards them to every `linerStripFor` call; free strips ignore them. The route's strips (and its per-liner
@@ -1255,28 +1256,55 @@ this card, and it loses nothing: no value was typed. A butted cut touches its ne
 overlap check counts as clear.
 
 ### Overlay canvas contents
-Aft → fwd: a **dimension rail above** — the strip total on the upper line when ≥ 2 undercuts,
-the chained run below it. The chain runs over the strip's **chain range**
-(`strip.chainStartMm`/`chainEndMm`), not its draw range: on a `FreeStrip` the chain is the
-window (the original window-edge chain; the draw range may extend past it by break room,
-undimensioned); on a `LinerStrip` the chain anchors on the **liner's own edges**
-(extended only by cut overhang), so the pad between a break edge and the liner edge is never
-dimensioned; with "Draw to the shaft end" on, a liner strip's chain range may end at an S.E.T.
-(its draw range at the shaft end beyond it), and the stops inherit it. While `PdfPrefs.undercutSplitAtLinerEdge` is on (default off — the
-overlay's `splitAtLinerEdge`), a **buried** liner edge (some previewed cut on the sheet runs past
-it, `buriedUndercutLinerEdgesMm`) is an extra chain node inserted inside the span that crosses it —
-the printed strip's `splitAtMm` rule, applied to the canvas's own stop list
-(`undercutCanvasRailStops`); off, no node, so every cut reads its full length. The chain's **labels stack** (on-device report: "I do want the
-dimensions to stack"): `planUndercutCanvasRail` runs the stops' spans through the printed strip's
-ONE label planner, `layoutWearStripRail` — a value centred on its span, slid inside it when it
-fits, and a value that would overlap an already-placed one taking the next row up — and each
-label lifts one text row per row it was assigned; the line and arrowheads keep the canvas's own
-drawing (`drawUndercutDimSpan`). The plan is made before the canvas draws, off the same x map
-(`computeUndercutWindowLayout` at the drawing Box's laid-out width; every input — stops, width,
-window start and length, scale inputs, fraction style — is one `UndercutCanvasRailInputs` record
-that is itself the `remember` key, so no input can drop out of the key), and the chain band grows by
-one label row for every row past the first, so the reserved height and the drawn rows are one
-number; the rail line keeps its distance off the profile and the extra rows stack above it.
+Aft → fwd: a **dimension rail above** — the printed strip's rails, by construction. The canvas
+runs the printed strip's ONE planner, `planUndercutStripRails` (`pdf/UndercutStripLayout.kt`), and
+its ONE draw sequence, `drawUndercutStripRails` → `drawUndercutRail` (`pdf/UndercutRailDraw.kt`),
+the same two calls `UndercutPdfComposer` makes, so the two rails cannot drift (on-device report:
+the canvas's own rail — every shoulder, nested cuts included, on one chain, decimal values above
+an unbroken line — read congested and cluttered next to the printed strip). What that gives the
+canvas:
+- the **level-0 chain** over the strip's TOP-LEVEL cuts only; each **nesting level** on its own
+  row UNDER the chain, located against its parent's shoulders (`buildNestedUndercutRailRows`); the
+  **total** across the top-level cuts on the line above (only with ≥ 2 top-level cuts);
+- values **seated in a break** in the line when they fit, the stacked fallback rows with a
+  page-white halo otherwise, arrowheads flipping only for a span too narrow to hold both;
+- labels from `formatLenDimDualLabel` (fractions, `"`/mm suffix) set through the fraction renderer
+  (`measureDualLabel`/`drawDualLabelCentered` — measure and draw convert together), in the
+  sheets' Output font; single-unit (`dual = false`), since the authoring overlay never sets a
+  dual value.
+
+The chain runs over the strip's **chain range** (`strip.chainStartMm`/`chainEndMm`), not its draw
+range: on a `FreeStrip` the chain is the window; on a `LinerStrip` it anchors on the **liner's own
+edges** (extended only by cut overhang), so the pad between a break edge and the liner edge is
+never dimensioned; with "Draw to the shaft end" on, a liner strip's chain may end at an S.E.T.
+While `PdfPrefs.undercutSplitAtLinerEdge` is on (default off — the overlay's `splitAtLinerEdge`), a
+**buried** liner edge (some previewed cut on the sheet runs past it, `buriedUndercutLinerEdgesMm`)
+is an extra chain node — the printed strip's `splitAtMm`, fed to the same planner. The spans are
+the PREVIEWED ones (stored cuts with the selected card's live draft applied), so the rail follows
+an edit while it is being typed. A strip with no cuts draws no rail.
+
+**Canvas scale.** Every fixed point size in the plan and the draw (text pad, arrowhead, label gap,
+arrow clearance, witness extension, halo pads, the 17 pt row pitch via
+`undercutRailRowHeightPt(scale)`) is multiplied by one factor, px per printed point =
+`density × UNDERCUT_DETAIL_DP_PER_PT` (1.25 dp per pt: the rail's 8 pt values set at 10 dp, the
+size the canvas's other labels read at); the page passes 1, which leaves every PDF value — and the
+printed sheet — byte-identical. Scaling the pads with the text is what makes the canvas take the
+SAME seat-in-break / arrow-direction / row decisions at its own size. The x map is the canvas's own
+(`computeUndercutWindowLayout` at the drawing Box's laid-out width). Every plan input — previewed
+spans, chain datums, split nodes, unit, width, x-map inputs, scale, text size, typeface, fraction
+style — is one `UndercutDetailRailInputs` record that is itself the `remember` key, so no input can
+drop out of it.
+
+**Vertical budget** (`undercutDetailRailBand`), the printed strip's construction
+(`computeUndercutStripInnerLayout`) at canvas scale: a top pad, then — when a total exists — the
+total line `UNDERCUT_TOTAL_RAIL_ABOVE_PT` down and the chain line the rest of
+`UNDERCUT_TOTAL_RAIL_BAND_PT` below it, else the chain's above-the-line fallback rows; then the
+chain line; then the plan's `belowRows` rows (clear air, the chain's below-line fallbacks, and one
+row per nesting level plus that row's own fallbacks, stepped exactly as the composer steps them);
+then a fixed 6 pt of headroom (`UNDERCUT_DETAIL_RAIL_HEADROOM_PT` — the printed strip spends up to
+15 pt of band surplus there, `UNDERCUT_RAIL_EXTRA_HEADROOM_MAX_PT`; the canvas has no surplus, and
+without it a fallback value on the lowest row stands on the outline). The drawn cylinder's top sits
+on the band's bottom (the profile row starts above it by its own slack over the cylinder).
 Below the rail, the **strip profile** (every resolved component clipped to the draw
 range, liners painted last so a liner over a body reads as the surface — matching the notch
 math's max-wins envelope) with **notches** cut in, and **Ø callouts below** via the shared
@@ -1373,7 +1401,7 @@ strips minus a 22 pt orientation row, so a lone full-width strip owns ≈ 414 pt
 - `UNDERCUT_RAIL_ROW_HEIGHT_PT` = 17 pt is the chained rail's fallback-label row pitch, used by
   **both** the reserved budget (`computeUndercutStripInnerLayout`) and the drawing
   (`drawUndercutRail`), so they cannot drift. A fallback label starts clear of the arrowheads
-  straddling the line (`UC_RAIL_LABEL_GAP_PT` = 5 pt past the arrowhead — the head's barb
+  straddling the line (`UNDERCUT_RAIL_LABEL_GAP_PT` = 5 pt past the arrowhead — the head's barb
   spread is the same whichever way it points) — the narrow-gap value ("2″") used to sit on the
   rail.
 - **Rows-used reservation** (`planUndercutRailRows`, 2026-08-01): the chain is resolved
@@ -1623,7 +1651,7 @@ strips minus a 22 pt orientation row, so a lone full-width strip owns ≈ 414 pt
 - **A cut prints its whole length unless the split pref asks otherwise** — the buried-edge chain
   node is fed only while `PdfPrefs.undercutSplitAtLinerEdge` is on (default off), at BOTH draw
   sites from the same `buriedUndercutLinerEdgesMm`; the pref never reaches `buildUndercutRailSpans`
-  or `undercutCanvasRailStops` themselves.
+  or `planUndercutStripRails` themselves.
 - **"Draw to the shaft end" moves only the chain/draw range of a liner strip** —
   `UndercutRecord.drawToSet` → `linerStripFor(reachToSetMm = UNDERCUT_SET_REACH_MM, aftSetMm,
   fwdSetMm)` at every strip builder call site; the chain ends at the S.E.T., the draw range at the

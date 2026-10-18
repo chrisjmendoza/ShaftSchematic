@@ -8,6 +8,15 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-17
 
+### fix(undercut): the detail page's dimension rail is the printed strip's rail
+
+- The undercut detail page drew its own chain rail: every cut shoulder, nested cuts included, on
+  one chain, decimal labels above an unbroken line, so a liner with several cuts read congested
+  and cluttered next to the printed strip (on-device report). It now runs the printed strip's
+  ONE rail planner and draw routine at screen scale: the top-level chain, a row under it for
+  each nesting level located against the parent's shoulders, the total above, values seated in a
+  break in the line, fraction labels.
+
 ### fix(undercut): cut numbers are an input aid only — never printed
 
 - Cut numbers no longer draw on the Undercut tab's whole-shaft overview, where a liner's cuts sit a
