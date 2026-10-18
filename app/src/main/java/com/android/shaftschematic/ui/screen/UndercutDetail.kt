@@ -1101,8 +1101,36 @@ fun UndercutWindowDetailOverlay(
                         val slackPx = (lay0.cy - maxOdMm * 0.5f * lay0.pxPerMm).coerceAtLeast(0f)
                         railBand.cylTopPx - slackPx
                     }
+                    // Cut numbers too wide for their cut sit BELOW the shaft, between its bottom
+                    // and the first Ø label row. Placed here off the canvas's own maps (profile
+                    // row at 0 — only offsets matter); where the leader zone is shorter than the
+                    // number plus a pad each side, the Ø band's top gap grows by the shortfall, so
+                    // a number never sits on a Ø value.
+                    val cutNumbers = remember(undercutRecord.undercuts, oalMm) {
+                        undercutSheetNumbers(undercutRecord.undercuts, oalMm)
+                    }
+                    val cutNumberGapPx = with(density) {
+                        val lay0 = computeUndercutWindowLayout(
+                            widthPx = canvasWidthPx.toFloat(),
+                            profileTopPx = 0f,
+                            profileRowHeightPx = profileRowDp.toPx(),
+                            windowLengthMm = winLenMm,
+                            maxOdMm = maxOdMm,
+                            edgePadPx = UNDERCUT_EDGE_PAD_DP.dp.toPx(),
+                        )
+                        val r0: (Float) -> Float = { diaMm -> diaMm * 0.5f * lay0.pxPerMm }
+                        val placements = undercutCutNumberPlacementsPx(
+                            notches, cutNumbers,
+                            xPx = { mm -> lay0.startPx + (mm - drawStartMm) * lay0.pxPerMm },
+                            rPx = r0,
+                            textSizePx = textPaint.textSize,
+                        )
+                        val bottom = undercutCutNumbersBottomPx(placements, lay0.cy, r0, textPaint.textSize)
+                        if (bottom == null) 0f
+                        else (bottom - (profileRowDp.toPx() + UNDERCUT_DIA_ROW0_GAP_PX)).coerceAtLeast(0f)
+                    }
                     val canvasHeightDp = with(density) {
-                        (profileTopPx + profileRowDp.toPx()).coerceAtLeast(0f).toDp()
+                        (profileTopPx + profileRowDp.toPx() + cutNumberGapPx).coerceAtLeast(0f).toDp()
                     } + diaBandDp
 
                     // Read live inside the tap pointerInput without re-keying it on every pinch.
@@ -1339,17 +1367,6 @@ fun UndercutWindowDetailOverlay(
                                     strokeWidthPx = 1.dp.toPx(),
                                 )
                             }
-                            // ── Cut numbers — an input aid, always drawn here and printed on no
-                            // sheet (on-device ruling); a pending draft has none ──
-                            drawUndercutCutNumbers(
-                                notches = notches,
-                                numbers = undercutSheetNumbers(undercutRecord.undercuts, oalMm),
-                                xPx = xPx,
-                                rPx = rPx,
-                                cy = cy,
-                                textSizePx = textPaint.textSize,
-                            )
-
                             // ── Overlap bands — where a blocked draft collides with a neighbour ──
                             // Over the notches (so the band reads on top of the cut it intrudes into)
                             // and under the selection highlight; full profile height like the
@@ -1430,7 +1447,7 @@ fun UndercutWindowDetailOverlay(
                                 }
                                 val plan = planDiaCallouts(stations, 4f, size.width - 4f, minGap = 6.dp.toPx())
                                 val placed = plan.finish(
-                                    row0Top = profileTopPx + profileRowPx + 2f,
+                                    row0Top = profileTopPx + profileRowPx + UNDERCUT_DIA_ROW0_GAP_PX + cutNumberGapPx,
                                     labelTextHeight = textPaint.textSize,
                                     rowGap = 4f,
                                     surfaceYAt = { i ->
@@ -1455,6 +1472,18 @@ fun UndercutWindowDetailOverlay(
                                     )
                                 }
                             }
+
+                            // ── Cut numbers — an input aid, always drawn here and printed on no
+                            // sheet (on-device ruling); a pending draft has none. After the Ø
+                            // callouts, so an outside number's halo knocks out a leader crossing it ──
+                            drawUndercutCutNumbers(
+                                notches = notches,
+                                numbers = cutNumbers,
+                                xPx = xPx,
+                                rPx = rPx,
+                                cy = cy,
+                                textSizePx = textPaint.textSize,
+                            )
                         }
                     }
 
@@ -1768,6 +1797,9 @@ internal const val PENDING_UNDERCUT_ID = "__undercut_draft__"
 
 /** Height of the strip profile band; the rails and Ø callouts add their own rows above/below. */
 private val UNDERCUT_PROFILE_ROW_DP = 140.dp
+
+/** The profile row's bottom → the first Ø callout label row's top, px (before any cut-number gap). */
+private const val UNDERCUT_DIA_ROW0_GAP_PX = 2f
 
 /**
  * One card's in-progress values — everything the card can change, held locally until Confirm.

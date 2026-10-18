@@ -146,6 +146,48 @@ class UndercutStripRailPlanTest {
     }
 
     @Test
+    fun `the nested row's fallback value sits above its own line, under the chain's labels`() {
+        // A tighter x map than [xAt] — the on-device width, where the parent's 2 3/8" middle span
+        // is too short to seat its value in a break.
+        val rails = plan(strip(), x = { mm -> (mm - 9900f) * 0.6f })
+        val nested = rails.nested.single()
+        val short = nested.single { it.label.inline() == "2 3/8\"" }
+        assertFalse("the 2 3/8\" span falls back off its line", short.seatsInBreak)
+
+        // The band is the plan's, unchanged: the chain's own rows, then the nested level's
+        // fallback rows and its line.
+        val chainRows = undercutRailFallbackRows(rails.chain)
+        assertTrue("the chain carries fallback rows below it", chainRows >= 1)
+        val nestedFallbackRows = undercutRailFallbackRows(nested)
+        assertEquals(1 + nestedFallbackRows, rails.rows.nestedRows)
+        assertEquals(chainRows + rails.rows.nestedRows, rails.rows.belowRows)
+
+        // The detail canvas's vertical split: chain line, belowRows, headroom, cylinder top.
+        val step = UNDERCUT_RAIL_ROW_HEIGHT_PT
+        val chainY = 100f
+        val cylTop = chainY + rails.rows.belowRows * step + 6f
+        val witnessBottom = cylTop - UNDERCUT_RAIL_WITNESS_GAP_PT
+        val lineY = undercutNestedRailLineYs(rails, chainY, rails.rows.belowRows, step, witnessBottom).single()
+        assertEquals("the nested line takes the band's last row", chainY + rails.rows.belowRows * step, lineY, 1e-3f)
+        assertTrue("the line stays above the witness start", lineY <= witnessBottom)
+
+        // An 8 pt label face: ascent 7.4, descent 2.
+        val textSize = 8f
+        val ascent = 7.4f
+        val descent = 2f
+        val baseline = undercutRailFallbackBaselineY(lineY, short.labelRow, above = true, step, textSize, descent)
+        assertTrue(
+            "the value's descent clears the arrowheads above the line ($baseline vs $lineY)",
+            baseline + descent < lineY - UNDERCUT_RAIL_ARROW_PT * 0.5f,
+        )
+        val chainLowest = undercutRailFallbackBaselineY(chainY, chainRows - 1, above = false, step, textSize, descent)
+        assertTrue(
+            "the value sits below the chain's lowest label row ($baseline vs $chainLowest)",
+            baseline - ascent > chainLowest + descent,
+        )
+    }
+
+    @Test
     fun `a started strip dimensions nothing`() {
         val s = strip()
         val rails = planUndercutStripRails(

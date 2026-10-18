@@ -528,10 +528,10 @@ data class UndercutRecord(
   matched to the cards and the list. There is no pref and no options-sheet or Settings row. The
   printed undercut sheet (main profile and detail strips alike) carries no cut numbers, and the
   route's whole-shaft overview canvas draws none either — at shaft scale a liner's cuts sit a few
-  pixels apart, so numbers there pile up under the strip badge and name nothing. Plain text, no
-  background. ONE pure placement, `undercutCutNumberPlacements(notches, numbers, …)`
-  (`geom/UndercutCutNumberMath.kt`, `UndercutCutNumberMathTest`), over the notches the detail
-  canvas already built:
+  pixels apart, so numbers there pile up under the strip badge and name nothing. Plain text; an
+  OUTSIDE number alone stands on a small sheet-white halo (below). ONE pure placement,
+  `undercutCutNumberPlacements(notches, numbers, …)` (`geom/UndercutCutNumberMath.kt`,
+  `UndercutCutNumberMathTest`), over the notches the detail canvas already built:
   - **Inside** by default — in the section core, horizontally centred on an UNCUT stretch of the
     cut's own floor and vertically centred on the shaft CENTRELINE (baseline half a glyph
     below it, `cy + r(glyph / 2)`). The core runs floor to floor through the centreline, so it
@@ -544,17 +544,25 @@ data class UndercutRecord(
     nested cut's own number sits inside the child, never on top of its parent's. A placement's id
     may therefore repeat, and the draw site never de-duplicates by id.
   - **Outside** when NO stretch fits the label plus a pad each side — width alone decides: ONE
-    label centred on the cut, the baseline a pad above the highest outer
-    surface over its top-level cut (`cy − r(surface + pad)` — a nested cut's own surface points sit
-    on its parent's floor, never the shaft's outside). Outside labels that would overlap are spread
-    apart by the least total movement that clears them (an isotonic fit), keeping their AFT → FWD
-    order.
-  A placement carries `xMm`, `baselineDiaMm` (the baseline's distance from the centreline) and
-  `inside` (below vs above it); the draw site builds the baseline from those fields alone.
-  Horizontal sizes are axial mm, vertical ones Ø units — the canvas converts its paint metrics
-  through its own two scales. A notch with no number — the detail overlay's pending draft, not yet
-  in the record — draws nothing. Drawn AFTER the notch passes and the liner outline, before the Ø
-  callouts and rails (`drawUndercutCutNumbers`, `ui/screen/UndercutSharedDraw.kt` —
+    label centred on the cut, **BELOW the shaft**, its glyph top a pad under the lowest outer
+    surface over its top-level cut on the bottom side (baseline `cy + r(surface + pad + glyph)` — a
+    nested cut's own surface points sit on its parent's floor, never the shaft's outside). Above
+    the shaft the numbers tangled with the rail's witness lines (on-device report); below it they
+    sit between the shaft bottom and the first Ø callout row, each over a small sheet-white halo (a
+    pad around the glyph) so a Ø leader crossing that spot is knocked out behind the number rather
+    than striking through it — the rail's fallback-label halo posture. Outside labels that would
+    overlap are spread apart by the least total movement that clears them (an isotonic fit),
+    keeping their AFT → FWD order. Where the leader zone under the shaft is shorter than a pad +
+    the glyph + a pad, the detail canvas grows the Ø band's top gap by the shortfall — only while
+    some number sits outside — so a number never sits on a Ø value (the canvas sizes it off the
+    same placements it draws, `undercutCutNumberPlacementsPx` → `undercutCutNumbersBottomPx`).
+  A placement carries `xMm`, `baselineDiaMm` (the baseline's distance BELOW the centreline — the
+  baseline is always `cy + r(baselineDiaMm)`) and `inside` (`false` = below the shaft); the draw
+  site builds the baseline from those fields alone. Horizontal sizes are axial mm, vertical ones Ø
+  units — the canvas converts its paint metrics through its own two scales. A notch with no number
+  — the detail overlay's pending draft, not yet in the record — draws nothing. Drawn AFTER the
+  notch passes, the liner outline, the rails and the Ø callouts — last, so an outside number's
+  halo covers a leader (`drawUndercutCutNumbers`, `ui/screen/UndercutSharedDraw.kt` —
   `SheetInk.Outline`; the detail canvas draws the PREVIEWED set, a draft of a recorded cut keeping
   that cut's number). `UndercutSheetNoCutNumbersTest` pins the printed sheet: the on-device job's
   page draws none of its five cuts' numbers.
@@ -1264,7 +1272,8 @@ the canvas's own rail — every shoulder, nested cuts included, on one chain, de
 an unbroken line — read congested and cluttered next to the printed strip). What that gives the
 canvas:
 - the **level-0 chain** over the strip's TOP-LEVEL cuts only; each **nesting level** on its own
-  row UNDER the chain, located against its parent's shoulders (`buildNestedUndercutRailRows`); the
+  row UNDER the chain, located against its parent's shoulders (`buildNestedUndercutRailRows`), its
+  fallback values above its own line (`undercutNestedRailLineYs`); the
   **total** across the top-level cuts on the line above (only with ≥ 2 top-level cuts);
 - values **seated in a break** in the line when they fit, the stacked fallback rows with a
   page-white halo otherwise, arrowheads flipping only for a span too narrow to hold both;
@@ -1529,7 +1538,13 @@ strips minus a 22 pt orientation row, so a lone full-width strip owns ≈ 414 pt
     disjoint, so a level always lays out on ONE row. `planUndercutRailRows` reserves a row for each
     level's line plus that line's fallback labels (`UndercutRailRowPlan.nestedRows`, stepped by the
     one `undercutRailRowHeightPt` metric), so the strip budgets the height rather than drawing into
-    the cylinder; the chain's own label rows stop where the nested rows begin;
+    the cylinder; the chain's own label rows stop where the nested rows begin. A nested row's
+    fallback values sit **ABOVE its own line**: each level takes its fallback rows first and its
+    line last (`undercutNestedRailLineYs`, drawn with `fallbackLabelAbove = true`), so a value too
+    wide for its span lands between the previous line's labels and this line — under the line it
+    fell onto the shaft's top surface and the cut numbers (on-device report). The band is the size
+    the plan reserved; only the order within it moved, so a level with no fallback draws exactly
+    where it always did, and the line still never drops below the witness-line start;
   - **a second rail line above the chain — the strip total** (`buildUndercutTotalSpan`, first
     shoulder → last shoulder, over the TOP-LEVEL spans). **Returns `null` (nothing drawn, no
     reserved band) for a strip with fewer than two drawable top-level undercuts** — with exactly

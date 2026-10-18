@@ -8,11 +8,13 @@ import kotlin.math.max
  * overview (on-device ruling); the detail canvas is this placement's only draw site.
  *
  * [xMm] is the label's horizontal CENTRE in shaft space. [baselineDiaMm] is the baseline's
- * distance from the centreline, in the draw site's own Ø→radius map. An [inside] label is
- * centred VERTICALLY on the centreline — its baseline half a glyph BELOW it, at
- * `cy + rPx(baselineDiaMm)`, clear of the Ø callout leaders leaving the floor lines; an outside
- * label's baseline is ABOVE the shaft at `cy − rPx(baselineDiaMm)`, a pad over the outer surface.
- * Both draw sites build the baseline from these two fields alone; every decision is here.
+ * distance BELOW the centreline, in the draw site's own Ø→radius map: the baseline is always
+ * `cy + rPx(baselineDiaMm)`. An [inside] label is centred VERTICALLY on the centreline — its
+ * baseline half a glyph below it — clear of the Ø callout leaders leaving the floor lines. An
+ * outside label (`inside = false`) sits BELOW the shaft, its glyph top a pad under the outer
+ * surface, so it stays clear of the dimension rail's witness lines above the shaft (on-device
+ * report); the draw site lays a sheet-white halo behind it, since a Ø callout leader may cross
+ * that band. The draw site builds the baseline from these fields alone; every decision is here.
  *
  * An [id] may repeat: a parent cut split into separate visible pieces by its nested cuts carries
  * one placement per piece that fits a label, so draw sites draw every placement as given and never
@@ -40,10 +42,10 @@ internal data class UndercutCutNumberPlacement(
  *   side carries the parent's number, so the reader sees the pieces are ONE section (on-device
  *   request); a piece too narrow gets none. A child's number sits inside the child, never on top
  *   of its parent's.
- * - **Outside** when no stretch fits — width alone decides: ONE label centred on the cut, a pad
- *   above the highest outer
- *   surface over its top-level cut. Outside labels that would overlap are spread apart by the
- *   least total movement that clears them, keeping their AFT→FWD order.
+ * - **Outside** when no stretch fits — width alone decides: ONE label centred on the cut, BELOW
+ *   the shaft, its glyph top a pad under the lowest outer surface over its top-level cut on the
+ *   bottom side. Outside labels that would overlap are spread apart by the least total movement
+ *   that clears them, keeping their AFT→FWD order.
  *
  * Horizontal quantities ([glyphWidthMm], [padMm]) are axial shaft mm; vertical ones
  * ([glyphHeightMm], [padDiaMm]) are in the draw site's Ø units — a value `d` whose `rPx(d)` is
@@ -75,13 +77,20 @@ internal fun undercutCutNumberPlacements(
                 UndercutCutNumberPlacement(n.id, label, (a + b) / 2f, glyphHeightMm / 2f, inside = true)
             }
         } else {
-            // The highest outer surface over the cut's top-level ancestor: a nested cut's own
-            // surface points sit on its parent's floor, not on the shaft's outside.
+            // The outermost surface over the cut's top-level ancestor — the lowest on the bottom
+            // side: a nested cut's own surface points sit on its parent's floor, not on the
+            // shaft's outside.
             val root = live
                 .filter { m -> m.id != n.id && undercutSpanContains(spanOf.getValue(m.id), span) }
                 .maxByOrNull { it.endMm - it.startMm } ?: n
             val surfaceDia = root.profiles.flatMap { it.surface }.maxOfOrNull { it.diaMm } ?: n.floorDiaMm
-            listOf(UndercutCutNumberPlacement(n.id, label, (n.startMm + n.endMm) / 2f, surfaceDia + padDiaMm, inside = false))
+            listOf(
+                UndercutCutNumberPlacement(
+                    n.id, label, (n.startMm + n.endMm) / 2f,
+                    baselineDiaMm = surfaceDia + padDiaMm + glyphHeightMm,
+                    inside = false,
+                ),
+            )
         }
     }
 

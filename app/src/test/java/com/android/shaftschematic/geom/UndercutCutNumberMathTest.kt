@@ -8,8 +8,9 @@ import org.junit.Test
 
 /**
  * [undercutCutNumberPlacements]: where each cut's sheet number prints — inside its section core
- * on the widest uncut stretch of its own floor, above the surface when that stretch is too narrow,
- * outside labels spread apart in order.
+ * on the widest uncut stretch of its own floor, BELOW the shaft when that stretch is too narrow
+ * (the baseline is always `cy + r(baselineDiaMm)`; an outside glyph's top sits a pad under the
+ * outer surface), outside labels spread apart in order.
  */
 class UndercutCutNumberMathTest {
 
@@ -90,7 +91,7 @@ class UndercutCutNumberMathTest {
         assertEquals(1, none.size)
         assertFalse(none.single().inside)
         assertEquals(200f, none.single().xMm, 1e-4f)
-        assertEquals(221f, none.single().baselineDiaMm, 1e-4f)
+        assertEquals("below the 220 surface: pad + glyph", 227f, none.single().baselineDiaMm, 1e-4f)
 
         // 100..300 with a child 103..250: the 3-wide AFT piece is skipped, the 50-wide FWD one labelled.
         val one = placeAll(
@@ -103,13 +104,16 @@ class UndercutCutNumberMathTest {
     }
 
     @Test
-    fun `a stretch too narrow for the label sends the number above the surface`() {
+    fun `a stretch too narrow for the label sends the number below the shaft`() {
         // 5 mm wide, label needs 4 + 2·pad = 6.
         val p = place(listOf(notch("g", 100f, 105f, floor = 190f, surface = 210f)), mapOf("g" to 7)).getValue("g")
 
         assertFalse(p.inside)
-        assertEquals(102.5f, p.xMm, 1e-4f)
-        assertEquals("a pad above the outer surface", 211f, p.baselineDiaMm, 1e-4f)
+        assertEquals("centred on the cut", 102.5f, p.xMm, 1e-4f)
+        // Measured DOWN from the centreline: the glyph's top a pad under the bottom surface, its
+        // baseline a glyph below that.
+        assertEquals("glyph top a pad below the outer surface", 210f + pad, p.baselineDiaMm - glyphH, 1e-4f)
+        assertEquals(217f, p.baselineDiaMm, 1e-4f)
     }
 
     @Test
@@ -121,7 +125,10 @@ class UndercutCutNumberMathTest {
         val pin = placed.getValue("pin")
 
         assertFalse(pin.inside)
-        assertEquals(221f, pin.baselineDiaMm, 1e-4f)
+        // Below the relief's 220 outer surface on the bottom side, not the pin's own 180 surface
+        // (its parent's floor).
+        assertEquals(227f, pin.baselineDiaMm, 1e-4f)
+        assertTrue("the glyph top clears the bottom surface", pin.baselineDiaMm - glyphH > 220f)
     }
 
     @Test
@@ -139,6 +146,9 @@ class UndercutCutNumberMathTest {
         assertFalse(b.inside)
         assertEquals(100f, a.xMm, 1e-4f)
         assertEquals(105f, b.xMm, 1e-4f)
+        // Both on the one row below the shaft: the spread is horizontal only.
+        assertEquals(207f, a.baselineDiaMm, 1e-4f)
+        assertEquals(a.baselineDiaMm, b.baselineDiaMm, 1e-4f)
         // Far-apart outside labels stay where they are.
         val far = place(
             listOf(notch("a", 100f, 102f, floor = 190f), notch("b", 200f, 202f, floor = 190f)),

@@ -13,6 +13,7 @@ import com.android.shaftschematic.geom.NOTCH_FACE_MIN_STEP_PX
 import com.android.shaftschematic.geom.UNDERCUT_SECTION_FILL_ALPHA
 import com.android.shaftschematic.geom.UndercutLinerOd
 import com.android.shaftschematic.geom.UndercutLinerSpan
+import com.android.shaftschematic.geom.UndercutCutNumberPlacement
 import com.android.shaftschematic.geom.UndercutNotch
 import com.android.shaftschematic.geom.linerOutlineSegments
 import com.android.shaftschematic.geom.undercutCutNumberPlacements
@@ -189,14 +190,63 @@ internal fun DrawScope.drawLinerOutlines(
     }
 }
 
+/** Pad between a cut number and the surface it sits under, and the spread gap, as a share of the text size. */
+private const val CUT_NUMBER_PAD_FRAC = 0.3f
+
+/**
+ * The cut numbers' placements on the detail canvas, in that canvas's own maps — the ONE call
+ * behind the draw pass ([drawUndercutCutNumbers]) and the canvas's vertical budget
+ * ([undercutCutNumbersBottomPx]), so the number the canvas makes room for is the number it draws.
+ * [xPx]/[rPx] are linear through the origin (every canvas site's); their unit steps turn the
+ * paint's px metrics into the axial mm / Ø units [undercutCutNumberPlacements] works in.
+ */
+internal fun undercutCutNumberPlacementsPx(
+    notches: List<UndercutNotch>,
+    numbers: Map<String, Int>,
+    xPx: (Float) -> Float,
+    rPx: (Float) -> Float,
+    textSizePx: Float,
+): List<UndercutCutNumberPlacement> {
+    if (notches.isEmpty() || numbers.isEmpty()) return emptyList()
+    val paint = cutNumberPaint(textSizePx, Color.Black)
+    val pxPerMmX = (xPx(1000f) - xPx(0f)) / 1000f
+    val pxPerDiaMm = (rPx(1000f) - rPx(0f)) / 1000f
+    if (pxPerMmX <= 0f || pxPerDiaMm <= 0f) return emptyList()
+    val padPx = textSizePx * CUT_NUMBER_PAD_FRAC
+    return undercutCutNumberPlacements(
+        notches = notches,
+        numbers = numbers,
+        glyphWidthMm = { paint.measureText(it) / pxPerMmX },
+        glyphHeightMm = cutNumberCapHeightPx(paint) / pxPerDiaMm,
+        padMm = padPx / pxPerMmX,
+        padDiaMm = padPx / pxPerDiaMm,
+    )
+}
+
+/**
+ * How far down the OUTSIDE cut numbers reach — the lowest glyph baseline plus a pad, the clear
+ * band the Ø callout labels must start below — or null when every number sits inside its cut.
+ */
+internal fun undercutCutNumbersBottomPx(
+    placements: List<UndercutCutNumberPlacement>,
+    cy: Float,
+    rPx: (Float) -> Float,
+    textSizePx: Float,
+): Float? = placements.filter { !it.inside }
+    .maxOfOrNull { cy + rPx(it.baselineDiaMm) }
+    ?.let { it + textSizePx * CUT_NUMBER_PAD_FRAC }
+
 /**
  * Cut numbers on the undercut detail canvas — an authoring aid, always drawn there: each cut's
  * number ([numbers] — `undercutSheetNumbers`, the Undercut tab list's numbering) where the ONE pure
  * placement [undercutCutNumberPlacements] puts it — inside the cut's section core centred on the
- * shaft centreline, or above the surface when the core is too narrow. Cut numbers print on no
- * sheet and draw on no overview (on-device ruling); the detail canvas is the only caller. A notch
- * with no number (a draft not yet in the record) draws nothing. Plain sheet-ink text, no
- * background. Called after the notch passes and the liner outline, before rails and callouts.
+ * shaft centreline, or BELOW the shaft when the core is too narrow (above it the number tangled
+ * with the rail's witness lines — on-device report). Cut numbers print on no sheet and draw on no
+ * overview (on-device ruling); the detail canvas is the only caller. A notch with no number (a
+ * draft not yet in the record) draws nothing. Sheet-ink text; an outside number stands on a small
+ * sheet-white halo so a Ø callout leader crossing its spot is knocked out behind it rather than
+ * striking through it (the rail's fallback-label halo posture), which is why the canvas calls
+ * this AFTER the Ø callouts.
  */
 internal fun DrawScope.drawUndercutCutNumbers(
     notches: List<UndercutNotch>,
@@ -206,32 +256,36 @@ internal fun DrawScope.drawUndercutCutNumbers(
     cy: Float,
     textSizePx: Float,
     color: Color = SheetInk.Outline,
-    padPx: Float = textSizePx * 0.3f,
+    haloColor: Color = Color.White,
 ) {
-    if (notches.isEmpty() || numbers.isEmpty()) return
-    val paint = android.graphics.Paint().apply {
-        isAntiAlias = true
-        this.color = color.toArgb()
-        textAlign = android.graphics.Paint.Align.CENTER
-        textSize = textSizePx
-    }
-    // Both scales are linear through the origin at every canvas site; their unit steps turn the
-    // paint's px metrics into the axial mm / Ø units the placement works in.
-    val pxPerMmX = (xPx(1000f) - xPx(0f)) / 1000f
-    val pxPerDiaMm = (rPx(1000f) - rPx(0f)) / 1000f
-    if (pxPerMmX <= 0f || pxPerDiaMm <= 0f) return
-    val capHeightPx = -paint.fontMetrics.ascent * 0.75f
-    val placements = undercutCutNumberPlacements(
-        notches = notches,
-        numbers = numbers,
-        glyphWidthMm = { paint.measureText(it) / pxPerMmX },
-        glyphHeightMm = capHeightPx / pxPerDiaMm,
-        padMm = padPx / pxPerMmX,
-        padDiaMm = padPx / pxPerDiaMm,
-    )
+    val placements = undercutCutNumberPlacementsPx(notches, numbers, xPx, rPx, textSizePx)
+    if (placements.isEmpty()) return
+    val paint = cutNumberPaint(textSizePx, color)
+    val capHeightPx = cutNumberCapHeightPx(paint)
+    // Half the placement pad, so the halo stops short of the outline stroke it sits under.
+    val haloPadPx = textSizePx * CUT_NUMBER_PAD_FRAC * 0.5f
     val native = drawContext.canvas.nativeCanvas
     placements.forEach { p ->
-        val y = if (p.inside) cy + rPx(p.baselineDiaMm) else cy - rPx(p.baselineDiaMm)
-        native.drawText(p.label, xPx(p.xMm), y, paint)
+        val x = xPx(p.xMm)
+        val y = cy + rPx(p.baselineDiaMm)
+        if (!p.inside) {
+            val halfW = paint.measureText(p.label) * 0.5f
+            drawRect(
+                color = haloColor,
+                topLeft = Offset(x - halfW - haloPadPx, y - capHeightPx - haloPadPx),
+                size = Size(2f * (halfW + haloPadPx), capHeightPx + 2f * haloPadPx),
+            )
+        }
+        native.drawText(p.label, x, y, paint)
     }
 }
+
+private fun cutNumberPaint(textSizePx: Float, color: Color) = android.graphics.Paint().apply {
+    isAntiAlias = true
+    this.color = color.toArgb()
+    textAlign = android.graphics.Paint.Align.CENTER
+    textSize = textSizePx
+}
+
+/** A digit's drawn height — the glyph height the placement stacks against. */
+private fun cutNumberCapHeightPx(paint: android.graphics.Paint): Float = -paint.fontMetrics.ascent * 0.75f
