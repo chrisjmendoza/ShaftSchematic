@@ -436,6 +436,14 @@ Boundary summary:
   normalization (`geom/SurfaceProfileMath.kt` + `geom/UndercutMath.kt` do).
 - Canvas and PDF share one pure pipeline; the route performs no clustering, clamping, or
   hit-test math of its own.
+- **Preview and Options within reach** (on-device request): a compact **Preview | Options** row
+  sits directly under the overview canvas (`undercut_tab_preview`, `undercut_tab_options`), above
+  "Add undercut", while the full Print / Preview / Export trio stays at the foot of the tab; the
+  detail page's top bar carries the same pair as icons (`undercut_detail_preview`,
+  `undercut_detail_options`). Preview opens the tab's one PDF preview (over the detail page when
+  opened from it) and shares the trio's export gate; Options opens the undercut preview's options
+  panel (`UndercutOptionsSheet` in the non-modal `PreviewOptionsPanel`) over the surface it was
+  opened from.
 
 ---
 

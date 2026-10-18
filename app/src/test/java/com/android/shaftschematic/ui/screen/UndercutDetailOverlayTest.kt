@@ -1,5 +1,6 @@
 package com.android.shaftschematic.ui.screen
 
+import android.app.Application
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -45,7 +46,9 @@ import com.android.shaftschematic.model.Undercut
 import com.android.shaftschematic.model.UndercutRecord
 import com.android.shaftschematic.model.UndercutReference
 import com.android.shaftschematic.ui.resolved.resolveComponents
+import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.util.UnitSystem
+import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -80,15 +83,21 @@ class UndercutDetailOverlayTest {
     private val addedRefs = mutableListOf<UndercutReference>()
     private val updated = mutableListOf<String>()
     private var closed = 0
+    private var previewed = 0
 
     private fun cut(id: String, start: Float, len: Float = 50f) = Undercut(
         id = id, startFromAftMm = start, lengthMm = len,
         authoredReference = UndercutReference.LINER_AFT, referenceLinerId = "L1",
     )
 
-    private fun show(cuts: List<Undercut>, initialSelectedId: String? = null) {
+    /**
+     * [withChrome] hosts the top bar's Preview and Options the way the Undercut tab does: Preview
+     * counts into [previewed], Options carries the undercut preview's real options sheet.
+     */
+    private fun show(cuts: List<Undercut>, initialSelectedId: String? = null, withChrome: Boolean = false) {
         record = UndercutRecord(cuts)
         val resolved = resolveComponents(spec)
+        val vm = if (withChrome) ShaftViewModel(ApplicationProvider.getApplicationContext<Application>()) else null
         rule.setContent {
             MaterialTheme {
                 val spans = record.undercuts.map {
@@ -119,6 +128,10 @@ class UndercutDetailOverlayTest {
                     },
                     onClose = { closed++ },
                     initialSelectedId = initialSelectedId,
+                    onPreview = if (withChrome) ({ previewed++ }) else null,
+                    optionsSheet = vm?.let { v ->
+                        { UndercutOptionsSheet(vm = v, blankDraft = false, onSetBlankDraft = {}) }
+                    },
                 )
             }
         }
@@ -974,5 +987,106 @@ class UndercutDetailOverlayTest {
             hasText(UNDERCUT_NO_STOCK_FWD_MSG) and onCard("u1"),
             useUnmergedTree = true,
         ).assertExists()
+    }
+
+    // ── Preview and Options from the top bar (on-device request: both within reach) ──
+
+    @Test
+    fun `the top bar carries Preview and Drawing options`() {
+        show(listOf(cut("u1", 600f)), withChrome = true)
+        rule.onNodeWithTag("undercut_detail_preview").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Preview").assertIsDisplayed()
+        rule.onNodeWithTag("undercut_detail_options").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Drawing options").assertIsDisplayed()
+    }
+
+    @Test
+    fun `without a host the top bar shows neither`() {
+        show(listOf(cut("u1", 600f)))
+        rule.onNodeWithTag("undercut_detail_preview").assertDoesNotExist()
+        rule.onNodeWithTag("undercut_detail_options").assertDoesNotExist()
+    }
+
+    @Test
+    fun `Options opens the undercut options panel over the page, and the icon closes it`() {
+        show(listOf(cut("u1", 600f)), withChrome = true)
+        rule.onNodeWithTag("preview_options_panel").assertDoesNotExist()
+
+        rule.onNodeWithTag("undercut_detail_options").performClick()
+        settle()
+        rule.onNodeWithTag("preview_options_panel").assertIsDisplayed()
+        // Over the detail page, not instead of it: its top bar is still there and live.
+        rule.onNodeWithTag("undercut_detail_undo").assertIsDisplayed()
+        // The undercut sheet's own rows: the liner outline in Shading, the arrow sizes in Lines.
+        rule.onNodeWithTag("options_shade_expander").performScrollTo().performClick()
+        rule.onNodeWithTag("pdf_undercut_liner_outline").assertExists()
+        rule.onNodeWithTag("options_lines_expander").performScrollTo().performClick()
+        rule.onNodeWithText("Dimension arrows").assertExists()
+
+        rule.onNodeWithTag("undercut_detail_options").performClick()
+        settle()
+        rule.onNodeWithTag("preview_options_panel").assertDoesNotExist()
+        assertEquals("the panel is not a way out of the page", 0, closed)
+    }
+
+    @Test
+    fun `the panel's own close button closes it`() {
+        show(listOf(cut("u1", 600f)), withChrome = true)
+        rule.onNodeWithTag("undercut_detail_options").performClick()
+        settle()
+        rule.onNodeWithTag("preview_options_close").performClick()
+        settle()
+        rule.onNodeWithTag("preview_options_panel").assertDoesNotExist()
+    }
+
+    @Test
+    fun `Preview asks the host for the preview and leaves the page open`() {
+        show(listOf(cut("u1", 600f)), withChrome = true)
+        rule.onNodeWithTag("undercut_detail_preview").performClick()
+        settle()
+        assertEquals(1, previewed)
+        assertEquals("the detail page stays open beneath the preview", 0, closed)
+        rule.onNodeWithTag("undercut_detail_undo").assertIsDisplayed()
+    }
+
+    @Test
+    fun `Preview saves a typed edit first, the way leaving does`() {
+        show(listOf(cut("u1", 600f, len = 100f), cut("u2", 900f)), initialSelectedId = "u2", withChrome = true)
+        val distance = hasText("Distance from Liner AFT (in)") and hasAnyAncestor(hasTestTag("undercut_card_u2"))
+        rule.onNode(distance).performTextReplacement("12")
+        rule.onNode(distance).performImeAction()
+        settle()
+        assertTrue("nothing recorded before the preview", updated.isEmpty())
+
+        rule.onNodeWithTag("undercut_detail_preview").performClick()
+        settle()
+        assertEquals(listOf("u2"), updated)
+        assertEquals(1, previewed)
+    }
+
+    @Test
+    fun `Preview with a blocked draft asks Keep editing or Discard first`() {
+        show(listOf(cut("u1", 600f, len = 100f), cut("u2", 900f)), initialSelectedId = "u2", withChrome = true)
+        val distance = hasText("Distance from Liner AFT (in)") and hasAnyAncestor(hasTestTag("undercut_card_u2"))
+        rule.onNode(distance).performTextReplacement("3")
+        rule.onNode(distance).performImeAction()
+        settle()
+
+        rule.onNodeWithTag("undercut_detail_preview").performClick()
+        settle()
+        rule.onNodeWithText("Undercut can't be saved").assertIsDisplayed()
+        assertEquals("no preview while the question is open", 0, previewed)
+
+        rule.onNodeWithTag("undercut_leave_keep").performClick()
+        settle()
+        assertEquals("Keep editing stays on the page", 0, previewed)
+
+        rule.onNodeWithTag("undercut_detail_preview").performClick()
+        settle()
+        rule.onNodeWithTag("undercut_leave_discard").performClick()
+        settle()
+        assertEquals("Discard goes on to the preview", 1, previewed)
+        assertEquals(0, closed)
+        assertTrue("a blocked draft reached the record", updated.isEmpty())
     }
 }

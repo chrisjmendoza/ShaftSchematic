@@ -536,7 +536,9 @@ internal val helpSections: List<HelpSection> = listOf(
                     "changed: a value that would put a cut off the shaft or partly over " +
                     "another cut (sit fully inside it or fully clear) stays in the card, and " +
                     "the status pill says why it cannot be saved yet. Undo and Redo sit in the " +
-                    "top bar, and deleting a cut offers Undo — from the open cut's card and " +
+                    "top bar, beside Preview and Drawing options — the preview of the sheet " +
+                    "and its options panel, without leaving the zoomed page (the tab has the " +
+                    "same pair under its drawing). Deleting a cut offers Undo — from the open cut's card and " +
                     "from the tab's list alike. \"Next cut\" on the card confirms the cut and " +
                     "opens a new one butted to its far end. The list below the drawing " +
                     "numbers the cuts from the aft end — the same numbers the zoomed detail " +
@@ -1032,8 +1034,10 @@ internal val helpSections: List<HelpSection> = listOf(
                     "runout drawings — but they are still app-wide and a Drawing profile " +
                     "captures them.\n" +
                     "• \"Dimension arrows\" — Small / Medium / Large arrowheads on the " +
-                    "dimension rails, on the schematic and consolidated sheets. Heads point " +
-                    "inward unless the span is too narrow to hold both.\n" +
+                    "dimension rails, on the schematic, consolidated and undercut sheets (the " +
+                    "undercut detail page's rail too). Heads point inward unless the span is " +
+                    "too narrow to hold both; on the undercut strips a larger head also needs " +
+                    "more room before a value fits in its line.\n" +
                     "• \"Thread slant\" — in the Thread section of every document's sheet, " +
                     "shown whenever the shaft has a thread. How far the thread " +
                     "hatch leans: it follows each thread's own pitch, 1× being the true crest " +

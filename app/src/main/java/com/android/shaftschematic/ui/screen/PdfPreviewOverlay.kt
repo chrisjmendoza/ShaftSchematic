@@ -466,9 +466,10 @@ internal fun RunoutWearOptionsSheet(
     /** This job's `WearRecord.stripSizeFrac` — the strips' height ceiling multiplier. */
     wearStripSizeFrac: Float = WEAR_STRIP_SIZE_FRAC_DEFAULT,
     /**
-     * Shows the shared "Dimension arrows" size picker. On for the consolidated sheet, the only
-     * document here that draws dimension rails; the classic runout/wear/undercut sheets draw
-     * their own fixed-head marks, so the control would be inert there.
+     * Shows the shared "Dimension arrows" size picker. On for the consolidated sheet's dimension
+     * rails and the undercut drawing's strip rails, the two documents here whose heads follow
+     * `PdfPrefs.arrowSizePt`; the classic runout and wear sheets draw their own fixed-head marks,
+     * so the control would be inert there.
      */
     showDimensionArrows: Boolean = false,
     /** The app-wide `PdfPrefs.arrowSizePt`; read only when [showDimensionArrows]. */

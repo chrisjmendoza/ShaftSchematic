@@ -37,6 +37,14 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
   **cluster window** — the wear-area tap idiom, with a strip (`geom/UndercutMath.kt`'s
   `UndercutStrip`) as the selectable area, not a bare window or a single component. No
   pinch-zoom on this canvas; the overlay owns zoom.
+- **Preview | Options** row directly under the canvas (testTags `undercut_tab_preview`,
+  `undercut_tab_options`), above "Add undercut" — the tab's Preview and Options without scrolling
+  to its foot (on-device request). Preview opens the same `PdfPreviewOverlay` the foot's Preview
+  button opens and shares its export gate; Options toggles the undercut preview's options panel
+  (`UndercutOptionsSheet` — the ONE configuration of `RunoutWearOptionsSheet` behind the preview's
+  Tune panel, this button and the detail page's Options icon) in the non-modal
+  `PreviewOptionsPanel` over the tab, closed by its close button, the button or Back. The foot's
+  Print / Preview / Export trio stays.
 - **"Add undercut"** button: records a default section and opens its strip (see "Add default"
   below).
 - **"Cut depth exaggeration" slider** (shown once at least one cut is recorded, directly under
@@ -61,9 +69,12 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
 - **"Recorded undercuts" list** below the canvas: a read-only summary + delete row per cut,
   numbered and ordered by the cut numbers (`undercutSheetNumbers`, AFT → FWD) — not an
   edit card (see "UI contract").
-- Blank-draft (write-in) toggle, PDF Preview (`PdfPreviewOverlay` + `RunoutWearOptionsSheet`),
+- Blank-draft (write-in) toggle, PDF Preview (`PdfPreviewOverlay` + `UndercutOptionsSheet`),
   Export (SAF `CreateDocument`), Print (`printShaftPdfPage`) — straight ports of the wear tab's
-  flows, all calling `composeUndercutPdf`. Print and Export ask first while a cut has no Ø (see
+  flows, all calling `composeUndercutPdf`. The preview is composed AFTER the detail overlay, with
+  its Back handler composed only while it is open, so a preview opened from the detail page draws
+  over it and Back returns to it. The options sheet carries the "Dimension arrows" chips
+  (`showDimensionArrows`): the strip rails' heads follow `PdfPrefs.arrowSizePt`. Print and Export ask first while a cut has no Ø (see
   "Missing Ø before print/export").
 
 ### UndercutWindowDetailOverlay (`UndercutDetail.kt`)
@@ -1277,6 +1288,17 @@ canvas:
   **total** across the top-level cuts on the line above (only with ≥ 2 top-level cuts);
 - values **seated in a break** in the line when they fit, the stacked fallback rows with a
   page-white halo otherwise, arrowheads flipping only for a span too narrow to hold both;
+- a **leader** on every fallback value — one straight stroke in the dimension paint from the
+  value's near halo edge (its bottom above the line, its top below it) to its OWN dimension line,
+  at the value's centre clamped between that span's arrowheads (`undercutRailLeader`), so a value
+  lifted a row or two off its line still says which span it states (on-device request: the nested
+  row's raised 2 3/8″ read as belonging to nothing). Leaders are drawn in the LINE pass, so a later
+  label's halo knocks one out like any other line; a blank write-in draft draws none;
+- arrowheads of the app-wide **"Dimension arrows"** length (`PdfPrefs.arrowSizePt`, Small 3 /
+  Medium 4 / Large 5 pt, default Small), handed to the plan and the draw alike — the head is a
+  layout input, since a value seats in its break only with a head's room on each side. The
+  fallback ROWS stay spaced off the fixed `UNDERCUT_RAIL_LABEL_CLEAR_ARROW_PT` (4 pt), so no
+  vertical budget moves with the pref; row 0 still clears the Large head;
 - labels from `formatLenDimDualLabel` (fractions, `"`/mm suffix) set through the fraction renderer
   (`measureDualLabel`/`drawDualLabelCentered` — measure and draw convert together), in the
   sheets' Output font; single-unit (`dual = false`), since the authoring overlay never sets a
@@ -1301,8 +1323,22 @@ printed sheet — byte-identical. Scaling the pads with the text is what makes t
 SAME seat-in-break / arrow-direction / row decisions at its own size. The x map is the canvas's own
 (`computeUndercutWindowLayout` at the drawing Box's laid-out width). Every plan input — previewed
 spans, chain datums, split nodes, unit, width, x-map inputs, scale, text size, typeface, fraction
-style — is one `UndercutDetailRailInputs` record that is itself the `remember` key, so no input can
-drop out of it.
+style, arrowhead size — is one `UndercutDetailRailInputs` record that is itself the `remember` key,
+so no input can drop out of it.
+
+**Preview and Options on the detail page.** The top bar carries, after Undo / Redo, a **Preview**
+icon (`undercut_detail_preview`, "Preview") and a **Drawing options** icon
+(`undercut_detail_options`, Tune). Preview is the back arrow's own leave — every card settled
+(focused field flushed, clear drafts committed, a blocked draft asked about with the same Keep
+editing / Discard prompt) — ending on the Undercut tab's PDF preview instead of the tab: the
+preview draws OVER the detail page, which stays open beneath it, and Back closes the preview back
+to the page. It shares the tab's export gate, as the tab's own Preview button does. Options opens
+the undercut preview's options panel (`UndercutOptionsSheet` in the non-modal
+`PreviewOptionsPanel`) over the page, capped below the canvas and save pill
+(`undercutDetailOptionsMaxHeightDp`); the icon toggles it, and its close button and Back close it.
+Every row is the same remote control for the one app-wide `PdfPrefs` value, so the canvas restyles
+live where it draws that element (arrow size, liner outline, split at liner edges, fractions,
+thread hatch, Output font).
 
 **Vertical budget** (`undercutDetailRailBand`), the printed strip's construction
 (`computeUndercutStripInnerLayout`) at canvas scale: a top pad, then — when a total exists — the

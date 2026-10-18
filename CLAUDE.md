@@ -976,8 +976,10 @@ the heads, through the same shared predicate); `planUndercutRailRows` reserves r
 `seatsInBreak`, never off the arrows. The head is a slim 2:1 V (barb spread = half the length),
 one shape at every rail site; its length is user-set — `PdfPrefs.arrowSizePt`, Small 3 /
 (default) / Medium 4 / Large 5 pt, in both PDF options sheets and Settings → Drawing
-"Dimension arrows". It reaches only the two dimension-rail composers (schematic, consolidated);
-the wear/undercut strips keep their own fixed head.
+"Dimension arrows". It reaches the two dimension-rail composers (schematic, consolidated) and the
+undercut rail — its PDF strips and its detail canvas, one rail (on-device request: smaller arrows
+on the undercut drawing); the wear strips keep their own fixed head. On every undercut rail a
+value that falls back off its line carries a thin leader down (or up) to its own span.
 
 **Labels and rail LINES share ONE collision space** — a floating value lives in the *next*
 rail's band, so per-rail collision tracking is blind exactly where the labels overlap. The

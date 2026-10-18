@@ -14,6 +14,8 @@ import com.android.shaftschematic.geom.undercutNestingForest
 import com.android.shaftschematic.model.LinerAnchor
 import com.android.shaftschematic.model.Undercut
 import com.android.shaftschematic.model.UndercutReference
+import com.android.shaftschematic.settings.PDF_ARROW_SIZE_DEFAULT_PT
+import com.android.shaftschematic.settings.PDF_ARROW_SIZE_LARGE_PT
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.DualLabel
 import com.android.shaftschematic.util.dualStackMetrics
@@ -418,6 +420,10 @@ data class UndercutStripRails(
  * [scale] multiplies the layout's fixed point sizes (text pad, arrowhead, label gap, arrow
  * clearance) for a caller drawing in another unit; the page passes 1, and at 1 every value is the
  * page's own.
+ *
+ * [arrowSizePt] is the app-wide "Dimension arrows" head (`PdfPrefs.arrowSizePt`, in points before
+ * [scale]): whether a value seats in its break and which way the heads point both depend on it, so
+ * the plan and `drawUndercutRail` must be handed the same value.
  */
 fun planUndercutStripRails(
     chainStartMm: Float,
@@ -430,6 +436,7 @@ fun planUndercutStripRails(
     xAt: (Float) -> Float,
     labelWidth: (DualLabel) -> Float,
     scale: Float = 1f,
+    arrowSizePt: Float = PDF_ARROW_SIZE_DEFAULT_PT,
 ): UndercutStripRails {
     val sorted = spans.sortedBy { it.startMm }
     val nestingById = undercutNestingForest(sorted).associateBy { it.id }
@@ -444,7 +451,7 @@ fun planUndercutStripRails(
         xAtStripMm = xAt,
         labelWidthPt = labelWidth,
         textPadPt = DIM_BREAK_TEXT_PAD_PT * scale,
-        arrowSizePt = UNDERCUT_RAIL_ARROW_PT * scale,
+        arrowSizePt = arrowSizePt * scale,
         minLabelGapPt = UNDERCUT_RAIL_MIN_LABEL_GAP_PT * scale,
         arrowClearPt = DimensionRailLayout.ARROW_CLEAR * scale,
     )
@@ -455,8 +462,14 @@ fun planUndercutStripRails(
     return UndercutStripRails(chainSpans, nestedSpans, totalSpan, chain, nested, total, rows)
 }
 
-/** The undercut rails' arrowhead length, points — the layout's seat test and the drawn head. */
-const val UNDERCUT_RAIL_ARROW_PT = 4f
+/**
+ * The head length a rail's fallback label rows are spaced clear of, points
+ * ([undercutRailFallbackBaselineY]). Fixed, never the "Dimension arrows" pref: every vertical budget
+ * the strip reserves (the total band, the row pitch) is measured off these rows, so a head-size
+ * change moves no row. Row 0 still clears the largest head the pref offers
+ * ([PDF_ARROW_SIZE_LARGE_PT]) by the label gap less half a point.
+ */
+const val UNDERCUT_RAIL_LABEL_CLEAR_ARROW_PT = 4f
 
 /** Least horizontal gap between two fallback values on one row, points. */
 const val UNDERCUT_RAIL_MIN_LABEL_GAP_PT = 4f

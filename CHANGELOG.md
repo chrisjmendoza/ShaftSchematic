@@ -6,6 +6,20 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-10-18
+
+### feat(undercut): leaders on raised values, arrow size, Preview and Options within reach
+
+- A rail value that cannot sit in its line now has a thin leader to the line it belongs to, on
+  the detail page and the printed strips alike (on-device request: the nested row's raised
+  2 3/8" did not say what it measured).
+- The undercut drawing's arrowheads follow the app-wide "Dimension arrows" setting, now on the
+  undercut sheet's options too; they were a fixed 4 pt (on-device request: smaller arrows). The
+  printed default is now the setting's default, Small 3 pt; Medium gives the old 4 pt head.
+- The undercut detail page has Preview and drawing-options icons in its top bar, and the
+  Undercut tab has Preview and Options buttons right under the overview, so neither needs a
+  scroll to the bottom (on-device request).
+
 ## 2026-10-17
 
 ### fix(undercut): nested-row values above their line; narrow cuts' numbers below the shaft

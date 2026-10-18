@@ -10,6 +10,10 @@ import com.android.shaftschematic.geom.clampUndercutSpan
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
 import com.android.shaftschematic.geom.undercutNestingForest
+import com.android.shaftschematic.settings.PDF_ARROW_SIZE_DEFAULT_PT
+import com.android.shaftschematic.settings.PDF_ARROW_SIZE_LARGE_PT
+import com.android.shaftschematic.settings.PDF_ARROW_SIZE_MEDIUM_PT
+import com.android.shaftschematic.settings.PDF_ARROW_SIZE_SMALL_PT
 import com.android.shaftschematic.ui.resolved.resolveComponents
 import com.android.shaftschematic.ui.resolved.surfaceSegsFrom
 import com.android.shaftschematic.util.DualLabel
@@ -102,9 +106,12 @@ class UndercutStripRailPlanTest {
     }
 
     @Test
-    fun `at scale 1 the plan is the composer's former inline sequence exactly`() {
+    fun `at scale 1 and the former fixed 4 pt head the plan is the composer's former inline sequence exactly`() {
         val s = strip()
-        val rails = plan(s)
+        val rails = planUndercutStripRails(
+            s.chainStartMm, s.chainEndMm, spans, unit, dual = false, splitAtMm = emptyList(), startedStrip = false,
+            xAt = xAt, labelWidth = labelWidth, arrowSizePt = PDF_ARROW_SIZE_MEDIUM_PT,
+        )
         // The composer's sequence before the planner existed, verbatim.
         val sorted = spans.sortedBy { it.startMm }
         val nestingById = undercutNestingForest(sorted).associateBy { it.id }
@@ -124,6 +131,70 @@ class UndercutStripRailPlanTest {
         assertEquals(nested, rails.nested)
         assertEquals(total, rails.total)
         assertEquals(rows, rails.rows)
+    }
+
+    // The rails follow the app-wide "Dimension arrows" pref: a value seats in its break only with
+    // an arrowhead's room on each side, so the head size is a layout input, not just ink.
+
+    /** One 40 mm cut in a 100 mm chain at 1 pt/mm, every value 26 pt wide: the cut's value has
+     *  exactly 3 pt each side of its break pads. */
+    private fun borderlinePlan(arrowSizePt: Float?): UndercutStripRails {
+        val cut = listOf(UndercutSpanMm("c", 30f, 70f))
+        return if (arrowSizePt == null) planUndercutStripRails(
+            0f, 100f, cut, unit, dual = false, splitAtMm = emptyList(),
+            startedStrip = false, xAt = { it }, labelWidth = { 26f },
+        ) else planUndercutStripRails(
+            0f, 100f, cut, unit, dual = false, splitAtMm = emptyList(),
+            startedStrip = false, xAt = { it }, labelWidth = { 26f }, arrowSizePt = arrowSizePt,
+        )
+    }
+
+    @Test
+    fun `a larger arrowhead flips a borderline span from seated to fallback`() {
+        val cut = { a: Float -> borderlinePlan(a).chain.single { it.x0Pt == 30f } }
+        assertTrue("3 pt heads fit the 3 pt either side", cut(PDF_ARROW_SIZE_SMALL_PT).seatsInBreak)
+        assertFalse("4 pt heads do not", cut(PDF_ARROW_SIZE_MEDIUM_PT).seatsInBreak)
+        assertFalse(cut(PDF_ARROW_SIZE_LARGE_PT).seatsInBreak)
+        // The fallback leaves the whole 40 pt span to the heads, so they still point inward.
+        assertTrue(cut(PDF_ARROW_SIZE_LARGE_PT).arrowInward)
+        // The fallback claims a row the seated value did not.
+        assertTrue(
+            undercutRailFallbackRows(borderlinePlan(PDF_ARROW_SIZE_LARGE_PT).chain) >=
+                undercutRailFallbackRows(borderlinePlan(PDF_ARROW_SIZE_SMALL_PT).chain),
+        )
+    }
+
+    @Test
+    fun `with no head given the plan uses the pref's default`() {
+        assertEquals(borderlinePlan(PDF_ARROW_SIZE_DEFAULT_PT), borderlinePlan(null))
+        val s = strip()
+        assertEquals(
+            plan(s),
+            planUndercutStripRails(
+                s.chainStartMm, s.chainEndMm, spans, unit, dual = false, splitAtMm = emptyList(), startedStrip = false,
+                xAt = xAt, labelWidth = labelWidth, arrowSizePt = PDF_ARROW_SIZE_DEFAULT_PT,
+            ),
+        )
+    }
+
+    @Test
+    fun `on the job the head size changes no decision a value had room for either way`() {
+        // Only borderline spans may flip: every value that seats at the largest head seats at the
+        // smallest too, and nothing seated at the smallest is new room the plan could not have had.
+        val s = strip()
+        fun at(a: Float) = planUndercutStripRails(
+            s.chainStartMm, s.chainEndMm, spans, unit, dual = false, splitAtMm = emptyList(), startedStrip = false,
+            xAt = xAt, labelWidth = labelWidth, arrowSizePt = a,
+        )
+        val small = at(PDF_ARROW_SIZE_SMALL_PT)
+        val large = at(PDF_ARROW_SIZE_LARGE_PT)
+        (large.chain + large.nested.flatten() + large.total)
+            .zip(small.chain + small.nested.flatten() + small.total)
+            .forEach { (l, sm) ->
+                assertEquals(l.x0Pt, sm.x0Pt, 1e-3f)
+                assertEquals(l.labelCxPt, sm.labelCxPt, 1e-3f)
+                if (l.seatsInBreak) assertTrue("${l.label.inline()} seats at 5 pt but not at 3 pt", sm.seatsInBreak)
+            }
     }
 
     @Test
@@ -177,8 +248,8 @@ class UndercutStripRailPlanTest {
         val descent = 2f
         val baseline = undercutRailFallbackBaselineY(lineY, short.labelRow, above = true, step, textSize, descent)
         assertTrue(
-            "the value's descent clears the arrowheads above the line ($baseline vs $lineY)",
-            baseline + descent < lineY - UNDERCUT_RAIL_ARROW_PT * 0.5f,
+            "the value's descent clears the largest arrowheads above the line ($baseline vs $lineY)",
+            baseline + descent < lineY - PDF_ARROW_SIZE_LARGE_PT * 0.5f,
         )
         val chainLowest = undercutRailFallbackBaselineY(chainY, chainRows - 1, above = false, step, textSize, descent)
         assertTrue(

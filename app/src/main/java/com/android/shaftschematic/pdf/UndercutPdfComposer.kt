@@ -36,6 +36,7 @@ import com.android.shaftschematic.geom.reliefSpan
 import com.android.shaftschematic.geom.shoulderEndMm
 import com.android.shaftschematic.geom.threadSurfaceSegs
 import com.android.shaftschematic.model.*
+import com.android.shaftschematic.settings.PDF_ARROW_SIZE_DEFAULT_PT
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.bodyBlends
@@ -486,6 +487,8 @@ fun composeUndercutPdf(
                 ?.takeIf { pdfPrefs.undercutSplitAtLinerEdge }
                 ?.let { buriedUndercutLinerEdgesMm(it.linerStartMm, it.linerEndMm, liveSpans) }
                 ?: emptyList(),
+            // The app-wide "Dimension arrows" head — the same pref the schematic's rails read.
+            arrowSizePt = pdfPrefs.arrowSizePt,
         )
     }
     if (overflow.isNotEmpty()) {
@@ -844,6 +847,8 @@ private fun drawUndercutDetailStrip(
      * empty unless `PdfPrefs.undercutSplitAtLinerEdge` is on.
      */
     railSplitAtMm: List<Float> = emptyList(),
+    /** `PdfPrefs.arrowSizePt`: the rail heads, and the seat-in-break / arrow-direction decisions. */
+    arrowSizePt: Float = PDF_ARROW_SIZE_DEFAULT_PT,
 ) {
     // Draw range, widened at layout time so the undimensioned pad outside each chain datum
     // prints with real air whatever the strip's scale is — the mm pad alone reads as cramped in
@@ -896,6 +901,7 @@ private fun drawUndercutDetailStrip(
         strip.chainStartMm, strip.chainEndMm, spans, unit, dual, railSplitAtMm, startedStrip,
         xAt = { mm -> xAtStrip(mm) },
         labelWidth = { s: DualLabel -> dimText.measureDualLabel(s, dualStacked) },
+        arrowSizePt = arrowSizePt,
     )
     val railPlan = rails.rows
     val inner = computeUndercutStripInnerLayout(
@@ -1000,6 +1006,7 @@ private fun drawUndercutDetailStrip(
         railLabelRows = inner.railLabelRows,
         drawLabels = !blankValues,
         dualStacked = dualStacked,
+        arrowSizePt = arrowSizePt,
     )
 
     // ── Title at the bottom: "<liner name> — <dist> FROM … S.E.T." ──

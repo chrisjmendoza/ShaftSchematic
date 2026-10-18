@@ -33,6 +33,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.outlined.Preview
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -40,6 +42,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
@@ -70,6 +73,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -157,6 +161,10 @@ import kotlin.math.roundToInt
  *   `pickUndercutStripAt` first, then liner containment, and opens
  *   [UndercutWindowDetailOverlay] on that strip (an empty liner yields an empty
  *   `linerStripFor` strip — the authoring entry point). No pinch-zoom here; the overlay owns zoom.
+ * - **Preview / Options** — a compact row directly under the overview canvas: the same preview
+ *   the foot of the tab opens, and the undercut preview's options panel ([UndercutOptionsSheet]
+ *   in a non-modal [PreviewOptionsPanel]) over the tab, so neither needs the tab scrolled to its
+ *   foot (on-device request). The detail page's top bar carries the same pair.
  * - **Add undercut** — records a 1 in section just FWD of the AFT S.E.T. and opens its strip.
  *   Precision comes from the overlay's numeric fields, never from the tap (wear posture).
  * - **Cut depth exaggeration** — a slider (0 – `UNDERCUT_EXAGGERATION_MAX_FRAC`) storing the
@@ -229,8 +237,12 @@ fun UndercutRoute(
     val canUndo            by vm.canUndo.collectAsState()
     val canRedo            by vm.canRedo.collectAsState()
 
+    val pdfArrowSizePt     by vm.pdfArrowSizePt.collectAsState()
+
     val ctx = LocalContext.current
     var showPreview by rememberSaveable { mutableStateOf(false) }
+    // The options panel over the tab body (the "Options" button under the overview canvas).
+    var showTabOptions by rememberSaveable { mutableStateOf(false) }
     // Blank-draft (write-in) copy: outline + form layout, all values blanked for handwriting.
     var blankDraft by rememberSaveable { mutableStateOf(false) }
     // Plain remember: an ImageBitmap is not saveable (crashes onSaveInstanceState),
@@ -253,6 +265,8 @@ fun UndercutRoute(
     // Every way the overlay opens comes through here, so the identity is always set with the
     // anchor. [selectId] is the card to open on; null opens on the strip's aft-most card.
     fun openOverlay(linerId: String?, undercutId: String?, selectId: String?) {
+        // The detail page carries its own options panel; the tab's would sit forgotten under it.
+        if (linerId != null || undercutId != null) showTabOptions = false
         anchorLinerId = linerId
         anchorUndercutId = undercutId
         overlayInitialSelectedId = selectId
@@ -440,12 +454,13 @@ fun UndercutRoute(
     // without the key the sheet's own layout chips would change nothing on the page.
     // pdfOutputFont is a key for the same reason: the typeface reaches the ink through
     // OutputTypography.active, which is not snapshot state either; so are pdfThreadSlant and
-    // pdfThreadDensity, which reach the hatch through ThreadHatchStyle.
+    // pdfThreadDensity, which reach the hatch through ThreadHatchStyle. pdfArrowSizePt reaches the
+    // composer only through the PdfPrefs snapshot, so it is a key like the dual-unit layout.
     LaunchedEffect(showPreview, spec, unit, resolvedComponents,
                    lineThicknessScale, pdfShadedBodies, pdfShadedTapers, pdfShadedLiners,
                    pdfUndercutLineArt, pdfUndercutLinerOutline, pdfUndercutSplitAtLinerEdge,
                    undercutRecord, blankDraft, pdfFractionStyle, pdfOutputFont, pdfThreadSlant, unitOverrides,
-                   dualUnits, pdfDualUnitLayout, pdfThreadDensity) {
+                   dualUnits, pdfDualUnitLayout, pdfThreadDensity, pdfArrowSizePt) {
         if (!showPreview) { previewBitmap = null; return@LaunchedEffect }
         previewLoading = true
         val prefsSnapshot     = vm.currentPdfPrefs
@@ -630,6 +645,34 @@ fun UndercutRoute(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+    }
+
+    // ── Preview / Options, within reach of the drawing ───────────────────────
+    // The foot of the tab keeps its full Print / Preview / Export group; this row puts the two
+    // inspection actions under the canvas they concern. Preview shares that group's gate.
+    val previewOptionsRow: @Composable ColumnScope.() -> Unit = {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            OutlinedButton(
+                onClick = { showTabOptions = false; showPreview = true },
+                enabled = gate.enabled,
+                modifier = Modifier.weight(1f).testTag("undercut_tab_preview"),
+            ) {
+                Icon(Icons.Outlined.Preview, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Preview")
+            }
+            OutlinedButton(
+                onClick = { showTabOptions = !showTabOptions },
+                modifier = Modifier.weight(1f).testTag("undercut_tab_options"),
+            ) {
+                Icon(Icons.Filled.Tune, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Options")
+            }
         }
     }
 
@@ -911,6 +954,7 @@ fun UndercutRoute(
                     // the pane's scroll: the cut list opposite it reshapes what it draws.
                     pinnedCanvas = canvasBlock,
                     canvasPaneScrolling = {
+                        previewOptionsRow()
                         introText()
                         printGroup()
                     },
@@ -931,6 +975,7 @@ fun UndercutRoute(
                 ) {
                     introText()
                     canvasBlock()
+                    previewOptionsRow()
                     addButton()
                     recordSection()
 
@@ -950,58 +995,25 @@ fun UndercutRoute(
                 .padding(horizontal = 16.dp, vertical = 8.dp)
                 .testTag("undercut_list_delete_snackbar"),
         )
-    }
 
-    BackHandler(enabled = showPreview) { showPreview = false }
-    if (showPreview) {
-        PdfPreviewOverlay(
-            bitmap = previewBitmap,
-            loading = previewLoading,
-            title = "Undercut Drawing Preview",
-            onClose = { showPreview = false },
-            onExport = {
-                guardMissingDia(export = true) {
-                    showPreview = false
-                    launcher.launchPicker(
-                        buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.UNDERCUT, blankDraft),
-                        what = "undercut export",
+        // The undercut preview's options panel over the tab — non-modal, closed by its close
+        // button, the Options button (a toggle) or Back. The overview canvas above it restyles
+        // where it draws what an option changes (the liner outline).
+        if (showTabOptions) {
+            Box(Modifier.fillMaxSize().systemBarsPadding()) {
+                PreviewOptionsPanel(
+                    onClose = { showTabOptions = false },
+                    maxHeightDp = (LocalConfiguration.current.screenHeightDp * PREVIEW_SHEET_MAX_FRAC).dp,
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                ) {
+                    UndercutOptionsSheet(
+                        vm = vm,
+                        blankDraft = blankDraft,
+                        onSetBlankDraft = { blankDraft = it },
                     )
                 }
-            },
-            // The tab body's Print action, unchanged — one function behind both, behind the same
-            // missing-Ø question.
-            onPrint = { guardMissingDia(export = false) { printUndercutDrawing() } },
-            optionsSheet = {
-                // Same blank-draft state as the tab body's switch — ONE state behind both, so
-                // the tab and the sheet can never disagree about what the preview is showing.
-                RunoutWearOptionsSheet(
-                    dualUnits = dualUnits,
-                    onDualUnitsChange = { vm.setDualUnits(it) },
-                    dualUnitLayout = pdfDualUnitLayout,
-                    lineThicknessScale = lineThicknessScale,
-                    pdfShadedBodies = pdfShadedBodies,
-                    pdfShadedTapers = pdfShadedTapers,
-                    pdfShadedLiners = pdfShadedLiners,
-                    // This document's profile shades every body run whatever the
-                    // explicit-only pref says, so its row is hidden here rather than shown
-                    // as a checkbox the page ignores.
-                    showShadeExplicitBodiesOnly = false,
-                    // The one document `PdfPrefs.undercutLineArt` reaches, so the row is offered
-                    // here and nowhere else.
-                    showUndercutLineArt = true,
-                    undercutLineArt = pdfUndercutLineArt,
-                    undercutLinerOutline = pdfUndercutLinerOutline,
-                    undercutSplitAtLinerEdge = pdfUndercutSplitAtLinerEdge,
-                    vm = vm,
-                    fractionStyle = pdfFractionStyle,
-                    hasThreads = hasDrawnThreads(spec),
-                    threadSlant = pdfThreadSlant,
-                    threadDensity = pdfThreadDensity,
-                    blankDraft = blankDraft,
-                    onSetBlankDraft = { blankDraft = it },
-                )
-            },
-        )
+            }
+        }
     }
 
     // ── "Print without diameters?" ───────────────────────────────────────────
@@ -1077,6 +1089,54 @@ fun UndercutRoute(
             canRedo = canRedo,
             onUndo = vm::undoEdit,
             onRedo = vm::redoEdit,
+            arrowSizePt = pdfArrowSizePt,
+            // The tab's own preview, opened over this page once its cards are settled.
+            onPreview = { showPreview = true },
+            previewEnabled = gate.enabled,
+            // The undercut preview's options, in the same panel, over this page. Blank draft is
+            // the tab's own state either way, so the two can never disagree.
+            optionsSheet = {
+                UndercutOptionsSheet(
+                    vm = vm,
+                    blankDraft = blankDraft,
+                    onSetBlankDraft = { blankDraft = it },
+                )
+            },
+        )
+    }
+
+    // ── Undercut drawing preview ──────────────────────────────────────────────
+    // After the detail overlay, so a preview opened from the detail page's top bar draws OVER it.
+    // Its Back handler is composed only while it is open, so it registers after the detail
+    // overlay's and wins: Back closes the preview back to the detail page.
+    if (showPreview) {
+        BackHandler { showPreview = false }
+        PdfPreviewOverlay(
+            bitmap = previewBitmap,
+            loading = previewLoading,
+            title = "Undercut Drawing Preview",
+            onClose = { showPreview = false },
+            onExport = {
+                guardMissingDia(export = true) {
+                    showPreview = false
+                    launcher.launchPicker(
+                        buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.UNDERCUT, blankDraft),
+                        what = "undercut export",
+                    )
+                }
+            },
+            // The tab body's Print action, unchanged — one function behind both, behind the same
+            // missing-Ø question.
+            onPrint = { guardMissingDia(export = false) { printUndercutDrawing() } },
+            optionsSheet = {
+                // Same blank-draft state as the tab body's switch — ONE state behind both, so
+                // the tab and the sheet can never disagree about what the preview is showing.
+                UndercutOptionsSheet(
+                    vm = vm,
+                    blankDraft = blankDraft,
+                    onSetBlankDraft = { blankDraft = it },
+                )
+            },
         )
     }
 }
@@ -1086,6 +1146,64 @@ internal const val DEFAULT_UNDERCUT_LENGTH_MM = UNDERCUT_DEFAULT_LENGTH_MM
 
 /** A Print ([export] false) or Export waiting on "Print without diameters?" — [count] cuts lack a Ø. */
 private class UndercutMissingDiaAsk(val count: Int, val export: Boolean, val action: () -> Unit)
+
+/**
+ * The undercut drawing's PDF options — ONE configuration of the shared [RunoutWearOptionsSheet]
+ * behind every surface that opens it: the preview's Tune panel, the tab's "Options" button and the
+ * detail page's Options icon. Every row is a remote control for the one app-wide `PdfPrefs` value
+ * (or the document's own dual-units switch), so the three can never disagree. [blankDraft] is the
+ * tab's session-only write-in election.
+ */
+@Composable
+internal fun UndercutOptionsSheet(
+    vm: ShaftViewModel,
+    blankDraft: Boolean,
+    onSetBlankDraft: (Boolean) -> Unit,
+) {
+    val spec by vm.spec.collectAsState()
+    val dualUnits by vm.dualUnits.collectAsState()
+    val pdfDualUnitLayout by vm.pdfDualUnitLayout.collectAsState()
+    val lineThicknessScale by vm.lineThicknessScale.collectAsState()
+    val pdfShadedBodies by vm.pdfShadedBodies.collectAsState()
+    val pdfShadedTapers by vm.pdfShadedTapers.collectAsState()
+    val pdfShadedLiners by vm.pdfShadedLiners.collectAsState()
+    val pdfUndercutLineArt by vm.pdfUndercutLineArt.collectAsState()
+    val pdfUndercutLinerOutline by vm.pdfUndercutLinerOutline.collectAsState()
+    val pdfUndercutSplitAtLinerEdge by vm.pdfUndercutSplitAtLinerEdge.collectAsState()
+    val pdfFractionStyle by vm.pdfFractionStyle.collectAsState()
+    val pdfThreadSlant by vm.pdfThreadSlant.collectAsState()
+    val pdfThreadDensity by vm.pdfThreadDensity.collectAsState()
+    val pdfArrowSizePt by vm.pdfArrowSizePt.collectAsState()
+    RunoutWearOptionsSheet(
+        dualUnits = dualUnits,
+        onDualUnitsChange = { vm.setDualUnits(it) },
+        dualUnitLayout = pdfDualUnitLayout,
+        lineThicknessScale = lineThicknessScale,
+        pdfShadedBodies = pdfShadedBodies,
+        pdfShadedTapers = pdfShadedTapers,
+        pdfShadedLiners = pdfShadedLiners,
+        // This document's profile shades every body run whatever the explicit-only pref says,
+        // so its row is hidden here rather than shown as a checkbox the page ignores.
+        showShadeExplicitBodiesOnly = false,
+        // The one document `PdfPrefs.undercutLineArt` reaches, so the row is offered here and
+        // nowhere else.
+        showUndercutLineArt = true,
+        undercutLineArt = pdfUndercutLineArt,
+        undercutLinerOutline = pdfUndercutLinerOutline,
+        undercutSplitAtLinerEdge = pdfUndercutSplitAtLinerEdge,
+        vm = vm,
+        // The strip rails' heads follow `PdfPrefs.arrowSizePt` (`drawUndercutRail`), on the
+        // printed strips and the detail canvas alike.
+        showDimensionArrows = true,
+        arrowSizePt = pdfArrowSizePt,
+        fractionStyle = pdfFractionStyle,
+        hasThreads = hasDrawnThreads(spec),
+        threadSlant = pdfThreadSlant,
+        threadDensity = pdfThreadDensity,
+        blankDraft = blankDraft,
+        onSetBlankDraft = onSetBlankDraft,
+    )
+}
 
 private fun openUndercutPdf(context: Context, uri: Uri) {
     val intent = buildOpenPdfIntent(context, uri)
