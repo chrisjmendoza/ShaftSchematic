@@ -2,6 +2,9 @@ package com.android.shaftschematic.ui.screen
 
 import android.app.Application
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assert
@@ -473,7 +476,7 @@ class PdfOptionsSectionsTest {
         val vm = vm()
         rule.setContent {
             MaterialTheme {
-                UndercutOptionsSheet(vm = vm, blankDraft = false, onSetBlankDraft = {})
+                UndercutOptionsSheet(vm = vm, blankDraft = false, onSetBlankDraft = {}, showThreadControls = false)
             }
         }
 
@@ -482,5 +485,21 @@ class PdfOptionsSectionsTest {
         rule.onNodeWithText("Dimension arrows").assertExists()
         rule.onNodeWithText("Line thickness", substring = true).assertExists()
         rule.onNodeWithText("Fractions").assertExists()
+    }
+
+    @Test
+    fun `the undercut sheet shows its Thread section only when it draws a thread`() {
+        val vm = vm()
+        var draws by mutableStateOf(false)
+        rule.setContent {
+            MaterialTheme {
+                UndercutOptionsSheet(vm = vm, blankDraft = false, onSetBlankDraft = {}, showThreadControls = draws)
+            }
+        }
+        rule.onNodeWithTag("options_thread_expander").assertDoesNotExist()
+
+        draws = true
+        rule.waitForIdle()
+        rule.onNodeWithTag("options_thread_expander").assertExists()
     }
 }

@@ -95,6 +95,7 @@ import com.android.shaftschematic.geom.clampUndercutSpan
 import com.android.shaftschematic.geom.effectiveUndercutReference
 import com.android.shaftschematic.geom.isUndercutStaleOverrun
 import com.android.shaftschematic.geom.linerStripFor
+import com.android.shaftschematic.geom.undercutStripsReachThread
 import com.android.shaftschematic.geom.UNDERCUT_SET_REACH_MM
 import com.android.shaftschematic.geom.undercutSetReachMm
 import com.android.shaftschematic.geom.maxOuterDiaOver
@@ -340,6 +341,24 @@ fun UndercutRoute(
         buildUndercutStrips(
             spans, linerSpans, oalMm, segs = segs,
             reachToSetMm = setReachMm, aftSetMm = stripAftSetMm, fwdSetMm = stripFwdSetMm,
+        )
+    }
+    // Whether the printed sheet draws a thread anywhere — the gate on its options' Thread section.
+    // The sheet prints the cut strips, or a started strip per liner when nothing is recorded, or
+    // the whole-shaft profile when it has neither (the composer's own order).
+    val sheetDrawsThread = remember(strips, linerSpans, oalMm, segs, setReachMm, stripAftSetMm, stripFwdSetMm, spec) {
+        val pageStrips = strips.ifEmpty {
+            linerSpans.sortedBy { it.startMm }.map {
+                linerStripFor(
+                    it, emptyList(), oalMm, segs = segs,
+                    reachToSetMm = setReachMm, aftSetMm = stripAftSetMm, fwdSetMm = stripFwdSetMm,
+                )
+            }
+        }
+        if (pageStrips.isEmpty()) hasDrawnThreads(spec)
+        else undercutStripsReachThread(
+            pageStrips,
+            spec.threads.map { it.startFromAftMm to it.startFromAftMm + it.lengthMm },
         )
     }
     val freeWindows = remember(strips) {
@@ -1007,6 +1026,7 @@ fun UndercutRoute(
                     modifier = Modifier.align(Alignment.BottomCenter),
                 ) {
                     UndercutOptionsSheet(
+                        showThreadControls = sheetDrawsThread,
                         vm = vm,
                         blankDraft = blankDraft,
                         onSetBlankDraft = { blankDraft = it },
@@ -1097,6 +1117,7 @@ fun UndercutRoute(
             // the tab's own state either way, so the two can never disagree.
             optionsSheet = {
                 UndercutOptionsSheet(
+                    showThreadControls = sheetDrawsThread,
                     vm = vm,
                     blankDraft = blankDraft,
                     onSetBlankDraft = { blankDraft = it },
@@ -1132,6 +1153,7 @@ fun UndercutRoute(
                 // Same blank-draft state as the tab body's switch — ONE state behind both, so
                 // the tab and the sheet can never disagree about what the preview is showing.
                 UndercutOptionsSheet(
+                    showThreadControls = sheetDrawsThread,
                     vm = vm,
                     blankDraft = blankDraft,
                     onSetBlankDraft = { blankDraft = it },
@@ -1159,6 +1181,12 @@ internal fun UndercutOptionsSheet(
     vm: ShaftViewModel,
     blankDraft: Boolean,
     onSetBlankDraft: (Boolean) -> Unit,
+    /**
+     * Whether this sheet draws a thread ([undercutStripsReachThread], or the whole-shaft profile on
+     * a threaded shaft) — the Thread section shows only then, since its sliders tune nothing else
+     * here (on-device request: fewer controls).
+     */
+    showThreadControls: Boolean,
 ) {
     val spec by vm.spec.collectAsState()
     val dualUnits by vm.dualUnits.collectAsState()
@@ -1197,7 +1225,7 @@ internal fun UndercutOptionsSheet(
         showDimensionArrows = true,
         arrowSizePt = pdfArrowSizePt,
         fractionStyle = pdfFractionStyle,
-        hasThreads = hasDrawnThreads(spec),
+        hasThreads = showThreadControls,
         threadSlant = pdfThreadSlant,
         threadDensity = pdfThreadDensity,
         blankDraft = blankDraft,

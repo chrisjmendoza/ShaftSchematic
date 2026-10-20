@@ -1452,3 +1452,20 @@ fun nestedNotchFloorDiaMm(
     val drawnDepth = min(relDrawnDepth.coerceAtLeast(0f), cap)
     return (parentDrawnFloorDiaMm - drawnDepth).coerceAtLeast(UNDERCUT_SPAN_EPS_MM)
 }
+
+/**
+ * Whether any of the undercut sheet's detail [strips] draws a thread: a strip's DRAW range
+ * overlapping a thread span ([threadSpansMm], shaft-space start to end, zero-length ones
+ * ignored). The undercut sheet draws a thread only where a strip window reaches it (or on the
+ * whole-shaft profile, which prints only when there are no strips — the caller's case), so the
+ * options sheet offers its thread-hatch controls only then; elsewhere they would tune nothing
+ * (on-device request: fewer controls). The printed strip may widen its range by a few points
+ * of paper pad beyond these ranges; a thread reached only by that pad keeps its hatch while the
+ * controls stay hidden — the setting still applies, and it remains on the other sheets.
+ */
+fun undercutStripsReachThread(
+    strips: List<UndercutStrip>,
+    threadSpansMm: List<Pair<Float, Float>>,
+): Boolean = threadSpansMm.any { (a, b) ->
+    b > a && strips.any { st -> st.drawStartMm < b && st.drawEndMm > a }
+}

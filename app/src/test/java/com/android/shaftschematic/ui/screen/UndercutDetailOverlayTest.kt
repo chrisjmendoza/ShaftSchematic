@@ -30,6 +30,9 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.doubleClick
+import androidx.compose.ui.test.pinch
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeRight
 import com.android.shaftschematic.doc.ShaftDocCodec
@@ -130,7 +133,7 @@ class UndercutDetailOverlayTest {
                     initialSelectedId = initialSelectedId,
                     onPreview = if (withChrome) ({ previewed++ }) else null,
                     optionsSheet = vm?.let { v ->
-                        { UndercutOptionsSheet(vm = v, blankDraft = false, onSetBlankDraft = {}) }
+                        { UndercutOptionsSheet(vm = v, blankDraft = false, onSetBlankDraft = {}, showThreadControls = false) }
                     },
                 )
             }
@@ -1088,5 +1091,43 @@ class UndercutDetailOverlayTest {
         assertEquals("Discard goes on to the preview", 1, previewed)
         assertEquals(0, closed)
         assertTrue("a blocked draft reached the record", updated.isEmpty())
+    }
+
+    @Test
+    fun `a zoomed section view resets from its corner button and the button leaves with the zoom`() {
+        show(listOf(cut("u1", 600f), cut("u2", 800f)), initialSelectedId = "u1")
+        val canvas = rule.onNodeWithContentDescription(SheetSemantics.undercutDetail(2))
+        rule.onNodeWithTag("undercut_detail_reset_view").assertDoesNotExist()
+
+        canvas.performTouchInput {
+            pinch(
+                start0 = center - Offset(20f, 0f), end0 = center - Offset(160f, 0f),
+                start1 = center + Offset(20f, 0f), end1 = center + Offset(160f, 0f),
+            )
+        }
+        rule.waitForIdle()
+        rule.onNodeWithTag("undercut_detail_reset_view").assertExists().performClick()
+        rule.mainClock.advanceTimeBy(500)
+        rule.waitForIdle()
+        rule.onNodeWithTag("undercut_detail_reset_view").assertDoesNotExist()
+    }
+
+    @Test
+    fun `a double-tap on a zoomed section view resets it`() {
+        show(listOf(cut("u1", 600f), cut("u2", 800f)), initialSelectedId = "u1")
+        val canvas = rule.onNodeWithContentDescription(SheetSemantics.undercutDetail(2))
+        canvas.performTouchInput {
+            pinch(
+                start0 = center - Offset(20f, 0f), end0 = center - Offset(160f, 0f),
+                start1 = center + Offset(20f, 0f), end1 = center + Offset(160f, 0f),
+            )
+        }
+        rule.waitForIdle()
+        rule.onNodeWithTag("undercut_detail_reset_view").assertExists()
+
+        canvas.performTouchInput { doubleClick(center) }
+        rule.mainClock.advanceTimeBy(500)
+        rule.waitForIdle()
+        rule.onNodeWithTag("undercut_detail_reset_view").assertDoesNotExist()
     }
 }

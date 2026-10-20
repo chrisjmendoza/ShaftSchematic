@@ -85,7 +85,15 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
   aft → fwd. An "Add undercut…" button between the two opens a draft-only page (see "UI
   contract"), the authoring entry point for a liner with no cuts yet.
 - Pinch-to-zoom (0.5×–6×) + two-finger pan; taps invert the same transform so hit-testing
-  always runs in untransformed canvas space.
+  always runs in untransformed canvas space. A double-tap, or the corner "Reset view" button
+  (testTag `undercut_detail_reset_view`, shown only while zoomed or panned), animates back to the
+  fitted view — the schematic preview's pair (on-device request).
+- The undercut options' **Thread** section shows only while the printed sheet draws a thread:
+  a printed strip's draw range overlapping a thread (`undercutStripsReachThread` over the cut
+  strips, or the started strips when nothing is recorded), or the whole-shaft profile on a
+  threaded shaft when there are no strips (on-device request: a shaft whose only thread lies
+  outside every strip showed hatch sliders that tuned nothing). The route passes it as
+  `UndercutOptionsSheet(showThreadControls)` at all three openings (preview, tab, detail page).
 - Cards edit a **local draft** that previews on the canvas and reaches the record only when
   **confirmed**. The previewed draft's notch draws **dashed** in the selection (primary) color —
   provisional, unmistakable against the liner and the settled cuts — and switches to the
