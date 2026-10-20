@@ -150,7 +150,8 @@ Full-resolution preview through the shared `util/PdfRaster.renderPdfPageBitmap`
   1. **Shaft** (`options_shaft_expander`, OPEN by default) — the live-tuning group:
      **"Shaft height"**, "Body S-break" threshold, the liner & taper compression control.
   2. **Thread** (`options_thread_expander`, collapsed) — "Thread slant", "Thread density";
-     only while the shaft draws a thread (`hasDrawnThreads`: a thread with length > 0).
+     only while the sheet draws a thread (`hasDrawnThreads`: a thread with length > 0; the
+     undercut sheet narrows it to strips that reach a thread, `undercutStripsReachThread`).
      Header summary: slant · density (`3× · 50%`).
   3. **Lines & text** (`options_lines_expander`, collapsed) — line thickness (50–200%, its
      live `onDrag` channel intact), "Dimension arrows" size, fractions. Header summary: the

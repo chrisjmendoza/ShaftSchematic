@@ -8,6 +8,15 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-18
 
+### fix(undercut): zoom reset on the section view; Thread options only when a thread is drawn
+
+- The undercut detail page's zoomed drawing resets with a double-tap or a corner "Reset view"
+  button shown while zoomed, as the schematic preview does (on-device request).
+- The undercut sheet's options show the Thread section only when the sheet draws a thread: a
+  printed strip reaching one, or the whole-shaft profile of a threaded shaft. A shaft whose only
+  thread lies outside every strip no longer shows hatch sliders that change nothing (on-device
+  request: fewer controls). The other sheets keep showing it whenever the shaft has a thread.
+
 ### feat(undercut): leaders on raised values, arrow size, Preview and Options within reach
 
 - A rail value that cannot sit in its line now has a thin leader to the line it belongs to, on

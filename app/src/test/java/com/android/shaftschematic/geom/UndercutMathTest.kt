@@ -1918,4 +1918,33 @@ class UndercutMathTest {
         assertEquals("1 cut has no diameter and will print without one.", undercutMissingDiaMessage(1))
         assertEquals("3 cuts have no diameter and will print without one.", undercutMissingDiaMessage(3))
     }
+
+    // ── undercutStripsReachThread: the undercut options' Thread-section gate ──
+
+    private fun linerStripDrawn(drawStart: Float, drawEnd: Float) = UndercutStrip.LinerStrip(
+        linerId = "L", linerStartMm = drawStart + 10f, linerEndMm = drawEnd - 10f,
+        drawStartMm = drawStart, drawEndMm = drawEnd,
+        chainStartMm = drawStart + 10f, chainEndMm = drawEnd - 10f, undercutIds = emptyList(),
+    )
+
+    @Test
+    fun `a strip far from every thread does not reach one`() {
+        // The on-device job: an excluded AFT thread behind the AFT face, the strip near the FWD end.
+        val strips = listOf(linerStripDrawn(9900f, 10995f))
+        assertFalse(undercutStripsReachThread(strips, listOf(-203.2f to 0f)))
+    }
+
+    @Test
+    fun `a strip whose window overlaps a thread reaches it`() {
+        val strips = listOf(linerStripDrawn(9900f, 10995f))
+        assertTrue(undercutStripsReachThread(strips, listOf(10900f to 11100f)))
+    }
+
+    @Test
+    fun `touching is not reaching and a zero-length thread never counts`() {
+        val strips = listOf(linerStripDrawn(1000f, 2000f))
+        assertFalse(undercutStripsReachThread(strips, listOf(2000f to 2200f)))
+        assertFalse(undercutStripsReachThread(strips, listOf(1500f to 1500f)))
+        assertFalse(undercutStripsReachThread(emptyList(), listOf(0f to 100f)))
+    }
 }

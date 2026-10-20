@@ -5,6 +5,10 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animate
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
@@ -25,6 +29,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
@@ -1033,6 +1038,20 @@ fun UndercutWindowDetailOverlay(
         zoomScale = (zoomScale * zoomChange).coerceIn(0.5f, 6f)
         zoomOffset = if (zoomScale <= 1f) Offset.Zero else zoomOffset + panChange
     }
+    // Back to the fitted view — double-tap or the corner button, the schematic preview's pair
+    // (on-device request: the section view zoomed but had no way back).
+    val zoomResetScope = rememberCoroutineScope()
+    fun resetZoom() {
+        val fromScale = zoomScale
+        val fromOffset = zoomOffset
+        if (fromScale == 1f && fromOffset == Offset.Zero) return
+        zoomResetScope.launch {
+            animate(0f, 1f, animationSpec = tween(140)) { t, _ ->
+                zoomScale = fromScale + (1f - fromScale) * t
+                zoomOffset = fromOffset * (1f - t)
+            }
+        }
+    }
 
     // Where the drawing block (canvas + save pill) ends, root px — the options panel's ceiling.
     var drawingBottomPx by remember { mutableFloatStateOf(0f) }
@@ -1241,7 +1260,7 @@ fun UndercutWindowDetailOverlay(
                             }
                             .transformable(zoomTransformState)
                             .pointerInput(strip, spans, winLenMm, maxOdMm) {
-                                detectTapGestures { rawTap ->
+                                detectTapGestures(onDoubleTap = { resetZoom() }) { rawTap ->
                                     val sc = scaleForTap.value
                                     val tap = Offset(
                                         (rawTap.x - offsetForTap.value.x - size.width / 2f) / sc + size.width / 2f,
@@ -1577,6 +1596,25 @@ fun UndercutWindowDetailOverlay(
                                 cy = cy,
                                 textSizePx = textPaint.textSize,
                             )
+                        }
+                        // Shown only while zoomed: at the fitted view there is nothing to reset,
+                        // and the corner belongs to the drawing.
+                        if (zoomScale != 1f || zoomOffset != Offset.Zero) {
+                            IconButton(
+                                onClick = { resetZoom() },
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(6.dp)
+                                    .size(40.dp)
+                                    .background(Color.White.copy(alpha = 0.6f), CircleShape)
+                                    .testTag("undercut_detail_reset_view"),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Refresh,
+                                    contentDescription = "Reset view",
+                                    tint = Color.Black.copy(alpha = 0.8f),
+                                )
+                            }
                         }
                     }
 

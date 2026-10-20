@@ -902,8 +902,10 @@ compression** — §5.7, the same per-job `RunoutConfig` values as the tab's own
 text** (collapsed: Line thickness, Dimension arrows, Fractions), **Shade in Components**
 (collapsed, + its "Explicit bodies only" sub-checkbox), **Measurement reference**
 (collapsed) — **Units** (collapsed: Dual units + layout) LAST. This is the fullest instance
-of the shared sheet: every gated row is on. The sheet takes `hasThreads`, which all four
-routes pass as `hasDrawnThreads(spec)`. The other three tabs reuse the same sheet with rows
+of the shared sheet: every gated row is on. The sheet takes `hasThreads`, which the schematic,
+runout, wear and Output routes pass as `hasDrawnThreads(spec)`; the undercut route passes whether
+its printed strips actually reach a thread (`undercutStripsReachThread`, see
+`contracts/UndercutDrawing.md`). The other three tabs reuse the same sheet with rows
 gated off by what their composer actually reads (a section left with nothing is omitted):
 - **Runout** (the classic standalone sheet) keeps the Content chips, Shaft height, Body
   S-break (it draws compression breaks too), Line thickness, Liner & taper compression, and the
@@ -926,8 +928,9 @@ gated off by what their composer actually reads (a section left with nothing is 
 
 Every instance keeps Lines & text (Line thickness + Fractions ungated — every document here
 prints lengths), Shade in Components and Units (ungated) at their fixed spots in the order;
-the Thread section follows the shaft — every document draws the shaft's threads, so it shows
-on every sheet exactly when there is one.
+the Thread section follows what the sheet draws — the schematic, runout and wear documents
+draw the shaft's threads, so it shows there exactly when the shaft has one; the undercut sheet
+draws a thread only where a strip reaches it, so it shows there only then.
 
 **Scope legibility** (DESIGN_INTENT §3.3, ruling Q3): a look row on either sheet is a remote
 control for the ONE app-wide `PdfPrefs` value, never a per-page copy, so both sheets carry the
