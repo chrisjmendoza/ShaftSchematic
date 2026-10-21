@@ -1,0 +1,164 @@
+# On-device checklist
+
+Things that shipped to `main` but have not yet been judged on a phone or tablet. Each item says
+what to do, what "good" looks like, and where it came from. Tick it off (or delete it) once you
+have looked; move anything that fails to `TODO.md` §Bugs with what you saw.
+
+Everything here is already green in the unit suite and `lintVitalRelease` — this list is about
+how it reads on hardware and on paper, which the tests cannot judge.
+
+Last updated: 2026-10-21.
+
+---
+
+## Undercut Drawing (2026-10-21 — three merges)
+
+Use job 935061 (Polar Ranger STBD) and one job with two or more liners holding cuts.
+
+### Rail values lift above the chain — `d2ed7c6`
+- [x] **Single section, landscape.** Short cuts' values sit ABOVE the chain line under the total
+  rail, each with a thin leader down to its own span; only the nested row sits below. *Verdict
+  2026-10-21: "BEA-UTIFUL".*
+- [ ] **Crowded page** (4 sections, or the landscape 2×2 grid). Short values stay BELOW the chain as
+  before — the lift must not shrink the shaft to make room.
+- [ ] **Zoomed detail page** (tap a liner on the Undercut tab). Same lifted layout as the printed
+  strip — it always lifts there.
+- [ ] Pure-fraction values (`15/16"`, `5/16"`) print at the small digit size next to `1 3/8"`.
+  Pre-existing fraction typography, not part of the lift. Decide whether it bothers you on paper.
+
+### Portrait page, S.E.T. lead, Sections to print — `08b1727`
+- [ ] **Portrait on paper.** A job with 2+ sections prints portrait with the strips stacked AFT→FWD,
+  full width. Header line fits (long customer names shrink slightly). Each strip's title sits
+  under its own figure, not floating between two.
+- [ ] **Page: Auto | Landscape | Portrait** (Drawing settings, and the preview's Options). Forcing
+  Landscape on a 2-section job gives the old 2-column grid; forcing Portrait on one section
+  centres it. Caption says "this sheet prints portrait (2 sections)".
+- [ ] **Printer dialog** asks for portrait paper when the sheet is portrait.
+- [ ] **S.E.T. lead.** Every strip with cuts ends its chain with a half dimension (one arrowhead at
+  the cut/liner edge, open end at the strip edge) whose value is the distance to the S.E.T. The
+  value sits IN the line, not on a leader. Title and lead name the same S.E.T.
+- [ ] **Distance to S.E.T.: Nearest | AFT | FWD.** Switching flips both the title and the lead; on
+  the FWD liner, AFT gives a long figure (hundreds of inches) and the title turns to "FROM AFT
+  S.E.T.".
+- [ ] **Draw to the shaft end + lead.** With it on, the FWD strip chains to the S.E.T. (`12 3/4"`)
+  and prints NO extra lead on that side; the MID strip still has its lead.
+- [ ] **Sections to print** (above the Print buttons, 2+ sections). Untick one: the list rows for
+  its cuts say "Not on the printout", the page goes landscape if one section remains, and the
+  sheet prints only what is ticked. Untick all: Print/Export greyed with the message, Preview
+  shows the "No undercut sections selected" page.
+- [ ] **Export all** (Output tab) with every undercut section unticked skips the undercut drawing
+  and says so in its result line.
+
+### Shop-user pass — `ad72e5a`
+- [ ] **Add undercut** button opens "Where is the cut?" (liner rows + bare shaft AFT/FWD). Cancel
+  records nothing. A liner row opens a "New undercut" card; backing out leaves no phantom cut.
+- [ ] **Card order** on a phone: Measure From, Distance, Length, Ø, Notes, then "+ Next cut", then the
+  collapsed "More ways to place this cut" — Distance should be visible without scrolling the card.
+- [ ] **Pill wording**: "Recorded" when clean, "Record cut" on a new cut, "Confirm change" on an edit.
+- [ ] **Fraction hint** under Distance and the `e.g. 5.625 or 5 5/8` placeholder in an empty Ø field
+  (placeholder shows while focused and empty).
+- [ ] **Past the liner edge** question reads as a yes/no ("Yes, it does" / "No, let me check").
+- [ ] **Drawing settings** is collapsed below the list; order Page, Distance to S.E.T., Split cuts at
+  liner edges, Drawn depth, Draw to the shaft end.
+- [ ] **Split cuts at liner edges** is where you would look for it — directly under Distance to
+  S.E.T. in both the tab and the preview's Options, no longer under Shade in Components
+  (`d2ed7c6`).
+
+### Older undercut items still open
+- [ ] Print one undercut sheet with **Line art (no shading)** on: do the open steps + full-height
+  faces read on paper without the grey core? (The ruling assumed yes from the screen mode.)
+- [ ] **Undercut gap after/before Cut N** field (2026-10-20, `f92eb1f`): type a gap after Cut 1 and
+  check the Distance re-reads from the datum and prints correctly.
+
+---
+
+## Help & FAQ paragraphs — `b7424f9` (2026-10-21)
+- [ ] Expand "Record undercut sections" and a bullet topic (Settings Reference → Editor Screen).
+  Paragraphs sit a clear gap apart and bullets a smaller gap apart; neither reads too loose.
+
+## In-app manual — `8feedc3` (2026-10-14)
+- [ ] Help → User manual opens; dark theme keeps the page light; a rotation restores the section
+  (not the exact scroll). The new Undercut figure is the portrait sheet with both S.E.T. leads.
+- [ ] Tap a Help topic's "manual" link — it lands on the right section.
+
+## Runout Move mode — `a5508c2` (2026-10-09)
+- [ ] Corner toggle on; touch picks a bubble up at once; tap selects a bubble or a component; the
+  −/+ toolbar acts on the selection. Judge the pickup haptic and the dashed component frame.
+- [ ] Toggle off: the canvas behaves exactly as before.
+
+## PDF options sheets (2026-10-03 — `7ae2976`, `1635fa8`)
+- [ ] **Sections**: judge the order and which start open on each document's sheet.
+- [ ] **Non-modal panel**: with the panel up, pinch-zoom the page; drag a slider — the page re-renders
+  under the finger and keeps your zoom; the panel never covers the page (page strip + capped panel).
+- [ ] Wear sheet: a commit redraws the page while the panel is up (page-strip layout).
+
+## Threads (2026-10-02/03 — `f7c7c88`, `7c1ca09`, `e893cb6`)
+- [ ] **Hatch slant** 3× default and **density** slider — judge both on a printed schematic.
+- [ ] **Thread relief**: switch on the card + Add dialog, Relief length / Ø / "Relief at" chips;
+  the groove prints at the S.E.T. end and follows the thread when its end flips.
+- [ ] Known open: a very full **dual-units consolidated sheet** can print overlapping rail labels
+  when the footer grows a line. Try one if you print dual units.
+
+## Keyways (2026-10-02 — `6d794ec`, plus standard sizes / captured)
+- [ ] ONE "Keyway" checkbox gates the whole section on Body/Taper cards and both Add dialogs;
+  unticking with values asks first; Undo brings the values back.
+- [ ] Captured keyway toggle + inset field; "Standard size…" picker fills W × D through the typed path.
+
+## Seal areas / face finish (2026-09-29 — `c212494`, `64a3434`, `eb2795a`, `80c4804`)
+- [ ] **Square | Blend** chips (labels above, outlines on all chips); **Seal areas** AFT/FWD as their
+  own section with a length under each ticked face.
+- [ ] Printed: dashed seal cuts anchored at the face, silhouette flat through them, S-break gap clear
+  of them; a blend at the same face does not push the dashes inward.
+- [ ] Footer reserves its height (no overlap on a long footer); Ø prints 3 decimals unless whole
+  (`10.990"`, `8"`); the coupling switch.
+
+## OAL commit-on-accept — `a8ff9cb` (2026-09-29)
+- [ ] Edit 368.5 → 367.75: nothing commits per keystroke; ✓ / Done / blur-with-change commits, ✗
+  reverts; an emptied field reverts and never zeroes the shaft.
+
+## Coupler cross-drilled bolt hole — `b8e4e0c` (2026-09-17)
+- [ ] Hole: Seam | Cross-drilled; From keyway 90° draws the hidden bore (dashed walls), In line draws
+  the circle; footer lines (Ø, "Hole center from FWD/AFT", clocking note only with a keyway).
+- [ ] Bolt rows never compress inside a compressed body (true pitch).
+
+## Final Schematic tab (2026-09-14)
+- [ ] "Start from original schematic", edit a liner on the Final only — the original is untouched;
+  Final sheets carry `Drawing: Final`, the FINAL badge and `_Final` filenames; Reset / Discard undo.
+
+## Label / Ø-callout collision — `1f58ec9` (merged 2026-09-23)
+- [ ] A component printing both a name and a Ø below the shaft: the name slides along its span or
+  drops a row; it never prints through the callout.
+
+## Misc shipped-unverified (2026-09-14 … 10-13)
+- [ ] **Output font** (Settings → Drawing) changes every sheet's typeface, previews re-render.
+- [ ] **Tap-to-rename** title and draft names.
+- [ ] **Manual bug batch** (`ead7a45`): new drawings follow Settings → Units; TIR fractions; taper
+  `3/4"/ft`; one filename builder (a `/` in a customer name never reaches the filename).
+- [ ] **Share diagnostic logs** (Settings → Data) attaches the two log files once.
+
+---
+
+## Device-class passes (bigger sittings)
+
+- [ ] **Tablet pass** (`e80ae82`): every tab in portrait (MEDIUM) and landscape (EXPANDED); the
+  permanent sidebar; rotate mid-edit on each tab; carousel card width in its pane; the tuning
+  page strip in landscape; the PDF preview closing on a tablet (must stay free to rotate). Judge
+  the 0.55/0.45 pane split and the 720 dp readable width by eye.
+- [ ] **Dark and high-contrast** chrome pass (Settings → Appearance). The five white sheets must
+  stay white with black ink.
+- [ ] **Accessibility**: 200% system font (any clipped row), one TalkBack pass over the five sheet
+  tabs.
+- [ ] **Material3 1.4.0 visual pass**: tuning sliders, options panel page-strip cap, Square | Blend
+  chips, AlertDialogs, Switch/Checkbox density, numeric-field blur commits; decide the pinch-zoom
+  centroid question (where a pinch zooms from).
+
+## One-time setup (not a device check, but owed)
+- [ ] **Crashlytics activation**: add Crashlytics to the Firebase app, download
+  `google-services.json`, add the `GOOGLE_SERVICES_JSON` Actions secret, force one test crash from
+  a distributed build.
+
+---
+
+### How to report back
+A screenshot or a photo of the paper plus one line ("good", or what is off) is enough. Anything
+that fails goes to `TODO.md` §Bugs; anything that passes gets deleted here.
