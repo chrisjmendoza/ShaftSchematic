@@ -6,6 +6,17 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-10-20
+
+### feat(undercut): a gap after (or before) another cut
+
+- On an undercut card, a tapped "Start at end of: Cut N" or "End at start of: Cut N" chip now
+  stays highlighted and opens a "Gap after Cut N" / "Gap before Cut N" field under its row
+  (on-device request: the next cut was measured 2 1/4" past the previous cut's end rather than
+  re-measured from the liner edge). Typing a gap moves the cut that far from the other cut's
+  end, length kept; its Distance still reads from the card's own datum, so the printed sheet is
+  unchanged. Nothing new is saved. Tap the chip again to close the field.
+
 ## 2026-10-18
 
 ### fix(undercut): zoom reset on the section view; Thread options only when a thread is drawn

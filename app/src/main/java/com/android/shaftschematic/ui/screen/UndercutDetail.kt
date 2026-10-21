@@ -140,6 +140,8 @@ import com.android.shaftschematic.geom.undercutSpanIssue
 import com.android.shaftschematic.geom.undercutSpanWithAftExtension
 import com.android.shaftschematic.geom.undercutSpanWithFwdExtension
 import com.android.shaftschematic.geom.undercutStartAtEndOf
+import com.android.shaftschematic.geom.undercutGapAfterMm
+import com.android.shaftschematic.geom.undercutGapBeforeMm
 import com.android.shaftschematic.geom.undercutEndAtStartOf
 import com.android.shaftschematic.geom.undercutOverlapMessage
 import com.android.shaftschematic.geom.undercutOverlapPartnerId
@@ -2050,22 +2052,34 @@ internal fun UndercutDraft.withWholeLiner(liner: UndercutLinerSpan): UndercutDra
 )
 
 /**
- * The card's "Start at end of cut N" preset: the draft's AFT end moved onto [other]'s FWD end
- * ([undercutStartAtEndOf]). Length and reference are untouched, so the Distance field re-seeds to
- * the new position under the same datum. A one-tap preset applied only on the tap; shaft bounds
+ * The card's "Start at end of cut N" preset: the draft's AFT end moved onto [other]'s FWD end, or
+ * [gapMm] past it — the typed "Gap after cut N" ([undercutStartAtEndOf]). Length and reference are
+ * untouched, so the Distance field re-seeds to the new position under the same datum. Shaft bounds
  * are the card's check.
  */
-internal fun UndercutDraft.startingAtEndOf(other: UndercutSpanMm): UndercutDraft = copy(
-    startFromAftMm = undercutStartAtEndOf(other.endMm),
+internal fun UndercutDraft.startingAtEndOf(other: UndercutSpanMm, gapMm: Float = 0f): UndercutDraft = copy(
+    startFromAftMm = undercutStartAtEndOf(other.endMm, gapMm),
 )
 
 /**
- * The card's "End at start of cut N" preset: the draft's FWD end moved onto [other]'s AFT end
- * ([undercutEndAtStartOf]), length and reference untouched — the mirror of [startingAtEndOf].
+ * The card's "End at start of cut N" preset: the draft's FWD end moved onto [other]'s AFT end, or
+ * [gapMm] short of it ([undercutEndAtStartOf]), length and reference untouched — the mirror of
+ * [startingAtEndOf].
  */
-internal fun UndercutDraft.endingAtStartOf(other: UndercutSpanMm): UndercutDraft = copy(
-    startFromAftMm = undercutEndAtStartOf(other.startMm, lengthMm),
+internal fun UndercutDraft.endingAtStartOf(other: UndercutSpanMm, gapMm: Float = 0f): UndercutDraft = copy(
+    startFromAftMm = undercutEndAtStartOf(other.startMm, lengthMm, gapMm),
 )
+
+/**
+ * The edge-to-edge chip a card's gap field measures from: [cutId]'s FWD end when [after] (the
+ * "Start at end of" row), its AFT end otherwise (the "End at start of" row). Card-local screen
+ * state, never stored — the gap itself is a view of the canonical span against that edge.
+ */
+internal data class UndercutGapAnchor(val after: Boolean, val cutId: String)
+
+/** The gap field's label against cut [position]: "Gap after Cut 1 (in)" / "Gap before Cut 2 (in)". */
+internal fun undercutGapFieldLabel(after: Boolean, position: Int, unitAbbr: String): String =
+    "Gap ${if (after) "after" else "before"} ${undercutButtChipLabel(position)} ($unitAbbr)"
 
 /** Whether a card's "Next cut" can act, and the caption under it when stock is what stops it. */
 internal data class UndercutNextCutState(val enabled: Boolean, val caption: String?)
@@ -2875,17 +2889,58 @@ private fun UndercutDraftCard(
             // Edge-to-edge presets against another cut on the page (on-device request: measuring
             // each new cut's Distance off the previous cut's end). Two explicit rows, every other
             // cut in both — one "After/Before cut N" chip that picked its side from the cuts'
-            // midpoints read "After cut 5" as AFT of cut 5 (on-device report). A one-tap preset: it
-            // sets the canonical start and nothing else, so Distance re-seeds under the same
-            // reference; never "selected". A result that would leave the shaft changes nothing and
-            // says so ("Not applied — <reason>") until the next tap or draft change — nothing was
-            // typed, so refusing the preset loses no value.
+            // midpoints read "After cut 5" as AFT of cut 5 (on-device report). A tap sets the
+            // canonical start edge to edge and nothing else, so Distance re-seeds under the same
+            // reference. A result that would leave the shaft changes nothing and says so ("Not
+            // applied — <reason>") until the next tap or draft change — nothing was typed, so
+            // refusing the preset loses no value.
+            // An applied chip stays SELECTED and opens a gap field under its row (on-device request:
+            // the next cut measured 2 1/4" past the previous cut's end rather than re-measured from
+            // the liner edge). The gap is a VIEW of the canonical span against that cut's edge —
+            // nothing new is stored, the Extend-past-liner posture: a typed gap moves the cut with
+            // its length kept, and Distance re-seeds under the card's own datum, so the sheet still
+            // reads from the liner or S.E.T. The typed gap commits verbatim; bounds and overlap are
+            // confirm-time, like every other field on this card. A second tap on the selected chip
+            // closes the field and changes nothing.
             if (buttTargets.isNotEmpty()) {
                 var buttIssue by remember(draft) { mutableStateOf<String?>(null) }
-                fun applyPreset(moved: UndercutDraft) {
+                var gapAnchor by remember(draft.id) { mutableStateOf<UndercutGapAnchor?>(null) }
+                val anchorTarget = gapAnchor?.let { a -> buttTargets.firstOrNull { it.second.id == a.cutId } }
+                val anchor = gapAnchor?.takeIf { anchorTarget != null }
+                fun applyPreset(moved: UndercutDraft, tapped: UndercutGapAnchor) {
+                    if (anchor == tapped) {
+                        gapAnchor = null
+                        return
+                    }
                     val issue = undercutSpanIssue(moved.startFromAftMm, moved.lengthMm, oalMm)
-                    if (issue != null) buttIssue = undercutPresetRefusal(issue)
-                    else onDraftChange(moved)
+                    if (issue != null) {
+                        buttIssue = undercutPresetRefusal(issue)
+                    } else {
+                        gapAnchor = tapped
+                        onDraftChange(moved)
+                    }
+                }
+                val gapField: @Composable (Boolean) -> Unit = gapField@{ after ->
+                    val (position, other) = anchorTarget ?: return@gapField
+                    if (anchor?.after != after) return@gapField
+                    val gapMm = if (after) {
+                        undercutGapAfterMm(draft.startFromAftMm, other.endMm)
+                    } else {
+                        undercutGapBeforeMm(draft.startFromAftMm, draft.lengthMm, other.startMm)
+                    }
+                    WearNum(
+                        label = undercutGapFieldLabel(after, position, abbr(unit)),
+                        initialDisplay = disp(gapMm, unit),
+                        allowNegative = true,
+                        modifier = Modifier.fillMaxWidth()
+                            .testTag(if (after) "undercut_gap_after" else "undercut_gap_before"),
+                    ) { raw ->
+                        val typedMm = toMmOrNull(raw, unit) ?: return@WearNum
+                        onDraftChange(
+                            if (after) draft.startingAtEndOf(other, typedMm)
+                            else draft.endingAtStartOf(other, typedMm),
+                        )
+                    }
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
@@ -2894,26 +2949,30 @@ private fun UndercutDraftCard(
                     )
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         buttTargets.forEach { (position, other) ->
+                            val tapped = UndercutGapAnchor(after = true, cutId = other.id)
                             Box(Modifier.testTag("undercut_butt_after_$position")) {
-                                WearChip(undercutButtChipLabel(position), selected = false) {
-                                    applyPreset(draft.startingAtEndOf(other))
+                                WearChip(undercutButtChipLabel(position), selected = anchor == tapped) {
+                                    applyPreset(draft.startingAtEndOf(other), tapped)
                                 }
                             }
                         }
                     }
+                    gapField(true)
                     Text(
                         "End at start of:", style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         buttTargets.forEach { (position, other) ->
+                            val tapped = UndercutGapAnchor(after = false, cutId = other.id)
                             Box(Modifier.testTag("undercut_butt_before_$position")) {
-                                WearChip(undercutButtChipLabel(position), selected = false) {
-                                    applyPreset(draft.endingAtStartOf(other))
+                                WearChip(undercutButtChipLabel(position), selected = anchor == tapped) {
+                                    applyPreset(draft.endingAtStartOf(other), tapped)
                                 }
                             }
                         }
                     }
+                    gapField(false)
                     buttIssue?.let { UndercutWarning(it, Modifier.testTag("undercut_butt_issue")) }
                 }
             }

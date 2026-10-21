@@ -3,6 +3,8 @@ package com.android.shaftschematic.ui.screen
 import com.android.shaftschematic.geom.UNDERCUT_PARTIAL_OVERLAP_MSG
 import com.android.shaftschematic.geom.UndercutLinerSpan
 import com.android.shaftschematic.geom.UndercutSpanMm
+import com.android.shaftschematic.geom.undercutGapAfterMm
+import com.android.shaftschematic.geom.undercutGapBeforeMm
 import com.android.shaftschematic.model.Undercut
 import com.android.shaftschematic.model.UndercutReference
 import com.android.shaftschematic.util.UnitSystem
@@ -385,6 +387,25 @@ class UndercutDraftTest {
         val draft = draftOf("d", 20f, lengthMm = 40f, reference = UndercutReference.FWD_SET)
         val moved = draft.endingAtStartOf(UndercutSpanMm("o", 100f, 150f))
         assertEquals(draft.copy(startFromAftMm = 60f), moved)
+    }
+
+    @Test
+    fun `a gap moves the draft that far past the other cut, and the gap view reads it back`() {
+        val other = UndercutSpanMm("o", 100f, 150f)
+        val draft = draftOf("d", 300f, lengthMm = 40f, reference = UndercutReference.LINER_AFT, referenceLinerId = "L1")
+        val after = draft.startingAtEndOf(other, gapMm = 57.15f)
+        assertEquals(draft.copy(startFromAftMm = 207.15f), after)
+        assertEquals(57.15f, undercutGapAfterMm(after.startFromAftMm, other.endMm), 1e-4f)
+
+        val before = draft.endingAtStartOf(other, gapMm = 10f)
+        assertEquals(draft.copy(startFromAftMm = 50f), before)
+        assertEquals(10f, undercutGapBeforeMm(before.startFromAftMm, before.lengthMm, other.startMm), 1e-4f)
+    }
+
+    @Test
+    fun `the gap field names its chip`() {
+        assertEquals("Gap after Cut 1 (in)", undercutGapFieldLabel(after = true, position = 1, unitAbbr = "in"))
+        assertEquals("Gap before Cut 3 (mm)", undercutGapFieldLabel(after = false, position = 3, unitAbbr = "mm"))
     }
 
     @Test
