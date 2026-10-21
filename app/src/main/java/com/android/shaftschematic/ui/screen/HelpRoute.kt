@@ -339,12 +339,7 @@ private fun HelpTopicCard(
                 )
             }
             if (showBody) {
-                Text(
-                    topic.body,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
+                HelpBodyText(topic.body, modifier = Modifier.padding(top = 8.dp))
                 topic.illustration?.invoke()
                 if (onReadMore != null) {
                     TextButton(
@@ -353,6 +348,32 @@ private fun HelpTopicCard(
                     ) {
                         Text("Read more in the manual")
                     }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * A topic body set as paragraphs: a blank line (`\n\n`) in the body starts a new paragraph,
+ * spaced a clear gap from the last, and a single `\n` inside a paragraph (a bullet list)
+ * starts a line set closer. Each line is its own Text, so a test's substring lookup must stay
+ * within one line; search reads the body string and is unaffected.
+ */
+@Composable
+private fun HelpBodyText(body: String, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        for (paragraph in body.split("\n\n")) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                for (line in paragraph.split("\n")) {
+                    Text(
+                        line,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         }
@@ -371,7 +392,8 @@ internal val helpSections: List<HelpSection> = listOf(
                 "Create your first shaft",
                 "From the home screen tap New Drawing. Type the overall length (OAL) and accept it " +
                     "with the green ✓ or the keyboard's Done key — the drawing takes the new " +
-                    "length once it is accepted, and the red ✗ puts the old value back. Add " +
+                    "length once it is accepted, and the red ✗ puts the old value back.\n\n" +
+                    "Add " +
                     "tapers, threads, liners, and bodies with the + Add Component button; each " +
                     "component becomes a card in " +
                     "the carousel where you edit its dimensions. Any span you don't cover is " +
@@ -392,7 +414,8 @@ internal val helpSections: List<HelpSection> = listOf(
             HelpTopic(
                 "Saving, drafts, and the asterisk",
                 "Save keeps your shaft inside the app; use Back up in Settings to get files " +
-                    "out. An asterisk in the title bar means unsaved changes. The app also " +
+                    "out. An asterisk in the title bar means unsaved changes.\n\n" +
+                    "The app also " +
                     "autosaves a rolling draft ring in the background — if you leave without " +
                     "saving, the home screen offers to continue where you left off.",
                 manualAnchor = "intro-saving",
@@ -400,10 +423,12 @@ internal val helpSections: List<HelpSection> = listOf(
             HelpTopic(
                 "Undo and redo",
                 "The History button in the editor's toolbar (the clock icon) holds Undo and " +
-                    "Redo. Each greys out when there is nothing to step to. A burst of quick " +
+                    "Redo. Each greys out when there is nothing to step to.\n\n" +
+                    "A burst of quick " +
                     "edits collapses into a single undo step, so undoing after typing a value " +
                     "returns you to before you started typing rather than stepping back one " +
-                    "character at a time. History covers the whole job — the shaft and its " +
+                    "character at a time.\n\n" +
+                    "History covers the whole job — the shaft and its " +
                     "Final drawing, runout readings and bubble moves, station counts, wear " +
                     "marks, and undercuts — and lasts for the editing session; it is not saved " +
                     "with the file and starts fresh when you open a document.",
@@ -418,7 +443,8 @@ internal val helpSections: List<HelpSection> = listOf(
                 "Edit components in the carousel",
                 "Values commit when you leave a field (tap elsewhere or Done) — not on every " +
                     "keystroke. Tapping into a field and leaving without editing changes " +
-                    "nothing. The Add dialog for each component shows the same controls as its " +
+                    "nothing.\n\n" +
+                    "The Add dialog for each component shows the same controls as its " +
                     "carousel card, so anything you can set at add time you can also edit later.",
                 manualAnchor = "editor-carousel",
             ),
@@ -426,9 +452,11 @@ internal val helpSections: List<HelpSection> = listOf(
                 "Bodies and auto-bodies",
                 "Bodies are the shaft's filler stock. Spans you don't define are drawn as " +
                     "auto-bodies — derived, greyed Start/Length, and a Ø you can set on each " +
-                    "auto-body card for that section of bare shaft alone. Tick \"Explicit body\" on an auto-body " +
+                    "auto-body card for that section of bare shaft alone.\n\n" +
+                    "Tick \"Explicit body\" on an auto-body " +
                     "card to promote it to a real, editable body; untick it on an explicit body " +
-                    "to make it automatic again. Adding a taper, thread, or liner over a body " +
+                    "to make it automatic again.\n\n" +
+                    "Adding a taper, thread, or liner over a body " +
                     "splits it; deleting one merges the fragments back.",
                 manualAnchor = "editor-bodies",
             ),
@@ -438,23 +466,28 @@ internal val helpSections: List<HelpSection> = listOf(
                     "in the Add dialog). The rate field takes a ratio (1:12), inches per foot " +
                     "(3/4\"/ft — the shop's 1:16), or a decimal; a bare fraction like 3/4 is " +
                     "refused because it could mean either, and the message names the two " +
-                    "forms to write instead. Tapers and explicit bodies can carry a keyway (width × " +
+                    "forms to write instead.\n\n" +
+                    "Tapers and explicit bodies can carry a keyway (width × " +
                     "depth, length): tick \"Keyway\" on the card or in the Add dialog to show " +
                     "its fields; unticking a card that has keyway values asks before clearing " +
-                    "them. A keyway runs out the end of its host unless you switch " +
+                    "them.\n\n" +
+                    "A keyway runs out the end of its host unless you switch " +
                     "on \"Captured keyway\" — the shop term for a slot inset from the S.E.T. " +
                     "(taper) or the chosen end face (body), rounded at both ends — which " +
-                    "reveals its Inset field; the footer then prints the inset. A spooned " +
+                    "reveals its Inset field; the footer then prints the inset.\n\n" +
+                    "A spooned " +
                     "keyway adds the enlarged bowl at the " +
                     "closed end on the drawing — it is drawing-only and never changes the " +
-                    "keyway's dimensions. With two or more keyways, clocking toggles " +
+                    "keyway's dimensions.\n\n" +
+                    "With two or more keyways, clocking toggles " +
                     "(180°/90°, CW/CCW) appear on the keyway cards.",
                 illustration = { SpoonedKeywayFigure() },
                 manualAnchor = "components-tapers",
             ),
             HelpTopic(
                 "Liners and threads",
-                "Liners sleeve over the shaft and measure from the AFT or FWD end. Threads " +
+                "Liners sleeve over the shaft and measure from the AFT or FWD end.\n\n" +
+                    "Threads " +
                     "can be left out of the overall length (switch off \"Include thread in OAL\" " +
                     "on the card or in the Add dialog) — " +
                     "useful when the OAL is quoted to the shoulder; an excluded thread just " +
@@ -467,7 +500,8 @@ internal val helpSections: List<HelpSection> = listOf(
                     "from the add chooser (\"Coupler Bolt Slot / Hole\"), pick the hole kind, " +
                     "then set Measure From (AFT or FWD), the distance to the nearest hole " +
                     "center, hole Ø, and how many; Spacing appears once the count is more " +
-                    "than one. Through hole is on by default — switch it off and a Depth " +
+                    "than one.\n\n" +
+                    "Through hole is on by default — switch it off and a Depth " +
                     "field appears for a blind hole. The Add dialog warns if the row would run " +
                     "off either end of the shaft.\n\n" +
                     "• \"Seam\" — the muff-coupler cutout, half in the shaft and half in the " +
@@ -494,7 +528,8 @@ internal val helpSections: List<HelpSection> = listOf(
                 "The Wear document records liner wear areas, pit/dye-failure X marks, and " +
                     "measured diameters. Tap a liner strip to zoom in, then place marks and " +
                     "type measured Ø values. These are reference marks only — they never " +
-                    "change the shaft's geometry. Blank mode prints a write-in template with " +
+                    "change the shaft's geometry.\n\n" +
+                    "Blank mode prints a write-in template with " +
                     "the drawing but no values, for taking measurements on the job.",
                 manualAnchor = "recording-wear",
             ),
@@ -502,7 +537,8 @@ internal val helpSections: List<HelpSection> = listOf(
                 "Record runout",
                 "The Runout sheet places dial-indicator stations per component and records a " +
                     "TIR value plus a high-spot clock position per bubble. Tap a bubble to " +
-                    "edit it; press and hold one to drag it along its component. Readings " +
+                    "edit it; press and hold one to drag it along its component.\n\n" +
+                    "Readings " +
                     "are reference-only and survive component edits; a reading whose station " +
                     "no longer exists is simply not drawn.\n\n" +
                     "Move mode — the pencil toggle in the preview's corner — is the quick way " +
@@ -515,7 +551,8 @@ internal val helpSections: List<HelpSection> = listOf(
                     "one), a liner the same but never fewer than two (set in an inch from each " +
                     "edge, where the geometry changes and an indicator reads unreliably), and a " +
                     "taper always two; you can raise or lower the count per component, or set it " +
-                    "to zero to hide that component's stations. Set the indicator direction on " +
+                    "to zero to hide that component's stations.\n\n" +
+                    "Set the indicator direction on " +
                     "the sheet and it prints as \"TIR's taken looking AFT / FORWARD\" at the " +
                     "bottom, so the shop knows how to read the high-spot arrows.\n\n" +
                     "The preview stays put at the top of the tab while you scroll, so you can " +
@@ -531,39 +568,48 @@ internal val helpSections: List<HelpSection> = listOf(
                     "shaft end (S.E.T.), a liner edge, or — for a cut inside another — that " +
                     "parent cut's shoulder (Parent AFT / Parent FWD), plus length and measured " +
                     "Ø. A liner edge that a cut has been machined across into the body is no " +
-                    "longer offered; measure from the nearer S.E.T. instead. \"Add " +
+                    "longer offered; measure from the nearer S.E.T. instead.\n\n" +
+                    "\"Add " +
                     "undercut\" asks where the cut is (a liner, or bare shaft from either " +
                     "S.E.T.) and opens that part zoomed in on a new card; or tap a liner " +
-                    "or highlighted section to zoom in and add cuts. What you type is never " +
+                    "or highlighted section to zoom in and add cuts.\n\n" +
+                    "What you type is never " +
                     "changed: a value that would put a cut off the shaft or partly over " +
                     "another cut (sit fully inside it or fully clear) stays in the card, and " +
                     "the status pill says why it cannot be recorded yet. Tap \"Record cut\" " +
-                    "on the pill to put a new cut in the record. Undo and Redo sit in the " +
+                    "on the pill to put a new cut in the record.\n\n" +
+                    "Undo and Redo sit in the " +
                     "top bar, beside Preview and Drawing options — the preview of the sheet " +
                     "and its options panel, without leaving the zoomed page (the tab has the " +
                     "same pair under its drawing). Deleting a cut offers Undo — from the open cut's card and " +
-                    "from the tab's list alike. \"Next cut\" at the foot of the card confirms the cut and " +
+                    "from the tab's list alike.\n\n" +
+                    "\"Next cut\" at the foot of the card confirms the cut and " +
                     "opens a new one butted to its far end; \"More ways to place this cut\" " +
-                    "below it holds the whole-liner, extension and butt-against shortcuts. The list below the drawing " +
+                    "below it holds the whole-liner, extension and butt-against shortcuts.\n\n" +
+                    "The list below the drawing " +
                     "numbers the cuts from the aft end — the same numbers the zoomed detail " +
                     "page shows inside each cut, to help you find it; they never print — " +
                     "and flags a cut with no Ø (\"Ø not entered\"); printing or " +
-                    "exporting while one has no Ø asks first (\"Print without diameters?\"). " +
+                    "exporting while one has no Ø asks first (\"Print without diameters?\").\n\n" +
                     "Cut depth on the drawing " +
                     "is exaggerated for visibility (real cuts are hairline-thin at scale) — " +
                     "the printed Ø values are always your typed numbers. The \"Drawn depth\" " +
                     "slider (under \"Drawing settings\" below the list) only changes the " +
-                    "drawing, never the data. \"Page\" (Auto | Landscape | Portrait, the " +
+                    "drawing, never the data.\n\n" +
+                    "\"Page\" (Auto | Landscape | Portrait, the " +
                     "first row of \"Drawing settings\" and in the sheet's PDF options) sets " +
                     "the printed page: Auto stacks two or more sections down a portrait page " +
-                    "and prints a single section landscape. \"Distance to S.E.T.\" (Nearest | " +
+                    "and prints a single section landscape.\n\n" +
+                    "\"Distance to S.E.T.\" (Nearest | " +
                     "AFT S.E.T. | FWD S.E.T., right after \"Page\") chooses the S.E.T. that each " +
                     "strip's title and the short dimension at its edge measure to; \"Split " +
-                    "cuts at liner edges\" sits directly under it. \"Sections " +
+                    "cuts at liner edges\" sits directly under it.\n\n" +
+                    "\"Sections " +
                     "to print\" (above the Print buttons when the sheet has two or more " +
                     "sections) is a checkbox per section; untick the ones you do not want on " +
                     "this printout, for example to send one liner's cuts to the welder by " +
-                    "itself. A short cut whose value does not fit its span is set above the " +
+                    "itself.\n\n" +
+                    "A short cut whose value does not fit its span is set above the " +
                     "chain line, under the overall dimension, with a leader down to its span " +
                     "when the strip has room; on a crowded sheet it drops below the line.",
                 manualAnchor = "recording-undercut",
@@ -571,11 +617,14 @@ internal val helpSections: List<HelpSection> = listOf(
             HelpTopic(
                 "Export, print, and blank templates",
                 "Each document (Shaft, Wear, Runout, Undercut) exports to PDF or prints " +
-                    "directly from its own tab. The preview shows the actual page. Template " +
+                    "directly from its own tab. The preview shows the actual page.\n\n" +
+                    "Template " +
                     "mode prints the shaft only (no dimensions); Blank draft prints the " +
-                    "drawing with empty write-in value slots. Drawing options sit on each " +
+                    "drawing with empty write-in value slots.\n\n" +
+                    "Drawing options sit on each " +
                     "document's PDF Options panel, and also in Settings → Drawing and " +
-                    "Settings → PDF Export Options. The Final " +
+                    "Settings → PDF Export Options.\n\n" +
+                    "The Final " +
                     "Schematic tab prints the same two ways from the shaft's finished " +
                     "geometry, and its sheets are marked Final.",
                 manualAnchor = "documents-print-export",
@@ -587,12 +636,13 @@ internal val helpSections: List<HelpSection> = listOf(
                     "Schematic + Runout, or Schematic + Wear, and preview before printing. " +
                     "Worn sections (measured areas whose Ø values print inside the profile) " +
                     "are added on this tab. Export all writes every checked document to one " +
-                    "folder in a single step. The Shaft height slider sets the drawn shaft's " +
+                    "folder in a single step.\n\n" +
+                    "The Shaft height slider sets the drawn shaft's " +
                     "height on paper directly, in inches, on the schematic and " +
                     "consolidated/runout sheets — $HEIGHT_FLOOR_LABEL_IN to $HEIGHT_CAP_LABEL_IN — and the Standard " +
                     "button restores the default size. That default follows a sizing curve " +
                     "you can adjust in Settings → Drawing → Default drawing size: set " +
-                    "what a 4 in and an 8 in shaft draw, and sizes in between follow. " +
+                    "what a 4 in and an 8 in shaft draw, and sizes in between follow.\n\n" +
                     "Liner & taper compression (next to the height slider) keeps the " +
                     "measured components readable: check \"Keep liners and tapers " +
                     "proportional lengthwise\" to ask for them at true scale, or set how " +
@@ -600,7 +650,8 @@ internal val helpSections: List<HelpSection> = listOf(
                     "together, so they stay in proportion with each other. The page " +
                     "balances the request — they keep as much true length as fits, and " +
                     "the runs between them always keep their relative " +
-                    "lengths readable. Settings → Drawing → Body S-break sets how far a " +
+                    "lengths readable.\n\n" +
+                    "Settings → Drawing → Body S-break sets how far a " +
                     "body run may be shortened before it prints the S-break symbol — set " +
                     "it to Never to hide compression entirely, or higher to mark it sooner.",
                 manualAnchor = "documents-consolidated",
@@ -616,11 +667,13 @@ internal val helpSections: List<HelpSection> = listOf(
             HelpTopic(
                 "Customize colors and theme",
                 "Settings → Appearance picks the app theme: System, Light, or Dark, plus a " +
-                    "High contrast option for better visibility. Settings → Preview Colors " +
+                    "High contrast option for better visibility.\n\n" +
+                    "Settings → Preview Colors " +
                     "styles the editor preview (outline, fills, black/white only) and the " +
                     "Undercut Drawing (shade color, intensity, or full line art). Drawing " +
                     "sheets and printed PDFs always stay white with dark ink, whatever the " +
-                    "app theme. Every Settings field is listed in the Settings Reference " +
+                    "app theme.\n\n" +
+                    "Every Settings field is listed in the Settings Reference " +
                     "section below.",
                 manualAnchor = "settings-appearance",
             ),
@@ -685,7 +738,8 @@ internal val helpSections: List<HelpSection> = listOf(
                     "started as a copy of the original and then adjusted: a liner moved, " +
                     "lengthened, or shortened once the wear and undercut work is known. " +
                     "Editing it never changes the original, so the two read as the before and " +
-                    "the after. It prints its own schematic — with runout bubbles if you " +
+                    "the after.\n\n" +
+                    "It prints its own schematic — with runout bubbles if you " +
                     "elect them on its PDF options sheet — and a blank runout sheet to take " +
                     "the finished shaft's readings on, all marked Final; every other " +
                     "document keeps drawing the original.",
@@ -778,9 +832,9 @@ internal val helpSections: List<HelpSection> = listOf(
                 "\"Millimeters\" or \"Inches\" — default Millimeters. Every NEW drawing starts " +
                     "in this unit: a metric shop sets Millimeters once and each new drawing " +
                     "is metric. A drawing owns its unit from then on — a saved drawing keeps " +
-                    "the unit it was saved in and opens in it whatever this setting says. " +
+                    "the unit it was saved in and opens in it whatever this setting says.\n\n" +
                     "While a drawing is open, the chips also switch how it is shown and " +
-                    "typed: fields, badges, drawings, and PDFs. " +
+                    "typed: fields, badges, drawings, and PDFs.\n\n" +
                     "Nothing in the file is converted — the model is always millimeters — so " +
                     "you can switch back and forth as often as you like with no drift. Inch " +
                     "fields also accept fractions like 3 1/2.",
@@ -801,9 +855,11 @@ internal val helpSections: List<HelpSection> = listOf(
                 "Settings → Drawing, first row. Default on. The DEFAULT for every " +
                     "component's \"Show name on drawing\" switch: a card you haven't set " +
                     "follows it, and the line under that switch says \"Following Settings → " +
-                    "Drawing → Component names\". A card you set yourself overrides it in " +
+                    "Drawing → Component names\".\n\n" +
+                    "A card you set yourself overrides it in " +
                     "either direction — a name switched on there prints even with this off, " +
-                    "and one switched off stays hidden even with this on. Turn it off when " +
+                    "and one switched off stays hidden even with this on.\n\n" +
+                    "Turn it off when " +
                     "drawings normally go out without names and you only name the odd " +
                     "section. The schematic's PDF options carry the same setting as the " +
                     "\"Component names\" chip.",
@@ -818,11 +874,14 @@ internal val helpSections: List<HelpSection> = listOf(
                     "• \"8″ shaft draws\" — default 1 in.\n\n" +
                     "Every other diameter follows the straight line through those two points, " +
                     "so a 6 in shaft lands halfway; the line under the sliders shows that " +
-                    "result live. No drawing ever exceeds $HEIGHT_CAP_LABEL_IN of shaft height on paper. " +
+                    "result live.\n\n" +
+                    "No drawing ever exceeds $HEIGHT_CAP_LABEL_IN of shaft height on paper. " +
                     "\"Standard (0.5″ / 1″)\" restores the shipped pair, which is the " +
-                    "proportional hand-sheet rule. If you set the 8 in value below the 4 in " +
+                    "proportional hand-sheet rule.\n\n" +
+                    "If you set the 8 in value below the 4 in " +
                     "value a warning appears and drawings simply flatten at the 4 in height — " +
-                    "a larger shaft never draws smaller than a smaller one. The per-job " +
+                    "a larger shaft never draws smaller than a smaller one.\n\n" +
+                    "The per-job " +
                     "\"Shaft height\" slider works on top of this default.",
                 manualAnchor = "settings-drawing-size",
             ),
@@ -859,11 +918,11 @@ internal val helpSections: List<HelpSection> = listOf(
                     "• \"Monospace\" — fixed pitch, so digits line up in a column.\n\n" +
                     "App-wide like the other Drawing settings: one choice serves every " +
                     "document, and a saved Drawing profile captures it along with the rest of " +
-                    "the look. \"Restore Drawing defaults\" puts it back to Standard.\n" +
+                    "the look. \"Restore Drawing defaults\" puts it back to Standard.\n\n" +
                     "Nothing on a sheet collides or shifts when you change it — fractions, " +
                     "dual-unit stacks and every rail break are measured from the face as it " +
                     "will actually print, not from a fixed width. A device that does not carry " +
-                    "one of these families simply prints in Standard.\n" +
+                    "one of these families simply prints in Standard.\n\n" +
                     "App screens are unaffected; this styles the paper only.",
                 manualAnchor = "settings-drawing-lines",
             ),
@@ -1102,7 +1161,8 @@ internal val helpSections: List<HelpSection> = listOf(
                 "They are reference features: notes on top of the drawing, like pencil marks " +
                     "on a print. They never affect overall length, component positions, or " +
                     "collision checks, and deleting a component never deletes your record of " +
-                    "what was measured — orphaned marks simply stop drawing. Coupler bolt " +
+                    "what was measured — orphaned marks simply stop drawing.\n\n" +
+                    "Coupler bolt " +
                     "slots work the same way: drawn, but never part of the length or the " +
                     "collision check.",
                 manualAnchor = "intro-reference",
@@ -1113,7 +1173,8 @@ internal val helpSections: List<HelpSection> = listOf(
                     "components yet — add at least one taper, thread, liner, or body, since " +
                     "coupler bolt slots alone give nothing to dimension — or two components " +
                     "overlap. Overlapping cards are flagged in the carousel; fix the " +
-                    "positions and export re-enables itself. Bodies never trigger this: a body " +
+                    "positions and export re-enables itself.\n\n" +
+                    "Bodies never trigger this: a body " +
                     "running under a liner or up against a taper is normal, and the drawing " +
                     "trims it around them.",
                 manualAnchor = "documents-blocked",
@@ -1132,7 +1193,8 @@ internal val helpSections: List<HelpSection> = listOf(
                 "The drawing shortens long plain runs so the whole shaft fits the page at a " +
                     "readable height. When a body run is squeezed past the point where it " +
                     "still reads honestly, it prints the S-break pair — the drafting symbol " +
-                    "for \"length removed here\". The dimension values are always the true " +
+                    "for \"length removed here\".\n\n" +
+                    "The dimension values are always the true " +
                     "lengths. Settings → Drawing → \"Body S-break\" sets how much squeeze " +
                     "earns the symbol, from Never (compression stays hidden) to Always.",
                 illustration = { SBreakFigure() },
