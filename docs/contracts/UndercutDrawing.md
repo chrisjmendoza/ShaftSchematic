@@ -1271,11 +1271,25 @@ position in the page order, the card title's number), in page order, in a `FlowR
 second). Both directions for every cut, chosen by the row and never by geometry: the single
 "Butt against: After/Before cut N" row picked its side from the cuts' midpoints, and "After cut 5"
 was read as AFT of cut 5 (on-device report). The pending card is never a target. A tap is a
-one-tap preset, applied only on the tap and never shown selected: "Start at end of" sets the
+preset applied on the tap: "Start at end of" sets the
 canonical start to the other cut's FWD end (`UndercutDraft.startingAtEndOf` →
 `undercutStartAtEndOf`), "End at start of" to its AFT end minus the draft's length
 (`UndercutDraft.endingAtStartOf` → `undercutEndAtStartOf`). Length and reference are untouched, so
-Distance re-seeds to the new position under the same datum. The result is validated with
+Distance re-seeds to the new position under the same datum.
+An applied chip stays **selected** and opens a **gap field** under its row (on-device request: the
+next cut was measured 2 1/4" past the previous cut's end, not re-measured from the liner edge) —
+**"Gap after Cut N (in)"** (`testTag "undercut_gap_after"`) or **"Gap before Cut N (in)"**
+(`"undercut_gap_before"`), label from `undercutGapFieldLabel`. One chip across both rows is
+selected at a time (`UndercutGapAnchor`, card-local screen state keyed on the draft id, dropped
+when its cut leaves the page; never stored). The field is a **view** of the canonical span against
+that cut's edge — `undercutGapAfterMm` = start − other FWD end, `undercutGapBeforeMm` = other AFT
+end − draft FWD end — the Extend-past-liner posture: nothing new is stored, a typed gap moves the
+cut with its length kept (`startingAtEndOf(other, gapMm)` / `endingAtStartOf(other, gapMm)`), and
+Distance re-seeds under the card's own datum, so the sheet keeps reading from the liner or S.E.T.
+The typed gap commits verbatim (negative allowed — it reads below zero once the draft starts
+inside the other cut); bounds and overlap are confirm-time like every other field here. A second
+tap on the selected chip closes the field and changes nothing; a later Distance or Length edit
+keeps the field open, re-reading the gap from the new span. The result is validated with
 `undercutSpanIssue`; a cut that would leave the shaft does **not** change the draft — the issue
 shows as a card warning under the rows, worded "Not applied — <reason>" (`undercutPresetRefusal`,
 `undercut_butt_issue`), until the next tap or draft change. Refusing a preset is the one refusal on

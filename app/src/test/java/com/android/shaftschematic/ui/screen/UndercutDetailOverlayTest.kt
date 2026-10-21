@@ -256,6 +256,31 @@ class UndercutDetailOverlayTest {
         assertTrue("a preset is a draft edit, not a record write", updated.isEmpty())
     }
 
+    @Test
+    fun `a selected start-at-end chip opens a gap field that moves the cut past that end`() {
+        show(listOf(cut("u1", 600f, len = 100f), cut("u2", 900f)), initialSelectedId = "u2")
+        val inU2 = hasAnyAncestor(hasTestTag("undercut_card_u2"))
+        val gap = hasText("Gap after Cut 1 (in)") and inU2
+        assertTrue("no gap field before a chip is chosen", rule.onAllNodes(gap).fetchSemanticsNodes().isEmpty())
+
+        rule.onNode(hasTestTag("undercut_butt_after_1") and inU2).performScrollTo().performClick()
+        settle()
+        typeAndCommit(gap, "2")
+        // 700 + 50.8 = 750.8 mm = 250.8 mm past the liner's AFT edge = 9.874 in, under the same datum.
+        assertTrue(
+            rule.onAllNodes(editableStartsWith("9.87") and inU2).fetchSemanticsNodes().isNotEmpty(),
+        )
+
+        // A second tap on the selected chip closes the field and leaves the cut where the gap put it.
+        rule.onNode(hasTestTag("undercut_butt_after_1") and inU2).performScrollTo().performClick()
+        settle()
+        assertTrue("the gap field closes", rule.onAllNodes(gap).fetchSemanticsNodes().isEmpty())
+        assertTrue(
+            rule.onAllNodes(editableStartsWith("9.87") and inU2).fetchSemanticsNodes().isNotEmpty(),
+        )
+        assertTrue("a gap is a draft edit, not a record write", updated.isEmpty())
+    }
+
     private fun editableStartsWith(prefix: String) = SemanticsMatcher("editable text starts with $prefix") {
         it.config.getOrNull(SemanticsProperties.EditableText)?.text?.startsWith(prefix) == true
     }

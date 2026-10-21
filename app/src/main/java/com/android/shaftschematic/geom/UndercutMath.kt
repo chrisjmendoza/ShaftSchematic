@@ -649,18 +649,34 @@ fun undercutOverlapMessage(partnerPosition: Int?): String =
 // ── Butt-against presets ──
 
 /**
- * "Start at end of cut N": the canonical start that puts a draft's AFT end on the other cut's
- * FWD end [otherEndMm] — edge to edge, which [undercutOverlapIssue] counts as clear. The length
- * is never touched; shaft bounds are the caller's check ([undercutSpanIssue]).
+ * "Start at end of cut N": the canonical start that puts a draft's AFT end [gapMm] FWD of the
+ * other cut's FWD end [otherEndMm] — at the default 0 edge to edge, which [undercutOverlapIssue]
+ * counts as clear. The length is never touched; shaft bounds and overlap are the caller's check
+ * ([undercutSpanIssue], and confirm time for a typed gap).
  */
-fun undercutStartAtEndOf(otherEndMm: Float): Float = otherEndMm
+fun undercutStartAtEndOf(otherEndMm: Float, gapMm: Float = 0f): Float = otherEndMm + gapMm
 
 /**
- * "End at start of cut N": the canonical start that puts the FWD end of a draft of [lengthMm] on
- * the other cut's AFT end [otherStartMm]. The length is never touched; shaft bounds are the
- * caller's check ([undercutSpanIssue]).
+ * "End at start of cut N": the canonical start that puts the FWD end of a draft of [lengthMm]
+ * [gapMm] AFT of the other cut's AFT end [otherStartMm] — at the default 0 edge to edge. The
+ * length is never touched; shaft bounds and overlap are the caller's check.
  */
-fun undercutEndAtStartOf(otherStartMm: Float, lengthMm: Float): Float = otherStartMm - lengthMm
+fun undercutEndAtStartOf(otherStartMm: Float, lengthMm: Float, gapMm: Float = 0f): Float =
+    otherStartMm - gapMm - lengthMm
+
+/**
+ * The card's "Gap after cut N" view: how far a draft's AFT end at [startMm] sits FWD of the other
+ * cut's FWD end [otherEndMm] — the inverse of [undercutStartAtEndOf]. Negative once the draft
+ * starts AFT of that end. Derived for display; nothing stores it.
+ */
+fun undercutGapAfterMm(startMm: Float, otherEndMm: Float): Float = startMm - otherEndMm
+
+/**
+ * The card's "Gap before cut N" view: how far a draft's FWD end sits AFT of the other cut's AFT
+ * end [otherStartMm] — the inverse of [undercutEndAtStartOf]. Derived for display only.
+ */
+fun undercutGapBeforeMm(startMm: Float, lengthMm: Float, otherStartMm: Float): Float =
+    otherStartMm - (startMm + lengthMm)
 
 // ── New-cut seeds ──
 
