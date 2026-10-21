@@ -8,6 +8,15 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-21
 
+### feat(help): Help & FAQ topics read in paragraphs
+
+- **Long topics broken up.** On-device report: the expanded Help cards were a single wall of text
+  ("Record undercut sections" ran a full screen without a break). The long topic bodies now carry
+  paragraph breaks at each change of subject; the wording is unchanged.
+- **Paragraphs are spaced, not just newlined.** `HelpBodyText` (`HelpRoute.kt`) sets each `\n\n`
+  paragraph with a 12 dp gap and each single-`\n` line inside one (the bullet lists) 4 dp apart, so
+  bullets no longer run together either. Search still matches against the whole body string.
+
 ### feat(undercut): short rail values lift above the chain when the strip has room
 
 - **Short values no longer crammed under the chain.** On-device request: a short cut's value that
