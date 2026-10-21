@@ -8,6 +8,21 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-21
 
+### feat(help): search matches words, ranks title hits first, highlights matches
+
+- **Words, not a phrase.** On-device report: searching "undercuts" left out "Record undercut
+  sections", because search was one literal substring and that topic only says "undercut".
+  `helpSearchTerms` now splits the query into words (question filler like "how"/"the" dropped,
+  `S.E.T.` and `3/4` kept whole) and `helpSearchStem` drops a plain plural, so "undercuts",
+  "bodies" and "inches" find their singulars; every word must appear somewhere in the topic.
+- **Ranked, categories kept.** On-device request: "prioritize category then subsections". A word
+  in a topic's title outranks any number of body mentions (`helpTopicScore`); topics sort by score
+  inside their section and sections by their best topic, ties keeping content order.
+- **Matches highlighted** in section headers, card titles and body text (`helpHighlightRanges`,
+  bold on the primary container), so it is clear why each card matched.
+- Help's own "Help & FAQ" topic, `Navigation.md` and the manual's Help paragraph describe the new
+  search; the in-app manual is rebuilt.
+
 ### feat(help): Help & FAQ topics read in paragraphs
 
 - **Long topics broken up.** On-device report: the expanded Help cards were a single wall of text

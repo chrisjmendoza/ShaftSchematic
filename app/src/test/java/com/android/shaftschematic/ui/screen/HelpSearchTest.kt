@@ -131,6 +131,132 @@ class HelpSearchTest {
         assertEquals(1, filterHelpSections(sections, "  runout  ").single().topics.size)
     }
 
+    // ── Search words ────────────────────────────────────────────────────────
+
+    @Test
+    fun `a query splits into words with question filler dropped`() {
+        assertEquals(listOf("add", "liner"), helpSearchTerms("How do I add a liner?"))
+    }
+
+    @Test
+    fun `filler is kept when it is all the query has`() {
+        assertEquals(listOf("why"), helpSearchTerms("Why"))
+    }
+
+    @Test
+    fun `end punctuation is trimmed but inner punctuation survives`() {
+        assertEquals(listOf("s.e.t"), helpSearchTerms("S.E.T."))
+        assertEquals(listOf("3/4"), helpSearchTerms("(3/4)"))
+        assertTrue(helpSearchTerms("  ?! ").isEmpty())
+    }
+
+    @Test
+    fun `plural endings stem to a substring of singular and plural`() {
+        assertEquals("undercut", helpSearchStem("undercuts"))
+        assertEquals("bod", helpSearchStem("bodies"))
+        assertEquals("inch", helpSearchStem("inches"))
+        assertEquals("tir", helpSearchStem("tir's"))
+        assertEquals("axis", helpSearchStem("axis"))
+        assertEquals("class", helpSearchStem("class"))
+        assertEquals("oal", helpSearchStem("oal"))
+    }
+
+    @Test
+    fun `words match anywhere, not as one phrase`() {
+        // "runout" is in the title, "TIR" in the body — a phrase substring found neither order.
+        assertEquals(
+            listOf("Record runout"),
+            filterHelpSections(sections, "TIR runout").single().topics.map { it.title },
+        )
+    }
+
+    @Test
+    fun `every word must be found`() {
+        assertTrue(filterHelpSections(sections, "runout storage").isEmpty())
+    }
+
+    @Test
+    fun `a plural query finds the real undercut topic first`() {
+        val hit = filterHelpSections(helpSections, "undercuts")
+        assertEquals("Record undercut sections", hit.first().topics.first().title)
+    }
+
+    // ── Ranking ─────────────────────────────────────────────────────────────
+
+    private val ranked = listOf(
+        HelpSection(
+            "Early",
+            listOf(
+                HelpTopic("Saving", "A liner is mentioned here once."),
+                HelpTopic("Liners and threads", "Sleeves over the shaft."),
+            ),
+        ),
+        HelpSection(
+            "Late",
+            listOf(HelpTopic("Liner shoulders", "A step at the liner end.")),
+        ),
+    )
+
+    @Test
+    fun `a title hit leads its section`() {
+        val early = filterHelpSections(ranked, "liner").first { it.title == "Early" }
+        assertEquals(listOf("Liners and threads", "Saving"), early.topics.map { it.title })
+    }
+
+    @Test
+    fun `a section is ordered by its best topic`() {
+        val only = listOf(
+            HelpSection("Mentions", listOf(HelpTopic("Saving", "A liner, a liner, a liner."))),
+            HelpSection("About", listOf(HelpTopic("Liner shoulders", "Steps."))),
+        )
+        assertEquals(listOf("About", "Mentions"), filterHelpSections(only, "liner").map { it.title })
+    }
+
+    @Test
+    fun `equal scores keep content order`() {
+        assertEquals(listOf("Early", "Late"), filterHelpSections(ranked, "liner").map { it.title })
+    }
+
+    @Test
+    fun `a section-title word qualifies every topic in it`() {
+        assertEquals(
+            listOf("Where are my files?"),
+            filterHelpSections(sections, "beta").single().topics.map { it.title },
+        )
+    }
+
+    // ── Highlight ───────────────────────────────────────────────────────────
+
+    @Test
+    fun `a highlight covers every occurrence, ignoring case`() {
+        assertEquals(
+            listOf(0..7, 13..20),
+            helpHighlightRanges("Undercut and undercut", listOf("undercut")),
+        )
+    }
+
+    @Test
+    fun `a highlight carries over the plural the stem dropped`() {
+        assertEquals(listOf(4..12), helpHighlightRanges("Two undercuts.", listOf("undercut")))
+        assertEquals(listOf(0..3, 9..14), helpHighlightRanges("body and bodies", listOf("bod")))
+    }
+
+    @Test
+    fun `a highlight never runs into the rest of a longer word`() {
+        // "s" is followed by more letters, so it is not a plural ending here.
+        assertEquals(listOf(0..4), helpHighlightRanges("taperset", listOf("taper")))
+    }
+
+    @Test
+    fun `overlapping hits merge`() {
+        assertEquals(listOf(0..7), helpHighlightRanges("undercut", listOf("under", "dercut")))
+    }
+
+    @Test
+    fun `no terms highlight nothing`() {
+        assertTrue(helpHighlightRanges("anything", emptyList()).isEmpty())
+    }
+
     // ── Deep-link index ─────────────────────────────────────────────────────
 
     @Test
