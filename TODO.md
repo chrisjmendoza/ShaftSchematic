@@ -143,6 +143,9 @@ at most a pointer from here.
 
 ### Verification
 
+The per-feature on-device checks live in `docs/ON_DEVICE_CHECKLIST.md` (what to look at, what
+"good" looks like, which merge it came from); the items below are the standing ones.
+
 - [ ] **Crashlytics activation** (one-time, console + repo settings): add Crashlytics to the
   existing Firebase app (the one behind `FIREBASE_APP_ID`), download `google-services.json`,
   put its contents in a new `GOOGLE_SERVICES_JSON` GitHub Actions secret (and optionally drop
