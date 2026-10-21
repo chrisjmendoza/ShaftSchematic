@@ -41,6 +41,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.ui.adaptive.readableWidth
 
@@ -96,6 +101,7 @@ fun HelpRoute(
     var query by rememberSaveable { mutableStateOf("") }
     val searching = query.isNotBlank()
     val shown = remember(query) { filterHelpSections(helpSections, query) }
+    val terms = remember(query) { helpSearchTerms(query) }
     val listState = rememberLazyListState()
 
     // The deep link is honoured once per key, against the UNFILTERED list — the screen opens
@@ -169,7 +175,7 @@ fun HelpRoute(
                 shown.forEach { section ->
                     item(key = "header_${section.title}") {
                         Text(
-                            section.title,
+                            rememberHighlighted(section.title, terms),
                             style = MaterialTheme.typography.titleMedium,
                             modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
                         )
@@ -178,6 +184,7 @@ fun HelpRoute(
                         HelpTopicCard(
                             topic = topic,
                             searching = searching,
+                            highlightTerms = terms,
                             openOnFirstShow = topic.key == initialTopicKey,
                             onReadMore = onOpenManual?.let { open ->
                                 topic.manualAnchor?.let { anchor -> { open(anchor, null) } }
@@ -301,12 +308,15 @@ internal data class HelpSection(val title: String, val topics: List<HelpTopic>)
  *                        expansion, so clearing the query restores the card's own state.
  * @param openOnFirstShow this card is the deep link's target — it SEEDS the saved expansion
  *                        rather than forcing it, so the reader can still collapse it.
+ * @param highlightTerms  search words to mark in the title and body ([helpSearchTerms]);
+ *                        empty while not searching.
  * @param onReadMore      opens the manual at the topic's section; null shows no link.
  */
 @Composable
 private fun HelpTopicCard(
     topic: HelpTopic,
     searching: Boolean = false,
+    highlightTerms: List<String> = emptyList(),
     openOnFirstShow: Boolean = false,
     onReadMore: (() -> Unit)? = null,
 ) {
@@ -329,7 +339,7 @@ private fun HelpTopicCard(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(
-                    topic.title,
+                    rememberHighlighted(topic.title, highlightTerms),
                     style = MaterialTheme.typography.titleSmall,
                     modifier = Modifier.weight(1f),
                 )
@@ -339,7 +349,7 @@ private fun HelpTopicCard(
                 )
             }
             if (showBody) {
-                HelpBodyText(topic.body, modifier = Modifier.padding(top = 8.dp))
+                HelpBodyText(topic.body, highlightTerms, modifier = Modifier.padding(top = 8.dp))
                 topic.illustration?.invoke()
                 if (onReadMore != null) {
                     TextButton(
@@ -361,7 +371,11 @@ private fun HelpTopicCard(
  * within one line; search reads the body string and is unaffected.
  */
 @Composable
-private fun HelpBodyText(body: String, modifier: Modifier = Modifier) {
+private fun HelpBodyText(
+    body: String,
+    highlightTerms: List<String>,
+    modifier: Modifier = Modifier,
+) {
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -370,11 +384,41 @@ private fun HelpBodyText(body: String, modifier: Modifier = Modifier) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 for (line in paragraph.split("\n")) {
                     Text(
-                        line,
+                        rememberHighlighted(line, highlightTerms),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+            }
+        }
+    }
+}
+
+/**
+ * [text] with every search hit ([helpHighlightRanges]) set like a highlighter stroke — bold on
+ * the primary container — so a reader sees at a glance WHY a card matched. Theme roles, not
+ * fixed inks: this is app chrome, never a sheet. No terms → the plain text.
+ */
+@Composable
+private fun rememberHighlighted(text: String, terms: List<String>): AnnotatedString {
+    val style = SpanStyle(
+        background = MaterialTheme.colorScheme.primaryContainer,
+        color = MaterialTheme.colorScheme.onPrimaryContainer,
+        fontWeight = FontWeight.Bold,
+    )
+    return remember(text, terms, style) {
+        val ranges = helpHighlightRanges(text, terms)
+        if (ranges.isEmpty()) {
+            AnnotatedString(text)
+        } else {
+            buildAnnotatedString {
+                var at = 0
+                for (range in ranges) {
+                    append(text.substring(at, range.first))
+                    withStyle(style) { append(text.substring(range.first, range.last + 1)) }
+                    at = range.last + 1
+                }
+                append(text.substring(at))
             }
         }
     }
@@ -1044,8 +1088,12 @@ internal val helpSections: List<HelpSection> = listOf(
             HelpTopic(
                 "Help, About, and Developer Options",
                 "• \"Help & FAQ\" — this screen. Search at the top narrows it to the topics " +
-                    "whose title or text contain what you type, and every match opens as you " +
-                    "search; clearing the box puts the list back as it was. The Runout, Wear, " +
+                    "that contain every word you type (\"undercuts\" finds \"undercut\" too; " +
+                    "words like \"how\" and \"the\" are skipped). Topics with the word in their " +
+                    "title come first, then the ones that only mention it, each category " +
+                    "ordered by its best match; every match opens as you search with the " +
+                    "words highlighted, and clearing the box puts the list back as it was. " +
+                    "The Runout, Wear, " +
                     "Undercut, and Consolidated Output tabs each carry a \"?\" button that " +
                     "opens this screen straight at that tab's guide.\n" +
                     "• \"About ShaftSchematic\" — app version and build, plus the note that all " +

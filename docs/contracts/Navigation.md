@@ -89,9 +89,20 @@ Route graph (AppNav.kt NavHost)
   - **Search** — an `OutlinedTextField` pinned above the list inside the Scaffold content
     (testTag `help_search`, label/placeholder "Search help", a × trailing icon while
     non-empty). Filtering is the pure `filterHelpSections(sections, query)`: blank or
-    whitespace-only returns the content unchanged, otherwise case-insensitive substring over
-    title OR body, sections with no surviving topic dropped, order preserved. An empty
-    result prints `No topics match "<query>".` **While a query is active its hits render
+    whitespace-only returns the content unchanged. Otherwise the query is split into WORDS
+    (`helpSearchTerms` — whitespace split, end punctuation trimmed so `S.E.T.` and `3/4`
+    survive, question filler like "how"/"the" dropped unless it is all the query has, a plain
+    plural stemmed by `helpSearchStem` so "undercuts" finds "undercut" — a phrase substring
+    lost the main undercut topic to its own plural, on-device report), and EVERY word must
+    occur, case-insensitive, in the topic's title, body, or section title. **Results are
+    ranked, category headings kept** (on-device request: "prioritize category then
+    subsections"): `helpTopicScore` weighs a title hit above any body count (body hits capped
+    per word, a section-title-only hit lowest); topics sort by score inside their section and
+    sections by their best topic, ties keeping content order. Sections with no surviving topic
+    are dropped. **Matched words are highlighted** in section headers, card titles and body
+    lines (`helpHighlightRanges` — every occurrence, carried over the plural ending the stem
+    dropped, merged; drawn bold on `primaryContainer`, a theme role, since this is chrome). An
+    empty result prints `No topics match "<query>".` **While a query is active its hits render
     EXPANDED** — a search hit that still needs a tap to read is the failing state — as an
     `expanded || searching` read at the card, never a write to the saved expansion, so
     clearing the query restores every card's own state.
