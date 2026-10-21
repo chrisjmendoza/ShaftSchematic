@@ -44,6 +44,11 @@ import com.android.shaftschematic.util.filterNumericInput
  * update refreshes the text; it is edge-triggered, so typing does not spam it. It reports
  * state and never drives a commit — the blur/IME pipeline above is still the only writer. The
  * carousel card's Save button is enabled off the aggregate of these reports.
+ *
+ * [placeholder] shows inside an empty box (an example of what to type); [hint] is supporting
+ * text shown only while the field has nothing to report — a rejection notice or an
+ * [externalIssueText] always takes the line instead, since an error outranks a tip. Both
+ * default null, which leaves the field exactly as it was without them.
  */
 @Composable
 fun NumericInputField(
@@ -60,6 +65,8 @@ fun NumericInputField(
     keyboardType: KeyboardType = KeyboardType.Decimal,
     validator: ((String) -> String?)? = null,
     onDirtyChange: ((Boolean) -> Unit)? = null,
+    placeholder: String? = null,
+    hint: String? = null,
     parseValid: (String) -> Boolean,
     onCommit: (String) -> Unit
 ) {
@@ -118,6 +125,7 @@ fun NumericInputField(
             text = if (filtered == raw.text) raw else raw.copy(text = filtered)
         },
         label = { Text(label) },
+        placeholder = placeholder?.let { p -> { Text(p) } },
         enabled = enabled,
         isError = rejectedNotice != null || externalIssueText != null,
         supportingText = {
@@ -126,6 +134,8 @@ fun NumericInputField(
                 Text(notice)
             } else if (externalIssueText != null) {
                 Text(externalIssueText)
+            } else if (hint != null) {
+                Text(hint)
             }
         },
         singleLine = singleLine,

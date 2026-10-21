@@ -431,8 +431,9 @@ Boundary summary:
 - The Distance field is authored against one of four references (AFT/FWD SET or a reference
   liner's AFT/FWD edge). Switching the reference is **display-only** — the UI never moves
   canonical shaft-space geometry (`geom/UndercutMath.kt` owns the conversion pair).
-- Drawn notch depth is display-exaggerated by the per-sheet "Cut depth exaggeration" slider
-  (`UndercutRecord.exaggerationFrac`); the UI reads the exaggeration, it never computes the
+- Drawn notch depth is display-exaggerated by the per-sheet "Drawn depth" slider (formerly "Cut depth
+  exaggeration"; under the tab's collapsed "Drawing settings" section below the recorded-cut list;
+  `UndercutRecord.exaggerationFrac`); the UI reads the exaggeration, it never computes the
   normalization (`geom/SurfaceProfileMath.kt` + `geom/UndercutMath.kt` do).
 - Canvas and PDF share one pure pipeline; the route performs no clustering, clamping, or
   hit-test math of its own.

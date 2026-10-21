@@ -60,6 +60,9 @@ class NumericInputFieldBlurTest {
     private fun Host(
         initialText: String = "12.5",
         validator: ((String) -> String?)? = null,
+        hint: String? = null,
+        placeholder: String? = null,
+        externalIssueText: String? = null,
     ) {
         val focusManager = LocalFocusManager.current
         MaterialTheme {
@@ -69,6 +72,9 @@ class NumericInputFieldBlurTest {
                     initialText = initialText,
                     modifier = Modifier.testTag(FIELD),
                     validator = validator,
+                    hint = hint,
+                    placeholder = placeholder,
+                    externalIssueText = externalIssueText,
                     onDirtyChange = { dirtyReports += it },
                     parseValid = { it.toFloatOrNull() != null },
                     onCommit = { commits += it }
@@ -290,6 +296,44 @@ class NumericInputFieldBlurTest {
         notice("1/ not applied — not a number").assertDoesNotExist()
     }
 
+    /* ── hint and placeholder — advertised entry, never in an error's place ──── */
+
+    @Test
+    fun `a clean field shows its hint, and a refused commit takes the line until the next edit`() {
+        rule.setContent { Host(hint = HINT) }
+        rule.waitForIdle()
+        notice(HINT).assertIsDisplayed()
+
+        focusField()
+        rule.onNodeWithTag(FIELD).performTextReplacement("1/")
+        rule.onNodeWithTag(FIELD).performImeAction()
+        rule.waitForIdle()
+        notice("1/ not applied — not a number").assertIsDisplayed()
+        notice(HINT).assertDoesNotExist()
+
+        rule.onNodeWithTag(FIELD).performTextReplacement("14")
+        rule.waitForIdle()
+        notice("1/ not applied — not a number").assertDoesNotExist()
+        notice(HINT).assertIsDisplayed()
+    }
+
+    @Test
+    fun `an external issue outranks the hint`() {
+        rule.setContent { Host(hint = HINT, externalIssueText = "Overlaps cut 1") }
+        rule.waitForIdle()
+        notice("Overlaps cut 1").assertIsDisplayed()
+        notice(HINT).assertDoesNotExist()
+    }
+
+    @Test
+    fun `an empty focused field shows its placeholder`() {
+        rule.setContent { Host(initialText = "", placeholder = "e.g. 5 5/8") }
+        focusField()
+        rule.waitForIdle()
+        notice("e.g. 5 5/8").assertIsDisplayed()
+        assertEquals("a placeholder is never a value", emptyList<String>(), commits)
+    }
+
     /* ── onDirtyChange — what the carousel card's Save button is enabled off ──── */
 
     @Test
@@ -398,5 +442,6 @@ class NumericInputFieldBlurTest {
         const val FIELD = "numeric_field"
         const val AWAY = "away_button"
         const val OTHER = "other_field"
+        const val HINT = "Decimals or fractions"
     }
 }
