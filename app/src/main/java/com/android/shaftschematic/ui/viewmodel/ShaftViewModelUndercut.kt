@@ -1,9 +1,12 @@
 package com.android.shaftschematic.ui.viewmodel
 
 import com.android.shaftschematic.geom.UNDERCUT_EXAGGERATION_MAX_FRAC
+import com.android.shaftschematic.geom.UndercutStrip
 import com.android.shaftschematic.model.Undercut
+import com.android.shaftschematic.model.UndercutPageOrientation
 import com.android.shaftschematic.model.UndercutRecord
 import com.android.shaftschematic.model.UndercutReference
+import com.android.shaftschematic.model.UndercutSetDatum
 import kotlinx.coroutines.flow.update
 
 /**
@@ -153,5 +156,60 @@ fun ShaftViewModel.setUndercutExaggeration(frac: Float) {
 fun ShaftViewModel.setUndercutDrawToSet(v: Boolean) {
     _undercutRecord.update { rec ->
         if (rec.drawToSet == v) rec else rec.copy(drawToSet = v)
+    }
+}
+
+/**
+ * Set this sheet's page shape ([UndercutRecord.pageOrientation]): AUTO prints one section
+ * landscape and two or more stacked on a portrait page; LANDSCAPE/PORTRAIT force that shape.
+ * Layout only — no stored cut moves — and a fit for this job's section count, so it is
+ * per-document and lives in the record rather than in app prefs. A no-op when unchanged.
+ */
+fun ShaftViewModel.setUndercutPageOrientation(o: UndercutPageOrientation) {
+    _undercutRecord.update { rec ->
+        if (rec.pageOrientation == o) rec else rec.copy(pageOrientation = o)
+    }
+}
+
+/**
+ * Set which S.E.T. this sheet's strips measure to ([UndercutRecord.setDatum]) — the strip titles
+ * and the lead dimension at each strip's edge follow it together. Dimensioning only — no stored
+ * cut moves — and a fit for this job, so per-document. A no-op when unchanged.
+ */
+fun ShaftViewModel.setUndercutSetDatum(d: UndercutSetDatum) {
+    _undercutRecord.update { rec ->
+        if (rec.setDatum == d) rec else rec.copy(setDatum = d)
+    }
+}
+
+/**
+ * Put [strip] on the printed sheet or leave it off ("Sections to print"), per job. A liner strip
+ * is keyed by its liner id ([UndercutRecord.excludedLinerIds]); a bare-shaft strip by its member
+ * cuts ([UndercutRecord.excludedFreeCutIds]) — leaving it off lists every member, printing it
+ * again unlists them all. Only the ids this strip names are touched, so other entries — orphans
+ * included — stay as they are. A no-op when the strip already reads [printed].
+ */
+fun ShaftViewModel.setUndercutSectionPrinted(strip: UndercutStrip, printed: Boolean) {
+    _undercutRecord.update { rec ->
+        when (strip) {
+            is UndercutStrip.LinerStrip -> {
+                val listed = strip.linerId in rec.excludedLinerIds
+                when {
+                    printed && listed -> rec.copy(excludedLinerIds = rec.excludedLinerIds - strip.linerId)
+                    !printed && !listed -> rec.copy(excludedLinerIds = rec.excludedLinerIds + strip.linerId)
+                    else -> rec
+                }
+            }
+            is UndercutStrip.FreeStrip -> {
+                val ids = strip.undercutIds
+                if (printed) {
+                    if (ids.none { it in rec.excludedFreeCutIds }) rec
+                    else rec.copy(excludedFreeCutIds = rec.excludedFreeCutIds.filterNot { it in ids })
+                } else {
+                    val missing = ids.filterNot { it in rec.excludedFreeCutIds }
+                    if (missing.isEmpty()) rec else rec.copy(excludedFreeCutIds = rec.excludedFreeCutIds + missing)
+                }
+            }
+        }
     }
 }

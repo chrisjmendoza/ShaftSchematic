@@ -1,7 +1,13 @@
 // app/src/main/java/com/android/shaftschematic/model/Undercut.kt
 package com.android.shaftschematic.model
 
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
 import java.util.UUID
 
 /**
@@ -126,10 +132,102 @@ data class Undercut(
  *   sketch's "to the S.E.T." figure). Display/dimensioning only — no stored value moves — but it
  *   is a FIT for this shaft's geometry, never a look pref, so it is per-document and lives
  *   here. Additive + defaulted; older files get `false`.
+ * @property pageOrientation Which page shape the printed sheet uses (see
+ *   [UndercutPageOrientation]); resolved against the sheet's section count by
+ *   `resolveUndercutPageOrientation`. A FIT for this job's strip count, not a look pref, so it is
+ *   per-document. Additive + defaulted, and decoded tolerantly: older files and unknown names get
+ *   [UndercutPageOrientation.AUTO].
+ * @property setDatum Which S.E.T. every printed strip measures to — its title anchor and the lead
+ *   dimension at the strip's edge (see [UndercutSetDatum]). A FIT for this job, so per-document.
+ *   Additive + defaulted, decoded tolerantly: older files and unknown names get
+ *   [UndercutSetDatum.NEAREST], which is the side every strip printed before the choice existed.
+ * @property excludedLinerIds Liner strips left off the printed sheet, by liner id ("Sections to
+ *   print"). An EXCLUSION list, so a liner added later prints by default and a selection is never
+ *   silently rewritten. Also governs that liner's started strip on a blank draft. An id that no
+ *   longer names a drawable liner is skipped at render, never pruned. Additive + defaulted.
+ * @property excludedFreeCutIds Cut ids whose bare-shaft section is left off the printed sheet. A
+ *   bare-shaft strip is excluded only while EVERY one of its member cuts is listed: windows
+ *   regroup as cuts change, and a cut added to an excluded window brings the whole window back,
+ *   never a partial chain. Orphan ids are skipped, never pruned. Additive + defaulted.
  */
 @Serializable
 data class UndercutRecord(
     val undercuts: List<Undercut> = emptyList(),
     val exaggerationFrac: Float = 0.25f,
     val drawToSet: Boolean = false,
+    val pageOrientation: UndercutPageOrientation = UndercutPageOrientation.AUTO,
+    val setDatum: UndercutSetDatum = UndercutSetDatum.NEAREST,
+    val excludedLinerIds: List<String> = emptyList(),
+    val excludedFreeCutIds: List<String> = emptyList(),
 )
+
+/**
+ * The S.E.T. the undercut sheet's strips measure to, chosen per job ([UndercutRecord.setDatum]):
+ * the strip title's anchor figure and the lead dimension that continues each strip's chain out to
+ * that S.E.T. read from the same side, so the two never disagree (on-device request).
+ * - [NEAREST]: each strip's own nearer S.E.T. — the rule every strip title used before the choice.
+ * - [AFT] / [FWD]: that S.E.T. for every strip.
+ *
+ * Serialized by NAME through [UndercutSetDatumSerializer], which decodes an unknown name to
+ * [NEAREST] instead of failing the document.
+ */
+@Serializable(with = UndercutSetDatumSerializer::class)
+enum class UndercutSetDatum {
+    NEAREST, AFT, FWD;
+
+    companion object {
+        /** Tolerant decode for a persisted name; an unknown or blank value is [NEAREST]. */
+        fun fromName(raw: String?): UndercutSetDatum =
+            if (raw.isNullOrBlank()) NEAREST
+            else runCatching { valueOf(raw) }.getOrDefault(NEAREST)
+    }
+}
+
+/** Name-string serializer for [UndercutSetDatum] with [UndercutSetDatum.fromName]'s fallback. */
+object UndercutSetDatumSerializer : KSerializer<UndercutSetDatum> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("com.android.shaftschematic.model.UndercutSetDatum", PrimitiveKind.STRING)
+
+    override fun serialize(encoder: Encoder, value: UndercutSetDatum) {
+        encoder.encodeString(value.name)
+    }
+
+    override fun deserialize(decoder: Decoder): UndercutSetDatum =
+        UndercutSetDatum.fromName(decoder.decodeString())
+}
+
+/**
+ * The undercut sheet's page shape, chosen per job ([UndercutRecord.pageOrientation]).
+ * - [AUTO]: one section prints landscape; two or more stack down a portrait page (on-device
+ *   request: the shop draws several sections stacked on a portrait page for spacing, a single
+ *   section reads best landscape). A "section" is a printed detail strip, never a cut.
+ * - [LANDSCAPE] / [PORTRAIT]: that shape whatever the section count.
+ *
+ * Serialized by NAME through [UndercutPageOrientationSerializer], which decodes an unknown name
+ * (a value from a newer build) to [AUTO] instead of failing — the document codec's Json does not
+ * coerce enum values, so a plain enum would refuse the whole document.
+ */
+@Serializable(with = UndercutPageOrientationSerializer::class)
+enum class UndercutPageOrientation {
+    AUTO, LANDSCAPE, PORTRAIT;
+
+    companion object {
+        /** Tolerant decode for a persisted name; an unknown or blank value is [AUTO]. */
+        fun fromName(raw: String?): UndercutPageOrientation =
+            if (raw.isNullOrBlank()) AUTO
+            else runCatching { valueOf(raw) }.getOrDefault(AUTO)
+    }
+}
+
+/** Name-string serializer for [UndercutPageOrientation] with [UndercutPageOrientation.fromName]'s fallback. */
+object UndercutPageOrientationSerializer : KSerializer<UndercutPageOrientation> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("com.android.shaftschematic.model.UndercutPageOrientation", PrimitiveKind.STRING)
+
+    override fun serialize(encoder: Encoder, value: UndercutPageOrientation) {
+        encoder.encodeString(value.name)
+    }
+
+    override fun deserialize(decoder: Decoder): UndercutPageOrientation =
+        UndercutPageOrientation.fromName(decoder.decodeString())
+}

@@ -4,6 +4,11 @@ import android.app.Application
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
@@ -13,6 +18,8 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ApplicationProvider
 import com.android.shaftschematic.geom.undercutSetPositions
+import com.android.shaftschematic.model.UndercutPageOrientation
+import com.android.shaftschematic.model.UndercutSetDatum
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.addBodyAt
 import com.android.shaftschematic.ui.viewmodel.addLinerAt
@@ -74,8 +81,10 @@ class UndercutRouteTest {
         val titles = undercutAddLinerTitles(spec, DisplayUnits.single(vm.unit.value))
         assertEquals(2, spec.liners.size)
         spec.liners.forEach { ln ->
+            // By the row's tag: the tab behind the chooser lists the same liners under "Sections to
+            // print" (an empty record prints a started strip per liner).
             rule.onNodeWithTag("undercut_add_where_liner_${ln.id}").assertIsDisplayed()
-            rule.onNodeWithText(titles.getValue(ln.id)).assertIsDisplayed()
+                .assertTextContains(titles.getValue(ln.id))
         }
         rule.onNodeWithTag("undercut_add_where_aft").assertIsDisplayed()
         rule.onNodeWithTag("undercut_add_where_fwd").assertIsDisplayed()
@@ -162,5 +171,120 @@ class UndercutRouteTest {
         val vm = vm()
         host(vm)
         rule.onAllNodesWithTag("undercut_drawing_settings_toggle").assertCountEquals(0)
+    }
+
+    @Test
+    fun `drawing settings lead with the Page row, AUTO naming portrait for two sections`() {
+        // One cut in each liner: two printed sections.
+        val vm = vm().also {
+            it.addUndercut(500f, 25.4f)
+            it.addUndercut(2000f, 25.4f)
+        }
+        host(vm)
+
+        rule.onNodeWithTag("undercut_drawing_settings_toggle").performScrollTo().performClick()
+        rule.waitForIdle()
+
+        rule.onNodeWithTag("undercut_page_auto").performScrollTo().assertIsSelected()
+        rule.onNodeWithTag("undercut_page_landscape").assertIsNotSelected()
+        rule.onNodeWithTag("undercut_page_portrait").assertIsNotSelected()
+        rule.onNodeWithTag("undercut_page_caption")
+            .assertTextContains("this sheet prints portrait (2 sections)", substring = true)
+            .assertTextContains("Saved with this job.", substring = true)
+
+        rule.onNodeWithTag("undercut_page_landscape").performClick()
+        rule.waitForIdle()
+
+        assertEquals(UndercutPageOrientation.LANDSCAPE, vm.undercutRecord.value.pageOrientation)
+        rule.onNodeWithTag("undercut_page_landscape").assertIsSelected()
+        rule.onNodeWithTag("undercut_page_caption").assertTextContains("Saved with this job.")
+    }
+    @Test
+    fun `drawing settings carry the Distance to S E T row after the Page row`() {
+        val vm = vm().also { it.addUndercut(500f, 25.4f) }
+        host(vm)
+
+        rule.onNodeWithTag("undercut_drawing_settings_toggle").performScrollTo().performClick()
+        rule.waitForIdle()
+
+        rule.onNodeWithText("Distance to S.E.T.").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithTag("undercut_set_datum_nearest").assertIsSelected()
+        rule.onNodeWithTag("undercut_set_datum_aft").assertIsNotSelected()
+        rule.onNodeWithTag("undercut_set_datum_fwd").assertIsNotSelected()
+        rule.onNodeWithText(UNDERCUT_SET_DATUM_CAPTION).assertExists()
+
+        rule.onNodeWithTag("undercut_set_datum_aft").performScrollTo().performClick()
+        rule.waitForIdle()
+        assertEquals(UndercutSetDatum.AFT, vm.undercutRecord.value.setDatum)
+        rule.onNodeWithTag("undercut_set_datum_aft").assertIsSelected()
+    }
+
+    @Test
+    fun `one section offers no sections list`() {
+        val vm = vm().also { it.addUndercut(500f, 25.4f) }
+        host(vm)
+        rule.onAllNodesWithText("Sections to print").assertCountEquals(0)
+    }
+
+    @Test
+    fun `sections to print lists two sections and unticking one updates the record and caption`() {
+        val vm = vm().also {
+            it.addUndercut(500f, 25.4f)
+            it.addUndercut(2000f, 25.4f)
+        }
+        host(vm)
+        val liners = vm.spec.value.liners.sortedBy { it.startFromAftMm }
+
+        rule.onNodeWithText("Sections to print").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithTag("undercut_print_sections_caption").assertTextContains("2 of 2 sections print.", substring = true)
+        rule.onNodeWithTag("undercut_print_section_${liners[0].id}").performScrollTo().performClick()
+        rule.waitForIdle()
+
+        assertEquals(listOf(liners[0].id), vm.undercutRecord.value.excludedLinerIds)
+        rule.onNodeWithTag("undercut_print_sections_caption")
+            .assertTextContains("1 of 2 sections print. Saved with this job.")
+        // Print and Export stay on: one section still prints.
+        rule.onNodeWithTag(DOC_ACTION_PRINT_TAG).performScrollTo().assertIsEnabled()
+    }
+
+    @Test
+    fun `every section unticked takes Print and Export away and says why`() {
+        val vm = vm().also {
+            it.addUndercut(500f, 25.4f)
+            it.addUndercut(2000f, 25.4f)
+        }
+        host(vm)
+        vm.spec.value.liners.forEach { ln ->
+            rule.onNodeWithTag("undercut_print_section_${ln.id}").performScrollTo().performClick()
+            rule.waitForIdle()
+        }
+        assertEquals(2, vm.undercutRecord.value.excludedLinerIds.size)
+
+        rule.onNodeWithTag("undercut_none_selected_message").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText(UNDERCUT_NONE_SELECTED_MESSAGE).assertExists()
+        rule.onNodeWithTag(DOC_ACTION_PRINT_TAG).performScrollTo().assertIsNotEnabled()
+        rule.onNodeWithTag(DOC_ACTION_EXPORT_TAG).performScrollTo().assertIsNotEnabled()
+        rule.onNodeWithTag(DOC_ACTION_PREVIEW_TAG).performScrollTo().assertIsEnabled()
+    }
+
+    @Test
+    fun `a recorded cut in a section left off says it is not on the printout`() {
+        val vm = vm().also {
+            it.addUndercut(500f, 25.4f)
+            it.addUndercut(2000f, 25.4f)
+        }
+        host(vm)
+        val liners = vm.spec.value.liners.sortedBy { it.startFromAftMm }
+        val inFirst = vm.undercutRecord.value.undercuts.single { it.startFromAftMm == 500f }
+        val inSecond = vm.undercutRecord.value.undercuts.single { it.startFromAftMm == 2000f }
+        rule.onAllNodesWithTag("undercut_row_not_printed_${inFirst.id}", useUnmergedTree = true).assertCountEquals(0)
+
+        rule.onNodeWithTag("undercut_print_section_${liners[0].id}").performScrollTo().performClick()
+        rule.waitForIdle()
+
+        // The list row is one clickable target, so its lines sit in the unmerged tree.
+        rule.onNodeWithTag("undercut_row_not_printed_${inFirst.id}", useUnmergedTree = true)
+            .assertTextContains("Not on the printout")
+        rule.onAllNodesWithTag("undercut_row_not_printed_${inSecond.id}", useUnmergedTree = true).assertCountEquals(0)
     }
 }

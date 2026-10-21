@@ -6,16 +6,24 @@ import android.graphics.Paint
 import com.android.shaftschematic.geom.ClampedUndercutSpanMm
 import com.android.shaftschematic.geom.DiaCalloutStation
 import com.android.shaftschematic.geom.DimensionRailLayout
+import com.android.shaftschematic.geom.SetPositions
+import com.android.shaftschematic.geom.UNDERCUT_TOUCH_EPS_MM
 import com.android.shaftschematic.geom.UndercutSpanMm
+import com.android.shaftschematic.geom.UndercutStrip
 import com.android.shaftschematic.geom.nearestSetReference
 import com.android.shaftschematic.geom.undercutCalloutAnchorMm
 import com.android.shaftschematic.geom.undercutCalloutAnchorsMm
 import com.android.shaftschematic.geom.undercutNestingForest
 import com.android.shaftschematic.model.LinerAnchor
+import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Undercut
+import com.android.shaftschematic.model.UndercutPageOrientation
+import com.android.shaftschematic.model.UndercutRecord
 import com.android.shaftschematic.model.UndercutReference
+import com.android.shaftschematic.model.UndercutSetDatum
 import com.android.shaftschematic.settings.PDF_ARROW_SIZE_DEFAULT_PT
 import com.android.shaftschematic.settings.PDF_ARROW_SIZE_LARGE_PT
+import com.android.shaftschematic.util.PdfPageOrientation
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.DualLabel
 import com.android.shaftschematic.util.dualStackMetrics
@@ -63,11 +71,180 @@ fun determineUndercutPdfMode(stripCount: Int): WearPdfMode = determineWearPdfMod
 
 /**
  * Detail strips shown on one undercut page for [mode] — the grid's 2 × 2 cap, or the
- * single-column cap below that. Strips past this print as a "+N more" text note (the
- * single-page constraint documented on [selectWearStripWindowsForPage]).
+ * single-column cap below that; on a [portrait] page, [UNDERCUT_PORTRAIT_MAX_PER_PAGE]. Strips
+ * past this print as a "+N more" text note (the single-page constraint documented on
+ * [selectWearStripWindowsForPage]).
  */
-fun undercutStripsPerPage(mode: WearPdfMode): Int =
-    if (mode == WearPdfMode.GRID) WEAR_STRIP_GRID_MAX_PER_PAGE else WEAR_STRIP_MAX_PER_PAGE
+fun undercutStripsPerPage(mode: WearPdfMode, portrait: Boolean = false): Int = when {
+    portrait -> UNDERCUT_PORTRAIT_MAX_PER_PAGE
+    mode == WearPdfMode.GRID -> WEAR_STRIP_GRID_MAX_PER_PAGE
+    else -> WEAR_STRIP_MAX_PER_PAGE
+}
+
+/**
+ * Detail strips stacked on one PORTRAIT undercut page — the landscape grid's cap, so choosing
+ * portrait never pushes a strip into the "+N more" note that landscape would have printed.
+ */
+const val UNDERCUT_PORTRAIT_MAX_PER_PAGE = WEAR_STRIP_GRID_MAX_PER_PAGE
+
+/** The section count from which an AUTO undercut sheet prints portrait. */
+const val UNDERCUT_PORTRAIT_AUTO_MIN_STRIPS = 2
+
+/**
+ * The page the undercut sheet prints on, from the job's [choice] and the number of detail strips
+ * the sheet draws ([stripCount] — cut strips, or the started liner strips when nothing is
+ * recorded; `undercutSheetStrips` in `UndercutPdfComposer.kt`). AUTO stacks two or more sections
+ * on a portrait page and prints one section — or none, the whole-shaft profile fallback, which
+ * wants the long page edge — landscape (on-device request). LANDSCAPE and PORTRAIT win outright.
+ */
+fun resolveUndercutPageOrientation(choice: UndercutPageOrientation, stripCount: Int): PdfPageOrientation =
+    when (choice) {
+        UndercutPageOrientation.LANDSCAPE -> PdfPageOrientation.LANDSCAPE
+        UndercutPageOrientation.PORTRAIT -> PdfPageOrientation.PORTRAIT
+        UndercutPageOrientation.AUTO ->
+            if (stripCount >= UNDERCUT_PORTRAIT_AUTO_MIN_STRIPS) PdfPageOrientation.PORTRAIT
+            else PdfPageOrientation.LANDSCAPE
+    }
+
+/**
+ * The on-page rectangle of each of the [stripCount] detail strips on an undercut sheet, inside the
+ * strip band `[bandTop, bandBottom]` less [reservedBottomPt] (the overflow note's band).
+ *
+ * - **Landscape** — one strip spans the content width; two or more take the 2-column grid
+ *   ([computeWearStripGridLayout]).
+ * - **[portrait]** — ONE column: every strip spans the full content width, stacked top → bottom in
+ *   the order given (AFT → FWD). With [overheadsPt] (rails, label rows, Ø callouts, title per
+ *   strip), a page with room takes [undercutPortraitNaturalCells] — each strip at its natural
+ *   height, spare height spread as air between them, so a title stays under its own figure. A
+ *   crowded page splits evenly ([computeWearVerticalLayout], the single-strip path's banding),
+ *   [WEAR_STRIP_GAP_PT] apart, unless that would squeeze a strip's drawn shaft below
+ *   [UNDERCUT_CYL_MAX_FLOOR_PT]: then [undercutPortraitStripHeights] gives each strip its own
+ *   overhead plus ONE common cylinder height, so a busy section takes height from a plain one
+ *   instead of drawing a sliver of a shaft under three rail rows. [overheadsPt] null (or the
+ *   wrong size) keeps the even split.
+ *
+ * The profile parameters are zeroed on every path: on an undercut sheet the strips own the page,
+ * so the whole band goes to them.
+ */
+fun undercutStripCells(
+    portrait: Boolean,
+    stripCount: Int,
+    bandTop: Float,
+    bandBottom: Float,
+    contentLeft: Float,
+    contentRight: Float,
+    reservedBottomPt: Float = 0f,
+    overheadsPt: List<Float>? = null,
+): List<WearStripCell> {
+    if (stripCount <= 0) return emptyList()
+    if (!portrait && determineUndercutPdfMode(stripCount) == WearPdfMode.GRID) {
+        return computeWearStripGridLayout(
+            bandTop, bandBottom, contentLeft, contentRight, stripCount,
+            reservedBottomPt = reservedBottomPt,
+            minProfileHeightPt = 0f, preferredProfileHeightPt = 0f, profileToStripsGapPt = 0f,
+        ).cells
+    }
+    if (portrait && overheadsPt != null && overheadsPt.size == stripCount) {
+        val gap = WEAR_STRIP_GAP_PT
+        val usable = bandBottom - reservedBottomPt - bandTop
+        undercutPortraitNaturalCells(usable, overheadsPt, gap)?.let { offsets ->
+            return offsets.map { (top, h) ->
+                WearStripCell(bandTop + top, bandTop + top + h, contentLeft, contentRight)
+            }
+        }
+        val available = usable - (stripCount - 1) * gap
+        val heights = undercutPortraitStripHeights(available, overheadsPt)
+        if (heights != null) {
+            var top = bandTop
+            return heights.map { h ->
+                WearStripCell(top, top + h, contentLeft, contentRight).also { top += h + gap }
+            }
+        }
+    }
+    val v = computeWearVerticalLayout(
+        bandTop, bandBottom, stripCount,
+        reservedBottomPt = reservedBottomPt,
+        minProfileHeightPt = 0f, preferredProfileHeightPt = 0f, profileToStripsGapPt = 0f,
+    )
+    return (0 until stripCount).map { i ->
+        WearStripCell(v.stripTops[i], v.stripBottoms[i], contentLeft, contentRight)
+    }
+}
+
+/**
+ * The cylinder a portrait strip draws at its natural size: the height
+ * [computeUndercutStripInnerLayout]'s cylinder cap allows a strip of height `overhead + cylinder`,
+ * solved for the cylinder — so a strip given exactly [overheadPt] + this has no surplus height to
+ * spend between its figure and its title. The cap is
+ * `max(floor, min(h × frac, abs))`; with `h = overhead + c`, the `h × frac` branch gives
+ * `c = frac × overhead / (1 − frac)`, clamped into `[floor, abs]` (each clamp is the branch that
+ * then binds, so the result always satisfies the cap).
+ */
+fun undercutNaturalCylinderPt(
+    overheadPt: Float,
+    cylMaxFrac: Float = UNDERCUT_CYL_MAX_HEIGHT_FRAC,
+    cylMaxFloorPt: Float = UNDERCUT_CYL_MAX_FLOOR_PT,
+    cylMaxAbsPt: Float = UNDERCUT_CYL_MAX_ABS_PT,
+): Float =
+    (cylMaxFrac * overheadPt.coerceAtLeast(0f) / (1f - cylMaxFrac))
+        .coerceIn(cylMaxFloorPt, cylMaxAbsPt)
+
+/**
+ * A roomy portrait page's strips at their NATURAL heights — each its own [overheadsPt] plus ONE
+ * common cylinder, the smallest [undercutNaturalCylinderPt] on the page — as `(top offset from
+ * the band top, height)` pairs, with the band's leftover height spread evenly above, between and
+ * below them. Null when those heights (plus the [gapPt] between strips) do not fit [usablePt]:
+ * the page is crowded and [undercutPortraitStripHeights] or the even split decides instead.
+ *
+ * Why natural heights: an even split hands a short stack more height than its strips can draw
+ * with — the cylinder cap then spends the surplus INSIDE each strip, between its Ø callouts and
+ * its title, and on a two-section page the first title floated halfway to the next strip, reading
+ * as belonging to neither (render review). Sized to what it draws, every strip keeps
+ * its title under its own figure and the spare height becomes air between sections. The common
+ * cylinder is the page's smallest natural one, which is at or under every strip's own cap (the
+ * natural cylinder rises with the overhead), so no strip is left with surplus; and one shaft
+ * height down the page reads as the shop's ruled sheet.
+ */
+fun undercutPortraitNaturalCells(
+    usablePt: Float,
+    overheadsPt: List<Float>,
+    gapPt: Float = WEAR_STRIP_GAP_PT,
+): List<Pair<Float, Float>>? {
+    val n = overheadsPt.size
+    if (n == 0 || usablePt <= 0f) return null
+    val cyl = overheadsPt.minOf { undercutNaturalCylinderPt(it) }
+    val heights = overheadsPt.map { it.coerceAtLeast(0f) + cyl }
+    val slack = usablePt - heights.sum() - (n - 1) * gapPt
+    if (slack < 0f) return null
+    val pad = slack / (n + 1)
+    var top = pad
+    return heights.map { h -> (top to h).also { top += h + gapPt + pad } }
+}
+
+/**
+ * Portrait strip heights that give every strip the SAME drawn-shaft height: strip i takes its own
+ * [overheadsPt] (everything it stacks around the cylinder) plus a common share of what is left of
+ * [availablePt] (the band less the gaps between strips). Null — keep the even split — when the
+ * even split already leaves every strip at least [cylFloorPt] of cylinder (each then draws at the
+ * capped size anyway, and an even page reads as the shop's ruled sheet), when there are fewer than
+ * two strips, or when the common share would not be positive.
+ *
+ * The common share is the MEAN of the even split's cylinder budgets, so it is never below the
+ * smallest of them: equalizing only ever raises the most-squeezed strip's shaft.
+ */
+fun undercutPortraitStripHeights(
+    availablePt: Float,
+    overheadsPt: List<Float>,
+    cylFloorPt: Float = UNDERCUT_CYL_MAX_FLOOR_PT,
+): List<Float>? {
+    val n = overheadsPt.size
+    if (n < 2 || availablePt <= 0f) return null
+    val even = availablePt / n
+    if (overheadsPt.all { even - it >= cylFloorPt }) return null
+    val common = (availablePt - overheadsPt.sum()) / n
+    if (common <= 0f) return null
+    return overheadsPt.map { it + common }
+}
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Horizontal + vertical strip banding
@@ -264,6 +441,42 @@ fun computeUndercutStripDrawRange(
     minPadPt: Float = UNDERCUT_STRIP_MIN_PAD_PT,
     minPtPerMm: Float = WEAR_STRIP_MIN_PT_PER_MM,
     maxPtPerMm: Float = WEAR_STRIP_MAX_PT_PER_MM,
+    /**
+     * The side a S.E.T. lead runs out of ([undercutStripSetSide]) and the drawn room it needs
+     * there ([undercutSetLeadRoomPt]); that side only is widened further
+     * ([undercutWidenForSetLead]) so the lead's value seats in its line. Null / 0 — no lead —
+     * leaves the range exactly as the pad rule alone decides it.
+     */
+    leadSide: UndercutAnchorSide? = null,
+    leadRoomPt: Float = 0f,
+): UndercutStripDrawRangeMm {
+    val base = computeUndercutStripPadRange(
+        drawStartMm, drawEndMm, chainStartMm, chainEndMm, stripLeftPt, stripRightPt, oalMm,
+        edgeInsetPt, minPadPt, minPtPerMm, maxPtPerMm,
+    )
+    if (leadSide == null || leadRoomPt <= 0f || drawEndMm - drawStartMm <= UNDERCUT_RAIL_SPAN_EPS_MM) return base
+    val availPt = (stripRightPt - stripLeftPt - 2f * edgeInsetPt).coerceAtLeast(1f)
+    return undercutWidenForSetLead(
+        base.startMm, base.endMm, chainStartMm, chainEndMm, leadSide, leadRoomPt,
+        otherMinPadPt = minPadPt.coerceIn(0f, availPt * UNDERCUT_STRIP_MAX_PAD_FRAC),
+        availPt = availPt, oalMm = oalMm.coerceAtLeast(0f),
+        minPtPerMm = minPtPerMm, maxPtPerMm = maxPtPerMm,
+    )
+}
+
+/** [computeUndercutStripDrawRange]'s per-side minimum-pad rule alone (no S.E.T. lead). */
+private fun computeUndercutStripPadRange(
+    drawStartMm: Float,
+    drawEndMm: Float,
+    chainStartMm: Float,
+    chainEndMm: Float,
+    stripLeftPt: Float,
+    stripRightPt: Float,
+    oalMm: Float,
+    edgeInsetPt: Float,
+    minPadPt: Float,
+    minPtPerMm: Float,
+    maxPtPerMm: Float,
 ): UndercutStripDrawRangeMm {
     val unchanged = UndercutStripDrawRangeMm(drawStartMm, drawEndMm)
     val drawLenMm = drawEndMm - drawStartMm
@@ -398,7 +611,22 @@ data class UndercutStripRails(
     /** The total's one-span layout; empty when [totalSpan] is null. */
     val total: List<WearRailSpanLayout>,
     val rows: UndercutRailRowPlan,
-)
+    /** The S.E.T. lead continuing the level-0 chain outward ([buildUndercutSetLeadSpan]); null when none. */
+    val leadSpan: UndercutSetLeadSpan? = null,
+    /** [leadSpan]'s layout, planned TOGETHER with [chain] (one row assignment); null when none. */
+    val lead: WearRailSpanLayout? = null,
+) {
+    /**
+     * The level-0 rail line as drawn: [chain] with the [lead] at its outboard end, AFT → FWD —
+     * the list the vertical plan reserved rows for and `drawUndercutStripRails` draws.
+     */
+    val chainWithLead: List<WearRailSpanLayout>
+        get() = when {
+            lead == null -> chain
+            leadSpan?.side == UndercutAnchorSide.AFT_SET -> listOf(lead) + chain
+            else -> chain + lead
+        }
+}
 
 /**
  * The ONE rail plan behind both undercut strip draw sites — the printed strip
@@ -437,6 +665,12 @@ fun planUndercutStripRails(
     labelWidth: (DualLabel) -> Float,
     scale: Float = 1f,
     arrowSizePt: Float = PDF_ARROW_SIZE_DEFAULT_PT,
+    /**
+     * The S.E.T. this strip's chain continues to ([undercutStripSetSide]) with the strip's DRAWN
+     * range — the lead span ([buildUndercutSetLeadSpan]) is laid out with the level-0 chain, so its
+     * value takes a row in the same assignment and the vertical plan reserves it. Null = no lead.
+     */
+    setLead: UndercutSetLead? = null,
 ): UndercutStripRails {
     val sorted = spans.sortedBy { it.startMm }
     val nestingById = undercutNestingForest(sorted).associateBy { it.id }
@@ -455,11 +689,196 @@ fun planUndercutStripRails(
         minLabelGapPt = UNDERCUT_RAIL_MIN_LABEL_GAP_PT * scale,
         arrowClearPt = DimensionRailLayout.ARROW_CLEAR * scale,
     )
-    val chain = layout(chainSpans)
+    // The lead rides the level-0 line, so it is laid out WITH the chain: one row assignment, one
+    // collision space for every value on that line.
+    val leadSpan = if (startedStrip || chainSpans.isEmpty()) null
+    else setLead?.let { buildUndercutSetLeadSpan(chainStartMm, chainEndMm, it, unit, dual) }
+    val leadFirst = leadSpan?.side == UndercutAnchorSide.AFT_SET
+    val line = when {
+        leadSpan == null -> chainSpans
+        leadFirst -> listOf(leadSpan.span) + chainSpans
+        else -> chainSpans + leadSpan.span
+    }
+    val lineLayout = layout(line)
+    val leadIndex = when {
+        leadSpan == null -> -1
+        leadFirst -> 0
+        else -> lineLayout.lastIndex
+    }
+    val chain = if (leadIndex < 0) lineLayout else lineLayout.filterIndexed { i, _ -> i != leadIndex }
+    val lead = if (leadSpan == null) null else lineLayout.getOrNull(leadIndex)?.let { l ->
+        if (!leadSpan.openOutboard) l
+        else {
+            // A half dimension has ONE head, at the datum: it points in from the open side unless
+            // the line is too short to hold even that one head.
+            val inward = (l.x1Pt - l.x0Pt) >= (arrowSizePt + DimensionRailLayout.ARROW_CLEAR) * scale
+            l.copy(arrowInward = inward, openStart = leadFirst, openEnd = !leadFirst)
+        }
+    }
     val nested = nestedSpans.map { layout(it) }
     val total = totalSpan?.let { layout(listOf(it)) } ?: emptyList()
-    val rows = planUndercutRailRows(chain, startedStrip, hasTotalRail = totalSpan != null, nestedLayouts = nested)
-    return UndercutStripRails(chainSpans, nestedSpans, totalSpan, chain, nested, total, rows)
+    val rows = planUndercutRailRows(lineLayout, startedStrip, hasTotalRail = totalSpan != null, nestedLayouts = nested)
+    return UndercutStripRails(chainSpans, nestedSpans, totalSpan, chain, nested, total, rows, leadSpan, lead)
+}
+
+/**
+ * What a strip's S.E.T. lead needs: the [side] it runs to ([undercutStripSetSide]), that S.E.T.'s
+ * shaft-space station [setMm], and the strip's DRAWN range `[drawStartMm, drawEndMm]` — the lead
+ * stops at the drawn edge when the S.E.T. is off the strip.
+ */
+data class UndercutSetLead(
+    val side: UndercutAnchorSide,
+    val setMm: Float,
+    val drawStartMm: Float,
+    val drawEndMm: Float,
+)
+
+/**
+ * A strip's S.E.T. lead, in strip mm: [span] runs from the chain's outer witness on [side] outward,
+ * labelled with the full datum → S.E.T. distance. [openOutboard] = the S.E.T. lies off the drawn
+ * strip, so [span] stops at the drawn edge and its outboard end is OPEN (no head, no witness) — a
+ * half dimension; false = the S.E.T. is on the strip and [span] is a normal two-headed dimension
+ * ending on a witness line at the S.E.T.
+ */
+data class UndercutSetLeadSpan(
+    val span: WearRailSpan,
+    val side: UndercutAnchorSide,
+    val openOutboard: Boolean,
+    /** The datum → S.E.T. distance the label states, mm. */
+    val valueMm: Float,
+)
+
+/**
+ * The lead that continues a strip's level-0 chain out to its S.E.T. (on-device request: the
+ * distance to the S.E.T. is in the title, but as the leading or ending dimension it reads on with
+ * the chain). The datum is the chain's outer witness on [lead]'s side — [chainEndMm] for the FWD
+ * S.E.T., [chainStartMm] for the AFT — and the value is datum → S.E.T., formatted like every other
+ * chain value.
+ *
+ * No lead when the chain already ends AT that S.E.T. ("Draw to the shaft end" reached it), when
+ * the S.E.T. lies on the wrong side of the datum (a cut outboard of its S.E.T.), or when the drawn
+ * strip leaves no room past the datum to draw one — each within [UNDERCUT_TOUCH_EPS_MM].
+ */
+fun buildUndercutSetLeadSpan(
+    chainStartMm: Float,
+    chainEndMm: Float,
+    lead: UndercutSetLead,
+    unit: UnitSystem,
+    dual: Boolean = false,
+): UndercutSetLeadSpan? {
+    val eps = UNDERCUT_TOUCH_EPS_MM
+    val value = undercutSetLeadValueMm(chainStartMm, chainEndMm, lead.side, lead.setMm) ?: return null
+    return if (lead.side == UndercutAnchorSide.FWD_SET) {
+        val onStrip = lead.setMm <= lead.drawEndMm + eps
+        val end = if (onStrip) lead.setMm else lead.drawEndMm
+        if (end - chainEndMm <= eps) return null
+        UndercutSetLeadSpan(
+            WearRailSpan(chainEndMm, end, formatLenDimDualLabel(value.toDouble(), unit, dual)),
+            lead.side, openOutboard = !onStrip, valueMm = value,
+        )
+    } else {
+        val onStrip = lead.setMm >= lead.drawStartMm - eps
+        val start = if (onStrip) lead.setMm else lead.drawStartMm
+        if (chainStartMm - start <= eps) return null
+        UndercutSetLeadSpan(
+            WearRailSpan(start, chainStartMm, formatLenDimDualLabel(value.toDouble(), unit, dual)),
+            lead.side, openOutboard = !onStrip, valueMm = value,
+        )
+    }
+}
+
+/**
+ * The value a strip's S.E.T. lead states — chain datum on [side] → that S.E.T. at [setMm], mm — or
+ * null when there is no lead to draw: the chain already reaches the S.E.T., or the S.E.T. lies on
+ * the wrong side of the datum (within [UNDERCUT_TOUCH_EPS_MM]). The ONE rule behind
+ * [buildUndercutSetLeadSpan] and the room the drawn range makes for it ([undercutSetLeadRoomPt]).
+ */
+fun undercutSetLeadValueMm(
+    chainStartMm: Float,
+    chainEndMm: Float,
+    side: UndercutAnchorSide,
+    setMm: Float,
+): Float? {
+    val value = if (side == UndercutAnchorSide.FWD_SET) setMm - chainEndMm else chainStartMm - setMm
+    return value.takeIf { it > UNDERCUT_TOUCH_EPS_MM }
+}
+
+/**
+ * The open tail a S.E.T. lead keeps past its value, points, before [scale] — and, the value being
+ * centred in its line, the same stub on the datum side that carries the head. Two default
+ * arrowheads: enough line beyond the value that the half dimension reads as the chain running on
+ * toward an S.E.T. off the strip, rather than a value parked in a corner.
+ */
+const val UNDERCUT_SET_LEAD_TAIL_PT = 8f
+
+/**
+ * The drawn width a strip's S.E.T. lead needs for its value to SEAT in a break in its own line
+ * (on-device report: a lead value that fell off onto a leader read as a stray label, not as the
+ * chain continuing to the S.E.T.): the value's measured width ([labelWidthPt], the very measure the
+ * rail planner uses), a [DIM_BREAK_TEXT_PAD_PT] each side of it, and a stub each side of at least
+ * [UNDERCUT_SET_LEAD_TAIL_PT] and never under two arrowheads — the datum stub carries the head, the
+ * other is the open tail. The planner's seat test (an arrowhead of line each side of the padded
+ * value) is then met with room to spare. [scale] converts the fixed point sizes for a caller in
+ * another unit (the detail canvas); [labelWidthPt] is already in that unit.
+ */
+fun undercutSetLeadRoomPt(
+    labelWidthPt: Float,
+    arrowSizePt: Float = PDF_ARROW_SIZE_DEFAULT_PT,
+    scale: Float = 1f,
+): Float = labelWidthPt + 2f * DIM_BREAK_TEXT_PAD_PT * scale +
+    2f * maxOf(UNDERCUT_SET_LEAD_TAIL_PT, 2f * arrowSizePt) * scale
+
+/**
+ * [drawStartMm, drawEndMm] widened OUTWARD on the lead's [side] only, so the S.E.T. lead gets
+ * [leadRoomPt] of drawn line past its chain datum at the strip's FINAL scale, while the other side
+ * keeps at least [otherMinPadPt] past its datum. The scale is `availPt / drawn length`, clamped to
+ * `[minPtPerMm, maxPtPerMm]` — the caller's own mapping — and widening lowers it, so the two pads
+ * are solved together by a short fixed-point walk (each step only widens, and it converges whenever
+ * the two requirements fit in [availPt]). Clamped to `[0, oalMm]`: a lead that would run past a
+ * shaft end stops there.
+ *
+ * Only draws more stock heading toward the S.E.T. — no datum moves, no dimension changes. A range
+ * that already gives both sides their room comes back as the very same values.
+ */
+fun undercutWidenForSetLead(
+    drawStartMm: Float,
+    drawEndMm: Float,
+    chainStartMm: Float,
+    chainEndMm: Float,
+    side: UndercutAnchorSide,
+    leadRoomPt: Float,
+    otherMinPadPt: Float,
+    availPt: Float,
+    oalMm: Float,
+    minPtPerMm: Float = 0f,
+    maxPtPerMm: Float = Float.MAX_VALUE,
+): UndercutStripDrawRangeMm {
+    val unchanged = UndercutStripDrawRangeMm(drawStartMm, drawEndMm)
+    if (leadRoomPt <= 0f || availPt <= 0f) return unchanged
+    val chainLen = (chainEndMm - chainStartMm).coerceAtLeast(0f)
+    val reqAft = if (side == UndercutAnchorSide.AFT_SET) leadRoomPt else otherMinPadPt
+    val reqFwd = if (side == UndercutAnchorSide.FWD_SET) leadRoomPt else otherMinPadPt
+    val maxAft = (chainStartMm - 0f).coerceAtLeast(0f)
+    val maxFwd = (oalMm - chainEndMm).coerceAtLeast(0f)
+    var aft = (chainStartMm - drawStartMm).coerceAtLeast(0f)
+    var fwd = (drawEndMm - chainEndMm).coerceAtLeast(0f)
+    var changed = false
+    repeat(64) {
+        val len = (chainLen + aft + fwd).coerceAtLeast(UNDERCUT_RAIL_SPAN_EPS_MM)
+        val ptPerMm = (availPt / len).coerceIn(minPtPerMm, maxPtPerMm).coerceAtLeast(1e-6f)
+        val nextAft = maxOf(aft, reqAft / ptPerMm).coerceAtMost(maxOf(aft, maxAft))
+        val nextFwd = maxOf(fwd, reqFwd / ptPerMm).coerceAtMost(maxOf(fwd, maxFwd))
+        if (nextAft - aft <= 1e-4f && nextFwd - fwd <= 1e-4f) {
+            return if (!changed) unchanged
+            else UndercutStripDrawRangeMm(
+                minOf(drawStartMm, chainStartMm - aft), maxOf(drawEndMm, chainEndMm + fwd),
+            )
+        }
+        aft = nextAft
+        fwd = nextFwd
+        changed = true
+    }
+    return UndercutStripDrawRangeMm(minOf(drawStartMm, chainStartMm - aft), maxOf(drawEndMm, chainEndMm + fwd))
 }
 
 /**
@@ -834,11 +1253,21 @@ fun undercutAnchorFor(
     lastShoulderMm: Float,
     aftSetXMm: Float,
     fwdSetXMm: Float,
+    /**
+     * The side already chosen ([undercutStripSetSide] — the job's "Distance to S.E.T." choice):
+     * AFT measures the first shoulder from the AFT S.E.T., FWD the last shoulder from the FWD.
+     * Null keeps the proximity rule.
+     */
+    forcedSide: UndercutAnchorSide? = null,
 ): UndercutAnchor {
     // Side choice delegates to the shared proximity rule (`geom/UndercutMath.kt`), the same
     // one that seeds a bare-shaft cut's default Distance reference in the editor — so the
     // printed anchor and the card's default always read from the same SET.
-    val side = nearestSetReference(firstShoulderMm, lastShoulderMm, aftSetXMm, fwdSetXMm)
+    val side = when (forcedSide) {
+        UndercutAnchorSide.AFT_SET -> UndercutReference.AFT_SET
+        UndercutAnchorSide.FWD_SET -> UndercutReference.FWD_SET
+        null -> nearestSetReference(firstShoulderMm, lastShoulderMm, aftSetXMm, fwdSetXMm)
+    }
     return if (side == UndercutReference.AFT_SET) {
         UndercutAnchor(UndercutAnchorSide.AFT_SET, abs(firstShoulderMm - aftSetXMm))
     } else {
@@ -885,4 +1314,67 @@ fun buildUndercutStripTitle(linerTitle: String?, anchorLabel: String, linerOdLab
         anchor.isEmpty() -> name
         else -> "$name — $anchor"
     }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// The S.E.T. a strip measures to, and which strips print
+// ──────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The S.E.T. [strip] measures to — the ONE side every consumer reads: the printed strip title's
+ * anchor, the printed S.E.T. lead, and the detail canvas's lead. The job's [datum] AFT / FWD wins;
+ * NEAREST is the title rule every strip printed before the choice existed:
+ * - a liner strip: the liner's nearer edge-to-S.E.T. ([wearStripAnchorForSpan] over the liner span,
+ *   ties AFT — `linerAnchorForPdf`'s rule);
+ * - a bare-shaft strip: the cut run's proximity rule ([nearestSetReference] over [stripSpans]' first
+ *   start and last end — `undercutAnchorFor`'s). [stripSpans] are the strip's own render-clamped
+ *   spans, sorted AFT → FWD; empty falls back to the chain bounds.
+ *
+ * [sets] are the sheet's own S.E.T.s (`computeSetPositionsInMeasureSpace`).
+ */
+fun undercutStripSetSide(
+    strip: UndercutStrip,
+    spec: ShaftSpec,
+    sets: SetPositions,
+    datum: UndercutSetDatum,
+    stripSpans: List<UndercutSpanMm> = emptyList(),
+): UndercutAnchorSide = when (datum) {
+    UndercutSetDatum.AFT -> UndercutAnchorSide.AFT_SET
+    UndercutSetDatum.FWD -> UndercutAnchorSide.FWD_SET
+    UndercutSetDatum.NEAREST -> when (strip) {
+        is UndercutStrip.LinerStrip ->
+            if (wearStripAnchorForSpan(spec, strip.linerStartMm, strip.linerEndMm, sets).anchor == LinerAnchor.FWD_SET) {
+                UndercutAnchorSide.FWD_SET
+            } else {
+                UndercutAnchorSide.AFT_SET
+            }
+        is UndercutStrip.FreeStrip -> {
+            val first = stripSpans.firstOrNull()?.startMm ?: strip.chainStartMm
+            val last = stripSpans.lastOrNull()?.endMm ?: strip.chainEndMm
+            if (nearestSetReference(first, last, sets.aftSETxMm.toFloat(), sets.fwdSETxMm.toFloat()) ==
+                UndercutReference.AFT_SET
+            ) {
+                UndercutAnchorSide.AFT_SET
+            } else {
+                UndercutAnchorSide.FWD_SET
+            }
+        }
+    }
+}
+
+/** This side as the shared liner-anchor wording's enum. */
+fun UndercutAnchorSide.toLinerAnchor(): LinerAnchor =
+    if (this == UndercutAnchorSide.AFT_SET) LinerAnchor.AFT_SET else LinerAnchor.FWD_SET
+
+/**
+ * Whether [strip] prints on this job's sheet ("Sections to print"): a liner strip unless its liner
+ * id is in [UndercutRecord.excludedLinerIds] (its started strip on a blank draft included); a
+ * bare-shaft strip unless EVERY one of its member cuts is in [UndercutRecord.excludedFreeCutIds] —
+ * so a cut added to an excluded window brings the whole window back, never a partial chain. A strip
+ * with no member cuts always prints.
+ */
+fun isUndercutStripPrinted(strip: UndercutStrip, record: UndercutRecord): Boolean = when (strip) {
+    is UndercutStrip.LinerStrip -> strip.linerId !in record.excludedLinerIds
+    is UndercutStrip.FreeStrip ->
+        strip.undercutIds.isEmpty() || !strip.undercutIds.all { it in record.excludedFreeCutIds }
 }

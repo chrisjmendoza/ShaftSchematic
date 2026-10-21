@@ -35,6 +35,7 @@ import com.android.shaftschematic.pdf.composeRunoutPdfOnCanvas
 import com.android.shaftschematic.pdf.composeShaftPdfOnCanvas
 import com.android.shaftschematic.pdf.composeUndercutPdf
 import com.android.shaftschematic.pdf.composeWearPdf
+import com.android.shaftschematic.pdf.undercutSheetOrientation
 import com.android.shaftschematic.settings.RunoutConfig
 import com.android.shaftschematic.settings.TirDirection
 import com.android.shaftschematic.ui.resolved.resolveComponents
@@ -251,8 +252,13 @@ class ManualFiguresTest {
 
     // ── Rendering helpers ────────────────────────────────────────────────────────────────
 
-    private fun sheet(scale: Float = SCALE, draw: (Canvas) -> Unit): Bitmap {
-        val bmp = Bitmap.createBitmap((pageW * scale).toInt(), (pageH * scale).toInt(), Bitmap.Config.ARGB_8888)
+    private fun sheet(
+        scale: Float = SCALE,
+        w: Float = pageW,
+        h: Float = pageH,
+        draw: (Canvas) -> Unit,
+    ): Bitmap {
+        val bmp = Bitmap.createBitmap((w * scale).toInt(), (h * scale).toInt(), Bitmap.Config.ARGB_8888)
         bmp.eraseColor(Color.WHITE)
         val c = Canvas(bmp)
         c.scale(scale, scale)
@@ -264,8 +270,8 @@ class ManualFiguresTest {
      * A `PdfDocument.Page` wrapping a bitmap canvas, for the composers that only take a page
      * (wear, undercut). The page constructor is private; `PageInfo.Builder` is public.
      */
-    private fun pageOn(c: Canvas): PdfDocument.Page {
-        val info = PdfDocument.PageInfo.Builder(pageW.toInt(), pageH.toInt(), 1).create()
+    private fun pageOn(c: Canvas, w: Float = pageW, h: Float = pageH): PdfDocument.Page {
+        val info = PdfDocument.PageInfo.Builder(w.toInt(), h.toInt(), 1).create()
         val ctor = PdfDocument.Page::class.java.getDeclaredConstructor(Canvas::class.java, PdfDocument.PageInfo::class.java)
         ctor.isAccessible = true
         return ctor.newInstance(c, info)
@@ -369,27 +375,32 @@ class ManualFiguresTest {
             "wear.png",
         )
 
+        // The undercut sheet resolves its own page: this two-liner fixture is the portrait sheet.
+        val undercutRecord = UndercutRecord(
+            undercuts = listOf(
+                Undercut(
+                    id = "U1", startFromAftMm = inch(39f), lengthMm = inch(6f), diaMm = inch(5.625f),
+                    authoredReference = UndercutReference.LINER_AFT, referenceLinerId = "L1",
+                ),
+                Undercut(
+                    id = "U2", startFromAftMm = inch(131f), lengthMm = inch(8f), diaMm = inch(5.44f),
+                    authoredReference = UndercutReference.LINER_AFT, referenceLinerId = "L2",
+                ),
+                Undercut(
+                    id = "U3", startFromAftMm = inch(133.5f), lengthMm = inch(3f), diaMm = inch(5.375f),
+                    authoredReference = UndercutReference.LINER_AFT, referenceLinerId = "L2",
+                ),
+            ),
+        )
+        val undercutPage = undercutSheetOrientation(mainSpec, mainResolved, undercutRecord, blankValues = false)
+        val undercutW = undercutPage.widthPt.toFloat()
+        val undercutH = undercutPage.heightPt.toFloat()
         save(
-            sheet { c ->
+            sheet(w = undercutW, h = undercutH) { c ->
                 composeUndercutPdf(
-                    pageOn(c), mainSpec, mainProject, UnitSystem.INCHES,
+                    pageOn(c, undercutW, undercutH), mainSpec, mainProject, UnitSystem.INCHES,
                     resolvedComponents = mainResolved,
-                    undercutRecord = UndercutRecord(
-                        undercuts = listOf(
-                            Undercut(
-                                id = "U1", startFromAftMm = inch(39f), lengthMm = inch(6f), diaMm = inch(5.625f),
-                                authoredReference = UndercutReference.LINER_AFT, referenceLinerId = "L1",
-                            ),
-                            Undercut(
-                                id = "U2", startFromAftMm = inch(131f), lengthMm = inch(8f), diaMm = inch(5.44f),
-                                authoredReference = UndercutReference.LINER_AFT, referenceLinerId = "L2",
-                            ),
-                            Undercut(
-                                id = "U3", startFromAftMm = inch(133.5f), lengthMm = inch(3f), diaMm = inch(5.375f),
-                                authoredReference = UndercutReference.LINER_AFT, referenceLinerId = "L2",
-                            ),
-                        ),
-                    ),
+                    undercutRecord = undercutRecord,
                 )
             },
             "undercut.png",

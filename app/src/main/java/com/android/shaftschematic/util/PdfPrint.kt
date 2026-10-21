@@ -17,12 +17,14 @@ import java.io.FileOutputStream
  * wear record) via the Android print framework — no export-to-file step needed.
  *
  * The page is composed with the exact same composer call the PDF export path uses, at the
- * same fixed US Letter landscape size (792 × 612 pt), so a print and an export are always
- * pixel-identical. The print framework handles printer selection, scaling, and save-to-PDF.
+ * same US Letter size — [orientation]'s, landscape (792 × 612 pt) by default — so a print and an
+ * export are always pixel-identical. The print framework handles printer selection, scaling, and
+ * save-to-PDF; the requested media follows the page's orientation.
  */
 fun printShaftPdfPage(
     context: Context,
     jobName: String,
+    orientation: PdfPageOrientation = PdfPageOrientation.LANDSCAPE,
     composePage: (PdfDocument.Page) -> Unit,
 ) {
     val printManager = context.getSystemService(Context.PRINT_SERVICE) as PrintManager
@@ -54,8 +56,8 @@ fun printShaftPdfPage(
         ) {
             val doc = PdfDocument()
             try {
-                // US Letter landscape (pt) — same page box as every export path.
-                val pageInfo = PdfDocument.PageInfo.Builder(792, 612, 1).create()
+                // US Letter in the requested orientation (pt) — same page box as the export path.
+                val pageInfo = PdfDocument.PageInfo.Builder(orientation.widthPt, orientation.heightPt, 1).create()
                 val page = doc.startPage(pageInfo)
                 try {
                     composePage(page)
@@ -80,7 +82,12 @@ fun printShaftPdfPage(
     }
 
     val attributes = PrintAttributes.Builder()
-        .setMediaSize(PrintAttributes.MediaSize.NA_LETTER.asLandscape())
+        .setMediaSize(
+            when (orientation) {
+                PdfPageOrientation.LANDSCAPE -> PrintAttributes.MediaSize.NA_LETTER.asLandscape()
+                PdfPageOrientation.PORTRAIT -> PrintAttributes.MediaSize.NA_LETTER.asPortrait()
+            },
+        )
         .build()
 
     printManager.print(jobName, adapter, attributes)

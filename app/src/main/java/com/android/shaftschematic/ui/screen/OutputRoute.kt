@@ -68,6 +68,8 @@ import com.android.shaftschematic.pdf.PdfExportOptions
 import com.android.shaftschematic.pdf.composeRunoutPdf
 import com.android.shaftschematic.pdf.composeShaftPdf
 import com.android.shaftschematic.pdf.composeUndercutPdf
+import com.android.shaftschematic.pdf.undercutSheetNoneSelected
+import com.android.shaftschematic.pdf.undercutSheetOrientation
 import com.android.shaftschematic.pdf.composeWearPdf
 import com.android.shaftschematic.pdf.consolidatedSheetHasInProfileValues
 import com.android.shaftschematic.settings.PdfPrefs
@@ -96,6 +98,7 @@ import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.FractionStyle
 import com.android.shaftschematic.util.OutputFont
 import com.android.shaftschematic.util.InkBand
+import com.android.shaftschematic.util.PdfPageOrientation
 import com.android.shaftschematic.util.launchPicker
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.createPdfInTree
@@ -420,14 +423,27 @@ fun OutputRoute(
             val displayUnits = vm.currentDisplayUnits()
             var attempted = 0
             var wroteCount = 0
+            // An undercut drawing with every section left off ("Sections to print") has nothing to
+            // print: it is skipped, never written as its "no sections selected" page, and the result
+            // line says so.
+            val undercutSkipped =
+                undercutSheetNoneSelected(spec, resolvedComponents, undercutRecord, blankDraft)
             OutputDoc.entries.forEachIndexed { i, doc ->
                 if (!batchChecked.getOrElse(i) { true }) return@forEachIndexed
+                if (doc == OutputDoc.UNDERCUT && undercutSkipped) return@forEachIndexed
                 attempted++
                 val name = buildOutputFilename(customer, vessel, jobNumber, shaftPosition, doc, blankDraft)
                 // A null uri means the provider refused to create the file — counted as a
                 // failure, but there is no document to carry an error page.
                 val docUri = createPdfInTree(ctx, treeUri, name) ?: return@forEachIndexed
-                val ok = writeShaftPdfToUri(ctx, docUri) { page ->
+                // Every document prints landscape except the undercut drawing, whose page follows
+                // its section count and the job's choice — the tab's own resolution.
+                val orientation = if (doc == OutputDoc.UNDERCUT) {
+                    undercutSheetOrientation(spec, resolvedComponents, undercutRecord, blankDraft)
+                } else {
+                    PdfPageOrientation.LANDSCAPE
+                }
+                val ok = writeShaftPdfToUri(ctx, docUri, orientation) { page ->
                     when (doc) {
                         OutputDoc.CONSOLIDATED -> composeConsolidated(
                             page, variant, spec, runoutConfig, project, unit, prefs,
@@ -483,13 +499,8 @@ fun OutputRoute(
                 }
                 if (ok) wroteCount++
             }
-            val failed = attempted - wroteCount
-            batchResult = if (failed == 0) {
-                "$wroteCount of $attempted PDFs written."
-            } else {
-                "$wroteCount of $attempted written — $failed failed " +
-                    "(see the error page inside each failed file)."
-            }
+            val undercutChecked = batchChecked.getOrElse(OutputDoc.UNDERCUT.ordinal) { true }
+            batchResult = exportAllResultMessage(wroteCount, attempted, undercutSkipped && undercutChecked)
         }
     }
 
@@ -944,3 +955,22 @@ fun OutputRoute(
         )
     }
 }
+
+/**
+ * The "Export all" result line: how many of the attempted PDFs were written, how many failed, and —
+ * when the undercut drawing was checked but every one of its sections is left off — that it was
+ * skipped rather than written.
+ */
+internal fun exportAllResultMessage(wroteCount: Int, attempted: Int, undercutSkipped: Boolean): String {
+    val failed = attempted - wroteCount
+    val base = if (failed == 0) {
+        "$wroteCount of $attempted PDFs written."
+    } else {
+        "$wroteCount of $attempted written — $failed failed " +
+            "(see the error page inside each failed file)."
+    }
+    return if (undercutSkipped) "$base $EXPORT_ALL_UNDERCUT_SKIPPED" else base
+}
+
+/** Appended to the "Export all" result when the undercut drawing has no section selected. */
+internal const val EXPORT_ALL_UNDERCUT_SKIPPED = "Undercut drawing skipped: no sections selected."

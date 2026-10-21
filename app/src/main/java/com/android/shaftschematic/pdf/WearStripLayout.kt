@@ -1615,6 +1615,13 @@ data class WearRailSpanLayout(
     val labelRow: Int,
     val seatsInBreak: Boolean,
     val arrowInward: Boolean,
+    /**
+     * An OPEN end: no arrowhead and no witness line there — the half dimension that continues an
+     * undercut strip's chain out toward an S.E.T. drawn off the strip
+     * (`pdf/UndercutStripLayout.kt`'s `buildUndercutSetLeadSpan`). The wear rails never set either.
+     */
+    val openStart: Boolean = false,
+    val openEnd: Boolean = false,
 )
 
 /**
@@ -1866,14 +1873,25 @@ fun wearStripAnchorForSpan(
     startMm: Float,
     endMm: Float,
     sets: SetPositions,
+    /**
+     * The S.E.T. to measure from, when the caller has already chosen it (the undercut sheet's
+     * per-job `UndercutRecord.setDatum`): that side's edge is measured whichever is nearer, with
+     * the same magnitude convention. Null keeps the nearer-edge rule.
+     */
+    forced: LinerAnchor? = null,
 ): WearStripAnchorDim {
     val win = computeOalWindow(spec)
     val aftEdge = win.toMeasureX(startMm.toDouble())
     val fwdEdge = aftEdge + (endMm - startMm).toDouble().coerceAtLeast(0.0)
     val distAft = (aftEdge - sets.aftSETxMm).coerceAtLeast(0.0)      // AFT SET → AFT edge
     val distFwd = (sets.fwdSETxMm - fwdEdge).coerceAtLeast(0.0)      // FWD SET → FWD edge
-    return if (distFwd < distAft) WearStripAnchorDim(LinerAnchor.FWD_SET, distFwd)
-    else WearStripAnchorDim(LinerAnchor.AFT_SET, distAft)
+    return when (forced) {
+        LinerAnchor.AFT_SET -> WearStripAnchorDim(LinerAnchor.AFT_SET, distAft)
+        LinerAnchor.FWD_SET -> WearStripAnchorDim(LinerAnchor.FWD_SET, distFwd)
+        else ->
+            if (distFwd < distAft) WearStripAnchorDim(LinerAnchor.FWD_SET, distFwd)
+            else WearStripAnchorDim(LinerAnchor.AFT_SET, distAft)
+    }
 }
 
 /**
@@ -1891,8 +1909,10 @@ fun buildSpanAnchorLabel(
     sets: SetPositions,
     unit: UnitSystem,
     dual: Boolean = false,
+    /** A side already chosen by the caller ([wearStripAnchorForSpan]'s `forced`); null = nearer. */
+    forced: LinerAnchor? = null,
 ): String {
-    val dim = wearStripAnchorForSpan(spec, startMm, endMm, sets)
+    val dim = wearStripAnchorForSpan(spec, startMm, endMm, sets, forced)
     return "${formatLenDimDual(dim.distanceMm, unit, dual)} ${linerAnchorSuffix(dim.anchor)}"
 }
 
@@ -1908,9 +1928,14 @@ fun buildLinerAnchorLabel(
     sets: SetPositions,
     unit: UnitSystem,
     dual: Boolean = false,
+    /**
+     * The S.E.T. the title measures to when the caller has chosen one (the undercut sheet's
+     * per-job choice): the liner's EDGE on that side to that S.E.T. Null = the nearer one.
+     */
+    forced: LinerAnchor? = null,
 ): String {
     val ln = spec.liners.firstOrNull { it.id == liner.id } ?: return ""
-    return buildSpanAnchorLabel(spec, ln.startFromAftMm, ln.startFromAftMm + ln.lengthMm, sets, unit, dual)
+    return buildSpanAnchorLabel(spec, ln.startFromAftMm, ln.startFromAftMm + ln.lengthMm, sets, unit, dual, forced)
 }
 
 /**

@@ -112,6 +112,8 @@ import com.android.shaftschematic.geom.buildUndercutNotches
 import com.android.shaftschematic.geom.buriedUndercutLinerEdgesMm
 import com.android.shaftschematic.geom.canonicalToUndercutStartMm
 import com.android.shaftschematic.geom.clampUndercutSpan
+import com.android.shaftschematic.geom.computeOalWindow
+import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
 import com.android.shaftschematic.geom.effectiveUndercutReference
 import com.android.shaftschematic.geom.isUndercutStaleOverrun
 import com.android.shaftschematic.geom.maxOuterDiaOver
@@ -169,6 +171,15 @@ import com.android.shaftschematic.pdf.UNDERCUT_TOTAL_RAIL_BAND_PT
 import com.android.shaftschematic.pdf.UndercutStripRails
 import com.android.shaftschematic.pdf.drawUndercutStripRails
 import com.android.shaftschematic.pdf.planUndercutStripRails
+import com.android.shaftschematic.pdf.UndercutAnchorSide
+import com.android.shaftschematic.pdf.UndercutSetLead
+import com.android.shaftschematic.pdf.formatLenDimDualLabel
+import com.android.shaftschematic.pdf.undercutWidenForSetLead
+import com.android.shaftschematic.pdf.undercutSetLeadRoomPt
+import com.android.shaftschematic.pdf.undercutSetLeadValueMm
+import com.android.shaftschematic.pdf.UndercutStripDrawRangeMm
+import com.android.shaftschematic.model.UndercutSetDatum
+import com.android.shaftschematic.pdf.undercutStripSetSide
 import com.android.shaftschematic.pdf.undercutRailRowHeightPt
 import com.android.shaftschematic.util.OutputTypography
 import com.android.shaftschematic.util.measureDualLabel
@@ -519,8 +530,9 @@ fun UndercutWindowDetailOverlay(
     // The window follows what is PREVIEWED, not just what is stored: a draft edited past the
     // strip's stored range (a cut overhanging the liner edge mid-edit — on-device report)
     // widens the drawing live, with the standard pad of neighbour stock beyond it — the same
-    // range a confirmed overhang gets when the strip rebuilds. Never narrows while editing.
-    val (drawStartMm, drawEndMm) = remember(strip, spans, oalMm, segs) {
+    // range a confirmed overhang gets when the strip rebuilds. Never narrows while editing. The
+    // canvas widens it once more on the S.E.T. lead's side, where its width is known.
+    val (previewDrawStartMm, previewDrawEndMm) = remember(strip, spans, oalMm, segs) {
         undercutPreviewDrawRange(strip, spans, oalMm, segs = segs, cutSpans = spans)
     }
     // Confirm-blocking status of the previewed draft: its notch draws dashed in the selection
@@ -1225,12 +1237,6 @@ fun UndercutWindowDetailOverlay(
                     // canvas height doesn't jump between one and two rows.
                     val diaBandDp = if (drawUndercuts.isEmpty()) 0.dp else 44.dp
 
-                    val winLenMm = (drawEndMm - drawStartMm).coerceAtLeast(0.001f)
-                    val maxOdMm = remember(segs, drawStartMm, drawEndMm) {
-                        val env = maxOuterDiaOver(segs, drawStartMm, drawEndMm)
-                        if (env > 0f) env else 1f
-                    }
-
                     // The rail band runs the printed strip's ONE planner (`planUndercutStripRails`)
                     // and ONE draw routine (`drawUndercutStripRails`) at canvas scale: the level-0 chain
                     // over the top-level cuts, each nesting level on its own row against its
@@ -1256,6 +1262,38 @@ fun UndercutWindowDetailOverlay(
                             strokeWidth = with(density) { UNDERCUT_DETAIL_RAIL_STROKE_DP.dp.toPx() }
                         }
                     }
+                    // The printed strip's lead room, at canvas scale: on the S.E.T. lead's side the
+                    // canvas draws enough stock past the chain datum for the lead's value to seat in
+                    // its own line with an open tail, exactly as the printed strip does.
+                    val profileRowPx = with(density) { profileRowDp.toPx() }
+                    val edgePadPx = with(density) { UNDERCUT_EDGE_PAD_DP.dp.toPx() }
+                    val (drawStartMm, drawEndMm) = remember(
+                        strip, spec, undercutRecord.setDatum, spans, previewDrawStartMm, previewDrawEndMm,
+                        oalMm, segs, canvasWidthPx, profileRowPx, edgePadPx, railTextPaint, railScale,
+                        arrowSizePt, unit,
+                    ) {
+                        undercutDetailLeadDrawRange(
+                            strip, spec, undercutRecord.setDatum, spans,
+                            previewDrawStartMm, previewDrawEndMm, oalMm,
+                            widthPx = canvasWidthPx.toFloat(),
+                            edgePadPx = edgePadPx,
+                            profileRowHeightPx = profileRowPx,
+                            maxOdMm = maxOuterDiaOver(segs, previewDrawStartMm, previewDrawEndMm).takeIf { it > 0f } ?: 1f,
+                            scale = railScale,
+                            arrowSizePt = arrowSizePt,
+                            unit = unit,
+                        ) { railTextPaint.measureDualLabel(it, false) }
+                    }
+                    val winLenMm = (drawEndMm - drawStartMm).coerceAtLeast(0.001f)
+                    val maxOdMm = remember(segs, drawStartMm, drawEndMm) {
+                        val env = maxOuterDiaOver(segs, drawStartMm, drawEndMm)
+                        if (env > 0f) env else 1f
+                    }
+                    // The S.E.T. the strip measures to — the printed strip's ONE resolver, over the
+                    // previewed spans — so the lead the canvas draws is the lead the sheet prints.
+                    val setLead = remember(strip, spec, undercutRecord.setDatum, spans, drawStartMm, drawEndMm) {
+                        undercutDetailSetLead(strip, spec, undercutRecord.setDatum, spans, drawStartMm, drawEndMm)
+                    }
                     // Every input of the plan is one record, and the record is the remember key, so
                     // no input can be left out of the key.
                     val railInputs = with(density) {
@@ -1277,6 +1315,7 @@ fun UndercutWindowDetailOverlay(
                             typeface = railTypeface,
                             fractionStyle = FractionTypography.active,
                             arrowSizePt = arrowSizePt,
+                            setLead = setLead,
                         )
                     }
                     val rails = remember(railInputs) {
@@ -3589,7 +3628,79 @@ internal data class UndercutDetailRailInputs(
     val fractionStyle: Any?,
     /** The "Dimension arrows" head, printed points — the seat-in-break decisions depend on it. */
     val arrowSizePt: Float = PDF_ARROW_SIZE_DEFAULT_PT,
+    /**
+     * The S.E.T. the strip measures to ([undercutStripSetSide]) with the canvas's drawn range —
+     * the printed strip's lead, through the same planner. Null draws none.
+     */
+    val setLead: UndercutSetLead? = null,
 )
+
+/**
+ * The detail canvas's S.E.T. lead input: the side from the printed strip's ONE resolver
+ * ([undercutStripSetSide], over the canvas's previewed [spans]), that S.E.T.'s station, and the
+ * canvas's drawn range — so the canvas draws the lead the sheet prints, through the same planner.
+ */
+internal fun undercutDetailSetLead(
+    strip: UndercutStrip,
+    spec: ShaftSpec,
+    datum: UndercutSetDatum,
+    spans: List<UndercutSpanMm>,
+    drawStartMm: Float,
+    drawEndMm: Float,
+): UndercutSetLead {
+    val sets = computeSetPositionsInMeasureSpace(computeOalWindow(spec), spec)
+    val side = undercutStripSetSide(strip, spec, sets, datum, spans.sortedBy { it.startMm })
+    return UndercutSetLead(
+        side = side,
+        setMm = (if (side == UndercutAnchorSide.AFT_SET) sets.aftSETxMm else sets.fwdSETxMm).toFloat(),
+        drawStartMm = drawStartMm,
+        drawEndMm = drawEndMm,
+    )
+}
+
+/**
+ * The detail canvas's drawn range: the previewed range ([previewStartMm], [previewEndMm]) widened
+ * on the S.E.T. lead's side only ([undercutWidenForSetLead]) so the lead's value seats in its line
+ * at the canvas scale — the printed strip's rule ([undercutSetLeadRoomPt] × [scale], measured by
+ * [labelWidthPx] as the canvas draws it), so the canvas lead reads like the sheet's. The canvas maps
+ * `(widthPx − 2·edgePadPx) / length`, capped by its height fit
+ * (`0.72 × profileRowHeightPx / maxOdMm`, [computeUndercutWindowLayout]'s rule). Returned
+ * unchanged with no width yet, no cuts, or no lead.
+ */
+internal fun undercutDetailLeadDrawRange(
+    strip: UndercutStrip,
+    spec: ShaftSpec,
+    datum: UndercutSetDatum,
+    spans: List<UndercutSpanMm>,
+    previewStartMm: Float,
+    previewEndMm: Float,
+    oalMm: Float,
+    widthPx: Float,
+    edgePadPx: Float,
+    profileRowHeightPx: Float,
+    maxOdMm: Float,
+    scale: Float,
+    arrowSizePt: Float,
+    unit: UnitSystem,
+    labelWidthPx: (DualLabel) -> Float,
+): UndercutStripDrawRangeMm {
+    val unchanged = UndercutStripDrawRangeMm(previewStartMm, previewEndMm)
+    val availPx = widthPx - 2f * edgePadPx
+    if (widthPx <= 0f || availPx <= 0f || spans.isEmpty()) return unchanged
+    val lead = undercutDetailSetLead(strip, spec, datum, spans, previewStartMm, previewEndMm)
+    val value = undercutSetLeadValueMm(strip.chainStartMm, strip.chainEndMm, lead.side, lead.setMm)
+        ?: return unchanged
+    val room = undercutSetLeadRoomPt(
+        labelWidthPx(formatLenDimDualLabel(value.toDouble(), unit, false)), arrowSizePt, scale,
+    )
+    return undercutWidenForSetLead(
+        previewStartMm, previewEndMm, strip.chainStartMm, strip.chainEndMm, lead.side, room,
+        otherMinPadPt = 0f,
+        availPt = availPx,
+        oalMm = oalMm,
+        maxPtPerMm = if (maxOdMm > 0f) profileRowHeightPx * 0.72f / maxOdMm else Float.MAX_VALUE,
+    )
+}
 
 /**
  * The detail canvas's rails: the printed strip's ONE planner ([planUndercutStripRails]) over the
@@ -3619,6 +3730,7 @@ internal fun planUndercutDetailRails(
         labelWidth = labelWidthPx,
         scale = inputs.scale,
         arrowSizePt = inputs.arrowSizePt,
+        setLead = inputs.setLead,
     )
 }
 

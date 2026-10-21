@@ -64,8 +64,8 @@ itself, printing repeatedly and reading the PDF back until nothing changes:
   PDF outline is rewritten to chapters and sections only, and the document metadata is set.
 
 `MANUAL_LAYOUT_DEBUG=1` prints each pass's decisions. Figure classes in the chapters:
-`figure.wide` (full sheet), `figure.strip` (full-width crop), `figure.detail` (close-up),
-`figure.detail.half` (two side by side).
+`figure.wide` (full sheet), `figure.wide.portrait` (a full sheet on a portrait page, height-capped),
+`figure.strip` (full-width crop), `figure.detail` (close-up), `figure.detail.half` (two side by side).
 
 ## Regenerate the figures
 

@@ -59,6 +59,10 @@ internal fun jobInfoHeaderLine(project: ProjectInfo, date: String): String {
  * @param headerHeightBlankPt Block height for the taller blank write-in header.
  * @param blankLineGapPt      Baseline gap between the blank header's two lines; the
  *                            printed header keeps the proportional `textSize × 1.4`.
+ * @param minFitTextSizePt    When positive, a printed job-info line too wide for the content
+ *                            width is first set smaller — down to this size — and only then
+ *                            ellipsized, so a narrow page keeps the date and side instead of
+ *                            cutting them off. `0` (the default) ellipsizes at the base size.
  */
 internal fun drawSheetHeader(
     c: Canvas,
@@ -72,11 +76,12 @@ internal fun drawSheetHeader(
     headerHeightBlankPt: Float,
     blankLineGapPt: Float,
     blankValues: Boolean,
+    minFitTextSizePt: Float = 0f,
 ) {
     val ts = text.textSize
 
-    fun centeredX(str: String): Float =
-        ((left + right - text.measureText(str)) * 0.5f).coerceAtLeast(left)
+    fun centeredX(str: String, paint: Paint = text): Float =
+        ((left + right - paint.measureText(str)) * 0.5f).coerceAtLeast(left)
 
     if (blankValues) {
         val line1Y = top + ts + 4f
@@ -94,9 +99,16 @@ internal fun drawSheetHeader(
         val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
         val line1 = jobInfoHeaderLine(project, date)
 
-        val line1Fit = ellipsizeToWidth(line1, text, right - left)
-        val line2Fit = ellipsizeToWidth(title, text, right - left)
-        c.drawText(line1Fit, centeredX(line1Fit), top + ts, text)
+        val width = right - left
+        val line1W = text.measureText(line1)
+        val line1Paint = if (minFitTextSizePt > 0f && line1W > width) {
+            Paint(text).apply { textSize = (ts * width / line1W).coerceIn(minFitTextSizePt, ts) }
+        } else {
+            text
+        }
+        val line1Fit = ellipsizeToWidth(line1, line1Paint, width)
+        val line2Fit = ellipsizeToWidth(title, text, width)
+        c.drawText(line1Fit, centeredX(line1Fit, line1Paint), top + ts, line1Paint)
         c.drawText(line2Fit, centeredX(line2Fit), top + ts + ts * 1.4f, text)
     }
 
