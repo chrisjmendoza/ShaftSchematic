@@ -54,7 +54,7 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
   undercuts" list, collapsed by default behind a header row with a chevron, `testTag
   "undercut_drawing_settings_toggle"` — usability review: nothing between Add and the list may
   read as a required step). It holds the rows below, in this order: Page, Distance to S.E.T.,
-  Drawn depth, Draw to the shaft end, Split cuts at liner edges. Tab block order
+  Split cuts at liner edges, Drawn depth, Draw to the shaft end. Tab block order
   (COMPACT/MEDIUM): intro, overview canvas, Preview | Options, Add undercut, Recorded undercuts,
   Drawing settings, then the print group — "Sections to print" (two or more sections; never
   collapsed), the blank-draft switch and Print / Preview / Export.
@@ -69,6 +69,16 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
   edge measure to this S.E.T. Saved with this job."): drives `UndercutRecord.setDatum` through
   `ShaftViewModel.setUndercutSetDatum` (undoable, marks dirty, no-op when unchanged). See "S.E.T.
   lead" under PDF layout.
+- **"Split cuts at liner edges" switch** (the THIRD row of Drawing settings, directly under
+  "Distance to S.E.T."; shared composable `UndercutSplitAtLinerEdgeRow`
+  (`ui/screen/UndercutSheetElectionRows.kt`) — label, caption `UNDERCUT_SPLIT_AT_LINER_EDGE_CAPTION`
+  + " App-wide.", Switch; testTag `undercut_split_at_liner_edge_switch`; same visibility as the
+  section): bound to the app-wide `PdfPrefs.undercutSplitAtLinerEdge` through
+  `ShaftViewModel.setPdfUndercutSplitAtLinerEdge` — the SAME value as the options-panel and
+  Settings rows. It sits beside the other dimensioning choice because it decides how an
+  overhanging cut is DIMENSIONED; under "Shade in Components" it could not be found (on-device
+  report). Not a per-job field: no undo step, no dirty mark. See "Split cuts at liner edges"
+  below.
 - **"Sections to print" list** (NOT in Drawing settings: it changes what prints, so it sits
   directly above the Blank draft row and the Print / Preview / Export trio and is never collapsed;
   shared composable `UndercutPrintSectionsList`, one checkbox row per section AFT → FWD, testTags
@@ -80,7 +90,7 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
   section off, Print and Export are disabled with `UNDERCUT_NONE_SELECTED_MESSAGE` (testTag
   `undercut_none_selected_message`) while Preview still opens. See "Sections to print" under PDF
   layout.
-- **"Drawn depth" slider** (the third row of Drawing settings; label formerly "Cut depth
+- **"Drawn depth" slider** (the fourth row of Drawing settings; label formerly "Cut depth
   exaggeration", caption "Makes shallow cuts easier to see — 0% is true scale. Printed Ø values
   never change. Saved with this job."): 0 – `UNDERCUT_EXAGGERATION_MAX_FRAC` with a live "%" readout,
   committing continuously through `ShaftViewModel.setUndercutExaggeration` — the OAL field's
@@ -93,13 +103,6 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
   constant): drives `UndercutRecord.drawToSet` through `ShaftViewModel.setUndercutDrawToSet`
   (the record-update path the exaggeration commit uses, so it rides the one undo history and
   the dirty mark). See "Draw to the shaft end" under the strip builders below.
-- **"Split cuts at liner edges" switch** (directly under "Draw to the shaft end", same visibility;
-  testTag `undercut_split_at_liner_edge_switch`, caption `UNDERCUT_SPLIT_AT_LINER_EDGE_CAPTION`
-  + " App-wide."): bound to the app-wide `PdfPrefs.undercutSplitAtLinerEdge` through
-  `ShaftViewModel.setPdfUndercutSplitAtLinerEdge` — the SAME value as the options-sheet and
-  Settings rows, offered here because the chain-rail rule is reached for from this tab
-  (on-device request). Not a per-job field: no undo step, no dirty mark. See "Split cuts at liner
-  edges" below.
 - **"Recorded undercuts" list** below the canvas: a read-only summary + delete row per cut,
   numbered and ordered by the cut numbers (`undercutSheetNumbers`, AFT → FWD) — not an
   edit card (see "UI contract").
@@ -544,7 +547,8 @@ data class UndercutRecord(
   into `ShaftPdfComposer`).
 
   **Print shading — `PdfPrefs.undercutLineArt`** (default `false`; Settings → PDF Export, and the
-  undercut preview's PDF options sheet at the FOOT of the "Shade in Components" group, testTag
+  undercut preview's PDF options sheet at the FOOT of the "Shade in Components" group (which
+  keeps only this row and "Liner outline" for the undercut sheet), testTag
   `pdf_undercut_line_art`): the print side's own line-art switch, part of the drawing LOOK and
   therefore captured by drawing profiles. On, the undercut PDF draws **no shade fill anywhere** —
   `bodyFill`, `taperFill`, `linerFill`, `stripLinerFill` and the notch section core are all absent
@@ -635,10 +639,11 @@ data class UndercutRecord(
   page draws none of its five cuts' numbers.
 
   **Split cuts at liner edges — `PdfPrefs.undercutSplitAtLinerEdge`** (default `false`; Settings →
-  PDF Export beside the liner-outline row, the undercut preview's PDF options sheet under it,
-  testTag `pdf_undercut_split_at_liner_edge`, and the Undercut tab's own options block under
-  "Draw to the shaft end", testTag `undercut_split_at_liner_edge_switch`, caption suffixed
-  " App-wide." there — three surfaces, one value; caption "A cut machined past a liner edge is
+  Drawing's own row, the undercut options panel's Content block directly under "Distance to
+  S.E.T." (testTag `pdf_undercut_split_at_liner_edge`), and the Undercut tab's Drawing settings,
+  also directly under "Distance to S.E.T." (testTag `undercut_split_at_liner_edge_switch`) — the
+  last two are the ONE shared `UndercutSplitAtLinerEdgeRow`, caption suffixed " App-wide." —
+  three surfaces, one value; it is NOT among the panel's shading rows; caption "A cut machined past a liner edge is
   dimensioned as two spans meeting at the edge. Off: every cut prints its full length."; captured
   by drawing profiles, settings key `pdf_undercut_split_at_liner_edge`). On-device direction: the
   shop measures the LENGTH of each cut, so by default every cut — one machined past a liner edge
@@ -1403,7 +1408,8 @@ the same two calls `UndercutPdfComposer` makes, so the two rails cannot drift (o
 the canvas's own rail — every shoulder, nested cuts included, on one chain, decimal values above
 an unbroken line — read congested and cluttered next to the printed strip). What that gives the
 canvas:
-- the **level-0 chain** over the strip's TOP-LEVEL cuts only; each **nesting level** on its own
+- the **level-0 chain** over the strip's TOP-LEVEL cuts only, its fallback values lifted ABOVE the
+  chain line under the total (the lifted plan, always on the canvas); each **nesting level** on its own
   row UNDER the chain, located against its parent's shoulders (`buildNestedUndercutRailRows`), its
   fallback values above its own line (`undercutNestedRailLineYs`); the
   **total** across the top-level cuts on the line above (only with ≥ 2 top-level cuts);
@@ -1462,9 +1468,10 @@ live where it draws that element (arrow size, liner outline, split at liner edge
 thread hatch, Output font).
 
 **Vertical budget** (`undercutDetailRailBand`), the printed strip's construction
-(`computeUndercutStripInnerLayout`) at canvas scale: a top pad, then — when a total exists — the
-total line `UNDERCUT_TOTAL_RAIL_ABOVE_PT` down and the chain line the rest of
-`UNDERCUT_TOTAL_RAIL_BAND_PT` below it, else the chain's above-the-line fallback rows; then the
+(`computeUndercutStripInnerLayout`) at canvas scale, ALWAYS with the lifted plan (the canvas band
+is additive and costs no page height): a top pad, then — when a total exists — the
+total line `UNDERCUT_TOTAL_RAIL_ABOVE_PT` down, 20 pt of separation, the chain's above-the-line
+(lifted) fallback rows, else just those rows; then the
 chain line; then the plan's `belowRows` rows (clear air, the chain's below-line fallbacks, and one
 row per nesting level plus that row's own fallbacks, stepped exactly as the composer steps them);
 then a fixed 6 pt of headroom (`UNDERCUT_DETAIL_RAIL_HEADROOM_PT` — the printed strip spends up to
@@ -1579,19 +1586,47 @@ strips minus a 22 pt orientation row, so a lone full-width strip owns ≈ 414 pt
   fixed always-2-rows budget reserved crowding air most strips never used, floating the rail
   figures far above the surface they dimension (on-device report). A **started** strip keeps the
   full 2-row budget below: its band is the machinist's to hand-draw a chain into.
-- **Fallback side follows the levels** (same date, on-device report): when a **total rail** sits
-  above the chain, fallback values tuck BELOW the line (the total's figure owns the space above) —
+- **Fallback side follows the levels** (on-device report): when a **total rail** sits
+  above the chain, fallback values tuck BELOW the line by default (the compressed plan; the
+  total's figure owns the space above) unless the strip LIFTS them (next bullet) —
   but when the chain is the sheet's **only label level** (single-cut cluster → no total span),
   a value pushed under the span line read as orphaned, so fallbacks stack ABOVE the line instead
   (`drawUndercutRail`'s `fallbackLabelAbove`, rows upward on the 17 pt pitch; the band above the
-  rail is reserved via `chainAboveBandPt`, mutually exclusive with the total band; below keeps
-  just the 1-row clear air). The wear strips reached the same conclusion later, from the same
+  rail is reserved via `chainAboveBandPt`, which stacks with the total band when a lifted plan
+  puts the rows under a total; below keeps just the 1-row clear air). The wear strips reached the same conclusion later, from the same
   symptom, and moved their fallback rows above unconditionally (`RunoutSheet.md`, "Dimension
   rail") — the total-rail exception here stays, because there the band above the chain is the
   total rail's own witness run, and both fallback rows print over a page-white halo either way.
   `computeUndercutStripInnerLayout` therefore passes `witnessRunPt = 0` to
   `computeWearStripInnerLayout`: it places both of its rail lines itself off `cylTop`, and
   `belowRows` (never 0) already holds the clear air the wear strip's witness run holds.
+- **Lifted fallbacks under a total rail** (on-device request: short cuts' values were crammed
+  between the chain and the shaft while the page had empty space above the rails — "flexible when
+  space is available, compress when the sheet has more sections or less space"). With a total
+  rail and at least one fallback, `planUndercutRailRows(..., lifted = true)` puts the fallback
+  rows ABOVE the chain line, between the chain and the total (`aboveRows = used`, `belowRows =
+  1 + nestedRows`) — net cost exactly one row of height (`used` added above, `used − 1` freed
+  below). `UndercutStripRails.withFallbacksLifted()` re-plans the ROWS only (guarded by
+  `canLiftFallbacks`); every span keeps its horizontal layout. The decision is ONE pure,
+  height-driven predicate, `undercutRailsLift(cylLiftedPt) = cylLiftedPt >=
+  UNDERCUT_CYL_MAX_FLOOR_PT` (96 pt): lift when the strip still draws at least the cylinder floor
+  after reserving the lifted rows — lifting spends surplus on a roomy strip, while a cramped strip
+  whose lifted shaft would drop under the floor keeps the compressed below layout.
+  `UndercutStripPlan.resolveRails(top, bottom, dualStacked)` makes the choice ONCE per strip and
+  the draw uses its result (`verticalOverheadPt(lifted)` measures either plan). The detail canvas
+  is ALWAYS lifted (its band is additive, no page height). The wear sheet is untouched.
+- **Inner-layout stack** — `computeUndercutStripInnerLayout` stacks the total band AND the above
+  band (`chainAboveBandPt`), top → bottom: the total value (`UNDERCUT_TOTAL_RAIL_ABOVE_PT`,
+  18 pt) → the total line → the rest of the total band (20 pt) → the lifted fallback rows → the
+  chain line → 1 clear-air row (+ nested rows) → the cylinder.
+  `totalRailY = chainRailY − aboveBand − (band − 18)`; a zero above band is byte-identical to the
+  total-only layout.
+- **Draw order** — `drawUndercutStripRails` ALWAYS draws the total rail FIRST, then the chain
+  (with its S.E.T. lead), then the nested rows, so the chain's label halos paint over the total's
+  witness lines; drawing the total after the chain would strike its witnesses through lifted
+  values. A lifted label's halo is widened across a total witness it straddles (`haloClearXs`,
+  `undercutRailHaloSpan`) so no sliver of the witness shows past it. On a sheet that lifts
+  nothing the order changes only two antialiased pixels.
 - **Cylinder cap** — `max(UNDERCUT_CYL_MAX_FLOOR_PT, min(band × UNDERCUT_CYL_MAX_HEIGHT_FRAC,
   UNDERCUT_CYL_MAX_ABS_PT))`: 0.38 of the strip's band, never past 170 pt, never below the 96 pt
   floor (so a full-width strip draws ≈ 157 pt rather than the ≈ 207 pt a half-band fraction gave —
@@ -1810,14 +1845,19 @@ stays landscape.
   portrait never pushes a section into the "+N more" note). Cell heights come from the pure
   `undercutStripCells(portrait, …, overheadsPt)`; each strip's vertical overhead (rails, label
   rows, Ø callouts, title) is measured from the very plan it draws.
-  - A page WITH ROOM uses `undercutPortraitNaturalCells`: every strip is sized to its overhead plus
+  - A page WITH ROOM uses `undercutPortraitNaturalCells`, measured with the LIFTED overheads first
+    (`undercutStripCells(..., liftedOverheadsPt)` ← `verticalOverheadPt(dualStacked, lifted = true)`:
+    each strip then has the row its lifted rail values take, see "Fallback side follows the
+    levels"); when the lifted natural cells do not fit, natural cells are retried with the
+    compressed overheads before any crowded path. Every strip is sized to its overhead plus
     ONE common shaft height (the page's smallest `undercutNaturalCylinderPt`, which satisfies every
     strip's cylinder cap, so no strip has spare height to spend between its figure and its title),
     and the leftover is spread as equal air above, between and below the strips (a lone
     forced-portrait strip is centred).
   - A CROWDED page falls back to the even split, or to `undercutPortraitStripHeights` (equal shaft
     height, a busy strip taking height from a plain one) when the even split would squeeze a shaft
-    under `UNDERCUT_CYL_MAX_FLOOR_PT`.
+    under `UNDERCUT_CYL_MAX_FLOOR_PT`. Both keep the compressed overheads; each strip then decides
+    for itself at draw time whether its cell affords the lift (`UndercutStripPlan.resolveRails`).
   - Portrait strips reserve `UC_PORTRAIT_TITLE_AIR_PT` (10 pt) between the Ø callouts and the
     strip title.
 - **Portrait header** — the job-info line shrinks to fit (down to `UC_HEADER_MIN_FIT_TEXT_PT`)

@@ -558,11 +558,14 @@ internal val helpSections: List<HelpSection> = listOf(
                     "the printed page: Auto stacks two or more sections down a portrait page " +
                     "and prints a single section landscape. \"Distance to S.E.T.\" (Nearest | " +
                     "AFT S.E.T. | FWD S.E.T., right after \"Page\") chooses the S.E.T. that each " +
-                    "strip's title and the short dimension at its edge measure to. \"Sections " +
+                    "strip's title and the short dimension at its edge measure to; \"Split " +
+                    "cuts at liner edges\" sits directly under it. \"Sections " +
                     "to print\" (above the Print buttons when the sheet has two or more " +
                     "sections) is a checkbox per section; untick the ones you do not want on " +
                     "this printout, for example to send one liner's cuts to the welder by " +
-                    "itself.",
+                    "itself. A short cut whose value does not fit its span is set above the " +
+                    "chain line, under the overall dimension, with a leader down to its span " +
+                    "when the strip has room; on a crowded sheet it drops below the line.",
                 manualAnchor = "recording-undercut",
             ),
             HelpTopic(
@@ -939,12 +942,13 @@ internal val helpSections: List<HelpSection> = listOf(
                     "the cuts, so a cut that runs from the liner into the body still shows " +
                     "where the liner was. It applies to the printed undercut sheet and the " +
                     "Undercut Drawing screens.\n" +
-                    "• \"Undercut drawing: split cuts at liner edges\" — default off, beside " +
-                    "the liner outline row. The chain of dimensions prints each cut's full " +
-                    "length, because the shop measures cut lengths. Turn it on and a cut " +
-                    "machined past a liner edge is dimensioned as two spans that meet at " +
-                    "the edge. Also on the Undercut tab beside \"Draw to the shaft end\" — " +
-                    "the same app-wide value.",
+                    "• \"Undercut drawing: split cuts at liner edges\" — default off. The " +
+                    "chain of dimensions prints each cut's full length, because the shop " +
+                    "measures cut lengths. Turn it on and a cut machined past a liner edge " +
+                    "is dimensioned as two spans that meet at the edge. On the undercut " +
+                    "sheet's PDF options and the Undercut tab's \"Drawing settings\" it sits " +
+                    "directly under \"Distance to S.E.T.\", with the other dimensioning " +
+                    "choice — the same app-wide value as this Settings row.",
                 manualAnchor = "settings-pdf-export",
             ),
             HelpTopic(

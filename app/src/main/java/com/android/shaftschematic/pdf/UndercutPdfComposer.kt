@@ -367,7 +367,10 @@ fun composeUndercutPdf(
         // sizes every strip to what it draws and spends the rest as air between them (a lone
         // forced-portrait strip centres), and on a crowded page a busy section takes height from
         // a plain one instead of drawing a sliver of a shaft.
-        val overheads = if (portrait) {
+        // The natural-height page (roomy by definition) is measured with every strip's chain
+        // values LIFTED above the line — the layout `resolveRails` then draws on a cell that size;
+        // the crowded paths keep the compressed overheads and each strip decides for itself.
+        val portraitPlans = if (portrait) {
             onPage.map { strip ->
                 planUndercutDetailStrip(
                     surfaceSegs, strip, strip.undercutIds.mapNotNull { id -> undercutById[id] },
@@ -376,7 +379,7 @@ fun composeUndercutPdf(
                     railSplitOf(strip), pdfPrefs.arrowSizePt,
                     titleAirPt = UC_PORTRAIT_TITLE_AIR_PT,
                     leadSide = stripSideOf(strip), aftSetMm = aftSetMm, fwdSetMm = fwdSetMm,
-                )?.verticalOverheadPt(wantDualStacked) ?: 0f
+                )
             }
         } else {
             null
@@ -384,7 +387,8 @@ fun composeUndercutPdf(
         stripCells = undercutStripCells(
             portrait, onPage.size, bandTop, midBotFull, contentLeft, contentRight,
             reservedBottomPt = overflowNoteH,
-            overheadsPt = overheads,
+            overheadsPt = portraitPlans?.map { it?.verticalOverheadPt(wantDualStacked) ?: 0f },
+            liftedOverheadsPt = portraitPlans?.map { it?.verticalOverheadPt(wantDualStacked, lifted = true) ?: 0f },
         )
         overflowBandTop = stripCells.lastOrNull()?.bottom ?: bandTop
     } else {
@@ -977,29 +981,60 @@ internal class UndercutStripPlan(
 ) {
     fun xAt(mm: Float): Float = hLayout.linerLeftPt + (mm - drawStartMm) * hLayout.ptPerMm
 
-    /** The strip's vertical split inside `[stripTop, stripBottom]` ([computeUndercutStripInnerLayout]). */
+    /** [rails] with the chain's fallback values lifted above the line ([UndercutStripRails.withFallbacksLifted]). */
+    private val liftedRails: UndercutStripRails by lazy { rails.withFallbacksLifted() }
+
+    /**
+     * The strip's vertical split inside `[stripTop, stripBottom]` ([computeUndercutStripInnerLayout]),
+     * for [rails] as planned or, [lifted], with the chain's fallback values lifted above the line.
+     */
     fun innerLayout(
         stripTop: Float,
         stripBottom: Float,
         dualStacked: Boolean,
         cylMaxFloorPt: Float = UNDERCUT_CYL_MAX_FLOOR_PT,
-    ): UndercutStripInnerLayout = computeUndercutStripInnerLayout(
-        stripTop, stripBottom,
-        titleHeightPt = titleText.textSize,
-        hasTotalRail = rails.totalSpan != null,
-        diaBandPt = if (diaPlan != null) diaBandPt + titleAirPt else diaBandPt,
-        maxLabelRows = rails.rows.belowRows,
-        chainAboveBandPt = rails.rows.aboveRows * undercutRailRowHeightPt(dimText, dualStacked),
-        cylMaxFloorPt = cylMaxFloorPt,
-    )
+        lifted: Boolean = false,
+    ): UndercutStripInnerLayout {
+        val r = if (lifted) liftedRails else rails
+        return computeUndercutStripInnerLayout(
+            stripTop, stripBottom,
+            titleHeightPt = titleText.textSize,
+            hasTotalRail = r.totalSpan != null,
+            diaBandPt = if (diaPlan != null) diaBandPt + titleAirPt else diaBandPt,
+            maxLabelRows = r.rows.belowRows,
+            chainAboveBandPt = r.rows.aboveRows * undercutRailRowHeightPt(dimText, dualStacked),
+            cylMaxFloorPt = cylMaxFloorPt,
+        )
+    }
+
+    /**
+     * The rails this strip DRAWS inside `[stripTop, stripBottom]`, with the vertical split that
+     * goes with them — the ONE answer the draw and every measurement read. The chain's fallback
+     * values lift above the line, under the total rail, when the strip can afford the extra row
+     * ([undercutRailsLift] on the lifted split's cylinder); otherwise they stay below the line,
+     * the compressed layout.
+     */
+    fun resolveRails(
+        stripTop: Float,
+        stripBottom: Float,
+        dualStacked: Boolean,
+    ): Pair<UndercutStripRails, UndercutStripInnerLayout> {
+        if (rails.canLiftFallbacks) {
+            val liftedInner = innerLayout(stripTop, stripBottom, dualStacked, lifted = true)
+            if (undercutRailsLift(liftedInner.cylBottom - liftedInner.cylTop)) return liftedRails to liftedInner
+        }
+        return rails to innerLayout(stripTop, stripBottom, dualStacked)
+    }
 
     /**
      * Everything this strip stacks around its drawn cylinder — rails, their label rows, the Ø
      * callouts, the title — measured on a band too tall for any row to drop out and with no
-     * cylinder cap, so the strip's height less this is exactly the cylinder it draws.
+     * cylinder cap, so the strip's height less this is exactly the cylinder it draws. [lifted]
+     * measures the rails with the chain's fallback values above the line — the layout a strip
+     * with room draws ([resolveRails]).
      */
-    fun verticalOverheadPt(dualStacked: Boolean): Float {
-        val probe = innerLayout(0f, OVERHEAD_PROBE_PT, dualStacked, cylMaxFloorPt = Float.MAX_VALUE)
+    fun verticalOverheadPt(dualStacked: Boolean, lifted: Boolean = false): Float {
+        val probe = innerLayout(0f, OVERHEAD_PROBE_PT, dualStacked, cylMaxFloorPt = Float.MAX_VALUE, lifted = lifted)
         return OVERHEAD_PROBE_PT - (probe.cylBottom - probe.cylTop)
     }
 
@@ -1239,8 +1274,9 @@ private fun drawUndercutDetailStrip(
     val dimText = plan.dimText
     val spans = plan.spans
     val diaPlan = plan.diaPlan
-    val rails = plan.rails
-    val inner = plan.innerLayout(stripTop, stripBottom, dualStacked)
+    // The rails as drawn: the chain's fallback values lifted above the line when this strip has
+    // the room for it, else below it — decided once, read by the whole draw.
+    val (rails, inner) = plan.resolveRails(stripTop, stripBottom, dualStacked)
     val cy = (inner.cylTop + inner.cylBottom) / 2f
     val rCap = ((inner.cylBottom - inner.cylTop) / 2f).coerceAtLeast(0f)
 
@@ -1315,7 +1351,7 @@ private fun drawUndercutDetailStrip(
         }
     }
 
-    // ── Rails: the chain, the nested levels under it, then the total above it ──
+    // ── Rails: the total, the chain under it, then the nested levels under that ──
     if (startedStrip) {
         // Datum bars only — the liner's own edges extended up into the empty band, so a
         // hand-drawn chain has something real to measure from. No dimension line, no arrows:
@@ -1325,7 +1361,7 @@ private fun drawUndercutDetailStrip(
             c.drawLine(x, inner.cylTop - UNDERCUT_RAIL_WITNESS_GAP_PT, x, inner.chainRailY, dim)
         }
     }
-    // The chain, the nested levels under it, then the total above it — the ONE rail sequence the
+    // The total, the chain, then the nested levels — the ONE rail sequence the
     // Undercut tab's detail canvas draws too (`drawUndercutStripRails`).
     drawUndercutStripRails(
         c, dim, dimText, rails,

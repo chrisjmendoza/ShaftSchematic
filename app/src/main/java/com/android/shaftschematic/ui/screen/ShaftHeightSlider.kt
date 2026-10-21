@@ -1149,8 +1149,6 @@ internal fun ShadeInPdfChecks(
     onSetUndercutLineArt: (Boolean) -> Unit = {},
     undercutLinerOutline: Boolean = true,
     onSetUndercutLinerOutline: (Boolean) -> Unit = {},
-    undercutSplitAtLinerEdge: Boolean = false,
-    onSetUndercutSplitAtLinerEdge: (Boolean) -> Unit = {},
 ) {
     OptionsSectionExpander(OptionsSection.SHADING) {
         ShadeInPdfCheckRows(
@@ -1169,8 +1167,6 @@ internal fun ShadeInPdfChecks(
             onSetUndercutLineArt = onSetUndercutLineArt,
             undercutLinerOutline = undercutLinerOutline,
             onSetUndercutLinerOutline = onSetUndercutLinerOutline,
-            undercutSplitAtLinerEdge = undercutSplitAtLinerEdge,
-            onSetUndercutSplitAtLinerEdge = onSetUndercutSplitAtLinerEdge,
         )
     }
 }
@@ -1219,9 +1215,6 @@ internal fun ShadeInPdfCheckRows(
     /** The app-wide `PdfPrefs.undercutLinerOutline`; read only when [showUndercutLineArt]. */
     undercutLinerOutline: Boolean = true,
     onSetUndercutLinerOutline: (Boolean) -> Unit = {},
-    /** The app-wide `PdfPrefs.undercutSplitAtLinerEdge`; read only when [showUndercutLineArt]. */
-    undercutSplitAtLinerEdge: Boolean = false,
-    onSetUndercutSplitAtLinerEdge: (Boolean) -> Unit = {},
 ) {
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1310,22 +1303,6 @@ internal fun ShadeInPdfCheckRows(
                 )
             }
         }
-        if (showUndercutLineArt) Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(
-                checked = undercutSplitAtLinerEdge,
-                onCheckedChange = onSetUndercutSplitAtLinerEdge,
-                modifier = Modifier.testTag("pdf_undercut_split_at_liner_edge"),
-            )
-            Spacer(Modifier.width(8.dp))
-            Column {
-                Text("Split cuts at liner edges", style = MaterialTheme.typography.bodyLarge)
-                Text(
-                    UNDERCUT_SPLIT_AT_LINER_EDGE_CAPTION,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
     }
 }
 
@@ -1333,7 +1310,10 @@ internal fun ShadeInPdfCheckRows(
 internal const val UNDERCUT_LINER_OUTLINE_CAPTION =
     "Dotted outline of each liner's original edges and OD over the cuts"
 
-/** The split-at-liner-edge row's caption — the options sheet and Settings say the same thing. */
+/**
+ * The split-at-liner-edge row's caption — the undercut tab, its options panel
+ * (`UndercutSplitAtLinerEdgeRow`) and Settings say the same thing.
+ */
 internal const val UNDERCUT_SPLIT_AT_LINER_EDGE_CAPTION =
     "A cut machined past a liner edge is dimensioned as two spans meeting at the edge. " +
         "Off: every cut prints its full length."

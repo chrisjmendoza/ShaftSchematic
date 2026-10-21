@@ -114,7 +114,12 @@ class PdfOptionsSectionsTest {
         // Cut numbers print on no sheet, so the sheet offers no row for them.
         rule.onNodeWithTag("pdf_undercut_cut_numbers").assertDoesNotExist()
         rule.onNodeWithText("Cut numbers").assertDoesNotExist()
-        rule.onNodeWithTag("pdf_undercut_split_at_liner_edge").assertExists()
+        // "Split cuts at liner edges" is a DIMENSIONING choice, not a shading one: it lives in
+        // the undercut Content block under "Distance to S.E.T." (`UndercutSplitAtLinerEdgeRow`,
+        // hosted by `UndercutOptionsSheet`), never among the shading rows — under "Shade in
+        // Components" it could not be found (on-device report).
+        rule.onNodeWithTag("pdf_undercut_split_at_liner_edge").assertDoesNotExist()
+        rule.onNodeWithText("Split cuts at liner edges").assertDoesNotExist()
     }
 
     @Test

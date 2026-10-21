@@ -3707,6 +3707,11 @@ internal fun undercutDetailLeadDrawRange(
  * canvas's own x map ([computeUndercutWindowLayout] at the Box width), single-unit, at the canvas
  * [UndercutDetailRailInputs.scale]. [labelWidthPx] measures a value as the canvas draws it. Null
  * until the Box has a width.
+ *
+ * Always LIFTED ([UndercutStripRails.withFallbacksLifted]): under a total rail the chain's
+ * fallback values sit above the line. The canvas has no page height to run out of — its rail band
+ * grows to what the plan reserves ([undercutDetailRailBand]) — so it is always the roomy case a
+ * printed strip lifts in (`undercutRailsLift`).
  */
 internal fun planUndercutDetailRails(
     inputs: UndercutDetailRailInputs,
@@ -3731,7 +3736,7 @@ internal fun planUndercutDetailRails(
         scale = inputs.scale,
         arrowSizePt = inputs.arrowSizePt,
         setLead = inputs.setLead,
-    )
+    ).withFallbacksLifted()
 }
 
 /** The detail canvas's rail band, px from the canvas top — see [undercutDetailRailBand]. */
@@ -3745,11 +3750,11 @@ internal data class UndercutDetailRailBand(
 /**
  * The detail canvas's rail band, built the printed strip's way (`computeUndercutStripInnerLayout`)
  * at canvas [scale]: a top pad, then the total rail line [UNDERCUT_TOTAL_RAIL_ABOVE_PT] down with
- * the rest of [UNDERCUT_TOTAL_RAIL_BAND_PT] below it when a total exists — else the chain's
- * above-the-line fallback rows — then the chain line, then the plan's `belowRows` rows (clear air,
- * the chain's below-line fallbacks and every nested row) and [UNDERCUT_DETAIL_RAIL_HEADROOM_PT],
- * ending on the cylinder top. A strip with no rail (no plan yet, or no cuts) keeps only the top
- * pad.
+ * the rest of [UNDERCUT_TOTAL_RAIL_BAND_PT] below it when a total exists, then the chain's
+ * above-the-line fallback rows (`aboveRows` — under a total, the lifted values), then the chain
+ * line, then the plan's `belowRows` rows (clear air, any below-line fallbacks and every nested
+ * row) and [UNDERCUT_DETAIL_RAIL_HEADROOM_PT], ending on the cylinder top. A strip with no rail
+ * (no plan yet, or no cuts) keeps only the top pad.
  */
 internal fun undercutDetailRailBand(
     rails: UndercutStripRails?,
@@ -3762,7 +3767,8 @@ internal fun undercutDetailRailBand(
     val chainY: Float
     if (rails.totalSpan != null) {
         totalY = topPad + UNDERCUT_TOTAL_RAIL_ABOVE_PT * scale
-        chainY = totalY + (UNDERCUT_TOTAL_RAIL_BAND_PT - UNDERCUT_TOTAL_RAIL_ABOVE_PT) * scale
+        chainY = totalY + (UNDERCUT_TOTAL_RAIL_BAND_PT - UNDERCUT_TOTAL_RAIL_ABOVE_PT) * scale +
+            rails.rows.aboveRows * rowStepPx
     } else {
         chainY = topPad + rails.rows.aboveRows * rowStepPx
         totalY = chainY

@@ -414,8 +414,6 @@ internal fun RunoutWearOptionsSheet(
     undercutLineArt: Boolean = false,
     /** The app-wide `PdfPrefs.undercutLinerOutline`; read only when [showUndercutLineArt]. */
     undercutLinerOutline: Boolean = true,
-    /** The app-wide `PdfPrefs.undercutSplitAtLinerEdge`; read only when [showUndercutLineArt]. */
-    undercutSplitAtLinerEdge: Boolean = false,
     /**
      * Shows the per-job "Coupling face" election. On for the runout and consolidated sheets,
      * the two documents that can draw the end view; off for the wear and undercut sheets,
@@ -791,8 +789,6 @@ internal fun RunoutWearOptionsSheet(
                 onSetUndercutLineArt = { vm.setPdfUndercutLineArt(it) },
                 undercutLinerOutline = undercutLinerOutline,
                 onSetUndercutLinerOutline = { vm.setPdfUndercutLinerOutline(it) },
-                undercutSplitAtLinerEdge = undercutSplitAtLinerEdge,
-                onSetUndercutSplitAtLinerEdge = { vm.setPdfUndercutSplitAtLinerEdge(it) },
             )
         }
 

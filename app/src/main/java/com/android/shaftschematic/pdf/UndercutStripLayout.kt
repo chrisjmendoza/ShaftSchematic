@@ -123,6 +123,13 @@ fun resolveUndercutPageOrientation(choice: UndercutPageOrientation, stripCount: 
  *   instead of drawing a sliver of a shaft under three rail rows. [overheadsPt] null (or the
  *   wrong size) keeps the even split.
  *
+ * [liftedOverheadsPt] are the same strips measured with their chain values LIFTED above the line
+ * (`UndercutStripPlan.verticalOverheadPt(lifted = true)`): the natural-cell page, roomy by
+ * definition, sizes from them first so each strip then has the row its lifted values take; when
+ * those do not fit, the natural cells are tried with [overheadsPt], and the crowded paths always
+ * read [overheadsPt] — each strip then decides at draw time whether its cell affords the lift.
+ * Null (or the wrong size) measures the natural cells with [overheadsPt] alone.
+ *
  * The profile parameters are zeroed on every path: on an undercut sheet the strips own the page,
  * so the whole band goes to them.
  */
@@ -135,6 +142,7 @@ fun undercutStripCells(
     contentRight: Float,
     reservedBottomPt: Float = 0f,
     overheadsPt: List<Float>? = null,
+    liftedOverheadsPt: List<Float>? = null,
 ): List<WearStripCell> {
     if (stripCount <= 0) return emptyList()
     if (!portrait && determineUndercutPdfMode(stripCount) == WearPdfMode.GRID) {
@@ -147,7 +155,10 @@ fun undercutStripCells(
     if (portrait && overheadsPt != null && overheadsPt.size == stripCount) {
         val gap = WEAR_STRIP_GAP_PT
         val usable = bandBottom - reservedBottomPt - bandTop
-        undercutPortraitNaturalCells(usable, overheadsPt, gap)?.let { offsets ->
+        val natural = liftedOverheadsPt?.takeIf { it.size == stripCount }
+            ?.let { undercutPortraitNaturalCells(usable, it, gap) }
+            ?: undercutPortraitNaturalCells(usable, overheadsPt, gap)
+        natural?.let { offsets ->
             return offsets.map { (top, h) ->
                 WearStripCell(bandTop + top, bandTop + top + h, contentLeft, contentRight)
             }
@@ -562,7 +573,12 @@ fun undercutRailFallbackRows(layout: List<WearRailSpanLayout>): Int =
  *
  * Which side of the line the fallbacks land on follows what sits above the chain:
  * - **Total rail present** → fallbacks tuck BELOW the line (the total's figure owns the space
- *   above), reserving the rows used, never less than 1.
+ *   above), reserving the rows used, never less than 1 — the compressed layout.
+ * - **Total rail present, [lifted]** → fallbacks go ABOVE the line, in rows between the chain and
+ *   the total rail, and below keeps just the 1-row clear air (on-device request: a strip with room
+ *   above its rails reads better with the short values over the chain than crammed between the
+ *   chain and the shaft). Whether a strip can afford it is the caller's decision
+ *   ([undercutRailsLift]); this only plans the rows.
  * - **Chain is the only label level** → fallbacks go ABOVE the line (on-device report: a small
  *   value pushed under the span line read as orphaned with nothing above the rail), and below
  *   keeps just the 1-row clear air off the shaft.
@@ -580,11 +596,16 @@ fun planUndercutRailRows(
     startedStrip: Boolean,
     hasTotalRail: Boolean,
     nestedLayouts: List<List<WearRailSpanLayout>> = emptyList(),
+    lifted: Boolean = false,
 ): UndercutRailRowPlan {
     if (startedStrip) return UndercutRailRowPlan(belowRows = WEAR_RAIL_MAX_LABEL_ROWS, aboveRows = 0)
     val used = undercutRailFallbackRows(chainLayout)
     val nestedRows = nestedLayouts.sumOf { 1 + undercutRailFallbackRows(it) }
-    return if (hasTotalRail) {
+    return if (hasTotalRail && lifted && used > 0) {
+        // Lifting costs exactly ONE row of strip height: `used` rows are added above the line and
+        // `used - 1` freed below it (the below band keeps its 1 row of clear air off the shaft).
+        UndercutRailRowPlan(belowRows = 1 + nestedRows, aboveRows = used, nestedRows = nestedRows)
+    } else if (hasTotalRail) {
         UndercutRailRowPlan(
             belowRows = used.coerceAtLeast(1) + nestedRows, aboveRows = 0, nestedRows = nestedRows,
         )
@@ -626,7 +647,39 @@ data class UndercutStripRails(
             leadSpan?.side == UndercutAnchorSide.AFT_SET -> listOf(lead) + chain
             else -> chain + lead
         }
+
+    /**
+     * Whether lifting would move anything: a total rail above the chain, and at least one level-0
+     * value (the S.E.T. lead's included) that falls off its line and is still planned below it.
+     */
+    val canLiftFallbacks: Boolean
+        get() = totalSpan != null && rows.aboveRows == 0 && undercutRailFallbackRows(chainWithLead) > 0
+
+    /**
+     * These rails with the level-0 chain's fallback values planned ABOVE the line, under the total
+     * rail ([planUndercutRailRows] `lifted`). Rows only: every span keeps the horizontal layout
+     * (x, seat, label row) it was planned with. Unchanged when [canLiftFallbacks] is false.
+     */
+    fun withFallbacksLifted(): UndercutStripRails =
+        if (!canLiftFallbacks) this
+        else copy(
+            rows = planUndercutRailRows(
+                chainWithLead, startedStrip = false, hasTotalRail = true, nestedLayouts = nested, lifted = true,
+            ),
+        )
 }
+
+/**
+ * Whether a strip lifts its chain's fallback values above the line
+ * ([UndercutStripRails.withFallbacksLifted]): yes when the strip, with the lifted rows reserved,
+ * still draws a shaft at least [cylFloorPt] tall. On a roomy strip the extra row comes out of the
+ * surplus the cylinder cap would otherwise have spent as air; on a cramped one the lifted cylinder
+ * would drop under the floor, so the values stay below the line — the compressed layout a busy
+ * sheet keeps (on-device request: use the room above the rails when the sheet has it, compress
+ * when it does not). [cylLiftedPt] is the cylinder height of the strip's LIFTED inner layout.
+ */
+fun undercutRailsLift(cylLiftedPt: Float, cylFloorPt: Float = UNDERCUT_CYL_MAX_FLOOR_PT): Boolean =
+    cylLiftedPt >= cylFloorPt
 
 /**
  * The ONE rail plan behind both undercut strip draw sites — the printed strip
@@ -895,9 +948,9 @@ const val UNDERCUT_RAIL_MIN_LABEL_GAP_PT = 4f
 
 /**
  * Splits one strip's vertical band, reserving [totalRailBandPt] at the top for the
- * cluster's total-span rail when [hasTotalRail] (or [chainAboveBandPt] for a single-level
- * chain's above-the-line fallback rows — see [planUndercutRailRows]; the two are mutually
- * exclusive), then delegating everything below it to
+ * cluster's total-span rail when [hasTotalRail] and [chainAboveBandPt] for the chain's
+ * above-the-line fallback rows ([planUndercutRailRows] — a chain with no total, or a lifted one
+ * under a total), then delegating everything below them to
  * [computeWearStripInnerLayout] — so the chained rail, the profile band, the measured-Ø
  * band ([diaBandPt]) and the title degrade in exactly the same order the wear strips do
  * (the drawn cylinder shrinks first, then label rows drop out; nothing ever overflows the
@@ -917,6 +970,11 @@ const val UNDERCUT_RAIL_MIN_LABEL_GAP_PT = 4f
  *
  * A band short enough that the cylinder never reaches the cap comes out bit-identical to the
  * plain delegation, so grid cells and the wear-shaped strips are unaffected.
+ *
+ * With both a total and an above band the stack reads, top → bottom: the total's value
+ * ([totalRailAbovePt]), the total line, the rest of [totalRailBandPt] as the gap down to the
+ * chain's lifted fallback rows ([chainAboveBandPt]), the chain line. A zero above band leaves
+ * the total-only layout exactly as it was.
  */
 fun computeUndercutStripInnerLayout(
     stripTop: Float,
@@ -936,9 +994,8 @@ fun computeUndercutStripInnerLayout(
 ): UndercutStripInnerLayout {
     val bottom = stripBottom.coerceAtLeast(stripTop)
     val band = if (hasTotalRail) totalRailBandPt.coerceAtLeast(0f) else 0f
-    // Above-the-line fallback rows (chain is the sheet's only label level — see
-    // [planUndercutRailRows]) reserve their band at the top exactly as the total rail's does;
-    // the two are mutually exclusive, so at most one is nonzero.
+    // Above-the-line fallback rows ([planUndercutRailRows]) reserve their band at the top exactly
+    // as the total rail's does; under a total they sit between the total line and the chain.
     val aboveBand = chainAboveBandPt.coerceAtLeast(0f)
     val innerTop = (stripTop + band + aboveBand).coerceAtMost(bottom)
     val inner = computeWearStripInnerLayout(
@@ -972,12 +1029,14 @@ fun computeUndercutStripInnerLayout(
     // collapsed onto the same Y — they preserve the ordering guarantee rather than shifting a
     // real layout.
     // The floor keeps the above-band clear: labels stacked above the line must stay inside the
-    // strip even when a short band pins the rail high.
-    val railFloor = (stripTop + aboveBand).coerceAtMost(cylTop)
+    // strip even when a short band pins the rail high — under a total, below the total's gap too.
+    val totalGap = (band - totalRailAbovePt).coerceAtLeast(0f)
+    val railFloor = (stripTop + aboveBand + if (aboveBand > 0f && band > 0f) totalGap else 0f)
+        .coerceAtMost(cylTop)
     val chainRailY = (cylTop - inner.railLabelRows * rowHeightPt - extraRailHeadroom)
         .coerceIn(railFloor, cylTop)
     val totalRailY = if (band > 0f) {
-        (chainRailY - (band - totalRailAbovePt).coerceAtLeast(0f)).coerceIn(stripTop, chainRailY)
+        (chainRailY - aboveBand - totalGap).coerceIn(stripTop, chainRailY)
     } else {
         chainRailY
     }

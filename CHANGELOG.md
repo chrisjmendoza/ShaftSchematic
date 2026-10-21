@@ -8,6 +8,47 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-21
 
+### feat(undercut): short rail values lift above the chain when the strip has room
+
+- **Short values no longer crammed under the chain.** On-device request: a short cut's value that
+  cannot seat in its span fell back BELOW the chain line, between the chain and the nested row or
+  cylinder, while the page had empty space above the rails — "flexible when space is available,
+  compress when the sheet has more sections or less space". With a total rail and at least one
+  fallback value, the LIFTED plan (`planUndercutRailRows(lifted)`, `UndercutStripRails.withFallbacksLifted()`)
+  puts the fallback rows ABOVE the chain line (net cost exactly one row of strip height); only the
+  rows are re-planned, the horizontal layout is untouched. A chain with no total rail already put
+  them above.
+- **One height-driven decision.** `undercutRailsLift(cylLiftedPt)`: lift when the strip still draws
+  at least the cylinder floor (`UNDERCUT_CYL_MAX_FLOOR_PT`, 96 pt) after reserving the lifted rows;
+  a cramped strip keeps the compressed below layout. `UndercutStripPlan.resolveRails` decides once
+  per strip and the draw uses it. `computeUndercutStripInnerLayout` stacks the total band and the
+  above band (total value, total line, 20 pt, lifted rows, chain line, clear air, nested rows,
+  cylinder); a zero above band is byte-identical to before.
+- **Portrait pages.** The natural-height cells measure each strip with the lifted overhead
+  (`undercutStripCells(liftedOverheadsPt)`); if those do not fit, natural cells are retried with the
+  compressed overheads before the crowded paths, which keep the compressed overhead and let each
+  strip's predicate decide. The detail canvas is always lifted (its band is additive).
+- **Draw order.** `drawUndercutStripRails` now draws the total rail first, then the chain, then the
+  nested rows, so the chain's label halos paint over the total's witness lines; a lifted label's halo
+  is widened across a witness it straddles so no sliver shows through. Sheets that lift nothing
+  change by two antialiased pixels. The wear sheet is untouched.
+- Docs: `docs/contracts/UndercutDrawing.md`, the `CLAUDE.md` undercut invariant, manual chapter 05.
+
+### fix(undercut): "Split cuts at liner edges" sits with "Distance to S.E.T."
+
+- **Found where it belongs.** On-device report: the option lived under "Shade in Components" in the
+  PDF options and could not be found — it decides how an overhanging cut is DIMENSIONED, not how
+  anything shades. One shared row (`UndercutSplitAtLinerEdgeRow`) now sits directly under
+  "Distance to S.E.T." in both places: the Undercut tab's Drawing settings (Page, Distance to S.E.T.,
+  Split cuts at liner edges, Drawn depth, Draw to the shaft end) and the undercut options panel's
+  Content block (Page, Distance to S.E.T., Split cuts at liner edges, Sections to print). It is gone
+  from the panel's shading rows, which keep "Undercut drawing: line art" and "Liner outline".
+- Same app-wide `PdfPrefs.undercutSplitAtLinerEdge`; Settings → Drawing's own row is unchanged.
+  Test tags `undercut_split_at_liner_edge_switch` (tab) and `pdf_undercut_split_at_liner_edge`
+  (panel) keep their values.
+- Docs: `docs/contracts/UndercutDrawing.md`, `docs/contracts/PdfExport.md`, `docs/PDF_EXPORT.md`,
+  manual chapters 04 and 06.
+
 ### feat(undercut): S.E.T. lead — the chain runs on to the S.E.T.
 
 - **A half dimension at the strip's edge.** On-device request: "a half dimensional rail at the edge

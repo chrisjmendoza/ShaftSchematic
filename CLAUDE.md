@@ -492,7 +492,11 @@ unchanged. **The detail canvas's rail IS the printed strip's rail**: both run th
 parent, total, row plan) and the ONE draw routine `drawUndercutStripRails` (`pdf/UndercutRailDraw.kt`), the
 canvas at `UNDERCUT_DETAIL_DP_PER_PT` through `scale` parameters that default to 1 (PDF byte-identical). A
 canvas-only rail (every shoulder on one chain, decimal labels above an unbroken line) read congested
-beside the sheet (on-device report) — do not reintroduce one. **ONE cut numbering, an INPUT aid only** — `undercutSheetNumbers` (`geom/UndercutNumbering.kt`,
+beside the sheet (on-device report) — do not reintroduce one. Under a total rail, short chain values
+lift ABOVE the chain line as a per-strip HEIGHT decision made once by `UndercutStripPlan.resolveRails`
+through the ONE predicate `undercutRailsLift` (the canvas is always lifted), and `drawUndercutStripRails`
+draws the total rail FIRST so the chain's label halos knock out its witness lines — drawing the total after
+the chain would strike through the lifted values. **ONE cut numbering, an INPUT aid only** — `undercutSheetNumbers` (`geom/UndercutNumbering.kt`,
 AFT → FWD by clamped start, 1-based, display-only; the record keeps its own order): the tab list sorts
 and numbers its rows by it, messages name cuts by it, and the zoomed DETAIL canvas draws it centred
 inside each section — on EVERY free piece of a parent that nested cuts split, so the pieces read as one
