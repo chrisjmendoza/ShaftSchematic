@@ -81,7 +81,12 @@ Preview rendering (`ShaftLayout` + `ShaftRenderer`) and the PDF composers (`Shaf
 ### Standard Page
 - US Letter: 11" × 8.5" (792 × 612 pt)
 - **Landscape** orientation (`PdfDocument.PageInfo.Builder(792, 612, 1)` —
-  `PdfExportRoute.kt`, `PdfPreviewScreen.kt`)
+  `PdfExportRoute.kt`, `PdfPreviewScreen.kt`) for every document **except the undercut drawing**,
+  which resolves its own page: `UndercutRecord.pageOrientation` (Auto | Landscape | Portrait;
+  Auto = portrait at two or more printed sections) through `undercutSheetOrientation`, giving
+  612 × 792 pt when portrait. The writers (`writeShaftPdfToUri`, `renderPdfPageBitmap`,
+  `printShaftPdfPage`) take a `PdfPageOrientation` that defaults to landscape, so no other
+  document changes. See `docs/contracts/UndercutDrawing.md` (Page orientation).
 - 50–75 pt margins (configurable)
 
 ### PDF Coordinate System
@@ -828,9 +833,20 @@ The per-job `UndercutRecord.drawToSet` ("Draw to the shaft end" on the Undercut 
 a liner strip whose chain ends within `UNDERCUT_SET_REACH_MM` (24 in) of its S.E.T. draws out to
 the physical shaft end with a flat end (no S-break) and its chain rail ends at the S.E.T.; liner
 strips only, total span unchanged.
+Every strip with cuts also leads its chain on to an S.E.T.: a half dimension from the chain's outer
+witness to that S.E.T. (one head at the datum, open at the strip's drawn edge; a normal two-headed
+span with a witness when the S.E.T. is inside the drawn range), laid out WITH the chain in
+`planUndercutStripRails` and drawn by `drawUndercutStripRails`, so the Undercut tab's detail
+canvas shows it too. The per-job `UndercutRecord.setDatum` ("Distance to S.E.T.": Nearest | AFT |
+FWD) picks the side through `undercutStripSetSide`, which the strip title reads as well; the
+strip's drawn range is widened on that side only to seat the value. The per-job exclusion lists
+("Sections to print") filter the strips inside `undercutSheetStrips`; a sheet with every section
+left off prints the header, "No undercut sections selected for this sheet." and the Notes row.
+See `docs/contracts/UndercutDrawing.md` (S.E.T. lead, Sections to print).
 
 **Direct print** (`util/PdfPrint.kt`, `printShaftPdfPage`) wraps the same composers in a
-`PrintDocumentAdapter` (US Letter landscape, 1 page) and hands them to the Android print
+`PrintDocumentAdapter` (US Letter landscape, 1 page; the undercut drawing prints portrait media,
+`NA_LETTER.asPortrait()`, when its page resolves portrait) and hands them to the Android print
 framework. A print and an export of the same document are composed by the same call and are
 therefore identical. Every PDF preview surface offers it from **two** places that share
 one action: the tab-body Print button, and the Print action in `PdfPreviewOverlay`'s top
@@ -890,7 +906,9 @@ so it returns the moment the sheet stops printing in-profile values. The classic
 for the five documents (consolidated [current variant], schematic, runout, wear,
 undercut; all on by default) written to one picked folder (`OpenDocumentTree` +
 `createPdfInTree`), each through the hardened write path, with a written/failed result
-line. Nothing auto-opens after a batch.
+line. An undercut drawing with every section left off ("Sections to print") is skipped, not
+written as its note page, and the result line ends "Undercut drawing skipped: no sections
+selected." Nothing auto-opens after a batch.
 
 **The consolidated preview's Tune sheet** (`RunoutWearOptionsSheet`, `ui/screen/PdfPreviewOverlay.kt`)
 follows the same section list the schematic sheet uses (§5.5): a **Content chip row**
@@ -924,7 +942,9 @@ gated off by what their composer actually reads (a section left with nothing is 
   drawing: line art (no shading)"** (`showUndercutLineArt = true`) at the foot of the shade
   group, since `PdfPrefs.undercutLineArt` reaches this composer alone — and **"Liner outline"**
   beneath it, same reasoning for `PdfPrefs.undercutLinerOutline` — and **"Split cuts at liner edges"** beside them for
-  `PdfPrefs.undercutSplitAtLinerEdge`.
+  `PdfPrefs.undercutSplitAtLinerEdge`. Its Content block also carries the per-job rows "Page",
+  "Distance to S.E.T." and, with two or more sections, "Sections to print" (each captioned
+  "Saved with this job").
 
 Every instance keeps Lines & text (Line thickness + Fractions ungated — every document here
 prints lengths), Shade in Components and Units (ungated) at their fixed spots in the order;

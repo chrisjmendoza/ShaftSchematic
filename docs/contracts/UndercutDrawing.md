@@ -19,6 +19,9 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
   site shares
 - `ui/screen/UndercutRoute.kt` — the tab: overview canvas, "Add undercut" (and its chooser), blank-draft toggle,
   preview/print/export
+- `ui/screen/UndercutPageOrientationRow.kt` / `ui/screen/UndercutSheetElectionRows.kt` — the
+  per-job sheet rows shared by the tab and the options panel: "Page", "Distance to S.E.T.",
+  "Sections to print"
 - `ui/screen/UndercutDetail.kt` — `UndercutWindowDetailOverlay`, the full-screen zoomed window +
   cards
 - `ui/screen/UndercutSharedDraw.kt` — what the tab and the overlay share but `geom/` cannot
@@ -50,10 +53,34 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
 - **"Drawing settings" section** (shown once at least one cut is recorded, BELOW the "Recorded
   undercuts" list, collapsed by default behind a header row with a chevron, `testTag
   "undercut_drawing_settings_toggle"` — usability review: nothing between Add and the list may
-  read as a required step). It holds the three rows below, in this order. Tab block order
+  read as a required step). It holds the rows below, in this order: Page, Distance to S.E.T.,
+  Drawn depth, Draw to the shaft end, Split cuts at liner edges. Tab block order
   (COMPACT/MEDIUM): intro, overview canvas, Preview | Options, Add undercut, Recorded undercuts,
-  Drawing settings, then the blank-draft switch and Print / Preview / Export.
-- **"Drawn depth" slider** (the first row of Drawing settings; label formerly "Cut depth
+  Drawing settings, then the print group — "Sections to print" (two or more sections; never
+  collapsed), the blank-draft switch and Print / Preview / Export.
+- **"Page" row** (the FIRST row of Drawing settings, above Drawn depth; shared composable
+  `UndercutPageOrientationRow`, chips Auto | Landscape | Portrait, testTags
+  `undercut_page_auto|_landscape|_portrait`): drives `UndercutRecord.pageOrientation` through
+  `ShaftViewModel.setUndercutPageOrientation` (mirrors `setUndercutDrawToSet`: undoable, marks
+  dirty, no-op when unchanged). See "Page orientation" under PDF layout.
+- **"Distance to S.E.T." row** (the SECOND row of Drawing settings, right after Page; shared
+  composable `UndercutSetDatumRow`, chips Nearest | AFT S.E.T. | FWD S.E.T., testTags
+  `undercut_set_datum_nearest|_aft|_fwd`, caption "The strip title and the dimension at the strip's
+  edge measure to this S.E.T. Saved with this job."): drives `UndercutRecord.setDatum` through
+  `ShaftViewModel.setUndercutSetDatum` (undoable, marks dirty, no-op when unchanged). See "S.E.T.
+  lead" under PDF layout.
+- **"Sections to print" list** (NOT in Drawing settings: it changes what prints, so it sits
+  directly above the Blank draft row and the Print / Preview / Export trio and is never collapsed;
+  shared composable `UndercutPrintSectionsList`, one checkbox row per section AFT → FWD, testTags
+  `undercut_print_section_<liner id>` / `undercut_print_section_free_<first cut id>`, caption
+  `undercutPrintSectionsCaption`): shown only when the sheet has two or more sections (one section
+  has nothing to choose); drives `excludedLinerIds`/`excludedFreeCutIds` through
+  `ShaftViewModel.setUndercutSectionPrinted`. The rows of the Recorded undercuts list whose cut is
+  in a deselected section read "Not on the printout" (`undercutCutIdsNotPrinted`). With every
+  section off, Print and Export are disabled with `UNDERCUT_NONE_SELECTED_MESSAGE` (testTag
+  `undercut_none_selected_message`) while Preview still opens. See "Sections to print" under PDF
+  layout.
+- **"Drawn depth" slider** (the third row of Drawing settings; label formerly "Cut depth
   exaggeration", caption "Makes shallow cuts easier to see — 0% is true scale. Printed Ø values
   never change. Saved with this job."): 0 – `UNDERCUT_EXAGGERATION_MAX_FRAC` with a live "%" readout,
   committing continuously through `ShaftViewModel.setUndercutExaggeration` — the OAL field's
@@ -142,6 +169,10 @@ data class UndercutRecord(
     val undercuts: List<Undercut> = emptyList(),
     val exaggerationFrac: Float = 0.25f,
     val drawToSet: Boolean = false,
+    val pageOrientation: UndercutPageOrientation = UndercutPageOrientation.AUTO,
+    val setDatum: UndercutSetDatum = UndercutSetDatum.NEAREST,
+    val excludedLinerIds: List<String> = emptyList(),
+    val excludedFreeCutIds: List<String> = emptyList(),
 )
 ```
 
@@ -149,6 +180,11 @@ data class UndercutRecord(
   decode off): per-document because it is a FIT for this shaft's geometry (how close a liner sits
   to a shaft end), never a look pref — the `exaggerationFrac` posture, not `PdfPrefs`. Display and
   dimensioning only: no stored cut moves.
+- **`pageOrientation`**, **`setDatum`**, **`excludedLinerIds`**, **`excludedFreeCutIds`** — the
+  other per-job fits, all additive + defaulted (older files decode off), none of them geometry: the
+  page shape ("Page orientation"), which S.E.T. the strips measure to ("S.E.T. lead"), and the
+  sections left off the printout ("Sections to print"). `setDatum` and `pageOrientation` serialize
+  by name through tolerant serializers; the exclusion ids are never pruned at decode.
 
 - **Canonical storage is shaft-space mm** (`startFromAftMm`, from the AFT face) — the same
   space as `Segment.startFromAftMm` and `computeSetPositionsInMeasureSpace`'s output (its
@@ -1463,7 +1499,9 @@ the S-curve break (`drawBreakEdgeCompose`, AFT `eyeAtTop = true`, FWD `false`).
 
 ## PDF layout
 
-`pdf/UndercutPdfComposer.kt` — landscape US Letter (792 × 612 pt), 36 pt margins.
+`pdf/UndercutPdfComposer.kt` — US Letter, 36 pt margins, landscape (792 × 612 pt) or portrait
+(612 × 792 pt) per the job's page orientation (see "Page orientation" below). The rest of this
+section describes the landscape page; the portrait differences are collected there.
 
 ### The strips own the page
 
@@ -1604,7 +1642,8 @@ strips minus a 22 pt orientation row, so a lone full-width strip owns ≈ 414 pt
 - **Detail strips**: page mode from strip count (`determineUndercutPdfMode`, delegating to
   `determineWearPdfMode`) — counting **started** strips exactly like cut-derived ones: 1 →
   `COMBINED` (one full-width strip), 2+ → `GRID` (2-column, max 4 + "+N more" overflow note),
-  0 → `PROFILE_FORM` (the fallback above). Vertical/horizontal strip banding reuses
+  0 → `PROFILE_FORM` (the fallback above) — the landscape page; a portrait page stacks one column
+  instead (see "Page orientation"). Vertical/horizontal strip banding reuses
   `computeWearVerticalLayout`/`computeWearStripGridLayout`/`computeWearStripHorizontalLayout`
   verbatim (count-driven, content-agnostic). Per strip:
   - the profile drawn over the strip's **draw range** (`strip.drawStartMm`/`drawEndMm`) at
@@ -1623,7 +1662,10 @@ strips minus a 22 pt orientation row, so a lone full-width strip owns ≈ 414 pt
     stays clamped to `[0, oalMm]`, so no datum moves, no dimension changes, and a cut at a shaft
     end keeps its flat physical end. That widening is blind to the profile and can carry an end
     onto a short piece again, so `drawUndercutDetailStrip` runs `withUndercutBreakRoom` once
-    more on its result before drawing;
+    more on its result before drawing. A strip that carries an **S.E.T. lead** is widened further,
+    on the lead's side ONLY, by `computeUndercutStripDrawRange(leadSide, leadRoomPt)` →
+    `undercutWidenForSetLead` (see "S.E.T. lead"); a strip with no lead gets exactly the range
+    above, and the break-room rule still runs last;
   - **chained dimension rail** (`buildUndercutRailSpans`), run over the strip's **chain range**
     (`strip.chainStartMm`/`chainEndMm`) — **not** the draw range: chain AFT datum → first
     shoulder, each undercut's own length, each inter-cut gap, remainder to chain FWD datum. On a
@@ -1699,18 +1741,24 @@ strips minus a 22 pt orientation row, so a lone full-width strip owns ≈ 414 pt
     `displayUnits`). A bare-shaft strip passes no OD and prints as before; the blank write-in title
     is unchanged (no OD). The distance is the **liner's own**
     edge-to-SET datum (`buildLinerAnchorLabel` + `linerAnchorForPdf`, the exact figure the
-    schematic and wear sheet print for this liner), **never a cut's shoulder** — a title that
+    schematic and wear sheet print for this liner, measured to the side
+    `undercutStripSetSide` resolves — the job's "Distance to S.E.T." choice, NEAREST being the
+    liner's nearer S.E.T., ties AFT; `buildLinerAnchorLabel(forced)`), **never a cut's shoulder** — a title that
     names the liner but measures to a cut reads as the liner sitting at the cut's position
     (on-device report: a cut 11.5 in into a liner 20 in from the AFT SET printed the liner as
     31.5 in out; cuts are located on the chain rail, from the liner's edges). A `FreeStrip`
     has nothing to name (a bare-shaft span carries no shop identity) and prints the anchor
-    alone: its S.E.T. is chosen by proximity (`undercutAnchorFor`: strip midpoint vs
-    SET-to-SET midpoint), distance measured to the strip's **near** shoulder — reported as a
+    alone: its S.E.T. is the side `undercutStripSetSide` resolves (NEAREST: the
+    proximity rule, `nearestSetReference` over the strip's shoulders; AFT / FWD: the job's forced
+    choice, passed as `undercutAnchorFor(forcedSide)`), distance measured to the strip's **near** shoulder — reported as a
     magnitude even when the strip sits outboard of its chosen SET. Either way the title aligns
     toward its SET (left for AFT, right for FWD). A liner strip with zero drawable cuts (every
     assigned span clamped away) still prints the liner name, its OD and its anchor. Blank mode: a
     writing rule + both directions printed for the machinist to circle one, always
     left-aligned (a write-in sheet has no presumed measurement direction).
+- **One side, shared with the lead.** The title and the S.E.T. lead at the strip's edge read the
+  SAME `undercutStripSetSide` result (see "S.E.T. lead"), so a strip never names one S.E.T. in its
+  title and dimensions to the other.
 - **Blank/template mode** (`blankValues = true`): `effectiveRecord = UndercutRecord()` — the
   record is dropped before the strips are built (matching the wear sheet's decision that blank
   templates carry no recorded stations), so the page comes out as **started liner strips** with
@@ -1723,6 +1771,138 @@ strips minus a 22 pt orientation row, so a lone full-width strip owns ≈ 414 pt
   concern with no place on a machining record).
 - Standard composer contract: `pdfPrefs` shading, `lineThicknessScale`, `resolvedComponents`
   (`withResolvedBodies`) — same signature shape as `composeWearPdf`/`composeRunoutPdf`.
+
+### Page orientation
+
+The undercut drawing is the one portrait-capable document (on-device request: several sections
+read best stacked down a portrait page; one section reads best landscape). Every other document
+stays landscape.
+
+- **The field** — `UndercutRecord.pageOrientation: UndercutPageOrientation` (`AUTO` default |
+  `LANDSCAPE` | `PORTRAIT`, `model/Undercut.kt`), serialized by name through a tolerant serializer
+  (unknown or missing → `AUTO`); additive, no `CURRENT_VERSION` bump. A per-job FIT like
+  `drawToSet`, not an app-wide look: not in `PdfPrefs`, not captured by drawing profiles.
+- **The resolver** — `resolveUndercutPageOrientation(choice, stripCount)`
+  (`pdf/UndercutStripLayout.kt`): a forced value wins; `AUTO` is portrait when the sheet prints two
+  or more PRINTED SECTIONS, landscape otherwise (0 strips = the whole-shaft profile fallback =
+  landscape). A section is a printed detail strip — one liner, or one bare-shaft cluster window —
+  never a cut, and a section the job leaves off ("Sections to print") is not counted: with one
+  section printed, Auto is landscape. Blank drafts count their started liner strips (a 3-liner
+  shaft's blank draft is portrait). A sheet with EVERY section left off is always landscape
+  (see "Sections to print").
+- **One strip source** — `undercutSheetStrips(...)` (extracted from `composeUndercutPdf`) builds the
+  strip list ONCE; the composer draws from it and `undercutSheetOrientation(spec,
+  resolvedComponents, undercutRecord, blankValues)` counts it, so the page size a caller starts and
+  the layout the composer draws cannot disagree. The list is the PRINTED strips (the "Sections to
+  print" filter runs inside it).
+- **Page plumbing** — `util/PdfSafExport.kt` defines `PdfPageOrientation(widthPt, heightPt)`
+  (`LANDSCAPE` 792 × 612, `PORTRAIT` 612 × 792). `writeShaftPdfToUri`, `renderPdfPageBitmap`
+  (`util/PdfRaster.kt`) and `printShaftPdfPage` (`util/PdfPrint.kt`; print media
+  `NA_LETTER.asPortrait()` for portrait) take an `orientation` defaulting to `LANDSCAPE`, so every
+  other document is byte-identical. Undercut print, preview, SAF export and the Consolidated
+  Output tab's Export all start the page `undercutSheetOrientation` resolves. The composer reads
+  the page shape off `page.info`; a writer that started a fixed landscape page would draw a
+  portrait layout off the page.
+- **Landscape** is byte-identical to the layout above: one strip full width, 2+ in the 2-column
+  grid, four per page.
+- **Portrait cells** — ONE column, every strip the full content width, stacked top to bottom
+  AFT → FWD, capped at `UNDERCUT_PORTRAIT_MAX_PER_PAGE` = 4 (equal to the grid's cap, so choosing
+  portrait never pushes a section into the "+N more" note). Cell heights come from the pure
+  `undercutStripCells(portrait, …, overheadsPt)`; each strip's vertical overhead (rails, label
+  rows, Ø callouts, title) is measured from the very plan it draws.
+  - A page WITH ROOM uses `undercutPortraitNaturalCells`: every strip is sized to its overhead plus
+    ONE common shaft height (the page's smallest `undercutNaturalCylinderPt`, which satisfies every
+    strip's cylinder cap, so no strip has spare height to spend between its figure and its title),
+    and the leftover is spread as equal air above, between and below the strips (a lone
+    forced-portrait strip is centred).
+  - A CROWDED page falls back to the even split, or to `undercutPortraitStripHeights` (equal shaft
+    height, a busy strip taking height from a plain one) when the even split would squeeze a shaft
+    under `UNDERCUT_CYL_MAX_FLOOR_PT`.
+  - Portrait strips reserve `UC_PORTRAIT_TITLE_AIR_PT` (10 pt) between the Ø callouts and the
+    strip title.
+- **Portrait header** — the job-info line shrinks to fit (down to `UC_HEADER_MIN_FIT_TEXT_PT`)
+  before it would be ellipsized: `drawSheetHeader(minFitTextSizePt)`, default 0 = unchanged for
+  every other sheet.
+- **UI** — the shared "Page" row (`UndercutPageOrientationRow`) is the first row of the tab's
+  "Drawing settings" and sits in the undercut options panel's top Content block under the Blank
+  draft chip. Its caption on Auto names the page this sheet prints and the section count; on a
+  forced value it reads "Saved with this job.". The options sheet's scope note also says
+  "Controls saved with this job say so."
+
+### S.E.T. lead
+
+On-device request: "a half dimensional rail at the edge that gives the distance to the nearest
+S.E.T. or the S.E.T. selection the user has in place … as the leading or ending dimension rail it
+gives better visual continuity". The strip title already states the distance to the S.E.T.; the
+lead repeats it as the first (or last) dimension of the level-0 chain, so the rail reads on to the
+datum.
+
+- **The choice** — `UndercutRecord.setDatum: UndercutSetDatum` (`NEAREST` default | `AFT` | `FWD`,
+  `model/Undercut.kt`), serialized by name through a tolerant serializer (unknown or missing →
+  `NEAREST`); additive, no `CURRENT_VERSION` bump. A per-job FIT like `drawToSet`, not in `PdfPrefs`.
+- **The side** — ONE resolver, `undercutStripSetSide(strip, spec, sets, datum, stripSpans)`
+  (`pdf/UndercutStripLayout.kt`). AFT / FWD force that S.E.T. NEAREST is the strip title's original
+  rule: a liner strip takes the liner's nearer edge-to-S.E.T. (`wearStripAnchorForSpan`, the rule
+  `linerAnchorForPdf` uses, ties AFT); a bare-shaft strip takes `nearestSetReference` over its
+  shoulders. The strip title reads the same result (`buildLinerAnchorLabel(forced)`,
+  `undercutAnchorFor(forcedSide)`), so NEAREST titles print byte-identically to before.
+- **The span** — on every strip WITH recorded cuts, `buildUndercutSetLeadSpan` adds a span on that
+  side from the chain's outer witness (`chainEndMm` for the FWD S.E.T., `chainStartMm` for the AFT)
+  to the S.E.T., labelled with the distance (`undercutSetLeadValueMm`) like every chain value
+  (document / per-component unit, dual-aware).
+  - The S.E.T. is usually OFF the strip, so the lead is a **half dimension**: one arrowhead at the
+    datum, the other end open at the strip's drawn edge — no head, no witness
+    (`WearRailSpanLayout.openStart`/`openEnd`, honoured by `drawUndercutRail`).
+  - An S.E.T. INSIDE the drawn range gives a normal two-headed span with a witness at the S.E.T.
+  - **No lead** on a started or blank strip (no cuts, nothing recorded), when "Draw to the shaft
+    end" already chains to that S.E.T., or when the S.E.T. lies on the wrong side of the datum
+    (a cut outboard of its S.E.T.).
+- **One planner, one draw routine** — the lead is laid out WITH the chain in the ONE
+  `planUndercutStripRails(setLead)` and drawn by the ONE `drawUndercutStripRails`, so the detail
+  canvas (whose range is widened by `undercutDetailLeadDrawRange`) shows it as the sheet prints it.
+  Do not give the canvas its own lead.
+- **Lead room** — the strip's drawn range is widened on the lead side ONLY so the value seats IN its
+  line with an open tail (`computeUndercutStripDrawRange(leadSide, leadRoomPt)` →
+  `undercutWidenForSetLead`; room `undercutSetLeadRoomPt` = value width + 2 × text pad + 2 ×
+  max(`UNDERCUT_SET_LEAD_TAIL_PT` = 8 pt, 2 × arrow)). The extra is undimensioned stock heading
+  toward the S.E.T., never a datum move; the break-room rule still runs after it. Widening lowers
+  that strip's scale slightly; the other side keeps its 24 pt minimum pad. A strip with no lead gets
+  exactly the old range.
+- **UI** — the "Distance to S.E.T." row (`UndercutSetDatumRow`): the tab's Drawing settings right
+  after "Page", and the undercut options panel's Content block. Setter `setUndercutSetDatum`.
+- Printed output changes on EVERY sheet with cuts, landscape and portrait.
+
+### Sections to print
+
+On-device request: "sometimes we put them all on one sheet, sometimes they are made separately".
+Section-level pick-and-print — no multi-page output.
+
+- **The election** — per-job `UndercutRecord.excludedLinerIds` (liner strips, a liner's started
+  strip on a blank draft or empty export included) and `excludedFreeCutIds` (a bare-shaft strip is
+  excluded iff ALL its member cuts are listed — a cut added to an excluded area brings the whole
+  area back, never a partial chain). Additive, no version bump. Default = everything prints; a new
+  liner or cut prints by default. Orphan ids are skipped at render and never pruned at decode.
+- **One filter** — `isUndercutStripPrinted(strip, record)`, applied inside `undercutSheetStrips`
+  (which also returns `allStrips`, the list before the filter, and `noneSelected`). The composer,
+  `undercutSheetStripCount`, `undercutSheetOrientation` (Auto counts PRINTED sections) and every
+  caption therefore agree. The election is read off the record itself, so a blank draft keeps it.
+- **Every section off** — `noneSelected` is true when there were sections and all are left off. The
+  composer prints the header, `UNDERCUT_NONE_SELECTED_NOTE` ("No undercut sections selected for this
+  sheet.") and the Notes row, on a landscape page; it NEVER falls back to the whole-shaft profile,
+  which would print a drawing nobody asked for. The tab disables Print and Export with "No sections
+  selected to print — tick at least one under "Sections to print"."; Preview still opens. The
+  Output tab's Export all SKIPS the undercut drawing (`undercutSheetNoneSelected`), and its result
+  line ends `EXPORT_ALL_UNDERCUT_SKIPPED` ("Undercut drawing skipped: no sections selected."). The
+  tab's Thread options count printed strips only.
+- **UI** — `UndercutPrintSectionsList`: a checkbox per section AFT → FWD, labelled as the strip
+  title names it (`undercutPrintSections`; liner rows `FWD Liner Ø10.000" (3 cuts)`, bare-shaft rows
+  `Bare shaft — 12" FROM AFT S.E.T. (1 cut)`, the anchor to the S.E.T. `undercutStripSetSide`
+  resolves), caption "<n> of <m> sections print. Saved with this job.". Shown for two or more
+  sections, never collapsed: directly above the Blank draft row and the Print buttons on the tab,
+  and in the undercut options panel. Setter `setUndercutSectionPrinted` (undoable) touches only the
+  ids the strip names.
+
+---
 
 ---
 

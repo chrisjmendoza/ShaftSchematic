@@ -312,6 +312,9 @@ figcaption::before { content: "Figure " counter(fig) ".\2002"; font-weight: 600;
 /* Full sheets, strips and close-ups. build.py moves a figure within its section when its
    written place would leave a hole at a page foot (see place_figures). */
 figure.wide img, figure.strip img { width: 100%; }
+/* A full sheet drawn on a portrait page (the undercut drawing): "wide" so build.py places it as a
+   full sheet, "portrait" so it is height-capped instead of stretched to the full text width. */
+figure.wide.portrait img { width: auto; max-height: 5.8in; }
 figure.detail img { max-height: 1.95in; }
 figure.detail figcaption { text-align: center; max-width: 5.2in; margin-left: auto; margin-right: auto; }
 /* A pair of close-ups side by side: build.py wraps the pair in one .figrow, placed as one unit. */

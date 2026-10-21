@@ -119,6 +119,10 @@ import com.android.shaftschematic.model.UndercutReference
 import com.android.shaftschematic.model.collidingIds
 import com.android.shaftschematic.pdf.buildUndercutStripTitle
 import com.android.shaftschematic.pdf.composeUndercutPdf
+import com.android.shaftschematic.pdf.resolveUndercutPageOrientation
+import com.android.shaftschematic.pdf.isUndercutStripPrinted
+import com.android.shaftschematic.pdf.undercutSheetOrientation
+import com.android.shaftschematic.pdf.undercutSheetStripCount
 import com.android.shaftschematic.pdf.formatDiaWithUnit
 import com.android.shaftschematic.pdf.formatLenWithUnit
 import com.android.shaftschematic.ui.adaptive.LocalSidebarPermanent
@@ -137,6 +141,9 @@ import com.android.shaftschematic.ui.viewmodel.removeUndercut
 import com.android.shaftschematic.ui.viewmodel.restoreUndercut
 import com.android.shaftschematic.ui.viewmodel.setPdfUndercutSplitAtLinerEdge
 import com.android.shaftschematic.ui.viewmodel.setUndercutDrawToSet
+import com.android.shaftschematic.ui.viewmodel.setUndercutPageOrientation
+import com.android.shaftschematic.ui.viewmodel.setUndercutSectionPrinted
+import com.android.shaftschematic.ui.viewmodel.setUndercutSetDatum
 import com.android.shaftschematic.ui.viewmodel.setUndercutExaggeration
 import com.android.shaftschematic.ui.viewmodel.updateUndercut
 import com.android.shaftschematic.ui.viewmodel.updateUndercutReference
@@ -185,7 +192,8 @@ import kotlin.math.roundToInt
  *   row opens that cut's strip; the trailing icon deletes it confirm-free, with a "Cut N deleted"
  *   snackbar Undo (`restoreUndercut`).
  * - **Drawing settings** — collapsed under the list, out of the authoring flow (usability
- *   review: nothing between Add and the list may read as a required step): "Drawn depth" (a
+ *   review: nothing between Add and the list may read as a required step): "Page" (per job —
+ *   Auto | Landscape | Portrait, [UndercutPageOrientationRow]), "Drawn depth" (a
  *   slider, 0 – `UNDERCUT_EXAGGERATION_MAX_FRAC`, storing the sheet's drawn-depth setting in the
  *   record — display-only styling for every notch draw site, never a stored or printed Ø),
  *   "Draw to the shaft end" (per job) and "Split cuts at liner edges" (app-wide).
@@ -338,7 +346,10 @@ fun UndercutRoute(
         val recordSnapshot = undercutRecord
         val blankSnapshot = blankDraft
         val displayUnitsSnapshot = vm.currentDisplayUnits()
-        printShaftPdfPage(ctx, jobName) { page ->
+        // The page the sheet's section count calls for — the same resolution the preview and
+        // the export start.
+        val orientation = undercutSheetOrientation(specSnapshot, resolvedSnapshot, recordSnapshot, blankSnapshot)
+        printShaftPdfPage(ctx, jobName, orientation) { page ->
             composeUndercutPdf(
                 page = page, spec = specSnapshot,
                 project = projectSnapshot, unit = unitSnapshot,
@@ -386,8 +397,12 @@ fun UndercutRoute(
     // Whether the printed sheet draws a thread anywhere — the gate on its options' Thread section.
     // The sheet prints the cut strips, or a started strip per liner when nothing is recorded, or
     // the whole-shaft profile when it has neither (the composer's own order).
-    val sheetDrawsThread = remember(strips, linerSpans, oalMm, segs, setReachMm, stripAftSetMm, stripFwdSetMm, spec) {
-        val pageStrips = strips.ifEmpty {
+    // Only the PRINTED sections count ("Sections to print"): a thread reached only by a section left
+    // off draws nowhere, and a sheet with every section left off draws no shaft at all.
+    val sheetDrawsThread = remember(
+        strips, linerSpans, oalMm, segs, setReachMm, stripAftSetMm, stripFwdSetMm, spec, undercutRecord,
+    ) {
+        val allStrips = strips.ifEmpty {
             linerSpans.sortedBy { it.startMm }.map {
                 linerStripFor(
                     it, emptyList(), oalMm, segs = segs,
@@ -395,12 +410,36 @@ fun UndercutRoute(
                 )
             }
         }
-        if (pageStrips.isEmpty()) hasDrawnThreads(spec)
-        else undercutStripsReachThread(
-            pageStrips,
-            spec.threads.map { it.startFromAftMm to it.startFromAftMm + it.lengthMm },
+        val pageStrips = allStrips.filter { isUndercutStripPrinted(it, undercutRecord) }
+        when {
+            allStrips.isEmpty() -> hasDrawnThreads(spec)
+            pageStrips.isEmpty() -> false
+            else -> undercutStripsReachThread(
+                pageStrips,
+                spec.threads.map { it.startFromAftMm to it.startFromAftMm + it.lengthMm },
+            )
+        }
+    }
+    // The printed sheet's section count and the page it resolves to — the print path's own
+    // computation (`undercutSheetStripCount`, blank draft included), so the Page caption names
+    // the page that will print.
+    val sheetStripCount = remember(spec, resolvedComponents, undercutRecord, blankDraft) {
+        undercutSheetStripCount(spec, resolvedComponents, undercutRecord, blankDraft)
+    }
+    val sheetOrientation = resolveUndercutPageOrientation(undercutRecord.pageOrientation, sheetStripCount)
+    // "Sections to print" (per job): every section the sheet could print, AFT → FWD and before the
+    // election, labelled as its strip title names it; the cuts in a section left off; and whether
+    // the job leaves EVERY section off, which takes Print and Export away (Preview shows the note).
+    val printSections = remember(spec, resolvedComponents, undercutRecord, blankDraft, unit, unitOverrides, dualUnits) {
+        undercutPrintSections(
+            spec, resolvedComponents, undercutRecord, blankDraft, DisplayUnits(unit, unitOverrides, dualUnits),
         )
     }
+    val notPrintedCutIds = remember(spec, resolvedComponents, undercutRecord) {
+        undercutCutIdsNotPrinted(spec, resolvedComponents, undercutRecord)
+    }
+    val noSectionSelected = printSections.isNotEmpty() && printSections.none { it.printed }
+    val outputEnabled = gate.enabled && !noSectionSelected
     val freeWindows = remember(strips) {
         strips.filterIsInstance<UndercutStrip.FreeStrip>().map { it.window }
     }
@@ -500,7 +539,8 @@ fun UndercutRoute(
         if (uri != null) {
             // Hardened write: a composer throw yields a valid error page, never a
             // truncated file (util/PdfSafExport.kt — one implementation for every tab).
-            val wrote = writeShaftPdfToUri(ctx, uri) { page ->
+            val orientation = undercutSheetOrientation(spec, resolvedComponents, undercutRecord, blankDraft)
+            val wrote = writeShaftPdfToUri(ctx, uri, orientation) { page ->
                 composeUndercutPdf(
                     page = page, spec = spec,
                     project = ProjectInfo(customer = customer, vessel = vessel,
@@ -542,7 +582,10 @@ fun UndercutRoute(
         val projectSnapshot = ProjectInfo(customer = customer, vessel = vessel,
             jobNumber = jobNumber, side = shaftPosition, item = item)
         val bmp = withContext(Dispatchers.IO) {
-            renderPdfPageBitmap(ctx) { page ->
+            // The page shape follows the sheet's section count and the job's choice; both of its
+            // inputs (`undercutRecord`, `blankDraft`, plus the geometry) are keys above.
+            val orientation = undercutSheetOrientation(spec, resolvedComponents, undercutRecord, blankDraft)
+            renderPdfPageBitmap(ctx, orientation = orientation) { page ->
                 composeUndercutPdf(
                     page = page, spec = spec, project = projectSnapshot, unit = unit,
                     displayUnits = displayUnitsSnapshot,
@@ -810,6 +853,7 @@ fun UndercutRoute(
                         UndercutListRow(
                             number = number,
                             undercut = u,
+                            notPrinted = u.id in notPrintedCutIds,
                             unit = unit,
                             oalMm = oalMm,
                             linerSpans = linerSpans,
@@ -860,6 +904,21 @@ fun UndercutRoute(
                 // release (PreviewTuning doctrine) — committing per frame would mark the document
                 // dirty on every pixel of travel.
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    // Per-job page shape: a fit for how many sections this sheet prints.
+                    UndercutPageOrientationRow(
+                        choice = undercutRecord.pageOrientation,
+                        stripCount = sheetStripCount,
+                        resolved = sheetOrientation,
+                        onChoose = { vm.setUndercutPageOrientation(it) },
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
+                    // Per-job: which S.E.T. the strip titles and the lead at each strip's edge
+                    // measure to.
+                    UndercutSetDatumRow(
+                        choice = undercutRecord.setDatum,
+                        onChoose = { vm.setUndercutSetDatum(it) },
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -944,6 +1003,11 @@ fun UndercutRoute(
 
     // ── Blank draft, export gate, Print / Preview / Export ───────────────────
     val printGroup: @Composable ColumnScope.() -> Unit = {
+        // What prints, beside Print and never folded away — it changes the sheet (per job).
+        UndercutPrintSectionsList(
+            sections = printSections,
+            onSetPrinted = { strip, printed -> vm.setUndercutSectionPrinted(strip, printed) },
+        )
         Row(verticalAlignment = Alignment.CenterVertically) {
             Switch(checked = blankDraft, onCheckedChange = { blankDraft = it })
             Spacer(Modifier.width(12.dp))
@@ -963,6 +1027,13 @@ fun UndercutRoute(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
             )
+        } else if (noSectionSelected) {
+            Text(
+                UNDERCUT_NONE_SELECTED_MESSAGE,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.testTag("undercut_none_selected_message"),
+            )
         }
 
         DocumentActionButtons(
@@ -978,6 +1049,7 @@ fun UndercutRoute(
                 }
             },
             enabled = gate.enabled,
+            printEnabled = outputEnabled,
         )
     }
 
@@ -1291,6 +1363,8 @@ fun UndercutRoute(
             // The tab body's Print action, unchanged — one function behind both, behind the same
             // missing-Ø question.
             onPrint = { guardMissingDia(export = false) { printUndercutDrawing() } },
+            // Every section left off: the page previews its note, but there is nothing to print.
+            actionsEnabled = !noSectionSelected,
             optionsSheet = {
                 // Same blank-draft state as the tab body's switch — ONE state behind both, so
                 // the tab and the sheet can never disagree about what the preview is showing.
@@ -1387,8 +1461,9 @@ private class UndercutMissingDiaAsk(val count: Int, val export: Boolean, val act
  * The undercut drawing's PDF options — ONE configuration of the shared [RunoutWearOptionsSheet]
  * behind every surface that opens it: the preview's Tune panel, the tab's "Options" button and the
  * detail page's Options icon. Every row is a remote control for the one app-wide `PdfPrefs` value
- * (or the document's own dual-units switch), so the three can never disagree. [blankDraft] is the
- * tab's session-only write-in election.
+ * (or the document's own dual-units switch), except the per-job "Page" row, which writes this job's
+ * `UndercutRecord.pageOrientation` and says so; the three surfaces can never disagree. [blankDraft]
+ * is the tab's session-only write-in election.
  */
 @Composable
 internal fun UndercutOptionsSheet(
@@ -1416,6 +1491,19 @@ internal fun UndercutOptionsSheet(
     val pdfThreadSlant by vm.pdfThreadSlant.collectAsState()
     val pdfThreadDensity by vm.pdfThreadDensity.collectAsState()
     val pdfArrowSizePt by vm.pdfArrowSizePt.collectAsState()
+    val resolvedComponents by vm.resolvedComponents.collectAsState()
+    val undercutRecord by vm.undercutRecord.collectAsState()
+    val unitOverrides by vm.unitOverrides.collectAsState()
+    val docUnit by vm.unit.collectAsState()
+    // The print path's own count and page (blank draft included), for the Page row's caption.
+    val stripCount = remember(spec, resolvedComponents, undercutRecord, blankDraft) {
+        undercutSheetStripCount(spec, resolvedComponents, undercutRecord, blankDraft)
+    }
+    val printSections = remember(spec, resolvedComponents, undercutRecord, blankDraft, docUnit, unitOverrides, dualUnits) {
+        undercutPrintSections(
+            spec, resolvedComponents, undercutRecord, blankDraft, DisplayUnits(docUnit, unitOverrides, dualUnits),
+        )
+    }
     RunoutWearOptionsSheet(
         dualUnits = dualUnits,
         onDualUnitsChange = { vm.setDualUnits(it) },
@@ -1444,6 +1532,23 @@ internal fun UndercutOptionsSheet(
         threadDensity = pdfThreadDensity,
         blankDraft = blankDraft,
         onSetBlankDraft = onSetBlankDraft,
+        undercutPageOrientation = undercutRecord.pageOrientation,
+        undercutStripCount = stripCount,
+        undercutResolvedOrientation = resolveUndercutPageOrientation(undercutRecord.pageOrientation, stripCount),
+        undercutContentRows = {
+            Spacer(Modifier.height(12.dp))
+            UndercutSetDatumRow(
+                choice = undercutRecord.setDatum,
+                onChoose = { vm.setUndercutSetDatum(it) },
+            )
+            if (printSections.size >= 2) {
+                Spacer(Modifier.height(12.dp))
+                UndercutPrintSectionsList(
+                    sections = printSections,
+                    onSetPrinted = { strip, printed -> vm.setUndercutSectionPrinted(strip, printed) },
+                )
+            }
+        },
     )
 }
 
@@ -1480,6 +1585,8 @@ private fun openUndercutPdf(context: Context, uri: Uri) {
 private fun UndercutListRow(
     number: Int,
     undercut: Undercut,
+    /** The cut sits in a section the job leaves off the printout ("Sections to print"). */
+    notPrinted: Boolean = false,
     unit: UnitSystem,
     oalMm: Float,
     linerSpans: List<UndercutLinerSpan>,
@@ -1537,6 +1644,14 @@ private fun UndercutListRow(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            if (notPrinted) {
+                Text(
+                    text = "Not on the printout",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.testTag("undercut_row_not_printed_${undercut.id}"),
+                )
+            }
             if (undercut.diaMm <= 0f) {
                 Text(
                     text = "Ø not entered",

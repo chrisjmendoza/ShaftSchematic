@@ -541,6 +541,21 @@ data), and each level ≥ 1 gets ONE extra chain row anchored at its **parent's 
 (`buildNestedUndercutRailRows`), reserved through the same `undercutRailRowHeightPt` metric. See
 `docs/archive/UndercutDrawing_PLAN.md`.
 
+The undercut sheet is the one portrait-capable document: its page shape is per-job
+`UndercutRecord.pageOrientation` (AUTO = portrait at 2+ printed sections), resolved ONCE by
+`undercutSheetOrientation` over the same `undercutSheetStrips` the composer draws, and every
+undercut writer (print, preview, export, Export all) starts that page — a writer that starts a
+fixed landscape page would draw a portrait layout off the page.
+
+Each strip with cuts also leads its level-0 chain on to the S.E.T. — a half dimension (one head at
+the datum, open at the drawn edge) planned WITH the chain in the ONE `planUndercutStripRails` and
+drawn by the ONE `drawUndercutStripRails`, so the detail canvas and the sheet cannot differ; its
+side comes from ONE `undercutStripSetSide` (per-job `UndercutRecord.setDatum`) shared with the
+strip title, because a title and a lead resolved separately could name different S.E.T.s. Which
+sections print is ONE filter, `isUndercutStripPrinted`, inside `undercutSheetStrips`, so page
+shape, layout and every caption count the same printed strips; every section off prints a note
+page and never falls back to the whole-shaft profile.
+
 ### The Final schematic is a second geometry, never a view of the original
 `final_spec` (`ShaftDocV1.finalSpec: ShaftSpec?`, sibling of `spec` in the envelope — `null` =
 no final drawing yet) is the drawing the shaft LEAVES with, after the wear/undercut work moved,

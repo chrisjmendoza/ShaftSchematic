@@ -553,7 +553,16 @@ internal val helpSections: List<HelpSection> = listOf(
                     "is exaggerated for visibility (real cuts are hairline-thin at scale) — " +
                     "the printed Ø values are always your typed numbers. The \"Drawn depth\" " +
                     "slider (under \"Drawing settings\" below the list) only changes the " +
-                    "drawing, never the data.",
+                    "drawing, never the data. \"Page\" (Auto | Landscape | Portrait, the " +
+                    "first row of \"Drawing settings\" and in the sheet's PDF options) sets " +
+                    "the printed page: Auto stacks two or more sections down a portrait page " +
+                    "and prints a single section landscape. \"Distance to S.E.T.\" (Nearest | " +
+                    "AFT S.E.T. | FWD S.E.T., right after \"Page\") chooses the S.E.T. that each " +
+                    "strip's title and the short dimension at its edge measure to. \"Sections " +
+                    "to print\" (above the Print buttons when the sheet has two or more " +
+                    "sections) is a checkbox per section; untick the ones you do not want on " +
+                    "this printout, for example to send one liner's cuts to the welder by " +
+                    "itself.",
                 manualAnchor = "recording-undercut",
             ),
             HelpTopic(
@@ -1017,6 +1026,15 @@ internal val helpSections: List<HelpSection> = listOf(
                     "session-only: not saved; it resets each session. On the " +
                     "schematic, \"Ø callouts\" beside it decides whether that blank sheet " +
                     "still carries Ø leaders to fill in.\n" +
+                    "• \"Page\" — on the Undercut Drawing, first under \"Drawing settings\" and " +
+                    "in its PDF options. Auto, Landscape or Portrait; Auto prints portrait when " +
+                    "the sheet has two or more sections to print. Saved with this job.\n" +
+                    "• \"Distance to S.E.T.\" — on the Undercut Drawing, right after \"Page\" and " +
+                    "in its PDF options. Nearest, AFT S.E.T. or FWD S.E.T.: the S.E.T. each " +
+                    "strip's title and the dimension at its edge measure to. Saved with this job.\n" +
+                    "• \"Sections to print\" — on the Undercut Drawing above the Print buttons, " +
+                    "and in its PDF options, when the sheet has two or more sections. Untick a " +
+                    "section to leave it off the printout. Saved with this job.\n" +
                     "• \"Drawn depth\" — on the Undercut Drawing, under \"Drawing settings\". Changes only how " +
                     "deep cuts look, never the printed numbers.\n" +
                     "• \"Draw to the shaft end\" — on the Undercut Drawing, under \"Drawing " +

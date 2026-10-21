@@ -24,8 +24,8 @@ import java.io.File
 const val PDF_PREVIEW_RENDER_SCALE = 2
 
 /**
- * Compose one landscape-Letter page via [composePage], rasterize it to a [Bitmap] at
- * [renderScale], and drop the temp file.
+ * Compose one US Letter page via [composePage] — [orientation]'s size, landscape by default —
+ * rasterize it to a [Bitmap] at [renderScale], and drop the temp file.
  *
  * Must be called off the main thread (use `Dispatchers.IO`). Returns null on any failure —
  * compose, write, or render — so the caller can show an error message instead of crashing.
@@ -39,6 +39,7 @@ const val PDF_PREVIEW_RENDER_SCALE = 2
 fun renderPdfPageBitmap(
     context: Context,
     renderScale: Int = PDF_PREVIEW_RENDER_SCALE,
+    orientation: PdfPageOrientation = PdfPageOrientation.LANDSCAPE,
     composePage: (PdfDocument.Page) -> Unit,
 ): Bitmap? = runCatching {
     val rasterScale = renderScale.coerceAtLeast(1)
@@ -47,7 +48,7 @@ fun renderPdfPageBitmap(
     val doc = PdfDocument()
     try {
         val pageInfo = PdfDocument.PageInfo.Builder(
-            PDF_PAGE_WIDTH_PT, PDF_PAGE_HEIGHT_PT, 1,
+            orientation.widthPt, orientation.heightPt, 1,
         ).create()
         val page = doc.startPage(pageInfo)
         composePage(page)

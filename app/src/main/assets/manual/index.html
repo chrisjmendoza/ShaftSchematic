@@ -1054,6 +1054,9 @@
       <tr><td><span class="ui">Ø callouts</span></td><td>On</td><td>Schematic, Final</td><td>Can be tapped only while Blank draft is on. On: the blank sheet keeps its Ø leaders with a write-in rule. Off: the leaders are left out so diameters can be written in wherever they belong.</td></tr>
       <tr><td><span class="ui">Component names</span></td><td>On</td><td>Schematic, Final</td><td>Component names under the shaft. This is the default for every component; a card's <span class="ui">Show name on drawing</span> toggle overrides it in either direction (see <a href="#components-show-name">Show name on drawing</a>). The same setting is <span class="path">Settings → Drawing → Component names on drawing</span> (see <a href="#settings-component-names">Component names</a>).</td></tr>
       <tr><td><span class="ui">Coupling face</span></td><td>Off</td><td>Runout, Consolidated</td><td>Prints the coupling end view, looking forward, at the bottom right. Saved with this job and shared with the Runout tab.</td></tr>
+      <tr><td><span class="ui">Page</span></td><td>Auto</td><td>Undercut only</td><td>Auto, Landscape or Portrait. Auto prints portrait when the sheet has two or more sections to print, landscape otherwise. Saved with this job. See <a href="#recording-page">Page</a>.</td></tr>
+      <tr><td><span class="ui">Distance to S.E.T.</span></td><td>Nearest</td><td>Undercut only</td><td>Nearest, AFT S.E.T. or FWD S.E.T. Chooses the S.E.T. that each view's title and the short dimension at the view's edge measure to. Saved with this job. See <a href="#recording-set-datum">Distance to S.E.T.</a>.</td></tr>
+      <tr><td><span class="ui">Sections to print</span></td><td>All ticked</td><td>Undercut only</td><td>One checkbox per section, shown when the sheet has two or more. Unticked sections are left off the printed sheet. Saved with this job. See <a href="#recording-sections">Sections to print</a>.</td></tr>
       <tr><td><span class="ui">Runout bubbles</span></td><td>Off</td><td>Final only</td><td>Turns the Final schematic into a Schematic + Runout sheet. See <a href="#documents-final">The Final Schematic tab</a>.</td></tr>
     </tbody>
   </table>
@@ -1080,7 +1083,7 @@
       <tr><td>Runout Sheet</td><td>Blank draft, Coupling face</td><td>Shaft (all four) · Runout bubbles · Thread · Lines &amp; text (Line thickness, Fractions) · Shade in Components · Units</td></tr>
       <tr><td>Consolidated Sheet</td><td>Blank draft, Coupling face</td><td>Every section except Wear. The fullest panel.</td></tr>
       <tr><td>Wear Document</td><td>Blank draft</td><td>Shaft (Shaft height only) · Wear · Thread · Lines &amp; text (Line thickness, Fractions) · Shade in Components (no Explicit bodies only) · Units</td></tr>
-      <tr><td>Undercut Drawing</td><td>Blank draft</td><td>Thread · Lines &amp; text (Line thickness, Fractions) · Shade in Components (with the line-art row, no Explicit bodies only) · Units</td></tr>
+      <tr><td>Undercut Drawing</td><td>Blank draft, Page, Distance to S.E.T., Sections to print</td><td>Thread · Lines &amp; text (Line thickness, Fractions) · Shade in Components (with the line-art row, no Explicit bodies only) · Units</td></tr>
     </tbody>
   </table>
 
@@ -1215,7 +1218,7 @@
   <ol class="steps">
     <li  class="keep">Tap <span class="ui">Print &lt;document&gt;</span> on the tab, or <span class="ui">Print</span> in the preview's top bar.</li>
     <li  class="keep">In the Android print dialog, choose your printer (or Save as PDF).</li>
-    <li  class="keep">Print. The sheet is a single US Letter page, landscape.</li>
+    <li  class="keep">Print. The sheet is a single US Letter page, landscape — or portrait for an undercut drawing that prints in portrait (see <a href="#recording-page">Page</a>).</li>
   </ol>
   <p  class="keep">A printed sheet and an exported PDF of the same document come from the same drawing step, so they are identical. The print job is named like the export file, so a print queue shows which job and drawing each sheet is; a blank schematic job adds “(blank draft)”.</p>
 
@@ -1398,7 +1401,7 @@
           Line thickness · Body S-break · Default drawing size · Dimension arrows · Fractions · Output font · Dual-unit layout · Thread slant and density · Bubble size and height · Shade in Components (Bodies, Explicit bodies only, Tapers, Liners) · Undercut drawing line art, liner outline and split cuts at liner edges · Component names on drawing · Measurement reference · Wear trace depth default · Wear area shade · Taper–liner join
         </td>
         <td>
-          Per-job settings (Shaft height, liner and taper compression, coupling face, wear strip choices) · Dual units on a document and the <span class="ui">Dual-unit display</span> switch · Which controls exist (Per-component units, Liner shoulders, Unit converter in Add dialogs) · Template mode · Open PDF after export · Theme, preview colors and on-screen undercut styles
+          Per-job settings (Shaft height, liner and taper compression, coupling face, wear strip choices, undercut page, S.E.T. distance and sections to print) · Dual units on a document and the <span class="ui">Dual-unit display</span> switch · Which controls exist (Per-component units, Liner shoulders, Unit converter in Add dialogs) · Template mode · Open PDF after export · Theme, preview colors and on-screen undercut styles
         </td>
       </tr>
     </tbody>
@@ -1414,7 +1417,7 @@
   <h2 id="reading-basics">How to read any sheet</h2>
 
   <h3>AFT is on the left</h3>
-  <p  class="keep">Every sheet is printed landscape, with the AFT end of the shaft on the left and the FWD end on the right. The wear and undercut records spell it out with “← AFT” and “FWD →” above the drawing; the schematic and runout sheets follow the same rule without the label. A taper on the left of the page is always the AFT taper.</p>
+  <p  class="keep">Every sheet is printed landscape — except an undercut drawing with two or more sections, which is portrait — with the AFT end of the shaft on the left and the FWD end on the right. The wear and undercut records spell it out with “← AFT” and “FWD →” above the drawing; the schematic and runout sheets follow the same rule without the label. A taper on the left of the page is always the AFT taper.</p>
 
   <h3>The drawing is fitted; the numbers are true</h3>
   <p  class="keep">A 168″ tailshaft has to fit across a sheet of paper, so the drawing is not to scale. Bare shaft and long body runs give up the most length, and a run shortened past a set point carries an S-break pair (see <a href="#reading-sbreak">S-breaks</a>). Liners and tapers are shortened less, never with a break symbol, and a longer taper always draws longer than a shorter one. Keyways stay in proportion to the drawn shaft, and a bigger diameter always draws taller.</p>
@@ -1797,19 +1800,19 @@
 
   <h2 id="reading-undercut">The undercut drawing</h2>
   <p  class="keep">The undercut drawing — titled “UNDERCUT RECORD” — records every section machined below the surface: where each cut starts, how long it is and the diameter it was taken to.</p>
-  <figure class="wide">
-    <img src="figures/undercut.webp" alt="Undercut record: the stern tube liner strip with one 6 inch cut to 5.625 inches, dimensioned 17, 6 and 7 inches; the seal liner strip with an 8 inch cut to 5.440 inches containing a deeper 3 inch cut to 5.375 inches, dimensioned 3, 8 and 5 inches with a second row of 2 1/2, 3 and 2 1/2 inches.">
-    <figcaption>The undercut drawing: one cut on the Stern tube liner, a nested pair on the Seal liner.</figcaption>
+  <figure class="wide portrait">
+    <img src="figures/undercut.webp" alt="Undercut record: the stern tube liner strip with one 6 inch cut to 5.625 inches, dimensioned 17, 6 and 7 inches after a 22 inch open-ended dimension to the AFT S.E.T.; the seal liner strip with an 8 inch cut to 5.440 inches containing a deeper 3 inch cut to 5.375 inches, dimensioned 3, 8 and 5 inches with a second row of 2 1/2, 3 and 2 1/2 inches, and a 24 inch open-ended dimension on to the FWD S.E.T.">
+    <figcaption>The undercut drawing on its portrait page: one cut on the Stern tube liner, a nested pair on the Seal liner.</figcaption>
   </figure>
-  <p  class="keep">There is no whole-shaft view. Below the header and the “← AFT” / “FWD →” row, each liner holding a cut gets its own strip showing the whole liner and a sliver of shaft beyond each end. Cuts on bare shaft get a strip around the cut.</p>
+  <p>There is no whole-shaft view. Below the header and the “← AFT” / “FWD →” row, each liner holding a cut gets its own strip showing the whole liner and a sliver of shaft beyond each end. Cuts on bare shaft get a strip around the cut. A sheet with two or more sections comes out portrait, with the sections stacked down the page from AFT to FWD, each across the full width; a sheet with a single section is landscape. The <span class="ui">Page</span> setting can force either (see <a href="#recording-page">Page</a>). A sheet may carry only some of a job's sections: <span class="ui">Sections to print</span> leaves the others off, so one liner's undercuts can go to the welder by themselves (see <a href="#recording-sections">Sections to print</a>); a sheet with every section left off prints only the header and a note saying so.</p>
 
   <h3>Reading a cut</h3>
   <ul>
     <li  class="keep"><strong>The cut is an open step in the liner.</strong> It is drawn as a reduced-diameter section: a full-height face at each end, a floor line, and a lighter grey core than the liner around it (no shading at all when the sheet is printed as line art). The top is left open — there is no lid line across the cut.</li>
     <li  class="keep"><strong>Depth is drawn deeper than true.</strong> A real undercut is too shallow to see at the strip's scale, so the drawn depth is exaggerated (the deepest cut on the sheet sets the scale). The diameter printed under the cut is the true, measured value.</li>
     <li  class="keep"><strong>The diameter</strong> prints below the cut on a leader: “5.625″” on the Stern tube liner. As on the wear document, it carries its unit and no Ø sign.</li>
-    <li  class="keep"><strong>The rail</strong> chains across the liner: 17″ from the liner's AFT edge to the cut, 6″ of cut, and 7″ from the cut to the FWD edge. The three add up to the liner's length.</li>
-    <li  class="keep"><strong>The title</strong> at the bottom names the liner and its distance from the S.E.T., as on the wear strips: “Stern tube liner — 22″ FROM AFT S.E.T.”.</li>
+    <li><strong>The rail</strong> chains across the liner: 17″ from the liner's AFT edge to the cut, 6″ of cut, and 7″ from the cut to the FWD edge. The three add up to the liner's length. Ahead of them, at the strip's AFT end, the 22″ dimension has one arrowhead and an open end: it is the distance from the liner's edge on to the S.E.T. — the same 22″ the title names. On the Seal liner it trails off the FWD end instead (24″), because that liner is nearer the FWD S.E.T. The open end means the S.E.T. lies past the part of the shaft the strip draws (see <a href="#recording-set-datum">Distance to S.E.T.</a>).</li>
+    <li  class="keep"><strong>The title</strong> at the bottom names the liner and its distance from the S.E.T., as on the wear strips (the S.E.T. is the one chosen under <span class="ui">Distance to S.E.T.</span>, nearest by default): “Stern tube liner — 22″ FROM AFT S.E.T.”.</li>
   </ul>
 
   <h3>Nested cuts</h3>
@@ -2121,9 +2124,9 @@
 
   <h2 id="recording-undercut">Undercuts</h2>
 
-  <figure class="wide">
+  <figure class="wide portrait">
     <img src="figures/undercut.webp" alt="A printed undercut record: two zoomed detail views of liners, each with stepped undercut sections cut into the profile, chained dimensions above, measured diameters below on leader lines, and the liner's distance from the S.E.T. under each view.">
-    <figcaption>The undercut record. The right-hand view shows a deeper 3″ cut nested inside an 8″ relief.</figcaption>
+    <figcaption>The undercut record on its portrait page, one liner view above the other. The lower view shows a deeper 3″ cut nested inside an 8″ relief.</figcaption>
   </figure>
 
   <h3>What an undercut section is</h3>
@@ -2136,7 +2139,8 @@
     <li  class="keep"><strong>The overview</strong> shows the shaft with every cut stepped into it. Every liner, and every bare-shaft area that holds cuts, is tinted as a tap target, with a badge counting its cuts. Tap a liner or highlighted area to open its zoomed detail view.</li>
     <li  class="keep"><span class="ui">Add undercut</span> asks <span class="ui">Where is the cut?</span> with one row for each liner (AFT to FWD, named as the detail page names it, for example <span class="ui">Stern tube liner Ø10.000"</span>), then <span class="ui">Bare shaft — from the AFT S.E.T.</span> and <span class="ui">Bare shaft — from the FWD S.E.T.</span> Pick one and that strip's detail view opens on a new, empty cut, ready for the real numbers. Nothing is recorded until you tap <span class="ui">Record cut</span>; <span class="ui">Cancel</span>, Back or a tap outside the question records nothing.</li>
     <li><span class="ui">Recorded undercuts</span> and, below it, <span class="ui">Drawing settings</span> appear once there is at least one cut. Each row of the list reads like “1. 3in from Stern tube liner AFT edge” with “Length 6in · Ø 5.625in” under it (Ø shows “—” until measured). The rows run AFT to FWD and their numbers are the ones the detail page shows inside each cut, whatever order the cuts were added in; they help you find a cut and never print. A cut with no diameter is marked <span class="ui">Ø not entered</span> and counted above the list; <span class="ui">Print</span> and <span class="ui">Export</span> ask <span class="ui">Print without diameters?</span> before printing such a sheet. Tap a row to open that cut; the bin icon deletes it, with an <span class="ui">Undo</span> in the message that follows.</li>
-    <li  class="keep"><span class="ui">Drawing settings</span>, below the list, is closed until you tap it. It holds <span class="ui">Drawn depth</span> (see <a href="#recording-cut-depth">Drawn depth</a>), <span class="ui">Draw to the shaft end</span> and <span class="ui">Split cuts at liner edges</span>.</li>
+    <li  class="keep"><span class="ui">Drawing settings</span>, below the list, is closed until you tap it. It holds <span class="ui">Page</span> (see <a href="#recording-page">Page</a>), <span class="ui">Distance to S.E.T.</span> (see <a href="#recording-set-datum">Distance to S.E.T.</a>), <span class="ui">Drawn depth</span> (see <a href="#recording-cut-depth">Drawn depth</a>), <span class="ui">Draw to the shaft end</span> and <span class="ui">Split cuts at liner edges</span>.</li>
+    <li  class="keep"><span class="ui">Sections to print</span>, just above the blank-draft switch and never folded away, appears when the sheet has two or more sections (see <a href="#recording-sections">Sections to print</a>).</li>
     <li  class="keep"><span class="ui">Blank draft (write-in)</span> and the <span class="ui">Print Undercut Drawing</span>, <span class="ui">Preview Undercut Drawing</span> and <span class="ui">Export Undercut Drawing PDF</span> buttons.</li>
   </ul>
 
@@ -2195,6 +2199,16 @@
   <p  class="keep">A <span class="ui">New undercut</span> card you leave without typing anything is simply dropped — the default span is a placeholder, not a cut. Tap <span class="ui">Record cut</span> if you really want the default recorded.</p>
   <p  class="keep">A cut that sits partly inside another, or exactly on top of one, is blocked with <span class="ui">Overlaps cut 3 — sit fully inside it or fully clear</span>, naming the other cut by its card number (<span class="ui">Overlaps a cut outside this strip</span> when it is recorded elsewhere on the shaft), and the overlapping stretch is painted on the drawing. Move it fully inside or fully clear of its neighbor.</p>
   <p  class="keep">Two warnings flag a diameter that looks wrong without changing it: <span class="ui">Ø isn't smaller than the shaft here (Ø 7.874 in) — check the number</span> (a cut no smaller than the surface it was cut into; the figure is that surface's diameter), and for a nested cut, <span class="ui">Ø isn't smaller than the surrounding cut's floor here (Ø … in) — check the number</span>.</p>
+
+  <h3 id="recording-page">Page</h3>
+  <p>Several sections read best stacked down a portrait page, with room between them; a single section reads best landscape. <span class="ui">Page</span>, the first row of <span class="ui">Drawing settings</span> (and also at the top of the undercut sheet's PDF options), chooses <span class="ui">Auto</span>, <span class="ui">Landscape</span> or <span class="ui">Portrait</span>. <span class="ui">Auto</span>, the default, prints portrait when the sheet has two or more sections to print — a section is one liner's view, or one view around cuts on bare shaft, however many cuts it holds — and landscape otherwise. Sections you leave off with <span class="ui">Sections to print</span> are not counted. The line under the chips says which page this sheet will print. Print, preview and export all use the same page. The choice is saved with the job and changes only the page, never a value.</p>
+
+  <h3 id="recording-set-datum">Distance to S.E.T.</h3>
+  <p>Each view on the printed sheet ends with a short dimension at its edge: the distance from the last cut's liner edge (or from the edge of the cut area, on bare shaft) on to the S.E.T., so the rail reads straight through to the datum the shop works from. The S.E.T. is usually beyond the part of the shaft the view shows, so the dimension has one arrowhead at the liner edge and an open end at the edge of the view. <span class="ui">Distance to S.E.T.</span> chooses which S.E.T. it measures to: <span class="ui">Nearest</span> (the default, the S.E.T. closest to that view), <span class="ui">AFT S.E.T.</span> or <span class="ui">FWD S.E.T.</span> The view's title at the bottom measures to the same S.E.T., so the two always agree. It sits right after <span class="ui">Page</span> in <span class="ui">Drawing settings</span> and in the undercut sheet's PDF options, and is saved with the job. A view with no cuts recorded has no such dimension, and neither does one that already runs out to the S.E.T. with <span class="ui">Draw to the shaft end</span>. The choice changes only how the sheet is dimensioned, never a value you typed.</p>
+
+  <h3 id="recording-sections">Sections to print</h3>
+  <p>Sometimes the undercut drawing goes out as one sheet, and sometimes each part is made separately. When the sheet has two or more sections, <span class="ui">Sections to print</span> lists them from AFT to FWD, one checkbox each — for example <span class="ui">FWD Liner Ø10.000" (3 cuts)</span> or <span class="ui">Bare shaft — 12" FROM AFT S.E.T. (1 cut)</span> — with a line under the list such as “2 of 3 sections print.” Everything prints until you untick something. To send one liner's undercuts to the welder by itself, untick the others, then print or export; to make the other sheet, tick them again and untick that liner. The choice is saved with the job, also appears in the undercut sheet's PDF options, and changes only what is printed — no cut is touched, and a cut in an unticked section shows <span class="ui">Not on the printout</span> in the Recorded undercuts list. A liner or cut you add later prints by default.</p>
+  <p  class="keep">With every section unticked there is nothing to print: <span class="ui">Print</span> and <span class="ui">Export</span> are off and say to tick at least one, <span class="ui">Preview</span> still opens (it shows a page reading “No undercut sections selected for this sheet.”), and <span class="ui">Export all</span> on the Output tab skips the undercut drawing and says so in its result.</p>
 
   <h3 id="recording-cut-depth">Drawn depth</h3>
   <p  class="keep">A real undercut is hairline-thin at drawing scale, so its depth is drawn deeper than true. <span class="ui">Drawn depth</span>, under <span class="ui">Drawing settings</span> below the list on the Undercut Drawing tab, sets how deep the job's deepest cut draws, from 0% (true scale) to 25%; shallower cuts scale to it, and a cut is never drawn shallower than true. The default is 25%. The setting is saved with the job and changes only the drawing — the printed Ø values are always the numbers you typed.</p>
@@ -2414,7 +2428,7 @@
   <p  class="keep">Each shading checkbox is the default for its kind of component. The <span class="ui">Shade on drawing</span> toggle on an individual body, taper or liner card overrides it for that one component — shade a named section without shading every body, or keep one unshaded while the rest are filled. See <a href="#components-shade">Shade on drawing</a>.</p>
 
   <h2 id="settings-per-job">Settings saved with the job</h2>
-  <p  class="keep">Some controls that look like settings belong to one job and travel with it, so a reopened shaft prints exactly as it did. You will not find them in Settings: <span class="ui">Shaft height</span> (1/2″ to 1 1/2″), the liner and taper compression pair, <span class="ui">Dual units</span>, <span class="ui">Trace depth exaggeration</span>, the wear strip choices, <span class="ui">Coupling face</span> and <span class="ui">Drawn depth</span>. They live on each document's PDF options panel and its tab, and their captions say so (see <a href="#documents-options">The PDF options panel</a>).</p>
+  <p  class="keep">Some controls that look like settings belong to one job and travel with it, so a reopened shaft prints exactly as it did. You will not find them in Settings: <span class="ui">Shaft height</span> (1/2″ to 1 1/2″), the liner and taper compression pair, <span class="ui">Dual units</span>, <span class="ui">Trace depth exaggeration</span>, the wear strip choices, <span class="ui">Coupling face</span>, <span class="ui">Page</span>, <span class="ui">Distance to S.E.T.</span>, <span class="ui">Sections to print</span> and <span class="ui">Drawn depth</span>. They live on each document's PDF options panel and its tab, and their captions say so (see <a href="#documents-options">The PDF options panel</a>).</p>
   <p  class="keep">The <span class="ui">Bubble size</span> and <span class="ui">Bubble height</span> sliders on the runout and consolidated panels are the reverse case: app-wide settings with no Settings row, because they only mean something on a runout drawing. See <a href="#documents-options">The PDF options panel</a> for every panel control.</p>
 
   <h2 id="settings-achievements">Achievements</h2>

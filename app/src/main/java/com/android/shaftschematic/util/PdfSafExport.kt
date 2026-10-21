@@ -22,12 +22,27 @@ import android.provider.DocumentsContract
  * goes to [AppLog] (evidence a tester can mail back) and to [CrashReporter] as a non-fatal.
  */
 
-/** US Letter landscape, in PDF points — the app's single page format. */
+/**
+ * US Letter landscape, in PDF points — the default page every document prints on
+ * ([PdfPageOrientation.LANDSCAPE]'s size).
+ */
 const val PDF_PAGE_WIDTH_PT = 792
 const val PDF_PAGE_HEIGHT_PT = 612
 
 /**
- * Compose one landscape-Letter page via [composePage] and write the document to [uri].
+ * The US Letter page a document is composed on, in PDF points. [LANDSCAPE] is the default for
+ * every document; the undercut drawing chooses [PORTRAIT] when it stacks two or more sections
+ * (`resolveUndercutPageOrientation`). The composers read the size off `page.info`, so the shape
+ * is decided once, by whoever starts the page.
+ */
+enum class PdfPageOrientation(val widthPt: Int, val heightPt: Int) {
+    LANDSCAPE(PDF_PAGE_WIDTH_PT, PDF_PAGE_HEIGHT_PT),
+    PORTRAIT(PDF_PAGE_HEIGHT_PT, PDF_PAGE_WIDTH_PT),
+}
+
+/**
+ * Compose one US Letter page via [composePage] and write the document to [uri]. The page is
+ * [orientation]'s size — landscape by default.
  *
  * @return `true` when [composePage] succeeded and the real document was written; `false`
  *   when the error page was written in its place, or the stream/write itself failed.
@@ -35,6 +50,7 @@ const val PDF_PAGE_HEIGHT_PT = 612
 fun writeShaftPdfToUri(
     context: Context,
     uri: Uri,
+    orientation: PdfPageOrientation = PdfPageOrientation.LANDSCAPE,
     composePage: (PdfDocument.Page) -> Unit,
 ): Boolean {
     // Breadcrumbs name the document only by its last path segment: enough to line an export up
@@ -46,7 +62,7 @@ fun writeShaftPdfToUri(
         context.contentResolver.openOutputStream(uri)?.use { out ->
             val doc = PdfDocument()
             try {
-                val pageInfo = PdfDocument.PageInfo.Builder(PDF_PAGE_WIDTH_PT, PDF_PAGE_HEIGHT_PT, 1).create()
+                val pageInfo = PdfDocument.PageInfo.Builder(orientation.widthPt, orientation.heightPt, 1).create()
                 val page = doc.startPage(pageInfo)
                 composed = try {
                     composePage(page)

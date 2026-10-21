@@ -93,6 +93,9 @@
       <tr><td><span class="ui">Ø callouts</span></td><td>On</td><td>Schematic, Final</td><td>Can be tapped only while Blank draft is on. On: the blank sheet keeps its Ø leaders with a write-in rule. Off: the leaders are left out so diameters can be written in wherever they belong.</td></tr>
       <tr><td><span class="ui">Component names</span></td><td>On</td><td>Schematic, Final</td><td>Component names under the shaft. This is the default for every component; a card's <span class="ui">Show name on drawing</span> toggle overrides it in either direction (see <a href="#components-show-name">Show name on drawing</a>). The same setting is <span class="path">Settings → Drawing → Component names on drawing</span> (see <a href="#settings-component-names">Component names</a>).</td></tr>
       <tr><td><span class="ui">Coupling face</span></td><td>Off</td><td>Runout, Consolidated</td><td>Prints the coupling end view, looking forward, at the bottom right. Saved with this job and shared with the Runout tab.</td></tr>
+      <tr><td><span class="ui">Page</span></td><td>Auto</td><td>Undercut only</td><td>Auto, Landscape or Portrait. Auto prints portrait when the sheet has two or more sections to print, landscape otherwise. Saved with this job. See <a href="#recording-page">Page</a>.</td></tr>
+      <tr><td><span class="ui">Distance to S.E.T.</span></td><td>Nearest</td><td>Undercut only</td><td>Nearest, AFT S.E.T. or FWD S.E.T. Chooses the S.E.T. that each view's title and the short dimension at the view's edge measure to. Saved with this job. See <a href="#recording-set-datum">Distance to S.E.T.</a>.</td></tr>
+      <tr><td><span class="ui">Sections to print</span></td><td>All ticked</td><td>Undercut only</td><td>One checkbox per section, shown when the sheet has two or more. Unticked sections are left off the printed sheet. Saved with this job. See <a href="#recording-sections">Sections to print</a>.</td></tr>
       <tr><td><span class="ui">Runout bubbles</span></td><td>Off</td><td>Final only</td><td>Turns the Final schematic into a Schematic + Runout sheet. See <a href="#documents-final">The Final Schematic tab</a>.</td></tr>
     </tbody>
   </table>
@@ -119,7 +122,7 @@
       <tr><td>Runout Sheet</td><td>Blank draft, Coupling face</td><td>Shaft (all four) · Runout bubbles · Thread · Lines &amp; text (Line thickness, Fractions) · Shade in Components · Units</td></tr>
       <tr><td>Consolidated Sheet</td><td>Blank draft, Coupling face</td><td>Every section except Wear. The fullest panel.</td></tr>
       <tr><td>Wear Document</td><td>Blank draft</td><td>Shaft (Shaft height only) · Wear · Thread · Lines &amp; text (Line thickness, Fractions) · Shade in Components (no Explicit bodies only) · Units</td></tr>
-      <tr><td>Undercut Drawing</td><td>Blank draft</td><td>Thread · Lines &amp; text (Line thickness, Fractions) · Shade in Components (with the line-art row, no Explicit bodies only) · Units</td></tr>
+      <tr><td>Undercut Drawing</td><td>Blank draft, Page, Distance to S.E.T., Sections to print</td><td>Thread · Lines &amp; text (Line thickness, Fractions) · Shade in Components (with the line-art row, no Explicit bodies only) · Units</td></tr>
     </tbody>
   </table>
 
@@ -254,7 +257,7 @@
   <ol class="steps">
     <li>Tap <span class="ui">Print &lt;document&gt;</span> on the tab, or <span class="ui">Print</span> in the preview's top bar.</li>
     <li>In the Android print dialog, choose your printer (or Save as PDF).</li>
-    <li>Print. The sheet is a single US Letter page, landscape.</li>
+    <li>Print. The sheet is a single US Letter page, landscape — or portrait for an undercut drawing that prints in portrait (see <a href="#recording-page">Page</a>).</li>
   </ol>
   <p>A printed sheet and an exported PDF of the same document come from the same drawing step, so they are identical. The print job is named like the export file, so a print queue shows which job and drawing each sheet is; a blank schematic job adds “(blank draft)”.</p>
 
@@ -437,7 +440,7 @@
           Line thickness · Body S-break · Default drawing size · Dimension arrows · Fractions · Output font · Dual-unit layout · Thread slant and density · Bubble size and height · Shade in Components (Bodies, Explicit bodies only, Tapers, Liners) · Undercut drawing line art, liner outline and split cuts at liner edges · Component names on drawing · Measurement reference · Wear trace depth default · Wear area shade · Taper–liner join
         </td>
         <td>
-          Per-job settings (Shaft height, liner and taper compression, coupling face, wear strip choices) · Dual units on a document and the <span class="ui">Dual-unit display</span> switch · Which controls exist (Per-component units, Liner shoulders, Unit converter in Add dialogs) · Template mode · Open PDF after export · Theme, preview colors and on-screen undercut styles
+          Per-job settings (Shaft height, liner and taper compression, coupling face, wear strip choices, undercut page, S.E.T. distance and sections to print) · Dual units on a document and the <span class="ui">Dual-unit display</span> switch · Which controls exist (Per-component units, Liner shoulders, Unit converter in Add dialogs) · Template mode · Open PDF after export · Theme, preview colors and on-screen undercut styles
         </td>
       </tr>
     </tbody>

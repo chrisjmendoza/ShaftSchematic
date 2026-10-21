@@ -8,6 +8,7 @@ import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.pdf.PdfDocument
 import com.android.shaftschematic.geom.ClampedUndercutSpanMm
+import com.android.shaftschematic.geom.SetPositions
 import com.android.shaftschematic.geom.SurfaceSeg
 import com.android.shaftschematic.geom.UndercutLinerSpan
 import com.android.shaftschematic.geom.UndercutNotch
@@ -30,6 +31,7 @@ import com.android.shaftschematic.geom.UNDERCUT_BREAK_AMP_FRAC_OF_R
 import com.android.shaftschematic.geom.withUndercutBreakRoom
 import com.android.shaftschematic.geom.maxOuterDiaOver
 import com.android.shaftschematic.geom.outerDiaAt
+import com.android.shaftschematic.geom.DiaCalloutPlan
 import com.android.shaftschematic.geom.planDiaCallouts
 import com.android.shaftschematic.geom.hatchSpan
 import com.android.shaftschematic.geom.reliefSpan
@@ -44,6 +46,7 @@ import com.android.shaftschematic.ui.resolved.linerSurfaceSegs
 import com.android.shaftschematic.ui.resolved.surfaceSegsFrom
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.DualLabel
+import com.android.shaftschematic.util.PdfPageOrientation
 import com.android.shaftschematic.util.VerboseLog
 import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.OutputTypography
@@ -84,7 +87,7 @@ const val UNDERCUT_DOC_TITLE = "UNDERCUT RECORD"
  * separation, label air, Ø-callout room — see [computeUndercutStripInnerLayout]'s cylinder
  * cap, which stops the reclaimed band from becoming one drawn slab).
  *
- * ## Page layout (landscape US Letter, 792 × 612 pt)
+ * ## Page layout (US Letter; landscape 792 × 612 pt shown)
  * ```
  * ┌─── header: job info line / "UNDERCUT RECORD" ─────────────────────────────┐
  * │   ← AFT                                                          FWD →    │
@@ -93,6 +96,15 @@ const val UNDERCUT_DOC_TITLE = "UNDERCUT RECORD"
  * │   Notes: ______________________________________________________________   │
  * └───────────────────────────────────────────────────────────────────────────┘
  * ```
+ * The page shape is the caller's ([undercutSheetOrientation], the job's
+ * [UndercutRecord.pageOrientation] against the strip count; this composer reads it off
+ * `page.info`). Landscape lays one strip at full width and two or more in a 2-column grid;
+ * PORTRAIT stacks every strip in ONE column, each the full content width, top → bottom
+ * AFT → FWD ([undercutStripCells]) — the shop's layout for several sections (on-device request).
+ * A portrait page with room sizes each strip to what it draws — one shaft height down the page,
+ * the title under its own figure with [UC_PORTRAIT_TITLE_AIR_PT] of air — and spreads the spare
+ * height between sections; a crowded one gives every strip the same shaft height, a busy section
+ * taking height from a plain one ([undercutStripCells]).
  *
  * ## Nothing recorded yet — started liner strips
  * A page with **no recorded cuts** — the blank write-in template (whose record is dropped
@@ -132,19 +144,21 @@ const val UNDERCUT_DOC_TITLE = "UNDERCUT RECORD"
  * sheet and the screen from disagreeing about where material was removed — nested cuts, drawn
  * as a staircase off each parent's floor, included.
  *
- * Same public contract as `composeWearPdf`/`composeRunoutPdf`: landscape US Letter page
- * already started by the caller; `resolvedComponents`, when provided, replace `spec.bodies`
- * for the drawn profile (`withResolvedBodies`) and supply the surface envelope the notches
- * are cut against.
+ * Same public contract as `composeWearPdf`/`composeRunoutPdf`: a US Letter page already started
+ * by the caller (landscape, or portrait when [undercutSheetOrientation] says so);
+ * `resolvedComponents`, when provided, replace `spec.bodies` for the drawn profile
+ * (`withResolvedBodies`) and supply the surface envelope the notches are cut against.
  *
- * @param page    Target PDF page (US Letter landscape, already started).
+ * @param page    Target PDF page (US Letter, already started; portrait when its height
+ *                exceeds its width).
  * @param spec    Shaft specification in millimeters.
  * @param project Job information (customer, vessel, job#, side).
  * @param unit    Display unit for every printed dimension.
  * @param undercutRecord Recorded undercut sections. Strips (`buildUndercutStrips`, or one
  *                started strip per drawable liner when nothing is recorded) decide the page
- *                mode: 1 → one full-width strip, 2+ → a 2-column grid with a "+N more" note
- *                past the cap, 0 → the whole-shaft profile form.
+ *                mode: 1 → one full-width strip, 2+ → a 2-column grid (portrait: one
+ *                full-width column) with a "+N more" note past the cap, 0 → the whole-shaft
+ *                profile form.
  * @param blankValues Blank-draft (write-in) mode: the record is dropped entirely
  *                (`UndercutRecord()`) — the wear sheet's decision that blank templates carry
  *                no recorded stations — so the page comes out as started liner strips with
@@ -241,11 +255,15 @@ fun composeUndercutPdf(
     val midTopFull = headerBottom + UC_HEADER_GAP_PT
     val midBotFull = notesY - UC_NOTES_GAP_PT
 
+    // ── Strips + the geometry they are built from ─────────────────────────────
+    // ONE source with the callers' page choice (`undercutSheetOrientation` counts the same
+    // strips), so the page a caller starts and the layout drawn on it cannot disagree.
+    val sheet = undercutSheetStrips(spec, resolvedComponents, undercutRecord, blankValues)
+    val setPositions = sheet.setPositions
+    val aftSetMm = sheet.aftSetMm
+    val fwdSetMm = sheet.fwdSetMm
+
     // ── Horizontal scale: SET to SET, so the profile fills the page width ──────
-    val oalWindow = computeOalWindow(spec)
-    val setPositions = computeSetPositionsInMeasureSpace(oalWindow, spec)
-    val aftSetMm = setPositions.aftSETxMm.toFloat()
-    val fwdSetMm = setPositions.fwdSETxMm.toFloat()
     val drawSpanMm = (fwdSetMm - aftSetMm).coerceAtLeast(1f)
     val ptPerMm = contentW / drawSpanMm
 
@@ -255,21 +273,10 @@ fun composeUndercutPdf(
     val maxDiaMm = (docSpec.maxOuterDiaMm().takeIf { it > 0f } ?: 50f).coerceAtLeast(20f)
 
     // ── Undercut geometry (shared pipeline — see the file KDoc) ────────────────
-    // The surface envelope comes from the SAME mapping the canvas overlay uses
-    // (`surfaceSegsFrom`), so both sites cut notches against an identical local surface.
-    // With no resolved list the drawn spec is the only source available, so its components
-    // stand in — auto-body spans are already folded into `docSpec.bodies` by
-    // `withResolvedBodies` whenever a resolved list WAS supplied.
-    val surfaceSegs = resolvedComponents?.let { surfaceSegsFrom(it, bodyBlends(spec, it)) }
-        ?: surfaceSegsFromSpec(docSpec)
-    val shaftExtentMm = max(spec.overallLengthMm, fwdSetMm)
-    val clampedById: Map<String, ClampedUndercutSpanMm> = effectiveRecord.undercuts.associate { u ->
-        u.id to clampUndercutSpan(u.startFromAftMm, u.lengthMm, shaftExtentMm)
-    }
-    val liveSpans = effectiveRecord.undercuts.mapNotNull { u ->
-        val s = clampedById[u.id] ?: return@mapNotNull null
-        if (s.isEmpty) null else UndercutSpanMm(u.id, s.startMm, s.endMm)
-    }
+    val surfaceSegs = sheet.surfaceSegs
+    val shaftExtentMm = sheet.shaftExtentMm
+    val clampedById = sheet.clampedById
+    val liveSpans = sheet.liveSpans
     // Every notch on the sheet, from the ONE shared builder the canvas overlay runs
     // (`geom/UndercutOverlayMath.kt`): clamped spans, the containment forest, true floors, and
     // the per-sheet drawn-depth normalization — resolved once, so the printed sheet and the
@@ -279,43 +286,39 @@ fun composeUndercutPdf(
         effectiveRecord.undercuts, surfaceSegs, shaftExtentMm,
         exaggerationFrac = effectiveRecord.exaggerationFrac,
     )
-    // Strip source: a cut overlapping a liner joins that liner's strip (whole liner drawn,
-    // wear-style); the leftovers cluster into padded bare-shaft windows. Degenerate liners
-    // (no length or no OD) would only produce a blank cell, so they are not offered — the
-    // same drawable filter `collectWearLinerGroups` applies.
-    val linerSpans = docSpec.liners
-        .filter { it.lengthMm > 0f && it.odMm > 0f }
-        .map { ln -> UndercutLinerSpan(ln.id, ln.startFromAftMm, ln.startFromAftMm + ln.lengthMm) }
-    // "Draw to the shaft end" (per-job): a liner strip near an S.E.T. chains out to it and draws
-    // on to the shaft's physical end. The S.E.T.s are the page's own (`computeSetPositionsInMeasureSpace`,
-    // the source `undercutSetPositions` reads), so the chain ends on the datum the sheet titles from.
-    val setReachMm = undercutSetReachMm(effectiveRecord.drawToSet)
-    val cutStrips = buildUndercutStrips(
-        liveSpans, linerSpans, shaftExtentMm, segs = surfaceSegs,
-        reachToSetMm = setReachMm, aftSetMm = aftSetMm, fwdSetMm = fwdSetMm,
-    )
-    // Nothing recorded (blank template, or an export of an empty record): every drawable liner
-    // gets a STARTED strip — drawn to scale, left empty for hand sketching. `linerStripFor`
-    // with no assigned cuts is exactly what the overlay uses to zoom an undercut-free liner,
-    // so a started strip and a real one are the same figure at the same scale.
-    val startedStrips: List<UndercutStrip> =
-        if (cutStrips.isNotEmpty()) emptyList()
-        else linerSpans.sortedBy { it.startMm }.map {
-            linerStripFor(
-                it, emptyList(), shaftExtentMm, segs = surfaceSegs,
-                reachToSetMm = setReachMm, aftSetMm = aftSetMm, fwdSetMm = fwdSetMm,
-            )
-        }
-    val pageStrips = cutStrips.ifEmpty { startedStrips }
+    val pageStrips = sheet.strips
     // Started strips carry no cuts to dimension: rails, notches and printed values all drop out.
-    val startedPage = cutStrips.isEmpty()
+    val startedPage = sheet.startedPage
+    // The page shape is the caller's: it started the page `undercutSheetOrientation` chose.
+    val portrait = pageH > pageW
     val mode = determineUndercutPdfMode(pageStrips.size)
-    val maxPerPage = undercutStripsPerPage(mode)
+    val maxPerPage = undercutStripsPerPage(mode, portrait)
     val onPage = pageStrips.take(maxPerPage)
     val overflow = pageStrips.drop(maxPerPage)
     val overflowNoteH = if (overflow.isNotEmpty()) UC_OVERFLOW_NOTE_HEIGHT_PT else 0f
 
     val undercutById = effectiveRecord.undercuts.associateBy { it.id }
+    // Per strip: the liner it zooms (null on a bare-shaft cluster), the unit it prints in — a
+    // liner strip resolves the liner's own unit override; a bare-shaft cluster has no single
+    // component to key off, so it falls back to the document unit — and, with
+    // `PdfPrefs.undercutSplitAtLinerEdge` on, the buried liner edges some cut on the sheet runs past
+    // into the body, which take chain nodes so the overhang is dimensioned against the edge's
+    // position (`buildUndercutRailSpans`); off, every cut prints its full length.
+    fun stripLinerOf(strip: UndercutStrip): Liner? = (strip as? UndercutStrip.LinerStrip)
+        ?.let { ls -> docSpec.liners.firstOrNull { it.id == ls.linerId } }
+    fun stripUnitOf(strip: UndercutStrip): UnitSystem = displayUnits.unitFor(stripLinerOf(strip)?.id)
+    fun railSplitOf(strip: UndercutStrip): List<Float> = (strip as? UndercutStrip.LinerStrip)
+        ?.takeIf { pdfPrefs.undercutSplitAtLinerEdge }
+        ?.let { buriedUndercutLinerEdgesMm(it.linerStartMm, it.linerEndMm, liveSpans) }
+        ?: emptyList()
+    // The S.E.T. each strip measures to — its title anchor AND the lead continuing its chain —
+    // from the ONE resolver (`undercutStripSetSide`), so the two never disagree.
+    fun stripSideOf(strip: UndercutStrip): UndercutAnchorSide = undercutStripSetSide(
+        strip, docSpec, setPositions, effectiveRecord.setDatum,
+        strip.undercutIds.mapNotNull { id ->
+            clampedById[id]?.takeIf { !it.isEmpty }?.let { UndercutSpanMm(id, it.startMm, it.endMm) }
+        }.sortedBy { it.startMm },
+    )
 
     // ── Header ───────────────────────────────────────────────────────────────
     drawSheetHeader(
@@ -325,7 +328,22 @@ fun composeUndercutPdf(
         headerHeightBlankPt = UC_HEADER_HEIGHT_BLANK_PT,
         blankLineGapPt = UC_HEADER_BLANK_LINE_GAP_PT,
         blankValues = blankValues,
+        // A portrait page is 540 pt across, where an ordinary job line overflows: it sets smaller
+        // before it loses the date and side. Landscape keeps its line as it always printed.
+        minFitTextSizePt = if (portrait) UC_HEADER_MIN_FIT_TEXT_PT else 0f,
     )
+
+    // Every section left off ("Sections to print"): header, one centred note, the notes row. Never
+    // the whole-shaft profile fallback — that would print a drawing nobody asked for.
+    if (sheet.noneSelected) {
+        val note = Paint(text).apply { textAlign = Paint.Align.CENTER }
+        c.drawText(
+            ellipsizeToWidth(UNDERCUT_NONE_SELECTED_NOTE, note, contentW),
+            (contentLeft + contentRight) * 0.5f, (midTopFull + midBotFull) * 0.5f, note,
+        )
+        drawUndercutNotesRow(c, text, contentLeft, contentRight, notesY)
+        return
+    }
 
     // ── Vertical banding ──────────────────────────────────────────────────────
     // Strips own the page (see the file KDoc): with at least one strip the main profile and
@@ -343,25 +361,32 @@ fun composeUndercutPdf(
         // are otherwise the wear sheet's, unchanged (count-driven, content-agnostic). Per-strip
         // growth is deliberately UNCAPPED here — the reclaimed height is the point — with
         // `computeUndercutStripInnerLayout`'s cylinder cap keeping the drawn shaft in proportion.
-        if (mode == WearPdfMode.GRID) {
-            val grid = computeWearStripGridLayout(
-                bandTop, midBotFull, contentLeft, contentRight, onPage.size,
-                reservedBottomPt = overflowNoteH,
-                minProfileHeightPt = 0f, preferredProfileHeightPt = 0f, profileToStripsGapPt = 0f,
-            )
-            stripCells = grid.cells
-            overflowBandTop = grid.cells.lastOrNull()?.bottom ?: bandTop
-        } else {
-            val v = computeWearVerticalLayout(
-                bandTop, midBotFull, onPage.size,
-                reservedBottomPt = overflowNoteH,
-                minProfileHeightPt = 0f, preferredProfileHeightPt = 0f, profileToStripsGapPt = 0f,
-            )
-            stripCells = onPage.indices.map { i ->
-                WearStripCell(v.stripTops[i], v.stripBottoms[i], contentLeft, contentRight)
+        // Landscape: one full-width strip or the 2-column grid; portrait: one column, every strip
+        // the full content width (`undercutStripCells`). Portrait first measures what each strip
+        // stacks around its shaft, from the very plan the strip then draws: a page with room
+        // sizes every strip to what it draws and spends the rest as air between them (a lone
+        // forced-portrait strip centres), and on a crowded page a busy section takes height from
+        // a plain one instead of drawing a sliver of a shaft.
+        val overheads = if (portrait) {
+            onPage.map { strip ->
+                planUndercutDetailStrip(
+                    surfaceSegs, strip, strip.undercutIds.mapNotNull { id -> undercutById[id] },
+                    clampedById, contentLeft, contentRight, stripUnitOf(strip), text, diaText,
+                    shaftExtentMm, startedPage, displayUnits.dual, wantDualStacked,
+                    railSplitOf(strip), pdfPrefs.arrowSizePt,
+                    titleAirPt = UC_PORTRAIT_TITLE_AIR_PT,
+                    leadSide = stripSideOf(strip), aftSetMm = aftSetMm, fwdSetMm = fwdSetMm,
+                )?.verticalOverheadPt(wantDualStacked) ?: 0f
             }
-            overflowBandTop = v.stripBottoms.lastOrNull() ?: bandTop
+        } else {
+            null
         }
+        stripCells = undercutStripCells(
+            portrait, onPage.size, bandTop, midBotFull, contentLeft, contentRight,
+            reservedBottomPt = overflowNoteH,
+            overheadsPt = overheads,
+        )
+        overflowBandTop = stripCells.lastOrNull()?.bottom ?: bandTop
     } else {
         // ── Fallback: the whole-shaft profile form ────────────────────────────
         // The profile's minimum height protects the actual drawn shaft radius — ptPerMm is a
@@ -444,11 +469,9 @@ fun composeUndercutPdf(
         // shoulder (on-device report: a cut 11.5 in into a liner 20 in from the AFT SET
         // printed the liner as 31.5 in out). Cuts are located on the chain rail, measured
         // from the liner's edges.
-        val stripLiner = (strip as? UndercutStrip.LinerStrip)
-            ?.let { ls -> docSpec.liners.firstOrNull { it.id == ls.linerId } }
-        // A liner strip resolves the liner's own unit override; a bare-shaft cluster has no
-        // single component to key off, so it falls back to the document unit.
-        val stripUnit = displayUnits.unitFor(stripLiner?.id)
+        val stripLiner = stripLinerOf(strip)
+        val stripUnit = stripUnitOf(strip)
+        val stripSide = stripSideOf(strip)
         drawUndercutDetailStrip(
             c, docSpec, surfaceSegs, strip,
             strip.undercutIds.mapNotNull { id -> undercutById[id] },
@@ -459,11 +482,17 @@ fun composeUndercutPdf(
             shaftExtentMm = shaftExtentMm,
             voidFill = voidFill,
             linerTitle = (strip as? UndercutStrip.LinerStrip)?.let { linerTitles[it.linerId] },
+            // The liner's EDGE on the chosen side to that S.E.T. — NEAREST is the nearer edge, the
+            // figure the schematic and the wear sheet print for this liner.
             linerAnchorLabel = stripLiner
-                ?.let { buildLinerAnchorLabel(docSpec, it, setPositions, stripUnit, displayUnits.dual) }
+                ?.let {
+                    buildLinerAnchorLabel(
+                        docSpec, it, setPositions, stripUnit, displayUnits.dual, forced = stripSide.toLinerAnchor(),
+                    )
+                }
                 ?.takeIf { it.isNotBlank() },
-            linerAnchorAlignRight = stripLiner
-                ?.let { linerAnchorForPdf(docSpec, it) } == LinerAnchor.FWD_SET,
+            linerAnchorAlignRight = stripSide == UndercutAnchorSide.FWD_SET,
+            leadSide = stripSide,
             // A started strip is a write-in figure whatever the caller asked for: its title is
             // the circle-one anchor rule, and it has no recorded value to print anywhere.
             blankValues = blankValues || startedPage,
@@ -480,15 +509,12 @@ fun composeUndercutPdf(
                 ?.let { "Ø" + formatDiaWithUnitDual(it.odMm.toDouble(), stripUnit, displayUnits.dual) },
             dual = displayUnits.dual,
             dualStacked = dualStacked,
-            // With `PdfPrefs.undercutSplitAtLinerEdge` on, a liner edge some cut on the sheet runs
-            // past into the body takes a chain node, so the overhang is dimensioned against the
-            // edge's position (`buildUndercutRailSpans`); off, every cut prints its full length.
-            railSplitAtMm = (strip as? UndercutStrip.LinerStrip)
-                ?.takeIf { pdfPrefs.undercutSplitAtLinerEdge }
-                ?.let { buriedUndercutLinerEdgesMm(it.linerStartMm, it.linerEndMm, liveSpans) }
-                ?: emptyList(),
+            railSplitAtMm = railSplitOf(strip),
             // The app-wide "Dimension arrows" head — the same pref the schematic's rails read.
             arrowSizePt = pdfPrefs.arrowSizePt,
+            // Portrait strips are sized to what they draw, so the title gets its own air under
+            // the Ø callouts; landscape keeps today's banding exactly.
+            titleAirPt = if (portrait) UC_PORTRAIT_TITLE_AIR_PT else 0f,
         )
     }
     if (overflow.isNotEmpty()) {
@@ -500,6 +526,179 @@ fun composeUndercutPdf(
     // place on a machining record (`docs/archive/UndercutDrawing_PLAN.md` §11.4).
     drawUndercutNotesRow(c, text, contentLeft, contentRight, notesY)
 }
+
+// ──────────────────────────────────────────────────────────────────────────────
+// The sheet's strips — one source for the composer and the callers' page choice
+// ──────────────────────────────────────────────────────────────────────────────
+
+/**
+ * What [undercutSheetStrips] resolves for one undercut sheet: the detail [strips] it draws, AFT →
+ * FWD as `buildUndercutStrips` orders them, and the geometry they were built from, which the
+ * composer reuses rather than re-derives.
+ *
+ * @property strips Cut strips, or — when nothing is recorded — one started strip per drawable
+ *   liner. Empty only when the sheet falls back to the whole-shaft profile form. The FULL list:
+ *   the composer applies its per-page cap and prints the rest as a "+N more" note.
+ * @property startedPage True when [strips] are started strips (no cuts on the sheet).
+ * @property setPositions The page's own S.E.T.s (`computeSetPositionsInMeasureSpace`).
+ * @property surfaceSegs The outer-surface envelope every notch is cut against.
+ * @property shaftExtentMm The extent cut spans are clamped to: OAL or the FWD S.E.T., the larger.
+ * @property clampedById Every recorded cut's span clamped to [shaftExtentMm], by id.
+ * @property liveSpans The clamped spans that are not empty.
+ */
+internal data class UndercutSheetStrips(
+    val strips: List<UndercutStrip>,
+    val startedPage: Boolean,
+    val setPositions: SetPositions,
+    val surfaceSegs: List<SurfaceSeg>,
+    val shaftExtentMm: Float,
+    val clampedById: Map<String, ClampedUndercutSpanMm>,
+    val liveSpans: List<UndercutSpanMm>,
+    /**
+     * Every section the sheet could print, BEFORE the "Sections to print" filter — the list the
+     * election UI offers, in the order the sheet draws it. [strips] is this list filtered by
+     * [isUndercutStripPrinted].
+     */
+    val allStrips: List<UndercutStrip> = strips,
+) {
+    val aftSetMm: Float get() = setPositions.aftSETxMm.toFloat()
+    val fwdSetMm: Float get() = setPositions.fwdSETxMm.toFloat()
+
+    /**
+     * There were sections to print and the job left every one of them off: the sheet prints a
+     * "no sections selected" note — never the whole-shaft profile fallback, which would print a
+     * drawing nobody asked for.
+     */
+    val noneSelected: Boolean get() = allStrips.isNotEmpty() && strips.isEmpty()
+}
+
+/**
+ * The detail strips [composeUndercutPdf] draws for this job, with the geometry behind them —
+ * the ONE derivation behind both the composer and [undercutSheetOrientation], so the page a
+ * caller starts and the layout the composer draws on it count the same sections.
+ *
+ * [blankValues] drops the record, as the composer does (a blank template carries no recorded
+ * cuts), so a blank draft counts its started liner strips. [resolvedComponents], when provided,
+ * replace `spec.bodies` for the drawn geometry and supply the surface envelope.
+ *
+ * The job's "Sections to print" election ([isUndercutStripPrinted], read off [undercutRecord] itself
+ * so a blank draft keeps it) is applied HERE, after the strips are built — grouping is unchanged —
+ * so the composer, the section count, the page choice and every caption count the same PRINTED
+ * sections.
+ */
+internal fun undercutSheetStrips(
+    spec: ShaftSpec,
+    resolvedComponents: List<ResolvedComponent>?,
+    undercutRecord: UndercutRecord,
+    blankValues: Boolean,
+): UndercutSheetStrips {
+    val docSpec = spec.withResolvedBodies(resolvedComponents)
+    val effectiveRecord = if (blankValues) UndercutRecord() else undercutRecord
+
+    val oalWindow = computeOalWindow(spec)
+    val setPositions = computeSetPositionsInMeasureSpace(oalWindow, spec)
+    val aftSetMm = setPositions.aftSETxMm.toFloat()
+    val fwdSetMm = setPositions.fwdSETxMm.toFloat()
+
+    // The surface envelope comes from the SAME mapping the canvas overlay uses
+    // (`surfaceSegsFrom`), so both sites cut notches against an identical local surface.
+    // With no resolved list the drawn spec is the only source available, so its components
+    // stand in — auto-body spans are already folded into `docSpec.bodies` by
+    // `withResolvedBodies` whenever a resolved list WAS supplied.
+    val surfaceSegs = resolvedComponents?.let { surfaceSegsFrom(it, bodyBlends(spec, it)) }
+        ?: surfaceSegsFromSpec(docSpec)
+    val shaftExtentMm = max(spec.overallLengthMm, fwdSetMm)
+    val clampedById: Map<String, ClampedUndercutSpanMm> = effectiveRecord.undercuts.associate { u ->
+        u.id to clampUndercutSpan(u.startFromAftMm, u.lengthMm, shaftExtentMm)
+    }
+    val liveSpans = effectiveRecord.undercuts.mapNotNull { u ->
+        val s = clampedById[u.id] ?: return@mapNotNull null
+        if (s.isEmpty) null else UndercutSpanMm(u.id, s.startMm, s.endMm)
+    }
+    // Strip source: a cut overlapping a liner joins that liner's strip (whole liner drawn,
+    // wear-style); the leftovers cluster into padded bare-shaft windows. Degenerate liners
+    // (no length or no OD) would only produce a blank cell, so they are not offered — the
+    // same drawable filter `collectWearLinerGroups` applies.
+    val linerSpans = docSpec.liners
+        .filter { it.lengthMm > 0f && it.odMm > 0f }
+        .map { ln -> UndercutLinerSpan(ln.id, ln.startFromAftMm, ln.startFromAftMm + ln.lengthMm) }
+    // "Draw to the shaft end" (per-job): a liner strip near an S.E.T. chains out to it and draws
+    // on to the shaft's physical end. The S.E.T.s are the page's own (`computeSetPositionsInMeasureSpace`,
+    // the source `undercutSetPositions` reads), so the chain ends on the datum the sheet titles from.
+    val setReachMm = undercutSetReachMm(effectiveRecord.drawToSet)
+    val cutStrips = buildUndercutStrips(
+        liveSpans, linerSpans, shaftExtentMm, segs = surfaceSegs,
+        reachToSetMm = setReachMm, aftSetMm = aftSetMm, fwdSetMm = fwdSetMm,
+    )
+    // Nothing recorded (blank template, or an export of an empty record): every drawable liner
+    // gets a STARTED strip — drawn to scale, left empty for hand sketching. `linerStripFor`
+    // with no assigned cuts is exactly what the overlay uses to zoom an undercut-free liner,
+    // so a started strip and a real one are the same figure at the same scale.
+    val startedStrips: List<UndercutStrip> =
+        if (cutStrips.isNotEmpty()) emptyList()
+        else linerSpans.sortedBy { it.startMm }.map {
+            linerStripFor(
+                it, emptyList(), shaftExtentMm, segs = surfaceSegs,
+                reachToSetMm = setReachMm, aftSetMm = aftSetMm, fwdSetMm = fwdSetMm,
+            )
+        }
+    val allStrips = cutStrips.ifEmpty { startedStrips }
+    return UndercutSheetStrips(
+        strips = allStrips.filter { isUndercutStripPrinted(it, undercutRecord) },
+        allStrips = allStrips,
+        startedPage = cutStrips.isEmpty(),
+        setPositions = setPositions,
+        surfaceSegs = surfaceSegs,
+        shaftExtentMm = shaftExtentMm,
+        clampedById = clampedById,
+        liveSpans = liveSpans,
+    )
+}
+
+/**
+ * How many detail strips [composeUndercutPdf] draws for this job — the PRINTED sections ("Sections
+ * to print" applied), before the per-page cap (a five-strip sheet is still two or more sections).
+ * Blank draft included.
+ */
+fun undercutSheetStripCount(
+    spec: ShaftSpec,
+    resolvedComponents: List<ResolvedComponent>?,
+    undercutRecord: UndercutRecord,
+    blankValues: Boolean,
+): Int = undercutSheetStrips(spec, resolvedComponents, undercutRecord, blankValues).strips.size
+
+/**
+ * The page every caller of [composeUndercutPdf] starts — preview, print, export and Export all
+ * alike: the job's [UndercutRecord.pageOrientation] resolved against the number of strips the
+ * sheet draws ([undercutSheetStripCount], blank draft included) by
+ * [resolveUndercutPageOrientation]. The choice is read off [undercutRecord] itself, so a blank
+ * draft keeps a job's forced shape. A sheet with every section left off prints its one-line note on
+ * a landscape page whatever the choice.
+ */
+fun undercutSheetOrientation(
+    spec: ShaftSpec,
+    resolvedComponents: List<ResolvedComponent>?,
+    undercutRecord: UndercutRecord,
+    blankValues: Boolean,
+): PdfPageOrientation {
+    val sheet = undercutSheetStrips(spec, resolvedComponents, undercutRecord, blankValues)
+    if (sheet.noneSelected) return PdfPageOrientation.LANDSCAPE
+    return resolveUndercutPageOrientation(undercutRecord.pageOrientation, sheet.strips.size)
+}
+
+/**
+ * True when the job leaves EVERY section of its undercut sheet off ("Sections to print") — the sheet
+ * then has nothing to print: the tab disables Print and Export, and "Export all" skips it.
+ */
+fun undercutSheetNoneSelected(
+    spec: ShaftSpec,
+    resolvedComponents: List<ResolvedComponent>?,
+    undercutRecord: UndercutRecord,
+    blankValues: Boolean,
+): Boolean = undercutSheetStrips(spec, resolvedComponents, undercutRecord, blankValues).noneSelected
+
+/** The note a sheet with every section left off prints in place of its strips. */
+const val UNDERCUT_NONE_SELECTED_NOTE = "No undercut sections selected for this sheet."
 
 // ──────────────────────────────────────────────────────────────────────────────
 // OAL line + direction reference
@@ -753,6 +952,177 @@ private fun drawUndercutNotches(
 // ──────────────────────────────────────────────────────────────────────────────
 
 /**
+ * The horizontal plan of one detail strip — everything [drawUndercutDetailStrip] resolves before
+ * it splits the strip's height: the draw range and its x map, the text paints, the strip's cut
+ * spans, the measured-Ø callout plan and the rails. Pure horizontal geometry, so the composer can
+ * also measure a strip's vertical NEEDS ([verticalOverheadPt]) before it bands the page, from the
+ * very plan the strip then draws.
+ */
+internal class UndercutStripPlan(
+    val drawStartMm: Float,
+    val drawEndMm: Float,
+    val hLayout: WearStripHorizontalLayout,
+    val titleText: Paint,
+    val dimText: Paint,
+    val spans: List<UndercutSpanMm>,
+    val diaPlan: DiaCalloutPlan?,
+    val diaBandPt: Float,
+    val rails: UndercutStripRails,
+    /**
+     * Air between the Ø callouts and the title, reserved under the callout band. Zero on a
+     * landscape sheet (byte-identical); a portrait page sizes each strip to what it draws, so with
+     * no spare height inside the strip the title would otherwise sit right on the last callout.
+     */
+    val titleAirPt: Float = 0f,
+) {
+    fun xAt(mm: Float): Float = hLayout.linerLeftPt + (mm - drawStartMm) * hLayout.ptPerMm
+
+    /** The strip's vertical split inside `[stripTop, stripBottom]` ([computeUndercutStripInnerLayout]). */
+    fun innerLayout(
+        stripTop: Float,
+        stripBottom: Float,
+        dualStacked: Boolean,
+        cylMaxFloorPt: Float = UNDERCUT_CYL_MAX_FLOOR_PT,
+    ): UndercutStripInnerLayout = computeUndercutStripInnerLayout(
+        stripTop, stripBottom,
+        titleHeightPt = titleText.textSize,
+        hasTotalRail = rails.totalSpan != null,
+        diaBandPt = if (diaPlan != null) diaBandPt + titleAirPt else diaBandPt,
+        maxLabelRows = rails.rows.belowRows,
+        chainAboveBandPt = rails.rows.aboveRows * undercutRailRowHeightPt(dimText, dualStacked),
+        cylMaxFloorPt = cylMaxFloorPt,
+    )
+
+    /**
+     * Everything this strip stacks around its drawn cylinder — rails, their label rows, the Ø
+     * callouts, the title — measured on a band too tall for any row to drop out and with no
+     * cylinder cap, so the strip's height less this is exactly the cylinder it draws.
+     */
+    fun verticalOverheadPt(dualStacked: Boolean): Float {
+        val probe = innerLayout(0f, OVERHEAD_PROBE_PT, dualStacked, cylMaxFloorPt = Float.MAX_VALUE)
+        return OVERHEAD_PROBE_PT - (probe.cylBottom - probe.cylTop)
+    }
+
+    private companion object {
+        const val OVERHEAD_PROBE_PT = 10_000f
+    }
+}
+
+/**
+ * Resolves [strip]'s [UndercutStripPlan] across `[stripLeft, stripRight]`, or null when its draw
+ * range is empty (nothing to draw).
+ *
+ * The draw range is widened at layout time so the undimensioned pad outside each chain datum
+ * prints with real air whatever the strip's scale is — the mm pad alone reads as cramped in
+ * a grid cell (see `computeUndercutStripDrawRange`). Datums and dimensions are untouched.
+ * That widening is blind to the profile and can carry an end onto a short seg again (a stub
+ * body between a taper and the liner), so the break-room rule runs once more on its result:
+ * each window-end S-break sits in stock with room for its lobes before the next face.
+ */
+internal fun planUndercutDetailStrip(
+    segs: List<SurfaceSeg>,
+    strip: UndercutStrip,
+    undercuts: List<Undercut>,
+    clampedById: Map<String, ClampedUndercutSpanMm>,
+    stripLeft: Float,
+    stripRight: Float,
+    unit: UnitSystem,
+    text: Paint,
+    diaText: Paint,
+    shaftExtentMm: Float,
+    startedStrip: Boolean,
+    dual: Boolean,
+    dualStacked: Boolean,
+    railSplitAtMm: List<Float>,
+    arrowSizePt: Float,
+    titleAirPt: Float = 0f,
+    /** The S.E.T. this strip measures to ([undercutStripSetSide]); null draws no lead. */
+    leadSide: UndercutAnchorSide? = null,
+    aftSetMm: Float = 0f,
+    fwdSetMm: Float = 0f,
+): UndercutStripPlan? {
+    // The strip's own cuts only: another strip's cut in this window draws as plain stock here.
+    val memberCutSpans = strip.undercutIds.mapNotNull { id ->
+        clampedById[id]?.takeIf { !it.isEmpty }?.let { cs -> UndercutSpanMm(id, cs.startMm, cs.endMm) }
+    }
+    val dimText = Paint(text).apply { textSize = (text.textSize - 2f).coerceAtLeast(7f) }
+    // The S.E.T. lead's room: on its side the strip draws enough stock past the chain datum for the
+    // lead's value to seat in its own line with an open tail after it (`undercutSetLeadRoomPt`,
+    // measured as the rail draws it). No lead — a started strip, or a chain already at its
+    // S.E.T. — and the range is the pad rule's alone.
+    val leadValueMm = if (startedStrip || memberCutSpans.isEmpty()) null
+    else leadSide?.let { side ->
+        undercutSetLeadValueMm(
+            strip.chainStartMm, strip.chainEndMm, side,
+            if (side == UndercutAnchorSide.AFT_SET) aftSetMm else fwdSetMm,
+        )
+    }
+    val leadRoomPt = leadValueMm?.let { v ->
+        undercutSetLeadRoomPt(
+            dimText.measureDualLabel(formatLenDimDualLabel(v.toDouble(), unit, dual), dualStacked),
+            arrowSizePt,
+        )
+    } ?: 0f
+    val drawRange = computeUndercutStripDrawRange(
+        strip.drawStartMm, strip.drawEndMm, strip.chainStartMm, strip.chainEndMm,
+        stripLeft, stripRight, shaftExtentMm,
+        leadSide = leadSide.takeIf { leadValueMm != null }, leadRoomPt = leadRoomPt,
+    )
+    val (drawStartMm, drawEndMm) =
+        withUndercutBreakRoom(drawRange.startMm, drawRange.endMm, segs, shaftExtentMm, memberCutSpans)
+    val drawLengthMm = drawEndMm - drawStartMm
+    if (drawLengthMm <= 0f) return null
+
+    val hLayout = computeWearStripHorizontalLayout(
+        stripLeft, stripRight, drawLengthMm, stubWidthPt = UNDERCUT_STRIP_EDGE_INSET_PT,
+    )
+    val ptPerMmStrip = hLayout.ptPerMm
+    fun xAtStrip(mm: Float): Float = hLayout.linerLeftPt + (mm - drawStartMm) * ptPerMmStrip
+
+    val titleText = Paint(text).apply { textSize = (text.textSize - 1f).coerceAtLeast(7f) }
+
+    // Spans on this strip, aft → fwd, render-clamped.
+    val spans = undercuts.mapNotNull { u ->
+        val s = clampedById[u.id] ?: return@mapNotNull null
+        if (s.isEmpty) null else UndercutSpanMm(u.id, s.startMm, s.endMm)
+    }.sortedBy { it.startMm }
+
+    // Measured-Ø plan first, so the strip reserves exactly the label rows its cuts need.
+    val diaStations = buildUndercutDiaStations(
+        undercuts, clampedById, ::xAtStrip, unit,
+        { s -> diaText.measureDualLabel(s, dualStacked) }, dual,
+    )
+    val diaPlan = if (diaStations.isEmpty()) null else
+        planDiaCallouts(diaStations, stripLeft + 2f, stripRight - 2f, UC_DIA_MIN_GAP_PT)
+    val diaBandPt = diaPlan?.let { it.labelsHeightPt(diaText.textSize, UC_DIA_ROW_GAP_PT) + 2f } ?: 0f
+
+    // The rails — level-0 chain over the top-level cuts, one row per nesting level located
+    // against the parent's edges, the total across the top-level cuts — from the ONE plan the
+    // detail canvas runs too. Resolved before the vertical split (pure horizontal geometry), so
+    // the split reserves only the fallback rows these labels actually use.
+    // The S.E.T. lead runs out from the chain's outer witness to the chosen S.E.T., stopping at
+    // this strip's DRAWN edge when the S.E.T. is off it.
+    val rails = planUndercutStripRails(
+        strip.chainStartMm, strip.chainEndMm, spans, unit, dual, railSplitAtMm, startedStrip,
+        xAt = { mm -> xAtStrip(mm) },
+        labelWidth = { s: DualLabel -> dimText.measureDualLabel(s, dualStacked) },
+        arrowSizePt = arrowSizePt,
+        setLead = leadSide?.let { side ->
+            UndercutSetLead(
+                side = side,
+                setMm = if (side == UndercutAnchorSide.AFT_SET) aftSetMm else fwdSetMm,
+                drawStartMm = drawStartMm,
+                drawEndMm = drawEndMm,
+            )
+        },
+    )
+    return UndercutStripPlan(
+        drawStartMm, drawEndMm, hLayout, titleText, dimText, spans, diaPlan, diaBandPt, rails,
+        titleAirPt,
+    )
+}
+
+/**
  * One broken-out detail strip: the resolved profile over the strip's draw range at
  * strip-local scale with a break edge at each cut end, the notches cut into it, the total
  * dimension on a rail line at the very top, the chained rail below that, the measured Ø
@@ -849,69 +1219,28 @@ private fun drawUndercutDetailStrip(
     railSplitAtMm: List<Float> = emptyList(),
     /** `PdfPrefs.arrowSizePt`: the rail heads, and the seat-in-break / arrow-direction decisions. */
     arrowSizePt: Float = PDF_ARROW_SIZE_DEFAULT_PT,
+    /** [UndercutStripPlan.titleAirPt] — nonzero on a portrait page only. */
+    titleAirPt: Float = 0f,
+    /**
+     * The S.E.T. this strip measures to ([undercutStripSetSide]): the bare-shaft title's anchor and
+     * the lead continuing the chain. Null keeps the bare-shaft proximity rule and draws no lead.
+     */
+    leadSide: UndercutAnchorSide? = null,
 ) {
-    // Draw range, widened at layout time so the undimensioned pad outside each chain datum
-    // prints with real air whatever the strip's scale is — the mm pad alone reads as cramped in
-    // a grid cell (see `computeUndercutStripDrawRange`). Datums and dimensions are untouched.
-    // That widening is blind to the profile and can carry an end onto a short seg again (a stub
-    // body between a taper and the liner), so the break-room rule runs once more on its result:
-    // each window-end S-break sits in stock with room for its lobes before the next face.
-    val drawRange = computeUndercutStripDrawRange(
-        strip.drawStartMm, strip.drawEndMm, strip.chainStartMm, strip.chainEndMm,
-        stripLeft, stripRight, shaftExtentMm,
-    )
-    // The strip's own cuts only: another strip's cut in this window draws as plain stock here.
-    val memberCutSpans = strip.undercutIds.mapNotNull { id ->
-        clampedById[id]?.takeIf { !it.isEmpty }?.let { cs -> UndercutSpanMm(id, cs.startMm, cs.endMm) }
-    }
-    val (drawStartMm, drawEndMm) =
-        withUndercutBreakRoom(drawRange.startMm, drawRange.endMm, segs, shaftExtentMm, memberCutSpans)
-    val drawLengthMm = drawEndMm - drawStartMm
-    if (drawLengthMm <= 0f) return
-
-    val hLayout = computeWearStripHorizontalLayout(
-        stripLeft, stripRight, drawLengthMm, stubWidthPt = UNDERCUT_STRIP_EDGE_INSET_PT,
-    )
-    val ptPerMmStrip = hLayout.ptPerMm
-    fun xAtStrip(mm: Float): Float = hLayout.linerLeftPt + (mm - drawStartMm) * ptPerMmStrip
-
-    val titleText = Paint(text).apply { textSize = (text.textSize - 1f).coerceAtLeast(7f) }
-    val dimText = Paint(text).apply { textSize = (text.textSize - 2f).coerceAtLeast(7f) }
-
-    // Spans on this strip, aft → fwd, render-clamped.
-    val spans = undercuts.mapNotNull { u ->
-        val s = clampedById[u.id] ?: return@mapNotNull null
-        if (s.isEmpty) null else UndercutSpanMm(u.id, s.startMm, s.endMm)
-    }.sortedBy { it.startMm }
-
-    // Measured-Ø plan first, so the strip reserves exactly the label rows its cuts need.
-    val diaStations = buildUndercutDiaStations(
-        undercuts, clampedById, ::xAtStrip, unit,
-        { s -> diaText.measureDualLabel(s, dualStacked) }, dual,
-    )
-    val diaPlan = if (diaStations.isEmpty()) null else
-        planDiaCallouts(diaStations, stripLeft + 2f, stripRight - 2f, UC_DIA_MIN_GAP_PT)
-    val diaBandPt = diaPlan?.let { it.labelsHeightPt(diaText.textSize, UC_DIA_ROW_GAP_PT) + 2f } ?: 0f
-
-    // The rails — level-0 chain over the top-level cuts, one row per nesting level located
-    // against the parent's edges, the total across the top-level cuts — from the ONE plan the
-    // detail canvas runs too. Resolved before the vertical split (pure horizontal geometry), so
-    // the split reserves only the fallback rows these labels actually use.
-    val rails = planUndercutStripRails(
-        strip.chainStartMm, strip.chainEndMm, spans, unit, dual, railSplitAtMm, startedStrip,
-        xAt = { mm -> xAtStrip(mm) },
-        labelWidth = { s: DualLabel -> dimText.measureDualLabel(s, dualStacked) },
-        arrowSizePt = arrowSizePt,
-    )
-    val railPlan = rails.rows
-    val inner = computeUndercutStripInnerLayout(
-        stripTop, stripBottom,
-        titleHeightPt = titleText.textSize,
-        hasTotalRail = rails.totalSpan != null,
-        diaBandPt = diaBandPt,
-        maxLabelRows = railPlan.belowRows,
-        chainAboveBandPt = railPlan.aboveRows * undercutRailRowHeightPt(dimText, dualStacked),
-    )
+    val plan = planUndercutDetailStrip(
+        segs, strip, undercuts, clampedById, stripLeft, stripRight, unit, text, diaText,
+        shaftExtentMm, startedStrip, dual, dualStacked, railSplitAtMm, arrowSizePt, titleAirPt,
+        leadSide = leadSide, aftSetMm = aftSetMm, fwdSetMm = fwdSetMm,
+    ) ?: return
+    val drawStartMm = plan.drawStartMm
+    val drawEndMm = plan.drawEndMm
+    fun xAtStrip(mm: Float): Float = plan.xAt(mm)
+    val titleText = plan.titleText
+    val dimText = plan.dimText
+    val spans = plan.spans
+    val diaPlan = plan.diaPlan
+    val rails = plan.rails
+    val inner = plan.innerLayout(stripTop, stripBottom, dualStacked)
     val cy = (inner.cylTop + inner.cylBottom) / 2f
     val rCap = ((inner.cylBottom - inner.cylTop) / 2f).coerceAtLeast(0f)
 
@@ -1045,6 +1374,7 @@ private fun drawUndercutDetailStrip(
             lastShoulderMm = spans.last().endMm,
             aftSetXMm = aftSetMm,
             fwdSetXMm = fwdSetMm,
+            forcedSide = leadSide,
         )
         val label = ellipsizeToWidth(
             buildUndercutStripTitle(null, buildUndercutAnchorLabel(anchor, unit, dual)),
@@ -1229,6 +1559,7 @@ private fun drawUndercutNotesRow(c: Canvas, text: Paint, left: Float, right: Flo
 private const val UC_OUTLINE_PT = 2.0f
 private const val UC_DIM_PT = 1.2f
 private const val UC_TEXT_PT = 10f
+private const val UC_HEADER_MIN_FIT_TEXT_PT = 8f        // portrait job line: smallest size before ellipsizing
 private const val UC_MARGIN_PT = 36f
 
 private const val UC_HEADER_HEIGHT_PT = 36f          // 2-line header block
@@ -1243,6 +1574,7 @@ private const val UC_OAL_TOP_REGION_PT = 18f         // OAL label + air above th
 private const val UC_DIRECTION_ROW_PT = 22f          // orientation row band above the strips (strips-own-page)
 private const val UC_NOTES_BOTTOM_OFFSET_PT = 24f    // notes baseline above contentBot
 private const val UC_NOTES_GAP_PT = 28f              // drawing area bottom → notes
+private const val UC_PORTRAIT_TITLE_AIR_PT = 10f      // Ø callouts → strip title, portrait pages only
 private const val UC_OVERFLOW_NOTE_HEIGHT_PT = 16f   // reserved band for the "+N more" note
 private const val UC_PROFILE_RADIUS_MARGIN_PT = 8f   // headroom above/below the shaft's drawn radius
 

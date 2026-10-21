@@ -226,6 +226,17 @@ androidTest) or the Add dialogs; their logic is pure and covered.
 - [ ] Final Schematic: "Create a new job from the final" — deliberately left out of the first pass.
 - [ ] Coupler bolt rows: authoring which side a blind 90° cross-drilled hole enters from (it is
   always drawn from the top silhouette).
+- [ ] Undercut sheet past four sections: a second page, plus an offer to spread the drawings out.
+  Shop jobs typically carry 3 sections, and 4 per page is a handy ceiling (on-device ruling, no
+  build yet). Today both shapes cap at 4 (`UNDERCUT_PORTRAIT_MAX_PER_PAGE` = the landscape grid's
+  `WEAR_STRIP_GRID_MAX_PER_PAGE`) and a 5th prints only as the "+N more" note; *Sections to print*
+  is the workaround (print the sheet twice with different sections ticked). The idea: when more
+  than 4 sections print, write them onto two pages, and offer to spread fewer per page for room
+  (e.g. 3 + 2 rather than 4 + 1). Blocker: every writer is single-page —
+  `writeShaftPdfToUri`, `renderPdfPageBitmap`, `printShaftPdfPage` (page count 1) and the preview
+  overlay's one bitmap — and `docs/PDF_EXPORT.md` §6 states "single page only", so this is the
+  app's first multi-page document. Page shape stays per page from the same `undercutSheetStrips`
+  count.
 - [ ] Undo/redo follow-ups (not blocking v1.0): cross-session/persisted history (currently
   in-memory, cleared on process death and at every new/open/import boundary), and metadata
   (customer/vessel/job/notes/shaft position/unit) is deliberately excluded from undoable state —

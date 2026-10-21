@@ -8,6 +8,112 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-21
 
+### feat(undercut): S.E.T. lead — the chain runs on to the S.E.T.
+
+- **A half dimension at the strip's edge.** On-device request: "a half dimensional rail at the edge
+  that gives the distance to the nearest S.E.T. or the S.E.T. selection the user has in place … as
+  the leading or ending dimension rail it gives better visual continuity". Every strip WITH recorded
+  cuts gains a lead span on its S.E.T. side, level 0 of the chain: from the chain's outer witness
+  (`chainEndMm` for the FWD S.E.T., `chainStartMm` for the AFT) to the S.E.T., valued at that
+  distance (`undercutSetLeadValueMm`, `buildUndercutSetLeadSpan`). The S.E.T. is usually off the
+  strip, so the lead is a HALF dimension: one arrowhead at the datum, an open end at the strip's
+  drawn edge with no head and no witness (`WearRailSpan.openStart`/`openEnd`, honoured by
+  `drawUndercutRail`). An S.E.T. inside the drawn range gives a normal two-headed span with a
+  witness at the S.E.T. No lead on started or blank strips, when "Draw to the shaft end" already
+  chains to that S.E.T., or when the S.E.T. is on the wrong side of the datum.
+- **One planner, one draw routine.** The lead is laid out with the chain in the ONE
+  `planUndercutStripRails(setLead)` and drawn by the ONE `drawUndercutStripRails`, so the detail
+  canvas shows it exactly as the sheet prints it (the canvas range is widened by
+  `undercutDetailLeadDrawRange`).
+- **Lead room.** The strip's drawn range is widened on the lead side ONLY
+  (`computeUndercutStripDrawRange(leadSide, leadRoomPt)` → `undercutWidenForSetLead`; room
+  `undercutSetLeadRoomPt` = value width + 2 × text pad + 2 × max(`UNDERCUT_SET_LEAD_TAIL_PT` 8 pt,
+  2 × arrow)) so the value seats IN its line with an open tail: undimensioned stock heading toward
+  the S.E.T., never a datum move. The break-room rule still runs after. A strip with no lead gets
+  exactly the old range; a widened strip draws at a slightly lower scale, and the other side keeps
+  its 24 pt minimum pad.
+- **Which S.E.T.: "Distance to S.E.T."** New per-job `UndercutRecord.setDatum`
+  (`NEAREST | AFT | FWD`, serialized by name, unknown or missing reads as NEAREST, additive — no
+  version bump). ONE resolver, `undercutStripSetSide(strip, spec, sets, datum, stripSpans)`: NEAREST
+  is the strip title's old rule (a liner strip's nearer edge-to-S.E.T., ties AFT; a bare-shaft
+  strip's `nearestSetReference` over its shoulders). The strip TITLE follows the same side
+  (`buildLinerAnchorLabel(forced)`, `undercutAnchorFor(forcedSide)`), so a title and its lead cannot
+  name different S.E.T.s; NEAREST titles are byte-identical to before.
+- **UI.** Chips Nearest | AFT S.E.T. | FWD S.E.T. (`UndercutSetDatumRow`), caption "The strip title
+  and the dimension at the strip's edge measure to this S.E.T. Saved with this job.", right after
+  "Page" in the tab's Drawing settings and in the undercut options panel. Setter
+  `setUndercutSetDatum` is undoable, marks the job dirty and ignores an unchanged value.
+- **Printed output changes on every sheet with cuts**, landscape and portrait: each strip gains its
+  lead (and the slightly wider drawn range that seats it).
+- Docs: `docs/contracts/UndercutDrawing.md` (S.E.T. lead), the `CLAUDE.md` undercut invariant,
+  manual chapters 04-07 and the Help topic.
+
+### feat(undercut): choose which sections print
+
+- **Pick the sections, print the rest of the job elsewhere.** On-device request: "sometimes we put
+  them all on one sheet, sometimes they are made separately". New per-job exclusion lists on
+  `UndercutRecord` (additive, no version bump): `excludedLinerIds` (liner strips, a liner's started
+  strip on a blank draft or empty export included) and `excludedFreeCutIds` (a bare-shaft strip is
+  excluded iff ALL its member cuts are listed, so a cut added to an excluded area brings the area
+  back whole). Default = everything prints; a new liner or cut prints by default. Ids that no longer
+  resolve are skipped at render, never pruned at decode.
+- **One filter.** `isUndercutStripPrinted`, applied inside `undercutSheetStrips` (which also returns
+  `allStrips`, the list before the filter, and `noneSelected`), so the composer,
+  `undercutSheetStripCount`, `undercutSheetOrientation` (Auto counts PRINTED sections: one printed
+  section is landscape) and every caption count the same strips.
+- **Every section off.** The composer prints the header, "No undercut sections selected for this
+  sheet." and the Notes row on a landscape page, never the whole-shaft profile fallback. Print and
+  Export are disabled with "No sections selected to print — tick at least one under "Sections to
+  print"."; Preview still opens. The Output tab's Export all SKIPS the undercut drawing and its
+  result line ends "Undercut drawing skipped: no sections selected." The tab's Thread options count
+  printed strips only.
+- **UI.** "Sections to print": a checkbox per section, AFT to FWD (liner rows
+  `FWD Liner Ø10.000" (3 cuts)`, bare-shaft rows `Bare shaft — 12" FROM AFT S.E.T. (1 cut)`), caption
+  "<n> of <m> sections print. Saved with this job.". Shown when the sheet has two or more sections;
+  never collapsed — directly above the Blank draft row and Print buttons on the tab, and in the
+  undercut options panel. Rows of the Recorded undercuts list whose cut is in a deselected section
+  read "Not on the printout". Setter `setUndercutSectionPrinted` is undoable.
+- Docs: `docs/contracts/UndercutDrawing.md` (Sections to print), the `CLAUDE.md` undercut invariant,
+  manual chapters 04-07 and the Help topic.
+
+### feat(undercut): portrait sheet — auto for two or more sections
+
+- **The undercut drawing can print portrait.** On-device request: the shop draws several undercut
+  sections stacked down a portrait page for spacing and clarity, while one section reads best
+  landscape. New per-job `UndercutRecord.pageOrientation` (`AUTO | LANDSCAPE | PORTRAIT`, serialized
+  by name, unknown or missing reads as AUTO, additive — no version bump). It is a fit for the job's
+  geometry, like `drawToSet`, so it is not in `PdfPrefs` and not captured by drawing profiles.
+- **Auto picks from the sections.** `resolveUndercutPageOrientation(choice, stripCount)`: AUTO is
+  portrait when the sheet prints two or more SECTIONS (a printed detail strip — one liner, or one
+  bare-shaft cluster window; never a cut), landscape otherwise (zero strips, the whole-shaft
+  profile fallback, is landscape). A forced value wins. Blank drafts count their started liner
+  strips. The strip list is computed once by `undercutSheetStrips`, shared by the composer and
+  `undercutSheetOrientation`, so the page a caller starts and the layout the composer draws cannot
+  disagree.
+- **Every writer starts the resolved page.** New `PdfPageOrientation` (`util/PdfSafExport.kt`);
+  `writeShaftPdfToUri`, `renderPdfPageBitmap` and `printShaftPdfPage` (print media
+  `NA_LETTER.asPortrait()`) take it, defaulting to LANDSCAPE, so every other document is
+  byte-identical. Undercut print, preview, SAF export and the Consolidated Output tab's Export all
+  start `undercutSheetOrientation`.
+- **Portrait layout.** One column, every strip the full content width, stacked AFT to FWD, at most
+  four per page (the landscape grid's cap, so choosing portrait never pushes a section into the
+  "+N more" note). Landscape is unchanged. Cell heights come from `undercutStripCells`: each strip's
+  overhead (rails, label rows, Ø callouts, title) is measured from the plan it draws; a page with
+  room gives every strip that overhead plus one common shaft height and spreads the leftover as
+  equal air above, between and below (a lone forced-portrait strip is centred); a crowded page
+  falls back to the even split, or to equal shaft heights when the even split would squeeze a
+  shaft. Portrait strips keep 10 pt between the Ø callouts and the title, and the header's job-info
+  line shrinks to fit before it would be ellipsized (`drawSheetHeader(minFitTextSizePt)`, 0 =
+  unchanged for every other sheet).
+- **One shared "Page" row** (`UndercutPageOrientationRow`: Auto | Landscape | Portrait, with a
+  caption saying what Auto does for this sheet). It is the first row of the Undercut tab's
+  "Drawing settings" and sits in the undercut sheet's PDF options panel under the Blank draft chip.
+  Setter `setUndercutPageOrientation` is undoable, marks the job dirty and ignores an unchanged
+  value. The options sheet's scope note now also says "Controls saved with this job say so."
+- Docs: `docs/contracts/UndercutDrawing.md` (Page orientation), `docs/PDF_EXPORT.md`, the
+  `CLAUDE.md` undercut invariant, manual chapters 04–06 with the undercut figure now rendered on
+  its resolved portrait page, and the Help topic.
+
 ### feat(undercut): shop-user pass — add chooser, card order, plain wording
 
 - **Add undercut asks where first.** The tab's button no longer records a 1" cut at the AFT S.E.T.;

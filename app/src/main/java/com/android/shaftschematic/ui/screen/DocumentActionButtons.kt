@@ -41,6 +41,9 @@ const val DOC_ACTION_EXPORT_TAG = "doc_action_export"
  * @param enabled      The hosting tab's export gate. All three actions share it — a document
  *                     that cannot be composed cannot be printed either. The gate's disabled
  *                     MESSAGE stays with the route: each tab words its own.
+ * @param printEnabled Print and Export only, inside [enabled]: a document that composes but has
+ *                     nothing to print (the undercut sheet with every section left off) still
+ *                     previews. Defaults to [enabled].
  */
 @Composable
 internal fun DocumentActionButtons(
@@ -49,10 +52,11 @@ internal fun DocumentActionButtons(
     onPreview: () -> Unit,
     onExport: () -> Unit,
     enabled: Boolean = true,
+    printEnabled: Boolean = enabled,
 ) {
     Button(
         onClick = onPrint,
-        enabled = enabled,
+        enabled = enabled && printEnabled,
         modifier = Modifier.fillMaxWidth().testTag(DOC_ACTION_PRINT_TAG),
     ) {
         Icon(Icons.Filled.Print, contentDescription = null)
@@ -72,7 +76,7 @@ internal fun DocumentActionButtons(
 
     OutlinedButton(
         onClick = onExport,
-        enabled = enabled,
+        enabled = enabled && printEnabled,
         modifier = Modifier.fillMaxWidth().testTag(DOC_ACTION_EXPORT_TAG),
     ) {
         Icon(Icons.Outlined.PictureAsPdf, contentDescription = null)

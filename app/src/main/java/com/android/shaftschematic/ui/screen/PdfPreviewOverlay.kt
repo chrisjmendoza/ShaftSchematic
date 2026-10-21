@@ -71,6 +71,7 @@ import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.THREAD_DENSITY_DEFAULT
 import com.android.shaftschematic.geom.THREAD_SLANT_DEFAULT
 import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
+import com.android.shaftschematic.model.UndercutPageOrientation
 import com.android.shaftschematic.pdf.WEAR_STRIP_SIZE_FRAC_DEFAULT
 import com.android.shaftschematic.settings.PDF_ARROW_SIZE_DEFAULT_PT
 import com.android.shaftschematic.settings.PDF_RUNOUT_BUBBLE_DROP_SCALE_DEFAULT
@@ -103,6 +104,7 @@ import com.android.shaftschematic.ui.viewmodel.setPdfWearBandShadeFrac
 import com.android.shaftschematic.ui.viewmodel.setPdfWearJoinGapMaxMm
 import com.android.shaftschematic.ui.viewmodel.setRunoutHeightScale
 import com.android.shaftschematic.ui.viewmodel.setShowCouplingFace
+import com.android.shaftschematic.ui.viewmodel.setUndercutPageOrientation
 import com.android.shaftschematic.ui.viewmodel.setWearCompactStrips
 import com.android.shaftschematic.ui.viewmodel.setWearShowShaftProfile
 import com.android.shaftschematic.ui.viewmodel.setWearStripComponents
@@ -110,6 +112,7 @@ import com.android.shaftschematic.ui.viewmodel.setWearStripSizeFrac
 import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.FractionStyle
 import com.android.shaftschematic.util.InkBand
+import com.android.shaftschematic.util.PdfPageOrientation
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.buildOpenPdfIntent
 
@@ -149,6 +152,8 @@ internal fun openRunoutPdf(context: Context, uri: Uri) {
  *                      the same snapshot-and-compose action its tab-body Print button runs,
  *                      from one local function, so the two entry points cannot drift. Null
  *                      hides the action. Labelled and filled — the primary output action.
+ * @param actionsEnabled False greys Print and Export (the page still previews) — the undercut
+ *                      sheet with every section left off has nothing to print.
  * @param optionsSheet  Optional composable content shown in the non-modal options panel
  *                      ([PreviewOptionsPanel]) the Tune icon toggles. When null, no Tune icon
  *                      is shown. The page stays pinch-zoomable and pannable under the open
@@ -178,6 +183,7 @@ internal fun PdfPreviewOverlay(
     optionsSheet: (@Composable () -> Unit)? = null,
     sheetTunesPage: Boolean = false,
     inkBand: InkBand? = null,
+    actionsEnabled: Boolean = true,
 ) {
     var showOptions by remember { mutableStateOf(false) }
 
@@ -275,15 +281,16 @@ internal fun PdfPreviewOverlay(
                     }
                 }
                 if (onPrint != null) {
-                    FilledTonalButton(onClick = onPrint) {
+                    FilledTonalButton(onClick = onPrint, enabled = actionsEnabled) {
                         Icon(Icons.Filled.Print, contentDescription = null)
                         Spacer(Modifier.width(6.dp))
                         Text("Print")
                     }
                 }
-                IconButton(onClick = onExport, modifier = Modifier.padding(end = 4.dp)) {
+                IconButton(onClick = onExport, enabled = actionsEnabled, modifier = Modifier.padding(end = 4.dp)) {
                     Icon(Icons.Outlined.PictureAsPdf, contentDescription = "Export PDF",
-                        tint = MaterialTheme.colorScheme.onSurface)
+                        tint = if (actionsEnabled) MaterialTheme.colorScheme.onSurface
+                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f))
                 }
             }
 
@@ -546,6 +553,21 @@ internal fun RunoutWearOptionsSheet(
      */
     showMeasurementReference: Boolean = false,
     pdfTieringMode: PdfTieringMode = PdfTieringMode.AUTO,
+    /**
+     * The undercut sheet's per-job page shape (`UndercutRecord.pageOrientation`). Non-null shows
+     * the "Page" row ([UndercutPageOrientationRow]) under the Content chips — on the undercut
+     * sheet only; null (the default) keeps it off every other document.
+     */
+    undercutPageOrientation: UndercutPageOrientation? = null,
+    /** Sections the undercut sheet prints (`undercutSheetStripCount`); read only with [undercutPageOrientation]. */
+    undercutStripCount: Int = 0,
+    /** The page that count resolves to (`undercutSheetOrientation`); read only with [undercutPageOrientation]. */
+    undercutResolvedOrientation: PdfPageOrientation = PdfPageOrientation.LANDSCAPE,
+    /**
+     * The undercut sheet's other per-job content rows — "Distance to S.E.T." and "Sections to
+     * print" — composed under the "Page" row; read only with [undercutPageOrientation].
+     */
+    undercutContentRows: (@Composable () -> Unit)? = null,
 ) {
     // Scrollable: without its own scroll a short screen clips the bottom rows mid-checkbox
     // (same posture as PdfOptionsSheet). The title and the height cap belong to the hosting
@@ -559,11 +581,11 @@ internal fun RunoutWearOptionsSheet(
             .padding(horizontal = 24.dp, vertical = 8.dp),
     ) {
         // One sheet serves the runout, consolidated, wear and undercut documents, and only
-        // some of them carry per-job controls — the undercut sheet has none, so it gets the
-        // app-wide sentence alone rather than a pointer to captions it does not show.
+        // some of them carry per-job controls — a sheet with none gets the app-wide sentence
+        // alone rather than a pointer to captions it does not show.
         OptionsScopeNote(
             hasJobControls = showHeightSlider || showLinerCompression ||
-                showCouplingFaceRow || showWearControls,
+                showCouplingFaceRow || showWearControls || undercutPageOrientation != null,
         )
         Spacer(Modifier.height(12.dp))
 
@@ -572,7 +594,7 @@ internal fun RunoutWearOptionsSheet(
         // that can draw the end view — the coupling face. Both are per-sheet elections, so
         // they lead; the coupling face is per-JOB (it rides the envelope's RunoutConfig, not
         // PdfPrefs — one job may measure the coupling and the next not).
-        if (onSetBlankDraft != null || showCouplingFaceRow) {
+        if (onSetBlankDraft != null || showCouplingFaceRow || undercutPageOrientation != null) {
             ContentChipRow {
                 if (onSetBlankDraft != null) {
                     ContentChip(
@@ -588,6 +610,18 @@ internal fun RunoutWearOptionsSheet(
                         onClick = { vm.setShowCouplingFace(!couplingFaceOn) },
                     )
                 }
+            }
+            // The undercut sheet's page shape — per job, beside the election that changes its
+            // section count (a blank draft prints every liner's started strip).
+            if (undercutPageOrientation != null) {
+                Spacer(Modifier.height(12.dp))
+                UndercutPageOrientationRow(
+                    choice = undercutPageOrientation,
+                    stripCount = undercutStripCount,
+                    resolved = undercutResolvedOrientation,
+                    onChoose = { vm.setUndercutPageOrientation(it) },
+                )
+                undercutContentRows?.invoke()
             }
 
             Spacer(Modifier.height(12.dp))

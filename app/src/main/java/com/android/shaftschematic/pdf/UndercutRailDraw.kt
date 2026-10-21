@@ -29,7 +29,8 @@ private const val UNDERCUT_RAIL_HALO_PAD_Y_PT = 0.5f
  * fed by the ONE plan ([planUndercutStripRails]).
  *
  * Witness lines from [witnessBottomY] up past [railY], an arrowed dimension line per span, and
- * each span's value. A label that fits inside its own span (the inward-arrow test, which also
+ * each span's value. A span's OPEN end ([WearRailSpanLayout.openStart]/`openEnd` — the S.E.T.
+ * lead's half dimension) draws neither its witness line nor its head. A label that fits inside its own span (the inward-arrow test, which also
  * guarantees stub room at [DIM_BREAK_TEXT_PAD_PT]) **seats in a break cut in the line**,
  * vertically centred — the schematic's value-in-a-break convention. A label wider than its span
  * falls back to the stacked rows `layoutWearStripRail` assigned, clamped to [maxLabelRows].
@@ -113,8 +114,10 @@ internal fun drawUndercutRail(
     // label, and running it after ALL lines means no later span can strike back through
     // (on-device report: the gap value between two cuts had lines running through it).
     layout.forEachIndexed { i, s ->
-        c.drawLine(s.x0Pt, witnessBottomY, s.x0Pt, railY - witnessExt, dim)
-        c.drawLine(s.x1Pt, witnessBottomY, s.x1Pt, railY - witnessExt, dim)
+        // An OPEN end (the S.E.T. lead's half dimension) has no witness line and no head: the
+        // line simply runs on toward an S.E.T. drawn off the strip.
+        if (!s.openStart) c.drawLine(s.x0Pt, witnessBottomY, s.x0Pt, railY - witnessExt, dim)
+        if (!s.openEnd) c.drawLine(s.x1Pt, witnessBottomY, s.x1Pt, railY - witnessExt, dim)
 
         val lw = dimText.measureDualLabel(s.label, dualStacked)
         val seatsInBreak = drawLabels && s.seatsInBreak
@@ -128,10 +131,14 @@ internal fun drawUndercutRail(
 
         val dirLeft = if (s.arrowInward) 1f else -1f
         val dirRight = if (s.arrowInward) -1f else 1f
-        c.drawLine(s.x0Pt, railY, s.x0Pt + dirLeft * arrow, railY - arrow * 0.5f, dim)
-        c.drawLine(s.x0Pt, railY, s.x0Pt + dirLeft * arrow, railY + arrow * 0.5f, dim)
-        c.drawLine(s.x1Pt, railY, s.x1Pt + dirRight * arrow, railY - arrow * 0.5f, dim)
-        c.drawLine(s.x1Pt, railY, s.x1Pt + dirRight * arrow, railY + arrow * 0.5f, dim)
+        if (!s.openStart) {
+            c.drawLine(s.x0Pt, railY, s.x0Pt + dirLeft * arrow, railY - arrow * 0.5f, dim)
+            c.drawLine(s.x0Pt, railY, s.x0Pt + dirLeft * arrow, railY + arrow * 0.5f, dim)
+        }
+        if (!s.openEnd) {
+            c.drawLine(s.x1Pt, railY, s.x1Pt + dirRight * arrow, railY - arrow * 0.5f, dim)
+            c.drawLine(s.x1Pt, railY, s.x1Pt + dirRight * arrow, railY + arrow * 0.5f, dim)
+        }
 
         fallbacks[i]?.let { f ->
             undercutRailLeader(
@@ -244,7 +251,8 @@ internal fun undercutNestedRailLineYs(
 
 /**
  * Draws one strip's whole rail stack from its plan ([planUndercutStripRails]) — the level-0
- * chain, one extra row per nesting level stacked UNDER it, and the total above it — the ONE
+ * chain with its S.E.T. lead, one extra row per nesting level stacked UNDER it, and the total
+ * above it — the ONE
  * sequence the printed strip and the detail canvas both run.
  *
  * Chained dimensions run most-detailed nearest the part, and a nested cut is located against its
@@ -275,8 +283,9 @@ internal fun drawUndercutStripRails(
     arrowSizePt: Float = PDF_ARROW_SIZE_DEFAULT_PT,
 ) {
     val plan = rails.rows
+    // The level-0 line carries the S.E.T. lead at its outboard end, laid out with the chain.
     drawUndercutRail(
-        c, dim, dimText, rails.chain,
+        c, dim, dimText, rails.chainWithLead,
         witnessBottomY = witnessBottomY,
         railY = chainRailY,
         // The chain's own label rows stop where the nested rows begin: the rest of the reserved

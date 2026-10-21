@@ -5,7 +5,7 @@
   <h2 id="reading-basics">How to read any sheet</h2>
 
   <h3>AFT is on the left</h3>
-  <p>Every sheet is printed landscape, with the AFT end of the shaft on the left and the FWD end on the right. The wear and undercut records spell it out with “← AFT” and “FWD →” above the drawing; the schematic and runout sheets follow the same rule without the label. A taper on the left of the page is always the AFT taper.</p>
+  <p>Every sheet is printed landscape — except an undercut drawing with two or more sections, which is portrait — with the AFT end of the shaft on the left and the FWD end on the right. The wear and undercut records spell it out with “← AFT” and “FWD →” above the drawing; the schematic and runout sheets follow the same rule without the label. A taper on the left of the page is always the AFT taper.</p>
 
   <h3>The drawing is fitted; the numbers are true</h3>
   <p>A 168″ tailshaft has to fit across a sheet of paper, so the drawing is not to scale. Bare shaft and long body runs give up the most length, and a run shortened past a set point carries an S-break pair (see <a href="#reading-sbreak">S-breaks</a>). Liners and tapers are shortened less, never with a break symbol, and a longer taper always draws longer than a shorter one. Keyways stay in proportion to the drawn shaft, and a bigger diameter always draws taller.</p>
@@ -391,19 +391,19 @@
 
   <h2 id="reading-undercut">The undercut drawing</h2>
   <p>The undercut drawing — titled “UNDERCUT RECORD” — records every section machined below the surface: where each cut starts, how long it is and the diameter it was taken to.</p>
-  <figure class="wide">
-    <img src="figures/undercut.png" alt="Undercut record: the stern tube liner strip with one 6 inch cut to 5.625 inches, dimensioned 17, 6 and 7 inches; the seal liner strip with an 8 inch cut to 5.440 inches containing a deeper 3 inch cut to 5.375 inches, dimensioned 3, 8 and 5 inches with a second row of 2 1/2, 3 and 2 1/2 inches.">
-    <figcaption>The undercut drawing: one cut on the Stern tube liner, a nested pair on the Seal liner.</figcaption>
+  <figure class="wide portrait">
+    <img src="figures/undercut.png" alt="Undercut record: the stern tube liner strip with one 6 inch cut to 5.625 inches, dimensioned 17, 6 and 7 inches after a 22 inch open-ended dimension to the AFT S.E.T.; the seal liner strip with an 8 inch cut to 5.440 inches containing a deeper 3 inch cut to 5.375 inches, dimensioned 3, 8 and 5 inches with a second row of 2 1/2, 3 and 2 1/2 inches, and a 24 inch open-ended dimension on to the FWD S.E.T.">
+    <figcaption>The undercut drawing on its portrait page: one cut on the Stern tube liner, a nested pair on the Seal liner.</figcaption>
   </figure>
-  <p>There is no whole-shaft view. Below the header and the “← AFT” / “FWD →” row, each liner holding a cut gets its own strip showing the whole liner and a sliver of shaft beyond each end. Cuts on bare shaft get a strip around the cut.</p>
+  <p>There is no whole-shaft view. Below the header and the “← AFT” / “FWD →” row, each liner holding a cut gets its own strip showing the whole liner and a sliver of shaft beyond each end. Cuts on bare shaft get a strip around the cut. A sheet with two or more sections comes out portrait, with the sections stacked down the page from AFT to FWD, each across the full width; a sheet with a single section is landscape. The <span class="ui">Page</span> setting can force either (see <a href="#recording-page">Page</a>). A sheet may carry only some of a job's sections: <span class="ui">Sections to print</span> leaves the others off, so one liner's undercuts can go to the welder by themselves (see <a href="#recording-sections">Sections to print</a>); a sheet with every section left off prints only the header and a note saying so.</p>
 
   <h3>Reading a cut</h3>
   <ul>
     <li><strong>The cut is an open step in the liner.</strong> It is drawn as a reduced-diameter section: a full-height face at each end, a floor line, and a lighter grey core than the liner around it (no shading at all when the sheet is printed as line art). The top is left open — there is no lid line across the cut.</li>
     <li><strong>Depth is drawn deeper than true.</strong> A real undercut is too shallow to see at the strip's scale, so the drawn depth is exaggerated (the deepest cut on the sheet sets the scale). The diameter printed under the cut is the true, measured value.</li>
     <li><strong>The diameter</strong> prints below the cut on a leader: “5.625″” on the Stern tube liner. As on the wear document, it carries its unit and no Ø sign.</li>
-    <li><strong>The rail</strong> chains across the liner: 17″ from the liner's AFT edge to the cut, 6″ of cut, and 7″ from the cut to the FWD edge. The three add up to the liner's length.</li>
-    <li><strong>The title</strong> at the bottom names the liner and its distance from the S.E.T., as on the wear strips: “Stern tube liner — 22″ FROM AFT S.E.T.”.</li>
+    <li><strong>The rail</strong> chains across the liner: 17″ from the liner's AFT edge to the cut, 6″ of cut, and 7″ from the cut to the FWD edge. The three add up to the liner's length. Ahead of them, at the strip's AFT end, the 22″ dimension has one arrowhead and an open end: it is the distance from the liner's edge on to the S.E.T. — the same 22″ the title names. On the Seal liner it trails off the FWD end instead (24″), because that liner is nearer the FWD S.E.T. The open end means the S.E.T. lies past the part of the shaft the strip draws (see <a href="#recording-set-datum">Distance to S.E.T.</a>).</li>
+    <li><strong>The title</strong> at the bottom names the liner and its distance from the S.E.T., as on the wear strips (the S.E.T. is the one chosen under <span class="ui">Distance to S.E.T.</span>, nearest by default): “Stern tube liner — 22″ FROM AFT S.E.T.”.</li>
   </ul>
 
   <h3>Nested cuts</h3>
