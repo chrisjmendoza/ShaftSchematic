@@ -6,6 +6,53 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-10-21
+
+### feat(undercut): shop-user pass — add chooser, card order, plain wording
+
+- **Add undercut asks where first.** The tab's button no longer records a 1" cut at the AFT S.E.T.;
+  it opens "Where is the cut?" with one row per liner (AFT to FWD, titled like the detail page's
+  strip, e.g. `Stern tube liner Ø10.000"`), then "Bare shaft — from the AFT S.E.T." and "Bare shaft
+  — from the FWD S.E.T.", and Cancel. A liner row opens that liner's page on a pending "New
+  undercut" card; a bare-shaft row opens a page on an empty window at that S.E.T. Nothing is
+  recorded until the pill's "Record cut" (or leaving a typed card); Cancel, Back and tap-outside
+  record nothing (usability review: a cut appearing before the user said where it was). Pure
+  helpers `undercutAddChoices`, `undercutAddLinerTitles`, `undercutBareShaftAddStrip`; the overlay
+  takes `seedNewCut`, read once at first composition and routed through the one `seedPendingCut()`
+  the page's own add button calls. After a bare-shaft cut is recorded the real strip replaces the
+  synthetic window under the same overlay identity.
+- **Drawing settings moved below the list.** "Drawn depth" (formerly "Cut depth exaggeration"),
+  "Draw to the shaft end" and "Split cuts at liner edges" now sit under a collapsed "Drawing
+  settings" header BELOW "Recorded undercuts", still shown only once there is a cut (usability
+  review: nothing between Add and the list may read as a required step). The slider's caption is
+  now "Makes shallow cuts easier to see — 0% is true scale. Printed Ø values never change. Saved
+  with this job."; the stored field is unchanged.
+- **Card order follows the work.** Title and delete, warnings, Measure From, Distance, Length,
+  Measured Ø, Notes, then "+ Next cut" as a full-width button at the foot of the card (it was a
+  header text button), then a collapsed "More ways to place this cut" row holding Span: Whole
+  liner, Extend past liner and the Start at end of / End at start of chips with their gap fields
+  (usability review: the rarely-used placement tools sat between the fields a shop user types).
+  The row shows only when there is a liner to span against or another cut to butt against; it
+  starts open for a Whole-liner or extended cut and stays open while a gap field is open; collapsing
+  it loses nothing.
+- **Plain wording.** Card title "Undercut 2 of 3 · aft → fwd" is now "Cut 2 of 3". The status pill
+  reads "Recorded" (was "Saved" — saving the job file is the tab's Save icon), and a dirty pill says
+  "Record cut" for a new cut and "Confirm change" for an edit. The "Past the liner edge" question
+  reads "This cut runs 2.000 in past the liner's FWD edge into the shaft. Is that right?" with
+  "Yes, it does" / "No, let me check" (behaviour unchanged); the declined warning ends "check
+  Distance and Length". The Ø warnings read "Ø isn't smaller than the shaft here (Ø 7.874 in) —
+  check the number" and the nested form "…the surrounding cut's floor here (Ø … in) — check the
+  number". The tab intro, the blank-draft caption ("Job info and overall length are blanked; …")
+  and the list row second line ("Length 6in · Ø 5.625in") were reworded the same way.
+- **Entry hints.** Distance shows "Decimals or fractions — 5.748, 3 1/2, 7/8" under it and Measured Ø
+  shows the placeholder "e.g. 5.625 or 5 5/8". `NumericInputField` gained optional `placeholder`
+  and `hint` (both default null, byte-identical when null); the hint shows only when there is no
+  rejection notice and no `externalIssueText` — an error outranks a tip.
+- Docs: `docs/contracts/UndercutDrawing.md` (add chooser, card order, More-ways expander, pill and
+  warning wording), `NumberField.md`, `UI_CONTRACT.md`, the User Manual's recording chapter and the
+  in-app Help topics follow the new labels; the CLAUDE.md slider name and Next-cut position
+  updated. The TODO item about the two Add buttons behaving differently is closed.
+
 ## 2026-10-20
 
 ### feat(undercut): a gap after (or before) another cut

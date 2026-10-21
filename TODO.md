@@ -116,9 +116,6 @@ at most a pointer from here.
   - **Blend length, seal-area length, liner-shoulder length and reduced Ø never print** — only
     the shoulder radius reaches the footer (deliberate per CLAUDE.md, but a machinist cannot make
     these from the paper alone). Decide whether a footer line per feature is wanted.
-  - **The Undercut tab's two Add buttons behave differently** — the overview's "Add undercut"
-    records a cut at once (Ø shown as "—"); "Add undercut in this liner" starts a draft that needs
-    confirming.
   - **Wear detail opens with the Add X tool selected**, so the first tap places a pit.
   - **Home leaves no way back into the open job** except Unsaved drafts / Recent.
   - **A bare metric designation ("M20") is accepted with zero pitch** and then warns "Zero pitch

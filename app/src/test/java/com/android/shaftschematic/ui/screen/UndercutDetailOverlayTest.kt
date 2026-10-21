@@ -12,6 +12,7 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasAnyDescendant
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.assertIsDisplayed
@@ -38,6 +39,8 @@ import androidx.compose.ui.test.swipeRight
 import com.android.shaftschematic.doc.ShaftDocCodec
 import com.android.shaftschematic.geom.UndercutLinerSpan
 import com.android.shaftschematic.geom.UndercutSpanMm
+import com.android.shaftschematic.geom.UndercutStrip
+import com.android.shaftschematic.geom.UndercutWindow
 import com.android.shaftschematic.geom.linerStripFor
 import com.android.shaftschematic.geom.nearestSetReference
 import com.android.shaftschematic.geom.undercutAddSeedSpan
@@ -97,7 +100,15 @@ class UndercutDetailOverlayTest {
      * [withChrome] hosts the top bar's Preview and Options the way the Undercut tab does: Preview
      * counts into [previewed], Options carries the undercut preview's real options sheet.
      */
-    private fun show(cuts: List<Undercut>, initialSelectedId: String? = null, withChrome: Boolean = false) {
+    private fun show(
+        cuts: List<Undercut>,
+        initialSelectedId: String? = null,
+        withChrome: Boolean = false,
+        seedNewCut: Boolean = false,
+        /** A fixed strip in place of the liner strip over the record — e.g. an empty bare-shaft window. */
+        fixedStrip: UndercutStrip? = null,
+        stripKey: String = "liner:L1",
+    ) {
         record = UndercutRecord(cuts)
         val resolved = resolveComponents(spec)
         val vm = if (withChrome) ShaftViewModel(ApplicationProvider.getApplicationContext<Application>()) else null
@@ -107,8 +118,8 @@ class UndercutDetailOverlayTest {
                     UndercutSpanMm(it.id, it.startFromAftMm, it.startFromAftMm + it.lengthMm)
                 }
                 UndercutWindowDetailOverlay(
-                    strip = linerStripFor(linerSpan, spans, oal),
-                    stripKey = "liner:L1",
+                    strip = fixedStrip ?: linerStripFor(linerSpan, spans, oal),
+                    stripKey = stripKey,
                     spec = spec,
                     resolvedComponents = resolved,
                     unit = UnitSystem.INCHES,
@@ -131,6 +142,7 @@ class UndercutDetailOverlayTest {
                     },
                     onClose = { closed++ },
                     initialSelectedId = initialSelectedId,
+                    seedNewCut = seedNewCut,
                     onPreview = if (withChrome) ({ previewed++ }) else null,
                     optionsSheet = vm?.let { v ->
                         { UndercutOptionsSheet(vm = v, blankDraft = false, onSetBlankDraft = {}, showThreadControls = false) }
@@ -235,6 +247,7 @@ class UndercutDetailOverlayTest {
     @Test
     fun `start at end of and end at start of move the draft to either side of a cut`() {
         show(listOf(cut("u1", 600f, len = 100f), cut("u2", 900f)), initialSelectedId = "u2")
+        openMorePlacement(hasAnyAncestor(hasTestTag("undercut_card_u2")))
         rule.onNode(hasTestTag("undercut_butt_after_1") and hasAnyAncestor(hasTestTag("undercut_card_u2")))
             .performScrollTo().performClick()
         settle()
@@ -263,6 +276,7 @@ class UndercutDetailOverlayTest {
         val gap = hasText("Gap after Cut 1 (in)") and inU2
         assertTrue("no gap field before a chip is chosen", rule.onAllNodes(gap).fetchSemanticsNodes().isEmpty())
 
+        openMorePlacement(inU2)
         rule.onNode(hasTestTag("undercut_butt_after_1") and inU2).performScrollTo().performClick()
         settle()
         typeAndCommit(gap, "2")
@@ -279,6 +293,18 @@ class UndercutDetailOverlayTest {
             rule.onAllNodes(editableStartsWith("9.87") and inU2).fetchSemanticsNodes().isNotEmpty(),
         )
         assertTrue("a gap is a draft edit, not a record write", updated.isEmpty())
+    }
+
+    /**
+     * Opens [card]'s "More ways to place this cut" — the span presets live behind it — unless it
+     * is open already (a card whose cut runs past its liner opens with it out).
+     */
+    private fun openMorePlacement(card: SemanticsMatcher) {
+        val closed = hasTestTag("undercut_more_placement") and card and hasContentDescription("Expand")
+        if (rule.onAllNodes(closed).fetchSemanticsNodes().isNotEmpty()) {
+            rule.onNode(closed).performScrollTo().performClick()
+            settle()
+        }
     }
 
     private fun editableStartsWith(prefix: String) = SemanticsMatcher("editable text starts with $prefix") {
@@ -308,7 +334,7 @@ class UndercutDetailOverlayTest {
             rule.onAllNodesWithText("Undercut extends past the shaft's FWD end", useUnmergedTree = true)
                 .fetchSemanticsNodes().isNotEmpty(),
         )
-        // The value reached the DRAFT: the pill reports the draft blocked, not "Saved".
+        // The value reached the DRAFT: the pill reports the draft blocked, not "Recorded".
         rule.onNodeWithTag("undercut_status_pill", useUnmergedTree = true)
             .assert(hasAnyDescendant(hasText("Undercut extends past the shaft's FWD end")))
         assertTrue("a blocked draft reached the record", updated.isEmpty())
@@ -454,6 +480,11 @@ class UndercutDetailOverlayTest {
         typeLengthPastTheLiner()
         rule.onNodeWithTag("undercut_overhang_dialog").assertIsDisplayed()
         rule.onNodeWithText("Past the liner edge").assertIsDisplayed()
+        rule.onNodeWithText(
+            undercutOverhangQuestion(aft = null, fwd = "${disp(162f, UnitSystem.INCHES)} in"),
+        ).assertIsDisplayed()
+        rule.onNodeWithText("Yes, it does").assertIsDisplayed()
+        rule.onNodeWithText("No, let me check").assertIsDisplayed()
 
         rule.onNodeWithTag("undercut_overhang_decline").performClick()
         rule.waitForIdle()
@@ -473,7 +504,7 @@ class UndercutDetailOverlayTest {
     }
 
     @Test
-    fun `a length run past the liner asks, and Add extension leaves no warning`() {
+    fun `a length run past the liner asks, and Yes leaves no warning`() {
         typeLengthPastTheLiner()
         rule.onNodeWithTag("undercut_overhang_accept").performClick()
         rule.waitForIdle()
@@ -648,7 +679,7 @@ class UndercutDetailOverlayTest {
     private val pendingCard = hasAnyAncestor(hasTestTag("undercut_card_$PENDING_UNDERCUT_ID"))
     private fun onCard(id: String) = hasAnyAncestor(hasTestTag("undercut_card_$id"))
     private val pill get() = rule.onNodeWithTag("undercut_status_pill", useUnmergedTree = true)
-    private fun assertPillSaved() = pill.assert(hasAnyDescendant(hasText("Saved")))
+    private fun assertPillRecorded() = pill.assert(hasAnyDescendant(hasText("Recorded")))
     private fun assertNoOverlapNamed(n: Int) = assertTrue(
         "\"Overlaps cut $n\" is on screen",
         rule.onAllNodesWithText("Overlaps cut $n", substring = true, useUnmergedTree = true)
@@ -685,6 +716,7 @@ class UndercutDetailOverlayTest {
         // "End at start of" numbers C by its page position, the pending card's seed included.
         val cPosition = buildUndercutPageIds(stored.sortedBy { it.startFromAftMm }, jobSeedStartMm(stored))
             .indexOf(cutC.id) + 1
+        openMorePlacement(pendingCard)
         rule.onNode(hasTestTag("undercut_butt_before_$cPosition") and pendingCard).performScrollTo().performClick()
         settle()
         typeAndCommit(hasText("Length (in)") and pendingCard, "1.25")
@@ -708,7 +740,7 @@ class UndercutDetailOverlayTest {
     private fun assertCardOneIsCleanAndEditable(eId: String) {
         rule.onNode(hasText(undercutCardTitle(1, 5)) and onCard(eId)).assertExists()
         assertNoLeavePrompt()
-        assertPillSaved()
+        assertPillRecorded()
         assertNoOverlapNamed(1)
         typeAndCommit(hasText("Measured Ø (in)") and onCard(eId), "9.25")
         assertNoOverlapNamed(1)
@@ -719,10 +751,10 @@ class UndercutDetailOverlayTest {
     fun `the recorded job opens clean on every card`() {
         showJob(jobCuts, initialSelectedId = cutE.id)
         rule.onNode(hasText(undercutCardTitle(1, 5)) and onCard(cutE.id)).assertExists()
-        assertPillSaved()
+        assertPillRecorded()
         repeat(4) {
             swipe(left = true)
-            assertPillSaved()
+            assertPillRecorded()
             assertNoLeavePrompt()
         }
         assertNoOverlapNamed(1)
@@ -895,7 +927,7 @@ class UndercutDetailOverlayTest {
     }
 
     @Test
-    fun `confirming a new cut with an in-flight overhang asks first, and Add extension records it`() {
+    fun `confirming a new cut with an in-flight overhang asks first, and Yes records it`() {
         pendingWithInFlightOverhang()
         rule.onNodeWithTag("undercut_confirm", useUnmergedTree = true).performClick()
         settle()
@@ -971,8 +1003,9 @@ class UndercutDetailOverlayTest {
         assertTrue(rule.onAllNodes(editableStartsWith("5.905") and pendingCard).fetchSemanticsNodes().isNotEmpty())
         assertTrue(rule.onAllNodes(editableIs("1") and pendingCard).fetchSemanticsNodes().isNotEmpty())
         assertTrue(rule.onAllNodes(editableStartsWith("7") and pendingCard).fetchSemanticsNodes().isEmpty())
+        // A new cut is offered for recording, not as a change to confirm.
         rule.onNodeWithTag("undercut_status_pill", useUnmergedTree = true)
-            .assert(hasAnyDescendant(hasText("Confirm change")))
+            .assert(hasAnyDescendant(hasText("Record cut")))
     }
 
     @Test
@@ -1154,5 +1187,188 @@ class UndercutDetailOverlayTest {
         rule.mainClock.advanceTimeBy(500)
         rule.waitForIdle()
         rule.onNodeWithTag("undercut_detail_reset_view").assertDoesNotExist()
+    }
+
+    // ── The card for the shop: the three numbers first, the presets behind an expander ──
+
+    private val inU2 get() = hasAnyAncestor(hasTestTag("undercut_card_u2"))
+    private fun countIn(card: SemanticsMatcher, tag: String) =
+        rule.onAllNodes(hasTestTag(tag) and card).fetchSemanticsNodes().size
+
+    @Test
+    fun `the span presets are collapsed by default and the three numbers are not`() {
+        show(listOf(cut("u1", 600f, len = 100f), cut("u2", 900f)), initialSelectedId = "u2")
+        rule.onNode(hasTestTag("undercut_more_placement") and inU2).assertExists()
+        assertEquals(0, countIn(inU2, "undercut_whole_liner"))
+        assertEquals(0, countIn(inU2, "undercut_extend_aft"))
+        assertEquals(0, countIn(inU2, "undercut_butt_after_1"))
+        rule.onNode(hasText("Distance from Liner AFT (in)") and inU2).assertExists()
+        rule.onNode(hasText("Length (in)") and inU2).assertExists()
+        rule.onNode(hasText("Measured Ø (in)") and inU2).assertExists()
+    }
+
+    @Test
+    fun `the card reads Distance, Length, Ø, Notes, Next cut, then the expander`() {
+        show(listOf(cut("u1", 600f, len = 100f), cut("u2", 900f)), initialSelectedId = "u2")
+        fun top(m: SemanticsMatcher) = rule.onNode(m and inU2).fetchSemanticsNode().positionInRoot.y
+        val order = listOf(
+            top(hasText("Measure From:")),
+            top(hasText("Distance from Liner AFT (in)")),
+            top(hasText("Length (in)")),
+            top(hasText("Measured Ø (in)")),
+            top(hasText("Notes")),
+            top(hasTestTag("undercut_next_cut")),
+            top(hasTestTag("undercut_more_placement")),
+        )
+        assertEquals("card order $order", order.sorted(), order)
+    }
+
+    @Test
+    fun `the expander shows the span presets and hides them again`() {
+        show(listOf(cut("u1", 600f, len = 100f), cut("u2", 900f)), initialSelectedId = "u2")
+        rule.onNode(hasTestTag("undercut_more_placement") and inU2).performScrollTo().performClick()
+        settle()
+        rule.onNode(hasTestTag("undercut_whole_liner") and inU2).assertExists()
+        rule.onNode(hasTestTag("undercut_extend_aft") and inU2).assertExists()
+        rule.onNode(hasTestTag("undercut_butt_after_1") and inU2).assertExists()
+        rule.onNode(hasTestTag("undercut_butt_before_1") and inU2).assertExists()
+
+        rule.onNode(hasTestTag("undercut_more_placement") and inU2).performScrollTo().performClick()
+        settle()
+        assertEquals(0, countIn(inU2, "undercut_whole_liner"))
+        assertEquals(0, countIn(inU2, "undercut_butt_after_1"))
+    }
+
+    @Test
+    fun `a tapped butt chip's gap field stays up through recompositions`() {
+        show(listOf(cut("u1", 600f, len = 100f), cut("u2", 900f)), initialSelectedId = "u2")
+        val gap = hasText("Gap after Cut 1 (in)") and inU2
+        openMorePlacement(inU2)
+        rule.onNode(hasTestTag("undercut_butt_after_1") and inU2).performScrollTo().performClick()
+        settle()
+        rule.onNode(gap).assertExists()
+
+        // A draft edit on the same card, and a record change around it, both recompose the card.
+        typeAndCommit(hasText("Measured Ø (in)") and inU2, "7")
+        record = record.copy(exaggerationFrac = 0.1f)
+        settle()
+        rule.onNode(gap).assertExists()
+        rule.onNode(hasTestTag("undercut_butt_after_1") and inU2).assertExists()
+    }
+
+    @Test
+    fun `collapsing with a gap field up closes the field and keeps the cut where the gap put it`() {
+        show(listOf(cut("u1", 600f, len = 100f), cut("u2", 900f)), initialSelectedId = "u2")
+        val gap = hasText("Gap after Cut 1 (in)") and inU2
+        openMorePlacement(inU2)
+        rule.onNode(hasTestTag("undercut_butt_after_1") and inU2).performScrollTo().performClick()
+        settle()
+        typeAndCommit(gap, "2")
+
+        rule.onNode(hasTestTag("undercut_more_placement") and inU2).performScrollTo().performClick()
+        settle()
+        assertTrue("the gap field closes", rule.onAllNodes(gap).fetchSemanticsNodes().isEmpty())
+        assertEquals(0, countIn(inU2, "undercut_butt_after_1"))
+        // 700 + 50.8 = 750.8 mm = 250.8 mm past the liner's AFT edge = 9.874 in, kept.
+        assertTrue(rule.onAllNodes(editableStartsWith("9.87") and inU2).fetchSemanticsNodes().isNotEmpty())
+        assertTrue("a collapse is not a record write", updated.isEmpty())
+    }
+
+    @Test
+    fun `a card with nothing to place against shows no expander`() {
+        // A bare-shaft window with one cut: no liner to span, no other cut to butt against.
+        val lone = Undercut(
+            id = "b1", startFromAftMm = 100f, lengthMm = 50f,
+            authoredReference = UndercutReference.AFT_SET,
+        )
+        show(
+            listOf(lone),
+            fixedStrip = UndercutStrip.FreeStrip(UndercutWindow(50f, 200f, listOf("b1"))),
+            stripKey = "free:b1",
+        )
+        assertTrue(rule.onAllNodesWithTag("undercut_more_placement").fetchSemanticsNodes().isEmpty())
+        rule.onNodeWithText("Measured Ø (in)").assertExists()
+    }
+
+    @Test
+    fun `Distance carries the fraction hint`() {
+        show(listOf(cut("u1", 900f)))
+        rule.onNode(hasText(UNDERCUT_FRACTION_HINT) and onCard("u1"), useUnmergedTree = true).assertExists()
+    }
+
+    @Test
+    fun `a Ø at the shaft surface says which figure it was compared against`() {
+        // The liner's OD is 200 mm: a Ø of 8 in (203.2 mm) is not below it.
+        show(listOf(cut("u1", 900f)))
+        typeAndCommit(hasText("Measured Ø (in)") and onCard("u1"), "8")
+        rule.onNode(
+            hasText(undercutDiaNotBelowSurfaceWarning(false, disp(200f, UnitSystem.INCHES), "in")) and onCard("u1"),
+            useUnmergedTree = true,
+        ).assertExists()
+        // An edit to a recorded cut is a change to confirm.
+        pill.assert(hasAnyDescendant(hasText("Confirm change")))
+    }
+
+    // ── Opening on a new cut (the tab's "Add undercut") ──
+
+    @Test
+    fun `opening a liner strip to add seeds a new cut and records nothing until confirmed`() {
+        show(listOf(cut("u1", 600f)), seedNewCut = true)
+        settle()
+        rule.onNodeWithText("New undercut").assertIsDisplayed()
+        pill.assert(hasAnyDescendant(hasText("Record cut")))
+        rule.onNodeWithTag("undercut_add_in_liner").assertIsNotEnabled()
+        assertTrue("a seeded add was recorded at $added", added.isEmpty())
+
+        // Leaving it untouched records nothing.
+        rule.onNodeWithContentDescription("Back to Undercut Drawing").performClick()
+        settle()
+        assertEquals(1, closed)
+        assertTrue("an untouched seeded add was recorded at $added", added.isEmpty())
+        assertEquals(listOf("u1"), record.undercuts.map { it.id })
+    }
+
+    @Test
+    fun `opening an empty bare-shaft window to add seeds a new cut there`() {
+        show(
+            emptyList(),
+            seedNewCut = true,
+            fixedStrip = UndercutStrip.FreeStrip(UndercutWindow(0f, 100f, emptyList())),
+            stripKey = "free:new:aft",
+        )
+        settle()
+        rule.onNodeWithText("New undercut").assertIsDisplayed()
+        pill.assert(hasAnyDescendant(hasText("Record cut")))
+        assertTrue(rule.onAllNodesWithText("No undercuts recorded here yet.").fetchSemanticsNodes().isEmpty())
+
+        rule.onNodeWithContentDescription("Back to Undercut Drawing").performClick()
+        settle()
+        assertEquals(1, closed)
+        assertTrue("an untouched seeded add was recorded at $added", added.isEmpty())
+        assertTrue(record.undercuts.isEmpty())
+    }
+
+    @Test
+    fun `a seeded bare-shaft cut records with its typed Ø`() {
+        show(
+            emptyList(),
+            seedNewCut = true,
+            fixedStrip = UndercutStrip.FreeStrip(UndercutWindow(0f, 100f, emptyList())),
+            stripKey = "free:new:aft",
+        )
+        settle()
+        typeAndCommit(hasText("Measured Ø (in)") and pendingCard, "5 5/8")
+        rule.onNodeWithTag("undercut_confirm", useUnmergedTree = true).performClick()
+        settle()
+        assertEquals(1, added.size)
+        // addUndercut lands the span; the typed Ø rides the update that follows it.
+        assertEquals(listOf("new"), updated)
+    }
+
+    @Test
+    fun `without seedNewCut the overlay opens on the strip's cuts`() {
+        show(listOf(cut("u1", 600f)))
+        assertTrue(rule.onAllNodesWithText("New undercut").fetchSemanticsNodes().isEmpty())
+        assertPillRecorded()
     }
 }

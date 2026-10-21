@@ -531,24 +531,29 @@ internal val helpSections: List<HelpSection> = listOf(
                     "shaft end (S.E.T.), a liner edge, or — for a cut inside another — that " +
                     "parent cut's shoulder (Parent AFT / Parent FWD), plus length and measured " +
                     "Ø. A liner edge that a cut has been machined across into the body is no " +
-                    "longer offered; measure from the nearer S.E.T. instead. Tap a liner " +
+                    "longer offered; measure from the nearer S.E.T. instead. \"Add " +
+                    "undercut\" asks where the cut is (a liner, or bare shaft from either " +
+                    "S.E.T.) and opens that part zoomed in on a new card; or tap a liner " +
                     "or highlighted section to zoom in and add cuts. What you type is never " +
                     "changed: a value that would put a cut off the shaft or partly over " +
                     "another cut (sit fully inside it or fully clear) stays in the card, and " +
-                    "the status pill says why it cannot be saved yet. Undo and Redo sit in the " +
+                    "the status pill says why it cannot be recorded yet. Tap \"Record cut\" " +
+                    "on the pill to put a new cut in the record. Undo and Redo sit in the " +
                     "top bar, beside Preview and Drawing options — the preview of the sheet " +
                     "and its options panel, without leaving the zoomed page (the tab has the " +
                     "same pair under its drawing). Deleting a cut offers Undo — from the open cut's card and " +
-                    "from the tab's list alike. \"Next cut\" on the card confirms the cut and " +
-                    "opens a new one butted to its far end. The list below the drawing " +
+                    "from the tab's list alike. \"Next cut\" at the foot of the card confirms the cut and " +
+                    "opens a new one butted to its far end; \"More ways to place this cut\" " +
+                    "below it holds the whole-liner, extension and butt-against shortcuts. The list below the drawing " +
                     "numbers the cuts from the aft end — the same numbers the zoomed detail " +
                     "page shows inside each cut, to help you find it; they never print — " +
                     "and flags a cut with no Ø (\"Ø not entered\"); printing or " +
                     "exporting while one has no Ø asks first (\"Print without diameters?\"). " +
                     "Cut depth on the drawing " +
                     "is exaggerated for visibility (real cuts are hairline-thin at scale) — " +
-                    "the printed Ø values are always your typed numbers. The exaggeration " +
-                    "slider on the sheet only changes the drawing, never the data.",
+                    "the printed Ø values are always your typed numbers. The \"Drawn depth\" " +
+                    "slider (under \"Drawing settings\" below the list) only changes the " +
+                    "drawing, never the data.",
                 manualAnchor = "recording-undercut",
             ),
             HelpTopic(
@@ -1012,10 +1017,10 @@ internal val helpSections: List<HelpSection> = listOf(
                     "session-only: not saved; it resets each session. On the " +
                     "schematic, \"Ø callouts\" beside it decides whether that blank sheet " +
                     "still carries Ø leaders to fill in.\n" +
-                    "• \"Cut depth exaggeration\" — on the Undercut Drawing. Changes only how " +
+                    "• \"Drawn depth\" — on the Undercut Drawing, under \"Drawing settings\". Changes only how " +
                     "deep cuts look, never the printed numbers.\n" +
-                    "• \"Draw to the shaft end\" — on the Undercut Drawing, under the depth " +
-                    "slider. A liner strip whose cuts end within 24 in of the S.E.T. draws " +
+                    "• \"Draw to the shaft end\" — on the Undercut Drawing, under \"Drawing " +
+                    "settings\", beside the Drawn depth slider. A liner strip whose cuts end within 24 in of the S.E.T. draws " +
                     "out to the shaft end, and its dimension chain finishes with the run from the " +
                     "last cut to the S.E.T. Saved with this job.\n" +
                     "• Worn sections — on the Consolidated Output tab. (That tab's \"Sheet " +

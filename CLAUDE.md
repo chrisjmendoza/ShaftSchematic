@@ -446,7 +446,7 @@ re-applies the rule after its points-based `computeUndercutStripDrawRange` widen
 measurement — stored **verbatim** (golden rule); `0` = placed-but-empty, drawn with a
 symbolic shallow floor in the overlay, never printed. Notch **depth is display-exaggerated**
 (`normalizedNotchFloorDiaMm` — drawn depth normalized to the sheet's deepest cut
-(`deepestUndercutDepthMm`) at the per-sheet "Cut depth exaggeration" slider value
+(`deepestUndercutDepthMm`) at the per-sheet "Drawn depth" slider value
 (`UndercutRecord.exaggerationFrac`, cap `UNDERCUT_EXAGGERATION_MAX_FRAC` = 25%), never
 shallower than true, region topology from the TRUE floor) because real cuts are hairline-thin
 at scale; printed Ø values stay the stored numbers. No carousel card and no Add dialog —
@@ -499,7 +499,7 @@ inside each section — on EVERY free piece of a parent that nested cuts split, 
 section; below the shaft on a white halo when too narrow, clear of the rail (placement in the pure
 `geom/UndercutCutNumberMath.kt`). It prints on NO sheet and draws on no whole-shaft overview, and has
 no pref (on-device ruling: "the cut counts are for input purposes only, no output on any sheet"). Liner strip titles carry the
-liner's OD in its display unit. "Next cut" confirms the card through the ONE confirm path and seeds a
+liner's OD in its display unit. "Next cut" (a full-width button at the card's foot) confirms the card through the ONE confirm path and seeds a
 PENDING cut butted to its FWD end (same datum, Ø empty; disabled while unconfirmable or with no stock
 FWD); an add on a strip with cuts seeds butted to the FWD-most cut (`undercutAddSeedSpan`); the tab's
 list delete offers the same `restoreUndercut` snackbar Undo as the detail page; a cut with no Ø is

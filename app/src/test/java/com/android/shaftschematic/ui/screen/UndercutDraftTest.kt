@@ -332,26 +332,41 @@ class UndercutDraftTest {
     // ── Card title + edge-to-edge presets ────────────────────────────────────────────
 
     @Test
-    fun `the card title states the aft to fwd position convention`() {
-        assertEquals("Undercut 2 of 3 · aft → fwd", undercutCardTitle(2, 3))
+    fun `the card title names the cut the way the chips and list rows do`() {
+        assertEquals("Cut 2 of 3", undercutCardTitle(2, 3))
+        assertEquals(undercutButtChipLabel(2), undercutCardTitle(2, 3).substringBefore(" of"))
     }
 
     @Test
-    fun `the past-the-liner-edge question names the end and the amount`() {
+    fun `the past-the-liner-edge question names the end and the amount as a yes or no`() {
         assertEquals(
-            "This undercut will run 0.5 in past the liner's FWD edge. " +
-                "Add that as an extension past the liner?",
-            undercutOverhangQuestion(aft = null, fwd = "0.5 in"),
+            "This cut runs 2.000 in past the liner's FWD edge into the shaft. Is that right?",
+            undercutOverhangQuestion(aft = null, fwd = "2.000 in"),
         )
         assertEquals(
-            "This undercut will run 1 in past the liner's AFT edge.\n" +
-                "This undercut will run 0.5 in past the liner's FWD edge.\n" +
-                "Add those as extensions past the liner?",
-            undercutOverhangQuestion(aft = "1 in", fwd = "0.5 in"),
+            "This cut runs 2.000 in past the liner's AFT edge into the shaft. Is that right?",
+            undercutOverhangQuestion(aft = "2.000 in", fwd = null),
         )
         assertEquals(
-            "Runs 0.5 in past the liner's FWD edge — double-check Distance and Length",
-            undercutOverhangWarning("0.5 in", "FWD"),
+            "This cut runs 1.000 in past the liner's AFT edge and 2.000 in past its FWD edge " +
+                "into the shaft. Is that right?",
+            undercutOverhangQuestion(aft = "1.000 in", fwd = "2.000 in"),
+        )
+        assertEquals(
+            "Runs 2.000 in past the liner's FWD edge — check Distance and Length",
+            undercutOverhangWarning("2.000 in", "FWD"),
+        )
+    }
+
+    @Test
+    fun `the Ø warning names the figure it was compared against`() {
+        assertEquals(
+            "Ø isn't smaller than the shaft here (Ø 10.000 in) — check the number",
+            undercutDiaNotBelowSurfaceWarning(nested = false, dia = "10.000", unitAbbr = "in"),
+        )
+        assertEquals(
+            "Ø isn't smaller than the surrounding cut's floor here (Ø 9.500 in) — check the number",
+            undercutDiaNotBelowSurfaceWarning(nested = true, dia = "9.500", unitAbbr = "in"),
         )
     }
 

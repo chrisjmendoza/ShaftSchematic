@@ -45,6 +45,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.Preview
@@ -54,6 +56,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarDuration
@@ -190,6 +193,8 @@ import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.DualLabel
 import com.android.shaftschematic.util.buildLinerTitleById
 import com.android.shaftschematic.util.toMmOrNull
+import com.android.shaftschematic.util.parseFractionOrDecimal
+import com.android.shaftschematic.ui.input.NumericInputField
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
@@ -246,9 +251,9 @@ import kotlin.math.min
  * **Saving is a floating pill, not card buttons** ([UndercutStatusPill], pinned at the boundary
  * between the canvas and the carousel so it can never scroll out of reach — on-device report: per-card
  * Confirm/Cancel buttons buried in the card's own scroll were missed). It states the selected card's
- * save state: *Saved* (nothing dirty), *Confirm change* (dirty and clear — one tap commits, staying
- * on the card), or the blocking reason (dirty and blocked, not confirmable); the last two also carry
- * a discard (✕).
+ * save state: *Recorded* (nothing dirty), *Record cut* / *Confirm change* (dirty and clear — a new
+ * cut or an edit to a recorded one; one tap commits, staying on the card), or the blocking reason
+ * (dirty and blocked, not confirmable); the last two also carry a discard (✕).
  *
  * **Leaving a card saves it.** A dirty draft that clears the confirm check commits by itself,
  * through the identical [confirmDraft] path (values verbatim — golden rule), when the machinist
@@ -343,6 +348,14 @@ fun UndercutWindowDetailOverlay(
      * null opens on the aft-most card. A cut that is not on this strip is healed away.
      */
     initialSelectedId: String? = null,
+    /**
+     * Open on a NEW cut: at the overlay's first composition, when no pending card exists, seed one
+     * exactly as the page's own "Add undercut in this liner / here" button does — the tab's "Add
+     * undercut" lands here. Nothing is recorded until the pill's "Record cut" (or leaving a typed
+     * card); an untouched seed is discarded on leave like any pending card. [strip] may be a free
+     * strip with no cuts yet (a bare-shaft add): the card seeds into its window.
+     */
+    seedNewCut: Boolean = false,
     /**
      * App-wide `PdfPrefs.undercutLinerOutline`: the dotted retrace of each liner's original edges
      * over the cuts, drawn here as on the printed sheet. Passed in so a change recomposes this canvas.
@@ -1002,6 +1015,79 @@ fun UndercutWindowDetailOverlay(
         }
     }
 
+    // The overlay's "Add undercut in this liner / here": a PENDING card for a new cut, selected and
+    // paged to. ONE seeding path, taken by that button and by a host that opens the overlay to add
+    // a cut ([seedNewCut]). The new page is a DRAFT — it previews here but enters the record only
+    // when confirmed (pill tap, or leaving the page with a clear draft); an untouched one is
+    // discarded on leave. The default span takes the first free gap in the strip so it doesn't
+    // land on top of an existing cut.
+    fun seedPendingCut() {
+        val addRange = undercutAddRangeOf(strip, stripLiner)
+        val occupied = undercutRecord.undercuts.map { u ->
+            val c = clampUndercutSpan(u.startFromAftMm, u.lengthMm, oalMm)
+            UndercutSpanMm(u.id, c.startMm, c.endMm)
+        }
+        // A strip that already holds cuts seeds the new one butted against them
+        // (FWD of the FWD-most, else AFT of the AFT-most), reading from that
+        // neighbour's datum — a run of cuts is recorded one after the next
+        // (on-device request). An empty strip, or one with no clear stock on
+        // either side, takes the default span below.
+        val butted = undercutAddSeedSpan(
+            stripCuts = undercuts.map { u ->
+                val c = clampUndercutSpan(u.startFromAftMm, u.lengthMm, oalMm)
+                UndercutSpanMm(u.id, c.startMm, c.endMm)
+            },
+            occupied = occupied,
+            oalMm = oalMm,
+            lengthMm = DEFAULT_UNDERCUT_LENGTH_MM,
+        )
+        val neighbour = butted?.let { b -> baselines[b.neighbourId] }
+        val span = defaultUndercutSpan(addRange.first, addRange.second, occupied, oalMm)
+        // A liner whose AFT edge an existing cut already runs past into the
+        // body has no step left there to measure from, so the new cut authors
+        // against the nearer S.E.T. instead (on-device request).
+        val seedFromLiner = stripLiner != null &&
+            !undercutLinerEdgeBuried(stripLiner.startMm, occupied)
+        val seed = if (butted != null && neighbour != null) undercutSeedInheriting(
+            startMm = butted.startMm,
+            lengthMm = butted.lengthMm,
+            from = neighbour,
+            linerSpans = linerSpans,
+            sheetSpans = occupied,
+            aftSetXMm = aftSetXMm,
+            fwdSetXMm = fwdSetXMm,
+        ) else UndercutDraft(
+                id = PENDING_UNDERCUT_ID,
+                startFromAftMm = span.startMm,
+                lengthMm = span.lengthMm,
+                diaMm = 0f,
+                note = "",
+                // A liner strip authors against the datum the machinist is
+                // standing at, so the very first typed Distance already reads
+                // from the liner's own AFT edge. A bare-shaft (body-only) cut
+                // has no liner edge — its only datums are the SETs, so the
+                // nearer one wins (the same proximity rule the printed strip's
+                // title anchor uses, so card and sheet read from the same SET).
+                reference = if (seedFromLiner) UndercutReference.LINER_AFT
+                            else nearestSetReference(
+                                span.startMm, span.startMm + span.lengthMm,
+                                aftSetXMm, fwdSetXMm,
+                            ),
+                referenceLinerId = if (seedFromLiner) stripLiner?.id.orEmpty() else "",
+            )
+        drafts = drafts + (PENDING_UNDERCUT_ID to seed)
+        pendingSeed = seed
+        selectedId = PENDING_UNDERCUT_ID
+    }
+
+    // A host that opened the overlay to ADD a cut ([seedNewCut]) gets the add button's pending
+    // card at once — once per overlay, read at its first composition, so a later strip-identity
+    // change (the new cut recorded onto its real strip) never seeds a second one. An empty free
+    // strip (a bare-shaft add, no cuts yet) is a valid host: the card seeds into its window.
+    LaunchedEffect(Unit) {
+        if (seedNewCut && pendingSeed == null && PENDING_UNDERCUT_ID !in drafts) seedPendingCut()
+    }
+
     BackHandler(enabled = leavePrompt == null && overlayOverhang == null) { requestClose() }
 
     // ── Colors captured here — the Canvas draw scope must not read MaterialTheme ──
@@ -1653,7 +1739,7 @@ fun UndercutWindowDetailOverlay(
                             state = when {
                                 activeDraft == null -> UndercutPillState.Saved
                                 activeDraftIssue != null -> UndercutPillState.Blocked(activeDraftIssue)
-                                else -> UndercutPillState.Unsaved
+                                else -> UndercutPillState.Unsaved(pending = activeDraft.isPending)
                             },
                             onConfirm = { confirmSelected() },
                             onDiscard = { activeDraft?.let { cancelDraft(it.id) } },
@@ -1664,69 +1750,9 @@ fun UndercutWindowDetailOverlay(
                     }
 
                     // Authoring entry point. On a liner strip this is the reason a liner with no cuts
-                    // yet is tappable on the overview at all; the new page is a DRAFT — it previews
-                    // here but enters the record only when confirmed (pill tap, or leaving the page
-                    // with a clear draft). The default span takes the first free gap in the strip so
-                    // it doesn't land on top of an existing cut.
-                    val addRange = undercutAddRangeOf(strip, stripLiner)
+                    // yet is tappable on the overview at all ([seedPendingCut]).
                     Button(
-                        onClick = {
-                            val occupied = undercutRecord.undercuts.map { u ->
-                                val c = clampUndercutSpan(u.startFromAftMm, u.lengthMm, oalMm)
-                                UndercutSpanMm(u.id, c.startMm, c.endMm)
-                            }
-                            // A strip that already holds cuts seeds the new one butted against them
-                            // (FWD of the FWD-most, else AFT of the AFT-most), reading from that
-                            // neighbour's datum — a run of cuts is recorded one after the next
-                            // (on-device request). An empty strip, or one with no clear stock on
-                            // either side, takes the default span below.
-                            val butted = undercutAddSeedSpan(
-                                stripCuts = undercuts.map { u ->
-                                    val c = clampUndercutSpan(u.startFromAftMm, u.lengthMm, oalMm)
-                                    UndercutSpanMm(u.id, c.startMm, c.endMm)
-                                },
-                                occupied = occupied,
-                                oalMm = oalMm,
-                                lengthMm = DEFAULT_UNDERCUT_LENGTH_MM,
-                            )
-                            val neighbour = butted?.let { b -> baselines[b.neighbourId] }
-                            val span = defaultUndercutSpan(addRange.first, addRange.second, occupied, oalMm)
-                            // A liner whose AFT edge an existing cut already runs past into the
-                            // body has no step left there to measure from, so the new cut authors
-                            // against the nearer S.E.T. instead (on-device request).
-                            val seedFromLiner = stripLiner != null &&
-                                !undercutLinerEdgeBuried(stripLiner.startMm, occupied)
-                            val seed = if (butted != null && neighbour != null) undercutSeedInheriting(
-                                startMm = butted.startMm,
-                                lengthMm = butted.lengthMm,
-                                from = neighbour,
-                                linerSpans = linerSpans,
-                                sheetSpans = occupied,
-                                aftSetXMm = aftSetXMm,
-                                fwdSetXMm = fwdSetXMm,
-                            ) else UndercutDraft(
-                                    id = PENDING_UNDERCUT_ID,
-                                    startFromAftMm = span.startMm,
-                                    lengthMm = span.lengthMm,
-                                    diaMm = 0f,
-                                    note = "",
-                                    // A liner strip authors against the datum the machinist is
-                                    // standing at, so the very first typed Distance already reads
-                                    // from the liner's own AFT edge. A bare-shaft (body-only) cut
-                                    // has no liner edge — its only datums are the SETs, so the
-                                    // nearer one wins (the same proximity rule the printed strip's
-                                    // title anchor uses, so card and sheet read from the same SET).
-                                    reference = if (seedFromLiner) UndercutReference.LINER_AFT
-                                                else nearestSetReference(
-                                                    span.startMm, span.startMm + span.lengthMm,
-                                                    aftSetXMm, fwdSetXMm,
-                                                ),
-                                    referenceLinerId = if (seedFromLiner) stripLiner?.id.orEmpty() else "",
-                                )
-                            drafts = drafts + (PENDING_UNDERCUT_ID to seed)
-                            pendingSeed = seed
-                            selectedId = PENDING_UNDERCUT_ID
-                        },
+                        onClick = { seedPendingCut() },
                         enabled = PENDING_UNDERCUT_ID !in drafts,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -2151,9 +2177,11 @@ internal fun undercutSeedInheriting(
  * A stored cut's card title. The number is the cut's POSITION aft → fwd on this strip (the
  * printed sheet carries no cut numbers), and the title says so — a new cut landing between two
  * others takes the middle number (on-device report: "Undercut 2 of 3" read as the wrong cut).
+ * "Cut N" is the same wording the edge-to-edge chips ([undercutButtChipLabel]) and the tab's list
+ * rows use, so one cut reads by one name everywhere on the screen (usability review).
  */
 internal fun undercutCardTitle(position: Int, count: Int): String =
-    "Undercut $position of $count · aft → fwd"
+    "Cut $position of $count"
 
 /**
  * The card's Parent AFT / Parent FWD chip: the Distance re-authored from [parent]'s shoulder
@@ -2184,27 +2212,35 @@ internal data class UndercutLinerEnds(val aft: Boolean, val fwd: Boolean) {
 /**
  * The "Past the liner edge" question for the ends a commit newly carried off the liner — [aft]
  * and [fwd] are the formatted overhangs ("0.500 in"), null for an end not being asked about.
- * One line per end, then the question.
+ * One sentence naming each end asked about, then a plain yes/no: the machinist is confirming what
+ * the typed numbers describe, not choosing a drafting operation (usability review).
  */
 internal fun undercutOverhangQuestion(aft: String?, fwd: String?): String {
-    val lines = listOfNotNull(
-        aft?.let { "This undercut will run $it past the liner's AFT edge." },
-        fwd?.let { "This undercut will run $it past the liner's FWD edge." },
-    )
-    return if (lines.size > 1) {
-        lines.joinToString("\n") + "\nAdd those as extensions past the liner?"
-    } else {
-        "${lines.firstOrNull().orEmpty()} Add that as an extension past the liner?"
+    val runs = when {
+        aft != null && fwd != null -> "$aft past the liner's AFT edge and $fwd past its FWD edge"
+        aft != null -> "$aft past the liner's AFT edge"
+        fwd != null -> "$fwd past the liner's FWD edge"
+        else -> "past the liner's edge"
     }
+    return "This cut runs $runs into the shaft. Is that right?"
 }
+
+/**
+ * The card's warning for a Measured Ø at or above what the cut is taken against — the shaft
+ * surface, or the surrounding cut's floor when [nested] — naming that figure ([dia] formatted,
+ * [unitAbbr] its unit).
+ */
+internal fun undercutDiaNotBelowSurfaceWarning(nested: Boolean, dia: String, unitAbbr: String): String =
+    if (nested) "Ø isn't smaller than the surrounding cut's floor here (Ø $dia $unitAbbr) — check the number"
+    else "Ø isn't smaller than the shaft here (Ø $dia $unitAbbr) — check the number"
 
 /** The Measure From caption under a disabled liner-edge chip — [end] AFT or FWD. */
 internal fun undercutBuriedEdgeCaption(end: String): String =
     "Liner $end edge is cut into the body — measure from a S.E.T."
 
-/** The card's standing warning after "No" — [amount] formatted with its unit, [end] AFT or FWD. */
+/** The card's standing warning after "No, let me check" — [amount] formatted with its unit, [end] AFT or FWD. */
 internal fun undercutOverhangWarning(amount: String, end: String): String =
-    "Runs $amount past the liner's $end edge — double-check Distance and Length"
+    "Runs $amount past the liner's $end edge — check Distance and Length"
 
 /** The notice when an Undo takes away a cut whose card held unsaved edits. */
 internal const val UNDERCUT_DISCARDED_DRAFT_MSG = "Unsaved changes to a removed cut were discarded"
@@ -2458,6 +2494,11 @@ private fun undercutAddRangeOf(
  * pending card (nothing recorded to delete). "Next cut" ([onNextCut]) is the one exception to "no
  * save controls": it runs the pill's own Confirm for this card, then opens the next cut's seed.
  *
+ * Order, top to bottom: the title and delete; the warnings; Measure From; Distance, Length and
+ * Measured Ø (the three numbers a cut is recorded by, first — usability review); Notes; the
+ * blocking reason; "Next cut"; and, collapsed behind "More ways to place this cut", the span
+ * presets (Whole liner, Extend past liner, Start at end of / End at start of).
+ *
  * Numeric fields keep the commit-on-blur contract (`docs/contracts/NumberField.md`); the commit lands in the
  * draft rather than the ViewModel. **No field on this card ever reverts a typed value**: the fields
  * carry no validator, so anything that parses lands in the draft verbatim and the canvas previews
@@ -2545,8 +2586,8 @@ private fun UndercutDraftCard(
     // before is ASKED about: the machinist may not know the typed numbers run the cut off the
     // liner, or a measurement may be wrong. Nothing is rewritten either way — the draft is the
     // typed value from the moment of the commit; the answer only decides whether the overhang
-    // reads as intended ("Add extension": the Extend field already shows it) or stays flagged
-    // with a warning until that end is back on the liner ("No"). Confirm is never blocked: the
+    // reads as intended ("Yes, it does": the Extend field already shows it) or stays flagged
+    // with a warning until that end is back on the liner ("No, let me check"). Confirm is never blocked: the
     // geometry is legal. Only those two fields ask — the Extend fields, Whole liner, Butt
     // against and the Measure From chips are explicit span choices or no span change at all.
     // Card-local, keyed on the cut's identity, so field re-seeds keep it.
@@ -2617,6 +2658,64 @@ private fun UndercutDraftCard(
     }
     val confirmIssue = undercutConfirmIssue(draft, oalMm, otherSpans, pagePositionById)
 
+    // ── "More ways to place this cut" ──────────────────────────────────────────────────
+    // The span presets — Whole liner, Extend past liner, and the edge-to-edge chips with their gap
+    // fields — sit behind ONE expander at the foot of the card, collapsed by default. Most shop
+    // users walk up with three numbers — where the cut is, how long, what Ø — so those are the
+    // first three fields, and a row of chips above them read as steps that had to be taken first
+    // (usability review). Every piece of the presets' state is held here, outside the expander, so
+    // a collapse loses nothing.
+    //
+    // On a liner strip the presets act on the STRIP's liner, the one the machinist opened and is
+    // looking at — never a different liner the cut's stored reference happens to name; off a liner
+    // strip they fall back to the reference liner. ("Measure From" keeps the reference liner: that
+    // is a datum choice, not a span preset.)
+    val spanLiner = stripLiner ?: refLiner
+    val (extAftMm, extFwdMm) = spanLiner?.let {
+        undercutLinerExtensionsMm(draft.startFromAftMm, draft.lengthMm, it.startMm, it.endMm)
+    } ?: (0f to 0f)
+    val isWholeLiner = spanLiner != null && undercutIsWholeLiner(
+        draft.startFromAftMm, draft.lengthMm, spanLiner.startMm, spanLiner.endMm,
+    )
+    // A limited extension commit can leave the draft — and so `initialDisplay` — unchanged (typing
+    // 4" twice against 2" of stock), and the field keys its text on `initialDisplay`, so a per-side
+    // counter bumped on every limited commit forces the re-seed to the applied value.
+    // The note holds the applied maximum and shows only while the field still reads it, so a later
+    // Whole-liner tap or Distance edit retires a note that no longer describes the span.
+    var aftLimitedMm by remember { mutableStateOf<Float?>(null) }
+    var fwdLimitedMm by remember { mutableStateOf<Float?>(null) }
+    var aftReseed by remember { mutableIntStateOf(0) }
+    var fwdReseed by remember { mutableIntStateOf(0) }
+    // The edge-to-edge chips' state: a refused preset's reason, and the applied chip whose gap
+    // field is open.
+    var buttIssue by remember(draft) { mutableStateOf<String?>(null) }
+    var gapAnchor by remember(draft.id) { mutableStateOf<UndercutGapAnchor?>(null) }
+    val anchorTarget = gapAnchor?.let { a -> buttTargets.firstOrNull { it.second.id == a.cutId } }
+    val anchor = gapAnchor?.takeIf { anchorTarget != null }
+    // Shown only when there is something behind it: a liner to span against, or another cut to
+    // butt against. It opens on its own for a cut that already IS one of its presets (Whole liner,
+    // or running past the liner), so a card shows how its span was made; that is a starting
+    // state, not a lock. An open gap field holds it open — a tapped "Cut N" chip with its field up
+    // is never hidden by the collapse; collapsing then closes that field the way a second tap on
+    // the chip does, keeping the cut where the gap put it.
+    val hasMorePlacement = spanLiner != null || buttTargets.isNotEmpty()
+    var morePlacementOpen by remember(draft.id) {
+        mutableStateOf(isWholeLiner || extAftMm > UNDERCUT_TOUCH_EPS_MM || extFwdMm > UNDERCUT_TOUCH_EPS_MM)
+    }
+    val morePlacementShown = morePlacementOpen || anchor != null
+    val cardFocusManager = LocalFocusManager.current
+    fun toggleMorePlacement() {
+        if (morePlacementShown) {
+            // A value still in a field that is about to leave composition lands in the draft
+            // first — a blur commits only into this card's draft, as tapping the canvas does.
+            cardFocusManager.clearFocus()
+            morePlacementOpen = false
+            gapAnchor = null
+        } else {
+            morePlacementOpen = true
+        }
+    }
+
     OutlinedCard(
         modifier = modifier.fillMaxSize().testTag("undercut_card_${draft.id}"),
         border = if (selected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
@@ -2635,22 +2734,12 @@ private fun UndercutDraftCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(title, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-                // "Next cut": confirm this card and open a new cut butted on its FWD end — the
-                // run-of-cuts workflow, at the top of the card so it never needs a scroll.
-                TextButton(
-                    onClick = onNextCut,
-                    enabled = nextCut.enabled,
-                    modifier = Modifier.testTag("undercut_next_cut"),
-                ) {
-                    Text("Next cut")
-                }
                 if (onDelete != null) {
                     IconButton(onClick = onDelete) {
                         Icon(Icons.Filled.Delete, contentDescription = "Delete $title")
                     }
                 }
             }
-            nextCut.caption?.let { UndercutCaption(it, Modifier.testTag("undercut_next_cut_caption")) }
 
             // A STORED cut the shaft no longer holds (the OAL moved under it). A dirty draft with
             // the same problem states the precise reason in the confirm-issue line instead — "re-
@@ -2658,11 +2747,10 @@ private fun UndercutDraftCard(
             if (staleOverrun && !dirty) {
                 UndercutWarning("Extends past shaft end — re-measure")
             }
+            // The warning carries the figure it was compared against — the same [surfaceDiaMm] the
+            // predicate reads — so the machinist can see which number is off (usability review).
             if (diaAtOrAboveSurface) {
-                UndercutWarning(
-                    if (draftIsNested) "Ø meets or exceeds the surrounding cut's floor here"
-                    else "Ø meets or exceeds shaft surface here",
-                )
+                UndercutWarning(undercutDiaNotBelowSurfaceWarning(draftIsNested, disp(surfaceDiaMm, unit), abbr(unit)))
             }
 
             // "Measure From" — which datum the Distance value is authored against: both S.E.T.s
@@ -2761,12 +2849,146 @@ private fun UndercutDraftCard(
                 }
             }
 
+            val displayedStartMm = canonicalToUndercutStartMm(
+                reference = shownReference,
+                canonicalStartMm = draft.startFromAftMm,
+                lengthMm = draft.lengthMm,
+                aftSetXMm = aftSetXMm,
+                fwdSetXMm = fwdSetXMm,
+                linerStartMm = refLinerStartMm,
+                linerEndMm = refLinerEndMm,
+                parentStartMm = refParentStartMm,
+                parentEndMm = refParentEndMm,
+            )
+            // Negative is a real value here: a cut overhanging the datum's edge (the "Extend past
+            // liner" case under a Liner reference) reads below zero and must be retypable as such.
+            // No validator: a Distance that puts the cut off the shaft still lands in the draft
+            // verbatim, and Confirm blocks it with the reason. The hint says fractions are
+            // welcome — the shop's tape reads in them (usability review); one hint per card, on
+            // its first field.
+            UndercutNum(
+                label = "Distance from ${undercutReferenceLabel(shownReference)} (${abbr(unit)})",
+                initialDisplay = disp(displayedStartMm, unit),
+                allowNegative = true,
+                hint = UNDERCUT_FRACTION_HINT,
+            ) { s ->
+                val enteredMm = toMmOrNull(s, unit) ?: return@UndercutNum
+                val canonicalMm = undercutStartToCanonicalMm(
+                    shownReference, enteredMm, draft.lengthMm, aftSetXMm, fwdSetXMm,
+                    refLinerStartMm, refLinerEndMm, refParentStartMm, refParentEndMm,
+                )
+                commitSpanEdit(draft.copy(startFromAftMm = canonicalMm))
+            }
+
+            // A length edit keeps the AUTHORED Distance fixed: canonical start is re-derived
+            // from the active reference at the new length (identity under an AFT reference;
+            // under a FWD reference the cut's FWD end stays pinned and the cut grows/shrinks
+            // AFT-ward). Committing the new length against the old canonical would rewrite
+            // the displayed Distance by the length delta — golden-rule violation (on-device
+            // report). No validator, as for Distance: a length that leaves the shaft (or is zero)
+            // lands in the draft verbatim and Confirm blocks it with the reason.
+            fun canonicalAtLength(newLenMm: Float): Float = undercutCanonicalForNewLength(
+                shownReference, draft.startFromAftMm, draft.lengthMm, newLenMm,
+                aftSetXMm, fwdSetXMm, refLinerStartMm, refLinerEndMm, refParentStartMm, refParentEndMm,
+            )
+            UndercutNum(
+                label = "Length (${abbr(unit)})",
+                initialDisplay = disp(draft.lengthMm, unit),
+            ) { s ->
+                toMmOrNull(s, unit)?.let { newLenMm ->
+                    commitSpanEdit(
+                        draft.copy(
+                            startFromAftMm = canonicalAtLength(newLenMm),
+                            lengthMm = newLenMm,
+                        ),
+                    )
+                }
+            }
+            // A declined "Past the liner edge" question, beside the numbers it is about — shown
+            // while that end still runs off the liner.
+            if (overhangFlagged.aft && overhangsAft) {
+                UndercutWarning(
+                    undercutOverhangWarning(overhangAmount(overhangAftMm), "AFT"),
+                    Modifier.testTag("undercut_overhang_warning"),
+                )
+            }
+            if (overhangFlagged.fwd && overhangsFwd) {
+                UndercutWarning(
+                    undercutOverhangWarning(overhangAmount(overhangFwdMm), "FWD"),
+                    Modifier.testTag("undercut_overhang_warning"),
+                )
+            }
+
+            // Measured Ø — a measurement, so any parseable value ≥ 0 lands **verbatim**
+            // (golden rule). A Ø at or above the local surface is a warning above, never a
+            // block and never an adjustment. An unentered Ø (0) shows an empty field, with an
+            // example of what to type in it — the one field on the card that starts empty.
+            UndercutNum(
+                label = "Measured Ø (${abbr(unit)})",
+                initialDisplay = if (draft.diaMm > 0f) disp(draft.diaMm, unit) else "",
+                placeholder = UNDERCUT_DIA_PLACEHOLDER,
+            ) { s ->
+                val mm = toMmOrNull(s, unit) ?: return@UndercutNum
+                onDraftChange(draft.copy(diaMm = mm))
+            }
+
+            // Notes — free text straight into the draft; Confirm/Cancel own persistence, so the
+            // numeric fields' capture-on-focus discipline buys nothing here.
+            OutlinedTextField(
+                value = draft.note,
+                onValueChange = { onDraftChange(draft.copy(note = it)) },
+                label = { Text("Notes") },
+                singleLine = false,
+                maxLines = 3,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            // The blocking reason, inline where the numbers that caused it are. The pill above the
+            // carousel states it too — this one survives being scrolled to, that one survives the
+            // card being scrolled.
+            if (dirty && confirmIssue != null) {
+                UndercutWarning(confirmIssue)
+            }
+
+            // "Next cut": confirm this card and open a new cut butted on its FWD end — the
+            // run-of-cuts workflow. At the foot of the card, after the fields it records, so it
+            // reads as the step after this cut's numbers rather than a header control to tap
+            // before typing them (usability review).
+            OutlinedButton(
+                onClick = onNextCut,
+                enabled = nextCut.enabled,
+                modifier = Modifier.fillMaxWidth().testTag("undercut_next_cut"),
+            ) {
+                Icon(Icons.Filled.Add, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Next cut")
+            }
+            nextCut.caption?.let { UndercutCaption(it, Modifier.testTag("undercut_next_cut_caption")) }
+
+            if (hasMorePlacement) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(onClick = { toggleMorePlacement() })
+                        .testTag("undercut_more_placement")
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        "More ways to place this cut",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Icon(
+                        if (morePlacementShown) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                        contentDescription = if (morePlacementShown) "Collapse" else "Expand",
+                    )
+                }
+            }
+
             // Span against a liner — "Whole liner" plus "Extend past liner" AFT/FWD (on-device
-            // request: a cut that covers the liner and runs on into the adjacent body). On a liner
-            // strip the presets act on the STRIP's liner, the one the machinist opened and is
-            // looking at — never a different liner the cut's stored reference happens to name;
-            // off a liner strip they fall back to the reference liner. ("Measure From" above keeps
-            // the reference liner: that is a datum choice, not a span preset.)
+            // request: a cut that covers the liner and runs on into the adjacent body).
             // Nothing new is stored: the extensions are a VIEW of the stored shaft-space span
             // against the liner's edges, the "Distance from Liner AFT" relation with the sign
             // flipped, and nothing derived ever writes back into them. A typed extension maps to
@@ -2774,8 +2996,7 @@ private fun UndercutDraftCard(
             // of the cut stays where it was, and the Distance/Length fields re-seed from the new
             // draft — golden rule. "Whole liner" is a one-tap preset applied only on the tap; it
             // also sets the Liner AFT reference against that liner, so Distance then reads 0.
-            val spanLiner = stripLiner ?: refLiner
-            if (spanLiner != null) {
+            if (morePlacementShown && spanLiner != null) {
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -2785,21 +3006,12 @@ private fun UndercutDraftCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Box(Modifier.testTag("undercut_whole_liner")) {
-                        WearChip(
-                            "Whole liner",
-                            undercutIsWholeLiner(
-                                draft.startFromAftMm, draft.lengthMm,
-                                spanLiner.startMm, spanLiner.endMm,
-                            ),
-                        ) {
+                        WearChip("Whole liner", isWholeLiner) {
                             onDraftChange(draft.withWholeLiner(spanLiner))
                         }
                     }
                 }
 
-                val (extAftMm, extFwdMm) = undercutLinerExtensionsMm(
-                    draft.startFromAftMm, draft.lengthMm, spanLiner.startMm, spanLiner.endMm,
-                )
                 Text(
                     "Extend past liner (${abbr(unit)})", style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -2815,17 +3027,6 @@ private fun UndercutDraftCard(
                 val maxFwdMm = maxUndercutFwdExtensionMm(spanLiner.endMm, oalMm)
                 val aftHasStock = maxAftMm > UNDERCUT_SPAN_EPS_MM
                 val fwdHasStock = maxFwdMm > UNDERCUT_SPAN_EPS_MM
-                // A limited commit can leave the draft — and so `initialDisplay` — unchanged (typing
-                // 4" twice against 2" of stock), and the field keys its text on `initialDisplay`, so
-                // a per-side counter bumped on every limited commit forces the re-seed to the
-                // applied value.
-                // The note holds the applied maximum and shows only while the field still reads
-                // it, so a later Whole-liner tap or Distance edit retires a note that no longer
-                // describes the span.
-                var aftLimitedMm by remember { mutableStateOf<Float?>(null) }
-                var fwdLimitedMm by remember { mutableStateOf<Float?>(null) }
-                var aftReseed by remember { mutableIntStateOf(0) }
-                var fwdReseed by remember { mutableIntStateOf(0) }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     key(aftReseed) {
                         WearNum(
@@ -2902,11 +3103,7 @@ private fun UndercutDraftCard(
             // reads from the liner or S.E.T. The typed gap commits verbatim; bounds and overlap are
             // confirm-time, like every other field on this card. A second tap on the selected chip
             // closes the field and changes nothing.
-            if (buttTargets.isNotEmpty()) {
-                var buttIssue by remember(draft) { mutableStateOf<String?>(null) }
-                var gapAnchor by remember(draft.id) { mutableStateOf<UndercutGapAnchor?>(null) }
-                val anchorTarget = gapAnchor?.let { a -> buttTargets.firstOrNull { it.second.id == a.cutId } }
-                val anchor = gapAnchor?.takeIf { anchorTarget != null }
+            if (morePlacementShown && buttTargets.isNotEmpty()) {
                 fun applyPreset(moved: UndercutDraft, tapped: UndercutGapAnchor) {
                     if (anchor == tapped) {
                         gapAnchor = null
@@ -2976,102 +3173,6 @@ private fun UndercutDraftCard(
                     buttIssue?.let { UndercutWarning(it, Modifier.testTag("undercut_butt_issue")) }
                 }
             }
-
-            val displayedStartMm = canonicalToUndercutStartMm(
-                reference = shownReference,
-                canonicalStartMm = draft.startFromAftMm,
-                lengthMm = draft.lengthMm,
-                aftSetXMm = aftSetXMm,
-                fwdSetXMm = fwdSetXMm,
-                linerStartMm = refLinerStartMm,
-                linerEndMm = refLinerEndMm,
-                parentStartMm = refParentStartMm,
-                parentEndMm = refParentEndMm,
-            )
-            // Negative is a real value here: a cut overhanging the datum's edge (the "Extend past
-            // liner" case under a Liner reference) reads below zero and must be retypable as such.
-            // No validator: a Distance that puts the cut off the shaft still lands in the draft
-            // verbatim, and Confirm blocks it with the reason.
-            WearNum(
-                label = "Distance from ${undercutReferenceLabel(shownReference)} (${abbr(unit)})",
-                initialDisplay = disp(displayedStartMm, unit),
-                allowNegative = true,
-            ) { s ->
-                val enteredMm = toMmOrNull(s, unit) ?: return@WearNum
-                val canonicalMm = undercutStartToCanonicalMm(
-                    shownReference, enteredMm, draft.lengthMm, aftSetXMm, fwdSetXMm,
-                    refLinerStartMm, refLinerEndMm, refParentStartMm, refParentEndMm,
-                )
-                commitSpanEdit(draft.copy(startFromAftMm = canonicalMm))
-            }
-
-            // A length edit keeps the AUTHORED Distance fixed: canonical start is re-derived
-            // from the active reference at the new length (identity under an AFT reference;
-            // under a FWD reference the cut's FWD end stays pinned and the cut grows/shrinks
-            // AFT-ward). Committing the new length against the old canonical would rewrite
-            // the displayed Distance by the length delta — golden-rule violation (on-device
-            // report). No validator, as for Distance: a length that leaves the shaft (or is zero)
-            // lands in the draft verbatim and Confirm blocks it with the reason.
-            fun canonicalAtLength(newLenMm: Float): Float = undercutCanonicalForNewLength(
-                shownReference, draft.startFromAftMm, draft.lengthMm, newLenMm,
-                aftSetXMm, fwdSetXMm, refLinerStartMm, refLinerEndMm, refParentStartMm, refParentEndMm,
-            )
-            WearNum(
-                label = "Length (${abbr(unit)})",
-                initialDisplay = disp(draft.lengthMm, unit),
-            ) { s ->
-                toMmOrNull(s, unit)?.let { newLenMm ->
-                    commitSpanEdit(
-                        draft.copy(
-                            startFromAftMm = canonicalAtLength(newLenMm),
-                            lengthMm = newLenMm,
-                        ),
-                    )
-                }
-            }
-            // A declined "Past the liner edge" question, beside the numbers it is about — shown
-            // while that end still runs off the liner.
-            if (overhangFlagged.aft && overhangsAft) {
-                UndercutWarning(
-                    undercutOverhangWarning(overhangAmount(overhangAftMm), "AFT"),
-                    Modifier.testTag("undercut_overhang_warning"),
-                )
-            }
-            if (overhangFlagged.fwd && overhangsFwd) {
-                UndercutWarning(
-                    undercutOverhangWarning(overhangAmount(overhangFwdMm), "FWD"),
-                    Modifier.testTag("undercut_overhang_warning"),
-                )
-            }
-
-            // Measured Ø — a measurement, so any parseable value ≥ 0 lands **verbatim**
-            // (golden rule). A Ø at or above the local surface is a warning above, never a
-            // block and never an adjustment. An unentered Ø (0) shows an empty field.
-            WearNum(
-                label = "Measured Ø (${abbr(unit)})",
-                initialDisplay = if (draft.diaMm > 0f) disp(draft.diaMm, unit) else "",
-            ) { s ->
-                val mm = toMmOrNull(s, unit) ?: return@WearNum
-                onDraftChange(draft.copy(diaMm = mm))
-            }
-
-            // Notes — free text straight into the draft; Confirm/Cancel own persistence, so the
-            // numeric fields' capture-on-focus discipline buys nothing here.
-            OutlinedTextField(
-                value = draft.note,
-                onValueChange = { onDraftChange(draft.copy(note = it)) },
-                label = { Text("Notes") },
-                singleLine = false,
-                maxLines = 3,
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            // The blocking reason, inline where the numbers that caused it are. The pill above the
-            // carousel states it too — this one survives being scrolled to, that one survives the
-            // card being scrolled.
-            if (dirty && confirmIssue != null) {
-                UndercutWarning(confirmIssue)
-            }
         }
     }
 
@@ -3117,12 +3218,12 @@ private fun UndercutOverhangDialog(
         text = { Text(undercutOverhangQuestion(aft = aftAmount, fwd = fwdAmount)) },
         confirmButton = {
             TextButton(onClick = onAccept, modifier = Modifier.testTag("undercut_overhang_accept")) {
-                Text("Add extension")
+                Text("Yes, it does")
             }
         },
         dismissButton = {
             TextButton(onClick = onDecline, modifier = Modifier.testTag("undercut_overhang_decline")) {
-                Text("No")
+                Text("No, let me check")
             }
         },
     )
@@ -3173,8 +3274,11 @@ internal sealed interface UndercutPillState {
     /** Nothing to save — the card matches the record. Not a button. */
     object Saved : UndercutPillState
 
-    /** A dirty draft that clears [undercutConfirmIssue]: one tap commits it. */
-    object Unsaved : UndercutPillState
+    /**
+     * A dirty draft that clears [undercutConfirmIssue]: one tap commits it. [pending] is the add
+     * flow's new cut, which the pill offers to RECORD rather than to confirm a change to.
+     */
+    data class Unsaved(val pending: Boolean) : UndercutPillState
 
     /** A dirty draft that cannot be committed; [reason] is the blocking check's own text. */
     data class Blocked(val reason: String) : UndercutPillState
@@ -3190,8 +3294,9 @@ private data class UndercutLeavePrompt(
 /**
  * The persistent save pill, floated at the canvas ↔ carousel boundary. It replaces the per-card
  * Confirm/Cancel row, which lived inside the card's own vertical scroll and was easy to miss
- * (on-device report). Tapping "Confirm change" runs the identical `confirmDraft` path the
- * auto-commit-on-leave runs, and stays on the card.
+ * (on-device report). Tapping it — "Record cut" on a new cut, "Confirm change" on a recorded
+ * one — runs the identical `confirmDraft` path the auto-commit-on-leave runs, and stays on the
+ * card.
  *
  * testTags: the container is `undercut_status_pill`, the confirm action keeps `undercut_confirm`
  * and the discard action `undercut_cancel` — one instance of each, since only the SELECTED card's
@@ -3206,12 +3311,12 @@ private fun UndercutStatusPill(
 ) {
     val container = when (state) {
         UndercutPillState.Saved -> MaterialTheme.colorScheme.surfaceVariant
-        UndercutPillState.Unsaved -> MaterialTheme.colorScheme.primaryContainer
+        is UndercutPillState.Unsaved -> MaterialTheme.colorScheme.primaryContainer
         is UndercutPillState.Blocked -> MaterialTheme.colorScheme.errorContainer
     }
     val onContainer = when (state) {
         UndercutPillState.Saved -> MaterialTheme.colorScheme.onSurfaceVariant
-        UndercutPillState.Unsaved -> MaterialTheme.colorScheme.onPrimaryContainer
+        is UndercutPillState.Unsaved -> MaterialTheme.colorScheme.onPrimaryContainer
         is UndercutPillState.Blocked -> MaterialTheme.colorScheme.onErrorContainer
     }
     Surface(
@@ -3234,10 +3339,13 @@ private fun UndercutStatusPill(
                             tint = UNDERCUT_SAVED_TINT,
                             modifier = Modifier.padding(end = 6.dp),
                         )
-                        Text("Saved", style = MaterialTheme.typography.labelLarge)
+                        // "Recorded": the cut is in this job's record. Saving the job file is the
+                        // tab's step, and a pill that claimed it would read as that step being
+                        // done here (usability review).
+                        Text("Recorded", style = MaterialTheme.typography.labelLarge)
                     }
 
-                UndercutPillState.Unsaved ->
+                is UndercutPillState.Unsaved ->
                     Row(
                         modifier = Modifier
                             .clickable(onClick = onConfirm)
@@ -3250,7 +3358,10 @@ private fun UndercutStatusPill(
                             contentDescription = null,
                             modifier = Modifier.padding(end = 6.dp),
                         )
-                        Text("Confirm change", style = MaterialTheme.typography.labelLarge)
+                        Text(
+                            if (state.pending) "Record cut" else "Confirm change",
+                            style = MaterialTheme.typography.labelLarge,
+                        )
                     }
 
                 is UndercutPillState.Blocked ->
@@ -3284,7 +3395,7 @@ private fun UndercutStatusPill(
     }
 }
 
-/** Green check on the "Saved" pill — a settled state reads at a glance, outside the theme ramp. */
+/** Green check on the "Recorded" pill — a settled state reads at a glance, outside the theme ramp. */
 private val UNDERCUT_SAVED_TINT = Color(0xFF2E7D32)
 
 /**
@@ -3294,6 +3405,40 @@ private val UNDERCUT_SAVED_TINT = Color(0xFF2E7D32)
  * 1e-3 mm.
  */
 private const val EXTENSION_NOTE_MATCH_MM = UNDERCUT_TOUCH_EPS_MM
+
+/** The Distance field's hint: fractions are typed as the tape reads them. */
+internal const val UNDERCUT_FRACTION_HINT = "Decimals or fractions — 5.748, 3 1/2, 7/8"
+
+/** The Measured Ø field's placeholder — the one card field that starts empty. */
+internal const val UNDERCUT_DIA_PLACEHOLDER = "e.g. 5.625 or 5 5/8"
+
+/**
+ * A card's numeric field: [WearNum]'s arguments (fractions allowed, parsed by
+ * [parseFractionOrDecimal], no validator — every card field commits what parses, verbatim) plus
+ * the field's [placeholder] and [hint].
+ */
+@Composable
+private fun UndercutNum(
+    label: String,
+    initialDisplay: String,
+    modifier: Modifier = Modifier.fillMaxWidth(),
+    allowNegative: Boolean = false,
+    placeholder: String? = null,
+    hint: String? = null,
+    onCommit: (String) -> Unit,
+) {
+    NumericInputField(
+        label = label,
+        initialText = initialDisplay,
+        modifier = modifier,
+        allowNegative = allowNegative,
+        allowFraction = true,
+        placeholder = placeholder,
+        hint = hint,
+        parseValid = { parseFractionOrDecimal(it) != null },
+        onCommit = onCommit,
+    )
+}
 
 /** A muted explanatory line under a control — why it is disabled, not a problem to fix. */
 @Composable

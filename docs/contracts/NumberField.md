@@ -118,6 +118,13 @@ Responsibilities
 - Support decimals and shop fractions in display.
 - Optional `validator` and `externalIssueText` parameters surface inline field issues. There is
   no switch to suppress the rejection notice: a refused value is always reported.
+- Optional `placeholder: String?` and `hint: String?` (both default `null`; byte-identical to the
+  field without them when null). `placeholder` is the `OutlinedTextField` placeholder — an example
+  of what to type (Material 3 shows it only while the field is focused and empty). `hint` is
+  supporting text shown ONLY when there is neither a rejection notice nor an `externalIssueText`:
+  precedence is rejection notice > `externalIssueText` > `hint`, because an error outranks a tip.
+  The undercut card uses both (Distance hint, Measured Ø placeholder) through its private
+  `UndercutNum` wrapper; `WearNum` is unchanged.
 
 Do Nots
 - Do not mutate ViewModel directly.

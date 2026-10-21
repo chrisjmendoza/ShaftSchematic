@@ -17,7 +17,7 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
   (`UndercutNotch`, `buildUndercutNotches`), and `undercutSetPositions`
 - `ui/resolved/SurfaceSegs.kt` — the one `resolvedComponents → SurfaceSeg` mapping every draw
   site shares
-- `ui/screen/UndercutRoute.kt` — the tab: overview canvas, "Add undercut", blank-draft toggle,
+- `ui/screen/UndercutRoute.kt` — the tab: overview canvas, "Add undercut" (and its chooser), blank-draft toggle,
   preview/print/export
 - `ui/screen/UndercutDetail.kt` — `UndercutWindowDetailOverlay`, the full-screen zoomed window +
   cards
@@ -45,14 +45,21 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
   Tune panel, this button and the detail page's Options icon) in the non-modal
   `PreviewOptionsPanel` over the tab, closed by its close button, the button or Back. The foot's
   Print / Preview / Export trio stays.
-- **"Add undercut"** button: records a default section and opens its strip (see "Add default"
-  below).
-- **"Cut depth exaggeration" slider** (shown once at least one cut is recorded, directly under
-  the canvas it restyles): 0 – `UNDERCUT_EXAGGERATION_MAX_FRAC` with a live "%" readout,
+- **"Add undercut"** button (`testTag "undercut_add"`): records NOTHING — it opens the "Where is
+  the cut?" chooser (see "Add chooser" below), whose answer opens a detail page on a pending card.
+- **"Drawing settings" section** (shown once at least one cut is recorded, BELOW the "Recorded
+  undercuts" list, collapsed by default behind a header row with a chevron, `testTag
+  "undercut_drawing_settings_toggle"` — usability review: nothing between Add and the list may
+  read as a required step). It holds the three rows below, in this order. Tab block order
+  (COMPACT/MEDIUM): intro, overview canvas, Preview | Options, Add undercut, Recorded undercuts,
+  Drawing settings, then the blank-draft switch and Print / Preview / Export.
+- **"Drawn depth" slider** (the first row of Drawing settings; label formerly "Cut depth
+  exaggeration", caption "Makes shallow cuts easier to see — 0% is true scale. Printed Ø values
+  never change. Saved with this job."): 0 – `UNDERCUT_EXAGGERATION_MAX_FRAC` with a live "%" readout,
   committing continuously through `ShaftViewModel.setUndercutExaggeration` — the OAL field's
   live-update posture, not commit-on-blur (it is a `Slider`, not a `NumericInputField`). It
   drives `UndercutRecord.exaggerationFrac`; see "Drawn depth exaggeration" below.
-- **"Draw to the shaft end" switch** (directly under the exaggeration slider, same visibility;
+- **"Draw to the shaft end" switch** (directly under the Drawn depth slider, same visibility;
   testTag `undercut_draw_to_set_switch`, caption "A liner strip within 24" of its S.E.T. draws
   out to the shaft end and dimensions the run to it. Saved with this job." — the reach is formatted
   from `UNDERCUT_SET_REACH_MM` in the document unit, so the caption cannot drift from the
@@ -69,6 +76,10 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
 - **"Recorded undercuts" list** below the canvas: a read-only summary + delete row per cut,
   numbered and ordered by the cut numbers (`undercutSheetNumbers`, AFT → FWD) — not an
   edit card (see "UI contract").
+- Intro line: "Record each cut — where it is, how long, and the diameter it was cut to. Prints a
+  zoomed drawing for the welder or machinist." The blank-draft caption reads "Job info and overall
+  length are blanked; recorded undercuts are omitted — a fresh form." (usability review: plain
+  words, no "OAL" or "S.E.T.-distance" jargon in the first lines a shop user reads).
 - Blank-draft (write-in) toggle, PDF Preview (`PdfPreviewOverlay` + `UndercutOptionsSheet`),
   Export (SAF `CreateDocument`), Print (`printShaftPdfPage`) — straight ports of the wear tab's
   flows, all calling `composeUndercutPdf`. The preview is composed AFTER the detail overlay, with
@@ -83,7 +94,8 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
   run + strip total), the strip's real resolved profile with notches cut in, Ø callouts below.
   The canvas is **fixed** at the top; below it a **swipeable card carousel**, one page per cut,
   aft → fwd. An "Add undercut…" button between the two opens a draft-only page (see "UI
-  contract"), the authoring entry point for a liner with no cuts yet.
+  contract"), the authoring entry point for a liner with no cuts yet. The tab's own "Add undercut"
+  reaches the same page through the add chooser (see "Add chooser").
 - Pinch-to-zoom (0.5×–6×) + two-finger pan; taps invert the same transform so hit-testing
   always runs in untransformed canvas space. A double-tap, or the corner "Reset view" button
   (testTag `undercut_detail_reset_view`, shown only while zoomed or panned), animates back to the
@@ -366,7 +378,7 @@ data class UndercutRecord(
   measured in whole inches — at true scale the notch is a hairline, so every notch draw site
   deepens the drawn floor (the hand-sheet convention: depth exaggerated, the printed Ø carries
   the real number). The exaggeration is **per sheet**, stored as
-  `UndercutRecord.exaggerationFrac` and driven by the "Cut depth exaggeration" slider on the
+  `UndercutRecord.exaggerationFrac` and driven by the "Drawn depth" slider (under the collapsed "Drawing settings" below the list) on the
   Undercut Drawing tab (0 – `UNDERCUT_EXAGGERATION_MAX_FRAC` = 0.25, live-committing through
   `ShaftViewModel.setUndercutExaggeration`; it lives in the record, not app prefs, so a
   document keeps the look it was authored with).
@@ -711,8 +723,8 @@ bound to one component.
   liner edge shows the taller shoulder on the liner side rather than a single averaged slope.
   Where the surface is at or below the floor (the undercut Ø is too large, or the span runs off
   a liner onto smaller bare stock), that portion yields **no region** — nothing is drawn there,
-  and the caller surfaces it as a non-blocking warning in the card ("Ø meets or exceeds shaft
-  surface here", or "…the surrounding cut's floor here" for a nested cut, whose local surface IS
+  and the caller surfaces it as a non-blocking warning in the card ("Ø isn't smaller than the
+  shaft here (Ø …) — check the number", or "…the surrounding cut's floor here…" for a nested cut, whose local surface IS
   its parent's floor), never a block or a rewritten value.
 
 ### `ui/resolved/SurfaceSegs.kt`
@@ -740,19 +752,19 @@ The tab keys its skeleton on `currentWindowWidthClass()`; the policy behind the 
 `docs/contracts/Adaptive.md`. Everything else in this section describes the COMPACT layout,
 which is unchanged.
 
-- **COMPACT** — one scrolling column: intro line, overview canvas + hint, "Add undercut",
-  the exaggeration slider and the recorded-cut list, then the blank-draft switch, the gate
-  message and `DocumentActionButtons`.
+- **COMPACT** — one scrolling column: intro line, overview canvas + hint, Preview | Options,
+  "Add undercut", the recorded-cut list, the collapsed "Drawing settings", then the blank-draft
+  switch, the gate message and `DocumentActionButtons`.
 - **MEDIUM** — the same single column with a taller canvas box (at the phone's height a shaft
   drawn across a 600–840 dp column flattens into a rule). Nothing else moves.
 - **EXPANDED** — two panes in a `Row` under the toolbar divider, a `VerticalDivider` between,
   each scrolling independently:
   - **left**, `testTag "sheet_pane_canvas"` — the overview canvas, then the intro line, the
     blank-draft switch, the gate message and `DocumentActionButtons`.
-  - **right**, `testTag "sheet_pane_controls"` — the authoring side: "Add undercut", the cut
-    depth exaggeration slider, and the recorded-cut list.
+  - **right**, `testTag "sheet_pane_controls"` — the authoring side: "Add undercut", the
+    recorded-cut list, and the collapsed "Drawing settings".
 
-  The canvas is **pinned** out of the left pane's scroll: the exaggeration slider opposite it
+  The canvas is **pinned** out of the left pane's scroll: the Drawn depth slider opposite it
   restyles what it draws, and a control whose effect scrolls off screen cannot be judged. The
   canvas sizes by PROPORTION there rather than by a fixed height, since the pane's width is the
   free variable.
@@ -800,8 +812,10 @@ nothing to open when the sidebar is already laid out beside the tabs.
   a sibling when its own cut is deleted, and a key derived from the strip's members (the earlier
   lexicographic-minimum member id) changed on every add, delete, merge or split — silently
   dropping the drafts and the selection those edits came from.
-- **"Add undercut"** button (global — see "Add default" below) sets `anchorUndercutId` to the
-  new undercut's id (clearing `anchorLinerId`), opening its strip immediately on that cut's card.
+- **"Add undercut"** button (global — see "Add chooser" below) opens the "Where is the cut?"
+  chooser; a liner row sets `anchorLinerId` and a bare-shaft row sets the route's
+  `bareShaftAddFromAft`, each with `seedNewCutOnOpen`, so the detail page opens on a pending
+  "New undercut" card. Nothing is recorded by the tap.
 - **"Recorded undercuts" list**, below the canvas (`UndercutListRow`, one row per cut, only shown
   once ≥ 1 undercut exists). Rows are **numbered and ordered by the cut numbers**
   (`undercutSheetNumbers` — AFT → FWD by clamped start, ties in record order, 1-based — the ONE
@@ -810,7 +824,7 @@ nothing to open when the sidebar is already laid out beside the tabs.
   (`"N. <distance> from <tag>"`). Display-only: the record keeps its own order. Each row is a
   distance summary under its *effective* reference (where a `LINER_*` reference reads
   `"<liner title> AFT/FWD edge"` via `effectiveUndercutReference`/`undercutReferenceLinerFor`),
-  a second line (`"L … · Ø …"`, Ø shown as `"—"` while unmeasured), an **"Ø not entered"** line
+  a second line (`"Length … · Ø …"`, Ø shown as `"—"` while unmeasured), an **"Ø not entered"** line
   in the error color under it for a cut with `diaMm <= 0` (`testTag
   "undercut_row_no_dia_<id>"` — such a cut prints with no diameter), and a stale-overrun warning
   icon (`isUndercutStaleOverrun`) when applicable. While any recorded cut has no Ø, the list
@@ -848,9 +862,9 @@ a section at the AFT S.E.T. position (clamped to `[0, oalMm]`), length
 (unentered), and returns the new id. `AFT_SET` here is consistent with the nearest-SET rule,
 not an exception to it — the seed sits AT the AFT SET, trivially the nearer datum; the
 overlay's free-strip add, whose seed can land anywhere, picks by proximity
-(`nearestSetReference`, see the overlay's Default section). The route's global "Add undercut" button calls it with the
-SET-based defaults **immediately** (it has no card to draft into); the overlay's "Add undercut…"
-button drafts first and calls it only on Confirm (below). Precision comes from the overlay's numeric fields
+(`nearestSetReference`, see the overlay's Default section). The route's "Add undercut" button no
+longer calls it: it opens the add chooser, and every add path drafts first and calls it only on
+"Record cut" (below). Precision comes from the overlay's numeric fields
 afterward, never from the tap — the wear posture: a tap only opens/selects, typing does the
 real work.
 
@@ -866,12 +880,13 @@ vertical card stack forced scrolling between the drawing and the fields.
   `startFromAftMm` — plus the add draft at its fixed seed position. A card therefore moves only
   when a draft is **confirmed**; typing a new Distance never slides the card out from under the
   field being typed in (`buildUndercutPageIds`).
-- **The title number is positional**: a stored cut's card reads `"Undercut N of M · aft → fwd"`
-  (`undercutCardTitle`) — N is the cut's position in that STRIP's aft → fwd page order, not an
+- **The title number is positional**: a stored cut's card reads `"Cut N of M"`
+  (`undercutCardTitle`; the earlier "Undercut N of M · aft → fwd" wording read as jargon in the
+  usability review, and the AFT → FWD order is stated by the carousel's "← AFT / FWD →" row) — N is the cut's position in that STRIP's aft → fwd page order, not an
   identity and not the cut number (`undercutSheetNumbers` numbers the whole shaft, so on a
   multi-strip shaft the card's N and the number drawn inside the cut can differ; the tab's list and
-  the detail canvas's numbers agree), and the suffix puts the convention on the card
-  (on-device report: a third cut added between two others read "Undercut 2 of 3" and was taken
+  the detail canvas's numbers agree), and the "N of M" form puts the position on the card
+  (on-device report: a third cut added between two others read "2 of 3" and was taken
   for the wrong cut). The pending card reads "New undercut". The Butt-against chips number cuts
   the same way.
 - **Selection and the open page are one thing**: swiping a card highlights its notch on the
@@ -969,9 +984,12 @@ row lived inside the card's own vertical scroll and was easy to miss and easy to
 canvas and the carousel** — sharing the "← AFT / FWD →" row's empty middle, so it is always
 visible whatever the card is scrolled to, and never covers the canvas's Ø callouts. It always
 describes the **selected** card's draft, in three states:
-- **Saved** — no dirty draft. Subtle `surfaceVariant` pill, green check, "Saved". Not a button.
-- **Unsaved** — dirty and clear. `primaryContainer` pill, tappable **"Confirm change"**
-  (`testTag "undercut_confirm"`) which confirms immediately and **stays on the card**, plus a
+- **Recorded** — no dirty draft. Subtle `surfaceVariant` pill, green check, "Recorded" (the cut is
+  in the job's record; saving the job file is the tab's Save icon, so the pill no longer says
+  "Saved"). Not a button.
+- **Unsaved** (`UndercutPillState.Unsaved(pending)`) — dirty and clear. `primaryContainer` pill,
+  tappable **"Record cut"** for a new (pending) cut or **"Confirm change"** for an edit to a
+  recorded cut (`testTag "undercut_confirm"`) which confirms immediately and **stays on the card**, plus a
   separate small **✕ discard** (`testTag "undercut_cancel"`) that drops the draft back to stored
   values — including the reference chips — and discards the page outright for a pending add.
 - **Blocked** — dirty with a non-null `undercutConfirmIssue`. `errorContainer` pill showing the
@@ -993,7 +1011,7 @@ default span, Ø 0, no note, the seeded reference) is **discarded** on leave —
 never asked about: the machinist typed nothing, and committing the seeded default left stray
 default-length cuts in the record (on-device report). The overlay keeps the seeded draft
 (`pendingSeed`, whose start is also the pending page's fixed ordering key) to tell the two apart.
-The pill's explicit **Confirm change** still records an untouched add — that is a deliberate tap.
+The pill's explicit **Record cut** still records an untouched add — that is a deliberate tap.
 
 The decision itself is the pure `undercutLeaveAction(draft, baseline, confirmIssue, pendingSeed)`
 → `NONE | COMMIT | DISCARD | PROMPT` (a pending card has no baseline, so it is dirty by
@@ -1100,9 +1118,10 @@ Each card:
   when it is out of range, and a **no-op when that id is already present** (a history Undo got
   there first). The carousel then returns to the restored card. On-device report: a cut deleted
   to restart it was lost with no way back.
-- **"Next cut"** button (`TextButton`, `testTag "undercut_next_cut"`) in the card's title row,
-  before the Delete icon, so it never needs a scroll — the run-of-cuts workflow (on-device
-  request). On the SELECTED, settled card only (the trash's rule; another card's tap brings the
+- **"Next cut"** button (full-width `OutlinedButton` with an Add icon, `testTag
+  "undercut_next_cut"`) at the FOOT of the card, after Notes and the confirm-issue warning and
+  above "More ways to place this cut" — the run-of-cuts workflow (on-device request; it sat in the
+  title row beside Delete until the usability review moved it where the card's fields end). On the SELECTED, settled card only (the trash's rule; another card's tap brings the
   selected one back to the front). A tap runs the pill's Confirm path for this card — flush the
   focused field, re-check `undercutConfirmIssue`, ask "Past the liner edge" for an overhang the
   flush landed (`UndercutAfterOverhang.NextCut` resumes on the answer), then `confirmDraft(draft,
@@ -1123,11 +1142,29 @@ Each card:
   "undercut_next_cut_caption"`); a seed is never placed past the shaft end. The "Start at end
   of" / "End at start of" chips are unchanged.
 
+- **Card field order** (usability review: the rarely-used placement tools sat between Distance and
+  Length and the Measured Ø a shop user came to type): title + delete, warnings, Measure From chips,
+  Distance, Length, the overhang warnings, Measured Ø, Notes, the confirm-issue warning, "Next cut",
+  then the **"More ways to place this cut"** expander. Distance carries the supporting hint
+  `UNDERCUT_FRACTION_HINT` ("Decimals or fractions — 5.748, 3 1/2, 7/8") and Measured Ø the
+  placeholder `UNDERCUT_DIA_PLACEHOLDER` ("e.g. 5.625 or 5 5/8"), both through `NumericInputField`'s
+  optional `placeholder`/`hint` (`NumberField.md`) via the card's private `UndercutNum` wrapper.
+- **"More ways to place this cut"** (`undercut_more_placement`): an expander row, collapsed by
+  default, shown only when the card has a liner to span against or another cut to butt against. It
+  holds, in their old order, Span: Whole liner, Extend past liner AFT / FWD, and the "Start at end
+  of" / "End at start of" chips with their gap fields. It STARTS OPEN for a cut that already is
+  Whole-liner or carries a non-zero extension, and is HELD open while a gap field is open — a
+  tapped "Cut N" chip's field is never hidden; collapsing it closes the field exactly as a second
+  chip tap does, and the cut stays where the gap put it. All preset state (the gap fields' text,
+  open chip, extension drafts) is hoisted above the expander, so collapsing and re-opening loses
+  nothing.
+
 - **Warnings** (non-blocking, both can show together): "Extends past shaft end — re-measure"
-  (`isUndercutStaleOverrun`, unedited card only — see "Draft editing") and "Ø meets or exceeds shaft surface here" (`diaMm > 0` and `diaMm
-  >=` the local surface Ø). For a draft that is **nested** inside another cut, the comparison is
-  against the **surrounding cut's floor** and the wording becomes "Ø meets or exceeds the
-  surrounding cut's floor here" — a nested cut removes material from its parent's floor, so the
+  (`isUndercutStaleOverrun`, unedited card only — see "Draft editing") and "Ø isn't smaller than the shaft here (Ø 7.874 in) — check the number" (`diaMm > 0` and `diaMm
+  >=` the local surface Ø; the figure is that surface Ø, `undercutDiaNotBelowSurfaceWarning`). For a
+  draft that is **nested** inside another cut, the comparison is
+  against the **surrounding cut's floor** and the wording becomes "Ø isn't smaller than the
+  surrounding cut's floor here (Ø … in) — check the number" — a nested cut removes material from its parent's floor, so the
   shaft surface is not the figure it can reach. Both terms come from `resolveUndercutFloors`
   (`surfaceDiaMm`, `nesting.parentId`), so the card and the notch build agree on what the cut is
   taken against.
@@ -1152,6 +1189,32 @@ the dropped draft held an edit (it differs from the cut as this strip last held 
 snackbar host shows "Unsaved changes to a removed cut were discarded" (`UNDERCUT_DISCARDED_DRAFT_MSG`,
 Short); a draft equal to its baseline goes without a notice, since nothing typed was lost. A free
 strip whose anchoring cut an Undo removes closes, like any anchor that stops resolving.
+
+### Add chooser ("Where is the cut?")
+The tab's **"Add undercut"** (`undercut_add`) records nothing and seeds no default at the AFT S.E.T.
+(usability review: a 1" cut dropped at the AFT S.E.T. was a surprise to a shop user who had not
+yet said where the cut was). It opens an AlertDialog **"Where is the cut?"** (`undercut_add_where`)
+with one row per choice from the pure `undercutAddChoices`: one per liner, AFT → FWD by span start
+(`undercut_add_where_liner_<id>`, titled by `undercutAddLinerTitles` — the detail page's strip
+title, e.g. `Stern tube liner Ø10.000"`, so the row tapped and the page it opens read alike), then
+"Bare shaft — from the AFT S.E.T." (`undercut_add_where_aft`) and "Bare shaft — from the FWD
+S.E.T." (`undercut_add_where_fwd`) — both always offered — and Cancel (`undercut_add_where_cancel`).
+Cancel, Back and tap-outside record nothing.
+- A **liner row** opens that liner's detail page on a pending "New undercut" card — the page's own
+  add seed, so the card is identical to the one "Add undercut in this liner" makes.
+- A **bare-shaft row** opens a detail page on a synthetic empty window at that S.E.T.
+  (`undercutBareShaftAddStrip`: a `DEFAULT_UNDERCUT_LENGTH_MM` span just inside the chosen S.E.T.,
+  padded by the SAME amount on both sides, shrunk to what the nearer shaft end allows — the
+  overlay centres the pending card in the window's free stock, so a symmetric pad is what lands the
+  seed at Distance 0 from its S.E.T.). Route state `bareShaftAddFromAft` carries the choice.
+- Both open the overlay with `seedNewCut = true` (route state `seedNewCutOnOpen`): the overlay reads
+  it ONCE at first composition and runs the ONE seeding function `seedPendingCut()` — the same
+  function the page's "Add undercut in this liner / here" button calls — so the chooser and the page
+  button can never seed differently.
+- Nothing is recorded until the pill's **"Record cut"** (or leaving an EDITED card). Once the
+  bare-shaft cut is recorded, the real free strip supersedes the synthetic window under the SAME
+  overlay identity (`stripKey` `free:new:aft` / `free:new:fwd`), so the drafts, pager and zoom
+  survive the hand-off.
 
 ### Overlay "Add undercut…"
 Between the canvas and the carousel: **"Add undercut in this liner"** on a `LinerStrip`
@@ -1195,7 +1258,7 @@ so the card's default Distance and the sheet's anchor always read from the same 
 tie breaks AFT. A liner strip whose **AFT edge** a recorded cut already runs past into the body
 (`undercutLinerEdgeBuried`) seeds the nearer S.E.T. for the default span instead of `LINER_AFT`,
 with `referenceLinerId` `""` (the edge has no step left to measure from); a buried FWD edge alone
-leaves the `LINER_AFT` seed. The route's global "Add undercut" seeds AT the AFT SET, where AFT_SET is
+leaves the `LINER_AFT` seed. The tab's bare-shaft add from the AFT S.E.T. seeds AT the AFT SET, where AFT_SET is
 trivially the nearer datum.
 
 Whole liner / Extend past liner (on-device request: a cut that covers the whole liner and runs on
@@ -1241,17 +1304,17 @@ wrong). On a liner card (`stripLiner ?: refLiner`), a **Distance or Length commi
 overhangs a liner edge it did not overhang before that commit (`newLinerOverhangs` in
 `geom/UndercutMath.kt`: per end, `undercutLinerExtensionsMm` ≤ `UNDERCUT_TOUCH_EPS_MM` before and
 > it after; an end already past that grows further, or one pulled back inside, is not new) opens
-an AlertDialog (`undercut_overhang_dialog`) titled **"Past the liner edge"**: "This undercut will
-run <amount> <unit> past the liner's AFT|FWD edge. Add that as an extension past the liner?" — one
-line per end when both newly overhang, then "Add those as extensions past the liner?"
-(`undercutOverhangQuestion`). Its two buttons are the ONLY way out (`DialogProperties(
+an AlertDialog (`undercut_overhang_dialog`) titled **"Past the liner edge"**: "This cut runs
+<amount> <unit> past the liner's AFT|FWD edge into the shaft. Is that right?" — when both ends newly
+overhang, "This cut runs <a> past the liner's AFT edge and <b> past its FWD edge into the shaft. Is
+that right?" (`undercutOverhangQuestion`). Its two buttons are the ONLY way out (`DialogProperties(
 dismissOnClickOutside = false, dismissOnBackPress = false)`): a tap outside would have to pick an
 answer silently.
-- **"Add extension"** (`undercut_overhang_accept`) — the overhang is intended; the Extend field
+- **"Yes, it does"** (`undercut_overhang_accept`; formerly "Add extension") — the overhang is intended; the Extend field
   already shows it. The end is recorded as acknowledged, and nothing more is shown.
-- **"No"** (`undercut_overhang_decline`) — the end is flagged, and the card shows a standing
+- **"No, let me check"** (`undercut_overhang_decline`; formerly "No") — the end is flagged, and the card shows a standing
   warning under the Length field (`undercut_overhang_warning`): "Runs <amount> <unit> past the
-  liner's AFT|FWD edge — double-check Distance and Length" (`undercutOverhangWarning`).
+  liner's AFT|FWD edge — check Distance and Length" (`undercutOverhangWarning`).
 - **Nothing is rewritten either way**: the draft holds the typed value from the commit on, and the
   answer changes only what the card says. Confirm is never blocked — the geometry is legal.
 - When that end's overhang returns to ≤ ε, its flag and its acknowledgement both clear, so the

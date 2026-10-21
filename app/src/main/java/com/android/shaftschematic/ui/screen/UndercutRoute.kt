@@ -31,6 +31,8 @@ import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Tune
@@ -40,6 +42,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -84,6 +87,7 @@ import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.SurfaceSeg
 import com.android.shaftschematic.geom.UNDERCUT_DEFAULT_LENGTH_MM
 import com.android.shaftschematic.geom.UNDERCUT_EXAGGERATION_MAX_FRAC
+import com.android.shaftschematic.geom.UNDERCUT_WINDOW_PAD_MM
 import com.android.shaftschematic.geom.UndercutLinerSpan
 import com.android.shaftschematic.geom.UndercutSpanMm
 import com.android.shaftschematic.geom.UndercutStrip
@@ -109,10 +113,13 @@ import com.android.shaftschematic.geom.undercutSheetNumbers
 import com.android.shaftschematic.geom.undercutMissingDiaMessage
 import com.android.shaftschematic.geom.undercutsMissingDia
 import com.android.shaftschematic.model.ProjectInfo
+import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Undercut
 import com.android.shaftschematic.model.UndercutReference
 import com.android.shaftschematic.model.collidingIds
+import com.android.shaftschematic.pdf.buildUndercutStripTitle
 import com.android.shaftschematic.pdf.composeUndercutPdf
+import com.android.shaftschematic.pdf.formatDiaWithUnit
 import com.android.shaftschematic.pdf.formatLenWithUnit
 import com.android.shaftschematic.ui.adaptive.LocalSidebarPermanent
 import com.android.shaftschematic.ui.adaptive.WindowWidthClass
@@ -166,16 +173,22 @@ import kotlin.math.roundToInt
  *   the foot of the tab opens, and the undercut preview's options panel ([UndercutOptionsSheet]
  *   in a non-modal [PreviewOptionsPanel]) over the tab, so neither needs the tab scrolled to its
  *   foot (on-device request). The detail page's top bar carries the same pair.
- * - **Add undercut** — records a 1 in section just FWD of the AFT S.E.T. and opens its strip.
- *   Precision comes from the overlay's numeric fields, never from the tap (wear posture).
- * - **Cut depth exaggeration** — a slider (0 – `UNDERCUT_EXAGGERATION_MAX_FRAC`) storing the
- *   sheet's drawn-depth setting in the record. Display-only styling for every notch draw site;
- *   it never touches a stored or printed Ø.
+ * - **Add undercut** — asks "Where is the cut?" (one row per liner, AFT → FWD, then bare shaft
+ *   from either S.E.T.) and opens that strip on a PENDING "New undercut" card, the detail page's
+ *   own add seed (`seedNewCut`). Nothing is recorded until the card is confirmed, so backing out
+ *   leaves no cut behind; a bare-shaft add opens a synthetic empty window at the chosen S.E.T.
+ *   ([undercutBareShaftAddStrip]) until the confirmed cut's real strip takes over. Precision
+ *   comes from the overlay's numeric fields, never from the tap (wear posture).
  * - **Undercut list** — one compact row per recorded cut, numbered and ordered AFT → FWD
  *   (`undercutSheetNumbers` — the numbers the detail page shows; they print on no sheet): its
  *   distance under its own authored reference, length, Ø ("Ø not entered" when unmeasured), and a stale-overrun warning. Tapping a
  *   row opens that cut's strip; the trailing icon deletes it confirm-free, with a "Cut N deleted"
  *   snackbar Undo (`restoreUndercut`).
+ * - **Drawing settings** — collapsed under the list, out of the authoring flow (usability
+ *   review: nothing between Add and the list may read as a required step): "Drawn depth" (a
+ *   slider, 0 – `UNDERCUT_EXAGGERATION_MAX_FRAC`, storing the sheet's drawn-depth setting in the
+ *   record — display-only styling for every notch draw site, never a stored or printed Ø),
+ *   "Draw to the shaft end" (per job) and "Split cuts at liner edges" (app-wide).
  * - Blank-draft toggle, Preview, Print, Export — straight ports of the wear document's flows,
  *   all calling `composeUndercutPdf`. Print and Export (tab body and preview alike) first ask
  *   "Print without diameters?" while any cut has no Ø and no blank draft is elected.
@@ -262,16 +275,43 @@ fun UndercutRoute(
     // the anchor itself — the identity outlives every edit made inside the overlay.
     var overlayKey by rememberSaveable { mutableStateOf<String?>(null) }
     var overlayInitialSelectedId by rememberSaveable { mutableStateOf<String?>(null) }
+    // The "Add undercut" path: the overlay opens on a PENDING "New undercut" card (its own add
+    // seed) instead of a recorded cut, so backing out records nothing. Only the add chooser sets
+    // it; every other opening (canvas tap, list row) and every close clears it.
+    var seedNewCutOnOpen by rememberSaveable { mutableStateOf(false) }
+    // A bare-shaft add has no strip to open yet — no cut is recorded there — so the overlay opens
+    // on a synthetic empty window at the chosen S.E.T. ([undercutBareShaftAddStrip]): true = AFT,
+    // false = FWD, null = none. The side is held rather than the strip so it survives recreation;
+    // the confirmed cut's real strip supersedes it (see `activeStrip`).
+    var bareShaftAddFromAft by rememberSaveable { mutableStateOf<Boolean?>(null) }
+    // "Where is the cut?" — the add chooser.
+    var showAddWhere by rememberSaveable { mutableStateOf(false) }
+    // The collapsed "Drawing settings" section under the list.
+    var showDrawingSettings by rememberSaveable { mutableStateOf(false) }
 
     // Every way the overlay opens comes through here, so the identity is always set with the
     // anchor. [selectId] is the card to open on; null opens on the strip's aft-most card.
-    fun openOverlay(linerId: String?, undercutId: String?, selectId: String?) {
+    // [seedNewCut] opens it on a pending new cut (the add chooser's liner rows).
+    fun openOverlay(linerId: String?, undercutId: String?, selectId: String?, seedNewCut: Boolean = false) {
         // The detail page carries its own options panel; the tab's would sit forgotten under it.
         if (linerId != null || undercutId != null) showTabOptions = false
         anchorLinerId = linerId
         anchorUndercutId = undercutId
         overlayInitialSelectedId = selectId
         overlayKey = linerId?.let { "liner:$it" } ?: undercutId?.let { "free:$it" }
+        seedNewCutOnOpen = seedNewCut
+        bareShaftAddFromAft = null
+    }
+
+    // The add chooser's bare-shaft rows: the synthetic window at that S.E.T., on a pending cut.
+    fun openBareShaftAdd(fromAft: Boolean) {
+        showTabOptions = false
+        anchorLinerId = null
+        anchorUndercutId = null
+        overlayInitialSelectedId = null
+        overlayKey = if (fromAft) "free:new:aft" else "free:new:fwd"
+        seedNewCutOnOpen = true
+        bareShaftAddFromAft = fromAft
     }
 
     // Collisions corrupt any drawing, so the shared export gate guards this surface too —
@@ -385,12 +425,26 @@ fun UndercutRoute(
     // because the record and the anchor can update in either order within a frame and clearing
     // on the stale pass would close an overlay that was just opened.
     val anchoredUndercutId = anchorUndercutId
+    val anchoredStrip = anchoredUndercutId?.let { id -> strips.firstOrNull { id in it.undercutIds } }
+    // The bare-shaft add's synthetic window. It stays the fallback until the confirmed cut's own
+    // strip resolves: the record reaches this composition through a collected flow, so the frame
+    // after the confirm can carry the new anchor before the new cut — dropping the overlay for
+    // that frame would wipe its state (the selection that follows the new card included).
+    val syntheticStrip = bareShaftAddFromAft?.let { fromAft ->
+        undercutBareShaftAddStrip(fromAft, stripAftSetMm, stripFwdSetMm, oalMm)
+    }
     val activeStrip: UndercutStrip? = when {
         anchorLinerId != null ->
             linerSpans.firstOrNull { it.id == anchorLinerId }?.let { ln -> stripForLiner(ln) }
-        anchoredUndercutId != null ->
-            strips.firstOrNull { anchoredUndercutId in it.undercutIds }
+        anchoredStrip != null -> anchoredStrip
+        syntheticStrip != null -> syntheticStrip
         else -> null
+    }
+    // Once the real strip holds the confirmed cut, the synthetic window has done its job; from then
+    // on the overlay follows the anchor like any free strip (deleting its last cut closes it).
+    val syntheticSuperseded = bareShaftAddFromAft != null && anchoredStrip != null
+    LaunchedEffect(syntheticSuperseded) {
+        if (syntheticSuperseded) bareShaftAddFromAft = null
     }
 
     // Open the strip an undercut belongs to, from the list below the canvas — on that cut's card.
@@ -547,8 +601,8 @@ fun UndercutRoute(
 
     val introText: @Composable ColumnScope.() -> Unit = {
         Text(
-            text = "Records undercut sections — distance from a S.E.T., length, and measured " +
-                "diameter — and prints them as zoomed detail views with chained dimensions.",
+            text = "Record each cut — where it is, how long, and the diameter it was cut to. " +
+                "Prints a zoomed drawing for the welder or machinist.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -695,18 +749,15 @@ fun UndercutRoute(
         }
     }
 
+    // "Add undercut" asks where the cut is and opens that strip on a pending card; it records
+    // nothing itself (usability review: a cut recorded on tap would stay on the list and the sheet
+    // when the machinist backs out, and a fixed bare-shaft seed would open the wrong strip for the
+    // common cut, the one in a liner, with no liner datums to measure from).
     val addButton: @Composable ColumnScope.() -> Unit = {
         Button(
-            onClick = {
-                val (aftSetXMm, _) = undercutSetPositions(spec)
-                val start = aftSetXMm.coerceIn(0f, oalMm)
-                val length = DEFAULT_UNDERCUT_LENGTH_MM
-                    .coerceAtMost((oalMm - start).coerceAtLeast(0.1f))
-                val newId = vm.addUndercut(start, length)
-                openOverlay(linerId = null, undercutId = newId, selectId = newId)
-            },
+            onClick = { showAddWhere = true },
             enabled = oalMm > 0f,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().testTag("undercut_add"),
         ) {
             Icon(Icons.Filled.Add, contentDescription = null)
             Spacer(Modifier.width(8.dp))
@@ -714,100 +765,12 @@ fun UndercutRoute(
         }
     }
 
-    // ── Drawn depth exaggeration + recorded undercuts ────────────────────────
+    // ── Recorded undercuts ───────────────────────────────────────────────────
     // Visibility + removal without hunting for the right strip first: every cut on the
     // shaft is listed here, aft → fwd, whichever strip it belongs to.
-    val recordSection: @Composable ColumnScope.() -> Unit = {
+    val recordList: @Composable ColumnScope.() -> Unit = {
         if (undercutRecord.undercuts.isNotEmpty()) {
             HorizontalDivider()
-
-            // Sheet-wide drawn-depth styling, sitting with the overview canvas it
-            // restyles so the change is visible while dragging. Display-only: the
-            // deepest cut draws at this fraction of its local surface Ø and shallower
-            // cuts scale relative to it, so sheets with very different absolute depths
-            // read alike; stored and printed Ø values never move (golden rule). The
-            // canvas follows the drag from route-local state; the record takes ONE
-            // write on release (PreviewTuning doctrine) — committing per frame marked
-            // the document dirty on every pixel of travel.
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text("Cut depth exaggeration", style = MaterialTheme.typography.bodyLarge)
-                    Text(
-                        text = "${(shownExaggeration * 100f).roundToInt()}%",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Slider(
-                    value = shownExaggeration,
-                    onValueChange = { dragExaggeration = it },
-                    onValueChangeFinished = {
-                        dragExaggeration?.let { vm.setUndercutExaggeration(it) }
-                        dragExaggeration = null
-                    },
-                    valueRange = 0f..UNDERCUT_EXAGGERATION_MAX_FRAC,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("undercut_exaggeration_slider"),
-                )
-                Text(
-                    "Drawing only — 0% is true scale. The deepest cut draws at this depth " +
-                        "and shallower cuts scale to it; printed Ø values never change.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                // Per-job fit, not a look: a liner strip near a shaft end draws out to the S.E.T.
-                // and its chain dimensions the run to it. The reach in the caption is the constant
-                // itself, so the text cannot drift from what the strips do.
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Draw to the shaft end", style = MaterialTheme.typography.bodyLarge)
-                        Text(
-                            "A liner strip within " +
-                                formatLenWithUnit(UNDERCUT_SET_REACH_MM.toDouble(), unit) +
-                                " of its S.E.T. draws out to the shaft end and dimensions the run " +
-                                "to it. Saved with this job.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Spacer(Modifier.width(8.dp))
-                    Switch(
-                        checked = undercutRecord.drawToSet,
-                        onCheckedChange = { vm.setUndercutDrawToSet(it) },
-                        modifier = Modifier.testTag("undercut_draw_to_set_switch"),
-                    )
-                }
-                // App-wide look pref, offered here because the chain-rail rule is reached for from
-                // this tab (on-device request); the options-sheet and Settings rows are the same
-                // value.
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Split cuts at liner edges", style = MaterialTheme.typography.bodyLarge)
-                        Text(
-                            "$UNDERCUT_SPLIT_AT_LINER_EDGE_CAPTION App-wide.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Spacer(Modifier.width(8.dp))
-                    Switch(
-                        checked = pdfUndercutSplitAtLinerEdge,
-                        onCheckedChange = { vm.setPdfUndercutSplitAtLinerEdge(it) },
-                        modifier = Modifier.testTag("undercut_split_at_liner_edge_switch"),
-                    )
-                }
-            }
 
             // Own spacing: the surrounding 16 dp rhythm would read as separate blocks
             // rather than one list.
@@ -862,6 +825,123 @@ fun UndercutRoute(
         }
     }
 
+    // ── Drawing settings, collapsed under the list ───────────────────────────
+    // How the sheet DRAWS the cuts, not what was cut: kept out of the authoring flow and folded
+    // away by default (usability review — between Add and the list it would read as a required
+    // step).
+    val drawingSettings: @Composable ColumnScope.() -> Unit = {
+        if (undercutRecord.undercuts.isNotEmpty()) {
+            HorizontalDivider()
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(MaterialTheme.shapes.small)
+                    .clickable { showDrawingSettings = !showDrawingSettings }
+                    .testTag("undercut_drawing_settings_toggle")
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "Drawing settings",
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.weight(1f),
+                )
+                Icon(
+                    if (showDrawingSettings) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                    contentDescription = if (showDrawingSettings) "Hide drawing settings" else "Show drawing settings",
+                )
+            }
+            if (showDrawingSettings) {
+                // Sheet-wide drawn-depth styling; the overview canvas restyles while dragging.
+                // Display-only: the deepest cut draws at this fraction of its local surface Ø and
+                // shallower cuts scale relative to it, so sheets with very different absolute
+                // depths read alike; stored and printed Ø values never move (golden rule). The
+                // canvas follows the drag from route-local state; the record takes ONE write on
+                // release (PreviewTuning doctrine) — committing per frame would mark the document
+                // dirty on every pixel of travel.
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("Drawn depth", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            text = "${(shownExaggeration * 100f).roundToInt()}%",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Slider(
+                        value = shownExaggeration,
+                        onValueChange = { dragExaggeration = it },
+                        onValueChangeFinished = {
+                            dragExaggeration?.let { vm.setUndercutExaggeration(it) }
+                            dragExaggeration = null
+                        },
+                        valueRange = 0f..UNDERCUT_EXAGGERATION_MAX_FRAC,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("undercut_exaggeration_slider"),
+                    )
+                    Text(
+                        "Makes shallow cuts easier to see — 0% is true scale. Printed Ø values " +
+                            "never change. Saved with this job.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    // Per-job fit, not a look: a liner strip near a shaft end draws out to the S.E.T.
+                    // and its chain dimensions the run to it. The reach in the caption is the constant
+                    // itself, so the text cannot drift from what the strips do.
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Draw to the shaft end", style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                "A liner strip within " +
+                                    formatLenWithUnit(UNDERCUT_SET_REACH_MM.toDouble(), unit) +
+                                    " of its S.E.T. draws out to the shaft end and dimensions the run " +
+                                    "to it. Saved with this job.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Switch(
+                            checked = undercutRecord.drawToSet,
+                            onCheckedChange = { vm.setUndercutDrawToSet(it) },
+                            modifier = Modifier.testTag("undercut_draw_to_set_switch"),
+                        )
+                    }
+                    // App-wide look pref, offered here because the chain-rail rule is reached for from
+                    // this tab (on-device request); the options-sheet and Settings rows are the same
+                    // value.
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Split cuts at liner edges", style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                "$UNDERCUT_SPLIT_AT_LINER_EDGE_CAPTION App-wide.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Switch(
+                            checked = pdfUndercutSplitAtLinerEdge,
+                            onCheckedChange = { vm.setPdfUndercutSplitAtLinerEdge(it) },
+                            modifier = Modifier.testTag("undercut_split_at_liner_edge_switch"),
+                        )
+                    }
+                }
+            }
+        }
+    }
+
     // ── Blank draft, export gate, Print / Preview / Export ───────────────────
     val printGroup: @Composable ColumnScope.() -> Unit = {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -870,7 +950,7 @@ fun UndercutRoute(
             Column {
                 Text("Blank draft (write-in)", style = MaterialTheme.typography.bodyLarge)
                 Text(
-                    "Job info and OAL are blanked; recorded undercuts are omitted — a fresh form.",
+                    "Job info and overall length are blanked; recorded undercuts are omitted — a fresh form.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -977,10 +1057,12 @@ fun UndercutRoute(
                         introText()
                         printGroup()
                     },
-                    // Authoring: adding cuts, exaggerating their drawn depth, listing them.
+                    // Authoring: adding cuts and listing them, with how the sheet draws them
+                    // folded away under the list.
                     controlsPane = {
                         addButton()
-                        recordSection()
+                        recordList()
+                        drawingSettings()
                     },
                 )
             } else {
@@ -996,7 +1078,8 @@ fun UndercutRoute(
                     canvasBlock()
                     previewOptionsRow()
                     addButton()
-                    recordSection()
+                    recordList()
+                    drawingSettings()
 
                     HorizontalDivider()
 
@@ -1067,6 +1150,53 @@ fun UndercutRoute(
         )
     }
 
+    // ── "Where is the cut?" — the add chooser ────────────────────────────────
+    // One row per liner (AFT → FWD, named as the detail page names its strip), then bare shaft from
+    // either S.E.T. Each row opens that strip on a pending card; Cancel, Back and tap-outside open
+    // nothing and record nothing.
+    if (showAddWhere) {
+        val addLinerTitles = remember(spec, unit, unitOverrides, dualUnits) {
+            undercutAddLinerTitles(spec, DisplayUnits(unit, unitOverrides, dualUnits))
+        }
+        val choices = remember(linerSpans, addLinerTitles) { undercutAddChoices(linerSpans, addLinerTitles) }
+        AlertDialog(
+            onDismissRequest = { showAddWhere = false },
+            modifier = Modifier.testTag("undercut_add_where"),
+            title = { Text("Where is the cut?") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    choices.forEach { choice ->
+                        ListItem(
+                            headlineContent = { Text(choice.label) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(MaterialTheme.shapes.small)
+                                .clickable {
+                                    showAddWhere = false
+                                    when (choice) {
+                                        is UndercutAddChoice.InLiner -> openOverlay(
+                                            linerId = choice.linerId, undercutId = null, selectId = null,
+                                            seedNewCut = true,
+                                        )
+                                        is UndercutAddChoice.BareShaft -> openBareShaftAdd(choice.fromAft)
+                                    }
+                                }
+                                .testTag(choice.testTag),
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { showAddWhere = false },
+                    modifier = Modifier.testTag("undercut_add_where_cancel"),
+                ) {
+                    Text("Cancel")
+                }
+            },
+        )
+    }
+
     // ── Undercut strip detail overlay ─────────────────────────────────────────
     // UndercutWindowDetailOverlay hosts its own BackHandler; only compose it while a strip
     // is active.
@@ -1075,6 +1205,9 @@ fun UndercutRoute(
             strip = s,
             stripKey = overlayKey ?: anchorLinerId?.let { "liner:$it" } ?: "free:$anchorUndercutId",
             initialSelectedId = overlayInitialSelectedId,
+            // The add chooser's opening: a pending "New undercut" card, seeded by the overlay's
+            // own add path on first composition; nothing reaches the record until it is confirmed.
+            seedNewCut = seedNewCutOnOpen,
             spec = spec,
             resolvedComponents = resolvedComponents,
             unit = unit,
@@ -1085,9 +1218,18 @@ fun UndercutRoute(
             onAddUndercut = { startMm, lengthMm, reference, referenceLinerId, referenceCutId ->
                 // Called when the overlay CONFIRMS a drafted new cut (a cancelled draft never
                 // reaches here, so the record gains no ghosts). The returned id lets the overlay
-                // land the draft's Ø/note and follow the new card; the open anchor already covers
-                // this strip, so no re-anchoring is needed.
-                vm.addUndercut(startMm, lengthMm, reference, referenceLinerId, referenceCutId)
+                // land the draft's Ø/note and follow the new card. A liner or recorded-cut anchor
+                // already covers this strip; the bare-shaft add's synthetic window has no anchor,
+                // so the new cut becomes it, and `activeStrip` moves to the real strip holding it
+                // under the same overlay identity — drafts and selection carry over. These state
+                // writes recompose later, so the overlay's follow-up Ø/note update still runs.
+                val newId = vm.addUndercut(startMm, lengthMm, reference, referenceLinerId, referenceCutId)
+                if (bareShaftAddFromAft != null && anchorLinerId == null && anchorUndercutId == null) {
+                    anchorUndercutId = newId
+                }
+                // The open seed is spent; a recreation must not seed a second pending card.
+                seedNewCutOnOpen = false
+                newId
             },
             onUpdateUndercut = vm::updateUndercut,
             onUpdateReference = vm::updateUndercutReference,
@@ -1165,6 +1307,78 @@ fun UndercutRoute(
 
 /** Default length of a newly added undercut (1 in), clamped to the remaining shaft extent. */
 internal const val DEFAULT_UNDERCUT_LENGTH_MM = UNDERCUT_DEFAULT_LENGTH_MM
+
+/** One row of the "Where is the cut?" add chooser. */
+internal sealed class UndercutAddChoice {
+    abstract val label: String
+    abstract val testTag: String
+
+    /** The cut is in this liner: its strip opens on a pending card with the liner's datums. */
+    data class InLiner(val linerId: String, override val label: String) : UndercutAddChoice() {
+        override val testTag: String get() = "undercut_add_where_liner_$linerId"
+    }
+
+    /** The cut is on bare shaft, measured from the AFT ([fromAft]) or the FWD S.E.T. */
+    data class BareShaft(val fromAft: Boolean) : UndercutAddChoice() {
+        override val label: String
+            get() = if (fromAft) "Bare shaft — from the AFT S.E.T." else "Bare shaft — from the FWD S.E.T."
+        override val testTag: String
+            get() = if (fromAft) "undercut_add_where_aft" else "undercut_add_where_fwd"
+    }
+}
+
+/**
+ * The add chooser's rows: one per liner, AFT → FWD by span start, titled from [linerTitles]
+ * (a liner missing from it reads "Liner N" by its AFT → FWD position), then bare shaft from the
+ * AFT S.E.T. and from the FWD S.E.T. — always both, whatever the shaft carries.
+ */
+internal fun undercutAddChoices(
+    linerSpans: List<UndercutLinerSpan>,
+    linerTitles: Map<String, String>,
+): List<UndercutAddChoice> =
+    linerSpans.sortedBy { it.startMm }.mapIndexed { i, ln ->
+        UndercutAddChoice.InLiner(ln.id, linerTitles[ln.id] ?: "Liner ${i + 1}")
+    } + UndercutAddChoice.BareShaft(fromAft = true) + UndercutAddChoice.BareShaft(fromAft = false)
+
+/**
+ * Every liner's chooser title: its positional name (`buildLinerTitleById`) followed by its OD in
+ * the liner's own display unit — the detail page's strip title, so the row tapped and the page it
+ * opens read alike.
+ */
+internal fun undercutAddLinerTitles(spec: ShaftSpec, displayUnits: DisplayUnits): Map<String, String> =
+    buildLinerTitleById(spec).mapValues { (id, name) ->
+        val odMm = spec.liners.firstOrNull { it.id == id }?.odMm?.takeIf { it > 0f }
+        buildUndercutStripTitle(
+            name, "",
+            odMm?.let { "Ø" + formatDiaWithUnit(it.toDouble(), displayUnits.unitFor(id)) },
+        )
+    }
+
+/**
+ * The window a bare-shaft add opens on before anything is recorded there: a [lengthMm] span just
+ * inside the chosen S.E.T. (AFT: starting at [aftSetMm]; FWD: ending at [fwdSetMm]), kept inside
+ * `[0, oalMm]`, padded by up to [padMm] — the SAME pad on both sides, shrunk to what the nearer
+ * shaft end allows. The overlay seeds its pending card centred in the window's free stock, so a
+ * symmetric pad is what lands that card exactly on the span (Distance 0 from its S.E.T.); a pad
+ * clamped on one side only would shift it off the S.E.T. No member cuts; the overlay's own preview
+ * range adds the break room and the pad around the pending cut.
+ */
+internal fun undercutBareShaftAddStrip(
+    fromAft: Boolean,
+    aftSetMm: Float,
+    fwdSetMm: Float,
+    oalMm: Float,
+    lengthMm: Float = DEFAULT_UNDERCUT_LENGTH_MM,
+    padMm: Float = UNDERCUT_WINDOW_PAD_MM,
+): UndercutStrip.FreeStrip {
+    val hi = oalMm.coerceAtLeast(0f)
+    val len = lengthMm.coerceIn(0f, hi)
+    val maxStart = (hi - len).coerceAtLeast(0f)
+    val start = (if (fromAft) aftSetMm else fwdSetMm - len).coerceIn(0f, maxStart)
+    val end = start + len
+    val pad = minOf(padMm, start, hi - end).coerceAtLeast(0f)
+    return UndercutStrip.FreeStrip(UndercutWindow(start - pad, end + pad, emptyList()))
+}
 
 /** A Print ([export] false) or Export waiting on "Print without diameters?" — [count] cuts lack a Ø. */
 private class UndercutMissingDiaAsk(val count: Int, val export: Boolean, val action: () -> Unit)
@@ -1319,7 +1533,7 @@ private fun UndercutListRow(
                 style = MaterialTheme.typography.bodyMedium,
             )
             Text(
-                text = "L ${disp(undercut.lengthMm, unit)}${abbr(unit)}  ·  Ø $diaText",
+                text = "Length ${disp(undercut.lengthMm, unit)}${abbr(unit)}  ·  Ø $diaText",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
