@@ -37,9 +37,9 @@ private const val UNDERCUT_RAIL_HALO_PAD_Y_PT = 0.5f
  * [fallbackLabelAbove] stacks those rows ABOVE the line instead of below — the total-span rail
  * (whose space below is the chained rail's), a single-level chain with no total above it
  * (`planUndercutRailRows`: a small value pushed under the span line reads as orphaned when
- * nothing sits above the rail — on-device report), and every nested row (below its line a value
- * would land on the shaft's top surface — on-device report). Baselines come from
- * [undercutRailFallbackBaselineY].
+ * nothing sits above the rail — on-device report), a chain LIFTED under its total on a strip with
+ * the room (`undercutRailsLift`), and every nested row (below its line a value would land on the
+ * shaft's top surface — on-device report). Baselines come from [undercutRailFallbackBaselineY].
  *
  * Every fallback value carries a **leader** — one straight stroke from its near halo edge to its
  * own dimension line ([undercutRailLeader]) — so a value lifted a row or two off its line still
@@ -48,6 +48,11 @@ private const val UNDERCUT_RAIL_HALO_PAD_Y_PT = 0.5f
  *
  * [drawLabels] = false (blank write-in draft) keeps every line and arrowhead but skips the
  * values and their leaders — the lines-in/values-out template rule.
+ *
+ * [haloClearXs] are vertical lines ANOTHER rail drew through this rail's fallback rows (a lifted
+ * chain's values sit across the total's witness lines): a halo whose edge would land inside such a
+ * stroke widens just enough to cover all of it ([undercutRailHaloSpan]), so no sliver of the line
+ * is left standing against the value.
  *
  * [arrowSizePt] is the head length (the app-wide `PdfPrefs.arrowSizePt`, in points) and must be
  * the value the plan was laid out with. [scale] multiplies every fixed point size here
@@ -76,6 +81,7 @@ internal fun drawUndercutRail(
     scale: Float = 1f,
     haloColor: Int = Color.WHITE,
     arrowSizePt: Float = PDF_ARROW_SIZE_DEFAULT_PT,
+    haloClearXs: List<Float> = emptyList(),
 ) {
     if (layout.isEmpty()) return
     val arrow = arrowSizePt * scale
@@ -162,13 +168,42 @@ internal fun drawUndercutRail(
             return@forEachIndexed
         }
         val f = fallbacks[i] ?: return@forEachIndexed
-        c.drawRect(
-            s.labelCxPt - lw * 0.5f - haloPadX, f.haloTop,
-            s.labelCxPt + lw * 0.5f + haloPadX, f.haloBottom,
-            halo,
+        val (haloLeft, haloRight) = undercutRailHaloSpan(
+            s.labelCxPt - lw * 0.5f - haloPadX,
+            s.labelCxPt + lw * 0.5f + haloPadX,
+            haloClearXs,
+            lineReach = dim.strokeWidth * 0.5f + UNDERCUT_RAIL_HALO_AA_PT * scale,
         )
+        c.drawRect(haloLeft, f.haloTop, haloRight, f.haloBottom, halo)
         c.drawDualLabelCentered(s.label, s.labelCxPt, f.baselineY, dimText, dualStacked)
     }
+}
+
+/** Antialiasing fringe a halo edge must clear past a covered line's stroke, points. */
+private const val UNDERCUT_RAIL_HALO_AA_PT = 0.5f
+
+/**
+ * A fallback value's halo `[left, right]`, widened over every vertical line in [clearXs] whose
+ * stroke ([lineReach] each side of its x, antialiasing included) the halo would otherwise cut
+ * through: a line half under the halo would leave a sliver standing against the value. A line
+ * wholly inside or wholly clear of the halo changes nothing, so with an empty [clearXs] the halo
+ * is exactly `[left, right]`.
+ */
+internal fun undercutRailHaloSpan(
+    left: Float,
+    right: Float,
+    clearXs: List<Float>,
+    lineReach: Float,
+): Pair<Float, Float> {
+    var l = left
+    var r = right
+    clearXs.forEach { x ->
+        if (x > left - lineReach && x < right + lineReach) {
+            l = minOf(l, x - lineReach)
+            r = maxOf(r, x + lineReach)
+        }
+    }
+    return l to r
 }
 
 /** A fallback value's leader: one vertical stroke at [x] from [fromY] (the value) to [toY] (its line). */
@@ -255,6 +290,13 @@ internal fun undercutNestedRailLineYs(
  * above it — the ONE
  * sequence the printed strip and the detail canvas both run.
  *
+ * The order is fixed — total, then chain, then the nested rows. The total's witness lines stand on
+ * the chain line and run up through the band where a lifted chain's fallback values sit
+ * ([UndercutStripRails.withFallbacksLifted]); drawing the chain after the total lets its label pass
+ * paint each value's halo over those witnesses. With nothing lifted the two rails meet only where
+ * a total witness joins the chain line, so the order changes nothing visible there (an antialiased
+ * junction pixel may round one grey level differently).
+ *
  * Chained dimensions run most-detailed nearest the part, and a nested cut is located against its
  * PARENT's edges, not the strip's datums. Parents at one level are disjoint, so a level always
  * lays out on a single row. Rows step by the ONE row-height metric the reserved band was budgeted
@@ -283,6 +325,20 @@ internal fun drawUndercutStripRails(
     arrowSizePt: Float = PDF_ARROW_SIZE_DEFAULT_PT,
 ) {
     val plan = rails.rows
+    // The total first: its witness lines stand on the chain line, and the chain's label pass below
+    // must paint over them where a lifted value sits in their way.
+    drawUndercutRail(
+        c, dim, dimText, rails.total,
+        witnessBottomY = chainRailY,
+        railY = totalRailY,
+        maxLabelRows = 1,
+        drawLabels = drawLabels,
+        fallbackLabelAbove = true,
+        dualStacked = dualStacked,
+        scale = scale,
+        haloColor = haloColor,
+        arrowSizePt = arrowSizePt,
+    )
     // The level-0 line carries the S.E.T. lead at its outboard end, laid out with the chain.
     drawUndercutRail(
         c, dim, dimText, rails.chainWithLead,
@@ -298,6 +354,8 @@ internal fun drawUndercutStripRails(
         scale = scale,
         haloColor = haloColor,
         arrowSizePt = arrowSizePt,
+        // Lifted values sit across the total's witness lines (chain line → total line).
+        haloClearXs = if (plan.aboveRows > 0) rails.total.flatMap { listOf(it.x0Pt, it.x1Pt) } else emptyList(),
     )
     if (rails.nested.isNotEmpty()) {
         val rowStep = undercutRailRowHeightPt(dimText, dualStacked, scale)
@@ -319,16 +377,4 @@ internal fun drawUndercutStripRails(
             )
         }
     }
-    drawUndercutRail(
-        c, dim, dimText, rails.total,
-        witnessBottomY = chainRailY,
-        railY = totalRailY,
-        maxLabelRows = 1,
-        drawLabels = drawLabels,
-        fallbackLabelAbove = true,
-        dualStacked = dualStacked,
-        scale = scale,
-        haloColor = haloColor,
-        arrowSizePt = arrowSizePt,
-    )
 }

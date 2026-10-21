@@ -919,6 +919,15 @@ fun UndercutRoute(
                         onChoose = { vm.setUndercutSetDatum(it) },
                         modifier = Modifier.padding(bottom = 8.dp),
                     )
+                    // Beside the other dimensioning choice, not among the shading rows: it decides
+                    // how an overhanging cut is DIMENSIONED, and under "Shade in Components" it
+                    // could not be found (on-device report).
+                    UndercutSplitAtLinerEdgeRow(
+                        checked = pdfUndercutSplitAtLinerEdge,
+                        onCheckedChange = { vm.setPdfUndercutSplitAtLinerEdge(it) },
+                        testTag = "undercut_split_at_liner_edge_switch",
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -977,25 +986,6 @@ fun UndercutRoute(
                     // App-wide look pref, offered here because the chain-rail rule is reached for from
                     // this tab (on-device request); the options-sheet and Settings rows are the same
                     // value.
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text("Split cuts at liner edges", style = MaterialTheme.typography.bodyLarge)
-                            Text(
-                                "$UNDERCUT_SPLIT_AT_LINER_EDGE_CAPTION App-wide.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        Spacer(Modifier.width(8.dp))
-                        Switch(
-                            checked = pdfUndercutSplitAtLinerEdge,
-                            onCheckedChange = { vm.setPdfUndercutSplitAtLinerEdge(it) },
-                            modifier = Modifier.testTag("undercut_split_at_liner_edge_switch"),
-                        )
-                    }
                 }
             }
         }
@@ -1520,7 +1510,6 @@ internal fun UndercutOptionsSheet(
         showUndercutLineArt = true,
         undercutLineArt = pdfUndercutLineArt,
         undercutLinerOutline = pdfUndercutLinerOutline,
-        undercutSplitAtLinerEdge = pdfUndercutSplitAtLinerEdge,
         vm = vm,
         // The strip rails' heads follow `PdfPrefs.arrowSizePt` (`drawUndercutRail`), on the
         // printed strips and the detail canvas alike.
@@ -1540,6 +1529,14 @@ internal fun UndercutOptionsSheet(
             UndercutSetDatumRow(
                 choice = undercutRecord.setDatum,
                 onChoose = { vm.setUndercutSetDatum(it) },
+            )
+            Spacer(Modifier.height(12.dp))
+            // With the S.E.T. choice, where a dimensioning option is looked for — not in the
+            // shading section (on-device report: it could not be found there).
+            UndercutSplitAtLinerEdgeRow(
+                checked = pdfUndercutSplitAtLinerEdge,
+                onCheckedChange = { vm.setPdfUndercutSplitAtLinerEdge(it) },
+                testTag = "pdf_undercut_split_at_liner_edge",
             )
             if (printSections.size >= 2) {
                 Spacer(Modifier.height(12.dp))

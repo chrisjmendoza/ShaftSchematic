@@ -96,7 +96,8 @@ class UndercutDetailSetLeadTest {
             scale = inputs.scale,
             setLead = lead,
         )
-        assertEquals(direct, rails)
+        // The canvas always takes the lifted plan: its rail band grows to what the plan reserves.
+        assertEquals(direct.withFallbacksLifted(), rails)
 
         // Forced AFT: the canvas lead swings to the AFT S.E.T. with the sheet's.
         val aft = undercutDetailSetLead(strip, spec, UndercutSetDatum.AFT, spans, range.startMm, range.endMm)

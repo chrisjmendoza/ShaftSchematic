@@ -824,9 +824,10 @@ on no sheet, main profile and detail strips alike (on-device ruling). There is n
 `docs/contracts/UndercutDrawing.md`.
 
 **Undercut drawing: split cuts at liner edges** (`PdfPrefs.undercutSplitAtLinerEdge`, default
-`false`; Settings → PDF Export "Undercut drawing: split cuts at liner edges" and the undercut
-options sheet's Shading section beside "Liner outline", and — the same value — the Undercut
-tab's own options block under "Draw to the shaft end", caption ending "App-wide."): the detail strips' chain rail prints each
+`false`; Settings → PDF Export "Undercut drawing: split cuts at liner edges", the undercut
+options sheet's Content block directly under "Distance to S.E.T." (not among the shading rows),
+and — the same value — the Undercut tab's Drawing settings, also directly under "Distance to
+S.E.T.", caption ending "App-wide."): the detail strips' chain rail prints each
 cut's FULL length (the shop measures cut lengths); on, a cut machined past a liner edge is
 dimensioned as two spans meeting at that edge. App-wide look pref (rides Drawing profiles).
 The per-job `UndercutRecord.drawToSet` ("Draw to the shaft end" on the Undercut tab) is separate:
@@ -941,10 +942,11 @@ gated off by what their composer actually reads (a section left with nothing is 
   apply, and it has no Shaft section — plus the one row nothing else gets: **"Undercut
   drawing: line art (no shading)"** (`showUndercutLineArt = true`) at the foot of the shade
   group, since `PdfPrefs.undercutLineArt` reaches this composer alone — and **"Liner outline"**
-  beneath it, same reasoning for `PdfPrefs.undercutLinerOutline` — and **"Split cuts at liner edges"** beside them for
-  `PdfPrefs.undercutSplitAtLinerEdge`. Its Content block also carries the per-job rows "Page",
-  "Distance to S.E.T." and, with two or more sections, "Sections to print" (each captioned
-  "Saved with this job").
+  beneath it, same reasoning for `PdfPrefs.undercutLinerOutline`. Its Content block also carries
+  the per-job rows "Page" and "Distance to S.E.T.", then **"Split cuts at liner edges"** (app-wide
+  `PdfPrefs.undercutSplitAtLinerEdge`, captioned "App-wide"; it decides how an overhanging cut is
+  dimensioned, so it sits with the S.E.T. choice rather than the shading rows) and, with two or
+  more sections, "Sections to print" (the per-job rows captioned "Saved with this job").
 
 Every instance keeps Lines & text (Line thickness + Fractions ungated — every document here
 prints lengths), Shade in Components and Units (ungated) at their fixed spots in the order;

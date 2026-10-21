@@ -6,6 +6,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Switch
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Checkbox
@@ -74,6 +77,36 @@ internal fun UndercutSetDatumRow(
 /** The caption under the "Distance to S.E.T." chips. */
 internal const val UNDERCUT_SET_DATUM_CAPTION =
     "The strip title and the dimension at the strip's edge measure to this S.E.T. Saved with this job."
+
+/**
+ * The app-wide "Split cuts at liner edges" switch (`PdfPrefs.undercutSplitAtLinerEdge`): a cut
+ * machined past a liner edge dimensioned as two spans meeting at the edge. ONE row behind the
+ * Undercut tab's Drawing settings and the undercut options panel, placed with "Distance to
+ * S.E.T." on both — it decides how the chain rail DIMENSIONS an overhang, so it sits with the
+ * other dimensioning choice rather than among the shading rows, where it could not be found
+ * (on-device report). [testTag] is the switch's tag: the two hosts keep their own so a test
+ * can tell them apart when the panel is open over the tab.
+ */
+@Composable
+internal fun UndercutSplitAtLinerEdgeRow(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    testTag: String,
+    modifier: Modifier = Modifier,
+) {
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text("Split cuts at liner edges", style = MaterialTheme.typography.bodyLarge)
+            Text(
+                "$UNDERCUT_SPLIT_AT_LINER_EDGE_CAPTION App-wide.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Switch(checked = checked, onCheckedChange = onCheckedChange, modifier = Modifier.testTag(testTag))
+    }
+}
 
 /** The chip label for [d]. */
 internal fun undercutSetDatumLabel(d: UndercutSetDatum): String = when (d) {

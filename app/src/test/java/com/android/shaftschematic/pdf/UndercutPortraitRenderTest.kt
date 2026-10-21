@@ -15,6 +15,7 @@ import com.android.shaftschematic.model.UndercutPageOrientation
 import com.android.shaftschematic.model.UndercutRecord
 import com.android.shaftschematic.model.UndercutReference
 import com.android.shaftschematic.model.UndercutSetDatum
+import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.ui.resolved.resolveComponents
 import com.android.shaftschematic.util.FractionStyle
 import com.android.shaftschematic.util.FractionTypography
@@ -169,6 +170,7 @@ class UndercutPortraitRenderTest {
         project: ProjectInfo,
         record: UndercutRecord,
         blank: Boolean = false,
+        pdfPrefs: PdfPrefs = PdfPrefs(),
     ) {
         val resolved = resolveComponents(spec)
         val orientation = undercutSheetOrientation(spec, resolved, record, blank)
@@ -183,6 +185,7 @@ class UndercutPortraitRenderTest {
             resolvedComponents = resolved,
             undercutRecord = record,
             blankValues = blank,
+            pdfPrefs = pdfPrefs,
         )
         FileOutputStream(File(outDir, name)).use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
@@ -206,7 +209,19 @@ class UndercutPortraitRenderTest {
         render("polar_portrait_draw_to_set.png", polar.spec, polarProject, polarTwoSections.copy(drawToSet = true))
         render("polar_portrait_blank.png", polar.spec, polarProject, polar.undercutRecord, blank = true)
         render("polar_as_recorded_auto.png", polar.spec, polarProject, polar.undercutRecord)
+        // The same sheet with "Split cuts at liner edges" on: the overhanging AFT cut prints as two
+        // short spans either side of the buried liner edge — three short values at the AFT end.
+        render(
+            "polar_as_recorded_split.png", polar.spec, polarProject, polar.undercutRecord,
+            pdfPrefs = PdfPrefs(undercutSplitAtLinerEdge = true),
+        )
         render("four_strips_portrait.png", fourSpec, fourProject, fourRecord)
+        // The crowded four-section page with short chain values under a total (a 3/8" cut 1" in
+        // from L1's AFT edge): each strip decides for itself whether its cell affords the lift.
+        render(
+            "four_strips_portrait_fallback.png", fourSpec, fourProject,
+            fourRecord.copy(undercuts = fourRecord.undercuts + cut("a0", 21f, 0.375f, 5.6875f, "L1")),
+        )
         render(
             "four_strips_landscape.png", fourSpec, fourProject,
             fourRecord.copy(pageOrientation = UndercutPageOrientation.LANDSCAPE),

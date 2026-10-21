@@ -694,16 +694,48 @@ class UndercutDraftTest {
             labelWidth = widthOf,
             scale = inputs.scale,
         )
-        assertEquals(direct, rails)
+        // ...with the chain's fallback values always lifted (the canvas has no page to run out of).
+        assertEquals(direct.withFallbacksLifted(), rails)
 
-        // The band is the printed strip's: total line, the chain the rest of the total band
-        // below it, then the plan's below-rows and the rail headroom down to the cylinder top.
+        // The band is the printed strip's: total line, the rest of the total band, the chain's
+        // lifted rows, the chain line, then the plan's below-rows and the rail headroom down to
+        // the cylinder top.
         val rowStep = 17f * inputs.scale
         val band = undercutDetailRailBand(rails, inputs.scale, rowStep)
-        assertEquals(20f * inputs.scale, band.chainRailY - band.totalRailY, 1e-3f)
+        assertEquals(
+            20f * inputs.scale + rails.rows.aboveRows * rowStep,
+            band.chainRailY - band.totalRailY, 1e-3f,
+        )
         assertEquals(
             band.chainRailY + rails.rows.belowRows * rowStep + UNDERCUT_DETAIL_RAIL_HEADROOM_PT * inputs.scale,
             band.cylTopPx, 1e-3f,
+        )
+    }
+
+    @Test
+    fun `the detail canvas lifts the job's short chain values above the line, under the total`() {
+        val raw = requireNotNull(javaClass.classLoader?.getResource("fixtures/undercut_polar_ranger_stbd.shaft"))
+            .readText()
+        val doc = com.android.shaftschematic.doc.ShaftDocCodec.decode(raw)
+        val liner = doc.spec.liners.single { it.id.startsWith("02d0b768") }
+        val spans = doc.undercutRecord.undercuts
+            .map { UndercutSpanMm(it.id, it.startFromAftMm, it.startFromAftMm + it.lengthMm) }
+        val chainStart = minOf(liner.startFromAftMm, spans.minOf { it.startMm })
+        val chainEnd = maxOf(liner.startFromAftMm + liner.lengthMm, spans.maxOf { it.endMm })
+        val inputs = detailRailInputs(spans, chainStart, chainEnd)
+        val rails = requireNotNull(planUndercutDetailRails(inputs) { it.inline().length * 14f })
+
+        val used = com.android.shaftschematic.pdf.undercutRailFallbackRows(rails.chainWithLead)
+        assertTrue("the job's 1 1/4\" falls off its line", used >= 1)
+        assertNotNull(rails.totalSpan)
+        assertEquals("every used row is lifted above the chain", used, rails.rows.aboveRows)
+        assertEquals("below keeps the clear row and the nested rows", 1 + rails.rows.nestedRows, rails.rows.belowRows)
+
+        val rowStep = 17f * inputs.scale
+        val band = undercutDetailRailBand(rails, inputs.scale, rowStep)
+        assertTrue(
+            "the total line sits above the lifted rows",
+            band.totalRailY < band.chainRailY - rails.rows.aboveRows * rowStep,
         )
     }
 
