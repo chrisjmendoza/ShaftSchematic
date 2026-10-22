@@ -43,6 +43,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -65,6 +66,7 @@ import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.effectiveWearTraceDepthFrac
 import com.android.shaftschematic.model.DyePenResult
 import com.android.shaftschematic.model.ProjectInfo
+import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.WearRecord
 import com.android.shaftschematic.model.collidingIds
 import com.android.shaftschematic.pdf.composeWearPdf
@@ -100,6 +102,10 @@ import com.android.shaftschematic.ui.viewmodel.updateWearDiaReading
 import com.android.shaftschematic.ui.viewmodel.updateWearSpot
 import com.android.shaftschematic.ui.viewmodel.updateWearSpotReference
 import com.android.shaftschematic.util.DisplayUnits
+import com.android.shaftschematic.util.OutputFont
+import com.android.shaftschematic.util.FractionStyle
+import com.android.shaftschematic.util.DualUnitLayout
+import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.InkBand
 import com.android.shaftschematic.util.buildOpenPdfIntent
 import com.android.shaftschematic.util.inkBand
@@ -108,6 +114,7 @@ import com.android.shaftschematic.util.printShaftPdfPage
 import com.android.shaftschematic.util.renderPdfPageBitmap
 import com.android.shaftschematic.util.writeShaftPdfToUri
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.withContext
 
 /**
@@ -206,9 +213,12 @@ fun WearRoute(
     var previewBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
     var previewLoading by remember { mutableStateOf(false) }
     // Where the rendered page carries ink, for the tuning page strip (`PdfPreviewOverlay`'s
-    // `inkBand`). This tab has no live-drag channel — every control commits on release and
-    // re-renders the whole page — so there are no draft frames to skip: each pass measures.
+    // `inkBand`). Measured on sharp passes only — a draft frame from a live slider drag that
+    // resized the strip would shuffle the layout under a moving finger.
     var previewInkBand by remember { mutableStateOf<InkBand?>(null) }
+    // Live "Line thickness" / "Shaft height" drags on the preview's options panel — visual-only
+    // overrides, never a write. See [PreviewTuning].
+    val tuning = rememberPreviewTuning()
     // Which component's wear-detail overlay is open, if any. Doubles as the overlay's visibility
     // flag. A body, taper, or liner id (all pit-eligible); see ComponentWearDetailOverlay.
     var selectedComponentId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -286,51 +296,76 @@ fun WearRoute(
         }
     }
 
-    // pdfFractionStyle is a key only: the style reaches the ink through
-    // FractionTypography.active, which is not snapshot state — without the key a style
-    // change would leave the rasterized preview drawing the old construction. traceDepthFrac
-    // is a key for the other half of its pair: a job's own override rides `wearRecord`, but a
-    // change to the Settings default reaches an un-overridden document only through this.
-    // wearBandShadeFrac and wearJoinGapMaxMm are keys for the same reason: the composer reads
-    // them off the PdfPrefs snapshot taken inside this effect, which is not snapshot state either.
-    // unitOverrides and dualUnits are keys for the same reason: they reach the composer only
-    // through the displayUnits snapshot built below. pdfDualUnitLayout joins them — the
-    // composer reads it off the PdfPrefs snapshot, so without the key the sheet's own layout
-    // chips would change nothing on the page they sit over. runoutConfig.heightScale is keyed on
-    // its own (the rest of the config draws nothing here): it sizes the main profile band.
-    // pdfOutputFont is a key for the same reason: the typeface reaches the ink through
-    // OutputTypography.active, which is not snapshot state either; so are pdfThreadSlant and
-    // pdfThreadDensity, which reach the hatch through ThreadHatchStyle.
-    LaunchedEffect(showPreview, spec, unit, resolvedComponents,
-                   lineThicknessScale, pdfShadedBodies, pdfShadedTapers, pdfShadedLiners,
-                   wearRecord, blankDraft, pdfFractionStyle, pdfOutputFont, pdfThreadSlant, pdfThreadDensity, traceDepthFrac,
-                   wearBandShadeFrac, wearJoinGapMaxMm, unitOverrides, dualUnits, pdfDualUnitLayout,
-                   runoutConfig.heightScale) {
-        if (!showPreview) { previewBitmap = null; previewInkBand = null; return@LaunchedEffect }
-        previewLoading = true
-        val prefsSnapshot     = vm.currentPdfPrefs
-        val thicknessSnapshot = lineThicknessScale
-        val displayUnitsSnapshot = DisplayUnits(unit, unitOverrides, dualUnits)
-        val projectSnapshot = ProjectInfo(customer = customer, vessel = vessel,
-            jobNumber = jobNumber, side = shaftPosition, item = item)
-        val heightSnapshot = runoutConfig.heightScale
-        // The ink band is measured off the raw raster, on the same IO pass that produced it.
-        val (bmp, band) = withContext(Dispatchers.IO) {
-            val raster = renderPdfPageBitmap(ctx) { page ->
-                composeWearPdf(
-                    page = page, spec = spec, project = projectSnapshot, unit = unit,
-                    displayUnits = displayUnitsSnapshot,
-                    pdfPrefs = prefsSnapshot, resolvedComponents = resolvedComponents,
-                    lineThicknessScale = thicknessSnapshot, wearRecord = wearRecord,
-                    blankValues = blankDraft, traceDepthFrac = traceDepthFrac,
-                    heightScale = heightSnapshot,
-                )
+    // The render loop. One [WearRenderInputs] value carries EVERYTHING the composed sheet reads
+    // (an omission there is a stale-preview bug); `snapshotFlow { … }.conflate()` renders the
+    // newest inputs and drops the intermediate frames a "Line thickness" or "Shaft height" drag
+    // produces while a render is in flight — the Runout tab's loop. When the drag ends the
+    // override goes null, the inputs change once more, and that final pass rasterizes at full
+    // resolution.
+    LaunchedEffect(Unit) {
+        var previousWasDraft = false
+        snapshotFlow {
+            WearRenderInputs(
+                showPreview = showPreview,
+                spec = spec,
+                project = ProjectInfo(customer = customer, vessel = vessel,
+                    jobNumber = jobNumber, side = shaftPosition, item = item),
+                unit = unit,
+                resolved = resolvedComponents,
+                lineThicknessScale = tuning.lineThickness ?: lineThicknessScale,
+                // Only the height of `RunoutConfig` draws on this sheet (the main profile band).
+                heightScale = tuning.heightScale ?: runoutConfig.heightScale,
+                shadedBodies = pdfShadedBodies,
+                shadedTapers = pdfShadedTapers,
+                shadedLiners = pdfShadedLiners,
+                wearRecord = wearRecord,
+                blankValues = blankDraft,
+                traceDepthFrac = traceDepthFrac,
+                wearBandShadeFrac = wearBandShadeFrac,
+                wearJoinGapMaxMm = wearJoinGapMaxMm,
+                fractionStyle = pdfFractionStyle,
+                outputFont = pdfOutputFont,
+                threadSlant = pdfThreadSlant,
+                threadDensity = pdfThreadDensity,
+                dualUnitLayout = pdfDualUnitLayout,
+                displayUnits = DisplayUnits(unit, unitOverrides, dualUnits),
+                draft = tuning.active,
+            )
+        }.conflate().collect { inputs ->
+            if (!inputs.showPreview) {
+                previewBitmap = null
+                previewInkBand = null
+                previousWasDraft = false
+                return@collect
             }
-            raster to raster?.inkBand()
+            // A drag frame — and the sharp pass right after one — keeps the current page on
+            // screen: swapping in the spinner between frames would strobe the preview.
+            val quiet = inputs.draft || previousWasDraft
+            previousWasDraft = inputs.draft
+            if (!quiet) previewLoading = true
+            val prefsSnapshot = vm.currentPdfPrefs
+            // The ink band is measured off the raw raster, on the same IO pass that produced it,
+            // and only on a sharp pass (see `previewInkBand`).
+            val (bmp, band) = withContext(Dispatchers.IO) {
+                val raster = renderPdfPageBitmap(
+                    ctx,
+                    renderScale = previewRenderScale(inputs.draft),
+                ) { page ->
+                    composeWearPdf(
+                        page = page, spec = inputs.spec, project = inputs.project, unit = inputs.unit,
+                        displayUnits = inputs.displayUnits,
+                        pdfPrefs = prefsSnapshot, resolvedComponents = inputs.resolved,
+                        lineThicknessScale = inputs.lineThicknessScale, wearRecord = inputs.wearRecord,
+                        blankValues = inputs.blankValues, traceDepthFrac = inputs.traceDepthFrac,
+                        heightScale = inputs.heightScale,
+                    )
+                }
+                raster to raster?.takeIf { !inputs.draft }?.inkBand()
+            }
+            previewBitmap = bmp?.asImageBitmap()
+            if (!inputs.draft) previewInkBand = band
+            previewLoading = false
         }
-        previewBitmap = bmp?.asImageBitmap()
-        previewInkBand = band
-        previewLoading = false
     }
 
     // Capture colors before the Canvas block (DrawScope is not composable) — same technique
@@ -683,12 +718,14 @@ fun WearRoute(
                     // explicit-only pref says, so its row is hidden here rather than shown
                     // as a checkbox the page ignores.
                     showShadeExplicitBodiesOnly = false,
+                    // "Line thickness" and "Shaft height" redraw the page under the finger.
+                    tuning = tuning,
                 )
             },
             // The sheet reshapes this page, so it must not cover it: a full-screen sheet hid
             // the preview entirely, leaving the changes unjudgeable as they were made
-            // (on-device report). Each control commits on release and re-renders the page
-            // under the open sheet's strip.
+            // (on-device report). "Line thickness" and "Shaft height" redraw the page live
+            // while dragged ([tuning]); every other control commits on release and re-renders it.
             sheetTunesPage = true,
             inkBand = previewInkBand,
         )
@@ -955,3 +992,43 @@ private fun DrawScope.drawWearAffordances(
         }
     }
 }
+
+/**
+ * Everything one composed wear preview page depends on, in one structural-equality value — the
+ * render loop's unit of work.
+ *
+ * The shade flags, wear-area shade, taper–liner join gap and dual-unit layout never reach the
+ * composer from here: they travel inside the `PdfPrefs` snapshot taken at render time. They are
+ * held here because the loop must RE-RENDER when they change, and a `PdfPrefs` read is not
+ * snapshot state. The fraction style, output font and thread hatch reach the ink through
+ * process-wide mirrors (`FractionTypography`, `OutputTypography`, `ThreadHatchStyle`) — keys
+ * only, for the same reason. [traceDepthFrac] is the ONE resolved value (job override or the
+ * Settings default), so a change to the default re-renders an un-overridden job.
+ */
+private data class WearRenderInputs(
+    val showPreview: Boolean,
+    val spec: ShaftSpec,
+    val project: ProjectInfo,
+    val unit: UnitSystem,
+    val resolved: List<ResolvedComponent>,
+    /** The committed multiplier, or the in-progress one while "Line thickness" is dragged. */
+    val lineThicknessScale: Float,
+    /** The committed per-job height, or the in-progress one while "Shaft height" is dragged. */
+    val heightScale: Float,
+    val shadedBodies: Boolean,
+    val shadedTapers: Boolean,
+    val shadedLiners: Boolean,
+    val wearRecord: WearRecord,
+    val blankValues: Boolean,
+    val traceDepthFrac: Float,
+    val wearBandShadeFrac: Float,
+    val wearJoinGapMaxMm: Float,
+    val fractionStyle: FractionStyle,
+    val outputFont: OutputFont,
+    val threadSlant: Float,
+    val threadDensity: Float,
+    val dualUnitLayout: DualUnitLayout,
+    val displayUnits: DisplayUnits,
+    /** A tuning slider is mid-drag: raster at draft resolution and hold the spinner back. */
+    val draft: Boolean,
+)

@@ -1003,9 +1003,9 @@ multiplier scopes to the whole-shaft profile band only. Threaded through every
 `composeWearPdf` caller — the Wear tab's preview/export/print and the Output tab's
 Export-all — from the one shared per-job `runoutConfig.heightScale`; the Wear route's
 render-inputs record carries `heightScale` as a re-render key. The Wear options-sheet row
-(`RunoutWearOptionsSheet(showHeightSlider = true)`) has no live-tuning channel — the wear
-sheet commits on release like its other controls and re-renders the whole page, the same
-posture as its trace-depth/wear-band controls.
+(`RunoutWearOptionsSheet(showHeightSlider = true)`) redraws the page live while dragged, like
+the height slider on every other preview: the route passes a `PreviewTuning` and folds
+`tuning.heightScale` into its render inputs; nothing persists until release.
 
 - Range 50%–300% (`PROFILE_HEIGHT_SCALE_MIN/MAX`).
 - **100% = the default sizing curve** (`defaultShaftHeightPt`, `geom/ProfileCompression.kt`):

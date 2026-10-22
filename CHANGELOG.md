@@ -8,6 +8,15 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-22
 
+### fix(wear): Line thickness and Shaft height redraw the wear preview live
+
+- **Every PDF preview now treats the shared sliders alike.** On-device request: consistent
+  behavior across the app. The wear preview applied Line thickness and Shaft height only on
+  release; it now passes a `PreviewTuning` and renders through the same conflated `snapshotFlow`
+  loop as the Runout, Consolidated and Undercut previews (`WearRenderInputs`), with draft frames
+  mid-drag and a sharp pass on release. Nothing is written until release. The wear-only sliders
+  still commit on release.
+
 ### fix(undercut): Line thickness redraws the undercut preview live
 
 - **The page follows the slider while it is dragged.** On-device report: on the undercut PDF
