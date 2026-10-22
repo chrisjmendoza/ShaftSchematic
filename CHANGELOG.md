@@ -8,6 +8,15 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-22
 
+### fix(calculators): the keyboard no longer hides the bottom of the calculator dialogs
+
+- **The keyway calculator's cutter fields and Close button stay reachable while typing.**
+  On-device report: with a cutter width focused, the keyboard covered the rest of the dialog.
+  The dialog window panned (slid up just far enough to show the cursor) instead of resizing, so
+  its scroll column had nothing to scroll. The keyway and taper calculators now switch their
+  window to resize above the keyboard (`DialogImeResize`), and the dialog shrinks into the space
+  that is left and scrolls.
+
 ### feat(undercut): "Total length of cuts" can be turned off
 
 - **The overall dimension across a section's cuts is now optional.** On-device request from the

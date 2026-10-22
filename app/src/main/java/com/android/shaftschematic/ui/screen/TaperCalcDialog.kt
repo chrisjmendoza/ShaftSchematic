@@ -97,6 +97,7 @@ fun TaperCalcDialog(
         modifier = Modifier.testTag("taper_calc_dialog"),
         title = { Text("Taper calculator") },
         text = {
+            DialogImeResize()
             Column(
                 Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp),

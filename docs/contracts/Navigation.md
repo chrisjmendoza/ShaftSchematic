@@ -52,7 +52,11 @@ Route graph (AppNav.kt NavHost)
     `defaultUnit`: `BoreKeywayCalcDialog`, `TaperCalcDialog`
     (`docs/DESIGN_INTENT.md` §3.8, solve in `util/TaperCalcMath.kt`), `UnitConverterDialog`.
     Calculators are document-free — they read nothing from the spec, write nothing back, and
-    never mark the session dirty.
+    never mark the session dirty. The keyway and taper calculators call `DialogImeResize()`
+    (`ui/screen/DialogImeResize.kt`) in their content so the dialog window RESIZES above the
+    keyboard instead of panning; their scroll column can then reach the fields below the
+    focused one and the Close button (a panned dialog left the cutter fields under the
+    keyboard — on-device report).
 - `settings` → SettingsRoute — main page plus two in-screen sub-pages (`SettingsPage`:
   Preview Colors, PDF Export), back-arrow returns to the main page before leaving the route
 - `about` → AboutRoute
