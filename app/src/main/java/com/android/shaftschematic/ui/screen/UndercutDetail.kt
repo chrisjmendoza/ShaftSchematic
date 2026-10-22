@@ -160,7 +160,7 @@ import com.android.shaftschematic.model.UndercutRecord
 import com.android.shaftschematic.model.UndercutReference
 import com.android.shaftschematic.pdf.formatDiaWithUnit
 import com.android.shaftschematic.pdf.buildUndercutStripTitle
-import com.android.shaftschematic.geom.undercutSheetNumbers
+import com.android.shaftschematic.geom.undercutSectionCuts
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.pdf.UNDERCUT_RAIL_WITNESS_GAP_PT
 import com.android.shaftschematic.pdf.UNDERCUT_TOTAL_RAIL_ABOVE_PT
@@ -404,12 +404,10 @@ fun UndercutWindowDetailOverlay(
     val stripLiner = (strip as? UndercutStrip.LinerStrip)
         ?.let { UndercutLinerSpan(it.linerId, it.linerStartMm, it.linerEndMm) }
 
-    // The strip's member undercuts, aft → fwd. Ids the record no longer holds simply drop out.
+    // The strip's member undercuts, aft → fwd — the section's numbering order, the same list the
+    // Undercut tab numbers this section's rows from. Ids the record no longer holds drop out.
     val undercuts = remember(undercutRecord, strip) {
-        strip.undercutIds
-            .distinct()
-            .mapNotNull { id -> undercutRecord.undercuts.firstOrNull { it.id == id } }
-            .sortedBy { it.startFromAftMm }
+        undercutSectionCuts(undercutRecord.undercuts, strip.undercutIds)
     }
 
     // ── Draft state ──────────────────────────────────────────────────────────
@@ -466,8 +464,10 @@ fun UndercutWindowDetailOverlay(
     val baselines = remember(undercuts, linerSpans) {
         undercuts.associate { it.id to undercutDraftOf(it, linerSpans) }
     }
-    // Every STORED cut's 1-based page position — the number its card title carries — so an overlap
-    // can name its partner. The pending card is not stored, so it is never anyone's partner.
+    // Every STORED cut's 1-based page position — the number its card title carries, the number
+    // drawn inside it on the canvas, and the one an overlap names its partner by: ONE count within
+    // this section, so everything in view agrees (on-device ruling). The pending card is not
+    // stored, so it is never anyone's partner and draws no number.
     val pagePositionById = remember(pageIds) {
         pageIds.withIndex()
             .filter { it.value != PENDING_UNDERCUT_ID }
@@ -1341,9 +1341,7 @@ fun UndercutWindowDetailOverlay(
                     // row at 0 — only offsets matter); where the leader zone is shorter than the
                     // number plus a pad each side, the Ø band's top gap grows by the shortfall, so
                     // a number never sits on a Ø value.
-                    val cutNumbers = remember(undercutRecord.undercuts, oalMm) {
-                        undercutSheetNumbers(undercutRecord.undercuts, oalMm)
-                    }
+                    val cutNumbers = pagePositionById
                     val cutNumberGapPx = with(density) {
                         val lay0 = computeUndercutWindowLayout(
                             widthPx = canvasWidthPx.toFloat(),

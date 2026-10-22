@@ -159,13 +159,13 @@ class UndercutCutNumberMathTest {
     }
 
     @Test
-    fun `numbers come from the sheet numbering, AFT to FWD, and a cut without one draws nothing`() {
-        // Record order FWD first; the sheet numbers them by position.
+    fun `numbers come from the section numbering, AFT to FWD, and a cut without one draws nothing`() {
+        // Record order FWD first; the section numbers them by position.
         val cuts = listOf(
             Undercut(id = "fwd", startFromAftMm = 500f, lengthMm = 40f, diaMm = 180f),
             Undercut(id = "aft", startFromAftMm = 100f, lengthMm = 40f, diaMm = 180f),
         )
-        val numbers = undercutSheetNumbers(cuts, oalMm = 1000f)
+        val numbers = undercutSections(cuts, listOf(listOf("fwd", "aft"))).single().numbers
         val placed = place(
             listOf(
                 notch("fwd", 500f, 540f, floor = 180f),

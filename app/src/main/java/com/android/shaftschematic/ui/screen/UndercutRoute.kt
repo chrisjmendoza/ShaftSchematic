@@ -117,7 +117,7 @@ import com.android.shaftschematic.geom.undercutReferenceParentSpan
 import com.android.shaftschematic.geom.undercutReferenceLabel
 import com.android.shaftschematic.geom.undercutReferenceLinerFor
 import com.android.shaftschematic.geom.undercutSetPositions
-import com.android.shaftschematic.geom.undercutSheetNumbers
+import com.android.shaftschematic.geom.undercutSections
 import com.android.shaftschematic.geom.undercutMissingDiaMessage
 import com.android.shaftschematic.geom.undercutsMissingDia
 import com.android.shaftschematic.model.ProjectInfo
@@ -202,11 +202,12 @@ import kotlin.math.roundToInt
  *   leaves no cut behind; a bare-shaft add opens a synthetic empty window at the chosen S.E.T.
  *   ([undercutBareShaftAddStrip]) until the confirmed cut's real strip takes over. Precision
  *   comes from the overlay's numeric fields, never from the tap (wear posture).
- * - **Undercut list** — one compact row per recorded cut, numbered and ordered AFT → FWD
- *   (`undercutSheetNumbers` — the numbers the detail page shows; they print on no sheet): its
+ * - **Undercut list** — one compact row per recorded cut, grouped under its section's title
+ *   (liner, or bare-shaft cluster) and numbered AFT → FWD from 1 within the section
+ *   (`undercutSections` — the numbers that section's detail page shows; they print on no sheet): its
  *   distance under its own authored reference, length, Ø ("Ø not entered" when unmeasured), and a stale-overrun warning. Tapping a
- *   row opens that cut's strip; the trailing icon deletes it confirm-free, with a "Cut N deleted"
- *   snackbar Undo (`restoreUndercut`).
+ *   row opens that cut's strip; the trailing icon deletes it confirm-free, with a "Cut N deleted —
+ *   <section>" snackbar Undo (`restoreUndercut`).
  * - **Drawing settings** — collapsed under the list, out of the authoring flow (usability
  *   review: nothing between Add and the list may read as a required step): "Page" (per job —
  *   Auto | Landscape | Portrait, [UndercutPageOrientationRow]), "Drawn depth" (a
@@ -519,8 +520,34 @@ fun UndercutRoute(
         }
     }
 
-    // The cut numbers the list and the detail page show (AFT → FWD), and the cuts that would print with no Ø.
-    val sheetNumbers = remember(undercutRecord, oalMm) { undercutSheetNumbers(undercutRecord.undercuts, oalMm) }
+    // The list's sections: the strips the detail page opens, AFT → FWD, each numbering its own cuts
+    // from 1 — the count the detail page draws and titles its cards with, so a row's number is the
+    // number in view on that section's page (on-device ruling). Cuts no strip holds trail as a group.
+    val listSections = remember(undercutRecord, strips) {
+        undercutSections(undercutRecord.undercuts, strips.map { it.undercutIds })
+    }
+    // Each section's heading: its "Sections to print" title (the strip title the sheet prints),
+    // looked up by liner, or by member cut for a bare-shaft cluster.
+    val sectionTitles = remember(spec, resolvedComponents, undercutRecord, unit, unitOverrides, dualUnits, strips) {
+        val titled = undercutPrintSections(
+            spec, resolvedComponents, undercutRecord, blankDraft = false,
+            DisplayUnits(unit, unitOverrides, dualUnits),
+        )
+        val byLiner = titled.mapNotNull { sec ->
+            (sec.strip as? UndercutStrip.LinerStrip)?.let { it.linerId to sec.label }
+        }.toMap()
+        val byCut = titled.filter { it.strip is UndercutStrip.FreeStrip }
+            .flatMap { sec -> sec.strip.undercutIds.map { it to sec.label } }
+            .toMap()
+        strips.map { strip ->
+            when (strip) {
+                is UndercutStrip.LinerStrip -> byLiner[strip.linerId] ?: "Liner"
+                is UndercutStrip.FreeStrip ->
+                    strip.undercutIds.firstNotNullOfOrNull { byCut[it] } ?: "Bare shaft"
+            }
+        }
+    }
+    // The cuts that would print with no Ø.
     val missingDia = remember(undercutRecord) { undercutsMissingDia(undercutRecord.undercuts) }
 
     // The list's delete: confirm-free, with the detail page's snackbar Undo — the removed cut and
@@ -529,7 +556,7 @@ fun UndercutRoute(
     // restored it). Nothing navigates: the list stays where it is.
     val listSnackbar = remember { SnackbarHostState() }
     val listSnackbarScope = rememberCoroutineScope()
-    fun deleteFromList(u: Undercut, number: Int) {
+    fun deleteFromList(u: Undercut, number: Int, sectionTitle: String) {
         val index = undercutRecord.undercuts.indexOfFirst { it.id == u.id }
         if (index < 0) return
         val removed = undercutRecord.undercuts[index]
@@ -538,7 +565,7 @@ fun UndercutRoute(
             // One pending delete at a time: a second delete replaces the first's offer.
             listSnackbar.currentSnackbarData?.dismiss()
             val result = listSnackbar.showSnackbar(
-                message = "Cut $number deleted",
+                message = undercutListDeletedMessage(number, sectionTitle),
                 actionLabel = "Undo",
                 duration = SnackbarDuration.Long,
             )
@@ -908,12 +935,25 @@ fun UndercutRoute(
                 }
                 val setPositions = undercutSetPositions(spec)
                 val linerTitles = buildLinerTitleById(spec)
-                // The one numbering (`undercutSheetNumbers`, AFT → FWD), so row N is the cut the
-                // detail page labels N. Display order only — the record keeps its own.
-                undercutRecord.undercuts
-                    .sortedBy { sheetNumbers[it.id] ?: Int.MAX_VALUE }
-                    .forEach { u ->
-                        val number = sheetNumbers[u.id] ?: 0
+                // One group per section, AFT → FWD, numbered from 1 within it (`undercutSections`),
+                // so row N under a heading is the cut that section's detail page labels N. Display
+                // order only — the record keeps its own.
+                listSections.forEachIndexed { groupIndex, section ->
+                    val title = section.sectionIndex?.let { sectionTitles.getOrNull(it) }
+                        ?: UNDERCUT_LIST_LOOSE_TITLE
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .padding(top = if (groupIndex == 0) 0.dp else 10.dp, bottom = 2.dp)
+                            .testTag(
+                                section.sectionIndex?.let { "undercut_list_section_$it" }
+                                    ?: "undercut_list_section_loose",
+                            ),
+                    )
+                    section.cuts.forEachIndexed { i, u ->
+                        val number = i + 1
                         UndercutListRow(
                             number = number,
                             undercut = u,
@@ -926,9 +966,10 @@ fun UndercutRoute(
                             aftSetXMm = setPositions.first,
                             fwdSetXMm = setPositions.second,
                             onOpen = { anchorToUndercut(u.id) },
-                            onDelete = { deleteFromList(u, number) },
+                            onDelete = { deleteFromList(u, number, title) },
                         )
                     }
+                }
             }
         }
     }
@@ -1526,6 +1567,16 @@ internal fun undercutBareShaftAddStrip(
     return UndercutStrip.FreeStrip(UndercutWindow(start - pad, end + pad, emptyList()))
 }
 
+/** The "Recorded undercuts" heading over cuts no section holds (zero length, or off a shortened shaft). */
+internal const val UNDERCUT_LIST_LOOSE_TITLE = "Not on the shaft"
+
+/**
+ * The list delete's snackbar. A number alone is ambiguous once every section counts from 1, so the
+ * message names the section too: `Cut 3 deleted — FWD Liner Ø10.000"`.
+ */
+internal fun undercutListDeletedMessage(number: Int, sectionTitle: String): String =
+    "Cut $number deleted — $sectionTitle"
+
 /** A Print ([export] false) or Export waiting on "Print without diameters?" — [count] cuts lack a Ø. */
 private class UndercutMissingDiaAsk(val count: Int, val export: Boolean, val action: () -> Unit)
 
@@ -1695,8 +1746,8 @@ private fun openUndercutPdf(context: Context, uri: Uri) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * One recorded undercut, summarized: its [number] (`undercutSheetNumbers`, the number the detail
- * page shows inside its section — an input aid, never printed), its distance under the reference it was authored against (with that
+ * One recorded undercut, summarized: its [number] (counted within its section, `undercutSections` —
+ * the number that section's detail page shows inside the cut — an input aid, never printed), its distance under the reference it was authored against (with that
  * reference's short tag), its length, and its Ø — "—" while unmeasured, with a "Ø not entered" note
  * under it, since such a cut prints with no diameter. A cut whose span no longer fits the shaft
  * (`isUndercutStaleOverrun`) leads with a warning icon, the same non-blocking classifier the card

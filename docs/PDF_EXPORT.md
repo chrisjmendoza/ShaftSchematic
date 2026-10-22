@@ -818,7 +818,8 @@ between body and liner still shows where the liner was. One pure builder
 (`geom/LinerOutlineMath.kt`), part of the drawing LOOK (rides Drawing profiles), and like line art
 it reaches only this composer. See `docs/contracts/UndercutDrawing.md`.
 
-**No cut numbers on the undercut sheet.** The cut numbering (`undercutSheetNumbers`, AFT → FWD)
+**No cut numbers on the undercut sheet.** The cut numbering (`undercutSections`, AFT → FWD, counted
+within each section)
 is an input aid only — the Undercut tab's list and the zoomed detail canvas show it — and it prints
 on no sheet, main profile and detail strips alike (on-device ruling). There is no pref for it. See
 `docs/contracts/UndercutDrawing.md`.
