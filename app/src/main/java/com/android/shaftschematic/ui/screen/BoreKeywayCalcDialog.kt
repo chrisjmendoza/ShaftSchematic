@@ -76,6 +76,8 @@ fun BoreKeywayCalcDialog(
         modifier = Modifier.testTag("bore_kw_calc_dialog"),
         title = { Text("Keyway rough-cutter depth") },
         text = {
+            // The cutter fields sit at the dialog's foot, under the keyboard once one is focused.
+            DialogImeResize()
             Column(
                 Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
