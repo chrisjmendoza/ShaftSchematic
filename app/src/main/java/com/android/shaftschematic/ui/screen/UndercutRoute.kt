@@ -67,6 +67,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -121,6 +122,7 @@ import com.android.shaftschematic.geom.undercutMissingDiaMessage
 import com.android.shaftschematic.geom.undercutsMissingDia
 import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.UndercutRecord
 import com.android.shaftschematic.model.Undercut
 import com.android.shaftschematic.model.UndercutReference
 import com.android.shaftschematic.model.collidingIds
@@ -154,7 +156,11 @@ import com.android.shaftschematic.ui.viewmodel.setUndercutSetDatum
 import com.android.shaftschematic.ui.viewmodel.setUndercutExaggeration
 import com.android.shaftschematic.ui.viewmodel.updateUndercut
 import com.android.shaftschematic.ui.viewmodel.updateUndercutReference
+import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.util.DisplayUnits
+import com.android.shaftschematic.util.DualUnitLayout
+import com.android.shaftschematic.util.FractionStyle
+import com.android.shaftschematic.util.OutputFont
 import com.android.shaftschematic.util.InkBand
 import com.android.shaftschematic.util.inkBand
 import com.android.shaftschematic.util.launchPicker
@@ -165,6 +171,7 @@ import com.android.shaftschematic.util.printShaftPdfPage
 import com.android.shaftschematic.util.renderPdfPageBitmap
 import com.android.shaftschematic.util.writeShaftPdfToUri
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
@@ -283,9 +290,12 @@ fun UndercutRoute(
     var previewBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
     var previewLoading by remember { mutableStateOf(false) }
     // Where the rendered page carries ink, for the tuning page strip (`PdfPreviewOverlay`'s
-    // `inkBand`). This tab has no live-drag channel — every control commits on release and
-    // re-renders the whole page — so there are no draft frames to skip: each pass measures.
+    // `inkBand`). Measured on sharp passes only — a draft frame from a live slider drag that
+    // resized the strip would shuffle the layout under a moving finger.
     var previewInkBand by remember { mutableStateOf<InkBand?>(null) }
+    // Live "Line thickness" drags on the preview's options panel — visual-only overrides, never
+    // a write. See [PreviewTuning].
+    val tuning = rememberPreviewTuning()
     // What anchors the open detail overlay. Strips are derived state (they re-cluster on every
     // record edit), so the anchor is an id rather than a strip index and the strip is looked up
     // fresh below. Two anchors, one live at a time: a **liner** id keeps a liner strip open even
@@ -573,49 +583,81 @@ fun UndercutRoute(
         }
     }
 
-    // pdfFractionStyle is a key only: the style reaches the ink through
-    // FractionTypography.active, which is not snapshot state — without the key a style
-    // change would leave the rasterized preview drawing the old construction. unitOverrides
-    // and dualUnits are keys for the same reason: they reach the composer only through the
-    // displayUnits snapshot built below, not through any field already keyed above.
-    // pdfDualUnitLayout joins them — the composer reads it off the PdfPrefs snapshot, so
-    // without the key the sheet's own layout chips would change nothing on the page.
-    // pdfOutputFont is a key for the same reason: the typeface reaches the ink through
-    // OutputTypography.active, which is not snapshot state either; so are pdfThreadSlant and
-    // pdfThreadDensity, which reach the hatch through ThreadHatchStyle. pdfArrowSizePt reaches the
-    // composer only through the PdfPrefs snapshot, so it is a key like the dual-unit layout.
-    LaunchedEffect(showPreview, spec, unit, resolvedComponents,
-                   lineThicknessScale, pdfShadedBodies, pdfShadedTapers, pdfShadedLiners,
-                   pdfUndercutLineArt, pdfUndercutLinerOutline, pdfUndercutSplitAtLinerEdge,
-                   undercutRecord, blankDraft, pdfFractionStyle, pdfOutputFont, pdfThreadSlant, unitOverrides,
-                   dualUnits, pdfDualUnitLayout, pdfThreadDensity, pdfArrowSizePt) {
-        if (!showPreview) { previewBitmap = null; previewInkBand = null; return@LaunchedEffect }
-        previewLoading = true
-        val prefsSnapshot     = vm.currentPdfPrefs
-        val thicknessSnapshot = lineThicknessScale
-        val displayUnitsSnapshot = DisplayUnits(unit, unitOverrides, dualUnits)
-        val projectSnapshot = ProjectInfo(customer = customer, vessel = vessel,
-            jobNumber = jobNumber, side = shaftPosition, item = item)
-        // The ink band is measured off the raw raster, on the same IO pass that produced it, so
-        // a portrait page's blank paper is cropped by the band of THAT page.
-        val (bmp, band) = withContext(Dispatchers.IO) {
-            // The page shape follows the sheet's section count and the job's choice; both of its
-            // inputs (`undercutRecord`, `blankDraft`, plus the geometry) are keys above.
-            val orientation = undercutSheetOrientation(spec, resolvedComponents, undercutRecord, blankDraft)
-            val raster = renderPdfPageBitmap(ctx, orientation = orientation) { page ->
-                composeUndercutPdf(
-                    page = page, spec = spec, project = projectSnapshot, unit = unit,
-                    displayUnits = displayUnitsSnapshot,
-                    pdfPrefs = prefsSnapshot, resolvedComponents = resolvedComponents,
-                    undercutRecord = undercutRecord, lineThicknessScale = thicknessSnapshot,
-                    blankValues = blankDraft,
-                )
+    // The render loop. One [UndercutRenderInputs] value carries EVERYTHING the composed sheet
+    // reads (an omission there is a stale-preview bug); `snapshotFlow { … }.conflate()` renders
+    // the newest inputs and drops the intermediate frames a "Line thickness" drag produces while
+    // a render is in flight — the Runout tab's loop. When the drag ends the override goes null,
+    // the inputs change once more, and that final pass rasterizes at full resolution.
+    LaunchedEffect(Unit) {
+        var previousWasDraft = false
+        snapshotFlow {
+            UndercutRenderInputs(
+                showPreview = showPreview,
+                spec = spec,
+                project = ProjectInfo(customer = customer, vessel = vessel,
+                    jobNumber = jobNumber, side = shaftPosition, item = item),
+                unit = unit,
+                resolved = resolvedComponents,
+                lineThicknessScale = tuning.lineThickness ?: lineThicknessScale,
+                shadedBodies = pdfShadedBodies,
+                shadedTapers = pdfShadedTapers,
+                shadedLiners = pdfShadedLiners,
+                undercutLineArt = pdfUndercutLineArt,
+                undercutLinerOutline = pdfUndercutLinerOutline,
+                undercutSplitAtLinerEdge = pdfUndercutSplitAtLinerEdge,
+                undercutRecord = undercutRecord,
+                blankValues = blankDraft,
+                fractionStyle = pdfFractionStyle,
+                outputFont = pdfOutputFont,
+                threadSlant = pdfThreadSlant,
+                threadDensity = pdfThreadDensity,
+                dualUnitLayout = pdfDualUnitLayout,
+                arrowSizePt = pdfArrowSizePt,
+                displayUnits = DisplayUnits(unit, unitOverrides, dualUnits),
+                draft = tuning.active,
+            )
+        }.conflate().collect { inputs ->
+            if (!inputs.showPreview) {
+                previewBitmap = null
+                previewInkBand = null
+                previousWasDraft = false
+                return@collect
             }
-            raster to raster?.inkBand()
+            // A drag frame — and the sharp pass right after one — keeps the current page on
+            // screen: swapping in the spinner between frames would strobe the preview.
+            val quiet = inputs.draft || previousWasDraft
+            previousWasDraft = inputs.draft
+            if (!quiet) previewLoading = true
+            val prefsSnapshot = vm.currentPdfPrefs
+            // The ink band is measured off the raw raster, on the same IO pass that produced it,
+            // so a portrait page's blank paper is cropped by the band of THAT page — and only on
+            // a sharp pass (see `previewInkBand`).
+            val (bmp, band) = withContext(Dispatchers.IO) {
+                // The page shape follows the sheet's section count and the job's choice; both of
+                // its inputs (`undercutRecord`, `blankValues`, plus the geometry) ride the inputs.
+                val orientation = undercutSheetOrientation(
+                    inputs.spec, inputs.resolved, inputs.undercutRecord, inputs.blankValues,
+                )
+                val raster = renderPdfPageBitmap(
+                    ctx,
+                    renderScale = previewRenderScale(inputs.draft),
+                    orientation = orientation,
+                ) { page ->
+                    composeUndercutPdf(
+                        page = page, spec = inputs.spec, project = inputs.project, unit = inputs.unit,
+                        displayUnits = inputs.displayUnits,
+                        pdfPrefs = prefsSnapshot, resolvedComponents = inputs.resolved,
+                        undercutRecord = inputs.undercutRecord,
+                        lineThicknessScale = inputs.lineThicknessScale,
+                        blankValues = inputs.blankValues,
+                    )
+                }
+                raster to raster?.takeIf { !inputs.draft }?.inkBand()
+            }
+            previewBitmap = bmp?.asImageBitmap()
+            if (!inputs.draft) previewInkBand = band
+            previewLoading = false
         }
-        previewBitmap = bmp?.asImageBitmap()
-        previewInkBand = band
-        previewLoading = false
     }
 
     // Capture colors before the Canvas block (DrawScope is not composable) — same technique
@@ -1395,12 +1437,14 @@ fun UndercutRoute(
                     vm = vm,
                     blankDraft = blankDraft,
                     onSetBlankDraft = { blankDraft = it },
+                    // The page under this panel redraws live while "Line thickness" is dragged.
+                    tuning = tuning,
                 )
             },
             // The panel's controls redraw this page, so it must not cover it: the plain cap
             // over the centered full-size page left the page behind the panel and the changes
-            // unwatchable (on-device report). Each control commits on release and re-renders
-            // the page under the open panel's strip — the wear sheet's posture.
+            // unwatchable (on-device report). "Line thickness" redraws the page live under the
+            // finger ([tuning]); every other control commits on release and re-renders it.
             sheetTunesPage = true,
             inkBand = previewInkBand,
         )
@@ -1486,6 +1530,44 @@ internal fun undercutBareShaftAddStrip(
 private class UndercutMissingDiaAsk(val count: Int, val export: Boolean, val action: () -> Unit)
 
 /**
+ * Everything one composed undercut preview page depends on, in one structural-equality value —
+ * the render loop's unit of work.
+ *
+ * The shade flags, line art, liner outline, split-at-liner-edge, dual-unit layout and arrow size
+ * never reach the composer from here: they travel inside the `PdfPrefs` snapshot taken at render
+ * time. They are held here because the loop must RE-RENDER when they change, and a `PdfPrefs`
+ * read is not snapshot state. The fraction style, output font and thread hatch reach the ink
+ * through process-wide mirrors (`FractionTypography`, `OutputTypography`, `ThreadHatchStyle`) —
+ * keys only, for the same reason.
+ */
+private data class UndercutRenderInputs(
+    val showPreview: Boolean,
+    val spec: ShaftSpec,
+    val project: ProjectInfo,
+    val unit: UnitSystem,
+    val resolved: List<ResolvedComponent>,
+    /** The committed multiplier, or the in-progress one while "Line thickness" is dragged. */
+    val lineThicknessScale: Float,
+    val shadedBodies: Boolean,
+    val shadedTapers: Boolean,
+    val shadedLiners: Boolean,
+    val undercutLineArt: Boolean,
+    val undercutLinerOutline: Boolean,
+    val undercutSplitAtLinerEdge: Boolean,
+    val undercutRecord: UndercutRecord,
+    val blankValues: Boolean,
+    val fractionStyle: FractionStyle,
+    val outputFont: OutputFont,
+    val threadSlant: Float,
+    val threadDensity: Float,
+    val dualUnitLayout: DualUnitLayout,
+    val arrowSizePt: Float,
+    val displayUnits: DisplayUnits,
+    /** A tuning slider is mid-drag: raster at draft resolution and hold the spinner back. */
+    val draft: Boolean,
+)
+
+/**
  * The undercut drawing's PDF options — ONE configuration of the shared [RunoutWearOptionsSheet]
  * behind every surface that opens it: the preview's Tune panel, the tab's "Options" button and the
  * detail page's Options icon. Every row is a remote control for the one app-wide `PdfPrefs` value
@@ -1504,6 +1586,12 @@ internal fun UndercutOptionsSheet(
      * here (on-device request: fewer controls).
      */
     showThreadControls: Boolean,
+    /**
+     * Live-tuning sink, passed only by the PDF preview — the one surface whose page re-renders
+     * from it. The tab's and the detail page's Options panels sit over on-screen canvases and
+     * keep commit-on-release.
+     */
+    tuning: PreviewTuning? = null,
 ) {
     val spec by vm.spec.collectAsState()
     val dualUnits by vm.dualUnits.collectAsState()
@@ -1559,6 +1647,7 @@ internal fun UndercutOptionsSheet(
         threadDensity = pdfThreadDensity,
         blankDraft = blankDraft,
         onSetBlankDraft = onSetBlankDraft,
+        tuning = tuning,
         undercutPageOrientation = undercutRecord.pageOrientation,
         undercutStripCount = stripCount,
         undercutResolvedOrientation = resolveUndercutPageOrientation(undercutRecord.pageOrientation, stripCount),

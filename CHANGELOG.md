@@ -8,6 +8,15 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-22
 
+### fix(undercut): Line thickness redraws the undercut preview live
+
+- **The page follows the slider while it is dragged.** On-device report: on the undercut PDF
+  preview, Line thickness only took effect on release, unlike the Schematic preview. The preview
+  now passes a `PreviewTuning` to its options panel and renders through the Runout tab's loop — a
+  conflated `snapshotFlow` of one `UndercutRenderInputs` value, half-resolution frames while the
+  finger is down, a sharp pass on release, the ink band measured on sharp passes only. Nothing is
+  written until release, as before. The tab's and detail page's Options panels are unchanged.
+
 ### fix(undercut): detail canvas — centred cuts, shorter S.E.T. lead stock, half the edge inset
 
 - **Both ends get the same stock.** On-device request: "give the edges more symmetry and center

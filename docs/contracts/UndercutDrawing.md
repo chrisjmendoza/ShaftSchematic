@@ -110,7 +110,11 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
   zoomed drawing for the welder or machinist." The blank-draft caption reads "Job info and overall
   length are blanked; recorded undercuts are omitted — a fresh form." (usability review: plain
   words, no "OAL" or "S.E.T.-distance" jargon in the first lines a shop user reads).
-- Blank-draft (write-in) toggle, PDF Preview (`PdfPreviewOverlay` + `UndercutOptionsSheet`),
+- Blank-draft (write-in) toggle, PDF Preview (`PdfPreviewOverlay` + `UndercutOptionsSheet`;
+  its "Line thickness" slider redraws the page live while dragged — the preview passes a
+  `PreviewTuning` and renders through a conflated `snapshotFlow` of `UndercutRenderInputs`, draft
+  raster mid-drag, sharp on release, nothing persisted until release; every other control
+  commits on release),
   Export (SAF `CreateDocument`), Print (`printShaftPdfPage`) — straight ports of the wear tab's
   flows, all calling `composeUndercutPdf`. The preview is composed AFTER the detail overlay, with
   its Back handler composed only while it is open, so a preview opened from the detail page draws
