@@ -46,15 +46,16 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
   button opens and shares its export gate; Options toggles the undercut preview's options panel
   (`UndercutOptionsSheet` — the ONE configuration of `RunoutWearOptionsSheet` behind the preview's
   Tune panel, this button and the detail page's Options icon) in the non-modal
-  `PreviewOptionsPanel` over the tab, closed by its close button, the button or Back. The foot's
-  Print / Preview / Export trio stays.
+  `PreviewOptionsPanel` over the tab, closed by its close button, the button or Back — capped
+  below the overview canvas (`undercutDetailOptionsMaxHeightDp`, the helper the detail page uses)
+  so the drawing it restyles stays in view. The foot's Print / Preview / Export trio stays.
 - **"Add undercut"** button (`testTag "undercut_add"`): records NOTHING — it opens the "Where is
   the cut?" chooser (see "Add chooser" below), whose answer opens a detail page on a pending card.
 - **"Drawing settings" section** (shown once at least one cut is recorded, BELOW the "Recorded
   undercuts" list, collapsed by default behind a header row with a chevron, `testTag
   "undercut_drawing_settings_toggle"` — usability review: nothing between Add and the list may
   read as a required step). It holds the rows below, in this order: Page, Distance to S.E.T.,
-  Split cuts at liner edges, Drawn depth, Draw to the shaft end. Tab block order
+  Split cuts at liner edges, Total length of cuts, Drawn depth, Draw to the shaft end. Tab block order
   (COMPACT/MEDIUM): intro, overview canvas, Preview | Options, Add undercut, Recorded undercuts,
   Drawing settings, then the print group — "Sections to print" (two or more sections; never
   collapsed), the blank-draft switch and Print / Preview / Export.
@@ -90,7 +91,7 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
   section off, Print and Export are disabled with `UNDERCUT_NONE_SELECTED_MESSAGE` (testTag
   `undercut_none_selected_message`) while Preview still opens. See "Sections to print" under PDF
   layout.
-- **"Drawn depth" slider** (the fourth row of Drawing settings; label formerly "Cut depth
+- **"Drawn depth" slider** (the fifth row of Drawing settings; label formerly "Cut depth
   exaggeration", caption "Makes shallow cuts easier to see — 0% is true scale. Printed Ø values
   never change. Saved with this job."): 0 – `UNDERCUT_EXAGGERATION_MAX_FRAC` with a live "%" readout,
   committing continuously through `ShaftViewModel.setUndercutExaggeration` — the OAL field's
@@ -108,7 +109,7 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
   panel as `pdf_undercut_total_rail`): drives `UndercutRecord.showTotalRail` through
   `ShaftViewModel.setUndercutShowTotalRail` (same record path, same undo history). Shows the
   RESOLVED value; while the job has not chosen, the caption says it follows the Settings default.
-  See "Total length of cuts" under "Sections to print" below.
+  See "Total length of cuts" under PDF layout below.
 - **"Recorded undercuts" list** below the canvas: a read-only summary + delete row per cut,
   grouped under each section's title and numbered from 1 within the section (`undercutSections`,
   AFT → FWD) — not an edit card (see "UI contract").
@@ -120,7 +121,9 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
   its "Line thickness" slider redraws the page live while dragged — the preview passes a
   `PreviewTuning` and renders through a conflated `snapshotFlow` of `UndercutRenderInputs`, draft
   raster mid-drag, sharp on release, nothing persisted until release; every other control
-  commits on release),
+  commits on release; while the options panel is open the preview takes the page-strip layout —
+  the page's ink band pinned under the app bar, the panel capped below it, the strip height read
+  off the rendered bitmap's shape (`pageAspectOf`) so a portrait sheet fills the width),
   Export (SAF `CreateDocument`), Print (`printShaftPdfPage`) — straight ports of the wear tab's
   flows, all calling `composeUndercutPdf`. The preview is composed AFTER the detail overlay, with
   its Back handler composed only while it is open, so a preview opened from the detail page draws

@@ -9,7 +9,8 @@
 
 ## PdfExportRoute
 
-Exports the current shaft to a **single-page PDF** (US Letter landscape, 792×612 pt)
+Exports the current shaft to a **single-page PDF** (US Letter landscape, 792×612 pt — the
+undercut drawing alone may resolve portrait, 612×792, per `undercutSheetOrientation`)
 via SAF, delegating drawing to `composeShaftPdf`.
 
 - Launch system "Create Document" (no storage permissions); guard against multiple
@@ -40,6 +41,7 @@ via SAF, delegating drawing to `composeShaftPdf`.
 | `runoutBubbleDropScale` | `1.0` | Multiplier on the drop from the shaft surface to the first bubble row (`SHORT_LEADER_PT` / `RunoutBubbleGeometry.shortLeader`), same two draw sites as `runoutBubbleScale`. Stored clamp 0.5–2.0; UI range 50–200%. Experimental — exists to find where the pointer lines land best and may be retired |
 | `undercutLinerOutline` | `true` | Faint dotted outline of each liner's original OD and end faces over the stretches an undercut erased, on the UNDERCUT document's profile and detail strips (`geom/LinerOutlineMath.kt`). Reaches the undercut composer only (Settings → PDF Export and the undercut options sheet); drawing-profile captured |
 | `undercutSplitAtLinerEdge` | `false` | Whether the undercut detail strips' chain rail splits a cut machined past a liner edge into two spans meeting at that edge. Off = every cut prints its full length (the shop measures cut lengths). Undercut composer + detail canvas only (Settings → PDF Export, the undercut options sheet's Content block, and the Undercut tab's Drawing settings — the last two directly under "Distance to S.E.T." — one value, three surfaces); drawing-profile captured. The per-job `UndercutRecord.drawToSet` flag (not a pref) separately extends a liner strip within `UNDERCUT_SET_REACH_MM` of its S.E.T. out to the shaft end with a flat end and ends its chain at the S.E.T. |
+| `undercutTotalRail` | `true` | The DEFAULT for whether the undercut detail strips print their total rail (one dimension across a section's top-level cuts, above the chain). A job pins its own choice in `UndercutRecord.showTotalRail` (`null` = follow this), resolved by `effectiveUndercutTotalRail` for the composer and the detail canvas alike; off, `planUndercutStripRails(showTotal = false)` plans no total and reserves no band. Settings → PDF Export "Undercut drawing: total length of cuts" only (the per-job switch is on the Undercut tab's Drawing settings and the undercut options sheet); drawing-profile captured |
 | `shadeExplicitBodiesOnly` | `false` | With `shadedBodies` on, narrows the body fill to explicit bodies only — auto (bare-shaft) runs draw unfilled. Consumed by the single `drawBodyRunsWithBreaks` pass (schematic + runout/consolidated); never reaches the wear/undercut documents (their `SimpleShaftProfile` body pass takes one fill for every run), so those two sheets hide the sub-checkbox (`showShadeExplicitBodiesOnly = false`). The kind checkboxes and this narrowing are additionally the DEFAULT for the per-component tri-state `shadeOnDrawing` card toggles (explicit `Body`/`Taper`/`Liner`), which override them per component in either direction — resolved by the pure `unshaded*Ids` builders, same wear/undercut boundary |
 
 All fields are also reachable in the preview screen's Tune sheet, except the sizing-curve
@@ -52,7 +54,7 @@ schematic Tune sheet this section otherwise describes. `runoutBubbleScale` /
 every other pref in this table — they have no Settings → Drawing control at all; they surface
 only in the runout/consolidated PDF Options sheets, in their "Runout bubbles" section, not on
 the schematic or wear/undercut sheets, whose composers never read them. `undercutLineArt` (and
-`undercutLinerOutline` and `undercutSplitAtLinerEdge` with it) is
+`undercutLinerOutline`, `undercutSplitAtLinerEdge` and `undercutTotalRail` with it) is
 the fourth, the mirror image of that: it reaches only the undercut composer, so it lives in
 Settings → PDF Export and the **undercut** preview's options sheet and nowhere else.
 
@@ -139,7 +141,7 @@ Full-resolution preview through the shared `util/PdfRaster.renderPdfPageBitmap`
   finger on its padding never pans the page beneath. The shared overlay
   (`PdfPreviewOverlay`) hosts the same panel. The sheet content is the scope note and a
   leading "Content" chip row — **Blank draft**, **Ø callouts** (enabled only while Blank
-  draft is on), **Labels**, and on the Final drawing **Runout bubbles** with its caption —
+  draft is on), **Component names**, and on the Final drawing **Runout bubbles** with its caption —
   never inside a section, then **collapsible sections** ordered by how often they are
   reached for, most-used on top (on-device request). ONE ordered list behind both options
   sheets — `OptionsSection` + `OptionsSections` (`ui/screen/ShaftHeightSlider.kt`) — lays
@@ -203,8 +205,10 @@ Full-resolution preview through the shared `util/PdfRaster.renderPdfPageBitmap`
   (`ui/screen/PreviewTuning.kt`) and the render loop reads `override ?: committed`.
   - **Visual only.** No DataStore write and no `RunoutConfig` update happens on a drag
     frame; commit-on-release is untouched, so nothing persists and the job is not marked
-    dirty by a drag. Callers that don't opt in (Settings, the wear/undercut sheets) keep
-    the no-op default.
+    dirty by a drag. Every PDF preview that shows one of these sliders opts in — the
+    schematic, runout/consolidated, wear (Line thickness, Shaft height) and undercut (Line
+    thickness) previews; only surfaces with no rendered page (Settings, the Undercut tab's and
+    detail page's own Options panels) keep the no-op default.
   - **Draft resolution.** `renderPdfPageBitmap(renderScale = …)` takes 1 while a drag is
     live (≈¼ the pixels, so the page keeps up) and the pass after the release restores
     `PDF_PREVIEW_RENDER_SCALE`. The spinner is held back for drag frames and for that

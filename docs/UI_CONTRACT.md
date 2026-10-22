@@ -428,8 +428,9 @@ Boundary summary:
 - Undercuts are authored **only here** — no carousel card and no Add dialog, so they sit
   outside the add-dialog-parity invariant. The tab offers a list-row editor alongside the
   canvas (the list rows are also the TalkBack-accessible path).
-- The Distance field is authored against one of four references (AFT/FWD SET or a reference
-  liner's AFT/FWD edge). Switching the reference is **display-only** — the UI never moves
+- The Distance field is authored against AFT/FWD SET, a reference liner's AFT/FWD edge (unless a
+  cut has buried that edge), or — for a cut nested inside another — the parent cut's AFT/FWD
+  shoulder. Switching the reference is **display-only** — the UI never moves
   canonical shaft-space geometry (`geom/UndercutMath.kt` owns the conversion pair).
 - Drawn notch depth is display-exaggerated by the per-sheet "Drawn depth" slider (formerly "Cut depth
   exaggeration"; under the tab's collapsed "Drawing settings" section below the recorded-cut list;
@@ -437,6 +438,17 @@ Boundary summary:
   normalization (`geom/SurfaceProfileMath.kt` + `geom/UndercutMath.kt` do).
 - Canvas and PDF share one pure pipeline; the route performs no clustering, clamping, or
   hit-test math of its own.
+- **Adding records nothing until confirmed**: "Add undercut" asks "Where is the cut?" (one row
+  per liner, then bare shaft from the AFT / FWD S.E.T.) and opens that strip's detail page on a
+  PENDING card; only "Record cut" (or "Next cut") records it, and an untouched new card is
+  discarded on leave.
+- **Cut numbers are an input aid, counted within each section**: the detail canvas, the card
+  titles ("Cut N of M") and the tab's list — grouped under one heading per section, loose cuts
+  under "Not on the shaft" — all number from 1 per section; nothing prints them.
+- **Per-job sheet fits** live in the collapsed "Drawing settings" section (Page, Distance to
+  S.E.T., Split cuts at liner edges — app-wide —, Total length of cuts, Drawn depth, Draw to the
+  shaft end) and, mirrored, in the undercut preview's options; "Sections to print" sits above
+  the print group whenever the sheet has two or more sections.
 - **Preview and Options within reach** (on-device request): a compact **Preview | Options** row
   sits directly under the overview canvas (`undercut_tab_preview`, `undercut_tab_options`), above
   "Add undercut", while the full Print / Preview / Export trio stays at the foot of the tab; the

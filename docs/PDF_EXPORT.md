@@ -742,7 +742,7 @@ Rules (shared helpers in `pdf/BlankFormText.kt`):
 **The Tune options sheet** (`PdfPreviewScreen.kt`) leads with a compact **"Content" chip
 row** (`ContentChipRow`/`ContentChip`, `ShaftHeightSlider.kt`) — **Blank draft**, **Ø
 callouts** (enabled only while Blank draft is on, still testTag `pdf_blank_dia_callouts_toggle`),
-**Labels** — replacing the old switch rows; the captions they used to carry moved to Help, since
+**Component names** — replacing the old switch rows; the captions they used to carry moved to Help, since
 three explained rows cost exactly the room the sliders below need. Under the chips, every
 other control sits in a **collapsible section**, the sections ordered by how often they are
 reached for, most-used on top (on-device request). ONE ordered list — `OptionsSection` +
@@ -835,6 +835,12 @@ The per-job `UndercutRecord.drawToSet` ("Draw to the shaft end" on the Undercut 
 a liner strip whose chain ends within `UNDERCUT_SET_REACH_MM` (24 in) of its S.E.T. draws out to
 the physical shaft end with a flat end (no S-break) and its chain rail ends at the S.E.T.; liner
 strips only, total span unchanged.
+**Total length of cuts** (per-job `UndercutRecord.showTotalRail`, `null` = follow the app default
+`PdfPrefs.undercutTotalRail`, default `true`; resolved ONCE by `effectiveUndercutTotalRail`): whether
+each strip prints its total rail across the top-level cuts. Off, `planUndercutStripRails(showTotal =
+false)` plans no total, so the strip reserves no total band and its chain lays out as a single-cut
+section's does — the detail canvas resolves the same value. Settings → PDF Export carries the
+default; the Undercut tab's Drawing settings and the undercut options sheet carry the job's switch.
 Every strip with cuts also leads its chain on to an S.E.T.: a half dimension from the chain's outer
 witness to that S.E.T. (one head at the datum, open at the strip's drawn edge; a normal two-headed
 span with a witness when the S.E.T. is inside the drawn range), laid out WITH the chain in
@@ -946,8 +952,9 @@ gated off by what their composer actually reads (a section left with nothing is 
   beneath it, same reasoning for `PdfPrefs.undercutLinerOutline`. Its Content block also carries
   the per-job rows "Page" and "Distance to S.E.T.", then **"Split cuts at liner edges"** (app-wide
   `PdfPrefs.undercutSplitAtLinerEdge`, captioned "App-wide"; it decides how an overhanging cut is
-  dimensioned, so it sits with the S.E.T. choice rather than the shading rows) and, with two or
-  more sections, "Sections to print" (the per-job rows captioned "Saved with this job").
+  dimensioned, so it sits with the S.E.T. choice rather than the shading rows), the per-job
+  **"Total length of cuts"** (`UndercutRecord.showTotalRail` over the `PdfPrefs.undercutTotalRail`
+  default) and, with two or more sections, "Sections to print" (the per-job rows captioned "Saved with this job").
 
 Every instance keeps Lines & text (Line thickness + Fractions ungated — every document here
 prints lengths), Shade in Components and Units (ungated) at their fixed spots in the order;

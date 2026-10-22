@@ -213,9 +213,11 @@ shared engine — never re-implemented per renderer):
   schematic PDF).
 - `WornSectionMath.kt` — worn-section span/label placement for the consolidated sheet
   (runout canvas ⇔ runout PDF).
-- `UndercutMath.kt` + `SurfaceProfileMath.kt` — undercut cluster windows, clamps, hit-tests
-  and the resolved→outer-surface envelope the notches cut against (undercut canvas ⇔
-  undercut PDF).
+- `UndercutMath.kt` + `SurfaceProfileMath.kt` + `UndercutOverlayMath.kt` — undercut strips and
+  cluster windows, clamps, hit-tests, the resolved→outer-surface envelope the notches cut against
+  and the notch builder (undercut canvas ⇔ undercut PDF); `UndercutNumbering.kt` (cut numbers,
+  counted within each section — input aid only) and `UndercutCutNumberMath.kt` (where the detail
+  canvas draws them); `LinerOutlineMath.kt` (the dotted retrace of a liner's erased edges).
 - `ProfileCompression.kt` — the PDF profile's compressed x-map: true-diameter visual height
   at the default sizing curve, spans foreshortened above per-kind width floors, and the
   height/scale solve behind the "Shaft height" slider.
@@ -286,8 +288,11 @@ resolved component list (auto-bodies included) and a `blankValues` write-in mode
 (lines-in/values-out hand-fill templates). The wear document's per-liner detail strips and
 measured-Ø callout bands are laid out by the pure `pdf/WearStripLayout.kt` +
 `geom/WearDiaCalloutLayout.kt`. The **undercut drawing** (`UndercutPdfComposer`) prints the
-shaft-space cuts as open silhouette steps with liner-anchored detail strips
-(`pdf/UndercutStripLayout.kt`). The **consolidated output sheet** is the runout composer in
+shaft-space cuts as open silhouette steps with liner-anchored detail strips — landscape, or
+portrait at two or more printed sections — each dimensioned by a chain of cut lengths, an
+optional total and a lead to the S.E.T. The ONE rail plan (`pdf/UndercutStripLayout.kt`'s
+`planUndercutStripRails`) and draw (`pdf/UndercutRailDraw.kt`) also serve the Undercut tab's
+detail canvas; `pdf/UndercutPdfFillPlan.kt` decides the print fills. The **consolidated output sheet** is the runout composer in
 its consolidated mode (`composeRunoutPdf(consolidated = true)`), which adds the schematic's
 dimension rails and footer plus the elected wear/runout content.
 

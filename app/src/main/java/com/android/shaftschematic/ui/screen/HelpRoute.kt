@@ -634,9 +634,11 @@ internal val helpSections: List<HelpSection> = listOf(
                     "of\" butt-against chips. How far a cut runs past its liner shows as " +
                     "a line under Length — information only, nothing to type.\n\n" +
                     "The list below the drawing " +
-                    "numbers the cuts from the aft end — the same numbers the zoomed detail " +
-                    "page shows inside each cut, to help you find it; they never print — " +
-                    "and flags a cut with no Ø (\"Ø not entered\"); printing or " +
+                    "groups the cuts under one heading per section (each liner, each " +
+                    "bare-shaft area; a cut no section holds sits under \"Not on the " +
+                    "shaft\") and numbers them from 1 within each section — the same numbers " +
+                    "that section's zoomed detail page shows inside each cut, to help you " +
+                    "find it; they never print — and flags a cut with no Ø (\"Ø not entered\"); printing or " +
                     "exporting while one has no Ø asks first (\"Print without diameters?\").\n\n" +
                     "Cut depth on the drawing " +
                     "is exaggerated for visibility (real cuts are hairline-thin at scale) — " +

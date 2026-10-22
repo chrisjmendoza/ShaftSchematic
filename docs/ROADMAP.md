@@ -1,6 +1,6 @@
 # ShaftSchematic Roadmap
 Version: v0.5.x  
-Last updated: 2026-08-16
+Last updated: 2026-10-22
 
 This roadmap defines the grounded, realistic, and approved feature trajectory for ShaftSchematic.
 
@@ -150,14 +150,17 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
 - Coupling face end view — optional outward-keyseat end view on the runout sheets, per-job
   toggle (default off), with its own pilot runout reading
 - Live preview tuning — Line thickness, Body S-break, Shaft height and Liner & taper compression
-  re-render the open preview under a dragging finger (draft raster, commit on release), with the
-  sheet shown as a fit-width ink-band page strip so the control never covers the page
+  re-render the open preview under a dragging finger (draft raster, commit on release) on every
+  PDF preview that shows them (schematic, runout/consolidated, wear, undercut), with the sheet
+  shown as a fit-width ink-band page strip so the control never covers the page
 - Dimension arrow size (Small/Medium/Large) and wear-depth exaggeration as user settings
 - Undercut Drawing — its own editor tab and PDF (`UndercutPdfComposer`) for
   machined-below-surface cuts: shaft-space spans (a cut may cross a liner edge), the settled
   open-notch convention (silhouette step + full-height section faces, mouth never lidded),
   liner-anchored detail strips, a per-sheet cut-depth exaggeration slider, and user-selectable
-  shading / line-art styles on screen and a line-art print option for the PDF
+  shading / line-art styles on screen and a line-art print option for the PDF; later a portrait
+  page for two or more sections, a lead dimension to the chosen S.E.T., per-section "Sections to
+  print", nested cuts dimensioned from their parent, and an optional total length of cuts
 - Consolidated Output tab — one sheet carrying the schematic's rails and footer plus the
   elected runout/wear content (`ConsolidatedVariant`: All three | Schematic + Runout |
   Schematic + Wear), the worn-section editor (values printed inside the profile over

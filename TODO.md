@@ -1,7 +1,7 @@
 # ShaftSchematic TODO
 
 **Version: v0.5.x Development Queue**
-**Last updated: 2026-10-13**
+**Last updated: 2026-10-22**
 
 ## What belongs here
 
@@ -124,8 +124,9 @@ at most a pointer from here.
     "150" briefly applies 50%) — the per-keystroke pattern removed from the OAL field.
   - **Template mode has no on-preview indicator**; it persists, sits only in Settings, and is not
     captured by Drawing profiles or reset by "Restore Drawing defaults".
-  - **Double-tap zoom reset exists only on the schematic preview**; the shared overlay (Runout /
-    Wear / Undercut / Consolidated) has neither it nor a Reset-zoom icon.
+  - **Double-tap zoom reset exists only on the schematic preview**; the shared PDF preview overlay
+    (Runout / Wear / Undercut / Consolidated) has neither it nor a Reset-zoom icon. (The Undercut
+    tab's zoomed detail page has its own double-tap and "Reset view" — a canvas, not the overlay.)
   - **Project Notes never print** (the wear/undercut "Notes:" areas are blank write-in lines).
   - **Measurement reference wording differs** — Settings "AFT (force AFT SET)" vs the panels'
     "AFT"; the Keyway calculator opens a dialog titled "Keyway rough-cutter depth".
@@ -239,7 +240,8 @@ androidTest) or the Add dialogs; their logic is pure and covered.
   `writeShaftPdfToUri`, `renderPdfPageBitmap`, `printShaftPdfPage` (page count 1) and the preview
   overlay's one bitmap — and `docs/PDF_EXPORT.md` §6 states "single page only", so this is the
   app's first multi-page document. Page shape stays per page from the same `undercutSheetStrips`
-  count.
+  count. **Decide first:** it contradicts §4's "Multi-page PDF or foldouts" non-goal, so building
+  it means lifting that non-goal for this one document.
 - [ ] Undo/redo follow-ups (not blocking v1.0): cross-session/persisted history (currently
   in-memory, cleared on process death and at every new/open/import boundary), and metadata
   (customer/vessel/job/notes/shaft position/unit) is deliberately excluded from undoable state —

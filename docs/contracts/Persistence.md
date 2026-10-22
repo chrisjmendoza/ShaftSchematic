@@ -55,7 +55,7 @@ draft problem cannot take each other down:
 
 | Store | Holds | Written |
 |---|---|---|
-| `settings` (`Context.settingsDataStore`) | units, theme, the whole drawing look, the mirror folder, migration/seeding flags | on each preference change |
+| `settings` (`Context.settingsDataStore`) | units, theme, the whole drawing look (`pdf_*` keys + `line_thickness_scale`; named presets in the single `drawing_profiles` JSON string), the mirror folder, migration/seeding flags | on each preference change |
 | `autosave_datastore` (`AutosaveManager`) | the draft ring — one `SessionSnapshot` per entry, the **whole** session including `finalSpec` (the final drawing) | **every 1.5 s of editing** |
 
 Invariants
