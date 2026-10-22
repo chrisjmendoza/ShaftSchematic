@@ -8,6 +8,38 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-22
 
+### fix(undercut): detail canvas — centred cuts, shorter S.E.T. lead stock, half the edge inset
+
+- **Both ends get the same stock.** On-device request: "give the edges more symmetry and center
+  the undercuts" — the S.E.T. lead widened only its own side, so the MID liner strip showed 9.56 in
+  of stock past the FWD datum and 4.30 in past the AFT one. `undercutDetailLeadDrawRange` now
+  passes the lead's room as `otherMinPadPt` too, so the far end widens to the same drawn stock and
+  the cuts sit centred between the breaks: 7.98 in each side on a 1080 px phone. Outward only, flat
+  physical ends untouched; canvas only — the printed strip keeps its 24 pt far-side pad.
+- **The lead's stub is one arrowhead and a point.** On-device request: the lead's stock was longer
+  than its text needed. `undercutSetLeadRoomPt` stubs are max(`UNDERCUT_SET_LEAD_TAIL_PT`, arrow +
+  1 pt) with the constant at 5 pt (was max(8 pt, 2 × arrow)); the value still seats in its line at
+  every "Dimension arrows" size, on the canvas and on the printed strip.
+- **Half the edge inset.** `UNDERCUT_EDGE_PAD_DP` 32 → 16 dp gives the drawing the width; the break
+  glyph's outward lobe, the only thing drawn there, is capped by the height fit at ~13 dp and
+  measures 8–10 dp on the job at 1080 px and at 360 dp (`UndercutDetailLeadRoomTest`).
+
+### fix(undercut): the preview's options panel keeps the page in view
+
+- **The undercut preview's PDF options panel no longer covers the page.** Like the wear sheet,
+  opening it moves the page into a strip under the top bar, cropped to the drawing's ink, with the
+  panel capped below it, so each change can be watched as it re-renders (on-device report: the
+  panel covered the whole screen). `UndercutRoute` passes `sheetTunesPage = true` and measures the
+  ink band on every pass — it has no live-drag channel, so there are no draft frames to skip.
+- **The page strip takes the rendered page's own shape** (`pageAspectOf` →
+  `tuningPageStripHeightDp(pageAspect)`), so the undercut sheet's portrait page (two or more
+  sections) fills the strip's width instead of drawing at about 60% of it; landscape sheets are
+  unchanged.
+- **The Undercut tab's own Options panel** (the button under the overview) now stops below the
+  overview canvas, capped the way the detail page caps its panel
+  (`undercutDetailOptionsMaxHeightDp`), so the drawing whose depth, shading and line art it changes
+  stays in view on a phone (on-device report: the plain 78% cap covered it).
+
 ### feat(undercut): card UX — button-like discard, sectioned placement presets, whole-liner gate, overhang as information, side-named butt chips
 
 - **Discard reads as a button.** On-device request: the status pill's ✗ was a bare glyph on the

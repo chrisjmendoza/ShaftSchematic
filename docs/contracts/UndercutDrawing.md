@@ -1931,13 +1931,33 @@ datum.
   `planUndercutStripRails(setLead)` and drawn by the ONE `drawUndercutStripRails`, so the detail
   canvas (whose range is widened by `undercutDetailLeadDrawRange`) shows it as the sheet prints it.
   Do not give the canvas its own lead.
-- **Lead room** — the strip's drawn range is widened on the lead side ONLY so the value seats IN its
-  line with an open tail (`computeUndercutStripDrawRange(leadSide, leadRoomPt)` →
+- **Lead room** — the printed strip's drawn range is widened on the lead side ONLY so the value
+  seats IN its line with an open tail (`computeUndercutStripDrawRange(leadSide, leadRoomPt)` →
   `undercutWidenForSetLead`; room `undercutSetLeadRoomPt` = value width + 2 × text pad + 2 ×
-  max(`UNDERCUT_SET_LEAD_TAIL_PT` = 8 pt, 2 × arrow)). The extra is undimensioned stock heading
-  toward the S.E.T., never a datum move; the break-room rule still runs after it. Widening lowers
-  that strip's scale slightly; the other side keeps its 24 pt minimum pad. A strip with no lead gets
-  exactly the old range.
+  max(`UNDERCUT_SET_LEAD_TAIL_PT` = 5 pt, arrow + 1 pt)). Each stub is one arrowhead and a point of
+  line on the datum side and the same open tail past the value — no more stock than the text needs
+  (on-device request: the lead's stock was longer than its value), and the planner's seat test (an
+  arrowhead of line each side of the padded value) still passes by at least a point at every
+  "Dimension arrows" size. The extra is undimensioned stock heading toward the S.E.T., never a datum
+  move; the break-room rule still runs after it. Widening lowers that strip's scale slightly; the
+  other side keeps its 24 pt minimum pad (`UNDERCUT_STRIP_MIN_PAD_PT`). A strip with no lead gets
+  exactly the pad rule's range.
+- **Detail canvas: both ends get the lead's stock** — `undercutDetailLeadDrawRange` widens the
+  canvas's previewed range with the lead's room on the lead side AND the same room
+  (`otherMinPadPt = room`) on the other, so both ends show the same stock past their chain datums
+  and the cuts sit centred between the two breaks (on-device request: "give the edges more
+  symmetry and center the undercuts"). Outward only — never narrower than the break-room preview —
+  and an end that reaches `0` / the OAL stops there as the flat physical end. Canvas only: the
+  printed strip's range keeps its own far-side pad. On the on-device job's MID liner strip at
+  1080 px this is 7.98 in of stock past each datum (≈ 6.6 in of plain daylight inside each break),
+  from 4.30 / 9.56 in (`UndercutDetailLeadRoomTest`).
+- **Detail canvas edge inset** — `UNDERCUT_EDGE_PAD_DP` = 16 dp of white space between each
+  window-end break and the canvas edge (on-device request: give the drawing the width). The only
+  thing drawn into it is the break glyph's outward lobe (`BREAK_EDGE_OUTWARD_REACH_FRAC` × the
+  amplitude, `UNDERCUT_BREAK_AMP_FRAC_OF_R` × the drawn radius); the height fit caps that radius at
+  0.36 × the 140 dp profile row, so the lobe never passes ~13 dp plus half a stroke (≈ 8–10 dp on
+  the job at 1080 px and at 360 dp). The lead's open tail ends AT the break line; the Ø callouts
+  clamp to the canvas on their own. The wear overlay's `SEG_EDGE_PAD_DP` is a separate constant.
 - **UI** — the "Distance to S.E.T." row (`UndercutSetDatumRow`): the tab's Drawing settings right
   after "Page", and the undercut options panel's Content block. Setter `setUndercutSetDatum`.
 - Printed output changes on EVERY sheet with cuts, landscape and portrait.

@@ -18,9 +18,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
@@ -58,6 +61,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -76,8 +80,11 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -148,6 +155,8 @@ import com.android.shaftschematic.ui.viewmodel.setUndercutExaggeration
 import com.android.shaftschematic.ui.viewmodel.updateUndercut
 import com.android.shaftschematic.ui.viewmodel.updateUndercutReference
 import com.android.shaftschematic.util.DisplayUnits
+import com.android.shaftschematic.util.InkBand
+import com.android.shaftschematic.util.inkBand
 import com.android.shaftschematic.util.launchPicker
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.buildLinerTitleById
@@ -265,12 +274,18 @@ fun UndercutRoute(
     var showPreview by rememberSaveable { mutableStateOf(false) }
     // The options panel over the tab body (the "Options" button under the overview canvas).
     var showTabOptions by rememberSaveable { mutableStateOf(false) }
+    // Where the overview canvas ends, root px — the tab options panel's ceiling.
+    var overviewBottomPx by remember { mutableFloatStateOf(0f) }
     // Blank-draft (write-in) copy: outline + form layout, all values blanked for handwriting.
     var blankDraft by rememberSaveable { mutableStateOf(false) }
     // Plain remember: an ImageBitmap is not saveable (crashes onSaveInstanceState),
     // and the LaunchedEffect below regenerates it anyway.
     var previewBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
     var previewLoading by remember { mutableStateOf(false) }
+    // Where the rendered page carries ink, for the tuning page strip (`PdfPreviewOverlay`'s
+    // `inkBand`). This tab has no live-drag channel — every control commits on release and
+    // re-renders the whole page — so there are no draft frames to skip: each pass measures.
+    var previewInkBand by remember { mutableStateOf<InkBand?>(null) }
     // What anchors the open detail overlay. Strips are derived state (they re-cluster on every
     // record edit), so the anchor is an id rather than a strip index and the strip is looked up
     // fresh below. Two anchors, one live at a time: a **liner** id keeps a liner strip open even
@@ -574,18 +589,20 @@ fun UndercutRoute(
                    pdfUndercutLineArt, pdfUndercutLinerOutline, pdfUndercutSplitAtLinerEdge,
                    undercutRecord, blankDraft, pdfFractionStyle, pdfOutputFont, pdfThreadSlant, unitOverrides,
                    dualUnits, pdfDualUnitLayout, pdfThreadDensity, pdfArrowSizePt) {
-        if (!showPreview) { previewBitmap = null; return@LaunchedEffect }
+        if (!showPreview) { previewBitmap = null; previewInkBand = null; return@LaunchedEffect }
         previewLoading = true
         val prefsSnapshot     = vm.currentPdfPrefs
         val thicknessSnapshot = lineThicknessScale
         val displayUnitsSnapshot = DisplayUnits(unit, unitOverrides, dualUnits)
         val projectSnapshot = ProjectInfo(customer = customer, vessel = vessel,
             jobNumber = jobNumber, side = shaftPosition, item = item)
-        val bmp = withContext(Dispatchers.IO) {
+        // The ink band is measured off the raw raster, on the same IO pass that produced it, so
+        // a portrait page's blank paper is cropped by the band of THAT page.
+        val (bmp, band) = withContext(Dispatchers.IO) {
             // The page shape follows the sheet's section count and the job's choice; both of its
             // inputs (`undercutRecord`, `blankDraft`, plus the geometry) are keys above.
             val orientation = undercutSheetOrientation(spec, resolvedComponents, undercutRecord, blankDraft)
-            renderPdfPageBitmap(ctx, orientation = orientation) { page ->
+            val raster = renderPdfPageBitmap(ctx, orientation = orientation) { page ->
                 composeUndercutPdf(
                     page = page, spec = spec, project = projectSnapshot, unit = unit,
                     displayUnits = displayUnitsSnapshot,
@@ -594,8 +611,10 @@ fun UndercutRoute(
                     blankValues = blankDraft,
                 )
             }
+            raster to raster?.inkBand()
         }
         previewBitmap = bmp?.asImageBitmap()
+        previewInkBand = band
         previewLoading = false
     }
 
@@ -656,6 +675,9 @@ fun UndercutRoute(
         if (oalMm > 0f) {
             Box(
                 modifier = canvasModifier
+                    // The tab's options panel stops here, so the overview it restyles stays in
+                    // view above it.
+                    .onGloballyPositioned { overviewBottomPx = it.boundsInRoot().bottom }
                     .clip(previewShape)
                     .background(Color.White)
                     .semantics {
@@ -1164,10 +1186,20 @@ fun UndercutRoute(
         // button, the Options button (a toggle) or Back. The overview canvas above it restyles
         // where it draws what an option changes (the liner outline).
         if (showTabOptions) {
+            // Capped like the detail page's panel: the screen below the overview canvas, less the
+            // panel's header row and the navigation-bar inset, so the drawing whose look these
+            // options change stays in view (on-device report: the plain 78% cap covered it on a
+            // phone). Before the canvas is measured the ceiling applies.
+            val tabOptionsMaxHeightDp = undercutDetailOptionsMaxHeightDp(
+                screenHeightDp = LocalConfiguration.current.screenHeightDp.toFloat(),
+                drawingBottomDp = with(LocalDensity.current) { overviewBottomPx.toDp().value },
+                chromeDp = TUNING_SHEET_CHROME_DP +
+                    WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding().value,
+            )
             Box(Modifier.fillMaxSize().systemBarsPadding()) {
                 PreviewOptionsPanel(
                     onClose = { showTabOptions = false },
-                    maxHeightDp = (LocalConfiguration.current.screenHeightDp * PREVIEW_SHEET_MAX_FRAC).dp,
+                    maxHeightDp = tabOptionsMaxHeightDp.dp,
                     modifier = Modifier.align(Alignment.BottomCenter),
                 ) {
                     UndercutOptionsSheet(
@@ -1365,6 +1397,12 @@ fun UndercutRoute(
                     onSetBlankDraft = { blankDraft = it },
                 )
             },
+            // The panel's controls redraw this page, so it must not cover it: the plain cap
+            // over the centered full-size page left the page behind the panel and the changes
+            // unwatchable (on-device report). Each control commits on release and re-renders
+            // the page under the open panel's strip — the wear sheet's posture.
+            sheetTunesPage = true,
+            inkBand = previewInkBand,
         )
     }
 }

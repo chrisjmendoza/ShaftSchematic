@@ -3,7 +3,11 @@ package com.android.shaftschematic.ui.screen
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.settings.RunoutConfig
 import com.android.shaftschematic.settings.TirDirection
+import com.android.shaftschematic.util.PDF_PAGE_HEIGHT_PT
+import com.android.shaftschematic.util.PDF_PAGE_WIDTH_PT
 import com.android.shaftschematic.util.PDF_PREVIEW_RENDER_SCALE
+import com.android.shaftschematic.util.PdfPageOrientation
+import com.android.shaftschematic.util.inkBandFromRows
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -209,5 +213,76 @@ class PreviewTuningTest {
     fun `the strip never goes negative on a tiny screen`() {
         assertTrue(tuningPageStripHeightDp(200f, 120f, chrome) >= 0f)
         assertTrue(tuningPageStripHeightDp(731f, 200f, chrome, inkFrac = 0.5f) >= 0f)
+    }
+
+    // ── Page shape: the undercut sheet is portrait at 2+ sections ─────────────
+
+    private val portraitAspect = PDF_PAGE_WIDTH_PT.toFloat() / PDF_PAGE_HEIGHT_PT.toFloat()
+
+    @Test
+    fun `the page aspect is read off the raster for both page shapes`() {
+        val s = PDF_PREVIEW_RENDER_SCALE
+        val land = PdfPageOrientation.LANDSCAPE
+        val port = PdfPageOrientation.PORTRAIT
+        assertEquals(LANDSCAPE_PAGE_ASPECT, pageAspectOf(land.widthPt * s, land.heightPt * s), 1e-4f)
+        assertEquals(portraitAspect, pageAspectOf(port.widthPt * s, port.heightPt * s), 1e-4f)
+        assertEquals(1.2941f, portraitAspect, 1e-3f)
+        // No page yet: the landscape default, never a division by zero.
+        assertEquals(LANDSCAPE_PAGE_ASPECT, pageAspectOf(0, 0), 0f)
+        // The landscape default leaves every existing caller's strip unchanged.
+        assertEquals(fitWidthPageHeightDp(393f), fitWidthPageHeightDp(393f, LANDSCAPE_PAGE_ASPECT), 0f)
+    }
+
+    @Test
+    fun `a portrait page's strip is sized for the portrait page, so it fills the width`() {
+        val w = 393f
+        val h = 851f
+        val strip = tuningPageStripHeightDp(w, h, chrome, inkFrac = 0.6f, pageAspect = portraitAspect)
+        assertEquals(fitWidthPageHeightDp(w, portraitAspect) * 0.6f, strip, 0.01f)
+        // drawPageBand fits the band to min(width, strip / band height): a strip exactly the
+        // band's fit-width height draws the page across the whole screen width.
+        val bandHeightAtFullWidth = w * portraitAspect * 0.6f
+        assertEquals(1f, strip / bandHeightAtFullWidth, 1e-4f)
+        // A strip sized as if the page were landscape would have drawn it at ~60% width.
+        val landscapeSized = tuningPageStripHeightDp(w, h, chrome, inkFrac = 0.6f)
+        assertTrue(landscapeSized / bandHeightAtFullWidth < 0.61f)
+        // The panel still clears its floor and the layout accounts for the screen.
+        val sheet = tuningSheetMaxHeightDp(h, strip, chrome)
+        assertTrue(sheet >= h * TUNING_SHEET_MIN_FRAC)
+        assertEquals(h, PREVIEW_TOP_CHROME_DP + strip + sheet + chrome, 0.01f)
+    }
+
+    @Test
+    fun `the ink band crops a portrait page's blank paper as it does a landscape one's`() {
+        val w = 393f
+        val h = 851f
+        val s = PDF_PREVIEW_RENDER_SCALE
+        // Portrait raster: two strips and the footer ink rows 160..1000 of 1584, the rest is paper.
+        val portH = PdfPageOrientation.PORTRAIT.heightPt * s
+        val portBand = inkBandFromRows({ it in 160..1000 }, portH, rowStep = 1, padFrac = 0.025f)!!
+        assertTrue(portBand.frac < 0.7f)
+        val portStrip = tuningPageStripHeightDp(w, h, chrome, portBand.frac, portraitAspect)
+        assertEquals(fitWidthPageHeightDp(w, portraitAspect) * portBand.frac, portStrip, 0.01f)
+        assertTrue(portStrip < fitWidthPageHeightDp(w, portraitAspect))
+
+        // Landscape raster, same posture.
+        val landH = PdfPageOrientation.LANDSCAPE.heightPt * s
+        val landBand = inkBandFromRows({ it in 200..900 }, landH, rowStep = 1, padFrac = 0.025f)!!
+        val landStrip = tuningPageStripHeightDp(w, h, chrome, landBand.frac, LANDSCAPE_PAGE_ASPECT)
+        assertEquals(fitWidthPageHeightDp(w) * landBand.frac, landStrip, 0.01f)
+        assertTrue(landStrip < fitWidthPageHeightDp(w))
+    }
+
+    @Test
+    fun `an unmeasured portrait page yields to the panel floor`() {
+        // Before a band exists the whole portrait page is taller than the room left over, so
+        // the panel keeps its floor and the strip takes the remainder (the page fits to it).
+        val w = 393f
+        val h = 851f
+        val strip = tuningPageStripHeightDp(w, h, chrome, pageAspect = portraitAspect)
+        val sheet = tuningSheetMaxHeightDp(h, strip, chrome)
+        assertTrue(strip < fitWidthPageHeightDp(w, portraitAspect))
+        assertEquals(h * TUNING_SHEET_MIN_FRAC, sheet, 0.01f)
+        assertEquals(h, PREVIEW_TOP_CHROME_DP + strip + sheet + chrome, 0.01f)
     }
 }
