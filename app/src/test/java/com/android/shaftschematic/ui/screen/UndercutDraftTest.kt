@@ -222,7 +222,7 @@ class UndercutDraftTest {
         assertEquals(listOf("b"), pool.map { it.id })
     }
 
-    // ── Whole liner / Extend past liner ──────────────────────────────────────
+    // ── Whole liner / overhang line ──────────────────────────────────────────
 
     @Test
     fun `whole liner sets the draft to the liner span authored from Liner AFT`() {
@@ -238,61 +238,20 @@ class UndercutDraftTest {
     }
 
     @Test
-    fun `a typed 2 inch AFT extension on a whole-liner draft runs into the body and pins the FWD end`() {
-        val liner = UndercutLinerSpan("L1", 600f, 1000f)
-        val whole = draftOf("x", 700f, 50f).withWholeLiner(liner)
-        val extMm = toMmOrNull("2", UnitSystem.INCHES)!!
-        val edit = whole.withAftLinerExtension(liner, extMm, oalMm = 1900f)
-        val extended = edit.draft
-        assertEquals(600f - 50.8f, extended.startFromAftMm, 1e-3f)
-        assertEquals(1000f, extended.startFromAftMm + extended.lengthMm, 1e-3f)
-        // An extension is a view of the span, never a datum: the reference stays put.
-        assertEquals(UndercutReference.LINER_AFT, extended.reference)
-        assertEquals("L1", extended.referenceLinerId)
-        assertEquals(50.8f, edit.appliedMm, 1e-3f)
-        assertFalse(edit.limited)
-    }
-
-    @Test
-    fun `a FWD extension pins the AFT end`() {
-        val liner = UndercutLinerSpan("L1", 600f, 1000f)
-        val edit = draftOf("x", 700f, 50f).withFwdLinerExtension(liner, 25.4f, oalMm = 1900f)
-        assertEquals(700f, edit.draft.startFromAftMm, 1e-4f)
-        assertEquals(1025.4f, edit.draft.startFromAftMm + edit.draft.lengthMm, 1e-3f)
-        assertFalse(edit.limited)
-    }
-
-    @Test
-    fun `an AFT extension past the shaft's AFT end applies the stock that is there`() {
-        // Liner 50 mm from the AFT end; 100 mm typed — only 50 mm of body to cut into.
-        val liner = UndercutLinerSpan("L1", 50f, 450f)
-        val edit = draftOf("x", 50f, 400f).withAftLinerExtension(liner, 100f, oalMm = 1000f)
-        assertEquals(0f, edit.draft.startFromAftMm, 1e-4f)
-        assertEquals(450f, edit.draft.startFromAftMm + edit.draft.lengthMm, 1e-4f)
-        assertEquals(50f, edit.appliedMm, 1e-4f)
-        assertTrue(edit.limited)
-    }
-
-    @Test
-    fun `a FWD extension past the shaft's FWD end applies the stock that is there`() {
-        // Liner FWD edge 50 mm short of the FWD end; 100 mm typed.
-        val liner = UndercutLinerSpan("L1", 550f, 950f)
-        val edit = draftOf("x", 550f, 400f).withFwdLinerExtension(liner, 100f, oalMm = 1000f)
-        assertEquals(550f, edit.draft.startFromAftMm, 1e-4f)
-        assertEquals(1000f, edit.draft.startFromAftMm + edit.draft.lengthMm, 1e-4f)
-        assertEquals(50f, edit.appliedMm, 1e-4f)
-        assertTrue(edit.limited)
-    }
-
-    @Test
-    fun `an extension inside the available stock is not limited`() {
-        val liner = UndercutLinerSpan("L1", 50f, 950f)
-        val aft = draftOf("x", 50f, 900f).withAftLinerExtension(liner, 30f, oalMm = 1000f)
-        val fwd = draftOf("x", 50f, 900f).withFwdLinerExtension(liner, 30f, oalMm = 1000f)
-        assertFalse(aft.limited)
-        assertFalse(fwd.limited)
-        assertEquals(20f, aft.draft.startFromAftMm, 1e-4f)
-        assertEquals(980f, fwd.draft.startFromAftMm + fwd.draft.lengthMm, 1e-4f)
+    fun `the overhang line names only the end that runs off`() {
+        assertEquals(
+            "Extends 3.5 in past the liner's FWD edge",
+            undercutOverhangInfo(aft = null, fwd = "3.5 in"),
+        )
+        assertEquals(
+            "Extends 1 in past the liner's AFT edge",
+            undercutOverhangInfo(aft = "1 in", fwd = null),
+        )
+        assertEquals(
+            "Extends 1 in past the liner's AFT edge and 3.5 in past its FWD edge",
+            undercutOverhangInfo(aft = "1 in", fwd = "3.5 in"),
+        )
+        assertNull(undercutOverhangInfo(aft = null, fwd = null))
     }
 
     // ── Leaving a card ───────────────────────────────────────────────────────
@@ -418,9 +377,9 @@ class UndercutDraftTest {
     }
 
     @Test
-    fun `the gap field names its chip`() {
-        assertEquals("Gap after Cut 1 (in)", undercutGapFieldLabel(after = true, position = 1, unitAbbr = "in"))
-        assertEquals("Gap before Cut 3 (mm)", undercutGapFieldLabel(after = false, position = 3, unitAbbr = "mm"))
+    fun `the gap field names its cut, the row names the side`() {
+        assertEquals("Gap to Cut 1 (in)", undercutGapFieldLabel(position = 1, unitAbbr = "in"))
+        assertEquals("Gap to Cut 3 (mm)", undercutGapFieldLabel(position = 3, unitAbbr = "mm"))
     }
 
     @Test

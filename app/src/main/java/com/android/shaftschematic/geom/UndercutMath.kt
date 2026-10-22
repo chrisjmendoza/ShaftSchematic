@@ -64,22 +64,30 @@ const val UNDERCUT_SET_REACH_MM = 609.6f
 fun undercutSetReachMm(drawToSet: Boolean): Float = if (drawToSet) UNDERCUT_SET_REACH_MM else 0f
 
 /**
- * Clearance past the window-end break glyph's reach, as a fraction of its amplitude, so the lobe
- * never kisses the next component face.
+ * Daylight a window-end break keeps between its glyph's inner reach and the next face or cut
+ * shoulder on the window's interior side, as a fraction of the glyph's amplitude: one full
+ * amplitude of plain stock, so the section reads as sitting in the shaft with body on both sides
+ * of it rather than with a break lobe on its face (on-device request: roomier stock before the
+ * breaks, the same on both ends, so the cuts read centred between them).
  */
-const val UNDERCUT_BREAK_CLEAR_FRAC_OF_AMP = 0.25f
+const val UNDERCUT_BREAK_CLEAR_FRAC_OF_AMP = 1.0f
+
+/**
+ * The window-end break glyph's amplitude in shaft mm for stock of outer Ø [diaMm]:
+ * `(dia/2)·`[UNDERCUT_BREAK_AMP_FRAC_OF_R], because the detail canvas maps x and r through one
+ * scale (the canvas draws exactly this; the PDF caps it lower, `UNDERCUT_BREAK_AMP_MAX_PT`).
+ */
+fun undercutBreakAmplitudeMm(diaMm: Float): Float = diaMm * 0.5f * UNDERCUT_BREAK_AMP_FRAC_OF_R
 
 /**
  * Uniform stock a window-end break needs on its INTERIOR side — from the break line to the next
- * face — for stock of outer Ø [diaMm]. The amplitude in shaft mm is
- * `(dia/2)·`[UNDERCUT_BREAK_AMP_FRAC_OF_R] because the detail canvas maps x and r through one
- * scale; the PDF caps its amplitude lower (`UNDERCUT_BREAK_AMP_MAX_PT`), so this room is
- * sufficient on both surfaces. The reach is the glyph's widest excursion to either side of its
- * line ([BREAK_EDGE_OUTWARD_REACH_FRAC]) plus [UNDERCUT_BREAK_CLEAR_FRAC_OF_AMP] of daylight.
+ * face — for stock of outer Ø [diaMm]: the glyph's widest excursion to either side of its line
+ * ([BREAK_EDGE_OUTWARD_REACH_FRAC] of [undercutBreakAmplitudeMm]) plus
+ * [UNDERCUT_BREAK_CLEAR_FRAC_OF_AMP] of daylight. The PDF's amplitude is capped lower, so this
+ * room is sufficient on both surfaces.
  */
 fun undercutBreakRoomMm(diaMm: Float): Float =
-    diaMm * 0.5f * UNDERCUT_BREAK_AMP_FRAC_OF_R *
-        (BREAK_EDGE_OUTWARD_REACH_FRAC + UNDERCUT_BREAK_CLEAR_FRAC_OF_AMP)
+    undercutBreakAmplitudeMm(diaMm) * (BREAK_EDGE_OUTWARD_REACH_FRAC + UNDERCUT_BREAK_CLEAR_FRAC_OF_AMP)
 
 /**
  * Widen the draw range `[startMm, endMm]` OUTWARD — never inward — until each end that is not
@@ -87,6 +95,14 @@ fun undercutBreakRoomMm(diaMm: Float): Float =
  * break line and the next face on the window's interior side (on-device report: a liner strip's
  * 1" pad landed a hair inside a taper, and the window-end S-break tangled with the taper face,
  * a 1/4" body and the liner face).
+ *
+ * Every interior end comes out of the ONE rule — the outermost face or cut shoulder on that side,
+ * plus the glyph's reach at that end's Ø, plus the daylight — and the daylight is SHARED: both
+ * interior ends take the larger of their own [UNDERCUT_BREAK_CLEAR_FRAC_OF_AMP] amplitudes, so a
+ * strip whose ends sit in stock of different Ø (a liner face on one side, a cut overhanging into a
+ * smaller body on the other) still shows the same plain stock before each break and its sections
+ * read centred between them (on-device request). An end the input already places further out keeps
+ * its place (this only widens).
  *
  * Works on the outer-surface envelope of [segs] ([buildSurfaceEnvelope]), so a body running
  * under a liner never hides the liner's face. A piece too short to host the break is walked
@@ -125,54 +141,81 @@ fun withUndercutBreakRoom(
         return cuts.any { mid > it.startMm && mid < it.endMm }
     }
     val cutPiece = BooleanArray(pieces.size) { inCut(pieces[it]) }
-    fun room(p: EnvelopePiece) = undercutBreakRoomMm(max(p.dia0Mm, p.dia1Mm))
+    fun ampOf(p: EnvelopePiece) = undercutBreakAmplitudeMm(max(p.dia0Mm, p.dia1Mm))
+    fun ownClear(p: EnvelopePiece) = ampOf(p) * UNDERCUT_BREAK_CLEAR_FRAC_OF_AMP
+    // The glyph's reach at this piece's Ø plus the daylight past it: the piece's own share of an
+    // amplitude, or the strip's shared [clearMm] when that is more.
+    fun room(p: EnvelopePiece, clearMm: Float) =
+        ampOf(p) * BREAK_EDGE_OUTWARD_REACH_FRAC + max(ownClear(p), clearMm)
     fun contiguous(a: EnvelopePiece, b: EnvelopePiece) = abs(a.x1Mm - b.x0Mm) <= eps
 
-    // AFT end: interior is +x, the face ahead of the break is the piece's x1.
-    var start = startMm
-    if (start <= eps) {
-        start = min(0f, startMm)
-    } else {
+    // AFT end: interior is +x, the face ahead of the break is the piece's x1. Returns the end and
+    // the piece the rule PLACED its break in — −1 for an end the input already gave room (it keeps
+    // its place and sets no daylight), the flat physical end, or uncovered x.
+    fun walkAft(clearMm: Float): Pair<Float, Int> {
+        if (startMm <= eps) return min(0f, startMm) to -1
+        var start = startMm
+        var landed = -1
         // Half-open: a start on a face belongs to the piece beginning there.
         var i = pieces.indexOfFirst { start >= it.x0Mm - eps && start < it.x1Mm - eps }
         var guard = pieces.size + 1
         while (i >= 0 && guard-- > 0) {
             val p = pieces[i]
-            val r = room(p)
+            val r = room(p, clearMm)
             if (!cutPiece[i] && p.x1Mm - start >= r - eps) break
             val candidate = p.x1Mm - r
             if (!cutPiece[i] && candidate >= p.x0Mm - eps) {
                 start = min(start, candidate)
+                landed = i
                 break
             }
             // Too short to host the break: walk over it to the piece ending at its AFT face.
             start = min(start, p.x0Mm)
             i = if (i > 0 && contiguous(pieces[i - 1], p)) i - 1 else -1
         }
-        if (start <= eps) start = min(0f, startMm)
+        return if (start <= eps) min(0f, startMm) to -1 else start to landed
     }
 
     // FWD end: the mirror — interior is −x, the face behind the break is the piece's x0.
-    var end = endMm
-    if (end >= hi - eps) {
-        end = max(hi, endMm)
-    } else {
+    fun walkFwd(clearMm: Float): Pair<Float, Int> {
+        if (endMm >= hi - eps) return max(hi, endMm) to -1
+        var end = endMm
+        var landed = -1
         // Half-open the other way: an end on a face belongs to the piece ending there.
         var i = pieces.indexOfFirst { end > it.x0Mm + eps && end <= it.x1Mm + eps }
         var guard = pieces.size + 1
         while (i >= 0 && guard-- > 0) {
             val p = pieces[i]
-            val r = room(p)
+            val r = room(p, clearMm)
             if (!cutPiece[i] && end - p.x0Mm >= r - eps) break
             val candidate = p.x0Mm + r
             if (!cutPiece[i] && candidate <= p.x1Mm + eps) {
                 end = max(end, candidate)
+                landed = i
                 break
             }
             end = max(end, p.x1Mm)
             i = if (i < pieces.size - 1 && contiguous(p, pieces[i + 1])) i + 1 else -1
         }
-        if (end >= hi - eps) end = max(hi, endMm)
+        return if (end >= hi - eps) max(hi, endMm) to -1 else end to landed
+    }
+
+    // The ends the rule places share ONE daylight — the larger of their own — so a strip whose two
+    // ends sit in stock of different Ø still shows the same plain stock before each break. Re-walking
+    // with a larger clearance only ever moves an end outward, so the shared value only grows and
+    // the loop settles within a few passes.
+    var clear = 0f
+    var (start, aftAt) = walkAft(clear)
+    var (end, fwdAt) = walkFwd(clear)
+    repeat(pieces.size + 1) {
+        val shared = max(
+            if (aftAt >= 0) ownClear(pieces[aftAt]) else 0f,
+            if (fwdAt >= 0) ownClear(pieces[fwdAt]) else 0f,
+        )
+        if (shared <= clear + eps) return start to end
+        clear = shared
+        walkAft(clear).let { start = it.first; aftAt = it.second }
+        walkFwd(clear).let { end = it.first; fwdAt = it.second }
     }
     return start to end
 }
@@ -329,10 +372,10 @@ fun undercutCanonicalForNewLength(
 // ── Liner extensions ──
 //
 // A cut that covers a liner and runs on into the neighbouring body is the stored shaft-space
-// span `[startMm, startMm + lengthMm]` read against the reference liner's edges — the relation
-// "Distance from Liner AFT" already expresses, with the sign flipped. Nothing here is stored:
-// the extensions are a view of the span, and a typed extension maps back to canonical through
-// the authored liner edge exactly as a typed Distance does.
+// span `[startMm, startMm + lengthMm]` read against the liner's edges — the relation
+// "Distance from Liner AFT" already expresses, with the sign flipped. Nothing here is stored and
+// nothing here is typed: the extensions are a read-only view of the span (the card's overhang
+// line under Length, and the "Past the liner edge" question), never an input.
 
 /**
  * How far the span `[startMm, startMm + lengthMm]` runs past the reference liner's edges into
@@ -374,92 +417,6 @@ fun newLinerOverhangs(
 }
 
 /**
- * The span after typing an AFT extension of [extMm] past the liner's AFT edge [linerStartMm],
- * as `(start, length)`. The span's FWD end stays pinned. `extMm > 0` puts the start at
- * `linerStartMm − extMm`; `extMm == 0` pulls a start that lies AFT of the liner edge back to
- * the edge and leaves a start inside the liner where it is (zero extension means "does not run
- * past the edge", not "starts at the edge"). A negative [extMm] is treated as 0.
- *
- * Pure; does not validate or clamp — the caller limits [extMm] to the stock that exists
- * ([clampUndercutExtension]) and checks the result's length (a span whose FWD end lies AFT of
- * the liner edge comes back with a non-positive length).
- */
-fun undercutSpanWithAftExtension(
-    startMm: Float,
-    lengthMm: Float,
-    linerStartMm: Float,
-    extMm: Float,
-): Pair<Float, Float> {
-    val endMm = startMm + lengthMm
-    val ext = max(0f, extMm)
-    val newStartMm = when {
-        ext > 0f -> linerStartMm - ext
-        startMm < linerStartMm -> linerStartMm
-        else -> startMm
-    }
-    return newStartMm to (endMm - newStartMm)
-}
-
-/**
- * Mirror of [undercutSpanWithAftExtension] for the liner's FWD edge [linerEndMm]: the span's
- * AFT end stays pinned. `extMm > 0` puts the FWD end at `linerEndMm + extMm`; `extMm == 0`
- * pulls a FWD end that lies past the liner edge back to it and leaves one inside the liner
- * where it is. A negative [extMm] is treated as 0. Returns `(start, length)`.
- */
-fun undercutSpanWithFwdExtension(
-    startMm: Float,
-    lengthMm: Float,
-    linerEndMm: Float,
-    extMm: Float,
-): Pair<Float, Float> {
-    val endMm = startMm + lengthMm
-    val ext = max(0f, extMm)
-    val newEndMm = when {
-        ext > 0f -> linerEndMm + ext
-        endMm > linerEndMm -> linerEndMm
-        else -> endMm
-    }
-    return startMm to (newEndMm - startMm)
-}
-
-/**
- * Stock available AFT of the liner for an extension: from the shaft's AFT end (0) to the liner's
- * AFT edge [linerStartMm]; never negative. A cut can only run past the liner into stock that is
- * there (on-device request), so this is the most the AFT "Extend past liner" field can apply.
- */
-fun maxUndercutAftExtensionMm(linerStartMm: Float): Float = max(0f, linerStartMm)
-
-/**
- * Stock available FWD of the liner: from the liner's FWD edge [linerEndMm] to the shaft's FWD
- * end [oalMm]; never negative. Mirror of [maxUndercutAftExtensionMm].
- */
-fun maxUndercutFwdExtensionMm(linerEndMm: Float, oalMm: Float): Float = max(0f, oalMm - linerEndMm)
-
-/**
- * A typed extension limited to the stock that exists: [appliedMm] is the value the span is built
- * from, and [limited] is true when the typed value asked for more than the shaft has.
- */
-data class UndercutExtensionClamp(val appliedMm: Float, val limited: Boolean)
-
-/**
- * Limits a typed extension [typedMm] to [maxMm] (from [maxUndercutAftExtensionMm] /
- * [maxUndercutFwdExtensionMm]). A value at or under the maximum passes through unchanged; a
- * larger one applies the maximum and reports `limited`. A negative [typedMm] applies 0 and is not
- * limited — the extension functions already read a negative as 0.
- *
- * This is a deliberate carve-out from the golden rule, for a DERIVED field only: the extension is
- * a view of the stored shaft-space span, nothing stores it, and a cut running past the shaft's
- * end is a limit of the shaft rather than a measurement to keep. The clamp applies at the moment
- * of typing; a stored span is never clamped after the fact.
- */
-fun clampUndercutExtension(typedMm: Float, maxMm: Float): UndercutExtensionClamp {
-    val typed = max(0f, typedMm)
-    val cap = max(0f, maxMm)
-    return if (typed > cap) UndercutExtensionClamp(cap, limited = true)
-    else UndercutExtensionClamp(typed, limited = false)
-}
-
-/**
  * True when the span `[startMm, startMm + lengthMm]` is the liner's own span
  * `[linerStartMm, linerEndMm]`, both ends within [epsMm] ([UNDERCUT_TOUCH_EPS_MM] by default, so
  * the "Whole liner" preset's own `Float` round trip still reads as the whole liner on a long shaft).
@@ -472,6 +429,22 @@ fun undercutIsWholeLiner(
     epsMm: Float = UNDERCUT_TOUCH_EPS_MM,
 ): Boolean =
     abs(startMm - linerStartMm) <= epsMm && abs(startMm + lengthMm - linerEndMm) <= epsMm
+
+/**
+ * True when any of [otherSpans] — the OTHER recorded cuts, the asking card's own draft already
+ * excluded — overlaps [liner]'s span `[startMm, endMm]` by more than [epsMm]
+ * ([UNDERCUT_TOUCH_EPS_MM] by default). A cut that only touches the liner's edge, or lies wholly
+ * outside it, is not company; one nested inside it is. Gates the card's "Whole liner" preset, which
+ * is offered only on a liner with no other cut (on-device ruling: once a liner carries a recorded
+ * cut, a whole-liner span is pointless). Pure; nothing stored reads it.
+ */
+fun undercutLinerHasOtherCuts(
+    otherSpans: List<UndercutSpanMm>,
+    liner: UndercutLinerSpan,
+    epsMm: Float = UNDERCUT_TOUCH_EPS_MM,
+): Boolean = otherSpans.any { s ->
+    min(s.endMm, liner.endMm) - max(s.startMm, liner.startMm) > epsMm
+}
 
 /**
  * The S.E.T. a **bare-shaft** (body-only) cut authors its Distance against by default:
@@ -649,7 +622,7 @@ fun undercutOverlapMessage(partnerPosition: Int?): String =
 // ── Butt-against presets ──
 
 /**
- * "Start at end of cut N": the canonical start that puts a draft's AFT end [gapMm] FWD of the
+ * "On the FWD side of: Cut N": the canonical start that puts a draft's AFT end [gapMm] FWD of the
  * other cut's FWD end [otherEndMm] — at the default 0 edge to edge, which [undercutOverlapIssue]
  * counts as clear. The length is never touched; shaft bounds and overlap are the caller's check
  * ([undercutSpanIssue], and confirm time for a typed gap).
@@ -657,7 +630,7 @@ fun undercutOverlapMessage(partnerPosition: Int?): String =
 fun undercutStartAtEndOf(otherEndMm: Float, gapMm: Float = 0f): Float = otherEndMm + gapMm
 
 /**
- * "End at start of cut N": the canonical start that puts the FWD end of a draft of [lengthMm]
+ * "On the AFT side of: Cut N": the canonical start that puts the FWD end of a draft of [lengthMm]
  * [gapMm] AFT of the other cut's AFT end [otherStartMm] — at the default 0 edge to edge. The
  * length is never touched; shaft bounds and overlap are the caller's check.
  */
@@ -665,14 +638,14 @@ fun undercutEndAtStartOf(otherStartMm: Float, lengthMm: Float, gapMm: Float = 0f
     otherStartMm - gapMm - lengthMm
 
 /**
- * The card's "Gap after cut N" view: how far a draft's AFT end at [startMm] sits FWD of the other
+ * The FWD-side row's "Gap to Cut N" view: how far a draft's AFT end at [startMm] sits FWD of the other
  * cut's FWD end [otherEndMm] — the inverse of [undercutStartAtEndOf]. Negative once the draft
  * starts AFT of that end. Derived for display; nothing stores it.
  */
 fun undercutGapAfterMm(startMm: Float, otherEndMm: Float): Float = startMm - otherEndMm
 
 /**
- * The card's "Gap before cut N" view: how far a draft's FWD end sits AFT of the other cut's AFT
+ * The AFT-side row's "Gap to Cut N" view: how far a draft's FWD end sits AFT of the other cut's AFT
  * end [otherStartMm] — the inverse of [undercutEndAtStartOf]. Derived for display only.
  */
 fun undercutGapBeforeMm(startMm: Float, lengthMm: Float, otherStartMm: Float): Float =

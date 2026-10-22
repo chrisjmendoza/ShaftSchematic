@@ -194,107 +194,41 @@ class UndercutMathTest {
         )
     }
 
+    // ── Whole-liner gate: a liner with company ──
+
+    private val gateLiner = UndercutLinerSpan("L1", 600f, 1000f)
+
     @Test
-    fun `an AFT extension on a mid-liner cut moves the start past the edge and pins the FWD end`() {
-        val (start, len) = undercutSpanWithAftExtension(
-            startMm = 700f, lengthMm = 100f, linerStartMm = 600f, extMm = 50f,
-        )
-        assertEquals(550f, start, 1e-4f)
-        assertEquals(800f, start + len, 1e-4f)
+    fun `a liner no other cut reaches has no company`() {
+        assertFalse(undercutLinerHasOtherCuts(emptyList(), gateLiner))
     }
 
     @Test
-    fun `a zero AFT extension pulls a start aft of the liner edge back to the edge`() {
-        val (start, len) = undercutSpanWithAftExtension(
-            startMm = 550f, lengthMm = 250f, linerStartMm = 600f, extMm = 0f,
-        )
-        assertEquals(600f, start, 1e-4f)
-        assertEquals(800f, start + len, 1e-4f)
+    fun `a cut wholly outside the liner is not company`() {
+        val others = listOf(UndercutSpanMm("a", 100f, 300f), UndercutSpanMm("b", 1100f, 1200f))
+        assertFalse(undercutLinerHasOtherCuts(others, gateLiner))
     }
 
     @Test
-    fun `a zero AFT extension leaves a start inside the liner where it is`() {
-        val (start, len) = undercutSpanWithAftExtension(
-            startMm = 700f, lengthMm = 100f, linerStartMm = 600f, extMm = 0f,
-        )
-        assertEquals(700f, start, 1e-4f)
-        assertEquals(100f, len, 1e-4f)
+    fun `a cut that only touches the liner edge within the slop is not company`() {
+        // Butted to the AFT edge, and one reaching 0.005 mm onto the FWD edge — both the edge.
+        val others = listOf(UndercutSpanMm("a", 500f, 600f), UndercutSpanMm("b", 999.995f, 1100f))
+        assertFalse(undercutLinerHasOtherCuts(others, gateLiner))
     }
 
     @Test
-    fun `a negative extension is treated as zero`() {
-        assertEquals(
-            undercutSpanWithAftExtension(550f, 250f, 600f, 0f),
-            undercutSpanWithAftExtension(550f, 250f, 600f, -10f),
-        )
-        assertEquals(
-            undercutSpanWithFwdExtension(700f, 350f, 1000f, 0f),
-            undercutSpanWithFwdExtension(700f, 350f, 1000f, -10f),
-        )
+    fun `a cut overlapping the liner by more than the slop is company`() {
+        assertTrue(undercutLinerHasOtherCuts(listOf(UndercutSpanMm("a", 500f, 600.5f)), gateLiner))
     }
 
     @Test
-    fun `a FWD extension moves the FWD end past the edge and pins the AFT end`() {
-        val (start, len) = undercutSpanWithFwdExtension(
-            startMm = 700f, lengthMm = 100f, linerEndMm = 1000f, extMm = 50f,
-        )
-        assertEquals(700f, start, 1e-4f)
-        assertEquals(1050f, start + len, 1e-4f)
+    fun `a cut nested inside the liner is company`() {
+        assertTrue(undercutLinerHasOtherCuts(listOf(UndercutSpanMm("a", 700f, 750f)), gateLiner))
     }
 
     @Test
-    fun `a zero FWD extension pulls an end past the liner edge back and leaves one inside alone`() {
-        val (pulledStart, pulledLen) = undercutSpanWithFwdExtension(
-            startMm = 700f, lengthMm = 350f, linerEndMm = 1000f, extMm = 0f,
-        )
-        assertEquals(700f, pulledStart, 1e-4f)
-        assertEquals(1000f, pulledStart + pulledLen, 1e-4f)
-
-        val (keptStart, keptLen) = undercutSpanWithFwdExtension(
-            startMm = 700f, lengthMm = 100f, linerEndMm = 1000f, extMm = 0f,
-        )
-        assertEquals(700f, keptStart, 1e-4f)
-        assertEquals(100f, keptLen, 1e-4f)
-    }
-
-    // ── Extension clamp: only into stock that exists ──
-
-    @Test
-    fun `max AFT extension is the stock from the shaft's AFT end to the liner`() {
-        assertEquals(600f, maxUndercutAftExtensionMm(linerStartMm = 600f), 1e-4f)
-    }
-
-    @Test
-    fun `max FWD extension is the stock from the liner to the shaft's FWD end`() {
-        assertEquals(900f, maxUndercutFwdExtensionMm(linerEndMm = 1000f, oalMm = 1900f), 1e-4f)
-    }
-
-    @Test
-    fun `a liner at the shaft end leaves no stock on that side`() {
-        assertEquals(0f, maxUndercutAftExtensionMm(linerStartMm = 0f), 1e-4f)
-        assertEquals(0f, maxUndercutFwdExtensionMm(linerEndMm = 1900f, oalMm = 1900f), 1e-4f)
-        // A stale liner past the end still never reports negative stock.
-        assertEquals(0f, maxUndercutFwdExtensionMm(linerEndMm = 2000f, oalMm = 1900f), 1e-4f)
-    }
-
-    @Test
-    fun `an extension below the maximum is applied unchanged and not limited`() {
-        assertEquals(UndercutExtensionClamp(30f, limited = false), clampUndercutExtension(30f, 50f))
-    }
-
-    @Test
-    fun `an extension above the maximum applies the maximum and is limited`() {
-        assertEquals(UndercutExtensionClamp(50.8f, limited = true), clampUndercutExtension(101.6f, 50.8f))
-    }
-
-    @Test
-    fun `an extension exactly at the maximum is not limited`() {
-        assertEquals(UndercutExtensionClamp(50f, limited = false), clampUndercutExtension(50f, 50f))
-    }
-
-    @Test
-    fun `a negative extension applies zero and is not limited`() {
-        assertEquals(UndercutExtensionClamp(0f, limited = false), clampUndercutExtension(-10f, 50f))
+    fun `a cut spanning the whole liner is company`() {
+        assertTrue(undercutLinerHasOtherCuts(listOf(UndercutSpanMm("a", 600f, 1000f)), gateLiner))
     }
 
     @Test
@@ -402,7 +336,7 @@ class UndercutMathTest {
         )
         // A wide shaft outgrows the 1" pad; a small one does not.
         assertTrue(undercutBreakRoomMm(210f) > UNDERCUT_WINDOW_PAD_MM)
-        assertFalse(undercutBreakRoomMm(100f) > UNDERCUT_WINDOW_PAD_MM)
+        assertFalse(undercutBreakRoomMm(50f) > UNDERCUT_WINDOW_PAD_MM)
     }
 
     @Test

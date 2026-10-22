@@ -268,17 +268,16 @@ data class UndercutRecord(
     PARENT cut's span — `PARENT_AFT` → `parentStart + entered` (display `canonical − parentStart`),
     `PARENT_FWD` → `parentEnd − entered − length` (display `parentEnd − (canonical + length)`). A
     Length edit under `PARENT_FWD` therefore pins the cut's FWD end, as under `LINER_FWD`.
-- **Liner extensions** (the card's Whole liner / Extend past liner view — see the overlay's
-  Default section): `undercutLinerExtensionsMm(start, length, linerStart, linerEnd)` → `(aft, fwd)`
-  overhang past each liner edge, each ≥ 0; `undercutSpanWithAftExtension(start, length,
-  linerStart, ext)` / `undercutSpanWithFwdExtension(start, length, linerEnd, ext)` → the
-  `(start, length)` after a typed extension, the opposite end pinned (negative `ext` = 0; `ext ==
-  0` pulls an overhanging end back to the edge, leaves an inside end alone);
+- **Liner extensions** (the card's read-only overhang line under Length and its "Past the liner
+  edge" question — see the overlay's Default section): `undercutLinerExtensionsMm(start, length,
+  linerStart, linerEnd)` → `(aft, fwd)` overhang past each liner edge, each ≥ 0 — a view of the
+  stored span, never an input (on-device ruling: no field asks for the position a second time);
   `undercutIsWholeLiner(start, length, linerStart, linerEnd, eps)` — the span is the liner's own
-  within ε (default `UNDERCUT_TOUCH_EPS_MM`, below); `maxUndercutAftExtensionMm(linerStart)` / `maxUndercutFwdExtensionMm(linerEnd, oal)` —
-  the stock between the liner edge and that shaft end, ≥ 0; `clampUndercutExtension(typed, max)` →
-  `UndercutExtensionClamp(appliedMm, limited)` (typed above max → max, limited; at or under →
-  unchanged; negative → 0, not limited).
+  within ε (default `UNDERCUT_TOUCH_EPS_MM`, below); `undercutLinerHasOtherCuts(otherSpans, liner,
+  eps)` — some OTHER recorded cut (the asking card's own draft already excluded) overlaps the
+  liner's `[start, end]` by more than ε: a cut touching the liner's edge within ε, or lying wholly
+  outside it, is not company; a cut nested inside it, or spanning it, is. The card's Whole liner
+  gate.
 - **Buried liner edges**: `undercutLinerEdgeBuried(edgeMm, spans, eps = UNDERCUT_TOUCH_EPS_MM)` —
   true when some span strictly crosses the edge, more than ε past it on BOTH sides (ending at the
   edge, or covering the liner's end without crossing, is not buried);
@@ -327,7 +326,7 @@ data class UndercutRecord(
   partial-overlap predicate, the default ε of **containment** (`undercutSpanContains`, so the
   containment forest, the confirm check and the overlap band share it), the nested shared-shoulder
   test and the butted-face test of the notch builder, and the default ε of `undercutIsWholeLiner`.
-  The presets compute their edges in `Float` — "End at start of" as `other.start − L` then
+  The presets compute their edges in `Float` — "On the AFT side of" as `other.start − L` then
   `start + L`, "Whole liner" as `end − start` then `start + L` — and at 8–16 m one ulp is about
   1e-3 mm, as large as the 1e-3 mm span ε, so a butted cut could read as overlapping and the Whole
   liner chip as unselected. Containment shares it because two tolerances leave a gap between them:
@@ -335,9 +334,9 @@ data class UndercutRecord(
   contained, so it read as a PARTIAL overlap. No real overlap is 0.01 mm thin. The span ε still
   governs shaft bounds.
 - **Edge-to-edge presets** (the card's two chip rows): `undercutStartAtEndOf(otherEnd)` →
-  `otherEnd` ("Start at end of cut N": the draft's AFT end on the other cut's FWD end) and
-  `undercutEndAtStartOf(otherStart, length)` → `otherStart − length` ("End at start of cut N":
-  the draft's FWD end on the other cut's AFT end). Edge to edge, which the overlap check counts as
+  `otherEnd` ("On the FWD side of: Cut N": the draft FWD of the other cut, its AFT end on the other
+  cut's FWD edge) and `undercutEndAtStartOf(otherStart, length)` → `otherStart − length` ("On the
+  AFT side of: Cut N": the draft AFT of the other cut, its FWD end on the other cut's AFT edge). Edge to edge, which the overlap check counts as
   clear; shaft bounds are the caller's `undercutSpanIssue` check (the card refuses an off-shaft
   result as "Not applied — <reason>", `undercutPresetRefusal` — a preset, so nothing typed is
   lost).
@@ -381,8 +380,20 @@ data class UndercutRecord(
   1/4 in body and the liner face). `undercutBreakRoomMm(diaMm)` =
   `Ø/2 · UNDERCUT_BREAK_AMP_FRAC_OF_R · (BREAK_EDGE_OUTWARD_REACH_FRAC +
   UNDERCUT_BREAK_CLEAR_FRAC_OF_AMP)` is the uniform stock a break needs between its line and
-  the next face (glyph reach ≈ 0.433 × amp plus 0.25 × amp of daylight; the PDF caps its
-  amplitude lower, so the same room suffices there). `withUndercutBreakRoom(startMm, endMm,
+  the next face (glyph reach ≈ 0.433 × amp plus **one full amplitude** of daylight,
+  `UNDERCUT_BREAK_CLEAR_FRAC_OF_AMP` = 1.0, `undercutBreakAmplitudeMm` = the canvas amplitude; the
+  PDF caps its amplitude lower, so the same room suffices there). **Equal margins** (on-device
+  request: the AFT break sat on the liner face while the FWD end showed more body; the cuts should
+  read centred between the breaks, with a little more body before each): every interior end comes
+  out of the ONE rule — the outermost feature on that side (liner face or cut shoulder, whichever is
+  further out), plus the glyph's reach at that end's Ø, plus the daylight — and the daylight is
+  **shared**: the ends the rule places take the larger of their own one-amplitude values, so a strip
+  whose two ends sit in stock of different Ø (a 10 in body beside the liner face, a 9 9/16 in body
+  past an overhanging cut) still shows the same plain stock before each break. An end the input
+  already places further out (the never-narrow preview, the PDF's pad floor or S.E.T. lead) keeps
+  its place and sets no shared value. On the on-device job's MID liner strip this is 3.000 in of
+  daylight at both ends, up from 0.750 / 0.717 in (`UndercutBreakRoomSymmetryTest`).
+  `withUndercutBreakRoom(startMm, endMm,
   segs, oalMm)` widens a draw range **outward only** until each non-physical end sits in a piece
   of the outer-surface envelope (`buildSurfaceEnvelope`, so a body under a liner never hides the
   liner's face) with that room before the piece's interior face; a piece too short to host the
@@ -1003,14 +1014,13 @@ cuts); every other card renders stored values.
   from a STORED card that carried an edit (a value typed into a card an Undo then took away)
   raises the `UNDERCUT_DISCARDED_DRAFT_MSG` snackbar, like the stale-draft drop; the add flow's
   card is exempt (its page goes only when it is confirmed, flush included, or cancelled).
-- **No field on this card ever reverts a typed value.** Distance, Length, the two "Extend past
-  liner" fields and Measured Ø carry no validator: anything that parses lands in the draft
-  verbatim and the canvas previews it (the notch pass draws the render-clamped span, so a draft
-  past the shaft end draws to the end). ALL span validity — shaft bounds, a positive length, no
-  partial overlap — is confirm-time (`undercutConfirmIssue`), and so is every reason a value can
-  be refused. Only text that does not parse is turned back, and the shared field names it
-  (`"<typed> not applied — not a number"`, `NumberField.md`). The one clamp on a typed value — an
-  extension past the shaft end — applies the maximum and says so under the field.
+- **No field on this card ever reverts a typed value.** Distance, Length, the gap fields and
+  Measured Ø carry no validator: anything that parses lands in the draft verbatim and the canvas
+  previews it (the notch pass draws the render-clamped span, so a draft past the shaft end draws
+  to the end). ALL span validity — shaft bounds, a positive length, no partial overlap — is
+  confirm-time (`undercutConfirmIssue`), and so is every reason a value can be refused. Only text
+  that does not parse is turned back, and the shared field names it (`"<typed> not applied — not
+  a number"`, `NumberField.md`). Nothing on the card clamps a typed value.
 - The blocking reason shows inline on the card while it is dirty (under the fields, and on the
   pill); the non-blocking Ø-vs-surface warning still shows, read off the **draft** so it describes
   what the canvas is previewing. The stale-overrun warning shows only on an UNEDITED card — on a
@@ -1031,10 +1041,15 @@ describes the **selected** card's draft, in three states:
 - **Unsaved** (`UndercutPillState.Unsaved(pending)`) — dirty and clear. `primaryContainer` pill,
   tappable **"Record cut"** for a new (pending) cut or **"Confirm change"** for an edit to a
   recorded cut (`testTag "undercut_confirm"`) which confirms immediately and **stays on the card**, plus a
-  separate small **✕ discard** (`testTag "undercut_cancel"`) that drops the draft back to stored
-  values — including the reference chips — and discards the page outright for a pending add.
+  separate **discard button** (`testTag "undercut_cancel"`, content description "Discard change")
+  that drops the draft back to stored values — including the reference chips — and discards the
+  page outright for a pending add. It is a bounded circular button inside the pill's right end — a
+  36 dp `FilledTonalIconButton`, inset 4 dp from the edge, a `surface` disc carrying a ✕ in
+  `error` (theme roles: the pill is app chrome, not a sheet) — so it reads as its own target on
+  every pill colour in light and dark themes (on-device request: a bare ✕ on the container colour
+  did not read as a button). Never the same tap target as confirming.
 - **Blocked** — dirty with a non-null `undercutConfirmIssue`. `errorContainer` pill showing the
-  blocking reason, **not** confirmable; the ✕ discard stays.
+  blocking reason, **not** confirmable; the discard button stays.
 
 *Leaving the card saves it.* A dirty draft that clears `undercutConfirmIssue` is confirmed
 automatically, through the identical `confirmDraft` path, when the machinist leaves its card:
@@ -1180,25 +1195,30 @@ Each card:
   blocked (the pill already says why — no second validator), while ANOTHER card holds the one
   pending add, and when less than the default length of shaft remains FWD of the cut — then with
   the caption **"No stock FWD of this cut"** (`UNDERCUT_NO_STOCK_FWD_MSG`, `testTag
-  "undercut_next_cut_caption"`); a seed is never placed past the shaft end. The "Start at end
-  of" / "End at start of" chips are unchanged.
+  "undercut_next_cut_caption"`); a seed is never placed past the shaft end. The side-named
+  edge-to-edge chips are unchanged.
 
 - **Card field order** (usability review: the rarely-used placement tools sat between Distance and
   Length and the Measured Ø a shop user came to type): title + delete, warnings, Measure From chips,
-  Distance, Length, the overhang warnings, Measured Ø, Notes, the confirm-issue warning, "Next cut",
-  then the **"More ways to place this cut"** expander. Distance carries the supporting hint
+  Distance, Length, the read-only overhang line (`undercut_overhang_info`, below), the overhang
+  warnings, Measured Ø, Notes, the confirm-issue warning, "Next cut", then the **"More ways to place
+  this cut"** section. Distance carries the supporting hint
   `UNDERCUT_FRACTION_HINT` ("Decimals or fractions — 5.748, 3 1/2, 7/8") and Measured Ø the
   placeholder `UNDERCUT_DIA_PLACEHOLDER` ("e.g. 5.625 or 5 5/8"), both through `NumericInputField`'s
   optional `placeholder`/`hint` (`NumberField.md`) via the card's private `UndercutNum` wrapper.
-- **"More ways to place this cut"** (`undercut_more_placement`): an expander row, collapsed by
-  default, shown only when the card has a liner to span against or another cut to butt against. It
-  holds, in their old order, Span: Whole liner, Extend past liner AFT / FWD, and the "Start at end
-  of" / "End at start of" chips with their gap fields. It STARTS OPEN for a cut that already is
-  Whole-liner or carries a non-zero extension, and is HELD open while a gap field is open — a
-  tapped "Cut N" chip's field is never hidden; collapsing it closes the field exactly as a second
-  chip tap does, and the cut stays where the gap put it. All preset state (the gap fields' text,
-  open chip, extension drafts) is hoisted above the expander, so collapsing and re-opening loses
-  nothing.
+- **"More ways to place this cut"** (`undercut_more_placement`): an expander, collapsed by
+  default, that reads as its own SECTION (on-device request: a plain `bodyMedium` line blended into
+  the card) — a `HorizontalDivider` above it, the heading in `titleSmall` / `onSurface` with the
+  expand/collapse icon, and, when open, its contents inside a rounded (12 dp) `surfaceVariant`
+  panel with 12 dp padding and 8 dp spacing, so the presets visibly belong to the heading. Shown
+  only when there is something behind it: the Whole liner chip is offered (below) or another cut on
+  the page can be butted against — a card with nothing behind the heading shows no heading. It
+  holds Span: Whole liner, then the "On the AFT side of" / "On the FWD side of" chips with their
+  gap fields. It STARTS OPEN for a cut that already is its offered Whole liner, and is HELD open
+  while a gap field is open — a tapped "Cut N" chip's field is never hidden; collapsing it closes
+  the field exactly as a second chip tap does, and the cut stays where the gap put it. All preset
+  state (the gap fields' text, open chip) is hoisted above the expander, so collapsing and
+  re-opening loses nothing.
 
 - **Warnings** (non-blocking, both can show together): "Extends past shaft end — re-measure"
   (`isUndercutStaleOverrun`, unedited card only — see "Draft editing") and "Ø isn't smaller than the shaft here (Ø 7.874 in) — check the number" (`diaMm > 0` and `diaMm
@@ -1302,42 +1322,36 @@ with `referenceLinerId` `""` (the edge has no step left to measure from); a buri
 leaves the `LINER_AFT` seed. The tab's bare-shaft add from the AFT S.E.T. seeds AT the AFT SET, where AFT_SET is
 trivially the nearer datum.
 
-Whole liner / Extend past liner (on-device request: a cut that covers the whole liner and runs on
-into the adjacent body). Shown on a card only while it has a liner to act on, between the Measure
-From chips and the Distance field. On a **liner strip** the block acts on the **strip's liner** —
+Whole liner (on-device request: a cut that covers the whole liner). The **"Span: Whole liner"**
+chip (`testTag "undercut_whole_liner"`, selected while `undercutIsWholeLiner` holds) sits first in
+the "More ways to place this cut" section. On a **liner strip** it acts on the **strip's liner** —
 the one the machinist opened and is looking at — never a different liner the cut's stored
 reference happens to name; off a liner strip it falls back to the reference liner (the draft's
 own, else the largest-share liner). The Measure From chips keep the reference liner: that is a
-datum choice, not a span preset. **"Span: Whole liner"**
-(`testTag "undercut_whole_liner"`, selected while `undercutIsWholeLiner` holds) is a one-tap
-preset, applied only on the tap: the draft takes the liner's span and the `LINER_AFT` reference
-for that liner, so Distance then reads 0. **"Extend past liner" AFT / FWD** (`undercut_extend_aft`
-/ `undercut_extend_fwd`) show how far the span runs past each liner edge
-(`undercutLinerExtensionsMm`, 0 for an end inside the liner). Typing an AFT value moves the AFT
-end to `linerStart − ext` with the **FWD end pinned** (`undercutSpanWithAftExtension`); FWD is the
-mirror with the **AFT end pinned** (`undercutSpanWithFwdExtension`). A typed 0 pulls an end that
-overhangs the edge back to it and leaves an end inside the liner alone. Neither field changes the
-reference. **An extension only runs into stock that is there** (on-device request): the most a side
-can apply is the stock between the liner edge and that shaft end (`maxUndercutAftExtensionMm` = the
-liner's AFT edge, `maxUndercutFwdExtensionMm` = `oalMm − linerEnd`), and a typed value past it is
-not blocked — `clampUndercutExtension` applies the maximum and the card shows "Extension past the
-shaft's AFT|FWD end isn't allowed — set to the maximum, …" under the row
-(`undercut_extend_aft_note` / `undercut_extend_fwd_note`; it clears on that side's next un-limited
-commit, and is shown only while the field still reads the applied maximum). The field re-seeds to
-the applied value — a per-side counter re-keys it on every limited commit, since a repeat overrun
-leaves the draft, and so `initialText`, unchanged. A side with no stock (the liner sits at that
-shaft end) is disabled with the caption "Liner is at the shaft's AFT|FWD end — nothing to extend
-into". Like every field on the card the two extension fields carry **no validator**: a clamped
-span cannot leave the shaft, and a result with no length (an end pulled back past the other) lands
-in the draft as computed and is blocked at confirm ("Length must be greater than zero"). The clamp is a **deliberate carve-out from the golden rule for a derived view field
-only**: nothing stores the extension, and a cut past the shaft's end is a limit of the shaft, not a
-measurement to keep; it applies at the moment of typing, and a stored span is never clamped after
-the fact. **Nothing is stored**: the extensions are
-a view of the stored shaft-space span against the authored liner edges — the "Distance from Liner
-AFT" relation with the sign flipped — and nothing derived writes back into them. The golden rule
-holds because a typed extension maps to canonical through the authored liner edge exactly as a
-typed Distance does; the Distance and Length fields re-seed from the new draft (`NumericInputField`
-keys its remembered text on `initialText`).
+datum choice, not a span preset. It is a one-tap preset, applied only on the tap: the draft takes
+the liner's span and the `LINER_AFT` reference for that liner, so Distance then reads 0. **It is
+offered only on a liner with no other cut** (on-device ruling: once a liner carries a recorded cut,
+a whole-liner span is pointless): `undercutLinerHasOtherCuts(otherSpans, liner)` over every OTHER
+cut on the sheet (`undercutOtherSpans`, the card's own draft excluded) hides the row as soon as one
+overlaps the liner by more than `UNDERCUT_TOUCH_EPS_MM`. Nothing stored changes: a card whose span
+already equals the liner keeps its values (Distance 0, Length = the liner) — it is simply not
+offered the chip while the liner has company.
+
+**The overhang is information, never an input** (on-device ruling: two "Extend past liner"
+fields asked the machinist to type the cut's position a second time, and Distance + Length plus
+the "Past the liner edge" question already cover it). Directly under the Length field — it is a
+derived view of Distance + Length, so it sits with them, never inside the "More ways" section — a
+liner card (`stripLiner ?: refLiner`) shows ONE read-only caption (`testTag
+"undercut_overhang_info"`) while at least one end runs past that liner by more than
+`UNDERCUT_TOUCH_EPS_MM` (`undercutLinerExtensionsMm`). It names only the end(s) that overhang, in
+the document unit: "Extends 3.5 in past the liner's FWD edge", "Extends 1 in past the liner's AFT
+edge", or "Extends 1 in past the liner's AFT edge and 3.5 in past its FWD edge"
+(`undercutOverhangInfo`). An end whose declined "Past the liner edge" warning is showing
+(`overhangFlagged`) is left out of the line — that warning already states the amount, and two
+lines for one overhang read as a mistake; with both ends flagged the line is absent. Nothing is
+stored and nothing is editable: the overhang is a view of the
+stored shaft-space span against the liner's edges — the "Distance from Liner AFT" relation with
+the sign flipped — and nothing derived writes back into the span.
 
 **"Past the liner edge" — an overhang typed by accident is asked about** (on-device request: the
 machinist may not know the typed numbers run the cut off the liner, or a measurement may be
@@ -1351,8 +1365,8 @@ overhang, "This cut runs <a> past the liner's AFT edge and <b> past its FWD edge
 that right?" (`undercutOverhangQuestion`). Its two buttons are the ONLY way out (`DialogProperties(
 dismissOnClickOutside = false, dismissOnBackPress = false)`): a tap outside would have to pick an
 answer silently.
-- **"Yes, it does"** (`undercut_overhang_accept`; formerly "Add extension") — the overhang is intended; the Extend field
-  already shows it. The end is recorded as acknowledged, and nothing more is shown.
+- **"Yes, it does"** (`undercut_overhang_accept`; formerly "Add extension") — the overhang is intended; the overhang
+  line under Length already shows it. The end is recorded as acknowledged, and nothing more is shown.
 - **"No, let me check"** (`undercut_overhang_decline`; formerly "No") — the end is flagged, and the card shows a standing
   warning under the Length field (`undercut_overhang_warning`): "Runs <amount> <unit> past the
   liner's AFT|FWD edge — check Distance and Length" (`undercutOverhangWarning`).
@@ -1362,32 +1376,38 @@ answer silently.
   next overhang there is asked about afresh. The state (`UndercutLinerEnds`) is card-local,
   `remember(draft.id)`: it survives field re-seeds and resets when the card's cut changes
   identity — and, being card-local, it is not kept once the card leaves composition.
-- Only Distance and Length ask. The Extend fields, Whole liner, the edge-to-edge presets and the Measure From
-  chips never do: the first three are explicit span choices, and the chips change no span.
+- Only Distance and Length ask. Whole liner, the edge-to-edge presets with their gap fields, and the
+  Measure From chips never do: the first two are explicit span choices, and the chips change no span.
 
 Edge-to-edge presets (on-device request: measuring each new cut's Distance from the previous
-cut's end is tedious). Directly below the Span / Extend past liner block (below the Measure From
-chips when the card has no reference liner), shown only while the page holds at least one OTHER
-stored cut: TWO labelled rows, **"Start at end of:"** and **"End at start of:"**, each listing
-EVERY other stored cut on the page as a chip **"Cut N"** (`undercutButtChipLabel`; N its 1-based
-position in the page order, the card title's number), in page order, in a `FlowRow`
-(`testTag "undercut_butt_after_<N>"` in the first row, `"undercut_butt_before_<N>"` in the
-second). Both directions for every cut, chosen by the row and never by geometry: the single
-"Butt against: After/Before cut N" row picked its side from the cuts' midpoints, and "After cut 5"
-was read as AFT of cut 5 (on-device report). The pending card is never a target. A tap is a
-preset applied on the tap: "Start at end of" sets the
-canonical start to the other cut's FWD end (`UndercutDraft.startingAtEndOf` →
-`undercutStartAtEndOf`), "End at start of" to its AFT end minus the draft's length
-(`UndercutDraft.endingAtStartOf` → `undercutEndAtStartOf`). Length and reference are untouched, so
+cut's end is tedious). In the "More ways to place this cut" section, below the Whole liner row when
+it is offered, shown only while the page holds at least one OTHER stored cut: TWO labelled rows
+named by the SIDE of the other cut this one goes on, AFT row first — **"On the AFT side of:"** and
+**"On the FWD side of:"** — each listing EVERY other stored cut on the page as a chip **"Cut N"**
+(`undercutButtChipLabel`; N its 1-based position in the page order, the card title's number), in
+page order, in a `FlowRow` (`testTag "undercut_butt_before_<N>"` in the AFT row,
+`"undercut_butt_after_<N>"` in the FWD row). Both directions for every cut, chosen by the row and
+never by geometry: the single "Butt against: After/Before cut N" row picked its side from the cuts'
+midpoints, and "After cut 5" was read as AFT of cut 5 (on-device report); the rows that followed it,
+"Start at end of:" / "End at start of:", read backwards depending on which end the machinist
+measured from (on-device report), so the rows now name the side. The pending card is never a
+target. A tap is a preset applied on the tap: "On the AFT side of" puts this cut AFT of cut N, its
+FWD end on cut N's AFT edge — the canonical start becomes the other cut's AFT end minus the draft's
+length (`UndercutDraft.endingAtStartOf` → `undercutEndAtStartOf`, `UndercutGapAnchor(after =
+false)`); "On the FWD side of" puts it FWD of cut N, its AFT end on cut N's FWD edge — the canonical
+start becomes the other cut's FWD end (`UndercutDraft.startingAtEndOf` → `undercutStartAtEndOf`,
+`after = true`). Length and reference are untouched, so
 Distance re-seeds to the new position under the same datum.
 An applied chip stays **selected** and opens a **gap field** under its row (on-device request: the
 next cut was measured 2 1/4" past the previous cut's end, not re-measured from the liner edge) —
-**"Gap after Cut N (in)"** (`testTag "undercut_gap_after"`) or **"Gap before Cut N (in)"**
-(`"undercut_gap_before"`), label from `undercutGapFieldLabel`. One chip across both rows is
+**"Gap to Cut N (in)"** under either row (`undercutGapFieldLabel`; the row it opens under names the
+side, so the label names only the cut — "Gap after" / "Gap before" carried the same ambiguity as
+the old row names), tagged `"undercut_gap_before"` under the AFT row and `"undercut_gap_after"`
+under the FWD row. One chip across both rows is
 selected at a time (`UndercutGapAnchor`, card-local screen state keyed on the draft id, dropped
 when its cut leaves the page; never stored). The field is a **view** of the canonical span against
 that cut's edge — `undercutGapAfterMm` = start − other FWD end, `undercutGapBeforeMm` = other AFT
-end − draft FWD end — the Extend-past-liner posture: nothing new is stored, a typed gap moves the
+end − draft FWD end — the overhang line's posture: nothing new is stored, a typed gap moves the
 cut with its length kept (`startingAtEndOf(other, gapMm)` / `endingAtStartOf(other, gapMm)`), and
 Distance re-seeds under the card's own datum, so the sheet keeps reading from the liner or S.E.T.
 The typed gap commits verbatim (negative allowed — it reads below zero once the draft starts
@@ -2042,5 +2062,5 @@ Section-level pick-and-print — no multi-page output.
   overlay's zoom windows, so it stays at 1 in; how wide the PDF's pad *prints* is the PDF's own
   `UNDERCUT_STRIP_MIN_PAD_PT` floor, tunable independently. The pad is a minimum: on a wide
   shaft the window-end break room (`undercutBreakRoomMm`, tuned by
-  `UNDERCUT_BREAK_CLEAR_FRAC_OF_AMP` = 0.25 and `UNDERCUT_BREAK_AMP_FRAC_OF_R` = 0.6) is what
-  the draw range actually gets.
+  `UNDERCUT_BREAK_CLEAR_FRAC_OF_AMP` = 1.0 and `UNDERCUT_BREAK_AMP_FRAC_OF_R` = 0.6, the daylight
+  shared by both interior ends) is what the draw range actually gets.
