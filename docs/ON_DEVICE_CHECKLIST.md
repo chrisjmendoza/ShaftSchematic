@@ -86,9 +86,15 @@ Use job 935061 (Polar Ranger STBD), MID liner page.
   and the red warning replaces that line for that end.
 - [ ] **Butt chips** read "On the AFT side of:" then "On the FWD side of:" with "Cut N" chips; the
   gap field reads "Gap to Cut N (in)". Tap each once and confirm the cut lands on the side named.
-- [ ] **S-break margins** on the detail canvas: the AFT end shows ~3 in of plain body before the
-  break (was ¾ in). The FWD end keeps the S.E.T. lead's room (~8 in on a phone) — say whether
-  you want the AFT side matched to it (true centring, both ends long) or left as is.
+- [ ] **S-break margins** on the detail canvas (second merge, 2026-10-22): both ends show the SAME
+  stock past the chain — about 8 in each on a phone — so the cuts sit centred; the S.E.T. lead's
+  line stubs are shorter and the white inset at each screen edge is halved, so the drawing is a
+  little larger. If 8 in a side still reads long, say so: the lever left is the lead's text
+  clearance.
+- [ ] **PDF options on the undercut preview**: opening the panel moves the page into a strip under
+  the top bar (cropped to the drawing) with the panel below it — on a portrait page (2+ sections)
+  the strip fills the width. The Undercut tab's own Options panel and the detail page's Drawing
+  options stop below their canvas.
 - [ ] **Printed strip** (Preview): equal plain stock before both breaks on every strip; the manual
   figure shows the same.
 

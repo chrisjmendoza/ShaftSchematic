@@ -1,6 +1,7 @@
 package com.android.shaftschematic.ui.screen
 
 import com.android.shaftschematic.doc.ShaftDocCodec
+import com.android.shaftschematic.geom.UNDERCUT_SPAN_EPS_MM
 import com.android.shaftschematic.geom.UndercutSpanMm
 import com.android.shaftschematic.geom.UndercutStrip
 import com.android.shaftschematic.geom.clampUndercutSpan
@@ -43,7 +44,8 @@ class UndercutDetailSetLeadTest {
             UndercutSpanMm(u.id, c.startMm, c.endMm)
         }
         val widthOf: (DualLabel) -> Float = { it.inline().length * 14f }
-        // The canvas widens its drawn range on the lead's side, as the printed strip does.
+        // The canvas widens its drawn range on the lead's side, as the printed strip does, and the
+        // other side to the same stock past its chain datum, so the cuts sit centred.
         val range = undercutDetailLeadDrawRange(
             strip, spec, UndercutSetDatum.NEAREST, spans, strip.drawStartMm, strip.drawEndMm,
             spec.overallLengthMm,
@@ -51,7 +53,12 @@ class UndercutDetailSetLeadTest {
             scale = 3.28f, arrowSizePt = com.android.shaftschematic.settings.PDF_ARROW_SIZE_DEFAULT_PT,
             unit = UnitSystem.INCHES, labelWidthPx = widthOf,
         )
-        assertTrue("only the FWD (lead) side grows", range.endMm > strip.drawEndMm && range.startMm == strip.drawStartMm)
+        assertTrue("the FWD (lead) side grows", range.endMm > strip.drawEndMm)
+        assertTrue("neither side narrows", range.startMm <= strip.drawStartMm)
+        assertEquals(
+            "the same stock past each chain datum",
+            strip.chainStartMm - range.startMm, range.endMm - strip.chainEndMm, UNDERCUT_SPAN_EPS_MM,
+        )
         val lead = undercutDetailSetLead(
             strip, spec, UndercutSetDatum.NEAREST, spans, range.startMm, range.endMm,
         )

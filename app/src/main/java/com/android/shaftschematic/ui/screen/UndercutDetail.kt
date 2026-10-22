@@ -1260,7 +1260,8 @@ fun UndercutWindowDetailOverlay(
                     }
                     // The printed strip's lead room, at canvas scale: on the S.E.T. lead's side the
                     // canvas draws enough stock past the chain datum for the lead's value to seat in
-                    // its own line with an open tail, exactly as the printed strip does.
+                    // its own line with an open tail, exactly as the printed strip does, and the same
+                    // stock past the other end's datum, so the cuts sit centred between the breaks.
                     val profileRowPx = with(density) { profileRowDp.toPx() }
                     val edgePadPx = with(density) { UNDERCUT_EDGE_PAD_DP.dp.toPx() }
                     val (drawStartMm, drawEndMm) = remember(
@@ -3430,11 +3431,16 @@ private fun UndercutWarning(text: String, modifier: Modifier = Modifier) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Clear space (dp) reserved at each side of the window canvas for the S-curve break edges,
- * whose bulge reaches `r × 0.6` past the window edge. The same budget reasoning as the wear
- * overlay's `SEG_EDGE_PAD_DP`.
+ * Clear space (dp) reserved at each side of the window canvas, between the window-end break and
+ * the canvas edge — kept to what the break needs, so the drawing gets the width (on-device
+ * request). The only thing that reaches into it is the break glyph's outward lobe:
+ * `BREAK_EDGE_OUTWARD_REACH_FRAC` (`geom/BreakGlyphMath.kt`) of the amplitude, the amplitude being
+ * [UNDERCUT_BREAK_AMP_FRAC_OF_R] of the drawn radius, and the height fit caps that radius at
+ * `0.36 ×` [UNDERCUT_PROFILE_ROW_DP], so the lobe never reaches past ~13 dp plus half a stroke.
+ * The S.E.T. lead's open tail ends AT the break line, and the Ø callouts clamp to the canvas on
+ * their own. Shrinking this under the lobe's reach would clip the break at the canvas edge.
  */
-internal const val UNDERCUT_EDGE_PAD_DP = 32f
+internal const val UNDERCUT_EDGE_PAD_DP = 16f
 
 internal data class UndercutWindowLayout(
     val pxPerMm: Float,
@@ -3578,9 +3584,12 @@ internal fun undercutDetailSetLead(
 
 /**
  * The detail canvas's drawn range: the previewed range ([previewStartMm], [previewEndMm]) widened
- * on the S.E.T. lead's side only ([undercutWidenForSetLead]) so the lead's value seats in its line
- * at the canvas scale — the printed strip's rule ([undercutSetLeadRoomPt] × [scale], measured by
- * [labelWidthPx] as the canvas draws it), so the canvas lead reads like the sheet's. The canvas maps
+ * ([undercutWidenForSetLead]) so the S.E.T. lead's value seats in its line at the canvas scale —
+ * the printed strip's rule ([undercutSetLeadRoomPt] × [scale], measured by [labelWidthPx] as the
+ * canvas draws it), so the canvas lead reads like the sheet's — and the OTHER end widened to the
+ * same drawn stock past its chain datum, so the cuts sit centred between the two breaks
+ * (on-device request: symmetric edges, centred undercuts). Only widens; an end at the shaft's own
+ * extent stops there. The printed strip keeps its own minimum pad on the far side. The canvas maps
  * `(widthPx − 2·edgePadPx) / length`, capped by its height fit
  * (`0.72 × profileRowHeightPx / maxOdMm`, [computeUndercutWindowLayout]'s rule). Returned
  * unchanged with no width yet, no cuts, or no lead.
@@ -3613,7 +3622,7 @@ internal fun undercutDetailLeadDrawRange(
     )
     return undercutWidenForSetLead(
         previewStartMm, previewEndMm, strip.chainStartMm, strip.chainEndMm, lead.side, room,
-        otherMinPadPt = 0f,
+        otherMinPadPt = room,
         availPt = availPx,
         oalMm = oalMm,
         maxPtPerMm = if (maxOdMm > 0f) profileRowHeightPx * 0.72f / maxOdMm else Float.MAX_VALUE,

@@ -875,29 +875,32 @@ fun undercutSetLeadValueMm(
 }
 
 /**
- * The open tail a S.E.T. lead keeps past its value, points, before [scale] — and, the value being
- * centred in its line, the same stub on the datum side that carries the head. Two default
- * arrowheads: enough line beyond the value that the half dimension reads as the chain running on
- * toward an S.E.T. off the strip, rather than a value parked in a corner.
+ * The shortest stub a S.E.T. lead keeps each side of its padded value, points, before [scale]: the
+ * open tail past the value and — the value being centred in its line — the same stub on the datum
+ * side that carries the head. Enough line beyond the value that the half dimension reads as the
+ * chain running on toward an S.E.T. off the strip; any longer only spends stock the strip has to
+ * draw for nothing (on-device request: the lead's stock was longer than its text needed).
+ * [undercutSetLeadRoomPt] raises it to an arrowhead plus a point when the head is larger.
  */
-const val UNDERCUT_SET_LEAD_TAIL_PT = 8f
+const val UNDERCUT_SET_LEAD_TAIL_PT = 5f
 
 /**
  * The drawn width a strip's S.E.T. lead needs for its value to SEAT in a break in its own line
  * (on-device report: a lead value that fell off onto a leader read as a stray label, not as the
  * chain continuing to the S.E.T.): the value's measured width ([labelWidthPt], the very measure the
- * rail planner uses), a [DIM_BREAK_TEXT_PAD_PT] each side of it, and a stub each side of at least
- * [UNDERCUT_SET_LEAD_TAIL_PT] and never under two arrowheads — the datum stub carries the head, the
- * other is the open tail. The planner's seat test (an arrowhead of line each side of the padded
- * value) is then met with room to spare. [scale] converts the fixed point sizes for a caller in
- * another unit (the detail canvas); [labelWidthPt] is already in that unit.
+ * rail planner uses), a [DIM_BREAK_TEXT_PAD_PT] each side of it, and a stub each side of
+ * [UNDERCUT_SET_LEAD_TAIL_PT] or one arrowhead plus a point, whichever is longer — the datum stub
+ * carries the head, the other is the open tail. The planner's seat test (an arrowhead of line each
+ * side of the padded value) is then met by at least a point on each side. [scale] converts the
+ * fixed point sizes for a caller in another unit (the detail canvas); [labelWidthPt] is already in
+ * that unit.
  */
 fun undercutSetLeadRoomPt(
     labelWidthPt: Float,
     arrowSizePt: Float = PDF_ARROW_SIZE_DEFAULT_PT,
     scale: Float = 1f,
 ): Float = labelWidthPt + 2f * DIM_BREAK_TEXT_PAD_PT * scale +
-    2f * maxOf(UNDERCUT_SET_LEAD_TAIL_PT, 2f * arrowSizePt) * scale
+    2f * maxOf(UNDERCUT_SET_LEAD_TAIL_PT, arrowSizePt + 1f) * scale
 
 /**
  * [drawStartMm, drawEndMm] widened OUTWARD on the lead's [side] only, so the S.E.T. lead gets

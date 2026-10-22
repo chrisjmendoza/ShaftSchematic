@@ -129,9 +129,9 @@ internal const val TUNING_SHEET_MIN_FRAC = 0.40f
 
 /**
  * Ceiling for any options panel's content, as a fraction of the screen — it keeps a band of
- * the page visible above a panel that does not tune the page (the undercut preview, which uses
- * this alone). The panel closes by its close button or Back, so no edge needs keeping for a
- * dismiss gesture.
+ * the page visible above the panel on a very tall window ([tuningSheetMaxHeightDp]'s upper
+ * clamp), and is the whole cap for a panel with no page strip to stay clear of. The panel
+ * closes by its close button or Back, so no edge needs keeping for a dismiss gesture.
  */
 internal const val PREVIEW_SHEET_MAX_FRAC = 0.78f
 
@@ -146,13 +146,29 @@ internal const val PREVIEW_SHEET_MAX_FRAC = 0.78f
  */
 internal const val TUNING_SHEET_CHROME_DP = 48f
 
+/** Height ÷ width of the landscape sheet (`PDF_PAGE_WIDTH_PT` × `PDF_PAGE_HEIGHT_PT`). */
+internal val LANDSCAPE_PAGE_ASPECT: Float =
+    PDF_PAGE_HEIGHT_PT.toFloat() / PDF_PAGE_WIDTH_PT.toFloat()
+
 /**
- * Height of the exported page drawn at fit-width, in dp. The sheets are LANDSCAPE
- * (`PDF_PAGE_WIDTH_PT` × `PDF_PAGE_HEIGHT_PT`), so a page fitted to a portrait screen's
- * width needs only this much height — the whole drawing lives in a strip near the top.
+ * Height ÷ width of a rendered page of [widthPx] × [heightPx], or [LANDSCAPE_PAGE_ASPECT] when
+ * there is no usable page yet. Read off the raster, never assumed: the undercut sheet is
+ * portrait at two or more printed sections, and a strip sized for a landscape page would fit a
+ * portrait one into ~60% of the screen width.
  */
-internal fun fitWidthPageHeightDp(screenWidthDp: Float): Float =
-    screenWidthDp * (PDF_PAGE_HEIGHT_PT.toFloat() / PDF_PAGE_WIDTH_PT.toFloat())
+internal fun pageAspectOf(widthPx: Int, heightPx: Int): Float =
+    if (widthPx > 0 && heightPx > 0) heightPx.toFloat() / widthPx.toFloat() else LANDSCAPE_PAGE_ASPECT
+
+/**
+ * Height of the exported page drawn at fit-width, in dp. Most sheets are LANDSCAPE
+ * (`PDF_PAGE_WIDTH_PT` × `PDF_PAGE_HEIGHT_PT`, the default [pageAspect]), so a page fitted to a
+ * portrait screen's width needs only this much height — the whole drawing lives in a strip near
+ * the top. A portrait page (the undercut sheet at two or more sections) passes its own aspect.
+ */
+internal fun fitWidthPageHeightDp(
+    screenWidthDp: Float,
+    pageAspect: Float = LANDSCAPE_PAGE_ASPECT,
+): Float = screenWidthDp * pageAspect
 
 /**
  * Height of the page strip the preview draws into while a tuning panel is open — the first
@@ -169,14 +185,18 @@ internal fun fitWidthPageHeightDp(screenWidthDp: Float): Float =
  * host both, the PANEL keeps its [TUNING_SHEET_MIN_FRAC] floor and the strip yields the
  * remainder (the page fits to that height instead, and stays pinch-zoomable under the open
  * panel).
+ *
+ * [pageAspect] is the rendered page's height ÷ width ([pageAspectOf]); [inkFrac] is a share of
+ * THAT page's height, so the two together size the band a portrait page actually inks.
  */
 internal fun tuningPageStripHeightDp(
     screenWidthDp: Float,
     screenHeightDp: Float,
     sheetChromeDp: Float,
     inkFrac: Float = 1f,
+    pageAspect: Float = LANDSCAPE_PAGE_ASPECT,
 ): Float = minOf(
-    fitWidthPageHeightDp(screenWidthDp) * inkFrac.coerceIn(0.05f, 1f),
+    fitWidthPageHeightDp(screenWidthDp, pageAspect) * inkFrac.coerceIn(0.05f, 1f),
     screenHeightDp - PREVIEW_TOP_CHROME_DP - sheetChromeDp -
         screenHeightDp * TUNING_SHEET_MIN_FRAC,
 ).coerceAtLeast(0f)

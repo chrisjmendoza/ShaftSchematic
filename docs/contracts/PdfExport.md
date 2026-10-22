@@ -222,10 +222,14 @@ Full-resolution preview through the shared `util/PdfRaster.renderPdfPageBitmap`
     switches to the **tuning layout**, whose pure math lives in `ui/screen/PreviewTuning.kt`
     ("sheet" in the names below is historical — the cap and chrome now size the options
     panel):
-    - The PDF pages are LANDSCAPE, so a whole page fits a strip only
+    - Most PDF pages are LANDSCAPE, so a whole page fits a strip only
       `screenWidthDp × (PDF_PAGE_HEIGHT_PT / PDF_PAGE_WIDTH_PT)` tall
       (`fitWidthPageHeightDp`, never a magic ratio). The Canvas draws the page fit-width and
-      **top-aligned** under the app bar instead of centered-and-fitted.
+      **top-aligned** under the app bar instead of centered-and-fitted. The page's shape is
+      read off the rendered bitmap (`pageAspectOf` → `tuningPageStripHeightDp(pageAspect)`,
+      landscape until a page exists), never assumed: the undercut sheet is portrait at two or
+      more printed sections, and a strip sized for a landscape page drew a portrait one at
+      ~60% of the width.
     - **The strip carries the page's ink band, not the whole sheet.** A composed page rarely
       inks its full height — the top margin plus unused rail room ran to ~30% of the page,
       so the drawing sat low in the strip under a band of white while items below the shaft
@@ -239,7 +243,7 @@ Full-resolution preview through the shared `util/PdfRaster.renderPdfPageBitmap`
       so a slider drag never resizes the strip or the sheet under the finger, and a page with
       no band yet draws whole.
     - **The pair is strip-first, cap-derived.** `tuningPageStripHeightDp(screenWidth,
-      screenHeight, sheetChromeDp, inkFrac)` then `tuningSheetMaxHeightDp(screenHeight,
+      screenHeight, sheetChromeDp, inkFrac, pageAspect)` then `tuningSheetMaxHeightDp(screenHeight,
       strip, sheetChromeDp)` = screen height − strip − `PREVIEW_TOP_CHROME_DP` (88 dp: status
       bar + app bar) − sheet chrome, clamped to `[TUNING_SHEET_MIN_FRAC 40%,
       PREVIEW_SHEET_MAX_FRAC 78%]` of the screen. The cap takes the strip as an argument

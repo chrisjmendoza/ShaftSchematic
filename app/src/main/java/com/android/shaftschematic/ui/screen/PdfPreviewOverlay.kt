@@ -165,12 +165,15 @@ internal fun openRunoutPdf(context: Context, uri: Uri) {
  *                      Wear passes true as well — its controls commit on release rather than
  *                      mid-drag, but the commit still redraws THIS page, and a panel that
  *                      covered it left the change unjudgeable (on-device report). Undercut
- *                      leaves it false: its options tune nothing on the page, which stays
- *                      centered full-size behind the panel.
+ *                      passes true on the same grounds: its panel covered the whole page,
+ *                      so nothing it changed could be watched (on-device report). False is
+ *                      the plain [PREVIEW_SHEET_MAX_FRAC] cap over the centered full-size page.
  * @param inkBand       Where [bitmap] carries ink, from the route's render loop. The strip
  *                      crops to it so the page's blank top margin does not take room from
  *                      the drawing; null shows the whole page. Measured on sharp passes
- *                      only, so the strip never resizes under a moving finger.
+ *                      only, so the strip never resizes under a moving finger. The strip
+ *                      takes the page's shape off [bitmap] itself ([pageAspectOf]), so the
+ *                      undercut sheet's portrait page fills the strip's width too.
  */
 @Composable
 internal fun PdfPreviewOverlay(
@@ -200,6 +203,7 @@ internal fun PdfPreviewOverlay(
         configuration.screenHeightDp.toFloat(),
         sheetChromeDp,
         inkBand?.frac ?: 1f,
+        pageAspectOf(bitmap?.width ?: 0, bitmap?.height ?: 0),
     )
     val stripHeight = stripHeightDp.dp
     val sheetMaxHeight = if (sheetTunesPage) {
@@ -230,8 +234,9 @@ internal fun PdfPreviewOverlay(
     }
     // The zoom resets when the LAYOUT changes — the strip and the centered full page fit the
     // page differently, so a zoom carried across the switch would point at the wrong place.
-    // That is every open and close of a page-tuning panel; on the undercut preview the page
-    // keeps its centered layout under the panel, so opening it leaves the zoom alone.
+    // That is every open and close of a page-tuning panel; a host that passes
+    // `sheetTunesPage = false` keeps the centered layout under the panel, so opening it there
+    // leaves the zoom alone.
     LaunchedEffect(stripLayout) {
         scaleState.floatValue = 1f
         offsetState.value = Offset.Zero

@@ -389,10 +389,16 @@ cap, title or inset of their own. ONE draw helper feeds both strip sites (`drawP
 The Wear/Undercut sheets carry no
 LIVE-tuning channel — their own controls (wear: strip election + trace depth + wear-area
 shade + taper–liner join; both: blank draft) commit on release and re-render the whole page
-— but the WEAR sheet still takes the **page-strip layout** (`sheetTunesPage = true`, ink band
-measured on every pass since there are no draft frames to skip): a commit that redraws the
-page is worthless while the panel covers it (on-device report). Only the UNDERCUT sheet keeps
-the plain 78% cap with the centered full-size page, zoomable behind the panel. Liners follow `shadedLiners` like
+— but BOTH still take the **page-strip layout** (`sheetTunesPage = true`, ink band measured on
+every pass since there are no draft frames to skip): a commit that redraws the page is worthless
+while the panel covers it (on-device reports, first the wear sheet, then the undercut sheet whose
+panel covered the whole page). Because the undercut sheet is the one portrait-capable document,
+the strip reads the page's shape off the rendered bitmap (`pageAspectOf` →
+`tuningPageStripHeightDp(pageAspect)`) rather than assuming landscape — a portrait page assumed
+landscape drew at ~60% of the strip's width. The Undercut TAB's own Options panel and the detail
+page's Drawing-options panel (over the on-screen canvases, not the rendered page) are capped below
+the drawing block they restyle (`undercutDetailOptionsMaxHeightDp`), so the drawing stays in view
+there too. Liners follow `shadedLiners` like
 bodies and tapers **except when in-profile values print** — a sheet-white knockout halo over
 grey reads as a pasted box, so on such a sheet liners draw unfilled whatever the pref says —
 and whatever a liner's per-component `shadeOnDrawing` says: the lock stands above the
