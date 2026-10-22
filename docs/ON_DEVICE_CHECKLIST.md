@@ -11,6 +11,32 @@ Last updated: 2026-10-22.
 
 ---
 
+## Undercut + previews (2026-10-22 — later merges)
+
+Use job 935061 (Polar Ranger STBD) and one job with two or more liners holding cuts.
+
+### Total length of cuts — `4f9c5ff`
+- [ ] **Per-job switch** (Undercut tab → Drawing settings, under Split cuts at liner edges; also in
+  the undercut preview's Options). Off: every section prints its cut lengths and S.E.T. lead with
+  NO overall dimension above them, and the strip loses that band rather than leaving a gap. The
+  zoomed detail page matches. On again brings it back. Undo steps it.
+- [ ] **Settings default** (Settings → PDF Export Options → "Undercut drawing: total length of
+  cuts"). Off there: a job that never touched its own switch prints without the total, and its
+  caption says it is following the default; a job switched on itself keeps its total.
+- [ ] Does a sheet without the total read clearly to the coworkers who asked for it?
+
+### Cut numbers count within each section — `ac1bb2a`
+- [ ] On a liner holding several cuts, the detail canvas numbers, the "Cut N of M" card titles and
+  the edge-to-edge chips all count from 1 in that section.
+- [ ] The Undercut tab's list groups cuts under each section's heading, numbered from 1 under each;
+  a cut on no section sits under "Not on the shaft". Deleting from the list says "Cut N deleted —
+  <section>" and Undo restores it.
+
+### Live preview sliders — `e8432c1`, `a5128fc`
+- [ ] **Undercut preview**: drag Line thickness — the page redraws under the finger, then sharpens
+  on release.
+- [ ] **Wear preview**: same for Line thickness and Shaft height.
+
 ## Undercut Drawing (2026-10-21 — three merges)
 
 Use job 935061 (Polar Ranger STBD) and one job with two or more liners holding cuts.
@@ -173,6 +199,11 @@ Use job 935061 (Polar Ranger STBD), MID liner page.
 - [ ] **Manual bug batch** (`ead7a45`): new drawings follow Settings → Units; TIR fractions; taper
   `3/4"/ft`; one filename builder (a `/` in a customer name never reaches the filename).
 - [ ] **Share diagnostic logs** (Settings → Data) attaches the two log files once.
+- [ ] **Component names on drawing** is the FIRST row of Settings → Drawing (moved off PDF Export,
+  `4bc3667`); a component card's "Show name on drawing" row says it is following that setting.
+- [ ] **Add Thread dialog** (`fa189bf`, `b2eb76e`): the column scrolls on a small phone; the chip
+  reads "Metric (mm)"; a thread added with "Include in OAL" off hangs off the chosen shaft end.
+- [ ] **Selection ring** in the editor preview is the thinner 4 px ring (`90613d4`).
 
 ---
 

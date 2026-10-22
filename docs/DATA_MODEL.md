@@ -1,6 +1,10 @@
 # ShaftSchematic Data Model
 Version: v0.5.x
-Last updated: 2026-08-13 — added `ShaftSpec.autoDiaOverrides` (`AutoDiaOverride`: per-section
+Last updated: 2026-10-22 — `UndercutRecord` listing completed (`drawToSet`, `showTotalRail`,
+`pageOrientation`, `setDatum`, `excludedLinerIds`, `excludedFreeCutIds`) and `WearRecord`'s
+per-job sheet fields listed (`traceDepthFrac`, `dyePenResult`, `stripComponentIds`,
+`showShaftProfile`, `compactStrips`, `stripSizeFrac`).
+2026-08-13 — added `ShaftSpec.autoDiaOverrides` (`AutoDiaOverride`: per-section
 bare-shaft Ø for a single auto-body span, shaft-space anchor, dormant anchors never pruned);
 `autoBodyDiaMm` demoted to the legacy shaft-wide fallback.
 2026-08-05 — envelope listing gains `undercutRecord`
@@ -428,14 +432,21 @@ template or a mate duplicate; the inspection records below stay keyed to the ORI
 **Reference-only inspection records** live in the envelope, never in `ShaftSpec`, so they
 can never affect geometry resolution:
 
-- `WearRecord(spots, pits, diaReadings, wornSections)` — liner wear bands (`WearSpot`,
-  keyed by `linerId`), pit "X" markers (`WearPit`), measured-diameter readings
+- `WearRecord(spots, pits, diaReadings, wornSections, traceDepthFrac, dyePenResult,
+  stripComponentIds, showShaftProfile, compactStrips, stripSizeFrac)` — liner wear bands
+  (`WearSpot`, keyed by `linerId`), pit "X" markers (`WearPit`), measured-diameter readings
   (`WearDiaReading`) — the middle two keyed by *resolved* component id with
-  component-local `axialMm` — and worn sections (`WornSection`).
+  component-local `axialMm` — and worn sections (`WornSection`). The last six are per-job
+  wear-sheet fits and results, all additive + defaulted and none of them geometry:
+  `traceDepthFrac` (`Float?`, `null` = follow `PdfPrefs.wearTraceDepthFrac`, resolved by
+  `effectiveWearTraceDepthFrac`), `dyePenResult` (`DyePenResult?`, `null` = both boxes blank),
+  `stripComponentIds` (`List<String>?`, `null` = every drawable liner; resolved ids, orphans
+  skipped at render, never pruned), `showShaftProfile` (default `true`), `compactStrips`
+  (default `false`), `stripSizeFrac` (default `1`).
 - `WornSection` — a designated measured area authored on the Consolidated Output tab. Unlike
   the other wear marks it is **shaft-space** (`startFromAftMm` + `lengthMm`), so it may
   cross component edges: no component key, no orphans. `authoredReference` reuses
-  `UndercutReference` SET values as display-only Distance metadata (canonical never moves on
+  the `AFT_SET`/`FWD_SET` values of `UndercutReference` as display-only Distance metadata (canonical never moves on
   a reference switch). `diaMm` is a **list** of typed measurements stored verbatim (golden
   rule); values ≤ 0 never print.
 - `RunoutReadings` — per-station TIR value + high-spot marker, keyed by
@@ -448,7 +459,8 @@ can never affect geometry resolution:
   and every station with no entry keeps deriving its position. Pins are stored verbatim
   (golden rule) — a pin stranded in a gap or beyond a shortened component is repaired at the
   **render layer**, never rewritten.
-- `UndercutRecord(undercuts, exaggerationFrac)` — its own envelope field
+- `UndercutRecord(undercuts, exaggerationFrac, drawToSet, showTotalRail, pageOrientation,
+  setDatum, excludedLinerIds, excludedFreeCutIds)` — its own envelope field
   (`@SerialName("undercut_record")`), sibling of `wear_record`. Each `Undercut` is a
   machined-below-surface span stored in **shaft space** (`startFromAftMm` + `lengthMm`) — a
   cut may sit inside a liner or straddle a component edge, so undercuts are deliberately
@@ -463,7 +475,15 @@ can never affect geometry resolution:
   `drawToSet` (`Boolean`, default `false`, additive — older files read `false`) is the per-job
   "Draw to the shaft end" switch: a liner strip whose chain ends within `UNDERCUT_SET_REACH_MM`
   (24 in) of its S.E.T. draws out to the shaft end and its chain rail ends at the S.E.T. Display and
-  dimensioning only; no stored value moves.
+  dimensioning only; no stored value moves. The other per-job fits, all additive + defaulted and
+  none of them geometry: `showTotalRail` (`Boolean?`, default `null` = follow
+  `PdfPrefs.undercutTotalRail`, resolved by `effectiveUndercutTotalRail`; `true`/`false` pins the
+  job — "Total length of cuts"); `pageOrientation` (`UndercutPageOrientation` AUTO | LANDSCAPE |
+  PORTRAIT, default AUTO = portrait at 2+ printed sections); `setDatum` (`UndercutSetDatum`
+  NEAREST | AFT | FWD, default NEAREST — the S.E.T. every strip's title and lead measure to); both
+  enums serialize by name through tolerant serializers (an unknown name decodes to the default).
+  `excludedLinerIds` / `excludedFreeCutIds` are the "Sections to print" EXCLUSION lists — a liner
+  or cut added later prints by default; orphan ids are skipped at render, never pruned.
 
 **Orphan policy** differs by key type: wear *spots* (liner-id-keyed, ids the codec knows)
 are pruned at **decode**; pits, measured-Ø readings, runout readings, and runout station

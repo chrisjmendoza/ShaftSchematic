@@ -320,7 +320,17 @@ Undercut Drawing tab/PDF. Reference-only and **shaft-space** (canonical `startFr
 so a cut may span components; no orphans, never pruned at decode. Drawn as an **open**
 silhouette step — void fill plus full-height section faces and floor lines, never closed by
 a lid. Drawn depth is display-exaggerated per sheet (`UndercutRecord.exaggerationFrac`);
-printed Ø values stay the stored numbers.
+printed Ø values stay the stored numbers. The other per-job sheet fits live on
+`UndercutRecord` too: `drawToSet` (Draw to the shaft end), `showTotalRail` (Total length of
+cuts), `pageOrientation`, `setDatum` (which S.E.T. the strips measure to — see S.E.T. Lead)
+and the "Sections to print" exclusion lists. A cut nested inside another may be dimensioned
+from its parent cut's shoulders (`PARENT_AFT`/`PARENT_FWD` via `Undercut.referenceCutId`).
+
+### S.E.T. Lead
+On the undercut sheet, the half dimension that continues each strip's chain of cut
+dimensions on to the S.E.T. (`UndercutRecord.setDatum`: Nearest, AFT or FWD) — one arrowhead
+at the datum side, open at the drawn edge when the S.E.T. is off the strip. The strip title
+measures to the same S.E.T., so the two never disagree.
 
 ### Pilot Diameter (future)
 Centering diameter for couplings.
