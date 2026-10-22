@@ -25,6 +25,7 @@ import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
 import com.android.shaftschematic.geom.linerStripFor
 import com.android.shaftschematic.geom.undercutSetReachMm
+import com.android.shaftschematic.geom.effectiveUndercutTotalRail
 import com.android.shaftschematic.geom.NOTCH_FACE_MIN_STEP_PX
 import com.android.shaftschematic.geom.UNDERCUT_SECTION_FILL_ALPHA
 import com.android.shaftschematic.geom.UNDERCUT_BREAK_AMP_FRAC_OF_R
@@ -187,6 +188,10 @@ fun composeUndercutPdf(
 
     val docSpec = spec.withResolvedBodies(resolvedComponents)
     val effectiveRecord = if (blankValues) UndercutRecord() else undercutRecord
+    // "Total length of cuts": the job's own choice, else the Settings → PDF Export default. Read off
+    // the CALLER's record, not effectiveRecord — a blank draft drops the cuts, not the job's
+    // dimensioning choice (a started strip plans no total either way).
+    val showTotalRail = effectiveUndercutTotalRail(undercutRecord.showTotalRail, pdfPrefs.undercutTotalRail)
     // Shared liner display titles — custom label wins, else positional AFT/MID/FWD defaults
     // (util/LinerTitles.kt). Same names the carousel cards, the wear sheet, and the runout
     // sheet show, so a liner-anchored strip is identifiable at a glance.
@@ -379,6 +384,7 @@ fun composeUndercutPdf(
                     railSplitOf(strip), pdfPrefs.arrowSizePt,
                     titleAirPt = UC_PORTRAIT_TITLE_AIR_PT,
                     leadSide = stripSideOf(strip), aftSetMm = aftSetMm, fwdSetMm = fwdSetMm,
+                    showTotal = showTotalRail,
                 )
             }
         } else {
@@ -516,6 +522,7 @@ fun composeUndercutPdf(
             railSplitAtMm = railSplitOf(strip),
             // The app-wide "Dimension arrows" head — the same pref the schematic's rails read.
             arrowSizePt = pdfPrefs.arrowSizePt,
+            showTotal = showTotalRail,
             // Portrait strips are sized to what they draw, so the title gets its own air under
             // the Ø callouts; landscape keeps today's banding exactly.
             titleAirPt = if (portrait) UC_PORTRAIT_TITLE_AIR_PT else 0f,
@@ -1075,6 +1082,8 @@ internal fun planUndercutDetailStrip(
     leadSide: UndercutAnchorSide? = null,
     aftSetMm: Float = 0f,
     fwdSetMm: Float = 0f,
+    /** The job's resolved "Total length of cuts" choice — [planUndercutStripRails]' `showTotal`. */
+    showTotal: Boolean = true,
 ): UndercutStripPlan? {
     // The strip's own cuts only: another strip's cut in this window draws as plain stock here.
     val memberCutSpans = strip.undercutIds.mapNotNull { id ->
@@ -1150,6 +1159,7 @@ internal fun planUndercutDetailStrip(
                 drawEndMm = drawEndMm,
             )
         },
+        showTotal = showTotal,
     )
     return UndercutStripPlan(
         drawStartMm, drawEndMm, hLayout, titleText, dimText, spans, diaPlan, diaBandPt, rails,
@@ -1261,11 +1271,13 @@ private fun drawUndercutDetailStrip(
      * the lead continuing the chain. Null keeps the bare-shaft proximity rule and draws no lead.
      */
     leadSide: UndercutAnchorSide? = null,
+    /** The job's resolved "Total length of cuts" choice — [planUndercutStripRails]' `showTotal`. */
+    showTotal: Boolean = true,
 ) {
     val plan = planUndercutDetailStrip(
         segs, strip, undercuts, clampedById, stripLeft, stripRight, unit, text, diaText,
         shaftExtentMm, startedStrip, dual, dualStacked, railSplitAtMm, arrowSizePt, titleAirPt,
-        leadSide = leadSide, aftSetMm = aftSetMm, fwdSetMm = fwdSetMm,
+        leadSide = leadSide, aftSetMm = aftSetMm, fwdSetMm = fwdSetMm, showTotal = showTotal,
     ) ?: return
     val drawStartMm = plan.drawStartMm
     val drawEndMm = plan.drawEndMm

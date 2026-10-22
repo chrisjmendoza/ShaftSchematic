@@ -8,6 +8,21 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-22
 
+### feat(undercut): "Total length of cuts" can be turned off
+
+- **The overall dimension across a section's cuts is now optional.** On-device request from the
+  shop: the total rail above the cut lengths helps on some jobs and confuses on others. The
+  Undercut tab's "Drawing settings" and the undercut preview's options carry a per-job
+  **Total length of cuts** switch (`UndercutRecord.showTotalRail`, saved with the job, undoable).
+- **App-wide default in Settings → PDF Export** — "Undercut drawing: total length of cuts"
+  (`PdfPrefs.undercutTotalRail`, on as shipped, captured by drawing profiles). A job that has never
+  used its own switch follows it, so turning the default off keeps new jobs off; a job's own choice
+  always wins (`effectiveUndercutTotalRail`).
+- Off, the strip plans no total (`planUndercutStripRails(showTotal = false)`): no band is reserved
+  and the chain lays out exactly as a single-cut section does. The detail canvas resolves the same
+  value, so screen and sheet agree. Older files decode to "follow the default" — byte-identical
+  output while the default stays on.
+
 ### fix(undercut): cut numbers count within each section
 
 - **The numbers in view match.** On-device report: a liner holding six cuts drew them as 4–9 while

@@ -184,6 +184,8 @@ object SettingsStore {
     private val KEY_PDF_UNDERCUT_LINER_OUTLINE = booleanPreferencesKey("pdf_undercut_liner_outline")
     // Chain-rail node at each liner edge a cut runs past, on the undercut drawing's strips.
     private val KEY_PDF_UNDERCUT_SPLIT_AT_LINER_EDGE = booleanPreferencesKey("pdf_undercut_split_at_liner_edge")
+    // Default for the undercut strips' total rail; a job may pin its own (UndercutRecord.showTotalRail).
+    private val KEY_PDF_UNDERCUT_TOTAL_RAIL = booleanPreferencesKey("pdf_undercut_total_rail")
     private val KEY_PDF_CURVE_LO_HEIGHT_IN = floatPreferencesKey("pdf_curve_lo_height_in")
     private val KEY_PDF_CURVE_HI_HEIGHT_IN = floatPreferencesKey("pdf_curve_hi_height_in")
     private val KEY_PDF_SBREAK_THRESHOLD_FRAC = floatPreferencesKey("pdf_sbreak_threshold_frac")
@@ -290,6 +292,13 @@ object SettingsStore {
         ctx.settingsPrefs.map { p -> p[KEY_PDF_UNDERCUT_SPLIT_AT_LINER_EDGE] ?: PdfPrefs().undercutSplitAtLinerEdge }
     suspend fun setPdfUndercutSplitAtLinerEdge(ctx: Context, v: Boolean) {
         ctx.editSettings { it[KEY_PDF_UNDERCUT_SPLIT_AT_LINER_EDGE] = v }
+    }
+
+    /** The undercut strips' total-rail default — see the key's comment. */
+    fun pdfUndercutTotalRailFlow(ctx: Context): Flow<Boolean> =
+        ctx.settingsPrefs.map { p -> p[KEY_PDF_UNDERCUT_TOTAL_RAIL] ?: PdfPrefs().undercutTotalRail }
+    suspend fun setPdfUndercutTotalRail(ctx: Context, v: Boolean) {
+        ctx.editSettings { it[KEY_PDF_UNDERCUT_TOTAL_RAIL] = v }
     }
 
     // Sizing-curve anchor heights (paper inches): what a 4" / 8" shaft draws by default.

@@ -178,6 +178,15 @@ data class PdfPrefs(
      */
     val undercutSplitAtLinerEdge: Boolean = false,
     /**
+     * The default for whether an undercut detail strip prints its TOTAL rail — the one dimension
+     * across all of a section's top-level cuts, above the chain (`buildUndercutTotalSpan`). A job
+     * may pin its own choice (`UndercutRecord.showTotalRail`); this is what a job that never
+     * touched its switch follows, resolved by `effectiveUndercutTotalRail`. On by default: the
+     * total helps on some jobs and confuses on others (on-device request), so it can be turned
+     * off here to stay off. Profiles capture it, like the wear trace-depth default.
+     */
+    val undercutTotalRail: Boolean = true,
+    /**
      * Default sizing-curve anchor heights (paper inches of drawn height at 100% on the
      * "Shaft height" slider): a 4" shaft draws [curveLoHeightIn] tall, an 8" shaft
      * [curveHiHeightIn]; sizes between and beyond follow the line

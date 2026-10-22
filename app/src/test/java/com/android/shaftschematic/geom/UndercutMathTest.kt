@@ -1692,6 +1692,14 @@ class UndercutMathTest {
     }
 
     @Test
+    fun `a job's total-rail choice wins over the app default, and an unset job follows it`() {
+        assertTrue(effectiveUndercutTotalRail(null, globalDefault = true))
+        assertFalse(effectiveUndercutTotalRail(null, globalDefault = false))
+        assertTrue(effectiveUndercutTotalRail(true, globalDefault = false))
+        assertFalse(effectiveUndercutTotalRail(false, globalDefault = true))
+    }
+
+    @Test
     fun `the chain ends at the FWD SET while the draw range runs on to the shaft end`() {
         // A FWD thread counted in the OAL: the S.E.T. (1900) sits inboard of the shaft end (2000).
         val oal = 2000f

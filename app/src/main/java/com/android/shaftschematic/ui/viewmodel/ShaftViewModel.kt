@@ -346,6 +346,11 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     internal val _pdfUndercutSplitAtLinerEdge = MutableStateFlow(PdfPrefs().undercutSplitAtLinerEdge)
     val pdfUndercutSplitAtLinerEdge: StateFlow<Boolean> = _pdfUndercutSplitAtLinerEdge.asStateFlow()
 
+    // Default for the undercut strips' total rail (a job may pin its own,
+    // UndercutRecord.showTotalRail). Also a preview re-render key on the Undercut tab.
+    internal val _pdfUndercutTotalRail = MutableStateFlow(PdfPrefs().undercutTotalRail)
+    val pdfUndercutTotalRail: StateFlow<Boolean> = _pdfUndercutTotalRail.asStateFlow()
+
     // Narrows the body shade to authored sections (auto/bare-shaft runs draw unfilled). Also a
     // preview re-render key on every tab that rasterizes with the current PdfPrefs.
     internal val _pdfShadeExplicitBodiesOnly = MutableStateFlow(PdfPrefs().shadeExplicitBodiesOnly)
@@ -1043,6 +1048,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             SettingsStore.pdfUndercutSplitAtLinerEdgeFlow(getApplication()).collectLatest { persisted ->
                 _pdfUndercutSplitAtLinerEdge.value = persisted
                 SettingsStore.updatePdfPrefs { it.copy(undercutSplitAtLinerEdge = persisted) }
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.pdfUndercutTotalRailFlow(getApplication()).collectLatest { persisted ->
+                _pdfUndercutTotalRail.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(undercutTotalRail = persisted) }
             }
         }
         viewModelScope.launch {

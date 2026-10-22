@@ -742,13 +742,20 @@ fun planUndercutStripRails(
      * value takes a row in the same assignment and the vertical plan reserves it. Null = no lead.
      */
     setLead: UndercutSetLead? = null,
+    /**
+     * Whether the strip prints its total rail ([buildUndercutTotalSpan]) — the job's resolved
+     * "Total length of cuts" choice (`effectiveUndercutTotalRail`). Off, the plan carries no total,
+     * so the vertical split reserves no total band and the chain's fallbacks go above its line,
+     * exactly as on a strip with a single cut.
+     */
+    showTotal: Boolean = true,
 ): UndercutStripRails {
     val sorted = spans.sortedBy { it.startMm }
     val nestingById = undercutNestingForest(sorted).associateBy { it.id }
     val topSpans = sorted.filter { (nestingById[it.id]?.level ?: 0) == 0 }
     val chainSpans = if (startedStrip) emptyList()
     else buildUndercutRailSpans(chainStartMm, chainEndMm, topSpans, unit, dual, splitAtMm = splitAtMm)
-    val totalSpan = if (startedStrip) null else buildUndercutTotalSpan(topSpans, unit, dual)
+    val totalSpan = if (startedStrip || !showTotal) null else buildUndercutTotalSpan(topSpans, unit, dual)
     val nestedSpans = if (startedStrip) emptyList() else buildNestedUndercutRailRows(sorted, unit, dual)
 
     fun layout(rail: List<WearRailSpan>) = layoutWearStripRail(

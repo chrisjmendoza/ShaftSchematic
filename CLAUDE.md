@@ -492,7 +492,10 @@ also clears cut shoulders. `PdfPrefs.undercutLinerOutline` (app-wide look pref, 
 draws each liner's ERASED edges/OD as a dotted outline over the cuts from the ONE pure
 `geom/LinerOutlineMath.kt`, identically on canvas and PDF. **The chain rail prints each cut's FULL
 length** (the shop measures cut lengths — on-device ruling); a buried liner edge becomes a chain node
-only under `PdfPrefs.undercutSplitAtLinerEdge` (app-wide look pref, default OFF). `UndercutRecord.drawToSet`
+only under `PdfPrefs.undercutSplitAtLinerEdge` (app-wide look pref, default OFF). The TOTAL rail is
+optional: per-job `UndercutRecord.showTotalRail` (`null` = follow `PdfPrefs.undercutTotalRail`, default ON),
+resolved ONCE by `effectiveUndercutTotalRail` and applied ONLY through `planUndercutStripRails(showTotal)` —
+off, the strip lays out as a single-cut section (on-device request: it confuses some jobs). `UndercutRecord.drawToSet`
 (per-job — a fit for this shaft's geometry, not a look) extends a liner strip whose chain ends within
 `UNDERCUT_SET_REACH_MM` (24") of its S.E.T. out to the shaft end (chain to the S.E.T.) — flat physical end, no break — and the
 chain gains the span to it (the sketch's "12 3/4 to the S.E.T."); liner strips only, the total span

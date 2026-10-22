@@ -103,6 +103,12 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
   constant): drives `UndercutRecord.drawToSet` through `ShaftViewModel.setUndercutDrawToSet`
   (the record-update path the exaggeration commit uses, so it rides the one undo history and
   the dirty mark). See "Draw to the shaft end" under the strip builders below.
+- **"Total length of cuts" switch** (under "Split cuts at liner edges"; testTag
+  `undercut_total_rail_switch`; the same shared `UndercutTotalRailRow` sits in the undercut options
+  panel as `pdf_undercut_total_rail`): drives `UndercutRecord.showTotalRail` through
+  `ShaftViewModel.setUndercutShowTotalRail` (same record path, same undo history). Shows the
+  RESOLVED value; while the job has not chosen, the caption says it follows the Settings default.
+  See "Total length of cuts" under "Sections to print" below.
 - **"Recorded undercuts" list** below the canvas: a read-only summary + delete row per cut,
   grouped under each section's title and numbered from 1 within the section (`undercutSections`,
   AFT → FWD) — not an edit card (see "UI contract").
@@ -176,6 +182,7 @@ data class UndercutRecord(
     val undercuts: List<Undercut> = emptyList(),
     val exaggerationFrac: Float = 0.25f,
     val drawToSet: Boolean = false,
+    val showTotalRail: Boolean? = null,
     val pageOrientation: UndercutPageOrientation = UndercutPageOrientation.AUTO,
     val setDatum: UndercutSetDatum = UndercutSetDatum.NEAREST,
     val excludedLinerIds: List<String> = emptyList(),
@@ -187,6 +194,9 @@ data class UndercutRecord(
   decode off): per-document because it is a FIT for this shaft's geometry (how close a liner sits
   to a shaft end), never a look pref — the `exaggerationFrac` posture, not `PdfPrefs`. Display and
   dimensioning only: no stored cut moves.
+- **`showTotalRail`** ("Total length of cuts", default `null`, additive + defaulted — older files
+  decode `null`): `null` follows the app default `PdfPrefs.undercutTotalRail` (Settings → PDF Export,
+  shipped ON); `true`/`false` pins this job. Dimensioning only: no stored cut moves.
 - **`pageOrientation`**, **`setDatum`**, **`excludedLinerIds`**, **`excludedFreeCutIds`** — the
   other per-job fits, all additive + defaulted (older files decode off), none of them geometry: the
   page shape ("Page orientation"), which S.E.T. the strips measure to ("S.E.T. lead"), and the
@@ -2005,6 +2015,26 @@ Section-level pick-and-print — no multi-page output.
   sections, never collapsed: directly above the Blank draft row and the Print buttons on the tab,
   and in the undercut options panel. Setter `setUndercutSectionPrinted` (undoable) touches only the
   ids the strip names.
+
+### Total length of cuts
+
+On-device request (shop coworkers): the total rail — one dimension across a section's top-level
+cuts, above the chain (`buildUndercutTotalSpan`) — clarifies some jobs and confuses others.
+
+- **Two levels, the trace-depth posture** — the per-job `UndercutRecord.showTotalRail: Boolean?`
+  over the app-wide default `PdfPrefs.undercutTotalRail` (default `true`; Settings → PDF Export
+  "Undercut drawing: total length of cuts"; captured by drawing profiles, so "Restore Drawing
+  defaults" turns it back on). ONE resolver, `effectiveUndercutTotalRail(record, default)`
+  (`geom/UndercutMath.kt`), read by the composer and by the detail canvas, so the sheet and the
+  canvas cannot disagree. A job that never touched its switch tracks the default; a touched job
+  stays pinned.
+- **One choke point** — `planUndercutStripRails(showTotal)`: off, the plan carries no `totalSpan`,
+  so every consumer (the vertical split's `hasTotalRail`, the detail canvas's rail band, the
+  lift decision) behaves exactly as on a strip with a single top-level cut — no total band
+  reserved, the chain's fallback values above its own line. The chain, nested rows and the S.E.T.
+  lead are untouched.
+- **Blank drafts** — the composer resolves off the caller's record, not the blank draft's empty
+  one; a started strip plans no total either way.
 
 ---
 

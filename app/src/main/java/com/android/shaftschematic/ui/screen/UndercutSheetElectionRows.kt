@@ -108,6 +108,47 @@ internal fun UndercutSplitAtLinerEdgeRow(
     }
 }
 
+/**
+ * What the "Total length of cuts" rail is, said once for the Undercut tab, the undercut options
+ * panel and Settings → PDF Export.
+ */
+internal const val UNDERCUT_TOTAL_RAIL_CAPTION =
+    "Each section with two or more cuts prints one dimension across all of them, above the cut lengths."
+
+/**
+ * The per-job "Total length of cuts" switch (`UndercutRecord.showTotalRail`): whether each
+ * section's strip prints its total rail. [checked] is the job's RESOLVED value
+ * (`effectiveUndercutTotalRail`); [followsDefault] is true while the job has not chosen and is
+ * still following the Settings → PDF Export default, which the caption says so the source of the
+ * value is never a guess. ONE row behind the Undercut tab's Drawing settings and the undercut
+ * options panel, placed with the other dimensioning choices. [testTag] is the switch's tag.
+ */
+@Composable
+internal fun UndercutTotalRailRow(
+    checked: Boolean,
+    followsDefault: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    testTag: String,
+    modifier: Modifier = Modifier,
+) {
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text("Total length of cuts", style = MaterialTheme.typography.bodyLarge)
+            Text(
+                "$UNDERCUT_TOTAL_RAIL_CAPTION " + if (followsDefault) {
+                    "Following the Settings → PDF Export default until changed here. Saved with this job."
+                } else {
+                    "Saved with this job."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Switch(checked = checked, onCheckedChange = onCheckedChange, modifier = Modifier.testTag(testTag))
+    }
+}
+
 /** The chip label for [d]. */
 internal fun undercutSetDatumLabel(d: UndercutSetDatum): String = when (d) {
     UndercutSetDatum.NEAREST -> "Nearest"

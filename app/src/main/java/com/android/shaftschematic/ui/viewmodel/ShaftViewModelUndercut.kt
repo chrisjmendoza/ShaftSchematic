@@ -160,6 +160,18 @@ fun ShaftViewModel.setUndercutDrawToSet(v: Boolean) {
 }
 
 /**
+ * Pin this sheet's "Total length of cuts" choice ([UndercutRecord.showTotalRail]): whether each
+ * section's strip prints the total rail across its top-level cuts. Writing a value pins THIS job
+ * against the Settings → PDF Export default (`PdfPrefs.undercutTotalRail`); `null` returns it to
+ * following that default. Dimensioning only — no stored cut moves. A no-op when unchanged.
+ */
+fun ShaftViewModel.setUndercutShowTotalRail(v: Boolean?) {
+    _undercutRecord.update { rec ->
+        if (rec.showTotalRail == v) rec else rec.copy(showTotalRail = v)
+    }
+}
+
+/**
  * Set this sheet's page shape ([UndercutRecord.pageOrientation]): AUTO prints one section
  * landscape and two or more stacked on a portrait page; LANDSCAPE/PORTRAIT force that shape.
  * Layout only — no stored cut moves — and a fit for this job's section count, so it is
