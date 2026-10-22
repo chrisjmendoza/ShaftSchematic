@@ -132,6 +132,17 @@ fun ShaftViewModel.setPdfUndercutSplitAtLinerEdge(v: Boolean, persist: Boolean =
 }
 
 /**
+ * Wired to the "Total length of cuts" row in Settings → PDF Export: the DEFAULT for whether the
+ * undercut strips print their total rail. A job that set its own switch on the Undercut tab
+ * (`UndercutRecord.showTotalRail`) keeps that choice.
+ */
+fun ShaftViewModel.setPdfUndercutTotalRail(v: Boolean, persist: Boolean = true) {
+    _pdfUndercutTotalRail.value = v
+    SettingsStore.updatePdfPrefs { it.copy(undercutTotalRail = v) }
+    if (persist) viewModelScope.launch { SettingsStore.setPdfUndercutTotalRail(getApplication(), v) }
+}
+
+/**
  * Wired to the "Shade in Components" block in Settings and both PDF options sheets — narrows
  * the body shade to authored sections, leaving auto (bare-shaft) runs unfilled. Subtractive:
  * it changes nothing while [setPdfShadedBodies] is off.
@@ -421,6 +432,7 @@ fun ShaftViewModel.applyDrawingProfile(profile: DrawingProfile) {
     setPdfUndercutLineArt(prefs.undercutLineArt)
     setPdfUndercutLinerOutline(prefs.undercutLinerOutline)
     setPdfUndercutSplitAtLinerEdge(prefs.undercutSplitAtLinerEdge)
+    setPdfUndercutTotalRail(prefs.undercutTotalRail)
     setPdfCurveLoHeightIn(prefs.curveLoHeightIn)
     setPdfCurveHiHeightIn(prefs.curveHiHeightIn)
     setPdfSBreakThresholdFrac(prefs.sBreakThresholdFrac)

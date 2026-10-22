@@ -153,6 +153,7 @@ fun SettingsRoute(
     val pdfUndercutLineArt by vm.pdfUndercutLineArt.collectAsState()
     val pdfUndercutLinerOutline by vm.pdfUndercutLinerOutline.collectAsState()
     val pdfUndercutSplitAtLinerEdge by vm.pdfUndercutSplitAtLinerEdge.collectAsState()
+    val pdfUndercutTotalRail by vm.pdfUndercutTotalRail.collectAsState()
     val pdfShadeExplicitBodiesOnly by vm.pdfShadeExplicitBodiesOnly.collectAsState()
     val pdfExportMode by vm.pdfExportMode.collectAsState()
     val lineThicknessScale by vm.lineThicknessScale.collectAsState()
@@ -1005,6 +1006,25 @@ fun SettingsRoute(
                             Text("Undercut drawing: split cuts at liner edges")
                             Text(
                                 UNDERCUT_SPLIT_AT_LINER_EDGE_CAPTION,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    // The DEFAULT a job follows until its own Undercut-tab switch is used
+                    // (UndercutRecord.showTotalRail): off here keeps new jobs off.
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = pdfUndercutTotalRail,
+                            onCheckedChange = { vm.setPdfUndercutTotalRail(it) },
+                            modifier = Modifier.testTag("pdf_undercut_total_rail_default"),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Column {
+                            Text("Undercut drawing: total length of cuts")
+                            Text(
+                                "$UNDERCUT_TOTAL_RAIL_CAPTION The default for every job; a job's own " +
+                                    "switch on the Undercut tab overrides it.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )

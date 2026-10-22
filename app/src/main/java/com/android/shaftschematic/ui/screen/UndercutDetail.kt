@@ -102,6 +102,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import com.android.shaftschematic.settings.PDF_ARROW_SIZE_DEFAULT_PT
+import com.android.shaftschematic.geom.effectiveUndercutTotalRail
 import com.android.shaftschematic.geom.DiaCalloutStation
 import com.android.shaftschematic.geom.UNDERCUT_BREAK_AMP_FRAC_OF_R
 import com.android.shaftschematic.geom.THREAD_DENSITY_DEFAULT
@@ -375,6 +376,12 @@ fun UndercutWindowDetailOverlay(
      * buried liner edge, as on the printed sheet. Passed in so a change restyles the rail.
      */
     splitAtLinerEdge: Boolean = false,
+    /**
+     * Settings → PDF Export default `PdfPrefs.undercutTotalRail`, resolved against this job's own
+     * `UndercutRecord.showTotalRail` (`effectiveUndercutTotalRail`) as the printed sheet resolves
+     * it. Passed in so a change re-plans the rail.
+     */
+    totalRailDefault: Boolean = true,
     /**
      * App-wide `PdfPrefs.arrowSizePt` ("Dimension arrows"): the rail heads, and with them which
      * values seat in their break — the printed strip's rule. Passed in so a change re-plans the rail.
@@ -1313,6 +1320,7 @@ fun UndercutWindowDetailOverlay(
                             fractionStyle = FractionTypography.active,
                             arrowSizePt = arrowSizePt,
                             setLead = setLead,
+                            showTotal = effectiveUndercutTotalRail(undercutRecord.showTotalRail, totalRailDefault),
                         )
                     }
                     val rails = remember(railInputs) {
@@ -3555,6 +3563,8 @@ internal data class UndercutDetailRailInputs(
      * the printed strip's lead, through the same planner. Null draws none.
      */
     val setLead: UndercutSetLead? = null,
+    /** The job's resolved "Total length of cuts" choice — the printed strip's `showTotal`. */
+    val showTotal: Boolean = true,
 )
 
 /**
@@ -3661,6 +3671,7 @@ internal fun planUndercutDetailRails(
         scale = inputs.scale,
         arrowSizePt = inputs.arrowSizePt,
         setLead = inputs.setLead,
+        showTotal = inputs.showTotal,
     ).withFallbacksLifted()
 }
 

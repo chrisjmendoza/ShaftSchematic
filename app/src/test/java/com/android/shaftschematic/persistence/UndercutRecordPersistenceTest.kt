@@ -7,6 +7,7 @@ import com.android.shaftschematic.model.UndercutRecord
 import com.android.shaftschematic.model.UndercutReference
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -217,6 +218,21 @@ class UndercutRecordPersistenceTest {
         assertEquals(0.25f, decoded.undercutRecord.exaggerationFrac, 0f)
         // "Draw to the shaft end" postdates this payload too: it decodes off.
         assertFalse(decoded.undercutRecord.drawToSet)
+        // So does the "Total length of cuts" choice: the job follows the app default.
+        assertNull(decoded.undercutRecord.showTotalRail)
+    }
+
+    @Test
+    fun `showTotalRail round trips through the envelope, including the follow-the-default null`() {
+        fun roundTrip(v: Boolean?): Boolean? = ShaftDocCodec.decode(
+            ShaftDocCodec.encodeV1(
+                ShaftDocCodec.ShaftDocV1(spec = spec(), undercutRecord = UndercutRecord(showTotalRail = v)),
+            ),
+        ).undercutRecord.showTotalRail
+        assertEquals(false, roundTrip(false))
+        assertEquals(true, roundTrip(true))
+        assertNull(roundTrip(null))
+        assertNull(UndercutRecord().showTotalRail)
     }
 
     @Test

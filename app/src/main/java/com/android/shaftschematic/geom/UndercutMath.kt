@@ -64,6 +64,15 @@ const val UNDERCUT_SET_REACH_MM = 609.6f
 fun undercutSetReachMm(drawToSet: Boolean): Float = if (drawToSet) UNDERCUT_SET_REACH_MM else 0f
 
 /**
+ * Whether the undercut strips print their total rail: this job's own choice
+ * (`UndercutRecord.showTotalRail`) when it made one, else the Settings → PDF Export default
+ * (`PdfPrefs.undercutTotalRail`). The ONE resolution behind the printed sheet and the detail
+ * canvas, so the two always agree.
+ */
+fun effectiveUndercutTotalRail(recordFlag: Boolean?, globalDefault: Boolean): Boolean =
+    recordFlag ?: globalDefault
+
+/**
  * Daylight a window-end break keeps between its glyph's inner reach and the next face or cut
  * shoulder on the window's interior side, as a fraction of the glyph's amplitude: one full
  * amplitude of plain stock, so the section reads as sitting in the shaft with body on both sides

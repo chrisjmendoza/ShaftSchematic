@@ -97,6 +97,32 @@ class UndercutStripRailPlanTest {
     }
 
     @Test
+    fun `with the total switched off the plan carries no total and reserves no total band`() {
+        val s = strip()
+        val on = plan(s)
+        val off = planUndercutStripRails(
+            s.chainStartMm, s.chainEndMm, spans, unit, dual = false, splitAtMm = emptyList(), startedStrip = false,
+            xAt = xAt, labelWidth = labelWidth, showTotal = false,
+        )
+        assertNull("no total span", off.totalSpan)
+        assertTrue("no total layout", off.total.isEmpty())
+        assertFalse("nothing to lift under a missing total", off.canLiftFallbacks)
+        // Everything else on the strip is the same plan: the switch removes the total only.
+        assertEquals(on.chainSpans, off.chainSpans)
+        assertEquals(on.nestedSpans, off.nestedSpans)
+        assertEquals(on.chain, off.chain)
+        assertEquals(on.nested, off.nested)
+        assertEquals(on.lead, off.lead)
+        assertEquals(
+            "with no total, the chain's fallbacks go above its line — the single-cut layout",
+            planUndercutRailRows(
+                on.chain, startedStrip = false, hasTotalRail = false, nestedLayouts = on.nested,
+            ),
+            off.rows,
+        )
+    }
+
+    @Test
     fun `with the draw-to-S E T reach the chain closes on the run to the S E T`() {
         val rails = plan(strip(UNDERCUT_SET_REACH_MM))
         assertEquals(

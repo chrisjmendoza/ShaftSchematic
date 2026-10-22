@@ -96,6 +96,7 @@
       <tr><td><span class="ui">Page</span></td><td>Auto</td><td>Undercut only</td><td>Auto, Landscape or Portrait. Auto prints portrait when the sheet has two or more sections to print, landscape otherwise. Saved with this job. See <a href="#recording-page">Page</a>.</td></tr>
       <tr><td><span class="ui">Distance to S.E.T.</span></td><td>Nearest</td><td>Undercut only</td><td>Nearest, AFT S.E.T. or FWD S.E.T. Chooses the S.E.T. that each view's title and the short dimension at the view's edge measure to. Saved with this job. See <a href="#recording-set-datum">Distance to S.E.T.</a>.</td></tr>
       <tr><td><span class="ui">Split cuts at liner edges</span></td><td>Off</td><td>Undercut only</td><td>Off: every cut prints its full length as one dimension. On: a cut that runs past a liner edge is dimensioned as two spans meeting at the edge. It sits under <span class="ui">Distance to S.E.T.</span> because it decides how a cut is dimensioned. App-wide, the same switch as in Settings.</td></tr>
+      <tr><td><span class="ui">Total length of cuts</span></td><td>On</td><td>Undercut only</td><td>On: a section with two or more cuts prints one dimension across all of them, above the cut lengths. Off: only the cut lengths print. Some jobs read better without the overall figure. Saved with the job; a job that has never changed it follows the default in Settings.</td></tr>
       <tr><td><span class="ui">Sections to print</span></td><td>All ticked</td><td>Undercut only</td><td>One checkbox per section, shown when the sheet has two or more. Unticked sections are left off the printed sheet. Saved with this job. See <a href="#recording-sections">Sections to print</a>.</td></tr>
       <tr><td><span class="ui">Runout bubbles</span></td><td>Off</td><td>Final only</td><td>Turns the Final schematic into a Schematic + Runout sheet. See <a href="#documents-final">The Final Schematic tab</a>.</td></tr>
     </tbody>
@@ -123,7 +124,7 @@
       <tr><td>Runout Sheet</td><td>Blank draft, Coupling face</td><td>Shaft (all four) · Runout bubbles · Thread · Lines &amp; text (Line thickness, Fractions) · Shade in Components · Units</td></tr>
       <tr><td>Consolidated Sheet</td><td>Blank draft, Coupling face</td><td>Every section except Wear. The fullest panel.</td></tr>
       <tr><td>Wear Document</td><td>Blank draft</td><td>Shaft (Shaft height only) · Wear · Thread · Lines &amp; text (Line thickness, Fractions) · Shade in Components (no Explicit bodies only) · Units</td></tr>
-      <tr><td>Undercut Drawing</td><td>Blank draft, Page, Distance to S.E.T., Split cuts at liner edges, Sections to print</td><td>Thread · Lines &amp; text (Line thickness, Fractions) · Shade in Components (with the line-art row, no Explicit bodies only) · Units</td></tr>
+      <tr><td>Undercut Drawing</td><td>Blank draft, Page, Distance to S.E.T., Split cuts at liner edges, Total length of cuts, Sections to print</td><td>Thread · Lines &amp; text (Line thickness, Fractions) · Shade in Components (with the line-art row, no Explicit bodies only) · Units</td></tr>
     </tbody>
   </table>
 
@@ -438,7 +439,7 @@
     <tbody>
       <tr>
         <td>
-          Line thickness · Body S-break · Default drawing size · Dimension arrows · Fractions · Output font · Dual-unit layout · Thread slant and density · Bubble size and height · Shade in Components (Bodies, Explicit bodies only, Tapers, Liners) · Undercut drawing line art, liner outline and split cuts at liner edges · Component names on drawing · Measurement reference · Wear trace depth default · Wear area shade · Taper–liner join
+          Line thickness · Body S-break · Default drawing size · Dimension arrows · Fractions · Output font · Dual-unit layout · Thread slant and density · Bubble size and height · Shade in Components (Bodies, Explicit bodies only, Tapers, Liners) · Undercut drawing line art, liner outline, split cuts at liner edges and total length of cuts · Component names on drawing · Measurement reference · Wear trace depth default · Wear area shade · Taper–liner join
         </td>
         <td>
           Per-job settings (Shaft height, liner and taper compression, coupling face, wear strip choices, undercut page, S.E.T. distance and sections to print) · Dual units on a document and the <span class="ui">Dual-unit display</span> switch · Which controls exist (Per-component units, Liner shoulders, Unit converter in Add dialogs) · Template mode · Open PDF after export · Theme, preview colors and on-screen undercut styles

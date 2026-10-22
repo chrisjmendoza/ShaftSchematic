@@ -1054,7 +1054,12 @@ internal val helpSections: List<HelpSection> = listOf(
                     "is dimensioned as two spans that meet at the edge. On the undercut " +
                     "sheet's PDF options and the Undercut tab's \"Drawing settings\" it sits " +
                     "directly under \"Distance to S.E.T.\", with the other dimensioning " +
-                    "choice — the same app-wide value as this Settings row.",
+                    "choice — the same app-wide value as this Settings row.\n" +
+                    "• \"Undercut drawing: total length of cuts\" — default on. A section with " +
+                    "two or more cuts prints one dimension across all of them, above the cut " +
+                    "lengths. This is the DEFAULT each job follows until its own \"Total length " +
+                    "of cuts\" switch on the Undercut tab is used; turn it off here and every " +
+                    "job you have not set yourself prints without it.",
                 manualAnchor = "settings-pdf-export",
             ),
             HelpTopic(
@@ -1155,6 +1160,10 @@ internal val helpSections: List<HelpSection> = listOf(
                     "settings\", beside the Drawn depth slider. A liner strip whose cuts end within 24 in of the S.E.T. draws " +
                     "out to the shaft end, and its dimension chain finishes with the run from the " +
                     "last cut to the S.E.T. Saved with this job.\n" +
+                    "• \"Total length of cuts\" — on the Undercut Drawing, under \"Drawing " +
+                    "settings\", and in its PDF options. Whether a section with two or more cuts " +
+                    "prints the overall run across them above the cut lengths. Saved with this " +
+                    "job; until you change it, the job follows the Settings → PDF Export default.\n" +
                     "• Worn sections — on the Consolidated Output tab. (That tab's \"Sheet " +
                     "content\" choice is not saved: it starts at All three each session.)\n\n" +
                     "App-wide — one setting, wherever you move it (also in Settings → " +
