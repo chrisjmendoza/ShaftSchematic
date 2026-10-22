@@ -386,11 +386,14 @@ counts the panel's OWN chrome outside the content slot — its header row (title
 held to exactly `TUNING_SHEET_CHROME_DP`, + the navigation-bar inset the hosts pad below it —
 or the menu eats the callouts and footer. The panel owns the cap; the sheet columns carry no
 cap, title or inset of their own. ONE draw helper feeds both strip sites (`drawPageBand`).
-The Wear/Undercut sheets carry no
-LIVE-tuning channel — their own controls (wear: strip election + trace depth + wear-area
-shade + taper–liner join; both: blank draft) commit on release and re-render the whole page
-— but BOTH still take the **page-strip layout** (`sheetTunesPage = true`, ink band measured on
-every pass since there are no draft frames to skip): a commit that redraws the page is worthless
+The Wear sheet carries no
+LIVE-tuning channel and the Undercut sheet carries ONE — "Line thickness" redraws the undercut
+preview under the finger through the same `PreviewTuning` + conflated `snapshotFlow` loop as the
+Runout tab (on-device request: it only took effect on release, unlike the Schematic preview).
+Every other control of theirs (wear: strip election + trace depth + wear-area shade + taper–liner
+join; both: blank draft) commits on release and re-renders the whole page — and BOTH take the
+**page-strip layout** (`sheetTunesPage = true`; the wear sheet measures the ink band on every
+pass, the undercut sheet on sharp passes only, skipping its draft frames): a commit that redraws the page is worthless
 while the panel covers it (on-device reports, first the wear sheet, then the undercut sheet whose
 panel covered the whole page). Because the undercut sheet is the one portrait-capable document,
 the strip reads the page's shape off the rendered bitmap (`pageAspectOf` →
