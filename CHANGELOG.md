@@ -8,6 +8,23 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-21
 
+### fix(undercut): nested rail rows sit up under the chain, clear air stays by the shaft
+
+- **The nested lengths no longer sit on the shaft.** On-device report: on a printed strip whose
+  chain values lift above the line, the nested row (the 4 3/4" / 2 3/8" / 5 1/2" under a parent
+  cut) printed ~11 pt above the shaft's top surface while ~45 pt of empty air sat between it and
+  the chain line.
+- **Root cause: the clear-air row was spent under the chain.** `planUndercutRailRows` reserves one
+  row of clear air between the lowest rail line and the shaft, but `undercutNestedRailLineYs`
+  started the nested rows BELOW that row, so the air landed under the chain and the nested rows ran
+  down to the band's bottom. `UndercutRailRowPlan` now names the chain's own below-line rows
+  (`chainBelowRows`) and the nested rows step from those, leaving the clear row as the lowest row
+  of the band. On a lifted strip (or one with no total rail) every nested line moves up exactly one
+  row (17 pt); the band, the chain, the total, the shaft and the Ø callouts do not move.
+- **The compressed layout is unchanged** — a total rail with the chain's values below its line has
+  no separate clear row, and steps exactly as before. One stepping still feeds both the printed
+  strip and the Undercut tab's detail canvas. Manual figure `undercut.png` regenerated.
+
 ### feat(help): search matches words, ranks title hits first, highlights matches
 
 - **Words, not a phrase.** On-device report: searching "undercuts" left out "Record undercut

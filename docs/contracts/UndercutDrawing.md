@@ -1472,8 +1472,9 @@ thread hatch, Output font).
 is additive and costs no page height): a top pad, then — when a total exists — the
 total line `UNDERCUT_TOTAL_RAIL_ABOVE_PT` down, 20 pt of separation, the chain's above-the-line
 (lifted) fallback rows, else just those rows; then the
-chain line; then the plan's `belowRows` rows (clear air, the chain's below-line fallbacks, and one
-row per nesting level plus that row's own fallbacks, stepped exactly as the composer steps them);
+chain line; then the plan's `belowRows` rows (top → bottom: the chain's below-line fallbacks, one
+row per nesting level plus that row's own fallbacks, then the clear-air row by the shaft — stepped
+exactly as the composer steps them);
 then a fixed 6 pt of headroom (`UNDERCUT_DETAIL_RAIL_HEADROOM_PT` — the printed strip spends up to
 15 pt of band surplus there, `UNDERCUT_RAIL_EXTRA_HEADROOM_MAX_PT`; the canvas has no surplus, and
 without it a fallback value on the lowest row stands on the outline). The drawn cylinder's top sits
@@ -1618,7 +1619,7 @@ strips minus a 22 pt orientation row, so a lone full-width strip owns ≈ 414 pt
 - **Inner-layout stack** — `computeUndercutStripInnerLayout` stacks the total band AND the above
   band (`chainAboveBandPt`), top → bottom: the total value (`UNDERCUT_TOTAL_RAIL_ABOVE_PT`,
   18 pt) → the total line → the rest of the total band (20 pt) → the lifted fallback rows → the
-  chain line → 1 clear-air row (+ nested rows) → the cylinder.
+  chain line → the nested rows → 1 clear-air row → the cylinder.
   `totalRailY = chainRailY − aboveBand − (band − 18)`; a zero above band is byte-identical to the
   total-only layout.
 - **Draw order** — `drawUndercutStripRails` ALWAYS draws the total rail FIRST, then the chain
@@ -1736,13 +1737,22 @@ strips minus a 22 pt orientation row, so a lone full-width strip owns ≈ 414 pt
     disjoint, so a level always lays out on ONE row. `planUndercutRailRows` reserves a row for each
     level's line plus that line's fallback labels (`UndercutRailRowPlan.nestedRows`, stepped by the
     one `undercutRailRowHeightPt` metric), so the strip budgets the height rather than drawing into
-    the cylinder; the chain's own label rows stop where the nested rows begin. A nested row's
+    the cylinder. The nested rows stack **directly under the chain's OWN below-line rows**
+    (`UndercutRailRowPlan.chainBelowRows` — the fallback rows the level-0 chain draws below its
+    line: none when its fallbacks are lifted or there is no total rail, the rows used in the
+    compressed layout), and the plan's clear-air row is the **LOWEST** row of the band, between the
+    last nested line and the shaft: `belowRows = chainBelowRows + nestedRows + clear`, `clear` = 1
+    unless the chain's own below-line rows fill that place (the compressed layout, which steps
+    exactly as before). Stepping under the clear row instead spent it directly under the chain and
+    ran the nested rows down to the band's bottom — a lifted strip printed its nested lengths
+    ~11 pt off the shaft with ~45 pt of empty air above them (on-device report). A nested row's
     fallback values sit **ABOVE its own line**: each level takes its fallback rows first and its
     line last (`undercutNestedRailLineYs`, drawn with `fallbackLabelAbove = true`), so a value too
     wide for its span lands between the previous line's labels and this line — under the line it
     fell onto the shaft's top surface and the cut numbers (on-device report). The band is the size
-    the plan reserved; only the order within it moved, so a level with no fallback draws exactly
-    where it always did, and the line still never drops below the witness-line start;
+    the plan reserved; where a short band grants fewer rows than planned, the chain's rows shrink to
+    what is left after the nested rows, and the line still never drops below the witness-line
+    start;
   - **a second rail line above the chain — the strip total** (`buildUndercutTotalSpan`, first
     shoulder → last shoulder, over the TOP-LEVEL spans). **Returns `null` (nothing drawn, no
     reserved band) for a strip with fewer than two drawable top-level undercuts** — with exactly
