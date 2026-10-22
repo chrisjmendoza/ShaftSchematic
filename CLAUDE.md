@@ -505,9 +505,15 @@ beside the sheet (on-device report) — do not reintroduce one. Under a total ra
 lift ABOVE the chain line as a per-strip HEIGHT decision made once by `UndercutStripPlan.resolveRails`
 through the ONE predicate `undercutRailsLift` (the canvas is always lifted), and `drawUndercutStripRails`
 draws the total rail FIRST so the chain's label halos knock out its witness lines — drawing the total after
-the chain would strike through the lifted values. **ONE cut numbering, an INPUT aid only** — `undercutSheetNumbers` (`geom/UndercutNumbering.kt`,
-AFT → FWD by clamped start, 1-based, display-only; the record keeps its own order): the tab list sorts
-and numbers its rows by it, messages name cuts by it, and the zoomed DETAIL canvas draws it centred
+the chain would strike through the lifted values. **ONE cut numbering, an INPUT aid only, counted WITHIN EACH SECTION** — `undercutSections` /
+`undercutSectionCuts` (`geom/UndercutNumbering.kt`: per strip, AFT → FWD by stored start, 1-based and
+restarting at 1 in every liner or bare-shaft section, display-only; the record keeps its own order —
+on-device ruling: "we're just counting cuts in each particular section for reference, so the numbers
+need to match within view"; a shaft-wide count drew 4–9 on a liner whose cards read "Cut 1 of 6"). The
+detail page's card titles ("Cut N of M"), edge-to-edge chips, overlap messages and canvas numbers all
+read the page position (`pagePositionById`), the tab list groups its rows under each section's
+"Sections to print" title and numbers them the same way (cuts no strip holds trail under "Not on the
+shaft"), and the list's delete snackbar names the section. The zoomed DETAIL canvas draws it centred
 inside each section — on EVERY free piece of a parent that nested cuts split, so the pieces read as one
 section; below the shaft on a white halo when too narrow, clear of the rail (placement in the pure
 `geom/UndercutCutNumberMath.kt`). It prints on NO sheet and draws on no whole-shaft overview, and has

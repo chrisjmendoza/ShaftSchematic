@@ -238,7 +238,8 @@ internal fun undercutCutNumbersBottomPx(
 
 /**
  * Cut numbers on the undercut detail canvas — an authoring aid, always drawn there: each cut's
- * number ([numbers] — `undercutSheetNumbers`, the Undercut tab list's numbering) where the ONE pure
+ * number ([numbers] — its position within the section, the card titles' "Cut N" and the Undercut
+ * tab list's numbering under that section's heading) where the ONE pure
  * placement [undercutCutNumberPlacements] puts it — inside the cut's section core centred on the
  * shaft centreline, or BELOW the shaft when the core is too narrow (above it the number tangled
  * with the rail's witness lines — on-device report). Cut numbers print on no sheet and draw on no

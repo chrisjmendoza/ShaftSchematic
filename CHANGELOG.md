@@ -8,6 +8,21 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-22
 
+### fix(undercut): cut numbers count within each section
+
+- **The numbers in view match.** On-device report: a liner holding six cuts drew them as 4–9 while
+  its cards read "Cut 1 of 6" … "Cut 6 of 6" — the canvas counted every cut on the shaft, the cards
+  counted the liner's. Ruling: "we're just counting cuts in each particular section for reference,
+  so the numbers need to match within view." Every section now counts from 1: the detail canvas
+  draws the card positions, so the drawing, the card titles, the edge-to-edge chips and the overlap
+  messages all agree.
+- **The Undercut tab's list is grouped by section.** One heading per liner or bare-shaft section,
+  AFT → FWD, titled as "Sections to print" titles it, with the rows numbered from 1 under each — row
+  N is the cut that section's detail page labels N. Cuts no section holds trail under "Not on the
+  shaft". The delete snackbar names the section (`Cut 3 deleted — FWD Liner Ø10.000"`).
+- `undercutSheetNumbers` is replaced by `undercutSections` / `undercutSectionCuts`
+  (`geom/UndercutNumbering.kt`); the detail page builds its pages from the same list.
+
 ### fix(wear): Line thickness and Shaft height redraw the wear preview live
 
 - **Every PDF preview now treats the shared sliders alike.** On-device request: consistent

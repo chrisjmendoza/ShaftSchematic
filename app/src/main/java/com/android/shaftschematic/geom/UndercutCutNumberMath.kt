@@ -29,7 +29,8 @@ internal data class UndercutCutNumberPlacement(
 )
 
 /**
- * Places each cut's number — the ONE cut numbering, [undercutSheetNumbers], handed in as
+ * Places each cut's number — the ONE cut numbering, counted within the section
+ * ([undercutSections]), handed in as
  * [numbers] — on the notches the detail canvas already built (`buildUndercutNotches`), so each
  * number sits in the same place relative to its cut whatever the strip's scale.
  *

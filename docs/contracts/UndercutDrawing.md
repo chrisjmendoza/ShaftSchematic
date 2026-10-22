@@ -104,8 +104,8 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
   (the record-update path the exaggeration commit uses, so it rides the one undo history and
   the dirty mark). See "Draw to the shaft end" under the strip builders below.
 - **"Recorded undercuts" list** below the canvas: a read-only summary + delete row per cut,
-  numbered and ordered by the cut numbers (`undercutSheetNumbers`, AFT → FWD) — not an
-  edit card (see "UI contract").
+  grouped under each section's title and numbered from 1 within the section (`undercutSections`,
+  AFT → FWD) — not an edit card (see "UI contract").
 - Intro line: "Record each cut — where it is, how long, and the diameter it was cut to. Prints a
   zoomed drawing for the welder or machinist." The blank-draft caption reads "Job info and overall
   length are blanked; recorded undercuts are omitted — a fresh form." (usability review: plain
@@ -607,11 +607,16 @@ data class UndercutRecord(
   `linerOutline`), and it is an Undercut-tab preview re-render key.
 
   **Cut numbers — an input aid, never printed** (on-device ruling: "the cut counts are for input
-  purposes only, no output on any sheet"). The ONE numbering, `undercutSheetNumbers`
-  (`geom/UndercutNumbering.kt` — AFT → FWD by clamped start, ties in record order, 1-based), shows
-  in exactly two places: the Undercut tab's "Recorded undercuts" list (row N, below) and the zoomed
-  detail canvas, which ALWAYS draws each cut's number inside its section so the drawing can be
-  matched to the cards and the list. There is no pref and no options-sheet or Settings row. The
+  purposes only, no output on any sheet"). The ONE numbering counts **within each section** —
+  a liner strip or a bare-shaft cluster, restarting at 1 in each (on-device ruling: "we're just
+  counting cuts in each particular section for reference, so the numbers need to match within
+  view"; a shaft-wide count drew 4–9 on a liner whose cards read "Cut 1 of 6"). `undercutSectionCuts`
+  (`geom/UndercutNumbering.kt` — a strip's members AFT → FWD by stored start, ties in member order)
+  is the list the detail page builds its pages from, so a cut's number is its card's "Cut N of M"
+  position (`pagePositionById`); `undercutSections` groups every cut that way for the tab list. It
+  shows in exactly two places: the Undercut tab's "Recorded undercuts" list (row N under its
+  section's heading, below) and the zoomed detail canvas, which ALWAYS draws each cut's number inside
+  its section so the drawing can be matched to the cards and the list. There is no pref and no options-sheet or Settings row. The
   printed undercut sheet (main profile and detail strips alike) carries no cut numbers, and the
   route's whole-shaft overview canvas draws none either — at shaft scale a liner's cuts sit a few
   pixels apart, so numbers there pile up under the strip badge and name nothing. Plain text; an
@@ -873,10 +878,14 @@ nothing to open when the sidebar is already laid out beside the tabs.
   `bareShaftAddFromAft`, each with `seedNewCutOnOpen`, so the detail page opens on a pending
   "New undercut" card. Nothing is recorded by the tap.
 - **"Recorded undercuts" list**, below the canvas (`UndercutListRow`, one row per cut, only shown
-  once ≥ 1 undercut exists). Rows are **numbered and ordered by the cut numbers**
-  (`undercutSheetNumbers` — AFT → FWD by clamped start, ties in record order, 1-based — the ONE
-  numbering the detail canvas also shows; no sheet prints it), so row N is the cut the detail
-  canvas labels N
+  once ≥ 1 undercut exists). Rows are **grouped by section** — one heading per strip the detail
+  page opens, AFT → FWD, titled as "Sections to print" titles it (`FWD Liner Ø10.000"`,
+  `Bare shaft — …`), with cuts no strip holds (zero length, or off a shortened shaft) trailing under
+  "Not on the shaft" (`UNDERCUT_LIST_LOOSE_TITLE`) — and **numbered from 1 within each section**
+  (`undercutSections` — the ONE numbering the detail canvas and the card titles also show; no sheet
+  prints it), so row N under a heading is the cut that section's detail canvas labels N. The delete
+  snackbar names the section too (`undercutListDeletedMessage`: `Cut 3 deleted — FWD Liner
+  Ø10.000"`), since a number alone repeats across sections
   (`"N. <distance> from <tag>"`). Display-only: the record keeps its own order. Each row is a
   distance summary under its *effective* reference (where a `LINER_*` reference reads
   `"<liner title> AFT/FWD edge"` via `effectiveUndercutReference`/`undercutReferenceLinerFor`),
@@ -939,9 +948,10 @@ vertical card stack forced scrolling between the drawing and the fields.
 - **The title number is positional**: a stored cut's card reads `"Cut N of M"`
   (`undercutCardTitle`; the earlier "Undercut N of M · aft → fwd" wording read as jargon in the
   usability review, and the AFT → FWD order is stated by the carousel's "← AFT / FWD →" row) — N is the cut's position in that STRIP's aft → fwd page order, not an
-  identity and not the cut number (`undercutSheetNumbers` numbers the whole shaft, so on a
-  multi-strip shaft the card's N and the number drawn inside the cut can differ; the tab's list and
-  the detail canvas's numbers agree), and the "N of M" form puts the position on the card
+  identity — and it IS the cut number: the canvas draws `pagePositionById` and the tab list counts
+  within the section the same way, so the card's N, the number drawn inside the cut and the list
+  row under that section's heading always agree (a pending card between two stored ones shifts the
+  later positions until it is confirmed or discarded), and the "N of M" form puts the position on the card
   (on-device report: a third cut added between two others read "2 of 3" and was taken
   for the wrong cut). The pending card reads "New undercut". The Butt-against chips number cuts
   the same way.

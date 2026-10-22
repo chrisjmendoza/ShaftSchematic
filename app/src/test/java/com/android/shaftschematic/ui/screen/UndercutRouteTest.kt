@@ -287,4 +287,33 @@ class UndercutRouteTest {
             .assertTextContains("Not on the printout")
         rule.onAllNodesWithTag("undercut_row_not_printed_${inSecond.id}", useUnmergedTree = true).assertCountEquals(0)
     }
+
+    @Test
+    fun `the list groups cuts under their section and numbers each section from 1`() {
+        val vm = vm().also {
+            it.addUndercut(2100f, 25.4f)
+            it.addUndercut(500f, 25.4f)
+            it.addUndercut(1900f, 25.4f)
+        }
+        host(vm)
+        val cuts = vm.undercutRecord.value.undercuts
+        val aftOnly = cuts.single { it.startFromAftMm == 500f }
+        val fwdFirst = cuts.single { it.startFromAftMm == 1900f }
+        val fwdSecond = cuts.single { it.startFromAftMm == 2100f }
+
+        // One heading per liner holding cuts, AFT → FWD, titled like "Sections to print".
+        rule.onNodeWithTag("undercut_list_section_0", useUnmergedTree = true).assertTextContains("Liner", substring = true)
+        rule.onNodeWithTag("undercut_list_section_1", useUnmergedTree = true).assertTextContains("Liner", substring = true)
+        rule.onAllNodesWithTag("undercut_list_section_loose", useUnmergedTree = true).assertCountEquals(0)
+
+        // Numbers restart in each section: the FWD liner's first cut is 1, not 2.
+        rule.onNodeWithTag("undercut_row_${aftOnly.id}").assertTextContains("1. ", substring = true)
+        rule.onNodeWithTag("undercut_row_${fwdFirst.id}").assertTextContains("1. ", substring = true)
+        rule.onNodeWithTag("undercut_row_${fwdSecond.id}").assertTextContains("2. ", substring = true)
+    }
+
+    @Test
+    fun `a deleted cut's snackbar names its section, since every section counts from 1`() {
+        assertEquals("Cut 3 deleted — FWD Liner Ø10\"", undercutListDeletedMessage(3, "FWD Liner Ø10\""))
+    }
 }
