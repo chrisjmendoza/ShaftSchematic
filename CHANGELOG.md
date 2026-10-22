@@ -6,6 +6,66 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-10-22
+
+### feat(undercut): card UX — button-like discard, sectioned placement presets, whole-liner gate, overhang as information, side-named butt chips
+
+- **Discard reads as a button.** On-device request: the status pill's ✗ was a bare glyph on the
+  pill's container colour and did not pop. It is now a bounded 36 dp circular
+  `FilledTonalIconButton` inside the pill's right end — a `surface` disc carrying the ✗ in
+  `error`, inset 4 dp — so it reads as its own target on every pill colour in light and dark
+  themes. Same tag (`undercut_cancel`), same "Discard change" description, still only on the
+  Unsaved and Blocked pills, and still never the same tap target as confirming.
+- **"More ways to place this cut" is its own section.** On-device request: the expander was a plain
+  `bodyMedium` line that blended into the card. It now has a divider above it, a `titleSmall`
+  heading with the expand/collapse icon, and, when open, its presets inside a rounded
+  `surfaceVariant` panel, so they visibly belong to the heading. Same tag and open/close behaviour.
+- **"Span: Whole liner" only on an empty liner.** On-device ruling: once a liner carries a recorded
+  cut, a whole-liner span is pointless. The chip is offered only while no OTHER cut overlaps the
+  liner by more than `UNDERCUT_TOUCH_EPS_MM` (`undercutLinerHasOtherCuts`, `geom/UndercutMath.kt` —
+  touching the edge or lying outside is not company, a nested cut is). Nothing stored changes: a cut
+  that already is the whole liner keeps its values. The section auto-opens only for a cut that is
+  its OFFERED Whole liner, and a card with nothing behind the heading shows no heading.
+- **The overhang is information, not an input.** On-device ruling: the "Extend past liner" AFT/FWD
+  fields asked for the cut's position a second time. They are gone, with their captions, their
+  "set to the maximum" notes and the state behind them; Distance + Length and the unchanged "Past
+  the liner edge" question cover it. In their place one read-only line directly under Length
+  (`undercut_overhang_info`, `undercutOverhangInfo`) names only the end(s) that run off the liner —
+  "Extends 3.5 in past the liner's FWD edge", or "Extends 1 in past the liner's AFT edge and 3.5 in
+  past its FWD edge". Deleted with the feature: `UndercutDraft.withAftLinerExtension` /
+  `withFwdLinerExtension`, `UndercutExtensionEdit`, `undercutSpanWithAftExtension` /
+  `…FwdExtension`, `maxUndercutAftExtensionMm` / `…FwdExtensionMm`, `clampUndercutExtension` /
+  `UndercutExtensionClamp` and their tests; `undercutLinerExtensionsMm` stays, it feeds the line and
+  the question. The golden-rule carve-out the clamp needed goes with it: nothing on the card clamps
+  a typed value any more.
+- **The butt-against chips name a side.** On-device report: "Start at end of: Cut N" / "End at
+  start of: Cut N" read backwards depending on which end the machinist measured from. The rows are
+  now **"On the AFT side of:"** (this cut AFT of cut N, its FWD end on cut N's AFT edge) and **"On
+  the FWD side of:"** (this cut FWD of cut N, its AFT end on cut N's FWD edge), AFT row first; the
+  gap field under either reads **"Gap to Cut N (in)"** — the row says the side. Chip labels, tags,
+  gap signs and the preset maths (`undercutStartAtEndOf` / `undercutEndAtStartOf`) are unchanged.
+- Contract (`docs/contracts/UndercutDrawing.md`), Help (the Undercuts topic) and the manual's
+  "Quick spans" section (now with a "Running past the liner" section) updated; in-app manual
+  rebuilt.
+
+### fix(undercut): equal, roomier stock margins before the window-end S-breaks
+
+- **A full glyph amplitude of plain stock before each break.** On-device request: on the detail
+  canvas the AFT break's lobes sat almost on the liner's AFT face while the FWD end showed more
+  body — "a little more body before the S-break", the same on both ends, so the cuts read centred
+  between the breaks. `UNDERCUT_BREAK_CLEAR_FRAC_OF_AMP` rises from 0.25 to **1.0**: the daylight
+  between a break glyph's inner reach and the nearest face or cut shoulder is now one amplitude.
+- **Both ends from one rule, one daylight.** Each interior end sits at the outermost feature on its
+  side (liner face or cut shoulder) + the glyph's reach at that end's Ø + the daylight, and the ends
+  the rule places now SHARE the larger daylight, so a strip whose ends sit in stock of different Ø
+  still shows equal margins. On the on-device job's MID liner strip (10" liner, a cut overhanging
+  its FWD face by 3 1/2") the daylight goes from 0.750" AFT / 0.717" FWD to **3.000" / 3.000"**;
+  the printed landscape strip, whose FWD S.E.T. lead used to leave 0.750" AFT against 2.185" FWD,
+  now prints 3.000" both sides. Chain datums, the never-narrow preview and the flat physical end
+  are unchanged; `withUndercutBreakRoom` stays the ONE source the canvas and the PDF strips share.
+- Contract (`docs/contracts/UndercutDrawing.md`) updated; the manual's undercut figure regenerated
+  and the in-app manual rebuilt.
+
 ## 2026-10-21
 
 ### fix(undercut): nested rail rows sit up under the chain, clear air stays by the shaft

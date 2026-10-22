@@ -7,7 +7,7 @@ have looked; move anything that fails to `TODO.md` §Bugs with what you saw.
 Everything here is already green in the unit suite and `lintVitalRelease` — this list is about
 how it reads on hardware and on paper, which the tests cannot judge.
 
-Last updated: 2026-10-21.
+Last updated: 2026-10-22.
 
 ---
 
@@ -50,11 +50,13 @@ Use job 935061 (Polar Ranger STBD) and one job with two or more liners holding c
   and says so in its result line.
 
 ### Shop-user pass — `ad72e5a`
-- [ ] **Add undercut** button opens "Where is the cut?" (liner rows + bare shaft AFT/FWD). Cancel
+- [x] **Add undercut** button opens "Where is the cut?" (liner rows + bare shaft AFT/FWD). Cancel
   records nothing. A liner row opens a "New undercut" card; backing out leaves no phantom cut.
+  *Verdict 2026-10-22: opens correctly.*
 - [ ] **Card order** on a phone: Measure From, Distance, Length, Ø, Notes, then "+ Next cut", then the
   collapsed "More ways to place this cut" — Distance should be visible without scrolling the card.
-- [ ] **Pill wording**: "Recorded" when clean, "Record cut" on a new cut, "Confirm change" on an edit.
+- [x] **Pill wording**: "Recorded" when clean, "Record cut" on a new cut, "Confirm change" on an edit.
+  *Verdict 2026-10-22: all three working correctly.*
 - [ ] **Fraction hint** under Distance and the `e.g. 5.625 or 5 5/8` placeholder in an empty Ø field
   (placeholder shows while focused and empty).
 - [ ] **Past the liner edge** question reads as a yes/no ("Yes, it does" / "No, let me check").
@@ -72,9 +74,39 @@ Use job 935061 (Polar Ranger STBD) and one job with two or more liners holding c
 
 ---
 
+## Undercut card UX pass 2 + S-break margins (2026-10-22, one merge)
+Use job 935061 (Polar Ranger STBD), MID liner page.
+- [ ] **Discard ✗** on the "Record cut" / "Confirm change" pill is a round white button with a red ✗
+  that reads as a button in light AND dark theme; tapping it discards and records nothing.
+- [ ] **"More ways to place this cut"** sits under a divider as a heading; opened, its chips sit in a
+  tinted panel. It is absent on a card with nothing behind it.
+- [ ] **Whole liner** chip is offered on an empty liner and NOT once the liner has a recorded cut.
+- [ ] **Extend past liner** fields are gone. A cut running past the liner shows one grey line under
+  Length ("Extends 3.5 in past the liner's FWD edge"); answer "No, let me check" to the question
+  and the red warning replaces that line for that end.
+- [ ] **Butt chips** read "On the AFT side of:" then "On the FWD side of:" with "Cut N" chips; the
+  gap field reads "Gap to Cut N (in)". Tap each once and confirm the cut lands on the side named.
+- [ ] **S-break margins** on the detail canvas: the AFT end shows ~3 in of plain body before the
+  break (was ¾ in). The FWD end keeps the S.E.T. lead's room (~8 in on a phone) — say whether
+  you want the AFT side matched to it (true centring, both ends long) or left as is.
+- [ ] **Printed strip** (Preview): equal plain stock before both breaks on every strip; the manual
+  figure shows the same.
+
 ## Help & FAQ paragraphs — `b7424f9` (2026-10-21)
-- [ ] Expand "Record undercut sections" and a bullet topic (Settings Reference → Editor Screen).
+- [x] Expand "Record undercut sections" and a bullet topic (Settings Reference → Editor Screen).
   Paragraphs sit a clear gap apart and bullets a smaller gap apart; neither reads too loose.
+  *Verdict 2026-10-21: "Help looks great. I'm very happy with that."*
+
+## Help search — `2565ea3` (2026-10-21)
+- [ ] Search "undercuts": "Record undercut sections" is the first card; the matched words are
+  highlighted (bold on a tinted background) in the heading, title and text. Check the highlight
+  colour reads in dark theme and high contrast.
+- [ ] Search "how do I add a liner": the filler words are ignored and the liner topics lead.
+
+## Undercut nested rail rows — `cbcc0d7` (2026-10-21)
+- [x] Polar Ranger STBD, FWD liner strip: the nested 4¾″ / 2⅜″ / 5½″ row sits one row higher,
+  a clear row of air between it and the shaft, its values clear of the chain's arrowheads.
+  *Verdict 2026-10-21 (from the regenerated sheet): "Beautiful."*
 
 ## In-app manual — `8feedc3` (2026-10-14)
 - [ ] Help → User manual opens; dark theme keeps the page light; a rotation restores the section

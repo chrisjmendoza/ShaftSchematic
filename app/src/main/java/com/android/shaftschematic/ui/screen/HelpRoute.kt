@@ -629,7 +629,10 @@ internal val helpSections: List<HelpSection> = listOf(
                     "from the tab's list alike.\n\n" +
                     "\"Next cut\" at the foot of the card confirms the cut and " +
                     "opens a new one butted to its far end; \"More ways to place this cut\" " +
-                    "below it holds the whole-liner, extension and butt-against shortcuts.\n\n" +
+                    "below it holds the whole-liner shortcut (offered only while the liner " +
+                    "has no other cut) and the \"On the AFT side of\" / \"On the FWD side " +
+                    "of\" butt-against chips. How far a cut runs past its liner shows as " +
+                    "a line under Length — information only, nothing to type.\n\n" +
                     "The list below the drawing " +
                     "numbers the cuts from the aft end — the same numbers the zoomed detail " +
                     "page shows inside each cut, to help you find it; they never print — " +
