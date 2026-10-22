@@ -540,16 +540,28 @@ data class UndercutStripInnerLayout(
  * line — feeds [computeUndercutStripInnerLayout] (`maxLabelRows` = [belowRows],
  * `chainAboveBandPt` = [aboveRows] × [UNDERCUT_RAIL_ROW_HEIGHT_PT]) and `drawUndercutRail`'s
  * `fallbackLabelAbove` flag ([aboveRows] > 0).
+ *
+ * The below band reads, top → bottom: the chain's own below-line fallback rows
+ * ([chainBelowRows]), the nested chain rows ([nestedRows]), then — unless the chain's own rows
+ * already fill that place — one row of CLEAR AIR, the LOWEST row, between the last rail line and
+ * the shaft. So `belowRows == chainBelowRows + nestedRows + clear`, with `clear` = 1 when the
+ * chain draws no rows below its line (lifted, no total rail, or a total with no fallbacks) and 0
+ * in the compressed layout (total rail, chain fallbacks below the line). A started strip keeps
+ * the whole [WEAR_RAIL_MAX_LABEL_ROWS] budget below with [chainBelowRows] = 0.
  */
 data class UndercutRailRowPlan(
-    /** Rows reserved between the rail line and the cylinder top (never 0 — clear air), the
-     *  nested chain rows ([nestedRows]) included. */
+    /** Rows reserved between the rail line and the cylinder top (never 0), the chain's own
+     *  below-line rows ([chainBelowRows]), the nested chain rows ([nestedRows]) and the clear row
+     *  included. */
     val belowRows: Int,
     /** Fallback rows stacked ABOVE the rail line; 0 when fallbacks tuck below instead. */
     val aboveRows: Int,
+    /** The fallback-label rows the level-0 chain itself draws BELOW its line: 0 when its
+     *  fallbacks go above it (lifted, or no total rail) or it has none, otherwise the rows used.
+     *  The nested rows stack directly under these (`undercutNestedRailLineYs`). */
+    val chainBelowRows: Int,
     /** How many of [belowRows] belong to the nested chain rows ([buildNestedUndercutRailRows]) —
-     *  one for each level's rail line plus that line's own fallback label rows. The composer
-     *  subtracts these to find where the chain's own rows end and the first nested line goes. */
+     *  one for each level's rail line plus that line's own fallback label rows. */
     val nestedRows: Int = 0,
 )
 
@@ -586,10 +598,12 @@ fun undercutRailFallbackRows(layout: List<WearRailSpanLayout>): Int =
  *   the machinist's band to hand-draw a chain into.
  *
  * [nestedLayouts] are the resolved nested chain rows ([buildNestedUndercutRailRows], one per
- * nesting level) that stack UNDER the level-0 chain. Each claims a row for its own rail line
- * plus the rows its fallback labels land on — ABOVE that line (`undercutNestedRailLineYs`) — so
- * the strip reserves the height the extra physical rails actually need instead of drawing them
- * into the cylinder.
+ * nesting level) that stack UNDER the level-0 chain, directly below the chain's own below-line
+ * rows ([UndercutRailRowPlan.chainBelowRows]). Each claims a row for its own rail line plus the
+ * rows its fallback labels land on — ABOVE that line (`undercutNestedRailLineYs`) — so the strip
+ * reserves the height the extra physical rails actually need instead of drawing them into the
+ * cylinder. The clear-air row, where the plan keeps one, is the LOWEST row of the below band,
+ * between the last nested line and the shaft.
  */
 fun planUndercutRailRows(
     chainLayout: List<WearRailSpanLayout>,
@@ -598,19 +612,23 @@ fun planUndercutRailRows(
     nestedLayouts: List<List<WearRailSpanLayout>> = emptyList(),
     lifted: Boolean = false,
 ): UndercutRailRowPlan {
-    if (startedStrip) return UndercutRailRowPlan(belowRows = WEAR_RAIL_MAX_LABEL_ROWS, aboveRows = 0)
+    if (startedStrip) {
+        return UndercutRailRowPlan(belowRows = WEAR_RAIL_MAX_LABEL_ROWS, aboveRows = 0, chainBelowRows = 0)
+    }
     val used = undercutRailFallbackRows(chainLayout)
     val nestedRows = nestedLayouts.sumOf { 1 + undercutRailFallbackRows(it) }
     return if (hasTotalRail && lifted && used > 0) {
         // Lifting costs exactly ONE row of strip height: `used` rows are added above the line and
         // `used - 1` freed below it (the below band keeps its 1 row of clear air off the shaft).
-        UndercutRailRowPlan(belowRows = 1 + nestedRows, aboveRows = used, nestedRows = nestedRows)
+        UndercutRailRowPlan(belowRows = 1 + nestedRows, aboveRows = used, chainBelowRows = 0, nestedRows = nestedRows)
     } else if (hasTotalRail) {
+        // The chain's fallbacks tuck below its line; with none, the one reserved row is clear air.
         UndercutRailRowPlan(
-            belowRows = used.coerceAtLeast(1) + nestedRows, aboveRows = 0, nestedRows = nestedRows,
+            belowRows = used.coerceAtLeast(1) + nestedRows, aboveRows = 0, chainBelowRows = used,
+            nestedRows = nestedRows,
         )
     } else {
-        UndercutRailRowPlan(belowRows = 1 + nestedRows, aboveRows = used, nestedRows = nestedRows)
+        UndercutRailRowPlan(belowRows = 1 + nestedRows, aboveRows = used, chainBelowRows = 0, nestedRows = nestedRows)
     }
 }
 

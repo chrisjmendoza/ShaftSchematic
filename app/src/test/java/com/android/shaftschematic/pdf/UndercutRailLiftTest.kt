@@ -47,11 +47,11 @@ class UndercutRailLiftTest {
         val nested = listOf(listOf(span(0, true)), listOf(span(0, false)))
         // nestedRows = (1 + 0) + (1 + 1) = 3
         assertEquals(
-            UndercutRailRowPlan(belowRows = 1 + 3, aboveRows = 1, nestedRows = 3),
+            UndercutRailRowPlan(belowRows = 1 + 3, aboveRows = 1, chainBelowRows = 0, nestedRows = 3),
             planUndercutRailRows(listOf(span(0, false)), false, hasTotalRail = true, nestedLayouts = nested, lifted = true),
         )
         assertEquals(
-            UndercutRailRowPlan(belowRows = 1, aboveRows = 2),
+            UndercutRailRowPlan(belowRows = 1, aboveRows = 2, chainBelowRows = 0),
             planUndercutRailRows(listOf(span(0, false), span(1, false)), false, hasTotalRail = true, lifted = true),
         )
         // Net cost of lifting: exactly one row.
@@ -75,7 +75,7 @@ class UndercutRailLiftTest {
             )
         }
         assertEquals(
-            UndercutRailRowPlan(belowRows = WEAR_RAIL_MAX_LABEL_ROWS, aboveRows = 0),
+            UndercutRailRowPlan(belowRows = WEAR_RAIL_MAX_LABEL_ROWS, aboveRows = 0, chainBelowRows = 0),
             planUndercutRailRows(emptyList(), startedStrip = true, hasTotalRail = true, lifted = true),
         )
     }

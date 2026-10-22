@@ -705,39 +705,39 @@ class UndercutStripLayoutTest {
         // Break-seated labels sit on the rail line itself — one clear row below keeps the rail
         // (and its arrowheads) off the shaft, nothing more, wherever fallbacks would go.
         assertEquals(
-            UndercutRailRowPlan(belowRows = 1, aboveRows = 0),
+            UndercutRailRowPlan(belowRows = 1, aboveRows = 0, chainBelowRows = 0),
             planUndercutRailRows(listOf(span(0, true), span(1, true)), startedStrip = false, hasTotalRail = true),
         )
         assertEquals(
-            UndercutRailRowPlan(belowRows = 1, aboveRows = 0),
+            UndercutRailRowPlan(belowRows = 1, aboveRows = 0, chainBelowRows = 0),
             planUndercutRailRows(emptyList(), startedStrip = false, hasTotalRail = false),
         )
         // Total rail above ⇒ fallbacks tuck BELOW, reserving through their own row (wear cap).
         assertEquals(
-            UndercutRailRowPlan(belowRows = 1, aboveRows = 0),
+            UndercutRailRowPlan(belowRows = 1, aboveRows = 0, chainBelowRows = 1),
             planUndercutRailRows(listOf(span(0, false)), startedStrip = false, hasTotalRail = true),
         )
         assertEquals(
-            UndercutRailRowPlan(belowRows = 2, aboveRows = 0),
+            UndercutRailRowPlan(belowRows = 2, aboveRows = 0, chainBelowRows = 2),
             planUndercutRailRows(listOf(span(0, true), span(1, false)), startedStrip = false, hasTotalRail = true),
         )
         assertEquals(
-            UndercutRailRowPlan(belowRows = WEAR_RAIL_MAX_LABEL_ROWS, aboveRows = 0),
+            UndercutRailRowPlan(belowRows = WEAR_RAIL_MAX_LABEL_ROWS, aboveRows = 0, chainBelowRows = WEAR_RAIL_MAX_LABEL_ROWS),
             planUndercutRailRows(listOf(span(5, false)), startedStrip = false, hasTotalRail = true),
         )
         // Chain is the only label level ⇒ fallbacks go ABOVE the line (on-device report),
         // below keeps just the clear row.
         assertEquals(
-            UndercutRailRowPlan(belowRows = 1, aboveRows = 1),
+            UndercutRailRowPlan(belowRows = 1, aboveRows = 1, chainBelowRows = 0),
             planUndercutRailRows(listOf(span(0, false)), startedStrip = false, hasTotalRail = false),
         )
         assertEquals(
-            UndercutRailRowPlan(belowRows = 1, aboveRows = WEAR_RAIL_MAX_LABEL_ROWS),
+            UndercutRailRowPlan(belowRows = 1, aboveRows = WEAR_RAIL_MAX_LABEL_ROWS, chainBelowRows = 0),
             planUndercutRailRows(listOf(span(5, false)), startedStrip = false, hasTotalRail = false),
         )
         // A started strip draws no chain; the full hand-drawing budget stays below.
         assertEquals(
-            UndercutRailRowPlan(belowRows = WEAR_RAIL_MAX_LABEL_ROWS, aboveRows = 0),
+            UndercutRailRowPlan(belowRows = WEAR_RAIL_MAX_LABEL_ROWS, aboveRows = 0, chainBelowRows = 0),
             planUndercutRailRows(emptyList(), startedStrip = true, hasTotalRail = false),
         )
     }

@@ -262,12 +262,15 @@ internal fun undercutRailFallbackBaselineY(
 
 /**
  * Y of each nesting level's rail line, in [UndercutStripRails.nested] order — the ONE stepping
- * behind [drawUndercutStripRails] and every test that checks it. The levels stack under the
- * chain's own label rows (what the strip granted, [railLabelRows] less the plan's `nestedRows`);
- * each level claims its fallback rows ([undercutRailFallbackRows]) and then one row for its line,
- * so its fallback values sit ABOVE the line, between the previous line's labels and this one. The
- * band is the one `planUndercutRailRows` reserved — only the order within it is fixed here — and
- * a line never drops below [witnessBottomY].
+ * behind [drawUndercutStripRails] and every test that checks it. The levels stack directly under
+ * the chain's OWN below-line label rows ([UndercutRailRowPlan.chainBelowRows] — none when the
+ * chain's fallbacks sit above its line), never under the plan's clear-air row: that row is the
+ * LOWEST of the band, between the last nested line and the shaft. Each level claims its fallback
+ * rows ([undercutRailFallbackRows]) and then one row for its line, so its fallback values sit
+ * ABOVE the line, between the previous line's labels and this one. The band is the one
+ * `planUndercutRailRows` reserved — only the order within it is fixed here. Where a short band
+ * granted fewer rows ([railLabelRows]) than the plan asked for, the chain's rows shrink to what
+ * is left after the nested rows, and a line never drops below [witnessBottomY].
  */
 internal fun undercutNestedRailLineYs(
     rails: UndercutStripRails,
@@ -276,7 +279,10 @@ internal fun undercutNestedRailLineYs(
     rowStep: Float,
     witnessBottomY: Float,
 ): List<Float> {
-    val chainBelowRows = (railLabelRows - rails.rows.nestedRows).coerceAtLeast(0)
+    val chainBelowRows = minOf(
+        rails.rows.chainBelowRows,
+        (railLabelRows - rails.rows.nestedRows).coerceAtLeast(0),
+    )
     var rowY = chainRailY + chainBelowRows * rowStep
     return rails.nested.map { lay ->
         rowY += (1 + undercutRailFallbackRows(lay)) * rowStep
@@ -300,11 +306,13 @@ internal fun undercutNestedRailLineYs(
  * Chained dimensions run most-detailed nearest the part, and a nested cut is located against its
  * PARENT's edges, not the strip's datums. Parents at one level are disjoint, so a level always
  * lays out on a single row. Rows step by the ONE row-height metric the reserved band was budgeted
- * with (`planUndercutRailRows`, [undercutNestedRailLineYs]); a nested row's fallback values sit
- * above its own line, clear of the chain's labels and of the shaft below.
+ * with (`planUndercutRailRows`, [undercutNestedRailLineYs]): the nested rows stack directly under
+ * the chain's own below-line rows, and the plan's clear-air row stays the lowest, between the last
+ * nested line and the shaft. A nested row's fallback values sit above its own line, clear of the
+ * chain's labels and of the shaft below.
  *
  * [railLabelRows] is the label rows the strip actually granted below the chain — the plan's
- * `belowRows`, or fewer where a short band clamps it — and the nested rows follow it down.
+ * `belowRows`, or fewer where a short band clamps it.
  * [witnessBottomY] is where every witness line of the chain and the nested rows starts (just
  * above the drawn surface); the total's witness lines stand on the chain line.
  */
