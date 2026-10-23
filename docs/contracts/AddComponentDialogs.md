@@ -71,10 +71,6 @@ European keyway is whole millimetres on an otherwise imperial shaft, and typing 
 (`"<componentId>#kw"` in `unit_overrides`), resolved keyway → component → document, so a keyway
 with no choice behaves exactly as it always did.
 
-The same chip also selects which table the **"Standard size…"** picker offers — ANSI B17.1 in
-inches, DIN 6885-1 / ISO 773 in millimetres — since it is already the unit the keyway is typed and
-printed in. An inch keyway on a metric document still wants inch key stock.
-
 **Card-only (a carve-out from the parity rule):** the per-component **"Prints in: in | mm"**
 chip, at the FOOT of the card, shown on the explicit-**Body**, **Taper**, **Thread**, and **Liner** cards when
 Settings → Drawing → *Per-component units* is on. It is the **third** post-hoc display
@@ -107,7 +103,6 @@ still authored in inches on an inch document. That asymmetry is a known follow-u
 | Keyway checkbox | Always. The gate for the whole keyway section (shared `KeywayGateRow`, `KeywaySection.kt`); default OFF in the dialog. On the card it seeds from `hasAnyKeywayValue` so a half-typed keyway keeps its section open, and unticking a card with any value opens "Remove keyway?" (`kw_remove_confirm`) before clearing W/D/L/inset/spooned |
 | KW from: AFT \| FWD chips | Only while the Keyway checkbox is ON (keyway end-face reference). Default seeded by `ShaftSpec.suggestedBodyKeywayEnd`: opposite the shaft's existing keyway when exactly one side is taken (an aft taper keyway suggests FWD, and vice versa); both/neither → AFT. The SAME seed drives the card's chips for a not-yet-real keyway (parity of behavior, on-device report: a new body keyway defaulting onto the taken side read as a second aft keyway). A seed only — the chips always win, and nothing stored is ever rewritten by it |
 | KW W / KW D / KW L | Only while the Keyway checkbox is ON (blank = 0 = no keyway; while OFF the dialog submits 0 whatever the hidden fields hold) |
-| "Standard size…" picker | Only while the Keyway checkbox is ON, directly under the W × D row. A menu of standard key stock (ANSI B17.1 in inches, DIN 6885-1 in mm — the keyway unit chooses; `geom/KeyStockStandards.kt`), the size the standard names for the body's Ø listed first. A pick fills W and D through the same path typing them takes and writes nothing on its own — never on a Ø change, never over an existing W × D |
 | Captured keyway toggle | Only while the Keyway checkbox is ON. Captured ⇔ inset > 0 — no stored flag (the card derives the toggle from `keywayOffsetFromEndMm`; the dialog holds it as local state). Turning it ON with a blank inset seeds `AddDefaultsConfig.KEYWAY_INSET_IN` (0.5 in); turning it OFF commits an open keyway (inset 0) — the dialog keeps the typed text until submit, and the card remembers the cleared inset for the session and restores it on the next ON (`keywayInsetForCaptured`) |
 | KW Inset from AFT / FWD | Only while the Keyway checkbox and the Captured keyway toggle are both ON (label follows chip). On the card, a blank or ≤ 0 commit is a no-op — the toggle is the one control that clears the inset |
 | Keyway spooned toggle | Only while the Keyway checkbox is ON (disabled + "N/A — captured" while captured; while OFF the dialog submits `false`) |
@@ -211,7 +206,6 @@ switch is the one control that clears. The "Relief at" chips are `thread_relief_
 | Rate | Always (read-only in Auto, editable in Manual) |
 | Keyway checkbox | Always. The gate for the whole keyway section (shared `KeywayGateRow`, `KeywaySection.kt`); default OFF in the dialog. On the card it seeds from `hasAnyKeywayValue` so a half-typed keyway keeps its section open, and unticking a card with any value opens "Remove keyway?" (`kw_remove_confirm`) before clearing W/D/L/inset/spooned |
 | KW W / KW D / KW L | Only while the Keyway checkbox is ON (blank = 0 = no keyway; while OFF the dialog submits 0 whatever the hidden fields hold) |
-| "Standard size…" picker | Only while the Keyway checkbox is ON, directly under the W × D row — the same menu as `AddBodyDialog`, suggested off the taper's **LARGE** end (a key is specified for the section it seats in) |
 | Captured keyway toggle | Only while the Keyway checkbox is ON — same rules as `AddBodyDialog` (captured ⇔ `keywayOffsetFromSetMm` > 0, 0.5 in seed, OFF commits inset 0) |
 | KW Inset from SET | Only while the Keyway checkbox and the Captured keyway toggle are both ON |
 | Keyway spooned toggle | Only while the Keyway checkbox is ON (disabled + "N/A — captured" while captured; while OFF the dialog submits `false`) |
@@ -369,6 +363,13 @@ the aft-most center as `startFromAftMm = OAL − enteredFwd − (count−1)·spa
 ---
 
 ## Change log
+**v1.13 (2026-10-23)**
+- **"Standard size…" picker removed** from the Body/Taper cards and both Add dialogs, with the
+  ANSI B17.1 / DIN 6885-1 key-stock tables (`geom/KeyStockStandards.kt`,
+  `ui/screen/KeywayStdSizePicker.kt`) — on-device ruling: the shop types W × D every time, so the
+  menu was a row of noise under a pair of fields it never filled. The keyway unit chip now governs
+  entry and print only. Parity holds: the control left all four surfaces together.
+
 **v1.12 (2026-10-03)**
 - Thread **relief** (on-device request, from a machine-shop textbook figure of a thread's
   run-out groove): a "Thread relief" switch revealing Relief length, Relief Ø and "Relief at:

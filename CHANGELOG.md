@@ -6,6 +6,15 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-10-23
+
+### chore(keyway): the "Standard size…" picker is gone
+
+- **Keyway width and depth are typed, full stop.** On-device ruling: the shop types W × D every
+  time, so the standard key-stock menu under the pair was a row of noise on the Body and Taper
+  cards and in both Add dialogs. The menu and its ANSI B17.1 / DIN 6885-1 tables are removed; the
+  keyway unit chip still sets the unit the pair is typed and printed in. Nothing stored changes.
+
 ## 2026-10-22
 
 ### fix(undercut): a cut split by a nested cut prints its Ø on both sides

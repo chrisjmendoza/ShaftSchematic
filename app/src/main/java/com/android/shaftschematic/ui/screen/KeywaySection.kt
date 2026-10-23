@@ -22,8 +22,8 @@ import androidx.compose.ui.unit.dp
  * The "Keyway" header row that gates the whole keyway section — ONE composable behind the Body
  * and Taper carousel cards and `AddBodyDialog` / `AddTaperDialog`, so the four surfaces cannot
  * drift (add-dialog-parity rule). Everything keyway-related on those surfaces — the keyway unit
- * chip, W × D, the standard-size picker, KW L, captured + inset, spooned, and the clocking
- * section — renders only while [checked] is true.
+ * chip, W × D, KW L, captured + inset, spooned, and the clocking section — renders only while
+ * [checked] is true.
  *
  * It is a Checkbox, deliberately not a Switch: in this app a checkbox means "this thing exists on
  * the component" (Explicit body, Keyway, Seal AFT/FWD), and a Switch means a mode of something

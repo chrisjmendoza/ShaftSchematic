@@ -42,7 +42,6 @@ import com.android.shaftschematic.util.manualTaperRateBlockingMessage
 import com.android.shaftschematic.util.manualTaperRateWarning
 import com.android.shaftschematic.util.parseTaperRateText
 import com.android.shaftschematic.util.toMmOrNull
-import kotlin.math.max
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TaperPagerCard — the `ResolvedTaper` arm of [ComponentPagerCard]
@@ -53,9 +52,9 @@ import kotlin.math.max
  * diameters, the Auto/Manual rate pair, and the keyway section. That section is gated by the
  * shared "Keyway" checkbox ([KeywayGateRow]), seeded open whenever any of W/D/L is typed;
  * unticking it with values present confirms through [RemoveKeywayConfirmDialog] before clearing
- * them. Inside the gate: the keyway's own unit chip, W × D, the standard-size picker, KW L, the
- * "Captured keyway" toggle with its "KW Inset from SET" field shown only while captured,
- * "Keyway spooned", and the clocking section.
+ * them. Inside the gate: the keyway's own unit chip, W × D, KW L, the "Captured keyway" toggle
+ * with its "KW Inset from SET" field shown only while captured, "Keyway spooned", and the
+ * clocking section.
  *
  * Rate mode is user-owned state seeded once per taper — it must not be re-derived from the
  * stored text, which would discard an explicit Auto/Manual choice. Every control that changes
@@ -303,15 +302,6 @@ internal fun TaperPagerCard(
                     val v = if (s.isBlank()) 0f else (toMmOrNull(s, kwUnit) ?: return@CommitNum)
                     onUpdateTaperKeyway(idx, t.keywayWidthMm, v, t.keywayLengthMm, t.keywayOffsetFromSetMm, t.keywaySpooned)
                 }
-            }
-            // Standard key stock for the W × D pair. The keyway is sized to the taper's LARGE end —
-            // a key is specified for the section it seats in, and that is the L.E.T. A pick rides the
-            // same update callback typing the fields does, so the values are authored from then on.
-            KeywayStdSizePicker(
-                unit = kwUnit,
-                hostDiaMm = max(t.startDiaMm, t.endDiaMm),
-            ) { w, d ->
-                onUpdateTaperKeyway(idx, w, d, t.keywayLengthMm, t.keywayOffsetFromSetMm, t.keywaySpooned)
             }
             // KW L / Inset parse in `kwUnit` like KW W/D — the keyway-unit chip governs what
             // EVERY keyway number means; parsing these two in the document unit under a kwUnit
