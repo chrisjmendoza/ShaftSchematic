@@ -14,8 +14,14 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
   On-device report: with a cutter width focused, the keyboard covered the rest of the dialog.
   The dialog window panned (slid up just far enough to show the cursor) instead of resizing, so
   its scroll column had nothing to scroll. The keyway and taper calculators now switch their
-  window to resize above the keyboard (`DialogImeResize`), and the dialog shrinks into the space
-  that is left and scrolls.
+  window to resize above the keyboard (`ImeResizingAlertDialog`), and the dialog shrinks into the
+  space that is left and scrolls.
+- **…and stays put while typing.** Follow-up on-device report: with the resize in place, every
+  keystroke scrolled the dialog back to its top and the field being typed in dropped under the
+  keyboard again. Android re-measures a wrap-content dialog window at the full display height
+  before each re-layout, and for that one pass the scroll column had nothing to scroll, so Compose
+  reset the scroll. The window now keeps a fixed size (the area above the keyboard) with the
+  dialog box pinned to its usual width inside it; reproduced and verified on an emulator.
 
 ### feat(undercut): "Total length of cuts" can be turned off
 
