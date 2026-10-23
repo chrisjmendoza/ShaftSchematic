@@ -26,6 +26,7 @@ import com.android.shaftschematic.geom.buildCompressedProfileXMap
 import com.android.shaftschematic.geom.exaggeratedProfileScale
 import com.android.shaftschematic.geom.solveMaxProfileScale
 import com.android.shaftschematic.geom.computeOalWindow
+import com.android.shaftschematic.geom.drawnExtentMm
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
 import com.android.shaftschematic.model.*
 import com.android.shaftschematic.pdf.dim.*
@@ -222,15 +223,12 @@ internal fun composeShaftPdfOnCanvas(
     // outside the OAL range.  AFT excluded threads have startFromAftMm = -lengthMm (negative);
     // FWD excluded threads have startFromAftMm = OAL and extend to OAL + lengthMm.
     // ptPerMm must be derived from this full span so neither end clips the page margin.
-    val contentMinMm = minOf(0f,
-        spec.threads.filter { it.excludeFromOAL && it.isAftEnd }
-            .minOfOrNull { it.startFromAftMm } ?: 0f
-    )
-    val contentMaxMm = maxOf(spec.overallLengthMm,
-        spec.threads.filter { it.excludeFromOAL && !it.isAftEnd }
-            .maxOfOrNull { it.startFromAftMm + it.lengthMm } ?: spec.overallLengthMm
-    )
-    val contentSpanMm = (contentMaxMm - contentMinMm).coerceAtLeast(1f)
+    // The ONE drawn-extent rule (`geom/DrawnExtent.kt`) — shared with the runout/consolidated
+    // sheet so no composer can start its x map at a datum a drawn thread sits outside of.
+    val drawnExtent = spec.drawnExtentMm()
+    val contentMinMm = drawnExtent.startMm
+    val contentMaxMm = drawnExtent.endMm
+    val contentSpanMm = drawnExtent.spanMm
 
     // ── Visual diameter scale + compressed x mapping (hand-sheet convention) ──
     // On-device rule (with rulered reference sketches): drawn shaft height follows TRUE

@@ -8,6 +8,16 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-23
 
+### fix(pdf): an excluded thread no longer runs off the edge of the consolidated sheet
+
+- **The runout and consolidated sheets now make room for a thread that is excluded from the
+  OAL.** On-device report: on the consolidated preview the AFT thread, excluded from the overall
+  length, drew past the left edge of the page. Those sheets mapped only the S.E.T.-to-S.E.T.
+  measurement window across the page and let anything outside it run into the margin; they now
+  map the drawn extent — that window widened by any excluded thread — the same rule the
+  schematic has always used (one shared builder). The OAL rail still dimensions the measured
+  window; only the page room changes, and a shaft with no excluded thread prints as before.
+
 ### fix(runout): body stations spread with equal gaps instead of crowding the faces
 
 - **A body's runout bubbles now sit at equal intervals, ends included.** On-device report: body
