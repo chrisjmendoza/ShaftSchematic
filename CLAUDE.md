@@ -656,6 +656,14 @@ Station counts are length-driven — one per `RUNOUT_STATION_INTERVAL_MM` (20") 
 same floored at 2 for the edge-inset convention; tapers a flat 2, the shop convention; all
 capped at `MAX_STATIONS_PER_COMPONENT`). `componentOverrides` still wins.
 
+**Body stations space with EQUAL gaps, the ends included** — `k · length / (count + 1)`, in
+physical mm on the linear canvas and in drawn x on the compressed sheet (ONE fraction in
+`runoutStationPositionsMm` and `collectRunoutStations`). Cell midpoints left half a pitch at each
+face and read on-device as bubbles crowding the faces like a liner's; the shop reads a uniform
+body anywhere and simply spreads them out (ruling). Tapers (small and large end) and liners
+(near the edges — the wear is further in) keep the edge-inset convention; do not apply the body
+rule to them.
+
 A body split by liners/tapers draws as several runs but is **ONE component**: one carousel
 name, one station-editor row, one override, one continuous run of `stationIndex` values
 AFT→FWD. `collectRunoutStations` therefore groups spans by id, derives the count ONCE from the

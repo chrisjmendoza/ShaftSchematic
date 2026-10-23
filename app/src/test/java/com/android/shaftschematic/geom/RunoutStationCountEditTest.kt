@@ -205,8 +205,8 @@ class RunoutStationCountEditTest {
 
     @Test
     fun `adding to a body uses the full span, not the inset band`() {
-        // A body's derived stations are cell midpoints with no edge inset, so an insertion at
-        // the empty end may legitimately reach the component's very edge.
+        // A body's derived stations have no edge inset band, so an insertion at the empty end
+        // may legitimately reach the component's very edge.
         val placements = RunoutStationPlacements().withComponent(id, listOf(10f, 30f))
         val (after, _) = add(placements, RunoutReadings(), kind = RunoutComponentKind.BODY)
 

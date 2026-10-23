@@ -123,11 +123,11 @@ import kotlin.math.sin
  *   Readings taken right on a taper's SET or LET face are unreliable.
  * - **Liners**: same inset convention as tapers — worn areas rarely reach a liner's very
  *   edges, so near-edge readings are the best runout spots (on-device rule).
- * - **Bodies**: stations spread evenly across each body's DRAWN span (cell midpoints in
- *   page x, inverted to physical mm through the compressed mapping) — a body surface is
- *   uniform, so the exact physical spot is free, and drawn-even placement keeps the
- *   sheet readable where physical midpoints would bunch into a foreshortened run
- *   (on-device request).
+ * - **Bodies**: stations spread evenly across each body's DRAWN span with equal gaps, ends
+ *   included (`k · width / (count + 1)` in page x, inverted to physical mm through the
+ *   compressed mapping) — a body surface is uniform, so the exact physical spot is free, and
+ *   drawn-even placement keeps the sheet readable where physical spacing would bunch into a
+ *   foreshortened run (on-device request). Cell midpoints read as crowding the faces.
  * - **Threads**: no stations (threads are not measured for runout). Still drawn as
  *   hatched envelopes for visual reference; excluded-from-OAL threads sit outside the
  *   SET-to-SET arrows at their physical position.
