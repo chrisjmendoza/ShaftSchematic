@@ -137,9 +137,12 @@ const val LEADER_DOGLEG_MIN_SLOPE = 0.5f
 /**
  * Axial mm positions of [count] measurement stations within one component.
  *
- * - Bodies (`useEdgeInset = false`): cell midpoints, `(i + 0.5) · length / count`,
- *   evenly covering the full length. (When the caller can invert its x mapping,
- *   [collectRunoutStations] instead places body stations evenly across the DRAWN span —
+ * - Bodies (`useEdgeInset = false`): equal gaps, ends included — `(i + 1) · length / (count + 1)`,
+ *   so the gap from each face to its nearest station is the SAME as the gap between stations.
+ *   Cell midpoints (`(i + 0.5) · length / count`) left only half a pitch at each end, and
+ *   read on-device as bubbles crowding the faces the way a liner's inset readings do; a body
+ *   surface is uniform, so the hand-drawn sheet simply spaces them out. (When the caller can
+ *   invert its x mapping, [collectRunoutStations] applies the same rule across the DRAWN span —
  *   see its KDoc.)
  * - Tapers / liners (`useEdgeInset = true`): first/last stations inset from each edge by
  *   `min(edgeInsetMm, length × 20%)` so readings land on the cylindrical run, not the
@@ -159,7 +162,7 @@ fun runoutStationPositionsMm(
         val span = lengthMm - 2f * inset
         List(count) { i -> startMm + inset + span * (i.toFloat() / (count - 1)) }
     } else {
-        List(count) { i -> startMm + (i + 0.5f) * lengthMm / count }
+        List(count) { i -> startMm + (i + 1f) * lengthMm / (count + 1) }
     }
 }
 
@@ -262,11 +265,12 @@ data class RunoutStationX(
  * - **Tapers / liners**: physical mm with the edge inset — the worn areas usually don't
  *   reach a liner's very edges, so near-edge readings are the best runout spots.
  * - **Bodies**: a body surface is uniform, so the exact physical spot is free — stations
- *   spread **evenly across the DRAWN span** (cell midpoints in output x, inverted back to
- *   mm via [mmAtX]). Under the compressed hand-sheet mapping, physical midpoints bunch
- *   into the foreshortened run; drawn-even placement keeps the sheet readable. When the
- *   caller has no inverse ([mmAtX] = null), bodies fall back to physical cell midpoints
- *   (identical under a linear mapping).
+ *   spread **evenly across the DRAWN span** with equal gaps, ends included (`k · width /
+ *   (count + 1)` in output x, inverted back to mm via [mmAtX]). Under the compressed
+ *   hand-sheet mapping, physical spacing bunches into the foreshortened run; drawn-even
+ *   placement keeps the sheet readable. When the caller has no inverse ([mmAtX] = null),
+ *   bodies fall back to the same rule in physical mm ([runoutStationPositionsMm], identical
+ *   under a linear mapping).
  *
  * [placements] overrides the derived position of any station the user has dragged. An
  * authored position wins over every rule above — it is a typed input in the golden-rule sense,
@@ -317,7 +321,7 @@ fun collectRunoutStations(
                 val x0 = xAtMm(span.startMm)
                 val x1 = xAtMm(span.startMm + span.lengthMm)
                 repeat(runCount) { i ->
-                    val xs = x0 + (i + 0.5f) * (x1 - x0) / runCount
+                    val xs = x0 + (i + 1f) * (x1 - x0) / (runCount + 1)
                     stations.add(RunoutStationX(id, mmAtX(xs), xs, stationIndex = nextIndex++))
                 }
             } else {

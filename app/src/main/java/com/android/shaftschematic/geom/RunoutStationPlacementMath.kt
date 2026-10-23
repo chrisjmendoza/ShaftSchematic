@@ -119,7 +119,7 @@ fun localStationPositions(
  * positions for [count] stations across [runs], with the user's pins from [authoredByIndex]
  * overlaid verbatim — what a count edit (+/−) plans against and then freezes wholesale.
  *
- * Derived values are the PHYSICAL convention (cell midpoints / edge insets, identical to what
+ * Derived values are the PHYSICAL convention (equal body gaps / edge insets, identical to what
  * the linear live canvas draws); a pin is stored **verbatim**, never coerced — a pin left
  * beyond the component by a later shrink stays authored (golden rule), and
  * [planStationInsertion] already widens its band around outliers. A derived value that lands

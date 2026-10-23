@@ -780,9 +780,10 @@ Same-day review feedback on step 4; supersedes step 4's picker placement:
   never a truncated file — and the collision export gate now guards the wear and
   undercut tabs too.
 - **Runout bubble algorithm** (on-device request with the hand-drawn reference):
-  - *Body stations place evenly across the DRAWN span* — cell midpoints in page x,
-    inverted to physical mm (`CompressedProfileXMap.mmAt`) — because a body surface is
-    uniform and physical midpoints bunch into foreshortened runs. Liners/tapers keep the
+  - *Body stations place evenly across the DRAWN span* — equal gaps in page x, the ends
+    included (`k · width / (count + 1)`), inverted to physical mm
+    (`CompressedProfileXMap.mmAt`) — because a body surface is uniform and physical spacing
+    bunches into foreshortened runs. Liners/tapers keep the
     physical edge-inset convention (worn areas rarely reach a liner's edges — those are
     the best reading spots).
   - *Even-spread waterfill* (`RunoutBubbleLayout` rule 7): every adjacent bubble gap
@@ -1323,12 +1324,20 @@ auto-body gap fill. Raw spec bodies may legally overlap tapers/liners and must n
 be used for station placement or profile drawing (2026-07-18 fix).
 
 Per component (`runoutStationPositionsMm`):
-- **Bodies:** cell midpoints, `(i + 0.5) · length / count` — even coverage of the full length.
-- **Tapers / Liners:** inset from each edge by `min(RUNOUT_EDGE_INSET_MM ≈ 25.4 mm, 20% of length)` so measurements land on the cylindrical run, not the transition slope.
+- **Bodies:** equal gaps, ends included — `(i + 1) · length / (count + 1)`, so the gap from each
+  face to its nearest station equals the gap between stations. Cell midpoints
+  (`(i + 0.5) · length / count`) leave only half a pitch at each face, and on-device the bubbles
+  read as crowding the faces the way a liner's inset readings do (ruling 2026-10-23: "they can
+  just be evenly spread out without crowding edges"; the hand-drawn sheet spaces them out
+  because a body surface is uniform and nothing says where to read). Both the physical rule and
+  the drawn-span rule use the same fraction, so a linear canvas and the compressed sheet agree.
+- **Tapers / Liners:** inset from each edge by `min(RUNOUT_EDGE_INSET_MM ≈ 25.4 mm, 20% of length)` so measurements land on the cylindrical run, not the transition slope — tapers are read at the small and large end, liners near their edges because the wear is further in.
 
 (2026-07-18: the canvas preview and PDF previously used *different* station math —
 body stations `len/(count+1)` on the PDF vs cell midpoints on canvas, inset caps 20% vs
-35%. Standardised on cell midpoints and the 20% cap in the shared engine.)
+35%. Standardised on cell midpoints and the 20% cap in the shared engine; 2026-10-23 moved
+BOTH sites to `len/(count+1)` on the on-device ruling above. A station's index never changes
+with its position, so typed TIRs stay on their bubbles.)
 
 ### Rows — alternating, globally aligned
 Within each component, consecutive stations **alternate rows** (0, 1, 0, 1, …) — the

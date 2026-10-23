@@ -259,10 +259,10 @@ class RunoutStationPlacementMathTest {
     }
 
     @Test
-    fun `current positions derive body cell midpoints when nothing is pinned`() {
+    fun `current positions derive equal body gaps when nothing is pinned`() {
         val runs = listOf(body(0f, 900f))
         assertEquals(
-            listOf(150f, 450f, 750f),
+            listOf(225f, 450f, 675f),
             currentLocalStationPositions(runs, 3, emptyMap()),
         )
     }

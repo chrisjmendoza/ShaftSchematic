@@ -8,6 +8,17 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-23
 
+### fix(runout): body stations spread with equal gaps instead of crowding the faces
+
+- **A body's runout bubbles now sit at equal intervals, ends included.** On-device report: body
+  stations never looked like the hand-drawn sheet, and the reason was the spacing — each station
+  sat at the middle of its share of the body, which left only half a gap at each face, so the end
+  bubbles crowded the faces the way a liner's inset readings do. A body surface is uniform, so the
+  stations now divide the body into equal gaps: face to first station, station to station, last
+  station to face. Tapers (small and large end) and liners (near the edges, where the wear is
+  not) are unchanged. Station numbering is unchanged, so recorded TIRs stay on their bubbles;
+  bubbles you have dragged stay where you put them.
+
 ### fix(editor): the preview fills a component only when it will print shaded
 
 - **"Shade on drawing" now either leaves a component empty or fills it in.** On-device report:

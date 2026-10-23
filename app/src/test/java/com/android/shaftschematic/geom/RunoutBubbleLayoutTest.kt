@@ -127,9 +127,20 @@ class RunoutBubbleLayoutTest {
     // ── Station position math (mm domain) ────────────────────────────────────
 
     @Test
-    fun `body stations are cell midpoints across full length`() {
+    fun `body stations spread with equal gaps, the ends included`() {
+        // 300 mm, 3 stations: four equal 75 mm gaps — face to station, station to station,
+        // station to face. Cell midpoints (150/250/350) left only 50 mm at each end and read
+        // as crowding the faces (on-device report).
         val positions = runoutStationPositionsMm(100f, 300f, 3, useEdgeInset = false)
-        assertEquals(listOf(150f, 250f, 350f), positions)
+        assertEquals(listOf(175f, 250f, 325f), positions)
+    }
+
+    @Test
+    fun `a body's end gap equals its station pitch`() {
+        val positions = runoutStationPositionsMm(0f, 1000f, 4, useEdgeInset = false)
+        val pitch = positions[1] - positions[0]
+        assertEquals(pitch, positions[0], 1e-3f)
+        assertEquals(pitch, 1000f - positions.last(), 1e-3f)
     }
 
     @Test
@@ -425,22 +436,22 @@ class RunoutBubbleLayoutTest {
     @Test
     fun `body stations place evenly across the DRAWN span under a compressed mapping`() {
         // Piecewise map compressing 0..1000mm into 100pt and stretching 1000..2000mm into
-        // 500pt. Physical midpoints would bunch the first body's stations into the squeezed
+        // 500pt. Physical spacing would bunch the first body's stations into the squeezed
         // 100pt; drawn-space placement spreads them evenly across it and inverts to mm.
         fun xAt(mm: Float) = if (mm <= 1000f) mm * 0.1f else 100f + (mm - 1000f) * 0.5f
         fun mmAt(x: Float) = if (x <= 100f) x / 0.1f else 1000f + (x - 100f) / 0.5f
         val spans = listOf(RunoutComponentSpan("b1", RunoutComponentKind.BODY, 0f, 1000f))
         val stations = collectRunoutStations(spans, mapOf("b1" to 4), ::xAt, ::mmAt)
         assertEquals(4, stations.size)
-        // Evenly spaced in DRAWN x: 12.5, 37.5, 62.5, 87.5 across the 100pt span.
+        // Equal gaps in DRAWN x, ends included: 20, 40, 60, 80 across the 100pt span.
         stations.forEachIndexed { i, st ->
-            assertEquals(12.5f + i * 25f, st.stationX, 1e-3f)
+            assertEquals(20f + i * 20f, st.stationX, 1e-3f)
             // And the mm is the true inverse of that drawn position.
             assertEquals(mmAt(st.stationX), st.stationMm, 1e-3f)
         }
-        // Without an inverse, bodies fall back to physical cell midpoints.
+        // Without an inverse, bodies fall back to the same equal-gap rule in physical mm.
         val fallback = collectRunoutStations(spans, mapOf("b1" to 4), ::xAt)
-        assertEquals(125f, fallback[0].stationMm, 1e-3f)
+        assertEquals(200f, fallback[0].stationMm, 1e-3f)
     }
 
     @Test
