@@ -68,18 +68,20 @@ data class RenderOptions(
     /**
      * Ids of the components that will print SHADED on the PDF — the same effective decision
      * the composers make (kind checkboxes + per-component `shadeOnDrawing`, resolved by the
-     * `unshaded*Ids` builders). Each id's fill gets [shadeOverlayColor] drawn over it, so the
-     * editor preview answers "what prints shaded" without opening the PDF preview
-     * (on-device report: a card's checked Shade toggle changed nothing in the preview box).
-     * Empty (the default) draws exactly as before the mirror existed.
+     * `unshaded*Ids` builders). With [fillFollowsShade] on, these are the ONLY bodies, tapers
+     * and liners that get their kind's fill colour; every other one draws as an empty outline,
+     * so the editor preview answers "what prints shaded" the way the sheet does — filled or
+     * not (on-device reports: first a checked Shade toggle that changed nothing in the box,
+     * then a taper filled grey with its toggle off and darker with it on, two shades of "on").
+     * Ignored while [fillFollowsShade] is false.
      */
     val shadedComponentIds: Set<String> = emptySet(),
     /**
-     * ARGB overlay for [shadedComponentIds]. The default is the PDF `shadeFill` grey
-     * (40-alpha black); themed callers pass an onSurface-derived tint so the marker stays
-     * visible on a dark canvas — this is a marker for the print decision, not print fidelity.
+     * `true` makes a body/taper/liner's fill conditional on [shadedComponentIds] — shaded
+     * components take the kind fill, unshaded ones draw empty. `false` (the default, a
+     * thumbnail) fills every component with its kind colour as a plain picture of the shaft.
      */
-    val shadeOverlayColor: Int = 0x28000000,
+    val fillFollowsShade: Boolean = false,
 
     // ──────────────────────────────
     // Highlighting
