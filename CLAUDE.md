@@ -66,9 +66,10 @@ Specifically:
   `AddBodyDialog`/`AddTaperDialog` when adding would reach ≥ 2 (≥ 1 existing + this
   dialog's keyway defined). Same condition on both surfaces. 180° and 90° are mutually
   exclusive.
-- **Keyway standard size**: the "Standard size…" picker appears on the Body/Taper cards and in
-  AddBodyDialog/AddTaperDialog under the W × D row; it writes through the typed-value path and
-  never fills on its own.
+- **No keyway standard-size picker**: the "Standard size…" key-stock menu that sat under the
+  W × D row on the Body/Taper cards and in AddBodyDialog/AddTaperDialog was REMOVED on-device
+  ruling ("we always type them in anyway"), its ANSI/DIN tables with it. W and D are typed. Do
+  not reintroduce it without asking.
 - **Taper AFT/FWD reference**: `AddTaperDialog` must show AFT/FWD direction chips.
 - **Thread relief**: the thread card and `AddThreadDialog` both carry the "Thread relief"
   switch (`thread_relief` / `add_thread_relief`) + Relief length + Relief Ø + "Relief at:

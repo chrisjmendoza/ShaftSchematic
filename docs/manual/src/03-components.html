@@ -247,7 +247,7 @@
   <p>Tapers and explicit bodies can each carry one keyway. The controls are the same on both, with two differences: a body keyway chooses which end it runs from, and a taper keyway always runs from the S.E.T.</p>
 
   <h3>The Keyway checkbox</h3>
-  <p>The whole keyway section, including its unit chip, sizes, standard-size picker, captured and spooned switches and the clocking switches, sits behind one <span class="ui">Keyway</span> checkbox.</p>
+  <p>The whole keyway section, including its unit chip, sizes, captured and spooned switches and the clocking switches, sits behind one <span class="ui">Keyway</span> checkbox.</p>
   <ul>
     <li><strong>On a card</strong>, the checkbox opens on its own whenever any keyway value (W, D or L) is filled in, so a half-typed keyway stays visible.</li>
     <li>Ticking it only shows the fields. Nothing is stored until you type a value.</li>
@@ -262,7 +262,6 @@
       <tr><td><span class="ui">KW from:</span> <span class="ui">AFT</span> | <span class="ui">FWD</span><br>(bodies only)</td><td>Which end face of the body the keyway runs from. An open keyway runs off that face; a captured one is inset from it.</td></tr>
       <tr><td><span class="ui">Keyway in:</span> <span class="ui">in</span> | <span class="ui">mm</span></td><td>The unit the keyway is typed and printed in. Shown only when <span class="path">Settings → Drawing → Per-component units</span> is on. Choosing the component's own unit clears the choice.</td></tr>
       <tr><td><span class="ui">KW W</span> × <span class="ui">KW D</span></td><td>Keyway width and keyseat depth into the shaft.</td></tr>
-      <tr><td><span class="ui">Standard size…</span></td><td>A menu of standard key stock that fills W and D; see below.</td></tr>
       <tr><td><span class="ui">KW L</span></td><td>Keyway length. On a spooned keyway this is the length to the base of the spoon.</td></tr>
       <tr><td><span class="ui">Captured keyway</span> switch</td><td>Off: an open keyway that runs out of the face. On: a keyway closed at both ends, inset from the face.</td></tr>
       <tr><td><span class="ui">KW Inset from SET</span> (taper)<br><span class="ui">KW Inset from AFT</span> / <span class="ui">KW Inset from FWD</span> (body)</td><td>Shown while captured: the distance from the S.E.T. (taper) or from the chosen body face to the near end of the slot. Starts at 1/2″.</td></tr>
@@ -280,14 +279,6 @@
   </ul>
   <p>A new body keyway's <span class="ui">KW from</span> chip starts on the end opposite the shaft's existing keyway when there is exactly one, so a second keyway on a shaft with an AFT taper keyway starts at FWD. Otherwise it starts at AFT. This is a starting choice only; tap the other chip to change it.</p>
   <aside class="note"><p>Turning <span class="ui">Captured keyway</span> off sets the inset to zero, which is what makes the keyway open. Turning it back on while the card is open restores the inset you had. Typing a blank or zero inset does not un-capture the keyway; only the switch does.</p></aside>
-
-  <h3 id="components-standard-size">Standard size…</h3>
-  <p>Tap <span class="ui">Standard size…</span> to pick from a standard key-stock table. Inch keyways use ANSI (American National Standards Institute) B17.1 plain parallel keys; metric keyways use DIN (Deutsches Institut für Normung) 6885-1. When the host diameter falls within the table, the first entry is marked with a check and <span class="ui">Suggested for Ø …</span>: the size for the body Ø on a body, or for the L.E.T. on a taper. Every other size stays in the list, because the shop fits the key it has.</p>
-  <ul>
-    <li>A pick fills <span class="ui">KW W</span> and <span class="ui">KW D</span> exactly as if you had typed them. From then on they are ordinary typed values.</li>
-    <li>D is the <strong>keyseat depth in the shaft</strong>, not the key height. For ANSI keys it is half the key height.</li>
-    <li>The menu never fills anything on its own, and changing a diameter never changes a keyway.</li>
-  </ul>
 
   <h3>Keyway clocking</h3>
   <p>When the shaft carries two or more keyways, each keyway's section shows two switches:</p>

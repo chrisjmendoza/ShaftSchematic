@@ -8,6 +8,13 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-23
 
+### chore(keyway): the "Standard size…" picker is gone
+
+- **Keyway width and depth are typed, full stop.** On-device ruling: the shop types W × D every
+  time, so the standard key-stock menu under the pair was a row of noise on the Body and Taper
+  cards and in both Add dialogs. The menu and its ANSI B17.1 / DIN 6885-1 tables are removed; the
+  keyway unit chip still sets the unit the pair is typed and printed in. Nothing stored changes.
+
 ### feat(editor): the landscape-tablet editor draws the shaft across the top with a peeking carousel
 
 - **The drawing takes the full width; the cards take the height.** On-device report from the
@@ -26,6 +33,7 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 - **The overall-length box lines up with the button under it.** The box, the "+ Add Component"
   button and the warnings in the column beside the drawing now share one width and one right
   edge, with the box's ✓/✗ to its right.
+
 
 ## 2026-10-22
 

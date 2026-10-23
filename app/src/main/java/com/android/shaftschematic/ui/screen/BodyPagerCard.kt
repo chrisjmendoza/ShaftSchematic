@@ -53,8 +53,8 @@ import com.android.shaftschematic.util.UnitSystem
  * section. That section is gated by the shared "Keyway" checkbox ([KeywayGateRow]), seeded open
  * whenever any of W/D/L is typed; unticking it with values present confirms through
  * [RemoveKeywayConfirmDialog] before clearing them. Inside the gate: KW from AFT | FWD, the keyway
- * unit chip, W × D, the standard-size picker, KW L, the "Captured keyway" toggle with its "KW Inset
- * from AFT/FWD" field shown only while captured, "Keyway spooned", and the clocking section.
+ * unit chip, W × D, KW L, the "Captured keyway" toggle with its "KW Inset from AFT/FWD" field
+ * shown only while captured, "Keyway spooned", and the clocking section.
  * Every control here that changes geometry, position, or a value is mirrored in
  * `AddBodyDialog` by the add-dialog-parity invariant; "Show Ø on drawing", "Show name on
  * drawing", "Compress on drawing", "Shade on drawing", and the "Prints in: in | mm" chip are
@@ -564,15 +564,6 @@ internal fun BodyPagerCard(
                     val v = if (s.isBlank()) 0f else (toMmOrNull(s, kwUnit) ?: return@CommitNum)
                     onUpdateBodyKeyway(idx, b.keywayWidthMm, v, b.keywayLengthMm, b.keywayOffsetFromEndMm, kwEnd, b.keywaySpooned)
                 }
-            }
-            // Standard key stock for the W × D pair, suggested off the body's own Ø. A pick rides
-            // the same update callback typing the fields does — the values are authored from then
-            // on, and nothing here ever fills a field by itself.
-            KeywayStdSizePicker(
-                unit = kwUnit,
-                hostDiaMm = b.diaMm,
-            ) { w, d ->
-                onUpdateBodyKeyway(idx, w, d, b.keywayLengthMm, b.keywayOffsetFromEndMm, kwEnd, b.keywaySpooned)
             }
             // KW L / Inset parse in `kwUnit` like KW W/D — the keyway-unit chip governs what
             // EVERY keyway number means; parsing these two in the document unit under a kwUnit
