@@ -124,32 +124,38 @@ internal fun LinerPagerCard(
                 border = if (isFwdRef) BorderStroke(1.dp, Color.Black) else null)
         }
 
-        CommitNum(
-            label = "Start from ${if (isFwdRef) "FWD" else "AFT"} (${abbr(unit)})",
-            initialDisplay = disp(authoredStartMm, unit),
-            validator = { raw ->
-                val authoredMm = toMmOrNull(raw, unit) ?: return@CommitNum "Enter a number"
-                val physStart  = if (isFwdRef) spec.overallLengthMm - authoredMm - ln.lengthMm else authoredMm
-                startOverlapErrorMm(spec, ln.id, ComponentKind.LINER, ln.lengthMm, physStart)
-            }
-        ) { s ->
-            val authoredMm = toMmOrNull(s, unit) ?: return@CommitNum
-            val physStart  = if (isFwdRef) spec.overallLengthMm - authoredMm - ln.lengthMm else authoredMm
-            onUpdateLiner(idx, physStart, ln.lengthMm, ln.odMm)
-        }
-        CommitNum(
-            "Length (${abbr(unit)})", disp(ln.lengthMm, unit),
-            validator = { raw -> positiveLengthErrorMm(toMmOrNull(raw, unit)) },
-        ) { s ->
-            val newLen    = toMmOrNull(s, unit) ?: return@CommitNum
-            val physStart = if (isFwdRef) {
-                val authored = spec.overallLengthMm - ln.startFromAftMm - ln.lengthMm
-                spec.overallLengthMm - authored - newLen
-            } else {
-                ln.startFromAftMm
-            }
-            onUpdateLiner(idx, physStart, newLen, ln.odMm)
-        }
+        FieldPair(
+            first = {
+                CommitNum(
+                    label = "Start from ${if (isFwdRef) "FWD" else "AFT"} (${abbr(unit)})",
+                    initialDisplay = disp(authoredStartMm, unit),
+                    validator = { raw ->
+                        val authoredMm = toMmOrNull(raw, unit) ?: return@CommitNum "Enter a number"
+                        val physStart  = if (isFwdRef) spec.overallLengthMm - authoredMm - ln.lengthMm else authoredMm
+                        startOverlapErrorMm(spec, ln.id, ComponentKind.LINER, ln.lengthMm, physStart)
+                    }
+                ) { s ->
+                    val authoredMm = toMmOrNull(s, unit) ?: return@CommitNum
+                    val physStart  = if (isFwdRef) spec.overallLengthMm - authoredMm - ln.lengthMm else authoredMm
+                    onUpdateLiner(idx, physStart, ln.lengthMm, ln.odMm)
+                }
+            },
+            second = {
+                CommitNum(
+                    "Length (${abbr(unit)})", disp(ln.lengthMm, unit),
+                    validator = { raw -> positiveLengthErrorMm(toMmOrNull(raw, unit)) },
+                ) { s ->
+                    val newLen    = toMmOrNull(s, unit) ?: return@CommitNum
+                    val physStart = if (isFwdRef) {
+                        val authored = spec.overallLengthMm - ln.startFromAftMm - ln.lengthMm
+                        spec.overallLengthMm - authored - newLen
+                    } else {
+                        ln.startFromAftMm
+                    }
+                    onUpdateLiner(idx, physStart, newLen, ln.odMm)
+                }
+            },
+        )
         CommitNum("Outer Ø (${abbr(unit)})", disp(ln.odMm, unit)) { s ->
             toMmOrNull(s, unit)?.let { onUpdateLiner(idx, ln.startFromAftMm, ln.lengthMm, it) }
         }
@@ -211,36 +217,48 @@ internal fun LinerPagerCard(
                         ln.shoulderFwdLenMm, ln.shoulderFwdOdMm, r)
                 },
                 aftFields = {
-                    CommitNum("Shoulder length (${abbr(unit)})", disp(ln.shoulderAftLenMm, unit)) { s ->
-                        toMmOrNull(s, unit)?.let {
-                            onUpdateLinerShoulder(
-                                idx, LinerAuthoredReference.AFT,
-                                it, ln.shoulderAftOdMm, ln.shoulderAftRadiusMm)
-                        }
-                    }
-                    CommitNum("Shoulder Ø (${abbr(unit)})", disp(ln.shoulderAftOdMm, unit)) { s ->
-                        toMmOrNull(s, unit)?.let {
-                            onUpdateLinerShoulder(
-                                idx, LinerAuthoredReference.AFT,
-                                ln.shoulderAftLenMm, it, ln.shoulderAftRadiusMm)
-                        }
-                    }
+                    FieldPair(
+                        first = {
+                            CommitNum("Shoulder length (${abbr(unit)})", disp(ln.shoulderAftLenMm, unit)) { s ->
+                                toMmOrNull(s, unit)?.let {
+                                    onUpdateLinerShoulder(
+                                        idx, LinerAuthoredReference.AFT,
+                                        it, ln.shoulderAftOdMm, ln.shoulderAftRadiusMm)
+                                }
+                            }
+                        },
+                        second = {
+                            CommitNum("Shoulder Ø (${abbr(unit)})", disp(ln.shoulderAftOdMm, unit)) { s ->
+                                toMmOrNull(s, unit)?.let {
+                                    onUpdateLinerShoulder(
+                                        idx, LinerAuthoredReference.AFT,
+                                        ln.shoulderAftLenMm, it, ln.shoulderAftRadiusMm)
+                                }
+                            }
+                        },
+                    )
                 },
                 fwdFields = {
-                    CommitNum("Shoulder length (${abbr(unit)})", disp(ln.shoulderFwdLenMm, unit)) { s ->
-                        toMmOrNull(s, unit)?.let {
-                            onUpdateLinerShoulder(
-                                idx, LinerAuthoredReference.FWD,
-                                it, ln.shoulderFwdOdMm, ln.shoulderFwdRadiusMm)
-                        }
-                    }
-                    CommitNum("Shoulder Ø (${abbr(unit)})", disp(ln.shoulderFwdOdMm, unit)) { s ->
-                        toMmOrNull(s, unit)?.let {
-                            onUpdateLinerShoulder(
-                                idx, LinerAuthoredReference.FWD,
-                                ln.shoulderFwdLenMm, it, ln.shoulderFwdRadiusMm)
-                        }
-                    }
+                    FieldPair(
+                        first = {
+                            CommitNum("Shoulder length (${abbr(unit)})", disp(ln.shoulderFwdLenMm, unit)) { s ->
+                                toMmOrNull(s, unit)?.let {
+                                    onUpdateLinerShoulder(
+                                        idx, LinerAuthoredReference.FWD,
+                                        it, ln.shoulderFwdOdMm, ln.shoulderFwdRadiusMm)
+                                }
+                            }
+                        },
+                        second = {
+                            CommitNum("Shoulder Ø (${abbr(unit)})", disp(ln.shoulderFwdOdMm, unit)) { s ->
+                                toMmOrNull(s, unit)?.let {
+                                    onUpdateLinerShoulder(
+                                        idx, LinerAuthoredReference.FWD,
+                                        ln.shoulderFwdLenMm, it, ln.shoulderFwdRadiusMm)
+                                }
+                            }
+                        },
+                    )
                 },
             )
         }

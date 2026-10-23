@@ -28,7 +28,9 @@ app's shape-by-window decisions are stated; every screen keys on the same axis.
   page strip (`PreviewTuning.kt`) — reads the real height in dp at its own site.
 - **Two panes only at EXPANDED** (`WindowWidthClass.twoPane`). A MEDIUM window split in two
   leaves each pane narrower than a phone, and the carousel cards and sheet controls are
-  phone-width designs; MEDIUM is a taller single column, nothing more.
+  phone-width designs; MEDIUM is a taller single column, nothing more. (The Schematic editor's
+  EXPANDED layout is a top band over a full-width carousel rather than two side-by-side panes —
+  `twoPane` still names the branch; see `ShaftScreen.md` "Window width".)
 - No `material3-window-size-class` / `material3-adaptive` dependency: three thresholds and one
   reader are the whole need, and the classification stays pure and testable without them.
   Reach for the library only if a layout ever needs its posture/hinge data.
@@ -37,7 +39,7 @@ app's shape-by-window decisions are stated; every screen keys on the same axis.
 
 | Surface | COMPACT (phone) | MEDIUM (portrait tablet, landscape phone) | EXPANDED (landscape tablet) |
 |---|---|---|---|
-| Schematic / Final editor (`ShaftScreen`) | today's column | preview cap 280 dp | two panes: preview + OAL + warnings \| components + carousel |
+| Schematic / Final editor (`ShaftScreen`) | today's column | preview cap 280 dp | drawing band across the top (4:1 preview + OAL / add / warnings side column) over a full-width carousel, current card centred, neighbours peeking |
 | Runout / Wear / Undercut tabs | today's column, 200 dp canvas | 280 dp canvas | two panes: canvas + print group \| controls |
 | Consolidated Output tab | today's column | readable width | readable width (see `RunoutSheet.md`) |
 | Editor sidebar | slide-in overlay (200 dp) | overlay | **permanent** 240 dp panel beside the tabs; hamburgers hidden |

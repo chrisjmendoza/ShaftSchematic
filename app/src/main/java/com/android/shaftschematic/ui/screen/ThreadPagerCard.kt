@@ -153,14 +153,20 @@ internal fun ThreadPagerCard(
                 }
             }
         } else {
-            CommitNum("Major Ø (${abbr(unit)})", disp(th.majorDiaMm, unit)) { s ->
-                toMmOrNull(s, unit)?.let { onUpdateThread(idx, th.startFromAftMm, th.lengthMm, it, th.pitchMm, th.metricDesignation) }
-            }
-            CommitNum("TPI", tpiDisplay) { s ->
-                parseFractionOrDecimal(s)?.toFloat()?.takeIf { it > 0f }?.let { tpi ->
-                    onUpdateThread(idx, th.startFromAftMm, th.lengthMm, th.majorDiaMm, tpiToPitchMm(tpi), th.metricDesignation)
-                }
-            }
+            FieldPair(
+                first = {
+                    CommitNum("Major Ø (${abbr(unit)})", disp(th.majorDiaMm, unit)) { s ->
+                        toMmOrNull(s, unit)?.let { onUpdateThread(idx, th.startFromAftMm, th.lengthMm, it, th.pitchMm, th.metricDesignation) }
+                    }
+                },
+                second = {
+                    CommitNum("TPI", tpiDisplay) { s ->
+                        parseFractionOrDecimal(s)?.toFloat()?.takeIf { it > 0f }?.let { tpi ->
+                            onUpdateThread(idx, th.startFromAftMm, th.lengthMm, th.majorDiaMm, tpiToPitchMm(tpi), th.metricDesignation)
+                        }
+                    }
+                },
+            )
         }
         CommitNum(
             "Length (${abbr(unit)})", disp(th.lengthMm, unit),

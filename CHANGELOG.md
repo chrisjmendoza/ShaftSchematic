@@ -6,6 +6,27 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-10-23
+
+### feat(editor): the landscape-tablet editor draws the shaft across the top with a peeking carousel
+
+- **The drawing takes the full width; the cards take the height.** On-device report from the
+  first tablet pass: the editor's two side-by-side panes squeezed a 165" shaft into a third of the
+  screen as a thin strip while the component card on the right was clipped at the phone's fixed
+  height. On a landscape tablet the drawing now spans a band across the top, with the overall
+  length, the "+ Add Component" button and the warnings in a column beside it, and the component
+  carousel fills the space under it: the current card sits centred, a little wider than a phone
+  card, with the previous and next cards peeking in faded at either side. Tapping a peeking card
+  brings it to the centre and selects it, exactly as a swipe does; a peeking card cannot be
+  edited until it is centred. Phones and portrait tablets are unchanged.
+- **Tablet cards show twice the fields.** On-device request: a full-width box holding a few
+  characters wasted the card. On the tablet the fields that read as a pair — Start / Length, the
+  taper's two diameters, Major Ø / TPI, a liner shoulder's length / Ø — share a row at the same
+  touch height, so a taper's whole entry fits without scrolling. Phone cards are unchanged.
+- **The overall-length box lines up with the button under it.** The box, the "+ Add Component"
+  button and the warnings in the column beside the drawing now share one width and one right
+  edge, with the box's ✓/✗ to its right.
+
 ## 2026-10-22
 
 ### fix(undercut): a cut split by a nested cut prints its Ø on both sides
