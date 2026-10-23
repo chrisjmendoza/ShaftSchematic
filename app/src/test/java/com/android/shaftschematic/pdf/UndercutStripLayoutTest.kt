@@ -872,16 +872,35 @@ class UndercutStripLayoutTest {
         val clamped = ids.associate { (id, span) -> id to ClampedUndercutSpanMm(span.first, span.second) }
         val byKey = buildUndercutDiaStations(
             undercuts, clamped, xAtMm = { it }, unit = mm, labelWidthPt = { 10f },
-        ).associate { it.key to it.stationX }
-        assertEquals(225f, byKey.getValue("n0"), 1e-3f)
-        assertEquals(270f, byKey.getValue("n1"), 1e-3f)
-        assertEquals(320f, byKey.getValue("n2"), 1e-3f)
+        ).groupBy({ it.key }, { it.stationX })
+        assertEquals(listOf(225f, 415f), byKey.getValue("n0"))
+        assertEquals(listOf(270f, 370f), byKey.getValue("n1"))
+        assertEquals(listOf(320f), byKey.getValue("n2"))
     }
 
     @Test
-    fun `an unmeasured child still moves its parent's station off its floor`() {
+    fun `a parent split by a nested cut prints its value on both pieces`() {
+        // On-device report: the relief's Ø printed beside one piece of its floor only, and the
+        // other piece read as an unrecorded diameter.
+        val parent = Undercut(id = "p", startFromAftMm = 0f, lengthMm = 300f, diaMm = 200f)
+        val child = Undercut(id = "c", startFromAftMm = 120f, lengthMm = 60f, diaMm = 190f)
+        val clamped = mapOf(
+            "p" to ClampedUndercutSpanMm(0f, 300f),
+            "c" to ClampedUndercutSpanMm(120f, 180f),
+        )
+        val stations = buildUndercutDiaStations(
+            listOf(parent, child), clamped, xAtMm = { it }, unit = mm, labelWidthPt = { 10f },
+        )
+        val parentStations = stations.filter { it.key == "p" }
+        assertEquals(listOf(60f, 240f), parentStations.map { it.stationX })
+        assertEquals(1, parentStations.map { it.label.inline() }.distinct().size)
+        assertEquals(listOf(150f), stations.filter { it.key == "c" }.map { it.stationX })
+    }
+
+    @Test
+    fun `an unmeasured child still moves its parent's stations off its floor`() {
         // The child prints no Ø of its own, but it still replaces the parent's floor over its
-        // span — so the parent's leader may not anchor there.
+        // span — so the parent's leaders may not anchor there: one lands on each piece beside it.
         val parent = Undercut(id = "p", startFromAftMm = 0f, lengthMm = 300f, diaMm = 200f)
         val child = Undercut(id = "c", startFromAftMm = 60f, lengthMm = 40f, diaMm = 0f)
         val clamped = mapOf(
@@ -891,7 +910,8 @@ class UndercutStripLayoutTest {
         val stations = buildUndercutDiaStations(
             listOf(parent, child), clamped, xAtMm = { it }, unit = mm, labelWidthPt = { 10f },
         )
-        assertEquals(1, stations.size)
-        assertEquals(200f, stations[0].stationX, 1e-3f)
+        assertEquals(listOf("p", "p"), stations.map { it.key })
+        assertEquals(listOf(30f, 200f), stations.map { it.stationX })
+        assertTrue(stations.none { it.stationX in 60f..100f })
     }
 }

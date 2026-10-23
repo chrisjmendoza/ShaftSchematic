@@ -1671,21 +1671,27 @@ fun UndercutWindowDetailOverlay(
                                 val leaderColor = outlineColor.copy(alpha = 0.6f)
                                 // Same shelf anchors the sheet uses, so a leader leaves the same
                                 // point of the same floor on both draw sites.
-                                val anchorById = undercutCalloutAnchorsMm(spans)
-                                val stations = notches.mapNotNull { n ->
+                                // One station per labelled piece of a cut's floor, so a parent
+                                // split by a nested cut reads as ONE diameter on both sides.
+                                val anchorsById = undercutCalloutAnchorsMm(spans)
+                                val stations = notches.flatMap { n ->
                                     val u = drawUndercuts.firstOrNull { it.id == n.id }
-                                        ?: return@mapNotNull null
+                                        ?: return@flatMap emptyList()
                                     // The authoring overlay stays single-unit (`docs/DualUnitStacking_PLAN.md`
                                     // §8), so its label has no second term and never stacks.
                                     val label = DualLabel.single(
                                         if (u.diaMm > 0f) formatDiaWithUnit(u.diaMm.toDouble(), unit) else "—"
                                     )
-                                    DiaCalloutStation(
-                                        key = n.id,
-                                        stationX = xPx(anchorById[n.id] ?: ((n.startMm + n.endMm) / 2f)),
-                                        label = label,
-                                        labelWidth = textPaint.measureText(label.primary),
-                                    )
+                                    val width = textPaint.measureText(label.primary)
+                                    val anchors = anchorsById[n.id] ?: listOf((n.startMm + n.endMm) / 2f)
+                                    anchors.map { anchorMm ->
+                                        DiaCalloutStation(
+                                            key = n.id,
+                                            stationX = xPx(anchorMm),
+                                            label = label,
+                                            labelWidth = width,
+                                        )
+                                    }
                                 }
                                 val plan = planDiaCallouts(stations, 4f, size.width - 4f, minGap = 6.dp.toPx())
                                 val placed = plan.finish(

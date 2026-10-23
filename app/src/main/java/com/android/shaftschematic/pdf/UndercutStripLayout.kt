@@ -1255,10 +1255,11 @@ fun buildUndercutTotalSpan(spans: List<UndercutSpanMm>, unit: UnitSystem, dual: 
 // ──────────────────────────────────────────────────────────────────────────────
 
 /**
- * Measured-Ø callout stations for one strip: one per undercut, positioned on the largest
- * visible shelf of its own floor ([undercutCalloutAnchorMm], the clamped span's centre for a
- * cut with nothing machined inside it), labelled with [formatDiaWithUnit] (no "Ø" prefix — the
- * footer/callout convention).
+ * Measured-Ø callout stations for one strip: one per visible PIECE of each undercut's own floor
+ * ([undercutCalloutAnchorsMm] — the clamped span's centre for a cut with nothing machined inside
+ * it; a parent split by a nested cut gets a station on every piece wide enough, each carrying the
+ * same value, so the two sides read as ONE diameter), labelled with [formatDiaWithUnit] (no "Ø"
+ * prefix — the footer/callout convention). Station keys therefore repeat for a split cut.
  *
  * An undercut with no entered Ø (`diaMm == 0` — placed but not yet measured) is SKIPPED:
  * the printed sheet never carries a placeholder for a value nobody recorded, the same rule
@@ -1286,17 +1287,22 @@ fun buildUndercutDiaStations(
         val s = clampedById[u.id] ?: return@mapNotNull null
         if (s.isEmpty) null else UndercutSpanMm(u.id, s.startMm, s.endMm)
     }
-    val anchorById = undercutCalloutAnchorsMm(spans)
-    return undercuts.mapNotNull { u ->
-        if (u.diaMm <= 0f) return@mapNotNull null
-        val anchorMm = anchorById[u.id] ?: return@mapNotNull null
+    // One station per labelled piece of a cut's floor: a parent split by a nested cut prints its
+    // Ø on EVERY piece wide enough, so the keys repeat and consumers look up by id.
+    val anchorsById = undercutCalloutAnchorsMm(spans)
+    return undercuts.flatMap { u ->
+        if (u.diaMm <= 0f) return@flatMap emptyList()
+        val anchors = anchorsById[u.id] ?: return@flatMap emptyList()
         val label = formatDiaWithUnitDualLabel(u.diaMm.toDouble(), unit, dual)
-        DiaCalloutStation(
-            key = u.id,
-            stationX = xAtMm(anchorMm),
-            label = label,
-            labelWidth = labelWidthPt(label),
-        )
+        val width = labelWidthPt(label)
+        anchors.map { anchorMm ->
+            DiaCalloutStation(
+                key = u.id,
+                stationX = xAtMm(anchorMm),
+                label = label,
+                labelWidth = width,
+            )
+        }
     }
 }
 

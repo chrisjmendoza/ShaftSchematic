@@ -368,11 +368,14 @@ data class UndercutRecord(
   Partial overlaps are TOLERATED, not repaired — neither span contains the other, so both stay
   top-level siblings. The forest drives the nested notch build, the drawn-floor stacking, the
   extra rail rows, and which cuts the deepest-depth pool counts.
-- **Ø callout shelf anchor** `undercutCalloutAnchorMm(span, others)` /
-  `undercutCalloutAnchorsMm(spans)` → where a cut's Ø leader leaves its own floor, in shaft-space
-  mm: subtract every contained span from the cut's own, take the midpoint of the widest remaining
-  segment (ties AFT-most), fall back to the span midpoint when nothing is left. Childless cuts
-  are unchanged. See the strip callout rules below.
+- **Ø callout shelf anchors** `undercutCalloutAnchorsMm(spans)` → where a cut's Ø leaders leave
+  its own floor, in shaft-space mm, a list per span id: subtract every contained span from the
+  cut's own and anchor the midpoint of EVERY remaining piece at least
+  `UNDERCUT_CALLOUT_MIN_PIECE_MM` (1/4") wide, AFT → FWD. A childless cut has one piece and one
+  anchor, its midpoint. A cut with no piece that wide falls back to its single
+  `undercutCalloutAnchorMm(span, others)` — the widest sliver (ties AFT-most), or the span midpoint
+  when its children cover it edge to edge — so no measured cut loses its value. See the strip
+  callout rules below.
 - **Stale classifier** `isUndercutStaleOverrun(startFromAftMm, lengthMm, oalMm)` — non-blocking;
   reuses `undercutSpanIssue` to detect a previously-valid record that no longer fits (OAL
   shrank). Card shows "Extends past shaft end — re-measure"; render clamps via
@@ -1806,13 +1809,19 @@ strips minus a 22 pt orientation row, so a lone full-width strip owns ≈ 414 pt
     one, a total span would just restate that undercut's own length, already dimensioned on the
     chain below (a lone relief holding a nested cut included);
   - **Ø callouts below** via `planDiaCallouts`/`buildUndercutDiaStations` (leader to notch floor,
-    `formatDiaWithUnit`, **no "Ø" prefix**); each leader leaves the **shelf anchor**
-    `undercutCalloutAnchorMm` — the midpoint of the largest still-visible segment of that cut's
-    OWN floor, found by subtracting from its span every other span contained in it (direct
-    children suffice; deeper descendants lie inside them), ties to the AFT-most segment. A
-    childless cut has one segment and so anchors at its span midpoint, exactly as it always did;
-    a cut its children cover end to end draws no floor anywhere and falls back to the midpoint.
-    The anchors are derived from **every drawable cut on the strip**, unmeasured ones included:
+    `formatDiaWithUnit`, **no "Ø" prefix**); the leaders leave the **shelf anchors**
+    `undercutCalloutAnchorsMm` — ONE PER VISIBLE PIECE of that cut's OWN floor, found by
+    subtracting from its span every other span contained in it (direct children suffice; deeper
+    descendants lie inside them). **A parent split by a nested cut prints its value on EVERY
+    piece** at least `UNDERCUT_CALLOUT_MIN_PIECE_MM` (1/4") wide — the same number, once per piece
+    (on-device report: a relief with a deeper cut in the middle printed its Ø beside one side only,
+    and a reader with just the sheet could not know the other side was the same diameter). A
+    childless cut has one piece and so anchors at its span midpoint, exactly as it always did; a
+    cut with no piece that wide keeps ONE anchor, `undercutCalloutAnchorMm` — the widest sliver
+    (ties AFT-most), or the span midpoint when its children cover it end to end. Station keys
+    repeat for a split cut; both draw sites look the floor up by id and never assume one station
+    per cut. The anchors are derived from **every drawable cut on the strip**, unmeasured ones
+    included:
     a child with no Ø prints no callout but still replaces its parent's floor. Midpoint anchoring
     broke on nesting twice — a parent's midpoint can sit inside a child (the leader lands on the
     child's face or in the void), and concentric cuts share a midpoint outright, collapsing every

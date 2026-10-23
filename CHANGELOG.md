@@ -8,6 +8,16 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-22
 
+### fix(undercut): a cut split by a nested cut prints its Ø on both sides
+
+- **Every visible piece of a cut's floor now carries the cut's measured Ø.** On-device report:
+  a relief with a deeper cut machined in its middle printed its diameter beside one side only, so a
+  reader with just the sheet could not tell the other side was the same diameter. The Ø callout
+  anchors (`undercutCalloutAnchorsMm`) now yield one leader per piece of the cut's own floor at
+  least 1/4" wide, each labelled with the same value, on the printed strip and the detail canvas
+  alike; a piece narrower than that stays unlabelled, and a cut with no piece that wide keeps its
+  single widest-shelf anchor as before. Plain cuts are unchanged.
+
 ### fix(calculators): the keyboard no longer hides the bottom of the calculator dialogs
 
 - **The keyway calculator's cutter fields and Close button stay reachable while typing.**
