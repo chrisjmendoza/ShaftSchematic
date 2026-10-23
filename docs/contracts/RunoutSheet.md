@@ -1427,17 +1427,26 @@ and dense component boundaries.
 
 ## OAL Dimension Alignment
 
-Both `RunoutPdfComposer` and `WearPdfComposer` derive the horizontal draw span from the **SET-to-SET** extent, not `overallLengthMm`:
+Both `RunoutPdfComposer` and `WearPdfComposer` place the OAL arrows on the **SET-to-SET** extent, not `overallLengthMm`:
 
 ```
 aftSetMm  = computeSetPositionsInMeasureSpace(oalWindow, spec).aftSETxMm
 fwdSetMm  = computeSetPositionsInMeasureSpace(oalWindow, spec).fwdSETxMm
-drawSpanMm = fwdSetMm − aftSetMm
-ptPerMm    = contentWidth / drawSpanMm
-xAt(mm)    = contentLeft + (mm − aftSetMm) × ptPerMm
 ```
 
-**Why:** Measurements on these documents always originate from the SET faces (see `computeSetPositionsInMeasureSpace`), so the arrows bracket the SET-to-SET span regardless of end threads. Threads ARE drawn — hatched envelopes at their physical position, purely for visual reference — and end threads (including excluded-from-OAL threads, which live outside 0..OAL after `syncExcludedThreadPositions`) stick out past the arrow tips into the margins.
+The runout/consolidated sheet's x MAP, though, spans the **drawn extent** — the ONE builder
+`ShaftSpec.drawnExtentMm()` (`geom/DrawnExtent.kt`, the schematic's rule): the SET window
+widened by any thread excluded from the OAL (an excluded AFT thread starts before 0, an excluded
+FWD thread ends past the OAL, after `syncExcludedThreadPositions`):
+
+```
+drawStartMm = min(aftSetMm, drawnExtent.startMm)
+drawEndMm   = max(fwdSetMm, drawnExtent.endMm)
+ptPerMm     = contentWidth / (drawEndMm − drawStartMm)      (prelim; the compressed map follows)
+xAt(mm)     = contentLeft + (mm − drawStartMm) × ptPerMm
+```
+
+**Why:** Measurements on these documents always originate from the SET faces (see `computeSetPositionsInMeasureSpace`), so the arrows bracket the SET-to-SET span regardless of end threads. Threads ARE drawn — hatched envelopes at their physical position, purely for visual reference — and end threads stick out past the arrow tips. Until 2026-10-23 the map spanned the SET window alone and let `xAt` extrapolate the excluded thread into the margin; a 6″ thread at the compressed scale ran past the edge of the page on the consolidated preview (on-device report), so the map now makes room for it. A shaft with no excluded thread maps exactly as before. The wear document keeps its own SET-to-SET span: it draws a thread-end STUB, not the thread's length.
 
 **Layout (2026-07-18):** the runout sheet's OAL dimension line sits `OAL_LINE_SPACE_PT` = 90 pt (≈ 1.25 in) above the shaft top — raised so it doesn't crowd the profile — with witness (extension) lines dropping to the shaft's actual top edge at each SET face (gap 3 pt, extending 5 pt past the line), matching the schematic/wear-document convention.
 
@@ -2201,7 +2210,7 @@ Both routes add `BackHandler(enabled = showPreview) { showPreview = false }` bef
 ## Contracts & Invariants
 
 - Model dimensions are canonical **mm**; all px/pt conversion happens inside the composer/preview.
-- Thread components produce no runout stations; they are drawn as hatched envelopes for visual reference only and may extend past the OAL arrows (excluded threads sit outside the SET-to-SET span).
+- Thread components produce no runout stations; they are drawn as hatched envelopes for visual reference only and may extend past the OAL arrows (excluded threads sit outside the SET-to-SET span, inside the drawn extent the x map spans).
 - The PDF page is U.S. Letter landscape (792 × 612 pt).
 - Canvas preview and PDF share one placement engine (`geom/RunoutBubbleLayout.kt`) so they are identical by construction — never re-implement placement in a renderer.
 - Bubbles never touch each other; leader lines never enter a bubble or cross another leader

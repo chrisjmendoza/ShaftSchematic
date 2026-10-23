@@ -21,6 +21,7 @@ import com.android.shaftschematic.geom.clampUndercutSpan
 import com.android.shaftschematic.geom.clockTickRimOffset
 import com.android.shaftschematic.geom.collectRunoutStations
 import com.android.shaftschematic.geom.computeOalWindow
+import com.android.shaftschematic.geom.drawnExtentMm
 import com.android.shaftschematic.geom.PROFILE_MIN_LINER_PT
 import com.android.shaftschematic.geom.PROFILE_TAPER_MIN_FRAC_OF_TRUE
 import com.android.shaftschematic.geom.PROFILE_MIN_THREAD_PT
@@ -130,7 +131,8 @@ import kotlin.math.sin
  *   (on-device request).
  * - **Threads**: no stations (threads are not measured for runout). Still drawn as
  *   hatched envelopes for visual reference; excluded-from-OAL threads sit outside the
- *   SET-to-SET arrows at their physical position.
+ *   SET-to-SET arrows at their physical position, and the x map spans them
+ *   (`drawnExtentMm`) so they stay on the page.
  *
  * ## Bubble rows and leader routing
  * Placement is delegated to the shared engine in `geom/RunoutBubbleLayout.kt` (also used
@@ -324,17 +326,23 @@ internal fun composeRunoutPdfOnCanvas(
     val contentW     = contentRight - contentLeft
 
     // ── Compute shaft scale ───────────────────────────────────────────────────
-    // The runout sheet spans the SET-to-SET measurement window (AFT SET face → FWD SET face).
-    // Thread components outside this window are not drawn on the runout profile.
+    // The OAL rail and the S.E.T. faces read from the SET-to-SET measurement window (AFT SET
+    // face → FWD SET face). The x MAP, though, spans the DRAWN extent (`geom/DrawnExtent.kt`,
+    // the schematic's rule): the window widened by any thread excluded from the OAL. Mapping
+    // the window alone let `xAt` extrapolate an excluded AFT thread off the left edge of the
+    // page (on-device report on the consolidated preview).
     val oalWindow      = computeOalWindow(spec)
     val setPositions   = computeSetPositionsInMeasureSpace(oalWindow, spec)
     val aftSetMm       = setPositions.aftSETxMm.toFloat()
     val fwdSetMm       = setPositions.fwdSETxMm.toFloat()
-    val drawSpanMm     = (fwdSetMm - aftSetMm).coerceAtLeast(1f)
+    val drawnExtent    = spec.drawnExtentMm()
+    val drawStartMm    = minOf(aftSetMm, drawnExtent.startMm)
+    val drawEndMm      = maxOf(fwdSetMm, drawnExtent.endMm)
+    val drawSpanMm     = (drawEndMm - drawStartMm).coerceAtLeast(1f)
     val widthFitPtPerMm = contentW / drawSpanMm
 
     /** Prelim linear mapping — used ONLY for the bubble-row budget (see the cycle note below). */
-    fun xAtLinear(mm: Float): Float = contentLeft + (mm - aftSetMm) * widthFitPtPerMm
+    fun xAtLinear(mm: Float): Float = contentLeft + (mm - drawStartMm) * widthFitPtPerMm
 
     // Empty when bubbles are elected out — the plan then reserves zero height and the
     // shaft area absorbs the difference.
@@ -500,7 +508,7 @@ internal fun composeRunoutPdfOnCanvas(
     val prelimPlan     = planRunoutBubbles(
         collectRunoutStations(
             stationSpans, config.componentOverrides, ::xAtLinear,
-            mmAtX = { x -> aftSetMm + (x - contentLeft) / widthFitPtPerMm },
+            mmAtX = { x -> drawStartMm + (x - contentLeft) / widthFitPtPerMm },
             placements = runoutStationPlacements,
         ),
         bubbleGeom,
@@ -613,12 +621,12 @@ internal fun composeRunoutPdfOnCanvas(
         maxDiaMm = maxOuterDiaMm,
     )
     val diaPtPerMm = solveMaxProfileScale(
-        windowStartMm = aftSetMm, windowEndMm = fwdSetMm,
+        windowStartMm = drawStartMm, windowEndMm = drawEndMm,
         features = featureSpans, contentWidth = contentW, scaleHi = desiredScale,
     ).coerceAtLeast(1e-5f)
 
     val xMap = buildCompressedProfileXMap(
-        windowStartMm = aftSetMm, windowEndMm = fwdSetMm,
+        windowStartMm = drawStartMm, windowEndMm = drawEndMm,
         features = featureSpans,
         contentLeft = contentLeft, contentRight = contentRight,
         diaPtPerMm = diaPtPerMm,
