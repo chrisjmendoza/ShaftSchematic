@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -71,13 +70,11 @@ fun BoreKeywayCalcDialog(
     var cutter1 by rememberSaveable { mutableStateOf("") }
     var cutter2 by rememberSaveable { mutableStateOf("") }
 
-    AlertDialog(
+    ImeResizingAlertDialog(
         onDismissRequest = onDismiss,
         modifier = Modifier.testTag("bore_kw_calc_dialog"),
         title = { Text("Keyway rough-cutter depth") },
         text = {
-            // The cutter fields sit at the dialog's foot, under the keyboard once one is focused.
-            DialogImeResize()
             Column(
                 Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp),

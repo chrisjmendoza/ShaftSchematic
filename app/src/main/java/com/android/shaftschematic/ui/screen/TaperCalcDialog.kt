@@ -11,7 +11,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -92,12 +91,11 @@ fun TaperCalcDialog(
     val shown = presentTaperCalc(entries, calculated)
     val calculate = { calculatedFor = entries }
 
-    AlertDialog(
+    ImeResizingAlertDialog(
         onDismissRequest = onDismiss,
         modifier = Modifier.testTag("taper_calc_dialog"),
         title = { Text("Taper calculator") },
         text = {
-            DialogImeResize()
             Column(
                 Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
