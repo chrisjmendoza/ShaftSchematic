@@ -871,6 +871,13 @@ fun undercutNestingForest(spans: List<UndercutSpanMm>): List<UndercutNesting> {
 }
 
 /**
+ * The smallest free piece of a cut's floor that still gets its own Ø callout, in shaft-space mm —
+ * 1/4". A piece narrower than this barely reads as a floor at all, so a leader onto it would be
+ * noise; such a piece is left to the cut's other pieces (or the widest-piece fallback).
+ */
+const val UNDERCUT_CALLOUT_MIN_PIECE_MM = 6.35f
+
+/**
  * Where a cut's measured-Ø callout hangs from: the midpoint of the largest **visible** segment
  * of its own drawn floor, in shaft-space mm.
  *
@@ -889,6 +896,9 @@ fun undercutNestingForest(spans: List<UndercutSpanMm>): List<UndercutNesting> {
  * A childless cut has one segment — its whole span — so it anchors at its own midpoint exactly
  * as it always did. A cut whose children cover it end to end draws no floor of its own anywhere;
  * it falls back to the span midpoint, the least-bad position and the historical one.
+ *
+ * This is the ONE anchor a cut gets when none of its pieces is wide enough to label on its own;
+ * [undercutCalloutAnchorsMm] is what the draw sites take, one anchor per labelled piece.
  */
 fun undercutCalloutAnchorMm(
     span: UndercutSpanMm,
@@ -897,36 +907,64 @@ fun undercutCalloutAnchorMm(
 ): Float {
     val mid = (span.startMm + span.endMm) * 0.5f
     if (span.endMm - span.startMm <= epsMm) return mid
+    val widest = undercutFloorPieces(span, others, epsMm).maxByOrNull { (a, b) -> b - a } ?: return mid
+    return if (widest.second - widest.first <= epsMm) mid else (widest.first + widest.second) * 0.5f
+}
 
+/**
+ * Every Ø-callout anchor of every cut on a strip, keyed by span id and listed AFT → FWD — the
+ * form both draw sites take, so a leader leaves the same shelf on the canvas overlay and on the
+ * sheet.
+ *
+ * A cut whose nested cuts split its floor into several visible pieces is still ONE cut at ONE
+ * diameter, but a reader of the printed sheet has only the drawing to go by: one labelled piece
+ * beside an unlabelled piece of the same floor reads as a second, unrecorded diameter (on-device
+ * report — a relief with a deeper cut in the middle printed its Ø on one side only). So EVERY
+ * piece of a cut's own floor at least [minPieceMm] wide gets its own anchor at the piece's
+ * midpoint, and the callout engine prints the cut's value at each one. A childless cut has one
+ * piece and one anchor, its midpoint, exactly as before. A cut with no piece that wide falls back
+ * to its single [undercutCalloutAnchorMm] — the widest sliver, or the span midpoint when its
+ * children cover it end to end — so no measured cut ever loses its value.
+ *
+ * The map holds a list per id, never an empty one. Station keys repeat for a split cut, so a
+ * consumer keyed by cut id must look up by id, never assume one station per cut.
+ */
+fun undercutCalloutAnchorsMm(
+    spans: List<UndercutSpanMm>,
+    minPieceMm: Float = UNDERCUT_CALLOUT_MIN_PIECE_MM,
+    epsMm: Float = UNDERCUT_TOUCH_EPS_MM,
+): Map<String, List<Float>> = spans.associate { span ->
+    val pieces = if (span.endMm - span.startMm <= epsMm) emptyList() else
+        undercutFloorPieces(span, spans, epsMm).filter { (a, b) -> b - a >= minPieceMm }
+    val anchors = if (pieces.isEmpty()) listOf(undercutCalloutAnchorMm(span, spans, epsMm))
+    else pieces.map { (a, b) -> (a + b) * 0.5f }
+    span.id to anchors
+}
+
+/**
+ * The pieces of [span]'s own floor still visible once every other span CONTAINED in it is
+ * subtracted (direct children suffice — deeper descendants lie inside them), AFT → FWD as
+ * `(startMm, endMm)` pairs. Zero-width leftovers are kept so a caller can apply its own width
+ * rule; nothing is returned for a span its children cover edge to edge.
+ */
+private fun undercutFloorPieces(
+    span: UndercutSpanMm,
+    others: List<UndercutSpanMm>,
+    epsMm: Float,
+): List<Pair<Float, Float>> {
     val children = others
         .filter { it.id != span.id && undercutSpanContains(span, it, epsMm) }
         .map { it.startMm.coerceIn(span.startMm, span.endMm) to it.endMm.coerceIn(span.startMm, span.endMm) }
         .sortedBy { it.first }
-
-    var bestStart = 0f
-    var bestEnd = 0f
-    var bestWidth = 0f
-    fun consider(a: Float, b: Float) {
-        if (b - a > bestWidth) { bestStart = a; bestEnd = b; bestWidth = b - a }
-    }
+    val out = mutableListOf<Pair<Float, Float>>()
     var cursor = span.startMm
     children.forEach { (cs, ce) ->
-        consider(cursor, cs)
+        if (cs > cursor) out += cursor to cs
         cursor = max(cursor, ce)
     }
-    consider(cursor, span.endMm)
-
-    return if (bestWidth <= epsMm) mid else (bestStart + bestEnd) * 0.5f
+    if (span.endMm > cursor) out += cursor to span.endMm
+    return out
 }
-
-/**
- * [undercutCalloutAnchorMm] over a whole strip's [spans], keyed by span id — the form both
- * draw sites take, so a leader leaves the same shelf on the canvas overlay and on the sheet.
- */
-fun undercutCalloutAnchorsMm(
-    spans: List<UndercutSpanMm>,
-    epsMm: Float = UNDERCUT_TOUCH_EPS_MM,
-): Map<String, Float> = spans.associate { it.id to undercutCalloutAnchorMm(it, spans, epsMm) }
 
 /**
  * A zoomed detail window covering one cluster of undercuts, in shaft-space mm.

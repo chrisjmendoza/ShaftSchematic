@@ -698,12 +698,59 @@ class UndercutMathTest {
             UndercutSpanMm("n2", 290f, 350f),
         )
         assertTrue("the scenario is concentric", spans.all { (it.startMm + it.endMm) / 2f == 320f })
-        val anchors = undercutCalloutAnchorsMm(spans)
+        val anchors = spans.associate { it.id to undercutCalloutAnchorMm(it, spans) }
         assertEquals(225f, anchors.getValue("n0"), 1e-3f)   // [200,250] ties [390,440], AFT wins
         assertEquals(270f, anchors.getValue("n1"), 1e-3f)   // [250,290] ties [350,390]
         assertEquals(320f, anchors.getValue("n2"), 1e-3f)   // childless
         val distinct = anchors.values.map { it }.toSet()
         assertEquals("every level anchors somewhere else", 3, distinct.size)
+    }
+
+    @Test
+    fun `a parent split by a nested cut gets one anchor per visible piece`() {
+        // On-device report: a relief with a deeper cut in the middle printed its Ø on one side
+        // only, and the other piece of the same floor read as an unrecorded diameter.
+        val parent = UndercutSpanMm("p", 100f, 400f)
+        val child = UndercutSpanMm("c", 220f, 260f)
+        val anchors = undercutCalloutAnchorsMm(listOf(parent, child))
+        assertEquals(listOf(160f, 330f), anchors.getValue("p"))   // AFT piece, then FWD piece
+        assertEquals(listOf(240f), anchors.getValue("c"))         // the child: its own midpoint
+    }
+
+    @Test
+    fun `a concentric staircase labels both sides of every level`() {
+        val spans = listOf(
+            UndercutSpanMm("n0", 200f, 440f),
+            UndercutSpanMm("n1", 250f, 390f),
+            UndercutSpanMm("n2", 290f, 350f),
+        )
+        val anchors = undercutCalloutAnchorsMm(spans)
+        assertEquals(listOf(225f, 415f), anchors.getValue("n0"))
+        assertEquals(listOf(270f, 370f), anchors.getValue("n1"))
+        assertEquals(listOf(320f), anchors.getValue("n2"))
+    }
+
+    @Test
+    fun `a piece narrower than the minimum is left unlabelled`() {
+        // The child sits 2 mm off the AFT shoulder: that sliver is no floor to label, so the
+        // parent keeps ONE anchor, on its wide FWD piece.
+        val parent = UndercutSpanMm("p", 100f, 400f)
+        val child = UndercutSpanMm("c", 102f, 160f)
+        val anchors = undercutCalloutAnchorsMm(listOf(parent, child))
+        assertEquals(listOf(280f), anchors.getValue("p"))
+    }
+
+    @Test
+    fun `a cut with no piece wide enough falls back to its single anchor`() {
+        // Children leave only slivers (2 mm each side): the fallback is the widest sliver, the
+        // same shelf the single-anchor rule picks, so the cut never loses its value.
+        val parent = UndercutSpanMm("p", 100f, 300f)
+        val child = UndercutSpanMm("c", 102f, 298f)
+        val anchors = undercutCalloutAnchorsMm(listOf(parent, child))
+        assertEquals(listOf(undercutCalloutAnchorMm(parent, listOf(parent, child))), anchors.getValue("p"))
+        // Covered edge to edge: the historical midpoint, once.
+        val halves = listOf(parent, UndercutSpanMm("d", 100f, 200f), UndercutSpanMm("e", 200f, 300f))
+        assertEquals(listOf(200f), undercutCalloutAnchorsMm(halves).getValue("p"))
     }
 
     @Test
@@ -736,8 +783,8 @@ class UndercutMathTest {
         val a = UndercutSpanMm("a", 100f, 300f)
         val b = UndercutSpanMm("b", 200f, 400f)
         val anchors = undercutCalloutAnchorsMm(listOf(a, b))
-        assertEquals(200f, anchors.getValue("a"), 1e-3f)
-        assertEquals(300f, anchors.getValue("b"), 1e-3f)
+        assertEquals(listOf(200f), anchors.getValue("a"))
+        assertEquals(listOf(300f), anchors.getValue("b"))
     }
 
     @Test
