@@ -3,6 +3,7 @@ package com.android.shaftschematic.ui.screen
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -71,6 +72,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -504,7 +506,7 @@ fun ShaftScreen(
         // They are composable lambdas rather than private composables because each would
         // otherwise have to restate this screen's parameter list — the carousel alone takes
         // fifty callbacks — and a signature copied twice is the drift this exists to prevent.
-        val previewBlock: @Composable (Dp) -> Unit = { previewMaxHeight ->
+        val previewBlock: @Composable (previewMaxHeight: Dp, aspect: Float) -> Unit = { previewMaxHeight, aspect ->
             PreviewCard(
                 showGrid = showGrid,
                 spec = spec,
@@ -532,18 +534,21 @@ fun ShaftScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 120.dp, max = previewMaxHeight)
-                    .aspectRatio(3.0f)
+                    .aspectRatio(aspect)
             )
             // NOTE: Highlight state is threaded into ShaftDrawing via PreviewCard.
         }
 
-        // Overall length entry and its two read-only companion labels.
-        val oalBlock: @Composable () -> Unit = {
+        // Overall length entry and its two read-only companion labels. [fieldMaxWidth] is the
+        // text box's width cap — the phone's 240 dp, or none where the field should fill a
+        // column the width of the control under it.
+        val oalBlock: @Composable (fieldMaxWidth: Dp) -> Unit = { fieldMaxWidth ->
             OverallLengthField(
                 spec = spec,
                 unit = unit,
                 onSetOverallLengthMm = onSetOverallLengthMm,
                 onSetOverallLengthRaw = onSetOverallLengthRaw,
+                fieldMaxWidth = fieldMaxWidth,
             )
 
             // Read-only: computed OAL in measurement space (less excluded end threads)
@@ -574,14 +579,12 @@ fun ShaftScreen(
             }
         }
 
-        // The components side: heading, the single add entry point, and the carousel, with
-        // the add dialogs it raises. A dialog takes no layout space, so it rides with the
-        // control that opens it in either branch.
-        //
-        // [warningSlot] is emitted between the add button and the carousel — where the spec
-        // warnings sit in one column. With two panes they move across to the preview, beside
-        // the drawing and the overall length they are about, and this slot stays empty.
-        val componentsBlock: @Composable (warningSlot: @Composable () -> Unit) -> Unit = { warningSlot ->
+        // The components side comes in three blocks — the heading, the single add entry point,
+        // and the carousel with the add dialogs it raises (a dialog takes no layout space, so
+        // it rides with the control that opens it in either branch). The single column stacks
+        // them through [componentsBlock]; the two-pane branch places them separately, the add
+        // button beside the drawing and the carousel across the full width under it.
+        val componentsHeader: @Composable (hint: String) -> Unit = { hint ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.Center,
@@ -593,12 +596,14 @@ fun ShaftScreen(
                 )
                 Spacer(Modifier.width(10.dp))
                 Text(
-                    "Swipe to select",
+                    hint,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+        }
 
+        val addComponentButton: @Composable () -> Unit = {
             Surface(
                 tonalElevation = 2.dp,
                 shape = MaterialTheme.shapes.large
@@ -611,15 +616,20 @@ fun ShaftScreen(
                     Text("+ Add Component")
                 }
             }
+        }
 
-            warningSlot()
-
+        // [peekPageWidth] non-null centres the current card at that width with its neighbours
+        // peeking at the sides (the tablet carousel); [fillHeight] fills the parent's height
+        // instead of the phone's fixed carousel height.
+        val carouselBlock: @Composable (peekPageWidth: Dp?, fillHeight: Boolean) -> Unit = { peekPageWidth, fillHeight ->
             ComponentCarouselPager(
                 spec = spec,
                 resolvedComponents = resolvedComponents,
                 unit = unit,
                 showEdgeArrows = showComponentArrows,
                 edgeArrowWidthDp = componentArrowWidthDp,
+                peekPageWidth = peekPageWidth,
+                fillHeight = fillHeight,
                 showComponentDebugLabels = showComponentDebugLabels,
                 componentTitlesDefault = componentTitlesDefault,
                 componentShadeDefaults = componentShadeDefaults,
@@ -833,6 +843,16 @@ fun ShaftScreen(
             }
         }
 
+        // [warningSlot] is emitted between the add button and the carousel — where the spec
+        // warnings sit in one column. With two panes they move up beside the drawing and the
+        // overall length they are about, and this slot stays empty.
+        val componentsBlock: @Composable (warningSlot: @Composable () -> Unit) -> Unit = { warningSlot ->
+            componentsHeader("Swipe to select")
+            addComponentButton()
+            warningSlot()
+            carouselBlock(null, false)
+        }
+
         if (projectInfoOpen) {
             // Raised from the toolbar, so it belongs to the screen rather than to either pane.
             ProjectInfoBottomSheet(
@@ -853,55 +873,89 @@ fun ShaftScreen(
         }
 
         if (widthClass.twoPane) {
-            // Two panes: the drawing and the length it is measured against on the left, the
-            // components being edited on the right. Each pane scrolls on its own, so a long
-            // warning banner can never push the preview off the screen and the carousel can
-            // never scroll the shaft out of sight while a card is being edited.
-            Column(
+            // A landscape tablet: the shaft is long and thin, so the drawing takes the WIDTH —
+            // a band across the top, with the overall length, the add button and the warnings
+            // in a column beside it — and the carousel takes the rest of the height, the
+            // current card centred with its neighbours peeking at the sides. The band is sized
+            // from the drawing and the side column scrolls inside it, so a long warning list
+            // can never push the cards down; the carousel never scrolls the drawing away.
+            BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(inner)
             ) {
-                HorizontalDivider()
-                Row(modifier = Modifier.fillMaxWidth().weight(1f)) {
-                    Column(
+                // The side column is the controls' width plus the OAL field's ✓/✗ slot, which
+                // stands to the right of the box so the box, the button and the warnings
+                // under it share one width and one right edge.
+                val sideColumnWidth = EXPANDED_SIDE_COLUMN_WIDTH_DP.dp + OAL_ACTION_SLOT_WIDTH
+                val bandHeight = expandedDrawingBandHeightDp(
+                    contentWidthDp = maxWidth.value - 2 * EXPANDED_CONTENT_PADDING.value,
+                    aspect = EXPANDED_PREVIEW_ASPECT,
+                    sideColumnWidthDp = sideColumnWidth.value,
+                    floorDp = EXPANDED_PREVIEW_MIN_HEIGHT.value,
+                    capDp = EXPANDED_PREVIEW_MAX_HEIGHT.value,
+                ).dp
+                Column(modifier = Modifier.fillMaxSize()) {
+                    HorizontalDivider()
+                    Row(
                         modifier = Modifier
-                            .weight(EXPANDED_PREVIEW_PANE_WEIGHT)
-                            .fillMaxHeight()
-                            .testTag(EDITOR_PANE_PREVIEW_TAG)
-                            .padding(horizontal = 16.dp)
-                            .verticalScroll(previewScroll)
-                            .padding(top = 8.dp, bottom = 16.dp)
-                            .windowInsetsPadding(
-                                WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)
-                            ),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                            .fillMaxWidth()
+                            .height(bandHeight + EXPANDED_BAND_VERTICAL_PADDING * 2)
+                            .padding(horizontal = EXPANDED_CONTENT_PADDING, vertical = EXPANDED_BAND_VERTICAL_PADDING),
+                        horizontalArrangement = Arrangement.spacedBy(EXPANDED_BAND_GAP_DP.dp)
                     ) {
-                        previewBlock(EXPANDED_PREVIEW_MAX_HEIGHT)
-                        HorizontalDivider()
-                        oalBlock()
-                        SpecWarningBanner(spec = spec)
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                                .testTag(EDITOR_PANE_PREVIEW_TAG),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            previewBlock(EXPANDED_PREVIEW_MAX_HEIGHT, EXPANDED_PREVIEW_ASPECT)
+                        }
+                        Column(
+                            modifier = Modifier
+                                .width(sideColumnWidth)
+                                .fillMaxHeight()
+                                .verticalScroll(previewScroll),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            // The box fills the controls' width (its ✓/✗ slot takes the rest
+                            // of the row) and the button and warnings stop at the same edge, so
+                            // the three read as one block (on-device report: a 240 dp box over
+                            // a wider button looked unrelated to it).
+                            oalBlock(Dp.Unspecified)
+                            Box(Modifier.fillMaxWidth().padding(end = OAL_ACTION_SLOT_WIDTH)) {
+                                addComponentButton()
+                            }
+                            Box(Modifier.fillMaxWidth().padding(end = OAL_ACTION_SLOT_WIDTH)) {
+                                SpecWarningBanner(spec = spec)
+                            }
+                        }
                     }
-
-                    VerticalDivider(modifier = Modifier.fillMaxHeight())
-
+                    HorizontalDivider()
                     Column(
                         modifier = Modifier
-                            .weight(EXPANDED_COMPONENTS_PANE_WEIGHT)
-                            .fillMaxHeight()
+                            .weight(1f)
+                            .fillMaxWidth()
                             .testTag(EDITOR_PANE_COMPONENTS_TAG)
-                            .padding(horizontal = 16.dp)
-                            // IME padding shrinks the scroll viewport, so it stays BEFORE
-                            // verticalScroll — see the Do Nots in `ShaftScreen.md`.
+                            .padding(horizontal = EXPANDED_CONTENT_PADDING)
+                            // The cards hold the text fields, so the keyboard shrinks this
+                            // region and the current card scrolls inside itself.
                             .imePadding()
-                            .verticalScroll(scroll)
                             .padding(top = 8.dp, bottom = 16.dp)
                             .windowInsetsPadding(
                                 WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)
                             ),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        componentsBlock {}
+                        componentsHeader("Tap or swipe to select")
+                        Box(Modifier.weight(1f).fillMaxWidth()) {
+                            // Tablet cards set their paired fields two to a row (`FieldPair`).
+                            CompositionLocalProvider(LocalCardFieldsTwoUp provides true) {
+                                carouselBlock(EXPANDED_CAROUSEL_PAGE_WIDTH, true)
+                            }
+                        }
                     }
                 }
             }
@@ -920,7 +974,8 @@ fun ShaftScreen(
                 // shaft as a flat strip, so only the ceiling moves — ratio and floor stand.
                 previewBlock(
                     if (widthClass == WindowWidthClass.MEDIUM) MEDIUM_PREVIEW_MAX_HEIGHT
-                    else COMPACT_PREVIEW_MAX_HEIGHT
+                    else COMPACT_PREVIEW_MAX_HEIGHT,
+                    COLUMN_PREVIEW_ASPECT,
                 )
 
                 Spacer(Modifier.height(12.dp))
@@ -939,7 +994,7 @@ fun ShaftScreen(
                         ),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    oalBlock()
+                    oalBlock(OAL_FIELD_MAX_WIDTH)
                     componentsBlock { SpecWarningBanner(spec = spec) }
                 }
             }
@@ -954,19 +1009,36 @@ private val COMPACT_PREVIEW_MAX_HEIGHT = 200.dp
 /** The preview card's height ceiling in a MEDIUM window (portrait tablet, phone landscape). */
 private val MEDIUM_PREVIEW_MAX_HEIGHT = 280.dp
 
-/** The preview card's height ceiling inside the two-pane left column. */
+/** The preview card's width : height in a single column — the phone's historical 3:1. */
+private const val COLUMN_PREVIEW_ASPECT = 3.0f
+
+/**
+ * The preview card's width : height in the EXPANDED drawing band. Wider than the column's
+ * 3:1 because the band is width-bound: the shaft draws at the same width either way, and a
+ * 3:1 box there was mostly blank paper above and below a long, thin shaft — height the cards
+ * under it can use.
+ */
+private const val EXPANDED_PREVIEW_ASPECT = 4.0f
+
+/** The preview card's height ceiling in the EXPANDED drawing band. */
 private val EXPANDED_PREVIEW_MAX_HEIGHT = 320.dp
 
-// The drawing is the reference being read while the cards on the right are edited, so it
-// takes the larger share; the carousel cards are a phone-width design and need no more than
-// the remainder at any tablet size.
-private const val EXPANDED_PREVIEW_PANE_WEIGHT = 0.55f
-private const val EXPANDED_COMPONENTS_PANE_WEIGHT = 0.45f
+/** The preview card's height floor — the same 120 dp floor every branch's card carries. */
+private val EXPANDED_PREVIEW_MIN_HEIGHT = 120.dp
 
-/** Two-pane left column — preview, overall length, warnings. */
+/** The editor's horizontal content padding in the EXPANDED layout, the phone column's 16 dp. */
+private val EXPANDED_CONTENT_PADDING = 16.dp
+
+/** Air above and below the drawing band. */
+private val EXPANDED_BAND_VERTICAL_PADDING = 8.dp
+
+/** The centred card's width in the EXPANDED carousel; the neighbours peek in the remainder. */
+private val EXPANDED_CAROUSEL_PAGE_WIDTH = CAROUSEL_PEEK_PAGE_WIDTH_DP.dp
+
+/** EXPANDED drawing band — the preview card, with the OAL / add / warnings column beside it. */
 internal const val EDITOR_PANE_PREVIEW_TAG = "editor_pane_preview"
 
-/** Two-pane right column — the Components heading, the add button, and the carousel. */
+/** EXPANDED components region — the Components heading and the peeking carousel under the band. */
 internal const val EDITOR_PANE_COMPONENTS_TAG = "editor_pane_components"
 
 @Composable
@@ -1432,6 +1504,8 @@ internal fun OverallLengthField(
     onSetOverallLengthMm: (Float) -> Unit,
     onSetOverallLengthRaw: (String) -> Unit,
     modifier: Modifier = Modifier,
+    /** The text box's width cap; [Dp.Unspecified] lets it take the row's width beside the ✓/✗ slot. */
+    fieldMaxWidth: Dp = OAL_FIELD_MAX_WIDTH,
 ) {
     var hasLenFocus by remember { mutableStateOf(false) }
     var lenTextOnFocus by remember { mutableStateOf<String?>(null) }
@@ -1501,8 +1575,8 @@ internal fun OverallLengthField(
             ),
             keyboardActions = KeyboardActions(onDone = { acceptEdit() }),
             modifier = Modifier
-                .weight(1f, fill = false)
-                .widthIn(min = 160.dp, max = 240.dp)
+                .weight(1f, fill = fieldMaxWidth == Dp.Unspecified)
+                .widthIn(min = 160.dp, max = fieldMaxWidth)
                 .testTag(OAL_FIELD_TAG)
                 .onFocusChanged { f ->
                     val wasFocused = hasLenFocus
@@ -1591,6 +1665,9 @@ internal const val OAL_CANCEL_TAG = "oal_cancel"
 private val OAL_ACCEPT_GREEN = Color(0xFF2E7D32)
 
 /** Two 48 dp icon buttons side by side. */
+/** The OAL text box's width cap in a column — the phone's historical 240 dp. */
+private val OAL_FIELD_MAX_WIDTH = 240.dp
+
 private val OAL_ACTION_SLOT_WIDTH = 96.dp
 private val OAL_ACTION_SLOT_HEIGHT = 48.dp
 

@@ -151,8 +151,10 @@ internal fun BodyPagerCard(
                     onCheckedChange = null
                 )
             }
-            CommitNum("Start (${abbr(unit)})", disp(startMm, unit), enabled = false) { }
-            CommitNum("Length (${abbr(unit)})", disp(lengthMm, unit), enabled = false) { }
+            FieldPair(
+                first = { CommitNum("Start (${abbr(unit)})", disp(startMm, unit), enabled = false) { } },
+                second = { CommitNum("Length (${abbr(unit)})", disp(lengthMm, unit), enabled = false) { } },
+            )
             CommitNum("Diameter (${abbr(unit)})", disp(diaMm, unit)) { s ->
                 toMmOrNull(s, unit)?.let {
                     onSetAutoSectionDia(component.startMmPhysical, component.endMmPhysical, it)
@@ -337,15 +339,21 @@ internal fun BodyPagerCard(
                 }
             )
         }
-        CommitNum("Start (${abbr(unit)})", disp(b.startFromAftMm, unit), validator = startValidator(b.id, ComponentKind.BODY, b.lengthMm)) { s ->
-            toMmOrNull(s, unit)?.let { onUpdateBody(idx, it, b.lengthMm, b.diaMm) }
-        }
-        CommitNum(
-            "Length (${abbr(unit)})", disp(b.lengthMm, unit),
-            validator = { raw -> positiveLengthErrorMm(toMmOrNull(raw, unit)) },
-        ) { s ->
-            toMmOrNull(s, unit)?.let { onUpdateBody(idx, b.startFromAftMm, it, b.diaMm) }
-        }
+        FieldPair(
+            first = {
+                CommitNum("Start (${abbr(unit)})", disp(b.startFromAftMm, unit), validator = startValidator(b.id, ComponentKind.BODY, b.lengthMm)) { s ->
+                    toMmOrNull(s, unit)?.let { onUpdateBody(idx, it, b.lengthMm, b.diaMm) }
+                }
+            },
+            second = {
+                CommitNum(
+                    "Length (${abbr(unit)})", disp(b.lengthMm, unit),
+                    validator = { raw -> positiveLengthErrorMm(toMmOrNull(raw, unit)) },
+                ) { s ->
+                    toMmOrNull(s, unit)?.let { onUpdateBody(idx, b.startFromAftMm, it, b.diaMm) }
+                }
+            },
+        )
         CommitNum("Diameter (${abbr(unit)})", disp(b.diaMm, unit)) { s ->
             toMmOrNull(s, unit)?.let { onUpdateBody(idx, b.startFromAftMm, b.lengthMm, it) }
         }

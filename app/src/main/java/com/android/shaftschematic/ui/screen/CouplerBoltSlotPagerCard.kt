@@ -131,16 +131,22 @@ internal fun CouplerBoltSlotPagerCard(
                 border = if (isFwdRef) BorderStroke(1.dp, Color.Black) else null)
         }
 
-        CommitNum(
-            label = slotStartFieldLabel(isFwd = isFwdRef, isCross = isCross, unit = unit),
-            initialDisplay = disp(authoredStartMm, unit)
-        ) { s ->
-            val authoredMm = toMmOrNull(s, unit) ?: return@CommitNum
-            onUpdateCouplerBoltSlot(idx, physFromAuthored(authoredMm, cs.count, cs.spacingMm), cs.holeDiaMm, cs.count, cs.spacingMm, cs.through, cs.depthMm)
-        }
-        CommitNum("Hole Ø (${abbr(unit)})", disp(cs.holeDiaMm, unit)) { s ->
-            toMmOrNull(s, unit)?.let { onUpdateCouplerBoltSlot(idx, cs.startFromAftMm, it, cs.count, cs.spacingMm, cs.through, cs.depthMm) }
-        }
+        FieldPair(
+            first = {
+                CommitNum(
+                    label = slotStartFieldLabel(isFwd = isFwdRef, isCross = isCross, unit = unit),
+                    initialDisplay = disp(authoredStartMm, unit)
+                ) { s ->
+                    val authoredMm = toMmOrNull(s, unit) ?: return@CommitNum
+                    onUpdateCouplerBoltSlot(idx, physFromAuthored(authoredMm, cs.count, cs.spacingMm), cs.holeDiaMm, cs.count, cs.spacingMm, cs.through, cs.depthMm)
+                }
+            },
+            second = {
+                CommitNum("Hole Ø (${abbr(unit)})", disp(cs.holeDiaMm, unit)) { s ->
+                    toMmOrNull(s, unit)?.let { onUpdateCouplerBoltSlot(idx, cs.startFromAftMm, it, cs.count, cs.spacingMm, cs.through, cs.depthMm) }
+                }
+            },
+        )
         CommitNum("Count", cs.count.toString()) { s ->
             val newCount = s.trim().toIntOrNull()?.coerceAtLeast(1) ?: return@CommitNum
             // Keep the authored (referenced) end fixed as count changes.

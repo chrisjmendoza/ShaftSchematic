@@ -4,10 +4,9 @@ ShaftScreen Contract
 Layer: UI → Screens  
 Purpose: Present the shaft editor surface and bind ViewModel state to user controls.
 
-Version: v0.18 (2026-09-16 — window width becomes the editor's adaptive axis: MEDIUM raises the
-preview card's height ceiling, EXPANDED splits the screen into a preview pane and a components
-pane and hides the hamburger. See "Window width".
-v0.17 2026-08-29)
+Version: v0.19 (2026-10-23 — EXPANDED becomes a drawing band across the top with a peeking
+carousel under it; the side-by-side panes are retired. See "Window width".
+v0.18 2026-09-16, v0.17 2026-08-29)
 
 ---
 
@@ -152,28 +151,60 @@ is never a class here. The Final Schematic tab hosts this same screen through
   with **only** the preview card's height ceiling raised to **280 dp**. The 3:1 ratio and the
   120 dp floor stand, so a wide window stops drawing the shaft as a flat strip. Nothing else
   moves: splitting a MEDIUM window would leave both halves narrower than a phone.
-- **EXPANDED** (≥ 840 dp: a landscape tablet) — **two panes** in a `Row`, divided by a
-  `VerticalDivider`:
-  - Left, weight 0.55, `testTag("editor_pane_preview")`: the preview card (pane width,
-    `aspectRatio(3f)`, ceiling **320 dp**), the OAL field and its labels, then
-    `SpecWarningBanner`. The warnings move here because they are about the drawing and the
-    length beside them.
-  - Right, weight 0.45, `testTag("editor_pane_components")`: the Components heading and hint,
-    the "+ Add Component" button, and the carousel at its usual `CAROUSEL_HEIGHT`.
-  - Each pane scrolls **independently**, so a long warning banner can never push the preview
-    off the screen and swiping the carousel can never scroll the shaft out of sight. Only the
-    components pane carries `imePadding()` — it is the one that holds text fields.
-  - Panes keep the editor's existing 16 dp horizontal padding; the carousel pager has no peek
-    or `contentPadding`, so one card fills whatever width the pane offers with no change.
+- **EXPANDED** (≥ 840 dp: a landscape tablet) — a **drawing band across the top** and a
+  **peeking carousel** filling the height under it. A shaft is long and thin, so the drawing
+  takes the WIDTH; the side-by-side panes this replaced squeezed it into a 55% column as a
+  flat strip while the cards on the right were clipped at the phone's fixed height (on-device
+  report from the first tablet pass).
+  - **The band** (`testTag("editor_pane_preview")` on the drawing box): a `Row` of the preview
+    card, `weight(1f)`, and a **side column** holding the OAL field and its labels, the
+    "+ Add Component" button, and `SpecWarningBanner`. The column is the controls' width
+    (`EXPANDED_SIDE_COLUMN_WIDTH_DP`, 260 dp) plus the OAL field's 96 dp ✓/✗ action slot: the
+    OAL box takes the controls' width (`OverallLengthField(fieldMaxWidth = Dp.Unspecified)`
+    lifts its 240 dp cap — the phone keeps `OAL_FIELD_MAX_WIDTH`) with the slot to its right,
+    and the button and the warnings are padded by the slot so all three share one width and
+    one right edge (on-device report: a 240 dp box over a wider button looked unrelated to it).
+    The band's height is the pure `expandedDrawingBandHeightDp` (`ui/screen/EditorTabletLayout.kt`):
+    the preview's shape over the width left beside the side column, clamped to the 120 dp
+    floor and the **320 dp** ceiling. The preview is **4:1** there (`EXPANDED_PREVIEW_ASPECT`),
+    not the column's 3:1: the band is width-bound, so the shaft draws at the same width either
+    way and a 3:1 box was blank paper above and below it — height the cards can use. The side
+    column scrolls INSIDE the band, so a long warning list can never push the carousel down.
+  - **The carousel region** (`testTag("editor_pane_components")`, `weight(1f)`): the
+    Components heading with the hint **"Tap or swipe to select"**, then the carousel with
+    `fillHeight = true` and `peekPageWidth = CAROUSEL_PEEK_PAGE_WIDTH_DP` (520 dp): the
+    current card sits CENTRED at that width and the previous/next cards **peek** in on either
+    side, faded to `CAROUSEL_PEEK_NEIGHBOUR_ALPHA` (0.45) and shrunk to
+    `CAROUSEL_PEEK_NEIGHBOUR_SCALE` (0.94) one page off centre, interpolated from the pager's
+    own offset fraction so a swipe cross-fades them. A **peeking card is a tap target, not an
+    editor**: a transparent overlay (`carousel_peek_<page>`) takes the tap and animates that
+    card to the centre (the pager's swipe passes through it), so a field on a faded card can
+    never take focus from the one being edited; the selection follows exactly as a swipe's
+    does (`CarouselSelectionSync`). A pager narrower than the card shows one whole card and no
+    peek (`peekPageWidthDp`). The region carries `imePadding()` — it holds the text fields —
+    and the current card scrolls inside itself.
+  - **Tablet cards set paired fields two to a row.** The region provides
+    `LocalCardFieldsTwoUp = true` (`ComponentCarousel.kt`), and the cards wrap the fields that
+    read as a pair in `FieldPair(first, second)`: Start / Length on the body (auto and explicit),
+    taper, liner and bolt-slot cards, the taper's two diameters, the thread's Major Ø / TPI,
+    and each liner shoulder's length / Ø. On a phone the local is false and `FieldPair` emits
+    the two fields straight into the card column — no wrapper, no extra spacing — so the phone
+    card is laid out exactly as before; on a tablet they share a row at `weight(1f)` each,
+    keeping the full 56 dp touch height (on-device request: a full-width box for a few
+    characters wasted the card). Lone values, conditional fields, and rows that already pair
+    (KW W × D) are left alone.
+  - The band and the region keep the editor's 16 dp horizontal padding.
 
 **Both branches emit the SAME content blocks.** `ShaftScreen` declares them once
-(`previewBlock`, `oalBlock`, `componentsBlock`) and each branch only decides where they go —
-composable lambdas rather than private composables because a private one would have to restate
-the screen's parameter list (the carousel alone takes fifty callbacks), and a signature copied
-twice is exactly the drift this prevents. `componentsBlock` takes a `warningSlot` emitted
-between the add button and the carousel: the single column fills it with `SpecWarningBanner`,
-the two-pane branch leaves it empty because the banner has moved left. Every `testTag` survives
-in both branches.
+(`previewBlock(maxHeight, aspect)`, `oalBlock`, `componentsHeader(hint)`,
+`addComponentButton`, `carouselBlock(peekPageWidth, fillHeight)`) and each branch only decides
+where they go — composable lambdas rather than private composables because a private one would
+have to restate the screen's parameter list (the carousel alone takes fifty callbacks), and a
+signature copied twice is exactly the drift this prevents. The single column stacks the last
+three through `componentsBlock(warningSlot)` — header ("Swipe to select"), button, the
+`SpecWarningBanner` in the slot, the carousel at `CAROUSEL_HEIGHT` with one card filling the
+pager — so **COMPACT and MEDIUM are byte-identical to before the tablet layout existed**; the
+EXPANDED branch places the same blocks separately. Every `testTag` survives in both branches.
 
 The toolbar's hamburger (`testTag("toolbar_menu")`) is **hidden** when
 `LocalSidebarPermanent.current` is true — in an EXPANDED window the sidebar is already laid out
@@ -283,6 +314,21 @@ Future Enhancements
 
 Change Log
 -----------
+**v0.19 (2026-10-23)**
+- **EXPANDED re-laid out: drawing band + peeking carousel.** The side-by-side panes squeezed
+  the shaft into a 55% column as a flat strip while the card on the right was clipped at the
+  phone's fixed carousel height (on-device report from the first tablet pass). The drawing now
+  takes the full width across the top (4:1 box, height from the pure
+  `expandedDrawingBandHeightDp`) with the OAL / add button / warnings in a 300 dp side column
+  that scrolls inside the band; the carousel fills the height under it with the current card
+  centred at 520 dp and its neighbours peeking faded and shrunk at the sides, each a tap target
+  that brings it to the centre (`ComponentCarouselPager(peekPageWidth, fillHeight)`, numbers in
+  `ui/screen/EditorTabletLayout.kt`, pinned by `EditorTabletLayoutTest`). The components block
+  is split into header / add button / carousel lambdas so the phone column composes the same
+  three in the same order — COMPACT and MEDIUM are byte-identical. Tablet cards set paired
+  fields two to a row (`FieldPair` / `LocalCardFieldsTwoUp`), and the OAL box, add button and
+  warnings in the side column share one width.
+
 **v0.18 (2026-09-16)**
 - **Window width branches added.** COMPACT is byte-identical to before. MEDIUM raises only the
   preview card's height ceiling to 280 dp. EXPANDED lays the editor out as two scrolling panes

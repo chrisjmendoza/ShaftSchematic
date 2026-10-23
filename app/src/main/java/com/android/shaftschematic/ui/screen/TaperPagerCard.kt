@@ -187,37 +187,49 @@ internal fun TaperPagerCard(
                 border = if (isFwdRef) BorderStroke(1.dp, Color.Black) else null)
         }
 
-        CommitNum(
-            label = "Start from ${if (isFwdRef) "FWD" else "AFT"} (${abbr(unit)})",
-            initialDisplay = disp(authoredStartMm, unit),
-            validator = { raw ->
-                val authoredMm = toMmOrNull(raw, unit) ?: return@CommitNum "Enter a number"
-                val physStart = if (isFwdRef) spec.overallLengthMm - authoredMm - t.lengthMm else authoredMm
-                startOverlapErrorMm(spec, t.id, ComponentKind.TAPER, t.lengthMm, physStart)
-            }
-        ) { s ->
-            val authoredMm = toMmOrNull(s, unit) ?: return@CommitNum
-            val physStart = if (isFwdRef) spec.overallLengthMm - authoredMm - t.lengthMm else authoredMm
-            onUpdateTaper(idx, physStart, t.lengthMm, t.startDiaMm, t.endDiaMm, nextRateText(t.lengthMm, t.startDiaMm, t.endDiaMm))
-        }
-        CommitNum(
-            "Length (${abbr(unit)})", disp(t.lengthMm, unit),
-            validator = { raw -> positiveLengthErrorMm(toMmOrNull(raw, unit)) },
-        ) { s ->
-            val newLen = toMmOrNull(s, unit) ?: return@CommitNum
-            val physStart = taperPhysStartForNewLength(t, newLen, spec.overallLengthMm)
-            onUpdateTaper(idx, physStart, newLen, t.startDiaMm, t.endDiaMm, nextRateText(newLen, t.startDiaMm, t.endDiaMm))
-        }
-        CommitNum("${endMap.leftCode} Ø (${abbr(unit)})", disp(t.startDiaMm, unit)) { s ->
-            toMmOrNull(s, unit)?.let {
-                onUpdateTaper(idx, t.startFromAftMm, t.lengthMm, it, t.endDiaMm, nextRateText(t.lengthMm, it, t.endDiaMm))
-            }
-        }
-        CommitNum("${endMap.rightCode} Ø (${abbr(unit)})", disp(t.endDiaMm, unit)) { s ->
-            toMmOrNull(s, unit)?.let {
-                onUpdateTaper(idx, t.startFromAftMm, t.lengthMm, t.startDiaMm, it, nextRateText(t.lengthMm, t.startDiaMm, it))
-            }
-        }
+        FieldPair(
+            first = {
+                CommitNum(
+                    label = "Start from ${if (isFwdRef) "FWD" else "AFT"} (${abbr(unit)})",
+                    initialDisplay = disp(authoredStartMm, unit),
+                    validator = { raw ->
+                        val authoredMm = toMmOrNull(raw, unit) ?: return@CommitNum "Enter a number"
+                        val physStart = if (isFwdRef) spec.overallLengthMm - authoredMm - t.lengthMm else authoredMm
+                        startOverlapErrorMm(spec, t.id, ComponentKind.TAPER, t.lengthMm, physStart)
+                    }
+                ) { s ->
+                    val authoredMm = toMmOrNull(s, unit) ?: return@CommitNum
+                    val physStart = if (isFwdRef) spec.overallLengthMm - authoredMm - t.lengthMm else authoredMm
+                    onUpdateTaper(idx, physStart, t.lengthMm, t.startDiaMm, t.endDiaMm, nextRateText(t.lengthMm, t.startDiaMm, t.endDiaMm))
+                }
+            },
+            second = {
+                CommitNum(
+                    "Length (${abbr(unit)})", disp(t.lengthMm, unit),
+                    validator = { raw -> positiveLengthErrorMm(toMmOrNull(raw, unit)) },
+                ) { s ->
+                    val newLen = toMmOrNull(s, unit) ?: return@CommitNum
+                    val physStart = taperPhysStartForNewLength(t, newLen, spec.overallLengthMm)
+                    onUpdateTaper(idx, physStart, newLen, t.startDiaMm, t.endDiaMm, nextRateText(newLen, t.startDiaMm, t.endDiaMm))
+                }
+            },
+        )
+        FieldPair(
+            first = {
+                CommitNum("${endMap.leftCode} Ø (${abbr(unit)})", disp(t.startDiaMm, unit)) { s ->
+                    toMmOrNull(s, unit)?.let {
+                        onUpdateTaper(idx, t.startFromAftMm, t.lengthMm, it, t.endDiaMm, nextRateText(t.lengthMm, it, t.endDiaMm))
+                    }
+                }
+            },
+            second = {
+                CommitNum("${endMap.rightCode} Ø (${abbr(unit)})", disp(t.endDiaMm, unit)) { s ->
+                    toMmOrNull(s, unit)?.let {
+                        onUpdateTaper(idx, t.startFromAftMm, t.lengthMm, t.startDiaMm, it, nextRateText(t.lengthMm, t.startDiaMm, it))
+                    }
+                }
+            },
+        )
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),

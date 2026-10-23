@@ -4,9 +4,12 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PageSize
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
@@ -38,6 +42,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -52,6 +57,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -93,7 +99,11 @@ import kotlinx.coroutines.launch
 // Carousel height constant
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** The carousel's height in a scrolling column (every phone layout); a tablet pane fills its height instead. */
 internal val CAROUSEL_HEIGHT = 360.dp
+
+/** A peeking neighbour's tap target — `carousel_peek_<page>`; a tap brings that card to the centre. */
+internal fun carouselPeekTag(page: Int): String = "carousel_peek_$page"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Internal data model
@@ -149,6 +159,15 @@ internal fun ComponentCarouselPager(
     unit: UnitSystem,
     showEdgeArrows: Boolean,
     edgeArrowWidthDp: Int,
+    /**
+     * Width of the CENTRED card when the carousel peeks its neighbours (an EXPANDED window):
+     * the current card sits in the middle at this width and the previous/next cards show at
+     * the sides, faded and shrunk, each a tap target that brings it to the centre. `null` is
+     * the phone layout — one card fills the pager — byte-identical to before the parameter.
+     */
+    peekPageWidth: Dp? = null,
+    /** Fill the height the parent gives (a tablet pane) instead of the fixed [CAROUSEL_HEIGHT]. */
+    fillHeight: Boolean = false,
     showComponentDebugLabels: Boolean,
     /** The Settings "Component names on drawing" switch — what an UNSET per-component name toggle follows. */
     componentTitlesDefault: Boolean = true,
@@ -288,7 +307,8 @@ internal fun ComponentCarouselPager(
         }
     }
 
-    Row(Modifier.fillMaxWidth().height(CAROUSEL_HEIGHT)) {
+    val rowHeight = if (fillHeight) Modifier.fillMaxHeight() else Modifier.height(CAROUSEL_HEIGHT)
+    Row(Modifier.fillMaxWidth().then(rowHeight)) {
         if (showEdgeArrows) {
             EdgeNavButton(
                 left = true,
@@ -301,14 +321,36 @@ internal fun ComponentCarouselPager(
             )
         }
 
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier.weight(1f).fillMaxHeight(),
-            // Key pages by component id so per-page state (scroll, focus) follows the
-            // component when one is inserted/removed, instead of staying positional.
-            key = { page -> rowsSorted.getOrNull(page)?.component?.id ?: page }
-        ) { page ->
-            Box(Modifier.fillMaxSize().padding(horizontal = pageGutter)) {
+        // The pager's own width decides the peek: the centred card takes `peekPageWidth` and
+        // the remainder is split into the two side peeks (`EditorTabletLayout.kt`).
+        BoxWithConstraints(Modifier.weight(1f).fillMaxHeight()) {
+            val peeks = peekPageWidth != null
+            val pageWidth = if (peekPageWidth != null) peekPageWidthDp(maxWidth.value, peekPageWidth.value).dp else 0.dp
+            val sidePad = if (peeks) peekSidePaddingDp(maxWidth.value, pageWidth.value).dp else 0.dp
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize(),
+                pageSize = if (peeks) PageSize.Fixed(pageWidth) else PageSize.Fill,
+                contentPadding = PaddingValues(horizontal = sidePad),
+                pageSpacing = if (peeks) CAROUSEL_PEEK_SPACING_DP.dp else 0.dp,
+                // Key pages by component id so per-page state (scroll, focus) follows the
+                // component when one is inserted/removed, instead of staying positional.
+                key = { page -> rowsSorted.getOrNull(page)?.component?.id ?: page }
+            ) { page ->
+            // A peeking neighbour fades and shrinks with its distance from the centre, read
+            // in the draw phase so a swipe animates it without recomposing the card.
+            val peekLayer = if (peeks) Modifier.graphicsLayer {
+                val off = pageOffsetFromCentre(page, pagerState.currentPage, pagerState.currentPageOffsetFraction)
+                alpha = neighbourAlpha(off)
+                scaleX = neighbourScale(off)
+                scaleY = scaleX
+            } else Modifier
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = if (peeks) 0.dp else pageGutter)
+                    .then(peekLayer)
+            ) {
                 val row = rowsSorted.getOrNull(page) ?: return@HorizontalPager
                 ComponentPagerCard(
                     spec = spec, unit = unit, row = row, physicalIndex = page,
@@ -367,6 +409,23 @@ internal fun ComponentCarouselPager(
                     onSetComponentUnit = onSetComponentUnit,
                     onSetKeywayUnit = onSetKeywayUnit,
                 )
+                // A neighbour is for looking at and picking, not editing: a transparent
+                // target over the whole card takes the tap and brings the card to the
+                // centre (the pager's swipe still passes through it), so a field on a
+                // faded card can never take focus from the one being edited.
+                if (peeks && page != pagerState.currentPage) {
+                    Box(
+                        Modifier
+                            .matchParentSize()
+                            .testTag(carouselPeekTag(page))
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClickLabel = "Show this component",
+                            ) { scope.launch { pagerState.animateScrollToPage(page) } }
+                    )
+                }
+            }
             }
         }
 
@@ -1054,6 +1113,42 @@ private fun CardSaveButton(dirtyState: CardDirtyState) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Carousel-private helpers
 // ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Whether the carousel cards set consecutive numeric fields TWO to a row. `false` (the
+ * default, every phone layout) is one field per row. The EXPANDED editor provides `true`
+ * around its carousel: a tablet card is wide enough that a full-width field holds a few
+ * characters in a lot of box, and two to a row shows twice the fields in the same height
+ * (on-device request). Nothing but [FieldPair] reads it.
+ */
+internal val LocalCardFieldsTwoUp = compositionLocalOf { false }
+
+/** The gap between the two fields of a [FieldPair] when they share a row. */
+internal val FIELD_PAIR_GAP = 8.dp
+
+/**
+ * Two numeric fields that are one row each on a phone and share a row on a tablet.
+ *
+ * With [LocalCardFieldsTwoUp] false this emits [first] and [second] straight into the card
+ * column — no wrapper, no extra spacing — so a phone card is laid out exactly as if the two
+ * calls stood where the pair does. With it true the two sit side by side, each `weight(1f)`,
+ * at the same 56 dp height a full-width field has, so a tablet card keeps its touch targets
+ * and gains a row. The cards pair the fields that READ as a pair — Start / Length, the two
+ * taper diameters, Major Ø / TPI, a shoulder's length / Ø — and leave a lone value, a
+ * conditional field, and anything already in a row (KW W × D) alone.
+ */
+@Composable
+internal fun FieldPair(first: @Composable () -> Unit, second: @Composable () -> Unit) {
+    if (LocalCardFieldsTwoUp.current) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(FIELD_PAIR_GAP)) {
+            Box(Modifier.weight(1f)) { first() }
+            Box(Modifier.weight(1f)) { second() }
+        }
+    } else {
+        first()
+        second()
+    }
+}
 
 /**
  * Numeric input field with commit-on-blur, fraction support, and optional inline validator.
