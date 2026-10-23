@@ -111,10 +111,13 @@ pure `unshadedBodyRunIds`/`unshadedTaperIds`/`unshadedLinerIds`
 always receive a paint; the consolidated sheet's in-profile-values liner lock and the
 wear/undercut documents' one-fill-per-kind `SimpleShaftProfile` boundary both stand above the
 per-component flag. The EDITOR PREVIEW BOX mirrors the same effective decision — the positive
-complement `shadedComponentIds` rides `RenderOptions.shadedComponentIds` as an
-onSurface-tinted overlay on the preview fills (a print-decision marker, not print fidelity;
-on-device report: a checked Shade toggle changed nothing in the preview box), so the box and
-the composers can never disagree about what shades), **"Show name on drawing"** (`showNameOnDrawing`, all four explicit component cards —
+complement `shadedComponentIds` rides `RenderOptions.shadedComponentIds` with
+`fillFollowsShade` on: a body/taper/liner the sheet will shade takes its kind's preview fill, an
+unshaded one draws as an EMPTY outline. The toggle either leaves a component empty or fills it in
+(on-device reports: first a checked Shade toggle that changed nothing in the box, then a taper
+filled grey with its toggle off and darker with it on — a tint-plus-overlay marker read as two
+shades of "on"; do not bring the overlay back), so the box and the composers can never disagree
+about what shades), **"Show name on drawing"** (`showNameOnDrawing`, all four explicit component cards —
 TRI-STATE per-component gate on the schematic's name label: unset follows the global
 `showComponentTitles` pref ("Component names on drawing", Settings → Drawing's FIRST row and the
 schematic options' "Component names" chip — moved off the PDF Export sub-page, where it could not

@@ -171,17 +171,12 @@ fun ShaftDrawing(
     // RenderOptions (keep most defaults; set only what we actively control here)
     // NOTE: legacy color fields in RenderOptions are ARGB Ints → use toArgb().
     //       highlight colors are Color → pass Color directly.
-    // The shade marker must read on both themes: onSurface at low alpha darkens a light
-    // canvas and lightens a dark one — a print-decision marker, not print fidelity.
-    val shadeOverlayColor =
-        (if (blackWhiteOnly) Color.Black else previewScheme.onSurface).copy(alpha = 0.16f)
-
     val options = remember(
         unit, lineThicknessScale, outlineColor,
         bodyFill, previewBodyFill, linerFill, previewLinerFill,
         taperFill, previewTaperFill, threadFill, previewThreadFill, threadHatch,
         highlightEnabled, highlightId, themeGlow,
-        shadedComponentIds, shadeOverlayColor, threadSlant, threadDensity,
+        shadedComponentIds, threadSlant, threadDensity,
     ) { RenderOptions(
         // Visual tuning
         paddingPx = 16,
@@ -197,9 +192,9 @@ fun ShaftDrawing(
         threadSlant = threadSlant,
         threadDensity = threadDensity,
 
-        // PDF-shade mirror
+        // PDF-shade mirror: the preview fills exactly the components the sheet shades.
         shadedComponentIds = shadedComponentIds,
-        shadeOverlayColor = shadeOverlayColor.toArgb(),
+        fillFollowsShade = true,
 
         // Highlight preset (obvious: colored glow)
         highlightEnabled = highlightEnabled,

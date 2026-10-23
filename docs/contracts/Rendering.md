@@ -158,11 +158,13 @@ fills, thread hatch/fill, slot fill), and highlight (glow) controls.
 The **PDF-shade mirror** lives here too: `shadedComponentIds: Set<String>` names the
 components that will print SHADED — the same effective decision the composers make (kind
 checkboxes + per-component `shadeOnDrawing`, resolved by the `unshaded*Ids` builders) — and
-each one's fill gets `shadeOverlayColor` drawn over it, so the editor preview answers "what
-prints shaded" without opening the PDF preview. Themed callers pass an onSurface-derived
-tint: this is a marker for the print decision, **not** print fidelity. Empty (the default)
-draws exactly as before the mirror existed, and the overlay's own default is the PDF
-`shadeFill` grey.
+`fillFollowsShade = true` makes it the fill GATE: a body, taper or liner in the set takes its
+kind's fill colour, one outside it draws as an empty outline, so the editor preview answers
+"what prints shaded" the way the sheet does. The earlier design kept every kind's preview tint
+and laid an onSurface overlay over the shaded ones; on-device a taper filled grey with its Shade
+toggle off and darker with it on read as two shades of "on", so the overlay is gone and the fill
+itself is the marker. `fillFollowsShade` defaults to `false` — a thumbnail
+(`ShaftThumbnail`) is a picture of the shaft and fills every kind as before.
 
 The dead grid /
 legend / text-size / edge-ring fields were deleted in the 2026-07-26 pass — the grid is
