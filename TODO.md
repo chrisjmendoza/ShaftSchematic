@@ -33,7 +33,7 @@ at most a pointer from here.
 | Tap-to-add pipeline | ❌ Removed — canvas tap is selection-only; add via the "+ Add Component" button's chooser |
 | OAL window / excluded threads | ✅ Implemented & unit-tested |
 | Taper rate input, derivation, colon entry | ✅ Auto-by-default with manual override |
-| Keyways — taper, body, spooned, captured, 180°/90° clocking, standard sizes | ✅ Shipped — one shared "Keyway" gate on cards + Add dialogs |
+| Keyways — taper, body, spooned, captured, 180°/90° clocking | ✅ Shipped — one shared "Keyway" gate on cards + Add dialogs; the standard-size picker was removed 2026-10-23 (W × D are typed) |
 | Threads — metric designations, relief groove, pitch-driven hatch (slant + density) | ✅ Shipped |
 | Coupler bolt rows — seam slots + cross-drilled holes | ✅ Shipped |
 | Liner shoulders | ✅ Shipped, capability-gated (default OFF) — schematic + runout/consolidated sheets, envelope-aware |
@@ -51,7 +51,7 @@ at most a pointer from here.
 | Drawing preset profiles | ✅ Shipped, app-wide |
 | Appearance settings (theme + high contrast) | ✅ Shipped — see §2 for the open on-device pass |
 | Sidebar nav (6 tabs) | ✅ Schematic / Runout / Wear / Undercut / Final / Consolidated Output |
-| Tablet layout | ✅ Shipped, unverified on hardware — window width class, two panes at EXPANDED, permanent sidebar, free rotation on sw600dp; see §2 |
+| Tablet layout | ✅ Shipped — window width class, permanent sidebar, free rotation on sw600dp; the Schematic editor at EXPANDED is a drawing band over a peeking carousel with two-up fields (verified on the Pixel_Tablet emulator 2026-10-23); the sheet tabs still use two panes; hardware pass open, see §2 |
 | Undo/redo | ✅ Session-scoped `SessionHistory` over `EditState` |
 | Internal save/open, autosave draft ring | ✅ Shipped |
 | Backup & restore, auto-mirror folder | ✅ Shipped |
@@ -162,7 +162,7 @@ The per-feature on-device checks live in `docs/ON_DEVICE_CHECKLIST.md` (what to 
   non-modal options panel (zoom under it, re-render keeps the page), thread relief, thread slant
   (judge the 3× default) and density, the keyway gate, captured keyways, seal areas as their own
   control (dashed cuts, anchored at the face, S-break clear of them), OAL commit-on-accept,
-  cross-drilled bolt holes, the Final Schematic tab, keyway standard sizes, Output font,
+  cross-drilled bolt holes, the Final Schematic tab, Output font,
   tap-to-rename title + draft names.
 - [ ] On-device visual pass of dark and high-contrast chrome (the Appearance schemes have only
   been reasoned about, not looked at). See `docs/contracts/Appearance.md`.
@@ -172,12 +172,16 @@ The per-feature on-device checks live in `docs/ON_DEVICE_CHECKLIST.md` (what to 
   editing path. Rulings in `docs/contracts/Appearance.md` §Accessibility.
 - [ ] On-device: print one undercut sheet with "Line art (no shading)" on and judge whether the
   notch construction alone reads on paper (the ruling assumed it does, from the screen mode).
-- [ ] **Tablet pass** (the layouts were built against Robolectric window sizes, never a tablet):
-  every tab in portrait (MEDIUM) and landscape (EXPANDED), the permanent sidebar, a rotation
-  mid-edit on each tab (what resets is listed in `docs/contracts/Adaptive.md` §Orientation), the
-  carousel card width inside its pane, the tuning sheet's page strip in landscape, and the PDF
-  preview closing on a tablet (must stay free to rotate). Judge the 0.55/0.45 pane split and the
-  720 dp readable width by eye — both are first guesses.
+- [ ] **Tablet pass on hardware.** The Schematic editor's EXPANDED layout (drawing band, peeking
+  carousel, two-up fields, aligned side column) was built and verified on the Pixel_Tablet
+  emulator 2026-10-23 — the emulator has no soft keyboard, so the card under the IME is unchecked.
+  Still open on a real tablet: the Runout / Wear / Undercut tabs in portrait (MEDIUM) and landscape
+  (EXPANDED, still two panes), the permanent sidebar, a rotation mid-edit on each tab (what resets
+  is listed in `docs/contracts/Adaptive.md` §Orientation), the tuning sheet's page strip in
+  landscape, the PDF preview closing on a tablet (must stay free to rotate), and the 720 dp
+  readable width by eye. Candidates from the editor pass: the same peeking carousel on a portrait
+  tablet (MEDIUM, contract says plain column today), an "N of M" counter in the Components header,
+  the top-band treatment for the sheet tabs.
 - [ ] **On-device visual pass after Material3 1.3.0 → 1.4.0** (Compose BOM 2026.04.01): component
   defaults moved, not APIs. Look at the tuning sliders, the options panel's page-strip cap
   (`TUNING_SHEET_CHROME_DP` counts the panel's header row; a changed default height shifts it),
