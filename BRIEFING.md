@@ -1,36 +1,43 @@
 # ShaftSchematic — Project Briefing
 
 **Generated:** 2026-05-03  
-**Last updated:** 2026-09-15 — the Final Schematic tab; the editor-tab list and the composer/document inventory now live in `docs/ARCHITECTURE.md` alone  
-**Current Version:** computed at build time from git history — `app/build.gradle.kts` (`versionName = "1.3.<n>"`); no version is hard-coded in the docs  
-**Series:** v0.5.x — runout/wear/undercut docs, consolidated output, line thickness, OAL fix
-
-> This is the narrative onboarding/architecture doc. Feature-by-feature status lives in
-> `TODO.md` §0 (single source of truth); the release-series roadmap lives in
-> `docs/ROADMAP.md`. Status is not duplicated here.
+**Current Version:** 1.1.1  
+**Series:** v0.4.x development queue active
 
 ---
 
 ## What It Is
 
-ShaftSchematic is an Android app (single Activity, Jetpack Compose + Material3; phones portrait, tablets adaptive) for modeling marine propeller-shaft assemblies. A machinist or shipyard engineer can define a multi-segment shaft, see a live dimensioned preview, and export a one-page technical PDF — without opening CAD software.
+ShaftSchematic is an Android app (portrait-locked, single Activity, Jetpack Compose + Material3) for modeling marine propeller-shaft assemblies. A machinist or shipyard engineer can define a multi-segment shaft, see a live dimensioned preview, and export a one-page technical PDF — without opening CAD software.
 
 Target users: machinists, shipyards, repair technicians, marine engineers.  
 Target hardware: Android 8.0+ (API 28), Target SDK 36.
 
 ---
 
-## Current Status (Stable)
+## Current Status (v1.1.1 — Stable)
 
-The core feature set is **shipped and working**: modeling (bodies with keyways, tapers
-with keyways and auto-rate, threads with OAL exclusion, liners, coupler bolt slots), live preview,
-validation (blocking + warnings), the PDF document set, a second "final" drawing per document,
-internal library with autosave and backup/restore, and full settings. The editor-tab list and
-the composer/document inventory live in **`docs/ARCHITECTURE.md`** (§5 and §"PDF Export"),
-which owns both — they are not restated here.
+The core feature set is **shipped and working**:
 
-For the authoritative feature-by-feature status table, see **`TODO.md` §0 — Current
-System State**. For what's next, see **`docs/ROADMAP.md`**.
+| Area | Status |
+|---|---|
+| Core data model (Body, Taper, Threads, Liner) | ✅ Stable |
+| ShaftLayout & ShaftRenderer | ✅ Contract-locked |
+| Live preview (Canvas, grid, labels) | ✅ Working |
+| Preview color presets + B/W mode | ✅ Shipped |
+| PDF export (one-page, landscape) | ✅ Stable, theme-safe |
+| Unit switching mm ↔ inch (persisted) | ✅ Working |
+| Component delete + multi-step Undo (up to 10) | ✅ Working |
+| Internal save/open (`.shaft` JSON) | ✅ Working |
+| SAF open/export | ✅ Working |
+| Component carousel + editor UI | ✅ Working |
+| Snapping engine (`SnapEngine`) | ✅ Implemented & unit-tested |
+| OAL window / excluded thread logic | ✅ Implemented & unit-tested |
+| Autosave / draft restore on launch | ✅ Working |
+| Settings screen (units, grid, PDF prefs) | ✅ Working |
+| Developer Options screen | ✅ Working |
+| Achievements screen | ✅ Stub present |
+| Portrait orientation lock | ✅ Enforced |
 
 ---
 
@@ -38,37 +45,36 @@ System State**. For what's next, see **`docs/ROADMAP.md`**.
 
 ```
 User Input → ShaftViewModel → ShaftSpec (mm)
-           → resolveComponents() (derived auto-bodies, ui/resolved/)
-           → ShaftLayout (px mapping — preview only)
-           → ShaftRenderer (preview geometry) → ShaftDrawing (Compose host) → Screen
-           → ShaftPdfComposer / RunoutPdfComposer / WearPdfComposer / UndercutPdfComposer
-             (PDF — separate drawing code, own fit + compression math)
+           → ShaftLayout (px mapping)
+           → ShaftRenderer (geometry drawing)
+           → ShaftDrawing (Compose canvas host)
+           → Screen
+           → ShaftPdfComposer (PDF, mirrors same renderer)
 ```
 
 **Key invariants:**
 - All model geometry stored in **millimeters only**. Inches are only rendered at UI display edges.
 - `ShaftViewModel` extends `AndroidViewModel` (needs `Application` for DataStore). Always instantiated via `ShaftViewModelFactory`.
 - `ShaftLayout` fits both axes: `pxPerMm = min(width/oal, height/maxOD)`.
-- `ShaftRenderer` (preview) and `ShaftPdfComposer` (PDF) are **separate drawing paths** sharing the same model but using separate Canvas drawing code and separate scale math (the composer computes its own `ptPerMm`; it never calls `ShaftLayout`). A fix in one does not propagate to the other automatically.
-- No geometry logic lives in Compose composables.
+- `ShaftRenderer` is the single source of truth for geometry drawing (both preview and PDF use it).
+- No geometry logic lives in Compose composables or in the PDF composer directly.
 
 **Package layout:**
 ```
 model/          ← immutable data classes (all mm)
-geom/           ← pure geometry helpers (OAL, tier assignment, profile compression,
-                  keyway/blend/undercut/wear math) — no positional snapping lives here
-ui/viewmodel/   ← ShaftViewModel + SessionAddDefaults
+geom/           ← pure geometry helpers (OAL, tier assignment, snap)
+ui/viewmodel/   ← ShaftViewModel + SnapUtils + SessionAddDefaults
 ui/drawing/     ← ShaftLayout, ShaftRenderer, GridRenderer, ShaftDrawing
 ui/screen/      ← StartScreen, ShaftScreen, ShaftEditorRoute, dialogs
-ui/input/       ← NumericInputField, TaperSetLetMapping
-ui/resolved/    ← ResolvedComponent (derived auto-body pipeline)
-ui/order/       ← ComponentOrder (ComponentKey, ComponentKind)
+ui/input/       ← NumberField, ShaftMetaSection
+ui/resolved/    ← ResolvedComponent (derived pipeline, partial)
+ui/order/       ← ComponentKey, ComponentKind (ordering layer)
 ui/theme/       ← Material3 theme
-pdf/            ← ShaftPdfComposer, RunoutPdfComposer, WearPdfComposer, UndercutPdfComposer + dim/ + notes/ + render/
+pdf/            ← ShaftPdfComposer + dim/ + notes/ + render/
 data/           ← SettingsStore (DataStore), AutosaveManager
 doc/            ← ShaftDocCodec (JSON serialization + migrations)
-io/             ← InternalStorage (app-private file management), ShaftBackup
-settings/       ← PdfPrefs, RunoutConfig, AppearancePrefs
+io/             ← InternalStorage (app-private file management)
+settings/       ← PdfPrefs, PdfTieringMode
 util/           ← UnitSystem, parsing helpers, PreviewColorSetting
 ```
 
@@ -80,40 +86,34 @@ A `ShaftSpec` is the root aggregate:
 
 | Component | Description |
 |---|---|
-| `Body` | Constant-diameter cylinder. Fields: `diaMm`, `startFromAftMm`, `lengthMm`. Keyway hosted (end-referenced): `keywayWidthMm`, `keywayDepthMm`, `keywayLengthMm`, `keywayOffsetFromEndMm`, `keywayEnd` (AFT/FWD), `keywaySpooned`. Bodies are the fluid base: plain bodies split around sacred components, keyed bodies stay whole, and bodies never collide. |
-| `Taper` | Linear diameter transition. Fields: `startDiaMm` / `endDiaMm`, `lengthMm`, `taperRateText`. Keyway hosted (SET-referenced): `keywayWidthMm`, `keywayDepthMm`, `keywayLengthMm`, `keywayOffsetFromSetMm`, `keywaySpooned`. |
-| `Threads` | Threaded segment. Fields: `majorDiaMm`, pitch (`pitchMm` + `tpi`), `excludeFromOAL`. |
-| `Liner` | Outer sleeve. Fields: `odMm`, anchor reference (`LinerAnchor`), authored direction. |
+| `Body` | Constant-diameter cylinder. Fields: `diaMm`, `startFromAftMm`, `lengthMm`. |
+| `Taper` | Linear diameter transition. Stores both `aftDiaMm` / `fwdDiaMm` + `lengthMm`. |
+| `Threads` | Threaded segment. Stores `majorDiaMm`, pitch (`pitchMm` + `tpi`), `includeInOal` flag. |
+| `Liner` | Outer sleeve. Stores `outerDiaMm`, anchor reference (`LinerAnchor`), authored direction. |
 
-`ShaftSpec` also carries `keyways180Apart` — a drawing note that the shaft's keyways are clocked 180° apart (far-side keyway renders hidden/dashed) — and `keyways90Apart` + `keyways90Cw`, its mutually-exclusive 90°-apart alternative (CW/CCW from the AFT keyway, viewed from aft; renders as an edge notch, not a hidden line).
-
-All axial positions are measured **AFT → FWD**. `ShaftSpec.validate()` checks non-negative values and segment bounds; it does not test for overlaps — overlap enforcement lives in collision detection (`collidingIds()`), separate from `validate()`. `collidingIds()` checks only sacred pairs (taper/thread/liner); bodies are fluid base material and never collide (a liner legitimately runs over a body).
+All axial positions are measured **AFT → FWD**. `ShaftSpec.validate()` checks non-negative values and segment bounds; it does not test for overlaps (by design — overlaps are valid for liners over bodies).
 
 ---
 
 ## Key Sub-Systems
 
 ### OAL Window
-`geom/OalComputations.kt` — computes how much length is excluded at the AFT/FWD ends when end threads have `excludeFromOAL = true`. Also derives the actual SET (small end of taper) positions in measurement space from taper geometry. Coordinate-anchored (not list-order dependent). Tested in `OalComputationsTest`.
+`geom/OalComputations.kt` — computes how much length is excluded at the AFT/FWD ends when end threads have `includeInOal = false`. Coordinate-anchored (not list-order dependent). Tested in `OalComputationsTest`.
 
-### Snap (model layer only)
-Nothing snaps a typed position (golden rule — the tap-to-add gesture and its `SnapUtils` pipeline were removed with it). The one surviving snap helper is model-layer: `ShaftSpec.snapForwardFrom(anchor)` (`model/ShaftSpecExtensions.kt`) aligns right-hand neighbors end-to-start in physical order; no ViewModel path calls it on typed commits. Unit-tested in `ShaftSpecSnapExtensionsTest`.
+### Snap Engine
+`ui/viewmodel/SnapUtils.kt` — `buildSnapAnchors(spec)` + `snapPositionMm(rawMm, anchors, toleranceMm)`. Pure mm, no pixel math. Default tolerance: 1.0 mm. Unit-tested in `ShaftSpecSnapExtensionsTest`.
 
 ### Tier Assignment
 `geom/DeterministicTierAssigner.kt` — assigns PDF dimension tier/rail slots to components deterministically. Tested in `DeterministicTierAssignerTest`.
 
 ### Resolved Component Pipeline
-`ui/resolved/ResolvedComponent.kt` — derived pipeline that generates auto bodies for unoccupied spans without persisting them. **Fully wired** (2026-07-18) into the schematic screen/PDF and the runout & wear documents — all rendering consumes the resolved list, not the raw spec.
+`ui/resolved/ResolvedComponent.kt` — early-stage derived pipeline intended to generate auto bodies for UI rendering without persisting them. **Partially implemented** — the full pipeline (auto body seeding, ordered rendering) is still planned in v0.4.x.
 
 ### Internal Storage
 `io/InternalStorage.kt` — manages the app-private `.shaft` file list; handles save, load, delete, overwrite confirmation. Filenames follow the convention: `{vessel/job}_{position}_{date}` (position suffix is optional, falls back to generated name).
 
 ### PDF Export
-`pdf/ShaftPdfComposer.kt` — renders to `PdfDocument` with its **own** scale math (`computeDetailPtPerMm`, plus the compressed x-map from `geom/ProfileCompression.kt`) and its **own Canvas drawing functions** (bodies, tapers, threads, liners), not `ShaftLayout`/`ShaftRenderer`. The two rendering paths share the model but not the drawing code — a fix in `ShaftRenderer` does not automatically propagate to the PDF. Includes: component labels (with row-based collision avoidance), centerline rules, dimension tiers, Ø callouts, footer (shaft position, taper KW data). PDFs draw no grid. Auto-open after export is configurable.
-
-For which composers produce which documents — the consolidated sheet, and the Final Schematic
-tab's sheets through `ui/nav/FinalSheetCompose.kt` — see `docs/ARCHITECTURE.md`
-§"PDF Export", the single source of truth for that inventory.
+`pdf/ShaftPdfComposer.kt` — renders to `PdfDocument` using the same `ShaftLayout` + `ShaftRenderer` as the screen preview. Includes: component labels, major/minor grid, centerline rules, dimension tiers, footer (shaft position, taper KW data). Auto-open after export is configurable.
 
 ---
 
@@ -123,16 +123,15 @@ tab's sheets through `ui/nav/FinalSheetCompose.kt` — see `docs/ARCHITECTURE.md
 StartScreen
   ├─ New Drawing → ShaftEditorRoute (blank spec)
   ├─ Open → file picker → ShaftEditorRoute (loaded spec)
-  ├─ Unsaved drafts (rolling ring, up to 3 entries, per-document identity)
-  │    ├─ tap an entry → continueDraft(draftId) → ShaftEditorRoute
-  │    └─ discard an entry → discardDraft(draftId) → stays on Start
-  └─ Settings → SettingsRoute (units, appearance, PDF export, data) / Help / About
+  ├─ Continue Draft → ShaftEditorRoute (autosaved spec)
+  ├─ Discard Draft → clears autosave → stays on Start
+  └─ Settings → SettingsRoute
 
-ShaftEditorRoute (sidebar hosts the editor tabs — list in docs/ARCHITECTURE.md §5)
+ShaftEditorRoute
   ├─ Component Carousel (swipe/select components)
-  ├─ Add Component dialogs (Body / Taper / Threads / Liner / Coupler Bolt Slot)
-  ├─ Delete + Undo (snackbar); session undo/redo history menu
-  ├─ Export PDF → system picker (SAF); "Export all" batch from the Output tab
+  ├─ Add Component dialogs (Body / Taper / Threads / Liner)
+  ├─ Delete + Undo (snackbar)
+  ├─ Export PDF → system picker (SAF)
   ├─ Save (internal) / Open (internal)
   └─ Developer Options (debug gating)
 ```
@@ -145,8 +144,8 @@ Unit tests live in `app/src/test/`:
 
 | Test file | Covers |
 |---|---|
-| `ShaftSpecTest` | Spec helpers: coverage, maxOD |
-| `ShaftSpecSnapExtensionsTest` | Model-layer `snapForwardFrom` + physical key order |
+| `ShaftSpecTest` | Spec helpers: coverage, freeToEnd, maxOD |
+| `ShaftSpecSnapExtensionsTest` | Snap engine edge cases |
 | `SegmentTest` | Segment validity |
 | `ShaftPositionTest` | Position enum logic |
 | `OalComputationsTest` | OAL exclusion logic |
@@ -159,10 +158,24 @@ Instrumented tests in `app/src/androidTest/` include a `ClearDataStoreRule` to i
 
 ---
 
-## Active Sprint
+## Active Sprint: v0.4.x
 
-Sprint status, the active queue, and the release-series roadmap are tracked in
-**`TODO.md`** and **`docs/ROADMAP.md`** — not duplicated here.
+### In Progress / Next Up
+
+**1.1 ✅ Snap Engine** — done  
+**1.2 Preview Tap → mm (not started)** — add `onTapAtMm` lambda to `ShaftDrawing`; convert `Offset → mm`; route through `SnapEngine`; store `pendingAddPositionMm` in ViewModel.  
+**1.3 Add-At-Position Flow (not started)** — `startAddAtPosition(positionMm)` VM intent; chooser dialog; prefilled defaults from axial gap.  
+**1.4 Resolved Component Pipeline (not started)** — auto body seeding from OAL; AFT/FWD authored reference toggle in liner card; unified Add Component entry point.  
+**1.5 Keyway support on Body (not started)** — data model field + editor UI (hosted feature, not standalone component).
+
+### Roadmap Horizon
+
+| Series | Focus |
+|---|---|
+| v0.5.x | Keyway (taper-hosted), Shoulder/Relief component, Coupling component |
+| v0.6.x | Component presets, reference geometry overlays, machining heuristic warnings |
+| v0.7.x | Optional cloud save, DXF export (if approved) |
+| v1.0 | All component types, full single-page PDF, complete test coverage, complete docs |
 
 ---
 
@@ -188,12 +201,9 @@ $env:PATH = "$env:JAVA_HOME\bin;$env:PATH"
 
 ## Known Constraints / Design Decisions
 
-- **Phones portrait, tablets free** — phones lock to portrait (the editor is a portrait layout
-  there); tablets (sw600dp) rotate freely and the screens adapt on one axis, the window width
-  class: a taller single column at MEDIUM, two panes and a permanent sidebar at EXPANDED
-  (landscape tablet). `docs/contracts/Adaptive.md`.
+- **Portrait only** — landscape is disabled; editor layout optimized for portrait.
 - **Single-page PDF only** — multi-page PDF is explicitly out of scope through v1.0.
 - **No pixel math in ViewModel** — VM is the geometry authority; UI passes raw mm coordinates.
 - **Auto bodies never persisted** — when the resolved pipeline is complete, auto-generated bodies exist only in the derived view layer.
-- **Overlaps** — `validate()` only checks bounds, not intersections; overlap enforcement is `collidingIds()`, which flags only sacred pairs (taper/thread/liner). Bodies are fluid base material and never collide; a sacred component added over a plain body splits it, while a keyed body stays whole.
+- **Overlaps are valid** — liners intentionally overlap bodies; `validate()` only checks bounds, not intersections.
 - **Committed-on-blur inputs** — numeric fields do not mutate VM state while the user is typing.
