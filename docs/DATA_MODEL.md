@@ -1,12 +1,16 @@
 # ShaftSchematic Data Model
 Version: v0.5.x
-Last updated: 2026-10-22 — `UndercutRecord` listing completed (`drawToSet`, `showTotalRail`,
+Last updated: 2026-10-27 — `AutoDiaOverride`: a section override no longer moves a
+neighbouring section's Ø, and a component add/remove that merges or covers its section drops it
+(`withAutoDiaOverridesSurviving`); `autoBodyDiaMm` is written again — the auto card's "All auto
+sections" choice and the new-shaft Ø prompt (`withAutoBodyDia`).
+2026-10-22 — `UndercutRecord` listing completed (`drawToSet`, `showTotalRail`,
 `pageOrientation`, `setDatum`, `excludedLinerIds`, `excludedFreeCutIds`) and `WearRecord`'s
 per-job sheet fields listed (`traceDepthFrac`, `dyePenResult`, `stripComponentIds`,
 `showShaftProfile`, `compactStrips`, `stripSizeFrac`).
 2026-08-13 — added `ShaftSpec.autoDiaOverrides` (`AutoDiaOverride`: per-section
-bare-shaft Ø for a single auto-body span, shaft-space anchor, dormant anchors never pruned);
-`autoBodyDiaMm` demoted to the legacy shaft-wide fallback.
+bare-shaft Ø for a single auto-body span, shaft-space anchor); `autoBodyDiaMm` demoted to the
+shaft-wide fallback.
 2026-08-05 — envelope listing gains `undercutRecord`
 (`@SerialName("undercut_record")`) and `WearRecord.wornSections`; added the `UndercutRecord`
 and `WornSection` bullets (shaft-space spans, no orphans, never pruned at decode).
@@ -94,8 +98,9 @@ raised false collision warnings on normal drafts.)
 - **Auto-bodies** (derived at resolve via `deriveAutoBodies`, never stored) flow around every
   component. Promote one to explicit with the **"Explicit body"** checkbox on its carousel card
   (or Add Body) to lock a span / add a keyway — the checkbox is the ONLY promotion path; the
-  card's editable Ø field instead writes a **per-section** `AutoDiaOverride` for that one span
-  (see below) without promoting.
+  card's editable Ø field instead writes, by the user's choice in its scope dialog, a
+  **per-section** `AutoDiaOverride` for that one span or the shaft-wide `autoBodyDiaMm` (see
+  below) without promoting.
 
 #### `AutoDiaOverride` — per-section bare-shaft Ø
 
@@ -107,25 +112,39 @@ data class AutoDiaOverride(
 )
 ```
 
-Individual auto sections may carry slightly different diameters without being promoted, so the
-auto-body card's Ø field is **per-section**. An auto span whose extent contains an anchor —
-the half-open interval `[startMm, endMm)` — draws at that `diaMm`.
+Individual auto sections may carry slightly different diameters without being promoted. The
+auto-body card's Ø commit asks for its scope when the shaft has more than one auto section —
+"This section" writes an override for that span, "All auto sections" writes
+`ShaftSpec.autoBodyDiaMm` and clears every override (`withAutoBodyDia`; with one section the
+value applies directly as All). An auto span whose extent contains an anchor — the half-open
+interval `[startMm, endMm)` — draws at that `diaMm`.
 
 - **Precedence per span:** aft-most anchor inside the span → `ShaftSpec.autoBodyDiaMm` (the
-  legacy shaft-wide value, no UI writes it any more) → neighbor derivation
-  (`resolveAutoBodyDia`). It also wins over the `normalizeBodies` diameter-continuity carry,
-  and a section-authored run seeds no continuity forward, so an override never leaks into the
-  next auto run.
-- **Merge rule:** delete the component separating two auto sections and the gaps join into one
-  run holding both anchors — the run takes the **aft-most** override's Ø, because the aft
-  section is authored first. The fwd one lies dormant.
+  shaft-wide value: "All auto sections" and the new-shaft Ø prompt) → neighbor derivation
+  (`resolveAutoBodyDia`). It also wins over the `normalizeBodies` diameter-continuity carry.
+- **Isolation:** an overridden run leaves the continuity carry exactly as it would have been
+  WITHOUT the override (the carried Ø, else the span's own no-override Ø), so a section's
+  override never moves a neighbouring section's Ø — before or after it.
+- **Merge rule:** when several anchors fall inside one span (hand-edited or legacy data), the
+  **aft-most** wins and the rest lie dormant — aft is authored first.
+- **Pruning — an override dies with its section:** a component **add or remove**
+  (`addBodyAt`/`addTaperAt`/`addThreadAt`/`addLinerAt` and their `remove*`, "Explicit body"
+  promotion and demotion included) keeps an override only when its anchor sits in an auto run
+  both before and after the edit and that run's start did not move AFT-ward
+  (`withAutoDiaOverridesSurviving`, `ui/resolved/AutoDiaOverridePrune.kt`). Removing the
+  component AFT of a section merges it into its AFT neighbour → its override goes; removing
+  the one FWD of it → kept; a component added over the anchor → goes; one added upstream
+  inside the span → kept; an override already dormant before the edit → goes. Undo restores
+  it (the history holds the whole spec).
 - **Shaft-space keying, no orphans:** auto spans have no stored row and their ids are
   position-derived, so anchors are stored in shaft space (the `Undercut` / `WornSection`
-  posture). An anchor that lands inside a component is **dormant** — not applied, never
-  pruned at decode — and resurrects unchanged if its span reappears. (A gap beside an
-  explicit body survives as its own run, so its anchors stay live while the gap exists.)
+  posture). An anchor a resize or OAL change strands inside a component is **dormant** — not
+  applied, never pruned at decode or by the resize — and applies again when its span
+  reappears. (A gap beside an explicit body survives as its own run, so its anchors stay live
+  while the gap exists.)
 - **Draw-only:** never affects OAL/coverage, span positioning, body resolution, or collision.
-  Written by `ShaftSpec.withAutoSectionDia` (upsert; `≤ 0` clears).
+  Written by `ShaftSpec.withAutoSectionDia` (upsert; `≤ 0` clears) and cleared wholesale by
+  `ShaftSpec.withAutoBodyDia`.
 
 #### Body Split / Merge
 

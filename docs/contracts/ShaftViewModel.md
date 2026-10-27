@@ -26,6 +26,19 @@ Responsibilities
   clamped where it is DRAWN, never here. Returns the spec unchanged when nothing moves, so a
   no-op set never marks the document dirty. `addBodyAt` takes the same three values so the Add
   dialog can set them at creation (add-dialog parity — a blend changes geometry).
+- `setAutoSectionDiaMm(spanStartMm, spanEndMm, valueMm, target)` — "This section": one auto
+  span's Ø as a shaft-space `AutoDiaOverride` (`ShaftSpec.withAutoSectionDia`, verbatim; ≤ 0
+  clears that section). `setAutoBodyDiaMm(valueMm, target)` — "All auto sections" and the
+  new-shaft Ø prompt: writes `autoBodyDiaMm` verbatim and clears EVERY override
+  (`ShaftSpec.withAutoBodyDia`; ≤ 0 ignored; a no-op returns the same spec, so nothing goes
+  dirty).
+- **Override prune seam.** Exactly eight mutators — `addBodyAt`, `addTaperAt`, `addThreadAt`,
+  `addLinerAt`, `removeBody`, `removeTaper`, `removeThread`, `removeLiner` — end their
+  `updateSpec` lambda with `result.withAutoDiaOverridesSurviving(before = s)`
+  (`ui/resolved/AutoDiaOverridePrune.kt`): an override survives only when its anchor sits in an
+  auto run before and after the edit and that run's start did not move AFT-ward (on-device
+  ruling: an override dies with its section; Undo restores it). No update/resize/OAL/keyway/
+  blend path prunes — a stranded anchor stays dormant until its span returns.
 - `setAutoBlend(spanStartMm, spanEndMm, end, lengthMm, profile)` — the auto-span mirror, writing a
   shaft-space `AutoBlend` anchor (`ShaftSpec.withAutoBlend`). Never promotes the span: staying
   derived is the point, since an anchored blend follows a span that re-derives while a promoted

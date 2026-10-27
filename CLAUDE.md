@@ -102,9 +102,10 @@ it would be a permanently-preset box adding noise to every add. Exactly six qual
 coupler slot's "show dimension rail", **"Show Ø on drawing"** (`Body`/`Liner`/auto-body
 cards), **"Shade on drawing"** (`shadeOnDrawing`, explicit `Body`/`Taper`/`Liner` cards —
 TRI-STATE like the name flag: unset follows the kind's "Shade in Components" checkbox
-(`shadedBodies`/`shadedTapers`/`shadedLiners`, with `shadeExplicitBodiesOnly` still carving
-auto runs out of the body default), explicit ON shades that one component even with the kind
-off — on-device request: shade a named SKF section without shading every body — and explicit
+(`shadedBodies`/`shadedTapers`/`shadedLiners` — shipped liners and tapers ON, bodies OFF,
+on-device ruling; the DataStore fallbacks read the one `PdfPrefs()` default — with
+`shadeExplicitBodiesOnly` still carving auto runs out of the body default), explicit ON shades
+that one component even with the kind off — on-device request: shade a named SKF section without shading every body — and explicit
 OFF keeps it unshaded with the kind on. Effective per-run decisions are precomputed by the
 pure `unshadedBodyRunIds`/`unshadedTaperIds`/`unshadedLinerIds`
 (`ui/resolved/ResolvedComponent.kt`) and threaded as id sets into the fill passes, which now
@@ -763,8 +764,9 @@ leaves from the **midpoint of the liner OD and the body Ø** (`seatDiaUnderLiner
 cue nothing authors. A seat authored as its own body under a liner is NOT consulted —
 `subtractBodiesAgainstNonBodies` trims a fully covered body out of the drawing.
 Explicit bodies carry blends as stored fields; **auto spans carry them as shaft-space anchors**
-(`AutoBlend`, `ShaftSpec.autoBlends` — the `AutoDiaOverride` posture: anchor at the span midpoint,
-aft-most wins, dormant under a component, NEVER pruned), so a saved template keeps its seal areas
+(`AutoBlend`, `ShaftSpec.autoBlends` — the `AutoDiaOverride` keying: anchor at the span midpoint,
+aft-most wins, dormant under a component — but NEVER pruned, not even by the component add/remove
+that drops an override), so a saved template keeps its seal areas
 when the liners or the overall length move under it. Both resolve to the same `BodyBlend`, and the
 draw sites cannot tell them apart. The face a blend curves from is the run's **DRAWN outer edge**
 (for an explicit body that is its stored span, since an explicit body never absorbs the gap
@@ -1194,17 +1196,25 @@ user edit. Fixed 2026-07-26, pinned by `BlurCommitPolicyTest` + `NumericInputFie
 ### Auto-body promotion
 Auto-body cards in the carousel (`ResolvedComponentSource.AUTO`) show Start/Length as
 **disabled** (greyed, derived-value) fields — there is no field-edit promotion path. The
-**Ø field is editable** and commits a **per-section** override (`ShaftSpec.autoDiaOverrides`
-— a shaft-space `AutoDiaOverride(anchorMm, diaMm)` list, anchor system-placed at the span
-midpoint; `diaMm` stored verbatim, golden rule). Per-span precedence: aft-most anchor inside
-the span `[start, end)` → legacy shaft-wide `autoBodyDiaMm` (> 0) → neighbor derivation.
-When a separator's deletion merges two differing sections, the merged span takes the **more
-aftward** override (aft is authored first); the FWD one lies **dormant — never pruned** (no
-orphans by construction, same posture as runout readings/wear pits), so re-splitting the run
-resurrects it as authored. Clearing the field (≤ 0) drops that section's override only.
-Overrides never affect auto-span positioning and do **not** promote the card. A gap beside an
-explicit body survives as its own run (never absorbed), so its anchors stay live while the gap
-exists.
+**Ø field is editable** and its commit chooses a SCOPE: with ≥ 2 auto sections an AlertDialog
+(`autobody_dia_scope_dialog`) asks **"This section"** — a **per-section** override
+(`ShaftSpec.autoDiaOverrides`, a shaft-space `AutoDiaOverride(anchorMm, diaMm)` list, anchor
+system-placed at the span midpoint) — or **"All auto sections"** — the shaft-wide
+`autoBodyDiaMm`, clearing every override (`withAutoBodyDia`); Cancel applies nothing and
+re-keys the field to the stored value. With one auto section the value applies directly as All.
+`diaMm` is stored verbatim (golden rule). Per-span precedence: aft-most anchor inside the span
+`[start, end)` → `autoBodyDiaMm` (> 0) → neighbor derivation. **A section's override never
+moves a neighbouring section's Ø** — an overridden run leaves the `normalizeBodies`
+continuity carry as it would have been without it (on-device report). **An override dies with
+its section:** the eight component add/remove mutators (promotion/demotion included) apply
+`withAutoDiaOverridesSurviving` — kept only when the anchor is in an auto run before and after
+and that run's start did not move AFT-ward, so removing the component AFT of a section (it
+merges into its AFT neighbour) or covering its anchor drops it, and a re-created section takes
+the shaft's Ø (on-device ruling); Undo restores it. A resize or OAL change never prunes: a
+stranded anchor lies dormant and applies again when its span returns. Clearing the field (≤ 0)
+drops that section's override only. Overrides never affect auto-span positioning and do
+**not** promote the card. A gap beside an explicit body survives as its own run (never
+absorbed), so its anchors stay live while the gap exists.
 Promotion to a real body happens only on an **explicit user action**: ticking the
 **"Explicit body"** checkbox (relabeled from "Make editable body"). Checking it calls
 `onAddBody` with the auto-body's current derived Start/Length/Ø, guarded by a `promoted`
@@ -1249,7 +1259,10 @@ is ~0.001 mm, and one unit of it put a flush taper "past the shaft end"; the bou
 the renderer's 0-OAL fallback (`ShaftSpec.renderSpanSpec()`, `ui/drawing/RenderSpanSpec.kt` —
 ONE implementation behind both canvases and the preview OAL badge) draws such a shaft to its
 coverage end.
-Nothing backfills it — not a load, not the first component added.
+Nothing backfills it — not a load, not the first component added. On a brand-new ORIGINAL
+shaft (OAL 0, `autoBodyDiaMm` 0, no components — `shouldPromptShaftDia`) the first OAL commit
+opens the "Shaft diameter" prompt (`ShaftDiaPromptDialog`, on-device request); Set writes
+`autoBodyDiaMm`, Skip is final because the OAL is no longer 0. Loads never prompt.
 See `docs/contracts/OverallLength.md`.
 
 ## Commit policy

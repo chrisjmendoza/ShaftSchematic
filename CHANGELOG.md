@@ -6,6 +6,53 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-10-27
+
+### fix(editor): one auto-body section's diameter no longer moves the others
+
+- **Changing the Ø of one auto-body section leaves every other auto section as it was.**
+  On-device report: editing one Body (auto) card's diameter changed the other auto sections too,
+  so the only way to give one section its own Ø was to make it an explicit body. Behind a liner
+  or a taper an auto section takes its diameter from the section before it; a section with its
+  own Ø used to break that chain, so the next section jumped to whatever was beside it (often the
+  liner's OD). The sections after an edited one now keep exactly the Ø they had before the edit.
+
+### feat(editor): choose "This section" or "All auto sections" when you change an auto-body Ø
+
+- **The Body (auto) card asks which sections a new diameter is for.** When the shaft has more
+  than one auto-body section, committing a diameter opens "Apply diameter to…": **This section**
+  changes only the card you are on, **All auto sections** sets the bare-shaft Ø for every auto
+  section together (and clears any section that had its own). Cancel applies nothing and puts the
+  stored value back in the box. With a single auto section there is nothing to choose, and the
+  value applies straight away as the shaft's Ø. Undo covers both choices.
+
+### feat(editor): a deleted auto section's diameter goes with it
+
+- **An auto section's own Ø no longer comes back after the section is deleted.** On-device
+  ruling: if the component that separated a section with its own diameter is deleted, and a
+  component is later added that splits the run again, the re-created section now takes the same
+  Ø as the other auto sections instead of reviving the old value. The rule follows the section:
+  removing the component AFT of it merges it into the section before it, and its Ø goes;
+  removing the component FWD of it leaves it in place, and it keeps its Ø; adding a component
+  over it removes it. Undo still brings the value back. Resizing a liner or changing the overall
+  length never drops one — a section squeezed out by a resize gets its Ø back when the room
+  returns.
+
+### feat(settings): liners and tapers shade by default; a new shaft asks for its diameter
+
+- **Shipped shading defaults are now liners and tapers on, bodies off.** On-device ruling:
+  liners and tapers are the parts a sheet shades; a body shades only when you ask for it (its
+  card's "Shade on drawing", or the "Bodies" box under Settings → PDF Export Options → "Shade in
+  Components"). This only changes the starting point: a device that already has these settings
+  keeps them. A fresh install, or **Restore Drawing defaults** (Settings → Drawing → Profiles),
+  picks up the new defaults.
+- **The first overall length on a new shaft asks for the bare-shaft diameter.** On-device
+  request: components added onto the default-sized bare shaft looked wrong until its diameter was
+  fixed. On a brand-new drawing, committing the overall length opens "Shaft diameter" — type it
+  (in the drawing's unit, fractions accepted) and tap **Set**, or **Skip**. It asks only once per
+  drawing, never when opening a saved document or a template, and the value can be changed later
+  on any Body (auto) card.
+
 ## 2026-10-23
 
 ### fix(pdf): an excluded thread no longer runs off the edge of the consolidated sheet

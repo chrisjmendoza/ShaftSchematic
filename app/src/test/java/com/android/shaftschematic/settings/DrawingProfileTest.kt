@@ -50,9 +50,11 @@ class DrawingProfileTest {
         val tuned = PdfPrefs(
             tieringMode = PdfTieringMode.FWD,
             showComponentTitles = false,
-            shadedBodies = true,
-            shadedTapers = true,
-            shadedLiners = true,
+            // Every shade flag set OPPOSITE its shipped default, so the round trip proves it
+            // carries the value rather than re-deriving the default.
+            shadedBodies = !PdfPrefs().shadedBodies,
+            shadedTapers = !PdfPrefs().shadedTapers,
+            shadedLiners = !PdfPrefs().shadedLiners,
             undercutLineArt = true,
             curveLoHeightIn = 0.75f,
             curveHiHeightIn = 1.25f,
@@ -82,7 +84,7 @@ class DrawingProfileTest {
             "Shop standard" to DrawingProfile(),
             "Customer A" to DrawingProfile.of(
                 PdfPrefs(
-                    shadedLiners = true,
+                    shadedLiners = !PdfPrefs().shadedLiners,
                     arrowSizePt = PDF_ARROW_SIZE_MEDIUM_PT,
                     fractionStyle = FractionStyle.STACKED,
                     outputFont = OutputFont.MONOSPACE,
@@ -127,11 +129,15 @@ class DrawingProfileTest {
     fun `a profile saved before a pref existed takes that pref's default`() {
         // The additive-decode posture: only two fields were stored, the rest come from
         // the shipped values, so an old preset stays loadable rather than being dropped.
-        val raw = """{"Legacy":{"shadedLiners":true,"lineThicknessScale":1.5}}"""
+        // The stored liner flag is the OPPOSITE of the shipped default, so reading it back
+        // proves the stored value wins over the default.
+        val storedLiners = !PdfPrefs().shadedLiners
+        val raw = """{"Legacy":{"shadedLiners":$storedLiners,"lineThicknessScale":1.5}}"""
 
         val profile = decodeDrawingProfiles(raw).getValue("Legacy")
 
-        assertTrue(profile.shadedLiners)
+        assertEquals(storedLiners, profile.shadedLiners)
+        assertEquals(PdfPrefs().shadedTapers, profile.shadedTapers)
         assertEquals(1.5f, profile.lineThicknessScale, 1e-6f)
         assertEquals(PdfPrefs().sBreakThresholdFrac, profile.sBreakThresholdFrac, 1e-6f)
         assertEquals(PdfPrefs().wearJoinGapMaxMm, profile.wearJoinGapMaxMm, 1e-6f)

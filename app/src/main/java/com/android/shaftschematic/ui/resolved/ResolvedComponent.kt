@@ -112,10 +112,19 @@ fun resolveComponents(spec: ShaftSpec): List<ResolvedComponent> {
         compareBy<ResolvedComponent>({ it.startMmPhysical }, { it.typeSortKey() })
     )
     val subtracted = subtractBodiesAgainstNonBodies(merged)
+    // The span's Ø with no section override — the shaft-wide value, else neighbor derivation
+    // over the same explicit list deriveAutoBodies resolved against.
+    val explicitSorted = explicit
+        .filter { it.source == ResolvedComponentSource.EXPLICIT }
+        .sortedBy { it.startMmPhysical }
+    val baseAutoDiaOf: (Float) -> Float = { startMm ->
+        if (spec.autoBodyDiaMm > 0f) spec.autoBodyDiaMm else resolveAutoBodyDia(startMm, explicitSorted)
+    }
     val bodiesAndFeatures = normalizeBodies(
         subtracted,
         overrideDiaMm = spec.autoBodyDiaMm,
-        sectionOverrides = spec.autoDiaOverrides
+        sectionOverrides = spec.autoDiaOverrides,
+        baseAutoDiaOf = baseAutoDiaOf
     )
 
     // Coupler bolt slots are overlays: resolved separately and appended so they never enter
@@ -492,7 +501,8 @@ private fun subtractBodiesAgainstNonBodies(components: List<ResolvedComponent>):
 private fun normalizeBodies(
     components: List<ResolvedComponent>,
     overrideDiaMm: Float = 0f,
-    sectionOverrides: List<AutoDiaOverride> = emptyList()
+    sectionOverrides: List<AutoDiaOverride> = emptyList(),
+    baseAutoDiaOf: (startMm: Float) -> Float
 ): List<ResolvedComponent> {
     if (components.isEmpty()) return components
 
@@ -546,12 +556,17 @@ private fun normalizeBodies(
     fun flush() {
         current?.let {
             result.add(it.toResolved())
-            // A section-authored auto run states one section's Ø, so it seeds no continuity:
-            // the next auto run falls back to the shaft-wide Ø or neighbor derivation rather
-            // than inheriting a value that was only ever true of the run before it. An
-            // explicit body's run seeds continuity, so the auto fill beyond it keeps
-            // drawing at the body's Ø.
-            lastMergedDia = if (it.sectionAuthored && !it.hasExplicit) null else it.diaMm
+            // A section-authored auto run states one section's Ø and nothing else: it leaves
+            // continuity exactly as the run would have left it WITHOUT the override (the
+            // carried Ø, else the span's own no-override Ø), so a section's value never moves
+            // a neighbouring section's Ø (on-device report: one auto section's edit changed
+            // the others). An explicit body's run, and an auto run with no authored Ø, seed
+            // continuity with their own Ø, so the auto fill beyond keeps drawing at it.
+            lastMergedDia = if (it.sectionAuthored && !it.hasExplicit) {
+                lastMergedDia ?: baseAutoDiaOf(it.start)
+            } else {
+                it.diaMm
+            }
             current = null
         }
     }

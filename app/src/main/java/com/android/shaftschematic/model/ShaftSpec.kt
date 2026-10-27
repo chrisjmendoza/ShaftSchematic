@@ -29,11 +29,11 @@ import kotlinx.serialization.Serializable
  * @property keyways90Cw Direction of the 90° clocking **viewed from aft**: true = clockwise,
  *           false = counter-clockwise. Only meaningful while [keyways90Apart] is set.
  *           Defaults true for back-compat.
- * @property autoBodyDiaMm Legacy shaft-wide bare-shaft diameter applied to auto-body spans
- *           that carry no [autoDiaOverrides] entry (mm). No UI writes it any more — the
- *           auto-body card's Ø field is per-section — but documents authored against the
- *           one-Ø-for-every-span rule still decode it, so it stays as the silent fallback
- *           between a section override and neighbor derivation. 0 = unset → derive from
+ * @property autoBodyDiaMm Shaft-wide bare-shaft diameter applied to auto-body spans that
+ *           carry no [autoDiaOverrides] entry (mm), stored verbatim. Written by the auto-body
+ *           card's "All auto sections" Ø choice (which also clears every section override —
+ *           see [withAutoBodyDia]) and by the new-shaft diameter prompt after the first OAL;
+ *           sits between a section override and neighbor derivation. 0 = unset → derive from
  *           neighbors. Affects drawn diameter only — auto-span positioning stays derived.
  *           Defaults 0 for back-compat.
  * @property autoBlends Blended faces on individual auto-body spans, keyed in shaft space by
@@ -43,8 +43,9 @@ import kotlinx.serialization.Serializable
  * @property autoDiaOverrides Per-section diameters for individual auto-body spans, keyed in
  *           shaft space by anchor. An auto span containing an anchor draws at that
  *           [AutoDiaOverride.diaMm], beating [autoBodyDiaMm] and neighbor derivation;
- *           aft-most anchor wins when a span holds several. Anchors that land inside a
- *           component are dormant, never pruned. Draw-only and
+ *           aft-most anchor wins when a span holds several. Anchors stranded by a resize are
+ *           dormant; a component add/remove that merges or covers a section drops its
+ *           override. Draw-only and
  *           additive/defaulted — see [AutoDiaOverride].
  * @property showAutoBodyDia Whether bare-shaft Ø values print as below-shaft callouts on the
  *           schematic. ONE flag for ALL auto spans — the bare shaft is one piece of stock, so

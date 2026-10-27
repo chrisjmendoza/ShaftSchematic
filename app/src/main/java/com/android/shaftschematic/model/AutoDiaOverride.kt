@@ -13,19 +13,27 @@ import kotlinx.serialization.Serializable
  * (`auto_body_<start>_<end>`), so they regenerate on every edit. An auto span whose extent
  * contains the anchor — the half-open interval `[startMm, endMm)` — draws at [diaMm].
  *
- * ## Dormancy — nothing is ever pruned
+ * ## Dormancy and pruning
  * An override whose anchor lands inside a component is **dormant**: not applied, but kept in
- * the list. (An explicit body never absorbs the auto gap beside it, so a gap's anchors stay
- * live for as long as the gap exists.) There are no orphans
- * by construction, and nothing is pruned at decode — the same rule as runout readings and
- * wear pits (skip at the use site, never delete). A dormant override resurrects unchanged
- * when the span that contains it reappears.
+ * the list. A resize that strands an anchor (a liner lengthened over it, an OAL change) leaves
+ * it dormant, and it applies again when the geometry gives the span back — a typed value
+ * survives a slipped neighbour length. (An explicit body never absorbs the auto gap beside it,
+ * so a gap's anchors stay live for as long as the gap exists.) Nothing is pruned at decode.
+ *
+ * A component **add or remove** is different: an override dies with its section. When the
+ * edit merges the section into its AFT neighbour (the component AFT of it was removed), covers
+ * the anchor with the new component, or leaves no auto span at the anchor, the override is
+ * dropped — the section that "got deleted" takes the shaft's Ø when it comes back, rather than
+ * resurrecting a value from before the delete (on-device ruling). An override already dormant
+ * before the add/remove is dropped by it too. Undo restores the dropped override with the
+ * rest of the document. The rule lives in `withAutoDiaOverridesSurviving`
+ * (`ui/resolved/AutoDiaOverridePrune.kt`), applied by the ViewModel's add/remove mutators only.
  *
  * ## Merge rule
- * When several anchors fall inside one span the **aft-most wins** and the rest stay dormant.
- * That is the shop reading of a merge: deleting the component that separated two auto
- * sections joins them into one run, and the joined run takes the Ø of the more aftward
- * section because aft is authored first.
+ * When several anchors fall inside one span the **aft-most wins** and the rest stay dormant
+ * (hand-edited or legacy data; the add/remove seam leaves at most the aft section's anchor
+ * after a merge). Aft is authored first, so a joined run takes the Ø of the more aftward
+ * section.
  *
  * [diaMm] is a user-typed value stored **verbatim** (golden rule: authored values are never
  * rounded, snapped, or derived). [anchorMm] is system-placed — the midpoint of the span the
@@ -73,9 +81,8 @@ fun List<AutoDiaOverride>.hasAutoSectionDia(startMm: Float, endMm: Float): Boole
  * [ShaftSpec.autoBodyDiaMm] and then to neighbor derivation.
  *
  * Overrides anchored outside the span — including dormant ones under a component — are left
- * alone, so they resurrect unchanged if
- * their span reappears. Returns `this` when nothing moves, so a no-op set never emits new
- * state or marks the document dirty.
+ * alone. Returns `this` when nothing moves, so a no-op set never emits new state or marks the
+ * document dirty.
  */
 fun ShaftSpec.withAutoSectionDia(
     spanStartMm: Float,
@@ -90,4 +97,20 @@ fun ShaftSpec.withAutoSectionDia(
         )
         else kept
     return if (next == autoDiaOverrides) this else copy(autoDiaOverrides = next)
+}
+
+/**
+ * Returns a copy carrying [valueMm] as the bare-shaft Ø of EVERY auto section together — the
+ * auto-body card's "All auto sections" choice, and the new-shaft diameter prompt.
+ *
+ * [valueMm] is stored **verbatim** in [ShaftSpec.autoBodyDiaMm] (golden rule) and every
+ * [ShaftSpec.autoDiaOverrides] entry is cleared, dormant ones included: "every section
+ * together" means no section keeps a value of its own. [valueMm] ≤ 0 is ignored. Returns
+ * `this` when nothing changes, so a no-op set never emits new state or marks the document
+ * dirty.
+ */
+fun ShaftSpec.withAutoBodyDia(valueMm: Float): ShaftSpec {
+    if (valueMm <= 0f) return this
+    if (autoBodyDiaMm == valueMm && autoDiaOverrides.isEmpty()) return this
+    return copy(autoBodyDiaMm = valueMm, autoDiaOverrides = emptyList())
 }

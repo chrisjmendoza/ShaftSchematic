@@ -14,13 +14,16 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -48,8 +51,9 @@ import com.android.shaftschematic.util.UnitSystem
  * Carousel editor card for a body — both shapes it takes.
  *
  * An AUTO span (`ResolvedComponentSource.AUTO`) shows derived Start/Length read-only with an
- * editable Ø (a per-section bare-shaft override) and the "Explicit body" checkbox that promotes
- * it; an explicit body shows the editable Start/Length/Ø, the face finishes and seal areas, and the keyway
+ * editable Ø — committed to "This section" (a per-section override) or "All auto sections" (the
+ * shaft-wide bare-shaft Ø) through a scope dialog whenever [autoSectionCount] > 1 — and the
+ * "Explicit body" checkbox that promotes it; an explicit body shows the editable Start/Length/Ø, the face finishes and seal areas, and the keyway
  * section. That section is gated by the shared "Keyway" checkbox ([KeywayGateRow]), seeded open
  * whenever any of W/D/L is typed; unticking it with values present confirms through
  * [RemoveKeywayConfirmDialog] before clearing them. Inside the gate: KW from AFT | FWD, the keyway
@@ -80,6 +84,9 @@ internal fun BodyPagerCard(
     startValidator: (String, ComponentKind, Float) -> (String) -> String?,
     onAddBody: (Float, Float, Float) -> Unit,
     onSetAutoSectionDia: (spanStartMm: Float, spanEndMm: Float, diaMm: Float) -> Unit,
+    onSetAllAutoSectionsDia: (diaMm: Float) -> Unit,
+    /** How many AUTO body sections the shaft resolves to — decides whether the Ø asks for a scope. */
+    autoSectionCount: Int,
     onSetAutoBlend: (spanStartMm: Float, spanEndMm: Float, end: LinerAuthoredReference, lengthMm: Float, profile: BlendProfile, seal: Boolean, sealLenMm: Float) -> Unit,
     onSetShowAutoBodyDia: (Boolean) -> Unit,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
@@ -103,13 +110,30 @@ internal fun BodyPagerCard(
     if (component.source == ResolvedComponentSource.AUTO) {
         // Auto-body Start/Length are derived from the resolve layer and shown
         // read-only (greyed); making the body explicit via the checkbox is the only
-        // way to control its position. The Ø field IS editable: it sets THIS
-        // section's bare-shaft Ø (an AutoDiaOverride anchored in this span) without
-        // promoting or touching positioning — neighbouring auto sections keep theirs.
+        // way to control its position. The Ø field IS editable, and the commit chooses
+        // its scope: with more than one auto section a dialog asks "This section" (an
+        // AutoDiaOverride anchored in this span — neighbouring sections keep theirs) or
+        // "All auto sections" (the shaft-wide bare-shaft Ø, clearing every section's
+        // own); with one section the value is the shaft's Ø and applies directly. No
+        // choice promotes or touches positioning.
         val startMm  = component.startMmPhysical
         val lengthMm = component.endMmPhysical - component.startMmPhysical
         val diaMm    = component.diaMm
         var promoted by remember(component.id) { mutableStateOf(false) }
+        // The typed Ø awaiting a scope choice; null while no dialog is up.
+        var pendingDiaMm by remember(component.id) { mutableStateOf<Float?>(null) }
+        // Bumped when the scope dialog is dismissed: re-keys the Ø field so it shows the
+        // STORED value again — a value that was not applied never stays in the box.
+        var diaFieldResetNonce by remember(component.id) { mutableStateOf(0) }
+        // The Ø field still holds focus after an IME-Done commit, and a later blur would
+        // commit the same text again — reopening the dialog after a choice, or, on Cancel,
+        // re-committing from the field the re-key disposes. Clearing focus as the dialog
+        // opens lets that blur land now, while it can only repeat the pending value.
+        val focusManager = LocalFocusManager.current
+        val scopeDialogOpen = pendingDiaMm != null
+        LaunchedEffect(scopeDialogOpen) {
+            if (scopeDialogOpen) focusManager.clearFocus()
+        }
 
         // Explicit promotion via checkbox: turns this derived fill into a real,
         // editable Body (needed to add a keyway to a line-shaft end span, or to
@@ -155,10 +179,50 @@ internal fun BodyPagerCard(
                 first = { CommitNum("Start (${abbr(unit)})", disp(startMm, unit), enabled = false) { } },
                 second = { CommitNum("Length (${abbr(unit)})", disp(lengthMm, unit), enabled = false) { } },
             )
-            CommitNum("Diameter (${abbr(unit)})", disp(diaMm, unit)) { s ->
-                toMmOrNull(s, unit)?.let {
-                    onSetAutoSectionDia(component.startMmPhysical, component.endMmPhysical, it)
+            key(diaFieldResetNonce) {
+                CommitNum("Diameter (${abbr(unit)})", disp(diaMm, unit)) { s ->
+                    toMmOrNull(s, unit)?.let {
+                        if (autoSectionCount <= 1) onSetAllAutoSectionsDia(it) else pendingDiaMm = it
+                    }
                 }
+            }
+            pendingDiaMm?.let { v ->
+                val dismiss: () -> Unit = {
+                    pendingDiaMm = null
+                    diaFieldResetNonce += 1
+                }
+                AlertDialog(
+                    onDismissRequest = dismiss,
+                    modifier = Modifier.testTag("autobody_dia_scope_dialog"),
+                    title = { Text("Apply diameter to…") },
+                    text = {
+                        Text(
+                            "This shaft has $autoSectionCount auto-body sections. Change only " +
+                                "this section, or every auto-body section together?"
+                        )
+                    },
+                    confirmButton = {
+                        Row {
+                            androidx.compose.material3.TextButton(
+                                onClick = {
+                                    pendingDiaMm = null
+                                    onSetAutoSectionDia(component.startMmPhysical, component.endMmPhysical, v)
+                                },
+                                modifier = Modifier.testTag("autobody_dia_this_section"),
+                            ) { Text("This section") }
+                            androidx.compose.material3.TextButton(
+                                onClick = {
+                                    pendingDiaMm = null
+                                    onSetAllAutoSectionsDia(v)
+                                },
+                                modifier = Modifier.testTag("autobody_dia_all_sections"),
+                            ) { Text("All auto sections") }
+                        }
+                    },
+                    dismissButton = {
+                        androidx.compose.material3.TextButton(onClick = dismiss) { Text("Cancel") }
+                    },
+                )
             }
             // One flag for every auto span — the bare shaft is one piece of stock, so
             // it carries one visibility even where sections differ in Ø.
