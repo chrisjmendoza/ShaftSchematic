@@ -195,7 +195,7 @@
   <aside class="note"><p>A body may run under a liner or up against a taper, and a body with a keyway is never split; see <a href="#editor-bodies">Bodies and bare shaft</a>.</p></aside>
 
   <h3>Bare-shaft card</h3>
-  <p>A bare-shaft card is titled <span class="ui">Body (auto)</span>. <span class="ui">Start</span> and <span class="ui">Length</span> are greyed out because the surrounding components decide them. <span class="ui">Diameter</span> is editable and sets the diameter of that one stretch of bare shaft only. The card also carries <span class="ui">Show bare-shaft Ø on drawing</span>, the same <span class="ui">Face finish</span> and <span class="ui">Seal areas</span> controls as an explicit body, and the <span class="ui">Explicit body</span> checkbox that promotes it.</p>
+  <p>A bare-shaft card is titled <span class="ui">Body (auto)</span>. <span class="ui">Start</span> and <span class="ui">Length</span> are greyed out because the surrounding components decide them. <span class="ui">Diameter</span> is editable: with more than one stretch of bare shaft it asks whether the new diameter is for <span class="ui">This section</span> or <span class="ui">All auto sections</span> (see <a href="#editor-bodies">Bodies and bare shaft</a>). The card also carries <span class="ui">Show bare-shaft Ø on drawing</span>, the same <span class="ui">Face finish</span> and <span class="ui">Seal areas</span> controls as an explicit body, and the <span class="ui">Explicit body</span> checkbox that promotes it.</p>
   <aside class="note"><p>Blends and seal areas set on an auto section belong to that stretch of bare shaft and follow it when the components around it move. Promoting the section starts the new explicit body with square faces and no seal areas; set them again on its card.</p></aside>
 
   <h3 id="components-blends">Face finish: Square or Blend</h3>
@@ -377,7 +377,7 @@
   <p>On a bare-shaft card, <span class="ui">Show bare-shaft Ø on drawing</span> is one switch for all bare shaft at once.</p>
 
   <h3 id="components-shade">Shade on drawing</h3>
-  <p>Grey shading is set by kind at <span class="path">Settings → PDF Export Options → Shade in Components</span> (<span class="ui">Bodies</span>, <span class="ui">Tapers</span>, <span class="ui">Liners</span>; all off by default), and repeated on each document's PDF options. The card switch works in three ways:</p>
+  <p>Grey shading is set by kind at <span class="path">Settings → PDF Export Options → Shade in Components</span> (<span class="ui">Bodies</span>, <span class="ui">Tapers</span>, <span class="ui">Liners</span>; tapers and liners on, bodies off by default), and repeated on each document's PDF options. The card switch works in three ways:</p>
   <ul>
     <li><strong>Untouched</strong>: the switch shows, and follows, the Settings checkbox for that kind.</li>
     <li><strong>Switched on</strong>: this component shades even with its kind off. Use it to grey out one named section and leave the rest of the drawing clean.</li>

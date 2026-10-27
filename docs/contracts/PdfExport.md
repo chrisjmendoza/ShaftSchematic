@@ -27,8 +27,8 @@ via SAF, delegating drawing to `composeShaftPdf`.
 | `showComponentTitles` | `true` | Draw component label rows below the shaft |
 | `tieringMode` | `AUTO` | Which end dimensions are anchored to (AFT / FWD / Auto) |
 | `shadedBodies` | `false` | Fill body sections with light grey |
-| `shadedTapers` | `false` | Fill taper trapezoids with light grey |
-| `shadedLiners` | `false` | Fill liner sections with light grey |
+| `shadedTapers` | `true` | Fill taper trapezoids with light grey (shipped ON — on-device ruling: liners and tapers are the parts a sheet shades; a device keeps what it stored, a fresh install or "Restore Drawing defaults" takes this) |
+| `shadedLiners` | `true` | Fill liner sections with light grey (shipped ON, same ruling) |
 | `undercutLineArt` | `false` | Line art on the UNDERCUT document: no shade fill anywhere on that sheet — bodies, tapers, liners, the detail strips' otherwise-always-shaded liner span and the notch section core — leaving the notch construction (void, section faces, floor lines) to carry the reading. Decided by the pure `undercutPdfFillPlan` (`pdf/UndercutPdfFillPlan.kt`). Reaches one composer, so it surfaces in Settings → PDF Export and the **undercut** preview's options sheet only. Independent of the screen-side `UndercutStyle` line-art mode, which never reaches a composer |
 | `curveLoHeightIn` | `0.5` | Sizing-curve anchor: drawn height (paper in) of a 4" shaft at 100% (0.25–1.5) |
 | `curveHiHeightIn` | `1.0` | Sizing-curve anchor: drawn height (paper in) of an 8" shaft at 100% (0.25–1.5) |

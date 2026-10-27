@@ -21,14 +21,18 @@ class UndercutPdfFillPlanTest {
 
     @Test
     fun `shipped prefs shade the strip liner and the section core, kinds follow their prefs`() {
-        val plan = undercutPdfFillPlan(PdfPrefs())
+        val shipped = PdfPrefs()
+        val plan = undercutPdfFillPlan(shipped)
 
-        assertFalse("bodies are unshaded by default", plan.body)
-        assertFalse("tapers are unshaded by default", plan.taper)
-        assertFalse("liners are unshaded by default", plan.liner)
+        assertEquals("bodies follow the shipped body default", shipped.shadedBodies, plan.body)
+        assertEquals("tapers follow the shipped taper default", shipped.shadedTapers, plan.taper)
+        assertEquals("liners follow the shipped liner default", shipped.shadedLiners, plan.liner)
         assertTrue("a detail strip always shades its liner", plan.stripLiner)
         assertTrue("the section core always takes its light fill", plan.sectionCore)
     }
+
+    /** Every kind's shade switched off, so one kind at a time can be turned on below. */
+    private val noKindsShaded = PdfPrefs(shadedBodies = false, shadedTapers = false, shadedLiners = false)
 
     @Test
     fun `each component kind follows its own shade preference`() {
@@ -36,19 +40,19 @@ class UndercutPdfFillPlanTest {
             UndercutPdfFillPlan(
                 body = true, taper = false, liner = false, stripLiner = true, sectionCore = true,
             ),
-            undercutPdfFillPlan(PdfPrefs(shadedBodies = true)),
+            undercutPdfFillPlan(noKindsShaded.copy(shadedBodies = true)),
         )
         assertEquals(
             UndercutPdfFillPlan(
                 body = false, taper = true, liner = false, stripLiner = true, sectionCore = true,
             ),
-            undercutPdfFillPlan(PdfPrefs(shadedTapers = true)),
+            undercutPdfFillPlan(noKindsShaded.copy(shadedTapers = true)),
         )
         assertEquals(
             UndercutPdfFillPlan(
                 body = false, taper = false, liner = true, stripLiner = true, sectionCore = true,
             ),
-            undercutPdfFillPlan(PdfPrefs(shadedLiners = true)),
+            undercutPdfFillPlan(noKindsShaded.copy(shadedLiners = true)),
         )
     }
 

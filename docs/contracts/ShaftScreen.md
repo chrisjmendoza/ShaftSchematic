@@ -4,9 +4,9 @@ ShaftScreen Contract
 Layer: UI → Screens  
 Purpose: Present the shaft editor surface and bind ViewModel state to user controls.
 
-Version: v0.19 (2026-10-23 — EXPANDED becomes a drawing band across the top with a peeking
-carousel under it; the side-by-side panes are retired. See "Window width".
-v0.18 2026-09-16, v0.17 2026-08-29)
+Version: v0.20 (2026-10-27 — the auto-body card's Ø asks "This section | All auto sections";
+the first OAL on a new shaft asks for the bare-shaft Ø.
+v0.19 2026-10-23, v0.18 2026-09-16, v0.17 2026-08-29)
 
 ---
 
@@ -34,6 +34,22 @@ Invariants
   drawing a bare number is how a shaft gets machined wrong.
 - Component carousel shows the **resolved** component list (auto-bodies included) in
   **physical position order** along the shaft. See `ComponentsOrdering.md` (v1.2).  
+- **Auto-body Ø scope.** The Body (auto) card's Ø commit chooses its scope. With
+  `autoSectionCount` ≥ 2 (AUTO `ResolvedBody` rows, counted ONCE in `ComponentCarouselPager`
+  and passed down through `ComponentPagerCard`) it opens "Apply diameter to…"
+  (`autobody_dia_scope_dialog`): **This section** (`autobody_dia_this_section`) →
+  `onSetAutoSectionDia(start, end, v)`; **All auto sections** (`autobody_dia_all_sections`) →
+  `onSetAllAutoSectionsDia(v)` (`ShaftViewModel.setAutoBodyDiaMm`, which clears every section
+  override); **Cancel**, back or an outside tap applies nothing and re-keys the field
+  (`key(diaFieldResetNonce)`) so it shows the STORED value — a value that was not applied never
+  stays in the box. The field's focus is cleared as the dialog opens, so the blur that IME Done
+  leaves pending cannot re-commit after a choice or from the field the re-key disposes. With
+  one auto section the value is the shaft's Ø and goes straight to `onSetAllAutoSectionsDia`.
+  Covered by `AutoBodyDiaScopeDialogTest`.
+- **New-shaft diameter prompt.** On the ORIGINAL drawing the first OAL commit on a brand-new
+  shaft opens `ShaftDiaPromptDialog` (`shaft_dia_prompt`, field `shaft_dia_prompt_field`,
+  `shaft_dia_prompt_set` / `shaft_dia_prompt_skip`), wired in `ShaftRoute`. See
+  `OverallLength.md`.
 - Text fields **commit on blur** or IME “Done”; no live ViewModel writes while typing.
   The OAL field follows the same rule — it no longer commits per keystroke (deleting one
   digit on the way from 368.5 to 367.75 committed a transient 36″ shaft and left a
@@ -314,6 +330,11 @@ Future Enhancements
 
 Change Log
 -----------
+**v0.20 (2026-10-27)**
+- **Auto-body Ø scope dialog** ("This section | All auto sections", on-device report: one
+  auto section's edit changed the others) and the **new-shaft diameter prompt** after the first
+  OAL (on-device request). See the two Invariants bullets above.
+
 **v0.19 (2026-10-23)**
 - **EXPANDED re-laid out: drawing band + peeking carousel.** The side-by-side panes squeezed
   the shaft into a 55% column as a flat strip while the card on the right was clipped at the

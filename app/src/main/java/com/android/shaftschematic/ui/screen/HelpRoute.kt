@@ -436,7 +436,10 @@ internal val helpSections: List<HelpSection> = listOf(
                 "Create your first shaft",
                 "From the home screen tap New Drawing. Type the overall length (OAL) and accept it " +
                     "with the green ✓ or the keyboard's Done key — the drawing takes the new " +
-                    "length once it is accepted, and the red ✗ puts the old value back.\n\n" +
+                    "length once it is accepted, and the red ✗ puts the old value back. On a new " +
+                    "drawing the first length you accept then asks for the bare-shaft diameter, " +
+                    "so the components you add sit on a shaft of the right size; Skip leaves it " +
+                    "to the Body (auto) card.\n\n" +
                     "Add " +
                     "tapers, threads, liners, and bodies with the + Add Component button; each " +
                     "component becomes a card in " +
@@ -495,8 +498,11 @@ internal val helpSections: List<HelpSection> = listOf(
             HelpTopic(
                 "Bodies and auto-bodies",
                 "Bodies are the shaft's filler stock. Spans you don't define are drawn as " +
-                    "auto-bodies — derived, greyed Start/Length, and a Ø you can set on each " +
-                    "auto-body card for that section of bare shaft alone.\n\n" +
+                    "auto-bodies — derived, greyed Start/Length, and a Ø you can set on any " +
+                    "auto-body card. With more than one auto section the card asks whether the " +
+                    "new Ø is for \"This section\" alone or \"All auto sections\"; one section's " +
+                    "Ø never changes another's. A section's own Ø goes with it when the " +
+                    "component that separated it is deleted (Undo brings it back).\n\n" +
                     "Tick \"Explicit body\" on an auto-body " +
                     "card to promote it to a real, editable body; untick it on an explicit body " +
                     "to make it automatic again.\n\n" +
@@ -1031,8 +1037,9 @@ internal val helpSections: List<HelpSection> = listOf(
                     "print.\n\n" +
                     "• \"Open PDF after export\" — default off. Hands the finished file to your " +
                     "PDF viewer as soon as it is written.\n" +
-                    "• \"Shade in Components\": \"Bodies\", \"Tapers\", \"Liners\" — all off by " +
-                    "default. Fills those sections with light grey instead of leaving them " +
+                    "• \"Shade in Components\": \"Bodies\", \"Tapers\", \"Liners\" — tapers and " +
+                    "liners on, bodies off by default. Fills those sections with light grey " +
+                    "instead of leaving them " +
                     "outlined. \"Explicit bodies only\", under \"Bodies\", narrows the fill to " +
                     "sections you added: auto (bare-shaft) runs stay unshaded. The same group " +
                     "appears in each document's PDF Options sheet, folded behind its heading. " +

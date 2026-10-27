@@ -108,18 +108,28 @@ Features:
 promotion is live today: the carousel's auto-body card promotes ONLY when the user ticks its
 **"Explicit body"** checkbox (`BodyPagerCard.kt` calls `onAddBody(...)`), persisting the
 section as a real `Body` in `ShaftSpec`. There is no field-edit promotion path — the card's
-editable Ø writes a per-section `AutoDiaOverride` without promoting; viewing the card never
-promotes it.
+editable Ø writes a per-section `AutoDiaOverride` or the shaft-wide bare-shaft Ø without
+promoting; viewing the card never promotes it.
 
-**Per-section Ø:** the Ø field applies to **that one auto span**
+**Per-section Ø — the scope is chosen at commit:** with more than one auto section, committing
+the card's Ø opens "Apply diameter to…" (`autobody_dia_scope_dialog`). **This section**
+(`autobody_dia_this_section`) applies it to **that one auto span**
 (`onSetAutoSectionDia(startMm, endMm, diaMm)` → `ShaftViewModel.setAutoSectionDiaMm` →
 `ShaftSpec.withAutoSectionDia`), so bare-shaft sections may differ without any of them
-becoming explicit. The override is keyed in shaft space by an anchor at the span midpoint,
-beats the legacy shaft-wide `ShaftSpec.autoBodyDiaMm` and neighbor derivation, and changes the
-drawn diameter only — span boundaries stay derived. Anchors under a component are dormant,
-never pruned, and resurrect when their span does. When a separator is deleted and two differing
-sections remerge, the joined run takes the **more aftward** section's Ø — aft is authored
-first. See DATA_MODEL.md §`AutoDiaOverride`.
+becoming explicit; **All auto sections** (`autobody_dia_all_sections`) sets the shaft-wide
+`ShaftSpec.autoBodyDiaMm` and clears every override (`onSetAllAutoSectionsDia` →
+`ShaftViewModel.setAutoBodyDiaMm` → `ShaftSpec.withAutoBodyDia`). Cancel applies nothing and
+re-keys the field so it shows the stored value. With ONE auto section the value is the shaft's
+Ø and applies directly as All. A section override is keyed in shaft space by an anchor at the
+span midpoint, beats `autoBodyDiaMm` and neighbor derivation, and changes the drawn diameter
+only — span boundaries stay derived — and it **never moves a neighbouring section's Ø**: an
+overridden run leaves the `normalizeBodies` continuity carry exactly as it would have been
+without the override (on-device report: one section's edit changed the others). Anchors a
+resize strands under a component are dormant and apply again when the span returns; a
+component **add or remove** that merges the section into its AFT neighbour or covers its
+anchor drops the override (`withAutoDiaOverridesSurviving`, applied by the eight add/remove
+mutators only — on-device ruling: a deleted section comes back at the shaft's Ø). Undo restores
+it. See DATA_MODEL.md §`AutoDiaOverride`.
 
 ### An explicit body never fuses with anything
 

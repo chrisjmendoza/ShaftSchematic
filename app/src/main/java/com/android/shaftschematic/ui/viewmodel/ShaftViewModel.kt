@@ -324,11 +324,13 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     internal val _pdfShowComponentTitles = MutableStateFlow(true)
     val pdfShowComponentTitles: StateFlow<Boolean> = _pdfShowComponentTitles.asStateFlow()
 
-    internal val _pdfShadedBodies = MutableStateFlow(false)
+    // Seeded from the shipped PdfPrefs defaults (the one copy), so the value shown before the
+    // DataStore read lands is the same one a fresh install settles on.
+    internal val _pdfShadedBodies = MutableStateFlow(PdfPrefs().shadedBodies)
     val pdfShadedBodies: StateFlow<Boolean> = _pdfShadedBodies.asStateFlow()
-    internal val _pdfShadedTapers = MutableStateFlow(false)
+    internal val _pdfShadedTapers = MutableStateFlow(PdfPrefs().shadedTapers)
     val pdfShadedTapers: StateFlow<Boolean> = _pdfShadedTapers.asStateFlow()
-    internal val _pdfShadedLiners = MutableStateFlow(false)
+    internal val _pdfShadedLiners = MutableStateFlow(PdfPrefs().shadedLiners)
     val pdfShadedLiners: StateFlow<Boolean> = _pdfShadedLiners.asStateFlow()
 
     // Line art on the printed undercut drawing: that sheet draws no shade fill at all. Also a
@@ -1413,9 +1415,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     /**
      * Set the bare-shaft Ø for the ONE auto-body span `[spanStartMm, spanEndMm)` (mm) — the
-     * span whose card was edited. Values ≤ 0 clear the section back to the legacy shaft-wide
-     * Ø and then to neighbor derivation; overrides anchored elsewhere are untouched, and
-     * auto-span positioning is unaffected. See [withAutoSectionDia].
+     * span whose card was edited ("This section"). Values ≤ 0 clear the section back to the
+     * shaft-wide Ø and then to neighbor derivation; overrides anchored elsewhere are untouched,
+     * and auto-span positioning is unaffected. See [withAutoSectionDia].
      */
     fun setAutoSectionDiaMm(
         spanStartMm: Float,
@@ -1424,6 +1426,15 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         target: SpecTarget = SpecTarget.ORIGINAL,
     ) {
         updateSpec(target) { it.withAutoSectionDia(spanStartMm, spanEndMm, valueMm) }
+    }
+
+    /**
+     * Set the bare-shaft Ø of EVERY auto-body section together (mm, verbatim) — the auto-body
+     * card's "All auto sections" choice and the new-shaft diameter prompt. Clears every
+     * section override; values ≤ 0 are ignored. See [withAutoBodyDia].
+     */
+    fun setAutoBodyDiaMm(valueMm: Float, target: SpecTarget = SpecTarget.ORIGINAL) {
+        updateSpec(target) { it.withAutoBodyDia(valueMm) }
     }
 
     // ────────────────────────────────────────────────────────────────────────────

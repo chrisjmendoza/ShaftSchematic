@@ -24,6 +24,7 @@ import com.android.shaftschematic.model.withKeyways90Apart
 import com.android.shaftschematic.model.withKeyways90Cw
 import com.android.shaftschematic.model.withPhysical
 import com.android.shaftschematic.ui.order.ComponentKind
+import com.android.shaftschematic.ui.resolved.withAutoDiaOverridesSurviving
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel.Companion.deriveTaperDiameters
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel.Companion.taperSmallEndAtStart
 import com.android.shaftschematic.util.UnitSystem
@@ -116,7 +117,7 @@ fun ShaftViewModel.addBodyAt(
                     blendFwdSealLenMm = max(0f, blendFwdSealLenMm),
                 )
             ) + s.bodies
-        )
+        ).withAutoDiaOverridesSurviving(before = s)
     }
     applyKeywayUnit(id, keywayUnit)
     rememberBodyDefaults(lengthMm = lengthMm, diaMm = diaMm)
@@ -208,7 +209,7 @@ fun ShaftViewModel.removeBody(id: String, target: SpecTarget = SpecTarget.ORIGIN
         removed = true
         s.copy(
             bodies = s.bodies.toMutableList().apply { removeAt(idx) }
-        )
+        ).withAutoDiaOverridesSurviving(before = s)
     }
 
     if (removed) {
@@ -276,7 +277,7 @@ fun ShaftViewModel.addTaperAt(
                     authoredReference = reference,
                 )
             ) + split.spec.tapers
-        )
+        ).withAutoDiaOverridesSurviving(before = s)
     }
     // Read the typed SET/LET back out of the x-ordered pair the same way it was put in, so
     // a FWD-half add seeds the next dialog's SET default from a SET and not from a LET.
@@ -404,7 +405,7 @@ fun ShaftViewModel.removeTaper(id: String, target: SpecTarget = SpecTarget.ORIGI
         val taper = s.tapers[idx]
         val afterRemoval = s.copy(tapers = s.tapers.toMutableList().apply { removeAt(idx) })
         val merge = afterRemoval.mergeBodiesAround(taper.startFromAftMm, taper.startFromAftMm + taper.lengthMm) { newId() }
-        merge.spec
+        merge.spec.withAutoDiaOverridesSurviving(before = s)
     }
 
     if (removed) {
@@ -469,6 +470,7 @@ fun ShaftViewModel.addThreadAt(
         // toggle re-synced it; on-device report). The toggle and end-chip mutators sync the same
         // way, so an added thread and a re-toggled one land on the same position.
         .syncExcludedThreadPositions()
+        .withAutoDiaOverridesSurviving(before = s)
     }
     // A metric-designation thread keeps its native units — register an implicit mm override
     // so every formatting site resolves it to mm uniformly (see DisplayUnits).
@@ -647,7 +649,7 @@ fun ShaftViewModel.removeThread(id: String, target: SpecTarget = SpecTarget.ORIG
         val merge = if (!thread.excludeFromOAL)
             afterRemoval.mergeBodiesAround(thread.startFromAftMm, thread.startFromAftMm + thread.lengthMm) { newId() }
         else BodySplitResult(afterRemoval, emptyList(), emptyList())
-        merge.spec
+        merge.spec.withAutoDiaOverridesSurviving(before = s)
     }
 
     if (removed) {
@@ -690,6 +692,7 @@ fun ShaftViewModel.addLinerAt(
             shoulderFwdRadiusMm = shoulderFwdRadiusMm,
         )
         split.spec.copy(liners = listOf(liner) + split.spec.liners)
+            .withAutoDiaOverridesSurviving(before = s)
     }
     rememberLinerDefaults(lengthMm = lengthMm, odMm = odMm)
     selectAdded(id, target)
@@ -1106,7 +1109,7 @@ fun ShaftViewModel.removeLiner(id: String, target: SpecTarget = SpecTarget.ORIGI
         val liner = s.liners[idx]
         val afterRemoval = s.copy(liners = s.liners.toMutableList().apply { removeAt(idx) })
         val merge = afterRemoval.mergeBodiesAround(liner.startFromAftMm, liner.startFromAftMm + liner.lengthMm) { newId() }
-        merge.spec
+        merge.spec.withAutoDiaOverridesSurviving(before = s)
     }
 
     if (removed) {

@@ -26,6 +26,7 @@
     <li>Tap <span class="ui">Project information</span> on the toolbar and fill in the job details.</li>
     <li>Check the unit (a new drawing takes the one set under <span class="path">Settings → Units</span>; see <a href="#editor-units">Units for the job</a>).</li>
     <li>Type the <span class="ui">Overall Length</span> and tap the green ✓.</li>
+    <li>When the app asks for the <span class="ui">Shaft diameter</span>, type the bare-shaft diameter and tap <span class="ui">Set</span> (see <a href="#editor-oal">The overall length</a>).</li>
     <li>Add the components with <span class="ui">+ Add Component</span>, AFT end first is easiest.</li>
     <li>Tap <span class="ui">Save</span> and confirm the suggested name.</li>
   </ol>
@@ -70,6 +71,8 @@
     <li><strong>Components past the end are allowed.</strong> If a component runs past the OAL, the field turns red as a warning. Nothing is rejected or trimmed; fix whichever number is wrong.</li>
   </ul>
   <p>When a thread is excluded from the OAL, a read-only line under the field, <span class="ui">Dimensioned OAL</span>, shows the span the sheet's OAL dimension actually covers.</p>
+  <h3 id="editor-oal-dia">The shaft diameter prompt</h3>
+  <p>On a new drawing, the first time you accept an overall length the app asks for the <span class="ui">Shaft diameter</span>: “What is the bare-shaft diameter? Components you add will sit on a shaft of this size.” Type it in the drawing's unit (fractions are fine) and tap <span class="ui">Set</span>; every stretch of bare shaft takes that diameter. Tap <span class="ui">Skip</span> to leave it for later. The question comes once per drawing: it is not asked again after a Skip, and never when you open a saved job or start from a template. You can change the diameter at any time on a <span class="ui">Body (auto)</span> card (see <a href="#editor-bodies">Bodies and bare shaft</a>).</p>
 
   <h3 id="editor-oal-change">What moves when the OAL changes</h3>
   <p>Each taper, liner and coupler bolt slot is measured from the end you chose for it with its AFT | FWD chips. When the OAL changes:</p>
@@ -160,7 +163,14 @@
   <p>Every stretch of the shaft you have not covered with a component is drawn as bare shaft, so the drawing is always one continuous piece. Bare shaft is filled in automatically and shows in the carousel as a <span class="ui">Body (auto)</span> card. You never need to add bodies just to join components together.</p>
 
   <h3>Setting a bare-shaft diameter</h3>
-  <p>On a <span class="ui">Body (auto)</span> card, <span class="ui">Start</span> and <span class="ui">Length</span> are greyed: they come from the components on either side. The <span class="ui">Diameter</span> field is live. Type a diameter to set that section of bare shaft. Each section takes its own diameter, so a shaft can step between liners without a single explicit body. Clear the field, or enter 0, to let that section take its diameter from its neighbors again.</p>
+  <p>On a <span class="ui">Body (auto)</span> card, <span class="ui">Start</span> and <span class="ui">Length</span> are greyed: they come from the components on either side. The <span class="ui">Diameter</span> field is live. When the shaft has more than one section of bare shaft, accepting a diameter asks <span class="ui">Apply diameter to…</span>:</p>
+  <ul>
+    <li><span class="ui">This section</span> sets the diameter of the section you are on only. Each section can take its own diameter, so a shaft can step between liners without a single explicit body, and changing one section never changes another.</li>
+    <li><span class="ui">All auto sections</span> sets the bare-shaft diameter for every section together, and clears any section that had a diameter of its own.</li>
+    <li><span class="ui">Cancel</span> changes nothing, and the field shows the stored diameter again.</li>
+  </ul>
+  <p>With only one section of bare shaft there is nothing to choose: the diameter you type is the shaft's. Clear the field, or enter 0, to let a section take its diameter from its neighbors again.</p>
+  <p>A section's own diameter goes with it. If you delete the component that separated it from the section before it, the two join and the joined run keeps the earlier section's diameter; add a component later that splits it again and the new section takes the shaft's diameter, not the old value. <span class="ui">Undo</span> brings the old value back. Moving or resizing a component, or changing the overall length, never loses one: a section squeezed out by a resize gets its diameter back when the room returns.</p>
   <p>If two sections with different diameters are joined (because the component between them was deleted), the joined section takes the AFT section's diameter. The FWD section's diameter is kept in reserve and comes back if the two are split again.</p>
   <p>The auto card also carries <span class="ui">Show bare-shaft Ø on drawing</span> (one switch for all bare shaft) and the face finish and seal area controls; see <a href="#components-bodies">Bodies</a>.</p>
 

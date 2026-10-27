@@ -247,6 +247,8 @@ fun ShaftScreen(
                 blendAftSeal: Boolean, blendFwdSeal: Boolean,
                 blendAftSealLenMm: Float, blendFwdSealLenMm: Float) -> Unit,
     onSetAutoSectionDia: (spanStartMm: Float, spanEndMm: Float, diaMm: Float) -> Unit,
+    /** Sets the bare-shaft Ø of EVERY auto section together (the card's "All auto sections"). */
+    onSetAllAutoSectionsDia: (diaMm: Float) -> Unit,
     onSetAutoBlend: (spanStartMm: Float, spanEndMm: Float, end: LinerAuthoredReference, lengthMm: Float, profile: BlendProfile, seal: Boolean, sealLenMm: Float) -> Unit,
     onSetShowAutoBodyDia: (Boolean) -> Unit,
     onAddTaper: (startMm: Float, lengthMm: Float, startDiaMm: Float, endDiaMm: Float,
@@ -643,6 +645,7 @@ fun ShaftScreen(
                     )
                 },
                 onSetAutoSectionDia = onSetAutoSectionDia,
+                onSetAllAutoSectionsDia = onSetAllAutoSectionsDia,
                 onSetAutoBlend = onSetAutoBlend,
                 onSetShowAutoBodyDia = onSetShowAutoBodyDia,
                 onUpdateBody = onUpdateBody,

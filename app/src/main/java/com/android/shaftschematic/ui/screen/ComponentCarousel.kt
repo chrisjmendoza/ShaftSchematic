@@ -77,6 +77,7 @@ import com.android.shaftschematic.ui.input.shouldCommitOnBlur
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
+import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
 import com.android.shaftschematic.ui.resolved.ResolvedCouplerBoltSlot
 import com.android.shaftschematic.ui.resolved.ResolvedLiner
 import com.android.shaftschematic.ui.resolved.ResolvedTaper
@@ -176,6 +177,7 @@ internal fun ComponentCarouselPager(
     selectedComponentId: String?,
     onAddBody: (Float, Float, Float) -> Unit,
     onSetAutoSectionDia: (spanStartMm: Float, spanEndMm: Float, diaMm: Float) -> Unit,
+    onSetAllAutoSectionsDia: (diaMm: Float) -> Unit,
     onSetAutoBlend: (spanStartMm: Float, spanEndMm: Float, end: LinerAuthoredReference, lengthMm: Float, profile: BlendProfile, seal: Boolean, sealLenMm: Float) -> Unit,
     onSetShowAutoBodyDia: (Boolean) -> Unit,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
@@ -236,6 +238,11 @@ internal fun ComponentCarouselPager(
     val linerTitleById  = remember(spec.liners, spec.overallLengthMm) { buildLinerTitleById(spec) }
     val threadTitleById = remember(spec)                           { buildThreadTitleById(spec) }
 
+    // An auto-body card's Ø asks "This section | All auto sections" only when there is more
+    // than one section to choose between.
+    val autoSectionCount = remember(resolvedComponents) {
+        resolvedComponents.count { it is ResolvedBody && it.source == ResolvedComponentSource.AUTO }
+    }
     val rowsSorted = remember(spec, resolvedComponents) {
         buildCarouselRows(spec, resolvedComponents)
     }
@@ -360,6 +367,8 @@ internal fun ComponentCarouselPager(
                     componentShadeDefaults = componentShadeDefaults,
                     onAddBody = onAddBody,
                     onSetAutoSectionDia = onSetAutoSectionDia,
+                    onSetAllAutoSectionsDia = onSetAllAutoSectionsDia,
+                    autoSectionCount = autoSectionCount,
                     onSetAutoBlend = onSetAutoBlend,
                     onSetShowAutoBodyDia = onSetShowAutoBodyDia,
                     onUpdateBody = onUpdateBody,
@@ -647,6 +656,9 @@ internal fun ComponentPagerCard(
     componentShadeDefaults: ComponentShadeDefaults = ComponentShadeDefaults(),
     onAddBody: (Float, Float, Float) -> Unit,
     onSetAutoSectionDia: (spanStartMm: Float, spanEndMm: Float, diaMm: Float) -> Unit,
+    onSetAllAutoSectionsDia: (diaMm: Float) -> Unit,
+    /** How many AUTO body sections the shaft resolves to (computed once by the pager). */
+    autoSectionCount: Int,
     onSetAutoBlend: (spanStartMm: Float, spanEndMm: Float, end: LinerAuthoredReference, lengthMm: Float, profile: BlendProfile, seal: Boolean, sealLenMm: Float) -> Unit,
     onSetShowAutoBodyDia: (Boolean) -> Unit,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
@@ -731,6 +743,8 @@ internal fun ComponentPagerCard(
             startValidator = ::startValidator,
             onAddBody = onAddBody,
             onSetAutoSectionDia = onSetAutoSectionDia,
+            onSetAllAutoSectionsDia = onSetAllAutoSectionsDia,
+            autoSectionCount = autoSectionCount,
             onSetAutoBlend = onSetAutoBlend,
             onSetShowAutoBodyDia = onSetShowAutoBodyDia,
             onUpdateBody = onUpdateBody,

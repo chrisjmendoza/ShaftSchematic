@@ -256,19 +256,19 @@ object SettingsStore {
     }
 
     fun pdfShadedBodiesFlow(ctx: Context): Flow<Boolean> =
-        ctx.settingsPrefs.map { p -> p[KEY_PDF_SHADED_BODIES] ?: false }
+        ctx.settingsPrefs.map { p -> p[KEY_PDF_SHADED_BODIES] ?: PdfPrefs().shadedBodies }
     suspend fun setPdfShadedBodies(ctx: Context, v: Boolean) {
         ctx.editSettings { it[KEY_PDF_SHADED_BODIES] = v }
     }
 
     fun pdfShadedTapersFlow(ctx: Context): Flow<Boolean> =
-        ctx.settingsPrefs.map { p -> p[KEY_PDF_SHADED_TAPERS] ?: false }
+        ctx.settingsPrefs.map { p -> p[KEY_PDF_SHADED_TAPERS] ?: PdfPrefs().shadedTapers }
     suspend fun setPdfShadedTapers(ctx: Context, v: Boolean) {
         ctx.editSettings { it[KEY_PDF_SHADED_TAPERS] = v }
     }
 
     fun pdfShadedLinersFlow(ctx: Context): Flow<Boolean> =
-        ctx.settingsPrefs.map { p -> p[KEY_PDF_SHADED_LINERS] ?: false }
+        ctx.settingsPrefs.map { p -> p[KEY_PDF_SHADED_LINERS] ?: PdfPrefs().shadedLiners }
     suspend fun setPdfShadedLiners(ctx: Context, v: Boolean) {
         ctx.editSettings { it[KEY_PDF_SHADED_LINERS] = v }
     }

@@ -4,6 +4,7 @@ import com.android.shaftschematic.model.AutoDiaOverride
 import com.android.shaftschematic.model.Body
 import com.android.shaftschematic.model.Liner
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.Taper
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -12,7 +13,8 @@ import org.junit.Test
  * `ShaftSpec.autoDiaOverrides` — per-section bare-shaft diameters for individual auto-body
  * spans. An override applies to the ONE span containing its anchor and beats both the legacy
  * shaft-wide `autoBodyDiaMm` and neighbor derivation; anchors that land elsewhere lie dormant
- * and are never pruned.
+ * (resolve never prunes — the ViewModel's add/remove seam does, see `AutoDiaOverridePruneTest`),
+ * and a section's override never moves a neighbouring section's Ø.
  */
 class AutoSectionDiaOverrideTest {
 
@@ -202,5 +204,57 @@ class AutoSectionDiaOverrideTest {
             resolved(base).map { it.startMmPhysical to it.endMmPhysical },
             resolved(overridden).map { it.startMmPhysical to it.endMmPhysical },
         )
+    }
+
+    // ── Section isolation (on-device report: one section's edit changed the others) ──
+
+    /**
+     * Taper 0..100 (end Ø 100) | auto 100..400 | liner 400..600 (OD 200) | auto 600..1000
+     * [| liner 700..800 (OD 250) | auto 800..1000 when [threeSections]]. The first auto span
+     * derives from the taper's end Ø (100) and the continuity carry holds every later span at
+     * it.
+     */
+    private fun taperLinerSpec(threeSections: Boolean = false, vararg overrides: AutoDiaOverride) =
+        ShaftSpec(
+            overallLengthMm = 1000f,
+            tapers = listOf(
+                Taper(id = "t1", startFromAftMm = 0f, lengthMm = 100f, startDiaMm = 120f, endDiaMm = 100f)
+            ),
+            liners = buildList {
+                add(Liner(id = "l1", startFromAftMm = 400f, lengthMm = 200f, odMm = 200f))
+                if (threeSections) add(Liner(id = "l2", startFromAftMm = 700f, lengthMm = 100f, odMm = 250f))
+            },
+            autoDiaOverrides = overrides.toList(),
+        )
+
+    @Test
+    fun `without an override the continuity carry holds every section at the first one's Ø`() {
+        assertEquals(listOf(100f, 100f), autoBodies(taperLinerSpec()).map { it.diaMm })
+    }
+
+    @Test
+    fun `an override on the aft section leaves the fwd section unchanged`() {
+        val autos = autoBodies(taperLinerSpec(false, AutoDiaOverride(anchorMm = 250f, diaMm = 120f)))
+
+        assertEquals(listOf(120f, 100f), autos.map { it.diaMm })
+    }
+
+    @Test
+    fun `an override on the fwd section leaves the aft section unchanged`() {
+        val autos = autoBodies(taperLinerSpec(false, AutoDiaOverride(anchorMm = 800f, diaMm = 130f)))
+
+        assertEquals(listOf(100f, 130f), autos.map { it.diaMm })
+    }
+
+    @Test
+    fun `an override on a middle section leaves the first and last at their baseline`() {
+        val baseline = autoBodies(taperLinerSpec(threeSections = true)).map { it.diaMm }
+        assertEquals(listOf(100f, 100f, 100f), baseline)
+
+        val autos = autoBodies(
+            taperLinerSpec(true, AutoDiaOverride(anchorMm = 650f, diaMm = 140f))
+        ).map { it.diaMm }
+
+        assertEquals(listOf(baseline[0], 140f, baseline[2]), autos)
     }
 }

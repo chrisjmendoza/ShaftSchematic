@@ -123,9 +123,14 @@ const val PDF_ARROW_SIZE_DEFAULT_PT = PDF_ARROW_SIZE_SMALL_PT
 data class PdfPrefs(
     val tieringMode: PdfTieringMode = PdfTieringMode.AUTO,
     val showComponentTitles: Boolean = true,
+    /**
+     * Shipped shade defaults: tapers and liners on, bodies off — liners and tapers are the parts
+     * a sheet shades, and a body shades only when asked (on-device ruling). The DataStore flows
+     * fall back to these same values, so this is the one copy of the default.
+     */
     val shadedBodies: Boolean = false,
-    val shadedTapers: Boolean = false,
-    val shadedLiners: Boolean = false,
+    val shadedTapers: Boolean = true,
+    val shadedLiners: Boolean = true,
     /**
      * Narrows the body shade to AUTHORED sections: with [shadedBodies] on, an explicit body
      * takes the fill and every auto (bare-shaft) run draws unfilled. Off on its own — the

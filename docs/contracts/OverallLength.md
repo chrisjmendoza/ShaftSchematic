@@ -1,4 +1,4 @@
-# Overall Length (v2.2, 2026-09-29)
+# Overall Length (v2.3, 2026-10-27)
 
 ## Scope
 Defines how the **Overall Length** field behaves, how it interacts with components, and how the
@@ -28,6 +28,19 @@ UI signals errors. Applies to `ShaftViewModel`, `ShaftRoute`, and `ShaftScreen`.
   before it clears focus, so the blur that follows cannot commit a second time or undo a cancel.
 - **Oversize**: if components extend past a **set** Overall (`> 0`), the input shows an
   **error**. A not-yet-set Overall (`0`) is never an error.
+- **New-shaft diameter prompt** (on-device request: components added onto the default-sized
+  bare shaft look wrong until its Ø is set). On the ORIGINAL drawing only, `ShaftRoute` reads
+  `shouldPromptShaftDia(spec)` (`ui/screen/ShaftDiaPrompt.kt`: OAL ≤ 0, `autoBodyDiaMm` ≤ 0, no
+  body/taper/thread/liner/bolt slot) BEFORE forwarding an OAL commit; if it was armed and the
+  committed OAL is > 0, `ShaftDiaPromptDialog` opens — one diameter field in the document unit
+  (fractions accepted, converted to mm at the edge), focused with the keyboard up; "Set"
+  (enabled while the entry parses > 0) writes `ShaftViewModel.setAutoBodyDiaMm`, "Skip"
+  dismisses. The accept path fires the mm and raw callbacks back to back: the second finds the
+  OAL already set and is not armed, so the prompt shows once; the blur-with-change path arms
+  the same way. A Skip is final (the OAL is no longer 0). Loading a document or template never
+  prompts (they carry an OAL or components); `newDocument()` resets to a blank `ShaftSpec()`,
+  so the next new drawing prompts again. The Ø is its own undo step after the OAL's. The
+  prompt never writes the OAL — nothing backfills it (below).
 
 ---
 
@@ -116,6 +129,9 @@ template card's preview can never disagree with the drawing it becomes.
 ---
 
 ## Change Log
+**v2.3 (2026-10-27)** — **New-shaft diameter prompt** (on-device request): the first OAL commit
+on a brand-new original drawing asks for the bare-shaft Ø (`shouldPromptShaftDia` /
+`ShaftDiaPromptDialog`); Set writes `autoBodyDiaMm`, Skip is final.
 **v2.2 (2026-09-29)** — **Per-keystroke commit removed** (on-device report: an edit from 368.5″
 to 367.75″ committed 36″ in passing and collapsed the drawing). The field commits on accept (✓ /
 IME Done / blur-with-change), ✗ cancels, the pair shows only while modified, and the field is

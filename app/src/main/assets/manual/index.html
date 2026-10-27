@@ -225,6 +225,7 @@
     <li  class="keep">Tap <span class="ui">Project information</span> on the toolbar and fill in the job details.</li>
     <li  class="keep">Check the unit (a new drawing takes the one set under <span class="path">Settings → Units</span>; see <a href="#editor-units">Units for the job</a>).</li>
     <li  class="keep">Type the <span class="ui">Overall Length</span> and tap the green ✓.</li>
+    <li  class="keep">When the app asks for the <span class="ui">Shaft diameter</span>, type the bare-shaft diameter and tap <span class="ui">Set</span> (see <a href="#editor-oal">The overall length</a>).</li>
     <li  class="keep">Add the components with <span class="ui">+ Add Component</span>, AFT end first is easiest.</li>
     <li  class="keep">Tap <span class="ui">Save</span> and confirm the suggested name.</li>
   </ol>
@@ -269,6 +270,8 @@
     <li  class="keep"><strong>Components past the end are allowed.</strong> If a component runs past the OAL, the field turns red as a warning. Nothing is rejected or trimmed; fix whichever number is wrong.</li>
   </ul>
   <p  class="keep">When a thread is excluded from the OAL, a read-only line under the field, <span class="ui">Dimensioned OAL</span>, shows the span the sheet's OAL dimension actually covers.</p>
+  <h3 id="editor-oal-dia">The shaft diameter prompt</h3>
+  <p>On a new drawing, the first time you accept an overall length the app asks for the <span class="ui">Shaft diameter</span>: “What is the bare-shaft diameter? Components you add will sit on a shaft of this size.” Type it in the drawing's unit (fractions are fine) and tap <span class="ui">Set</span>; every stretch of bare shaft takes that diameter. Tap <span class="ui">Skip</span> to leave it for later. The question comes once per drawing: it is not asked again after a Skip, and never when you open a saved job or start from a template. You can change the diameter at any time on a <span class="ui">Body (auto)</span> card (see <a href="#editor-bodies">Bodies and bare shaft</a>).</p>
 
   <h3 id="editor-oal-change">What moves when the OAL changes</h3>
   <p  class="keep">Each taper, liner and coupler bolt slot is measured from the end you chose for it with its AFT | FWD chips. When the OAL changes:</p>
@@ -359,7 +362,14 @@
   <p  class="keep">Every stretch of the shaft you have not covered with a component is drawn as bare shaft, so the drawing is always one continuous piece. Bare shaft is filled in automatically and shows in the carousel as a <span class="ui">Body (auto)</span> card. You never need to add bodies just to join components together.</p>
 
   <h3>Setting a bare-shaft diameter</h3>
-  <p  class="keep">On a <span class="ui">Body (auto)</span> card, <span class="ui">Start</span> and <span class="ui">Length</span> are greyed: they come from the components on either side. The <span class="ui">Diameter</span> field is live. Type a diameter to set that section of bare shaft. Each section takes its own diameter, so a shaft can step between liners without a single explicit body. Clear the field, or enter 0, to let that section take its diameter from its neighbors again.</p>
+  <p  class="keep">On a <span class="ui">Body (auto)</span> card, <span class="ui">Start</span> and <span class="ui">Length</span> are greyed: they come from the components on either side. The <span class="ui">Diameter</span> field is live. When the shaft has more than one section of bare shaft, accepting a diameter asks <span class="ui">Apply diameter to…</span>:</p>
+  <ul>
+    <li  class="keep"><span class="ui">This section</span> sets the diameter of the section you are on only. Each section can take its own diameter, so a shaft can step between liners without a single explicit body, and changing one section never changes another.</li>
+    <li  class="keep"><span class="ui">All auto sections</span> sets the bare-shaft diameter for every section together, and clears any section that had a diameter of its own.</li>
+    <li  class="keep"><span class="ui">Cancel</span> changes nothing, and the field shows the stored diameter again.</li>
+  </ul>
+  <p  class="keep">With only one section of bare shaft there is nothing to choose: the diameter you type is the shaft's. Clear the field, or enter 0, to let a section take its diameter from its neighbors again.</p>
+  <p  class="keep">A section's own diameter goes with it. If you delete the component that separated it from the section before it, the two join and the joined run keeps the earlier section's diameter; add a component later that splits it again and the new section takes the shaft's diameter, not the old value. <span class="ui">Undo</span> brings the old value back. Moving or resizing a component, or changing the overall length, never loses one: a section squeezed out by a resize gets its diameter back when the room returns.</p>
   <p  class="keep">If two sections with different diameters are joined (because the component between them was deleted), the joined section takes the AFT section's diameter. The FWD section's diameter is kept in reserve and comes back if the two are split again.</p>
   <p  class="keep">The auto card also carries <span class="ui">Show bare-shaft Ø on drawing</span> (one switch for all bare shaft) and the face finish and seal area controls; see <a href="#components-bodies">Bodies</a>.</p>
 
@@ -707,7 +717,7 @@
   <aside class="note"><p  class="keep">A body may run under a liner or up against a taper, and a body with a keyway is never split; see <a href="#editor-bodies">Bodies and bare shaft</a>.</p></aside>
 
   <h3>Bare-shaft card</h3>
-  <p  class="keep">A bare-shaft card is titled <span class="ui">Body (auto)</span>. <span class="ui">Start</span> and <span class="ui">Length</span> are greyed out because the surrounding components decide them. <span class="ui">Diameter</span> is editable and sets the diameter of that one stretch of bare shaft only. The card also carries <span class="ui">Show bare-shaft Ø on drawing</span>, the same <span class="ui">Face finish</span> and <span class="ui">Seal areas</span> controls as an explicit body, and the <span class="ui">Explicit body</span> checkbox that promotes it.</p>
+  <p  class="keep">A bare-shaft card is titled <span class="ui">Body (auto)</span>. <span class="ui">Start</span> and <span class="ui">Length</span> are greyed out because the surrounding components decide them. <span class="ui">Diameter</span> is editable: with more than one stretch of bare shaft it asks whether the new diameter is for <span class="ui">This section</span> or <span class="ui">All auto sections</span> (see <a href="#editor-bodies">Bodies and bare shaft</a>). The card also carries <span class="ui">Show bare-shaft Ø on drawing</span>, the same <span class="ui">Face finish</span> and <span class="ui">Seal areas</span> controls as an explicit body, and the <span class="ui">Explicit body</span> checkbox that promotes it.</p>
   <aside class="note"><p  class="keep">Blends and seal areas set on an auto section belong to that stretch of bare shaft and follow it when the components around it move. Promoting the section starts the new explicit body with square faces and no seal areas; set them again on its card.</p></aside>
 
   <h3 id="components-blends">Face finish: Square or Blend</h3>
@@ -889,7 +899,7 @@
   <p  class="keep">On a bare-shaft card, <span class="ui">Show bare-shaft Ø on drawing</span> is one switch for all bare shaft at once.</p>
 
   <h3 id="components-shade">Shade on drawing</h3>
-  <p  class="keep">Grey shading is set by kind at <span class="path">Settings → PDF Export Options → Shade in Components</span> (<span class="ui">Bodies</span>, <span class="ui">Tapers</span>, <span class="ui">Liners</span>; all off by default), and repeated on each document's PDF options. The card switch works in three ways:</p>
+  <p  class="keep">Grey shading is set by kind at <span class="path">Settings → PDF Export Options → Shade in Components</span> (<span class="ui">Bodies</span>, <span class="ui">Tapers</span>, <span class="ui">Liners</span>; tapers and liners on, bodies off by default), and repeated on each document's PDF options. The card switch works in three ways:</p>
   <ul>
     <li  class="keep"><strong>Untouched</strong>: the switch shows, and follows, the Settings checkbox for that kind.</li>
     <li  class="keep"><strong>Switched on</strong>: this component shades even with its kind off. Use it to grey out one named section and leave the rest of the drawing clean.</li>
@@ -2415,8 +2425,8 @@
       <tr class="short"><td><span class="ui">Open PDF after export</span></td><td>Off</td><td>Opens the finished file in your PDF viewer as soon as it is written.</td></tr>
       <tr><td><span class="ui">Shade in Components</span>: <span class="ui">Bodies</span></td><td>Off</td><td>Fills bodies with light grey instead of leaving them outlined. Also on the PDF options panel (Shade in Components section).</td></tr>
       <tr><td><span class="ui">Explicit bodies only</span></td><td>Off</td><td>Under <span class="ui">Bodies</span>. Shades only the body sections you added; auto (bare-shaft) sections stay unshaded. Works only while <span class="ui">Bodies</span> is checked. Also on the PDF options panel, except on the wear and undercut sheets, which shade every body the same way.</td></tr>
-      <tr><td><span class="ui">Tapers</span></td><td>Off</td><td>Fills tapers with light grey. Also on the PDF options panel.</td></tr>
-      <tr><td><span class="ui">Liners</span></td><td>Off</td><td>Fills liners with light grey. Also on the PDF options panel. Liners print unshaded on a consolidated sheet that carries Ø values inside the profile; your setting returns on every other sheet.</td></tr>
+      <tr><td><span class="ui">Tapers</span></td><td>On</td><td>Fills tapers with light grey. Also on the PDF options panel.</td></tr>
+      <tr><td><span class="ui">Liners</span></td><td>On</td><td>Fills liners with light grey. Also on the PDF options panel. Liners print unshaded on a consolidated sheet that carries Ø values inside the profile; your setting returns on every other sheet.</td></tr>
       <tr><td><span class="ui">Undercut drawing: line art (no shading)</span></td><td>Off</td><td>The printed undercut sheet drops every fill, including the detail strips' grey liner; the cut sections read from their faces and floor lines. Affects that one document only, and is separate from the on-screen Undercut Drawing style. Also on the PDF options panel (undercut sheet).</td></tr>
       <tr><td><span class="ui">Undercut drawing: liner outline</span></td><td>On</td><td>A faint dotted outline of each liner's original edges and outside diameter is drawn over the cuts, so a cut that runs from the liner into the body still shows where the liner was. Applies to the printed undercut sheet and the Undercut Drawing screens. Also on the PDF options panel (undercut sheet).</td></tr>
       <tr><td><span class="ui">Undercut drawing: split cuts at liner edges</span></td><td>Off</td><td>Off: every cut prints its full length. On: a cut machined past a liner edge is dimensioned as two spans meeting at the edge. App-wide; also under <span class="ui">Distance to S.E.T.</span> in the Undercut tab's <span class="ui">Drawing settings</span> and the undercut PDF options.</td></tr>
@@ -2425,7 +2435,7 @@
       <tr><td><span class="ui">Measurement reference</span></td><td><span class="ui">Auto (closest end)</span></td><td>Which end printed dimensions measure from: <span class="ui">Auto (closest end)</span>, <span class="ui">AFT (force AFT SET)</span> or <span class="ui">FWD (force FWD SET)</span>. Auto measures each dimension from whichever end is closer. Also on the PDF options panel (schematic and consolidated sheets), where the choices read <span class="ui">Auto (closest end)</span>, <span class="ui">AFT</span> and <span class="ui">FWD</span>.</td></tr>
     </tbody>
   </table>
-  <p  class="keep">Each shading checkbox is the default for its kind of component. The <span class="ui">Shade on drawing</span> toggle on an individual body, taper or liner card overrides it for that one component — shade a named section without shading every body, or keep one unshaded while the rest are filled. See <a href="#components-shade">Shade on drawing</a>.</p>
+  <p  class="keep">Liners and tapers are the parts a sheet usually shades, so they start on; bodies start off. A device that was set up before these defaults keeps its own settings; <span class="ui">Restore Drawing defaults</span> picks up the new ones. Each shading checkbox is the default for its kind of component. The <span class="ui">Shade on drawing</span> toggle on an individual body, taper or liner card overrides it for that one component — shade a named section without shading every body, or keep one unshaded while the rest are filled. See <a href="#components-shade">Shade on drawing</a>.</p>
 
   <h2 id="settings-per-job">Settings saved with the job</h2>
   <p  class="keep">Some controls that look like settings belong to one job and travel with it, so a reopened shaft prints exactly as it did. You will not find them in Settings: <span class="ui">Shaft height</span> (1/2″ to 1 1/2″), the liner and taper compression pair, <span class="ui">Dual units</span>, <span class="ui">Trace depth exaggeration</span>, the wear strip choices, <span class="ui">Coupling face</span>, <span class="ui">Page</span>, <span class="ui">Distance to S.E.T.</span>, <span class="ui">Sections to print</span> and <span class="ui">Drawn depth</span>. They live on each document's PDF options panel and its tab, and their captions say so (see <a href="#documents-options">The PDF options panel</a>).</p>

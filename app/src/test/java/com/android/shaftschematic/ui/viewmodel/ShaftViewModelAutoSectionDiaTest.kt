@@ -1,5 +1,8 @@
 package com.android.shaftschematic.ui.viewmodel
 
+import android.app.Application
+import android.os.Looper
+import androidx.test.core.app.ApplicationProvider
 import com.android.shaftschematic.model.AutoDiaOverride
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.withAutoSectionDia
@@ -7,15 +10,22 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
+import org.robolectric.annotation.Config
 
 /**
- * The auto-section Ø upsert, exercised through the pure spec transform the ViewModel setter
- * delegates to (`setAutoSectionDiaMm` is a one-line `_spec.update { … }` wrapper around
- * [withAutoSectionDia]).
+ * The auto-section Ø setters.
  *
- * The setter carries no logic of its own, so this class exercises [withAutoSectionDia] directly
- * rather than instantiating the AndroidViewModel around it.
+ * The section upsert is exercised through the pure spec transform `setAutoSectionDiaMm`
+ * delegates to ([withAutoSectionDia]) — the setter carries no logic of its own. The "All auto
+ * sections" setter, and the prune seam the component add/remove mutators apply, drive the REAL
+ * [ShaftViewModel], since what they promise (overrides cleared or dropped, Undo bringing them
+ * back, a resize leaving them alone) only exists where the history and the mutators run.
  */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class ShaftViewModelAutoSectionDiaTest {
 
     // Mirrors ShaftViewModel.setAutoSectionDiaMm.
@@ -107,5 +117,92 @@ class ShaftViewModelAutoSectionDiaTest {
 
         assertEquals(2, result.autoDiaOverrides.size)
         assertTrue(result.autoDiaOverrides.contains(AutoDiaOverride(anchorMm = 400f, diaMm = 160f)))
+    }
+
+    // ── Real ViewModel: "All auto sections" and the add/remove prune seam ─────────
+
+    private fun idle() = shadowOf(Looper.getMainLooper()).idle()
+
+    /** Past the coalescing window, so the next edit is its own history step. */
+    private fun nextStep() {
+        idle()
+        Thread.sleep(SessionHistory.COALESCE_WINDOW_MS + 200L)
+    }
+
+    /** OAL 1000 with a liner at 400..600 — auto sections 0..400 and 600..1000. */
+    private fun twoSectionVm(): ShaftViewModel {
+        val vm = ShaftViewModel(ApplicationProvider.getApplicationContext<Application>())
+        idle()
+        vm.onSetOverallLengthMm(1000f)
+        vm.addLinerAt(startMm = 400f, lengthMm = 200f, odMm = 200f)
+        idle()
+        return vm
+    }
+
+    @Test
+    fun `all auto sections sets the shaft-wide value, clears every override, and undoes`() {
+        val vm = twoSectionVm()
+        vm.setAutoSectionDiaMm(600f, 1000f, 150f)
+        nextStep()
+        val before = vm.spec.value
+        assertEquals(1, before.autoDiaOverrides.size)
+
+        vm.setAutoBodyDiaMm(120f)
+        idle()
+
+        assertEquals(120f, vm.spec.value.autoBodyDiaMm)
+        assertTrue("no section keeps a value of its own", vm.spec.value.autoDiaOverrides.isEmpty())
+
+        vm.undoEdit()
+        idle()
+
+        assertEquals(before.autoBodyDiaMm, vm.spec.value.autoBodyDiaMm)
+        assertEquals(before.autoDiaOverrides, vm.spec.value.autoDiaOverrides)
+    }
+
+    @Test
+    fun `all auto sections ignores a non-positive value`() {
+        val vm = twoSectionVm()
+        val before = vm.spec.value
+
+        vm.setAutoBodyDiaMm(0f)
+        vm.setAutoBodyDiaMm(-3f)
+
+        assertSame(before, vm.spec.value)
+    }
+
+    @Test
+    fun `removing the separating liner drops the fwd section's override and undo restores it`() {
+        val vm = twoSectionVm()
+        vm.setAutoSectionDiaMm(600f, 1000f, 150f)
+        nextStep()
+        val withOverride = vm.spec.value.autoDiaOverrides
+        assertEquals(listOf(AutoDiaOverride(anchorMm = 800f, diaMm = 150f)), withOverride)
+
+        vm.removeLiner(vm.spec.value.liners.single().id)
+        idle()
+
+        assertTrue("the merged-away section's Ø died with it", vm.spec.value.autoDiaOverrides.isEmpty())
+
+        vm.undoEdit()
+        idle()
+
+        assertEquals(withOverride, vm.spec.value.autoDiaOverrides)
+    }
+
+    @Test
+    fun `lengthening a liner over the anchor through the update path keeps the override dormant`() {
+        val vm = twoSectionVm()
+        vm.setAutoSectionDiaMm(600f, 1000f, 150f)
+        idle()
+
+        // 400..900 now covers the 800 anchor — a resize, never a prune.
+        vm.updateLiner(index = 0, startMm = 400f, lengthMm = 500f, odMm = 200f)
+        idle()
+
+        assertEquals(
+            listOf(AutoDiaOverride(anchorMm = 800f, diaMm = 150f)),
+            vm.spec.value.autoDiaOverrides,
+        )
     }
 }
