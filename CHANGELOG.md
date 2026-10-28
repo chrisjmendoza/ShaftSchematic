@@ -8,6 +8,30 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-27
 
+### fix(wear): "Trace depth exaggeration" now moves the shaft drawing, not just the detail strips
+
+- **The worn-profile trace draws on the whole-shaft drawings too.** On-device report: moving the
+  Wear tab's "Trace depth exaggeration" slider changed nothing on the shaft. The trace only ever
+  drew in the liner detail strips and the tapped-liner overlay; the shaft drawing above the
+  slider and the wear sheet's main profile stayed perfect cylinders. Both now dip through the
+  measured diameters inside each wear band, from the same construction the strips use, so the
+  slider is answered everywhere the liner is drawn. As before, a trace needs a wear band on the
+  liner with at least one measured Ø inside it; the schematic preview is unchanged.
+
+### feat(pdf): a mid-shaft taper is dimensioned like a liner; the footer's "Body: Ø" line is gone
+
+- **The job block no longer prints the "Body: Ø …" list.** On-device ruling: it repeated the
+  diameters the drawing already carries wherever a body card has "Show Ø on drawing" on, and
+  cost a footer row on the long shafts with the least room. A body's Ø now prints only as its
+  below-shaft callout. Blank drafts drop the write-in line too.
+
+- **A taper that stands off both ends of the shaft now gets its own dimension rail.** On-device
+  request (a step-down taper in the body ahead of the FWD liner, with a plain body at the
+  coupling end): the schematic and the consolidated sheet print the taper's distance from the
+  nearer S.E.T. — or from the S.E.T. the "Measurement reference" option forces — plus its length,
+  exactly the pair a liner gets. End tapers keep printing their length only, and the footer's
+  AFT/FWD taper columns are unchanged, so every taper's rate and diameters still print there.
+
 ### feat(settings): liners and tapers shade by default; a new shaft asks for its diameter
 
 - **Shipped shading defaults are now liners and tapers on, bodies off.** On-device ruling:

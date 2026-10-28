@@ -636,7 +636,7 @@ private fun drawThreadStubHatch(
  * and `-1` for the BOTTOM, so both edges bite the same amount out of the cylinder. [xAtLocalMm]
  * maps a liner-local mm to strip x.
  */
-private fun tracedLinerEdgePath(
+internal fun tracedLinerEdgePath(
     leftPt: Float,
     rightPt: Float,
     edgeY: Float,

@@ -387,7 +387,7 @@ internal fun composeRunoutPdfOnCanvas(
             unit = unit,
             measureFrom = measureFromMode,
             displayUnits = displayUnits,
-        ) + buildTaperLengthSpans(spec, oalWindow, unit, displayUnits) +
+        ) + buildTaperLengthSpans(spec, oalWindow, unit, displayUnits, measureFromMode) +
             buildCouplerSlotSpans(spec, oalWindow, unit, displayUnits)
         RailPlanner().assignAll(dimSpans, tierOriginMmFor(measureFromMode, oalWindow.oalMm))
     } else emptyList()
@@ -453,7 +453,7 @@ internal fun composeRunoutPdfOnCanvas(
     // and letting `drawFooter` grow upward put the "TIR's taken looking:" line through the
     // "AFT Taper" heading on a Schematic + Runout sheet (on-device report); on the schematic
     // sheet that growth has a 1-inch info gap to climb into, here it has none.
-    val footerCfg = if (consolidated) sheetFooterConfig(spec, resolvedComponents) else null
+    val footerCfg = if (consolidated) sheetFooterConfig(spec) else null
     val footerBlockH = footerCfg?.let {
         footerBlockHeightPt(
             contentLeft, contentRight, spec, unit, project, text, it,

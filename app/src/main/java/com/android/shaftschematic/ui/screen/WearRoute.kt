@@ -63,7 +63,9 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.unit.dp
+import com.android.shaftschematic.geom.WearTraceLiner
 import com.android.shaftschematic.geom.effectiveWearTraceDepthFrac
+import com.android.shaftschematic.geom.wearLinerTraces
 import com.android.shaftschematic.model.DyePenResult
 import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.model.ShaftSpec
@@ -383,7 +385,18 @@ fun WearRoute(
     val previewShape   = MaterialTheme.shapes.medium
 
     val transparentArgb = Color.Transparent.toArgb()
-    val previewOpts = remember(outlineArgb, bodyFillArgb, hatchArgb, pdfThreadSlant, pdfThreadDensity) {
+    // Every liner's worn-profile trace for the shaft canvas above the slider — the wear sheet's
+    // main-profile builder, so this drawing answers "Trace depth exaggeration" the way the
+    // sheet does (on-device report: the slider changed nothing on the shaft).
+    val linerTraces = remember(wearRecord, spec.liners, traceDepthFrac) {
+        wearLinerTraces(
+            liners = spec.liners.map { WearTraceLiner(it.id, it.odMm, it.lengthMm) },
+            spots = wearRecord.spots.map { Triple(it.linerId, it.startMm, it.lengthMm) },
+            readings = wearRecord.diaReadings.map { Triple(it.componentId, it.axialMm, it.diaMm) },
+            maxDepthFrac = traceDepthFrac,
+        )
+    }
+    val previewOpts = remember(outlineArgb, bodyFillArgb, hatchArgb, pdfThreadSlant, pdfThreadDensity, linerTraces) {
         RenderOptions(
             outlineColor        = outlineArgb,
             outlineWidthPx      = 1.5f,
@@ -394,6 +407,7 @@ fun WearRoute(
             threadHatchColor    = hatchArgb,
             threadSlant         = pdfThreadSlant,
             threadDensity       = pdfThreadDensity,
+            wearLinerTraces     = linerTraces,
         )
     }
 

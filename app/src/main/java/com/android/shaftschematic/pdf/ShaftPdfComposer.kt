@@ -177,7 +177,7 @@ internal fun composeShaftPdfOnCanvas(
     // customer name) climbed into the name band and printed its "FWD Taper" heading through a
     // liner's name (found by `SheetTextOverlapTest`). Reserving the measured height keeps the
     // label rows above the footer by construction; the gap stays air.
-    val footerCfg = if (effectiveOptions.showFooter) sheetFooterConfig(spec, resolvedComponents) else null
+    val footerCfg = if (effectiveOptions.showFooter) sheetFooterConfig(spec) else null
     val footerBlockPt = footerCfg?.let {
         footerBlockHeightPt(
             PAGE_MARGIN_PT, pageW - PAGE_MARGIN_PT, spec, unit, project, text, it,
@@ -425,7 +425,7 @@ internal fun composeShaftPdfOnCanvas(
             unit = unit,
             measureFrom = measureFromMode,
             displayUnits = displayUnits,
-        ) + buildTaperLengthSpans(spec, win, unit, displayUnits) +
+        ) + buildTaperLengthSpans(spec, win, unit, displayUnits, measureFromMode) +
             buildCouplerSlotSpans(spec, win, unit, displayUnits)
         val planner = RailPlanner()
         val tierOriginMm = tierOriginMmFor(pdfPrefs.tieringMode, win.oalMm)
@@ -823,19 +823,28 @@ internal fun drawBlendCurvePdf(
 }
 
 /**
- * Adds one LOCAL span per end-taper so taper lengths are shown on the diagram.
+ * The taper spans: one LOCAL length span per END taper, and the liner pair (DATUM from its SET
+ * to the near edge + LOCAL length) for every OTHER taper.
+ *
+ * An end taper's SET is one of its own edges, so its length is the whole story and the span
+ * stays LOCAL even though it touches the SET — it is a feature↔feature length, never a datum.
+ * A taper that stands off both SETs — a mid-shaft step that brings the Ø down ahead of a liner
+ * (on-device request) — is located like a liner: the shop needs where it starts as well as how
+ * long it is, so it goes through [mapToMidTaperDimsForPdf] and the ONE liner span builder, and
+ * the "Measurement reference" option reaches it exactly as it reaches a liner. The footer's
+ * AFT/FWD taper columns are untouched: they still note every taper's rate and diameters.
  *
  * Span endpoints are expressed in measurement-space (rebased by [win.measureStartMm]).
- * Do not classify these as DATUM even if they touch a SET; these are feature↔feature lengths.
- * Each taper's label resolves its own display unit via [displayUnits] (keyed by [Taper.id]).
+ * Each taper's labels resolve their own display unit via [displayUnits] (keyed by [Taper.id]).
  */
 internal fun buildTaperLengthSpans(
     spec: ShaftSpec,
     win: com.android.shaftschematic.geom.OalWindow,
     unit: UnitSystem,
     displayUnits: DisplayUnits = DisplayUnits.single(unit),
+    measureFrom: PdfTieringMode = PdfTieringMode.AUTO,
 ): List<DimSpan> = buildList {
-    getAftEndTaper(spec)?.let { tp ->
+    fun endTaperLength(tp: Taper) {
         val x0 = win.toMeasureX(tp.startFromAftMm.toDouble())
         val x1 = win.toMeasureX((tp.startFromAftMm + tp.lengthMm).toDouble())
         add(
@@ -847,19 +856,33 @@ internal fun buildTaperLengthSpans(
             )
         )
     }
+    getAftEndTaper(spec)?.let(::endTaperLength)
+    getFwdEndTaper(spec)?.let(::endTaperLength)
 
-    getFwdEndTaper(spec)?.let { tp ->
-        val x0 = win.toMeasureX(tp.startFromAftMm.toDouble())
-        val x1 = win.toMeasureX((tp.startFromAftMm + tp.lengthMm).toDouble())
-        add(
-            DimSpan(
-                x0,
-                x1,
-                label = formatLenDimDualLabel(abs(x1 - x0), displayUnits.unitFor(tp.id), displayUnits.dual),
-                kind = SpanKind.LOCAL
-            )
+    addAll(
+        buildLinerSpans(
+            liners = mapToMidTaperDimsForPdf(spec, measureFrom),
+            sets = computeSetPositionsInMeasureSpace(win, spec),
+            unit = unit,
+            measureFrom = measureFrom,
+            displayUnits = displayUnits,
         )
-    }
+    )
+}
+
+/**
+ * The tapers that are NOT end tapers — neither [getAftEndTaper] nor [getFwdEndTaper] claims
+ * them — adapted to the liner dimensioning shape ([LinerDim]) by the same rule
+ * [mapToLinerDimsForPdf] applies to a liner: SET → near edge, anchored to the nearer SET under
+ * AUTO or to the forced SET. Zero-length tapers draw nothing and dimension nothing.
+ */
+internal fun mapToMidTaperDimsForPdf(spec: ShaftSpec, measureFrom: PdfTieringMode): List<LinerDim> {
+    val win = computeOalWindow(spec)
+    val sets = computeSetPositionsInMeasureSpace(win, spec)
+    val endIds = setOfNotNull(getAftEndTaper(spec)?.id, getFwdEndTaper(spec)?.id)
+    return spec.tapers
+        .filter { it.id !in endIds && it.lengthMm > END_EPS_MM }
+        .map { tp -> setDimForPdf(tp.id, tp.startFromAftMm, tp.lengthMm, win, sets, measureFrom) }
 }
 
 /**
@@ -907,35 +930,49 @@ internal fun buildCouplerSlotSpans(
 internal fun mapToLinerDimsForPdf(spec: ShaftSpec, measureFrom: PdfTieringMode): List<LinerDim> {
     val win  = computeOalWindow(spec)
     val sets = computeSetPositionsInMeasureSpace(win, spec)
+    return spec.liners.map { ln -> setDimForPdf(ln.id, ln.startFromAftMm, ln.lengthMm, win, sets, measureFrom) }
+}
 
-    return spec.liners.map { ln ->
-        // Edges in measurement space (AFT→FWD)
-        val aftEdge = win.toMeasureX(ln.startFromAftMm.toDouble())
-        val fwdEdge = aftEdge + ln.lengthMm.toDouble()
-        val length  = (fwdEdge - aftEdge).coerceAtLeast(0.0)
+/**
+ * ONE rule for every component dimensioned "SET → near edge, then length" — liners and
+ * mid-shaft tapers: edges rebased into measurement space, the anchor forced by the
+ * "Measurement reference" option or, under AUTO, the SET nearer to the component. Keyed by the
+ * component's own id so its display unit resolves per component.
+ */
+private fun setDimForPdf(
+    id: String,
+    startFromAftMm: Float,
+    lengthMm: Float,
+    win: com.android.shaftschematic.geom.OalWindow,
+    sets: com.android.shaftschematic.geom.SetPositions,
+    measureFrom: PdfTieringMode,
+): LinerDim {
+    // Edges in measurement space (AFT→FWD)
+    val aftEdge = win.toMeasureX(startFromAftMm.toDouble())
+    val fwdEdge = aftEdge + lengthMm.toDouble()
+    val length  = (fwdEdge - aftEdge).coerceAtLeast(0.0)
 
-        // Compare SET→nearest edge distances using the correct edge per SET
-        val distAft = (aftEdge - sets.aftSETxMm).coerceAtLeast(0.0)      // AFT SET → AFT edge
-        val distFwd = (sets.fwdSETxMm - fwdEdge).coerceAtLeast(0.0)      // FWD SET → FWD edge
+    // Compare SET→nearest edge distances using the correct edge per SET
+    val distAft = (aftEdge - sets.aftSETxMm).coerceAtLeast(0.0)      // AFT SET → AFT edge
+    val distFwd = (sets.fwdSETxMm - fwdEdge).coerceAtLeast(0.0)      // FWD SET → FWD edge
 
-        val forcedAnchor = when (measureFrom) {
-            PdfTieringMode.AFT -> LinerAnchor.AFT_SET
-            PdfTieringMode.FWD -> LinerAnchor.FWD_SET
-            PdfTieringMode.AUTO -> null
-        }
-        // Forced AFT/FWD overrides any per-component anchoring; AUTO keeps existing behavior.
-        val anchor = forcedAnchor ?: if (distFwd < distAft) LinerAnchor.FWD_SET else LinerAnchor.AFT_SET
-        val offset = when (anchor) {
-            LinerAnchor.AFT_SET -> distAft
-            LinerAnchor.FWD_SET -> distFwd
-        }
-        LinerDim(
-            id = ln.id,
-            anchor = anchor,
-            offsetFromSetMm = offset,
-            lengthMm = length
-        )
+    val forcedAnchor = when (measureFrom) {
+        PdfTieringMode.AFT -> LinerAnchor.AFT_SET
+        PdfTieringMode.FWD -> LinerAnchor.FWD_SET
+        PdfTieringMode.AUTO -> null
     }
+    // Forced AFT/FWD overrides any per-component anchoring; AUTO keeps existing behavior.
+    val anchor = forcedAnchor ?: if (distFwd < distAft) LinerAnchor.FWD_SET else LinerAnchor.AFT_SET
+    val offset = when (anchor) {
+        LinerAnchor.AFT_SET -> distAft
+        LinerAnchor.FWD_SET -> distFwd
+    }
+    return LinerDim(
+        id = id,
+        anchor = anchor,
+        offsetFromSetMm = offset,
+        lengthMm = length
+    )
 }
 
 /**

@@ -13,7 +13,7 @@ import org.junit.Test
  * before the flags existed. All three flags are additive (no envelope version bump). Body
  * and bare-shaft callouts are OPT-IN — their flags default false, so a document with no
  * flags prints no body Ø callouts until a card's toggle turns one on (on-device
- * preference; the footer's "Body:" list still carries every Ø). Liners default visible.
+ * preference; the footer carries no body Ø line). Liners default visible.
  */
 class DiaVisibilityPersistenceTest {
 

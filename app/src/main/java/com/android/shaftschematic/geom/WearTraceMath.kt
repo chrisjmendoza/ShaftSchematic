@@ -11,10 +11,11 @@ package com.android.shaftschematic.geom
  * unit-testable on the JVM and carries no `pdf → ui` dependency — same posture as
  * `WearPitMath.kt` / `WearDiaMath.kt`.
  *
- * Both draw sites — `ComponentWearDetailOverlay` (canvas) and `WearPdfComposer`'s liner detail
- * strip (PDF) — build their polyline from the SAME [buildWearTrace] output, smoothed by the SAME
- * [smoothWearTrace] call per band, each mapping it through its own scale, so the two render
- * identically.
+ * Every draw site — `ComponentWearDetailOverlay` (canvas) and `WearPdfComposer`'s liner detail
+ * strip (PDF), plus the whole-shaft pair through [wearLinerTraces] (the wear sheet's main
+ * profile and the Wear tab's shaft canvas) — builds its polyline from the SAME [buildWearTrace]
+ * output, smoothed by the SAME [smoothWearTrace] call per band, each mapping it through its own
+ * scale, so they all render identically.
  */
 
 /**
@@ -293,4 +294,62 @@ fun sequenceWearTraces(traces: List<List<WearTraceVertex>>): List<WearTraceVerte
         cursorMm = trace.last().localMm
     }
     return out
+}
+
+/** A liner as the whole-shaft trace builder sees it: stored id, nominal OD and length (mm). */
+data class WearTraceLiner(val id: String, val odMm: Float, val lengthMm: Float)
+
+/**
+ * Every liner's sequenced worn-profile trace for ONE record — liner id → the left-to-right vertex
+ * run (liner-local mm, depth fraction of the drawn radius) its surface edges follow. Liners with
+ * no band, or no valued reading inside a band, are absent, so a site draws them as plain
+ * cylinders.
+ *
+ * ONE construction for the whole-shaft draw sites — the wear sheet's main profile
+ * (`drawSimpleShaftProfile`) and the Wear tab's shaft canvas (`ShaftRenderer`) — built the way
+ * the liner detail strip and the detail overlay build theirs: each band clamped to the liner
+ * (rendering only; the stored spot never moves), traced by [buildWearTrace] against the record's
+ * deepest liner reading ([deepestWearDepthMm] — one baseline per record, so every liner on a
+ * drawing exaggerates against the same worst wear), smoothed per band by [smoothWearTrace],
+ * then flattened by [sequenceWearTraces]. A reading on a body or taper never traces.
+ *
+ * [spots] are `(linerId, startMm, lengthMm)` wear bands, [readings] `(componentId, axialMm,
+ * diaMm)` measured stations; both liner-local from the AFT edge.
+ */
+fun wearLinerTraces(
+    liners: List<WearTraceLiner>,
+    spots: List<Triple<String, Float, Float>>,
+    readings: List<Triple<String, Float, Float>>,
+    maxDepthFrac: Float,
+): Map<String, List<WearTraceVertex>> {
+    val odById = liners.associate { it.id to it.odMm }
+    val deepestMm = deepestWearDepthMm(
+        readings.mapNotNull { (id, _, diaMm) -> odById[id]?.let { od -> od to diaMm } }
+    )
+    return liners.mapNotNull { ln ->
+        if (ln.lengthMm <= 0f || ln.odMm <= 0f) return@mapNotNull null
+        val bands = spots.filter { it.first == ln.id }.sortedBy { it.second }
+        if (bands.isEmpty()) return@mapNotNull null
+        val traceReadings = readings
+            .filter { it.first == ln.id && it.third > 0f }
+            .map { WearTraceReading(it.second.coerceIn(0f, ln.lengthMm), it.third) }
+        if (traceReadings.isEmpty()) return@mapNotNull null
+        val verts = sequenceWearTraces(
+            bands.map { (_, startMm, lengthMm) ->
+                val s = startMm.coerceIn(0f, ln.lengthMm)
+                val e = (startMm + lengthMm).coerceIn(0f, ln.lengthMm)
+                smoothWearTrace(
+                    buildWearTrace(
+                        bandStartMm = s,
+                        bandLengthMm = (e - s).coerceAtLeast(0f),
+                        readings = traceReadings,
+                        nominalOdMm = ln.odMm,
+                        deepestDepthMm = deepestMm,
+                        maxDepthFrac = maxDepthFrac,
+                    )
+                )
+            }
+        )
+        if (verts.isEmpty()) null else ln.id to verts
+    }.toMap()
 }

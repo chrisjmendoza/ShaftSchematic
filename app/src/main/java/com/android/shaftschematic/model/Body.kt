@@ -29,7 +29,7 @@ import java.util.UUID
  *   schematic. Draw-only flag: it changes nothing in the model, resolve, OAL, collision, or
  *   footer geometry, and never rewrites [diaMm]. Defaults OFF (on-device preference): body Ø
  *   callouts are opt-in per card, so the schematic stays clean unless a Ø is deliberately
- *   shown — the footer's "Body:" list still always carries every Ø. When several shown
+ *   shown (the footer carries no body Ø line). When several shown
  *   bodies share a Ø, the callout anchors at the longest of them.
  * @property showNameOnDrawing Whether this body's name prints as a component label under the
  *   schematic. Tri-state, draw-only (never rewrites [label]): `null` — the default — follows

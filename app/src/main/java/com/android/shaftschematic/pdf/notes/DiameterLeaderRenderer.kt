@@ -17,7 +17,7 @@ import com.android.shaftschematic.util.measureDualLabel
  * builder from `DisplayUnits.unitFor(componentId)`), so a mixed-unit sheet can show a body in
  * mm beside a liner in inches. Labels use [formatDiaWithUnitDual] (whole inches bare, otherwise
  * 3 decimals; single-unit output when a callout's `dual` is false) so an on-shaft callout
- * reads identically to the footer's "Body: Ø …" line.
+ * reads like the footer's L.E.T. / S.E.T. values.
  *
  * BELOW-side callouts that would collide horizontally are stacked onto a second row via
  * [DiameterCalloutLayout] — the same two-tier posture the runout bubbles use. ABOVE-side
