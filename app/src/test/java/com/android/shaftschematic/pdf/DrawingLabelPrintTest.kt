@@ -3,8 +3,6 @@ package com.android.shaftschematic.pdf
 import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.model.ShaftSpec
-import com.android.shaftschematic.util.DisplayUnits
-import com.android.shaftschematic.util.UnitSystem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -39,7 +37,7 @@ class DrawingLabelPrintTest {
     )
 
     private fun midColumn(drawingLabel: String, item: String = "", blank: Boolean = false): List<String> =
-        buildFooterMidColumn(spec, project(drawingLabel, item), cfg, date, blank, DisplayUnits.single(UnitSystem.INCHES))
+        buildFooterMidColumn(spec, project(drawingLabel, item), cfg, date, blank)
 
     // ── Footer, printed branch ──────────────────────────────────────────────
 

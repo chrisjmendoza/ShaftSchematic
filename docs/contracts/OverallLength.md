@@ -80,7 +80,7 @@ Symmetrically for FWD end threads. Label is passed explicitly to
 `oalSpan(..., labelMm = spec.overallLengthMm)` so it is always the typed OAL regardless of
 bracket width.
 
-Component dimension rails (liners, taper lengths) always reference SET positions and are
+Component dimension rails (liners, end-taper lengths, mid-shaft taper positions) always reference SET positions and are
 unaffected by this toggle.
 
 ---

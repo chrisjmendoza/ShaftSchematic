@@ -642,11 +642,23 @@ top and bottom edges dip through the measured diameters instead of running strai
 band's fill follows them, so the material measured away shows as white slivers above and below
 (on-device report: a liner measured almost half an inch down still printed as a perfect
 cylinder). Pure construction in **`geom/WearTraceMath.kt`** (`buildWearTrace` /
-`smoothWearTrace` / `sequenceWearTraces`, `WearTraceMathTest`); the two draw sites — the **PDF
-liner detail strip** (`WearPdfComposerStrip.drawWearDetailStrip`) and the **canvas overlay**
+`smoothWearTrace` / `sequenceWearTraces`, `WearTraceMathTest`); the two detail draw sites — the
+**PDF liner detail strip** (`WearPdfComposerStrip.drawWearDetailStrip`) and the **canvas overlay**
 (`ComponentWearDetailOverlay`, whose silhouette path carries the dip so fill, stroke and the
 clipped red band tint all bite together) — walk that same output through their own scale, so
 they render identically (the draw-both-sites rule, same posture as the pit "X").
+
+The **whole-shaft drawings trace too** — the wear sheet's **main profile**
+(`drawSimpleShaftProfile(linerTraces)`, the liner edges and fill through `tracedLinerEdgePath` /
+`tracedLinerFillPath`) and the **Wear tab's shaft canvas** above the slider
+(`RenderOptions.wearLinerTraces` → `ShaftRenderer`'s liner pass; empty on every other canvas, so
+the schematic preview is byte-identical). Both take their per-liner vertex runs from the ONE
+builder `wearLinerTraces` (`geom/WearTraceMath.kt`, `WearLinerTracesTest`), which clamps each
+band, traces it with `buildWearTrace` against the record's deepest liner reading, smooths per
+band and sequences — the strips' construction. On-device report: moving "Trace depth
+exaggeration" changed nothing on the shaft, because only the detail strip and the tapped-liner
+overlay drew the trace; the drawing the slider sits under must answer it. A liner with no band,
+or no valued reading inside a band, draws a plain cylinder on every site.
 
 The trace is **smoothed**: real wear flows rather than bevelling (on-device request), so
 `smoothWearTrace` fits a **monotone cubic Hermite (Fritsch–Carlson)** curve through the vertices

@@ -17,6 +17,8 @@ import com.android.shaftschematic.geom.buildWearTrace
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
 import com.android.shaftschematic.geom.deepestWearDepthMm
+import com.android.shaftschematic.geom.WearTraceLiner
+import com.android.shaftschematic.geom.wearLinerTraces
 import com.android.shaftschematic.geom.pitCenterY
 import com.android.shaftschematic.geom.pitHalfArm
 import com.android.shaftschematic.geom.planDiaCallouts
@@ -479,6 +481,25 @@ fun composeWearPdf(
         }
     }
 
+    // Worn-profile trace baseline (geom/WearTraceMath.kt): the deepest valued reading on ANY
+    // liner, computed ONCE so every strip on the sheet exaggerates against the same worst
+    // wear. Body/taper readings never trace, so they stay out of the baseline.
+    val linerOdMmById = docSpec.liners.associate { it.id to it.odMm }
+    val deepestLinerWearMm = deepestWearDepthMm(
+        effectiveRecord.diaReadings.mapNotNull { r ->
+            val odMm = linerOdMmById[r.componentId] ?: return@mapNotNull null
+            odMm to r.diaMm
+        }
+    )
+    // Every liner's worn-profile trace for the MAIN profile — ONE builder, the strips' construction
+    // (on-device report: the "Trace depth exaggeration" slider changed nothing on the shaft).
+    val profileLinerTraces = wearLinerTraces(
+        liners = docSpec.liners.map { WearTraceLiner(it.id, it.odMm, it.lengthMm) },
+        spots = effectiveRecord.spots.map { Triple(it.linerId, it.startMm, it.lengthMm) },
+        readings = effectiveRecord.diaReadings.map { Triple(it.componentId, it.axialMm, it.diaMm) },
+        maxDepthFrac = traceDepthFrac,
+    )
+
     // ── Shaft profile + OAL line ──────────────────────────────────────────────
     // Elected out (showShaftProfile = false) the whole band is skipped — profile, OAL rail,
     // on-profile bands/pits, liner names, and the direction reference — and the strips already
@@ -514,6 +535,7 @@ fun composeWearPdf(
             // The wear document omits machining detail by product decision (keyways, blends,
             // liner shoulders) — the thread relief groove included.
             threadRelief = false,
+            linerTraces = profileLinerTraces,
         )
 
         // Vertical-stroke wear bands (liner spots) + pit "X"s at true position on the profile. Bands
@@ -549,16 +571,6 @@ fun composeWearPdf(
     }
 
     // ── Per-liner detail strips ─────────────────────────────────────────────
-    // Worn-profile trace baseline (geom/WearTraceMath.kt): the deepest valued reading on ANY
-    // liner, computed ONCE so every strip on the sheet exaggerates against the same worst
-    // wear. Body/taper readings never trace, so they stay out of the baseline.
-    val linerOdMmById = docSpec.liners.associate { it.id to it.odMm }
-    val deepestLinerWearMm = deepestWearDepthMm(
-        effectiveRecord.diaReadings.mapNotNull { r ->
-            val odMm = linerOdMmById[r.componentId] ?: return@mapNotNull null
-            odMm to r.diaMm
-        }
-    )
     // ONE mm→pt scale across every strip on the page, so relative component lengths read true —
     // a 22" liner draws half the width of a 44" one instead of both filling their own cells.
     // A packed page's scale comes out of the packer, which solved it against the whole page width;

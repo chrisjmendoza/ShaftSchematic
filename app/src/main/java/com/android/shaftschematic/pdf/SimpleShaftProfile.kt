@@ -10,6 +10,7 @@ import com.android.shaftschematic.geom.shoulderEndMm
 import com.android.shaftschematic.geom.threadHatchLean
 import com.android.shaftschematic.geom.threadHatchRun
 import com.android.shaftschematic.geom.threadHatchSpacing
+import com.android.shaftschematic.geom.WearTraceVertex
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Threads
 import com.android.shaftschematic.util.ThreadHatchStyle
@@ -70,6 +71,14 @@ internal fun drawSimpleShaftProfile(
      * omissions — so a relieved thread prints there as the plain hatched envelope.
      */
     threadRelief: Boolean = true,
+    /**
+     * Worn-profile traces by liner id (`wearLinerTraces`, `geom/WearTraceMath.kt`): a liner with
+     * an entry draws its surface edges and fill through the measured diameters, the detail strip's
+     * construction mapped through THIS profile's scale, so the main profile answers the "Trace
+     * depth exaggeration" slider like the strips do (on-device report: the slider changed nothing
+     * on the shaft). Empty — every caller but the wear document — draws plain cylinders.
+     */
+    linerTraces: Map<String, List<WearTraceVertex>> = emptyMap(),
 ) {
     // ── Shade fills first (drawn under all outlines) ──────────────────────
     bodyFill?.let { f ->
@@ -110,7 +119,13 @@ internal fun drawSimpleShaftProfile(
         spec.liners.forEach { ln ->
             if (ln.lengthMm <= 0f || ln.odMm <= 0f) return@forEach
             val r = rPx(ln.odMm)
-            c.drawRect(xAt(ln.startFromAftMm), cy - r, xAt(ln.startFromAftMm + ln.lengthMm), cy + r, f)
+            val x0 = xAt(ln.startFromAftMm); val x1 = xAt(ln.startFromAftMm + ln.lengthMm)
+            val verts = linerTraces[ln.id].orEmpty()
+            if (verts.isEmpty()) {
+                c.drawRect(x0, cy - r, x1, cy + r, f)
+            } else {
+                c.drawPath(tracedLinerFillPath(x0, x1, cy, r, verts) { mm -> xAt(ln.startFromAftMm + mm) }, f)
+            }
         }
     }
     // Bodies, with a compression break in any long run.
@@ -148,7 +163,16 @@ internal fun drawSimpleShaftProfile(
         if (ln.lengthMm <= 0f || ln.odMm <= 0f) return@forEach
         val x0 = xAt(ln.startFromAftMm); val x1 = xAt(ln.startFromAftMm + ln.lengthMm)
         val r = rPx(ln.odMm); val top = cy - r; val bot = cy + r
-        c.drawLine(x0, top, x1, top, outline); c.drawLine(x0, bot, x1, bot, outline)
+        val verts = linerTraces[ln.id].orEmpty()
+        if (verts.isEmpty()) {
+            c.drawLine(x0, top, x1, top, outline); c.drawLine(x0, bot, x1, bot, outline)
+        } else {
+            // Inside a traced wear band the edges dip through the measured diameters, mirrored
+            // about the centreline — the detail strip's own edge construction.
+            val xAtLocal: (Float) -> Float = { mm -> xAt(ln.startFromAftMm + mm) }
+            c.drawPath(tracedLinerEdgePath(x0, x1, top, 1f, r, verts, xAtLocal), outline)
+            c.drawPath(tracedLinerEdgePath(x0, x1, bot, -1f, r, verts, xAtLocal), outline)
+        }
         c.drawLine(x0, top, x0, bot, dimPaint); c.drawLine(x1, top, x1, bot, dimPaint)
     }
     // Threads — outline envelope + slanted hatch so the machinist knows the zone is threaded,
@@ -277,4 +301,29 @@ internal fun drawThreadHatchStrokes(
         hx += spacingPt
     }
     c.restoreToCount(saved)
+}
+
+/**
+ * A traced liner's fill: the closed polygon between the traced TOP edge (left→right) and the
+ * traced BOTTOM edge (right→left), both from the ONE sequenced vertex run — the strip's
+ * `tracedBandFillPath` posture applied to the whole liner, so fill and stroke bite together.
+ */
+internal fun tracedLinerFillPath(
+    leftPt: Float,
+    rightPt: Float,
+    cy: Float,
+    radiusPt: Float,
+    verts: List<WearTraceVertex>,
+    xAtLocalMm: (Float) -> Float,
+): Path = Path().apply {
+    moveTo(leftPt, cy - radiusPt)
+    verts.forEach { v -> lineTo(xAtLocalMm(v.localMm), cy - radiusPt + v.depthFrac * radiusPt) }
+    lineTo(rightPt, cy - radiusPt)
+    lineTo(rightPt, cy + radiusPt)
+    for (i in verts.indices.reversed()) {
+        val v = verts[i]
+        lineTo(xAtLocalMm(v.localMm), cy + radiusPt - v.depthFrac * radiusPt)
+    }
+    lineTo(leftPt, cy + radiusPt)
+    close()
 }

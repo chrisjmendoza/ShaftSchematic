@@ -20,9 +20,6 @@ import com.android.shaftschematic.model.keywayAbsSpanMm
 import com.android.shaftschematic.model.keywayClocking
 import com.android.shaftschematic.model.keywayCount
 import com.android.shaftschematic.model.shoulderOn
-import com.android.shaftschematic.ui.resolved.ResolvedBody
-import com.android.shaftschematic.ui.resolved.ResolvedComponent
-import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.autoTaperRateText
@@ -155,13 +152,11 @@ internal fun buildFooterMidColumn(
     cfg: FooterConfig,
     date: String,
     blankValues: Boolean = false,
-    displayUnits: DisplayUnits = DisplayUnits.single(UnitSystem.INCHES),
 ): List<String> = if (blankValues) {
     buildList {
         add("Customer:"); add("Vessel:"); add("Job #:"); add("Item:")
         if (project.drawingLabel.isNotBlank()) add("Drawing:")
         add("Date:")
-        if (cfg.bodyDiasMm.isNotEmpty()) add("Body: Ø")
         keywayClockingFooterNote(spec)?.let { add(it) }
         add("Side:")
     }
@@ -173,14 +168,6 @@ internal fun buildFooterMidColumn(
         if (project.item.isNotBlank()) add("Item: ${project.item}")
         if (project.drawingLabel.isNotBlank()) add("Drawing: ${project.drawingLabel}")
         add("Date: $date")
-        if (cfg.bodyDiasMm.isNotEmpty()) {
-            // No single component backs this line (it's the distinct set across every body),
-            // so it prints in the document unit — the same posture as the OAL rail.
-            val label = cfg.bodyDiasMm.joinToString(", ") {
-                "Ø ${formatDiaWithUnitDual(it.toDouble(), displayUnits.documentUnit, displayUnits.dual)}"
-            }
-            add("Body: $label")
-        }
         keywayClockingFooterNote(spec)?.let { add(it) }
     }
 }
@@ -260,7 +247,7 @@ internal fun planFooter(
     // blank draft pads it like the others so all three rules come out the same length.
     val rightMaxW = rectRight - rightX - (if (blankValues) colPad else 0f)
 
-    val midLines = buildFooterMidColumn(spec, project, cfg, date, blankValues, displayUnits)
+    val midLines = buildFooterMidColumn(spec, project, cfg, date, blankValues)
 
     // WRAPPING, not ellipsizing. A dual-unit spec line is roughly twice as wide as a single-unit
     // one, and the old `…` truncation dropped the very figure the sheet exists to carry
@@ -889,39 +876,23 @@ data class FooterConfig(
     val showFwdThread: Boolean,
     val showAftTaper: Boolean,
     val showFwdTaper: Boolean,
-    /** Distinct body ODs (mm) to print as the "Body:" line; empty hides the line. */
-    val bodyDiasMm: List<Float> = emptyList(),
 )
 
 /**
- * The footer configuration both sheets print from — which end columns print and the distinct
- * explicit-body Ø list. ONE builder so the schematic and the consolidated sheet can never
- * disagree about the block, and built BEFORE either composer's vertical budget, because the
- * band each reserves ([footerBlockHeightPt]) is measured from exactly the lines it will print.
+ * The footer configuration both sheets print from — which end columns print. ONE builder so
+ * the schematic and the consolidated sheet can never disagree about the block, and built
+ * BEFORE either composer's vertical budget, because the band each reserves
+ * ([footerBlockHeightPt]) is measured from exactly the lines it will print.
  *
- * The "Body:" diameters are the authored bodies as actually DRAWN: raw `spec.bodies` can hold
- * degenerate rows (zero-length, or fully swallowed by body subtraction under a liner/taper) that
- * are invisible in the drawing and the carousel, and their Ø must not print. Taper rendering is
- * gated by `detectEndFeatures()`; the taper flags here only decide whether the footer carries
- * that end's spec column at all.
+ * The job block carries no body Ø line: a body's diameter prints only where its card asks for
+ * it, as a below-shaft callout (on-device ruling — the "Body: Ø" list repeated values the
+ * drawing already carries and cost a footer row). Taper rendering is gated by
+ * `detectEndFeatures()`; the taper flags here only decide whether the footer carries that
+ * end's spec column at all.
  */
-internal fun sheetFooterConfig(
-    spec: ShaftSpec,
-    resolvedComponents: List<ResolvedComponent>?,
-): FooterConfig {
-    val bodyDiasMm = (
-        resolvedComponents
-            ?.filterIsInstance<ResolvedBody>()
-            ?.filter {
-                it.source == ResolvedComponentSource.EXPLICIT &&
-                    it.endMmPhysical - it.startMmPhysical > 0f && it.diaMm > 0f
-            }
-            ?.map { it.diaMm }
-            ?: spec.bodies.filter { it.lengthMm > 0f && it.diaMm > 0f }.map { it.diaMm }
-        ).distinct().sorted()
+internal fun sheetFooterConfig(spec: ShaftSpec): FooterConfig {
     val tapers = selectFooterTapers(spec)
     return FooterConfig(
-        bodyDiasMm = bodyDiasMm,
         showAftThread = hasAftThread(spec),
         showFwdThread = hasFwdThread(spec),
         showAftTaper = tapers.aft != null,

@@ -211,7 +211,11 @@ readings instead draw INSIDE the profile at their station — one rotated haloed
 below-shaft callouts there; the wear document itself (the authoring surface) keeps its
 callout engine unchanged. Valued **liner** readings inside a wear band additionally drive the
 drawn **worn-profile trace** — the liner's surface line dips through the measured diameters in
-the liner detail strip and the detail overlay, drawn identically in both sites from the pure
+the liner detail strip and the detail overlay, AND on the two whole-shaft drawings — the wear
+sheet's main profile (`drawSimpleShaftProfile(linerTraces)`) and the Wear tab's shaft canvas
+(`RenderOptions.wearLinerTraces`, empty everywhere else) — through the ONE builder
+`wearLinerTraces` (on-device report: the "Trace depth exaggeration" slider changed nothing on
+the shaft while only the detail sites traced); all drawn identically from the pure
 `geom/WearTraceMath.kt` and display-exaggerated like the undercut notch (normalized to the
 record's deepest liner reading, never shallower than true scale). That exaggeration cap is
 **user-set**, 5–25% (`WEAR_TRACE_MIN_DEPTH_FRAC`..`WEAR_TRACE_MAX_DEPTH_FRAC`, the max also the
@@ -1003,9 +1007,11 @@ Two visibility controls gate the pass, and they compose as an AND:
   body of a shared-Ø group moves the anchor to the longest body of that Ø still shown, rather
   than deleting the value (the on-device case: a Ø printed over a fiberglassed run that could
   not have been measured there). The spec→drawable mapping (`ShaftSpec.bodyForPdf`) must strip
-  fragment ids with `resolvedBodyBaseId`, so hiding a split body hides every run. The footer's
-  "Body:" Ø list is deliberately NOT gated — the value is true for the shaft; only its
-  placement was wrong. These toggles are **card-only**, an explicit carve-out from the
+  fragment ids with `resolvedBodyBaseId`, so hiding a split body hides every run. **The footer
+  carries no body Ø line** — the job block's "Body: Ø …" list was removed (on-device ruling: it
+  repeated values the drawing carries where a card asks for them, and cost a footer row), so the
+  callout is the ONLY place a body Ø prints; do not reintroduce the line. These toggles are
+  **card-only**, an explicit carve-out from the
   add-dialog-parity invariant on the same grounds as the coupler slot's "show dimension rail".
 - **Per sheet, blank drafts only** — `PdfExportOptions.blankDiaCallouts` drops the whole
   pass (line, arrow, and rule) so a write-in sheet can be annotated freehand. One rule,

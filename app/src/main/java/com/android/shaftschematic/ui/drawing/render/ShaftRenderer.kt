@@ -493,6 +493,36 @@ object ShaftRenderer {
 
             val aftSpec = spec(LinerAuthoredReference.AFT)
             val fwdSpec = spec(LinerAuthoredReference.FWD)
+            // A worn-profile trace (Wear tab only): the edges and fill dip through the measured
+            // diameters, mirrored about the centreline — the wear sheet's main-profile
+            // construction through this canvas's scale. A shouldered liner keeps its silhouette.
+            val trace = opts.wearLinerTraces[storedId].orEmpty()
+            if (aftSpec == null && fwdSpec == null && trace.isNotEmpty() && stored != null) {
+                fun xAtLocal(mm: Float) = L.xPx(stored.startFromAftMm + mm)
+                val path = Path().apply {
+                    moveTo(x0, top)
+                    trace.forEach { v -> lineTo(xAtLocal(v.localMm), top + v.depthFrac * r) }
+                    lineTo(x1, top)
+                    lineTo(x1, cy + r)
+                    for (i in trace.indices.reversed()) {
+                        val v = trace[i]
+                        lineTo(xAtLocal(v.localMm), cy + r - v.depthFrac * r)
+                    }
+                    lineTo(x0, cy + r)
+                    close()
+                }
+                drawPath(path, color = fillFor(storedId, linerFill))
+                if (isHighlighted(hiEnabled, hiId, storedId)) {
+                    drawHighlightStrokeRect(
+                        topLeft = topLeft,
+                        size = size,
+                        baseStrokePx = outlineW,
+                        glowColor = hiGlowCol, glowDx = hiGlowDx, glowAlpha = hiGlowA
+                    )
+                }
+                drawPath(path, color = outline, style = Stroke(width = outlineW))
+                return
+            }
             if (aftSpec == null && fwdSpec == null) {
                 drawRect(color = fillFor(storedId, linerFill), topLeft = topLeft, size = size)
                 if (isHighlighted(hiEnabled, hiId, storedId)) {

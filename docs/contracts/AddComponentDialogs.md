@@ -300,7 +300,7 @@ list and the reasoning for each:
 | Control | Cards | Why card-only |
 |---|---|---|
 | **Show dimension rail** | `ResolvedCouplerBoltSlot` | Prints the row's position span (authored end → nearest hole center) on the rail sheets; off by default |
-| **Show Ø on drawing** | Body (explicit + auto), Liner | Controls whether the Ø callout prints below the shaft. Bodies and the bare shaft default **off** — body Ø callouts are opt-in per card (on-device preference; the footer's "Body:" list still carries every Ø). Liners default on |
+| **Show Ø on drawing** | Body (explicit + auto), Liner | Controls whether the Ø callout prints below the shaft. Bodies and the bare shaft default **off** — body Ø callouts are opt-in per card (on-device preference; the footer carries no body Ø line). Liners default on |
 
 Anything that moves a value or a component stays under the parity rule above. See
 `docs/PDF_EXPORT.md` §5.3 for what the Ø toggle does to the callout pass.

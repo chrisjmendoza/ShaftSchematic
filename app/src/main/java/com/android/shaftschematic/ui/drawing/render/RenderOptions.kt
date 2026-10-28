@@ -1,5 +1,6 @@
 package com.android.shaftschematic.ui.drawing.render
 
+import com.android.shaftschematic.geom.WearTraceVertex
 import androidx.compose.ui.graphics.Color
 import com.android.shaftschematic.geom.THREAD_DENSITY_DEFAULT
 import com.android.shaftschematic.geom.THREAD_SLANT_DEFAULT
@@ -16,6 +17,14 @@ import com.android.shaftschematic.geom.THREAD_SLANT_DEFAULT
  */
 data class RenderOptions(
     val paddingPx: Int = 16,
+
+    /**
+     * Worn-profile traces by stored liner id (`wearLinerTraces`, `geom/WearTraceMath.kt`): a liner
+     * with an entry draws its edges and fill through the measured diameters. Only the Wear tab
+     * passes any (on-device report: its "Trace depth exaggeration" slider changed nothing on the
+     * shaft drawing above it); empty keeps every other canvas byte-identical.
+     */
+    val wearLinerTraces: Map<String, List<WearTraceVertex>> = emptyMap(),
 
     // ──────────────────────────────
     // Geometry styling

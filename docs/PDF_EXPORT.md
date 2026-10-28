@@ -252,7 +252,7 @@ The bracket **position** changes based on `excludeFromOAL`:
 
 The label is passed as an explicit `labelMm` override to `oalSpan()` so it is always the typed OAL regardless of bracket width. Component dimension rails always reference SET positions.
 
-**What else is dimensioned** (all through the same planner, §5.4): the liner spans (`buildLinerSpans`), the end-taper lengths (`buildTaperLengthSpans`), and — per row, opt-in — a **coupler bolt row's authored position** (`buildCouplerSlotSpans`, beside the taper builder; the consolidated sheet calls the same function). That span is the only one that references a **shaft end rather than a SET**: it runs from the face the row was measured from (`Measure From` AFT = 0, FWD = OAL) to the nearest hole center, carries the stored distance (`authoredCenterMm`) in the row's own display unit, and tiers LOCAL like any other. Off by default, so untouched sheets print byte-identically; see `docs/contracts/CouplerBoltSlot.md` § Dimension rail.
+**What else is dimensioned** (all through the same planner, §5.4): the liner spans (`buildLinerSpans`), the taper spans (`buildTaperLengthSpans` — an **end taper** prints its length only, since its SET is one of its own edges; a **taper that stands off both SETs**, the mid-shaft step that brings the Ø down ahead of a liner, is located **like a liner**: a DATUM span from the nearer SET (or the forced "Measurement reference" SET) to its near edge plus its LOCAL length, through the same adapter rule (`mapToMidTaperDimsForPdf` → `buildLinerSpans`) — on-device request; the footer's AFT/FWD taper columns still note every taper's rate and diameters, untouched), and — per row, opt-in — a **coupler bolt row's authored position** (`buildCouplerSlotSpans`, beside the taper builder; the consolidated sheet calls the same function). That span is the only one that references a **shaft end rather than a SET**: it runs from the face the row was measured from (`Measure From` AFT = 0, FWD = OAL) to the nearest hole center, carries the stored distance (`authoredCenterMm`) in the row's own display unit, and tiers LOCAL like any other. Off by default, so untouched sheets print byte-identically; see `docs/contracts/CouplerBoltSlot.md` § Dimension rail.
 
 **Label text (2026-07-28):** printed end-to-end spans keep their small `"OAL"` prefix —
 `oalSpan()` (`pdf/dim/LinerSpanBuilder.kt`) renders `"OAL " + formatLenDim(labelMm, unit)`,
@@ -476,7 +476,7 @@ and `ShaftSpec.showAutoBodyDia` for every auto span at once). A switch under the
 the body / auto-body / liner cards. All three are additive envelope fields. **Body and
 bare-shaft callouts are opt-in — those two flags default `false`** (on-device preference:
 the schematic stays clean unless a body's Ø is deliberately shown, and a document with no
-flags prints no body Ø callouts; the footer's "Body:" list still carries every Ø). Liners
+flags prints no body Ø callouts). Liners
 default `true`.
 
 - **The filter runs before the grouping.** Hiding one body of a shared-Ø group does not
@@ -488,8 +488,10 @@ default `true`.
   below the shaft.
 - **Fragment-aware.** `ShaftSpec.bodyForPdf` looks the flag up by `resolvedBodyBaseId`, so a
   body a liner has split hides every one of its drawn runs.
-- **The footer is not gated.** The "Body:" Ø list still shows the diameter — the value is
-  true for the shaft; only its placement on the drawing was misleading.
+- **The footer carries no body Ø line.** The job block's "Body: Ø …" list (every distinct
+  explicit-body Ø) was removed on-device ruling: it repeated values the drawing already
+  carries where a card asks for them, and cost a footer row. A body's Ø prints ONLY as the
+  below-shaft callout its card opts into.
 - Draw-only: no geometry, no OAL, no collision, no stored value changes. Card-only, with no
   Add-dialog counterpart (see the carve-out in `CLAUDE.md` / `AddComponentDialogs.md`).
 

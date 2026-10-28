@@ -123,7 +123,7 @@ class BodyOdCalloutsTest {
     @Test
     fun `bodies are hidden by default — callouts are opt-in`() {
         // On-device preference: the schematic stays clean unless a body's Ø is deliberately
-        // shown; the footer's "Body:" list still carries every Ø.
+        // shown; the footer carries no body Ø line.
         assertFalse(Body().showDiaOnDrawing)
         val defaultBody = Body(startFromAftMm = 0f, lengthMm = 400f, diaMm = 127f)
         assertTrue(buildBodyOdCallouts(listOf(defaultBody)).isEmpty())

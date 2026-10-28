@@ -1,0 +1,189 @@
+{
+    "version": 1,
+    "preferred_unit": "INCHES",
+    "unit_locked": true,
+    "job_number": "935066",
+    "customer": "Pac-Fish",
+    "vessel": "Preston",
+    "item": "",
+    "shaft_position": "OTHER",
+    "notes": "",
+    "spec": {
+        "overallLengthMm": 6070.6,
+        "bodies": [
+            {
+                "id": "77b9aef2-dd5c-45d1-906b-e225cbe9ca42",
+                "startFromAftMm": 5695.95,
+                "lengthMm": 374.6499,
+                "diaMm": 152.3492,
+                "keywayWidthMm": 34.925,
+                "keywayDepthMm": 12.7,
+                "keywayLengthMm": 279.4,
+                "keywayOffsetFromEndMm": 0.0,
+                "keywayEnd": "FWD",
+                "keywaySpooned": false,
+                "showDiaOnDrawing": false,
+                "showNameOnDrawing": null,
+                "shadeOnDrawing": false,
+                "compressOnDrawing": false,
+                "blendAftMm": 0.0,
+                "blendFwdMm": 0.0,
+                "blendAftSeal": false,
+                "blendFwdSeal": false,
+                "blendAftSealLenMm": 0.0,
+                "blendFwdSealLenMm": 0.0,
+                "blendProfile": "OGEE",
+                "label": null
+            }
+        ],
+        "tapers": [
+            {
+                "id": "4cf77ba6-153f-4c7a-b484-3ae6a0bb5f56",
+                "startFromAftMm": 4572.0,
+                "lengthMm": 161.925,
+                "startDiaMm": 165.1,
+                "endDiaMm": 150.0124,
+                "keywayWidthMm": 0.0,
+                "keywayDepthMm": 0.0,
+                "keywayLengthMm": 0.0,
+                "keywayOffsetFromSetMm": 0.0,
+                "keywaySpooned": false,
+                "taperRateText": "1:10.732",
+                "authoredReference": "AFT",
+                "label": null,
+                "showNameOnDrawing": null,
+                "shadeOnDrawing": true
+            },
+            {
+                "id": "e577b13c-a80b-4fde-9280-33093215a6ce",
+                "startFromAftMm": 0.0,
+                "lengthMm": 409.575,
+                "startDiaMm": 131.6228,
+                "endDiaMm": 165.7604,
+                "keywayWidthMm": 34.925,
+                "keywayDepthMm": 12.7,
+                "keywayLengthMm": 352.425,
+                "keywayOffsetFromSetMm": 0.0,
+                "keywaySpooned": true,
+                "taperRateText": "1:12",
+                "authoredReference": "AFT",
+                "label": null,
+                "showNameOnDrawing": null,
+                "shadeOnDrawing": null
+            }
+        ],
+        "threads": [
+            {
+                "id": "b05e98ac-a326-4e55-8c3d-1b5e2bc8f828",
+                "startFromAftMm": -123.825,
+                "majorDiaMm": 114.3,
+                "pitchMm": 6.35,
+                "lengthMm": 123.825,
+                "excludeFromOAL": true,
+                "isAftEnd": true,
+                "tpi": null,
+                "metricDesignation": null,
+                "label": null,
+                "showNameOnDrawing": null,
+                "reliefLenMm": 0.0,
+                "reliefDiaMm": 0.0,
+                "reliefAtAft": false
+            }
+        ],
+        "liners": [
+            {
+                "id": "b67c7642-69b0-4f22-9e59-6a2d4be6083e",
+                "startMmPhysical": 4816.475,
+                "lengthMm": 879.475,
+                "odMm": 177.8,
+                "label": null,
+                "authoredReference": "FWD",
+                "endMmPhysical": 5695.95,
+                "showDiaOnDrawing": true,
+                "showNameOnDrawing": null,
+                "shadeOnDrawing": null,
+                "shoulderAftLenMm": 0.0,
+                "shoulderAftOdMm": 0.0,
+                "shoulderAftRadiusMm": 0.0,
+                "shoulderFwdLenMm": 0.0,
+                "shoulderFwdOdMm": 0.0,
+                "shoulderFwdRadiusMm": 0.0
+            },
+            {
+                "id": "6e96b333-30a6-4a3c-80b2-5d2aaebb15ed",
+                "startMmPhysical": 409.575,
+                "lengthMm": 895.35,
+                "odMm": 190.5,
+                "label": null,
+                "authoredReference": "AFT",
+                "endMmPhysical": 1304.925,
+                "showDiaOnDrawing": true,
+                "showNameOnDrawing": null,
+                "shadeOnDrawing": null,
+                "shoulderAftLenMm": 0.0,
+                "shoulderAftOdMm": 0.0,
+                "shoulderAftRadiusMm": 0.0,
+                "shoulderFwdLenMm": 0.0,
+                "shoulderFwdOdMm": 0.0,
+                "shoulderFwdRadiusMm": 0.0
+            }
+        ],
+        "couplerBoltSlots": [],
+        "keyways180Apart": false,
+        "keyways90Apart": false,
+        "keyways90Cw": true,
+        "autoBodyDiaMm": 152.4,
+        "showAutoBodyDia": false,
+        "autoDiaOverrides": [
+            {
+                "anchorMm": 4775.2,
+                "diaMm": 150.0124
+            },
+            {
+                "anchorMm": 2938.4624,
+                "diaMm": 165.1
+            }
+        ],
+        "autoBlends": []
+    },
+    "final_spec": null,
+    "runout_config": {
+        "componentOverrides": {},
+        "tirDirection": "UNSET",
+        "heightScale": 1.0,
+        "linersProportional": false,
+        "linerCompression": 1.0,
+        "showCouplingFace": false
+    },
+    "wear_record": {
+        "spots": [],
+        "pits": [],
+        "diaReadings": [],
+        "wornSections": [],
+        "traceDepthFrac": null,
+        "dyePenResult": null,
+        "stripComponentIds": null,
+        "showShaftProfile": true,
+        "compactStrips": false,
+        "stripSizeFrac": 1.0
+    },
+    "runout_readings": {
+        "readings": []
+    },
+    "runout_stations": {
+        "placements": []
+    },
+    "undercut_record": {
+        "undercuts": [],
+        "exaggerationFrac": 0.25,
+        "drawToSet": false,
+        "showTotalRail": null,
+        "pageOrientation": "AUTO",
+        "setDatum": "NEAREST",
+        "excludedLinerIds": [],
+        "excludedFreeCutIds": []
+    },
+    "station_interval_version": 1,
+    "unit_overrides": {},
+    "dual_units": false
+}
