@@ -8,6 +8,13 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-27
 
+### fix(pdf): a thread's diameter prints the way it was typed
+
+- **The footer's "Thread:" line drops trailing zeros on the major Ø.** On-device ruling: a typed
+  `4.5` prints `4.5"`, not `4.500"`. This is the one exception to the three-decimal diameter
+  rule. Every other diameter on the sheet, the thread relief's Ø included, still prints whole or
+  at three decimals.
+
 ### fix(editor): a component can be renamed again
 
 - **The card title's rename editor opens again after a rename.** On-device report: the first

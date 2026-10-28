@@ -448,6 +448,10 @@ they are now all-BELOW, same as liners.
   with a body OD even when the values match numerically.
 - **Formatting:** labels use `formatDiaWithUnit` (inches: whole numbers print bare, any other value prints exactly 3 decimals — `11"`, `10.990"`; mm stays compact 1-decimal),
   the same convention as the footer's "Ø" text — not the old raw 4-decimal formatting.
+  **One exception:** the footer's `Thread:` line prints the thread's major Ø through
+  `formatThreadDiaWithUnit` — inches at most 3 decimals with trailing zeros dropped (`4.5"`,
+  `3.75"`, never `4.500"`), on-device ruling: a thread size is called out the way it is written.
+  Every other diameter, the thread relief's Ø included, keeps the whole-or-3-decimals rule.
 - **Two-tier stacking:** horizontally-close labels stack onto a second row instead of
   overlapping, the same posture as the runout bubbles' two-row layout (see
   `RunoutSheet.md`). Tier assignment is pure, JVM-tested math in
