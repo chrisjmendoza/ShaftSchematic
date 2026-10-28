@@ -4,9 +4,9 @@ ShaftScreen Contract
 Layer: UI → Screens  
 Purpose: Present the shaft editor surface and bind ViewModel state to user controls.
 
-Version: v0.20 (2026-10-27 — the auto-body card's Ø asks "This section | All auto sections";
-the first OAL on a new shaft asks for the bare-shaft Ø.
-v0.19 2026-10-23, v0.18 2026-09-16, v0.17 2026-08-29)
+Version: v0.21 (2026-10-27 — a MEDIUM window's carousel fills the column; the carousel and the
+warning banner keep their saved state across a rotation between width branches.
+v0.20 2026-10-27, v0.19 2026-10-23, v0.18 2026-09-16, v0.17 2026-08-29)
 
 ---
 
@@ -164,9 +164,17 @@ is never a class here. The Final Schematic tab hosts this same screen through
   scrolling column holding the OAL field, the dimensioned-OAL / debug labels, the Components
   heading, the "+ Add Component" button, `SpecWarningBanner`, and the carousel.
 - **MEDIUM** (600–839 dp: a portrait tablet, a phone in landscape) — the same single column,
-  with **only** the preview card's height ceiling raised to **280 dp**. The 3:1 ratio and the
-  120 dp floor stand, so a wide window stops drawing the shaft as a flat strip. Nothing else
-  moves: splitting a MEDIUM window would leave both halves narrower than a phone.
+  with the preview card's height ceiling raised to **280 dp** (the 3:1 ratio and the 120 dp
+  floor stand, so a wide window stops drawing the shaft as a flat strip) and the **carousel
+  filling the column's leftover height**: the phone's fixed `CAROUSEL_HEIGHT` (360 dp) left the
+  card's Diameter field cut in half above an empty quarter of a portrait tablet (on-device
+  report). The carousel sits in a box (`testTag("editor_medium_carousel")`) whose height is the
+  pure `mediumCarouselHeight` (`ui/screen/EditorTabletLayout.kt`): the scroll viewport less
+  everything above the carousel, measured off the column itself, never under 360 dp — a short
+  window scrolls rather than squeezing the card — and the carousel fills it with the same
+  `fillHeight` the EXPANDED region uses. The viewport is read outside the IME padding, so the
+  keyboard scrolls the column instead of shrinking the card. Nothing splits: a MEDIUM window
+  in two would leave both halves narrower than a phone.
 - **EXPANDED** (≥ 840 dp: a landscape tablet) — a **drawing band across the top** and a
   **peeking carousel** filling the height under it. A shaft is long and thin, so the drawing
   takes the WIDTH; the side-by-side panes this replaced squeezed it into a 55% column as a
@@ -217,10 +225,21 @@ is never a class here. The Final Schematic tab hosts this same screen through
 where they go — composable lambdas rather than private composables because a private one would
 have to restate the screen's parameter list (the carousel alone takes fifty callbacks), and a
 signature copied twice is exactly the drift this prevents. The single column stacks the last
-three through `componentsBlock(warningSlot)` — header ("Swipe to select"), button, the
-`SpecWarningBanner` in the slot, the carousel at `CAROUSEL_HEIGHT` with one card filling the
-pager — so **COMPACT and MEDIUM are byte-identical to before the tablet layout existed**; the
-EXPANDED branch places the same blocks separately. Every `testTag` survives in both branches.
+three through `componentsBlock(warningSlot, carouselHeight)` — header ("Swipe to select"),
+button, the `SpecWarningBanner` in the slot, the carousel with one card filling the pager (at
+`CAROUSEL_HEIGHT` on COMPACT, in the filled box on MEDIUM) — so **COMPACT is byte-identical to
+before the tablet layout existed**; the EXPANDED branch places the same blocks separately.
+Every `testTag` survives in both branches.
+
+**The carousel and the warning banner are movable content** (`movableContentOf`), because they
+are the blocks a rotation across the EXPANDED boundary MOVES between branches.
+`rememberSaveable` keys its values by composition path, so a block composed from a different
+branch per width class would read none of the other branch's saved values — a card's typed
+text and scroll, an open add dialog's fields, a dismissed warning would reset on a rotation —
+and the unread values, saved again, would come back a rotation later. Movable content roots
+the path at itself rather than at the branch hosting it. Pinned by `EditorRotationStateTest`
+(in place and across a recreation). The tab itself has the same problem one level up, solved
+in `ShaftEditorRoute` (`Adaptive.md`).
 
 The toolbar's hamburger (`testTag("toolbar_menu")`) is **hidden** when
 `LocalSidebarPermanent.current` is true — in an EXPANDED window the sidebar is already laid out
@@ -330,6 +349,13 @@ Future Enhancements
 
 Change Log
 -----------
+**v0.21 (2026-10-27)**
+- **MEDIUM carousel fills the column** (`mediumCarouselHeight`, floor `CAROUSEL_HEIGHT`) —
+  on-device report: the portrait tablet's card was clipped above ~330 dp of empty screen.
+  COMPACT unchanged.
+- **Carousel and warning banner are movable content**, so their saved state survives a rotation
+  between the width branches (see "Window width"). Pinned by `EditorRotationStateTest`.
+
 **v0.20 (2026-10-27)**
 - **Auto-body Ø scope dialog** ("This section | All auto sections", on-device report: one
   auto section's edit changed the others) and the **new-shaft diameter prompt** after the first

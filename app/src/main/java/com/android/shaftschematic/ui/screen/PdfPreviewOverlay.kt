@@ -19,19 +19,20 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -65,8 +66,10 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.THREAD_DENSITY_DEFAULT
 import com.android.shaftschematic.geom.THREAD_SLANT_DEFAULT
@@ -190,33 +193,10 @@ internal fun PdfPreviewOverlay(
 ) {
     var showOptions by remember { mutableStateOf(false) }
 
-    // Tuning layout: page strip on top, panel below it. See [tuningPageStripHeightDp].
-    // The panel's header row and the navigation-bar inset below it sit OUTSIDE the content
-    // cap, so both are budgeted here — a cap that ignored them left the options overlapping
-    // the strip and swallowing the drawing's lowest callouts (on-device report).
+    // Tuning layout: page strip on top, panel below it — sized inside the preview box below
+    // (see [tuningPageStripHeightDp]).
     val stripLayout = showOptions && sheetTunesPage
     val configuration = LocalConfiguration.current
-    val navBottomDp = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding().value
-    val sheetChromeDp = TUNING_SHEET_CHROME_DP + navBottomDp
-    val stripHeightDp = tuningPageStripHeightDp(
-        configuration.screenWidthDp.toFloat(),
-        configuration.screenHeightDp.toFloat(),
-        sheetChromeDp,
-        inkBand?.frac ?: 1f,
-        pageAspectOf(bitmap?.width ?: 0, bitmap?.height ?: 0),
-    )
-    val stripHeight = stripHeightDp.dp
-    val sheetMaxHeight = if (sheetTunesPage) {
-        tuningSheetMaxHeightDp(
-            configuration.screenHeightDp.toFloat(),
-            stripHeightDp,
-            sheetChromeDp,
-        ).dp
-    } else {
-        // Options that reshape nothing on the page have no strip to stay clear of, just a
-        // band of page to keep in view at the top.
-        (configuration.screenHeightDp * PREVIEW_SHEET_MAX_FRAC).dp
-    }
 
     // ── Pan / zoom ─────────────────────────────────────────────────────────
     // Held HERE, not keyed by the bitmap and not inside the bitmap branch below: every
@@ -252,18 +232,30 @@ internal fun PdfPreviewOverlay(
         onDispose { activity?.restoreBaseOrientation() }
     }
 
+    // The ROOT takes the top bar's colour and only the page area below the bar is painted black,
+    // so the status bar always sits over the bar's colour, as an app bar's would on the other
+    // previews: the status-bar icons follow the app theme, and over a black backdrop a light
+    // theme's dark icons disappear (on-device report). Painting the root rather than sizing a
+    // band to the status-bar inset holds whatever the inset arithmetic does — a band placed as a
+    // child of this Surface took the Surface's full-size minimum constraints and drew centred
+    // down the middle of the screen, behind the page, leaving the bar black (tablet report).
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = Color.Black,
+        color = MaterialTheme.colorScheme.surface,
     ) {
+        // Top inset only here: the side and bottom insets are applied INSIDE the black page area
+        // below, so the navigation bar and any side inset keep the black backdrop they always had.
         Column(
-            modifier = Modifier.fillMaxSize().systemBarsPadding(),
+            modifier = Modifier
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Top)),
         ) {
             // ── Top bar ────────────────────────────────────────────────────
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(MaterialTheme.colorScheme.surface)
+                    .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Horizontal))
                     .padding(horizontal = 4.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -271,10 +263,16 @@ internal fun PdfPreviewOverlay(
                     Icon(Icons.Filled.Close, contentDescription = "Close preview",
                         tint = MaterialTheme.colorScheme.onSurface)
                 }
+                // At most two lines, ellipsized: beside the Print button "Undercut Drawing Preview"
+                // needs two lines at the default font, and one line would cut "Preview" off; at
+                // 200% an uncapped title broke mid-word over four and pushed the page down
+                // (on-device reports).
                 Text(
                     text = title,
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f).padding(start = 4.dp),
                 )
                 if (optionsSheet != null) {
@@ -305,10 +303,45 @@ internal fun PdfPreviewOverlay(
             // could slide up OVER the toolbar and hide Close/Export (on-device report). The
             // document tucks BEHIND the bar instead. Hit testing was always bounded by layout,
             // so the bar stayed tappable — this fixes what the user could see.
-            Box(
-                modifier = Modifier.fillMaxSize().clipToBounds(),
+            // The black backdrop is painted BEFORE the inset padding, so it reaches under the
+            // navigation bar and any side inset while the page and the panel stay clear of them.
+            BoxWithConstraints(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black)
+                    .windowInsetsPadding(
+                        WindowInsets.systemBars.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom),
+                    )
+                    .clipToBounds()
+                    .testTag("pdf_preview_area"),
                 contentAlignment = Alignment.Center,
             ) {
+                // Page strip on top, panel below it, budgeted from THIS box's measured size: the
+                // box already sits under the top bar and above the navigation bar, so the only
+                // panel chrome inside it is the header row. An allowance for the bars instead fell
+                // short of a tall status bar and let the panel cover the strip's last rows
+                // (on-device report: the undercut sheet's "Notes" line).
+                val stripHeightDp = tuningPageStripHeightDp(
+                    maxWidth.value,
+                    configuration.screenHeightDp.toFloat(),
+                    TUNING_SHEET_CHROME_DP,
+                    inkBand?.frac ?: 1f,
+                    pageAspectOf(bitmap?.width ?: 0, bitmap?.height ?: 0),
+                    availableHeightDp = maxHeight.value,
+                )
+                val stripHeight = stripHeightDp.dp
+                val sheetMaxHeight = if (sheetTunesPage) {
+                    tuningSheetMaxHeightDp(
+                        configuration.screenHeightDp.toFloat(),
+                        stripHeightDp,
+                        TUNING_SHEET_CHROME_DP,
+                        availableHeightDp = maxHeight.value,
+                    ).dp
+                } else {
+                    // Options that reshape nothing on the page have no strip to stay clear of,
+                    // just a band of page to keep in view at the top.
+                    (configuration.screenHeightDp * PREVIEW_SHEET_MAX_FRAC).dp
+                }
                 // The full spinner stands in for the page only until a FIRST page exists; a
                 // re-render after that keeps the current page and its zoom on screen and
                 // signals the pass with the corner indicator below (see `PdfPreviewScreen`).
@@ -372,8 +405,8 @@ internal fun PdfPreviewOverlay(
                 // over the page and takes the touches that land on it, while the page above
                 // it keeps its pinch and pan. No scrim: nothing here is modal. The cap is
                 // computed here because only the overlay knows the strip the panel has to
-                // stay clear of; the panel applies it. The root Column's `systemBarsPadding`
-                // keeps this Box — and so the panel at its bottom — above the navigation bar.
+                // stay clear of; the panel applies it. This Box's own bottom inset padding keeps
+                // it — and so the panel at its bottom — above the navigation bar.
                 if (showOptions && optionsSheet != null) {
                     PreviewOptionsPanel(
                         onClose = { showOptions = false },
@@ -575,8 +608,8 @@ internal fun RunoutWearOptionsSheet(
     // Scrollable: without its own scroll a short screen clips the bottom rows mid-checkbox
     // (same posture as PdfOptionsSheet). The title and the height cap belong to the hosting
     // [PreviewOptionsPanel] — only `PdfPreviewOverlay` knows the page strip a tuning panel must
-    // stay clear of — and the navigation-bar inset is paid by the overlay's
-    // `systemBarsPadding`, so this column carries none of them.
+    // stay clear of — and the navigation-bar inset is paid by the overlay's page box, so this
+    // column carries none of them.
     Column(
         Modifier
             .fillMaxWidth()

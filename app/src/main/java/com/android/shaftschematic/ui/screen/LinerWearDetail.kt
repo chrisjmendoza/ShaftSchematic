@@ -1209,7 +1209,7 @@ internal fun WearChip(
         onClick = onClick,
         enabled = enabled,
         modifier = modifier,
-        label = { Text(label) },
+        label = { ChipLabel(label) },
         colors = FilterChipDefaults.filterChipColors(
             selectedContainerColor = Color.Black, selectedLabelColor = Color.White,
             containerColor = Color.Transparent, labelColor = MaterialTheme.colorScheme.onSurface,

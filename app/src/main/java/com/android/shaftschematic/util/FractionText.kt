@@ -34,9 +34,9 @@ object FractionText {
         data class Frac(val numerator: String, val denominator: String) : Run
 
         /**
-         * The tightened space between a whole number and its fraction (`12 5/8`). A fraction box
-         * carries its own side bearing, so a full word-space next to one reads as a gap; this
-         * stands in for any run of spaces that touches a fraction.
+         * The tightened space between a whole number and its fraction (`12 5/8`). A mixed number
+         * reads as ONE value, so a full word space inside it reads as two; this stands in for the
+         * run of spaces between the whole number's last digit and the fraction, and only there.
          */
         data object Gap : Run
     }
@@ -141,29 +141,31 @@ object FractionText {
         return Match(Run.Frac(text.substring(start, j), den), k)
     }
 
-    /** Replaces every run of spaces that touches a fraction with a single [Run.Gap]. */
+    /**
+     * Replaces the whole-number space of a mixed number (`12 5/8` — a digit, spaces, then a
+     * fraction) with a single [Run.Gap]. Every other space beside a fraction stays a plain word
+     * space: `Rate: 3/4"/ft`, `× 9/16`, `1/4 × 1/8` separate a label or an operator from a value,
+     * and the tightened gap there printed as no space at all — "Rate:¾"/ft" (on-device report).
+     */
     private fun tightenSpaces(runs: List<Run>): List<Run> {
         if (runs.none { it is Run.Frac }) return runs
 
-        val out = ArrayList<Run>(runs.size + 2)
+        val out = ArrayList<Run>(runs.size + 1)
         for ((idx, run) in runs.withIndex()) {
             if (run !is Run.Plain) {
                 out += run
                 continue
             }
-            val fracBefore = idx > 0 && runs[idx - 1] is Run.Frac
             val fracAfter = idx + 1 < runs.size && runs[idx + 1] is Run.Frac
-
-            var body = run.text
-            val lead = fracBefore && body.startsWith(" ")
-            val trail = fracAfter && body.endsWith(" ")
-            if (lead) body = body.trimStart(' ')
-            if (trail) body = body.trimEnd(' ')
-
-            if (lead) out += Run.Gap
-            if (body.isNotEmpty()) out += Run.Plain(body)
-            // An all-space run between two fractions collapses to the single leading gap.
-            if (trail && body.isNotEmpty()) out += Run.Gap
+            val body = run.text.trimEnd(' ')
+            val wholeNumberSpace = fracAfter && body.length < run.text.length &&
+                body.lastOrNull()?.isDigit() == true
+            if (wholeNumberSpace) {
+                out += Run.Plain(body)
+                out += Run.Gap
+            } else {
+                out += run
+            }
         }
         return out
     }

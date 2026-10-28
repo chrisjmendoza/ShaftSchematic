@@ -44,6 +44,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.ProjectInfo
+import com.android.shaftschematic.ui.adaptive.LocalSidebarPermanent
 import com.android.shaftschematic.pdf.composeRunoutPdf
 import com.android.shaftschematic.ui.nav.FINAL_DRAWING_LABEL
 import com.android.shaftschematic.ui.nav.blockingExportError
@@ -66,9 +67,10 @@ import com.android.shaftschematic.util.writeShaftPdfToUri
  * came in and nothing on this tab changes it — the two are the before and the after.
  *
  * Two states, one tab:
- * - **No final drawing yet** — the light tab chrome over an empty state saying what this is,
- *   what it is not, and one button to start it. Nothing else: a tab that offers editing
- *   controls over a drawing that does not exist has to invent one to show them.
+ * - **No final drawing yet** — the light tab chrome (navigation, History, Save) over an empty
+ *   state saying what this is, what it is not, and one button to start it. Nothing else: a tab
+ *   that offers editing controls over a drawing that does not exist has to invent one to show
+ *   them. History stays because a Discard lands here and must be undoable in place.
  * - **A final drawing exists** — the SAME editor the Schematic tab hosts, bound to the final
  *   geometry (`ShaftRoute(target = FINAL)`). The carousel, add dialogs, preview box, collision
  *   badges and warnings need no changes at all: they are presentational over whatever spec
@@ -189,6 +191,8 @@ private fun FinalEmptyState(
 ) {
     val currentDocumentName by vm.currentDocumentName.collectAsState()
     val hasUnsavedChanges by vm.hasUnsavedChanges.collectAsState()
+    val canUndo by vm.canUndo.collectAsState()
+    val canRedo by vm.canRedo.collectAsState()
 
     Column(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
         EditorDocumentTitle(
@@ -203,8 +207,11 @@ private fun FinalEmptyState(
                 .padding(horizontal = 4.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = onOpenSidebar) {
-                Icon(Icons.Filled.Menu, contentDescription = "Open navigation")
+            // Nothing to open when the sidebar is already laid out beside the tabs.
+            if (!LocalSidebarPermanent.current) {
+                IconButton(onClick = onOpenSidebar) {
+                    Icon(Icons.Filled.Menu, contentDescription = "Open navigation")
+                }
             }
             Text(
                 text = EditorTab.FINAL.label,
@@ -212,6 +219,15 @@ private fun FinalEmptyState(
                 modifier = Modifier.padding(start = 4.dp),
             )
             Spacer(Modifier.weight(1f))
+            // The same History action the editor bar carries: "Discard final drawing" lands on
+            // this state, and without it the discard could only be undone from another tab
+            // (on-device report).
+            HistoryMenu(
+                canUndo = canUndo,
+                canRedo = canRedo,
+                onUndo = vm::undoEdit,
+                onRedo = vm::redoEdit,
+            )
             IconButton(
                 onClick = onSave,
                 modifier = Modifier.testTag("toolbar_save"),

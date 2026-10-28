@@ -80,3 +80,18 @@ fun expandedDrawingBandHeightDp(
     val previewWidth = (contentWidthDp - sideColumnWidthDp - gapDp).coerceAtLeast(0f)
     return (previewWidth / aspect).coerceIn(floorDp, capDp)
 }
+
+/**
+ * Height of the component carousel in a MEDIUM window's scrolling column (a portrait tablet):
+ * whatever the column's viewport has left once everything above the carousel is laid out, so the
+ * card runs to the foot of the screen — never under [floor], the phone's fixed height, so a short
+ * window scrolls the column rather than squeezing the card. [contentHeight] is the column's whole
+ * scrolled content and [carouselHeight] the carousel's share of it, both from the same layout
+ * pass; any one unit (px or dp) throughout.
+ */
+fun mediumCarouselHeight(
+    viewportHeight: Float,
+    contentHeight: Float,
+    carouselHeight: Float,
+    floor: Float,
+): Float = (viewportHeight - (contentHeight - carouselHeight)).coerceAtLeast(floor)

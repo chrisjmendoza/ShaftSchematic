@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -77,6 +78,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.movableContentOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -91,6 +94,8 @@ import com.android.shaftschematic.geom.computeOalWindow
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.input.ImeAction
@@ -398,12 +403,18 @@ fun ShaftScreen(
                 // insets would pad for it a second time.
                 windowInsets = WindowInsets(0, 0, 0, 0),
                 title = {
-                    Text(
-                        text = editorTitle,
-                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    // A COMPACT bar prints no title: the action icons leave it a couple of
+                    // characters, so it printed as ".." (on-device report), and the document
+                    // title strip above already names the screen.
+                    if (currentWindowWidthClass() != WindowWidthClass.COMPACT) {
+                        Text(
+                            text = editorTitle,
+                            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.testTag(EDITOR_BAR_TITLE_TAG),
+                        )
+                    }
                 },
                 navigationIcon = {
                     // Hamburger opens the sidebar nav drawer.
@@ -502,6 +513,11 @@ fun ShaftScreen(
     ) { inner ->
         val widthClass = currentWindowWidthClass()
         val previewScroll = rememberScrollState()
+        // The MEDIUM column's measurements behind its carousel height, px: the scroll viewport,
+        // the whole scrolled content, and the carousel's own share of that content.
+        var mediumViewportPx by remember { mutableIntStateOf(0) }
+        var mediumContentPx by remember { mutableIntStateOf(0) }
+        var mediumCarouselPx by remember { mutableIntStateOf(0) }
 
         // The editor's content blocks are declared ONCE here and invoked by whichever width
         // branch lays out, so the phone column and the tablet two-pane cannot drift apart.
@@ -623,7 +639,7 @@ fun ShaftScreen(
         // [peekPageWidth] non-null centres the current card at that width with its neighbours
         // peeking at the sides (the tablet carousel); [fillHeight] fills the parent's height
         // instead of the phone's fixed carousel height.
-        val carouselBlock: @Composable (peekPageWidth: Dp?, fillHeight: Boolean) -> Unit = { peekPageWidth, fillHeight ->
+        val carouselContent: @Composable (peekPageWidth: Dp?, fillHeight: Boolean) -> Unit = { peekPageWidth, fillHeight ->
             ComponentCarouselPager(
                 spec = spec,
                 resolvedComponents = resolvedComponents,
@@ -707,10 +723,12 @@ fun ShaftScreen(
                     onAddBody = {
                         chooserOpen = false
                         addStartMm = d.startMm
-                        addLengthMm = if (spec.overallLengthMm > d.startMm) {
-                            spec.overallLengthMm - d.startMm
-                        } else {
-                            sessionAddDefaults.bodyLenMm
+                        // A Start moved onto a bare-shaft span opens sized to that span; a
+                        // body to the OAL from there would run over the components FWD of it.
+                        addLengthMm = when {
+                            d.bareSpanEndMm != null -> d.bareSpanEndMm - d.startMm
+                            spec.overallLengthMm > d.startMm -> spec.overallLengthMm - d.startMm
+                            else -> sessionAddDefaults.bodyLenMm
                         }
                         addBodyOpen = true
                     },
@@ -846,14 +864,45 @@ fun ShaftScreen(
             }
         }
 
+        // The carousel (with the add dialogs it raises) and the warning banner are MOVABLE
+        // content, because a rotation across the EXPANDED boundary moves them between the two
+        // width branches. `rememberSaveable` keys its values by composition path, and movable
+        // content roots that path at itself rather than at the branch hosting it — so a card's
+        // typed text and scroll, an add dialog's fields and a dismissed warning keep their saved
+        // state across the move instead of resetting, and no stale copy is saved again to come
+        // back on a later rotation.
+        val latestCarouselContent by rememberUpdatedState(carouselContent)
+        val carouselBlock: @Composable (peekPageWidth: Dp?, fillHeight: Boolean) -> Unit = remember {
+            movableContentOf { peekPageWidth: Dp?, fillHeight: Boolean ->
+                latestCarouselContent(peekPageWidth, fillHeight)
+            }
+        }
+        val latestSpec by rememberUpdatedState(spec)
+        val warningBanner: @Composable () -> Unit = remember {
+            movableContentOf { SpecWarningBanner(spec = latestSpec) }
+        }
+
         // [warningSlot] is emitted between the add button and the carousel — where the spec
         // warnings sit in one column. With two panes they move up beside the drawing and the
-        // overall length they are about, and this slot stays empty.
-        val componentsBlock: @Composable (warningSlot: @Composable () -> Unit) -> Unit = { warningSlot ->
+        // overall length they are about, and this slot stays empty. [carouselHeight] null is the
+        // phone's fixed-height carousel; a height fills a box that tall (a MEDIUM window).
+        val componentsBlock: @Composable (warningSlot: @Composable () -> Unit, carouselHeight: Dp?) -> Unit = { warningSlot, carouselHeight ->
             componentsHeader("Swipe to select")
             addComponentButton()
             warningSlot()
-            carouselBlock(null, false)
+            if (carouselHeight == null) {
+                carouselBlock(null, false)
+            } else {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(carouselHeight)
+                        .onSizeChanged { mediumCarouselPx = it.height }
+                        .testTag(EDITOR_MEDIUM_CAROUSEL_TAG)
+                ) {
+                    carouselBlock(null, true)
+                }
+            }
         }
 
         if (projectInfoOpen) {
@@ -932,7 +981,7 @@ fun ShaftScreen(
                                 addComponentButton()
                             }
                             Box(Modifier.fillMaxWidth().padding(end = OAL_ACTION_SLOT_WIDTH)) {
-                                SpecWarningBanner(spec = spec)
+                                warningBanner()
                             }
                         }
                     }
@@ -985,20 +1034,55 @@ fun ShaftScreen(
                 HorizontalDivider()
                 Spacer(Modifier.height(12.dp))
 
+                // A MEDIUM window is a taller column, and the phone's fixed carousel height left
+                // the card clipped above an empty quarter of the screen (on-device report): there
+                // the carousel takes whatever height the scrolling column has left under the
+                // controls above it, measured off this column (`mediumCarouselHeight`). The
+                // viewport is read OUTSIDE the IME padding, so the keyboard scrolls the column
+                // rather than shrinking the card under the focused field.
+                val medium = widthClass == WindowWidthClass.MEDIUM
+                val mediumCarouselDp = if (
+                    medium && mediumViewportPx > 0 && mediumContentPx > 0 && mediumCarouselPx > 0
+                ) {
+                    with(LocalDensity.current) {
+                        mediumCarouselHeight(
+                            viewportHeight = mediumViewportPx.toFloat(),
+                            contentHeight = mediumContentPx.toFloat(),
+                            carouselHeight = mediumCarouselPx.toFloat(),
+                            floor = CAROUSEL_HEIGHT.toPx(),
+                        ).toDp()
+                    }
+                } else {
+                    CAROUSEL_HEIGHT
+                }
+
                 // Scrollable editor content
                 Column(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
+                        .then(if (medium) Modifier.onSizeChanged { mediumViewportPx = it.height } else Modifier)
                         .imePadding()
                         .verticalScroll(scroll)
+                        // The scroll keeps the viewport's minimum height on its content, so the
+                        // content is measured past a relaxed minimum or it never reads shorter
+                        // than the viewport — the case the fill exists for.
+                        .then(
+                            if (medium) {
+                                Modifier
+                                    .wrapContentHeight(Alignment.Top)
+                                    .onSizeChanged { mediumContentPx = it.height }
+                            } else {
+                                Modifier
+                            }
+                        )
                         .windowInsetsPadding(
                             WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)
                         ),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     oalBlock(OAL_FIELD_MAX_WIDTH)
-                    componentsBlock { SpecWarningBanner(spec = spec) }
+                    componentsBlock({ warningBanner() }, if (medium) mediumCarouselDp else null)
                 }
             }
         }
@@ -1044,8 +1128,18 @@ internal const val EDITOR_PANE_PREVIEW_TAG = "editor_pane_preview"
 /** EXPANDED components region — the Components heading and the peeking carousel under the band. */
 internal const val EDITOR_PANE_COMPONENTS_TAG = "editor_pane_components"
 
+/** MEDIUM components column — the box the carousel fills, sized to the column's leftover height. */
+internal const val EDITOR_MEDIUM_CAROUSEL_TAG = "editor_medium_carousel"
+
+/** The action bar's screen title ("Shaft Editor") — composed on MEDIUM and EXPANDED only. */
+internal const val EDITOR_BAR_TITLE_TAG = "editor_bar_title"
+
+/**
+ * The History (Undo / Redo) action over the ONE document history. Shared with the Final tab's
+ * empty state, so a discarded final drawing can be undone where it was discarded.
+ */
 @Composable
-private fun HistoryMenu(
+internal fun HistoryMenu(
     canUndo: Boolean,
     canRedo: Boolean,
     onUndo: () -> Unit,
@@ -1460,17 +1554,29 @@ internal fun formatDisplay(valueMm: Float, unit: UnitSystem, d: Int = 3): String
         (valueMm.toDouble() / MM_PER_IN).toFloat()
     }
 
-    return "%.${decimals}f"
+    // A value that rounds to zero at this precision prints "0", never "-0": a FWD-referenced
+    // component flush with the FWD end recovers its distance as a negative zero or a hair
+    // below it, and "-0" in a Start field reads as a negative position (on-device report).
+    val text = "%.${decimals}f"
         .format(v)
         .trimEnd('0')
         .trimEnd('.')
         .ifEmpty { "0" }
+    return if (text == "-0") "0" else text
 }
 
 /** Convenience wrapper for "mm → display" in the component cards. */
 internal fun disp(mm: Float, unit: UnitSystem, d: Int = 3): String =
     formatDisplay(mm, unit, d)
 
+
+/** The system font scale above which the OAL field's label shortens to "OAL (in)". */
+internal const val OAL_SHORT_LABEL_FONT_SCALE = 1.3f
+
+/** The OAL field's label: "Overall Length (in)", or "OAL (in)" at a large system font. */
+internal fun oalFieldLabel(unit: UnitSystem, fontScale: Float): String =
+    if (fontScale > OAL_SHORT_LABEL_FONT_SCALE) "OAL (${abbr(unit)})"
+    else "Overall Length (${abbr(unit)})"
 
 /**
  * The shaft's Overall Length entry field.
@@ -1561,6 +1667,11 @@ internal fun OverallLengthField(
         focusManager.clearFocus()
     }
 
+    // At a large system font the full label wrapped inside the outline and its first line was
+    // clipped by the field's top edge (on-device report, 200%): it shortens past
+    // OAL_SHORT_LABEL_FONT_SCALE and never takes a second line at any scale.
+    val oalLabel = oalFieldLabel(unit, LocalDensity.current.fontScale)
+
     Row(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
@@ -1568,7 +1679,7 @@ internal fun OverallLengthField(
         OutlinedTextField(
             value = lengthText,
             onValueChange = { input -> lengthText = input },
-            label = { Text("Overall Length (${abbr(unit)})") },
+            label = { Text(oalLabel, maxLines = 1, overflow = TextOverflow.Ellipsis) },
             singleLine = true,
             enabled = true,
             isError = isOversized,

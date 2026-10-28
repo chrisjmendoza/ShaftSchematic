@@ -1514,8 +1514,28 @@ fun computeWearStripInnerLayout(
     val cylTop = cylBottom - cylH
     val railY = (cylTop - witnessRun).coerceAtLeast(stripTop)
     val remainingForRail = (railY - stripTop).coerceAtLeast(0f)
-    val railLabelRows = (remainingForRail / rowHeightPt).toInt().coerceIn(0, maxLabelRows)
+    // The epsilon absorbs float rounding in the subtractions above: a band reserved for exactly N
+    // rows of a non-integral pitch (a stacked dual row) can come back a hair short and drop a row.
+    val railLabelRows = ((remainingForRail + ROW_FIT_EPS_PT) / rowHeightPt).toInt().coerceIn(0, maxLabelRows)
     return WearStripInnerLayout(cylTop, cylBottom, railY, railLabelRows)
+}
+
+/** Float slack [computeWearStripInnerLayout] allows a band reserved for a whole number of rows. */
+private const val ROW_FIT_EPS_PT = 1e-3f
+
+/**
+ * Where a liner name under the main profile centres (it draws CENTER-aligned): on its liner's
+ * span centre [spanCx], slid only as far as keeps the whole label of width [labelW] inside
+ * `[loX, hiX]` — the row between the "← AFT" / "FWD →" direction labels. Clamping the centre
+ * alone let a liner near a shaft end run half its name into the direction label on the same
+ * baseline (on-device report: "FWD LinFWD →"). A label wider than the row (the caller ellipsizes
+ * to it, so only by rounding) centres in the row.
+ */
+fun wearProfileNameCenterX(spanCx: Float, labelW: Float, loX: Float, hiX: Float): Float {
+    val half = labelW * 0.5f
+    val lo = loX + half
+    val hi = hiX - half
+    return if (lo > hi) (loX + hiX) * 0.5f else spanCx.coerceIn(lo, hi)
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

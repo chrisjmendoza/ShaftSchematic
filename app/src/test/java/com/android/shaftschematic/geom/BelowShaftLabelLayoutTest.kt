@@ -226,4 +226,48 @@ class BelowShaftLabelLayoutTest {
         assertEquals(200f, out[0].left, 0.01f)
         assertFalse(out[0].fitted)
     }
+
+    // ── Clearance reads as a separation ───────────────────────────────────────
+
+    /**
+     * The clearance must exceed a word space of the 10 pt label face (~3 pt), or two names print
+     * as one run — "AFT Thread AFT Taper" (on-device report).
+     */
+    @Test
+    fun `the clearance is wider than a word space`() {
+        assertTrue(BelowShaftLabelLayout.PAD_X >= 6f)
+    }
+
+    /** A thread butting a taper: names aimed at touching spans end at least the gap apart. */
+    @Test
+    fun `names on touching spans end at least the gap apart`() {
+        // Thread 100..180, taper 180..300; both names wider than half their span's room.
+        val reqs = listOf(
+            centered(text = 70f, center = 140f, spanL = 100f, spanR = 180f),
+            centered(text = 64f, center = 240f, spanL = 180f, spanR = 300f),
+        )
+        val out = BelowShaftLabelLayout.place(reqs, emptyList(), rows)
+
+        assertTrue("both stayed on the first row", out.all { it.row == 0 && it.fitted })
+        val (a, b) = out.zip(reqs).sortedBy { it.first.left }
+        val gap = b.first.left - (a.first.left + a.second.width)
+        assertTrue("gap $gap < ${BelowShaftLabelLayout.PAD_X}", gap >= BelowShaftLabelLayout.PAD_X - 0.01f)
+    }
+
+    /** A liner's name slid beside its own Ø value keeps the gap from it. */
+    @Test
+    fun `a name beside a callout box keeps the gap from it`() {
+        val cx = 300f
+        val value = Box(left = cx + 4f, right = cx + 60f, top = 24f, bottom = 36f)
+        val reqs = listOf(centered(text = 60f, center = cx, spanL = cx - 120f, spanR = cx + 120f))
+        val out = BelowShaftLabelLayout.place(reqs, listOf(value), rows)
+
+        assertEquals(0, out[0].row)
+        val right = out[0].left + reqs[0].width
+        val clearance = if (right <= value.left) value.left - right else out[0].left - value.right
+        assertTrue(
+            "clearance $clearance < ${BelowShaftLabelLayout.PAD_X}",
+            clearance >= BelowShaftLabelLayout.PAD_X - 0.01f,
+        )
+    }
 }

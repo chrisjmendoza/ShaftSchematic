@@ -6,7 +6,9 @@ File: `ui/input/NumericInputField.kt` (composable `NumericInputField`; wrapped b
 `CommitNum` in `ComponentCarousel.kt` and `CommitNumField` in `AddComponentDialogs.kt`)  
 Purpose: Single-line numeric field that holds local text; commits on blur/IME Done via callback.
 
-Version: v0.6 (2026-10-16; a rejected value is reverted to the caller's value AND named in a
+Version: v0.7 (2026-10-27; the box's text, the settled text and the rejection notice survive an
+activity recreation, and the focus baseline is the settled text).
+v0.6 (2026-10-16; a rejected value is reverted to the caller's value AND named in a
 `"<typed> not applied — <reason>"` notice that only an edit clears; the unused `showValidationErrors` switch was removed).
 v0.5 (2026-08-29; the edge-trigger and external-refresh edges of `onDirtyChange` are now
 pinned by tests). v0.4 (2026-08-29) added the `onDirtyChange` contract behind the carousel card's
@@ -32,7 +34,25 @@ Invariants
   reset the Add-Body length default. Do not restore a "commit defensively when the
   baseline is null" rule.
 - The baseline is re-captured on **each** focus gain, not once at composition — otherwise
-  a second visit to the field compares against stale text and commits spuriously.
+  a second visit to the field compares against stale text and commits spuriously. It is the
+  **settled** text (below), which equals the box's text on every focus gain but one: a
+  restored edit that never landed (next bullet), which a blur must hand over rather than read
+  as unchanged and leave on screen, unapplied.
+- **Typed text survives an activity recreation** (a tablet rotation; on-device report: a typed
+  undercut Ø came back blank). The box's text, the settled text and the rejection notice are
+  `rememberSaveable`, keyed on `initialText` exactly as the plain state was. By default a restore
+  commits nothing: the focus baseline stays plain state, so the attach-time unfocused callback
+  still finds no baseline. The state is saved before the teardown, whose own blur commits as any blur
+  does; where that commit lands in state the recreation discards, the restored text is the only
+  copy and its next blur lands it. Restoration does not compare `rememberSaveable` inputs, so
+  the field also saves the `initialText` it was seeded from and drops the saved state when the
+  incoming value differs (the teardown blur's commit already reached the model) — otherwise it
+  would report a phantom uncommitted edit.
+- **`landRestoredEdit = true`** is for a caller whose commits land in state the teardown blur
+  cannot reach (the undercut card's draft, saved before the teardown): a field restored still
+  holding an edit commits it ONCE, after the restoring composition — a rejected one reverts with
+  its notice, as a blur's would. Only a restore can compose a field dirty (a fresh field's text
+  is its settled text), so it never fires on an ordinary composition. Default `false`.
 - **Invalid input reverts AND names what it threw away — the field never silently swaps a
   value.** On a failed commit (blur or IME Done; the text does not parse, or `validator` returns
   a reason) the box goes back to the value the caller holds — the last committed text, or the
@@ -78,7 +98,9 @@ Length validator convention
 
 Test coverage
 - `ui/input/BlurCommitPolicyTest` — the predicate, pure JVM.
-- `ui/input/NumericInputFieldBlurTest` — the predicate actually wired into the field:
+- `ui/input/NumericInputFieldBlurTest` — the restoration edges via `StateRestorationTester`
+  (typed text back, no commit from the restore itself, the restored edit landing on the next
+  blur, a moved model value winning over saved text, `landRestoredEdit` landing it at once), and the predicate actually wired into the field:
   real focus/blur/IME events, re-focus baseline, invalid-input revert (to the caller's value,
   never a half-typed intermediate) with its `"<typed> not applied — <reason>"` notice for a
   validator rejection, a parse failure and a blank entry, the notice surviving a re-focus (both a

@@ -15,6 +15,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -63,6 +64,7 @@ class NumericInputFieldBlurTest {
         hint: String? = null,
         placeholder: String? = null,
         externalIssueText: String? = null,
+        landRestoredEdit: Boolean = false,
     ) {
         val focusManager = LocalFocusManager.current
         MaterialTheme {
@@ -75,6 +77,7 @@ class NumericInputFieldBlurTest {
                     hint = hint,
                     placeholder = placeholder,
                     externalIssueText = externalIssueText,
+                    landRestoredEdit = landRestoredEdit,
                     onDirtyChange = { dirtyReports += it },
                     parseValid = { it.toFloatOrNull() != null },
                     onCommit = { commits += it }
@@ -436,6 +439,101 @@ class NumericInputFieldBlurTest {
 
         assertEquals("a refresh must not write back", emptyList<String>(), commits)
         assertEquals("the refreshed value is the settled one", false, dirtyReports.last())
+    }
+
+    /* ── A typed value survives an activity recreation (a tablet rotation) ──────── */
+
+    // The state is saved BEFORE the teardown, and the teardown takes focus off the field, so its
+    // own blur commits once on the way out exactly as any blur does. Where that commit lands in
+    // state the recreation discards (the undercut card's draft), the caller's value comes back
+    // unchanged and the typed text is the only copy left — the case these pin.
+
+    @Test
+    fun `a typed value that was never committed survives a recreation without committing`() {
+        val restorer = StateRestorationTester(rule)
+        restorer.setContent { Host() }
+
+        focusField()
+        rule.onNodeWithTag(FIELD).performTextReplacement("13")
+        rule.waitForIdle()
+
+        restorer.emulateSavedInstanceStateRestore()
+        rule.waitForIdle()
+
+        fieldHolds("13")
+        assertEquals("the teardown's blur is the only commit; the restore adds none", listOf("13"), commits)
+        assertEquals("the restored edit still reads as uncommitted", true, dirtyReports.last())
+    }
+
+    @Test
+    fun `a restored edit lands on the next blur even with no further typing`() {
+        // On screen and unapplied is the trap: the box shows the typed value, so leaving the
+        // field must hand it over exactly as a blur before the rotation would have.
+        val restorer = StateRestorationTester(rule)
+        restorer.setContent { Host() }
+
+        focusField()
+        rule.onNodeWithTag(FIELD).performTextReplacement("13")
+        rule.waitForIdle()
+        restorer.emulateSavedInstanceStateRestore()
+        rule.waitForIdle()
+
+        focusField()
+        focusElsewhere()
+
+        assertEquals("the teardown's blur, then the restored edit landing", listOf("13", "13"), commits)
+    }
+
+    @Test
+    fun `a restore over a model value that moved meanwhile shows the new value clean`() {
+        // Restoration does not compare the saved state's inputs: a model value that changed
+        // between the save and the restore (a teardown blur committed the edit) must win over
+        // the saved text, or the field would report an edit nobody is making.
+        var initial = "12.5"
+        val restorer = StateRestorationTester(rule)
+        restorer.setContent { Host(initialText = initial) }
+
+        focusField()
+        rule.onNodeWithTag(FIELD).performTextReplacement("13")
+        rule.waitForIdle()
+
+        initial = "20"
+        restorer.emulateSavedInstanceStateRestore()
+        rule.waitForIdle()
+
+        fieldHolds("20")
+        assertEquals("only the teardown's blur committed", listOf("13"), commits)
+        assertEquals(false, dirtyReports.last())
+    }
+
+    @Test
+    fun `landRestoredEdit commits a restored edit once, with no focus and no further typing`() {
+        // The undercut card's case: the teardown's blur committed into state the recreation threw
+        // away, so the restored field must hand its edit over itself.
+        val restorer = StateRestorationTester(rule)
+        restorer.setContent { Host(landRestoredEdit = true) }
+
+        focusField()
+        rule.onNodeWithTag(FIELD).performTextReplacement("13")
+        rule.waitForIdle()
+        restorer.emulateSavedInstanceStateRestore()
+        rule.waitForIdle()
+
+        fieldHolds("13")
+        assertEquals("the teardown's blur, then the restored edit landing", listOf("13", "13"), commits)
+        assertEquals("the landed edit is settled", false, dirtyReports.last())
+    }
+
+    @Test
+    fun `landRestoredEdit commits nothing on an ordinary composition or a clean restore`() {
+        val restorer = StateRestorationTester(rule)
+        restorer.setContent { Host(landRestoredEdit = true) }
+        rule.waitForIdle()
+        assertEquals("composition alone must not commit", emptyList<String>(), commits)
+
+        restorer.emulateSavedInstanceStateRestore()
+        rule.waitForIdle()
+        assertEquals("a restore with nothing typed must not commit", emptyList<String>(), commits)
     }
 
     private companion object {

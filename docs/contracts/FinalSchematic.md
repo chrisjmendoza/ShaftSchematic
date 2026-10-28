@@ -115,9 +115,12 @@ Marking — a final sheet must never pass for the original:
 - `EditorTab.FINAL` — "Final Schematic", between UNDERCUT and OUTPUT (it follows undercuts in
   the shop process). Enabled by the same built-shaft rule as the other document tabs.
 - `FinalRoute` (`ui/screen/FinalRoute.kt`):
-  - **No final yet** → the light tab chrome (document title strip, toolbar with the tab name and
-    Save) over an empty state: what the tab is, what it is not, and one primary button
-    **"Start from original schematic"** (`startFinalSpec`).
+  - **No final yet** → the light tab chrome (document title strip, toolbar with the tab name,
+    History and Save; its hamburger hidden beside the permanent sidebar like every tab's,
+    `LocalSidebarPermanent`) over an empty state: what the tab is, what it is not, and one primary
+    button **"Start from original schematic"** (`startFinalSpec`). History is the editor bar's
+    own `HistoryMenu` over the ONE document history — a Discard lands on this state, and its
+    Undo must be reachable without leaving the tab (on-device report).
   - **Final present** → the SAME editor as the Schematic tab: `ShaftRoute(target = FINAL)` — its
     `spec`/`resolvedComponents` come from the final flows and every callback passes the
     target — titled "Final Schematic", under a persistent banner *"Final drawing — the

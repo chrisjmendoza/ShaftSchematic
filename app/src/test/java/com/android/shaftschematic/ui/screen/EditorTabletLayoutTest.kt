@@ -55,4 +55,17 @@ class EditorTabletLayoutTest {
         assertEquals(120f, expandedDrawingBandHeightDp(400f, aspect = 4f, floorDp = 120f, capDp = 320f), 1e-3f)
         assertEquals(320f, expandedDrawingBandHeightDp(2000f, aspect = 4f, floorDp = 120f, capDp = 320f), 1e-3f)
     }
+
+    @Test
+    fun `a medium carousel takes what the viewport has left above its floor`() {
+        // 900 of viewport; the content is 1000 tall of which the carousel is 360, so 640 sits above.
+        assertEquals(900f - 640f, mediumCarouselHeight(900f, 1000f, 360f, floor = 200f), 1e-3f)
+        // Re-measured at that height the answer holds — the layout settles in one pass.
+        assertEquals(260f, mediumCarouselHeight(900f, 640f + 260f, 260f, floor = 200f), 1e-3f)
+    }
+
+    @Test
+    fun `a medium carousel never drops under the phone's height`() {
+        assertEquals(360f, mediumCarouselHeight(700f, 1000f, 360f, floor = 360f), 1e-3f)
+    }
 }

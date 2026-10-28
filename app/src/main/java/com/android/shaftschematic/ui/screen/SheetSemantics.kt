@@ -41,9 +41,17 @@ object SheetSemantics {
         "Liner wear detail. ${count(wearAreaCount, "wear area")}, ${count(pitCount, "pit")}, " +
             "${count(diaReadingCount, "diameter reading")} in view."
 
-    /** Runout tab — preview canvas (draggable stations, tap-to-enter readings). */
-    fun runoutPreview(stationCount: Int, readingCount: Int): String =
+    /**
+     * Runout tab — preview canvas (draggable stations, tap-to-enter readings). [moveMode] swaps
+     * the gesture sentence for Move mode's own — a tap there selects instead of opening the
+     * reading dialog, so the plain instructions would read out the wrong gestures.
+     */
+    fun runoutPreview(stationCount: Int, readingCount: Int, moveMode: Boolean = false): String =
         "Runout drawing. ${count(stationCount, "station")}, " +
             "${count(readingCount, "reading")} entered. " +
-            "Long-press a bubble to move it; tap to enter a reading."
+            if (moveMode) {
+                "Move mode on: drag a bubble to move it; tap a bubble or component to select it."
+            } else {
+                "Long-press a bubble to move it; tap to enter a reading."
+            }
 }

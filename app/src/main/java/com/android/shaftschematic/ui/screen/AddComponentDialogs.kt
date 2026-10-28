@@ -32,6 +32,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,12 +51,14 @@ import com.android.shaftschematic.model.SlotAuthoredReference
 import com.android.shaftschematic.model.keywayCount
 import com.android.shaftschematic.model.suggestedBodyKeywayEnd
 import com.android.shaftschematic.model.suggestedThreadReliefAtAft
+import com.android.shaftschematic.ui.config.AddDefaultsConfig
 import com.android.shaftschematic.ui.input.classifyTaperSideByMidpoint
 import com.android.shaftschematic.ui.input.taperAddDiameterOrder
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.util.collectAddWarnings
 import com.android.shaftschematic.ui.util.startOverlapErrorMm
 import com.android.shaftschematic.util.autoTaperRateText
+import com.android.shaftschematic.util.filterTaperRateInput
 import com.android.shaftschematic.util.manualTaperRateBlockingMessage
 import com.android.shaftschematic.util.manualTaperRateWarning
 import com.android.shaftschematic.util.parseFractionOrDecimal
@@ -78,30 +81,47 @@ private data class AddDialogDefaults(
 
 /**
  * Compute convenient dialog defaults:
- * - startMm = end of the last component (max end across all lists) or 0 if none
- * - lastDiaMm = last known diameter (body.dia, else taper.endDia, else 25 mm)
- * - bodyDiaMm = first body diameter when present, else lastDiaMm
+ * - startMm = see [addDialogStartMm]
+ * - lastDiaMm = see [addDialogLastDiaMm]
+ * - bodyDiaMm = see [addDialogBodyDiaMm]
  * - linerOdMm = first liner OD when present, else lastDiaMm
  */
 @Composable
 private fun rememberAddDialogDefaults(spec: ShaftSpec): AddDialogDefaults {
-    val startMm = remember(spec) {
-        // Bodies are fillers; excluded threads sit outside the shaft envelope.
-        listOfNotNull(
-            spec.tapers.maxOfOrNull  { it.startFromAftMm + it.lengthMm },
-            spec.liners.maxOfOrNull  { it.startFromAftMm + it.lengthMm },
-            spec.threads.filter { !it.excludeFromOAL }.maxOfOrNull { it.startFromAftMm + it.lengthMm },
-        ).maxOrNull() ?: 0f
-    }
-    val lastDia = remember(spec) {
-        spec.bodies.lastOrNull()?.diaMm
-            ?: spec.tapers.lastOrNull()?.endDiaMm
-            ?: 25f
-    }
-    val bodyDia = remember(spec) { spec.bodies.firstOrNull()?.diaMm ?: lastDia }
+    // Fallback only — the editor's chooser passes its own Start, from the same rule.
+    val startMm = remember(spec) { addDialogStartMm(spec) }
+    val lastDia = remember(spec) { addDialogLastDiaMm(spec) }
+    val bodyDia = remember(spec) { addDialogBodyDiaMm(spec, lastDia) }
     val linerOd = remember(spec) { spec.liners.firstOrNull()?.odMm ?: lastDia }
     return AddDialogDefaults(startMm = startMm, lastDiaMm = lastDia, bodyDiaMm = bodyDia, linerOdMm = linerOd)
 }
+
+/**
+ * The "last known diameter" the Add dialogs seed from (mm) — the Add Taper S.E.T. Ø, the thread
+ * major Ø and the liner-OD fallback: the last explicit body's Ø, else the last taper's end Ø,
+ * else the shaft-wide bare-shaft Ø (`ShaftSpec.autoBodyDiaMm` — the new-shaft prompt), else
+ * [ADD_DIALOG_DIA_FALLBACK_MM]. Without the bare-shaft step a new 8″ drawing offered a 25 mm
+ * (0.984″) taper (on-device report).
+ */
+internal fun addDialogLastDiaMm(spec: ShaftSpec): Float =
+    spec.bodies.lastOrNull()?.diaMm
+        ?: spec.tapers.lastOrNull()?.endDiaMm
+        ?: spec.autoBodyDiaMm.takeIf { it > 0f }
+        ?: ADD_DIALOG_DIA_FALLBACK_MM
+
+/** The diameter an Add dialog seeds when the drawing offers nothing to copy (mm). */
+internal const val ADD_DIALOG_DIA_FALLBACK_MM = 25f
+
+/**
+ * The Ø `AddBodyDialog` opens with (mm): the first explicit body's Ø, else the shaft-wide
+ * bare-shaft Ø (`ShaftSpec.autoBodyDiaMm` — the new-shaft prompt and the auto-body card's "All
+ * auto sections"), else [fallbackDiaMm]. An authored body wins over the bare-shaft Ø; without the
+ * bare-shaft step a new 8″ drawing offered a 25 mm (0.984″) body (on-device report).
+ */
+internal fun addDialogBodyDiaMm(spec: ShaftSpec, fallbackDiaMm: Float): Float =
+    spec.bodies.firstOrNull()?.diaMm
+        ?: spec.autoBodyDiaMm.takeIf { it > 0f }
+        ?: fallbackDiaMm
 
 /* ────────────────────────────────────────────────────────────────────────────
  * Dialog-local utilities
@@ -655,10 +675,23 @@ fun AddCouplerBoltSlotDialog(
     var clocking by remember { mutableStateOf(BoltHoleClocking.DEG_90) }
     val isCross = holeStyle == BoltHoleStyle.CROSS
 
-    var startAft by remember(unit, initialStartMm) { mutableStateOf(toDisplayString(initialStartMm, unit)) }
-    var startFwd by remember(unit) { mutableStateOf("0") }
-    var holeDia by remember(unit, initialHoleDiaMm) { mutableStateOf(toDisplayString(max(1f, initialHoleDiaMm), unit)) }
-    var countText by remember(initialCount) { mutableStateOf(initialCount.coerceAtLeast(1).toString()) }
+    // Both position seeds put the row ON the shaft, so the dialog opens valid with Add live
+    // (see couplerBoltSlotSeedMm). The seeds use the same hole Ø / count / spacing the fields open with.
+    val seedHoleDiaMm = max(1f, initialHoleDiaMm)
+    val seedCount = initialCount.coerceAtLeast(1)
+    fun seed(fwd: Boolean): Float = couplerBoltSlotSeedMm(
+        oalMm = spec.overallLengthMm,
+        isFwd = fwd,
+        suggestedAftStartMm = initialStartMm,
+        holeDiaMm = seedHoleDiaMm,
+        count = seedCount,
+        spacingMm = initialSpacingMm,
+        fromFaceMm = AddDefaultsConfig.SLOT_FROM_END_IN * 25.4f,
+    )
+    var startAft by remember(unit, initialStartMm) { mutableStateOf(toDisplayString(seed(fwd = false), unit)) }
+    var startFwd by remember(unit) { mutableStateOf(toDisplayString(seed(fwd = true), unit)) }
+    var holeDia by remember(unit, initialHoleDiaMm) { mutableStateOf(toDisplayString(seedHoleDiaMm, unit)) }
+    var countText by remember(initialCount) { mutableStateOf(seedCount.toString()) }
     var spacing by remember(unit, initialSpacingMm) { mutableStateOf(toDisplayString(initialSpacingMm, unit)) }
     var depth by remember(unit, initialDepthMm) { mutableStateOf(toDisplayString(initialDepthMm, unit)) }
 
@@ -668,30 +701,14 @@ fun AddCouplerBoltSlotDialog(
     val depthMm = toMmOrNull(depth, unit) ?: -1f
     val startEntered = toMmOrNull(if (isFwd) startFwd else startAft, unit) ?: -1f
 
-    // Axial span from the aft-most cutout (i = 0) to the fwd-most, used for FWD anchoring.
-    val rowSpanMm = (count - 1).coerceAtLeast(0) * spacingMm.coerceAtLeast(0f)
-
     // Physical position (from AFT) of the aft-most cutout center. When measuring from FWD, the
     // entered value locates the fwd-most cutout; the row then extends aft.
-    val physStartMm = if (isFwd) {
-        if (startEntered >= 0f) (spec.overallLengthMm - startEntered - rowSpanMm).coerceAtLeast(0f) else -1f
-    } else {
-        startEntered
-    }
+    val physStartMm = couplerBoltSlotPhysStartMm(spec.overallLengthMm, isFwd, startEntered, count, spacingMm)
 
     // Bounds check: every cutout (center ± hole radius) must lie on the shaft. Mirrors
     // CouplerBoltSlot.isValid(); only enforced once an OAL exists to check against.
     val boundsError: String? =
-        if (spec.overallLengthMm > 0f && physStartMm >= 0f && holeDiaMm > 0f && count >= 1) {
-            val lastCenterMm = physStartMm + rowSpanMm
-            val eps = 1e-3f
-            when {
-                physStartMm - holeDiaMm * 0.5f < -eps -> "Row extends past the AFT end of the shaft"
-                lastCenterMm + holeDiaMm * 0.5f > spec.overallLengthMm + eps ->
-                    "Row extends past the end of the shaft"
-                else -> null
-            }
-        } else null
+        couplerBoltSlotBoundsError(spec.overallLengthMm, physStartMm, holeDiaMm, count, spacingMm)
 
     // Unit converter launcher — a pure read-only tool, see addDialogTitleWithConverter's KDoc.
     var converterOpen by remember { mutableStateOf(false) }
@@ -834,27 +851,29 @@ fun AddThreadDialog(
 
     fun formatTpi(v: Float): String = "%1.3f".format(v).trimEnd('0').trimEnd('.').ifEmpty { "0" }
 
-    var start by remember(unit, effectiveStartMm) { mutableStateOf(toDisplayString(effectiveStartMm, unit)) }
-    var length by remember(unit, effectiveLengthMm) { mutableStateOf(toDisplayString(effectiveLengthMm, unit)) }
-    var major by remember(unit, effectiveMajorMm) { mutableStateOf(toDisplayString(max(1f, effectiveMajorMm), unit)) }
-    var tpiText by remember(initialTpi) { mutableStateOf(formatTpi(initialTpi)) }
-    var countInOal by remember { mutableStateOf(true) }
-    var isAftEnd by remember { mutableStateOf(true) }
+    var start by rememberSaveable(unit, effectiveStartMm) { mutableStateOf(toDisplayString(effectiveStartMm, unit)) }
+    var length by rememberSaveable(unit, effectiveLengthMm) { mutableStateOf(toDisplayString(effectiveLengthMm, unit)) }
+    var major by rememberSaveable(unit, effectiveMajorMm) { mutableStateOf(toDisplayString(max(1f, effectiveMajorMm), unit)) }
+    var tpiText by rememberSaveable(initialTpi) { mutableStateOf(formatTpi(initialTpi)) }
+    // Saveable: a configuration change (a system font-scale change recreates the activity) would
+    // otherwise reset every switch and chip while the dialog itself stays open (on-device report).
+    var countInOal by rememberSaveable { mutableStateOf(true) }
+    var isAftEnd by rememberSaveable { mutableStateOf(true) }
 
     // Thread relief: local switch (default OFF) revealing the two fields and the end chips. While
     // it is off the dialog submits relief 0/0 whatever the hidden fields hold. The end FOLLOWS the
     // thread's position ([suggestedThreadReliefAtAft], read live) until the end chips are tapped:
     // seeding it once left it on the shaft-end side after "Thread end" or "Include thread in OAL"
     // changed (on-device report). A tapped chip is the user's choice and is kept.
-    var reliefOn by remember { mutableStateOf(false) }
-    var reliefLenText by remember { mutableStateOf("") }
-    var reliefDiaText by remember { mutableStateOf("") }
-    var reliefEndChoice by remember { mutableStateOf<Boolean?>(null) }
+    var reliefOn by rememberSaveable { mutableStateOf(false) }
+    var reliefLenText by rememberSaveable { mutableStateOf("") }
+    var reliefDiaText by rememberSaveable { mutableStateOf("") }
+    var reliefEndChoice by rememberSaveable { mutableStateOf<Boolean?>(null) }
 
     // Imperial (TPI, entered in the session unit) vs Metric (a self-declaring M-designation
     // that always names its own mm values — see `ThreadDesignation`).
-    var metricMode by remember { mutableStateOf(false) }
-    var designationText by remember { mutableStateOf("") }
+    var metricMode by rememberSaveable { mutableStateOf(false) }
+    var designationText by rememberSaveable { mutableStateOf("") }
     val parsedDesignation = if (metricMode) ThreadDesignation.parse(designationText) else null
 
     val startMm = toMmOrNull(start, unit) ?: -1f
@@ -924,11 +943,7 @@ fun AddThreadDialog(
                     CommitNumField("Start (${abbr(unit)})", start, errorText = startError) { start = it }
                     Spacer(Modifier.height(8.dp))
                 } else {
-                    Row(
-                        Modifier.fillMaxWidth().padding(bottom = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    ChipFlowRow(Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
                         Text("Thread end:", style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                         DirectionChip("AFT", selected =  isAftEnd) { isAftEnd = true  }
@@ -936,11 +951,7 @@ fun AddThreadDialog(
                     }
                     Spacer(Modifier.height(4.dp))
                 }
-                Row(
-                    Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                ChipFlowRow(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
                     DirectionChip("Imperial (TPI)", selected = !metricMode) { metricMode = false }
                     DirectionChip("Metric (mm)", selected = metricMode) { metricMode = true }
                 }
@@ -984,7 +995,13 @@ fun AddThreadDialog(
                     Spacer(Modifier.height(8.dp))
                     CommitNumField("Relief Ø (${abbr(unit)})", reliefDiaText) { reliefDiaText = it }
                     Spacer(Modifier.height(8.dp))
-                    ThreadReliefEndChips(atAft = reliefAtAft, testTag = "add_thread_relief_end") { reliefEndChoice = it }
+                    ThreadReliefEndChips(
+                        atAft = reliefAtAft,
+                        testTag = "add_thread_relief_end",
+                        chip = { label, selected, modifier, onClick ->
+                            DirectionChip(label, selected, modifier, onClick)
+                        },
+                    ) { reliefEndChoice = it }
                 }
                 Spacer(Modifier.height(8.dp))
                 Row(
@@ -1231,7 +1248,9 @@ fun AddTaperDialog(
                     keyboardType = KeyboardType.Ascii,
                     enabled = !autoRate,
                     supportingText = rateIssueText,
-                    highlight = rateIssueText != null
+                    highlight = rateIssueText != null,
+                    // The taper card's rate field takes the same filter: one acceptance rule.
+                    inputFilter = ::filterTaperRateInput
                 ) { rateText = it }
                 Spacer(Modifier.height(12.dp))
                 // The shared gate row the cards carry. No confirm on untick: nothing is stored
@@ -1384,9 +1403,15 @@ fun AddTaperDialog(
  * ──────────────────────────────────────────────────────────────────────────── */
 
 @Composable
-private fun DirectionChip(label: String, selected: Boolean, onClick: () -> Unit) {
+private fun DirectionChip(
+    label: String,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
     OutlinedButton(
         onClick = onClick,
+        modifier = modifier,
         border = if (selected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
                  else BorderStroke(0.dp, Color.Transparent),
         colors = ButtonDefaults.outlinedButtonColors(
@@ -1396,7 +1421,7 @@ private fun DirectionChip(label: String, selected: Boolean, onClick: () -> Unit)
                              else MaterialTheme.colorScheme.onSurfaceVariant,
         ),
     ) {
-        Text(label, style = MaterialTheme.typography.labelLarge)
+        ChipLabel(label, style = MaterialTheme.typography.labelLarge)
     }
 }
 
@@ -1441,6 +1466,7 @@ private fun CommitNumField(
     keyboardType: KeyboardType = KeyboardType.Decimal,
     enabled: Boolean = true,
     highlight: Boolean = false,
+    inputFilter: ((String) -> String)? = null,
     onCommit: (String) -> Unit
 ) {
     // text is the live value; initial only resets it when the parent externally
@@ -1452,7 +1478,8 @@ private fun CommitNumField(
     }
     OutlinedTextField(
         value = text,
-        onValueChange = { newText ->
+        onValueChange = { raw ->
+            val newText = inputFilter?.invoke(raw) ?: raw
             text = newText
             onCommit(newText)   // commit on every keystroke so Add always has the current value
         },

@@ -6,6 +6,9 @@ import androidx.test.core.app.ApplicationProvider
 import com.android.shaftschematic.model.AutoDiaOverride
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.withAutoSectionDia
+import com.android.shaftschematic.ui.screen.ADD_DIALOG_DIA_FALLBACK_MM
+import com.android.shaftschematic.ui.screen.addDialogBodyDiaMm
+import com.android.shaftschematic.ui.screen.addDialogLastDiaMm
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -158,6 +161,63 @@ class ShaftViewModelAutoSectionDiaTest {
 
         assertEquals(before.autoBodyDiaMm, vm.spec.value.autoBodyDiaMm)
         assertEquals(before.autoDiaOverrides, vm.spec.value.autoDiaOverrides)
+    }
+
+    /** The Add Body dialog's Ø when nothing else names one — its own 25 mm placeholder. */
+    private val placeholderDiaMm = 25f
+
+    @Test
+    fun `the add body dialog opens at the bare-shaft diameter the prompt set`() {
+        val vm = ShaftViewModel(ApplicationProvider.getApplicationContext<Application>())
+        idle()
+        vm.onSetOverallLengthMm(9000f)
+        vm.setAutoBodyDiaMm(203.2f)
+        idle()
+
+        assertEquals(203.2f, addDialogBodyDiaMm(vm.spec.value, placeholderDiaMm), 0f)
+    }
+
+    @Test
+    fun `an added body's diameter outranks a later bare-shaft diameter`() {
+        val vm = ShaftViewModel(ApplicationProvider.getApplicationContext<Application>())
+        idle()
+        vm.onSetOverallLengthMm(9000f)
+        vm.addBodyAt(startMm = 0f, lengthMm = 1000f, diaMm = 150f)
+        vm.setAutoBodyDiaMm(203.2f)
+        idle()
+
+        assertEquals(150f, addDialogBodyDiaMm(vm.spec.value, placeholderDiaMm), 0f)
+    }
+
+    @Test
+    fun `with neither a body nor a bare-shaft diameter the dialog keeps its fallback`() {
+        assertEquals(placeholderDiaMm, addDialogBodyDiaMm(ShaftSpec(overallLengthMm = 1000f), placeholderDiaMm), 0f)
+    }
+
+    @Test
+    fun `the taper and thread dialogs seed from the bare-shaft diameter too`() {
+        val vm = ShaftViewModel(ApplicationProvider.getApplicationContext<Application>())
+        idle()
+        vm.onSetOverallLengthMm(9000f)
+        vm.setAutoBodyDiaMm(203.2f)
+        idle()
+        assertEquals(203.2f, addDialogLastDiaMm(vm.spec.value), 0f)
+    }
+
+    @Test
+    fun `the last known diameter prefers an authored body or taper over the bare shaft`() {
+        val vm = ShaftViewModel(ApplicationProvider.getApplicationContext<Application>())
+        idle()
+        vm.onSetOverallLengthMm(9000f)
+        vm.setAutoBodyDiaMm(203.2f)
+        vm.addBodyAt(startMm = 0f, lengthMm = 1000f, diaMm = 150f)
+        idle()
+        assertEquals(150f, addDialogLastDiaMm(vm.spec.value), 0f)
+    }
+
+    @Test
+    fun `with nothing to copy the last known diameter is the fallback`() {
+        assertEquals(ADD_DIALOG_DIA_FALLBACK_MM, addDialogLastDiaMm(ShaftSpec(overallLengthMm = 1000f)), 0f)
     }
 
     @Test

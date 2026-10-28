@@ -545,9 +545,11 @@ data class UndercutStripInnerLayout(
  * ([chainBelowRows]), the nested chain rows ([nestedRows]), then — unless the chain's own rows
  * already fill that place — one row of CLEAR AIR, the LOWEST row, between the last rail line and
  * the shaft. So `belowRows == chainBelowRows + nestedRows + clear`, with `clear` = 1 when the
- * chain draws no rows below its line (lifted, no total rail, or a total with no fallbacks) and 0
- * in the compressed layout (total rail, chain fallbacks below the line). A started strip keeps
- * the whole [WEAR_RAIL_MAX_LABEL_ROWS] budget below with [chainBelowRows] = 0.
+ * chain draws no rows below its line (lifted, no total rail, or a total with no fallbacks) or
+ * nested rows stack under it, and 0 only in the chain-only compressed layout (total rail, chain
+ * fallbacks below the line, no nested rows) — whose last value is kept off the shaft by the
+ * split's `belowClearPt` ([computeUndercutStripInnerLayout]) rather than a whole row. A started
+ * strip keeps the whole [WEAR_RAIL_MAX_LABEL_ROWS] budget below with [chainBelowRows] = 0.
  */
 data class UndercutRailRowPlan(
     /** Rows reserved between the rail line and the cylinder top (never 0), the chain's own
@@ -585,7 +587,8 @@ fun undercutRailFallbackRows(layout: List<WearRailSpanLayout>): Int =
  *
  * Which side of the line the fallbacks land on follows what sits above the chain:
  * - **Total rail present** → fallbacks tuck BELOW the line (the total's figure owns the space
- *   above), reserving the rows used, never less than 1 — the compressed layout.
+ *   above), reserving the rows used, never less than 1 — the compressed layout. With nested rows
+ *   under the chain it adds the clear row below them as well.
  * - **Total rail present, [lifted]** → fallbacks go ABOVE the line, in rows between the chain and
  *   the total rail, and below keeps just the 1-row clear air (on-device request: a strip with room
  *   above its rails reads better with the short values over the chain than crammed between the
@@ -623,8 +626,13 @@ fun planUndercutRailRows(
         UndercutRailRowPlan(belowRows = 1 + nestedRows, aboveRows = used, chainBelowRows = 0, nestedRows = nestedRows)
     } else if (hasTotalRail) {
         // The chain's fallbacks tuck below its line; with none, the one reserved row is clear air.
+        // Nested rows keep the clear row too: the last nested line otherwise lands on the band's
+        // bottom edge, which on a crowded strip is the liner's outline (on-device report). A
+        // chain-only strip spends no row on it — `computeUndercutStripInnerLayout`'s `belowClearPt`
+        // keeps its last value off the shaft instead.
+        val clear = if (used == 0 || nestedRows > 0) 1 else 0
         UndercutRailRowPlan(
-            belowRows = used.coerceAtLeast(1) + nestedRows, aboveRows = 0, chainBelowRows = used,
+            belowRows = used + nestedRows + clear, aboveRows = 0, chainBelowRows = used,
             nestedRows = nestedRows,
         )
     } else {
@@ -1003,6 +1011,12 @@ const val UNDERCUT_RAIL_MIN_LABEL_GAP_PT = 4f
  * ([totalRailAbovePt]), the total line, the rest of [totalRailBandPt] as the gap down to the
  * chain's lifted fallback rows ([chainAboveBandPt]), the chain line. A zero above band leaves
  * the total-only layout exactly as it was.
+ *
+ * [belowClearPt] is air reserved between the last below-line row and the cylinder top, for the
+ * one plan whose below band carries no clear row (the chain-only compressed layout,
+ * [planUndercutRailRows]): there the last row's baseline is the band's bottom edge, and without
+ * it the value's descenders stand on the shaft's outline. `0` (the default) leaves every other
+ * plan exactly as it was.
  */
 fun computeUndercutStripInnerLayout(
     stripTop: Float,
@@ -1019,12 +1033,14 @@ fun computeUndercutStripInnerLayout(
     cylMaxFrac: Float = UNDERCUT_CYL_MAX_HEIGHT_FRAC,
     cylMaxFloorPt: Float = UNDERCUT_CYL_MAX_FLOOR_PT,
     cylMaxAbsPt: Float = UNDERCUT_CYL_MAX_ABS_PT,
+    belowClearPt: Float = 0f,
 ): UndercutStripInnerLayout {
     val bottom = stripBottom.coerceAtLeast(stripTop)
     val band = if (hasTotalRail) totalRailBandPt.coerceAtLeast(0f) else 0f
     // Above-the-line fallback rows ([planUndercutRailRows]) reserve their band at the top exactly
     // as the total rail's does; under a total they sit between the total line and the chain.
     val aboveBand = chainAboveBandPt.coerceAtLeast(0f)
+    val belowClear = belowClearPt.coerceAtLeast(0f)
     val innerTop = (stripTop + band + aboveBand).coerceAtMost(bottom)
     val inner = computeWearStripInnerLayout(
         stripTop = innerTop,
@@ -1034,11 +1050,12 @@ fun computeUndercutStripInnerLayout(
         labelHeadroomPt = labelHeadroomPt,
         maxLabelRows = maxLabelRows,
         diaBandPt = diaBandPt,
-        // No witness run reserved here: this layout places both its rail lines itself, off
-        // [UndercutStripInnerLayout.cylTop], and `belowRows` (never 0 — see [planUndercutRailRows])
-        // already holds a full label row of clear air between the chained rail and the cylinder.
-        // Reserving the wear strip's run on top of it would only widen that gap.
-        witnessRunPt = 0f,
+        // No wear-strip witness run: this layout places both its rail lines itself, off
+        // [UndercutStripInnerLayout.cylTop], and `belowRows` holds a full label row of clear air
+        // between the last rail line and the cylinder in every plan but the chain-only compressed
+        // one ([planUndercutRailRows]). That one reserves just [belowClearPt], so its last value's
+        // descenders stay off the shaft's outline.
+        witnessRunPt = belowClear,
     )
 
     // Cylinder cap + surplus spend (see the KDoc): the drawn cylinder keeps `cylH - surplus`,
@@ -1061,7 +1078,7 @@ fun computeUndercutStripInnerLayout(
     val totalGap = (band - totalRailAbovePt).coerceAtLeast(0f)
     val railFloor = (stripTop + aboveBand + if (aboveBand > 0f && band > 0f) totalGap else 0f)
         .coerceAtMost(cylTop)
-    val chainRailY = (cylTop - inner.railLabelRows * rowHeightPt - extraRailHeadroom)
+    val chainRailY = (cylTop - belowClear - inner.railLabelRows * rowHeightPt - extraRailHeadroom)
         .coerceIn(railFloor, cylTop)
     val totalRailY = if (band > 0f) {
         (chainRailY - aboveBand - totalGap).coerceIn(stripTop, chainRailY)

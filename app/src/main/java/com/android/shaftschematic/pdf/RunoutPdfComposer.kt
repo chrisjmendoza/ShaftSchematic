@@ -61,7 +61,6 @@ import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.VerboseLog
 import com.android.shaftschematic.util.DualLabel
 import com.android.shaftschematic.util.DualUnitLayout
-import com.android.shaftschematic.util.OutputTypography
 import com.android.shaftschematic.util.dualStackMetrics
 import com.android.shaftschematic.util.measureDualLabel
 import com.android.shaftschematic.util.setsStacked
@@ -313,12 +312,7 @@ internal fun composeRunoutPdfOnCanvas(
     } else {
         unshadedLinerIds(spec, pdfPrefs.shadedLiners)
     }
-    val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.FILL
-        textSize = TEXT_PT
-        typeface = OutputTypography.active
-        color = Color.BLACK
-    }
+    val text = sheetTextPaint(TEXT_PT)
     // ── Page regions ─────────────────────────────────────────────────────────
     val margin = PAGE_MARGIN_PT
     val contentLeft  = margin
@@ -1470,14 +1464,8 @@ private fun drawPlacedBubbles(
      */
     r: Float,
 ) {
-    val valuePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.FILL
-        color = Color.BLACK
-        // Printed value sits small inside the (larger) circle, leaving room to hand-write.
-        textSize = r * 0.60f
-        textAlign = Paint.Align.CENTER
-        typeface = OutputTypography.active
-    }
+    // Printed value sits small inside the (larger) circle, leaving room to hand-write.
+    val valuePaint = sheetTextPaint(r * 0.60f, Paint.Align.CENTER)
     val highSpot = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.rgb(198, 40, 40) // red — the high spot, per shop convention
         style = Paint.Style.STROKE

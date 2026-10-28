@@ -141,4 +141,14 @@ class SheetSemanticsTest {
             SheetSemantics.runoutPreview(6, 4),
         )
     }
+
+    /** Move mode re-binds the gestures, so the spoken instructions follow it. */
+    @Test
+    fun `runout preview in move mode names the move gestures`() {
+        assertEquals(
+            "Runout drawing. 6 stations, 4 readings entered. " +
+                "Move mode on: drag a bubble to move it; tap a bubble or component to select it.",
+            SheetSemantics.runoutPreview(6, 4, moveMode = true),
+        )
+    }
 }

@@ -102,17 +102,26 @@ internal val HighContrastDarkColorScheme = darkColorScheme(
  *   (Stainless/Steel/Bronze) resolve predictably. Revisit deliberately if wallpaper-driven
  *   color is ever wanted.
  */
+/**
+ * Whether [themeMode] resolves to a dark scheme here. The ONE resolution behind both the color
+ * scheme and the system-bar icon appearance (`MainActivity`), so the status-bar icons can never
+ * be dark on a dark app bar or light on a light one. High contrast does not enter it: each
+ * high-contrast scheme keeps its base scheme's light/dark ground.
+ */
+@Composable
+fun isAppDarkTheme(themeMode: AppThemeMode): Boolean = when (themeMode) {
+    AppThemeMode.SYSTEM -> isSystemInDarkTheme()
+    AppThemeMode.LIGHT -> false
+    AppThemeMode.DARK -> true
+}
+
 @Composable
 fun ShaftSchematicTheme(
     themeMode: AppThemeMode = AppThemeMode.LIGHT,
     highContrast: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    val darkTheme = when (themeMode) {
-        AppThemeMode.SYSTEM -> isSystemInDarkTheme()
-        AppThemeMode.LIGHT -> false
-        AppThemeMode.DARK -> true
-    }
+    val darkTheme = isAppDarkTheme(themeMode)
     val colorScheme = when {
         highContrast && darkTheme -> HighContrastDarkColorScheme
         highContrast -> HighContrastLightColorScheme

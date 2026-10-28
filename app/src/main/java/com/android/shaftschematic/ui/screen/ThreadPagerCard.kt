@@ -2,7 +2,6 @@ package com.android.shaftschematic.ui.screen
 
 import android.util.Log
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -114,11 +113,7 @@ internal fun ThreadPagerCard(
         }
         if (!includeInOal) {
             // AFT / FWD end selector — replaces the start input for excluded threads
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            ChipFlowRow(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
                 Text("Thread end:", style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 val chipColors = FilterChipDefaults.filterChipColors(
@@ -127,11 +122,11 @@ internal fun ThreadPagerCard(
                 )
                 FilterChip(selected = th.isAftEnd,
                     onClick = { onSetThreadEndPosition(th.id, true) },
-                    label = { Text("AFT") }, colors = chipColors,
+                    label = { ChipLabel("AFT") }, colors = chipColors,
                     border = if (th.isAftEnd) BorderStroke(1.dp, Color.Black) else null)
                 FilterChip(selected = !th.isAftEnd,
                     onClick = { onSetThreadEndPosition(th.id, false) },
-                    label = { Text("FWD") }, colors = chipColors,
+                    label = { ChipLabel("FWD") }, colors = chipColors,
                     border = if (!th.isAftEnd) BorderStroke(1.dp, Color.Black) else null)
             }
         } else {

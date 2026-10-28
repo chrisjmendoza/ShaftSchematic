@@ -201,10 +201,11 @@ Top of page, full width.
 
 ### Font Rules:
 - Sans-serif by default, but the face is user-set: **Settings → Drawing → "Output font"**
-  (`PdfPrefs.outputFont` — Standard / Condensed / Serif / Monospace). Each composer builds its
-  root text `Paint` with `typeface = OutputTypography.active`, the process-wide mirror
-  `SettingsStore.updatePdfPrefs` writes; every other text paint on a sheet is a copy-constructor
-  of that root and inherits the face. App-wide and captured by Drawing profiles, never
+  (`PdfPrefs.outputFont` — Standard / Condensed / Serif / Monospace). Every fresh text `Paint`
+  a composer builds comes from `sheetTextPaint` (`pdf/SheetTextPaint.kt`), which applies
+  `OutputTypography.active`, the process-wide mirror `SettingsStore.updatePdfPrefs` writes; every
+  other text paint on a sheet is a copy-constructor of one of those and inherits the face
+  (`SheetTextPaintSourceTest` guards the rule). App-wide and captured by Drawing profiles, never
   per-document, and deliberately absent from the PDF options sheets. See
   `docs/contracts/FractionTypography.md` §6.
 - 10–14 pt depending on field importance
@@ -546,6 +547,11 @@ callouts' occupancy boxes as obstacles, in §5.4's resolution order:
    span widened to contain the centered position (a short component's name is wider than the
    component) and clamped to the content rect;
 2. only when no slide fits, **drop to the next row**.
+
+Every placement keeps `BelowShaftLabelLayout.PAD_X` (8 pt) clear of the next name, Ø value or
+leader. The clearance has to read as a separation rather than a word space: at 3 pt — one space of
+the 10 pt label face — a thread and a taper printed "AFT Thread AFT Taper" as one run, and a liner's
+Ø sat against its name (on-device report).
 
 Rows stop at the footer band, so a crowded sheet can never walk labels off the drawing. When a
 label still finds nowhere to go, the whole pass retries one point smaller — narrower text needs

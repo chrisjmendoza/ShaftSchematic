@@ -4,7 +4,6 @@ package com.android.shaftschematic.ui.screen
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,18 +11,18 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,9 +37,8 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.android.shaftschematic.geom.RUNOUT_CLOCK_TICKS
 import com.android.shaftschematic.geom.bubbleAngleDeg
 import com.android.shaftschematic.geom.clockTickLabel
@@ -70,6 +68,10 @@ import kotlin.math.min
  *   Save is disabled while the field holds text the parser cannot read, so nothing typed is
  *   ever silently dropped.
  *
+ * Hosted in an [ImeResizingAlertDialog], so with the keyboard up the window shrinks to the room
+ * above it: the ring and the value field scroll, and the title and the three buttons stay on
+ * screen (in landscape the keyboard otherwise covers Cancel and Save).
+ *
  * Both value and marker are optional and independent. The working state seeds from the passed
  * initial values, so reopening a saved bubble shows its saved data until the user edits it.
  *
@@ -87,8 +89,9 @@ fun RunoutBubbleDialog(
     onSave: (valueMm: Float?, highSpotHalfHours: Int?) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var markerTick by remember { mutableStateOf(initialHighSpotHalfHours) }
-    var valueText by remember {
+    // Saveable so a rotation keeps the typed TIR and the placed high spot with the open dialog.
+    var markerTick by rememberSaveable { mutableStateOf(initialHighSpotHalfHours) }
+    var valueText by rememberSaveable {
         mutableStateOf(initialValueMm?.let { formatRunoutValue(it, unit) } ?: "")
     }
     val unitSuffix = if (unit == UnitSystem.INCHES) "in" else "mm"
@@ -100,22 +103,26 @@ fun RunoutBubbleDialog(
     val textMeasurer = rememberTextMeasurer()
     val labelStyle   = MaterialTheme.typography.labelMedium.copy(color = labelColor)
 
-    Dialog(
+    // An [ImeResizingAlertDialog]: in landscape the keyboard covered Cancel and Save (on-device
+    // report), so the window resizes above the keyboard and the ring, the value field and the
+    // high-spot line scroll in the text slot, which gives way while the title and the buttons
+    // keep their place. Fixed at the editor's width, so the ring keeps its size.
+    ImeResizingAlertDialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
-    ) {
-        Surface(
-            shape = MaterialTheme.shapes.large,
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 6.dp,
-            modifier = Modifier.width(340.dp),
-        ) {
+        modifier = Modifier.width(RUNOUT_BUBBLE_DIALOG_WIDTH),
+        title = {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleMedium,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        },
+        text = {
             Column(
-                modifier = Modifier.padding(20.dp),
+                modifier = Modifier.verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Text(title, style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(2.dp))
                 Text(
                     "Tap or drag the ring to set the high spot",
                     style = MaterialTheme.typography.bodySmall,
@@ -188,34 +195,32 @@ fun RunoutBubbleDialog(
                     style = MaterialTheme.typography.bodyMedium,
                     color = if (markerTick != null) markerColor else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-
-                Spacer(Modifier.height(20.dp))
-
-                // ── Clear · Cancel · Save ─────────────────────────────────────────
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    TextButton(onClick = { markerTick = null; valueText = "" }) { Text("Clear") }
-                    Row {
-                        TextButton(onClick = onDismiss) { Text("Cancel") }
-                        Spacer(Modifier.width(8.dp))
-                        // Blank saves "no value"; a fraction or decimal saves through the same
-                        // parser every numeric field uses; unreadable text cannot be saved at
-                        // all — the filter admits `1/64`, so Save must read it, never drop it.
-                        val parsedMm = parseRunoutValueInput(valueText, unit)
-                        Button(
-                            onClick = { onSave(parsedMm, markerTick) },
-                            enabled = valueText.isBlank() || parsedMm != null,
-                            modifier = Modifier.testTag("runout_bubble_save"),
-                        ) { Text("Save") }
-                    }
-                }
             }
-        }
-    }
+        },
+        // ── Clear · Cancel · Save ─────────────────────────────────────────────
+        // Blank saves "no value"; a fraction or decimal saves through the same parser every
+        // numeric field uses; unreadable text cannot be saved at all — the filter admits `1/64`,
+        // so Save must read it, never drop it.
+        confirmButton = {
+            val parsedMm = parseRunoutValueInput(valueText, unit)
+            Button(
+                onClick = { onSave(parsedMm, markerTick) },
+                enabled = valueText.isBlank() || parsedMm != null,
+                modifier = Modifier.testTag("runout_bubble_save"),
+            ) { Text("Save") }
+        },
+        dismissButton = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = { markerTick = null; valueText = "" }) { Text("Clear") }
+                Spacer(Modifier.width(8.dp))
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+            }
+        },
+    )
 }
+
+/** The reading editor's width — the ring fills it, so this sets the ring's size too. */
+private val RUNOUT_BUBBLE_DIALOG_WIDTH = 340.dp
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Drawing + touch mapping

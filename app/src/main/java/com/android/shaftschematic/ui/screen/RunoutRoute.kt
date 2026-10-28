@@ -60,6 +60,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -198,7 +200,10 @@ fun RunoutRoute(
     val dualUnits          by vm.dualUnits.collectAsState()
 
     // Which bubble's editor dialog is open, if any (component id + station index + display title).
-    var editingBubble by remember { mutableStateOf<EditingRunoutBubble?>(null) }
+    // Saveable, like the dialog's own value and high spot, so a rotation keeps the edit open.
+    var editingBubble by rememberSaveable(stateSaver = EditingRunoutBubbleSaver) {
+        mutableStateOf<EditingRunoutBubble?>(null)
+    }
 
     // The bubble currently under a finger, if any. Purely visual state: the drag re-plans the
     // canvas from these in-progress positions, and the ViewModel write happens once on
@@ -630,6 +635,7 @@ fun RunoutRoute(
                     contentDescription = SheetSemantics.runoutPreview(
                         stationCount = previewStationCount,
                         readingCount = runoutReadings.readings.size,
+                        moveMode = moveMode,
                     )
                 }
                 .transformable(state = previewTransformState)
@@ -936,7 +942,11 @@ fun RunoutRoute(
     // layout, and in the phone's one column it keeps its historical place.
     val printGroup: @Composable ColumnScope.() -> Unit = {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Switch(checked = blankDraft, onCheckedChange = { blankDraft = it })
+            Switch(
+                checked = blankDraft,
+                onCheckedChange = { blankDraft = it },
+                modifier = Modifier.testTag(RUNOUT_BLANK_DRAFT_TAG),
+            )
             Spacer(Modifier.width(12.dp))
             Column {
                 Text("Blank draft (write-in)", style = MaterialTheme.typography.bodyLarge)
@@ -1237,11 +1247,32 @@ private data class RunoutRenderInputs(
     val draft: Boolean,
 )
 
+/** Test tag on the tab's "Blank draft (write-in)" switch. */
+internal const val RUNOUT_BLANK_DRAFT_TAG = "runout_blank_draft"
+
 /** Identifies the bubble whose editor dialog is open. */
 private data class EditingRunoutBubble(
     val componentId: String,
     val stationIndex: Int,
     val title: String,
+)
+
+/**
+ * Bundles an open bubble editor across an activity recreation (a tablet rotation), so the
+ * dialog — and the value and high spot it holds — come back where they were.
+ */
+private val EditingRunoutBubbleSaver: Saver<EditingRunoutBubble?, Any> = listSaver<EditingRunoutBubble?, Any>(
+    save = { bubble ->
+        if (bubble == null) emptyList() else listOf(bubble.componentId, bubble.stationIndex, bubble.title)
+    },
+    restore = { parts ->
+        if (parts.size < 3) null
+        else EditingRunoutBubble(
+            componentId = parts[0] as String,
+            stationIndex = parts[1] as Int,
+            title = parts[2] as String,
+        )
+    },
 )
 
 /**
@@ -1375,6 +1406,10 @@ private fun Density.computeRunoutPreview(
     bubbleDropScale: Float = 1f,
 ): RunoutPreview {
     val marginPx = 12.dp.toPx()
+    // The planner keeps a bubble's EDGE inside the content bounds, but its ring is stroked
+    // centred on that edge (2.5× wide while dragged or selected) and the card clips to rounded
+    // corners, so a bubble at the canvas edge lost a sliver of its ring (on-device report).
+    val ringAllowancePx = 2.dp.toPx()
     // The two user-set bubble multipliers, applied exactly as the composer applies them
     // (`pdf/RunoutPdfComposer.kt`): radius and drop scale, `minGap` stays a fixed clearance
     // floor. Canvas and sheet must agree — the bubbles are one drawing in two renderings.
@@ -1382,8 +1417,8 @@ private fun Density.computeRunoutPreview(
         radius = 7.dp.toPx() * bubbleScale,
         minGap = 5.dp.toPx(),
         shortLeader = 5.dp.toPx() * bubbleDropScale,
-        contentLeft = 0f,
-        contentRight = widthPx,
+        contentLeft = ringAllowancePx,
+        contentRight = widthPx - ringAllowancePx,
     )
     val spans = runoutComponentSpans(resolvedComponents)
 

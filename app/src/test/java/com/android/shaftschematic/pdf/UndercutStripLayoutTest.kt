@@ -725,6 +725,15 @@ class UndercutStripLayoutTest {
             UndercutRailRowPlan(belowRows = WEAR_RAIL_MAX_LABEL_ROWS, aboveRows = 0, chainBelowRows = WEAR_RAIL_MAX_LABEL_ROWS),
             planUndercutRailRows(listOf(span(5, false)), startedStrip = false, hasTotalRail = true),
         )
+        // ...and with nested rows under them, a clear row below those (on-device report: the last
+        // nested line otherwise lands on the liner's outline).
+        assertEquals(
+            UndercutRailRowPlan(belowRows = 1 + 1 + 1, aboveRows = 0, chainBelowRows = 1, nestedRows = 1),
+            planUndercutRailRows(
+                listOf(span(0, false)), startedStrip = false, hasTotalRail = true,
+                nestedLayouts = listOf(listOf(span(0, true))),
+            ),
+        )
         // Chain is the only label level ⇒ fallbacks go ABOVE the line (on-device report),
         // below keeps just the clear row.
         assertEquals(

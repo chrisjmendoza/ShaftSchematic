@@ -2,7 +2,6 @@ package com.android.shaftschematic.ui.screen
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -33,7 +32,7 @@ internal fun UndercutPageOrientationRow(
 ) {
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text("Page", style = MaterialTheme.typography.bodyLarge)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        ChipFlowRow {
             UndercutPageOrientation.entries.forEach { o ->
                 WearChip(
                     label = undercutPageOrientationLabel(o),

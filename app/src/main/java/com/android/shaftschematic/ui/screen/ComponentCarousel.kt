@@ -100,7 +100,10 @@ import kotlinx.coroutines.launch
 // Carousel height constant
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** The carousel's height in a scrolling column (every phone layout); a tablet pane fills its height instead. */
+/**
+ * The carousel's height in a phone's scrolling column, and its floor in a MEDIUM column; a MEDIUM
+ * column and the EXPANDED pane hand it a height to fill instead (`fillHeight`).
+ */
 internal val CAROUSEL_HEIGHT = 360.dp
 
 /** A peeking neighbour's tap target — `carousel_peek_<page>`; a tap brings that card to the centre. */
@@ -167,7 +170,7 @@ internal fun ComponentCarouselPager(
      * the phone layout — one card fills the pager — byte-identical to before the parameter.
      */
     peekPageWidth: Dp? = null,
-    /** Fill the height the parent gives (a tablet pane) instead of the fixed [CAROUSEL_HEIGHT]. */
+    /** Fill the height the parent gives (a tablet column or pane) instead of the fixed [CAROUSEL_HEIGHT]. */
     fillHeight: Boolean = false,
     showComponentDebugLabels: Boolean,
     /** The Settings "Component names on drawing" switch — what an UNSET per-component name toggle follows. */
@@ -1179,6 +1182,7 @@ internal fun CommitNum(
     fillMaxWidth: Boolean = true,
     keyboardType: KeyboardType = KeyboardType.Decimal,
     allowColon: Boolean = false,
+    inputFilter: ((String) -> String)? = null,
     enabled: Boolean = true,
     externalIssueText: String? = null,
     parseValid: (String) -> Boolean = { parseFractionOrDecimal(it) != null },
@@ -1201,6 +1205,7 @@ internal fun CommitNum(
         allowNegative = false,
         allowFraction = true,
         allowColon = allowColon,
+        inputFilter = inputFilter,
         keyboardType = keyboardType,
         validator = validator,
         onDirtyChange = { dirty -> dirtyState?.setDirty(fieldToken, dirty) },

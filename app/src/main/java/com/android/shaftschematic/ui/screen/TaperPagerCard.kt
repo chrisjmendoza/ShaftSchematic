@@ -38,6 +38,7 @@ import com.android.shaftschematic.ui.util.taperWarningMessages
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.autoTaperRateText
+import com.android.shaftschematic.util.filterTaperRateInput
 import com.android.shaftschematic.util.manualTaperRateBlockingMessage
 import com.android.shaftschematic.util.manualTaperRateWarning
 import com.android.shaftschematic.util.parseTaperRateText
@@ -254,7 +255,9 @@ internal fun TaperPagerCard(
             label = "Rate (1:12, 3/4\"/ft, or decimal)",
             initialDisplay = if (autoRate) computedRateText.orEmpty() else t.taperRateText.ifBlank { "" },
             keyboardType = KeyboardType.Ascii,
-            allowColon = true,
+            // The rate filter, not the numeric one: the label's own `3/4"/ft` needs inch marks,
+            // letters and a second slash. AddTaperDialog's rate field takes the same filter.
+            inputFilter = ::filterTaperRateInput,
             enabled = !autoRate,
             externalIssueText = rateIssue,
             // Bare "1" passes parse so the validator can explain the ambiguity;

@@ -5,7 +5,8 @@ Files: `ui/adaptive/WindowSize.kt`, `ui/adaptive/ReadableWidth.kt`, `ui/adaptive
 `AndroidManifest.xml`; consumers: `ShaftEditorRoute`, `ShaftScreen`, the sheet tabs, every list
 screen, both PDF preview screens
 Layer: UI (layout policy)
-Version: v1.0 (2026-09-16)
+Version: v1.1 (2026-10-27 — saved state survives a rotation across the EXPANDED boundary;
+MEDIUM editor carousel fills the column. v1.0 2026-09-16)
 
 ## Why
 
@@ -39,7 +40,7 @@ app's shape-by-window decisions are stated; every screen keys on the same axis.
 
 | Surface | COMPACT (phone) | MEDIUM (portrait tablet, landscape phone) | EXPANDED (landscape tablet) |
 |---|---|---|---|
-| Schematic / Final editor (`ShaftScreen`) | today's column | preview cap 280 dp | drawing band across the top (4:1 preview + OAL / add / warnings side column) over a full-width carousel, current card centred, neighbours peeking |
+| Schematic / Final editor (`ShaftScreen`) | today's column; the action bar prints NO title (the icons left it ".."; the document title strip names the screen) | preview cap 280 dp, bar title shown, carousel fills the column's leftover height (floor 360 dp) | drawing band across the top (4:1 preview + OAL / add / warnings side column) over a full-width carousel, current card centred, neighbours peeking |
 | Runout / Wear / Undercut tabs | today's column, 200 dp canvas | 280 dp canvas | two panes: canvas + print group \| controls |
 | Consolidated Output tab | today's column | readable width | readable width (see `RunoutSheet.md`) |
 | Editor sidebar | slide-in overlay (200 dp) | overlay | **permanent** 240 dp panel beside the tabs; hamburgers hidden |
@@ -56,6 +57,20 @@ Per-surface details live in the owning contracts (`ShaftScreen.md`, `RunoutSheet
   private composables and has the single-column and the two-pane branch CALL them. Duplicating
   a block into each branch is how the phone and the tablet drift — a control added to one and
   not the other is exactly the bug the add-dialog-parity invariant exists to prevent on cards.
+- **A block a width change MOVES has one saved-state identity.** `rememberSaveable` keys its
+  values by composition PATH, so content composed from a different call site per branch reads
+  none of the other branch's saved values: a rotation across the EXPANDED boundary resets it,
+  and the unread values are saved again and come back a rotation later (on-device report — the
+  Runout tab's Blank draft read ON, OFF, ON over two rotations; an open undercut detail page
+  dropped back to the list, and a closed one reappeared later). Either give the block ONE call
+  site with only its surroundings conditional (`ShaftEditorRoute` composes the tab content from
+  a single place and only the permanent panel beside it comes and goes), or make it
+  `movableContentOf`, which roots the path at the content itself (`ShaftScreen`'s carousel and
+  warning banner). A `SaveableStateHolder` alone does NOT fix this: the keys inside its provider
+  are still path-based. Pinned by `EditorRotationStateTest`, in place and across a recreation.
+  The sheet tabs need neither: their saved state (`showPreview`, `blankDraft`, the undercut
+  detail anchor, the selected wear component) is declared above their own width branch, and
+  the blocks the branch moves hold only scroll positions.
 - **COMPACT is byte-identical to the pre-tablet layout.** Nothing in this contract changes a
   phone. Every existing `testTag` survives in every branch.
 - **Pinned things stay pinned.** The preview card and the sheet canvases sit above their
@@ -90,7 +105,11 @@ Per-surface details live in the owning contracts (`ShaftScreen.md`, `RunoutSheet
 - **Rotation recreates the activity.** No `configChanges` handling: Compose state that must
   survive is `rememberSaveable` (active tab, sidebar, dialog-open flags, `showPreview`,
   `blankDraft`, selected wear component); the ViewModel holds the document and the selection.
-  Transient `remember` state (pinch zoom/pan on the runout canvas, an in-progress bubble edit,
+  A numeric field's typed text is saveable too (`NumericInputField`, `NumberField.md`), and so
+  is the runout bubble editor (which bubble, its TIR text, its high spot). The undercut detail
+  page's unconfirmed drafts are not: a typed Ø the rotation's own blur committed into a draft
+  is lost with the draft, but the field brings the text back and lands it on its next blur.
+  Transient `remember` state (pinch zoom/pan on the runout canvas,
   the rasterized preview bitmaps, expanded dropdowns) resets on rotation, and the bitmaps
   regenerate from their `LaunchedEffect`s. Acceptable for a tablet; do not add `configChanges`
   to paper over it, which would also stop the layouts re-keying on the new width.
@@ -107,6 +126,9 @@ Per-surface details live in the owning contracts (`ShaftScreen.md`, `RunoutSheet
 ## Testing
 
 - `WindowSizeTest` pins the breakpoints and the two-pane rule.
+- `EditorRotationStateTest` drives the width class through `LocalConfiguration` at a tablet
+  window and pins saved state across EXPANDED ↔ MEDIUM, both in place and through
+  `StateRestorationTester` (save in one branch, restore in the other).
 - Robolectric hosts a route at a tablet size with `@Config(qualifiers = "w1280dp-h800dp-land")`
   (the suite's phone default is `w400dp-h800dp`); the two-pane tests assert the pane tags exist
   at tablet width and are absent at phone width, and that the hamburger follows

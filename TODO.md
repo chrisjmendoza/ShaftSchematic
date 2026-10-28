@@ -1,7 +1,7 @@
 # ShaftSchematic TODO
 
 **Version: v0.5.x Development Queue**
-**Last updated: 2026-10-22**
+**Last updated: 2026-10-27**
 
 ## What belongs here
 
@@ -100,7 +100,6 @@ at most a pointer from here.
   and shop practice:
   - Warning thresholds in `ui/util/ComponentWarnings.kt`: 1.5× adjacent-body step, 0.5 mm
     adjacency eps, and the implausible-value badge (length > 15 m, any Ø > 1 m).
-  - The keyway "Standard size…" key-stock tables (ANSI / DIN).
   - The liner-shoulder edge-radius list `LINER_SHOULDER_STD_RADII_IN`.
   - The thread-relief seeds (length 1.5 × pitch, Ø = major − 1.3 × pitch).
 - **Surfaced by the User Manual writers (2026-10-13)** — real but each is a product call, so none
@@ -137,6 +136,14 @@ at most a pointer from here.
   on ~53%). The slider's top ~70% of travel therefore moves only liners. Options: lower the taper
   baseline gate, or make the liner floor λ-aware (risk: body runs start to equalize). Decide
   whether the mismatch matters on paper before changing anything.
+- **Undercut strip: a neighbouring section's cut inside this strip's window** (on-device pass
+  2026-10-27). A strip's draw window (liner + pad + S-break room) can reach over a cut that belongs
+  to the next section — a bare-shaft cut ½″ off a liner, or the AFT liner's window covering a bare
+  cut just AFT of it — and today draws plain full-Ø stock there, though the shaft is cut.
+  Options: (1) keep plain stock (the strip shows only its own section), or (2) draw the
+  neighbour's notch unlabelled — no Ø, no rail span, no number. **Recommendation: (2), through the
+  ONE notch builder (`buildUndercutNotches`)**, so the silhouette is true and the two draw sites
+  cannot differ. A pinned test asserts today's plain stock; change it with the ruling.
 
 ---
 
@@ -145,7 +152,10 @@ at most a pointer from here.
 ### Verification
 
 The per-feature on-device checks live in `docs/ON_DEVICE_CHECKLIST.md` (what to look at, what
-"good" looks like, which merge it came from); the items below are the standing ones.
+"good" looks like, which merge it came from); the items below are the standing ones. A headless
+AVD recipe (phone `calc_test` + `Pixel_Tablet`, adb-driven UI dumps and screenshots) drove the
+2026-10-27 pass; it lives in the maintainer's agent notes, outside the repo — ask for it rather
+than re-inventing one.
 
 - [ ] **Crashlytics activation** (one-time, console + repo settings): add Crashlytics to the
   existing Firebase app (the one behind `FIREBASE_APP_ID`), download `google-services.json`,
@@ -153,42 +163,26 @@ The per-feature on-device checks live in `docs/ON_DEVICE_CHECKLIST.md` (what to 
   the file at `app/google-services.json` locally — it is gitignored), then force one test crash
   from a distributed build to confirm the pipe. Until then everything builds green with crash
   reporting simply inactive.
-- [ ] On-device: tap Settings → Data → "Share diagnostic logs" once — the FileProvider
-  attachment path is pinned by test only indirectly (Robolectric cannot resolve provider roots).
-- [ ] On-device pass on the recent tail — shipped but unverified on hardware (`CHANGELOG.md` has
-  the details). As of this update: runout Move mode (corner toggle, touch-to-drag, tap-select,
-  −/+ toolbar — judge the pickup haptic and the dashed component frame), PDF options sections
-  (order + which start open), the
-  non-modal options panel (zoom under it, re-render keeps the page), thread relief, thread slant
-  (judge the 3× default) and density, the keyway gate, captured keyways, seal areas as their own
-  control (dashed cuts, anchored at the face, S-break clear of them), OAL commit-on-accept,
-  cross-drilled bolt holes, the Final Schematic tab, Output font,
-  tap-to-rename title + draft names.
-- [ ] On-device visual pass of dark and high-contrast chrome (the Appearance schemes have only
-  been reasoned about, not looked at). See `docs/contracts/Appearance.md`.
-- [ ] On-device accessibility walk: the app at 200% system font scale (any clipped row —
-  usually a `Modifier.height(x)` that wants `heightIn(min = x)`), and one TalkBack pass over
-  the five sheet tabs to hear the canvas summaries and confirm the list rows are a workable
-  editing path. Rulings in `docs/contracts/Appearance.md` §Accessibility.
+- [ ] On-device pass on the recent tail — the 2026-10-27 AVD pass covered the functional half
+  (its failures are fixed or listed under §Bugs); what is left is hardware and paper judgment
+  (haptics, pinch-zoom, printed sheets) plus a re-check of that pass's fixes, all in the checklist.
+- [ ] One TalkBack pass over the five sheet tabs to hear the canvas summaries and confirm the list
+  rows are a workable editing path (the 200% font walk and the dark / high-contrast pass were done
+  on the AVD 2026-10-27). Rulings in `docs/contracts/Appearance.md` §Accessibility.
 - [ ] On-device: print one undercut sheet with "Line art (no shading)" on and judge whether the
   notch construction alone reads on paper (the ruling assumed it does, from the screen mode).
-- [ ] **Tablet pass on hardware.** The Schematic editor's EXPANDED layout (drawing band, peeking
-  carousel, two-up fields, aligned side column) was built and verified on the Pixel_Tablet
-  emulator 2026-10-23 — the emulator has no soft keyboard, so the card under the IME is unchecked.
-  Still open on a real tablet: the Runout / Wear / Undercut tabs in portrait (MEDIUM) and landscape
-  (EXPANDED, still two panes), the permanent sidebar, a rotation mid-edit on each tab (what resets
-  is listed in `docs/contracts/Adaptive.md` §Orientation), the tuning sheet's page strip in
-  landscape, the PDF preview closing on a tablet (must stay free to rotate), and the 720 dp
-  readable width by eye. Candidates from the editor pass: the same peeking carousel on a portrait
-  tablet (MEDIUM, contract says plain column today), an "N of M" counter in the Components header,
-  the top-band treatment for the sheet tabs.
-- [ ] **On-device visual pass after Material3 1.3.0 → 1.4.0** (Compose BOM 2026.04.01): component
-  defaults moved, not APIs. Look at the tuning sliders, the options panel's page-strip cap
-  (`TUNING_SHEET_CHROME_DP` counts the panel's header row; a changed default height shifts it),
-  the Square | Blend face-finish chips (labels above, outlines on ALL chips), AlertDialogs,
-  Switch/Checkbox density, and numeric-field blur commits. Also decide the four pinch-zoom
-  surfaces' `rememberTransformableState` centroid deprecation on-device — taking the centroid
-  changes where a pinch zooms from.
+- [ ] **Tablet pass on hardware.** Every tab in portrait (MEDIUM) and landscape (EXPANDED), the
+  permanent sidebar, rotation mid-edit, the page strip, preview closing and the pane split were
+  walked on the Pixel_Tablet emulator 2026-10-27; its failures (rotation state, MEDIUM carousel
+  height, the Final hamburger, the undercut card under the keyboard) are fixed and listed for a
+  re-check in the checklist. Still open on a real tablet: those re-checks, and the Schematic card
+  under the soft keyboard (§Bugs). Candidates from the editor pass: the same peeking carousel on a
+  portrait tablet (MEDIUM, contract says plain column today), an "N of M" counter in the
+  Components header, the top-band treatment for the sheet tabs.
+- [ ] **Material3 1.4.0 pinch-zoom centroid** (Compose BOM 2026.04.01; the visual pass of the
+  sliders, page-strip cap, chips, dialogs and Switch/Checkbox density was done on the AVD
+  2026-10-27): decide the four pinch-zoom surfaces' `rememberTransformableState` centroid
+  deprecation on hardware — taking the centroid changes where a pinch zooms from.
 
 ### Bugs
 
@@ -198,6 +192,33 @@ The per-feature on-device checks live in `docs/ON_DEVICE_CHECKLIST.md` (what to 
   off a prelim linear-map plan, and the final compressed map seats fewer values inline than that
   plan assumed. Pre-existing; the thread-relief test fixture is arranged around it — un-arrange it
   when fixing.
+
+Found on the 2026-10-27 AVD pass and not fixed on its branch:
+
+- [ ] **Inverted taper accepted silently; three rules disagree.** A taper typed with S.E.T. Ø >
+  L.E.T. Ø (S.E.T. 8, L.E.T. 7.25, Measure From FWD) gets no warning, and the card/drawing title
+  goes by diameter trend ("AFT Taper"), the footer column by midpoint ("FWD Taper"), and the
+  footer values by magnitude (L.E.T. / S.E.T. printed swapped against what was typed). Needs a
+  ruling: warn on an inverted taper, or key the title and `letSet` on position.
+- [ ] **Schematic EXPANDED editor with the keyboard up**: the fixed drawing band keeps its height
+  and squeezes the card to one row of fields, the focused field's label clipped (tablet
+  landscape). The undercut detail page got the yielding fix; this one was left.
+- [ ] **Card AFT | FWD chips stack letters at 200% font** — the Body / Taper / Liner / Coupler
+  cards' inline `FilterChip` rows are not on the shared `ChipLabel` / `ChipFlowRow`, so "FWD"
+  still breaks one letter per line there.
+- [ ] **Undercut tab list delete: the Undo snackbar is short** (~4 s) — on the AVD it was gone
+  before it could be reached and the tap fell through to "Drawing settings" (top-bar Undo still
+  restored the cut).
+- [ ] **Share diagnostic logs — two-file case unverified.** The share sheet attaches `log.0.txt`
+  once; the ring had never rotated, so attaching both files (`log.1.txt` too) has not been seen.
+  Push the log past 256 KB, or check on a device that has rotated it.
+
+- [ ] **`ImeResizingAlertDialog` resizes above the keyboard only intermittently** (API 36 AVD,
+  2026-10-27): on 4 of 6 opens of the runout reading dialog, and 3 of 4 of the keyway calculator,
+  the window was resized to the keyboard (`adjustResize`, [0,136][1080,1517]) but the content still
+  laid out full height, so Cancel/Save sat under the keyboard. Suspected race between the
+  `doOnLayout` `setLayout(MATCH_PARENT, MATCH_PARENT)` pin in `ui/screen/DialogImeResize.kt` and the
+  IME animation under edge-to-edge. Pre-existing for the calculators; check on hardware first.
 
 ### Tech debt
 

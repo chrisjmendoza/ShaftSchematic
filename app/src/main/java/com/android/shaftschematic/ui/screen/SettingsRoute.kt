@@ -24,6 +24,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.material3.minimumInteractiveComponentSize
+import androidx.compose.ui.semantics.Role
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -265,12 +268,10 @@ fun SettingsRoute(
                             )
                         }
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Switch(
-                            checked = highContrast,
-                            onCheckedChange = { vm.setHighContrast(it) }
-                        )
-                        Spacer(Modifier.width(8.dp))
+                    SettingSwitchRow(
+                        checked = highContrast,
+                        onCheckedChange = { vm.setHighContrast(it) },
+                    ) {
                         Text("High contrast")
                     }
                     Text(
@@ -300,13 +301,11 @@ fun SettingsRoute(
                     // leads the Drawing section because it is reached for from a card, not while
                     // exporting (on-device report: on the PDF Export sub-page it could not be
                     // found). Same pref as the schematic options sheet's chip.
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Switch(
-                            checked = pdfShowComponentTitles,
-                            onCheckedChange = { vm.setPdfShowComponentTitles(it) },
-                            modifier = Modifier.testTag("settings_component_names_switch"),
-                        )
-                        Spacer(Modifier.width(8.dp))
+                    SettingSwitchRow(
+                        checked = pdfShowComponentTitles,
+                        onCheckedChange = { vm.setPdfShowComponentTitles(it) },
+                        modifier = Modifier.testTag("settings_component_names_switch"),
+                    ) {
                         Column {
                             Text(COMPONENT_NAMES_SETTING_LABEL)
                             Text(
@@ -453,14 +452,12 @@ fun SettingsRoute(
                         onCommit = { vm.setPdfDualUnitLayout(it) },
                     )
 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Switch(
-                            checked = perComponentUnits,
-                            onCheckedChange = { checked ->
-                                scope.launch { SettingsStore.setPerComponentUnits(ctx, checked) }
-                            }
-                        )
-                        Spacer(Modifier.width(8.dp))
+                    SettingSwitchRow(
+                        checked = perComponentUnits,
+                        onCheckedChange = { checked ->
+                            scope.launch { SettingsStore.setPerComponentUnits(ctx, checked) }
+                        },
+                    ) {
                         Column {
                             Text("Per-component units")
                             Text(
@@ -470,14 +467,12 @@ fun SettingsRoute(
                             )
                         }
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Switch(
-                            checked = dualUnitsDefault,
-                            onCheckedChange = { checked ->
-                                scope.launch { SettingsStore.setDualUnitsDefault(ctx, checked) }
-                            }
-                        )
-                        Spacer(Modifier.width(8.dp))
+                    SettingSwitchRow(
+                        checked = dualUnitsDefault,
+                        onCheckedChange = { checked ->
+                            scope.launch { SettingsStore.setDualUnitsDefault(ctx, checked) }
+                        },
+                    ) {
                         Column {
                             Text("Dual-unit display")
                             Text(
@@ -491,15 +486,13 @@ fun SettingsRoute(
                     // drawings never carry shoulders, so the authoring controls stay off
                     // the liner card until wanted (on-device request). Liners already
                     // carrying shoulder values keep their controls whatever this says.
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Switch(
-                            checked = linerShoulders,
-                            onCheckedChange = { checked ->
-                                scope.launch { SettingsStore.setLinerShouldersEnabled(ctx, checked) }
-                            },
-                            modifier = Modifier.testTag("settings_liner_shoulders"),
-                        )
-                        Spacer(Modifier.width(8.dp))
+                    SettingSwitchRow(
+                        checked = linerShoulders,
+                        onCheckedChange = { checked ->
+                            scope.launch { SettingsStore.setLinerShouldersEnabled(ctx, checked) }
+                        },
+                        modifier = Modifier.testTag("settings_liner_shoulders"),
+                    ) {
                         Column {
                             Text("Liner shoulders")
                             Text(
@@ -512,15 +505,13 @@ fun SettingsRoute(
                     // Most shops work in one unit, so the calculator icon on every Add dialog
                     // is noise for them (on-device request). The sidebar "Unit converter" Tools
                     // entry is unaffected — it stays available either way.
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Switch(
-                            checked = dialogUnitConverter,
-                            onCheckedChange = { checked ->
-                                scope.launch { SettingsStore.setDialogUnitConverterEnabled(ctx, checked) }
-                            },
-                            modifier = Modifier.testTag("settings_dialog_unit_converter"),
-                        )
-                        Spacer(Modifier.width(8.dp))
+                    SettingSwitchRow(
+                        checked = dialogUnitConverter,
+                        onCheckedChange = { checked ->
+                            scope.launch { SettingsStore.setDialogUnitConverterEnabled(ctx, checked) }
+                        },
+                        modifier = Modifier.testTag("settings_dialog_unit_converter"),
+                    ) {
                         Column {
                             Text("Unit converter in Add dialogs")
                             Text(
@@ -571,25 +562,19 @@ fun SettingsRoute(
                             .clickable { page = SettingsPage.PREVIEW_COLORS }
                     )
 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Switch(checked = showGrid, onCheckedChange = { vm.setShowGrid(it) })
-                        Spacer(Modifier.width(8.dp))
+                    SettingSwitchRow(checked = showGrid, onCheckedChange = { vm.setShowGrid(it) }) {
                         Text("Show Grid in Preview")
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Switch(
-                            checked = showHighlightSelection,
-                            onCheckedChange = { vm.setShowHighlightSelection(it) }
-                        )
-                        Spacer(Modifier.width(8.dp))
+                    SettingSwitchRow(
+                        checked = showHighlightSelection,
+                        onCheckedChange = { vm.setShowHighlightSelection(it) },
+                    ) {
                         Text("Highlight Selected Component in Preview")
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Switch(
-                            checked = showComponentArrows,
-                            onCheckedChange = { vm.setShowComponentArrows(it) }
-                        )
-                        Spacer(Modifier.width(8.dp))
+                    SettingSwitchRow(
+                        checked = showComponentArrows,
+                        onCheckedChange = { vm.setShowComponentArrows(it) },
+                    ) {
                         Text("Show Left/Right Arrows on Component Cards")
                     }
 
@@ -612,12 +597,10 @@ fun SettingsRoute(
 
                     HorizontalDivider()
                     Text("Achievements", style = MaterialTheme.typography.titleMedium)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Switch(
-                            checked = achievementsEnabled,
-                            onCheckedChange = { vm.setAchievementsEnabled(it) }
-                        )
-                        Spacer(Modifier.width(8.dp))
+                    SettingSwitchRow(
+                        checked = achievementsEnabled,
+                        onCheckedChange = { vm.setAchievementsEnabled(it) },
+                    ) {
                         Text("Enable Achievements")
                     }
                     ListItem(
@@ -774,12 +757,10 @@ fun SettingsRoute(
                 ) {
                     Text("Applies to Preview only", style = MaterialTheme.typography.bodySmall)
 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Switch(
-                            checked = previewBlackWhiteOnly,
-                            onCheckedChange = { vm.setPreviewBlackWhiteOnly(it) }
-                        )
-                        Spacer(Modifier.width(8.dp))
+                    SettingSwitchRow(
+                        checked = previewBlackWhiteOnly,
+                        onCheckedChange = { vm.setPreviewBlackWhiteOnly(it) },
+                    ) {
                         Text("Black/White Only")
                     }
 
@@ -836,12 +817,10 @@ fun SettingsRoute(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Switch(
-                            checked = undercutStyle.lineArt,
-                            onCheckedChange = { vm.setUndercutLineArt(it) }
-                        )
-                        Spacer(Modifier.width(8.dp))
+                    SettingSwitchRow(
+                        checked = undercutStyle.lineArt,
+                        onCheckedChange = { vm.setUndercutLineArt(it) },
+                    ) {
                         Text("Line art (no shading)")
                     }
                     if (undercutStyle.lineArt) {
@@ -900,12 +879,10 @@ fun SettingsRoute(
                         .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Switch(
-                            checked = openPdfAfterExport,
-                            onCheckedChange = { vm.setOpenPdfAfterExport(it) }
-                        )
-                        Spacer(Modifier.width(8.dp))
+                    SettingSwitchRow(
+                        checked = openPdfAfterExport,
+                        onCheckedChange = { vm.setOpenPdfAfterExport(it) },
+                    ) {
                         Text("Open PDF after export")
                     }
 
@@ -1032,16 +1009,14 @@ fun SettingsRoute(
                     }
 
                     HorizontalDivider()
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Switch(
-                            checked = pdfExportMode == PdfExportMode.Template,
-                            onCheckedChange = { enabled ->
-                                vm.setPdfExportMode(
-                                    if (enabled) PdfExportMode.Template else PdfExportMode.Standard
-                                )
-                            }
-                        )
-                        Spacer(Modifier.width(8.dp))
+                    SettingSwitchRow(
+                        checked = pdfExportMode == PdfExportMode.Template,
+                        onCheckedChange = { enabled ->
+                            vm.setPdfExportMode(
+                                if (enabled) PdfExportMode.Template else PdfExportMode.Standard
+                            )
+                        },
+                    ) {
                         Text("Template (shaft only)")
                     }
 
@@ -1431,5 +1406,38 @@ private fun PreviewColorRow(
                 }
             }
         }
+    }
+}
+
+/**
+ * A Settings switch row whose WHOLE row toggles — the label included, as a reader expects
+ * (on-device report: tapping "High contrast" did nothing; only the switch thumb responded). The
+ * row carries the toggle and its Switch semantics; the [Switch] is display-only, so a tap lands
+ * once. The Switch keeps its 48 dp touch-target box, which M3 drops from a Switch with no
+ * callback, so the rows are as tall as they were. [modifier] (a test tag) goes on the row,
+ * where the toggleable node now is.
+ */
+@Composable
+internal fun SettingSwitchRow(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    Row(
+        modifier = modifier.toggleable(
+            value = checked,
+            role = Role.Switch,
+            onValueChange = onCheckedChange,
+        ),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Switch(
+            checked = checked,
+            onCheckedChange = null,
+            modifier = Modifier.minimumInteractiveComponentSize(),
+        )
+        Spacer(Modifier.width(8.dp))
+        content()
     }
 }

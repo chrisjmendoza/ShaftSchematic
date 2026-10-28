@@ -1,10 +1,14 @@
 package com.android.shaftschematic.ui.screen
 
+import android.view.ViewGroup.LayoutParams.MATCH_PARENT
+import android.view.WindowManager
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
@@ -18,6 +22,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowDialog
 
 /**
  * The bubble editor's TIR field reads what it admits. The input filter allowed shop fractions
@@ -83,5 +88,50 @@ class RunoutBubbleDialogTest {
         show()
         rule.onNodeWithTag("runout_bubble_value").performTextInput("1/")
         rule.onNodeWithTag("runout_bubble_save").assertIsNotEnabled()
+    }
+
+    /** A rotation recreates the activity; the typed TIR comes back with the dialog. */
+    @Test
+    fun `a typed value survives a recreation and still saves`() {
+        saved = null
+        val restorer = StateRestorationTester(rule)
+        restorer.setContent {
+            MaterialTheme {
+                RunoutBubbleDialog(
+                    title = "AFT Liner · station 1",
+                    unit = UnitSystem.MILLIMETERS,
+                    initialValueMm = null,
+                    initialHighSpotHalfHours = null,
+                    onSave = { mm, tick -> saved = mm to tick },
+                    onDismiss = {},
+                )
+            }
+        }
+        rule.onNodeWithTag("runout_bubble_value").performTextInput("0.08")
+
+        restorer.emulateSavedInstanceStateRestore()
+
+        rule.onNodeWithTag("runout_bubble_save").performClick()
+        assertEquals(0.08f, requireNotNull(saved).first!!, 1e-6f)
+    }
+
+    /**
+     * In landscape the keyboard covered Cancel and Save (on-device report): the editor is an
+     * [ImeResizingAlertDialog], so its window resizes above the keyboard at a fixed size.
+     */
+    @Test
+    fun `the editor resizes above the keyboard and keeps its buttons`() {
+        show()
+        rule.waitForIdle()
+        val attrs = ShadowDialog.getLatestDialog().window!!.attributes
+        assertEquals(
+            WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE,
+            attrs.softInputMode and WindowManager.LayoutParams.SOFT_INPUT_MASK_ADJUST,
+        )
+        assertEquals(MATCH_PARENT, attrs.width)
+        assertEquals(MATCH_PARENT, attrs.height)
+        rule.onNodeWithText("Clear").assertExists()
+        rule.onNodeWithText("Cancel").assertExists()
+        rule.onNodeWithTag("runout_bubble_save").assertExists()
     }
 }

@@ -232,6 +232,11 @@ Submit ordering (SET/LET → the stored pair):
 Manual taper-rate rules (both surfaces carry the one label `Rate (1:12, 3/4"/ft, or decimal)`):
 - Accepted: a ratio (`1:12`), inches per foot (`3/4"/ft` and its spellings — `TaperRate.md`),
   or a decimal.
+- Both rate fields filter keystrokes through the ONE `filterTaperRateInput`
+  (`util/TextFilters.kt`), which keeps every character those spellings use (digits `. / :`,
+  spaces, `"` `″` `'`, the letters of `in`/`ft`). The card's field never runs the numeric
+  filter: it drops inch marks, letters and the second slash, leaving the bare `3/4` the
+  parser refuses (on-device report).
 - A bare slash fraction (`3/4`, `1/1`) is ambiguous between a slope and inches per foot and is
   blocked with a message naming the explicit forms; the parser never guesses.
 - Bare `1` is invalid/ambiguous and must be rewritten as a full ratio or inches per foot.

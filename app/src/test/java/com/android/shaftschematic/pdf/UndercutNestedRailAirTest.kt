@@ -3,11 +3,18 @@ package com.android.shaftschematic.pdf
 import android.graphics.Paint
 import com.android.shaftschematic.doc.ShaftDocCodec
 import com.android.shaftschematic.geom.UndercutStrip
+import com.android.shaftschematic.model.Liner
+import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.Undercut
+import com.android.shaftschematic.model.UndercutRecord
+import com.android.shaftschematic.model.UndercutReference
 import com.android.shaftschematic.settings.PDF_ARROW_SIZE_DEFAULT_PT
 import com.android.shaftschematic.settings.PDF_ARROW_SIZE_LARGE_PT
 import com.android.shaftschematic.ui.resolved.resolveComponents
 import com.android.shaftschematic.util.DualLabel
 import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.util.dualStackMetrics
+import com.android.shaftschematic.util.setsStacked
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -21,8 +28,9 @@ import org.robolectric.annotation.GraphicsMode
  * chain (on-device report: on a lifted strip the nested lengths printed crammed against the
  * shaft with empty air above them). The rows stack directly under the chain's OWN below-line
  * rows ([UndercutRailRowPlan.chainBelowRows]); the plan's clear-air row is the LOWEST of the band,
- * between the last nested line and the shaft ([undercutNestedRailLineYs]). The compressed layout
- * (total rail, chain fallbacks below the line) has no separate clear row and keeps its stepping.
+ * between the last nested line and the shaft ([undercutNestedRailLineYs]) — the compressed layout
+ * (total rail, chain fallbacks below the line) included, so on a crowded page no nested line lands
+ * on the liner's outline (on-device report).
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -66,8 +74,12 @@ class UndercutNestedRailAirTest {
             listOf(span(0, false), span(1, false)), false, hasTotalRail = true, nestedLayouts = nested,
         )
         assertEquals(2, compressed.chainBelowRows)
-        assertEquals(2 + nestedRows, compressed.belowRows)
-        assertEquals("compressed: the chain's rows fill the place, no separate clear row", 0, clear(compressed))
+        assertEquals(2 + nestedRows + 1, compressed.belowRows)
+        assertEquals("compressed with nested rows: one clear row under them", 1, clear(compressed))
+
+        val chainOnly = planUndercutRailRows(listOf(span(0, false), span(1, false)), false, hasTotalRail = true)
+        assertEquals(2, chainOnly.belowRows)
+        assertEquals("compressed, chain only: the chain's rows fill the place", 0, clear(chainOnly))
 
         val seated = planUndercutRailRows(listOf(span(0, true)), false, hasTotalRail = true, nestedLayouts = nested)
         assertEquals(0, seated.chainBelowRows)
@@ -108,17 +120,22 @@ class UndercutNestedRailAirTest {
     }
 
     @Test
-    fun `the compressed layout keeps its stepping`() {
+    fun `the compressed layout keeps a clear row under its nested lines`() {
+        // On-device report: on a crowded page the last nested line landed on the band's bottom
+        // edge — the liner's outline.
         val nested = listOf(listOf(span(0, false)), listOf(span(0, true)))
         val plan = planUndercutRailRows(listOf(span(0, false)), false, hasTotalRail = true, nestedLayouts = nested)
         assertEquals(1, plan.chainBelowRows)
+        // nestedRows = (1 + 1) + (1 + 0) = 3, plus the chain's own row and the clear row.
+        assertEquals(1 + 3 + 1, plan.belowRows)
         val r = rails(listOf(span(0, false)), nested, plan)
-        val witnessBottom = chainY + plan.belowRows * step + 6f - UNDERCUT_RAIL_WITNESS_GAP_PT
+        val bandBottom = chainY + plan.belowRows * step
+        val witnessBottom = bandBottom - UNDERCUT_RAIL_WITNESS_GAP_PT
         val lineYs = undercutNestedRailLineYs(r, chainY, plan.belowRows, step, witnessBottom)
-        val first = preFixLineY(r, plan.belowRows, 1)
-        assertEquals(first, lineYs[0], 0f)
-        assertEquals(first + (1 + 0) * step, lineYs[1], 0f)
-        assertEquals("the last line takes the band's last row", chainY + plan.belowRows * step, lineYs[1], 1e-3f)
+        // Under the chain's own row: the first level's fallback row, then its line; then the next.
+        assertEquals(chainY + (1 + 2) * step, lineYs[0], 1e-3f)
+        assertEquals(lineYs[0] + step, lineYs[1], 1e-3f)
+        assertEquals("one full clear row under the last nested line", step, bandBottom - lineYs.last(), 1e-3f)
     }
 
     @Test
@@ -129,8 +146,8 @@ class UndercutNestedRailAirTest {
         val witnessBottom = chainY + 1 * step + 3f
         val lineY = undercutNestedRailLineYs(rails(listOf(span(0, false)), nested, lifted), chainY, 1, step, witnessBottom).single()
         assertEquals(witnessBottom, lineY, 0f)
-        // Compressed: plan wants 2 + 2 rows, the band granted 3 — the chain's rows shrink exactly
-        // as they always did.
+        // Compressed: plan wants 2 + 2 + 1 rows, the band granted 3 — the chain's rows shrink to
+        // what is left after the nested rows.
         val compressed = planUndercutRailRows(
             listOf(span(0, false), span(1, false)), false, hasTotalRail = true, nestedLayouts = nested,
         )
@@ -212,5 +229,114 @@ class UndercutNestedRailAirTest {
             }
         }
         assertTrue("some width puts a nested value off its line", liftedWithNestedFallback >= 1)
+    }
+
+    // ── Crowded bands: the compressed layout ─────────────────────────────────────────────
+
+    private val crowdText = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 10f }
+    private val crowdDiaText = Paint(crowdText).apply { textSize = 8f }
+
+    /** A band too short to lift: the lifted layout would draw only a 60 pt shaft. */
+    private fun crowdedBand(plan: UndercutStripPlan, stacked: Boolean): Pair<Float, Float> =
+        112f to 112f + plan.verticalOverheadPt(stacked, lifted = true) + 60f
+
+    /** Every below-line chain value's lowest ink (descent, and a stack's second line) clears [limitY]. */
+    private fun assertChainValuesClear(
+        plan: UndercutStripPlan,
+        rails: UndercutStripRails,
+        inner: UndercutStripInnerLayout,
+        stacked: Boolean,
+        limitY: Float,
+        what: String,
+    ) {
+        val rowStep = undercutRailRowHeightPt(plan.dimText, stacked)
+        val fm = plan.dimText.fontMetrics
+        val chainRows = (inner.railLabelRows - rails.rows.nestedRows).coerceAtLeast(1)
+        val below = rails.chainWithLead.filter { !it.seatsInBreak }
+        assertTrue("$what: some chain value falls below its line", below.isNotEmpty())
+        below.forEach { s ->
+            val baseline = undercutRailFallbackBaselineY(
+                inner.chainRailY, s.labelRow.coerceAtMost(chainRows - 1), above = false, rowStep,
+                plan.dimText.textSize, fm.descent,
+            )
+            val stackH = if (s.label.setsStacked(stacked)) plan.dimText.dualStackMetrics().advance else 0f
+            val inkBottom = baseline + fm.descent + stackH
+            assertTrue("$what: ${s.label.inline()} ink bottom $inkBottom clears $limitY", inkBottom <= limitY)
+        }
+    }
+
+    @Test
+    fun `on a crowded band the job's nested row keeps a clear row above the outline`() {
+        val doc = ShaftDocCodec.decode(
+            requireNotNull(javaClass.classLoader?.getResource("fixtures/undercut_polar_ranger_stbd.shaft")).readText(),
+        )
+        val record = doc.undercutRecord
+        val sh = undercutSheetStrips(doc.spec, resolveComponents(doc.spec), record, blankValues = false)
+        val strip = sh.strips.filterIsInstance<UndercutStrip.LinerStrip>().maxBy { it.linerStartMm }
+        // Single-unit, and stacked dual — whose taller rows the band must be reserved at too.
+        listOf(false, true).forEach { stacked ->
+            val plan = requireNotNull(
+                planUndercutDetailStrip(
+                    sh.surfaceSegs, strip, record.undercuts.filter { it.id in strip.undercutIds }, sh.clampedById,
+                    36f, 576f, UnitSystem.INCHES, crowdText, crowdDiaText, sh.shaftExtentMm,
+                    startedStrip = false, dual = stacked, dualStacked = stacked, railSplitAtMm = emptyList(),
+                    arrowSizePt = PDF_ARROW_SIZE_DEFAULT_PT,
+                    leadSide = UndercutAnchorSide.FWD_SET, aftSetMm = sh.aftSetMm, fwdSetMm = sh.fwdSetMm,
+                ),
+            )
+            val (top, bottom) = crowdedBand(plan, stacked)
+            val (rails, inner) = plan.resolveRails(top, bottom, stacked)
+            val what = if (stacked) "stacked dual" else "single unit"
+            assertEquals("$what: crowded, so compressed", 0, rails.rows.aboveRows)
+            assertTrue("$what: nested rows", rails.rows.nestedRows > 0)
+            assertEquals("$what: the band grants the whole plan", rails.rows.belowRows, inner.railLabelRows)
+
+            val rowStep = undercutRailRowHeightPt(plan.dimText, stacked)
+            val witnessBottom = inner.cylTop - UNDERCUT_RAIL_WITNESS_GAP_PT
+            val lineYs = undercutNestedRailLineYs(rails, inner.chainRailY, inner.railLabelRows, rowStep, witnessBottom)
+            println("crowded $what: chainRailY=${inner.chainRailY} cylTop=${inner.cylTop} rows=${rails.rows} lines=$lineYs")
+            lineYs.forEach { y ->
+                assertTrue("$what: nested line $y sits a row above the outline ${inner.cylTop}", y <= inner.cylTop - rowStep + 1e-3f)
+            }
+            assertChainValuesClear(plan, rails, inner, stacked, inner.cylTop - 1f, what)
+        }
+    }
+
+    @Test
+    fun `a crowded chain-only strip keeps its below-line value off the outline`() {
+        val inch = 25.4f
+        val spec = ShaftSpec(
+            overallLengthMm = 120f * inch,
+            autoBodyDiaMm = 5f * inch,
+            liners = listOf(Liner(id = "L", startFromAftMm = 50f * inch, lengthMm = 18f * inch, odMm = 5.75f * inch)),
+        )
+        fun cut(id: String, at: Float, len: Float) = Undercut(
+            id = id, startFromAftMm = at * inch, lengthMm = len * inch, diaMm = 5.625f * inch,
+            authoredReference = UndercutReference.LINER_AFT, referenceLinerId = "L",
+        )
+        val record = UndercutRecord(undercuts = listOf(cut("a", 51f, 1f), cut("b", 53f, 7f)))
+        val sh = undercutSheetStrips(spec, resolveComponents(spec), record, blankValues = false)
+        val strip = sh.strips.single()
+        listOf(false, true).forEach { stacked ->
+            // A narrow cell: the 1" spans cannot seat their values.
+            val plan = requireNotNull(
+                planUndercutDetailStrip(
+                    sh.surfaceSegs, strip, record.undercuts, sh.clampedById,
+                    36f, 256f, UnitSystem.INCHES, crowdText, crowdDiaText, sh.shaftExtentMm,
+                    startedStrip = false, dual = stacked, dualStacked = stacked, railSplitAtMm = emptyList(),
+                    arrowSizePt = PDF_ARROW_SIZE_DEFAULT_PT,
+                    leadSide = UndercutAnchorSide.AFT_SET, aftSetMm = sh.aftSetMm, fwdSetMm = sh.fwdSetMm,
+                ),
+            )
+            val what = if (stacked) "stacked dual" else "single unit"
+            assertTrue("$what: the short values cannot seat", plan.rails.canLiftFallbacks)
+            val (top, bottom) = crowdedBand(plan, stacked)
+            val (rails, inner) = plan.resolveRails(top, bottom, stacked)
+            assertEquals("$what: crowded, so compressed", 0, rails.rows.aboveRows)
+            assertEquals("$what: no nested rows", 0, rails.rows.nestedRows)
+            assertTrue("$what: the chain's values sit below its line", rails.rows.chainBelowRows > 0)
+            println("crowded chain-only $what: chainRailY=${inner.chainRailY} cylTop=${inner.cylTop} rows=${rails.rows}")
+            assertChainValuesClear(plan, rails, inner, stacked, inner.cylTop - 1f, what)
+        }
     }
 }

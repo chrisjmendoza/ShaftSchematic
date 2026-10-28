@@ -10,6 +10,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
@@ -49,6 +50,20 @@ import com.android.shaftschematic.util.filterNumericInput
  * text shown only while the field has nothing to report — a rejection notice or an
  * [externalIssueText] always takes the line instead, since an error outranks a tip. Both
  * default null, which leaves the field exactly as it was without them.
+ *
+ * [inputFilter], when given, replaces the numeric keystroke filter for a field whose accepted
+ * spellings are not plain numbers (the taper rate's `3/4"/ft`); null keeps [filterNumericInput]
+ * with the allow-flags above.
+ *
+ * [landRestoredEdit] is for a caller whose commits land in state that does NOT outlive an
+ * activity recreation's teardown. The state is saved BEFORE the teardown, so the teardown's own
+ * blur commits into the composition being thrown away, and the restored field then shows a typed
+ * value its caller never received — unfocused, so nothing leaves it on the next leave (on-device
+ * report: an undercut card's typed Ø, shown after a rotation, dropped on Back). When true, a field
+ * restored holding such an edit commits it once, as that blur would have; a rejected one reverts
+ * with its notice, as a blur's would. False (the default) leaves a restored edit uncommitted until
+ * the next blur — right for a caller whose state the teardown blur already reached (the
+ * ViewModel), where the restore finds the moved value and shows it clean.
  */
 @Composable
 fun NumericInputField(
@@ -60,6 +75,7 @@ fun NumericInputField(
     allowNegative: Boolean = false,
     allowFraction: Boolean = true,
     allowColon: Boolean = false,
+    inputFilter: ((String) -> String)? = null,
     singleLine: Boolean = true,
     maxLines: Int = if (singleLine) 1 else 5,
     keyboardType: KeyboardType = KeyboardType.Decimal,
@@ -67,28 +83,50 @@ fun NumericInputField(
     onDirtyChange: ((Boolean) -> Unit)? = null,
     placeholder: String? = null,
     hint: String? = null,
+    landRestoredEdit: Boolean = false,
     parseValid: (String) -> Boolean,
     onCommit: (String) -> Unit
 ) {
-    var text by remember(initialText) { mutableStateOf(TextFieldValue(initialText)) }
+    // The box's text, the settled text and the notice are SAVEABLE, keyed on [initialText] like
+    // the plain state they replace: a typed value nobody has committed yet survives an activity
+    // recreation (a tablet rotation) instead of coming back blank (on-device report — a typed
+    // undercut Ø lost on rotation). A restore commits nothing unless the caller asks for it
+    // ([landRestoredEdit]): the focus baseline below stays plain state, so the attach-time
+    // unfocused callback still finds no baseline.
+    var text by rememberSaveable(initialText, stateSaver = TextFieldValue.Saver) {
+        mutableStateOf(TextFieldValue(initialText))
+    }
 
     // Why the last commit was refused, naming the value that was not applied; null when there is
     // nothing to report. Cleared only by an edit to the text, never by focus.
-    var rejectedNotice by remember(initialText) { mutableStateOf<String?>(null) }
+    var rejectedNotice by rememberSaveable(initialText) { mutableStateOf<String?>(null) }
 
     /** The reason [raw] cannot be committed, or null when it can. */
     fun rejectionReason(raw: String): String? =
         if (!parseValid(raw)) NOT_A_NUMBER_REASON else validator?.invoke(raw)
 
-    // Null when not focused; set to the text value at the moment focus was gained.
-    // Used to skip commits when the user tapped a field but didn't change its value.
+    // Null when not focused; set on each focus gain to the SETTLED text (below), the value a
+    // blur with no edit leaves in place. Used to skip commits when the user tapped a field but
+    // didn't change its value. Deliberately not saveable: focus does not survive a recreation.
     var textWhenFocused by remember(initialText) { mutableStateOf<String?>(null) }
 
     // The text the field would be left holding if the user walked away right now: the
     // incoming value, then whatever a commit or a revert settled on. Anything else in the
     // box is an edit that has not landed yet. It is also the revert target: the value the
     // caller actually holds, never an intermediate the caller was never handed.
-    var settledText by remember(initialText) { mutableStateOf(initialText) }
+    var settledText by rememberSaveable(initialText) { mutableStateOf(initialText) }
+
+    // The [initialText] the saved state above was seeded from. Restoration does not compare
+    // `rememberSaveable` inputs, so a restore over a model value that moved meanwhile (a blur
+    // during the teardown committed the edit) would bring back text and a settled value for the
+    // OLD model value and report a phantom dirty edit; the stale state is dropped instead.
+    var seededFrom by rememberSaveable(initialText) { mutableStateOf(initialText) }
+    if (seededFrom != initialText) {
+        seededFrom = initialText
+        text = TextFieldValue(initialText)
+        settledText = initialText
+        rejectedNotice = null
+    }
 
     fun commitOrRevert() {
         val typed = text.text
@@ -111,10 +149,19 @@ fun NumericInputField(
     val isDirty = text.text != settledText
     LaunchedEffect(isDirty) { dirtyListener?.invoke(isDirty) }
 
+    // A field enters composition dirty only when restored holding an edit that never landed —
+    // a fresh field's text IS its settled text. Run once, after the composition that restored it,
+    // so the caller's own restored state is in place to take the commit. See [landRestoredEdit].
+    if (landRestoredEdit) {
+        LaunchedEffect(Unit) {
+            if (textWhenFocused == null && text.text != settledText) commitOrRevert()
+        }
+    }
+
     OutlinedTextField(
         value = text,
         onValueChange = { raw ->
-            val filtered = filterNumericInput(
+            val filtered = inputFilter?.invoke(raw.text) ?: filterNumericInput(
                 raw = raw.text,
                 allowNegative = allowNegative,
                 allowFraction = allowFraction,
@@ -144,7 +191,10 @@ fun NumericInputField(
         keyboardActions = KeyboardActions(onDone = { commitOrRevert() }),
         modifier = modifier.onFocusChanged { f ->
             if (f.isFocused) {
-                textWhenFocused = text.text
+                // The settled text equals the box's text on every focus gain but one: a restored
+                // edit that never landed. Against the settled text a blur lands that edit, where
+                // the box's own text would read it as unchanged and leave it on screen, unapplied.
+                textWhenFocused = settledText
                 text = text.copy(selection = TextRange(0, text.text.length))
             }
             if (!f.isFocused) {
