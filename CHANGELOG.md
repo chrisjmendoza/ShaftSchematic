@@ -8,6 +8,23 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-27
 
+### fix(editor): a component can be renamed again
+
+- **The card title's rename editor opens again after a rename.** On-device report: the first
+  rename worked, the second open closed instantly. The editor's "has held focus" check was
+  kept per component, so after the first commit it fired on the next open's attach callback.
+  It now lives with each edit.
+
+### feat(output): "Dye pen test" PASS / FAIL row on the consolidated sheet
+
+- **The Consolidated Output tab has a "Dye pen test" switch.** On-device request. Turned on, the
+  sheet prints "Dye pen test: ☐ PASS ☐ FAIL" in the line above the footer, after the "TIR's
+  taken looking" rule (at the left when runouts are elected out). Leave both boxes blank to
+  mark by hand, or pick Pass or Fail in the app — one at a time, and tapping the chosen one
+  again clears it. The result is the same one the Wear sheet prints, so the two documents
+  always agree. Off by default, so existing sheets print exactly as before; saved with the job.
+  The same switch and chips are on the consolidated preview's options panel.
+
 ### fix(wear): "Trace depth exaggeration" now moves the shaft drawing, not just the detail strips
 
 - **The worn-profile trace draws on the whole-shaft drawings too.** On-device report: moving the

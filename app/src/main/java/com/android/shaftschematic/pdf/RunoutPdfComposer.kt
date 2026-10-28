@@ -461,8 +461,12 @@ internal fun composeRunoutPdfOnCanvas(
         )
     } ?: 0f
     val footerTop = pageH - margin - footerBlockH
-    // No TIR line when bubbles are elected out — its lane returns to the shaft area.
-    val tirY = footerTop - (if (drawBubbles) TIR_LINE_HEIGHT_PT else 0f)
+    // The dye pen row shares the TIR line's lane (consolidated only, per-job election); the
+    // boxes mark from the ONE WearRecord.dyePenResult the wear sheet prints, blank on a draft.
+    val drawDyePen = consolidated && config.showDyePenTest
+    // No TIR line when bubbles are elected out — its lane returns to the shaft area, unless
+    // the dye pen row still needs it.
+    val tirY = footerTop - (if (drawBubbles || drawDyePen) TIR_LINE_HEIGHT_PT else 0f)
 
     // ── Bottom lane ───────────────────────────────────────────────────────────
     // The TIR line (left) and the coupling end view (right) share the band above the
@@ -471,7 +475,7 @@ internal fun composeRunoutPdfOnCanvas(
     // shaft and its bubbles run down through the face.
     val couplingCx = contentRight - COUPLING_FACE_PAD_PT - COUPLING_FACE_OUTER_R_PT
     val bottomLaneH = maxOf(
-        if (drawBubbles) TIR_LINE_HEIGHT_PT else 0f,
+        if (drawBubbles || drawDyePen) TIR_LINE_HEIGHT_PT else 0f,
         if (drawFace) COUPLING_FACE_BLOCK_PT else 0f,
     )
     val bottomLaneTopY = footerTop - bottomLaneH
@@ -771,6 +775,18 @@ internal fun composeRunoutPdfOnCanvas(
             if (drawFace) couplingCx - COUPLING_FACE_OUTER_R_PT - COUPLING_FACE_PAD_PT
             else contentRight
         drawTirLine(c, text, contentLeft, tirRight, tirY, effectiveTir)
+    }
+    // ── Dye pen test boxes — same lane, after the TIR rule (or at the left without one) ──
+    // ONE construction with the wear sheet's notes row (drawDyePenBoxes); a blank draft leaves
+    // both boxes empty for hand-marking.
+    if (drawDyePen) {
+        val x = if (drawBubbles) {
+            contentLeft + text.measureText("TIR's taken looking:  ") + TIR_FILL_RULE_PT + DYE_PEN_GAP_PT
+        } else contentLeft
+        drawDyePenBoxes(
+            c, text, x, tirY, "Dye pen test:  ",
+            if (blankValues) null else wearRecord.dyePenResult,
+        )
     }
 
     // ── Coupling end view (bottom-right of the bottom lane) ───────────────────
@@ -1701,6 +1717,7 @@ private const val TEXT_PT    = 10f
 private const val PAGE_MARGIN_PT   = 36f    // 0.5 in margins
 private const val TIR_LINE_HEIGHT_PT = 20f  // Space for TIR direction line at bottom
 private const val TIR_FILL_RULE_PT   = 180f // Write-in rule after "TIR's taken looking:"
+private const val DYE_PEN_GAP_PT     = 36f  // Gap between the TIR rule and the dye pen boxes sharing its lane
 
 // Coupling end view — bottom-right of the band the TIR line shares. The block is the tallest
 // thing in that band, so everything above reserves against it rather than the TIR lane.

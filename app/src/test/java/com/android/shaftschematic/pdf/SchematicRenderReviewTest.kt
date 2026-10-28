@@ -5,11 +5,13 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.pdf.PdfDocument
 import com.android.shaftschematic.doc.ShaftDocCodec
+import com.android.shaftschematic.model.DyePenResult
 import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.model.WearDiaReading
 import com.android.shaftschematic.model.WearRecord
 import com.android.shaftschematic.model.WearSpot
 import com.android.shaftschematic.settings.PdfPrefs
+import com.android.shaftschematic.settings.RunoutConfig
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.ui.resolved.resolveComponents
 import com.android.shaftschematic.util.FractionStyle
@@ -147,18 +149,35 @@ class SchematicRenderReviewTest {
         save(name, bmp)
     }
 
-    private fun renderConsolidated(name: String, doc: ShaftDocCodec.Decoded, pdfPrefs: PdfPrefs = PdfPrefs()) {
+    private fun renderConsolidated(
+        name: String,
+        doc: ShaftDocCodec.Decoded,
+        pdfPrefs: PdfPrefs = PdfPrefs(),
+        config: RunoutConfig = doc.runoutConfig,
+        wearRecord: WearRecord = doc.wearRecord,
+    ) {
         val (bmp, c) = bitmapPage()
         composeRunoutPdfOnCanvas(
             c, PDF_PAGE_WIDTH_PT.toFloat(), PDF_PAGE_HEIGHT_PT.toFloat(),
             spec = doc.spec,
-            config = doc.runoutConfig,
+            config = config,
             project = doc.project(),
             unit = doc.preferredUnit ?: UnitSystem.INCHES,
             pdfPrefs = pdfPrefs,
             resolvedComponents = resolveComponents(doc.spec),
+            wearRecord = wearRecord,
         )
         save(name, bmp)
+    }
+
+    /** The consolidated sheet with the dye pen row elected and PASS marked in-app. */
+    @Test
+    fun `consolidated sheet prints the dye pen row`() {
+        renderConsolidated(
+            "consolidated_dye_pen.png", midTaper,
+            config = midTaper.runoutConfig.copy(showDyePenTest = true, showCouplingFace = true),
+            wearRecord = midTaper.wearRecord.copy(dyePenResult = DyePenResult.PASS),
+        )
     }
 
     private companion object {

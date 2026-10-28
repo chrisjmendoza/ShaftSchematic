@@ -982,6 +982,28 @@ private fun drawWearNotesArea(
     y: Float,
     dyePenResult: DyePenResult? = null,
 ) {
+    var x = drawDyePenBoxes(c, text, left, y, "Dye pen inspection: ", dyePenResult) + 24f
+
+    // Notes fill-in line
+    c.drawText("Notes:", x, y, text); x += text.measureText("Notes:") + 6f
+    c.drawLine(x, y + 2f, right, y + 2f, Paint(text).apply { style = Paint.Style.STROKE; strokeWidth = 0.7f })
+}
+
+/**
+ * The dye penetrant row — [label], then a PASS box and a FAIL box, the chosen one ([result])
+ * marked with an inset "X", the other present and blank; `null` leaves both blank for
+ * hand-marking. ONE construction for every sheet that prints it — the wear sheet's notes row and
+ * the consolidated sheet's bottom lane — so the two forms always read alike. Returns the x just
+ * past "FAIL".
+ */
+internal fun drawDyePenBoxes(
+    c: Canvas,
+    text: Paint,
+    left: Float,
+    y: Float,
+    label: String,
+    result: DyePenResult?,
+): Float {
     val boxSize = 10f
     var x = left
 
@@ -997,18 +1019,15 @@ private fun drawWearNotesArea(
         x += boxSize + 4f
     }
 
-    c.drawText("Dye pen inspection: ", x, y, text)
-    x += text.measureText("Dye pen inspection: ")
+    c.drawText(label, x, y, text)
+    x += text.measureText(label)
 
-    drawCheckbox(marked = dyePenResult == DyePenResult.PASS)
+    drawCheckbox(marked = result == DyePenResult.PASS)
     c.drawText("PASS", x, y, text); x += text.measureText("PASS") + 20f
 
-    drawCheckbox(marked = dyePenResult == DyePenResult.FAIL)
-    c.drawText("FAIL", x, y, text); x += text.measureText("FAIL") + 24f
-
-    // Notes fill-in line
-    c.drawText("Notes:", x, y, text); x += text.measureText("Notes:") + 6f
-    c.drawLine(x, y + 2f, right, y + 2f, Paint(text).apply { style = Paint.Style.STROKE; strokeWidth = 0.7f })
+    drawCheckbox(marked = result == DyePenResult.FAIL)
+    c.drawText("FAIL", x, y, text); x += text.measureText("FAIL")
+    return x
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

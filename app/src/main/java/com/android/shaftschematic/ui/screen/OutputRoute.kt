@@ -93,6 +93,8 @@ import com.android.shaftschematic.ui.viewmodel.setRunoutHeightScale
 import com.android.shaftschematic.ui.viewmodel.setShowCouplingFace
 import com.android.shaftschematic.ui.viewmodel.updateWornSection
 import com.android.shaftschematic.ui.viewmodel.updateWornSectionReference
+import com.android.shaftschematic.ui.viewmodel.setDyePenResult
+import com.android.shaftschematic.ui.viewmodel.setShowDyePenTest
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.FractionStyle
@@ -670,6 +672,32 @@ fun OutputRoute(
                     )
                 }
             }
+            // The dye penetrant row in the bottom lane: elected per job, the boxes marked from the
+            // ONE WearRecord.dyePenResult the wear sheet prints — none or one, never both.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(
+                    checked = runoutConfig.showDyePenTest,
+                    onCheckedChange = { vm.setShowDyePenTest(it) },
+                    modifier = Modifier.testTag("output_dye_pen_switch"),
+                )
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Text("Dye pen test", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "Prints \"Dye pen test: PASS / FAIL\" boxes above the footer. Leave both " +
+                            "blank to mark by hand, or pick one here. Saved with this job.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            if (runoutConfig.showDyePenTest) {
+                DyePenResultChips(
+                    result = wearRecord.dyePenResult,
+                    onSelect = { vm.setDyePenResult(it) },
+                    label = "Result:",
+                )
+            }
             Text(
                 "The consolidated sheet always carries the schematic's dimensions and spec " +
                     "footer; pick whether it features the runouts, the wear record, or both. " +
@@ -917,6 +945,9 @@ fun OutputRoute(
                     linerShadeLocked = linerShadeLocked,
                     showCouplingFaceRow = true,
                     couplingFaceOn = runoutConfig.showCouplingFace,
+                    showDyePenRow = true,
+                    dyePenOn = runoutConfig.showDyePenTest,
+                    dyePenResult = wearRecord.dyePenResult,
                     showSBreak = true,
                     sBreakThresholdFrac = pdfSBreakThresholdFrac,
                     showDimensionArrows = true,

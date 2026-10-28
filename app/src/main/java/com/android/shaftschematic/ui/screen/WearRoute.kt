@@ -558,23 +558,8 @@ fun WearRoute(
         // notes row; the other box stays present and blank. Tapping the selected chip
         // deselects it, returning both boxes to blank for hand-marking (the original
         // form posture, and what a blank draft always prints).
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                "Dye pen inspection:",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            val result = wearRecord.dyePenResult
-            WearChip("Pass", result == DyePenResult.PASS) {
-                vm.setDyePenResult(if (result == DyePenResult.PASS) null else DyePenResult.PASS)
-            }
-            WearChip("Fail", result == DyePenResult.FAIL) {
-                vm.setDyePenResult(if (result == DyePenResult.FAIL) null else DyePenResult.FAIL)
-            }
-        }
+        // ONE construction with the Consolidated Output tab's row — same stored value.
+        DyePenResultChips(result = wearRecord.dyePenResult, onSelect = { vm.setDyePenResult(it) })
 
         // ── Strip election ────────────────────────────────────────────────
         // The same section the preview's PDF options sheet carries, from the one
