@@ -564,7 +564,9 @@ internal fun buildFooterEndColumns(
     // drift from the authored designation (golden rule: authored text is never re-derived).
     // The length term still resolves the thread's own display unit (its id already carries
     // an mm override when metric — see DisplayUnits/ShaftViewModel). Non-metric threads keep
-    // today's dia × TPI-or-mm-pitch × length line, unchanged apart from dual-awareness.
+    // today's dia × TPI-or-mm-pitch × length line, unchanged apart from dual-awareness. The
+    // major Ø drops trailing zeros (`4.5"`, not `4.500"`) — the one exception to the
+    // three-decimal diameter rule, see [formatThreadDiaWithUnit].
     fun threadLines(th: Threads): List<String> = buildList {
         val thUnit = displayUnits.unitFor(th.id)
         add(line("Thread:") {
@@ -572,7 +574,7 @@ internal fun buildFooterEndColumns(
             if (designation != null) {
                 "$designation × ${formatLenWithUnitDual(th.lengthMm.toDouble(), thUnit, dual)}"
             } else {
-                "${formatDiaWithUnitDual(th.majorDiaMm.toDouble(), thUnit, dual)} × ${fmtPitch(th.pitchMm, thUnit)} × ${formatLenWithUnitDual(th.lengthMm.toDouble(), thUnit, dual)}"
+                "${formatThreadDiaWithUnitDual(th.majorDiaMm.toDouble(), thUnit, dual)} × ${fmtPitch(th.pitchMm, thUnit)} × ${formatLenWithUnitDual(th.lengthMm.toDouble(), thUnit, dual)}"
             }
         })
         // A relieved thread states its groove right under it, in the thread's own unit: the

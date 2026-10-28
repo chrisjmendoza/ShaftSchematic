@@ -66,6 +66,22 @@ fun formatDiaWithUnit(mm: Double, unit: Any?): String {
 }
 
 /**
+ * Formats a THREAD's major diameter for the footer's "Thread:" line — the one exception to the
+ * three-decimal diameter rule of [formatDiaWithUnit] (on-device ruling).
+ *
+ * - Inches: at most three decimals with trailing zeros dropped, so a typed `4.5` prints `4.5"`
+ *   and `3.75` prints `3.75"`; a whole number prints bare. A thread's major Ø is a nominal size,
+ *   called out the way it is written, not a ground diameter read off a micrometer.
+ * - Millimeters: the same compact 1-decimal form as [formatDiaWithUnit].
+ */
+fun formatThreadDiaWithUnit(mm: Double, unit: Any?): String {
+    val name = unit?.toString()?.uppercase(Locale.US) ?: "MM"
+    if (!name.contains("INCH")) return formatDiaWithUnit(mm, unit)
+    val s = String.format(Locale.US, "%.3f", mm / 25.4).trimEnd('0').trimEnd('.')
+    return "$s\""
+}
+
+/**
  * The unit a dual value's SECONDARY term prints in — simply the other one.
  */
 fun dualSecondaryUnit(primary: UnitSystem): UnitSystem =
@@ -114,6 +130,10 @@ fun formatLenWithUnitDual(mm: Double, primary: UnitSystem, dual: Boolean): Strin
 /** Dual-aware [formatDiaWithUnit], inline. */
 fun formatDiaWithUnitDual(mm: Double, primary: UnitSystem, dual: Boolean): String =
     formatDiaWithUnitDualLabel(mm, primary, dual).inline()
+
+/** Dual-aware [formatThreadDiaWithUnit], inline. The secondary takes the same thread form. */
+fun formatThreadDiaWithUnitDual(mm: Double, primary: UnitSystem, dual: Boolean): String =
+    composeDual(primary, dual, fmt = { formatThreadDiaWithUnit(mm, it) }).inline()
 
 /**
  * [formatLenDim] as a two-term label. The primary keeps the dimension formatter (a mm PRIMARY

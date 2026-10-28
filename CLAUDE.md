@@ -977,7 +977,7 @@ half-height plus the poke-past clearance (see the keyway-scale invariant above).
 ### Diameter callouts are BELOW-only, tiered, and footer-formatted
 On-shaft diameter callouts (body OD, liner OD — `buildBodyOdCallouts`/`buildLinerOdCallouts`
 in `ShaftPdfComposer.kt`) all hang **BELOW** the shaft; do not reintroduce above/below
-alternation. Labels use `formatDiaWithUnit` (inches: a whole number bare, any other value at exactly 3 decimals — `10.990"`, never `10.99"`, on-device report; mm compact 1-decimal) to match the
+alternation. Labels use `formatDiaWithUnit` (inches: a whole number bare, any other value at exactly 3 decimals — `10.990"`, never `10.99"`, on-device report; mm compact 1-decimal; the ONE exception is the footer `Thread:` line's major Ø, `formatThreadDiaWithUnit`, which drops trailing zeros — `4.5"` — on-device ruling) to match the
 footer's "Ø" text — never the raw 4-decimal format. Bodies and liners are **separate OD
 groups** — a liner OD is never deduped against a body OD. Horizontally-close labels stack onto
 a second row via `geom/DiameterCalloutLayout.kt` (pure, unit-tested), the same two-tier
