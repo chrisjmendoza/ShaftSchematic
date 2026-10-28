@@ -972,7 +972,6 @@ internal fun EditableCardTitle(
 ) {
     var editing by rememberSaveable(componentId) { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
-    var hasFocusedOnce by remember(componentId) { mutableStateOf(false) }
 
     if (!editing) {
         Row(
@@ -995,6 +994,10 @@ internal fun EditableCardTitle(
         }
     } else {
         var text by remember(componentId, label) { mutableStateOf(label.orEmpty()) }
+        // The focus baseline lives with THIS editor, not the component: a baseline remembered
+        // per component stayed true after the first rename, so the second open's initial
+        // unfocused callback committed and closed the field at once (on-device report).
+        var hasFocusedOnce by remember { mutableStateOf(false) }
         LaunchedEffect(componentId) { focusRequester.requestFocus() }
         OutlinedTextField(
             value = text,
