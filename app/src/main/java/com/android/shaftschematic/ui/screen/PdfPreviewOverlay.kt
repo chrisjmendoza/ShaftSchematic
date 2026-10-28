@@ -107,6 +107,9 @@ import com.android.shaftschematic.ui.viewmodel.setPdfWearBandShadeFrac
 import com.android.shaftschematic.ui.viewmodel.setPdfWearJoinGapMaxMm
 import com.android.shaftschematic.ui.viewmodel.setRunoutHeightScale
 import com.android.shaftschematic.ui.viewmodel.setShowCouplingFace
+import com.android.shaftschematic.ui.viewmodel.setShowDyePenTest
+import com.android.shaftschematic.ui.viewmodel.setDyePenResult
+import com.android.shaftschematic.model.DyePenResult
 import com.android.shaftschematic.ui.viewmodel.setUndercutPageOrientation
 import com.android.shaftschematic.ui.viewmodel.setWearCompactStrips
 import com.android.shaftschematic.ui.viewmodel.setWearShowShaftProfile
@@ -463,6 +466,16 @@ internal fun RunoutWearOptionsSheet(
     /** This job's `RunoutConfig.showCouplingFace`; read only when [showCouplingFaceRow]. */
     couplingFaceOn: Boolean = false,
     /**
+     * Shows the per-job "Dye pen test" election (consolidated sheet only — the one document
+     * that prints the row electively) and, while on, the shared Pass | Fail chips over the ONE
+     * `WearRecord.dyePenResult`.
+     */
+    showDyePenRow: Boolean = false,
+    /** This job's `RunoutConfig.showDyePenTest`; read only when [showDyePenRow]. */
+    dyePenOn: Boolean = false,
+    /** This job's `WearRecord.dyePenResult`; read only when [showDyePenRow]. */
+    dyePenResult: DyePenResult? = null,
+    /**
      * Shows the shared "Body S-break" threshold slider. On for the runout and consolidated
      * sheets, which draw compression breaks; off for the wear and undercut documents, whose
      * profiles never break, so the control would be inert noise there.
@@ -621,7 +634,7 @@ internal fun RunoutWearOptionsSheet(
         // alone rather than a pointer to captions it does not show.
         OptionsScopeNote(
             hasJobControls = showHeightSlider || showLinerCompression ||
-                showCouplingFaceRow || showWearControls || undercutPageOrientation != null,
+                showCouplingFaceRow || showDyePenRow || showWearControls || undercutPageOrientation != null,
         )
         Spacer(Modifier.height(12.dp))
 
@@ -646,6 +659,22 @@ internal fun RunoutWearOptionsSheet(
                         onClick = { vm.setShowCouplingFace(!couplingFaceOn) },
                     )
                 }
+                if (showDyePenRow) {
+                    ContentChip(
+                        label = "Dye pen test",
+                        selected = dyePenOn,
+                        onClick = { vm.setShowDyePenTest(!dyePenOn) },
+                    )
+                }
+            }
+            // The result the printed boxes mark — the Output tab's row, one construction.
+            if (showDyePenRow && dyePenOn) {
+                Spacer(Modifier.height(8.dp))
+                DyePenResultChips(
+                    result = dyePenResult,
+                    onSelect = { vm.setDyePenResult(it) },
+                    label = "Dye pen result:",
+                )
             }
             // The undercut sheet's page shape — per job, beside the election that changes its
             // section count (a blank draft prints every liner's started strip).

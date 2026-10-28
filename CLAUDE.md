@@ -434,7 +434,11 @@ one-line retirement switch for a future full consolidation); the Runout tab auth
 (`EditorTab.OUTPUT`, `ui/screen/OutputRoute.kt`) owns the consolidated sheet — content
 election (`ConsolidatedVariant`: All three (default) | Schematic + Runout | Schematic +
 Wear, via `includeBubbles`/`includeWearInfo`), the worn-section editor, the "Shaft
-height" slider, and **Export all** (checked documents batch-written to a picked folder).
+height" slider, the per-job **"Dye pen test" row** (`RunoutConfig.showDyePenTest`, default
+OFF — `Dye pen test: ☐ PASS ☐ FAIL` in the TIR line's lane, the boxes marked from the ONE
+`WearRecord.dyePenResult` the wear sheet prints through the ONE `drawDyePenBoxes`; none or one,
+never both — the shared `DyePenResultChips` clears on re-tap, a blank draft prints both blank),
+and **Export all** (checked documents batch-written to a picked folder).
 Every SAF export goes through the hardened `util/PdfSafExport.writeShaftPdfToUri`
 (composer throw → valid error page, never a truncated file) and the collision export
 gate guards every export surface. See `docs/contracts/RunoutSheet.md` (Consolidation step 5) and

@@ -72,6 +72,14 @@ data class RunoutConfig(
     val linersProportional: Boolean = false,
     val linerCompression: Float = 1.0f,
     val showCouplingFace: Boolean = false,
+    /**
+     * Whether the consolidated sheet prints the "Dye pen test: ☐ PASS ☐ FAIL" row in the band
+     * above the footer (the TIR line's lane). Per job, additive and defaulted OFF so every
+     * existing document prints byte-identically; the boxes mark from the ONE
+     * `WearRecord.dyePenResult` the wear sheet prints (none or one, never both — on-device
+     * request), blank for hand-marking while nothing is selected.
+     */
+    val showDyePenTest: Boolean = false,
 ) {
     /**
      * The measured-component width floor as a fraction of true drawn width — what the

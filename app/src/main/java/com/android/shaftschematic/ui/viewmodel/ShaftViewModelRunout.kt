@@ -88,6 +88,15 @@ fun ShaftViewModel.setShowCouplingFace(show: Boolean) {
     _runoutConfig.update { it.copy(showCouplingFace = show) }
 }
 
+/**
+ * Elect the consolidated sheet's "Dye pen test: PASS / FAIL" row ([RunoutConfig.showDyePenTest]).
+ * Which box is marked is the wear record's [com.android.shaftschematic.model.WearRecord.dyePenResult]
+ * (`setDyePenResult`), ONE value for every sheet that prints the boxes.
+ */
+fun ShaftViewModel.setShowDyePenTest(show: Boolean) {
+    _runoutConfig.update { it.copy(showDyePenTest = show) }
+}
+
 // ── Runout per-station readings (bubble value + high-spot marker) ─────────────
 
 /**

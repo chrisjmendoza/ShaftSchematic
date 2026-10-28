@@ -771,6 +771,17 @@ Same-day review feedback on step 4; supersedes step 4's picker placement:
   their lanes to the shaft area), the **"Shaft height" slider**, the **worn-section
   editor** (moved from the Runout tab — sections print on this sheet), blank draft, and
   Preview/Print/Export of the consolidated sheet.
+- **"Dye pen test" row** (on-device request): a per-job switch, `RunoutConfig.showDyePenTest`
+  (additive, default OFF — existing sheets byte-identical; `RunoutConfigDyePenTest`), prints
+  `Dye pen test: ☐ PASS ☐ FAIL` in the TIR line's lane above the footer — after the write-in
+  rule when bubbles print, at the left when they are elected out (the lane is reserved either
+  way). The boxes mark from the ONE `WearRecord.dyePenResult` the wear sheet prints, through
+  the ONE construction `drawDyePenBoxes` (`pdf/WearPdfComposer.kt`): **none or one, never
+  both** — the shared `DyePenResultChips` (Wear tab, Output tab, consolidated preview panel)
+  toggles Pass | Fail and tapping the selected chip clears it, leaving both boxes blank for
+  hand-marking; a blank draft always prints them blank. The Output tab's switch sits under
+  "Coupling face" in Sheet content with the chips beneath it while on; the preview's options
+  panel carries the same as a "Dye pen test" content chip plus the chips row.
 - **"Export all"** (same tab): checkboxes for the five documents (consolidated [current
   variant], schematic, runout, wear, undercut — all on by default) + one folder pick
   (`OpenDocumentTree` + `createPdfInTree`); each file goes through the hardened write, so
