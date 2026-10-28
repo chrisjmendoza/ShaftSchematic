@@ -27,7 +27,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
@@ -78,6 +80,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
@@ -137,7 +142,10 @@ import com.android.shaftschematic.geom.undercutLinerHasOtherCuts
 import com.android.shaftschematic.geom.undercutLinerExtensionsMm
 import com.android.shaftschematic.geom.undercutOverlapIssue
 import com.android.shaftschematic.geom.undercutPartialOverlapsMm
+import com.android.shaftschematic.geom.undercutPreviewChainMm
 import com.android.shaftschematic.geom.undercutPreviewDrawRange
+import com.android.shaftschematic.geom.undercutSetReachMm
+import com.android.shaftschematic.geom.withChainMm
 import com.android.shaftschematic.geom.undercutReferenceLabel
 import com.android.shaftschematic.geom.undercutReferenceLinerFor
 import com.android.shaftschematic.geom.undercutSetPositions
@@ -298,6 +306,7 @@ import kotlin.math.min
  * "Distance" field is re-projected, against the authored reference — the two S.E.T.s plus the
  * reference liner's edges ([canonicalToUndercutStartMm]/[undercutStartToCanonicalMm]).
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun UndercutWindowDetailOverlay(
     strip: UndercutStrip,
@@ -424,14 +433,31 @@ fun UndercutWindowDetailOverlay(
     // Per-card local edits; a card with no entry here shows stored values. The add flow's
     // not-yet-recorded page lives under [PENDING_UNDERCUT_ID]. Every entry is keyed by its own
     // draft's id, and only a card that has a page here can write one (`writeDraft` below).
-    var drafts by remember(stripKey) { mutableStateOf(emptyMap<String, UndercutDraft>()) }
+    //
+    // The drafts, the add flow's seed and the selection are SAVEABLE: an activity recreation (a
+    // tablet rotation) keeps the overlay open, and an edit already in a draft — or the add flow's
+    // whole pending card — must come back with it rather than vanish with the old composition
+    // while its card shows the stored values again. The map saves as its drafts and restores keyed
+    // by each draft's own id ([UndercutDraftMapSaver]), so the id ↔ page pairing survives intact.
+    var drafts by rememberSaveable(stripKey, stateSaver = UndercutDraftMapSaver) {
+        mutableStateOf(emptyMap<String, UndercutDraft>())
+    }
+    // How many times each card's draft was discarded: the card keys its own placement state (the
+    // applied edge-to-edge chip, the open "More ways" section) on it, so a Discard returns the
+    // card to its stored cut with no chip still claiming a gap the cut no longer has (on-device
+    // report: a stale chip showed a negative gap after Discard).
+    var discardCounts by remember(stripKey) { mutableStateOf(emptyMap<String, Int>()) }
     // The add draft exactly as it was seeded. Its start is the pending card's ordering key, fixed
     // at creation — a pending card must not slide between pages while its Distance is being typed,
     // the same "reorder only on confirm" rule the recorded cards follow — and the whole draft is
     // what tells an untouched add (discarded on leave) from an edited one.
-    var pendingSeed by remember(stripKey) { mutableStateOf<UndercutDraft?>(null) }
+    var pendingSeed by rememberSaveable(stripKey, stateSaver = UndercutPendingSeedSaver) {
+        mutableStateOf<UndercutDraft?>(null)
+    }
     val pendingSeedStartMm = pendingSeed?.startFromAftMm
-    var selectedId by remember(stripKey) { mutableStateOf(initialSelectedId) }
+    // Saveable with the drafts: a restore that fell back to [initialSelectedId] would run the
+    // leave sweep over the card the machinist was actually on, committing or prompting on it.
+    var selectedId by rememberSaveable(stripKey) { mutableStateOf(initialSelectedId) }
     // The cut Confirm just added, until the record publishes it: the selection already names it,
     // but it has no page yet, and healing or adopting in that frame would drop the card the
     // machinist is about to be taken to.
@@ -568,6 +594,24 @@ fun UndercutWindowDetailOverlay(
     val setPositions = remember(spec) { undercutSetPositions(spec) }
     val aftSetXMm = setPositions.first
     val fwdSetXMm = setPositions.second
+
+    // The strip the rail and the S.E.T. lead measure: while a draft is previewed, its chain is the
+    // one confirming the draft would rebuild ([undercutPreviewChainMm], the strip builder's datums
+    // over the previewed spans) — the stored chain would keep a datum the draft has moved off.
+    // Idle, the stored strip itself.
+    val railStrip = remember(strip, activeDraft, spans, oalMm, undercutRecord.drawToSet, aftSetXMm, fwdSetXMm) {
+        if (activeDraft == null) {
+            strip
+        } else {
+            val (chainStartMm, chainEndMm) = undercutPreviewChainMm(
+                strip, spans, oalMm,
+                reachToSetMm = undercutSetReachMm(undercutRecord.drawToSet),
+                aftSetMm = aftSetXMm,
+                fwdSetMm = fwdSetXMm,
+            )
+            strip.withChainMm(chainStartMm, chainEndMm)
+        }
+    }
 
     // ── Carousel ↔ selection, a two-way binding that converges ───────────────
     // Never zero — the pager is simply not composed for an empty strip, and a 0-page state is a
@@ -779,6 +823,7 @@ fun UndercutWindowDetailOverlay(
 
     fun cancelDraft(id: String) {
         drafts = drafts - id
+        discardCounts = discardCounts + (id to (discardCounts[id] ?: 0) + 1)
         if (id == PENDING_UNDERCUT_ID) {
             pendingSeed = null
             selectedId = null
@@ -1117,7 +1162,7 @@ fun UndercutWindowDetailOverlay(
     // on-screen strip and the printed strip alike: grey liner, white cut sections (on-device
     // request). Line art empties the fill entirely.
     val linerFillColor = style.linerFill()
-    val selectColor = MaterialTheme.colorScheme.primary
+    val selectColor = SheetInk.Selection
     val errorColor = MaterialTheme.colorScheme.error
     val textColorArgb = outlineColor.toArgb()
     val textPaint = remember(textColorArgb) {
@@ -1166,14 +1211,40 @@ fun UndercutWindowDetailOverlay(
         chromeDp = TUNING_SHEET_CHROME_DP + navBottomDp,
     )
 
+    // While the keyboard is up the drawing block yields height to the card being typed into: the
+    // page under the system bars and the keyboard, less the top bar, less the card's floor, is all
+    // the drawing may take, and it scrolls inside that (on-device report: on a landscape tablet the
+    // full-height canvas pushed the card — and the field being typed into — off the screen).
+    // Without the keyboard nothing is capped and the canvas keeps its full height.
+    var pageHeightPx by remember { mutableIntStateOf(0) }
+    var topBarHeightPx by remember { mutableIntStateOf(0) }
+    val drawingScroll = rememberScrollState()
+    val drawingCapDp: Float? = if (WindowInsets.isImeVisible && pageHeightPx > 0) {
+        with(LocalDensity.current) {
+            undercutDrawingCapWhileTypingDp(
+                pageHeightDp = pageHeightPx.toDp().value,
+                topBarHeightDp = topBarHeightPx.toDp().value,
+            )
+        }
+    } else {
+        null
+    }
+
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Box(modifier = Modifier.fillMaxSize()) {
-            Column(modifier = Modifier.fillMaxSize().systemBarsPadding().imePadding()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .systemBarsPadding()
+                    .imePadding()
+                    .onSizeChanged { pageHeightPx = it.height },
+            ) {
 
                 // ── Top bar ──────────────────────────────────────────────────────
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .onSizeChanged { topBarHeightPx = it.height }
                         .background(MaterialTheme.colorScheme.surface)
                         .padding(horizontal = 4.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -1232,7 +1303,16 @@ fun UndercutWindowDetailOverlay(
 
                 // ── Fixed drawing block: the canvas never scrolls away from the cards ──
                 Column(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(
+                            if (drawingCapDp != null) {
+                                Modifier.heightIn(max = drawingCapDp.dp).verticalScroll(drawingScroll)
+                            } else {
+                                Modifier
+                            }
+                        )
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     val profileRowDp = UNDERCUT_PROFILE_ROW_DP
@@ -1272,12 +1352,12 @@ fun UndercutWindowDetailOverlay(
                     val profileRowPx = with(density) { profileRowDp.toPx() }
                     val edgePadPx = with(density) { UNDERCUT_EDGE_PAD_DP.dp.toPx() }
                     val (drawStartMm, drawEndMm) = remember(
-                        strip, spec, undercutRecord.setDatum, spans, previewDrawStartMm, previewDrawEndMm,
+                        railStrip, spec, undercutRecord.setDatum, spans, previewDrawStartMm, previewDrawEndMm,
                         oalMm, segs, canvasWidthPx, profileRowPx, edgePadPx, railTextPaint, railScale,
                         arrowSizePt, unit,
                     ) {
                         undercutDetailLeadDrawRange(
-                            strip, spec, undercutRecord.setDatum, spans,
+                            railStrip, spec, undercutRecord.setDatum, spans,
                             previewDrawStartMm, previewDrawEndMm, oalMm,
                             widthPx = canvasWidthPx.toFloat(),
                             edgePadPx = edgePadPx,
@@ -1295,16 +1375,16 @@ fun UndercutWindowDetailOverlay(
                     }
                     // The S.E.T. the strip measures to — the printed strip's ONE resolver, over the
                     // previewed spans — so the lead the canvas draws is the lead the sheet prints.
-                    val setLead = remember(strip, spec, undercutRecord.setDatum, spans, drawStartMm, drawEndMm) {
-                        undercutDetailSetLead(strip, spec, undercutRecord.setDatum, spans, drawStartMm, drawEndMm)
+                    val setLead = remember(railStrip, spec, undercutRecord.setDatum, spans, drawStartMm, drawEndMm) {
+                        undercutDetailSetLead(railStrip, spec, undercutRecord.setDatum, spans, drawStartMm, drawEndMm)
                     }
                     // Every input of the plan is one record, and the record is the remember key, so
                     // no input can be left out of the key.
                     val railInputs = with(density) {
                         UndercutDetailRailInputs(
                             spans = spans,
-                            chainStartMm = strip.chainStartMm,
-                            chainEndMm = strip.chainEndMm,
+                            chainStartMm = railStrip.chainStartMm,
+                            chainEndMm = railStrip.chainEndMm,
                             splitAtMm = railSplitAtMm,
                             unit = unit,
                             startedStrip = spans.isEmpty(),
@@ -1849,6 +1929,7 @@ fun UndercutWindowDetailOverlay(
                                 title = if (draft.isPending) "New undercut"
                                         else undercutCardTitle(page + 1, pageIds.size),
                                 draft = draft,
+                                resetKey = discardCounts[id] ?: 0,
                                 dirty = draft != baseline,
                                 selected = id == selectedId,
                                 unit = unit,
@@ -2043,6 +2124,26 @@ internal fun undercutDetailOptionsMaxHeightDp(
     .coerceAtLeast(screenHeightDp * TUNING_SHEET_MIN_FRAC)
     .coerceAtMost(screenHeightDp * PREVIEW_SHEET_MAX_FRAC)
 
+/**
+ * The least height the detail page's card carousel keeps while the keyboard is up, dp: the card's
+ * title row and a field with its label and supporting line, so the field being typed into stays
+ * on screen.
+ */
+internal const val UNDERCUT_CARD_MIN_HEIGHT_TYPING_DP = 200f
+
+/**
+ * The drawing block's height cap on the detail page while the keyboard is up, dp: the page's
+ * height under the system bars and the keyboard ([pageHeightDp]), less the top bar, the rule
+ * under the drawing and [UNDERCUT_CARD_MIN_HEIGHT_TYPING_DP] for the card. Never negative; at 0
+ * the drawing scrolls away entirely and the whole page is the card.
+ */
+internal fun undercutDrawingCapWhileTypingDp(pageHeightDp: Float, topBarHeightDp: Float): Float =
+    (pageHeightDp - topBarHeightDp - UNDERCUT_DRAWING_RULE_DP - UNDERCUT_CARD_MIN_HEIGHT_TYPING_DP)
+        .coerceAtLeast(0f)
+
+/** The 1 dp rule between the drawing block and the card carousel. */
+private const val UNDERCUT_DRAWING_RULE_DP = 1f
+
 /** Height of the strip profile band; the rails and Ø callouts add their own rows above/below. */
 private val UNDERCUT_PROFILE_ROW_DP = 140.dp
 
@@ -2071,6 +2172,56 @@ internal data class UndercutDraft(
 ) {
     val isPending: Boolean get() = id == PENDING_UNDERCUT_ID
 }
+
+/** How many saved values one [UndercutDraft] takes — see [undercutDraftSavedFields]. */
+private const val UNDERCUT_DRAFT_SAVED_FIELD_COUNT = 8
+
+/** [draft]'s fields as bundle-safe values, in the order [undercutDraftFromSaved] reads them. */
+private fun undercutDraftSavedFields(draft: UndercutDraft): List<Any> = listOf(
+    draft.id,
+    draft.startFromAftMm,
+    draft.lengthMm,
+    draft.diaMm,
+    draft.note,
+    draft.reference.name,
+    draft.referenceLinerId,
+    draft.referenceCutId,
+)
+
+/** The draft [fields] saved, or null when they are not one ([undercutDraftSavedFields]). */
+private fun undercutDraftFromSaved(fields: List<*>): UndercutDraft? {
+    if (fields.size != UNDERCUT_DRAFT_SAVED_FIELD_COUNT) return null
+    return UndercutDraft(
+        id = fields[0] as? String ?: return null,
+        startFromAftMm = fields[1] as? Float ?: return null,
+        lengthMm = fields[2] as? Float ?: return null,
+        diaMm = fields[3] as? Float ?: return null,
+        note = fields[4] as? String ?: return null,
+        reference = UndercutReference.entries.firstOrNull { it.name == fields[5] } ?: return null,
+        referenceLinerId = fields[6] as? String ?: return null,
+        referenceCutId = fields[7] as? String ?: return null,
+    )
+}
+
+/**
+ * Saves the detail overlay's draft map across an activity recreation as its drafts' fields, and
+ * restores it keyed by each draft's OWN id — the key every draft is written under (`writeDraft`),
+ * so a restored map pairs each draft with the page it came from by construction.
+ */
+internal val UndercutDraftMapSaver: Saver<Map<String, UndercutDraft>, Any> = listSaver(
+    save = { drafts -> drafts.values.flatMap(::undercutDraftSavedFields) },
+    restore = { saved ->
+        saved.chunked(UNDERCUT_DRAFT_SAVED_FIELD_COUNT)
+            .mapNotNull(::undercutDraftFromSaved)
+            .associateBy { it.id }
+    },
+)
+
+/** Saves the add flow's seed (null while no pending card is open) with the drafts it keys. */
+internal val UndercutPendingSeedSaver: Saver<UndercutDraft?, Any> = Saver(
+    save = { seed -> seed?.let { ArrayList(undercutDraftSavedFields(it)) } },
+    restore = { saved -> (saved as? List<*>)?.let(::undercutDraftFromSaved) },
+)
 
 /**
  * The draft a stored [u] starts from — its values plus the reference the card actually displays
@@ -2539,6 +2690,8 @@ private fun undercutAddRangeOf(
 private fun UndercutDraftCard(
     title: String,
     draft: UndercutDraft,
+    /** Bumped each time this card's draft is discarded; resets the card's placement state. */
+    resetKey: Int,
     dirty: Boolean,
     selected: Boolean,
     unit: UnitSystem,
@@ -2707,7 +2860,10 @@ private fun UndercutDraftCard(
     // The edge-to-edge chips' state: a refused preset's reason, and the applied chip whose gap
     // field is open.
     var buttIssue by remember(draft) { mutableStateOf<String?>(null) }
-    var gapAnchor by remember(draft.id) { mutableStateOf<UndercutGapAnchor?>(null) }
+    // Keyed on the discard count too: a Discard puts the stored cut back under the same id, and a
+    // chip still applied would read its gap against a span the cut no longer has. A confirmed chip
+    // stays — its gap is then true of the stored cut.
+    var gapAnchor by remember(draft.id, resetKey) { mutableStateOf<UndercutGapAnchor?>(null) }
     val anchorTarget = gapAnchor?.let { a -> buttTargets.firstOrNull { it.second.id == a.cutId } }
     val anchor = gapAnchor?.takeIf { anchorTarget != null }
     // Shown only when there is something behind it: an empty liner to span, or another cut to
@@ -2717,7 +2873,7 @@ private fun UndercutDraftCard(
     // "Cut N" chip with its field up is never hidden by the collapse; collapsing then closes that
     // field the way a second tap on the chip does, keeping the cut where the gap put it.
     val hasMorePlacement = wholeLinerTarget != null || buttTargets.isNotEmpty()
-    var morePlacementOpen by remember(draft.id) { mutableStateOf(isWholeLiner) }
+    var morePlacementOpen by remember(draft.id, resetKey) { mutableStateOf(isWholeLiner) }
     val morePlacementShown = hasMorePlacement && (morePlacementOpen || anchor != null)
     val cardFocusManager = LocalFocusManager.current
     fun toggleMorePlacement() {
@@ -3405,6 +3561,10 @@ private fun UndercutNum(
         allowFraction = true,
         placeholder = placeholder,
         hint = hint,
+        // A card's commits land in the overlay's draft, which the recreation's teardown blur
+        // cannot reach — the draft was saved before it. A value the field restores still typed
+        // is landed in the restored draft instead, so a leave or a confirm finds it there.
+        landRestoredEdit = true,
         parseValid = { parseFractionOrDecimal(it) != null },
         onCommit = onCommit,
     )

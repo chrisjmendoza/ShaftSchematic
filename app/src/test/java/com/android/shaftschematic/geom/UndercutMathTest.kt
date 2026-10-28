@@ -1811,6 +1811,117 @@ class UndercutMathTest {
         )
     }
 
+    @Test
+    fun `strips follow cut order even when the shaft-end reach starts a liner's drawing at 0`() {
+        // On-device report: under "Draw to the shaft end" the AFT liner's draw range starts at the
+        // shaft end, so a draw-start sort printed it ahead of the bare cut lying AFT of it.
+        val liner = UndercutLinerSpan("L", 600f, 1000f)
+        val inLiner = UndercutSpanMm("in", 700f, 760f)
+        val bare = UndercutSpanMm("bare", 520f, 540f)
+        val strips = buildUndercutStrips(
+            listOf(inLiner, bare), listOf(liner), oalMm = 3000f, reachToSetMm = UNDERCUT_SET_REACH_MM,
+        )
+        val linerStrip = strips.filterIsInstance<UndercutStrip.LinerStrip>().single()
+        assertEquals("the reach draws the liner from the shaft end", 0f, linerStrip.drawStartMm, 1e-3f)
+        assertEquals(listOf(listOf("bare"), listOf("in")), strips.map { it.undercutIds })
+        // Without the reach the order is the same.
+        assertEquals(
+            listOf(listOf("bare"), listOf("in")),
+            buildUndercutStrips(listOf(inLiner, bare), listOf(liner), oalMm = 3000f).map { it.undercutIds },
+        )
+    }
+
+    // ── Preview chain (the detail canvas while a draft is moved) ──
+
+    @Test
+    fun `the preview chain is the chain confirm would rebuild`() {
+        val oal = 3000f
+        val liner = UndercutLinerSpan("L", 600f, 1000f)
+        val overhang = UndercutSpanMm("o", 580f, 700f)
+        val inside = UndercutSpanMm("i", 800f, 850f)
+        val stored = buildUndercutStrips(listOf(overhang, inside), listOf(liner), oal)
+            .filterIsInstance<UndercutStrip.LinerStrip>().single()
+        assertEquals("the stored overhang sets the chain start", 580f, stored.chainStartMm, 1e-3f)
+
+        // Nothing moved: the stored chain.
+        assertEquals(
+            stored.chainStartMm to stored.chainEndMm,
+            undercutPreviewChainMm(stored, listOf(overhang, inside), oal),
+        )
+        // The overhang moved inside the liner: the chain falls back to the liner's own edges.
+        assertEquals(
+            600f to 1000f,
+            undercutPreviewChainMm(stored, listOf(UndercutSpanMm("o", 700f, 760f), inside), oal),
+        )
+        // A cut moved AFT of the stored chain start leads the chain from its own shoulder.
+        assertEquals(
+            500f,
+            undercutPreviewChainMm(stored, listOf(UndercutSpanMm("o", 500f, 550f), inside), oal).first,
+            1e-3f,
+        )
+        // No live span: the stored chain.
+        assertEquals(stored.chainStartMm to stored.chainEndMm, undercutPreviewChainMm(stored, emptyList(), oal))
+    }
+
+    @Test
+    fun `the preview chain honours the shaft-end reach exactly as the strip builder does`() {
+        val oal = 3000f
+        val liner = UndercutLinerSpan("L", 2000f, 2500f)
+        val cut = UndercutSpanMm("c", 2100f, 2200f)
+        fun build(spans: List<UndercutSpanMm>) = buildUndercutStrips(
+            spans, listOf(liner), oal, reachToSetMm = UNDERCUT_SET_REACH_MM, aftSetMm = 50f, fwdSetMm = 2950f,
+        ).filterIsInstance<UndercutStrip.LinerStrip>().single()
+        val stored = build(listOf(cut))
+        fun preview(spans: List<UndercutSpanMm>) = undercutPreviewChainMm(
+            stored, spans, oal, reachToSetMm = UNDERCUT_SET_REACH_MM, aftSetMm = 50f, fwdSetMm = 2950f,
+        )
+        assertEquals(stored.chainStartMm to stored.chainEndMm, preview(listOf(cut)))
+        // Moved into an AFT overhang (still on the liner): the chain start follows it.
+        val moved = listOf(UndercutSpanMm("c", 1950f, 2050f))
+        assertEquals(1950f, preview(moved).first, 1e-3f)
+        assertEquals(build(moved).let { it.chainStartMm to it.chainEndMm }, preview(moved))
+    }
+
+    @Test
+    fun `a free strip's preview chain is its cuts' padded extent`() {
+        val oal = 3000f
+        val a = UndercutSpanMm("a", 1200f, 1250f)
+        val b = UndercutSpanMm("b", 1300f, 1320f)
+        val stored = buildUndercutStrips(listOf(a, b), emptyList(), oal)
+            .filterIsInstance<UndercutStrip.FreeStrip>().single()
+        assertEquals(stored.chainStartMm to stored.chainEndMm, undercutPreviewChainMm(stored, listOf(a, b), oal))
+        val (start, end) = undercutPreviewChainMm(stored, listOf(a.copy(startMm = 1100f, endMm = 1150f), b), oal)
+        assertEquals(1100f - UNDERCUT_WINDOW_PAD_MM, start, 1e-3f)
+        assertEquals(1320f + UNDERCUT_WINDOW_PAD_MM, end, 1e-3f)
+        // Clamped to the shaft.
+        assertEquals(0f, undercutPreviewChainMm(stored, listOf(a.copy(startMm = 5f, endMm = 20f)), oal).first, 0f)
+        // Moving the chain keeps the strip's draw range and members.
+        val moved = stored.withChainMm(start, end) as UndercutStrip.FreeStrip
+        assertEquals(start to end, moved.chainStartMm to moved.chainEndMm)
+        assertEquals(stored.drawStartMm to stored.drawEndMm, moved.drawStartMm to moved.drawEndMm)
+        assertEquals(stored.undercutIds, moved.undercutIds)
+    }
+
+    @Test
+    fun `a strip pick prefers the strip whose chain holds the tap`() {
+        val liner = UndercutLinerSpan("L", 600f, 1000f)
+        // A bare cut just FWD of the liner: the liner's FWD pad overlaps the bare strip's window.
+        val strips = buildUndercutStrips(
+            listOf(UndercutSpanMm("in", 700f, 760f), UndercutSpanMm("bare", 1030f, 1040f)),
+            listOf(liner), oalMm = 3000f,
+        )
+        val linerStrip = strips.filterIsInstance<UndercutStrip.LinerStrip>().single()
+        val bareStrip = strips.filterIsInstance<UndercutStrip.FreeStrip>().single()
+        val tap = 1010f
+        assertTrue("in the liner's padded drawing", tap <= linerStrip.drawEndMm && tap > linerStrip.chainEndMm)
+        assertTrue("on the bare strip's chain", tap >= bareStrip.chainStartMm)
+        assertEquals("liner first in order", linerStrip, strips.first())
+        assertEquals(bareStrip, pickUndercutStripAt(tap, strips))
+        // Off every chain the first hit in order still wins (here the only one).
+        assertEquals(linerStrip, pickUndercutStripAt(1001f, strips))
+        assertEquals(linerStrip, pickUndercutStripAt(700f, strips))
+    }
+
     // ── New-cut seeds ──
 
     @Test

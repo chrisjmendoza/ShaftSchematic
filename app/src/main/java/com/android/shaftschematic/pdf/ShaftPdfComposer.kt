@@ -50,7 +50,6 @@ import com.android.shaftschematic.ui.resolved.unshadedTaperIds
 import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.DualUnitLayout
-import com.android.shaftschematic.util.OutputTypography
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.VerboseLog
 import com.android.shaftschematic.util.buildBodyTitleById
@@ -168,11 +167,7 @@ internal fun composeShaftPdfOnCanvas(
     // grows and its lines space out because handwriting is larger than printed text.
     val blank = effectiveOptions.blankValues
 
-    val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.FILL; textSize = TEXT_PT
-        typeface = OutputTypography.active
-        color = 0xFF000000.toInt()
-    }
+    val text = sheetTextPaint(TEXT_PT)
 
     // The footer band is reserved at the height the footer will actually PRINT
     // (`footerBlockHeightPt`): its mode's default block, or taller when a column wraps or runs to
@@ -384,11 +379,7 @@ internal fun composeShaftPdfOnCanvas(
         shaftTopY = yTopOfShaft,
         shaftBottomY = cy + halfHeightPx,
         linePaint = dim,
-        textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.FILL
-            textSize = TEXT_PT - 2f
-            color = 0xFF000000.toInt()
-        },
+        textPaint = sheetTextPaint(TEXT_PT - 2f),
         blankValues = blank,
         dualStacked = displayUnits.dual && pdfPrefs.dualUnitLayout == DualUnitLayout.STACKED,
     )
@@ -418,11 +409,7 @@ internal fun composeShaftPdfOnCanvas(
         val startRailGap = LANE_GAP_PT + 6f
         val startDimTextSize = TEXT_PT - 2f
         val minDimTextSize = 7f
-        val dimText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.FILL
-            textSize = startDimTextSize
-            color = 0xFF000000.toInt()
-        }
+        val dimText = sheetTextPaint(startDimTextSize)
 
         // Measurement reference (AFT/FWD/AUTO) is separate from tier origin.
         val measureFromMode = pdfPrefs.tieringMode

@@ -143,6 +143,40 @@ class FractionTextRendererTest {
         }
     }
 
+    /**
+     * A label's space before a fraction is the base font's word space, under every built-up
+     * style: the fraction starts exactly where the plain `"Rate: "` ends. Tightening it to the
+     * mixed-number gap printed "Rate:¾"/ft" in the footer (on-device report).
+     */
+    @Test
+    fun `a fraction after a label keeps the label's full word space`() {
+        val p = paint()
+        for (style in listOf(FractionTextStyle.Stacked, FractionTextStyle.Diagonal)) {
+            for ((label, text) in listOf(
+                "Rate: " to "Rate: 3/4\"/ft",
+                "Thread relief: " to "Thread relief: 3/8\" × Ø 4.675\"",
+                "KW: 1 1/4\" × " to "KW: 1 1/4\" × 9/16\" × 12\"",
+            )) {
+                val layout = FractionTextRenderer.layout(p, FractionText.parse(text), style)
+                val fracs = layout.placed.filter { it.run is FractionText.Run.Frac }
+                val target = fracs.last { it.x < p.measureRichText(label, style) + 1f }
+                assertEquals("${style.style} '$text'", p.measureRichText(label, style), target.x, 0.01f)
+            }
+        }
+    }
+
+    /** The mixed number keeps its tightened gap: narrower than a word space. */
+    @Test
+    fun `a mixed number still sets its fraction closer than a word space`() {
+        val p = paint()
+        for (style in listOf(FractionTextStyle.Stacked, FractionTextStyle.Diagonal)) {
+            val layout = FractionTextRenderer.layout(p, FractionText.parse("12 5/8"), style)
+            val frac = layout.placed.first { it.run is FractionText.Run.Frac }
+            assertTrue("${style.style}", frac.x < p.measureText("12 "))
+            assertEquals(p.measureText("12") + p.textSize * style.gapFrac, frac.x, 0.01f)
+        }
+    }
+
     @Test
     fun `inline style is a pure passthrough`() {
         val p = paint()

@@ -710,10 +710,11 @@ fun UndercutRoute(
     val outlineColor   = Color.Black
     // The liner outline's fixed ink: sheet black, dimmed — a retrace, never a component edge.
     val linerOutlineColor = SheetInk.Outline.copy(alpha = LINER_OUTLINE_CANVAS_ALPHA)
-    val tapTintColor   = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
-    val tapBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.65f)
-    val badgeColor     = MaterialTheme.colorScheme.primary
-    val badgeTextArgb  = MaterialTheme.colorScheme.onPrimary.toArgb()
+    // The tap affordance sits on the same white paper, so it is fixed sheet ink too.
+    val tapTintColor   = SheetInk.Selection.copy(alpha = 0.16f)
+    val tapBorderColor = SheetInk.Selection.copy(alpha = 0.65f)
+    val badgeColor     = SheetInk.Selection
+    val badgeTextArgb  = SheetInk.OnSelection.toArgb()
     val previewShape   = MaterialTheme.shapes.medium
 
     val previewOpts = remember(outlineArgb, bodyFillArgb, linerFillArgb, hatchArgb, pdfThreadSlant, pdfThreadDensity) {

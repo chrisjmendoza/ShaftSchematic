@@ -261,6 +261,22 @@ internal fun undercutRailFallbackBaselineY(
 }
 
 /**
+ * The air a below-line fallback band needs under its LAST row so that row's value stays off the
+ * shaft, points: the overhang of that value's ink — its descent, and a stacked value's second line
+ * — past the band's bottom edge ([undercutRailFallbackBaselineY]: row 0's baseline sits a label
+ * gap and a text height under the line, so the ink runs past one row pitch), plus a point of
+ * daylight, and never less than the witness gap plus a point. The printed strip reserves it under
+ * the chain-only compressed plan, the one whose below band has no clear row
+ * (`UndercutStripPlan.innerLayout`).
+ */
+internal fun undercutRailBelowClearPt(dimText: Paint, dualStacked: Boolean): Float {
+    val stackH = if (dualStacked) dimText.dualStackMetrics().advance else 0f
+    val overhang = UNDERCUT_RAIL_LABEL_CLEAR_ARROW_PT + UNDERCUT_RAIL_LABEL_GAP_PT + dimText.textSize +
+        dimText.fontMetrics.descent + stackH - undercutRailRowHeightPt(dimText, dualStacked)
+    return maxOf(UNDERCUT_RAIL_WITNESS_GAP_PT + 1f, overhang + 1f)
+}
+
+/**
  * Y of each nesting level's rail line, in [UndercutStripRails.nested] order — the ONE stepping
  * behind [drawUndercutStripRails] and every test that checks it. The levels stack directly under
  * the chain's OWN below-line label rows ([UndercutRailRowPlan.chainBelowRows] — none when the

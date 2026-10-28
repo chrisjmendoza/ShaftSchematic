@@ -75,11 +75,23 @@ over the cuts is fixed `SheetInk` on the canvases (theme-independent) and driven
 input aid are fixed `SheetInk.Outline` text with no pref; they print on no sheet. Its sibling `PdfPrefs.undercutSplitAtLinerEdge`
 (default off) decides whether the chain rail splits a cut at a liner edge it crosses.
 
-**Interactive affordances stay theme-driven** — tap tints, selection highlights, draft
-notch outlines, badges use `colorScheme.primary`/`error`. They are UI, not ink. The
-high-contrast accents were chosen to survive on white; the plain-dark accents (Purple80,
-dark error) are weak-but-visible on the sheets — acceptable for an opt-in mode, pending an
-on-device visual pass.
+**Tap and selection affordances are fixed ink too** — the overview canvases' tap tint,
+border and count badge (Wear, Undercut) and the undercut detail canvas's selection draw in
+`SheetInk.Selection` (with `SheetInk.OnSelection` badge text), the historical light-theme
+primary, so the default Light theme draws exactly what it always did. They used to follow
+`colorScheme.primary`; the on-device pass found High contrast's amber reading weakly on the
+white paper (every component on the wear overview carried a pale-yellow border), so the
+"theme-driven affordance" posture was retired for them. Error marks on a draft (`colorScheme.error`)
+remain theme-driven.
+
+### System bars follow the app theme
+
+`MainActivity` re-applies `enableEdgeToEdge` with explicit `SystemBarStyle`s whenever the
+resolved theme flips (`isAppDarkTheme(themeMode)`, the ONE resolution `ShaftSchematicTheme` also
+uses): light status/navigation icons over a dark app, dark icons over a light one. The bare
+`enableEdgeToEdge()` follows the SYSTEM night mode, which left dark, invisible clock and status
+icons over the Dark and High-contrast Dark app bars (on-device report). High contrast does not
+enter the decision — each high-contrast scheme keeps its base scheme's ground.
 
 PDF output is unconditionally theme-independent (composers use fixed `android.graphics`
 colors) — nothing in this contract touches it.
@@ -106,6 +118,14 @@ colors) — nothing in this contract touches it.
   long-press-to-drag/tap-to-enter, plus its Move mode's −/+ toolbar — real buttons, so adding
   or removing a station on a selected component IS a TalkBack path) — because the canvas's
   placement gestures (tap a pixel, drag a bubble) are not themselves a TalkBack path.
+- **Chrome survives a large system font** (on-device pass at 130% and 200%): the editor sidebar
+  scrolls when it outgrows its panel (`EditorSidebarPanel`, one column for the overlay and the
+  permanent panel, held at least the panel's height so the tools group still sits at the bottom
+  while it fits); chip labels never break inside a word and chip rows wrap whole chips onto a
+  second line (`ChipLabel` / `ChipFlowRow`, `ui/screen/ChipRows.kt`); the OAL field's label
+  shortens to "OAL (in)" above 1.3× and never takes a second line; the PDF preview bars' titles
+  are capped at two lines (ellipsized beyond). Settings switch rows toggle from their label as well as the switch
+  (`SettingSwitchRow`).
 - **Icon-only buttons always carry a `contentDescription`.** An `IconButton` whose only
   child is an `Icon` with no visible text sibling must describe its action ("Back", "Save",
   "Open navigation", …). An icon drawn beside its own visible text label keeps

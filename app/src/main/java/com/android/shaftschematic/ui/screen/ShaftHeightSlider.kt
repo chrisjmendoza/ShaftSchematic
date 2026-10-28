@@ -549,12 +549,12 @@ internal fun DimensionArrowSizeChips(
     Column {
         Text("Dimension arrows", style = MaterialTheme.typography.titleSmall)
         Spacer(Modifier.height(4.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        ChipFlowRow(spacing = 0.dp) {
             PDF_ARROW_SIZES_PT.forEach { pt ->
                 FilterChip(
                     selected = abs(arrowSizePt - pt) < 1e-3f,
                     onClick = { onCommit(pt) },
-                    label = { Text(arrowSizeLabel(pt)) },
+                    label = { ChipLabel(arrowSizeLabel(pt)) },
                     modifier = Modifier.padding(end = 8.dp),
                 )
             }
@@ -723,7 +723,7 @@ internal fun OutputFontChips(
                 FilterChip(
                     selected = outputFont == font,
                     onClick = { onCommit(font) },
-                    label = { Text(font.uiLabel(), fontFamily = outputFontPreviewFamily(font)) },
+                    label = { ChipLabel(font.uiLabel(), fontFamily = outputFontPreviewFamily(font)) },
                     modifier = Modifier.testTag("output_font_${font.name}"),
                 )
             }
@@ -766,12 +766,12 @@ internal fun FractionStyleChips(
     Column {
         Text("Fractions", style = MaterialTheme.typography.titleSmall)
         Spacer(Modifier.height(4.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        ChipFlowRow(spacing = 0.dp) {
             FractionStyle.entries.forEach { style ->
                 FilterChip(
                     selected = fractionStyle == style,
                     onClick = { onCommit(style) },
-                    label = { Text(style.uiLabel()) },
+                    label = { ChipLabel(style.uiLabel()) },
                     modifier = Modifier
                         .padding(end = 8.dp)
                         .testTag("fraction_style_${style.name.lowercase()}"),
@@ -808,13 +808,13 @@ internal fun DualUnitLayoutChips(
     Column {
         Text("Dual-unit layout", style = MaterialTheme.typography.titleSmall)
         Spacer(Modifier.height(4.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        ChipFlowRow(spacing = 0.dp) {
             DualUnitLayout.entries.forEach { option ->
                 FilterChip(
                     selected = layout == option,
                     enabled = enabled,
                     onClick = { onCommit(option) },
-                    label = { Text(option.uiLabel()) },
+                    label = { ChipLabel(option.uiLabel()) },
                     modifier = Modifier
                         .padding(end = 8.dp)
                         .testTag("dual_unit_layout_${option.name.lowercase()}"),
@@ -1070,7 +1070,7 @@ internal fun ContentChip(
         selected = selected,
         enabled = enabled,
         onClick = onClick,
-        label = { Text(label) },
+        label = { ChipLabel(label) },
         leadingIcon = if (selected) {
             {
                 Icon(

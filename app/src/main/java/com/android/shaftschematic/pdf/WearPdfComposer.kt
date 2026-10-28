@@ -35,7 +35,6 @@ import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.PDF_PAGE_WIDTH_PT
 import com.android.shaftschematic.util.VerboseLog
 import com.android.shaftschematic.util.DualUnitLayout
-import com.android.shaftschematic.util.OutputTypography
 import com.android.shaftschematic.util.drawDualLabelCentered
 import com.android.shaftschematic.util.dualStackMetrics
 import com.android.shaftschematic.util.measureDualLabel
@@ -174,11 +173,7 @@ fun composeWearPdf(
         style = Paint.Style.STROKE; strokeWidth = WEAR_OUTLINE_PT * thicknessScale; color = Color.BLACK
     }
     val dim = Paint(outline).apply { strokeWidth = WEAR_DIM_PT * thicknessScale }
-    val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.FILL; textSize = WEAR_TEXT_PT
-        typeface = OutputTypography.active
-        color = Color.BLACK
-    }
+    val text = sheetTextPaint(WEAR_TEXT_PT)
     fun shadeFill() = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
         color = Color.argb(40, 0, 0, 0)
@@ -700,7 +695,8 @@ private fun drawWearDirectionRef(
  * Liner names centered under their span on the MAIN profile — a lightweight reference tying each
  * wear band to its broken-out (zoomed) strip below, so a reader can match "this band on the shaft"
  * to "that strip". Shares the row with the "← AFT" / "FWD →" direction labels: each name is
- * centered on its liner span but clamped clear of those edge-anchored labels. Uses the same shared
+ * centered on its liner span, and the whole NAME — not just its centre — is held clear of those
+ * edge-anchored labels ([wearProfileNameCenterX]). Uses the same shared
  * title (`buildLinerTitleById` — custom label or positional AFT/MID/FWD default) the strip title
  * shows, so the two always read the same.
  */
@@ -725,9 +721,9 @@ private fun drawWearLinerNamesOnProfile(
     groups.forEach { g ->
         val ln = g.liner
         if (ln.lengthMm <= 0f) return@forEach
-        val name = linerTitles[ln.id] ?: "Liner"
-        val cx = ((xAt(ln.startFromAftMm) + xAt(ln.startFromAftMm + ln.lengthMm)) * 0.5f).coerceIn(loX, hiX)
-        c.drawText(ellipsizeToWidth(name, p, hiX - loX), cx, y, p)
+        val label = ellipsizeToWidth(linerTitles[ln.id] ?: "Liner", p, hiX - loX)
+        val spanCx = (xAt(ln.startFromAftMm) + xAt(ln.startFromAftMm + ln.lengthMm)) * 0.5f
+        c.drawText(label, wearProfileNameCenterX(spanCx, p.measureText(label), loX, hiX), y, p)
     }
 }
 

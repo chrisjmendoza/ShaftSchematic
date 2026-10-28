@@ -285,4 +285,84 @@ class PreviewTuningTest {
         assertEquals(h * TUNING_SHEET_MIN_FRAC, sheet, 0.01f)
         assertEquals(h, PREVIEW_TOP_CHROME_DP + strip + sheet + chrome, 0.01f)
     }
+
+    // ── Measured preview box ──
+
+    @Test
+    fun `with the measured preview box the panel meets the strip whatever the top chrome`() {
+        // On-device report: a 1080 x 2400 phone at 2.625x (411 x 914 dp, the screen height
+        // counting the system bars) with a 52 dp status bar and a 56 dp preview bar — 108 dp of
+        // top chrome against the 88 dp allowance — so the panel covered the strip's last 20 dp
+        // (the undercut sheet's "Notes" line).
+        val w = 411f
+        val h = 914f
+        val nav = 24f
+        val box = h - 52f - 56f - nav
+        val ink = 0.887f
+        val strip = tuningPageStripHeightDp(w, h, TUNING_SHEET_CHROME_DP, ink, availableHeightDp = box)
+        val cap = tuningSheetMaxHeightDp(h, strip, TUNING_SHEET_CHROME_DP, availableHeightDp = box)
+        assertEquals("the strip is still the page's ink band at fit width", fitWidthPageHeightDp(w) * ink, strip, 0.01f)
+        assertEquals("strip + header + content fill the box exactly", box, strip + TUNING_SHEET_CHROME_DP + cap, 0.01f)
+        // The screen-height budget on the same device overran the strip by the chrome shortfall.
+        val screenCap = tuningSheetMaxHeightDp(h, tuningPageStripHeightDp(w, h, TUNING_SHEET_CHROME_DP + nav, ink), TUNING_SHEET_CHROME_DP + nav)
+        assertEquals(20f, (strip + TUNING_SHEET_CHROME_DP + screenCap) - box, 0.01f)
+    }
+
+    @Test
+    fun `in a measured box an unmeasured portrait page still yields to the panel floor`() {
+        val w = 411f
+        val h = 914f
+        val box = 782f
+        val strip = tuningPageStripHeightDp(w, h, TUNING_SHEET_CHROME_DP, pageAspect = portraitAspect, availableHeightDp = box)
+        val cap = tuningSheetMaxHeightDp(h, strip, TUNING_SHEET_CHROME_DP, availableHeightDp = box)
+        assertTrue(strip < fitWidthPageHeightDp(w, portraitAspect))
+        assertEquals(h * TUNING_SHEET_MIN_FRAC, cap, 0.01f)
+        assertEquals(box, strip + TUNING_SHEET_CHROME_DP + cap, 0.01f)
+    }
+
+    // ── Undercut options panels (tab + detail page) ──
+
+    @Test
+    fun `the undercut panels budget from the measured drawing bottom so the phone's bars cost nothing`() {
+        // The same phone: 914 dp of screen height counting the system bars, a 52 dp status bar,
+        // a 24 dp navigation bar. The undercut panels measure the drawing block's bottom in ROOT
+        // coordinates — which already include the real status bar and the page's own top bar —
+        // and carry no fixed top-chrome allowance, so they cannot fall short the way the
+        // preview's 88 dp allowance did. The panel (anchored above the navigation bar, header
+        // row + capped content) meets the drawing exactly.
+        val h = 914f
+        val nav = 24f
+        for (drawingBottom in listOf(52f + 57f + 260f, 52f + 57f + 330f)) {
+            val cap = undercutDetailOptionsMaxHeightDp(h, drawingBottom, TUNING_SHEET_CHROME_DP + nav)
+            val panelTop = h - nav - TUNING_SHEET_CHROME_DP - cap
+            assertEquals("drawing bottom $drawingBottom", drawingBottom, panelTop, 0.01f)
+        }
+    }
+
+    @Test
+    fun `where the screen height excludes the bars the undercut panels stop short of the drawing`() {
+        // Pre-edge-to-edge configuration: screenHeightDp excludes the 52 + 24 dp of bars while the
+        // window (and the root coordinates) still span them — the cap comes out conservative.
+        val window = 914f
+        val nav = 24f
+        val screen = window - 52f - nav
+        val drawingBottom = 52f + 57f + 260f
+        val cap = undercutDetailOptionsMaxHeightDp(screen, drawingBottom, TUNING_SHEET_CHROME_DP + nav)
+        val panelTop = window - nav - TUNING_SHEET_CHROME_DP - cap
+        assertTrue("panel top $panelTop clears the drawing", panelTop >= drawingBottom)
+    }
+
+    @Test
+    fun `while typing the undercut drawing leaves the card its floor`() {
+        // A landscape tablet with the keyboard up: ~390 dp of page under the bars and keyboard,
+        // a 56 dp top bar. The drawing takes the rest above the card's floor and the 1 dp rule.
+        val cap = undercutDrawingCapWhileTypingDp(pageHeightDp = 390f, topBarHeightDp = 56f)
+        assertEquals(390f - 56f - 1f - UNDERCUT_CARD_MIN_HEIGHT_TYPING_DP, cap, 0.01f)
+    }
+
+    @Test
+    fun `on a page too short for the card's floor the drawing gets nothing, never a negative cap`() {
+        assertEquals(0f, undercutDrawingCapWhileTypingDp(pageHeightDp = 180f, topBarHeightDp = 56f), 0f)
+    }
 }
+

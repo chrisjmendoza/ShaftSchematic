@@ -2,6 +2,7 @@ package com.android.shaftschematic.ui.screen
 
 import android.app.Application
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -21,6 +22,7 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -32,6 +34,7 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.test.doubleClick
 import androidx.compose.ui.test.pinch
 import androidx.compose.ui.geometry.Offset
@@ -89,6 +92,8 @@ class UndercutDetailOverlayTest {
     private val added = mutableListOf<Float>()
     private val addedRefs = mutableListOf<UndercutReference>()
     private val updated = mutableListOf<String>()
+    /** (length, Ø) in mm of every update the overlay sends, in order. */
+    private val updatedValues = mutableListOf<Pair<Float, Float>>()
     private var closed = 0
     private var previewed = 0
 
@@ -109,11 +114,15 @@ class UndercutDetailOverlayTest {
         /** A fixed strip in place of the liner strip over the record — e.g. an empty bare-shaft window. */
         fixedStrip: UndercutStrip? = null,
         stripKey: String = "liner:L1",
+        /** Hosts the overlay under a [StateRestorationTester], to emulate an activity recreation. */
+        restorer: StateRestorationTester? = null,
     ) {
         record = UndercutRecord(cuts)
         val resolved = resolveComponents(spec)
         val vm = if (withChrome) ShaftViewModel(ApplicationProvider.getApplicationContext<Application>()) else null
-        rule.setContent {
+        fun setHost(content: @Composable () -> Unit) =
+            if (restorer != null) restorer.setContent(content) else rule.setContent(content)
+        setHost {
             MaterialTheme {
                 val spans = record.undercuts.map {
                     UndercutSpanMm(it.id, it.startFromAftMm, it.startFromAftMm + it.lengthMm)
@@ -135,7 +144,10 @@ class UndercutDetailOverlayTest {
                         record = record.copy(undercuts = record.undercuts + u)
                         u.id
                     },
-                    onUpdateUndercut = { id, _, _, _, _ -> updated += id },
+                    onUpdateUndercut = { id, _, len, dia, _ ->
+                        updated += id
+                        updatedValues += len to dia
+                    },
                     onUpdateReference = { _, _, _, _ -> },
                     onRemoveUndercut = { id ->
                         removed += id
@@ -294,6 +306,24 @@ class UndercutDetailOverlayTest {
             rule.onAllNodes(editableStartsWith("9.87") and inU2).fetchSemanticsNodes().isNotEmpty(),
         )
         assertTrue("a gap is a draft edit, not a record write", updated.isEmpty())
+    }
+
+    @Test
+    fun `discarding a chip-placed draft leaves no chip or gap field behind`() {
+        // On-device report: after Discard the AFT-side chip stayed selected and its gap field read
+        // the stored cut's distance from Cut 1 as a negative gap.
+        show(listOf(cut("u1", 600f, len = 100f), cut("u2", 900f)), initialSelectedId = "u2")
+        val inU2 = hasAnyAncestor(hasTestTag("undercut_card_u2"))
+        val gap = hasText("Gap to Cut 1 (in)") and inU2
+        openMorePlacement(inU2)
+        rule.onNode(hasTestTag("undercut_butt_before_1") and inU2).performScrollTo().performClick()
+        settle()
+        assertTrue("the chip opens its gap field", rule.onAllNodes(gap).fetchSemanticsNodes().isNotEmpty())
+
+        rule.onNodeWithContentDescription("Discard change").performClick()
+        settle()
+        assertTrue("no stale gap field after Discard", rule.onAllNodes(gap).fetchSemanticsNodes().isEmpty())
+        assertTrue("Discard writes nothing", updated.isEmpty())
     }
 
     /**
@@ -1487,5 +1517,78 @@ class UndercutDetailOverlayTest {
         show(listOf(cut("u1", 600f)))
         assertTrue(rule.onAllNodesWithText("New undercut").fetchSemanticsNodes().isEmpty())
         assertPillRecorded()
+    }
+
+    // ── An activity recreation (a tablet rotation) ──
+
+    private fun diaField(card: SemanticsMatcher) = rule.onNode(hasText("Measured Ø (in)") and card)
+    private fun SemanticsMatcher.holds(text: String) = rule.onNode(this).assert(
+        SemanticsMatcher.expectValue(SemanticsProperties.EditableText, AnnotatedString(text)),
+    )
+
+    @Test
+    fun `a typed Ø restored by a recreation lands in the draft and Back records it`() {
+        // On-device report: after a rotation the field showed the typed Ø, unfocused, and Back
+        // left without it — the teardown's blur had committed into the draft map being thrown away.
+        val restorer = StateRestorationTester(rule)
+        show(listOf(cut("u1", 900f)), restorer = restorer)
+        diaField(onCard("u1")).performScrollTo().performTextReplacement("7")
+        rule.waitForIdle()
+
+        restorer.emulateSavedInstanceStateRestore()
+        settle()
+
+        (hasText("Measured Ø (in)") and onCard("u1")).holds("7")
+        pill.assert(hasAnyDescendant(hasText("Confirm change")))
+        assertTrue("the restore recorded something on its own: $updated", updated.isEmpty())
+
+        rule.onNodeWithContentDescription("Back to Undercut Drawing").performClick()
+        settle()
+        assertEquals(1, closed)
+        assertEquals(listOf("u1"), updated)
+        assertEquals(7f * 25.4f, updatedValues.single().second, 1e-3f)
+    }
+
+    @Test
+    fun `a new cut's typed Ø survives a recreation and Record cut writes it`() {
+        val restorer = StateRestorationTester(rule)
+        show(listOf(cut("u1", 600f)), seedNewCut = true, restorer = restorer)
+        settle()
+        diaField(pendingCard).performScrollTo().performTextReplacement("5")
+        rule.waitForIdle()
+
+        restorer.emulateSavedInstanceStateRestore()
+        settle()
+
+        // The same pending card, not a second seed, still holding the typed Ø — now in its draft.
+        assertEquals(1, rule.onAllNodesWithText("New undercut").fetchSemanticsNodes().size)
+        (hasText("Measured Ø (in)") and pendingCard).holds("5")
+        pill.assert(hasAnyDescendant(hasText("Record cut")))
+        assertTrue("the restore recorded the cut on its own at $added", added.isEmpty())
+
+        rule.onNodeWithTag("undercut_confirm", useUnmergedTree = true).performClick()
+        settle()
+        assertEquals(1, added.size)
+        assertEquals(listOf("new"), updated)
+        assertEquals(5f * 25.4f, updatedValues.single().second, 1e-3f)
+    }
+
+    @Test
+    fun `an edit already in a draft survives a recreation`() {
+        // A committed Length waits in the draft for Confirm; a draft map lost with the old
+        // composition would put the stored Length back on the card with no word of it.
+        val restorer = StateRestorationTester(rule)
+        show(listOf(cut("u1", 900f)), restorer = restorer)
+        typeAndCommit(hasText("Length (in)") and onCard("u1"), "3")
+        pill.assert(hasAnyDescendant(hasText("Confirm change")))
+
+        restorer.emulateSavedInstanceStateRestore()
+        settle()
+
+        pill.assert(hasAnyDescendant(hasText("Confirm change")))
+        rule.onNodeWithTag("undercut_confirm", useUnmergedTree = true).performClick()
+        settle()
+        assertEquals(listOf("u1"), updated)
+        assertEquals(3f * 25.4f, updatedValues.single().first, 1e-3f)
     }
 }

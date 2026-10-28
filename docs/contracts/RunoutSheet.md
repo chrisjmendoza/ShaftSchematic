@@ -405,7 +405,7 @@ the UI contract added on top of the existing wear-document tab.
 canvas (`ShaftLayout.compute` + `ShaftRenderer.draw` against `resolvedComponents`, never raw
 spec), but deliberately **no pinch-to-zoom** — this canvas only needs a single tap gesture, so
 skipping the transformable/zoom state kept the tap-coordinate math simple (no scale/offset to
-divide out). After `ShaftRenderer.draw`, `drawWearAffordances` adds a faint primary-tint
+divide out). After `ShaftRenderer.draw`, `drawWearAffordances` adds a faint `SheetInk.Selection`-tint
 fill + border over every liner (tap affordance) and a small count badge above any liner that
 already has ≥1 recorded wear spot. (It has since been generalized to every pit-eligible
 component — bodies and tapers too; see "Wear Pits" below.)
@@ -1160,6 +1160,12 @@ field) are ignored. The marker follows the finger until release. Three buttons: 
 working marker + value in place — the marker-removal affordance), **Cancel** (discard, close),
 **Save** (persist via `setRunoutReading`, close; saving with neither value nor marker removes the
 reading). Working state seeds from the stored reading, so reopening shows saved data until edited.
+The open bubble, the typed value and the placed marker are `rememberSaveable`, so a tablet
+rotation (an activity recreation) brings the dialog back mid-edit (on-device report: the typed
+TIR and high spot were lost). The dialog is an `ImeResizingAlertDialog` (`DialogImeResize.kt`):
+its window resizes above the keyboard at a fixed size, the ring, value field and high-spot line
+scroll in the text slot, and the title and Clear · Cancel · Save stay on screen (on-device
+report: in landscape the keyboard covered Cancel and Save).
 
 **Canvas tap → dialog** (`RunoutRoute`): `computeRunoutPreview` (a `Density` extension) hoists the
 shared plan so the renderer and the tap handler compute identical geometry. The tap handler inverts

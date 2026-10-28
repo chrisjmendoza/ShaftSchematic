@@ -1,6 +1,11 @@
 package com.android.shaftschematic.ui.screen
 
+import com.android.shaftschematic.ui.config.AddDefaultsConfig
+import com.android.shaftschematic.ui.viewmodel.SessionAddDefaults
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -155,6 +160,54 @@ class AddDialogGatesTest {
     @Test
     fun `slot is blocked by a bounds error`() {
         assertFalse(slot(boundsError = "Extends past the FWD face"))
+    }
+
+    /**
+     * The dialog opens on its session defaults (0.5" hole, 2 holes at 2") measured from FWD.
+     * A FWD seed of 0 put the fwd-most hole center ON the shaft end: half the hole hung off it,
+     * "Row extends past the end of the shaft", Add disabled (on-device report). Whatever face
+     * the dialog opens on, the seeded row must fit and Add must be live.
+     */
+    private fun opensValid(oalMm: Float, isFwd: Boolean, suggestedAftStartMm: Float) {
+        val d = SessionAddDefaults.initial()
+        val entered = couplerBoltSlotSeedMm(
+            oalMm = oalMm, isFwd = isFwd, suggestedAftStartMm = suggestedAftStartMm,
+            holeDiaMm = d.slotHoleDiaMm, count = d.slotCount, spacingMm = d.slotSpacingMm,
+            fromFaceMm = AddDefaultsConfig.SLOT_FROM_END_IN * 25.4f,
+        )
+        val phys = couplerBoltSlotPhysStartMm(oalMm, isFwd, entered, d.slotCount, d.slotSpacingMm)
+        val bounds = couplerBoltSlotBoundsError(oalMm, phys, d.slotHoleDiaMm, d.slotCount, d.slotSpacingMm)
+        assertNull("isFwd=$isFwd suggested=$suggestedAftStartMm", bounds)
+        assertTrue(
+            couplerBoltSlotAddEnabled(phys, d.slotHoleDiaMm, d.slotCount, d.slotSpacingMm, true, d.slotDepthMm, bounds)
+        )
+    }
+
+    @Test
+    fun `the bolt slot dialog opens valid from FWD`() {
+        opensValid(oalMm = 9000f, isFwd = true, suggestedAftStartMm = 0f)
+        assertEquals(25.4f, couplerBoltSlotSeedMm(9000f, true, 0f, 12.7f, 2, 50.8f, 25.4f), 0f)
+    }
+
+    @Test
+    fun `the bolt slot dialog opens valid from AFT even when the suggested start is off the shaft`() {
+        // No components: the suggested start is the AFT face itself.
+        opensValid(oalMm = 9000f, isFwd = false, suggestedAftStartMm = 0f)
+        // Components to the FWD end: the suggested start is the OAL.
+        opensValid(oalMm = 9000f, isFwd = false, suggestedAftStartMm = 9000f)
+        // A suggested start the row fits at is kept.
+        assertEquals(3000f, couplerBoltSlotSeedMm(9000f, false, 3000f, 12.7f, 2, 50.8f, 25.4f), 0f)
+    }
+
+    @Test
+    fun `the seed is never less than one hole diameter from the face`() {
+        assertEquals(60f, couplerBoltSlotSeedMm(9000f, true, 0f, 60f, 1, 0f, 25.4f), 0f)
+    }
+
+    @Test
+    fun `a zero FWD distance is what failed the bounds check`() {
+        val phys = couplerBoltSlotPhysStartMm(9000f, isFwd = true, enteredMm = 0f, count = 2, spacingMm = 50.8f)
+        assertNotNull(couplerBoltSlotBoundsError(9000f, phys, 12.7f, 2, 50.8f))
     }
 
     // ── Taper ────────────────────────────────────────────────────────────────────

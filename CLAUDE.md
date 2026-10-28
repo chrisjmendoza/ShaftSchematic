@@ -389,7 +389,11 @@ page's **ink band** (`util/PdfInkBounds.kt` — blank paper cropped, inked rows 
 band measured on sharp passes only so it can't resize under a dragging finger) and the cap
 counts the panel's OWN chrome outside the content slot — its header row (title + close),
 held to exactly `TUNING_SHEET_CHROME_DP`, + the navigation-bar inset the hosts pad below it —
-or the menu eats the callouts and footer. The panel owns the cap; the sheet columns carry no
+or the menu eats the callouts and footer. Both preview hosts budget strip and cap from the
+MEASURED preview box (`availableHeightDp` — under the app bar, already above that inset, so the
+inset is not counted again); the screen less `PREVIEW_TOP_CHROME_DP` is only the fallback, since a
+taller real status bar overran that allowance and the panel hid the undercut sheet's "Notes" line
+(on-device report). The panel owns the cap; the sheet columns carry no
 cap, title or inset of their own. ONE draw helper feeds both strip sites (`drawPageBand`).
 **Every PDF preview treats the shared tuning sliders alike**: wherever Line thickness, Body
 S-break, Shaft height or Liner compression appears, it redraws the page under the finger through
@@ -634,7 +638,10 @@ fixed inks, never theme roles, and never leaking into the PDF composers. The PRI
 sheet therefore carries its OWN `PdfPrefs.undercutLineArt` (profile-captured, decided by the
 pure `undercutPdfFillPlan`), which suppresses every fill on that document — the detail strips'
 always-shaded liner and the notch section core included; the two flags are independent by
-design, one meaning on two surfaces, neither reading the other. See
+design, one meaning on two surfaces, neither reading the other. Tap and selection highlights on
+those canvases — the Wear/Undercut overview tap tint, border and badge and the undercut detail
+canvas's selection — are fixed `SheetInk.Selection` ink as well, never `colorScheme.primary`
+(on-device report: High contrast's amber read weakly on the white paper). See
 `docs/contracts/Appearance.md`.
 
 ### Layout adapts on ONE axis, the window width class

@@ -72,6 +72,11 @@ Metric display is the exact mm conversion of the same physical sizes (e.g. body
 session's last-used size per component type. Thread's default **Major Ø** is fixed per
 spec above, not derived from a prior segment.
 
+**Start seed** (`addStartSeed`, `ui/screen/ShaftScreenController.kt`): an Add dialog opens at
+the end of the last taper/liner/OAL-counted thread, unless that end is at or past the OAL or
+falls inside a component — then it opens at the start of the AFT-most bare-shaft (auto) span
+(Add Body sized to that span), and with no bare shaft left the end seed stands.
+
 ---
 
 ## QA

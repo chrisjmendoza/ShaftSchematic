@@ -39,7 +39,8 @@ import androidx.core.view.doOnLayout
  * dialog looks exactly as it did: the window fills the area above the keyboard and the
  * dialog box sits centered in it, as before.
  *
- * Only the parameters the calculators use are exposed; add others as a caller needs them.
+ * Only the parameters its callers use (the calculators, the runout reading editor) are exposed;
+ * add others as a caller needs them.
  */
 @Composable
 internal fun ImeResizingAlertDialog(

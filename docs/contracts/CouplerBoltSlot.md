@@ -73,6 +73,13 @@ validation, or `maxOuterDiaMm` (a slot's `maxDiaMm()` is 0 — it does not defin
 Same convention is applied identically in `AddCouplerBoltSlotDialog` and the carousel card,
 so editing round-trips.
 
+`AddCouplerBoltSlotDialog` opens on a row that FITS, so "Add" is live from the first frame
+(`couplerBoltSlotSeedMm`, `AddDialogGates.kt`): the position seeds at
+`AddDefaultsConfig.SLOT_FROM_END_IN` (1″) or one hole Ø, whichever is larger, from the chosen
+face; measured from AFT the suggested start (end of the last component) is kept when the row
+fits there. A FWD seed of 0 put the nearest hole center on the shaft end — half the hole off the
+shaft, "Row extends past the end of the shaft", Add disabled (on-device report).
+
 ---
 
 ## Hole style (SEAM / CROSS)

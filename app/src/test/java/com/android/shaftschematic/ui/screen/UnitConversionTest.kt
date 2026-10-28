@@ -90,4 +90,17 @@ class UnitConversionTest {
         val s = formatDisplay(mm, UnitSystem.INCHES, 4)
         assertEquals("5.9375", s)
     }
+
+    @Test
+    fun `formatDisplay never prints a negative zero`() {
+        // A FWD-referenced taper flush with the FWD end recovers its Start as -0.0 or a hair
+        // below zero; the field must read "0", not "-0".
+        assertEquals("0", formatDisplay(-0.0f, UnitSystem.INCHES))
+        assertEquals("0", formatDisplay(-0.0f, UnitSystem.MILLIMETERS))
+        assertEquals("0", formatDisplay(-0.0001f, UnitSystem.INCHES))
+        assertEquals("0", formatDisplay(-0.0001f, UnitSystem.MILLIMETERS))
+        // A real negative still prints its sign.
+        assertEquals("-1", formatDisplay(-25.4f, UnitSystem.INCHES))
+        assertEquals("-0.5", formatDisplay(-0.5f, UnitSystem.MILLIMETERS))
+    }
 }

@@ -1637,4 +1637,26 @@ class WearStripLayoutTest {
         assertEquals("negative room, no curl", 0f, wearStripBreakAmplitudePt(r, -5f, stroke), 1e-3f)
     }
 
+    // ── Liner names under the main profile ──
+
+    @Test
+    fun `a liner name near either shaft end stays clear of the direction labels`() {
+        val loX = 80f
+        val hiX = 700f
+        val w = 60f
+        // FWD liner: its span centre sits past the row's end — the whole name slides inside.
+        val fwd = wearProfileNameCenterX(spanCx = 720f, labelW = w, loX = loX, hiX = hiX)
+        assertEquals(hiX - w / 2f, fwd, 1e-4f)
+        assertTrue("the name's right edge stops at the FWD label's zone", fwd + w / 2f <= hiX + 1e-4f)
+        // AFT liner, mirrored.
+        val aft = wearProfileNameCenterX(spanCx = 60f, labelW = w, loX = loX, hiX = hiX)
+        assertEquals(loX + w / 2f, aft, 1e-4f)
+        // Centre just inside the row but the name still reaching past it: slid, not just clamped.
+        assertEquals(hiX - w / 2f, wearProfileNameCenterX(695f, w, loX, hiX), 1e-4f)
+        // Mid-span: centred on its liner, untouched.
+        assertEquals(400f, wearProfileNameCenterX(400f, w, loX, hiX), 0f)
+        // A name exactly as wide as the row centres in it; never an inverted clamp.
+        assertEquals((loX + hiX) / 2f, wearProfileNameCenterX(100f, hiX - loX, loX, hiX), 1e-4f)
+        assertEquals((loX + hiX) / 2f, wearProfileNameCenterX(100f, hiX - loX + 3f, loX, hiX), 1e-4f)
+    }
 }

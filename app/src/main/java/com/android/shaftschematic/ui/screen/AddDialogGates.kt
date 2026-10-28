@@ -66,6 +66,71 @@ fun couplerBoltSlotAddEnabled(
         boundsError == null
 
 /**
+ * Physical position (from AFT, mm) of a coupler bolt row's aft-most hole center. [enteredMm] is
+ * the typed distance from the chosen face to the NEAREST hole center; measured from FWD it
+ * locates the fwd-most hole and the row extends aft. `-1f` when the entry is unusable.
+ */
+fun couplerBoltSlotPhysStartMm(
+    oalMm: Float,
+    isFwd: Boolean,
+    enteredMm: Float,
+    count: Int,
+    spacingMm: Float,
+): Float {
+    if (enteredMm < 0f) return -1f
+    if (!isFwd) return enteredMm
+    val rowSpanMm = (count - 1).coerceAtLeast(0) * spacingMm.coerceAtLeast(0f)
+    return (oalMm - enteredMm - rowSpanMm).coerceAtLeast(0f)
+}
+
+/**
+ * Every hole (center ± radius) must lie on the shaft — mirrors `CouplerBoltSlot.isValid()`.
+ * Only checked once an OAL exists and the row is fully entered; null when the row fits.
+ */
+fun couplerBoltSlotBoundsError(
+    oalMm: Float,
+    physStartMm: Float,
+    holeDiaMm: Float,
+    count: Int,
+    spacingMm: Float,
+): String? {
+    if (!(oalMm > 0f && physStartMm >= 0f && holeDiaMm > 0f && count >= 1)) return null
+    val rowSpanMm = (count - 1).coerceAtLeast(0) * spacingMm.coerceAtLeast(0f)
+    val lastCenterMm = physStartMm + rowSpanMm
+    val eps = 1e-3f
+    return when {
+        physStartMm - holeDiaMm * 0.5f < -eps -> "Row extends past the AFT end of the shaft"
+        lastCenterMm + holeDiaMm * 0.5f > oalMm + eps -> "Row extends past the end of the shaft"
+        else -> null
+    }
+}
+
+/**
+ * The position (mm from the chosen face to the nearest hole center) `AddCouplerBoltSlotDialog`
+ * opens with, so it opens on a row that FITS and "Add" is live. From FWD — the default — a
+ * seed of 0 put the hole center on the shaft end, half the hole hung off it, and the dialog
+ * opened red with "Add" disabled (on-device report). The seed is [fromFaceMm] (1 in) or one
+ * hole Ø, whichever is larger; from AFT the suggested start (the end of the last component) is
+ * kept whenever the row fits there.
+ */
+fun couplerBoltSlotSeedMm(
+    oalMm: Float,
+    isFwd: Boolean,
+    suggestedAftStartMm: Float,
+    holeDiaMm: Float,
+    count: Int,
+    spacingMm: Float,
+    fromFaceMm: Float,
+): Float {
+    val faceSeed = maxOf(fromFaceMm, holeDiaMm)
+    if (isFwd) return faceSeed
+    val fits = suggestedAftStartMm >= 0f && couplerBoltSlotBoundsError(
+        oalMm, suggestedAftStartMm, holeDiaMm, count, spacingMm,
+    ) == null && suggestedAftStartMm - holeDiaMm * 0.5f >= 0f
+    return if (fits) suggestedAftStartMm else faceSeed
+}
+
+/**
  * Add Taper: start and length as usual, plus two rate-specific conditions.
  *
  * @param autoRate true when the rate is derived from Length + SET + LET rather than typed.

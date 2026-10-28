@@ -38,6 +38,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -48,6 +49,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.ui.adaptive.readableWidth
+import kotlinx.coroutines.flow.drop
 
 /**
  * HelpRoute — in-app glossary, how-to guides, and FAQ. Reached from the editor sidebar's
@@ -110,6 +112,13 @@ fun HelpRoute(
     val leadItems = if (onOpenManual != null) 1 else 0
     LaunchedEffect(initialTopicKey) {
         helpTopicItemIndex(helpSections, initialTopicKey)?.let { listState.scrollToItem(it + leadItems) }
+    }
+    // A new query opens on its first result. The list keeps its scroll anchored to the key of
+    // the item at the top, so a result that survives a re-rank holds the view wherever it lands
+    // and the leading results sit above the fold (on-device report). `drop(1)` skips the value
+    // present at composition, so neither the deep link nor a restored query is overridden.
+    LaunchedEffect(listState) {
+        snapshotFlow { query }.drop(1).collect { listState.scrollToItem(0) }
     }
 
     Scaffold(

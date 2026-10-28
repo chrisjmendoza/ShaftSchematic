@@ -1273,13 +1273,57 @@ fun undercutPreviewDrawRange(
 }
 
 /**
+ * The chain datums `(start, end)` a detail overlay should dimension while it PREVIEWS a draft —
+ * the chain confirming the draft would rebuild, so the canvas rail never measures from a stored
+ * datum the draft has already moved off (on-device report: a moved overhang left a phantom lead
+ * gap behind, and a cut moved AFT of the stored chain start collapsed to a zero-width span).
+ *
+ * A [UndercutStrip.LinerStrip] re-runs [linerStripFor] over [previewSpans] — the liner's edges
+ * extended by any overhang, then the "Draw to the shaft end" reach ([reachToSetMm] against
+ * [aftSetMm]/[fwdSetMm]) — exactly as [buildUndercutStrips] does on confirm. A
+ * [UndercutStrip.FreeStrip] takes the cuts' padded extent clamped to `[0, oalMm]`, its window's
+ * construction ([clusterUndercuts]). No live span keeps the strip's stored chain. Pass the
+ * arguments the strip was built with, so with nothing moved the result IS the stored chain.
+ */
+fun undercutPreviewChainMm(
+    strip: UndercutStrip,
+    previewSpans: List<UndercutSpanMm>,
+    oalMm: Float,
+    padMm: Float = UNDERCUT_WINDOW_PAD_MM,
+    reachToSetMm: Float = 0f,
+    aftSetMm: Float = 0f,
+    fwdSetMm: Float = oalMm,
+): Pair<Float, Float> {
+    val live = previewSpans.filter { it.endMm > it.startMm }
+    if (live.isEmpty()) return strip.chainStartMm to strip.chainEndMm
+    return when (strip) {
+        is UndercutStrip.LinerStrip -> linerStripFor(
+            UndercutLinerSpan(strip.linerId, strip.linerStartMm, strip.linerEndMm), live, oalMm, padMm,
+            reachToSetMm = reachToSetMm, aftSetMm = aftSetMm, fwdSetMm = fwdSetMm,
+        ).let { it.chainStartMm to it.chainEndMm }
+        is UndercutStrip.FreeStrip -> {
+            val hi = oalMm.coerceAtLeast(0f)
+            (live.minOf { it.startMm } - padMm).coerceIn(0f, hi) to (live.maxOf { it.endMm } + padMm).coerceIn(0f, hi)
+        }
+    }
+}
+
+/** This strip with its chain datums moved to `[startMm, endMm]` — draw range and members untouched. */
+fun UndercutStrip.withChainMm(startMm: Float, endMm: Float): UndercutStrip = when (this) {
+    is UndercutStrip.LinerStrip -> copy(chainStartMm = startMm, chainEndMm = endMm)
+    is UndercutStrip.FreeStrip -> copy(window = window.copy(startMm = startMm, endMm = endMm))
+}
+
+/**
  * Group cuts into detail strips: every cut overlapping a liner — or chained to one that does,
  * [assignUndercutLiners] — joins that liner's [UndercutStrip.LinerStrip] (one strip per liner
  * with ≥1 cut, covering the whole liner and every chained cut); the remaining bare-shaft cuts
  * cluster into [UndercutStrip.FreeStrip] windows via
  * [clusterUndercuts]. Every strip's DRAW range gets break room against [segs]
  * ([withUndercutBreakRoom]; chain datums never move — a free strip's window stays its chain
- * and only its draw range grows). Result is sorted aft → fwd by draw start. Consumed by the
+ * and only its draw range grows). Result is sorted aft → fwd by each strip's FIRST CUT start,
+ * ties by draw start — never by draw range or chain alone, which "Draw to the shaft end" moves
+ * onto the shaft end and its S.E.T. Consumed by the
  * overview affordances, the detail overlay, and the PDF strips, so all three agree by
  * construction. Empty spans are skipped, as in [clusterUndercuts]. Empty [segs] skips the
  * break room. [reachToSetMm], [aftSetMm] and [fwdSetMm] are forwarded to every liner strip
@@ -1313,16 +1357,31 @@ fun buildUndercutStrips(
             withUndercutBreakRoom(window.startMm, window.endMm, segs, oalMm, cutSpans = members)
         strips += UndercutStrip.FreeStrip(window, drawStart, drawEnd)
     }
-    return strips.sortedBy { it.drawStartMm }
+    // Section order is CUT order: a draw range is padded and, under "Draw to the shaft end",
+    // starts at the shaft end, so it can sort a liner ahead of a bare cut lying AFT of it
+    // (on-device report). The chain start is no better — the same option moves it onto the
+    // S.E.T. A bare cut never lies inside a liner's span (overlap assigns it to the liner) and
+    // free windows are disjoint, so first-cut order is the shaft's AFT → FWD order.
+    val startById = live.associate { it.id to it.startMm }
+    return strips.sortedWith(
+        compareBy(
+            { s -> s.undercutIds.mapNotNull { startById[it] }.minOrNull() ?: s.drawStartMm },
+            { s -> s.drawStartMm },
+        ),
+    )
 }
 
 /**
  * Pick the strip containing shaft-space [xMm], or `null`. Unlike free windows, liner
- * strips can overlap a neighboring strip's pad; the first hit in aft → fwd order wins —
- * ties are visually indistinguishable at pad scale.
+ * strips can overlap a neighboring strip's pad (and, under "Draw to the shaft end", run on
+ * to the shaft end over a neighbour's cuts): a strip whose CHAIN holds [xMm] wins — that is
+ * the section the tap is on — and otherwise the first hit in [strips] order, whose ties are
+ * visually indistinguishable at pad scale.
  */
-fun pickUndercutStripAt(xMm: Float, strips: List<UndercutStrip>): UndercutStrip? =
-    strips.firstOrNull { xMm >= it.drawStartMm && xMm <= it.drawEndMm }
+fun pickUndercutStripAt(xMm: Float, strips: List<UndercutStrip>): UndercutStrip? {
+    val hits = strips.filter { xMm >= it.drawStartMm && xMm <= it.drawEndMm }
+    return hits.firstOrNull { xMm >= it.chainStartMm && xMm <= it.chainEndMm } ?: hits.firstOrNull()
+}
 
 // ── Placeholder Ø ──
 

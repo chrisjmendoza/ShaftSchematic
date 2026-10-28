@@ -8,18 +8,22 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.Article
@@ -185,140 +189,149 @@ fun EditorSidebarPanel(
     onNavigated: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxHeight()
-            .statusBarsPadding()        // keeps top icon below status bar
-            .navigationBarsPadding()    // keeps Settings above system nav bar
-            .padding(vertical = 8.dp),
-    ) {
-        // ── App title ────────────────────────────────────────
-        Text(
-            text = "ShaftSchematic",
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-        )
+    // The list scrolls when it outgrows the panel — at a large system font the last rows were
+    // cut off with no way to reach them (on-device report, 200%). The column is held at least
+    // the panel's height, so while it fits the weighted spacer still pins the tools group to
+    // the bottom exactly as before; one column serves both the overlay and the permanent panel.
+    BoxWithConstraints(modifier.fillMaxHeight()) {
+        val panelHeight = if (constraints.hasBoundedHeight) maxHeight else 0.dp
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .heightIn(min = panelHeight)
+                .statusBarsPadding()        // keeps top icon below status bar
+                .navigationBarsPadding()    // keeps Settings above system nav bar
+                .padding(vertical = 8.dp),
+        ) {
+            // ── App title ────────────────────────────────────────
+            Text(
+                text = "ShaftSchematic",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            )
 
-        HorizontalDivider(modifier = Modifier.padding(horizontal = 8.dp))
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 8.dp))
 
-        Spacer(Modifier.size(4.dp))
+            Spacer(Modifier.size(4.dp))
 
-        // ── Home ─────────────────────────────────────────────
-        NavItem(
-            icon = Icons.Filled.Home,
-            label = "Home",
-            selected = false,
-            enabled = true,
-            onClick = { onHome(); onNavigated() },
-        )
-
-        Spacer(Modifier.size(4.dp))
-        HorizontalDivider(modifier = Modifier.padding(horizontal = 8.dp))
-        Spacer(Modifier.size(4.dp))
-
-        // ── Document tabs ─────────────────────────────────────
-        NavItem(
-            icon = Icons.Filled.Schema,
-            label = EditorTab.SCHEMATIC.label,
-            selected = selectedTab == EditorTab.SCHEMATIC,
-            enabled = true,
-            onClick = { onTabSelected(EditorTab.SCHEMATIC); onNavigated() },
-        )
-        NavItem(
-            icon = Icons.Filled.TrackChanges,
-            label = EditorTab.RUNOUT.label,
-            selected = selectedTab == EditorTab.RUNOUT,
-            enabled = runoutEnabled,
-            onClick = { if (runoutEnabled) { onTabSelected(EditorTab.RUNOUT); onNavigated() } },
-            disabledHint = "Add components first",
-        )
-        // The Wear page is the authoring surface for wear data; the
-        // Consolidated Output tab features that data on its sheet.
-        // WEAR_TAB_ENABLED (EditorTab.kt) can retire this entry when full
-        // consolidation lands.
-        if (WEAR_TAB_ENABLED) {
+            // ── Home ─────────────────────────────────────────────
             NavItem(
-                icon = Icons.Filled.Article,
-                label = EditorTab.WEAR.label,
-                selected = selectedTab == EditorTab.WEAR,
+                icon = Icons.Filled.Home,
+                label = "Home",
+                selected = false,
+                enabled = true,
+                onClick = { onHome(); onNavigated() },
+            )
+
+            Spacer(Modifier.size(4.dp))
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 8.dp))
+            Spacer(Modifier.size(4.dp))
+
+            // ── Document tabs ─────────────────────────────────────
+            NavItem(
+                icon = Icons.Filled.Schema,
+                label = EditorTab.SCHEMATIC.label,
+                selected = selectedTab == EditorTab.SCHEMATIC,
+                enabled = true,
+                onClick = { onTabSelected(EditorTab.SCHEMATIC); onNavigated() },
+            )
+            NavItem(
+                icon = Icons.Filled.TrackChanges,
+                label = EditorTab.RUNOUT.label,
+                selected = selectedTab == EditorTab.RUNOUT,
                 enabled = runoutEnabled,
-                onClick = { if (runoutEnabled) { onTabSelected(EditorTab.WEAR); onNavigated() } },
+                onClick = { if (runoutEnabled) { onTabSelected(EditorTab.RUNOUT); onNavigated() } },
                 disabledHint = "Add components first",
             )
+            // The Wear page is the authoring surface for wear data; the
+            // Consolidated Output tab features that data on its sheet.
+            // WEAR_TAB_ENABLED (EditorTab.kt) can retire this entry when full
+            // consolidation lands.
+            if (WEAR_TAB_ENABLED) {
+                NavItem(
+                    icon = Icons.Filled.Article,
+                    label = EditorTab.WEAR.label,
+                    selected = selectedTab == EditorTab.WEAR,
+                    enabled = runoutEnabled,
+                    onClick = { if (runoutEnabled) { onTabSelected(EditorTab.WEAR); onNavigated() } },
+                    disabledHint = "Add components first",
+                )
+            }
+            NavItem(
+                icon = Icons.Filled.ContentCut,
+                label = EditorTab.UNDERCUT.label,
+                selected = selectedTab == EditorTab.UNDERCUT,
+                enabled = runoutEnabled,
+                onClick = { if (runoutEnabled) { onTabSelected(EditorTab.UNDERCUT); onNavigated() } },
+                disabledHint = "Add components first",
+            )
+            // The document's second geometry — the shaft as it leaves. It follows
+            // the Undercut Drawing because the final drawing is decided once the
+            // wear and undercut work is known.
+            NavItem(
+                icon = Icons.Filled.FactCheck,
+                label = EditorTab.FINAL.label,
+                selected = selectedTab == EditorTab.FINAL,
+                enabled = runoutEnabled,
+                onClick = { if (runoutEnabled) { onTabSelected(EditorTab.FINAL); onNavigated() } },
+                disabledHint = "Add components first",
+            )
+            NavItem(
+                icon = Icons.Filled.PictureAsPdf,
+                label = EditorTab.OUTPUT.label,
+                selected = selectedTab == EditorTab.OUTPUT,
+                enabled = runoutEnabled,
+                onClick = { if (runoutEnabled) { onTabSelected(EditorTab.OUTPUT); onNavigated() } },
+                disabledHint = "Add components first",
+            )
+
+            Spacer(Modifier.weight(1f))
+
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 8.dp))
+            Spacer(Modifier.size(4.dp))
+
+            // ── Tools ─────────────────────────────────────────────
+            NavItem(
+                icon = Icons.Filled.Calculate,
+                label = "Keyway calculator",
+                selected = false,
+                enabled = true,
+                onClick = { onKeywayCalculator(); onNavigated() },
+            )
+            NavItem(
+                icon = Icons.Filled.SquareFoot,
+                label = "Taper calculator",
+                selected = false,
+                enabled = true,
+                onClick = { onTaperCalculator(); onNavigated() },
+            )
+            NavItem(
+                icon = Icons.Filled.SwapHoriz,
+                label = "Unit converter",
+                selected = false,
+                enabled = true,
+                onClick = { onUnitConverter(); onNavigated() },
+            )
+
+            NavItem(
+                icon = Icons.AutoMirrored.Filled.HelpOutline,
+                label = "Help & FAQ",
+                selected = false,
+                enabled = true,
+                onClick = { onHelp(); onNavigated() },
+            )
+
+            // ── Settings ──────────────────────────────────────────
+            NavItem(
+                icon = Icons.Filled.Settings,
+                label = "Settings",
+                selected = false,
+                enabled = true,
+                onClick = { onSettings(); onNavigated() },
+            )
         }
-        NavItem(
-            icon = Icons.Filled.ContentCut,
-            label = EditorTab.UNDERCUT.label,
-            selected = selectedTab == EditorTab.UNDERCUT,
-            enabled = runoutEnabled,
-            onClick = { if (runoutEnabled) { onTabSelected(EditorTab.UNDERCUT); onNavigated() } },
-            disabledHint = "Add components first",
-        )
-        // The document's second geometry — the shaft as it leaves. It follows
-        // the Undercut Drawing because the final drawing is decided once the
-        // wear and undercut work is known.
-        NavItem(
-            icon = Icons.Filled.FactCheck,
-            label = EditorTab.FINAL.label,
-            selected = selectedTab == EditorTab.FINAL,
-            enabled = runoutEnabled,
-            onClick = { if (runoutEnabled) { onTabSelected(EditorTab.FINAL); onNavigated() } },
-            disabledHint = "Add components first",
-        )
-        NavItem(
-            icon = Icons.Filled.PictureAsPdf,
-            label = EditorTab.OUTPUT.label,
-            selected = selectedTab == EditorTab.OUTPUT,
-            enabled = runoutEnabled,
-            onClick = { if (runoutEnabled) { onTabSelected(EditorTab.OUTPUT); onNavigated() } },
-            disabledHint = "Add components first",
-        )
-
-        Spacer(Modifier.weight(1f))
-
-        HorizontalDivider(modifier = Modifier.padding(horizontal = 8.dp))
-        Spacer(Modifier.size(4.dp))
-
-        // ── Tools ─────────────────────────────────────────────
-        NavItem(
-            icon = Icons.Filled.Calculate,
-            label = "Keyway calculator",
-            selected = false,
-            enabled = true,
-            onClick = { onKeywayCalculator(); onNavigated() },
-        )
-        NavItem(
-            icon = Icons.Filled.SquareFoot,
-            label = "Taper calculator",
-            selected = false,
-            enabled = true,
-            onClick = { onTaperCalculator(); onNavigated() },
-        )
-        NavItem(
-            icon = Icons.Filled.SwapHoriz,
-            label = "Unit converter",
-            selected = false,
-            enabled = true,
-            onClick = { onUnitConverter(); onNavigated() },
-        )
-
-        NavItem(
-            icon = Icons.AutoMirrored.Filled.HelpOutline,
-            label = "Help & FAQ",
-            selected = false,
-            enabled = true,
-            onClick = { onHelp(); onNavigated() },
-        )
-
-        // ── Settings ──────────────────────────────────────────
-        NavItem(
-            icon = Icons.Filled.Settings,
-            label = "Settings",
-            selected = false,
-            enabled = true,
-            onClick = { onSettings(); onNavigated() },
-        )
     }
 }
 

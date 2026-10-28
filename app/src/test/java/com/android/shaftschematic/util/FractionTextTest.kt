@@ -30,17 +30,27 @@ class FractionTextTest {
 
     @Test
     fun `fraction inside a sentence keeps its surroundings`() {
+        // A label's space is a word space, never the tightened mixed-number gap: tightening it
+        // printed "Rate:¾"/ft" (on-device report).
         assertEquals(
-            listOf(plain("OAL:"), Run.Gap, frac("1", "2"), plain("\" from AFT")),
+            listOf(plain("OAL: "), frac("1", "2"), plain("\" from AFT")),
             FractionText.parse("OAL: 1/2\" from AFT"),
+        )
+        assertEquals(
+            listOf(plain("Rate: "), frac("3", "4"), plain("\"/ft")),
+            FractionText.parse("Rate: 3/4\"/ft"),
         )
     }
 
     @Test
     fun `several fractions in one label`() {
         assertEquals(
-            listOf(frac("1", "4"), Run.Gap, plain("×"), Run.Gap, frac("1", "8")),
+            listOf(frac("1", "4"), plain(" × "), frac("1", "8")),
             FractionText.parse("1/4 × 1/8"),
+        )
+        assertEquals(
+            listOf(plain("KW: 1"), Run.Gap, frac("1", "4"), plain("\" × "), frac("9", "16"), plain("\"")),
+            FractionText.parse("KW: 1 1/4\" × 9/16\""),
         )
     }
 

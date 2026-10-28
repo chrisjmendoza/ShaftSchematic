@@ -70,11 +70,15 @@ class UndercutPreviewLayoutTest {
         rule.waitForIdle()
 
         val strip = rule.onNodeWithContentDescription(PREVIEW).fetchSemanticsNode().boundsInRoot
+        val area = rule.onNodeWithTag(PREVIEW_AREA).fetchSemanticsNode().boundsInRoot
+        // Budgeted from the preview box the strip and the panel share, as measured.
         val expected = tuningPageStripHeightDp(
-            screenWidthDp(), screenHeightDp(), TUNING_SHEET_CHROME_DP + navBarDp(),
+            dp(area.width), screenHeightDp(), TUNING_SHEET_CHROME_DP,
             inkFrac = 1f, pageAspect = pageAspectOf(portrait.width, portrait.height),
+            availableHeightDp = dp(area.height),
         )
         assertEquals(expected, dp(strip.height), 1f)
+        assertEquals("the strip is pinned to the box top", area.top, strip.top, 1f)
         // The strip spans the screen width — the page tops the screen, not a sliver of it.
         assertEquals(screenWidthDp(), dp(strip.width), 1f)
     }
@@ -94,13 +98,23 @@ class UndercutPreviewLayoutTest {
         rule.waitForIdle()
 
         val panel = rule.onNodeWithTag("preview_options_panel").fetchSemanticsNode().boundsInRoot
+        val area = rule.onNodeWithTag(PREVIEW_AREA).fetchSemanticsNode().boundsInRoot
         // The strip the panel must stay clear of: whatever page the route rendered (none under
         // Robolectric's PDF stack, which is the landscape default with no ink band) — the same
-        // inputs the overlay itself reads.
-        val chrome = TUNING_SHEET_CHROME_DP + navBarDp()
-        val strip = tuningPageStripHeightDp(screenWidthDp(), screenHeightDp(), chrome)
-        val cap = tuningSheetMaxHeightDp(screenHeightDp(), strip, chrome)
+        // inputs the overlay itself reads, off the measured preview box.
+        val strip = tuningPageStripHeightDp(
+            dp(area.width), screenHeightDp(), TUNING_SHEET_CHROME_DP, availableHeightDp = dp(area.height),
+        )
+        val cap = tuningSheetMaxHeightDp(
+            screenHeightDp(), strip, TUNING_SHEET_CHROME_DP, availableHeightDp = dp(area.height),
+        )
         val panelDp = dp(panel.height)
+        // The panel's top edge never comes above the strip's bottom edge (on-device report: the
+        // undercut sheet's "Notes" line sat under the panel).
+        assertTrue(
+            "panel top ${dp(panel.top)} dp must sit at or below the strip bottom ${dp(area.top) + strip} dp",
+            dp(panel.top) >= dp(area.top) + strip - 1f,
+        )
         // Header row + content capped below the strip. The plain 78% cap would let the panel
         // run up over the page.
         assertTrue(
@@ -141,10 +155,9 @@ class UndercutPreviewLayoutTest {
         )
     }
 
-    private fun navBarDp(): Float = 0f
-
     private companion object {
         const val OPTIONS_ICON = "PDF options"
         const val PREVIEW = "PDF preview — pinch to zoom, drag to pan"
+        const val PREVIEW_AREA = "pdf_preview_area"
     }
 }

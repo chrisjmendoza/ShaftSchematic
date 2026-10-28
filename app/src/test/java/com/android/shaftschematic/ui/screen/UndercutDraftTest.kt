@@ -1,5 +1,6 @@
 package com.android.shaftschematic.ui.screen
 
+import androidx.compose.runtime.saveable.SaverScope
 import com.android.shaftschematic.geom.UNDERCUT_PARTIAL_OVERLAP_MSG
 import com.android.shaftschematic.geom.UndercutLinerSpan
 import com.android.shaftschematic.geom.UndercutSpanMm
@@ -774,5 +775,31 @@ class UndercutDraftTest {
         val atEnd = undercutNextCutState(draftOf("u1", 1950f, 40f), blocked = false, otherPendingOpen = false, oalMm = 2000f)
         assertFalse(atEnd.enabled)
         assertEquals(UNDERCUT_NO_STOCK_FWD_MSG, atEnd.caption)
+    }
+
+    // ── Saved across an activity recreation ──────────────────────────────────
+
+    private val anyScope = SaverScope { true }
+
+    @Test
+    fun `the draft map saves and restores verbatim, each draft keyed by its own id`() {
+        val drafts = listOf(
+            draftOf("u1", 612.5f, 31.75f, diaMm = 250.19f, note = "pitted", reference = UndercutReference.LINER_AFT, referenceLinerId = "L1"),
+            UndercutDraft(PENDING_UNDERCUT_ID, 700f, 25f, 0f, "", UndercutReference.PARENT_FWD, "", referenceCutId = "u1"),
+        ).associateBy { it.id }
+        val saved = with(UndercutDraftMapSaver) { anyScope.save(drafts) }
+        val restored = UndercutDraftMapSaver.restore(requireNotNull(saved))
+        assertEquals(drafts, restored)
+        restored!!.forEach { (key, d) -> assertEquals(key, d.id) }
+        // An empty map saves nothing, so a restore falls back to the empty initial map.
+        assertNull(with(UndercutDraftMapSaver) { anyScope.save(emptyMap()) })
+    }
+
+    @Test
+    fun `the pending seed saves and restores, and an absent seed saves nothing`() {
+        val seed = draftOf(PENDING_UNDERCUT_ID, 640f, 25.4f, reference = UndercutReference.FWD_SET)
+        val saved = with(UndercutPendingSeedSaver) { anyScope.save(seed) }
+        assertEquals(seed, UndercutPendingSeedSaver.restore(requireNotNull(saved)))
+        assertNull(with(UndercutPendingSeedSaver) { anyScope.save(null) })
     }
 }

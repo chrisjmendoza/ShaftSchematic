@@ -139,8 +139,10 @@ internal const val PREVIEW_SHEET_MAX_FRAC = 0.78f
  * The panel chrome that sits OUTSIDE the content slot's `heightIn` cap: the
  * [PreviewOptionsPanel] header row (title + close button), held to exactly this height. The
  * navigation-bar inset below the panel takes screen height outside the cap too — the hosts pay
- * it as layout padding — so callers add the measured `WindowInsets.navigationBars` bottom to
- * this constant. Both have to come out of the content budget — capping the content alone
+ * it as layout padding — so a caller budgeting from the SCREEN adds the measured
+ * `WindowInsets.navigationBars` bottom to this constant; one budgeting from the measured preview
+ * box (`availableHeightDp`), which already sits above that inset, does not. Both have to come
+ * out of the content budget — capping the content alone
  * leaves the panel taller than the cap and overlapping the page strip, which cost the drawing
  * its lowest callouts and its footer (on-device report).
  */
@@ -188,6 +190,15 @@ internal fun fitWidthPageHeightDp(
  *
  * [pageAspect] is the rendered page's height ÷ width ([pageAspectOf]); [inkFrac] is a share of
  * THAT page's height, so the two together size the band a portrait page actually inks.
+ *
+ * [availableHeightDp] is the MEASURED height of the preview box the strip and the panel share
+ * (the area under the app bar, above the navigation bar). When the host passes it, the strip is
+ * budgeted from it — [sheetChromeDp] is then the panel chrome INSIDE that box, the header row —
+ * instead of from the screen less [PREVIEW_TOP_CHROME_DP]: the real status bar plus app bar is
+ * device-dependent (a display cutout's status bar alone can pass 50 dp), and where the screen
+ * height counts the system bars an allowance short of the real chrome let the panel run up over
+ * the strip's last rows (on-device report: the undercut sheet's "Notes" line hidden under the
+ * panel). The screen height still sizes the panel's [TUNING_SHEET_MIN_FRAC] floor.
  */
 internal fun tuningPageStripHeightDp(
     screenWidthDp: Float,
@@ -195,11 +206,16 @@ internal fun tuningPageStripHeightDp(
     sheetChromeDp: Float,
     inkFrac: Float = 1f,
     pageAspect: Float = LANDSCAPE_PAGE_ASPECT,
+    availableHeightDp: Float? = null,
 ): Float = minOf(
     fitWidthPageHeightDp(screenWidthDp, pageAspect) * inkFrac.coerceIn(0.05f, 1f),
-    screenHeightDp - PREVIEW_TOP_CHROME_DP - sheetChromeDp -
+    tuningRoomDp(screenHeightDp, availableHeightDp) - sheetChromeDp -
         screenHeightDp * TUNING_SHEET_MIN_FRAC,
 ).coerceAtLeast(0f)
+
+/** The height the strip and the panel split: the measured preview box, else the screen less the top chrome allowance. */
+private fun tuningRoomDp(screenHeightDp: Float, availableHeightDp: Float?): Float =
+    availableHeightDp ?: (screenHeightDp - PREVIEW_TOP_CHROME_DP)
 
 /**
  * Height cap for the CONTENT SLOT of an options panel that tunes the page above it:
@@ -211,14 +227,16 @@ internal fun tuningPageStripHeightDp(
  * page in view on very tall ones.
  *
  * Takes [stripHeightDp] rather than recomputing it, so cap and strip can never disagree.
- * Where `Configuration.screenHeightDp` excludes the system bars the cap comes out
- * conservative — a slightly shorter panel, never a covered page.
+ * [availableHeightDp] is [tuningPageStripHeightDp]'s: with the measured preview box the panel
+ * stops exactly at the strip's bottom edge whatever the device's top chrome. Without it the cap
+ * rests on the [PREVIEW_TOP_CHROME_DP] allowance, which a taller status bar overruns.
  */
 internal fun tuningSheetMaxHeightDp(
     screenHeightDp: Float,
     stripHeightDp: Float,
     sheetChromeDp: Float,
-): Float = (screenHeightDp - stripHeightDp - PREVIEW_TOP_CHROME_DP - sheetChromeDp)
+    availableHeightDp: Float? = null,
+): Float = (tuningRoomDp(screenHeightDp, availableHeightDp) - stripHeightDp - sheetChromeDp)
     .coerceAtLeast(screenHeightDp * TUNING_SHEET_MIN_FRAC)
     .coerceAtMost(screenHeightDp * PREVIEW_SHEET_MAX_FRAC)
 

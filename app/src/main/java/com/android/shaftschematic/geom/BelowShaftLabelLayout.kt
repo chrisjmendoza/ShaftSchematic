@@ -23,8 +23,14 @@ import kotlin.math.abs
  */
 object BelowShaftLabelLayout {
 
-    /** Horizontal clearance kept between a label and anything it is placed beside (pt). */
-    const val PAD_X: Float = 3f
+    /**
+     * Horizontal clearance kept between a label and anything it is placed beside — another name,
+     * a Ø value, a leader (pt). It must read as a SEPARATION, not a word space: at 3 pt (one
+     * space of the 10 pt label face) two neighbouring names printed as one run, "AFT Thread AFT
+     * Taper", and a liner's Ø sat against its name as "Seal sleeve Ø 9.370″" (on-device report).
+     * About three word spaces of that face.
+     */
+    const val PAD_X: Float = 8f
 
     /** Positions that differ by less than this are the same position (pt). */
     private const val EPS = 1e-3f

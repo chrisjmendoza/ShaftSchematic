@@ -50,7 +50,6 @@ import com.android.shaftschematic.util.DualLabel
 import com.android.shaftschematic.util.PdfPageOrientation
 import com.android.shaftschematic.util.VerboseLog
 import com.android.shaftschematic.util.DualUnitLayout
-import com.android.shaftschematic.util.OutputTypography
 import com.android.shaftschematic.util.drawDualLabelCentered
 import com.android.shaftschematic.util.measureDualLabel
 import com.android.shaftschematic.util.UnitSystem
@@ -206,11 +205,7 @@ fun composeUndercutPdf(
         style = Paint.Style.STROKE; strokeWidth = UC_OUTLINE_PT * thicknessScale; color = Color.BLACK
     }
     val dim = Paint(outline).apply { strokeWidth = UC_DIM_PT * thicknessScale }
-    val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.FILL; textSize = UC_TEXT_PT
-        typeface = OutputTypography.active
-        color = Color.BLACK
-    }
+    val text = sheetTextPaint(UC_TEXT_PT)
     fun shadeFill() = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL; color = Color.argb(40, 0, 0, 0)
     }
@@ -1003,14 +998,24 @@ internal class UndercutStripPlan(
         lifted: Boolean = false,
     ): UndercutStripInnerLayout {
         val r = if (lifted) liftedRails else rails
+        // ONE row metric for the reserved band and the drawn rows (`drawUndercutStripRails` steps
+        // by it): a stacked dual sheet's taller rows otherwise overrun the band into the shaft.
+        val rowHeight = undercutRailRowHeightPt(dimText, dualStacked)
         return computeUndercutStripInnerLayout(
             stripTop, stripBottom,
             titleHeightPt = titleText.textSize,
             hasTotalRail = r.totalSpan != null,
+            rowHeightPt = rowHeight,
             diaBandPt = if (diaPlan != null) diaBandPt + titleAirPt else diaBandPt,
             maxLabelRows = r.rows.belowRows,
-            chainAboveBandPt = r.rows.aboveRows * undercutRailRowHeightPt(dimText, dualStacked),
+            chainAboveBandPt = r.rows.aboveRows * rowHeight,
             cylMaxFloorPt = cylMaxFloorPt,
+            // The chain-only compressed plan has no clear row under its last below-line value.
+            belowClearPt = if (r.rows.chainBelowRows > 0 && r.rows.nestedRows == 0) {
+                undercutRailBelowClearPt(dimText, dualStacked)
+            } else {
+                0f
+            },
         )
     }
 

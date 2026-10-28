@@ -95,6 +95,13 @@ slightly off stacked):
 Never `copy(style = …)` one preset onto another style; that is exactly the bug `forStyle` exists
 to prevent, and `FractionStyleSettingTest` pins it.
 
+**The tightened gap is the mixed number's ONLY.** The parser turns the space between a whole
+number's last digit and its fraction (`12 5/8`) into the gap run; every other space beside a
+fraction — after a label (`Rate: 3/4"/ft`), around an operator (`1/4 × 1/8`) — stays a plain word
+space, measured and drawn as the base font's own space. Tightening those printed as no space at
+all, "Rate:¾"/ft" (on-device report); `FractionTextRendererTest` pins that a fraction after
+`"Rate: "` starts exactly where the plain label ends.
+
 ### The size contract that keeps layout untouched
 
 Digits sit at **0.64** of the base size — pushed to the largest value that still keeps the whole
@@ -193,14 +200,18 @@ the default), **Settings → Drawing → "Output font"**. It is app-wide, captur
 profile, restored by "Restore Drawing defaults", and deliberately absent from the PDF options
 sheets — a shop picks a face once, so it is a house style rather than a per-sheet decision.
 
-The draw sites take no typeface parameter. Each PDF composer builds its root text `Paint` with
-`typeface = OutputTypography.active`, and every other text paint on that sheet is a
-copy-constructor of the root, so four lines carry the choice to every glyph on the page:
+The draw sites take no typeface parameter. Every FRESH text paint under `pdf/` is built by the
+ONE factory `sheetTextPaint(size, align)` (`pdf/SheetTextPaint.kt`), which sets
+`typeface = OutputTypography.active`; every other text paint is a copy-constructor of one of those
+and inherits the face. A text paint built by hand once printed the schematic's rail values and Ø
+callouts in the platform sans beside a Serif sheet (on-device report), so
+`SheetTextPaintSourceTest` scans `pdf/` and fails on a fresh `Paint(...)` whose `apply` block sets a
+text property. The factory's call sites:
 
-| Composer | Root paint |
+| Composer | Fresh text paints |
 | --- | --- |
-| `pdf/ShaftPdfComposer.kt` | `text` |
-| `pdf/RunoutPdfComposer.kt` | `text`, and the in-profile `valuePaint` |
+| `pdf/ShaftPdfComposer.kt` | `text`, the Ø-callout paint, the rail `dimText` |
+| `pdf/RunoutPdfComposer.kt` | `text`, the bubble `valuePaint` |
 | `pdf/WearPdfComposer.kt` | `text` |
 | `pdf/UndercutPdfComposer.kt` | `text` |
 

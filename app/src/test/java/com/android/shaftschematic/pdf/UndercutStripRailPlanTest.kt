@@ -251,13 +251,13 @@ class UndercutStripRailPlanTest {
         val short = nested.single { it.label.inline() == "2 3/8\"" }
         assertFalse("the 2 3/8\" span falls back off its line", short.seatsInBreak)
 
-        // The band is the plan's, unchanged: the chain's own rows, then the nested level's
-        // fallback rows and its line.
+        // The band is the plan's: the chain's own rows, then the nested level's fallback rows and
+        // its line, then one clear row between that line and the shaft.
         val chainRows = undercutRailFallbackRows(rails.chain)
         assertTrue("the chain carries fallback rows below it", chainRows >= 1)
         val nestedFallbackRows = undercutRailFallbackRows(nested)
         assertEquals(1 + nestedFallbackRows, rails.rows.nestedRows)
-        assertEquals(chainRows + rails.rows.nestedRows, rails.rows.belowRows)
+        assertEquals(chainRows + rails.rows.nestedRows + 1, rails.rows.belowRows)
 
         // The detail canvas's vertical split: chain line, belowRows, headroom, cylinder top.
         val step = UNDERCUT_RAIL_ROW_HEIGHT_PT
@@ -265,7 +265,10 @@ class UndercutStripRailPlanTest {
         val cylTop = chainY + rails.rows.belowRows * step + 6f
         val witnessBottom = cylTop - UNDERCUT_RAIL_WITNESS_GAP_PT
         val lineY = undercutNestedRailLineYs(rails, chainY, rails.rows.belowRows, step, witnessBottom).single()
-        assertEquals("the nested line takes the band's last row", chainY + rails.rows.belowRows * step, lineY, 1e-3f)
+        assertEquals(
+            "the nested line keeps the band's last row clear under it",
+            chainY + (rails.rows.belowRows - 1) * step, lineY, 1e-3f,
+        )
         assertTrue("the line stays above the witness start", lineY <= witnessBottom)
 
         // An 8 pt label face: ascent 7.4, descent 2.

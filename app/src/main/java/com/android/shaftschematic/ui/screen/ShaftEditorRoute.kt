@@ -124,7 +124,7 @@ fun ShaftEditorRoute(
         if (isBuilt || tab == EditorTab.SCHEMATIC) activeTab = tab
     }
 
-    // The active document, declared once so both placements host the identical tab switch.
+    // The active document. Composed from exactly one place below, at every width.
     val tabContent: @Composable () -> Unit = {
         when (activeTab) {
             EditorTab.SCHEMATIC -> ShaftRoute(
@@ -194,9 +194,15 @@ fun ShaftEditorRoute(
     // Full-size Box so the sidebar can overlay the content
     Box(Modifier.fillMaxSize()) {
 
-        if (sidebarPermanent) {
-            // ── Permanent sidebar: the panel displaces the content rather than covering it ──
-            Row(Modifier.fillMaxSize()) {
+        // The tab content has ONE call site at every width, and only the permanent panel beside
+        // it comes and goes. `rememberSaveable` keys its values by the composition PATH, so a
+        // tab composed from a different branch per width class reads none of the other branch's
+        // saved state: a rotation across the EXPANDED boundary would reset every tab's switches
+        // and pages, and the unread values, saved again, would come back on the next rotation
+        // (on-device report — a Blank draft switch reading ON, OFF, ON over two rotations).
+        Row(Modifier.fillMaxSize()) {
+            if (sidebarPermanent) {
+                // ── Permanent sidebar: the panel displaces the content rather than covering it ──
                 Surface(
                     modifier = Modifier
                         .fillMaxHeight()
@@ -218,17 +224,17 @@ fun ShaftEditorRoute(
                 }
 
                 VerticalDivider(modifier = Modifier.fillMaxHeight())
+            }
 
-                Box(Modifier.weight(1f).fillMaxHeight()) {
-                    CompositionLocalProvider(LocalSidebarPermanent provides true) {
-                        tabContent()
-                    }
+            // ── Active document (the full width without the permanent panel) ──────
+            Box(Modifier.weight(1f).fillMaxHeight()) {
+                CompositionLocalProvider(LocalSidebarPermanent provides sidebarPermanent) {
+                    tabContent()
                 }
             }
-        } else {
-            // ── Active document (always full-width) ─────────────────────────────
-            tabContent()
+        }
 
+        if (!sidebarPermanent) {
             // ── Overlay sidebar (modal panel when open) ─────────────────────────
             EditorSidebarOverlay(
                 open = sidebarOpen,

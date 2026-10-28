@@ -139,6 +139,12 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
   aft → fwd. An "Add undercut…" button between the two opens a draft-only page (see "UI
   contract"), the authoring entry point for a liner with no cuts yet. The tab's own "Add undercut"
   reaches the same page through the add chooser (see "Add chooser").
+  **While the keyboard is up the drawing block yields to the card**: it is capped at the page's
+  height under the system bars and the keyboard, less the top bar and
+  `UNDERCUT_CARD_MIN_HEIGHT_TYPING_DP` (200 dp) for the card, and scrolls inside that cap
+  (`undercutDrawingCapWhileTypingDp`). On a landscape tablet the full-height canvas pushed the
+  card — and the field being typed into — off the screen (on-device report). Without the
+  keyboard nothing is capped. The page is one column at every width (no two-pane branch).
 - Pinch-to-zoom (0.5×–6×) + two-finger pan; taps invert the same transform so hit-testing
   always runs in untransformed canvas space. A double-tap, or the corner "Reset view" button
   (testTag `undercut_detail_reset_view`, shown only while zoomed or panned), animates back to the
@@ -150,7 +156,7 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
   outside every strip showed hatch sliders that tuned nothing). The route passes it as
   `UndercutOptionsSheet(showThreadControls)` at all three openings (preview, tab, detail page).
 - Cards edit a **local draft** that previews on the canvas and reaches the record only when
-  **confirmed**. The previewed draft's notch draws **dashed** in the selection (primary) color —
+  **confirmed**. The previewed draft's notch draws **dashed** in the selection color (`SheetInk.Selection`) —
   provisional, unmistakable against the liner and the settled cuts — and switches to the
   **error color** while its confirm check fails (out of shaft bounds, or partially overlapping
   another cut: the same `undercutConfirmIssue` the status pill reads, so the drawing and the
@@ -857,7 +863,7 @@ nothing to open when the sidebar is already laid out beside the tabs.
 
 ### Overview canvas (`UndercutRoute`)
 - `ShaftLayout.compute` + `ShaftRenderer.draw` over `resolvedComponents`, then notches drawn
-  first (they erase profile strokes inside each cut), then a faint primary tint + border over
+  first (they erase profile strokes inside each cut), then a faint `SheetInk.Selection` tint + border over
   **every liner** (whether or not it holds cuts) and every bare-shaft **cluster window**, plus a
   small count badge above any target holding ≥ 1 cut (`drawUndercutStripAffordances`). Liners
   are unconditional tap targets — an empty liner can still be zoomed and authored into, matching
@@ -889,6 +895,15 @@ nothing to open when the sidebar is already laid out beside the tabs.
   a sibling when its own cut is deleted, and a key derived from the strip's members (the earlier
   lexicographic-minimum member id) changed on every add, delete, merge or split — silently
   dropping the drafts and the selection those edits came from.
+- **Drafts survive an activity recreation** (a tablet rotation). The drafts, the add flow's seed
+  and the selection are `rememberSaveable` under the same `stripKey` (`UndercutDraftMapSaver`,
+  `UndercutPendingSeedSaver`); the map saves as its drafts and restores keyed by each draft's own
+  id, so a restored draft's id still equals its card's page id. The state is saved BEFORE the
+  teardown, so the teardown's blur commits a focused field into the composition being thrown
+  away: the card fields therefore pass `NumericInputField(landRestoredEdit = true)`, and a field
+  restored still holding typed text lands it in the restored draft once — the pill reads
+  "Record cut" / "Confirm change", and a leave settles it like any other draft (on-device
+  report: a typed Ø shown after a rotation was dropped on Back).
 - **"Add undercut"** button (global — see "Add chooser" below) opens the "Where is the cut?"
   chooser; a liner row sets `anchorLinerId` and a bare-shaft row sets the route's
   `bareShaftAddFromAft`, each with `seedNewCutOnOpen`, so the detail page opens on a pending

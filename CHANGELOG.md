@@ -8,36 +8,6 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-27
 
-### fix(editor): one auto-body section's diameter no longer moves the others
-
-- **Changing the Ø of one auto-body section leaves every other auto section as it was.**
-  On-device report: editing one Body (auto) card's diameter changed the other auto sections too,
-  so the only way to give one section its own Ø was to make it an explicit body. Behind a liner
-  or a taper an auto section takes its diameter from the section before it; a section with its
-  own Ø used to break that chain, so the next section jumped to whatever was beside it (often the
-  liner's OD). The sections after an edited one now keep exactly the Ø they had before the edit.
-
-### feat(editor): choose "This section" or "All auto sections" when you change an auto-body Ø
-
-- **The Body (auto) card asks which sections a new diameter is for.** When the shaft has more
-  than one auto-body section, committing a diameter opens "Apply diameter to…": **This section**
-  changes only the card you are on, **All auto sections** sets the bare-shaft Ø for every auto
-  section together (and clears any section that had its own). Cancel applies nothing and puts the
-  stored value back in the box. With a single auto section there is nothing to choose, and the
-  value applies straight away as the shaft's Ø. Undo covers both choices.
-
-### feat(editor): a deleted auto section's diameter goes with it
-
-- **An auto section's own Ø no longer comes back after the section is deleted.** On-device
-  ruling: if the component that separated a section with its own diameter is deleted, and a
-  component is later added that splits the run again, the re-created section now takes the same
-  Ø as the other auto sections instead of reviving the old value. The rule follows the section:
-  removing the component AFT of it merges it into the section before it, and its Ø goes;
-  removing the component FWD of it leaves it in place, and it keeps its Ø; adding a component
-  over it removes it. Undo still brings the value back. Resizing a liner or changing the overall
-  length never drops one — a section squeezed out by a resize gets its Ø back when the room
-  returns.
-
 ### feat(settings): liners and tapers shade by default; a new shaft asks for its diameter
 
 - **Shipped shading defaults are now liners and tapers on, bodies off.** On-device ruling:
@@ -52,6 +22,134 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
   (in the drawing's unit, fractions accepted) and tap **Set**, or **Skip**. It asks only once per
   drawing, never when opening a saved document or a template, and the value can be changed later
   on any Body (auto) card.
+
+### feat(editor): choose "This section" or "All auto sections" when you change an auto-body Ø
+
+- **The Body (auto) card asks which sections a new diameter is for.** When the shaft has more
+  than one auto-body section, committing a diameter opens "Apply diameter to…": **This section**
+  changes only the card you are on, **All auto sections** sets the bare-shaft Ø for every auto
+  section together (and clears any section that had its own). Cancel applies nothing and puts the
+  stored value back in the box. With a single auto section there is nothing to choose, and the
+  value applies straight away as the shaft's Ø. Undo covers both choices.
+
+### fix(editor): one auto-body section's diameter no longer moves the others
+
+- **Changing the Ø of one auto-body section leaves every other auto section as it was.**
+  On-device report: editing one Body (auto) card's diameter changed the other auto sections too,
+  so the only way to give one section its own Ø was to make it an explicit body. Behind a liner
+  or a taper an auto section takes its diameter from the section before it; a section with its
+  own Ø used to break that chain, so the next section jumped to whatever was beside it (often the
+  liner's OD). The sections after an edited one now keep exactly the Ø they had before the edit.
+
+### feat(editor): a deleted auto section's diameter goes with it
+
+- **An auto section's own Ø no longer comes back after the section is deleted.** On-device
+  ruling: if the component that separated a section with its own diameter is deleted, and a
+  component is later added that splits the run again, the re-created section now takes the same
+  Ø as the other auto sections instead of reviving the old value. The rule follows the section:
+  removing the component AFT of it merges it into the section before it, and its Ø goes;
+  removing the component FWD of it leaves it in place, and it keeps its Ø; adding a component
+  over it removes it. Undo still brings the value back. Resizing a liner or changing the overall
+  length never drops one — a section squeezed out by a resize gets its Ø back when the room
+  returns.
+
+### fix(undercut): on-device pass — crowded page rails, strip order, draft chain, Discard chip, wear label, preview panel
+
+- **A crowded undercut page keeps its rail values off the shaft.** On-device report (four
+  sections, portrait): the FWD strip's nested row ran along the liner outline and a short value
+  below the chain stood on it. A squeezed strip now keeps one clear row under a nested row, and a
+  chain-only strip a witness gap, so both sit in air; under stacked dual units the band is reserved
+  at the row height the rails actually step by.
+- **Sections print AFT→FWD by their first cut.** A bare-shaft cut just AFT of the AFT liner printed
+  below that liner's strip, because the strips were ordered by their drawn window, which reaches
+  further AFT. Where two windows overlap on the overview, a tap opens the section whose chain holds
+  it.
+- **The detail canvas's chain follows a cut while you move it.** Moving a draft past its
+  neighbours left a phantom gap where it had been, or no span at all for it, until it was
+  confirmed; the chain and the S.E.T. lead are now built from the draft's position, the way
+  confirming will build them. Nothing changes while no draft is open.
+- **Discard clears the butt chips.** After discarding a draft placed with "On the AFT side of:
+  Cut 1" the chip stayed selected and its gap field read a negative distance; Discard now resets
+  the chips and the "More ways" panel with the rest of the card.
+- **Wear sheet: the FWD liner's name no longer runs into "FWD →".** A name near a shaft end stays
+  whole inside the drawing instead of being centred on the end; the direction marker stays where
+  it was.
+- **The PDF options panel no longer hides the foot of the page strip.** On-device report: on the
+  undercut preview the "Notes" line sat under the panel's top edge. Both preview hosts now size the
+  strip and the panel from the measured preview area instead of a fixed allowance for the status
+  and app bars, which a taller status bar overran.
+
+### fix(editor): on-device pass — taper rate entry, "-0", footer fraction spacing, phone title, add-dialog defaults, Final Undo
+
+- **The taper card's Rate field takes `3/4"/ft`.** Its label advertised `1:12, 3/4"/ft, or
+  decimal`, but the field dropped inch marks, letters and the second slash as you typed, leaving
+  the ambiguous `3/4` it then refused. The card and the Add Taper dialog now share one rate filter
+  that keeps every spelling the rate parser reads (`3/4"/ft`, `3/4in/ft`, `1:12`, `.0625`).
+- **A FWD-referenced component flush with the FWD end shows `0`, not `-0`,** in its Start field.
+- **The footer keeps the space before a fraction:** "Rate: ¾"/ft", "Thread relief: ⅜" × …",
+  "KW: 1¼" × ⁹⁄₁₆" × 12"". Only a mixed number's own space (`12 ⅝`) is tightened now.
+- **The phone editor bar no longer prints its title as "..":** on a compact window the bar shows
+  its icons only (the document title above it names the screen); tablets keep the title.
+- **Add Body opens at the bare-shaft Ø** when the drawing has no explicit body yet — a new 8″
+  shaft offered a 0.984″ (25 mm) body. An existing explicit body's Ø still wins.
+- **Add Taper and Add Thread seed from the bare-shaft Ø as well** — the S.E.T. Ø / major Ø
+  default follows the last body or taper, else the shaft's Ø, before falling back to 25 mm.
+- **Add Coupler Bolt Slot opens ready to add:** the position seeds 1″ (or one hole Ø) from the
+  face, instead of 0 from FWD, which put the hole center on the shaft end and disabled Add.
+- **The empty Final tab has History (Undo/Redo),** so "Discard final drawing" can be undone where
+  it was discarded.
+- **Add Thread dialog:** the "Relief at" chips match the dialog's other chip rows, and the
+  switches, chips and typed values survive a configuration change (a system font-scale change).
+
+### fix: output font everywhere, Help search, dark status bar, large-font layouts, label spacing
+
+- **The Output font reaches every value on the schematic.** Under Serif the dimension-rail values
+  and the Ø callouts still printed sans; every fresh text paint on a sheet now comes from one
+  factory that applies the chosen face, and a source test fails on one that bypasses it.
+- **A new Help search opens on its first result** instead of wherever the previous list was
+  scrolled.
+- **Dark and High-contrast Dark show the status-bar clock and icons** — they now follow the app
+  theme rather than the system's, so they are light over a dark bar and dark over a light one.
+- **Tap and selection highlights on the Wear and Undercut sheets are fixed ink** — the classic
+  purple in every theme; High contrast's amber read weakly on the white paper.
+- **Every Settings switch row toggles from its label**, not only from the switch.
+- **Large system fonts:** the editor sidebar scrolls to its last rows; chip labels no longer break
+  mid-word ("F/W/D", "Portr/ait") — a row moves a chip that does not fit onto a second line; the
+  OAL field's label shortens to "OAL (in)" instead of being clipped; PDF preview titles take at
+  most two lines (so "Undercut Drawing Preview" still reads whole at the default font).
+- **Neighbouring component names and a liner's Ø no longer print as one run** on the schematic:
+  the gap below the shaft is now about three word spaces, not one.
+- **Add dialogs on a fully built shaft open on the first bare-shaft section** instead of at the
+  OAL; Add Body is sized to that section. A shaft with a trailing gap opens where it did.
+- **Runout tab:** in Move mode the canvas's spoken description names the move gestures, and the
+  outermost bubbles no longer lose a sliver of their ring at the canvas edge.
+
+### fix(tablet): state survives rotation, portrait carousel height, Final hamburger, keyboard on the undercut card, runout reading dialog
+
+- **Rotating a tablet keeps every tab's state.** Crossing between landscape (permanent sidebar)
+  and portrait reset the tab's switches and pages — the Runout "Blank draft" read ON, OFF, ON over
+  two rotations, an open undercut detail page fell back to the list and a closed one came back
+  later. The tab is now composed from one place at every width, and the Schematic carousel and
+  warning banner carry their state when they move (a dismissed warning stays dismissed).
+- **A typed value that was not yet committed survives a rotation** — in every numeric field
+  (an undercut's Measured Ø came back blank), and the runout reading dialog stays open with its
+  TIR and high spot.
+- **An undercut card's unsaved edits survive a rotation and are kept on leaving.** A Ø typed
+  before the rotation showed again afterwards but was dropped on Back; it now waits in the card as
+  an unsaved change ("Record cut" / "Confirm change") and is recorded or asked about on the way
+  out like any other. Values already typed into a card but not yet confirmed (Distance, Length,
+  Notes, the measuring datum), and a "New undercut" card being filled in, also come back with the
+  rotation instead of resetting.
+- **Portrait tablet: the component card runs to the foot of the screen** instead of stopping at
+  the phone's height with its Diameter field cut in half above empty space.
+- **The empty Final tab drops its hamburger** beside the permanent sidebar, like every other tab.
+- **Undercut detail page with the keyboard up:** the drawing gives way so the card being typed
+  into stays on screen (it was pushed off entirely on a landscape tablet).
+- **PDF preview overlays paint the status bar the app-bar colour** instead of black, so its
+  icons stay visible — on the tablet too, where the bar still read black beside the sidebar.
+- **Runout reading dialog with the keyboard up:** in landscape the keyboard covered Cancel and
+  Save. The dialog now shrinks to the room above the keyboard — the ring scrolls, and the title
+  and the Clear · Cancel · Save buttons stay on screen.
 
 ## 2026-10-23
 

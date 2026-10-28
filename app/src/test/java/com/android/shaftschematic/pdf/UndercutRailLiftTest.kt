@@ -252,9 +252,36 @@ class UndercutRailLiftTest {
     }
 
     @Test
-    fun `the lifted overhead is exactly one row more`() {
+    fun `lifting a strip with nested rows costs no height`() {
+        // The recorded job's strip carries a nested row, so its compressed plan keeps a clear row
+        // under the nested line too (on-device report: without it the line sat on the outline) —
+        // exactly the clear row the lifted plan keeps.
         val plan = planOf(doc.spec, doc.undercutRecord, 36f, 576f)
-        assertEquals(row, plan.verticalOverheadPt(false, lifted = true) - plan.verticalOverheadPt(false), 1e-3f)
+        assertTrue(plan.rails.rows.nestedRows > 0)
+        assertEquals(plan.verticalOverheadPt(false), plan.verticalOverheadPt(false, lifted = true), 1e-3f)
+    }
+
+    @Test
+    fun `lifting a chain-only strip costs one row less its below clear`() {
+        // One 18" liner, a 1" cut and a 7" cut: in a narrow cell the 1" values cannot seat.
+        val inch = 25.4f
+        val spec = ShaftSpec(
+            overallLengthMm = 120f * inch,
+            autoBodyDiaMm = 5f * inch,
+            liners = listOf(Liner(id = "L", startFromAftMm = 50f * inch, lengthMm = 18f * inch, odMm = 5.75f * inch)),
+        )
+        fun cut(id: String, at: Float, len: Float) = Undercut(
+            id = id, startFromAftMm = at * inch, lengthMm = len * inch, diaMm = 5.625f * inch,
+            authoredReference = UndercutReference.LINER_AFT, referenceLinerId = "L",
+        )
+        val plan = planOf(spec, UndercutRecord(undercuts = listOf(cut("a", 51f, 1f), cut("b", 53f, 7f))), 36f, 256f)
+        assertTrue(plan.rails.canLiftFallbacks)
+        assertEquals(0, plan.rails.rows.nestedRows)
+        assertEquals(
+            row - undercutRailBelowClearPt(plan.dimText, dualStacked = false),
+            plan.verticalOverheadPt(false, lifted = true) - plan.verticalOverheadPt(false),
+            1e-3f,
+        )
     }
 
     // ── Page banding ─────────────────────────────────────────────────────────────────────

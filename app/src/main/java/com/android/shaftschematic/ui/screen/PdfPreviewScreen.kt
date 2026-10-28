@@ -12,11 +12,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -68,6 +65,7 @@ import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.model.ShaftSpec
@@ -326,23 +324,9 @@ fun PdfPreviewScreen(
     // and the panel is capped just below it, so a slider's effect is visible as it is
     // dragged ("I can see the PDF Preview area lighten up on moving a slider but I can't
     // see anything" — on-device report). The strip carries the page's INK BAND, so the
-    // drawing gets the room the blank top margin used to hold. The panel's header row and
-    // the navigation-bar inset below it sit OUTSIDE the content cap, so they are budgeted
-    // here; strip and cap come from one set of inputs and cannot disagree.
+    // drawing gets the room the blank top margin used to hold. Strip and cap are sized inside
+    // the preview box below, from its measured height, and cannot disagree.
     val configuration = LocalConfiguration.current
-    val navBottomDp = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding().value
-    val sheetChromeDp = TUNING_SHEET_CHROME_DP + navBottomDp
-    val stripHeightDp = tuningPageStripHeightDp(
-        configuration.screenWidthDp.toFloat(),
-        configuration.screenHeightDp.toFloat(),
-        sheetChromeDp,
-        inkBand?.frac ?: 1f,
-    )
-    val maxSheetHeight = tuningSheetMaxHeightDp(
-        configuration.screenHeightDp.toFloat(),
-        stripHeightDp,
-        sheetChromeDp,
-    ).dp
     // Zoom/pan resets when the panel opens AND when it closes: the strip layout and the
     // full-page layout fit the page differently, so a zoom carried across either transition
     // would point at the wrong place. Between those transitions the zoom is deliberately
@@ -381,7 +365,15 @@ fun PdfPreviewScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (isFinal) "Final PDF Preview" else "PDF Preview") },
+                // At most two lines, ellipsized — the Print button beside it wraps the title, and
+                // at a large font scale an uncapped title breaks mid-word over four lines.
+                title = {
+                    Text(
+                        if (isFinal) "Final PDF Preview" else "PDF Preview",
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
@@ -476,13 +468,30 @@ fun PdfPreviewScreen(
         // overlay clips for the same reason). `paddingValues` carries the Scaffold's default
         // content insets — the navigation bar included — so the options panel anchored to this
         // Box's bottom sits above the navigation bar without paying the inset itself.
-        Box(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
                 .clipToBounds(),
             contentAlignment = Alignment.Center
         ) {
+            // Budgeted from THIS box's measured size: it already sits under the app bar and above
+            // the navigation bar, so the only panel chrome inside it is the header row. An
+            // allowance for the bars instead fell short of a tall status bar and let the panel
+            // cover the strip's last rows (on-device report).
+            val stripHeightDp = tuningPageStripHeightDp(
+                maxWidth.value,
+                configuration.screenHeightDp.toFloat(),
+                TUNING_SHEET_CHROME_DP,
+                inkBand?.frac ?: 1f,
+                availableHeightDp = maxHeight.value,
+            )
+            val maxSheetHeight = tuningSheetMaxHeightDp(
+                configuration.screenHeightDp.toFloat(),
+                stripHeightDp,
+                TUNING_SHEET_CHROME_DP,
+                availableHeightDp = maxHeight.value,
+            ).dp
             // The full spinner stands in for the page only until a FIRST page exists. A
             // re-render after that — a commit-on-release slider such as Thread slant — keeps
             // the current page (and the zoom on it) on screen and signals the pass with the

@@ -4,13 +4,16 @@ import android.app.Application
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.addBodyAt
 import com.android.shaftschematic.ui.viewmodel.addLinerAt
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -66,6 +69,15 @@ class ShaftScreenTwoPaneTest {
         rule.onNodeWithTag(EDITOR_PANE_PREVIEW_TAG).assertIsDisplayed()
         rule.onNodeWithTag(EDITOR_PANE_COMPONENTS_TAG).assertIsDisplayed()
         rule.onAllNodesWithTag("toolbar_menu").assertCountEquals(0)
+        rule.onNodeWithTag(EDITOR_BAR_TITLE_TAG).assertIsDisplayed()
+    }
+
+    @Test
+    @Config(sdk = [34], qualifiers = "w700dp-h1000dp")
+    fun `a medium window keeps the bar title`() {
+        host()
+
+        rule.onNodeWithTag(EDITOR_BAR_TITLE_TAG).assertIsDisplayed()
     }
 
     @Test
@@ -75,5 +87,37 @@ class ShaftScreenTwoPaneTest {
         rule.onAllNodesWithTag(EDITOR_PANE_PREVIEW_TAG).assertCountEquals(0)
         rule.onAllNodesWithTag(EDITOR_PANE_COMPONENTS_TAG).assertCountEquals(0)
         rule.onNodeWithTag("toolbar_menu").assertIsDisplayed()
+    }
+
+    /** The phone bar's icons leave the title a couple of characters — it printed as "..". */
+    @Test
+    fun `a compact window prints no bar title`() {
+        host()
+
+        rule.onAllNodesWithTag(EDITOR_BAR_TITLE_TAG).assertCountEquals(0)
+        rule.onNodeWithTag("toolbar_save").assertIsDisplayed()
+    }
+
+    /**
+     * A portrait tablet is a taller column, not a phone: the carousel runs to the foot of the
+     * screen instead of stopping at the phone's 360 dp with the card's lower fields cut off above
+     * an empty quarter of the screen.
+     */
+    @Test
+    @Config(sdk = [34], qualifiers = "w800dp-h1280dp")
+    fun `a medium window's carousel takes the column's remaining height`() {
+        host()
+        rule.waitForIdle()
+
+        val carousel = rule.onNodeWithTag(EDITOR_MEDIUM_CAROUSEL_TAG).getBoundsInRoot()
+        val height = carousel.bottom - carousel.top
+        assertTrue("carousel $height should be well past the phone's $CAROUSEL_HEIGHT", height > CAROUSEL_HEIGHT + 100.dp)
+    }
+
+    @Test
+    fun `a compact window keeps the phone's fixed carousel`() {
+        host()
+
+        rule.onAllNodesWithTag(EDITOR_MEDIUM_CAROUSEL_TAG).assertCountEquals(0)
     }
 }

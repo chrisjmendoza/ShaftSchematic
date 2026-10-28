@@ -5,6 +5,11 @@ import com.android.shaftschematic.geom.UNDERCUT_SPAN_EPS_MM
 import com.android.shaftschematic.geom.UndercutSpanMm
 import com.android.shaftschematic.geom.UndercutStrip
 import com.android.shaftschematic.geom.clampUndercutSpan
+import com.android.shaftschematic.geom.undercutPreviewChainMm
+import com.android.shaftschematic.geom.undercutPreviewDrawRange
+import com.android.shaftschematic.geom.undercutSetPositions
+import com.android.shaftschematic.geom.undercutSetReachMm
+import com.android.shaftschematic.geom.withChainMm
 import com.android.shaftschematic.model.UndercutSetDatum
 import com.android.shaftschematic.pdf.UndercutAnchorSide
 import com.android.shaftschematic.pdf.planUndercutStripRails
@@ -112,5 +117,74 @@ class UndercutDetailSetLeadTest {
         val aftRails = requireNotNull(planUndercutDetailRails(inputs.copy(setLead = aft), widthOf))
         assertTrue(aftRails.lead!!.openStart)
         assertEquals(aftRails.lead, aftRails.chainWithLead.first())
+    }
+
+    @Test
+    fun `a previewed draft's chain carries the lead from where the draft leaves the chain`() {
+        val oal = spec.overallLengthMm
+        val strip = undercutSheetStrips(spec, resolveComponents(spec), doc.undercutRecord, blankValues = false)
+            .strips.single() as UndercutStrip.LinerStrip
+        val spans = doc.undercutRecord.undercuts.map { u ->
+            val c = clampUndercutSpan(u.startFromAftMm, u.lengthMm, oal)
+            UndercutSpanMm(u.id, c.startMm, c.endMm)
+        }
+        val (aftSet, fwdSet) = undercutSetPositions(spec)
+        val reach = undercutSetReachMm(doc.undercutRecord.drawToSet)
+        fun previewStrip(preview: List<UndercutSpanMm>): UndercutStrip {
+            val (s, e) = undercutPreviewChainMm(strip, preview, oal, reachToSetMm = reach, aftSetMm = aftSet, fwdSetMm = fwdSet)
+            return strip.withChainMm(s, e)
+        }
+        // Nothing moved: the stored chain, so an idle canvas and a no-op draft draw alike.
+        assertEquals(strip, previewStrip(spans))
+
+        // The FWD overhang cut moved 1" further FWD: the chain end follows it and the lead shortens
+        // from the stored 12 3/4" to 11 3/4".
+        val inch = 25.4f
+        val fwdMost = spans.maxBy { it.endMm }
+        val moved = spans.map { if (it.id == fwdMost.id) it.copy(startMm = it.startMm + inch, endMm = it.endMm + inch) else it }
+        val draftStrip = previewStrip(moved)
+        assertEquals(strip.chainEndMm + inch, draftStrip.chainEndMm, UNDERCUT_SPAN_EPS_MM)
+        assertEquals(strip.chainStartMm, draftStrip.chainStartMm, UNDERCUT_SPAN_EPS_MM)
+
+        val widthOf: (DualLabel) -> Float = { it.inline().length * 14f }
+        val (previewStart, previewEnd) = undercutPreviewDrawRange(strip, moved, oal, cutSpans = moved)
+        val range = undercutDetailLeadDrawRange(
+            draftStrip, spec, UndercutSetDatum.NEAREST, moved, previewStart, previewEnd, oal,
+            widthPx = 1000f, edgePadPx = 84f, profileRowHeightPx = 367f, maxOdMm = 254f,
+            scale = 3.28f, arrowSizePt = com.android.shaftschematic.settings.PDF_ARROW_SIZE_DEFAULT_PT,
+            unit = UnitSystem.INCHES, labelWidthPx = widthOf,
+        )
+        assertEquals(
+            "the same stock past each of the DRAFT's chain datums",
+            draftStrip.chainStartMm - range.startMm, range.endMm - draftStrip.chainEndMm, UNDERCUT_SPAN_EPS_MM,
+        )
+        val lead = undercutDetailSetLead(draftStrip, spec, UndercutSetDatum.NEAREST, moved, range.startMm, range.endMm)
+        val rails = requireNotNull(
+            planUndercutDetailRails(
+                UndercutDetailRailInputs(
+                    spans = moved,
+                    chainStartMm = draftStrip.chainStartMm,
+                    chainEndMm = draftStrip.chainEndMm,
+                    splitAtMm = emptyList(),
+                    unit = UnitSystem.INCHES,
+                    startedStrip = false,
+                    widthPx = 1000f,
+                    profileRowHeightPx = 367f,
+                    edgePadPx = 84f,
+                    drawStartMm = range.startMm,
+                    windowLengthMm = range.endMm - range.startMm,
+                    maxOdMm = 254f,
+                    scale = 3.28f,
+                    textSizePx = 26.25f,
+                    typeface = null,
+                    fractionStyle = null,
+                    setLead = lead,
+                ),
+                widthOf,
+            ),
+        )
+        assertEquals("11 3/4\"", rails.leadSpan!!.span.label.inline())
+        // The moved cut keeps its own span on the chain rather than collapsing against a stale datum.
+        assertTrue(rails.chainSpans.any { kotlin.math.abs((it.endMm - it.startMm) - (fwdMost.endMm - fwdMost.startMm)) < 1e-2f })
     }
 }

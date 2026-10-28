@@ -1,7 +1,6 @@
 package com.android.shaftschematic.ui.screen
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -126,36 +125,49 @@ internal fun ThreadReliefSwitchRow(
 }
 
 /**
- * The "Relief at: AFT | FWD" chip row, styled like the thread card's "Thread end" chips. The
- * chips carry `<testTag>_aft` / `<testTag>_fwd`.
+ * One "Relief at" chip: its label, whether it is selected, the modifier carrying its test tag,
+ * and its click. Lets each host draw the row in its own surface's chip style.
+ */
+internal typealias ReliefEndChip =
+    @Composable (label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) -> Unit
+
+/**
+ * The "Relief at: AFT | FWD" chip row. The chips carry `<testTag>_aft` / `<testTag>_fwd`.
+ * [chip] draws each chip; null draws the thread card's "Thread end" style. `AddThreadDialog`
+ * passes its own chip so the row matches the dialog's other chip rows — the two styles side by
+ * side in one dialog read as two kinds of control (on-device report).
  */
 @Composable
 internal fun ThreadReliefEndChips(
     atAft: Boolean,
     testTag: String,
+    chip: ReliefEndChip? = null,
     onSelect: (atAft: Boolean) -> Unit,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp).testTag(testTag),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+    ChipFlowRow(Modifier.fillMaxWidth().padding(bottom = 8.dp).testTag(testTag)) {
         Text("Relief at:", style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
-        val chipColors = FilterChipDefaults.filterChipColors(
-            selectedContainerColor = Color.Black, selectedLabelColor = Color.White,
-            containerColor = Color.Transparent, labelColor = MaterialTheme.colorScheme.onSurface
-        )
-        FilterChip(selected = atAft,
-            onClick = { onSelect(true) },
-            label = { Text("AFT") }, colors = chipColors,
-            border = if (atAft) BorderStroke(1.dp, Color.Black) else null,
-            modifier = Modifier.testTag("${testTag}_aft"))
-        FilterChip(selected = !atAft,
-            onClick = { onSelect(false) },
-            label = { Text("FWD") }, colors = chipColors,
-            border = if (!atAft) BorderStroke(1.dp, Color.Black) else null,
-            modifier = Modifier.testTag("${testTag}_fwd"))
+        val aftModifier = Modifier.testTag("${testTag}_aft")
+        val fwdModifier = Modifier.testTag("${testTag}_fwd")
+        if (chip != null) {
+            chip("AFT", atAft, aftModifier) { onSelect(true) }
+            chip("FWD", !atAft, fwdModifier) { onSelect(false) }
+        } else {
+            val chipColors = FilterChipDefaults.filterChipColors(
+                selectedContainerColor = Color.Black, selectedLabelColor = Color.White,
+                containerColor = Color.Transparent, labelColor = MaterialTheme.colorScheme.onSurface
+            )
+            FilterChip(selected = atAft,
+                onClick = { onSelect(true) },
+                label = { ChipLabel("AFT") }, colors = chipColors,
+                border = if (atAft) BorderStroke(1.dp, Color.Black) else null,
+                modifier = aftModifier)
+            FilterChip(selected = !atAft,
+                onClick = { onSelect(false) },
+                label = { ChipLabel("FWD") }, colors = chipColors,
+                border = if (!atAft) BorderStroke(1.dp, Color.Black) else null,
+                modifier = fwdModifier)
+        }
     }
 }
 

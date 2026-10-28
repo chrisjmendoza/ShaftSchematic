@@ -34,6 +34,13 @@ object AddDefaultsConfig {
     const val SLOT_DEPTH_IN      = 0.25f
     const val SLOT_COUNT_DEFAULT = 2
 
+    /**
+     * Distance from the measured face to the nearest hole center a new coupler bolt row opens
+     * with (1 in; never less than one hole Ø) — so the dialog opens on a row that sits on the
+     * shaft. A starting value the user types over, never a derivation.
+     */
+    const val SLOT_FROM_END_IN = 1f
+
     // ---- Blend defaults -------------------------------------------------------
     /**
      * Axial length a face takes when its blend is first switched on (2 in). A blend is a

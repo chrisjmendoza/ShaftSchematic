@@ -375,10 +375,11 @@ fun WearRoute(
     val outlineArgb    = SheetInk.Outline.toArgb()
     val bodyFillArgb   = SheetInk.Outline.copy(alpha = 0.08f).toArgb()
     val hatchArgb      = SheetInk.Outline.copy(alpha = 0.55f).toArgb()
-    val tapTintColor   = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
-    val tapBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.65f)
-    val badgeColor     = MaterialTheme.colorScheme.primary
-    val badgeTextArgb  = MaterialTheme.colorScheme.onPrimary.toArgb()
+    // The tap affordance sits on the same white paper, so it is fixed sheet ink too.
+    val tapTintColor   = SheetInk.Selection.copy(alpha = 0.16f)
+    val tapBorderColor = SheetInk.Selection.copy(alpha = 0.65f)
+    val badgeColor     = SheetInk.Selection
+    val badgeTextArgb  = SheetInk.OnSelection.toArgb()
     val previewShape   = MaterialTheme.shapes.medium
 
     val transparentArgb = Color.Transparent.toArgb()
