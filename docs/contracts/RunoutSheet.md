@@ -706,7 +706,16 @@ verdict "25% should be our high end"):
   two draw sites can never disagree. It is also a **re-render key** on the wear preview: a job's
   own override rides `wearRecord`, but a change to the Settings default reaches an
   un-overridden document only through the key.
-- **UI** — the "Trace depth exaggeration" row (shared `WearTraceDepthControlRow`, wrapping
+- **Live preview** — the wear preview's render loop must resolve the depth INSIDE its
+  `snapshotFlow` block from the two state reads (`wearRecord.traceDepthFrac`, the Settings
+  default), never from the composition's `traceDepthFrac` val: the block is created once, so a
+  captured val is stale forever and every slider commit re-rendered the page at the old depth
+  (on-device report; `WearRenderInputsSourceTest`).
+- **UI** — the "Trace depth exaggeration" row, shown in THREE places from ONE construction:
+  the Wear tab body, the wear preview's options panel, and the liner inspection page under its
+  Diameter measurements section (`ComponentWearDetailOverlay(traceDepthControl)`, liners only —
+  on-device request: the dial was not reachable where the readings are recorded). The row
+  (shared `WearTraceDepthControlRow`, wrapping
   `WearTraceDepthSlider` with drag tracked locally and committed once on release) writes the
   per-job override; its **"Save as default"** button — enabled only while the effective value
   differs from the stored global — writes the current value to the global pref AND clears the

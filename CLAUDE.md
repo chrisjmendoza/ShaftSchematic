@@ -1102,7 +1102,12 @@ process-wide `FractionTypography.active` mirror, whose ONLY writer is
 `SettingsStore.updatePdfPrefs` (the `SettingsStore.pdfPrefs` pattern — threading a uniform
 drawing decision through every composer's private draw functions costs more than it buys). That
 mirror is not snapshot state, so every preview's render-inputs record must carry `fractionStyle`
-as a **re-render key** or that tab keeps drawing the old style. `OutputTypography.active`
+as a **re-render key** or that tab keeps drawing the old style. Every field of that record must
+be read from STATE inside the `snapshotFlow` block: the block is created once
+(`LaunchedEffect(Unit)`), so a plain `val` derived in the composition and captured there is the
+first composition's value forever — the wear preview re-rendered on every "Trace depth
+exaggeration" commit at the stale depth, because `traceDepthFrac` was such a val (on-device
+report; `WearRenderInputsSourceTest` pins it). `OutputTypography.active`
 (`PdfPrefs.outputFont`, Settings → Drawing → "Output font" — the FACE every sheet is set in, and
 the composers' root text paint) is the sibling mirror with the same single writer, the same
 re-render-key rule, and the same tolerant `fromName` fallback; it is Settings-only, never on the

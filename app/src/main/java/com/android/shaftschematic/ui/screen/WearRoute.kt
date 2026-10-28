@@ -322,7 +322,12 @@ fun WearRoute(
                 shadedLiners = pdfShadedLiners,
                 wearRecord = wearRecord,
                 blankValues = blankDraft,
-                traceDepthFrac = traceDepthFrac,
+                // Resolved HERE from the two state reads, never from the composition's
+                // `traceDepthFrac` val: this lambda is created once (LaunchedEffect(Unit)), so a
+                // plain val captured in it is the first composition's value forever — the slider
+                // re-rendered the page at the stale depth (on-device report). Every other input
+                // is a state delegate and reads live.
+                traceDepthFrac = effectiveWearTraceDepthFrac(wearRecord.traceDepthFrac, wearTraceDefault),
                 wearBandShadeFrac = wearBandShadeFrac,
                 wearJoinGapMaxMm = wearJoinGapMaxMm,
                 fractionStyle = pdfFractionStyle,
@@ -766,6 +771,10 @@ fun WearRoute(
             onRemoveDiaReading = vm::removeWearDiaReading,
             onClose = { selectedComponentId = null },
             traceDepthFrac = traceDepthFrac,
+            // The same row the tab body and the preview's options panel show — ONE construction.
+            traceDepthControl = {
+                WearTraceDepthControlRow(vm = vm, effectiveFrac = traceDepthFrac, globalDefault = wearTraceDefault)
+            },
             threadSlant = pdfThreadSlant,
             threadDensity = pdfThreadDensity,
         )

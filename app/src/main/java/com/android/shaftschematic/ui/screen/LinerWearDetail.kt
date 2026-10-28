@@ -189,6 +189,14 @@ fun ComponentWearDetailOverlay(
      */
     traceDepthFrac: Float = WEAR_TRACE_MAX_DEPTH_FRAC,
     /**
+     * The "Trace depth exaggeration" row (`WearTraceDepthControlRow`), rendered under the
+     * Diameter measurements section on LINER pages — the page where the readings that drive the
+     * trace are recorded, so the dial sits beside the drawing it moves (on-device request: it was
+     * reachable only from the tab body and the preview's options panel). Null hides it; bodies and
+     * tapers never trace, so it never shows there.
+     */
+    traceDepthControl: (@Composable () -> Unit)? = null,
+    /**
      * App-wide thread-hatch slant factor (`PdfPrefs.threadSlant`) for the shaft-end thread
      * stubs — the same value the printed strip's stub hatch reads, passed in so a change
      * recomposes this canvas.
@@ -791,6 +799,12 @@ fun ComponentWearDetailOverlay(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                // The exaggeration dial beside the readings that drive it — liners only, the one
+                // component kind that traces.
+                if (liner != null && traceDepthControl != null) {
+                    Spacer(Modifier.height(4.dp))
+                    traceDepthControl()
+                }
 
                 // ── Liner wear spots (bands) — liners only ───────────────────
                 if (liner != null) {
