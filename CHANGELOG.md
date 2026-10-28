@@ -17,6 +17,13 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
   measured diameters inside each wear band, from the same construction the strips use, so the
   slider is answered everywhere the liner is drawn. As before, a trace needs a wear band on the
   liner with at least one measured Ø inside it; the schematic preview is unchanged.
+- **The wear preview now actually redraws at the new depth.** On-device report (screenshots at
+  5% and 25% with identical strips): the preview re-rendered on every commit but with the depth
+  it had when the page was first opened. Fixed in the preview's render loop.
+- **The slider is on the liner inspection page too.** "Trace depth exaggeration" now sits under
+  Diameter measurements on a liner's wear-inspection page, beside the readings that drive it,
+  with the same "Save as default" button. Bodies and tapers never trace, so it does not appear
+  there.
 
 ### feat(pdf): a mid-shaft taper is dimensioned like a liner; the footer's "Body: Ø" line is gone
 
