@@ -1,7 +1,7 @@
-# ShaftSchematic TODO
+﻿# ShaftSchematic TODO
 
 **Version: v0.5.x Development Queue**
-**Last updated: 2026-10-27**
+**Last updated: 2026-10-29**
 
 ## What belongs here
 
@@ -51,7 +51,7 @@ at most a pointer from here.
 | Drawing preset profiles | ✅ Shipped, app-wide |
 | Appearance settings (theme + high contrast) | ✅ Shipped — see §2 for the open on-device pass |
 | Sidebar nav (6 tabs) | ✅ Schematic / Runout / Wear / Undercut / Final / Consolidated Output |
-| Tablet layout | ✅ Shipped — window width class, permanent sidebar, free rotation on sw600dp; the Schematic editor at EXPANDED is a drawing band over a peeking carousel with two-up fields (verified on the Pixel_Tablet emulator 2026-10-23); the sheet tabs still use two panes; hardware pass open, see §2 |
+| Tablet layout | ✅ Shipped — window width class, permanent sidebar, free rotation on sw600dp; the Schematic editor at EXPANDED is a drawing band (yields to the keyboard and grows for its warnings) over a peeking carousel with two-up fields; the PDF previews dock the options panel beside the page at EXPANDED; the sheet tabs use two panes. Verified on the Pixel_Tablet emulator 2026-10-23/27/29 — no tablet hardware exists, so every tablet check runs on that AVD; re-checks open, see §2 |
 | Undo/redo | ✅ Session-scoped `SessionHistory` over `EditState` |
 | Internal save/open, autosave draft ring | ✅ Shipped |
 | Backup & restore, auto-mirror folder | ✅ Shipped |
@@ -104,9 +104,6 @@ at most a pointer from here.
   - The thread-relief seeds (length 1.5 × pitch, Ø = major − 1.3 × pitch).
 - **Surfaced by the User Manual writers (2026-10-13)** — real but each is a product call, so none
   was changed in the manual's bug batch:
-  - **Undo lives only on the Schematic and Final toolbars**, yet History covers runout, wear and
-    undercut edits made on the other tabs. Add the History button to those toolbars, or accept
-    "go back to the Schematic tab to undo" (the manual says that today).
   - **Tri-state card toggles cannot return to "follow the setting"** — once "Shade on drawing" /
     "Show name on drawing" is flipped on a card the component keeps its own value for good. A
     third "Default" state on the control, or a long-press reset.
@@ -171,14 +168,17 @@ than re-inventing one.
   on the AVD 2026-10-27). Rulings in `docs/contracts/Appearance.md` §Accessibility.
 - [ ] On-device: print one undercut sheet with "Line art (no shading)" on and judge whether the
   notch construction alone reads on paper (the ruling assumed it does, from the screen mode).
-- [ ] **Tablet pass on hardware.** Every tab in portrait (MEDIUM) and landscape (EXPANDED), the
-  permanent sidebar, rotation mid-edit, the page strip, preview closing and the pane split were
-  walked on the Pixel_Tablet emulator 2026-10-27; its failures (rotation state, MEDIUM carousel
-  height, the Final hamburger, the undercut card under the keyboard) are fixed and listed for a
-  re-check in the checklist. Still open on a real tablet: those re-checks, and the Schematic card
-  under the soft keyboard (§Bugs). Candidates from the editor pass: the same peeking carousel on a
-  portrait tablet (MEDIUM, contract says plain column today), an "N of M" counter in the
-  Components header, the top-band treatment for the sheet tabs.
+- [ ] **Tablet re-check on the Pixel_Tablet AVD** (there is no tablet hardware; the AVD is the
+  tablet). Two emulator passes (2026-10-27 editor/tabs, 2026-10-29 editor + outputs over three
+  real jobs) found and fixed: rotation state, MEDIUM carousel height, the Final hamburger, the
+  undercut card under the keyboard, the drawing band under the keyboard and beside two warnings,
+  the Runout canvas past the shaft end, and the PDF options panel (now docked beside the page at
+  EXPANDED). Left to do by hand: the re-check list in `docs/ON_DEVICE_CHECKLIST.md`
+  ("Fixed 2026-10-29 — tablet pass") plus the three rulings of the same day. Candidates, not
+  built: the same peeking carousel on a portrait tablet (MEDIUM, contract says plain column
+  today), an "N of M" counter in the Components header, the top-band treatment for the sheet tabs,
+  and the **Output tab at EXPANDED**, which stays one column per `docs/contracts/Adaptive.md` —
+  decide whether it should take two panes like the other sheet tabs.
 - [ ] **Material3 1.4.0 pinch-zoom centroid** (Compose BOM 2026.04.01; the visual pass of the
   sliders, page-strip cap, chips, dialogs and Switch/Checkbox density was done on the AVD
   2026-10-27): decide the four pinch-zoom surfaces' `rememberTransformableState` centroid
@@ -186,12 +186,25 @@ than re-inventing one.
 
 ### Bugs
 
-- [ ] **Dual-units consolidated sheet: rail labels can overlap.** On a very full sheet with dual
-  units on, growing the footer by one line (e.g. a thread-relief line) prints overlapping rail
-  values. Suspected cause: `RunoutPdfComposer`'s `railsBlockH` estimates the fallback-rail lifts
-  off a prelim linear-map plan, and the final compressed map seats fewer values inline than that
-  plan assumed. Pre-existing; the thread-relief test fixture is arranged around it — un-arrange it
-  when fixing.
+- [ ] **Dual-units consolidated sheet: rail values printed through lines on a very full sheet.**
+  Reproduced 2026-10-29 (gated render `pdf/DualRailOverlapRenderTest.kt`, `DUAL_RAIL_RENDER_DIR`;
+  PNGs in the maintainer's notes): the `SheetTextOverlapTest` spec with a relief on BOTH threads,
+  dual INLINE — "16"", "25 1/4"" and "30"" print with the S.E.T. extension lines or the in-profile
+  Ø values through them. The real fixtures stay clean. Cause, read from the code: the rail-lift
+  estimate is NOT it (the vertical solve re-plans the lift on the real map, reserved == drawn). In
+  dual mode the second relief footer line wraps, the footer grows ~27 pt, the footer has no give,
+  and the shaft drops to ~14 pt — far under the 1/2" floor — so the compressed taper spans can no
+  longer seat their values in a break and `DimensionRailLayout`'s last resort prints them centred
+  through the line; the in-profile Ø columns (minimum text size) then stand taller than the shaft
+  and spill into the rail band. STACKED is worse: the `dualStacked` gate checks
+  `RUNOUT_MIN_SHAFT_AREA_PT` without `prelimBubbleSectionH`, so stacking is kept and the bubble
+  rows squeeze the shaft to nothing. Fix direction: give the footer/rail budget a floor that keeps
+  the shaft at the band floor (drop stacking, then drop dual, then wrap less) before the rails lose
+  their breaks, and fold `prelimBubbleSectionH` into the stacking gate. The thread-relief test
+  fixture is arranged around this — un-arrange it when fixing. Also correct the synthetic spec
+  while there (`SheetTextOverlapTest`, copied by the render test): its AFT taper has the large end
+  at the thread and tapers DOWN into the shaft, which no real shaft does (on-device report) —
+  the small end belongs at the thread.
 
 Found on the 2026-10-27 AVD pass and not fixed on its branch:
 
@@ -200,15 +213,14 @@ Found on the 2026-10-27 AVD pass and not fixed on its branch:
   goes by diameter trend ("AFT Taper"), the footer column by midpoint ("FWD Taper"), and the
   footer values by magnitude (L.E.T. / S.E.T. printed swapped against what was typed). Needs a
   ruling: warn on an inverted taper, or key the title and `letSet` on position.
-- [ ] **Schematic EXPANDED editor with the keyboard up**: the fixed drawing band keeps its height
-  and squeezes the card to one row of fields, the focused field's label clipped (tablet
-  landscape). The undercut detail page got the yielding fix; this one was left.
 - [ ] **Card AFT | FWD chips stack letters at 200% font** — the Body / Taper / Liner / Coupler
   cards' inline `FilterChip` rows are not on the shared `ChipLabel` / `ChipFlowRow`, so "FWD"
   still breaks one letter per line there.
-- [ ] **Undercut tab list delete: the Undo snackbar is short** (~4 s) — on the AVD it was gone
-  before it could be reached and the tap fell through to "Drawing settings" (top-bar Undo still
-  restored the cut).
+- [ ] **Undercut tab list delete: the Undo snackbar was missed on the AVD** — it was gone before
+  the scripted tap reached it and the tap fell through to "Drawing settings" (top-bar Undo still
+  restored the cut). The list's snackbar is already `SnackbarDuration.Long` (10 s); the detail
+  page's delete snackbar is `Short`. Decide whether a delete snackbar should stay until dismissed
+  (`Indefinite` with a dismiss action) on both, or whether 10 s is enough by hand.
 - [ ] **Share diagnostic logs — two-file case unverified.** The share sheet attaches `log.0.txt`
   once; the ring had never rotated, so attaching both files (`log.1.txt` too) has not been seen.
   Push the log past 256 KB, or check on a device that has rotated it.
