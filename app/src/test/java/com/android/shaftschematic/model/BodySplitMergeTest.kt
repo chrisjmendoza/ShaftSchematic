@@ -23,6 +23,67 @@ class BodySplitMergeTest {
 
     // ── splitBodiesAround ────────────────────────────────────────────────────
 
+    private val blended = Body(
+        id = "b1", startFromAftMm = 0f, lengthMm = 500f, diaMm = 60f,
+        blendAftMm = 40f, blendAftSeal = true, blendAftSealLenMm = 30f, blendAftToLinerOd = true,
+        blendFwdMm = 25f, blendFwdSeal = true, blendFwdSealLenMm = 20f, blendFwdToLinerOd = false,
+        blendProfile = BlendProfile.FILLET,
+    )
+
+    @Test
+    fun `split - each fragment keeps the face it still holds, the cut faces are square`() {
+        resetIds()
+        val spec = ShaftSpec(overallLengthMm = 500f, bodies = listOf(blended))
+
+        val result = spec.splitBodiesAround(200f, 350f, ::nextId)
+
+        val left = result.spec.bodies.first { it.startFromAftMm == 0f }
+        assertEquals(40f, left.blendAftMm, 0.001f)
+        assertTrue(left.blendAftSeal)
+        assertEquals(30f, left.blendAftSealLenMm, 0.001f)
+        assertTrue(left.blendAftToLinerOd)
+        assertEquals(BlendProfile.FILLET, left.blendProfile)
+        assertEquals("cut face is square", 0f, left.blendFwdMm, 0.001f)
+        assertFalse(left.blendFwdSeal)
+
+        val right = result.spec.bodies.first { it.startFromAftMm == 350f }
+        assertEquals(25f, right.blendFwdMm, 0.001f)
+        assertTrue(right.blendFwdSeal)
+        assertEquals(20f, right.blendFwdSealLenMm, 0.001f)
+        assertFalse(right.blendFwdToLinerOd)
+        assertEquals(BlendProfile.FILLET, right.blendProfile)
+        assertEquals("cut face is square", 0f, right.blendAftMm, 0.001f)
+        assertFalse(right.blendAftSeal)
+    }
+
+    @Test
+    fun `merge - the AFT fragment gives the AFT face and the FWD fragment the FWD face`() {
+        resetIds()
+        val a = Body(
+            id = "a", startFromAftMm = 0f, lengthMm = 200f, diaMm = 60f,
+            blendAftMm = 40f, blendAftSeal = true, blendAftSealLenMm = 30f, blendAftToLinerOd = true,
+            blendFwdMm = 7f, blendProfile = BlendProfile.FILLET,
+        )
+        val b = Body(
+            id = "b", startFromAftMm = 350f, lengthMm = 150f, diaMm = 60f,
+            blendAftMm = 9f, blendFwdMm = 25f, blendFwdSeal = true, blendFwdSealLenMm = 20f,
+        )
+        val spec = ShaftSpec(overallLengthMm = 500f, bodies = listOf(a, b))
+
+        val merged = spec.mergeBodiesAround(200f, 350f, ::nextId).spec.bodies.single()
+
+        assertEquals(40f, merged.blendAftMm, 0.001f)
+        assertTrue(merged.blendAftSeal)
+        assertEquals(30f, merged.blendAftSealLenMm, 0.001f)
+        assertTrue(merged.blendAftToLinerOd)
+        assertEquals(25f, merged.blendFwdMm, 0.001f)
+        assertTrue(merged.blendFwdSeal)
+        assertEquals(20f, merged.blendFwdSealLenMm, 0.001f)
+        assertFalse(merged.blendFwdToLinerOd)
+        assertEquals("profile follows the AFT fragment", BlendProfile.FILLET, merged.blendProfile)
+    }
+
+
     @Test
     fun `split - component in middle of body produces two fragments`() {
         resetIds()

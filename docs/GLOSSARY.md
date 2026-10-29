@@ -97,7 +97,7 @@ line across the body over a flat silhouette (no notches in the edges): a solid f
 is this drawing's glyph for a component face, and three of them made one shaft read as three or
 four segments. A schematic cue, not a count to machine from, and it prints no value. Authored in
 its own **"Seal areas"** section (AFT / FWD checkboxes plus a length), independent of the
-Square | Blend face finish. Stored per face as
+Square | Blend "Component blend" chips. Stored per face as
 `Body.blendAftSeal` / `blendFwdSeal`, or `AutoBlend.seal` on a bare-shaft span.
 
 ---

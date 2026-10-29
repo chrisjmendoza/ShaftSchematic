@@ -56,7 +56,7 @@ import com.android.shaftschematic.util.UnitSystem
  * An AUTO span (`ResolvedComponentSource.AUTO`) shows derived Start/Length read-only with an
  * editable Ø — committed to "This section" (a per-section override) or "All auto sections" (the
  * shaft-wide bare-shaft Ø) through a scope dialog whenever [autoSectionCount] > 1 — and the
- * "Explicit body" checkbox that promotes it; an explicit body shows the editable Start/Length/Ø, the face finishes and seal areas, and the keyway
+ * "Explicit body" checkbox that promotes it; an explicit body shows the editable Start/Length/Ø, the component blends and seal areas, and the keyway
  * section. That section is gated by the shared "Keyway" checkbox ([KeywayGateRow]), seeded open
  * whenever any of W/D/L is typed; unticking it with values present confirms through
  * [RemoveKeywayConfirmDialog] before clearing them. Inside the gate: KW from AFT | FWD, the keyway
@@ -90,7 +90,7 @@ internal fun BodyPagerCard(
     onSetAllAutoSectionsDia: (diaMm: Float) -> Unit,
     /** How many AUTO body sections the shaft resolves to — decides whether the Ø asks for a scope. */
     autoSectionCount: Int,
-    onSetAutoBlend: (spanStartMm: Float, spanEndMm: Float, end: LinerAuthoredReference, lengthMm: Float, profile: BlendProfile, seal: Boolean, sealLenMm: Float) -> Unit,
+    onSetAutoBlend: (spanStartMm: Float, spanEndMm: Float, end: LinerAuthoredReference, lengthMm: Float, profile: BlendProfile, seal: Boolean, sealLenMm: Float, toLinerOd: Boolean) -> Unit,
     onSetShowAutoBodyDia: (Boolean) -> Unit,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateBodyShowDia: (Int, Boolean) -> Unit,
@@ -98,7 +98,7 @@ internal fun BodyPagerCard(
     onUpdateBodyShade: (Int, Boolean) -> Unit = { _, _ -> },
     onUpdateBodyCompressOnDrawing: (Int, Boolean) -> Unit,
     onUpdateBodyShowDimensionRail: (Int, Boolean) -> Unit = { _, _ -> },
-    onUpdateBodyBlend: (index: Int, blendAftMm: Float, blendFwdMm: Float, profile: BlendProfile, sealAft: Boolean, sealFwd: Boolean, sealAftLenMm: Float, sealFwdLenMm: Float) -> Unit,
+    onUpdateBodyBlend: (index: Int, blendAftMm: Float, blendFwdMm: Float, profile: BlendProfile, sealAft: Boolean, sealFwd: Boolean, sealAftLenMm: Float, sealFwdLenMm: Float, toLinerOdAft: Boolean, toLinerOdFwd: Boolean) -> Unit,
     onUpdateBodyLabel: (Int, String?) -> Unit,
     onUpdateBodyKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromEndMm: Float, end: LinerAuthoredReference, spooned: Boolean) -> Unit,
     onSetKeyways180Apart: (Boolean) -> Unit,
@@ -255,12 +255,31 @@ internal fun BodyPagerCard(
                 profile = autoProfile,
                 aftSeal = aftBlend?.seal == true,
                 fwdSeal = fwdBlend?.seal == true,
+                aftLinerTarget = blendLinerTarget(aftBlend?.toLinerOd == true),
+                fwdLinerTarget = blendLinerTarget(fwdBlend?.toLinerOd == true),
+                // Shown only while the face is Blend, so its anchor exists; every other field of
+                // the anchor passes through verbatim.
+                onSetAftLinerTarget = { t ->
+                    aftBlend?.let {
+                        onSetAutoBlend(component.startMmPhysical, component.endMmPhysical,
+                            LinerAuthoredReference.AFT, it.lengthMm, it.profile, it.seal, it.sealLenMm,
+                            t.toLinerOd)
+                    }
+                },
+                onSetFwdLinerTarget = { t ->
+                    fwdBlend?.let {
+                        onSetAutoBlend(component.startMmPhysical, component.endMmPhysical,
+                            LinerAuthoredReference.FWD, it.lengthMm, it.profile, it.seal, it.sealLenMm,
+                            t.toLinerOd)
+                    }
+                },
                 onSetAftMode = { m ->
                     onSetAutoBlend(
                         component.startMmPhysical, component.endMmPhysical,
                         LinerAuthoredReference.AFT,
                         blendLenForMode(m, aftBlend?.lengthMm ?: 0f, lengthMm),
                         autoProfile, aftBlend?.seal ?: false, aftBlend?.sealLenMm ?: 0f,
+                        aftBlend?.toLinerOd ?: false,
                     )
                 },
                 onSetFwdMode = { m ->
@@ -269,6 +288,7 @@ internal fun BodyPagerCard(
                         LinerAuthoredReference.FWD,
                         blendLenForMode(m, fwdBlend?.lengthMm ?: 0f, lengthMm),
                         autoProfile, fwdBlend?.seal ?: false, fwdBlend?.sealLenMm ?: 0f,
+                        fwdBlend?.toLinerOd ?: false,
                     )
                 },
                 // Unticking a seal on a square face clears the anchor (length 0, no seal).
@@ -277,6 +297,7 @@ internal fun BodyPagerCard(
                         component.startMmPhysical, component.endMmPhysical,
                         LinerAuthoredReference.AFT, aftBlend?.lengthMm ?: 0f, autoProfile, on,
                         sealLenForSeal(on, aftBlend?.sealLenMm ?: 0f, lengthMm),
+                        aftBlend?.toLinerOd ?: false,
                     )
                 },
                 onSetFwdSeal = { on ->
@@ -284,16 +305,17 @@ internal fun BodyPagerCard(
                         component.startMmPhysical, component.endMmPhysical,
                         LinerAuthoredReference.FWD, fwdBlend?.lengthMm ?: 0f, autoProfile, on,
                         sealLenForSeal(on, fwdBlend?.sealLenMm ?: 0f, lengthMm),
+                        fwdBlend?.toLinerOd ?: false,
                     )
                 },
                 onProfile = { p ->
                     aftBlend?.let {
                         onSetAutoBlend(component.startMmPhysical, component.endMmPhysical,
-                            LinerAuthoredReference.AFT, it.lengthMm, p, it.seal, it.sealLenMm)
+                            LinerAuthoredReference.AFT, it.lengthMm, p, it.seal, it.sealLenMm, it.toLinerOd)
                     }
                     fwdBlend?.let {
                         onSetAutoBlend(component.startMmPhysical, component.endMmPhysical,
-                            LinerAuthoredReference.FWD, it.lengthMm, p, it.seal, it.sealLenMm)
+                            LinerAuthoredReference.FWD, it.lengthMm, p, it.seal, it.sealLenMm, it.toLinerOd)
                     }
                 },
                 aftLengthField = {
@@ -301,7 +323,7 @@ internal fun BodyPagerCard(
                         toMmOrNull(str, unit)?.let {
                             onSetAutoBlend(component.startMmPhysical, component.endMmPhysical,
                                 LinerAuthoredReference.AFT, it, autoProfile, aftBlend?.seal ?: false,
-                                aftBlend?.sealLenMm ?: 0f)
+                                aftBlend?.sealLenMm ?: 0f, aftBlend?.toLinerOd ?: false)
                         }
                     }
                 },
@@ -310,7 +332,7 @@ internal fun BodyPagerCard(
                         toMmOrNull(str, unit)?.let {
                             onSetAutoBlend(component.startMmPhysical, component.endMmPhysical,
                                 LinerAuthoredReference.FWD, it, autoProfile, fwdBlend?.seal ?: false,
-                                fwdBlend?.sealLenMm ?: 0f)
+                                fwdBlend?.sealLenMm ?: 0f, fwdBlend?.toLinerOd ?: false)
                         }
                     }
                 },
@@ -322,7 +344,7 @@ internal fun BodyPagerCard(
                         val mm = toMmOrNull(str, unit)
                         if (blend != null && mm != null) {
                             onSetAutoBlend(component.startMmPhysical, component.endMmPhysical,
-                                LinerAuthoredReference.AFT, blend.lengthMm, autoProfile, blend.seal, mm)
+                                LinerAuthoredReference.AFT, blend.lengthMm, autoProfile, blend.seal, mm, blend.toLinerOd)
                         }
                     }
                 },
@@ -332,7 +354,7 @@ internal fun BodyPagerCard(
                         val mm = toMmOrNull(str, unit)
                         if (blend != null && mm != null) {
                             onSetAutoBlend(component.startMmPhysical, component.endMmPhysical,
-                                LinerAuthoredReference.FWD, blend.lengthMm, autoProfile, blend.seal, mm)
+                                LinerAuthoredReference.FWD, blend.lengthMm, autoProfile, blend.seal, mm, blend.toLinerOd)
                         }
                     }
                 },
@@ -486,11 +508,26 @@ internal fun BodyPagerCard(
             profile = b.blendProfile,
             aftSeal = b.blendAftSeal,
             fwdSeal = b.blendFwdSeal,
+            aftLinerTarget = blendLinerTarget(b.blendAftToLinerOd),
+            fwdLinerTarget = blendLinerTarget(b.blendFwdToLinerOd),
+            onSetAftLinerTarget = { t ->
+                onUpdateBodyBlend(
+                    idx, b.blendAftMm, b.blendFwdMm, b.blendProfile, b.blendAftSeal, b.blendFwdSeal,
+                    b.blendAftSealLenMm, b.blendFwdSealLenMm, t.toLinerOd, b.blendFwdToLinerOd,
+                )
+            },
+            onSetFwdLinerTarget = { t ->
+                onUpdateBodyBlend(
+                    idx, b.blendAftMm, b.blendFwdMm, b.blendProfile, b.blendAftSeal, b.blendFwdSeal,
+                    b.blendAftSealLenMm, b.blendFwdSealLenMm, b.blendAftToLinerOd, t.toLinerOd,
+                )
+            },
             onSetAftMode = { m ->
                 onUpdateBodyBlend(
                     idx, blendLenForMode(m, b.blendAftMm, b.lengthMm), b.blendFwdMm,
                     b.blendProfile, b.blendAftSeal, b.blendFwdSeal,
                     b.blendAftSealLenMm, b.blendFwdSealLenMm,
+                    b.blendAftToLinerOd, b.blendFwdToLinerOd,
                 )
             },
             onSetFwdMode = { m ->
@@ -498,24 +535,28 @@ internal fun BodyPagerCard(
                     idx, b.blendAftMm, blendLenForMode(m, b.blendFwdMm, b.lengthMm),
                     b.blendProfile, b.blendAftSeal, b.blendFwdSeal,
                     b.blendAftSealLenMm, b.blendFwdSealLenMm,
+                    b.blendAftToLinerOd, b.blendFwdToLinerOd,
                 )
             },
             onSetAftSeal = { on ->
                 onUpdateBodyBlend(
                     idx, b.blendAftMm, b.blendFwdMm, b.blendProfile, on, b.blendFwdSeal,
                     sealLenForSeal(on, b.blendAftSealLenMm, b.lengthMm), b.blendFwdSealLenMm,
+                    b.blendAftToLinerOd, b.blendFwdToLinerOd,
                 )
             },
             onSetFwdSeal = { on ->
                 onUpdateBodyBlend(
                     idx, b.blendAftMm, b.blendFwdMm, b.blendProfile, b.blendAftSeal, on,
                     b.blendAftSealLenMm, sealLenForSeal(on, b.blendFwdSealLenMm, b.lengthMm),
+                    b.blendAftToLinerOd, b.blendFwdToLinerOd,
                 )
             },
             onProfile = { p ->
                 onUpdateBodyBlend(
                     idx, b.blendAftMm, b.blendFwdMm, p, b.blendAftSeal, b.blendFwdSeal,
                     b.blendAftSealLenMm, b.blendFwdSealLenMm,
+                    b.blendAftToLinerOd, b.blendFwdToLinerOd,
                 )
             },
             aftLengthField = {
@@ -524,6 +565,7 @@ internal fun BodyPagerCard(
                         onUpdateBodyBlend(
                             idx, it, b.blendFwdMm, b.blendProfile, b.blendAftSeal, b.blendFwdSeal,
                             b.blendAftSealLenMm, b.blendFwdSealLenMm,
+                            b.blendAftToLinerOd, b.blendFwdToLinerOd,
                         )
                     }
                 }
@@ -534,6 +576,7 @@ internal fun BodyPagerCard(
                         onUpdateBodyBlend(
                             idx, b.blendAftMm, it, b.blendProfile, b.blendAftSeal, b.blendFwdSeal,
                             b.blendAftSealLenMm, b.blendFwdSealLenMm,
+                            b.blendAftToLinerOd, b.blendFwdToLinerOd,
                         )
                     }
                 }
@@ -544,6 +587,7 @@ internal fun BodyPagerCard(
                         onUpdateBodyBlend(
                             idx, b.blendAftMm, b.blendFwdMm, b.blendProfile, b.blendAftSeal, b.blendFwdSeal,
                             it, b.blendFwdSealLenMm,
+                            b.blendAftToLinerOd, b.blendFwdToLinerOd,
                         )
                     }
                 }
@@ -554,6 +598,7 @@ internal fun BodyPagerCard(
                         onUpdateBodyBlend(
                             idx, b.blendAftMm, b.blendFwdMm, b.blendProfile, b.blendAftSeal, b.blendFwdSeal,
                             b.blendAftSealLenMm, it,
+                            b.blendAftToLinerOd, b.blendFwdToLinerOd,
                         )
                     }
                 }

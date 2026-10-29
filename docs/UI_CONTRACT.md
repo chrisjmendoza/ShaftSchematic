@@ -176,20 +176,18 @@ never absorbed into a run that already carries one. Without that stop a Ø6 body
 resolved to a single run at the aft-most Ø with **one card instead of two**. See
 `docs/COMPONENT_CONTRACT.md`.
 
-**Face finish section.** Below "Show Ø on drawing", one chip row per face —
-**AFT / FWD: Square | Blend | Seal area** — with an axial length field under any face that is not
-Square, and shape chips (S-curve | Fillet | Eased cone) once some face is finished.
-
-The three modes are mutually exclusive *as presented*, which is a deliberate small fiction:
-**Seal area includes the blend**, because the radius cuts are machined across the blended section
-and there is nowhere to put them on a square face. It is presented that way because the shop
-describes a face as square, blended, or a seal area — a seal area is a thing you add, not a
-modifier on something else. The earlier nesting (a Blend checkbox revealing a Seal area checkbox)
-hid the seal behind a control nobody would think to tick first. Storage is unaffected: the model
-still carries a length and a flag independently, and `blendFaceMode`/`blendLenForMode`
-(`ComponentCarousel.kt`, unit-tested) are the only projection. Switching Blend ↔ Seal area keeps
-the typed length, and **Square is the off switch** — it clears the length and the seal flag,
-leaving the other face untouched.
+**Component blend section** (`ui/screen/BlendSection.kt`, shared by both body cards and
+`AddBodyDialog`). Below "Show Ø on drawing", one chip row per face — **AFT / FWD: Square | Blend** —
+headed "Component blend" (it read "Face finish", which made no sense on a component card —
+on-device report). Under a face that is Blend: its axial length field, then an **"At a liner:
+Seat | Liner OD"** chip row — where the curve leaves from when a liner butts that face, the derived
+half-way seat (default) or the liner's full OD (on-device request). Shape chips (S-curve | Fillet |
+Eased cone) appear once some face is blended. Seal areas are their own sibling section ("Seal
+areas": AFT / FWD checkboxes, a length field under each ticked face) — a section property, never a
+third chip in the Square | Blend row and never nested under a blend control (both earlier layouts
+hid or misdescribed it, on-device reports). `blendFaceMode`/`blendLenForMode`/`sealLenForSeal`
+are the only projection; a Square | Blend change never touches the seal flags, and a seal toggle
+never touches the blend length.
 
 Two rules make the rows read correctly, both learned on device:
 - **Every chip keeps a visible outline, selected or not.** M3's default filter chip gives an

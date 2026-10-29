@@ -190,6 +190,8 @@ data class Body(
     val blendFwdSeal: Boolean = false,
     val blendAftSealLenMm: Float = 0f,  // seal-area length, measured from the face; 0 = follow blendAftMm
     val blendFwdSealLenMm: Float = 0f,
+    val blendAftToLinerOd: Boolean = false,  // at a butting liner: false = half-way seat, true = the liner's full OD
+    val blendFwdToLinerOd: Boolean = false,
     val blendProfile: BlendProfile = BlendProfile.OGEE,
 ) : Segment
 Taper
@@ -225,6 +227,7 @@ Blend fields on Body (drawing-only, additive, default 0/OGEE):
   moves or trims another component. Diameters are DERIVED at resolve, never stored. Where a liner
   butts the face (a seal area) the curve leaves from the midpoint of the liner OD and `diaMm`
   (`seatDiaUnderLiner`) — the real seat is hidden under the liner and its depth varies job to job.
+  That midpoint is the default; see `blendAftToLinerOd` for the face that runs to the liner OD.
 - `blendAftSeal` / `blendFwdSeal`: whether that end carries a seal area — the radius cuts the
   fiberglass seats into, drawn as 3 full-height dashed lines across the body (the silhouette stays
   flat — no notches). A section property, **independent of the blend length**: the seal area is
@@ -236,6 +239,13 @@ Blend fields on Body (drawing-only, additive, default 0/OGEE):
   blend length — every document saved before the field existed decodes to it and keeps its
   grooves (on a square face a `0` resolves to no seal area drawn). Stored independently of the
   seal flag: unticking a seal keeps the typed length. Derived: `Body.blendSealLenMmOn(end)`.
+- `blendAftToLinerOd` / `blendFwdToLinerOd`: where that face's curve leaves from when a LINER
+  butts it — `false` (default; every document saved before the field decodes to it, so it draws
+  exactly as before) the derived half-way seat, `true` the liner's full OD: a short cone straight up
+  to the sleeve with no seat (on-device request, shop photo). Read only in the liner branch of
+  `blendAt`; a body or taper across the face is followed whatever it says. Drawing-only; kept while
+  the face is square. UI: the "At a liner: Seat | Liner OD" chips. Derived:
+  `Body.blendToLinerOdOn(end)`.
 - `blendProfile`: `OGEE` (tangent both ends, default) | `FILLET` (tangent at the large end only)
   | `EASED_CONE` (straight cone, both corners eased).
 - Silhouette only: no dimension rail, no footer row, no effect on OAL, coverage, resolve spans,
@@ -247,17 +257,17 @@ Blend fields on Body (drawing-only, additive, default 0/OGEE):
 `ShaftSpec.autoBlends: List<AutoBlend>` (additive, defaults empty) — blended faces on auto-body
 spans, keyed in **shaft space** by anchor rather than by a component id, since auto ids are
 position-derived and regenerate on every edit:
-- `AutoBlend(anchorMm, end, lengthMm, profile, seal, sealLenMm)`. The span whose half-open extent
+- `AutoBlend(anchorMm, end, lengthMm, profile, seal, sealLenMm, toLinerOd)`. The span whose half-open extent
   `[startMm, endMm)` contains the anchor blends the named face; the anchor is system-placed at
   the span midpoint and carries no authored meaning. `lengthMm` is typed and stored verbatim.
 - Aft-most anchor wins **per face**, so one span may carry both an aft and a fwd blend.
 - Dormant under a component or inside an absorbed gap; **never pruned**, resurrects unchanged.
 - Helpers: `List<AutoBlend>.autoBlendFor(startMm, endMm, end)`,
-  `ShaftSpec.withAutoBlend(spanStartMm, spanEndMm, end, lengthMm, profile = OGEE, seal = false, sealLenMm = 0f)`
+  `ShaftSpec.withAutoBlend(spanStartMm, spanEndMm, end, lengthMm, profile = OGEE, seal = false, sealLenMm = 0f, toLinerOd = false)`
   (`model/AutoBlend.kt`; upsert — `lengthMm` ≤ 0 **with `seal = false`** clears that face only,
   and `seal`/`sealLenMm` carry the auto span's seal area the way `Body.blendAftSeal`/
   `blendAftSealLenMm` do for an explicit body; `sealLenMm` is stored verbatim, a negative coerced
-  to 0, 0 = follow `lengthMm`). An anchor with `lengthMm = 0` and `seal = true` is a **seal-only
+  to 0, 0 = follow `lengthMm`; `toLinerOd` is the auto span's `blendAftToLinerOd`, default `false`). An anchor with `lengthMm = 0` and `seal = true` is a **seal-only
   face** — a square end whose seal area starts at the face; `autoBlendFor` honours it.
 
 Keyways are features, not standalone components.

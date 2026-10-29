@@ -8,6 +8,38 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-28
 
+### fix(editor): "Face finish" is now "Component blend"
+
+- The heading over each body face's Square | Blend chips read "Face finish", which made no sense
+  on a component card (on-device report). It now reads "Component blend" on the explicit body card,
+  the auto-body card and the Add Body dialog. The chips, the Shape row and the Seal areas section
+  are unchanged.
+- Docs: `docs/COMPONENT_CONTRACT.md`, `docs/contracts/AddComponentDialogs.md`, `docs/UI_CONTRACT.md`,
+  `docs/GLOSSARY.md`, User Manual (Components → Component blend; the Help link still lands there).
+
+### feat(body): a blend can run to the liner's full OD
+
+- Where a liner butts a blended body face, the curve has always started halfway between the liner
+  OD and the body Ø — a seat the drawing does not show. Some shafts have no seat at all: the body
+  ramps in a short cone straight up to the liner's full diameter (on-device request, with a shop
+  photo of a polished FWD body doing exactly that).
+- Each blended face now has an "At a liner" choice: Seat (the default, the halfway start as
+  before) or Liner OD (the curve runs all the way up to the liner). It sits under the face's blend
+  length, on the explicit body card, the auto-body card and the Add Body dialog alike. It only
+  matters where a liner butts the face; a body or taper across the face is followed as always.
+- Drawing only: no liner moves, no value is rewritten, no rail or footer line changes. Undercuts
+  and wear readings in the transition see the diameter the curve really leaves from.
+- New fields `Body.blendAftToLinerOd` / `blendFwdToLinerOd` and `AutoBlend.toLinerOd` (optional;
+  documents saved before them decode to Seat and draw exactly as before). Docs:
+  `docs/COMPONENT_CONTRACT.md`, `docs/contracts/AddComponentDialogs.md`, `docs/DATA_MODEL.md`, User
+  Manual (Components → Component blend).
+- **A body's blends and seal areas now survive a split and a merge.** Adding a liner or taper over
+  a blended body cut it into two fragments that came back with square faces and no seal areas;
+  removing the component merged them back the same way. Each fragment now keeps the face it
+  still has — the AFT fragment the AFT blend, the FWD fragment the FWD blend, the new faces at the
+  cut square — and a merge takes its AFT face from the AFT fragment and its FWD face from the FWD
+  one, the same way the name and drawing switches already carried over.
+
 ### feat(pdf): an explicit body at the end of the shaft prints its own length
 
 - An explicit body whose stored span touches the AFT or FWD face of the shaft now prints a length

@@ -27,9 +27,10 @@ import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.BlendProfile
 
 /**
- * How one body face is finished: [SQUARE], or [BLEND] — a shoulder ramping from the neighbour's
- * diameter to the body's own. That is the whole of a face finish. A seal area is NOT a finish;
- * it is a property of the body section and has its own control (see [BlendSection]).
+ * How one body face meets its neighbour — the "Component blend" chips: [SQUARE], or [BLEND] — a
+ * shoulder ramping from the neighbour's diameter to the body's own. That is the whole of the
+ * blend. A seal area is NOT part of the blend; it is a property of the body section and has its
+ * own control (see [BlendSection]).
  */
 enum class BlendFaceMode { SQUARE, BLEND }
 
@@ -40,14 +41,37 @@ private fun BlendFaceMode.chipLabel(): String = when (this) {
 }
 
 /**
- * The face-finish and seal-area controls for a body — ONE structure shared by the carousel cards
- * (explicit and auto) and `AddBodyDialog`.
+ * Where a blended face's curve leaves from when a LINER butts it — the "At a liner" chips.
+ * [SEAT] (the default) is the derived half-way shoulder between the liner OD and the body Ø;
+ * [LINER_OD] runs the curve all the way up to the liner's OD, a short cone with no seat
+ * (on-device request). UI-edge vocabulary over the stored `…ToLinerOd` booleans, the
+ * [BlendFaceMode]-over-length posture.
+ */
+enum class BlendLinerTarget { SEAT, LINER_OD }
+
+/** The chip a stored `…ToLinerOd` flag selects. */
+fun blendLinerTarget(toLinerOd: Boolean): BlendLinerTarget =
+    if (toLinerOd) BlendLinerTarget.LINER_OD else BlendLinerTarget.SEAT
+
+/** The stored flag a chip writes. */
+val BlendLinerTarget.toLinerOd: Boolean get() = this == BlendLinerTarget.LINER_OD
+
+private fun BlendLinerTarget.chipLabel(): String = when (this) {
+    BlendLinerTarget.SEAT -> "Seat"
+    BlendLinerTarget.LINER_OD -> "Liner OD"
+}
+
+/**
+ * The component-blend and seal-area controls for a body — ONE structure shared by the carousel
+ * cards (explicit and auto) and `AddBodyDialog`.
  *
  * Two independent questions, two sections:
- * - **Face finish** — per face, Square or Blend: whether the body END has a shoulder ramping up
- *   to its neighbour (e.g. to where the liner's full height begins) or is square.
+ * - **Component blend** — per face, Square or Blend: whether the body END has a shoulder ramping
+ *   up to its neighbour (e.g. to where the liner's full height begins) or is square. A blended
+ *   face also says where the curve leaves from when a liner butts it ("At a liner": the derived
+ *   half-way Seat, or the full Liner OD).
  * - **Seal areas** — per face, on/off plus its own length: the radius cuts the fiberglass seats
- *   into. A seal area belongs to the body SECTION, not to the face finish, so a body can carry
+ *   into. A seal area belongs to the body SECTION, not to the blend, so a body can carry
  *   grooves at a square end, grooves behind a blended shoulder, or a shoulder with no grooves
  *   (on-device report: the photographed shaft has grooves on the fiberglassed body and, beyond
  *   them, a ramp up to the liner). The seal area is measured from the face either way, so it
@@ -57,14 +81,17 @@ private fun BlendFaceMode.chipLabel(): String = when (this) {
  * card-only carve-out that covers "Show Ø on drawing" and the unit chip. Sharing the composable
  * is what keeps the surfaces from drifting: the length FIELDS are slots because the cards commit
  * on blur while the dialog holds local state until submit, but every control and every visibility
- * condition is decided here, once — a blend length under a blended face, a seal-area length under
- * a face whose seal is on.
+ * condition is decided here, once — a blend length and the "At a liner" chips under a blended
+ * face, a seal-area length under a face whose seal is on. The "At a liner" row shows whether or
+ * not a liner butts the face today: the dialog cannot know the neighbour, and one rule on both
+ * surfaces beats two.
  *
- * The seal-area checkboxes sit in their own section, a sibling of "Face finish" — never nested
- * under a blend control (a nested layout hid the seal behind a control nobody would think to tick
- * first — on-device report) and never folded into the finish chips as a third mode (a seal area
- * is a section property, not a face finish — on-device report). The profile row appears only once
- * some face is blended; with both square there is nothing for a profile to describe.
+ * The seal-area checkboxes sit in their own section, a sibling of "Component blend" — never
+ * nested under a blend control (a nested layout hid the seal behind a control nobody would think
+ * to tick first — on-device report) and never folded into the Square | Blend chips as a third
+ * mode (a seal area is a section property, not part of the blend — on-device report). The profile
+ * row appears only once some face is blended; with both square there is nothing for a profile to
+ * describe.
  */
 @Composable
 fun BlendSection(
@@ -78,6 +105,10 @@ fun BlendSection(
     onProfile: (BlendProfile) -> Unit,
     onSetAftSeal: (Boolean) -> Unit,
     onSetFwdSeal: (Boolean) -> Unit,
+    aftLinerTarget: BlendLinerTarget,
+    fwdLinerTarget: BlendLinerTarget,
+    onSetAftLinerTarget: (BlendLinerTarget) -> Unit,
+    onSetFwdLinerTarget: (BlendLinerTarget) -> Unit,
     aftLengthField: @Composable () -> Unit,
     fwdLengthField: @Composable () -> Unit,
     aftSealLengthField: @Composable () -> Unit,
@@ -85,15 +116,21 @@ fun BlendSection(
 ) {
     Column(Modifier.fillMaxWidth()) {
         Text(
-            "Face finish",
+            "Component blend",
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
         BlendFaceRow("AFT", aftMode, "body_blend_aft", onSetAftMode)
-        if (aftMode == BlendFaceMode.BLEND) aftLengthField()
+        if (aftMode == BlendFaceMode.BLEND) {
+            aftLengthField()
+            BlendLinerTargetRow(aftLinerTarget, "body_blend_aft_liner_target", onSetAftLinerTarget)
+        }
         BlendFaceRow("FWD", fwdMode, "body_blend_fwd", onSetFwdMode)
-        if (fwdMode == BlendFaceMode.BLEND) fwdLengthField()
+        if (fwdMode == BlendFaceMode.BLEND) {
+            fwdLengthField()
+            BlendLinerTargetRow(fwdLinerTarget, "body_blend_fwd_liner_target", onSetFwdLinerTarget)
+        }
 
         if (aftMode == BlendFaceMode.BLEND || fwdMode == BlendFaceMode.BLEND) {
             Spacer(Modifier.height(8.dp))
@@ -163,6 +200,23 @@ private fun BlendProfile.chipLabel(): String = when (this) {
     BlendProfile.OGEE -> "S-curve"
     BlendProfile.FILLET -> "Fillet"
     BlendProfile.EASED_CONE -> "Eased cone"
+}
+
+/** One blended face's "At a liner" chips: Seat (the default) | Liner OD. */
+@Composable
+private fun BlendLinerTargetRow(
+    target: BlendLinerTarget,
+    tagPrefix: String,
+    onSelect: (BlendLinerTarget) -> Unit,
+) {
+    ChipRow(
+        label = "At a liner",
+        options = BlendLinerTarget.values().toList(),
+        selected = target,
+        labelOf = { it.chipLabel() },
+        tagOf = { "${tagPrefix}_${it.name}" },
+        onSelect = onSelect,
+    )
 }
 
 @Composable

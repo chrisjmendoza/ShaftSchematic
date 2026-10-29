@@ -173,14 +173,22 @@ material.
   diameter the shaft steps to. The exception is a face a liner **butts directly against**, a real
   seal area: the shaft IS cut down under the liner, but that seat is covered and never drawn, and
   its depth varies job to job. The curve there leaves from the **midpoint of the liner OD and the
-  body Ø** (`seatDiaUnderLiner`) — a derived visual cue, not a measurement, so nothing authors it.
-  Stepping straight to the liner OD would overstate the shoulder; running to a seat nobody entered
-  would be a made-up number. A seat authored as its own body under the liner is **not** consulted:
+  body Ø** (`seatDiaUnderLiner`) — a derived visual cue, not a measurement — by DEFAULT.
+  Running to a seat nobody entered would be a made-up number. Some shafts carry no seat at all: the
+  body ramps in a short cone right up to the sleeve (on-device request, shop photo of a polished
+  FWD body ramping to the liner's full Ø). A per-face flag — `Body.blendAftToLinerOd`/
+  `blendFwdToLinerOd`, `AutoBlend.toLinerOd`, the **"At a liner: Seat | Liner OD"** chips — runs
+  the curve to the liner's OD instead. It is resolved in the ONE `blendAt` (through
+  `seatDiaUnderLiner`) and read only in that liner branch: a body or taper across the face wins the
+  lookup and is followed whatever the flag says. Unset (every saved document) draws exactly the
+  midpoint seat. Nothing else moves — no span, no stored value, no rail, no footer; the surface
+  envelope (`surfaceSegsFrom`) follows, so an undercut or wear probe in the transition sees the
+  diameter the curve really leaves from. A seat authored as its own body under the liner is **not** consulted:
   `subtractBodiesAgainstNonBodies` trims a fully covered body out of the drawing, so there is
   nothing on the sheet for the curve to arrive at.
 - A body end may carry a **seal area** — `Body.blendAftSeal`/`blendFwdSeal` (or `AutoBlend.seal`) —
   drawing `SEAL_GROOVE_COUNT` (3) cuts for the fiberglass to seat into. A seal area is a
-  **property of the body SECTION with its own on/off and length, independent of the face finish**
+  **property of the body SECTION with its own on/off and length, independent of the blend**
   (on-device report, photo of a shaft on the lathe): a body can carry grooves at a square end,
   grooves beside a blended shoulder, or a shoulder with no grooves. The seal area is **measured
   FROM THE FACE and stays put whether the end is square or blended** (on-device report: a blend
@@ -205,8 +213,8 @@ material.
   full-height line is the glyph for a component face and made the shaft read as segments
   (on-device report); the dash is finer than the hidden-keyway pattern on purpose. Authored in its own **"Seal areas"** section
   (AFT / FWD checkboxes, a length field under each ticked face), a sibling of the Square | Blend
-  "Face finish" chips — never a third finish mode and never nested under a blend control. A
-  finish change leaves the seal flags alone, and unticking a seal keeps its typed length. A fixed
+  "Component blend" chips — never a third blend mode and never nested under a blend control. A
+  Square | Blend change leaves the seal flags alone, and unticking a seal keeps its typed length. A fixed
   count, since the drawing is a cue rather than something to machine from.
 - Silhouette only — no dimension rail, no footer row, no effect on OAL, coverage, or collision.
 - Draw sites: the schematic canvas (`ShaftRenderer`), the schematic PDF (`ShaftPdfComposer`),
@@ -229,6 +237,9 @@ material.
   same-Ø surviving gap has no step and draws no blend; the gap-side step is the auto run's far
   face, covered by an `AutoBlend` anchor.
 - A split body blends on the run holding the **stored** face, never an interior fragment edge.
+- A split **stores** each face on the fragment that holds it (`carryBodyBlendFace`): the AFT
+  fragment keeps the AFT blend/seal/liner target, the FWD fragment the FWD ones, the cut faces
+  are square, and the profile rides on both; a merge takes AFT from A and FWD from B.
 
 Geometry: `ui/resolved/BodyBlends.kt`; curve math `geom/BlendProfileMath.kt` (a general
 join-two-radii primitive, shared with the queued liner-shoulder fillet and undercut end radius).

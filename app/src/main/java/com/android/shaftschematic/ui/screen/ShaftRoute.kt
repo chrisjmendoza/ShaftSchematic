@@ -363,12 +363,12 @@ fun ShaftRoute(
         },
         onSelectComponentById = vm::selectComponentById,
 
-        onAddBody   = { s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSp, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd, bSAftLen, bSFwdLen ->
-            vm.addBodyAt(s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSp, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd, bSAftLen, bSFwdLen, target)
+        onAddBody   = { s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSp, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd, bSAftLen, bSFwdLen, bOdAft, bOdFwd ->
+            vm.addBodyAt(s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSp, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd, bSAftLen, bSFwdLen, bOdAft, bOdFwd, target)
         },
         onSetAutoSectionDia = { s0, s1, d -> vm.setAutoSectionDiaMm(s0, s1, d, target) },
         onSetAllAutoSectionsDia = { d -> vm.setAutoBodyDiaMm(d, target) },
-        onSetAutoBlend = { s0, s1, end, len, prof, seal, sealLen -> vm.setAutoBlend(s0, s1, end, len, prof, seal, sealLen, target) },
+        onSetAutoBlend = { s0, s1, end, len, prof, seal, sealLen, toOd -> vm.setAutoBlend(s0, s1, end, len, prof, seal, sealLen, toOd, target) },
         onSetShowAutoBodyDia = { show -> vm.setShowAutoBodyDia(show, target) },
         onAddTaper  = { s, l, sd, ed, rate, ref, kwW, kwD, kwL, kwO, kwS, kwUnit, rateManual ->
             vm.addTaperAt(s, l, sd, ed, rate, ref, kwW, kwD, kwL, kwO, kwS, kwUnit, target, rateManual)
@@ -397,7 +397,7 @@ fun ShaftRoute(
         onUpdateBodyShade = { i, shade -> vm.updateBodyShade(i, shade, target) },
         onUpdateBodyCompressOnDrawing = { i, on -> vm.updateBodyCompressOnDrawing(i, on, target) },
         onUpdateBodyShowDimensionRail = { i, show -> vm.updateBodyShowDimensionRail(i, show, target) },
-        onUpdateBodyBlend = { i, aft, fwd, p, sAft, sFwd, sAftLen, sFwdLen -> vm.updateBodyBlend(i, aft, fwd, p, sAft, sFwd, sAftLen, sFwdLen, target) },
+        onUpdateBodyBlend = { i, aft, fwd, p, sAft, sFwd, sAftLen, sFwdLen, odAft, odFwd -> vm.updateBodyBlend(i, aft, fwd, p, sAft, sFwd, sAftLen, sFwdLen, odAft, odFwd, target) },
         onUpdateBodyLabel = { i, label     -> vm.updateBodyLabel(i, label, target) },
         onUpdateBodyKeyway = { i, w, d, l, offset, end, spooned -> vm.updateBodyKeyway(i, w, d, l, offset, end, spooned, target) },
         onUpdateTaper  = { i, s, l, sd, ed, rate -> vm.updateTaper(i, s, l, sd, ed, rate, target) },

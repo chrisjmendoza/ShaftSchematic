@@ -54,7 +54,7 @@ data class AutoBlend(
     /**
      * Whether this face carries a seal area — radius cuts measured from the face, in the same
      * place whether [lengthMm] is 0 (a square face) or not. Independent of [lengthMm]: a seal
-     * area is a section property, not a face finish.
+     * area is a section property, not part of the blend.
      */
     val seal: Boolean = false,
     /**
@@ -63,6 +63,12 @@ data class AutoBlend(
      * field existed carries.
      */
     val sealLenMm: Float = 0f,
+    /**
+     * Where the curve leaves from when a LINER butts this face: `false` (the default, and every
+     * anchor saved before the field) the derived half-way seat, `true` the liner's full OD — the
+     * [Body.blendAftToLinerOd] rule. Drawing-only, like [lengthMm].
+     */
+    val toLinerOd: Boolean = false,
 )
 
 /**
@@ -85,8 +91,8 @@ fun List<AutoBlend>.autoBlendFor(
         .minByOrNull { it.anchorMm }
 
 /**
- * Returns a copy carrying [lengthMm], [profile] and the seal pair ([seal], [sealLenMm]) on face
- * [end] of the auto span `[spanStartMm, spanEndMm)`.
+ * Returns a copy carrying [lengthMm], [profile], the seal pair ([seal], [sealLenMm]) and the
+ * liner target ([toLinerOd]) on face [end] of the auto span `[spanStartMm, spanEndMm)`.
  *
  * Upsert: every blend for that face anchored inside the span is dropped, then the value is
  * stored **verbatim** against a fresh anchor at the span midpoint. [lengthMm] ≤ 0 with
@@ -103,6 +109,7 @@ fun ShaftSpec.withAutoBlend(
     profile: BlendProfile = BlendProfile.OGEE,
     seal: Boolean = false,
     sealLenMm: Float = 0f,
+    toLinerOd: Boolean = false,
 ): ShaftSpec {
     val kept = autoBlends.filterNot {
         it.end == end && it.anchorMm >= spanStartMm && it.anchorMm < spanEndMm
@@ -115,6 +122,7 @@ fun ShaftSpec.withAutoBlend(
             profile = profile,
             seal = seal,
             sealLenMm = sealLenMm.coerceAtLeast(0f),
+            toLinerOd = toLinerOd,
         )
         else kept
     return if (next == autoBlends) this else copy(autoBlends = next)

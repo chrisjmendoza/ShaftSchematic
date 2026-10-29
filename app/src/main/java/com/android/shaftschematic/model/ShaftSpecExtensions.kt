@@ -375,6 +375,31 @@ internal fun carryBodyDisplay(from: Body, to: Body): Body = to.copy(
 )
 
 /**
+ * [to] with the blend authored on ONE face of [from] — that face's blend length, seal area,
+ * seal length and liner target — plus [from]'s blend profile. A face is a property of the body
+ * END it sits on: a split hands the AFT face to the AFT fragment and the FWD face to the FWD
+ * fragment (the two faces cut at the component are square, as any new face is), and a merge
+ * takes its AFT face from the AFT fragment and its FWD face from the FWD one. Dropping the blends
+ * on a split silently squared a face the user had authored.
+ */
+internal fun carryBodyBlendFace(from: Body, to: Body, face: LinerAuthoredReference): Body = when (face) {
+    LinerAuthoredReference.AFT -> to.copy(
+        blendAftMm = from.blendAftMm,
+        blendAftSeal = from.blendAftSeal,
+        blendAftSealLenMm = from.blendAftSealLenMm,
+        blendAftToLinerOd = from.blendAftToLinerOd,
+        blendProfile = from.blendProfile,
+    )
+    LinerAuthoredReference.FWD -> to.copy(
+        blendFwdMm = from.blendFwdMm,
+        blendFwdSeal = from.blendFwdSeal,
+        blendFwdSealLenMm = from.blendFwdSealLenMm,
+        blendFwdToLinerOd = from.blendFwdToLinerOd,
+        blendProfile = from.blendProfile,
+    )
+}
+
+/**
  * Splits any body whose axial span overlaps [compStart, compEnd] into up to two
  * fragments, one on each side of the component.  Call this before inserting a new
  * taper / liner / thread so the carousel reflects independent body sections.
@@ -414,9 +439,13 @@ fun ShaftSpec.splitBodiesAround(
             addedIds  += id
             newBodies += carryBodyKeyway(
                 from = body,
-                to = carryBodyDisplay(
+                to = carryBodyBlendFace(
                     body,
-                    Body(id = id, startFromAftMm = bodyStart, lengthMm = compStart - bodyStart, diaMm = body.diaMm),
+                    carryBodyDisplay(
+                        body,
+                        Body(id = id, startFromAftMm = bodyStart, lengthMm = compStart - bodyStart, diaMm = body.diaMm),
+                    ),
+                    LinerAuthoredReference.AFT,
                 )
             )
         }
@@ -426,9 +455,13 @@ fun ShaftSpec.splitBodiesAround(
             addedIds  += id
             newBodies += carryBodyKeyway(
                 from = body,
-                to = carryBodyDisplay(
+                to = carryBodyBlendFace(
                     body,
-                    Body(id = id, startFromAftMm = compEnd, lengthMm = bodyEnd - compEnd, diaMm = body.diaMm),
+                    carryBodyDisplay(
+                        body,
+                        Body(id = id, startFromAftMm = compEnd, lengthMm = bodyEnd - compEnd, diaMm = body.diaMm),
+                    ),
+                    LinerAuthoredReference.FWD,
                 )
             )
         }
@@ -497,7 +530,8 @@ fun ShaftSpec.mergeBodiesAround(
         val id = genId()
         addedIds += id
         // Draw-only decisions come from A: aft is authored first, so its name and its
-        // visibility/compression flags are the ones the user set on the original body.
+        // visibility/compression flags are the ones the user set on the original body. The
+        // faces come from the fragment that holds each: A's AFT face, B's FWD face.
         var merged = carryBodyDisplay(
             bodyA,
             Body(
@@ -507,6 +541,10 @@ fun ShaftSpec.mergeBodiesAround(
                 diaMm          = bodyA.diaMm,   // == bodyB.diaMm, guaranteed by the guard above
             ),
         )
+        // FWD from B first, AFT from A last, so the ONE profile is A's — authored first, like
+        // the display decisions above.
+        merged = carryBodyBlendFace(bodyB, merged, LinerAuthoredReference.FWD)
+        merged = carryBodyBlendFace(bodyA, merged, LinerAuthoredReference.AFT)
         // A merged body has one keyway slot; prefer A's, fall back to B's.
         merged = carryBodyKeyway(bodyA, merged)
         if (!merged.hasKeyway) merged = carryBodyKeyway(bodyB, merged)
