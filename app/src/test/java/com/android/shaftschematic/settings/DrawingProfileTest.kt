@@ -116,7 +116,7 @@ class DrawingProfileTest {
         listOf(
             "tieringMode", "showComponentTitles", "shadedBodies", "shadedTapers", "shadedLiners",
             "undercutLineArt", "undercutLinerOutline", "undercutSplitAtLinerEdge", "undercutTotalRail", "curveLoHeightIn", "curveHiHeightIn", "sBreakThresholdFrac", "arrowSizePt",
-            "threadSlant", "threadDensity", "fractionStyle", "outputFont", "dualUnitLayout", "wearTraceDepthFrac", "wearBandShadeFrac",
+            "threadSlant", "threadDensity", "fractionStyle", "outputFont", "dualUnitLayout", "showUnitsNote", "wearAreasShaded", "wearTraceDepthFrac", "wearBandShadeFrac",
             "wearJoinGapMaxMm", "lineThicknessScale",
         ).forEach { field ->
             assertTrue("missing field in encoded profile: $field", json.contains("\"$field\""))

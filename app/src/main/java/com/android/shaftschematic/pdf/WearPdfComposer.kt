@@ -40,8 +40,7 @@ import com.android.shaftschematic.util.PDF_PAGE_WIDTH_PT
 import com.android.shaftschematic.util.VerboseLog
 import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.drawDualLabelCentered
-import com.android.shaftschematic.util.dualStackMetrics
-import com.android.shaftschematic.util.measureDualLabel
+import com.android.shaftschematic.util.DualLabel
 import com.android.shaftschematic.util.setsStacked
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.buildLinerTitleById
@@ -299,11 +298,7 @@ fun composeWearPdf(
     // A body/taper reading whose component HAS a strip on this page draws in that strip instead,
     // at the zoomed scale — the placement rule liners have always followed.
     val profileDia = if (showProfile && resolvedComponents != null) {
-        // Measured INLINE deliberately, even when the sheet may stack: the horizontal solve runs
-        // before the strips are laid out, so it cannot yet know whether stacking survives §7's
-        // fallback. Inline is the WIDER form, so a stacked label always fits the slot a plan solved
-        // for an inline one. Stacking simply does not earn fewer rows here, which is the cheap side
-        // of the trade — the reserved band below is sized for the taller row either way.
+        // One line in the primary unit, never dual ([wearDiaCalloutLabel]).
         buildProfileDiaCalloutInput(
             effectiveRecord.diaReadings, resolvedComponents, ::xAt, diaText, displayUnits,
             skipComponentIds = onPageComponentIds,
@@ -311,11 +306,8 @@ fun composeWearPdf(
     } else ProfileDiaCalloutInput(emptyList(), emptyMap())
     val profileDiaPlan = if (profileDia.stations.isEmpty()) null else
         planDiaCallouts(profileDia.stations, contentLeft, contentRight, WEAR_DIA_MIN_GAP_PT)
-    // Reserved at the STACK height whenever stacking is wanted, before §7's per-sheet fallback is
-    // known: reserving the taller row costs a few points of white if the sheet ends up inline, while
-    // reserving the shorter one would overlap the rows if it ends up stacked.
-    val profileDiaRowHeightPt =
-        if (wantDualStacked) diaText.dualStackMetrics().height else diaText.textSize
+    // A wear Ø value is one line on every sheet, so a callout row is one text line tall.
+    val profileDiaRowHeightPt = diaText.textSize
     val profileDiaBandPt = profileDiaPlan?.bandHeightPt(
         profileDiaRowHeightPt, WEAR_DIA_ROW_GAP_PT, WEAR_DIA_PROFILE_LEADER_PT) ?: 0f
 
@@ -568,7 +560,7 @@ fun composeWearPdf(
                 },
                 leaderStartGap = 2f,
             )
-            drawDiaCallouts(c, placed, dim, diaText, dualStacked)
+            drawDiaCallouts(c, placed, dim, diaText)
         }
     }
 
@@ -614,6 +606,9 @@ fun composeWearPdf(
     // ── Notes / dye-pen area ──────────────────────────────────────────────
     // effectiveRecord, not wearRecord: a blank write-in draft keeps both boxes empty.
     drawWearNotesArea(c, text, contentLeft, contentRight, notesY, effectiveRecord.dyePenResult)
+
+    // Last, in the bottom margin strip: the opt-in "Units in …" note.
+    if (pdfPrefs.showUnitsNote) drawUnitsNote(c, pageW, pageH, margin, displayUnits.documentUnit)
 }
 
 /**
@@ -868,7 +863,6 @@ private fun buildProfileDiaCalloutInput(
     diaText: Paint,
     displayUnits: DisplayUnits,
     skipComponentIds: Set<String> = emptySet(),
-    dualStacked: Boolean = false,
 ): ProfileDiaCalloutInput {
     if (readings.isEmpty()) return ProfileDiaCalloutInput(emptyList(), emptyMap())
     val byId = components.associateBy { it.id }
@@ -889,14 +883,12 @@ private fun buildProfileDiaCalloutInput(
             else -> return@forEach   // liners → detail strip; threads/slots ineligible
         }
         if (drawnDiaMm <= 0f) return@forEach
-        val label = formatDiaWithUnitDualLabel(
-            r.diaMm.toDouble(), displayUnits.unitFor(r.componentId), displayUnits.dual,
-        )
+        val label = wearDiaCalloutLabel(r.diaMm, displayUnits.unitFor(r.componentId))
         stations += DiaCalloutStation(
             key = r.id,
             stationX = xAt(rc.startMmPhysical + local),
             label = label,
-            labelWidth = diaText.measureDualLabel(label, dualStacked),
+            labelWidth = diaText.measureRichText(label.primary),
         )
         surface[r.id] = drawnDiaMm
     }
@@ -904,23 +896,32 @@ private fun buildProfileDiaCalloutInput(
 }
 
 /**
+ * The wear document's measured-Ø callout label: [formatDiaWithUnit] in the reading's own print
+ * unit, ONE term. A wear Ø value never prints a dual secondary, inline or stacked (on-device
+ * ruling: on a dual job the mm term stood taller than the shaft) — the strips' dimension rails and
+ * the OAL keep dual. Shared by the main-profile and detail-strip callouts.
+ */
+internal fun wearDiaCalloutLabel(diaMm: Float, unit: UnitSystem): DualLabel =
+    DualLabel.single(formatDiaWithUnit(diaMm.toDouble(), unit))
+
+/**
  * Draws placed measured-Ø callouts: each leader polyline (straight or dogleg — see
  * `geom/WearDiaCalloutLayout.kt`) plus its value label at the planned row position. Shared
- * by the main-profile and detail-strip draw paths so both surfaces render identically.
+ * by the main-profile and detail-strip draw paths so both surfaces render identically. The
+ * label is one line ([wearDiaCalloutLabel]), so nothing here stacks.
  */
 internal fun drawDiaCallouts(
     c: Canvas,
     placed: List<PlacedDiaCallout>,
     dim: Paint,
     diaText: Paint,
-    dualStacked: Boolean = false,
 ) {
     placed.forEach { p ->
         for (s in 0 until p.leader.size - 1) {
             c.drawLine(p.leader[s].x, p.leader[s].y, p.leader[s + 1].x, p.leader[s + 1].y, dim)
         }
         val fm = diaText.fontMetrics
-        c.drawDualLabelCentered(p.label, p.labelCx, p.labelTopY - fm.ascent, diaText, dualStacked)
+        c.drawDualLabelCentered(p.label, p.labelCx, p.labelTopY - fm.ascent, diaText, stacked = false)
     }
 }
 

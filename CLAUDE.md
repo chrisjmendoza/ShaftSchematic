@@ -210,7 +210,10 @@ printed. Callouts are placed by the shared pure engine `geom/WearDiaCalloutLayou
 in both draw sites: `ComponentWearDetailOverlay` (canvas) and `WearPdfComposer` (a reading draws
 in its component's detail strip whenever that component has one on the sheet — liners always, a
 taper or body once elected onto a strip — and under the main profile otherwise). Labels
-use `formatDiaWithUnit`, no `Ø` prefix. On the **consolidated runout sheet** the same
+use `formatDiaWithUnit`, no `Ø` prefix. Every wear Ø value — these callouts, the consolidated
+sheet's in-profile readings and worn-section values — prints the PRIMARY unit only, never dual,
+inline or stacked (on-device ruling: the mm term stood taller than the shaft); the label helpers
+take no `dual` parameter, and rails and footer keep dual. On the **consolidated runout sheet** the same
 readings instead draw INSIDE the profile at their station — one rotated haloed column via
 `drawDiaReadingsInProfile` (`RunoutPdfComposer`), liners included, `Ø`-prefixed — replacing
 below-shaft callouts there; the wear document itself (the authoring surface) keeps its
@@ -253,7 +256,17 @@ last** — wear-area bands and pit X's (migrated from the retired wear tab,
 knockout halos (worn values, then `drawDiaReadingsInProfile`); do not draw any mark after
 the text passes. A pit X that would cross a value's halo is not drawn (on-device ruling: the
 value stands above the pits) — the values are planned before the marks pass and their halos
-handed to it (`pitXTouchesHalo`); wear-area bands are never hidden. Values **auto-fit their local band** (`fittedValueTextSize`, floor
+handed to it (`pitXTouchesHalo`); wear-area bands are never hidden. **Shaded wear areas**
+(`PdfPrefs.wearAreasShaded`, app-wide look, default ON — on-device ruling): each band is ONE light
+grey fill (`CONSOLIDATED_WEAR_SHADE_ALPHA` ≈ 10%) over the clamped liner span at the full drawn
+liner height instead of vertical strokes, from the ONE `consolidatedWearBandRects`, drawn first in
+the marks pass; a value's knockout is then re-shaded with the band grey wherever it overlaps a band
+(the knockout and its re-shade drawn without anti-aliasing so no seam outlines them), so no white
+box shows on the highlight yet a liner face or S-break under the digits is still knocked out — text
+printed with no knockout at all had a liner face running between the digits, read as decimal
+points. The pit rule is unchanged (it guards the same halo); OFF prints today's strokes and white
+halos byte-identically; the liner-shade lock stands (a liner's own fill under a 10% band would hide
+the band). Values **auto-fit their local band** (`fittedValueTextSize`, floor
 `WORN_VALUE_MIN_TEXT_PT`/14 px canvas); the PDF profile follows the **hand-sheet
 compression convention** — drawn height follows TRUE diameter on the **default sizing
 curve** (`defaultShaftHeightPt`: STANDARD anchors are PROPORTIONAL — 8" → 1",
@@ -453,6 +466,8 @@ height" slider, the per-job **"Dye pen test" row** (`RunoutConfig.showDyePenTest
 OFF — `Dye pen test: ☐ PASS ☐ FAIL` in the TIR line's lane, the boxes marked from the ONE
 `WearRecord.dyePenResult` the wear sheet prints through the ONE `drawDyePenBoxes`; none or one,
 never both — the shared `DyePenResultChips` clears on re-tap, a blank draft prints both blank),
+the app-wide **"Shade wear areas on the shaft drawing"** switch in its PDF options' Shading
+section (a remote control for `PdfPrefs.wearAreasShaded`, also in Settings → Drawing),
 and **Export all** (checked documents batch-written to a picked folder).
 Every SAF export goes through the hardened `util/PdfSafExport.writeShaftPdfToUri`
 (composer throw → valid error page, never a truncated file) and the collision export
@@ -791,7 +806,8 @@ instead (`movedWhole`), since holding the shaft position would strand every mark
 span; TIR and Ø VALUES are copied verbatim — and the same carry follows a body through PROMOTION ("Explicit
 body": the new stored body on exactly the run's span) and DEMOTION (the auto run that then fills
 exactly the removed body's span), `bodyIdentitySwaps`. The value + high-spot marker
-and the keyway cutout must be drawn **identically in both bubble draw sites** —
+and the keyway cutout (sized from the shaft's own keyway through ONE pure `bubbleKeywayNotch`,
+`geom/RunoutBubbleNotchMath.kt`) must be drawn **identically in both bubble draw sites** —
 `RunoutRoute.drawRunoutMarkers` (canvas) and `RunoutPdfComposer.drawPlacedBubbles` (PDF).
 Pure clock/hit-test math lives in `geom/RunoutReadingMath.kt` (shared, no `pdf → ui` dep);
 value formatting in `util/RunoutValueFormat.kt`. One reserved key, `COUPLING_PILOT_COMPONENT_ID`
@@ -1061,7 +1077,7 @@ Two visibility controls gate the pass, and they compose as an AND:
 See `docs/PDF_EXPORT.md` §5.3.
 
 ### Dimension values seat in a break in the line
-`PdfDimensionRenderer.drawPlanned` draws each dimension line as **two stubs**
+`PdfDimensionRenderer.drawPlan` draws each dimension line as **two stubs**
 (`xa→gapLeft`, `gapRight→xb`) with the value seated in the gap, vertically centered on the
 line — not floating above a continuous line. The gap (label width + 2·`textPad`) is cut
 **only** when both stubs can host an inward arrowhead (`canFitInwardArrows`). Spans too
@@ -1089,20 +1105,34 @@ height carries one too (`Placement.leader`) — ONE construction, `geom/RailValu
 leader is a collision obstacle like a label (an outside spot whose leader would cross a value is
 not taken).
 
-**Labels and rail LINES share ONE collision space** — a floating value lives in the *next*
+**Every rail value prints on a white box** (on-device ruling: "I do that on my hand drawings
+and it is still clear where the line is") — a sheet-white halo, `RAIL_VALUE_HALO_PAD_PT` around
+the planner's measured box (full width, the full stacked-dual height), OAL rail included, inline
+and floating alike (one path; blank-draft write-in gaps draw none). `PdfDimensionRenderer.drawPlan`
+draws in TWO passes — every span's extension lines, line/stubs, leader and arrowheads, THEN every
+halo and value — so a line under a value is knocked out, never struck through; drawing span by
+span would let a later span's line cross an earlier value.
+
+**Labels share ONE collision space; lines are not in it** — a floating value lives in the *next*
 rail's band, so per-rail collision tracking is blind exactly where the labels overlap. The
 pure planner `geom/DimensionRailLayout.kt` places every span at once (top OAL rail included),
-treating both placed labels and every rail line as obstacles; the renderer keeps only the
-Canvas work, and no collision logic may be duplicated back into it. Resolution order:
-(a) **slide the value horizontally along its own span** — smallest shift from center inside
-`[xa+textPad+half, xb−textPad−half]`, tightened by `arrowSize` on both sides for an inline
-value so the break keeps its inward arrows; (b) a floating value with no room over its span
-steps just OUTSIDE it at the same height (past the FWD extension line, then the AFT one, inside
-the content area, never crossing its own extension lines); (c) only then bump it vertically
-(bounded, never past the content top, and never nearer another rail's line than its own — a
-value floated two bands up read as the wrong rail's, Emulator QA). A rail carrying a floating value **lifts every rail
+treating placed labels (and leaders) as the only obstacles — rail and extension lines are the
+halo's job; the renderer keeps only the Canvas work, and no collision logic may be duplicated
+back into it. Resolution order for a value that cannot seat in its break: (a) **CENTRED over its
+own span**, floating just above its own line, even when wider than the span — overhanging its
+own extension lines and crossing a neighbour's is fine (on-device ruling: centred over its rail
+beats pushed away from it); (b) only when that overlaps another VALUE: slide with its centre
+kept over its span, then step just OUTSIDE it at the same height (past the FWD extension line,
+then the AFT one), then bump vertically — last resorts, each with its `Placement.leader`.
+Every placement keeps its FULL measured width (dual secondary included) inside the content area
+— a centred value at the page edge shifts inward, an outside spot that cannot fit is skipped
+(a dual value once ran off the page). The band rule stands: a bump is bounded, never past the
+content top, and never nearer another rail's line than its own (a value floated two bands up
+read as the wrong rail's, Emulator QA), so no value ever sits on another rail's horizontal
+line. An inline value slides only inside `[xa+textPad+half+arrowSize, xb−textPad−half−arrowSize]`
+so its break keeps inward arrows. A rail carrying a floating value **lifts every rail
 above it** — the OAL rail included — by one label band (glyph height + gap), cumulative per
-intervening fallback rail. Inline-vs-fallback is decided from **x-geometry alone**, so the
+intervening fallback rail, exactly as before the halo. Inline-vs-fallback is decided from **x-geometry alone**, so the
 lifts are known before the vertical budget: both composers fold them in
 (`ShaftPdfComposer`'s `computeTopY` fit loop; `RunoutPdfComposer`'s `railsBlockH`, off a
 prelim linear-map plan since the real x map needs the budget). Blank drafts plan on the
@@ -1178,7 +1208,9 @@ Dual values are SET in one of two layouts — `PdfPrefs.dualUnitLayout`, Setting
 **both terms always carry their unit suffix** — the moment a sheet mixes units, a bare number is
 how a shaft gets machined wrong — and the SECONDARY always takes the compact format (mm to one
 decimal), never the dimension formatter's 3 decimals: a converted value is a courtesy, not a
-measurement.
+measurement. Wear Ø values print the primary unit only, never dual — on-device ruling: the mm
+term stood taller than the shaft (`wornSectionValueLabels`, `diaReadingValueLabel`,
+`wearDiaCalloutLabel`); dimension rails and the footer keep dual.
 
 A stack is **~55% NARROWER** (it measures as its wider LINE, not the sum plus brackets), which is
 the whole economic case: values that inline dual pushed above the dimension line seat back in the
@@ -1193,8 +1225,8 @@ strings all the way to the draw site (`util/DualLabel.kt` — a pre-joined `Stri
 stacked). The rail planner takes it as an INFLATED ASCENT (`geom/DimensionRailLayout.TextMetrics`)
 and needs no other change; the wear/undercut strips thread ONE row height into both the reserved
 band and the drawn rows (`wearRailRowHeightPt`/`undercutRailRowHeightPt` — they were two
-independent numbers before, nesting only by luck); the Ø tier step, the wear Ø callout rows, and
-the consolidated sheet's rotated in-profile values read it too. Measure and draw convert together
+independent numbers before, nesting only by luck); the Ø tier step reads it too (wear Ø values
+never stack — they are single-unit, above). Measure and draw convert together
 at every site (`measureDualLabel`/`drawDualLabel`), the fraction pair's rule.
 
 **A sheet that cannot afford the stack gives it up WHOLE** — per sheet, never per label, because a

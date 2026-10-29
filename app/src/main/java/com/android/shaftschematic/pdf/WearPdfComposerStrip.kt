@@ -128,8 +128,9 @@ internal fun drawWearStripWindow(
     // true ratio to it, so heights read proportional on paper across the strips.
     heightFrac: Float = 1f,
     /**
-     * Set dual values as two-line stacks in this strip's rail and Ø callouts. Decided once for the
-     * whole SHEET by the composer (§7 degradation) and handed down, never re-derived here.
+     * Set dual values as two-line stacks in this strip's dimension rail. Decided once for the whole
+     * SHEET by the composer (§7 degradation) and handed down, never re-derived here. The Ø
+     * callouts never read it: a wear Ø value prints one term ([wearDiaCalloutLabel]).
      */
     dualStacked: Boolean = false,
     titles: Map<String, String>,
@@ -195,12 +196,10 @@ internal fun drawWearStripWindow(
     val diaStations = valuedReadings.map { r ->
         val comp = compById.getValue(r.componentId)
         val local = r.axialMm.coerceIn(0f, comp.lengthMm)
-        val label = formatDiaWithUnitDualLabel(
-            r.diaMm.toDouble(), displayUnits.unitFor(r.componentId), displayUnits.dual,
-        )
+        val label = wearDiaCalloutLabel(r.diaMm, displayUnits.unitFor(r.componentId))
         DiaCalloutStation(
             r.id, xAtStrip(comp.startMm + local), label,
-            dimText.measureDualLabel(label, dualStacked),
+            dimText.measureRichText(label.primary),
         )
     }
     // Drawn diameter under each station, so a leader and its witness tick meet the actual
@@ -211,9 +210,9 @@ internal fun drawWearStripWindow(
     }
     val diaPlan = if (diaStations.isEmpty()) null else
         planDiaCallouts(diaStations, contentLeft + 2f, contentRight - 2f, WEAR_DIA_MIN_GAP_PT)
-    // A stacked value is two lines tall, so a callout ROW is the whole stack — the reserved band
-    // and `finish`'s row pitch below must read the same number or the rows overprint.
-    val diaRowHeightPt = if (dualStacked) dimText.dualStackMetrics().height else dimText.textSize
+    // A wear Ø value is one line, so a callout ROW is one text line — the reserved band and
+    // `finish`'s row pitch below read the same number or the rows overprint.
+    val diaRowHeightPt = dimText.textSize
     // The band also keeps a little air above the strip title, so the last callout row and the
     // title never read as one block (on-device report).
     val diaBandPt = diaPlan?.let {

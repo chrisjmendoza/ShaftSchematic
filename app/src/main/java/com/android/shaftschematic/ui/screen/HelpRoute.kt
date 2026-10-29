@@ -1026,6 +1026,32 @@ internal val helpSections: List<HelpSection> = listOf(
                 manualAnchor = "settings-drawing-lines",
             ),
             HelpTopic(
+                "Drawing — $WEAR_AREAS_SHADED_TITLE",
+                "Settings → Drawing, the last of the wear rows, and the Output tab's PDF options " +
+                    "(Shading). Default on. On the consolidated sheet each measured wear area " +
+                    "prints as a light grey highlight over the liner instead of vertical lines, and " +
+                    "the measured diameters print straight on it with no white box — a line that " +
+                    "runs under a value is still interrupted at the value.\n\n" +
+                    "Switch it off for the vertical lines. The wear sheet keeps its own \"Wear area " +
+                    "shade\". App-wide and captured by Drawing profiles; \"Restore Drawing " +
+                    "defaults\" turns it back on.",
+                manualAnchor = "settings-drawing-wear",
+            ),
+            HelpTopic(
+                "Drawing — $UNITS_NOTE_SETTING_TITLE",
+                "Settings → Drawing, under \"Dual-unit layout\". Default off. On, every " +
+                    "printed sheet — schematic (Final included), runout, consolidated, wear and " +
+                    "undercut — carries a small \"Units in inches\" or \"Units in mm\" in its " +
+                    "lower-right corner, below the drawing and the footer, so nothing on the " +
+                    "sheet moves.\n\n" +
+                    "It names the drawing's own unit. A component printed in the other unit, or " +
+                    "the converted second value on a dual-units job, still carries its own unit " +
+                    "suffix.\n\n" +
+                    "App-wide and captured by Drawing profiles; \"Restore Drawing defaults\" " +
+                    "turns it off. Settings only — it is not on the PDF options panel.",
+                manualAnchor = "settings-drawing-lines",
+            ),
+            HelpTopic(
                 "Editor Screen",
                 "Presentation of the editor and its preview.\n\n" +
                     "• \"Line Thickness\" — default 100%. Slider from 50% to 200%, a typed % " +

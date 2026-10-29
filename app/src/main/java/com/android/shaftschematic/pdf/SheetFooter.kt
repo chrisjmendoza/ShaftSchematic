@@ -983,3 +983,43 @@ internal fun sheetFooterConfig(spec: ShaftSpec): FooterConfig {
         showFwdTaper = tapers.fwd != null,
     )
 }
+
+// ──────────────────────────────────────────────────────────────────────────────
+// "Units in …" note — Settings → Drawing → "Units note on sheets" (`PdfPrefs.showUnitsNote`)
+// ──────────────────────────────────────────────────────────────────────────────
+
+/** Text size of the units note: one step under the footer's smallest text. */
+internal const val UNITS_NOTE_TEXT_PT = 8f
+
+/**
+ * Distance the note's lowest ink keeps from the paper's bottom edge — the unprintable band most
+ * printers leave (¼"). The note sits in the bottom MARGIN strip, below everything the composers
+ * lay out, so it can never collide with a footer column, the coupling end view, the FINAL badge or
+ * the undercut sheet's notes line on any sheet or orientation.
+ */
+internal const val UNITS_NOTE_EDGE_CLEAR_PT = 18f
+
+/** The note's wording for the document [unit]. */
+internal fun unitsNoteText(unit: UnitSystem): String = when (unit) {
+    UnitSystem.INCHES -> "Units in inches"
+    UnitSystem.MILLIMETERS -> "Units in mm"
+}
+
+/**
+ * Prints "Units in inches" / "Units in mm" (the DOCUMENT display unit — a per-component override
+ * or a dual secondary does not change what the sheet as a whole is drawn in) small, right-aligned
+ * at the page's right margin, inside the bottom margin strip (on-device request). Every composer
+ * calls it LAST, and only while `PdfPrefs.showUnitsNote` is on — off draws nothing, so the sheet
+ * stays byte-identical.
+ *
+ * The baseline keeps the ink [UNITS_NOTE_EDGE_CLEAR_PT] off the bottom edge, but never lets the
+ * text rise above the margin line `pageH - marginPt`, which is where every composer's content
+ * stops.
+ */
+internal fun drawUnitsNote(c: Canvas, pageW: Float, pageH: Float, marginPt: Float, unit: UnitSystem) {
+    val paint = sheetTextPaint(UNITS_NOTE_TEXT_PT, Paint.Align.RIGHT)
+    val fm = paint.fontMetrics
+    val clearOfEdge = pageH - UNITS_NOTE_EDGE_CLEAR_PT - fm.descent
+    val clearOfContent = pageH - marginPt - fm.ascent
+    c.drawText(unitsNoteText(unit), pageW - marginPt, max(clearOfEdge, clearOfContent), paint)
+}

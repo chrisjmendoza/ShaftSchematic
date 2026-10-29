@@ -337,6 +337,11 @@ prints exactly as it did before they existed.
   **Stacked** (primary over secondary). A stack is about 55% narrower, so more values sit inside
   the dimension line instead of above it; it is one line taller, and a sheet whose vertical budget
   cannot absorb that reverts to Inline for the WHOLE sheet. Inert on a single-unit document.
+- **Units note on sheets** (`PdfPrefs.showUnitsNote`, default OFF; Settings ONLY — never on a PDF
+  options sheet) — a look switch directly under the layout chips, ahead of the capability
+  switches. On, every printed sheet carries a small "Units in inches" / "Units in mm" (the
+  DOCUMENT unit) in its bottom-right margin (on-device request). App-wide, captured by Drawing
+  profiles and reset by "Restore Drawing defaults"; see `docs/PDF_EXPORT.md` §4.
 
 Both are display-axis controls: geometry stays canonical mm, and neither ever rewrites a
 value the user typed (golden rule). Numeric **entry** fields keep taking the document unit

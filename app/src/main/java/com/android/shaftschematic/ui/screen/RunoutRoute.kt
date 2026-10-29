@@ -90,6 +90,9 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.PlacedRunoutBubble
+import com.android.shaftschematic.geom.BubbleKeywayNotch
+import com.android.shaftschematic.geom.bubbleKeywayNotch
+import com.android.shaftschematic.geom.sheetKeywayProportion
 import com.android.shaftschematic.geom.RunoutBubbleGeometry
 import com.android.shaftschematic.geom.RunoutBubblePlan
 import com.android.shaftschematic.geom.RunoutStationX
@@ -269,6 +272,8 @@ fun RunoutRoute(
     // so the shared export gate guards this surface too.
     val collidingIds = remember(spec) { spec.collidingIds() }
     val gate = remember(spec, collidingIds) { exportPdfGate(spec, collidingIds) }
+    // The bubbles' keyway notch proportion — the shaft's own keyway, once per spec, as the PDF.
+    val bubbleKeywayProportion = remember(spec) { sheetKeywayProportion(spec) }
 
     val outputFilename =
         buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.RUNOUT, blankDraft, currentDocumentName)
@@ -801,6 +806,7 @@ fun RunoutRoute(
                 }
                 drawRunoutMarkers(
                     preview.bubbles, preview.geom, runoutReadings, unit, textMeasurer,
+                    keywayProportion = bubbleKeywayProportion,
                     dragging = draggingStation,
                     selected = liveSelection,
                 )
@@ -1666,6 +1672,8 @@ private fun DrawScope.drawRunoutMarkers(
     readings: RunoutReadings,
     unit: com.android.shaftschematic.util.UnitSystem,
     textMeasurer: TextMeasurer,
+    /** (W/Ø, D/Ø) of the shaft's own keyway — `sheetKeywayProportion`, once per spec. */
+    keywayProportion: Pair<Float, Float>,
     dragging: DraggingRunoutStation? = null,
     selected: RunoutMoveSelection? = null,
 ) {
@@ -1673,6 +1681,9 @@ private fun DrawScope.drawRunoutMarkers(
     val markerColor = RunoutMarkerInk
     val highSpotColor = Color(0xFFC62828) // red — the high spot, per shop convention
     val r = geom.radius
+    // One notch for every bubble, sized at the plain ring stroke so a heavier dragged/selected
+    // ring never reshapes its slot.
+    val notch = bubbleKeywayNotch(r, keywayProportion.first, keywayProportion.second, stroke = strokeW)
 
     bubbles.forEach { b ->
         val isDragged = dragging != null &&
@@ -1684,7 +1695,7 @@ private fun DrawScope.drawRunoutMarkers(
             drawLine(markerColor, Offset(p.x, p.y), Offset(q.x, q.y), strokeWidth = strokeW)
         }
         drawRunoutBubbleRing(
-            center, r, markerColor,
+            center, r, notch, markerColor,
             if (isDragged || isSelected) strokeW * 2.5f else strokeW,
         )
 
@@ -1725,14 +1736,17 @@ private fun DrawScope.drawRunoutMarkers(
 /**
  * Draw a runout bubble ring with a keyway cutout at 12 o'clock: the top arc is broken across the
  * slot mouth and an open-topped slot descends into the circle (matches the shop's key-at-top
- * convention). Shared geometry with the PDF renderer.
+ * convention). The slot is [notch] — sized from the shaft's own keyway by
+ * `geom/RunoutBubbleNotchMath.kt`, the same notch the PDF renderer draws.
  */
-private fun DrawScope.drawRunoutBubbleRing(center: Offset, r: Float, color: Color, strokeW: Float) {
+private fun DrawScope.drawRunoutBubbleRing(
+    center: Offset, r: Float, notch: BubbleKeywayNotch, color: Color, strokeW: Float,
+) {
     val stroke = Stroke(width = strokeW)
-    // Slot half-width and the angular gap it subtends at the rim (measured from 12 o'clock).
-    val slotHalf = r * 0.22f
-    val slotDepth = r * 0.42f
-    val gapDeg = Math.toDegrees(kotlin.math.asin((slotHalf / r).coerceIn(0f, 1f).toDouble())).toFloat()
+    // Slot half-width, depth, and the angular gap it subtends at the rim (from 12 o'clock).
+    val slotHalf = notch.slotHalf
+    val slotDepth = notch.slotDepth
+    val gapDeg = notch.gapDeg
 
     // Arc everywhere except the gap at the top (top = -90° in the drawArc convention).
     drawArc(

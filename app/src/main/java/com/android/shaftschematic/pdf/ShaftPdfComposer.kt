@@ -541,10 +541,8 @@ internal fun composeShaftPdfOnCanvas(
             rows(renderer, railGap, topY + topLift), safeTopY = contentTopY,
             contentLeft = geomRect.left, contentRight = geomRect.right,
         )
-        assignments.forEachIndexed { i, rs ->
-            renderer.drawPlanned(c, rs.span, plan.placements[i], true)
-        }
-        renderer.drawPlanned(c, oalDimSpan, plan.placements.last(), true)
+        // One call for the whole plan: every line first, then every value over its halo.
+        renderer.drawPlan(c, assignments.map { it.span } + oalDimSpan, plan.placements)
     }
 
     // The callouts themselves — planned above (the name labels had to see them), inked here.
@@ -557,6 +555,9 @@ internal fun composeShaftPdfOnCanvas(
 
         drawFooter(c, infoRect, spec, unit, project, filename, appVersion, text, footerCfg, blankValues = blank, displayUnits = displayUnits)
     }
+
+    // Last, in the bottom margin strip: the opt-in "Units in …" note.
+    if (pdfPrefs.showUnitsNote) drawUnitsNote(c, pageW, pageH, PAGE_MARGIN_PT, displayUnits.documentUnit)
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

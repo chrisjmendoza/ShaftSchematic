@@ -200,11 +200,27 @@ Top of page, full width.
   discipline as the fraction pair.
 
   **Every vertical budget a stack touches derives from `Paint.dualStackMetrics()`** — the rail
-  planner (as an inflated ascent, §5.4), the wear/undercut strip rail rows, the below-shaft Ø
-  tier step, the wear Ø callout rows, and the consolidated sheet's rotated in-profile values
-  (where the axes swap: a stack costs room ALONG the shaft and needs LESS drawn diameter). A
-  sheet whose budget cannot absorb it reverts to INLINE for the whole sheet and logs why —
-  per sheet, never per label. See `docs/archive/DualUnitStacking_PLAN.md`.
+  planner (as an inflated ascent, §5.4), the wear/undercut strip rail rows and the below-shaft Ø
+  tier step. A sheet whose budget cannot absorb it reverts to INLINE for the whole sheet and logs
+  why — per sheet, never per label. See `docs/archive/DualUnitStacking_PLAN.md`.
+
+  **Exception — wear Ø values print the primary unit only, never dual** (on-device ruling: the
+  mm term stood taller than the shaft). The consolidated sheet's in-profile reading and
+  worn-section values (`diaReadingValueLabel`, `wornSectionValueLabels`) and the wear document's
+  Ø callouts (`wearDiaCalloutLabel`) are ONE term in the reading's print unit, inline or stacked
+  layout alike; their rows and rotated columns are one text line thick. Dimension rails, the OAL
+  and the footer keep dual.
+- Units note (opt-in, on-device request) — Settings → Drawing → "Units note on sheets"
+  (`PdfPrefs.showUnitsNote`, default OFF, Settings only — not on the PDF options sheets;
+  app-wide, captured by Drawing profiles). On, EVERY sheet — schematic (Final included), classic
+  and consolidated runout, wear, undercut in either orientation, the undercut "no sections" note
+  page included — prints `Units in inches` / `Units in mm` from the DOCUMENT unit
+  (`DisplayUnits.documentUnit`) at `UNITS_NOTE_TEXT_PT` (8 pt, the sheet face), right-aligned at
+  the right margin, inside the bottom MARGIN strip: its ink stays `UNITS_NOTE_EDGE_CLEAR_PT`
+  (¼") off the paper edge and never rises above `pageH - margin`, where every composer's content
+  stops — so it cannot meet the footer columns, the FINAL badge, the coupling end view or the
+  undercut notes line, and nothing else on the sheet moves. ONE helper, `drawUnitsNote`
+  (`pdf/SheetFooter.kt`), called LAST by each composer; OFF draws nothing (byte-identical).
 - Overall Length
 - Scale (“1:1”, “2:1”, or “Scale to Fit”)
 - Drawn By (optional)
@@ -605,7 +621,7 @@ unchanged: the leaders are anchored geometry and the names are what move.
 # 5.4 Inline Dimension Text (value seated in the line break)
 
 Dimension values on the schematic's horizontal dimension lines
-(`PdfDimensionRenderer.drawPlanned`) are drawn seated **inside a break in the line** — the
+(`PdfDimensionRenderer.drawPlan`) are drawn seated **inside a break in the line** — the
 hand-drafting convention `|←—— 237 1/2" ——→|` — instead of floating above a continuous line.
 
 - **Inline (primary) path.** The main dimension line is drawn as two stubs,
@@ -650,30 +666,43 @@ hand-drafting convention `|←—— 237 1/2" ——→|` — instead of floatin
   tab's detail canvas alike — the undercut options sheet carries the chips too); the wear
   strip rails keep their own fixed 4 pt head. A smaller head also widens inline eligibility
   slightly, since the stub requirement is `arrowSize`.
+- **Every value on a white box (the halo).** On-device ruling: "put a white box behind every
+  rail value so a line crossing it never strikes through the numbers — I do that on my hand
+  drawings and it is still clear where the line is." Every rail value — OAL included, seated in
+  its break or floating — prints over a sheet-white rectangle `RAIL_VALUE_HALO_PAD_PT` (1.5 pt)
+  larger than the planner's measured box on every side (full width, and the full two-line
+  height on a stacked dual sheet, since the box comes off `dualStackMetrics`).
+  `PdfDimensionRenderer.drawPlan` draws the whole plan in TWO passes: every span's extension
+  lines, rail line or stubs, leader and arrowheads first, then every halo and its value. A value
+  in its break gets the same halo (nothing is under it there) so there is one draw path. Blank
+  drafts draw no halo — the write-in gap is the cut break. Pinned by `RailValueHaloTest`.
 - **One collision space (`geom/DimensionRailLayout.kt`).** A floating value lives in the
-  vertical band of the *next rail up*, so labels and rail lines from different tiers
-  cannot be resolved rail by rail. A pure planner places **every** span at once — the top
-  OAL rail included — treating both the placed labels and every rail **line** as
-  obstacles, so no value is ever printed over another value or struck through by a
-  neighbouring tier's dimension line.
-  - **Slide, then step outside, then bump — never onto another rail.** A colliding value
-    first slides **horizontally along its own span** — the smallest shift from center that
-    clears everything, bounded by `[xa + textPad + half, xb − textPad − half]`, tightened by
-    `arrowSize` on both sides for an inline value so the break keeps its inward arrows. A
-    floating value that still has no spot — typically one wider than its own span — next
-    tries the spot **just OUTSIDE its span at the same height**: right of the FWD extension
-    line (clear of an outward arrowhead, `textPad` off the line, sliding at most
-    `OUTSIDE_REACH` further to step over a neighbouring extension line), then left of the AFT
-    one, always inside the content area (`plan(contentLeft, contentRight)`, both composers
-    pass their geometry rect). A value outside its span never crosses its own extension
-    lines, and a value overhanging its own short span is not allowed to be struck by its own
-    boundary line where a HIGHER rail continues it upward (the AFT S.E.T. line rising to the
-    OAL). Only then does it bump vertically — bounded, never past the content top, and only
-    while it stays in the band directly above its OWN rail line: a bump that would put it
-    against, or nearer to, another rail's line over it is refused, and an unresolvable value
-    prints at its own rail's height. Emulator QA: on a 368 1/2" shaft whose 30" explicit body
-    draws at true scale, the ~24 pt AFT-taper and liner-datum spans floated their values two
-    bands up, each sitting over the wrong rail.
+  vertical band of the *next rail up*, so labels from different tiers cannot be resolved
+  rail by rail. A pure planner places **every** span at once — the top OAL rail included —
+  treating the placed labels (and leaders) as the only obstacles, so no value is ever printed
+  over another value. Rail and extension LINES are not obstacles: the halo knocks them out.
+  - **Centre, then slide, then step outside, then bump — never onto another rail.** A value
+    that cannot seat in its break prints **centred over its own span**, just above its own
+    line, even when it is wider than the span — overhanging its own extension lines, or
+    crossing a neighbour's, is fine under the halo (on-device ruling: "a value should sit
+    directly centred over its own rail … I'd rather have that than push the numbers away from
+    the rail"). Only when that spot overlaps another VALUE does it move: it slides with its
+    centre kept between the span's ends, then tries the spot **just OUTSIDE its span at the
+    same height** — right of the FWD extension line (clear of an outward arrowhead, `textPad`
+    off the line, at most `OUTSIDE_REACH` further), then left of the AFT one — and only then
+    bumps vertically: bounded, never past the content top, and only while it stays in the band
+    directly above its OWN rail line; a bump that would put it against, or nearer to, another
+    rail's line over it is refused, and an unresolvable value prints at its own rail's height.
+    Emulator QA: on a 368 1/2" shaft whose 30" explicit body draws at true scale, the ~24 pt
+    AFT-taper and liner-datum spans once floated their values two bands up, each over the
+    wrong rail. An inline value slides only inside `[xa + textPad + half + arrowSize,
+    xb − textPad − half − arrowSize]`, so its break keeps its inward arrows.
+  - **Every box stays on the page.** Every placement — centred, slid, outside, bumped — keeps
+    its FULL measured width (a dual secondary included) inside `plan(contentLeft,
+    contentRight)` (both composers pass their geometry rect): a centred value near the page
+    edge shifts inward, and an outside spot whose box cannot fit is skipped. A dual
+    `14 3/4" [374.7 mm]` centred over the last span of the Titan job once ran past the right
+    page edge.
   - **A value off its own line carries a leader.** A floating value the planner set BESIDE its
     span (centre outside `[xa, xb]`) or bumped above its home height gets a thin leader to its
     own span — `Placement.leader`, the undercut rails' construction (`geom/RailValueLeader.kt`,
@@ -683,13 +712,15 @@ hand-drafting convention `|←—— 237 1/2" ——→|` — instead of floatin
     ordinary fallback) or seated in its break has none, so a sheet with no displaced value is
     unchanged. A leader is an obstacle like a label: its landing point slides along the span to
     clear values already placed, an OUTSIDE spot whose leader would still cross one is not
-    taken, and every later value keeps clear of the leader's box. `drawPlanned` strokes it with
-    the line paint; blank drafts, which print no value, print no leader. Emulator QA: on the
+    taken, and every later value keeps clear of the leader's box. `drawPlan` strokes it with
+    the line paint in its lines pass; blank drafts, which print no value, print no leader. Emulator QA: on the
     QA_Titan rebuild the AFT taper's "25 3/16"" sat beside its span over the start of the next
     one with nothing tying it to its own.
   - **Tiers lift.** A rail carrying at least one floating value pushes every rail
     **above** it — the OAL rail included — up by one label band (glyph height + gap),
-    cumulatively per intervening fallback rail, so the lines clear the values.
+    cumulatively per intervening fallback rail, so no other rail's line runs through a
+    floating value's band. The halo does not change this: a floating value still costs the
+    rails above it exactly one band.
   - **Budgets include the lifts.** `ShaftPdfComposer` folds `topLift` into its
     `computeTopY` fit loop (shrink rail gap, then text size, until the lifted block still
     clears `geomRect.top`); `RunoutPdfComposer` adds it to `railsBlockH` before the shaft
@@ -700,7 +731,7 @@ hand-drafting convention `|←—— 237 1/2" ——→|` — instead of floatin
     it covers the lift the drawn rails take; a reservation the real map does not use stays,
     so a sheet that already fitted is unchanged. An under-reserved block crushed the OAL
     rail onto the tier below it (§5.7, Emulator QA).
-  - Placement order is least-slide-room-first, so a wide span is the one that moves.
+  - Placement order is least-slide-room-first, so a value with more room is the one that moves.
     Pinned by `DimensionRailLayoutTest`.
 - **Top OAL rail included.** The OAL span is planned and drawn through the same path as
   the numbered component rails below it, so it gets the identical inline-break treatment
@@ -985,6 +1016,13 @@ sheet locks its "Liners" checkbox with it (disabled, displayed unchecked, captio
 print inside the profile on this sheet") — display-only; the stored pref is never rewritten,
 so it returns the moment the sheet stops printing in-profile values. The classic runout sheet
 (`consolidated = false`) has no in-profile text and simply honors the pref.
+
+**Wear areas shade by default**: `PdfPrefs.wearAreasShaded` (app-wide, default ON — on-device
+ruling; Settings → Drawing "Shade wear areas on the shaft drawing" and this tab's PDF options,
+Shading section) draws each wear area as a ≈10% grey fill (`CONSOLIDATED_WEAR_SHADE_ALPHA`) instead
+of the vertical strokes, and re-shades each in-profile value's knockout where it overlaps a band,
+so the values read on the highlight with no white box while lines under them stay knocked out.
+OFF restores the strokes and white halos exactly. See `docs/contracts/RunoutSheet.md`.
 
 **Also on this tab**: the per-job "Shaft height" slider (§5.7), the worn-section editor
 (sections print on this sheet), the blank-draft toggle, and **Export all** — checkboxes

@@ -1750,3 +1750,38 @@ internal fun estimatedLinerKeptFracOfTrue(
     )
     return requestedFracOfTrue * lambda
 }
+
+/** "Shade wear areas on the shaft drawing" — one wording for Settings, the Output sheet and Help. */
+internal const val WEAR_AREAS_SHADED_TITLE = "Shade wear areas on the shaft drawing"
+internal const val WEAR_AREAS_SHADED_CAPTION =
+    "Light grey instead of the vertical lines on the consolidated sheet; the measured values " +
+        "print without their white box"
+
+/**
+ * The app-wide `PdfPrefs.wearAreasShaded` switch — Settings → Drawing and the Output tab's PDF
+ * options sheet, one construction for the one value (the options-sheet rule: a look control on a
+ * sheet is a remote control for the shared pref).
+ */
+@Composable
+internal fun WearAreasShadedRow(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(WEAR_AREAS_SHADED_TITLE, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                WEAR_AREAS_SHADED_CAPTION,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            modifier = Modifier.testTag("pdf_wear_areas_shaded"),
+        )
+    }
+}

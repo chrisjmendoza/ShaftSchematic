@@ -10,10 +10,11 @@ import org.junit.Test
  *
  * 1. **A taller value is expressed by inflating the ascent**, and every derived quantity — the
  *    band, the per-rail lifts, the collision boxes — follows from it with no other change.
- * 2. **Extension lines are obstacles.** A rail's extension lines run from the object up to that
- *    rail, so they cross the band of every rail below it, which is exactly where those rails park
- *    a floating value (`docs/archive/DualUnitStacking_PLAN.md` §1b — an extension line printed straight
- *    through the tail of a dual label on a real sheet).
+ * 2. **Extension lines are NOT obstacles.** A rail's extension lines cross the band of every rail
+ *    below it, where those rails park a floating value; the renderer draws every value over a
+ *    sheet-white halo after every line, so a crossing is knocked out rather than struck through
+ *    (on-device ruling — it replaced the obstacle treatment from
+ *    `docs/archive/DualUnitStacking_PLAN.md` §1b, which pushed values away from their rails).
  */
 class DimensionRailStackedTest {
 
@@ -71,34 +72,23 @@ class DimensionRailStackedTest {
     }
 
     @Test
-    fun `a floating label clears a neighbouring rail's extension line`() {
+    fun `a floating label centres across a neighbouring rail's extension line`() {
         // Rail 1 spans 100..300, so it draws extension lines at x=100 and x=300 running DOWN past
-        // rail 0's band. Rail 0's value floats and its label is wide enough to sit across x=300,
-        // which is exactly the strike-through the printed sheet showed.
+        // rail 0's band. Rail 0's value floats and is wide enough to sit across x=300: it stays
+        // centred over its own span, and the renderer's halo knocks the line out under it.
         val spans = listOf(
             span(0, 200f, 250f, 290f, 90f),     // floats (label wider than span)
             span(1, 170f, 100f, 300f, 30f),     // its extensions cross rail 0's band
         )
         val plan = DimensionRailLayout.plan(spans, single, arrow, pad, safeTopY = 0f)
-        val label = plan.placements[0].label
-
-        // Rail 1's extension at x=300 runs from ITS rail line (y=170) down to the object, so the
-        // label clears it by sliding aside or rising above its top end — this label is wider than
-        // its own span and has no slide room over it, so it steps just outside its span, past the
-        // extension line, on its own rail's band.
-        val extensionBox = DimensionRailLayout.Box(
-            300f - DimensionRailLayout.LINE_HALF_CLEAR, 170f,
-            300f + DimensionRailLayout.LINE_HALF_CLEAR, Float.MAX_VALUE,
-        )
-        assertTrue(
-            "label $label should not overlap the extension line at x=300",
-            !label.intersects(extensionBox),
-        )
-        assertTrue("the label should sit right of the extension line", label.left > 300f)
+        val p = plan.placements[0]
+        assertEquals("centred over its own span", 270f, p.cx, 1e-3f)
+        assertTrue("it crosses the extension line at x=300", p.label.left < 300f && p.label.right > 300f)
         assertEquals(
             "...at its own rail's height, not bumped",
-            200f - single.aboveDy + single.ascent, label.top, 1e-3f,
+            200f - single.aboveDy + single.ascent, p.label.top, 1e-3f,
         )
+        assertEquals("a value at home needs no leader", null, p.leader)
     }
 
     @Test
@@ -115,8 +105,8 @@ class DimensionRailStackedTest {
 
     @Test
     fun `a chained neighbour sharing a boundary counts as own, not as an obstacle`() {
-        // Two spans meeting at x=200: the extension line there belongs to both. If the shared line
-        // were treated as foreign, every chained inline value would be pushed off its centre.
+        // Two spans meeting at x=200: the extension line there belongs to both, and no line moves
+        // a value — every chained inline value keeps its centre.
         val spans = listOf(
             span(0, 200f, 0f, 200f, 40f),
             span(0, 200f, 200f, 400f, 40f),

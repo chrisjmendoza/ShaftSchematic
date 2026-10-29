@@ -1013,6 +1013,15 @@ On-device request following the worn-sections review:
   Labels: `Ø` + `formatDiaWithUnit` (the wear doc's own callout engine keeps its
   prefix-free labels; two conventions until consolidation settles). Value-less readings
   and orphans skipped, as ever.
+- **Wear Ø values print the primary unit only — never dual** (on-device ruling: on a
+  dual-units job the in-profile columns carried `[278.9 mm]` and stood taller than the shaft).
+  ONE term, inline or stacked layout alike, from the reading's own print unit
+  (`DisplayUnits.unitFor`) or, for worn sections, the document unit: `diaReadingValueLabel`,
+  `wornSectionValueLabels` (this sheet) and `wearDiaCalloutLabel` (the wear document's main-profile
+  and strip callouts). None takes a `dual` parameter, and the in-profile plan carries no stacked
+  rotation path. The dimension rails, the OAL and the footer keep dual exactly as before; on the
+  wear sheet the strips' dimension rails still stack, so its per-sheet §7 stacking decision stays
+  — it no longer reaches the Ø callout rows, which are one text line tall.
 - **Wear areas + pit X's migrate here** ("for now for testing"): `drawWearMarksOnRunoutProfile`
   draws each spot's vertical-line band clamped to its liner span (reuses the wear
   composer's `drawVerticalBand` construction) and each pit X via the wear composer's own
@@ -1032,6 +1041,23 @@ On-device request following the worn-sections review:
   (`pitXTouchesHalo`, `geom/WearPitMath.kt`). Wear-area bands are never hidden, and the z-order
   is unchanged. Consolidated sheet only — the wear document and the canvas overlays draw every
   pit, the same posture as the sheet's in-profile liner-shade lock.
+- **Shaded wear areas (default; on-device request, ruled the preferred look).** App-wide look pref
+  `PdfPrefs.wearAreasShaded` — Settings → Drawing "Shade wear areas on the shaft drawing" (last of
+  the wear rows) and the Output tab's PDF options sheet (`RunoutWearOptionsSheet(
+  showWearAreasShadedRow)`, Shading section — a remote control for the one value); captured by
+  Drawing profiles. ON: each wear area is ONE black fill at `CONSOLIDATED_WEAR_SHADE_ALPHA` (26/255
+  ≈ 10% — fixed; the wear document's own `wearBandShadeFrac`, default ≈16%, is a different mark
+  under its own slider) over the clamped liner span at the full drawn liner height, from the ONE
+  `consolidatedWearBandRects`, drawn first in the marks pass, no vertical strokes. Every in-profile
+  value keeps its knockout, but where the knockout overlaps a band it is re-shaded with the band's
+  grey (`drawInProfileValues(shadeUnder)`) — so the value reads straight on the highlight with no
+  white box, while a line under its digits (a liner face, an S-break, a section boundary) is still
+  knocked out. Over a band the knockout and its re-shade draw without anti-aliasing, so they
+  rasterize to the same pixels and no seam outlines the box. The pit rule is unchanged (same
+  halo). OFF prints today's strokes and plain white halos byte-identically. The liner-shade lock
+  (`consolidatedSheetHasInProfileValues`) stays: a liner's own fill under a 10% band would hide
+  the band. Consolidated PDF only — the classic sheet and the Runout tab canvas draw no wear marks,
+  and the wear document and Wear tab keep their own look.
 - **Blank drafts** drop bands/X's/readings entirely (the wear doc's blank rule) and keep
   only worn-section boundaries as write-in areas.
 - **Legibility (on-device report — values towered over the thin proportional profile,
@@ -1631,7 +1657,7 @@ span; only the label uses the typed value. The printed label keeps its small `"O
 prefix (product decision, 2026-07-28: compact print output reads well and the prefix is a
 nice visual identifier) and **seats in a break cut mid-span, vertically centred on the
 line** — the same value-in-a-break convention as the schematic's dimension lines
-(`PdfDimensionRenderer.drawPlanned`), so all drawing outputs read the same; a span too short
+(`PdfDimensionRenderer.drawPlan`), so all drawing outputs read the same; a span too short
 to seat the label with arrow room falls back to a continuous line with the label above (it
 keeps its inward arrows — direction follows the span's width, not the label's placement).
 Neither document's **header** repeats the OAL (it would just duplicate this span), and the
@@ -2398,6 +2424,7 @@ Both routes add `BackHandler(enabled = showPreview) { showPreview = false }` bef
   leader that starts at the station's x on the shaft surface and ends on the bubble's rim —
   nothing suppresses or shortens a leader because the bubble happens to sit near its station.
 - Keyway reference cutout — an **open-topped keyway slot** at 12-o'clock (the top arc is broken across the slot mouth; two walls descend into the circle with a bottom connector), replacing the older protruding square notch. Nothing extends past the rim. Drawn identically in BOTH the PDF (`drawRunoutBubbleRingPdf`) and the canvas preview (`drawRunoutBubbleRing`).
+  **The slot is sized from the shaft's own keyway** (on-device request: the old fixed slot — half-width 0.22 r, depth 0.42 r — read about three times too deep). The bubble is the shaft section at bubble scale, so the ONE pure `bubbleKeywayNotch` (`geom/RunoutBubbleNotchMath.kt`) draws `slotHalf = r · W/Ø` and `slotDepth = 2r · D/Ø` (depth from the rim, the shop's keyseat measure), with the rim gap `asin(slotHalf / r)`. The proportion is ONE per sheet, `sheetKeywayProportion(spec)`: the shaft's AFT-most keyway (`ShaftSpec.datumKeywayHostId`, the same datum the clocking notes use), host Ø = a taper's LARGE-end Ø or a body's Ø; no keyway → the square key, W = Ø/4, D = Ø/8 (`0.25 r` each way). Every bubble on the sheet shows the same notch — it is the 12-o'clock reference marker, not a per-station feature — blank drafts included. Legibility clamps apply AFTER the proportion and are safe because the notch prints no number: half-width `≥ max(1.5 · stroke, 0.06 r)` and `≤ 0.35 r` (the arc survives); depth `≥ 3 · stroke` and `≤ 0.50 r` (the centred value is 0.60 r tall). `stroke` is the ring's own stroke at that site (the canvas uses the plain ring stroke, so a heavier dragged/selected ring never reshapes the slot). At the default 23 pt sheet bubble and 2 pt outline the depth floor (6 pt ≈ 0.26 r) is what prints for typical keyways (true 2·D/Ø ≈ 0.13–0.15 r): at 2 strokes the floor line merged into the broken rim and the slot read as a nub. The coupling end view's hub keyseat (`CouplingFaceMath`) is a different object and keeps its own fractions.
 - **Runout readings are reference-only** (like coupler bolt slots / wear spots): a per-station TIR value + high-spot marker that never affect OAL/`coverageEndMm`, body resolution, or collision. Both are optional and independent; a sheet exports fine with neither. See "Runout Bubble Editor".
 - Any recorded value/marker is drawn identically in BOTH draw sites (the two must stay in lockstep — `RunoutRoute.drawRunoutMarkers` ⇔ `RunoutPdfComposer.drawPlacedBubbles`).
 - OAL arrows bracket the SET-to-SET span, not the full `overallLengthMm`.

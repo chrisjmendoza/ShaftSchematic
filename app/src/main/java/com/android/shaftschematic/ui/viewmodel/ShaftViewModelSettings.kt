@@ -314,6 +314,23 @@ fun ShaftViewModel.setPdfDualUnitLayout(layout: DualUnitLayout, persist: Boolean
     if (persist) viewModelScope.launch { SettingsStore.setPdfDualUnitLayout(getApplication(), layout) }
 }
 
+/** Settings → Drawing → "Units note on sheets": the "Units in …" note on every printed sheet. */
+fun ShaftViewModel.setPdfShowUnitsNote(v: Boolean, persist: Boolean = true) {
+    _pdfShowUnitsNote.value = v
+    SettingsStore.updatePdfPrefs { it.copy(showUnitsNote = v) }
+    if (persist) viewModelScope.launch { SettingsStore.setPdfShowUnitsNote(getApplication(), v) }
+}
+
+/**
+ * "Shade wear areas on the shaft drawing" — the consolidated sheet's wear areas as a light grey
+ * fill with halo-free values. One pref, set from Settings → Drawing and the Output tab's sheet.
+ */
+fun ShaftViewModel.setPdfWearAreasShaded(v: Boolean, persist: Boolean = true) {
+    _pdfWearAreasShaded.value = v
+    SettingsStore.updatePdfPrefs { it.copy(wearAreasShaded = v) }
+    if (persist) viewModelScope.launch { SettingsStore.setPdfWearAreasShaded(getApplication(), v) }
+}
+
 fun ShaftViewModel.setPdfExportMode(mode: PdfExportMode, persist: Boolean = true) {
     _pdfExportMode.value = mode
     if (persist) {
@@ -442,6 +459,8 @@ fun ShaftViewModel.applyDrawingProfile(profile: DrawingProfile) {
     setPdfFractionStyle(prefs.fractionStyle)
     setPdfOutputFont(prefs.outputFont)
     setPdfDualUnitLayout(prefs.dualUnitLayout)
+    setPdfShowUnitsNote(prefs.showUnitsNote)
+    setPdfWearAreasShaded(prefs.wearAreasShaded)
     setPdfWearTraceDepthFrac(prefs.wearTraceDepthFrac)
     setPdfWearBandShadeFrac(prefs.wearBandShadeFrac)
     setPdfWearJoinGapMaxMm(prefs.wearJoinGapMaxMm)

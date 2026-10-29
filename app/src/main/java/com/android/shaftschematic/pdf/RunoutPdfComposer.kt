@@ -16,6 +16,9 @@ import com.android.shaftschematic.geom.SEAL_DASH_OFF_PT
 import com.android.shaftschematic.geom.SEAL_DASH_ON_PT
 import com.android.shaftschematic.geom.couplingFaceLayout
 import com.android.shaftschematic.geom.PlacedRunoutBubble
+import com.android.shaftschematic.geom.BubbleKeywayNotch
+import com.android.shaftschematic.geom.bubbleKeywayNotch
+import com.android.shaftschematic.geom.sheetKeywayProportion
 import com.android.shaftschematic.geom.RunoutBubbleGeometry
 import com.android.shaftschematic.geom.RunoutComponentKind
 import com.android.shaftschematic.geom.RunoutComponentSpan
@@ -66,11 +69,8 @@ import com.android.shaftschematic.ui.resolved.unshadedLinerIds
 import com.android.shaftschematic.ui.resolved.unshadedTaperIds
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.VerboseLog
-import com.android.shaftschematic.util.DualLabel
 import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.dualStackMetrics
-import com.android.shaftschematic.util.measureDualLabel
-import com.android.shaftschematic.util.setsStacked
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.drawRichText
 import com.android.shaftschematic.util.formatRunoutValue
@@ -584,10 +584,10 @@ internal fun composeRunoutPdfOnCanvas(
         val fm = text.fontMetrics
         val baseLine = fm.descent - fm.ascent
         var need = 0f
-        fun consider(labels: List<DualLabel>, stationDiaMm: Float) {
+        fun consider(labels: List<String>, stationDiaMm: Float) {
             if (labels.isEmpty() || stationDiaMm <= 0f) return
             val neededPt = labels.maxOf {
-                wornValueBandHeightNeeded(text.measureDualLabel(it, dualStacked), baseLine)
+                wornValueBandHeightNeeded(text.measureRichText(it), baseLine)
             }
             need = maxOf(need, neededPt / (stationDiaMm * WORN_VALUE_BAND_FIT_FRAC))
         }
@@ -598,7 +598,7 @@ internal fun composeRunoutPdfOnCanvas(
             val endMm = minOf(clamped.endMm, fwdSetMm)
             if (endMm - startMm <= 1e-3f) return@forEach
             consider(
-                wornSectionValueDualLabels(s.diaMm, displayUnits.documentUnit, displayUnits.dual),
+                wornSectionValueLabels(s.diaMm, displayUnits.documentUnit),
                 outerDiaMmAt((startMm + endMm) / 2f),
             )
         }
@@ -610,7 +610,7 @@ internal fun composeRunoutPdfOnCanvas(
                 val stationMm = rc.startMmPhysical + r.axialMm.coerceIn(0f, lenMm)
                 val readingUnit = displayUnits.unitFor(r.componentId)
                 consider(
-                    listOf(diaReadingValueDualLabel(r.diaMm, readingUnit, displayUnits.dual)),
+                    listOf(diaReadingValueLabel(r.diaMm, readingUnit)),
                     outerDiaMmAt(stationMm),
                 )
             }
@@ -822,8 +822,8 @@ internal fun composeRunoutPdfOnCanvas(
             safeTopY = margin + 6f,
             contentLeft = contentLeft, contentRight = contentRight,
         )
-        railAssignments.forEachIndexed { i, ra -> renderer.drawPlanned(c, ra.span, plan.placements[i], true) }
-        renderer.drawPlanned(c, oalDimSpan, plan.placements.last(), true)
+        // One call for the whole plan: every line first, then every value over its halo.
+        renderer.drawPlan(c, railAssignments.map { it.span } + oalDimSpan, plan.placements)
     }
 
     // ── Draw shaft profile ────────────────────────────────────────────────────
@@ -852,11 +852,10 @@ internal fun composeRunoutPdfOnCanvas(
             wearRecord.wornSections,
             oalMm = spec.overallLengthMm,
             windowStartMm = aftSetMm, windowEndMm = fwdSetMm,
-            unit = displayUnits.documentUnit, dual = displayUnits.dual,
+            unit = displayUnits.documentUnit,
             xAt = ::xAt, surfaceRAt = ::shaftOuterRPxAt, cy = shaftCy,
             text = text,
             minTextSize = WORN_VALUE_MIN_TEXT_PT,
-            dualStacked = dualStacked,
         )
     } else emptyList()
     val readingValues = if (printValues) {
@@ -865,8 +864,15 @@ internal fun composeRunoutPdfOnCanvas(
             cy = shaftCy, xAt = ::xAt, surfaceRAt = ::shaftOuterRPxAt,
             displayUnits = displayUnits, text = text,
             minTextSize = WORN_VALUE_MIN_TEXT_PT,
-            dualStacked = dualStacked,
         )
+    } else emptyList()
+    // Settings → Drawing "Shade wear areas on the shaft drawing" (`PdfPrefs.wearAreasShaded`,
+    // default ON — on-device ruling): each wear area is a light grey fill instead of vertical
+    // strokes, and a value's knockout takes the shade under it ([shadeUnder]) so it reads as no
+    // box at all while still breaking any line under the digits.
+    val shadeWearAreas = pdfPrefs.wearAreasShaded
+    val wearBandRects = if (printValues && shadeWearAreas) {
+        consolidatedWearBandRects(wearRecord, docSpec.liners, shaftCy, ::xAt, ::rPx)
     } else emptyList()
     if (printValues) {
         drawWearMarksOnRunoutProfile(
@@ -874,6 +880,7 @@ internal fun composeRunoutPdfOnCanvas(
             cy = shaftCy, xAt = ::xAt, rPx = ::rPx, outline = outline,
             pitSmallHalf = WEAR_PIT_SMALL_HALF_PROFILE_PT,
             valueHalos = (wornValues + readingValues).map { it.column },
+            shaded = shadeWearAreas,
         )
     }
     if (drawWear) {
@@ -884,9 +891,10 @@ internal fun composeRunoutPdfOnCanvas(
             xAt = ::xAt, surfaceRAt = ::shaftOuterRPxAt, cy = shaftCy,
             outline = outline,
             values = wornValues,
+            shadeUnder = wearBandRects,
         )
     }
-    drawDiaReadingsInProfile(c, readingValues)
+    drawDiaReadingsInProfile(c, readingValues, shadeUnder = wearBandRects)
 
     // ── Fix vertical bubble positions, route leaders, draw ────────────────────
     val bubbleResult = bubblePlan.finish(
@@ -895,7 +903,10 @@ internal fun composeRunoutPdfOnCanvas(
     )
     // Blank drafts keep the bubbles (they ARE the write-in circles) but drop recorded values.
     val effectiveReadings = if (blankValues) RunoutReadings() else runoutReadings
-    drawPlacedBubbles(c, bubbleResult.bubbles, outline, effectiveReadings, unit, bubbleRadiusPt)
+    drawPlacedBubbles(
+        c, bubbleResult.bubbles, outline, effectiveReadings, unit, bubbleRadiusPt,
+        keywayProportion = sheetKeywayProportion(spec),
+    )
 
     // ── Draw TIR direction line (directly above the footer block) ─────────────
     // Runout content only — elected out with the bubbles on a Schematic + Wear sheet.
@@ -960,6 +971,9 @@ internal fun composeRunoutPdfOnCanvas(
             displayUnits = displayUnits,
         )
     }
+
+    // Last, in the bottom margin strip: the opt-in "Units in …" note (classic and consolidated).
+    if (pdfPrefs.showUnitsNote) drawUnitsNote(c, pageW, pageH, margin, displayUnits.documentUnit)
 }
 
 /**
@@ -1084,37 +1098,40 @@ internal fun consolidatedSheetHasInProfileValues(
  * - Values ≤ 0 never print (placed-but-empty rule); an empty section draws boundaries
  *   only — on a blank draft (no planned values) that clear interior IS the write-in
  *   area, same posture as the write-in bubbles.
- * - Value text: "Ø" + [formatDiaWithUnit] — the measurement verbatim, never re-derived.
+ * - Value text: "Ø" + [formatDiaWithUnit] — the measurement verbatim, never re-derived, in
+ *   the primary unit only ([wornSectionValueLabels]).
  */
 /** Smallest legible in-profile value text on the printed page (pt). */
 internal const val WORN_VALUE_MIN_TEXT_PT = 6f
 
 /**
+ * Alpha (of 255) of a shaded wear area's black fill on the consolidated sheet — ≈10% grey
+ * (on-device request: "enough to see the highlight, not dark enough to make the text hard to
+ * read"). Fixed: the wear document's own band shade (`PdfPrefs.wearBandShadeFrac`, default ≈16%)
+ * is a different mark under its own slider and does not reach this sheet.
+ */
+internal const val CONSOLIDATED_WEAR_SHADE_ALPHA = 26
+
+/**
  * Printable value labels for a worn section — the shared solve/draw source of truth.
  *
- * Two terms, kept apart, because a stacked dual value sets on two lines; the "Ø" identifier rides
- * the PRIMARY so a stack reads `Ø11"` over `279.4 mm` rather than repeating the symbol.
+ * Primary unit only, whatever the document's dual setting: a wear Ø value never prints a dual
+ * secondary, inline or stacked (on-device ruling: on a dual job the mm term stood taller than the
+ * shaft). That is why there is no `dual` parameter — the dimension rails and the footer keep dual.
  */
-internal fun wornSectionValueDualLabels(
-    diaMm: List<Float>,
-    unit: UnitSystem,
-    dual: Boolean = false,
-): List<DualLabel> =
-    diaMm.filter { it > 0f }.map { withDiaSymbol(formatDiaWithUnitDualLabel(it.toDouble(), unit, dual)) }
+internal fun wornSectionValueLabels(diaMm: List<Float>, unit: UnitSystem): List<String> =
+    diaMm.filter { it > 0f }.map { wearDiaValueText(it, unit) }
 
-/** [wornSectionValueDualLabels] as one-liners, for callers with no stacking to do. */
-internal fun wornSectionValueLabels(diaMm: List<Float>, unit: UnitSystem, dual: Boolean = false): List<String> =
-    wornSectionValueDualLabels(diaMm, unit, dual).map { it.inline() }
+/**
+ * Printable label for one measured-Ø point reading — primary unit only, never dual, for the
+ * reason on [wornSectionValueLabels].
+ */
+internal fun diaReadingValueLabel(diaMm: Float, unit: UnitSystem): String =
+    wearDiaValueText(diaMm, unit)
 
-/** Printable label for one measured-Ø point reading, as its two terms. */
-internal fun diaReadingValueDualLabel(diaMm: Float, unit: UnitSystem, dual: Boolean = false): DualLabel =
-    withDiaSymbol(formatDiaWithUnitDualLabel(diaMm.toDouble(), unit, dual))
-
-/** Printable label for one measured-Ø point reading. */
-internal fun diaReadingValueLabel(diaMm: Float, unit: UnitSystem, dual: Boolean = false): String =
-    diaReadingValueDualLabel(diaMm, unit, dual).inline()
-
-private fun withDiaSymbol(value: DualLabel): DualLabel = value.copy(primary = "Ø" + value.primary)
+/** "Ø" + [formatDiaWithUnit] — the measurement verbatim in its one print unit. */
+private fun wearDiaValueText(diaMm: Float, unit: UnitSystem): String =
+    "Ø" + formatDiaWithUnit(diaMm.toDouble(), unit)
 
 /**
  * One planned in-profile value: its rotated column (centre + knockout halo), the label, and the
@@ -1125,9 +1142,8 @@ private fun withDiaSymbol(value: DualLabel): DualLabel = value.copy(primary = "�
  */
 internal class InProfileValue(
     val column: WornValueColumn,
-    val label: DualLabel,
+    val label: String,
     val paint: Paint,
-    val stacked: Boolean,
 )
 
 /**
@@ -1173,15 +1189,6 @@ internal fun planWornSectionValues(
      * below this size — the numbers must stay legible even if the halo then overhangs.
      */
     minTextSize: Float,
-    /** Worn sections are shaft-space, not component-keyed — one dual flag for the whole sheet. */
-    dual: Boolean = false,
-    /**
-     * Set dual values as a two-line stack. Under rotation the stack lies ACROSS the shaft, so it
-     * costs axial room and SAVES band height — the opposite of every other site
-     * (`docs/DualUnitStacking_PLAN.md` §6). The Runout tab's canvas deliberately draws no
-     * in-profile values (it authors runouts only), so the printed sheet is the sole consumer.
-     */
-    dualStacked: Boolean = false,
 ): List<InProfileValue> {
     if (sections.isEmpty()) return emptyList()
     val baseText = centeredValuePaint(text)
@@ -1192,17 +1199,15 @@ internal fun planWornSectionValues(
     sections.forEach { section ->
         val (startMm, endMm) = wornSectionDrawSpanMm(section, oalMm, windowStartMm, windowEndMm)
             ?: return@forEach
-        val labels = wornSectionValueDualLabels(section.diaMm, unit, dual)
+        val labels = wornSectionValueLabels(section.diaMm, unit)
         if (labels.isEmpty()) return@forEach
 
-        // Auto-fit: one size per section, from its longest value against the local band. A stacked
-        // value is only as LONG as its longer term (the axes swap under rotation), so stacking
-        // lowers this demand instead of raising it.
+        // Auto-fit: one size per section, from its longest value against the local band.
         val bandPx = 2f * surfaceRAt((startMm + endMm) / 2f) * WORN_VALUE_BAND_FIT_FRAC
         val fitted = fittedValueTextSize(
             baseTextSize = baseText.textSize,
             minTextSize = minTextSize,
-            labelLengthAtBase = labels.maxOf { baseText.measureDualLabel(it, dualStacked) },
+            labelLengthAtBase = labels.maxOf { baseText.measureRichText(it) },
             lineHeightAtBase = baseLine,
             bandHeight = bandPx,
         )
@@ -1212,13 +1217,12 @@ internal fun planWornSectionValues(
 
         val layout = layoutWornSectionValues(
             x0 = xAt(startMm), x1 = xAt(endMm), cy = cy,
-            labelLengths = labels.map { valueText.measureDualLabel(it, dualStacked) },
+            labelLengths = labels.map { valueText.measureRichText(it) },
             lineHeight = fm.descent - fm.ascent,
-            columnThickness = if (dualStacked) valueText.dualStackMetrics().height
-                              else fm.descent - fm.ascent,
+            columnThickness = fm.descent - fm.ascent,
         )
         layout.columns.forEachIndexed { i, col ->
-            out += InProfileValue(col, labels[i], valueText, dualStacked)
+            out += InProfileValue(col, labels[i], valueText)
         }
     }
     return out
@@ -1239,6 +1243,8 @@ internal fun drawWornSections(
      * boundary crosses a halo. Empty on a blank draft — the clear interior is the write-in area.
      */
     values: List<InProfileValue>,
+    /** The shaded wear areas a value's knockout re-shades ([drawInProfileValues]); empty = white. */
+    shadeUnder: List<RectF> = emptyList(),
 ) {
     if (sections.isEmpty()) return
     sections.forEach { section ->
@@ -1253,60 +1259,117 @@ internal fun drawWornSections(
         c.drawLine(x0, cy - r0, x0, cy + r0, outline)
         c.drawLine(x1, cy - r1, x1, cy + r1, outline)
     }
-    drawInProfileValues(c, values)
+    drawInProfileValues(c, values, shadeUnder)
 }
 
-/** Draw planned in-profile values — each a knockout halo, then its rotated text. */
-private fun drawInProfileValues(c: Canvas, values: List<InProfileValue>) {
+/**
+ * Draw planned in-profile values — each a knockout halo, then its rotated text.
+ *
+ * Where a halo lies over a shaded wear area ([shadeUnder], the consolidated sheet's
+ * `PdfPrefs.wearAreasShaded` mode) the knockout is re-shaded with the band's own grey inside the
+ * band, so it matches what surrounds it: no white box punches a hole in the highlight (on-device
+ * request), yet a line passing under the value — a liner face, an S-break, a section boundary —
+ * is still knocked out rather than striking the digits. Empty [shadeUnder] prints today's white
+ * halo exactly.
+ */
+private fun drawInProfileValues(c: Canvas, values: List<InProfileValue>, shadeUnder: List<RectF> = emptyList()) {
     if (values.isEmpty()) return
     val halo = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
         color = Color.WHITE
     }
-    values.forEach { v -> drawRotatedValueColumn(c, v.column, v.label, v.paint, halo, v.stacked) }
+    // Over a band the knockout and its re-shade share edges exactly; drawn without anti-aliasing,
+    // both rasterize to the same pixels, so no lighter seam outlines the (invisible) box.
+    val seamHalo = Paint(halo).apply { isAntiAlias = false }
+    val seamShade = consolidatedWearShadePaint().apply { isAntiAlias = false }
+    values.forEach { v ->
+        val overBand = shadeUnder.any { overlaps(it, v.column) }
+        drawRotatedValueColumn(
+            c, v.column, v.label, v.paint,
+            halo = if (overBand) seamHalo else halo,
+            shadeUnder = shadeUnder, shade = seamShade,
+        )
+    }
 }
+
+private fun overlaps(band: RectF, col: WornValueColumn): Boolean =
+    band.left < col.haloRight && col.haloLeft < band.right && band.top < col.haloBottom && col.haloTop < band.bottom
 
 /**
  * One in-profile value column: knockout halo first (erases every mark already drawn under
- * the value — the "no lines through the numbers" rule), then the 90°-rotated text set into
- * the cleared slot. Shared by the worn-section value pass and the migrated dia readings.
+ * the value — the "no lines through the numbers" rule), re-shaded where it overlaps a shaded
+ * wear area, then the 90°-rotated text set into the cleared slot. Shared by the worn-section
+ * value pass and the migrated dia readings.
  */
 private fun drawRotatedValueColumn(
     c: Canvas,
     col: WornValueColumn,
-    label: DualLabel,
+    label: String,
     valueText: Paint,
     halo: Paint,
-    stacked: Boolean = false,
+    shadeUnder: List<RectF>,
+    shade: Paint,
 ) {
     c.drawRect(col.haloLeft, col.haloTop, col.haloRight, col.haloBottom, halo)
+    shadeUnder.forEach { band ->
+        val l = maxOf(band.left, col.haloLeft)
+        val t = maxOf(band.top, col.haloTop)
+        val r = minOf(band.right, col.haloRight)
+        val b = minOf(band.bottom, col.haloBottom)
+        if (l < r && t < b) c.drawRect(l, t, r, b, shade)
+    }
     val fm = valueText.fontMetrics
     val centerBaseline = col.cy - (fm.ascent + fm.descent) / 2f
     c.save()
     c.rotate(-90f, col.cx, col.cy)
-    if (label.setsStacked(stacked)) {
-        // Rotated, the stack lies ACROSS the shaft: the rotation maps a baseline step (local +y)
-        // onto page +x, so the primary sits aft of the secondary and the pair straddles the
-        // column centre. Both terms therefore read bottom-to-top like every other in-profile
-        // value, and the halo (sized off the same stack height) covers both.
-        val advance = valueText.dualStackMetrics().advance
-        label.lines().forEachIndexed { i, line ->
-            val dy = (i - (label.lines().size - 1) / 2f) * advance
-            c.drawText(line, col.cx, centerBaseline + dy, valueText)
-        }
-    } else {
-        c.drawText(label.inline(), col.cx, centerBaseline, valueText)
-    }
+    c.drawText(label, col.cx, centerBaseline, valueText)
     c.restore()
+}
+
+/** The consolidated sheet's wear-area shade: black at [CONSOLIDATED_WEAR_SHADE_ALPHA]. */
+private fun consolidatedWearShadePaint(): Paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    style = Paint.Style.FILL
+    color = Color.BLACK
+    alpha = CONSOLIDATED_WEAR_SHADE_ALPHA
+}
+
+/**
+ * Each wear area's rectangle on the consolidated profile: its liner's clamped span
+ * ([clampWearBandToLiner]) at the full drawn liner height. ONE construction behind the shaded band
+ * fill and the knockouts that re-shade over it, so the two can never disagree. Orphan spots
+ * (liner gone) and empty spans are skipped.
+ */
+internal fun consolidatedWearBandRects(
+    record: WearRecord,
+    liners: List<Liner>,
+    cy: Float,
+    xAt: (Float) -> Float,
+    rPx: (Float) -> Float,
+): List<RectF> = record.spots.mapNotNull { spot ->
+    val ln = liners.firstOrNull { it.id == spot.linerId } ?: return@mapNotNull null
+    if (ln.lengthMm <= 0f || ln.odMm <= 0f) return@mapNotNull null
+    val clamp = clampWearBandToLiner(spot.startMm, spot.lengthMm, ln.lengthMm)
+    if (clamp.lengthMm <= 0f) return@mapNotNull null
+    val r = rPx(ln.odMm)
+    RectF(
+        xAt(ln.startFromAftMm + clamp.startMm), cy - r,
+        xAt(ln.startFromAftMm + clamp.startMm + clamp.lengthMm), cy + r,
+    )
 }
 
 /**
  * Wear marks migrated from the retired wear document onto the consolidated runout sheet:
- * the vertical-line wear-area bands (each `WearSpot`, clamped to its liner's span — reuses
- * the wear composer's [drawVerticalBand] construction) and the pit "X" markers (reuses
- * [drawWearPitsOnProfile], so the X stays identical across every draw site per
- * `geom/WearPitMath.kt`). Marks only — value text is drawn later, over halos, by
- * [drawWornSections] / [drawDiaReadingsInProfile] (text always on top).
+ * the wear-area bands (each `WearSpot`, clamped to its liner's span) and the pit "X" markers
+ * (reuses [drawWearPitsOnProfile], so the X stays identical across every draw site per
+ * `geom/WearPitMath.kt`). Marks only — value text is drawn later by [drawWornSections] /
+ * [drawDiaReadingsInProfile] (text always on top).
+ *
+ * A band is a light grey fill ([consolidatedWearBandRects]: the clamped liner span at the full drawn
+ * liner height), black at [CONSOLIDATED_WEAR_SHADE_ALPHA], when [shaded] (`PdfPrefs.wearAreasShaded`,
+ * the default — on-device request: "clearer, and you don't need a white box around the wear
+ * diameter text"); otherwise thin vertical strokes across the span (the wear composer's
+ * [drawVerticalBand]), the shop's hand mark. Drawn first in this pass, so pits, boundaries and text
+ * sit on top.
  *
  * Orphan spots (liner no longer in the spec) and orphan pits are simply skipped —
  * render-layer orphan handling, stored record never mutated.
@@ -1327,23 +1390,18 @@ internal fun drawWearMarksOnRunoutProfile(
     pitSmallHalf: Float,
     /** The halos of every value the sheet will print in the profile — planned before this pass. */
     valueHalos: List<WornValueColumn> = emptyList(),
+    /** Fill each wear area light grey instead of stroking it. */
+    shaded: Boolean = false,
 ) {
-    // Wear areas — thin vertical strokes across the liner span, the shop's hand mark.
     if (record.spots.isNotEmpty()) {
         val bandLines = Paint(outline).apply { strokeWidth = outline.strokeWidth * 0.5f; alpha = 120 }
-        record.spots.forEach { spot ->
-            val ln = liners.firstOrNull { it.id == spot.linerId } ?: return@forEach
-            if (ln.lengthMm <= 0f || ln.odMm <= 0f) return@forEach
-            val clamp = clampWearBandToLiner(spot.startMm, spot.lengthMm, ln.lengthMm)
-            if (clamp.lengthMm <= 0f) return@forEach
-            val r = rPx(ln.odMm)
-            drawVerticalBand(
-                c,
-                xAt(ln.startFromAftMm + clamp.startMm),
-                xAt(ln.startFromAftMm + clamp.startMm + clamp.lengthMm),
-                cy - r, cy + r,
-                bandLines, pitchPt = 6f,
-            )
+        val bandFill = consolidatedWearShadePaint()
+        consolidatedWearBandRects(record, liners, cy, xAt, rPx).forEach { band ->
+            if (shaded) {
+                c.drawRect(band, bandFill)
+            } else {
+                drawVerticalBand(c, band.left, band.right, band.top, band.bottom, bandLines, pitchPt = 6f)
+            }
         }
     }
     // Pit X's — the exact wear-document profile construction.
@@ -1370,8 +1428,8 @@ internal fun drawWearMarksOnRunoutProfile(
  * Draws the plan [planDiaReadingsInProfile] made — the same columns the pit pass already
  * yielded to.
  */
-internal fun drawDiaReadingsInProfile(c: Canvas, values: List<InProfileValue>) =
-    drawInProfileValues(c, values)
+internal fun drawDiaReadingsInProfile(c: Canvas, values: List<InProfileValue>, shadeUnder: List<RectF> = emptyList()) =
+    drawInProfileValues(c, values, shadeUnder)
 
 /** Plan the in-profile reading columns [drawDiaReadingsInProfile] draws. */
 internal fun planDiaReadingsInProfile(
@@ -1386,13 +1444,6 @@ internal fun planDiaReadingsInProfile(
     text: Paint,
     /** Auto-fit floor, same rule as [planWornSectionValues] — fitted per reading. */
     minTextSize: Float,
-    /**
-     * Set dual values as a two-line stack. Under rotation the stack lies ACROSS the shaft, so it
-     * costs axial room and SAVES band height — the opposite of every other site
-     * (`docs/DualUnitStacking_PLAN.md` §6). The Runout tab's canvas deliberately draws no
-     * in-profile values (it authors runouts only), so the printed sheet is the sole consumer.
-     */
-    dualStacked: Boolean = false,
 ): List<InProfileValue> {
     if (readings.isEmpty() || components == null) return emptyList()
     val byId = components.associateBy { it.id }
@@ -1408,15 +1459,14 @@ internal fun planDiaReadingsInProfile(
         val local = r.axialMm.coerceIn(0f, lenMm)
         val stationMm = rc.startMmPhysical + local
         val stationX = xAt(stationMm)
-        val label = diaReadingValueDualLabel(
-            r.diaMm, displayUnits.unitFor(r.componentId), displayUnits.dual,
-        )
+        // Primary unit only — never dual ([wornSectionValueLabels]).
+        val label = diaReadingValueLabel(r.diaMm, displayUnits.unitFor(r.componentId))
 
         val bandPx = 2f * surfaceRAt(stationMm) * WORN_VALUE_BAND_FIT_FRAC
         val fitted = fittedValueTextSize(
             baseTextSize = baseText.textSize,
             minTextSize = minTextSize,
-            labelLengthAtBase = baseText.measureDualLabel(label, dualStacked),
+            labelLengthAtBase = baseText.measureRichText(label),
             lineHeightAtBase = baseLine,
             bandHeight = bandPx,
         )
@@ -1427,12 +1477,11 @@ internal fun planDiaReadingsInProfile(
         // Degenerate span → the single column centers exactly on the station.
         val layout = layoutWornSectionValues(
             x0 = stationX, x1 = stationX, cy = cy,
-            labelLengths = listOf(valueText.measureDualLabel(label, dualStacked)),
+            labelLengths = listOf(valueText.measureRichText(label)),
             lineHeight = fm.descent - fm.ascent,
-            columnThickness = if (dualStacked) valueText.dualStackMetrics().height
-                              else fm.descent - fm.ascent,
+            columnThickness = fm.descent - fm.ascent,
         )
-        out += InProfileValue(layout.columns.single(), label, valueText, dualStacked)
+        out += InProfileValue(layout.columns.single(), label, valueText)
     }
     return out
 }
@@ -1750,7 +1799,13 @@ private fun drawPlacedBubbles(
      * planner did not space for would overlap each other and their leaders.
      */
     r: Float,
+    /** (W/Ø, D/Ø) of the shaft's own keyway — [sheetKeywayProportion], once per sheet. */
+    keywayProportion: Pair<Float, Float>,
 ) {
+    // One notch for the whole sheet: the notch is the reference marker, not a per-station feature.
+    val notch = bubbleKeywayNotch(
+        r, keywayProportion.first, keywayProportion.second, stroke = outline.strokeWidth,
+    )
     // Printed value sits small inside the (larger) circle, leaving room to hand-write.
     val valuePaint = sheetTextPaint(r * 0.60f, Paint.Align.CENTER)
     val highSpot = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -1765,7 +1820,7 @@ private fun drawPlacedBubbles(
         b.leader.zipWithNext { p, q -> c.drawLine(p.x, p.y, q.x, q.y, outline) }
 
         // Ring with keyway cutout at 12 o'clock (top arc broken across an open-topped slot).
-        drawRunoutBubbleRingPdf(c, b.bubbleX, b.bubbleCenterY, r, outline)
+        drawRunoutBubbleRingPdf(c, b.bubbleX, b.bubbleCenterY, r, notch, outline)
 
         val reading = readings.find(b.componentId, b.stationIndex)
         // TIR value, centred in the circle.
@@ -1791,13 +1846,16 @@ private fun drawPlacedBubbles(
 
 /**
  * Draw a runout bubble ring with a keyway cutout at 12 o'clock: the top arc is broken across the
- * slot mouth and an open-topped slot descends into the circle (key-at-top shop convention). Shared
- * geometry with the on-screen `RunoutRoute.drawRunoutBubbleRing`.
+ * slot mouth and an open-topped slot descends into the circle (key-at-top shop convention). The
+ * slot is [notch] — sized from the shaft's own keyway by `geom/RunoutBubbleNotchMath.kt`, the
+ * same notch the on-screen `RunoutRoute.drawRunoutBubbleRing` draws.
  */
-private fun drawRunoutBubbleRingPdf(c: Canvas, cx: Float, cy: Float, r: Float, outline: Paint) {
-    val slotHalf = r * 0.22f
-    val slotDepth = r * 0.42f
-    val gapDeg = Math.toDegrees(asin((slotHalf / r).coerceIn(0f, 1f).toDouble())).toFloat()
+private fun drawRunoutBubbleRingPdf(
+    c: Canvas, cx: Float, cy: Float, r: Float, notch: BubbleKeywayNotch, outline: Paint,
+) {
+    val slotHalf = notch.slotHalf
+    val slotDepth = notch.slotDepth
+    val gapDeg = notch.gapDeg
 
     // Arc everywhere except the gap at the top (top = -90° in the drawArc convention).
     val oval = RectF(cx - r, cy - r, cx + r, cy + r)
