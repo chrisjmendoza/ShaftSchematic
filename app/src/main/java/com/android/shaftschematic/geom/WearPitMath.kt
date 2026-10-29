@@ -98,3 +98,16 @@ fun acrossFracFromTapY(tapY: Float, topY: Float, botY: Float): Float {
     if (h <= 0f) return 0.5f
     return (tapY - topY) / h
 }
+
+/**
+ * Does a pit "X" centred on `(cx, cy)` with half-arm [halfArm] touch the knockout [halo] of an
+ * in-profile value? The X's bounds are its square `cx ± halfArm, cy ± halfArm`, grown by
+ * [strokePad] (half the stroke width — a round cap reaches that far past the tip); touching
+ * counts. The consolidated sheet hides such a pit (on-device ruling: the value stands above the
+ * pits), because the halo knocks out only the text box and the rest of the X pokes out past it.
+ */
+fun pitXTouchesHalo(cx: Float, cy: Float, halfArm: Float, strokePad: Float, halo: WornValueColumn): Boolean {
+    val reach = halfArm + strokePad.coerceAtLeast(0f)
+    return cx - reach <= halo.haloRight && cx + reach >= halo.haloLeft &&
+        cy - reach <= halo.haloBottom && cy + reach >= halo.haloTop
+}

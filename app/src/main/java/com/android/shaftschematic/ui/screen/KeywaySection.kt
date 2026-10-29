@@ -1,14 +1,17 @@
 // file: app/src/main/java/com/android/shaftschematic/ui/screen/KeywaySection.kt
 package com.android.shaftschematic.ui.screen
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -18,6 +21,31 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.ui.util.positiveLengthErrorMm
+
+/**
+ * The "×" between the KW W and KW D fields — ONE composable behind the Body and Taper cards and
+ * both Add dialogs. Those rows align their fields by the TOP, so an error line under W hangs
+ * below W alone and D keeps its place; the sign therefore sits in a slot the height of the
+ * field's outline, offset by the label's notch, so it stays on the boxes' centre line whatever
+ * hangs under either field.
+ */
+@Composable
+internal fun KeywayTimesSign() {
+    Box(
+        modifier = Modifier
+            .padding(top = KEYWAY_FIELD_LABEL_NOTCH)
+            .height(OutlinedTextFieldDefaults.MinHeight),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text("×", style = MaterialTheme.typography.titleMedium)
+    }
+}
+
+/**
+ * The space an outlined field with a label reserves above its outline for the label's notch —
+ * Material 3's outlined-field top padding.
+ */
+private val KEYWAY_FIELD_LABEL_NOTCH = 8.dp
 
 /**
  * The "Keyway" header row that gates the whole keyway section — ONE composable behind the Body

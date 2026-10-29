@@ -11,6 +11,7 @@ import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import com.android.shaftschematic.ui.adaptive.currentWindowWidthClass
 import com.android.shaftschematic.ui.adaptive.restoreBaseOrientation
 import com.android.shaftschematic.ui.adaptive.unlockRotation
 import android.net.Uri
@@ -19,12 +20,14 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -174,7 +177,10 @@ internal fun openRunoutPdf(context: Context, uri: Uri) {
  *                      passes true on the same grounds: its panel covered the whole page,
  *                      so nothing it changed could be watched (on-device report). False is
  *                      the plain [PREVIEW_SHEET_MAX_FRAC] cap over the centered full-size page.
- * @param inkBand       Where [bitmap] carries ink, from the route's render loop. The strip
+ *                      Both are the COMPACT / MEDIUM layouts: at EXPANDED every open panel
+ *                      docks as a right-hand column and the whole page fits, at full height,
+ *                      into the width beside it ([previewPageLayout]).
+ * @param inkBand      Where [bitmap] carries ink, from the route's render loop. The strip
  *                      crops to it so the page's blank top margin does not take room from
  *                      the drawing; null shows the whole page. Measured on sharp passes
  *                      only, so the strip never resizes under a moving finger. The strip
@@ -196,9 +202,15 @@ internal fun PdfPreviewOverlay(
 ) {
     var showOptions by remember { mutableStateOf(false) }
 
-    // Tuning layout: page strip on top, panel below it — sized inside the preview box below
-    // (see [tuningPageStripHeightDp]).
-    val stripLayout = showOptions && sheetTunesPage
+    // Where the page sits while the panel is open: at COMPACT / MEDIUM a page-tuning panel takes
+    // the strip layout — page strip on top, panel below it, sized inside the preview box below
+    // (see [tuningPageStripHeightDp]); at EXPANDED the panel docks beside the page.
+    val docksBeside = previewPanelDocksBeside(currentWindowWidthClass())
+    val pageLayout = previewPageLayout(
+        optionsOpen = showOptions && optionsSheet != null,
+        sheetTunesPage = sheetTunesPage,
+        docksBeside = docksBeside,
+    )
     val configuration = LocalConfiguration.current
 
     // ── Pan / zoom ─────────────────────────────────────────────────────────
@@ -215,12 +227,12 @@ internal fun PdfPreviewOverlay(
         scaleState.floatValue = (scaleState.floatValue * zoomChange).coerceIn(0.5f, 8f)
         offsetState.value = offsetState.value + panChange
     }
-    // The zoom resets when the LAYOUT changes — the strip and the centered full page fit the
-    // page differently, so a zoom carried across the switch would point at the wrong place.
-    // That is every open and close of a page-tuning panel; a host that passes
-    // `sheetTunesPage = false` keeps the centered layout under the panel, so opening it there
-    // leaves the zoom alone.
-    LaunchedEffect(stripLayout) {
+    // The zoom resets when the LAYOUT changes — the strip, the docked page and the centered full
+    // page fit the page into different boxes, so a zoom carried across the switch would point at
+    // the wrong place. That is every open and close of a page-tuning or docked panel; a host that
+    // passes `sheetTunesPage = false` keeps the centered layout under an undocked panel, so
+    // opening it there leaves the zoom alone.
+    LaunchedEffect(pageLayout) {
         scaleState.floatValue = 1f
         offsetState.value = Offset.Zero
     }
@@ -345,76 +357,100 @@ internal fun PdfPreviewOverlay(
                     // just a band of page to keep in view at the top.
                     (configuration.screenHeightDp * PREVIEW_SHEET_MAX_FRAC).dp
                 }
-                // The full spinner stands in for the page only until a FIRST page exists; a
-                // re-render after that keeps the current page and its zoom on screen and
-                // signals the pass with the corner indicator below (see `PdfPreviewScreen`).
-                when {
-                    loading && bitmap == null -> CircularProgressIndicator(color = Color.White)
-                    bitmap != null -> {
-                        val scale  by scaleState
-                        val offset by offsetState
+                val docked = pageLayout == PreviewPageLayout.DOCKED
+                // The page block: the whole box, or — docked — the width left of the panel at
+                // full height. ONE block in either layout; only its box changes.
+                Box(
+                    modifier = if (docked) {
+                        Modifier
+                            .align(Alignment.CenterStart)
+                            .fillMaxHeight()
+                            .width(dockedPageWidthDp(maxWidth.value).dp)
+                    } else {
+                        Modifier.fillMaxSize()
+                    },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    // The full spinner stands in for the page only until a FIRST page exists; a
+                    // re-render after that keeps the current page and its zoom on screen and
+                    // signals the pass with the corner indicator below (see `PdfPreviewScreen`).
+                    when {
+                        loading && bitmap == null -> CircularProgressIndicator(color = Color.White)
+                        bitmap != null -> {
+                            val scale  by scaleState
+                            val offset by offsetState
 
-                        if (stripLayout) {
-                            // The drawing, cropped to its ink band and fitted into the
-                            // strip the panel was sized to leave free. One draw helper
-                            // with the schematic preview's Canvas, so they cannot drift.
-                            Canvas(
-                                modifier = Modifier
-                                    .align(Alignment.TopCenter)
-                                    .fillMaxWidth()
-                                    .height(stripHeight)
-                                    .transformable(state = transformState)
-                                    .graphicsLayer(
-                                        scaleX = scale,
-                                        scaleY = scale,
-                                        translationX = offset.x,
-                                        translationY = offset.y,
-                                    )
-                                    .semantics {
-                                        contentDescription =
-                                            "PDF preview — pinch to zoom, drag to pan"
-                                    },
-                            ) {
-                                drawPageBand(bitmap, inkBand, stripHeight.toPx())
+                            if (pageLayout == PreviewPageLayout.STRIP) {
+                                // The drawing, cropped to its ink band and fitted into the
+                                // strip the panel was sized to leave free. One draw helper
+                                // with the schematic preview's Canvas, so they cannot drift.
+                                Canvas(
+                                    modifier = Modifier
+                                        .align(Alignment.TopCenter)
+                                        .fillMaxWidth()
+                                        .height(stripHeight)
+                                        .transformable(state = transformState)
+                                        .graphicsLayer(
+                                            scaleX = scale,
+                                            scaleY = scale,
+                                            translationX = offset.x,
+                                            translationY = offset.y,
+                                        )
+                                        .semantics {
+                                            contentDescription =
+                                                "PDF preview — pinch to zoom, drag to pan"
+                                        },
+                                ) {
+                                    drawPageBand(bitmap, inkBand, stripHeight.toPx())
+                                }
+                            } else {
+                                Image(
+                                    bitmap = bitmap,
+                                    contentDescription = "PDF preview — pinch to zoom, drag to pan",
+                                    contentScale = ContentScale.Fit,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .transformable(state = transformState)
+                                        .graphicsLayer(
+                                            scaleX = scale,
+                                            scaleY = scale,
+                                            translationX = offset.x,
+                                            translationY = offset.y,
+                                        ),
+                                )
                             }
-                        } else {
-                            Image(
-                                bitmap = bitmap,
-                                contentDescription = "PDF preview — pinch to zoom, drag to pan",
-                                contentScale = ContentScale.Fit,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .transformable(state = transformState)
-                                    .graphicsLayer(
-                                        scaleX = scale,
-                                        scaleY = scale,
-                                        translationX = offset.x,
-                                        translationY = offset.y,
-                                    ),
-                            )
                         }
+                        else -> Text(
+                            "Preview unavailable",
+                            color = Color.White,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
                     }
-                    else -> Text(
-                        "Preview unavailable",
-                        color = Color.White,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
-                if (loading && bitmap != null) {
-                    PreviewRerenderIndicator(Modifier.align(Alignment.TopEnd))
+                    if (loading && bitmap != null) {
+                        PreviewRerenderIndicator(Modifier.align(Alignment.TopEnd))
+                    }
                 }
 
                 // The options, as a non-modal panel in this Box — composed LAST so it draws
                 // over the page and takes the touches that land on it, while the page above
                 // it keeps its pinch and pan. No scrim: nothing here is modal. The cap is
                 // computed here because only the overlay knows the strip the panel has to
-                // stay clear of; the panel applies it. This Box's own bottom inset padding keeps
-                // it — and so the panel at its bottom — above the navigation bar.
+                // stay clear of; the panel applies it. Docked, it is the column right of the
+                // page block instead. This Box's own bottom inset padding keeps it — and so the
+                // panel at its bottom — above the navigation bar.
                 if (showOptions && optionsSheet != null) {
                     PreviewOptionsPanel(
                         onClose = { showOptions = false },
                         maxHeightDp = sheetMaxHeight,
-                        modifier = Modifier.align(Alignment.BottomCenter),
+                        docked = docked,
+                        modifier = if (docked) {
+                            Modifier
+                                .align(Alignment.CenterEnd)
+                                .fillMaxHeight()
+                                .width(dockedPanelWidthDp(maxWidth.value).dp)
+                        } else {
+                            Modifier.align(Alignment.BottomCenter)
+                        },
                     ) {
                         optionsSheet()
                     }

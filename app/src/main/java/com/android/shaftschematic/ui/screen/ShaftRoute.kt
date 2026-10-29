@@ -171,9 +171,10 @@ fun ShaftRoute(
                         duration = SnackbarDuration.Long // ~5s-ish, depends on platform
                     )
 
-                    // Same guarantee as the OAL snackbar: the delete, or nothing.
+                    // Same guarantee as the OAL snackbar: the delete, or nothing. An Undo that
+                    // restores the component also selects it, so the carousel shows its card.
                     if (result == SnackbarResult.ActionPerformed) {
-                        vm.undoEditIfStillAt(event.expected)
+                        vm.undoDeletion(event)
                     }
                 }
             }

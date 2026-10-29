@@ -15,6 +15,17 @@ import kotlin.math.min
  * • All inputs from model are **millimeters**.
  * • Geometry never inspects UI units; conversion happens in the UI layer only.
  */
+/**
+ * The axial range (mm) these components occupy — the smallest physical start to the largest
+ * physical end — or null for none. A canvas passes it as [ShaftLayout.compute]'s `extentMm` so a
+ * part hanging past an end (a body left running past a shortened OAL) draws inside the canvas
+ * instead of off its edge, the window the editor preview gets from its problem marks. For a shaft
+ * whose parts all sit inside the overall length (excluded threads aside, which the layout already
+ * holds) the window is unchanged; the OAL itself is never changed.
+ */
+fun List<ResolvedComponent>.componentAxialExtentMm(): Pair<Float, Float>? =
+    if (isEmpty()) null else minOf { it.startMmPhysical } to maxOf { it.endMmPhysical }
+
 object ShaftLayout {
 
     data class Result(

@@ -4,7 +4,10 @@ ShaftScreen Contract
 Layer: UI → Screens  
 Purpose: Present the shaft editor surface and bind ViewModel state to user controls.
 
-Version: v0.23 (2026-10-28 — the warning banner names each problem part, lists overlaps, and
+Version: v0.24 (2026-10-29 — the EXPANDED drawing band grows to its side column under the cap
+and yields height to the keyboard; the editor snackbar clears the navigation bar; the delete
+snackbar's Undo returns the carousel to the restored card. v0.23
+2026-10-28 — the warning banner names each problem part, lists overlaps, and
 each line selects its part; the preview marks the same problems in red; an OAL change says what
 it moved. v0.22 2026-10-28 — card fields refuse what they cannot apply through their validator,
 never in the commit lambda; overlap messages name the partner by its card title; a Length is
@@ -193,12 +196,18 @@ is never a class here. The Final Schematic tab hosts this same screen through
     lifts its 240 dp cap — the phone keeps `OAL_FIELD_MAX_WIDTH`) with the slot to its right,
     and the button and the warnings are padded by the slot so all three share one width and
     one right edge (on-device report: a 240 dp box over a wider button looked unrelated to it).
-    The band's height is the pure `expandedDrawingBandHeightDp` (`ui/screen/EditorTabletLayout.kt`):
+    The drawing's height is the pure `expandedDrawingBandHeightDp` (`ui/screen/EditorTabletLayout.kt`):
     the preview's shape over the width left beside the side column, clamped to the 120 dp
-    floor and the **320 dp** ceiling. The preview is **4:1** there (`EXPANDED_PREVIEW_ASPECT`),
+    floor and the **320 dp** ceiling. The BAND is the larger of that and the side column's
+    measured content height, under the same ceiling (`expandedBandHeightDp`), so two warnings
+    read whole instead of the second being clipped beside spare paper (on-device report). The preview is **4:1** there (`EXPANDED_PREVIEW_ASPECT`),
     not the column's 3:1: the band is width-bound, so the shaft draws at the same width either
-    way and a 3:1 box was blank paper above and below it — height the cards can use. The side
-    column scrolls INSIDE the band, so a long warning list can never push the carousel down.
+    way and a 3:1 box was blank paper above and below it — height the cards can use. Past the
+    ceiling the side column scrolls INSIDE the band, with a fade at its foot while it can scroll
+    further, so a long warning list can never push the carousel below the ceiling. With the
+    keyboard up the band yields height so the component region keeps 220 dp
+    (`expandedBandHeightUnderImeDp`, never under the drawing's floor), and the preview narrows
+    to keep its shape (`expandedPreviewMaxWidthDp`) — see `Adaptive.md`.
   - **The carousel region** (`testTag("editor_pane_components")`, `weight(1f)`): the
     Components heading with the hint **"Tap or swipe to select"**, then the carousel with
     `fillHeight = true` and `peekPageWidth = CAROUSEL_PEEK_PAGE_WIDTH_DP` (520 dp): the
@@ -413,6 +422,18 @@ Future Enhancements
 
 Change Log
 -----------
+**v0.24 (2026-10-29)**
+- **EXPANDED band = max(drawing, side column) under the 320 dp cap**, with a foot fade when the
+  side column scrolls; **the band yields to the keyboard** so the focused card keeps its field,
+  label and notice in view (on-device reports from the tablet pass). Pure numbers in
+  `EditorTabletLayout.kt`, pinned by `EditorTabletLayoutTest`.
+- **The editor snackbar pads for the navigation bar** (the Scaffold's content insets are
+  horizontal only, so the gesture handle drew across the message — on-device report).
+- **The delete snackbar's Undo selects the restored component** (`ShowDeletedSnack.componentId`
+  → `ShaftViewModel.undoDeletion`), so the carousel animates back to its card through the
+  ordinary selection-follow effect; a stale Undo selects nothing (on-device ruling: after
+  "Thread deleted — Undo" the carousel stayed on the neighbouring page). See `ShaftViewModel.md`.
+
 **v0.21 (2026-10-27)**
 - **MEDIUM carousel fills the column** (`mediumCarouselHeight`, floor `CAROUSEL_HEIGHT`) —
   on-device report: the portrait tablet's card was clipped above ~330 dp of empty screen.

@@ -1050,13 +1050,14 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         // Observe persisted defaults. The default is always remembered (it seeds the next new
-        // drawing); it is applied to the LIVE unit only when the document isn't unit-locked.
+        // drawing); it is applied to the LIVE unit only when the document isn't unit-locked —
+        // as a re-display that never makes the document unsaved work ([redisplayUnit]).
         viewModelScope.launch {
             SettingsStore.defaultUnitFlow(getApplication()).collectLatest { pref ->
                 val u = if (pref == UnitPref.INCHES) UnitSystem.INCHES else UnitSystem.MILLIMETERS
                 _defaultUnit.value = u
                 if (!_unitLocked.value) {
-                    setUnit(u, persist = false) // avoid ping-ponging DataStore
+                    redisplayUnit(u) // no DataStore write — avoids ping-ponging the setting
                 }
             }
         }
@@ -1439,15 +1440,32 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
      * unit-locked (the lock stops the stored default from flipping the document, not the user
      * from setting the default — gating the write on the lock left a metric shop unable to
      * make its next drawing metric from inside the editor). Every load path passes `false`.
+     * The chips also re-display the open document in that unit, through [redisplayUnit], so the
+     * switch alone never marks it unsaved.
      */
     fun setUnit(newUnit: UnitSystem, persist: Boolean = true) {
-        if (newUnit != _unit.value) _unit.value = newUnit
+        if (persist) redisplayUnit(newUnit)
+        else if (newUnit != _unit.value) _unit.value = newUnit
         if (persist) {
             viewModelScope.launch {
                 val pref = if (newUnit == UnitSystem.INCHES) UnitPref.INCHES else UnitPref.MILLIMETERS
                 SettingsStore.setDefaultUnit(getApplication(), pref)
             }
         }
+    }
+
+    /**
+     * Settings → Units re-displays the open document in [newUnit] WITHOUT making it unsaved
+     * work (on-device ruling: a user may switch to millimeters just to read the values for
+     * comparison). The dirty baseline's unit moves with the live unit, so a clean document
+     * stays clean, a document with edits stays dirty for those edits, no draft is written for
+     * the switch alone, the first VALUE edit dirties it as usual, and the save after that
+     * stores the new unit. The unit is not part of [EditState], so this is never an undo step.
+     */
+    private fun redisplayUnit(newUnit: UnitSystem) {
+        if (newUnit == _unit.value) return
+        _savedSnapshot.update { it?.copy(unitSystem = newUnit) }
+        _unit.value = newUnit
     }
 
     /** Toggles grid visibility in Preview (persisted in Settings). */
@@ -1610,13 +1628,26 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     /**
      * Emits a deletion snackbar request for the given [ComponentKind], carrying the state the
      * delete produced — called right after the removal's [updateSpec], so that state is the
-     * delete's (see [undoEditIfStillAt]).
+     * delete's (see [undoEditIfStillAt]) — and the deleted component's [id], which the Undo
+     * selects again ([undoDeletion]).
      */
-    internal fun emitDeletedSnack(kind: ComponentKind) {
+    internal fun emitDeletedSnack(kind: ComponentKind, id: String) {
         val expected = currentEditState()
         viewModelScope.launch {
-            _uiEvents.emit(UiEvent.ShowDeletedSnack(kind, expected))
+            _uiEvents.emit(UiEvent.ShowDeletedSnack(kind, expected, id))
         }
+    }
+
+    /**
+     * The deletion snackbar's Undo: undoes the delete through [undoEditIfStillAt] and, when it
+     * did, selects the restored component so the carousel returns to its card (on-device
+     * ruling: after "Thread deleted — Undo" the carousel stayed on the neighbouring page). A
+     * stale Undo undoes nothing and selects nothing. Returns whether the delete was undone.
+     */
+    internal fun undoDeletion(snack: UiEvent.ShowDeletedSnack): Boolean {
+        if (!undoEditIfStillAt(snack.expected)) return false
+        selectComponentById(snack.componentId)
+        return true
     }
 
         // ────────────────────────────────────────────────────────────────────────────

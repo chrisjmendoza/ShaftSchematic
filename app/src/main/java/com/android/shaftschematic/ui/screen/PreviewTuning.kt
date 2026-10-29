@@ -12,6 +12,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.settings.RunoutConfig
+import com.android.shaftschematic.ui.adaptive.WindowWidthClass
+import com.android.shaftschematic.ui.adaptive.twoPane
 import com.android.shaftschematic.util.InkBand
 import com.android.shaftschematic.util.PDF_PAGE_HEIGHT_PT
 import com.android.shaftschematic.util.PDF_PAGE_WIDTH_PT
@@ -44,7 +46,8 @@ import kotlin.math.roundToInt
  * rendering is worthless if the menu covers the page: the strip is sized from the page's INK
  * BAND so blank paper never takes room from the drawing, and the panel budget counts the
  * panel's own chrome ([TUNING_SHEET_CHROME_DP] + the navigation-bar inset below it), which no
- * content cap covers.
+ * content cap covers. That strip is the COMPACT / MEDIUM answer; at EXPANDED the panel docks
+ * beside the page instead ([previewPageLayout], [dockedPageWidthDp]).
  */
 class PreviewTuning {
     /** In-progress "Line thickness" multiplier, or null when no thickness drag is live. */
@@ -239,6 +242,80 @@ internal fun tuningSheetMaxHeightDp(
 ): Float = (tuningRoomDp(screenHeightDp, availableHeightDp) - stripHeightDp - sheetChromeDp)
     .coerceAtLeast(screenHeightDp * TUNING_SHEET_MIN_FRAC)
     .coerceAtMost(screenHeightDp * PREVIEW_SHEET_MAX_FRAC)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Docked layout — the panel beside the page (EXPANDED)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Where an open preview puts its page relative to the options panel. ONE resolver
+ * ([previewPageLayout]) decides it for both preview hosts, and both reset their zoom when the
+ * value changes, because each layout fits the page into a different box.
+ */
+internal enum class PreviewPageLayout {
+    /**
+     * The whole page fitted into the preview box: the panel is closed, or it restyles nothing on
+     * the page and floats over it under the [PREVIEW_SHEET_MAX_FRAC] cap.
+     */
+    FULL,
+
+    /**
+     * COMPACT / MEDIUM with a page-tuning panel open: the page's ink band in a fit-width strip
+     * under the app bar, the panel capped below it ([tuningPageStripHeightDp],
+     * [tuningSheetMaxHeightDp]).
+     */
+    STRIP,
+
+    /**
+     * EXPANDED with the panel open: the panel is a right-hand column ([dockedPanelWidthDp]) and
+     * the page is the ordinary full page, fitted at full height into the width left beside it
+     * ([dockedPageWidthDp]).
+     */
+    DOCKED,
+}
+
+/**
+ * Width of the docked options column, in dp — a phone-width column, the width the options
+ * sheets are designed at.
+ */
+internal const val PREVIEW_PANEL_DOCK_WIDTH_DP = 380f
+
+/**
+ * Whether an open options panel docks BESIDE the page rather than under a page strip. EXPANDED
+ * only, the app's one two-pane class: on a landscape tablet the strip-and-cap layout left the
+ * strip a third of the screen tall, so a portrait undercut page drew at a quarter of the strip's
+ * width with values a few pixels high (on-device report). At COMPACT and MEDIUM there is no room
+ * for a page beside a phone-width column, and the strip stays.
+ */
+internal fun previewPanelDocksBeside(widthClass: WindowWidthClass): Boolean = widthClass.twoPane
+
+/**
+ * The page layout for an open-or-closed panel. [sheetTunesPage] chooses the strip over the
+ * centered full page only where the panel would otherwise sit OVER the page; a docked panel sits
+ * beside it, so every docked panel gets the same layout.
+ */
+internal fun previewPageLayout(
+    optionsOpen: Boolean,
+    sheetTunesPage: Boolean,
+    docksBeside: Boolean,
+): PreviewPageLayout = when {
+    !optionsOpen -> PreviewPageLayout.FULL
+    docksBeside -> PreviewPageLayout.DOCKED
+    sheetTunesPage -> PreviewPageLayout.STRIP
+    else -> PreviewPageLayout.FULL
+}
+
+/**
+ * Width of the docked panel inside a preview box [boxWidthDp] wide: [PREVIEW_PANEL_DOCK_WIDTH_DP],
+ * but never more than half the box, so the page keeps at least half on a narrow EXPANDED window
+ * (a window just past the breakpoint, beside the permanent sidebar).
+ */
+internal fun dockedPanelWidthDp(boxWidthDp: Float): Float =
+    minOf(PREVIEW_PANEL_DOCK_WIDTH_DP, boxWidthDp / 2f).coerceAtLeast(0f)
+
+/** Width the page box keeps beside the docked panel ([dockedPanelWidthDp]) in a box [boxWidthDp] wide. */
+internal fun dockedPageWidthDp(boxWidthDp: Float): Float =
+    (boxWidthDp - dockedPanelWidthDp(boxWidthDp)).coerceAtLeast(0f)
 
 /**
  * Draws [bitmap] into the tuning strip: cropped to [band] (its ink), fitted to the strip's

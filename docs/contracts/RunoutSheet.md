@@ -1022,6 +1022,16 @@ On-device request following the worn-sections review:
   boundaries, then ALL value text last (worn-section values, then dia readings), each over
   its sheet-white halo so nothing lines through a number. Same order on the preview canvas
   and the PDF (shared implementations via `nativeCanvas`).
+- **A pit X that would cross a value's halo is not drawn** (on-device ruling: the value stands
+  above the pits). The halo knocks out the text box only, so an X under a value left fragments
+  poking out between two halos that read as debris. Every in-profile value is therefore PLANNED
+  before the marks pass — `planWornSectionValues` / `planDiaReadingsInProfile`, the same plan
+  `drawWornSections` / `drawDiaReadingsInProfile` then draw — and the halos reach
+  `drawWearMarksOnRunoutProfile(valueHalos)`, which skips any pit whose X (half-arm from
+  `pitHalfArm`, the same `smallHalf` the draw uses, plus half the stroke) touches one
+  (`pitXTouchesHalo`, `geom/WearPitMath.kt`). Wear-area bands are never hidden, and the z-order
+  is unchanged. Consolidated sheet only — the wear document and the canvas overlays draw every
+  pit, the same posture as the sheet's in-profile liner-shade lock.
 - **Blank drafts** drop bands/X's/readings entirely (the wear doc's blank rule) and keep
   only worn-section boundaries as write-in areas.
 - **Legibility (on-device report — values towered over the thin proportional profile,

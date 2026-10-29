@@ -21,6 +21,8 @@ import com.android.shaftschematic.geom.WearTraceLiner
 import com.android.shaftschematic.geom.wearLinerTraces
 import com.android.shaftschematic.geom.pitCenterY
 import com.android.shaftschematic.geom.pitHalfArm
+import com.android.shaftschematic.geom.pitXTouchesHalo
+import com.android.shaftschematic.geom.WornValueColumn
 import com.android.shaftschematic.geom.planDiaCallouts
 import com.android.shaftschematic.geom.sequenceWearTraces
 import com.android.shaftschematic.geom.smoothWearTrace
@@ -797,6 +799,10 @@ internal const val WEAR_PIT_SMALL_HALF_PROFILE_PT = 1.7f
  * Internal (not private): the consolidated runout sheet reuses this exact construction for
  * its migrated pit marks — [smallHalf] is the per-surface SMALL half-arm (pt on PDFs, px on
  * the preview canvas), the `WearPitMath` caller-picks-scale rule.
+ *
+ * [hideUnderHalos] is the consolidated sheet's in-profile-values rule: a pit whose X (stroke
+ * included) would touch one of those value halos is not drawn ([pitXTouchesHalo]). The wear
+ * document passes none, so every pit draws there.
  */
 internal fun drawWearPitsOnProfile(
     c: Canvas,
@@ -807,9 +813,11 @@ internal fun drawWearPitsOnProfile(
     rPx: (Float) -> Float,
     pitPaint: Paint,
     smallHalf: Float = WEAR_PIT_SMALL_HALF_PROFILE_PT,
+    hideUnderHalos: List<WornValueColumn> = emptyList(),
 ) {
     if (pits.isEmpty()) return
     val byId = components.associateBy { it.id }
+    val strokePad = pitPaint.strokeWidth / 2f
     pits.forEach { pit ->
         val rc = byId[pit.componentId] ?: return@forEach
         val lenMm = (rc.endMmPhysical - rc.startMmPhysical).coerceAtLeast(0.001f)
@@ -827,7 +835,9 @@ internal fun drawWearPitsOnProfile(
         val cx = xAt(rc.startMmPhysical + local)
         val r = rPx(diaMm)
         val py = pitCenterY(cy - r, cy + r, pit.acrossFrac)
-        drawWearPitX(c, cx, py, pitHalfArm(pit.size, smallHalf), pitPaint)
+        val half = pitHalfArm(pit.size, smallHalf)
+        if (hideUnderHalos.any { pitXTouchesHalo(cx, py, half, strokePad, it) }) return@forEach
+        drawWearPitX(c, cx, py, half, pitPaint)
     }
 }
 

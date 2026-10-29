@@ -193,6 +193,33 @@ class PreviewOptionsPanelTest {
         assertEquals(fitWidth, previewWidthPx(), 0.5f)
     }
 
+    @Test
+    @Config(qualifiers = "w1280dp-h800dp-land")
+    fun `at EXPANDED the panel docks beside a full-height page`() {
+        setUpOverlay()
+        openOptions()
+
+        val density = rule.activity.resources.displayMetrics.density
+        val area = rule.onNodeWithTag("pdf_preview_area").fetchSemanticsNode().boundsInRoot
+        val panel = rule.onNodeWithTag("preview_options_panel").fetchSemanticsNode().boundsInRoot
+        val page = rule.onNodeWithContentDescription(PREVIEW).fetchSemanticsNode().boundsInRoot
+
+        // The panel is the right-hand column, the full height of the preview box.
+        assertEquals(dockedPanelWidthDp(area.width / density), panel.width / density, 1f)
+        assertEquals(area.height, panel.height, 1f)
+        assertEquals(area.right, panel.right, 1f)
+        // The page is the ordinary full page in the width left of it — full height, never under
+        // the panel, no strip.
+        assertEquals(dockedPageWidthDp(area.width / density), page.width / density, 1f)
+        assertEquals(area.height, page.height, 1f)
+        assertTrue("page ${page.right} ends where the panel ${panel.left} starts", page.right <= panel.left + 1f)
+
+        // Closing gives the page the whole box back.
+        rule.onNodeWithTag("preview_options_close").performClick()
+        rule.waitForIdle()
+        assertEquals(area.width, previewWidthPx(), 1f)
+    }
+
     private companion object {
         const val OPTIONS_ICON = "PDF options"
         const val PREVIEW = "PDF preview — pinch to zoom, drag to pan"

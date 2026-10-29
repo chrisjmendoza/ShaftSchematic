@@ -36,6 +36,16 @@ const val EXPANDED_SIDE_COLUMN_WIDTH_DP = 260f
 const val EXPANDED_BAND_GAP_DP = 16f
 
 /**
+ * The height the component region under the drawing band keeps while the keyboard is up, dp:
+ * the "Components" heading, the card's top, and one two-up field row with its label and the
+ * "not applied" notice line under it. The band yields height to the keyboard down to this.
+ */
+const val EXPANDED_CAROUSEL_MIN_HEIGHT_DP = 220f
+
+/** Height of the fade at the foot of the side column while it has more to scroll to, dp. */
+const val EXPANDED_SIDE_COLUMN_FADE_DP = 24f
+
+/**
  * The card width a peeking pager uses: [requestedDp], never wider than the pager itself (a
  * narrow tablet window still shows one whole card) and never negative.
  */
@@ -64,10 +74,10 @@ fun neighbourScale(offset: Float): Float =
     1f + (CAROUSEL_PEEK_NEIGHBOUR_SCALE - 1f) * offset.coerceIn(0f, 1f)
 
 /**
- * Height of the drawing band across the top of the EXPANDED editor, dp: the preview keeps its
- * [aspect] (width : height) over whatever width is left beside the side column, between
- * [floorDp] and [capDp]. The band is sized from the drawing, never from the side column, so
- * the column scrolls inside the band and a long warning list can never push the carousel down.
+ * Height the DRAWING wants in the band across the top of the EXPANDED editor, dp: the preview
+ * keeps its [aspect] (width : height) over whatever width is left beside the side column, between
+ * [floorDp] and [capDp]. The band itself is the larger of this and the side column's content
+ * ([expandedBandHeightDp]), so the side column is never clipped short of the cap.
  */
 fun expandedDrawingBandHeightDp(
     contentWidthDp: Float,
@@ -80,6 +90,46 @@ fun expandedDrawingBandHeightDp(
     val previewWidth = (contentWidthDp - sideColumnWidthDp - gapDp).coerceAtLeast(0f)
     return (previewWidth / aspect).coerceIn(floorDp, capDp)
 }
+
+/**
+ * Height of the drawing band, dp: the LARGER of what the drawing wants ([drawingDp], from
+ * [expandedDrawingBandHeightDp]) and the side column's content ([sideColumnDp] — the overall
+ * length box, the add button and the warnings), never over [capDp]. A side column taller than the
+ * drawing grows the band rather than being clipped mid-warning under spare paper beside the shaft
+ * (on-device report); one taller than the cap scrolls inside the band, so a long warning list can
+ * still never push the carousel below the cap.
+ */
+fun expandedBandHeightDp(drawingDp: Float, sideColumnDp: Float, capDp: Float): Float =
+    maxOf(drawingDp, sideColumnDp).coerceAtMost(capDp).coerceAtLeast(0f)
+
+/**
+ * The band's height once the keyboard is up, dp. [bandDp] is the band with no keyboard,
+ * [viewportDp] the height the band and the component region share, and [imeDp] the keyboard's
+ * inset over that viewport. With the keyboard up the band gives up height so the component region
+ * keeps [carouselMinDp] — the focused field, its label and its notice stay above the keyboard
+ * (on-device report: the band held its height and left the card ~65 dp) — but never below
+ * [bandMinDp], the drawing's own floor. No keyboard returns [bandDp] unchanged, and the band only
+ * ever shrinks for one.
+ */
+fun expandedBandHeightUnderImeDp(
+    bandDp: Float,
+    viewportDp: Float,
+    imeDp: Float,
+    carouselMinDp: Float,
+    bandMinDp: Float,
+): Float {
+    if (imeDp <= 0f) return bandDp
+    val room = viewportDp - imeDp - carouselMinDp
+    return minOf(bandDp, room.coerceAtLeast(bandMinDp))
+}
+
+/**
+ * The widest the preview may draw inside a band [bandInnerDp] tall, dp: the width that keeps its
+ * [aspect] at the band's height (never over [capDp]). A band shortened for the keyboard narrows
+ * the drawing rather than stretching its box to the full width at the shorter height.
+ */
+fun expandedPreviewMaxWidthDp(bandInnerDp: Float, aspect: Float, capDp: Float): Float =
+    minOf(bandInnerDp, capDp).coerceAtLeast(0f) * aspect
 
 /**
  * Height of the component carousel in a MEDIUM window's scrolling column (a portrait tablet):

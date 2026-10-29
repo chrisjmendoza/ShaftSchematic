@@ -2,7 +2,9 @@ package com.android.shaftschematic.geom
 
 import com.android.shaftschematic.model.PitSize
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -57,5 +59,30 @@ class WearPitMathTest {
         assertEquals("b", pickPitAt(45f, 10f, targets, padPx = 6f))
         // Far from both
         assertNull(pickPitAt(25f, 80f, targets, padPx = 2f))
+    }
+
+    // A value halo 10 wide × 40 tall, centred on (100, 50).
+    private val halo = WornValueColumn(
+        cx = 100f, cy = 50f, haloLeft = 95f, haloTop = 30f, haloRight = 105f, haloBottom = 70f,
+    )
+
+    @Test
+    fun `a pit X centred under a value halo touches it`() {
+        assertTrue(pitXTouchesHalo(cx = 100f, cy = 50f, halfArm = 3.4f, strokePad = 0.5f, halo = halo))
+    }
+
+    @Test
+    fun `a pit X whose arm only reaches the halo edge still touches it`() {
+        // Centre 4 pt left of the halo, arm 3.4 + stroke pad 0.6 = exactly 4 → touching counts.
+        assertTrue(pitXTouchesHalo(cx = 91f, cy = 50f, halfArm = 3.4f, strokePad = 0.6f, halo = halo))
+        // The stroke pad is what reaches it: without it the X stops 0.6 short.
+        assertFalse(pitXTouchesHalo(cx = 91f, cy = 50f, halfArm = 3.4f, strokePad = 0f, halo = halo))
+    }
+
+    @Test
+    fun `a pit X clear of the halo does not touch it`() {
+        assertFalse(pitXTouchesHalo(cx = 140f, cy = 50f, halfArm = 3.4f, strokePad = 0.5f, halo = halo))
+        // Beside the halo axially but past its end across the shaft.
+        assertFalse(pitXTouchesHalo(cx = 100f, cy = 80f, halfArm = 3.4f, strokePad = 0.5f, halo = halo))
     }
 }

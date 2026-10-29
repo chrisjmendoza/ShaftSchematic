@@ -319,7 +319,7 @@ fun SettingsRoute(
                     Text(
                         "Default drawing size",
                         style = MaterialTheme.typography.titleSmall,
-                        modifier = Modifier.padding(start = 4.dp, top = 4.dp)
+                        modifier = Modifier.padding(top = 4.dp)
                     )
                     Text(
                         "Drawn shaft height on paper at 100% “Shaft height”. Set what a " +
@@ -1272,7 +1272,7 @@ private fun LineThicknessControl(
                     if (parsed != null) onScaleChange(parsed.coerceIn(50, 200) / 100f)
                 },
                 modifier = Modifier
-                    .width(72.dp)
+                    .width(LINE_THICKNESS_FIELD_WIDTH)
                     .onFocusChanged { focus ->
                         if (!focus.isFocused) {
                             val parsed = fieldText.trim().trimEnd('%').toIntOrNull()
@@ -1294,6 +1294,13 @@ private fun LineThicknessControl(
         }
     }
 }
+
+/**
+ * Width of the Line Thickness percent field: the widest value, "200", plus its "%" suffix and the
+ * outlined field's 16 dp side padding. Narrower, the suffix overlaps the value's last digit
+ * (on-device report: the suffix clipped the last digit of "100%").
+ */
+private val LINE_THICKNESS_FIELD_WIDTH = 88.dp
 
 @Composable
 private fun PreviewColorRow(

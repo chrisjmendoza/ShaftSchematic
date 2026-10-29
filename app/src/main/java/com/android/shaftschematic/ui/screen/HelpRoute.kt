@@ -528,6 +528,26 @@ internal val helpSections: List<HelpSection> = listOf(
                 manualAnchor = "editor-bodies",
             ),
             HelpTopic(
+                "Component blends and seal areas",
+                "A blend is a smooth machined ramp at a body end: the drawing curves out of the " +
+                    "body's own face, from the neighbour's Ø into the body's Ø, instead of a " +
+                    "square shoulder. Each face has its own Square | Blend chips under " +
+                    "\"Component blend\" on the body card (explicit or auto) and in Add Body; " +
+                    "Blend shows the length the curve runs in from the face, and one Shape — " +
+                    "S-curve, Fillet or Eased cone — serves both faces. Where a liner butts a " +
+                    "blended face, \"At a liner: Seat | Liner OD\" picks where the curve starts: " +
+                    "halfway between the liner OD and the body Ø (Seat, the default), or the " +
+                    "full liner OD for a shaft that ramps straight up to the liner.\n\n" +
+                    "A seal area is the stretch at a body end the fiberglass seats into. Tick " +
+                    "AFT or FWD under \"Seal areas\" and give it a length; it is measured from " +
+                    "the face, whether that face is square or blended, and draws as three " +
+                    "dashed cuts across the body.\n\n" +
+                    "Neither prints a dimension or a footer line — the rails still dimension the " +
+                    "body ends as if they were square — so a short blend is drawn wider than " +
+                    "scale just so it can be seen.",
+                manualAnchor = "components-blends",
+            ),
+            HelpTopic(
                 "Tapers, keyways, and spooned ends",
                 "Tapers measure from the AFT or FWD end (\"Measure From\" chips on the card and " +
                     "in the Add dialog). The rate field takes a ratio (1:12), inches per foot " +

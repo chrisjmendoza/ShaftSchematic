@@ -15,6 +15,47 @@ import org.junit.Test
  */
 class ShaftLayoutTest {
 
+    private fun body(start: Float, end: Float) = com.android.shaftschematic.ui.resolved.ResolvedBody(
+        id = "b$start",
+        type = com.android.shaftschematic.ui.resolved.ResolvedComponentType.BODY,
+        source = com.android.shaftschematic.ui.resolved.ResolvedComponentSource.EXPLICIT,
+        startMmPhysical = start,
+        endMmPhysical = end,
+        diaMm = 100f,
+    )
+
+    @Test
+    fun `component extent spans the parts and is null for none`() {
+        assertNull(emptyList<com.android.shaftschematic.ui.resolved.ResolvedComponent>().componentAxialExtentMm())
+        assertEquals(0f to 1146f, listOf(body(0f, 500f), body(500f, 1146f)).componentAxialExtentMm())
+    }
+
+    @Test
+    fun `a body past a shortened OAL widens the window to hold it`() {
+        // OAL 1000, a body running to 1146: the window reaches the body's end, so its FWD end maps
+        // inside the content rect rather than past the right edge.
+        val spec = ShaftSpec(overallLengthMm = 1000f)
+        val parts = listOf(body(0f, 500f), body(500f, 1146f))
+        val result = ShaftLayout.compute(
+            spec = spec, leftPx = 0f, topPx = 0f, rightPx = 800f, bottomPx = 200f, marginPx = 12f,
+            resolvedComponents = parts, extentMm = parts.componentAxialExtentMm(),
+        )
+        assertEquals(1146f, result.maxXMm, 0.001f)
+        assertTrue(result.xPx(1146f) <= result.contentRightPx + 0.01f)
+    }
+
+    @Test
+    fun `parts inside the OAL leave the window at the OAL`() {
+        val spec = ShaftSpec(overallLengthMm = 1000f)
+        val parts = listOf(body(0f, 400f), body(400f, 1000f))
+        val result = ShaftLayout.compute(
+            spec = spec, leftPx = 0f, topPx = 0f, rightPx = 800f, bottomPx = 200f, marginPx = 12f,
+            resolvedComponents = parts, extentMm = parts.componentAxialExtentMm(),
+        )
+        assertEquals(0f, result.minXMm, 0.001f)
+        assertEquals(1000f, result.maxXMm, 0.001f)
+    }
+
     @Test
     fun `compute returns valid result for empty spec`() {
         val spec = ShaftSpec(overallLengthMm = 1000f)
