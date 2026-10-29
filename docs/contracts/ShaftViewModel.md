@@ -4,7 +4,7 @@ ShaftViewModel Contract
 Layer: UI → ViewModel  
 Purpose: Owns editable ShaftSpec state, unit selection, grid toggle, and routes all commits from the UI to the model/persistence.
 
-Version: v1.4 (2026-10-29)
+Version: v1.5 (2026-10-29)
 
 Invariants
 - All stored geometry is **canonical millimeters (mm)**.  
@@ -241,6 +241,7 @@ editor* above); the listings below name the values ahead of it.
 - `addTaperAt(startMm, lengthMm, startDiaMm, endDiaMm, rateText, reference: LinerAuthoredReference = AFT, keyway…, target)` — `startDiaMm`/`endDiaMm` arrive **x-ordered AFT → FWD** (the Add dialog orders the typed S.E.T./L.E.T. by the taper's physical half, `ui/input/TaperSetLetMapping.kt`); `reference` records the measured-from end and is stored on `Taper.authoredReference` so the carousel card reopens in that frame. Which end is the Small End — used to derive a missing diameter from the rate and to seed the next dialog's SET/LET defaults — comes from `taperSmallEndAtStart` against `spec.overallLengthMm`, the shaft's authored OAL (nothing grows it around an overhanging taper; a 0 OAL has no frame and classifies AFT).
 - `addBodyAt(startMm, lengthMm, diaMm, keyway…, blend…, target)` — see `updateBodyBlend` above for the blend params; `docs/contracts/Defaults.md` carries the full parameter order.
 - `addThreadAt(startMm, lengthMm, majorDiaMm, pitchMm, excludeFromOAL = false, isAftEnd = true, metricDesignation = null, reliefLenMm = 0f, reliefDiaMm = 0f, reliefAtAft = false, target)` — major Ø third, pitch fourth; swapping them yields nonsense TPI. The relief rides the add under add-dialog parity; 0/0 = no relief.
+- `setThreadExcludeFromOal(id, excludeFromOAL, adjustOal = false, target)` — the thread card's "Include thread in OAL" prompt. ONE `updateSpec(target)` through the pure `ShaftSpec.withThreadOalInclusion` (`model/ShaftSpecExtensions.kt`): out of the OAL, the thread goes out at the end it sits at (AFT gap ≤ FWD gap → AFT) and syncs outside it; into the OAL, it lands INSIDE the shaft at its end (start 0 at AFT, `OAL − L` at FWD, floored at 0). With `adjustOal` the OAL shrinks/grows by the thread's length through `withNewOal` — exactly what typing the OAL does; no second OAL-change path, and only when OAL > 0 and length > 0. A relief at its suggested end follows. Flag, OAL change and relief follow are one undo step; with `adjustOal`, a re-anchored FWD part emits `ShowOalMovedSnack` through `announceOalMove(before, target)`, the helper `onSetOverallLengthMm` shares. Unknown id or unchanged flag = no-op. See `OverallLength.md` §"Thread inclusion prompt".
 - `setThreadRelief(id, reliefLenMm, reliefDiaMm, reliefAtAft, target)` — the thread card's relief commits (switch, both fields, the "Relief at" chips), the `setThreadEndPosition` shape: through `updateSpec(target)`, so it undoes and reaches the Final drawing; values stored verbatim (negatives floor at 0; 0/0 clears). The relief is PART of the thread's stored span, so nothing else moves — the thread's own start/length, every other component and the OAL stay as authored. Unknown id = no-op.
 - `addCouplerBoltSlotAt(startMm, holeDiaMm, count, spacingMm, through = true, depthMm = 0f, reference: SlotAuthoredReference = FWD, target)` — adds a coupler bolt-slot row. Slots never drive OAL; no body split. Paired with `updateCouplerBoltSlot(index, …, target)`, `updateCouplerBoltSlotReference/ShowRail(index, …, target)`, and `removeCouplerBoltSlot(id, target)` (recoverable via the general `undoEdit()` session history; no body merge). See `CouplerBoltSlot.md`.
 
@@ -260,6 +261,11 @@ Future Enhancements
 
 Change Log
 ----------
+**v1.5 (2026-10-29)**
+- `setThreadExcludeFromOal` gains `adjustOal: Boolean = false` (before `target`) and delegates to
+  `withThreadOalInclusion`; the OAL move snackbar is factored into `announceOalMove`, shared with
+  `onSetOverallLengthMm` (on-device report: the card's switch asks whether the OAL follows).
+
 **v1.4 (2026-10-29)**
 - Settings → Units re-displays the open document without dirtying it: `redisplayUnit` moves the
   dirty baseline's unit with the live unit (on-device ruling).

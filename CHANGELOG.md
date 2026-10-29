@@ -8,6 +8,31 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-29
 
+### feat(editor): "Include thread in OAL" asks whether the overall length follows the thread
+
+- On a thread card, tapping **Include thread in OAL** now asks before it changes anything. Taking
+  a thread OUT of the OAL offers **Shorten OAL** (the overall length drops by the thread's length)
+  or **Keep OAL**; bringing one IN offers **Lengthen OAL** or **Keep OAL**. The prompt shows the
+  old and new OAL in the drawing's unit. **Cancel** changes nothing. With no OAL typed yet, or a
+  thread with no length, the switch flips straight away as before.
+- Shorten/Lengthen changes the OAL exactly as typing the new value into the OAL field does: parts
+  measured from the FWD end keep their distance from it, parts measured from the AFT end stay put,
+  and the "moved …" message appears when a part moved. One **Undo** takes back the switch and the
+  OAL together.
+- A thread taken out of the OAL now goes out at the end it is actually sitting at — a FWD-end
+  thread no longer jumps to the AFT end. A thread brought into the OAL now lands INSIDE the shaft
+  at its end instead of staying outside it and lighting the "extends past the end" warning.
+- The case that prompted this — an OAL measured over the FWD thread, with the thread marked out of
+  it: switch the thread in and choose **Keep OAL**. A part that was placed against that (wrong)
+  FWD end now overlaps the thread and shows the collision chip; switching the thread back out with
+  **Shorten OAL** carries every FWD-measured part to the corrected end, which is the two-step
+  route when the end part should follow. Typing the corrected OAL into the field with the thread
+  left out does the same in one step.
+- The Add Thread dialog is unchanged.
+- Docs: `docs/contracts/OverallLength.md` (Thread inclusion prompt), `ShaftScreen.md`,
+  `ShaftViewModel.md`, `AddComponentDialogs.md`, the User Manual (Components, Editor, Help), Help →
+  the thread topic.
+
 ### feat(output): wear areas print as a light grey highlight on the consolidated sheet
 
 - On the consolidated sheet each measured wear area now prints as a light grey (about 10%)

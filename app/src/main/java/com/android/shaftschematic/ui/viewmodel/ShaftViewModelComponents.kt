@@ -12,7 +12,8 @@ import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.SlotAuthoredReference
 import com.android.shaftschematic.model.Taper
 import com.android.shaftschematic.model.Threads
-import com.android.shaftschematic.model.withReliefEndFollowing
+import com.android.shaftschematic.model.withThreadOalInclusion
+import com.android.shaftschematic.model.withThreadReliefFollowing
 import com.android.shaftschematic.model.mergeBodiesAround
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.splitBodiesAround
@@ -582,21 +583,22 @@ private fun ShaftViewModel.applyMetricThreadUnit(threadId: String, metricDesigna
     }
 }
 
+/**
+ * Flips thread [id] in or out of the OAL on [target]'s drawing ([withThreadOalInclusion]); with
+ * [adjustOal] the OAL grows or shrinks by the thread's length, exactly as typing it would. ONE
+ * [updateSpec] — the flag, the OAL change and the relief follow are one undo step — and an OAL
+ * change that re-anchored a FWD-measured part announces it through the OAL field's own snackbar,
+ * whose Undo takes the whole step back.
+ */
 fun ShaftViewModel.setThreadExcludeFromOal(
     id: String,
     excludeFromOAL: Boolean,
+    adjustOal: Boolean = false,
     target: SpecTarget = SpecTarget.ORIGINAL,
-) = updateSpec(target) { s ->
-    val idx = s.threads.indexOfFirst { it.id == id }
-    if (idx == -1) s
-    else {
-        val before = s.threads[idx]
-        s.copy(
-            threads = s.threads.toMutableList().also { l ->
-                l[idx] = before.copy(excludeFromOAL = excludeFromOAL)
-            }
-        ).syncExcludedThreadPositions().withThreadReliefFollowing(id, before)
-    }
+) {
+    val before = specValue(target)
+    updateSpec(target) { s -> s.withThreadOalInclusion(id, excludeFromOAL, adjustOal) }
+    if (adjustOal) announceOalMove(before, target)
 }
 
 fun ShaftViewModel.setThreadEndPosition(
@@ -614,20 +616,6 @@ fun ShaftViewModel.setThreadEndPosition(
             }
         ).syncExcludedThreadPositions().withThreadReliefFollowing(id, before)
     }
-}
-
-/**
- * The thread [id]'s relief end carried across a position change from [before]
- * ([withReliefEndFollowing]) — applied AFTER `syncExcludedThreadPositions`, so it reads the
- * thread's settled start. Part of the same user action, so it is one undo step with it.
- */
-private fun ShaftSpec.withThreadReliefFollowing(id: String, before: Threads): ShaftSpec {
-    val idx = threads.indexOfFirst { it.id == id }
-    if (idx == -1) return this
-    val moved = threads[idx]
-    val followed = moved.withReliefEndFollowing(before, overallLengthMm)
-    return if (followed === moved) this
-    else copy(threads = threads.toMutableList().also { it[idx] = followed })
 }
 
 /**

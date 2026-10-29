@@ -203,6 +203,79 @@ fun ShaftSpec.withNewOal(newOal: Float): ShaftSpec {
     ).syncExcludedThreadPositions()
 }
 
+/**
+ * Flips thread [id] in or out of the OAL; with [adjustOal] the OAL grows or shrinks by the
+ * thread's length through [withNewOal] — exactly what typing the new OAL does, so FWD-measured
+ * tapers, liners and bolt rows keep their distance from the FWD face and AFT-measured parts keep
+ * their start. Nothing else moves. Behind the card's "Include thread in OAL" prompt (on-device
+ * report: an OAL measured over the FWD thread, with the thread marked out of it, printed a
+ * thread-length too long, and switching the thread in put it on top of the FWD end part).
+ *
+ * - Out of the OAL: the thread goes out at the end it is SITTING at — AFT when its AFT gap is no
+ *   larger than its FWD gap, FWD otherwise (the stored `isAftEnd` is dormant while a thread is
+ *   included, its chips hidden, so a stale default would send a FWD thread to the AFT end). With
+ *   no OAL typed the stored end stands. Shortening by the thread then leaves a FWD thread exactly
+ *   where it was, now beyond the new FWD face.
+ * - Into the OAL: the shaft lengthens first (when asked), then the thread is placed INSIDE the
+ *   shaft at its end — start 0 at AFT, `OAL − length` at FWD, floored at 0 — because "included in
+ *   the OAL" means inside it. That start is derived (an excluded thread's start is system-placed),
+ *   so this replaces a derived value, never a typed one. Lengthening leaves a FWD thread exactly
+ *   where it was, now inside the new OAL.
+ *
+ * The OAL changes only when there is one (> 0) and the thread has a length; `withNewOal` clamps
+ * at 0. A relief still at its suggested end follows the move ([withThreadReliefFollowing]). An
+ * unknown [id] or an unchanged flag returns this spec.
+ */
+fun ShaftSpec.withThreadOalInclusion(id: String, excludeFromOAL: Boolean, adjustOal: Boolean): ShaftSpec {
+    val idx = threads.indexOfFirst { it.id == id }
+    if (idx == -1) return this
+    val before = threads[idx]
+    if (before.excludeFromOAL == excludeFromOAL) return this
+    val oal = overallLengthMm
+    val len = before.lengthMm
+    val adjusting = adjustOal && oal > 0f && len > 0f
+
+    fun ShaftSpec.withThreadAt(i: Int, change: (Threads) -> Threads): ShaftSpec =
+        copy(threads = threads.toMutableList().also { it[i] = change(it[i]) })
+
+    val after = if (excludeFromOAL) {
+        val atAft = if (oal > 0f) {
+            val aftGap = before.startFromAftMm
+            val fwdGap = oal - (before.startFromAftMm + len)
+            aftGap <= fwdGap
+        } else {
+            before.isAftEnd
+        }
+        val flipped = withThreadAt(idx) { it.copy(excludeFromOAL = true, isAftEnd = atAft) }
+            .syncExcludedThreadPositions()
+        if (adjusting) flipped.withNewOal(oal - len) else flipped
+    } else {
+        val resized = if (adjusting) withNewOal(oal + len) else this
+        val start = if (before.isAftEnd) 0f else (resized.overallLengthMm - len).coerceAtLeast(0f)
+        resized.withThreadAt(idx) { it.copy(excludeFromOAL = false, startFromAftMm = start) }
+    }
+    return after.withThreadReliefFollowing(id, before, beforeOverallLengthMm = oal)
+}
+
+/**
+ * The thread [id]'s relief end carried across a position change from [before]
+ * ([withReliefEndFollowing]) — applied AFTER the thread's position settles, so it reads the
+ * settled start. Part of the same user action, so it is one undo step with it.
+ * [beforeOverallLengthMm] is the OAL [before] sat in, when the same step changed it.
+ */
+internal fun ShaftSpec.withThreadReliefFollowing(
+    id: String,
+    before: Threads,
+    beforeOverallLengthMm: Float = overallLengthMm,
+): ShaftSpec {
+    val idx = threads.indexOfFirst { it.id == id }
+    if (idx == -1) return this
+    val moved = threads[idx]
+    val followed = moved.withReliefEndFollowing(before, overallLengthMm, beforeOverallLengthMm)
+    return if (followed === moved) this
+    else copy(threads = threads.toMutableList().also { it[idx] = followed })
+}
+
 /** Look up the Segment for a ComponentKey in this spec. */
 private fun ShaftSpec.segmentFor(key: ComponentKey): Segment? =
     when (key.kind) {

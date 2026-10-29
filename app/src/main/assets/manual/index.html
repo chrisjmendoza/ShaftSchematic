@@ -353,7 +353,7 @@
     <thead><tr><th>Message</th><th>Meaning</th></tr></thead>
     <tbody>
       <tr class="short"><td><span class="ui">Extends past shaft length</span></td><td>The component runs past the OAL. Either the component or the OAL is wrong.</td></tr>
-      <tr><td><span class="ui">Extends past the AFT end of the shaft</span></td><td>The component starts before the AFT end — for example a thread switched to <span class="ui">Include thread in OAL</span> while it still hangs off that end. Move it, or switch the thread back out of the OAL.</td></tr>
+      <tr><td><span class="ui">Extends past the AFT end of the shaft</span></td><td>The component starts before the AFT end — for example a part measured from the FWD end whose distance from that end plus its length is more than the OAL. Move it, or check the OAL.</td></tr>
       <tr><td><span class="ui">Very short segment (&lt; 1 mm)</span></td><td>A length so short it is probably a typo.</td></tr>
       <tr><td><span class="ui">Length exceeds 15 m — check for a typo</span></td><td>A length no shaft has.</td></tr>
       <tr><td><span class="ui">Diameter exceeds 1 m — check for a typo</span></td><td>A diameter no shaft has.</td></tr>
@@ -627,7 +627,7 @@
   <table class="ref">
     <thead><tr><th>Field / control</th><th>What it means</th></tr></thead>
     <tbody>
-      <tr class="short"><td><span class="ui">Include thread in OAL</span></td><td>On (default): the thread is part of the overall length and is placed by its Start. Off: the thread sits outside the OAL, beyond the end of the shaft.</td></tr>
+      <tr><td><span class="ui">Include thread in OAL</span></td><td>On (default): the thread is part of the overall length and is placed by its Start. Off: the thread sits outside the OAL, beyond the end of the shaft. On the card, tapping it asks whether the overall length should change with the thread (see below).</td></tr>
       <tr><td><span class="ui">Start</span></td><td>Distance from the AFT end to the start of the thread. Shown only while the thread counts in the OAL (overall length).</td></tr>
       <tr><td><span class="ui">Thread end:</span> <span class="ui">AFT</span> | <span class="ui">FWD</span></td><td>Replaces Start when the thread is excluded from the OAL: which end of the shaft the thread hangs off. Default AFT.</td></tr>
       <tr><td><span class="ui">Major Ø</span>, <span class="ui">TPI</span></td><td>Imperial threads only. TPI accepts decimals and fractions.</td></tr>
@@ -639,6 +639,8 @@
 
   <h3>Threads excluded from the OAL</h3>
   <p  class="keep">A typical propeller shaft is quoted S.E.T. to S.E.T., with the nut threads standing outside that figure. Turn <span class="ui">Include thread in OAL</span> off and pick the <span class="ui">Thread end</span>. The app places the thread flush against that end of the shaft, outside the dimensioned length, and keeps it there when the OAL changes. The OAL dimension on the sheet stops at the shaft end and the thread prints beyond it.</p>
+  <p>On a thread card the switch asks before it changes anything. Switching a thread <em>out</em> offers <span class="ui">Shorten OAL</span>, which takes the thread's length off the overall length, or <span class="ui">Keep OAL</span>. Switching one <em>in</em> offers <span class="ui">Lengthen OAL</span>, which adds the thread's length, or <span class="ui">Keep OAL</span>. The prompt shows the old and the new OAL. Shorten and Lengthen change the OAL exactly as typing the new value into the <span class="ui">Overall Length</span> field would: parts measured from the FWD end keep their distance from it, and the app says which parts moved. <span class="ui">Cancel</span> changes nothing, and one Undo takes back the switch and the OAL together.</p>
+  <p  class="keep">A thread switched out goes out at the end it is sitting at. A thread switched in is placed inside the shaft at its end — flush with the AFT end, or ending at the FWD end. So if the OAL was measured over the thread but the thread was marked out of it, switch the thread in and choose <span class="ui">Keep OAL</span>; a part that was placed against that end will then overlap the thread and its card says so. With no overall length typed yet the switch simply flips.</p>
 
   <h3 id="components-thread-relief">Thread relief</h3>
   <p  class="keep">A relief is the plain groove turned below the thread root where the thread runs up to its shoulder, so the tool can run out and the nut seats. Turn on <span class="ui">Thread relief</span> and three more controls appear:</p>
@@ -2539,7 +2541,10 @@
   <p  class="keep">The part you are adding conflicts with something already on the shaft. The dialog lists each problem, for example <span class="ui">Overlaps FWD Taper</span> (the name on that part's card) or <span class="ui">Falls outside shaft span</span> (with the shaft's OAL). Tap <span class="ui">Add Anyway</span> to add it and fix the position afterwards, or <span class="ui">Cancel</span> to go back and correct the numbers first.</p>
 
   <h3>A thread card says “Thread must be at a shaft end, not between components”</h3>
-  <p  class="keep">A thread counted in the overall length has to sit at one end of the shaft. Move it to the AFT or FWD end. If the OAL is quoted to the shoulder and the thread hangs off past it, switch off <span class="ui">Include thread in OAL</span> on the card or in the Add Thread dialog and choose which end it hangs from with the <span class="ui">Thread end:</span> <span class="ui">AFT</span> | <span class="ui">FWD</span> chips.</p>
+  <p  class="keep">A thread counted in the overall length has to sit at one end of the shaft. Move it to the AFT or FWD end. If the OAL is quoted to the shoulder and the thread hangs off past it, switch off <span class="ui">Include thread in OAL</span> on the card or in the Add Thread dialog and choose which end it hangs from with the <span class="ui">Thread end:</span> <span class="ui">AFT</span> | <span class="ui">FWD</span> chips. On the card the switch asks whether to <span class="ui">Shorten OAL</span> by the thread's length or <span class="ui">Keep OAL</span>: shorten when the OAL you typed was measured over the thread.</p>
+
+  <h3>The drawing prints a thread-length too long</h3>
+  <p>The OAL was measured over the thread, but the thread is marked out of the OAL, so the app hangs it beyond the shaft end and the drawing runs a thread-length long. Switch <span class="ui">Include thread in OAL</span> on and choose <span class="ui">Keep OAL</span>: the thread moves inside the shaft at its end and the OAL stays as typed. A part that was placed against that end now overlaps the thread and its card says so — move it, or switch the thread back out and choose <span class="ui">Shorten OAL</span>, which carries every part measured from the FWD end to the corrected end. Typing the corrected OAL into the <span class="ui">Overall Length</span> field with the thread left out does the same in one step.</p>
 
   <h3>I shortened a body and a new “Body (auto)” card appeared</h3>
   <p  class="keep">The length you took off the body is now bare shaft, and the app fills every uncovered span with an automatic body so the drawing stays continuous. The new <span class="ui">Body (auto)</span> card shows that span. Your body keeps the exact length you typed. To make the bare section a real, editable body, tick <span class="ui">Explicit body</span> on its card.</p>

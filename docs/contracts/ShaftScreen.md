@@ -4,7 +4,8 @@ ShaftScreen Contract
 Layer: UI → Screens  
 Purpose: Present the shaft editor surface and bind ViewModel state to user controls.
 
-Version: v0.24 (2026-10-29 — the EXPANDED drawing band grows to its side column under the cap
+Version: v0.25 (2026-10-29 — the thread card's "Include thread in OAL" switch asks whether the
+OAL follows. v0.24 2026-10-29 — the EXPANDED drawing band grows to its side column under the cap
 and yields height to the keyboard; the editor snackbar clears the navigation bar; the delete
 snackbar's Undo returns the carousel to the restored card. v0.23
 2026-10-28 — the warning banner names each problem part, lists overlaps, and
@@ -58,6 +59,16 @@ closing the dialog never drops the cursor and keyboard into the OAL field. With
   shaft opens `ShaftDiaPromptDialog` (`shaft_dia_prompt`, field `shaft_dia_prompt_field`,
   `shaft_dia_prompt_set` / `shaft_dia_prompt_skip`), wired in `ShaftRoute`. See
   `OverallLength.md`.
+- **Thread card: "Include thread in OAL" asks.** Tapping the row (`thread_include_in_oal`) with
+  an OAL typed and a thread length > 0 opens a prompt instead of flipping — "Exclude thread from
+  OAL" offers **Shorten OAL**, "Include thread in OAL" offers **Lengthen OAL**, each beside
+  **Keep OAL** and **Cancel** (`thread_oal_adjust` / `thread_oal_keep` / `thread_oal_cancel`), the
+  old and new OAL named in the document unit. The switch shows the stored state until a choice
+  is made; Cancel or an outside tap applies nothing. With no OAL or no thread length the switch
+  flips at once (`adjustOal = false`). The card calls `onSetThreadExcludeFromOal(id,
+  excludeFromOAL, adjustOal)` → `ShaftViewModel.setThreadExcludeFromOal` (rules, one undo step and
+  the move snackbar: `OverallLength.md` §"Thread inclusion prompt"). Covered by
+  `ThreadOalPromptCardTest`. A confirmation, not a control, so `AddThreadDialog` carries nothing.
 - Text fields **commit on blur** or IME “Done”; no live ViewModel writes while typing.
   The OAL field follows the same rule — it no longer commits per keystroke (deleting one
   digit on the way from 368.5 to 367.75 committed a transient 36″ shaft and left a
@@ -304,8 +315,8 @@ Notes
   that starts before 0 reads "Extends past the AFT end of the shaft" on its card and "*Part*
   starts *d* before the AFT end" on the banner; one that runs beyond the OAL keeps "past shaft
   length" on the card and reads "*Part* runs *d* past the FWD end" on the banner. "Past shaft length"
-  for a part hanging off the AFT end (an excluded AFT thread switched into the OAL lands at a
-  negative start) read as wrong — emulator QA. The two halves (`startsBeforeAftEnd`,
+  for a part hanging off the AFT end (a component whose start was typed before 0) read as wrong
+  — emulator QA. The two halves (`startsBeforeAftEnd`,
   `endsPastOal`) ARE `outsideShaftSpan` (it is their OR); they exist only to name the end.
   Separately, the **Length** field rejects `≤ 0` ("Must be > 0", `positiveLengthErrorMm`)
   through the standard validator path — the field errors, reverts, and does not commit, so a
@@ -422,6 +433,12 @@ Future Enhancements
 
 Change Log
 -----------
+**v0.25 (2026-10-29)**
+- **"Include thread in OAL" asks whether the OAL follows** (on-device report: an OAL measured over
+  the FWD thread, the thread marked out of it). Shorten/Lengthen OAL, Keep OAL or Cancel; an
+  included thread lands inside the shaft at its end. See the invariant above and
+  `OverallLength.md` §"Thread inclusion prompt".
+
 **v0.24 (2026-10-29)**
 - **EXPANDED band = max(drawing, side column) under the 320 dp cap**, with a foot fade when the
   side column scrolls; **the band yields to the keyboard** so the focused card keeps its field,

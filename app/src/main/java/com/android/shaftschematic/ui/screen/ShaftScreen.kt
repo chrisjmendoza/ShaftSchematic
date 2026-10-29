@@ -320,7 +320,7 @@ fun ShaftScreen(
     onSetKeyways180Apart: (Boolean) -> Unit,
     onSetKeyways90Apart: (Boolean) -> Unit,
     onSetKeyways90Cw: (Boolean) -> Unit,
-    onSetThreadExcludeFromOal: (id: String, excludeFromOAL: Boolean) -> Unit,
+    onSetThreadExcludeFromOal: (id: String, excludeFromOAL: Boolean, adjustOal: Boolean) -> Unit,
     onSetThreadEndPosition: (id: String, isAft: Boolean) -> Unit,
     onSetThreadRelief: (id: String, reliefLenMm: Float, reliefDiaMm: Float, reliefAtAft: Boolean) -> Unit,
 

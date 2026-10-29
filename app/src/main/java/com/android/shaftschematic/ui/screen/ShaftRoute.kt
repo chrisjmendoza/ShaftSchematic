@@ -433,7 +433,7 @@ fun ShaftRoute(
         onSetKeyways180Apart = { on -> vm.setKeyways180Apart(on, target) },
         onSetKeyways90Apart = { on -> vm.setKeyways90Apart(on, target) },
         onSetKeyways90Cw = { cw -> vm.setKeyways90Cw(cw, target) },
-        onSetThreadExcludeFromOal = { id, ex -> vm.setThreadExcludeFromOal(id, ex, target) },
+        onSetThreadExcludeFromOal = { id, ex, adjust -> vm.setThreadExcludeFromOal(id, ex, adjust, target) },
         onSetThreadEndPosition = { id, isAft -> vm.setThreadEndPosition(id, isAft, target) },
         onSetThreadRelief = { id, len, dia, atAft -> vm.setThreadRelief(id, len, dia, atAft, target) },
 

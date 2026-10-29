@@ -283,6 +283,12 @@ The Start field is **replaced** by the AFT/FWD chips when excluded from OAL — 
 not hidden in addition to them. Matches `ThreadPagerCard.kt`,
 `!includeInOal` block.
 
+The card's "Include thread in OAL" switch additionally ASKS whether the shaft's OAL follows the
+thread (Shorten/Lengthen OAL, Keep OAL, Cancel — `OverallLength.md` §"Thread inclusion prompt").
+That prompt is a **confirmation on a change to a STORED thread** (the `kw_remove_confirm` /
+`body_demote_confirm` class), not a control: an added thread has no prior inclusion to change, so
+`AddThreadDialog` carries nothing for it and its switch stays a plain switch. Not a parity gap.
+
 `isAftEnd` is passed through: `onSubmit → ShaftScreen.onAddThread → ShaftRoute →
 ShaftViewModel.addThreadAt()` and stored on the `Threads` model object.
 

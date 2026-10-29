@@ -7,17 +7,25 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.pdf.formatLenWithUnit
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.resolved.ResolvedThread
 import com.android.shaftschematic.ui.util.MUST_BE_POSITIVE_MSG
@@ -38,7 +46,8 @@ import com.android.shaftschematic.util.UnitSystem
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Carousel editor card for a thread: the "Include thread in OAL" switch, the imperial
+ * Carousel editor card for a thread: the "Include thread in OAL" switch (which asks whether the
+ * OAL follows the thread — [ThreadOalPromptDialog]), the imperial
  * Major Ø/TPI pair or the metric designation field, Length, and the thread relief
  * ([ThreadReliefCardSection]).
  *
@@ -67,7 +76,7 @@ internal fun ThreadPagerCard(
     onUpdateThread: (Int, Float, Float, Float, Float, String?) -> Unit,
     onUpdateThreadLabel: (Int, String?) -> Unit,
     onUpdateThreadShowLabel: (Int, Boolean) -> Unit,
-    onSetThreadExcludeFromOal: (id: String, excludeFromOAL: Boolean) -> Unit,
+    onSetThreadExcludeFromOal: (id: String, excludeFromOAL: Boolean, adjustOal: Boolean) -> Unit,
     onSetThreadEndPosition: (id: String, isAft: Boolean) -> Unit,
     onSetThreadRelief: (id: String, reliefLenMm: Float, reliefDiaMm: Float, reliefAtAft: Boolean) -> Unit,
     onRemoveThread: (String) -> Unit,
@@ -104,17 +113,39 @@ internal fun ThreadPagerCard(
         }
     ) {
         val includeInOal = !th.excludeFromOAL
+        // The switch ASKS whether the shaft's overall length follows the thread (on-device
+        // report: an OAL measured over the FWD thread, with the thread marked out of it). It keeps
+        // showing the stored state until a choice is made. With no OAL typed or no thread length
+        // there is nothing to ask, and it flips at once.
+        var oalPromptOpen by remember(th.id) { mutableStateOf(false) }
         Row(
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
                 .toggleable(
                     value = includeInOal,
                     role = androidx.compose.ui.semantics.Role.Switch,
-                    onValueChange = { checked -> onSetThreadExcludeFromOal(th.id, !checked) }
-                ).padding(vertical = 4.dp),
+                    onValueChange = { checked ->
+                        if (spec.overallLengthMm > 0f && th.lengthMm > 0f) oalPromptOpen = true
+                        else onSetThreadExcludeFromOal(th.id, !checked, false)
+                    }
+                ).padding(vertical = 4.dp)
+                .testTag("thread_include_in_oal"),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text("Include thread in OAL", modifier = Modifier.weight(1f))
             androidx.compose.material3.Switch(checked = includeInOal, onCheckedChange = null)
+        }
+        if (oalPromptOpen) {
+            ThreadOalPromptDialog(
+                excluding = includeInOal,
+                overallLengthMm = spec.overallLengthMm,
+                threadLengthMm = th.lengthMm,
+                unit = unit,
+                onChoose = { adjustOal ->
+                    oalPromptOpen = false
+                    onSetThreadExcludeFromOal(th.id, includeInOal, adjustOal)
+                },
+                onDismiss = { oalPromptOpen = false },
+            )
         }
         if (!includeInOal) {
             // AFT / FWD end selector — replaces the start input for excluded threads
@@ -210,4 +241,57 @@ internal fun ThreadPagerCard(
             ComponentUnitChip(th.id, unit, unitOverrides, onSetComponentUnit)
         }
     }
+}
+
+/**
+ * The "Include thread in OAL" prompt: [excluding] takes the thread out of the OAL (offering to
+ * shorten it by [threadLengthMm]), otherwise into it (offering to lengthen). [onChoose] receives
+ * `adjustOal` — `true` for Shorten/Lengthen, `false` for Keep OAL; Cancel and an outside tap
+ * choose nothing. Lengths print in the document's [unit].
+ *
+ * A confirmation on a change to a STORED thread (the `body_demote_confirm` class), not a control,
+ * so `AddThreadDialog` carries nothing for it.
+ */
+@Composable
+private fun ThreadOalPromptDialog(
+    excluding: Boolean,
+    overallLengthMm: Float,
+    threadLengthMm: Float,
+    unit: UnitSystem,
+    onChoose: (adjustOal: Boolean) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val newOalMm = if (excluding) overallLengthMm - threadLengthMm else overallLengthMm + threadLengthMm
+    val oldOal = formatLenWithUnit(overallLengthMm.toDouble(), unit)
+    val newOal = formatLenWithUnit(newOalMm.coerceAtLeast(0f).toDouble(), unit)
+    val verb = if (excluding) "Shorten" else "Lengthen"
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (excluding) "Exclude thread from OAL" else "Include thread in OAL") },
+        text = {
+            Text(
+                "${verb} the overall length by the thread? OAL $oldOal → $newOal. " +
+                    "Parts measured from the FWD end keep their distance from it, exactly as if " +
+                    "you typed the new OAL."
+            )
+        },
+        confirmButton = {
+            Row {
+                TextButton(
+                    onClick = { onChoose(false) },
+                    modifier = Modifier.testTag("thread_oal_keep"),
+                ) { Text("Keep OAL") }
+                TextButton(
+                    onClick = { onChoose(true) },
+                    modifier = Modifier.testTag("thread_oal_adjust"),
+                ) { Text("$verb OAL") }
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.testTag("thread_oal_cancel"),
+            ) { Text("Cancel") }
+        },
+    )
 }

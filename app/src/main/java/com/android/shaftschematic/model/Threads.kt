@@ -162,11 +162,19 @@ fun suggestedThreadReliefAtAft(
  * A relief at the OTHER end — deliberately put where the suggestion would not — is left alone,
  * as is a thread with no relief or a move that leaves the suggestion where it was. Length and Ø
  * never change.
+ *
+ * [beforeOverallLengthMm] is the OAL [before] sat in — different from [overallLengthMm] only when
+ * the same step changed the shaft length (the OAL inclusion prompt's Shorten/Lengthen), so the
+ * old suggestion is read against the shaft the thread was actually on.
  */
-fun Threads.withReliefEndFollowing(before: Threads, overallLengthMm: Float): Threads {
+fun Threads.withReliefEndFollowing(
+    before: Threads,
+    overallLengthMm: Float,
+    beforeOverallLengthMm: Float = overallLengthMm,
+): Threads {
     if (reliefLenMm <= 0f) return this
     val was = suggestedThreadReliefAtAft(
-        before.startFromAftMm, before.lengthMm, before.excludeFromOAL, before.isAftEnd, overallLengthMm,
+        before.startFromAftMm, before.lengthMm, before.excludeFromOAL, before.isAftEnd, beforeOverallLengthMm,
     )
     val now = suggestedThreadReliefAtAft(startFromAftMm, lengthMm, excludeFromOAL, isAftEnd, overallLengthMm)
     return if (reliefAtAft == was && was != now) copy(reliefAtAft = now) else this

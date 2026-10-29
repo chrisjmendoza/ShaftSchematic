@@ -194,7 +194,7 @@ class ThreadReliefCardTest {
                     onUpdateThread = { _, _, _, _, _, _ -> },
                     onUpdateThreadLabel = { _, _ -> },
                     onUpdateThreadShowLabel = { _, _ -> },
-                    onSetThreadExcludeFromOal = { _, _ -> },
+                    onSetThreadExcludeFromOal = { _, _, _ -> },
                     onSetThreadEndPosition = { _, _ -> },
                     onSetThreadRelief = { _, len, dia, atAft -> reported += Triple(len, dia, atAft) },
                     onRemoveThread = {},
