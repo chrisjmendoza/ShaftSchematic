@@ -251,7 +251,9 @@ live on the Output tab's rasterized real-PDF preview); pure layout in
 last** — wear-area bands and pit X's (migrated from the retired wear tab,
 `drawWearMarksOnRunoutProfile`), then worn-section boundaries, then ALL value text over
 knockout halos (worn values, then `drawDiaReadingsInProfile`); do not draw any mark after
-the text passes. Values **auto-fit their local band** (`fittedValueTextSize`, floor
+the text passes. A pit X that would cross a value's halo is not drawn (on-device ruling: the
+value stands above the pits) — the values are planned before the marks pass and their halos
+handed to it (`pitXTouchesHalo`); wear-area bands are never hidden. Values **auto-fit their local band** (`fittedValueTextSize`, floor
 `WORN_VALUE_MIN_TEXT_PT`/14 px canvas); the PDF profile follows the **hand-sheet
 compression convention** — drawn height follows TRUE diameter on the **default sizing
 curve** (`defaultShaftHeightPt`: STANDARD anchors are PROPORTIONAL — 8" → 1",
@@ -395,10 +397,13 @@ switches between strip and full page (on-device request: zoom on the threads whi
 thread sliders — a modal `ModalBottomSheet` took every outside touch as a dismiss, so the page
 could not be pinched while the sliders were up). An empty `pointerInput` on the panel makes it
 a hit-test target across its whole area, so a touch on its padding never pans the page under
-it. **An open tuning panel may never cover the page**: the preview switches to the fit-width
-**page strip** pinned under the app bar and the panel is capped below it
+it. **An open tuning panel may never cover the page**: at COMPACT/MEDIUM the preview switches to
+the fit-width **page strip** pinned under the app bar and the panel is capped below it
 (`tuningPageStripHeightDp` → `tuningSheetMaxHeightDp`, pure, off the real `PDF_PAGE_*_PT`
-constants; panel floor 40% of the screen, strip yields the remainder). The strip shows the
+constants; panel floor 40% of the screen, strip yields the remainder); at EXPANDED the panel
+docks beside the page as a right-hand column and the page keeps the ordinary full-page fit at
+full height in the width left of it (ONE resolver, `previewPageLayout`, both hosts — a strip on a
+landscape tablet drew a portrait page at a quarter of its width, on-device report). The strip shows the
 page's **ink band** (`util/PdfInkBounds.kt` — blank paper cropped, inked rows never cropped,
 band measured on sharp passes only so it can't resize under a dragging finger) and the cap
 counts the panel's OWN chrome outside the content slot — its header row (title + close),

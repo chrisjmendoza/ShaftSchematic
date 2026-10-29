@@ -3,6 +3,7 @@ package com.android.shaftschematic.ui.screen
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.settings.RunoutConfig
 import com.android.shaftschematic.settings.TirDirection
+import com.android.shaftschematic.ui.adaptive.WindowWidthClass
 import com.android.shaftschematic.util.PDF_PAGE_HEIGHT_PT
 import com.android.shaftschematic.util.PDF_PAGE_WIDTH_PT
 import com.android.shaftschematic.util.PDF_PREVIEW_RENDER_SCALE
@@ -364,5 +365,64 @@ class PreviewTuningTest {
     fun `on a page too short for the card's floor the drawing gets nothing, never a negative cap`() {
         assertEquals(0f, undercutDrawingCapWhileTypingDp(pageHeightDp = 180f, topBarHeightDp = 56f), 0f)
     }
-}
 
+    // ── Docked layout (EXPANDED) ─────────────────────────────────────────────
+
+    @Test
+    fun `only an EXPANDED window docks the panel beside the page`() {
+        assertEquals(false, previewPanelDocksBeside(WindowWidthClass.COMPACT))
+        assertEquals(false, previewPanelDocksBeside(WindowWidthClass.MEDIUM))
+        assertEquals(true, previewPanelDocksBeside(WindowWidthClass.EXPANDED))
+    }
+
+    @Test
+    fun `COMPACT and MEDIUM keep the strip and the centered full page`() {
+        // The layouts the phone has always had: closed = full page, a page-tuning panel = strip,
+        // a panel that tunes nothing on the page floats over the full page.
+        assertEquals(PreviewPageLayout.FULL, previewPageLayout(false, sheetTunesPage = true, docksBeside = false))
+        assertEquals(PreviewPageLayout.STRIP, previewPageLayout(true, sheetTunesPage = true, docksBeside = false))
+        assertEquals(PreviewPageLayout.FULL, previewPageLayout(true, sheetTunesPage = false, docksBeside = false))
+    }
+
+    @Test
+    fun `EXPANDED docks every open panel and is the full page while closed`() {
+        assertEquals(PreviewPageLayout.FULL, previewPageLayout(false, sheetTunesPage = true, docksBeside = true))
+        assertEquals(PreviewPageLayout.DOCKED, previewPageLayout(true, sheetTunesPage = true, docksBeside = true))
+        assertEquals(PreviewPageLayout.DOCKED, previewPageLayout(true, sheetTunesPage = false, docksBeside = true))
+    }
+
+    @Test
+    fun `the docked panel is a phone-width column and the page takes the rest`() {
+        // A landscape tablet's preview box beside the permanent sidebar (~1040 dp).
+        val box = 1040f
+        assertEquals(PREVIEW_PANEL_DOCK_WIDTH_DP, dockedPanelWidthDp(box), 0f)
+        assertEquals(box - PREVIEW_PANEL_DOCK_WIDTH_DP, dockedPageWidthDp(box), 0f)
+        assertEquals(box, dockedPanelWidthDp(box) + dockedPageWidthDp(box), 0f)
+    }
+
+    @Test
+    fun `on a narrow EXPANDED box the page keeps at least half`() {
+        val box = 600f
+        assertEquals(300f, dockedPanelWidthDp(box), 0f)
+        assertEquals(300f, dockedPageWidthDp(box), 0f)
+        assertEquals(0f, dockedPanelWidthDp(0f), 0f)
+        assertEquals(0f, dockedPageWidthDp(0f), 0f)
+    }
+
+    @Test
+    fun `a docked portrait page is drawn far larger than in the landscape tablet strip`() {
+        // The on-device case: Pixel Tablet landscape, preview box ~1040 x 720 dp, a portrait
+        // undercut page. Docked, the page fits the box's full height beside the panel; in the
+        // strip it fit a band about a third of the screen tall.
+        val boxW = 1040f
+        val boxH = 720f
+        val aspect = PdfPageOrientation.PORTRAIT.heightPt.toFloat() / PdfPageOrientation.PORTRAIT.widthPt
+        val pageW = dockedPageWidthDp(boxW)
+        val dockedDrawnH = minOf(boxH, pageW * aspect)
+        val strip = tuningPageStripHeightDp(
+            boxW, 800f, TUNING_SHEET_CHROME_DP, pageAspect = aspect, availableHeightDp = boxH,
+        )
+        assertEquals(boxH, dockedDrawnH, 0.01f)
+        assertTrue("docked $dockedDrawnH vs strip $strip", dockedDrawnH > 2f * strip)
+    }
+}

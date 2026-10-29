@@ -119,6 +119,7 @@ import com.android.shaftschematic.ui.adaptive.WindowWidthClass
 import com.android.shaftschematic.ui.adaptive.currentWindowWidthClass
 import com.android.shaftschematic.ui.drawing.render.RenderOptions
 import com.android.shaftschematic.ui.drawing.render.ShaftLayout
+import com.android.shaftschematic.ui.drawing.render.componentAxialExtentMm
 import com.android.shaftschematic.ui.drawing.render.ShaftRenderer
 import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
@@ -1525,6 +1526,10 @@ private fun Density.computeRunoutPreview(
             spec = spec, leftPx = 0f, topPx = 0f, rightPx = widthPx,
             bottomPx = heightPx - reservedH, marginPx = marginPx,
             resolvedComponents = resolvedComponents,
+            // The window holds every drawn part, so a body running past a shortened OAL — and
+            // its bubbles — stay on the canvas instead of being cut at its right edge
+            // (on-device report).
+            extentMm = resolvedComponents.componentAxialExtentMm(),
         )
         val stations = collectRunoutStations(
             spans, overrides,

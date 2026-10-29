@@ -5,8 +5,11 @@ Files: `ui/adaptive/WindowSize.kt`, `ui/adaptive/ReadableWidth.kt`, `ui/adaptive
 `AndroidManifest.xml`; consumers: `ShaftEditorRoute`, `ShaftScreen`, the sheet tabs, every list
 screen, both PDF preview screens
 Layer: UI (layout policy)
-Version: v1.1 (2026-10-27 — saved state survives a rotation across the EXPANDED boundary;
-MEDIUM editor carousel fills the column. v1.0 2026-09-16)
+Version: v1.2 (2026-10-29 — the EXPANDED editor's drawing band is as tall as the taller of the
+drawing and its side column, under the cap, and yields height to the keyboard; an open PDF
+preview options panel docks beside the page. v1.1 2026-10-27 —
+saved state survives a rotation across the EXPANDED boundary; MEDIUM editor carousel fills the
+column. v1.0 2026-09-16)
 
 ## Why
 
@@ -25,8 +28,9 @@ app's shape-by-window decisions are stated; every screen keys on the same axis.
   `currentWindowWidthClass()` takes `LocalConfiguration.screenWidthDp` (system bars excluded,
   so a window is classified by the width the content actually gets) and recomposes on
   rotation, split-screen resize and fold.
-- **No height class.** The one layout that cares about height — the preview tuning sheet's
-  page strip (`PreviewTuning.kt`) — reads the real height in dp at its own site.
+- **No height class.** The layouts that care about height read the real height in dp at their
+  own site: the preview tuning sheet's page strip at COMPACT / MEDIUM (`PreviewTuning.kt`), and the EXPANDED
+  editor's drawing band, which yields to the keyboard (below).
 - **Two panes only at EXPANDED** (`WindowWidthClass.twoPane`). A MEDIUM window split in two
   leaves each pane narrower than a phone, and the carousel cards and sheet controls are
   phone-width designs; MEDIUM is a taller single column, nothing more. (The Schematic editor's
@@ -40,12 +44,51 @@ app's shape-by-window decisions are stated; every screen keys on the same axis.
 
 | Surface | COMPACT (phone) | MEDIUM (portrait tablet, landscape phone) | EXPANDED (landscape tablet) |
 |---|---|---|---|
-| Schematic / Final editor (`ShaftScreen`) | today's column; the action bar prints NO title (the icons left it ".."; the document title strip names the screen) | preview cap 280 dp, bar title shown, carousel fills the column's leftover height (floor 360 dp) | drawing band across the top (4:1 preview + OAL / add / warnings side column) over a full-width carousel, current card centred, neighbours peeking |
+| Schematic / Final editor (`ShaftScreen`) | today's column; the action bar prints NO title (the icons left it ".."; the document title strip names the screen) | preview cap 280 dp, bar title shown, carousel fills the column's leftover height (floor 360 dp) | drawing band across the top (4:1 preview + OAL / add / warnings side column) over a full-width carousel, current card centred, neighbours peeking; the band is as tall as the taller of the drawing and the side column (under the cap) and yields height to the keyboard |
 | Runout / Wear / Undercut tabs | today's column, 200 dp canvas | 280 dp canvas | two panes: canvas + print group \| controls |
 | Consolidated Output tab | today's column | readable width | readable width (see `RunoutSheet.md`) |
 | Editor sidebar | slide-in overlay (200 dp) | overlay | **permanent** 240 dp panel beside the tabs; hamburgers hidden |
 | List screens (Start, Settings, Help, About, Achievements, Developer Options, Templates, Open, Save As) | full width | `readableWidth()` — 720 dp cap, centred | same |
 | PDF preview screens | rotation unlocked while open | same | same (already free) |
+| PDF previews, options panel open (`PdfPreviewScreen`, `PdfPreviewOverlay`) | page strip under the app bar (the page's ink band, fit-width), panel capped below it | same | panel **docked** as a right-hand column (380 dp, at most half the box); the page is the ordinary full page, fitted at full height into the width beside it |
+
+### The EXPANDED editor's drawing band
+
+- **Height = max(drawing, side column), under the cap.** The band is the larger of the height the
+  4:1 drawing wants over the width beside the side column (`expandedDrawingBandHeightDp`) and the
+  side column's own content height (the OAL box, the add button, the warnings — measured past
+  the scroll's minimum height), capped at the preview's 320 dp ceiling (`expandedBandHeightDp`).
+  A band sized from the drawing alone clipped the second of two warnings mid-line beside empty
+  paper (on-device report). Past the cap the side column scrolls inside the band and a fade at
+  its foot (`EXPANDED_SIDE_COLUMN_FADE_DP`, drawn only while it can scroll further) says so — a
+  warning list still never pushes the carousel below the cap.
+- **The band yields to the keyboard.** With the keyboard up the band shrinks so the component
+  region under it keeps `EXPANDED_CAROUSEL_MIN_HEIGHT_DP` (220 dp: the heading, the card's top,
+  one two-up field row with its label and its "not applied" notice), never below the drawing's
+  120 dp floor plus padding (`expandedBandHeightUnderImeDp`, reading `WindowInsets.ime` against
+  the band's viewport). A band that held its height left the focused card ~65 dp, clipping the
+  field's label and hiding its notice (on-device report). With no keyboard the band is unchanged.
+  The preview keeps its shape in a shorter band: it is held to the width its aspect takes at the
+  band's height (`expandedPreviewMaxWidthDp`), so it draws smaller rather than squashed.
+- All of it is pure arithmetic in `ui/screen/EditorTabletLayout.kt`, pinned by
+  `EditorTabletLayoutTest`; COMPACT and MEDIUM do not read it.
+
+### The PDF previews' docked options panel
+
+- **At EXPANDED an open options panel docks beside the page.** The page strip and capped panel
+  are the phone's answer to "the panel may never cover the page"; on a landscape tablet they left
+  the strip a third of the screen tall, so a portrait undercut page drew at a quarter of the strip's
+  width with unreadable values (on-device report). Both hosts resolve ONE `previewPageLayout`
+  (`FULL` / `STRIP` / `DOCKED`, `PreviewTuning.kt`): docked, the panel is a right-hand column
+  (`PREVIEW_PANEL_DOCK_WIDTH_DP`, never more than half the box — `dockedPanelWidthDp`) whose
+  content scrolls in the column's full height, and the page is the ordinary full page — no ink-band
+  crop — fitted into the width left of it (`dockedPageWidthDp`), zoomable as ever.
+- Every panel docks there, page-tuning or not. COMPACT and MEDIUM keep the strip / centered page
+  unchanged. The page block and the panel each have ONE call site per host; only their boxes change.
+- The zoom resets when the layout value changes (open, close, or a rotation across the EXPANDED
+  boundary); the render loop, draft raster, commit-on-release, re-render indicator and the panel's
+  close / Back handling do not depend on where the panel sits. Pinned by `PreviewTuningTest`
+  (pure) and `PreviewOptionsPanelTest` (Robolectric at `w1280dp-h800dp-land`).
 
 Per-surface details live in the owning contracts (`ShaftScreen.md`, `RunoutSheet.md`,
 `UndercutDrawing.md`, `Navigation.md`, `UI_CONTRACT.md`); this table is the map.

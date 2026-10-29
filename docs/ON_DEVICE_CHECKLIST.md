@@ -17,6 +17,36 @@ Last updated: 2026-10-27.
 
 ---
 
+## Fixed 2026-10-29 — tablet pass, re-check on hardware
+
+A Pixel_Tablet AVD pass (editor + outputs at EXPANDED/MEDIUM, real jobs) found and fixed these;
+none has been seen on a physical tablet or on a phone with the snackbar change.
+
+### Tablet (landscape, EXPANDED)
+- [ ] **Keyboard up on a card**: the drawing band shrinks and the focused field, its label and a
+  "… not applied" notice all stay in view above the keyboard; the shaft draws smaller, not squashed.
+- [ ] **Two warnings beside the drawing** (shorten the OAL so a body runs past the end): both read
+  whole; with more than fit, a fade at the foot of the column and it scrolls.
+- [ ] **PDF options docked**: on every preview the Tune/options panel opens as a right-hand column
+  and the page keeps the full height beside it (the Undercut portrait page especially); pinch-zoom
+  works; a slider drag redraws under the finger. Held upright (MEDIUM), the page strip as before.
+- [ ] **Runout canvas** with a body past the FWD end: the whole shaft and its last bubble on the canvas.
+
+### Phone and tablet
+- [ ] **Editor snackbars** ("… deleted — Undo", "OAL … moved") sit above the navigation bar / gesture
+  handle — check 3-button nav and gesture nav.
+- [ ] **Keyway W × D** with "Not a number" under W: the D box stays level, the × centred.
+- [ ] **Add Body**: "At a liner" chips the same distance under the Blend length as on the card.
+- [ ] **Help** search "blend" / "seal" → "Component blends and seal areas" → "Read more" lands on the
+  manual's Component blend section.
+- [ ] **Settings → Drawing**: Line Thickness shows "100%" whole; "Default drawing size" heading aligned.
+- [ ] **Consolidated sheet**: a pit X under an in-profile Ø value is left off; pits clear of the
+  values still print; the wear sheet shows every pit.
+- [ ] **Settings → Units with a job open**: the job re-displays in the new unit with NO "*" and no
+  unsaved draft; the first value edit marks it; a save after that keeps the new unit.
+- [ ] **Delete → Undo** on the snackbar slides the cards back to the restored part (thread, liner,
+  and a body made automatic then undone).
+
 ## Fixed 2026-10-27 — re-check on hardware
 
 Failures from the AVD pass, fixed on `fix/on-device-pass-2026-10-27`. One line per fix: what to

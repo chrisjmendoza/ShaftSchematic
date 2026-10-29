@@ -6,6 +6,82 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-10-29
+
+### fix(tablet): the editor's drawing band makes room for the keyboard and the warnings
+
+- On a landscape tablet, typing in a component card left the card about an inch of screen above
+  the keyboard: the field's label was cut off and a "not applied" message under it could not be
+  seen. The drawing across the top now gets shorter while the keyboard is up, so the field you are
+  typing in, its label and its message all stay in view. The drawing keeps its shape, just
+  smaller; it goes back to full size when the keyboard closes.
+- With two warnings beside the drawing, the second was cut off halfway and there was no sign the
+  column scrolled. The top band now grows to fit the warnings (up to the drawing's full height), and
+  when there are more than fit, a fade at the foot of the column shows there is more to scroll to.
+- Docs: `docs/contracts/Adaptive.md`, `docs/contracts/ShaftScreen.md`.
+
+### fix(runout): a part past the shaft's end stays on the Runout tab's drawing
+
+- With the overall length shortened so a body ran past the FWD end, the Runout tab drew the shaft
+  off the right edge of its canvas, cutting the FWD end and its last bubble. The drawing now widens
+  to hold every part, the way the Schematic preview does. Nothing changes for a shaft whose parts
+  fit inside its length, and the printed sheet is untouched.
+
+### fix(editor): small layout fixes from the tablet pass
+
+- The editor's messages at the bottom of the screen ("Body deleted — Undo", the overall-length
+  "moved …" message) sit above the navigation bar instead of under the gesture handle.
+- Keyway W × D: a "Not a number" message under W no longer pushes the D box down; the two boxes keep
+  their tops level and the × stays centred between them. Same on the Body and Taper cards and in
+  Add Body / Add Taper.
+- Add Body: the "At a liner" chips sit the same distance under the Blend length field as they do on
+  the card (and the seal-area length fields match the card too).
+- Settings → Drawing: the "Default drawing size" heading lines up with the headings around it.
+- Settings → Drawing → Line Thickness: the percent box is wide enough to show "100%" whole.
+
+### fix(tablet): PDF options sit beside the page on a landscape tablet
+
+- On a landscape tablet, opening PDF options (the sliders icon) in any preview squeezed the page
+  into a thin band above the options; a portrait undercut sheet came out a few inches wide with
+  values too small to read. The options now open as a column down the right-hand side, and the
+  page keeps the full height of the screen beside them — still pinch-zoomable, still redrawing as
+  you move a slider. Phones, and a tablet held upright, keep the page band over the options as
+  before. Same on every preview: Schematic, Final, Runout, Wear, Undercut and Consolidated Output.
+- Docs: `docs/contracts/Adaptive.md`.
+
+### feat(help): a Help topic for component blends and seal areas
+
+- Help now has "Component blends and seal areas": what a blend is (Square | Blend per end, the
+  shape, and "At a liner: Seat | Liner OD"), what a seal area is, and that neither prints a
+  dimension. Searching Help for blend, seal, ramp, cone, fillet or liner OD finds it, and "Read
+  more in the manual" opens the manual's Component blend section.
+
+### fix(output): a wear-pit X under a measured value is left off the consolidated sheet
+
+- On the consolidated sheet, a pit X sitting under one of the Ø values printed inside a liner
+  showed bits of the X poking out between the values, which read as stray marks. A pit whose X
+  would touch a value's white box is now left off that sheet: the value stands above the pits.
+  Pits clear of the values still print, the wear-area lines are unchanged, and the wear sheet still
+  shows every pit.
+- Docs: `docs/contracts/RunoutSheet.md`, `CLAUDE.md`.
+
+### fix(settings): switching Settings → Units no longer marks the open job as changed
+
+- With an inch job open, switching Settings → Units to Millimeters showed the job in millimeters
+  (as it should — handy for reading the values both ways) but also put the "*" on its title and
+  left an unsaved draft behind. The switch alone no longer counts as a change: no "*", no draft,
+  nothing to undo. The first value you change after it marks the job as usual, and saving then
+  keeps the new unit.
+- Docs: `docs/contracts/ShaftViewModel.md`, `docs/contracts/Persistence.md`.
+
+### fix(editor): Undo after a delete brings you back to the restored part
+
+- After deleting a part and tapping Undo on the "Thread deleted" message, the part came back but
+  the cards stayed on the neighbouring part. Undo now slides the cards back to the part it
+  restored. Same for every part, and for a body made automatic with "Explicit body" unticked. An
+  Undo that can no longer apply (the drawing changed since) moves nothing.
+- Docs: `docs/contracts/ShaftViewModel.md`, `docs/contracts/ShaftScreen.md`.
+
 ## 2026-10-28
 
 ### fix(editor): "Face finish" is now "Component blend"

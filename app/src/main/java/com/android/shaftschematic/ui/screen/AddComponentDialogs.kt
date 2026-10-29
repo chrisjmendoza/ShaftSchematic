@@ -368,17 +368,20 @@ fun AddBodyDialog(
                             defaultSealLenMm(lengthMm).let { blendFwdSealLen.reseed(it, toDisplayString(it, unit)) }
                         }
                     },
+                    // The length fields keep the card field's empty supporting line, so the
+                    // "At a liner" chips and the next face sit the same distance under them here
+                    // as on the card.
                     aftLengthField = {
-                        CommitNumField("Blend AFT (${abbr(unit)})", blendAft.text) { blendAft.onText(it) }
+                        CommitNumField("Blend AFT (${abbr(unit)})", blendAft.text, reserveSupportingLine = true) { blendAft.onText(it) }
                     },
                     fwdLengthField = {
-                        CommitNumField("Blend FWD (${abbr(unit)})", blendFwd.text) { blendFwd.onText(it) }
+                        CommitNumField("Blend FWD (${abbr(unit)})", blendFwd.text, reserveSupportingLine = true) { blendFwd.onText(it) }
                     },
                     aftSealLengthField = {
-                        CommitNumField("Seal area AFT (${abbr(unit)})", blendAftSealLen.text) { blendAftSealLen.onText(it) }
+                        CommitNumField("Seal area AFT (${abbr(unit)})", blendAftSealLen.text, reserveSupportingLine = true) { blendAftSealLen.onText(it) }
                     },
                     fwdSealLengthField = {
-                        CommitNumField("Seal area FWD (${abbr(unit)})", blendFwdSealLen.text) { blendFwdSealLen.onText(it) }
+                        CommitNumField("Seal area FWD (${abbr(unit)})", blendFwdSealLen.text, reserveSupportingLine = true) { blendFwdSealLen.onText(it) }
                     },
                 )
                 Spacer(Modifier.height(12.dp))
@@ -406,10 +409,10 @@ fun AddBodyDialog(
                         Spacer(Modifier.height(4.dp))
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically) {
+                        verticalAlignment = Alignment.Top) {
                         CommitNumField("KW W (${abbr(kwUnit)})", kwWidth,
                             modifier = Modifier.weight(1f)) { kwWidth = it }
-                        Text("×", style = MaterialTheme.typography.titleMedium)
+                        KeywayTimesSign()
                         CommitNumField("KW D (${abbr(kwUnit)})", kwDepth,
                             modifier = Modifier.weight(1f)) { kwDepth = it }
                     }
@@ -1368,10 +1371,10 @@ fun AddTaperDialog(
                         Spacer(Modifier.height(4.dp))
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically) {
+                        verticalAlignment = Alignment.Top) {
                         CommitNumField("KW W (${abbr(kwUnit)})", kwWidth,
                             modifier = Modifier.weight(1f)) { kwWidth = it }
-                        Text("×", style = MaterialTheme.typography.titleMedium)
+                        KeywayTimesSign()
                         CommitNumField("KW D (${abbr(kwUnit)})", kwDepth,
                             modifier = Modifier.weight(1f)) { kwDepth = it }
                     }
@@ -1596,6 +1599,12 @@ private fun CommitNumField(
     requirePositive: Boolean = false,
     /** The in-field "/" key (inch documents, while focused); off for whole-number fields. */
     fractionKey: Boolean = keyboardType == KeyboardType.Decimal,
+    /**
+     * Keep the supporting-text line under the field even while it is empty, the way every card
+     * field (`NumericInputField`) does — for a field inside a section the cards share
+     * (`BlendSection`), so the gap under it is the same on both surfaces.
+     */
+    reserveSupportingLine: Boolean = false,
     onCommit: (String) -> Unit
 ) {
     // text is the live value; initial only resets it when the parent externally
@@ -1636,6 +1645,8 @@ private fun CommitNumField(
                             else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+        } else if (reserveSupportingLine) {
+            {}
         } else null,
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
         keyboardActions = KeyboardActions(onDone = { onCommit(text) }),

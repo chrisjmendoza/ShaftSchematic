@@ -3,6 +3,7 @@ package com.android.shaftschematic.ui.screen
 
 import android.app.Activity
 import android.content.Context
+import com.android.shaftschematic.ui.adaptive.currentWindowWidthClass
 import com.android.shaftschematic.ui.adaptive.restoreBaseOrientation
 import com.android.shaftschematic.ui.adaptive.unlockRotation
 import android.os.Build
@@ -12,7 +13,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Column
@@ -111,9 +114,11 @@ import kotlin.math.roundToInt
  * - The Tune action toggles a non-modal options panel ([PreviewOptionsPanel]) in this
  *   screen's own layout. While it is open the page redraws as a fit-width strip pinned under
  *   the app bar, and the panel is capped to what is left below it — the sliders tune the page
- *   live, so the page has to stay in sight. The page stays pinch-zoomable and pannable under
- *   the open panel, and a zoom survives a re-render; opening or closing the panel resets it,
- *   since the two layouts fit the page differently.
+ *   live, so the page has to stay in sight. At EXPANDED the panel docks as a right-hand
+ *   column instead and the whole page fits, at full height, into the width beside it. The
+ *   page stays pinch-zoomable and pannable under the open panel, and a zoom survives a
+ *   re-render; opening or closing the panel resets it, since the layouts fit the page
+ *   differently.
  * - If rendering fails, a plain error message is shown (no crash).
  * - The "Export PDF" action in the top bar calls [onExport] to proceed to the SAF picker.
  * - No model state is mutated here.
@@ -326,13 +331,21 @@ fun PdfPreviewScreen(
     // see anything" — on-device report). The strip carries the page's INK BAND, so the
     // drawing gets the room the blank top margin used to hold. Strip and cap are sized inside
     // the preview box below, from its measured height, and cannot disagree.
+    // At EXPANDED the panel docks beside the page instead, and the page keeps the full-page
+    // layout at full height in the width left of it ([previewPageLayout]).
     val configuration = LocalConfiguration.current
-    // Zoom/pan resets when the panel opens AND when it closes: the strip layout and the
-    // full-page layout fit the page differently, so a zoom carried across either transition
-    // would point at the wrong place. Between those transitions the zoom is deliberately
-    // KEPT — a re-render swaps the bitmap but every pass fits it into the same box, so a zoom
-    // on the threads stays on the threads while their sliders commit (on-device request).
-    LaunchedEffect(showOptions) {
+    val pageLayout = previewPageLayout(
+        optionsOpen = showOptions,
+        sheetTunesPage = true,
+        docksBeside = previewPanelDocksBeside(currentWindowWidthClass()),
+    )
+    // Zoom/pan resets when the panel opens AND when it closes: the strip, the docked page and
+    // the full-page layout fit the page into different boxes, so a zoom carried across any
+    // transition would point at the wrong place. Between those transitions the zoom is
+    // deliberately KEPT — a re-render swaps the bitmap but every pass fits it into the same box,
+    // so a zoom on the threads stays on the threads while their sliders commit (on-device
+    // request).
+    LaunchedEffect(pageLayout) {
         scale.snapTo(1f)
         offset.snapTo(Offset.Zero)
     }
@@ -492,118 +505,142 @@ fun PdfPreviewScreen(
                 TUNING_SHEET_CHROME_DP,
                 availableHeightDp = maxHeight.value,
             ).dp
-            // The full spinner stands in for the page only until a FIRST page exists. A
-            // re-render after that — a commit-on-release slider such as Thread slant — keeps
-            // the current page (and the zoom on it) on screen and signals the pass with the
-            // small corner indicator below: swapping the page out for a spinner at exactly
-            // the moment a change is being watched made the change unwatchable.
-            when {
-                isLoading && currentBitmap == null -> {
-                    CircularProgressIndicator()
-                }
+            val docked = pageLayout == PreviewPageLayout.DOCKED
+            // The page block: the whole box, or — docked — the width left of the panel at full
+            // height. ONE block in either layout; only its box changes.
+            Box(
+                modifier = if (docked) {
+                    Modifier
+                        .align(Alignment.CenterStart)
+                        .fillMaxHeight()
+                        .width(dockedPageWidthDp(maxWidth.value).dp)
+                } else {
+                    Modifier.fillMaxSize()
+                },
+                contentAlignment = Alignment.Center,
+            ) {
+                // The full spinner stands in for the page only until a FIRST page exists. A
+                // re-render after that — a commit-on-release slider such as Thread slant — keeps
+                // the current page (and the zoom on it) on screen and signals the pass with the
+                // small corner indicator below: swapping the page out for a spinner at exactly
+                // the moment a change is being watched made the change unwatchable.
+                when {
+                    isLoading && currentBitmap == null -> {
+                        CircularProgressIndicator()
+                    }
 
-                currentError != null -> {
-                    Text(
-                        text = currentError,
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(24.dp)
-                    )
-                }
+                    currentError != null -> {
+                        Text(
+                            text = currentError,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(24.dp)
+                        )
+                    }
 
-                currentBitmap != null -> {
-                    Canvas(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .then(gestures)
-                            .testTag("pdf_preview_canvas")
-                    ) {
-                        withTransform({
-                            translate(offset.value.x, offset.value.y)
-                            scale(scale.value, scale.value, Offset.Zero)
-                        }) {
-                            if (showOptions) {
-                                // Tuning layout: the drawing, cropped to its ink band,
-                                // fitted into the strip the panel was sized to leave free
-                                // and top-aligned under the app bar.
-                                drawPageBand(currentBitmap, inkBand, stripHeightDp.dp.toPx())
-                            } else {
-                                // Normal preview: the whole page — real paper, blank
-                                // margins included — fitted to the canvas and centered.
-                                val imgW = currentBitmap.width.toFloat()
-                                val imgH = currentBitmap.height.toFloat()
-                                val fitScale = minOf(size.width / imgW, size.height / imgH)
-                                val fittedW = imgW * fitScale
-                                val fittedH = imgH * fitScale
-                                drawImage(
-                                    image = currentBitmap,
-                                    dstOffset = androidx.compose.ui.unit.IntOffset(
-                                        ((size.width - fittedW) / 2f).toInt(),
-                                        ((size.height - fittedH) / 2f).toInt()
-                                    ),
-                                    dstSize = androidx.compose.ui.unit.IntSize(
-                                        fittedW.toInt(),
-                                        fittedH.toInt()
+                    currentBitmap != null -> {
+                        Canvas(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .then(gestures)
+                                .testTag("pdf_preview_canvas")
+                        ) {
+                            withTransform({
+                                translate(offset.value.x, offset.value.y)
+                                scale(scale.value, scale.value, Offset.Zero)
+                            }) {
+                                if (pageLayout == PreviewPageLayout.STRIP) {
+                                    // Tuning layout: the drawing, cropped to its ink band,
+                                    // fitted into the strip the panel was sized to leave free
+                                    // and top-aligned under the app bar.
+                                    drawPageBand(currentBitmap, inkBand, stripHeightDp.dp.toPx())
+                                } else {
+                                    // Normal preview, and the docked page: the whole page — real
+                                    // paper, blank margins included — fitted to the canvas and
+                                    // centered.
+                                    val imgW = currentBitmap.width.toFloat()
+                                    val imgH = currentBitmap.height.toFloat()
+                                    val fitScale = minOf(size.width / imgW, size.height / imgH)
+                                    val fittedW = imgW * fitScale
+                                    val fittedH = imgH * fitScale
+                                    drawImage(
+                                        image = currentBitmap,
+                                        dstOffset = androidx.compose.ui.unit.IntOffset(
+                                            ((size.width - fittedW) / 2f).toInt(),
+                                            ((size.height - fittedH) / 2f).toInt()
+                                        ),
+                                        dstSize = androidx.compose.ui.unit.IntSize(
+                                            fittedW.toInt(),
+                                            fittedH.toInt()
+                                        )
                                     )
-                                )
+                                }
                             }
                         }
                     }
                 }
-            }
-            if (isLoading && currentBitmap != null) {
-                PreviewRerenderIndicator(Modifier.align(Alignment.TopEnd))
-            }
+                if (isLoading && currentBitmap != null) {
+                    PreviewRerenderIndicator(Modifier.align(Alignment.TopEnd))
+                }
 
-            // Always-visible blank-draft toggle, overlaid on the preview — the SAME
-            // session-only state as the options panel's chip, so the two can never
-            // disagree. Surfaced here because the options buried it (on-device report:
-            // hard to find, even when demoing the app). Toggling re-renders the
-            // preview live, so what's shown is always what will print. Hidden while the
-            // options panel is open: it would sit on the page strip, and the panel's own
-            // first row is this same election.
-            if (!showOptions) {
-                // The chip floats over the page, so its container is OPAQUE and it casts a
-                // shadow: an M3 filter chip's unselected container is transparent by default,
-                // which let the drawing's dimension rails and OAL value read straight through
-                // the label as the page was panned under it (on-device report). Theme-driven,
-                // not sheet ink — this is an interactive affordance over the paper, not
-                // something printed on it, and a forced-white box would take dark theme's
-                // near-white label with it.
-                val chipShape = MaterialTheme.shapes.small
-                FilterChip(
-                    selected = pdfBlankDraft,
-                    onClick = { vm.setPdfBlankDraft(!pdfBlankDraft) },
-                    label = { Text("Blank draft (write-in)") },
-                    leadingIcon = if (pdfBlankDraft) {
-                        {
-                            Icon(
-                                Icons.Filled.Check,
-                                contentDescription = null,
-                                modifier = Modifier.size(FilterChipDefaults.IconSize),
-                            )
-                        }
-                    } else null,
-                    shape = chipShape,
-                    colors = FilterChipDefaults.filterChipColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                    ),
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(top = 4.dp)
-                        .shadow(2.dp, chipShape)
-                        .testTag("pdf_blank_toggle"),
-                )
+                // Always-visible blank-draft toggle, overlaid on the preview — the SAME
+                // session-only state as the options panel's chip, so the two can never
+                // disagree. Surfaced here because the options buried it (on-device report:
+                // hard to find, even when demoing the app). Toggling re-renders the
+                // preview live, so what's shown is always what will print. Hidden while the
+                // options panel is open: it would sit on the page strip, and the panel's own
+                // first row is this same election.
+                if (!showOptions) {
+                    // The chip floats over the page, so its container is OPAQUE and it casts a
+                    // shadow: an M3 filter chip's unselected container is transparent by default,
+                    // which let the drawing's dimension rails and OAL value read straight through
+                    // the label as the page was panned under it (on-device report). Theme-driven,
+                    // not sheet ink — this is an interactive affordance over the paper, not
+                    // something printed on it, and a forced-white box would take dark theme's
+                    // near-white label with it.
+                    val chipShape = MaterialTheme.shapes.small
+                    FilterChip(
+                        selected = pdfBlankDraft,
+                        onClick = { vm.setPdfBlankDraft(!pdfBlankDraft) },
+                        label = { Text("Blank draft (write-in)") },
+                        leadingIcon = if (pdfBlankDraft) {
+                            {
+                                Icon(
+                                    Icons.Filled.Check,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(FilterChipDefaults.IconSize),
+                                )
+                            }
+                        } else null,
+                        shape = chipShape,
+                        colors = FilterChipDefaults.filterChipColors(
+                            containerColor = MaterialTheme.colorScheme.surface,
+                        ),
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(top = 4.dp)
+                            .shadow(2.dp, chipShape)
+                            .testTag("pdf_blank_toggle"),
+                    )
+                }
             }
 
             // The options, as a non-modal panel in this Box — composed LAST so it draws over
             // the page and takes the touches that land on it, while the page strip above it
             // keeps its pinch and pan. No scrim: nothing here is modal, and the page is the
-            // thing being judged.
+            // thing being judged. Docked, it is the column right of the page block instead.
             if (showOptions) {
                 PreviewOptionsPanel(
                     onClose = { showOptions = false },
                     maxHeightDp = maxSheetHeight,
-                    modifier = Modifier.align(Alignment.BottomCenter),
+                    docked = docked,
+                    modifier = if (docked) {
+                        Modifier
+                            .align(Alignment.CenterEnd)
+                            .fillMaxHeight()
+                            .width(dockedPanelWidthDp(maxWidth.value).dp)
+                    } else {
+                        Modifier.align(Alignment.BottomCenter)
+                    },
                 ) {
                     PdfOptionsSheet(
                         vm = vm,

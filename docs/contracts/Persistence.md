@@ -198,6 +198,11 @@ Invariants
   only the dual flag. The Settings → Units chips persist the default whether or not the open
   document is locked — the lock stops the stored default from flipping the document, not the
   user from setting the default.
+- The chips also re-display the OPEN document in the chosen unit, and that never makes it
+  unsaved work (on-device ruling): the dirty baseline's unit moves with the live unit
+  (`ShaftViewModel.redisplayUnit`), so the switch alone writes no draft and is no undo step;
+  the first value edit dirties the document as usual, and the save after it stores the new
+  unit. See `ShaftViewModel.md`.
 - The final drawing: `final_spec` (`ShaftDocV1.finalSpec: ShaftSpec?`, `@SerialName("final_spec")`)
   is the document's **second whole `ShaftSpec`** — the shaft as it leaves — sibling of `spec`,
   not a reference mark inside it. `null` (the default) = this document has no final drawing,

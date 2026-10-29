@@ -20,8 +20,16 @@ sealed interface UiEvent {
      * @property expected The editor state the delete produced. The snackbar's Undo goes through
      *   `ShaftViewModel.undoEditIfStillAt(expected)`, so it undoes the delete or nothing — never
      *   an edit made while the snackbar was up.
+     * @property componentId The deleted component's id as its carousel card was keyed — the
+     *   stored id, which for a body is also its first run's resolved (base) id. An Undo that
+     *   restores the component selects it, so the carousel returns to the restored card
+     *   (`ShaftViewModel.undoDeletion`); a stale Undo selects nothing.
      */
-    data class ShowDeletedSnack(val kind: ComponentKind, val expected: EditState) : UiEvent
+    data class ShowDeletedSnack(
+        val kind: ComponentKind,
+        val expected: EditState,
+        val componentId: String,
+    ) : UiEvent
 
     /**
      * Request to show what an OAL commit moved ([message], `oalMoveSummary`), with "Undo" — the

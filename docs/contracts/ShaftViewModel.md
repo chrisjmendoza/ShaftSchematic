@@ -4,7 +4,7 @@ ShaftViewModel Contract
 Layer: UI → ViewModel  
 Purpose: Owns editable ShaftSpec state, unit selection, grid toggle, and routes all commits from the UI to the model/persistence.
 
-Version: v1.3 (2026-10-03)
+Version: v1.4 (2026-10-29)
 
 Invariants
 - All stored geometry is **canonical millimeters (mm)**.  
@@ -63,6 +63,14 @@ Responsibilities
     draft the async unit-preference restore used to create on empty-ring launches),
     and removes this session's entry exactly once on the dirty→clean transition
     (which also cleans up previously-persisted phantoms).
+  - **Settings → Units re-displays, it never dirties** (on-device ruling: a user may switch
+    to millimeters just to read the values). `redisplayUnit` — behind the Settings chips
+    (`setUnit(persist = true)`) and the default-unit collector's apply to an unlocked
+    document — moves the baseline's `unitSystem` with the live `_unit`, so a clean document
+    stays clean and writes no draft, a document with edits stays dirty for those edits, the
+    first value edit dirties it as usual, and the save after that stores the new unit. The
+    unit is not in `EditState`, so the switch is never an undo step. Load paths
+    (`setUnit(persist = false)`) set the unit directly and reseat the baseline themselves.
   - `markDocumentSaved()` **also removes this session's draft-ring entry immediately**
     (guarded by `draftPersisted`). The observer's dirty→clean removal only runs on the
     *next* combine emission, which never comes when the user saves and navigates away
@@ -144,8 +152,8 @@ Responsibilities
   - **Replaces the old delete-only undo entirely.** `LastDeleted`,
     `deleteHistory`/`redoHistory`, `isRedoing`, `canUndoDeletes`/`canRedoDeletes`,
     `undoLastDelete()`/`redoLastDelete()`, and `clearDeleteHistory()` are all removed;
-    the delete snackbar's "Undo" action goes through `undoEditIfStillAt(expected)` (see
-    `ShaftRoute.kt` and the snackbar-token bullet below).
+    the delete snackbar's "Undo" action goes through `undoDeletion` →
+    `undoEditIfStillAt(expected)` (see `ShaftRoute.kt` and the snackbar-token bullets below).
     The removers (`removeBody` / `removeTaper` / `removeThread` / `removeLiner` /
     `removeCouplerBoltSlot`, `ui/viewmodel/ShaftViewModelComponents.kt`) are unchanged in
     effect (body-merge behavior preserved) but push no per-delete history of their own —
@@ -160,6 +168,13 @@ Responsibilities
     editing under a visible snackbar; a blind `undoEdit()` from its action took back whichever
     edit came last. `EditState` equality is structural, but an untouched editor still holds the
     instances it recorded, so the compare settles on reference identity.
+  - **A delete's Undo selects what it restored.** `ShowDeletedSnack` also carries
+    `componentId` — the deleted component's stored id, the id its carousel card was keyed by
+    (for a body, the first run's resolved id is the stored id). The route's action calls
+    `undoDeletion(snack)`: `undoEditIfStillAt(expected)`, then — only when it undid —
+    `selectComponentById(componentId)`, so the carousel animates back to the restored card
+    (on-device ruling). A stale Undo selects nothing. Demotion ("Explicit body" unticked →
+    `removeBody`) takes the same path, so its Undo selects the restored explicit body.
 
 Two specs, one editor
 - A document has **two** geometries: `spec` (the original schematic — what came in) and the
@@ -245,6 +260,12 @@ Future Enhancements
 
 Change Log
 ----------
+**v1.4 (2026-10-29)**
+- Settings → Units re-displays the open document without dirtying it: `redisplayUnit` moves the
+  dirty baseline's unit with the live unit (on-device ruling).
+- `ShowDeletedSnack` carries `componentId`; `undoDeletion(snack)` undoes the delete and selects
+  the restored component, so the carousel returns to its card (on-device ruling).
+
 **v1.3 (2026-10-03)**
 - Thread relief: `setThreadRelief(id, len, dia, atAft, target)` added; `addThreadAt` gains
   `reliefLenMm`/`reliefDiaMm`/`reliefAtAft` (defaulted, so existing call sites are unchanged).

@@ -93,6 +93,10 @@ import com.android.shaftschematic.geom.THREAD_SLANT_DEFAULT
 import com.android.shaftschematic.geom.computeOalWindow
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -396,7 +400,18 @@ fun ShaftScreen(
     // See the golden rule (user inputs are sacred) in CLAUDE.md.
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        // The content insets below are horizontal only (each branch pads its own bottom), so
+        // the Scaffold places the snackbar on the window's bottom edge; the host pads for the
+        // navigation bar itself, or the gesture handle draws across the message (on-device
+        // report).
+        snackbarHost = {
+            SnackbarHost(
+                snackbarHostState,
+                Modifier.windowInsetsPadding(
+                    WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)
+                ),
+            )
+        },
         contentWindowInsets = WindowInsets.systemBars.only(
             WindowInsetsSides.Horizontal
         ),
@@ -533,6 +548,8 @@ fun ShaftScreen(
         var mediumViewportPx by remember { mutableIntStateOf(0) }
         var mediumContentPx by remember { mutableIntStateOf(0) }
         var mediumCarouselPx by remember { mutableIntStateOf(0) }
+        // The EXPANDED side column's content height, px — what the drawing band grows to.
+        var expandedSideColumnContentPx by remember { mutableIntStateOf(0) }
 
         // The editor's content blocks are declared ONCE here and invoked by whichever width
         // branch lays out, so the phone column and the tablet two-pane cannot drift apart.
@@ -957,9 +974,12 @@ fun ShaftScreen(
             // A landscape tablet: the shaft is long and thin, so the drawing takes the WIDTH —
             // a band across the top, with the overall length, the add button and the warnings
             // in a column beside it — and the carousel takes the rest of the height, the
-            // current card centred with its neighbours peeking at the sides. The band is sized
-            // from the drawing and the side column scrolls inside it, so a long warning list
-            // can never push the cards down; the carousel never scrolls the drawing away.
+            // current card centred with its neighbours peeking at the sides. The band is as
+            // tall as the taller of the drawing and the side column, up to the preview's cap;
+            // past the cap the side column scrolls inside the band (a fade at its foot says
+            // so), so a long warning list can never push the cards below the cap. With the
+            // keyboard up the band yields height so the focused card keeps its field in view;
+            // the carousel never scrolls the drawing away.
             BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxSize()
@@ -969,19 +989,36 @@ fun ShaftScreen(
                 // stands to the right of the box so the box, the button and the warnings
                 // under it share one width and one right edge.
                 val sideColumnWidth = EXPANDED_SIDE_COLUMN_WIDTH_DP.dp + OAL_ACTION_SLOT_WIDTH
-                val bandHeight = expandedDrawingBandHeightDp(
+                val density = LocalDensity.current
+                val drawingBand = expandedDrawingBandHeightDp(
                     contentWidthDp = maxWidth.value - 2 * EXPANDED_CONTENT_PADDING.value,
                     aspect = EXPANDED_PREVIEW_ASPECT,
                     sideColumnWidthDp = sideColumnWidth.value,
                     floorDp = EXPANDED_PREVIEW_MIN_HEIGHT.value,
                     capDp = EXPANDED_PREVIEW_MAX_HEIGHT.value,
-                ).dp
+                )
+                val sideColumnContentDp = with(density) { expandedSideColumnContentPx.toDp() }.value
+                val bandPadding = EXPANDED_BAND_VERTICAL_PADDING.value * 2
+                val bandOuter = expandedBandHeightUnderImeDp(
+                    bandDp = expandedBandHeightDp(
+                        drawingDp = drawingBand,
+                        sideColumnDp = sideColumnContentDp,
+                        capDp = EXPANDED_PREVIEW_MAX_HEIGHT.value,
+                    ) + bandPadding,
+                    // The two dividers framing the band take their share of the viewport.
+                    viewportDp = maxHeight.value - 2 * EXPANDED_BAND_DIVIDER_DP,
+                    imeDp = with(density) { WindowInsets.ime.getBottom(density).toDp() }.value,
+                    carouselMinDp = EXPANDED_CAROUSEL_MIN_HEIGHT_DP,
+                    bandMinDp = EXPANDED_PREVIEW_MIN_HEIGHT.value + bandPadding,
+                )
+                val bandInner = (bandOuter - bandPadding).coerceAtLeast(0f)
+                val fadeColor = MaterialTheme.colorScheme.background
                 Column(modifier = Modifier.fillMaxSize()) {
                     HorizontalDivider()
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(bandHeight + EXPANDED_BAND_VERTICAL_PADDING * 2)
+                            .height(bandOuter.dp)
                             .padding(horizontal = EXPANDED_CONTENT_PADDING, vertical = EXPANDED_BAND_VERTICAL_PADDING),
                         horizontalArrangement = Arrangement.spacedBy(EXPANDED_BAND_GAP_DP.dp)
                     ) {
@@ -992,13 +1029,45 @@ fun ShaftScreen(
                                 .testTag(EDITOR_PANE_PREVIEW_TAG),
                             contentAlignment = Alignment.Center
                         ) {
-                            previewBlock(EXPANDED_PREVIEW_MAX_HEIGHT, EXPANDED_PREVIEW_ASPECT)
+                            // The preview fills its width at a fixed shape; held to the width
+                            // that shape takes at the band's height, a band shortened for the
+                            // keyboard draws a smaller shaft rather than a squashed box.
+                            Box(
+                                Modifier.widthIn(
+                                    max = expandedPreviewMaxWidthDp(
+                                        bandInnerDp = bandInner,
+                                        aspect = EXPANDED_PREVIEW_ASPECT,
+                                        capDp = EXPANDED_PREVIEW_MAX_HEIGHT.value,
+                                    ).dp
+                                )
+                            ) {
+                                previewBlock(EXPANDED_PREVIEW_MAX_HEIGHT, EXPANDED_PREVIEW_ASPECT)
+                            }
                         }
                         Column(
                             modifier = Modifier
                                 .width(sideColumnWidth)
                                 .fillMaxHeight()
-                                .verticalScroll(previewScroll),
+                                .drawWithContent {
+                                    drawContent()
+                                    if (previewScroll.canScrollForward) {
+                                        val fade = EXPANDED_SIDE_COLUMN_FADE_DP.dp.toPx()
+                                        drawRect(
+                                            brush = Brush.verticalGradient(
+                                                colors = listOf(fadeColor.copy(alpha = 0f), fadeColor),
+                                                startY = size.height - fade,
+                                                endY = size.height,
+                                            ),
+                                            topLeft = Offset(0f, size.height - fade),
+                                            size = Size(size.width, fade),
+                                        )
+                                    }
+                                }
+                                .verticalScroll(previewScroll)
+                                // Measured past the scroll's minimum height, so the band can
+                                // read the column's own content height and grow to it.
+                                .wrapContentHeight(Alignment.Top)
+                                .onSizeChanged { expandedSideColumnContentPx = it.height },
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             // The box fills the controls' width (its ✓/✗ slot takes the rest
@@ -1147,6 +1216,9 @@ private val EXPANDED_CONTENT_PADDING = 16.dp
 
 /** Air above and below the drawing band. */
 private val EXPANDED_BAND_VERTICAL_PADDING = 8.dp
+
+/** Thickness of each `HorizontalDivider` framing the drawing band, dp (Material's 1 dp). */
+private const val EXPANDED_BAND_DIVIDER_DP = 1f
 
 /** The centred card's width in the EXPANDED carousel; the neighbours peek in the remainder. */
 private val EXPANDED_CAROUSEL_PAGE_WIDTH = CAROUSEL_PEEK_PAGE_WIDTH_DP.dp

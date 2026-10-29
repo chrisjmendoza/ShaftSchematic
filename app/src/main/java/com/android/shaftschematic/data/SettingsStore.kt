@@ -54,10 +54,12 @@ import com.android.shaftschematic.util.PreviewColorSetting
 import com.android.shaftschematic.util.UndercutShadeColor
 import com.android.shaftschematic.util.UndercutShadeIntensity
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
@@ -103,10 +105,18 @@ private val Context.settingsPrefs: Flow<Preferences>
  *
  * `CancellationException` is rethrown rather than swallowed, so structured concurrency still
  * works for callers that race writes.
+ *
+ * The edit runs on the IO dispatcher. DataStore runs each edit's transform on the CALLER's
+ * context inside one serial write actor, so a write launched from the main dispatcher would hop
+ * back to the main thread mid-edit; any caller that then blocks the main thread while waiting on
+ * the store would deadlock behind its own queued write — and under Robolectric, which clears the
+ * main looper between tests, one such hop wedges the actor for the rest of the JVM and every
+ * later write with it (a suite that hung without a timeout). The block only writes map entries, so
+ * nothing in it needs the caller's thread.
  */
 private suspend fun Context.editSettings(block: suspend (MutablePreferences) -> Unit) {
     try {
-        settingsDataStore.edit(block)
+        withContext(Dispatchers.IO) { settingsDataStore.edit(block) }
     } catch (c: CancellationException) {
         throw c
     } catch (t: Throwable) {

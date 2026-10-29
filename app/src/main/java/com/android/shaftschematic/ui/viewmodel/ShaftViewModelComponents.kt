@@ -218,7 +218,7 @@ fun ShaftViewModel.removeBody(id: String, target: SpecTarget = SpecTarget.ORIGIN
     }
 
     if (removed) {
-        emitDeletedSnack(ComponentKind.BODY)
+        emitDeletedSnack(ComponentKind.BODY, id)
     }
 }
 
@@ -440,7 +440,7 @@ fun ShaftViewModel.removeTaper(id: String, target: SpecTarget = SpecTarget.ORIGI
     }
 
     if (removed) {
-        emitDeletedSnack(ComponentKind.TAPER)
+        emitDeletedSnack(ComponentKind.TAPER, id)
     }
 }
 
@@ -684,7 +684,7 @@ fun ShaftViewModel.removeThread(id: String, target: SpecTarget = SpecTarget.ORIG
     }
 
     if (removed) {
-        emitDeletedSnack(ComponentKind.THREAD)
+        emitDeletedSnack(ComponentKind.THREAD, id)
     }
 }
 
@@ -1176,7 +1176,7 @@ fun ShaftViewModel.removeLiner(id: String, target: SpecTarget = SpecTarget.ORIGI
     }
 
     if (removed) {
-        emitDeletedSnack(ComponentKind.LINER)
+        emitDeletedSnack(ComponentKind.LINER, id)
     }
 }
 
@@ -1335,6 +1335,6 @@ fun ShaftViewModel.removeCouplerBoltSlot(id: String, target: SpecTarget = SpecTa
     }
 
     if (removed) {
-        emitDeletedSnack(ComponentKind.COUPLER_BOLT_SLOT)
+        emitDeletedSnack(ComponentKind.COUPLER_BOLT_SLOT, id)
     }
 }

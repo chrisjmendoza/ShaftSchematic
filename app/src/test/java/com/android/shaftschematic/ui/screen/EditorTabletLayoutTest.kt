@@ -57,6 +57,73 @@ class EditorTabletLayoutTest {
     }
 
     @Test
+    fun `the band is the taller of the drawing and the side column`() {
+        // The side column (OAL box, add button, two warnings) is taller than the drawing: the
+        // band grows to it rather than clipping the second warning.
+        assertEquals(260f, expandedBandHeightDp(drawingDp = 171f, sideColumnDp = 260f, capDp = 320f), 1e-3f)
+        // A short side column leaves the band at the drawing's height.
+        assertEquals(171f, expandedBandHeightDp(drawingDp = 171f, sideColumnDp = 140f, capDp = 320f), 1e-3f)
+        // Nothing measured yet (first frame): the drawing decides.
+        assertEquals(171f, expandedBandHeightDp(drawingDp = 171f, sideColumnDp = 0f, capDp = 320f), 1e-3f)
+    }
+
+    @Test
+    fun `a side column past the cap scrolls inside a band held at the cap`() {
+        assertEquals(320f, expandedBandHeightDp(drawingDp = 171f, sideColumnDp = 900f, capDp = 320f), 1e-3f)
+    }
+
+    @Test
+    fun `with no keyboard the band keeps its height`() {
+        assertEquals(
+            187f,
+            expandedBandHeightUnderImeDp(
+                bandDp = 187f, viewportDp = 690f, imeDp = 0f,
+                carouselMinDp = EXPANDED_CAROUSEL_MIN_HEIGHT_DP, bandMinDp = 136f,
+            ),
+            1e-3f,
+        )
+    }
+
+    @Test
+    fun `under a keyboard the band yields so the carousel keeps its floor`() {
+        // 800 of viewport, a 365 dp keyboard: 800 − 365 − 220 = 215 for the band.
+        val band = expandedBandHeightUnderImeDp(
+            bandDp = 336f, viewportDp = 800f, imeDp = 365f,
+            carouselMinDp = EXPANDED_CAROUSEL_MIN_HEIGHT_DP, bandMinDp = 136f,
+        )
+        assertEquals(215f, band, 1e-3f)
+        assertEquals(EXPANDED_CAROUSEL_MIN_HEIGHT_DP, 800f - 365f - band, 1e-3f)
+        // A band already short enough is left alone — the keyboard never grows it.
+        assertEquals(
+            150f,
+            expandedBandHeightUnderImeDp(
+                bandDp = 150f, viewportDp = 800f, imeDp = 365f,
+                carouselMinDp = EXPANDED_CAROUSEL_MIN_HEIGHT_DP, bandMinDp = 136f,
+            ),
+            1e-3f,
+        )
+    }
+
+    @Test
+    fun `under a keyboard the band never drops below its floor`() {
+        assertEquals(
+            136f,
+            expandedBandHeightUnderImeDp(
+                bandDp = 336f, viewportDp = 400f, imeDp = 300f,
+                carouselMinDp = EXPANDED_CAROUSEL_MIN_HEIGHT_DP, bandMinDp = 136f,
+            ),
+            1e-3f,
+        )
+    }
+
+    @Test
+    fun `the preview's width follows the band's height at its own shape`() {
+        // A 120 dp band at 4:1 draws 480 wide; a band past the cap is held to the cap's width.
+        assertEquals(480f, expandedPreviewMaxWidthDp(bandInnerDp = 120f, aspect = 4f, capDp = 320f), 1e-3f)
+        assertEquals(1280f, expandedPreviewMaxWidthDp(bandInnerDp = 400f, aspect = 4f, capDp = 320f), 1e-3f)
+    }
+
+    @Test
     fun `a medium carousel takes what the viewport has left above its floor`() {
         // 900 of viewport; the content is 1000 tall of which the carousel is 360, so 640 sits above.
         assertEquals(900f - 640f, mediumCarouselHeight(900f, 1000f, 360f, floor = 200f), 1e-3f)
