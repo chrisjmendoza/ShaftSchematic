@@ -119,8 +119,10 @@ only for the shaft's END taper on that side (`isFooterEndTaper` — `getAftEndTa
 and plain `Taper` for one part-way along. Picking the column by midpoint says nothing about where
 the shaft ends: a step-down taper mid-shaft headed "FWD Taper" told the shop the coupling end was a
 taper when it was a straight keyed body (on-device report). A body keyway listed in a column that
-holds a taper block names its body (`Body #1 KW:`, `buildBodyTitleById`) so it cannot read as the
-taper's keyway; a column without a taper keeps `Body KW:`.
+holds a taper block names its body (`Body #1 KW:`, `buildBodyTitleById`) and is set off from the
+block by one blank row (`FOOTER_GAP_LINE`, once per column, before its first body keyway — an empty
+line measures and draws as one row and is never a blank draft's write-in rule), so it cannot read as
+the taper's keyway (on-device request); a column without a taper keeps `Body KW:` and no gap.
 
 ### Where the footer block sits
 
