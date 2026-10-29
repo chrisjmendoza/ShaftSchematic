@@ -110,6 +110,18 @@ PDF uses its own fixed black-and-white styling inside `ShaftPdfComposer`.
    `ShaftRenderer`.
 4. Draw title block.
 
+### Footer taper headings
+
+Each end column may open with a taper block (`selectFooterTapers` picks the AFT-most and FWD-most
+taper by midpoint). Its heading is `footerTaperHeader`: the taper's **name** when the user gave it
+one (on-device request: a rename has to reach the printed page); otherwise `AFT Taper`/`FWD Taper`
+only for the shaft's END taper on that side (`isFooterEndTaper` — `getAftEndTaper`/`getFwdEndTaper`),
+and plain `Taper` for one part-way along. Picking the column by midpoint says nothing about where
+the shaft ends: a step-down taper mid-shaft headed "FWD Taper" told the shop the coupling end was a
+taper when it was a straight keyed body (on-device report). A body keyway listed in a column that
+holds a taper block names its body (`Body #1 KW:`, `buildBodyTitleById`) so it cannot read as the
+taper's keyway; a column without a taper keeps `Body KW:`.
+
 ### Where the footer block sits
 
 **On the bottom margin, growing upward** (`footerBandTop`, pure + unit-tested). Its bottom edge
@@ -698,8 +710,8 @@ Rules (shared helpers in `pdf/BlankFormText.kt`):
   (`FOOTER_BLOCK_BLANK_PT` = 200 pt vs 96 pt); `drawFooter` fit-clamps the pitch to the
   band, so the fullest column (taper + spooned note + thread) tightens toward printed
   density instead of overrunning the page. The middle job-info column starts one line
-  **lower** than the end columns (`midLeadLines`) whenever those lead with an
-  `AFT Taper`/`FWD Taper` heading: the middle block has no heading, so flush tops would
+  **lower** than the end columns (`midLeadLines`) whenever those lead with a taper
+  block's heading (`FooterColumns.aftLeadsWithHeading`/`fwdLeadsWithHeading`): the middle block has no heading, so flush tops would
   put its rules half a pitch off every neighbouring rule. The fit-clamp counts that extra
   line. Printed footers stay flush — their lines carry values, not rules, and the 96 pt band
   has no spare line. The three columns also split the band into **equal thirds** on a blank

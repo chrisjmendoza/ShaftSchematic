@@ -6,6 +6,18 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-10-28
+
+### fix(pdf): the footer heads a taper with its own name
+
+- **A taper you named prints that name over its footer block.** On-device report: a step-down
+  taper part-way along the shaft (named "Body size transition taper") printed in the footer as
+  the "FWD Taper", although the shaft's FWD end is a straight keyed body. A renamed taper now
+  heads its block with its name on every sheet, blank drafts included. Unnamed, the taper at
+  each end still reads "AFT Taper" / "FWD Taper", and one part-way along reads "Taper".
+- **A body keyway listed under a taper block names its body** ("Body #1 KW:"), so it no longer
+  reads as that taper's keyway.
+
 ## 2026-10-27
 
 ### fix(pdf): a thread's diameter prints the way it was typed
