@@ -35,6 +35,16 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
   (`ui/screen/DialogDiscardGuard.kt`), so a new field or chip is covered without a list to keep up.
   Docs: `docs/contracts/AddComponentDialogs.md`, User Manual (Editor, Recording).
 
+### fix(input): the fraction key looks like a fraction
+
+- The key at the right end of an inch field that types the fraction bar showed a bare bold "/",
+  which read as a divider rather than "fraction" (on-device report: it was confusing). It now
+  shows a small stacked fraction in grey — an "n" over a short bar over a "d" — and still types
+  "/" at the cursor. Screen readers announce it as "Fraction bar — types /", and a hardware
+  keyboard or D-pad can no longer move focus onto it out of the field.
+  Docs: `docs/contracts/NumberField.md` §"Keyboard", User Manual (Editor → units), Help
+  (Millimeters and inches).
+
 ### feat(input): a "/" key in number fields, for keyboards whose number pad has none
 
 - Number fields ask for the keyboard's number pad, and Gboard's has no `/` — on such phones a
