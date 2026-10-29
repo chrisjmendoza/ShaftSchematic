@@ -1519,9 +1519,17 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     fun onSetOverallLengthMm(valueMm: Float, target: SpecTarget = SpecTarget.ORIGINAL) {
         val before = specValue(target)
         updateSpec(target) { it.withNewOal(valueMm) }
-        // The re-anchor of FWD-measured parts is silent in the model; say what it moved, so an
-        // OAL correction that carries a liner into another part is not a mystery (on-device
-        // report). Nothing moved → no snackbar.
+        announceOalMove(before, target)
+    }
+
+    /**
+     * The re-anchor of FWD-measured parts is silent in the model; say what an OAL change from
+     * [before] moved on [target]'s drawing, so an OAL correction that carries a liner into another
+     * part is not a mystery (on-device report). Nothing moved → no snackbar. The snackbar names
+     * the resulting edit state, so its Undo takes back the whole step that changed the OAL. Shared
+     * by the OAL field and the thread card's OAL inclusion prompt.
+     */
+    internal fun announceOalMove(before: ShaftSpec, target: SpecTarget) {
         oalMoveSummary(before, specValue(target), _unit.value)?.let { message ->
             val expected = currentEditState()
             viewModelScope.launch { _uiEvents.emit(UiEvent.ShowOalMovedSnack(message, expected)) }

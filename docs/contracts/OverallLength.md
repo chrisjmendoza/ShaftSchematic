@@ -1,4 +1,4 @@
-# Overall Length (v2.4, 2026-10-28)
+# Overall Length (v2.5, 2026-10-29)
 
 ## Scope
 Defines how the **Overall Length** field behaves, how it interacts with components, and how the
@@ -149,6 +149,53 @@ targets: the Final tab's OAL field takes the same path (`ShaftRoute(target = FIN
 report: an OAL correction from 239" to 234 3/16" carried a FWD-measured liner into a mid-shaft
 taper and nothing said why the two now overlapped.
 
+### Thread inclusion prompt
+The thread card's **"Include thread in OAL"** switch ASKS whether the shaft's overall length
+follows the thread (on-device report: a job's OAL was measured over the FWD thread, the thread was
+marked out of the OAL, the sheet printed a thread-length too long, and switching the thread in put
+it on top of the FWD end part). Tapping the row opens an `AlertDialog`; the switch keeps showing
+the STORED state until a choice is made.
+- **Out of the OAL** — "Exclude thread from OAL": `Shorten the overall length by the thread? OAL
+  <O> → <O−L>. …` with **Shorten OAL** / **Keep OAL** / **Cancel**.
+- **Into the OAL** — "Include thread in OAL": `Lengthen the overall length by the thread? OAL <O> →
+  <O+L>. …` with **Lengthen OAL** / **Keep OAL** / **Cancel**.
+- Lengths print in the document unit (`formatLenWithUnit`). testTags: `thread_include_in_oal` (the
+  row), `thread_oal_adjust` (Shorten/Lengthen), `thread_oal_keep`, `thread_oal_cancel`. Cancel or
+  an outside tap applies nothing.
+- **No prompt** when `overallLengthMm <= 0` or the thread's `lengthMm <= 0`: the switch flips at
+  once with no OAL change.
+
+The ONE model helper is `ShaftSpec.withThreadOalInclusion(id, excludeFromOAL, adjustOal)`
+(`model/ShaftSpecExtensions.kt`), and its OAL change IS `withNewOal` — exactly what typing the new
+OAL into the field does: FWD-referenced tapers, liners and bolt rows keep their distance from the
+FWD face, AFT-referenced parts keep their start, nothing else moves. There is no second OAL-change
+path. (A "nothing else moves" variant that would hold FWD-measured parts in place was considered
+and deferred — a product question, not built.)
+- **Out**: the thread goes out at the end it is SITTING at — AFT when its AFT gap `s` ≤ its FWD gap
+  `O − (s + L)`, FWD otherwise. The stored `isAftEnd` is dormant while the thread is included (its
+  chips are hidden), so a stale default sent a FWD thread to the AFT end. With no OAL typed the
+  stored end stands. The excluded thread is then synced outside that end
+  (`syncExcludedThreadPositions`); Shorten follows with `withNewOal(O − L)`, so a FWD thread stays
+  physically where it was, now beyond the new FWD face.
+- **In**: Lengthen first runs `withNewOal(O + L)`; then the thread is placed INSIDE the shaft at its
+  end — `startFromAftMm = 0` at AFT, `OAL − L` at FWD (floored at 0). "Included in the OAL" means
+  inside it; an included thread that kept its outside position (`−L` or `O`) lit the
+  past-the-end warning. That start is derived (an excluded thread's start is system-placed), so it
+  replaces a derived value, never a typed one. With Lengthen a FWD thread stays physically where it
+  was, now inside the new OAL; an AFT thread lands at `[0, L]`.
+- The OAL changes only when `O > 0` and `L > 0`; `withNewOal` clamps at 0 (a Shorten past zero is
+  what typing would do).
+- A thread relief still at its suggested end follows the move (`withThreadReliefFollowing`, the old
+  suggestion read against the OAL the thread was on).
+
+`ShaftViewModel.setThreadExcludeFromOal(id, excludeFromOAL, adjustOal = false, target)` applies it in
+ONE `updateSpec` — the flag, the OAL change and the relief follow are one undo step. With
+`adjustOal`, an OAL change that re-anchored a FWD-measured part emits the same
+`UiEvent.ShowOalMovedSnack` as the field (`announceOalMove`, shared with `onSetOverallLengthMm`),
+whose Undo takes the flag and the OAL back together. Both targets, like the field. The Add Thread
+dialog carries nothing for it: the prompt is a confirmation on a change to a STORED thread (the
+`body_demote_confirm` class), not a control (`AddComponentDialogs.md`).
+
 ### Load (open, template apply, template preview)
 There is nothing to decide. A document's stored `overallLengthMm` is restored verbatim and
 every load path resolves through the same one-argument `resolveComponents(spec)`, so a
@@ -157,6 +204,10 @@ template card's preview can never disagree with the drawing it becomes.
 ---
 
 ## Change Log
+**v2.5 (2026-10-29)** — **Thread inclusion prompt** (on-device report): the thread card's "Include
+thread in OAL" switch asks whether the OAL follows (Shorten/Lengthen through `withNewOal`, or Keep);
+a thread taken out goes out at the end it sits at, and one brought in lands inside the shaft at its
+end (`withThreadOalInclusion`).
 **v2.4 (2026-10-28)** — **The move snackbar** (on-device report): an OAL commit that re-anchors
 FWD-measured parts says which moved, how far and which way, with Undo (`oalMoveSummary`). The
 warning banner now names a part past an end ("Body #1 runs 4 13/16" past the FWD end") instead of

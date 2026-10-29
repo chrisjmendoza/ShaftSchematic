@@ -581,7 +581,11 @@ internal val helpSections: List<HelpSection> = listOf(
                     "can be left out of the overall length (switch off \"Include thread in OAL\" " +
                     "on the card or in the Add dialog) — " +
                     "useful when the OAL is quoted to the shoulder; an excluded thread just " +
-                    "picks which end it hangs off.",
+                    "picks which end it hangs off.\n\n" +
+                    "On the card that switch asks first: Shorten OAL (or Lengthen OAL when " +
+                    "switching a thread in) changes the overall length by the thread's length, " +
+                    "exactly as typing it would; Keep OAL leaves the length alone. A thread " +
+                    "switched in sits inside the shaft at its end. One Undo takes it all back.",
                 manualAnchor = "components-liners",
             ),
             HelpTopic(

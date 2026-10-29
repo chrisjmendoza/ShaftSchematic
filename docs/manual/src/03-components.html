@@ -91,7 +91,7 @@
   <table class="ref">
     <thead><tr><th>Field / control</th><th>What it means</th></tr></thead>
     <tbody>
-      <tr><td><span class="ui">Include thread in OAL</span></td><td>On (default): the thread is part of the overall length and is placed by its Start. Off: the thread sits outside the OAL, beyond the end of the shaft.</td></tr>
+      <tr><td><span class="ui">Include thread in OAL</span></td><td>On (default): the thread is part of the overall length and is placed by its Start. Off: the thread sits outside the OAL, beyond the end of the shaft. On the card, tapping it asks whether the overall length should change with the thread (see below).</td></tr>
       <tr><td><span class="ui">Start</span></td><td>Distance from the AFT end to the start of the thread. Shown only while the thread counts in the OAL (overall length).</td></tr>
       <tr><td><span class="ui">Thread end:</span> <span class="ui">AFT</span> | <span class="ui">FWD</span></td><td>Replaces Start when the thread is excluded from the OAL: which end of the shaft the thread hangs off. Default AFT.</td></tr>
       <tr><td><span class="ui">Major Ø</span>, <span class="ui">TPI</span></td><td>Imperial threads only. TPI accepts decimals and fractions.</td></tr>
@@ -103,6 +103,8 @@
 
   <h3>Threads excluded from the OAL</h3>
   <p>A typical propeller shaft is quoted S.E.T. to S.E.T., with the nut threads standing outside that figure. Turn <span class="ui">Include thread in OAL</span> off and pick the <span class="ui">Thread end</span>. The app places the thread flush against that end of the shaft, outside the dimensioned length, and keeps it there when the OAL changes. The OAL dimension on the sheet stops at the shaft end and the thread prints beyond it.</p>
+  <p>On a thread card the switch asks before it changes anything. Switching a thread <em>out</em> offers <span class="ui">Shorten OAL</span>, which takes the thread's length off the overall length, or <span class="ui">Keep OAL</span>. Switching one <em>in</em> offers <span class="ui">Lengthen OAL</span>, which adds the thread's length, or <span class="ui">Keep OAL</span>. The prompt shows the old and the new OAL. Shorten and Lengthen change the OAL exactly as typing the new value into the <span class="ui">Overall Length</span> field would: parts measured from the FWD end keep their distance from it, and the app says which parts moved. <span class="ui">Cancel</span> changes nothing, and one Undo takes back the switch and the OAL together.</p>
+  <p>A thread switched out goes out at the end it is sitting at. A thread switched in is placed inside the shaft at its end — flush with the AFT end, or ending at the FWD end. So if the OAL was measured over the thread but the thread was marked out of it, switch the thread in and choose <span class="ui">Keep OAL</span>; a part that was placed against that end will then overlap the thread and its card says so. With no overall length typed yet the switch simply flips.</p>
 
   <h3 id="components-thread-relief">Thread relief</h3>
   <p>A relief is the plain groove turned below the thread root where the thread runs up to its shoulder, so the tool can run out and the nut seats. Turn on <span class="ui">Thread relief</span> and three more controls appear:</p>

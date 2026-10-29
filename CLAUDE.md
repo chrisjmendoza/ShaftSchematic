@@ -42,7 +42,11 @@ it from the other is a bug.
 Specifically:
 - **Thread excluded from OAL** (`countInOal = false`): `AddThreadDialog` must show
   "Thread end: AFT | FWD" chips and hide the Start field — same as the carousel card
-  (`ThreadPagerCard.kt`, `!includeInOal` block).
+  (`ThreadPagerCard.kt`, `!includeInOal` block). The card's "Include thread in OAL" switch
+  additionally ASKS whether the OAL follows (Shorten/Lengthen | Keep | Cancel —
+  `withThreadOalInclusion`, whose OAL change is the ONE helper `withNewOal`); the dialog does not —
+  a confirmation on a stored thread, not a control. A thread switched IN lands INSIDE the shaft at
+  its end, and one switched OUT goes out at the end it sits at.
 - **Liner AFT/FWD reference**: `AddLinerDialog` must show "Measure From: AFT | FWD" chips.
 - **Body keyway**: `AddBodyDialog` and the explicit-body carousel card must both expose
   the keyway section behind the Keyway gate (below): KW from AFT | FWD chips, W × D, L,
