@@ -23,6 +23,7 @@ import com.android.shaftschematic.model.shoulderOn
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.autoTaperRateText
+import com.android.shaftschematic.util.buildBodyTitleById
 import com.android.shaftschematic.util.buildLinerTitleById
 import com.android.shaftschematic.util.drawRichText
 import com.android.shaftschematic.util.wrapRichLines
@@ -126,6 +127,29 @@ internal fun selectFooterTapers(spec: ShaftSpec): FooterTapers {
     return FooterTapers(aft = sorted.first(), fwd = sorted.last())
 }
 
+/**
+ * True when [t] is the shaft's END feature on that side — it starts at the AFT end (x = 0, or the
+ * AFT end thread's shoulder) for [aftSide], or ends at the FWD end (x = OAL, or the FWD end
+ * thread's shoulder) otherwise, so nothing but a thread (and reference features — bolt slots and
+ * the like) lies beyond it. Only such a taper may be headed "AFT Taper"/"FWD Taper": the column a
+ * taper lands in ([selectFooterTapers]) says nothing about where the shaft ends, and a step-down
+ * taper mid-shaft headed "FWD Taper" told the machinist the coupling end was a taper (on-device report).
+ */
+internal fun isFooterEndTaper(spec: ShaftSpec, t: Taper, aftSide: Boolean): Boolean =
+    (if (aftSide) getAftEndTaper(spec) else getFwdEndTaper(spec)) === t
+
+/**
+ * The heading of a footer taper block. A taper the user NAMED prints that name (on-device request:
+ * a rename has to reach the printed page); otherwise the shaft's end taper on that side reads
+ * "AFT Taper"/"FWD Taper" ([isFooterEndTaper]) and any other taper plain "Taper".
+ */
+internal fun footerTaperHeader(spec: ShaftSpec, t: Taper, aftSide: Boolean): String =
+    t.label?.trim()?.takeIf { it.isNotEmpty() }
+        ?: when {
+            isFooterEndTaper(spec, t, aftSide) -> if (aftSide) FOOTER_AFT_TAPER_HEADER else FOOTER_FWD_TAPER_HEADER
+            else -> FOOTER_MID_TAPER_HEADER
+        }
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Footer (3 columns; center column is work-order info)
 // ──────────────────────────────────────────────────────────────────────────────
@@ -218,12 +242,7 @@ internal fun planFooter(
     // draft (every line a rule) that misalignment is what the eye reads first — drop the middle
     // column one line so all three columns share the same set of baselines. Printed footers carry
     // values, not rules, and their reserved band has no room to spare, so they stay flush.
-    val midLeadLines = if (
-        blankValues && (
-            cols.aftLines.firstOrNull() == FOOTER_AFT_TAPER_HEADER ||
-                cols.fwdLines.firstOrNull() == FOOTER_FWD_TAPER_HEADER
-            )
-    ) 1 else 0
+    val midLeadLines = if (blankValues && (cols.aftLeadsWithHeading || cols.fwdLeadsWithHeading)) 1 else 0
 
     // Column starts. A printed footer weights the band toward the left and middle columns,
     // where the long free text lives (taper specs, customer and vessel names) — the FWD column
@@ -422,7 +441,11 @@ internal fun keywayClockingFooterNote(spec: ShaftSpec): String? {
 
 internal data class FooterColumns(
     val aftLines: List<String>,
-    val fwdLines: List<String>
+    val fwdLines: List<String>,
+    /** The AFT column opens with a taper block's heading line (a label, not a writing rule). */
+    val aftLeadsWithHeading: Boolean = false,
+    /** The FWD column opens with a taper block's heading line. */
+    val fwdLeadsWithHeading: Boolean = false,
 )
 
 /** Clocking note under a cross-drilled hole's lines; null when the shaft has no keyway to clock against. */
@@ -501,6 +524,8 @@ internal fun threadReliefFooterLine(th: Threads, unit: UnitSystem, dual: Boolean
 // leads with one to decide the middle column's first baseline — a literal there would drift.
 internal const val FOOTER_AFT_TAPER_HEADER = "AFT Taper"
 internal const val FOOTER_FWD_TAPER_HEADER = "FWD Taper"
+/** Heading of an unnamed mid-shaft taper's block — it is neither end's taper. */
+internal const val FOOTER_MID_TAPER_HEADER = "Taper"
 
 /**
  * Builds the exact left/right footer text lines that [drawFooter] will render.
@@ -586,10 +611,12 @@ internal fun buildFooterEndColumns(
     }
 
     val aft = mutableListOf<String>()
+    var aftTaperBlock = false
     if (cfg.showAftTaper) {
         taperSides.aft?.let { tp ->
-            aft += FOOTER_AFT_TAPER_HEADER
+            aft += footerTaperHeader(spec, tp, aftSide = true)
             aft += taperLines(tp)
+            aftTaperBlock = true
         }
     }
     if (cfg.showAftThread && ends.aftThread) {
@@ -597,10 +624,12 @@ internal fun buildFooterEndColumns(
     }
 
     val fwd = mutableListOf<String>()
+    var fwdTaperBlock = false
     if (cfg.showFwdTaper) {
         taperSides.fwd?.let { tp ->
-            fwd += FOOTER_FWD_TAPER_HEADER
+            fwd += footerTaperHeader(spec, tp, aftSide = false)
             fwd += taperLines(tp)
+            fwdTaperBlock = true
         }
     }
     if (cfg.showFwdThread && ends.fwdThread) {
@@ -616,11 +645,15 @@ internal fun buildFooterEndColumns(
     }
 
     // Body-hosted keyways (fitted couplings on intermediate shafts): list in the column
-    // matching the keyway's physical half of the shaft.
-    fun bodyKwLine(b: Body): String {
+    // matching the keyway's physical half of the shaft. Below a taper block the line names its
+    // body ("Body #1 KW:" — the drawing's title for it), or it reads as that taper's keyway
+    // (on-device report: a FWD body's keyway printed under a mid-shaft taper's block).
+    val bodyTitles = buildBodyTitleById(spec)
+    fun bodyKwLine(b: Body, underTaper: Boolean): String {
         val spoon = if (effectiveKeywaySpooned(b.keywaySpooned, b.keywayOffsetFromEndMm)) " (spooned)" else ""
         val kwUnit = displayUnits.keywayUnitFor(b.id)
-        return line("Body KW:") {
+        val label = if (underTaper) "${bodyTitles[b.id] ?: "Body"} KW:" else "Body KW:"
+        return line(label) {
             "${formatLenWithUnitDual(b.keywayWidthMm.toDouble(), kwUnit, dual)} × " +
                 "${formatLenWithUnitDual(b.keywayDepthMm.toDouble(), kwUnit, dual)} × " +
                 "${formatLenWithUnitDual(b.keywayLengthMm.toDouble(), kwUnit, dual)}$spoon"
@@ -629,8 +662,9 @@ internal fun buildFooterEndColumns(
     spec.bodies.filter { it.hasKeyway }.forEach { b ->
         val span = b.keywayAbsSpanMm() ?: return@forEach
         val centerMm = span.centerMm
-        val col = if (centerMm <= spec.overallLengthMm * 0.5f) aft else fwd
-        col += bodyKwLine(b)
+        val aftHalf = centerMm <= spec.overallLengthMm * 0.5f
+        val col = if (aftHalf) aft else fwd
+        col += bodyKwLine(b, underTaper = if (aftHalf) aftTaperBlock else fwdTaperBlock)
         if (b.keywayOffsetFromEndMm > 0f) {
             val kwUnit = displayUnits.keywayUnitFor(b.id)
             val face = if (b.keywayEnd == LinerAuthoredReference.FWD) "FWD" else "AFT"
@@ -673,7 +707,10 @@ internal fun buildFooterEndColumns(
         col += line(label) { value }
     }
 
-    return FooterColumns(aftLines = aft, fwdLines = fwd)
+    return FooterColumns(
+        aftLines = aft, fwdLines = fwd,
+        aftLeadsWithHeading = aftTaperBlock, fwdLeadsWithHeading = fwdTaperBlock,
+    )
 }
 
 private data class LetSetResult(val let: Float, val set: Float)
