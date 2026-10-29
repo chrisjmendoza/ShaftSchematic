@@ -1,6 +1,16 @@
 package com.android.shaftschematic.ui.input
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
@@ -9,22 +19,32 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
  * File: FractionKey.kt
  * Layer: UI → Input
  *
- * The in-field "/" key: number fields ask for the keyboard's number pad, and a number pad has
- * digits, `.`, `-` and usually a space, but no fraction bar (Gboard's has none). The key types
+ * The in-field fraction key: number fields ask for the keyboard's number pad, and a number pad
+ * has digits, `.`, `-` and usually a space, but no fraction bar (Gboard's has none). The key types
  * the bar into the focused field, so `10 1/4` and `10-1/4` can be entered on any keyboard.
+ *
+ * Its face is a small stacked fraction — a grey "n" over a short bar over a grey "d" — because a
+ * bare "/" in a field's trailing slot reads as a divider or a clear button, not as "fraction"
+ * (on-device report). The glyph is built from text and a 1 dp bar, never a Unicode vulgar
+ * fraction character, and it is not a drawn sheet fraction (`FractionText` does not apply).
  * See `docs/contracts/NumberField.md` §"Keyboard".
  */
 
@@ -49,20 +69,59 @@ fun TextFieldValue.insertAtCursor(insert: String): TextFieldValue {
     return TextFieldValue(newText, TextRange(start + insert.length))
 }
 
+/** Accessibility label of every [FractionKey]; the glyph itself is hidden from semantics. */
+const val FRACTION_KEY_DESCRIPTION = "Fraction bar — types /"
+
 /**
- * The "/" key, sized for a text field's trailing slot. A tap does not take focus from the
- * field (a touch-mode click never moves focus), so the keyboard stays up and typing carries on
- * after the bar.
+ * The fraction key, sized for a text field's trailing slot: a stacked n-over-d glyph in the
+ * field labels' grey (`onSurfaceVariant`) that types "/" at the cursor. The button can never take
+ * focus — a touch-mode click never moves focus, and `canFocus = false` keeps a hardware-keyboard
+ * or D-pad press from pulling it out of the field too — so the keyboard stays up and typing
+ * carries on after the bar.
  */
 @Composable
 fun FractionKey(onClick: () -> Unit, modifier: Modifier = Modifier) {
     IconButton(
         onClick = onClick,
         modifier = modifier
+            .focusProperties { canFocus = false }
             .testTag(FRACTION_KEY_TAG)
-            .semantics { contentDescription = "Type a fraction bar" },
+            .semantics { contentDescription = FRACTION_KEY_DESCRIPTION },
     ) {
-        Text("/", fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        StackedFractionGlyph()
+    }
+}
+
+/**
+ * "n" over a 1 dp bar over "d". The column takes its intrinsic width, so the bar spans exactly
+ * the wider letter; at 11 sp the stack is under 30 dp tall and sits centred in the button's
+ * 48 dp slot.
+ */
+@Composable
+private fun StackedFractionGlyph() {
+    val color = MaterialTheme.colorScheme.onSurfaceVariant
+    val style = MaterialTheme.typography.labelSmall.copy(
+        fontSize = 11.sp,
+        lineHeight = 12.sp,
+        fontWeight = FontWeight.Medium,
+        textAlign = TextAlign.Center,
+    )
+    Column(
+        modifier = Modifier
+            .width(IntrinsicSize.Max)
+            .clearAndSetSemantics { },
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text("n", color = color, style = style)
+        Box(
+            Modifier
+                .padding(vertical = 1.dp)
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(color),
+        )
+        Text("d", color = color, style = style)
     }
 }
 

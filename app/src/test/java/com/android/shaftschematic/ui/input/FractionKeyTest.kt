@@ -9,12 +9,16 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.assertContentDescriptionEquals
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextInputSelection
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
@@ -27,10 +31,11 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * The in-field "/" key: number fields ask for the number pad, which has no fraction bar, so the
- * key is the only way to type one there. Pins the cursor arithmetic, the `String`-field bridge,
- * and that the key is wired into [NumericInputField] — shown only while a fraction-capable field
- * is focused in an inch document, and typing at the cursor.
+ * The in-field fraction key: number fields ask for the number pad, which has no fraction bar, so
+ * the key is the only way to type one there. Pins the cursor arithmetic, the `String`-field
+ * bridge, and that the key is wired into [NumericInputField] — shown only while a
+ * fraction-capable field is focused in an inch document, announced by its description rather
+ * than its glyph's letters, and typing at the cursor.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], qualifiers = "w400dp-h800dp")
@@ -100,6 +105,30 @@ class FractionKeyTest {
         rule.onAllNodesWithTag(FRACTION_KEY_TAG).assertCountEquals(0)
         rule.onNodeWithTag(FIELD).performClick()
         rule.onAllNodesWithTag(FRACTION_KEY_TAG).assertCountEquals(1)
+    }
+
+    @Test
+    fun `the key carries its tag and description and hides the glyph letters`() {
+        rule.setContent { Host() }
+        rule.onNodeWithTag(FIELD).performClick()
+        rule.onNodeWithTag(FRACTION_KEY_TAG)
+            .assertIsDisplayed()
+            .assertContentDescriptionEquals(FRACTION_KEY_DESCRIPTION)
+        rule.onAllNodesWithText("/").assertCountEquals(0)
+        rule.onAllNodesWithText("n").assertCountEquals(0)
+        rule.onAllNodesWithText("d").assertCountEquals(0)
+    }
+
+    @Test
+    fun `the key types a bar mid-text at the cursor`() {
+        rule.setContent { Host() }
+        rule.onNodeWithTag(FIELD).performClick()
+        rule.onNodeWithTag(FIELD).performTextReplacement("10 14")
+        rule.onNodeWithTag(FIELD).performTextInputSelection(TextRange(4))
+        rule.onNodeWithTag(FRACTION_KEY_TAG).performClick()
+        rule.onNodeWithTag(AWAY).performClick()
+        rule.waitForIdle()
+        assertEquals(listOf("10 1/4"), commits)
     }
 
     @Test

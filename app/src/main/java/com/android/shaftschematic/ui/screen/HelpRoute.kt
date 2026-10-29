@@ -465,8 +465,9 @@ internal val helpSections: List<HelpSection> = listOf(
                     "value is stored in millimeters, so switching units never changes your " +
                     "numbers — it only changes how they are shown. Inch fields accept " +
                     "fractions like 3 1/2. Some keyboards' number pads have no / key, so while " +
-                    "you type in an inch field a / button sits at the right end of the field " +
-                    "— tap it where the fraction bar goes. 10-1/4 works too.",
+                    "you type in an inch field a small grey fraction button (n over d) sits at " +
+                    "the right end of the field. It types the fraction bar — tap it where the / " +
+                    "goes. 10-1/4 works too.",
                 manualAnchor = "intro-units",
             ),
             HelpTopic(

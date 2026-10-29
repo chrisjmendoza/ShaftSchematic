@@ -191,16 +191,19 @@ Keyboard
   leave the regular keyboard so every device keeps a way to type a fraction). The calculators,
   the taper rate (`1:12`) and the thread designation ask for the text keyboard outright.
 - **A number pad has no `/`** (Gboard's offers digits, `-`, space, `,` and `.`), so a
-  fraction-capable number-pad field carries its own fraction key: a "/" button in the field's
-  trailing slot (`FractionKey`, `ui/input/FractionKey.kt`, testTag `fraction_key`) that types a
-  bar AT THE CURSOR, replacing a selection the way a typed key would. With the pad's space or
+  fraction-capable number-pad field carries its own fraction key in the field's trailing slot
+  (`FractionKey`, `ui/input/FractionKey.kt`, testTag `fraction_key`, description "Fraction bar —
+  types /"). Its face is a small stacked fraction — a grey (`onSurfaceVariant`) "n" over a 1 dp
+  bar over a "d", built from text, never a Unicode vulgar-fraction glyph — because a bare "/"
+  read as a divider rather than "fraction" (on-device report). It types a bar AT THE CURSOR, replacing a selection the way a typed key would. With the pad's space or
   hyphen it enters `10 1/4` and `10-1/4`. The key shows only while the field is focused (an idle
   field keeps its full width), only on fields that accept a fraction (`allowFraction`) AND ask
   for the number pad (`KeyboardType.Decimal`), and only in an inch document — the app root
   provides `LocalFractionKeyEnabled` from the document unit. A whole-number field opts out
   (`fractionKey = false` — the bolt-slot Count, on the card and in the Add dialog alike). A tap
-  never takes focus from the field, so the keyboard stays up. Text-keyboard fields carry no key:
-  their keyboard already has `/` (the taper rate on the card used to show one, emulator QA).
+  never takes focus from the field (the button is `focusProperties { canFocus = false }`, like
+  the OAL ✓/✗), so the keyboard stays up. Text-keyboard fields carry no key: their keyboard
+  already has `/` (the taper rate on the card used to show one, emulator QA).
 - Hosts: `NumericInputField` (every card field, the undercut and wear editors), the Overall
   Length field, the Add dialogs' number fields and the new-shaft diameter prompt. A field whose
   state is a plain `String` cannot insert at its cursor (replacing its text from outside leaves
