@@ -1,5 +1,7 @@
 package com.android.shaftschematic.ui.screen
 
+import com.android.shaftschematic.ui.util.MUST_BE_NON_NEGATIVE_MSG
+import com.android.shaftschematic.util.isLengthText
 import com.android.shaftschematic.util.parseFractionOrDecimal
 
 /**
@@ -44,6 +46,42 @@ fun addDialogPhysStartMm(isFwd: Boolean, enteredMm: Float, lengthMm: Float, oalM
 /** True when a FWD-measured [enteredMm] + [lengthMm] would reach past the AFT face. */
 fun addDialogFwdStartPastAft(isFwd: Boolean, enteredMm: Float, lengthMm: Float, oalMm: Float): Boolean =
     isFwd && oalMm > 0f && enteredMm >= 0f && lengthMm > 0f && oalMm - enteredMm - lengthMm <= -1e-3f
+
+/**
+ * "Must be ≥ 0" under a Start that reads as a negative number ([enteredMm], null when the text is
+ * blank or unreadable — those have their own handling). The number pad has a `-` and the dialogs
+ * filter nothing, so a typed `-5` otherwise left Add disabled with nothing marked. The cards'
+ * wording for the same refusal ([MUST_BE_NON_NEGATIVE_MSG]).
+ */
+fun addDialogNegativeStartError(enteredMm: Float?): String? =
+    if (enteredMm != null && enteredMm < 0f) MUST_BE_NON_NEGATIVE_MSG else null
+
+/**
+ * Whether every optional numeric field an Add dialog SHOWS is blank or reads as a length — the
+ * fields outside the required set (keyway W/D/L/inset, blend and seal-area lengths, relief length
+ * and Ø, shoulder length and Ø, the taper's S.E.T./L.E.T.). A field showing "Not a number" holds
+ * Add, as a required field does: submitting it would store 0 in place of the typed value. A null
+ * entry is a field whose section is hidden (keyway unticked, relief off, seal unticked) and never
+ * gates; blank stays allowed, as before.
+ */
+fun optionalEntriesReadable(texts: List<String?>): Boolean =
+    texts.all { it == null || it.isBlank() || isLengthText(it) }
+
+/** The keyway section's fields for [optionalEntriesReadable]: none while the gate is off. */
+fun keywayEntryTexts(
+    enabled: Boolean,
+    captured: Boolean,
+    widthText: String,
+    depthText: String,
+    lengthText: String,
+    insetText: String,
+): List<String?> =
+    if (!enabled) emptyList()
+    else listOf(widthText, depthText, lengthText, insetText.takeIf { captured })
+
+/** The thread-relief section's fields for [optionalEntriesReadable]: none while it is off. */
+fun threadReliefEntryTexts(on: Boolean, lengthText: String, diaText: String): List<String?> =
+    if (on) listOf(lengthText, diaText) else emptyList()
 
 /** Add Body: needs a placeable start and positive length and diameter. */
 fun bodyAddEnabled(startMm: Float, lengthMm: Float, diaMm: Float): Boolean =

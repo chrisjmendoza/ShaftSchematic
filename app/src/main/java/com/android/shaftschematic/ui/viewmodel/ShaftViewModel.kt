@@ -289,6 +289,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             autoAfter = autoBodyRuns(resolveComponents(after)),
             explicitBefore = storedBodyRuns(before),
             explicitAfter = storedBodyRuns(after),
+            // An OAL change moves FWD-referenced parts by the delta, and a gap between two of them
+            // moves whole; 0 for every other edit.
+            shiftMm = after.overallLengthMm - before.overallLengthMm,
         )
         val rekeyed = data.rekeyedFor(successors)
         if (rekeyed == data) return
@@ -685,7 +688,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     // Undo/redo apply a restored EditState back onto the flows; the collector's re-emission
     // is a no-op because SessionHistory.record ignores states equal to its current head
     // (isRestoringHistory is a belt-and-suspenders guard around the application block).
-    // History is dropped at document/session boundaries (newShaft/importJson/newDocument/
+    // History is reseeded at document/session boundaries (importJson/applyTemplate/newDocument/
     // continueDraft and the autosave auto-restore).
     // ────────────────────────────────────────────────────────────────────────────
     private val editHistory = SessionHistory<EditState>()
@@ -759,6 +762,24 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         val restored = editHistory.undo(currentEditState()) ?: return
         applyEditState(restored)
         updateHistoryFlags()
+    }
+
+    /**
+     * Undo for a snackbar that announced ONE edit: undoes only while the editor is still in
+     * [expected], the state that edit produced, and returns whether it did. A snackbar waits on
+     * screen while the user keeps editing, and a blind [undoEdit] from its action would take back
+     * whatever came last — a card edit or a delete — and leave the announced change in place.
+     * Otherwise nothing is undone and a short message points at History → Undo. The comparison
+     * is structural, but an untouched editor holds the same instances it recorded, so it settles
+     * on reference identity.
+     */
+    internal fun undoEditIfStillAt(expected: EditState): Boolean {
+        if (currentEditState() != expected) {
+            viewModelScope.launch { _uiEvents.emit(UiEvent.ShowSnackbarMessage(SNACK_UNDO_STALE_MESSAGE)) }
+            return false
+        }
+        undoEdit()
+        return true
     }
 
     /** Redo the most recently undone edit step. */
@@ -1464,7 +1485,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         // OAL correction that carries a liner into another part is not a mystery (on-device
         // report). Nothing moved → no snackbar.
         oalMoveSummary(before, specValue(target), _unit.value)?.let { message ->
-            viewModelScope.launch { _uiEvents.emit(UiEvent.ShowOalMovedSnack(message)) }
+            val expected = currentEditState()
+            viewModelScope.launch { _uiEvents.emit(UiEvent.ShowOalMovedSnack(message, expected)) }
         }
     }
 
@@ -1585,10 +1607,15 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     // Private helpers
     // ────────────────────────────────────────────────────────────────────────────
 
-    /** Emits a deletion snackbar request for the given [ComponentKind]. */
+    /**
+     * Emits a deletion snackbar request for the given [ComponentKind], carrying the state the
+     * delete produced — called right after the removal's [updateSpec], so that state is the
+     * delete's (see [undoEditIfStillAt]).
+     */
     internal fun emitDeletedSnack(kind: ComponentKind) {
+        val expected = currentEditState()
         viewModelScope.launch {
-            _uiEvents.emit(UiEvent.ShowDeletedSnack(kind))
+            _uiEvents.emit(UiEvent.ShowDeletedSnack(kind, expected))
         }
     }
 
@@ -1597,6 +1624,10 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     // ────────────────────────────────────────────────────────────────────────────
 
     companion object {
+        /** What a snackbar's Undo says when the drawing moved on since its edit ([undoEditIfStillAt]). */
+        internal const val SNACK_UNDO_STALE_MESSAGE =
+            "Nothing undone — the drawing has changed since. Use History → Undo."
+
         /** Injectable for tests; defaults to the real internal-storage migration. */
         internal var migrateLegacyInternalDocs: suspend (Context) -> InternalStorage.MigrationReport = { ctx ->
             InternalStorage.migrateLegacyJsonToShaft(ctx)

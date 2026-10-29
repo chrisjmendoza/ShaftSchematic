@@ -29,9 +29,9 @@ data class RenderOptions(
     /**
      * Problem marks (`previewIssueMarks`, the warning banner's own `specIssues` list): each
      * overlapping pair's shared stretch as a red band, each past-end overhang red-tinted with the
-     * real shaft end dashed. Only the Schematic tab's editor preview passes any (on-device report:
-     * the banner said something was wrong and nothing showed which part); empty keeps every other
-     * canvas byte-identical. The PDF composers never read [RenderOptions].
+     * real shaft end dashed. Only the editor preview (Schematic and Final tabs) passes any
+     * (on-device report: the banner said something was wrong and nothing showed which part);
+     * empty keeps every other canvas byte-identical. The PDF composers never read [RenderOptions].
      */
     val issueMarks: List<PreviewIssueMark> = emptyList(),
 

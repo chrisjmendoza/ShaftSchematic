@@ -17,12 +17,17 @@ sealed interface UiEvent {
      * Request to show a deletion snackbar with “Undo”.
      *
      * @property kind The kind of component that was deleted.
+     * @property expected The editor state the delete produced. The snackbar's Undo goes through
+     *   `ShaftViewModel.undoEditIfStillAt(expected)`, so it undoes the delete or nothing — never
+     *   an edit made while the snackbar was up.
      */
-    data class ShowDeletedSnack(val kind: ComponentKind) : UiEvent
+    data class ShowDeletedSnack(val kind: ComponentKind, val expected: EditState) : UiEvent
 
     /**
      * Request to show what an OAL commit moved ([message], `oalMoveSummary`), with "Undo" — the
      * commit is one history step, so the action undoes the OAL change and the move together.
+     * [expected] is the state the commit produced; as with [ShowDeletedSnack], Undo acts only
+     * while the drawing is still in it.
      */
-    data class ShowOalMovedSnack(val message: String) : UiEvent
+    data class ShowOalMovedSnack(val message: String, val expected: EditState) : UiEvent
 }

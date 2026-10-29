@@ -28,6 +28,7 @@ import com.android.shaftschematic.geom.solveMaxProfileScale
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.drawnExtentMm
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
+import com.android.shaftschematic.geom.oalRailEndsMm
 import com.android.shaftschematic.model.*
 import com.android.shaftschematic.pdf.dim.*
 import com.android.shaftschematic.pdf.notes.*
@@ -456,12 +457,7 @@ internal fun composeShaftPdfOnCanvas(
             dualStacked = stacked,
         )
 
-        val oalAft = if (spec.threads.any { t ->
-            abs(t.startFromAftMm.toDouble()) <= END_EPS_MM && !t.excludeFromOAL
-        }) 0.0 else sets.aftSETxMm
-        val oalFwd = if (spec.threads.any { t ->
-            abs((t.startFromAftMm + t.lengthMm).toDouble() - spec.overallLengthMm.toDouble()) <= END_EPS_MM && !t.excludeFromOAL
-        }) win.oalMm else sets.fwdSETxMm
+        val (oalAft, oalFwd) = oalRailEndsMm(spec, sets, win)
         val oalDimSpan = oalSpan(
             oalAft, oalFwd, displayUnits.documentUnit,
             labelMm = spec.overallLengthMm.toDouble(), dual = displayUnits.dual,

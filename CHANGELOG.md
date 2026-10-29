@@ -8,6 +8,41 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-28
 
+### fix: review follow-ups to the emulator QA wave
+
+- **A pasted word after a number is refused, not stored as the bare number.** `12ft` or
+  `10 inches` in a card field used to commit 12 or 10 in the drawing's unit; the card now says
+  "not applied — not a number", the same as the Add dialog, so the two take exactly the same
+  spellings.
+- **Phones set to a comma-decimal language open their fields correctly.** On a German, French,
+  Spanish or Portuguese phone every whole-number value an Add dialog or card opened with showed
+  "Not a number" (the seed was written as `12,0000`). Seeds are now written the way the parser
+  reads them, whatever the phone's language.
+- **The "/" key stays off fields that don't need it** — the taper card's Rate (its keyboard already
+  has `/`) and the bolt-slot card's Count.
+- **Add stays greyed while any visible optional field shows "Not a number"** — keyway, blend, seal
+  area, thread relief, liner shoulder, taper S.E.T./L.E.T. — so a keyway typed as `1,500` is no
+  longer added with a width of 0. Fields in a section that is switched off don't block Add.
+- **A negative Start in an Add dialog says "Must be ≥ 0"**, as the cards do, instead of silently
+  disabling Add.
+- **Runout readings stay on a bare-shaft gap that an OAL correction moves.** A gap between two
+  FWD-measured parts moves with them; when it moved further than its own length (239" → 234 3/16"
+  on a 4" gap) its TIRs, dragged bubbles, pits and Ø readings dropped off the sheet — and in a rarer
+  layout a gap could inherit its neighbour's readings. They now follow the gap and keep their place
+  in it.
+- **The Undo on an OAL-change or delete snackbar undoes only that change.** Editing a card or
+  deleting a part while the snackbar was up and then tapping its Undo took back the later edit and
+  left the first one in place. It now undoes nothing and says so; History → Undo still steps back as
+  usual.
+- **The classic runout sheet's OAL arrow takes in an included end thread again.** It had started
+  at the taper face while the label gave the full length. It now runs from the shaft face when an
+  end thread counts in the OAL and from the S.E.T. when the thread is excluded, as on the schematic.
+- **"Undo move" on the Runout tab retires for good once the bubble count changes** — a Redo that
+  brings the count back no longer revives it.
+- Comments and docs: `CLAUDE.md` says the refusal notice clears on the next edit of the field, not
+  on focus, and states what the bare-shaft re-key moves; `docs/contracts/NumberField.md`,
+  `AddComponentDialogs.md`, `RunoutSheet.md`, `ShaftViewModel.md`, `OverallLength.md` updated.
+
 ### feat(pdf): an explicit body at the end of the shaft prints its own length
 
 - An explicit body whose stored span touches the AFT or FWD face of the shaft now prints a length

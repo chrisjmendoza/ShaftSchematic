@@ -6,7 +6,10 @@ File: `ui/input/NumericInputField.kt` (composable `NumericInputField`; wrapped b
 `CommitNum` in `ComponentCarousel.kt` and `CommitNumField` in `AddComponentDialogs.kt`)  
 Purpose: Single-line numeric field that holds local text; commits on blur/IME Done via callback.
 
-Version: v0.10 (2026-10-28; released focus parks on the window root — `FocusParkingRoot` — so
+Version: v0.11 (2026-10-28; the filter keeps the trailing run of LETTERS and inch marks, so
+`12ft` reaches the parser whole and is refused; seeds format in `Locale.US`; the "/" key needs a
+number-pad keyboard as well as a fraction-capable field).
+v0.10 (2026-10-28; released focus parks on the window root — `FocusParkingRoot` — so
 clearing focus out of touch mode, and the dialog dismissal after it, never lands in the first
 text field on the screen).
 v0.9 (2026-10-28; every card rule a commit lambda used to enforce by returning early is
@@ -192,10 +195,12 @@ Keyboard
   trailing slot (`FractionKey`, `ui/input/FractionKey.kt`, testTag `fraction_key`) that types a
   bar AT THE CURSOR, replacing a selection the way a typed key would. With the pad's space or
   hyphen it enters `10 1/4` and `10-1/4`. The key shows only while the field is focused (an idle
-  field keeps its full width), only on fields that accept a fraction (`allowFraction`), and only
-  in an inch document — the app root provides `LocalFractionKeyEnabled` from the document unit.
-  A tap never takes focus from the field, so the keyboard stays up. Text-keyboard fields carry no
-  key: their keyboard already has `/`.
+  field keeps its full width), only on fields that accept a fraction (`allowFraction`) AND ask
+  for the number pad (`KeyboardType.Decimal`), and only in an inch document — the app root
+  provides `LocalFractionKeyEnabled` from the document unit. A whole-number field opts out
+  (`fractionKey = false` — the bolt-slot Count, on the card and in the Add dialog alike). A tap
+  never takes focus from the field, so the keyboard stays up. Text-keyboard fields carry no key:
+  their keyboard already has `/` (the taper rate on the card used to show one, emulator QA).
 - Hosts: `NumericInputField` (every card field, the undercut and wear editors), the Overall
   Length field, the Add dialogs' number fields and the new-shaft diameter prompt. A field whose
   state is a plain `String` cannot insert at its cursor (replacing its text from outside leaves
@@ -263,14 +268,21 @@ rejecting the edit:
   fraction slash, whitespace for `W N/D`, and ONE hyphen separating a whole number from its
   fraction (`10-1/4` — only right after a digit and only before the slash) when
   `allowFraction`; one `:` for ratio entry like `1:12` when `allowColon = true` (taper rate
-  text); and a **trailing unit suffix** — the run of `m`, `i`, `n`, `"`, `″`, `'` at the END of
-  the text — kept as typed so the parser can read it. Everything else is dropped. Dropping the
-  hyphen turned `10-1/4` into `101/4` (= 25.25), deleting the comma turned `1,5` into `15`, and
-  eating a pasted `mm` stored a metric value in the document unit (emulator QA) — each a valid,
-  wrong number. This is the only numeric typing filter (the taper rate has its own,
+  text); and the **trailing run of letters and inch marks** (`"`, `″`, `'`) at the END of the
+  text — kept as typed so the parser reads it (`260mm`, `12in`, `11"`) or refuses it (`12ft`,
+  `10 inches`: "not applied — not a number"). Letters anywhere else, and everything else, are
+  dropped. Dropping the hyphen turned `10-1/4` into `101/4` (= 25.25), deleting the comma turned
+  `1,5` into `15`, eating a pasted `mm` stored a metric value in the document unit, and keeping
+  only the suffix letters turned `12ft` into an accepted 12 (emulator QA) — each a valid, wrong
+  number. This is the only numeric typing filter (the taper rate has its own,
   `filterTaperRateInput`).
 - Filters never enforce numeric validity (commit path does) and never block paste or
   select-all.
+- **Seeds are formatted for the parser, not the device locale.** Every text a number field is
+  seeded with — `formatDisplay`/`disp`, the Add dialogs' `toDisplayString` and TPI seed,
+  `fmtTrim`, `formatRunoutValue` — formats in `Locale.US`. A locale-following `%.4f` on a
+  comma-decimal device (de, fr, es, pt-BR) turns 12" into `12,0000`, which trims to `12,` — a
+  shape the parser refuses — and `1.505` into `1,505`, the ambiguous thousands form.
 
 **Parsing (`util/Parsing.kt`)** — pure, side-effect-free, neutral by design (no
 clamping, no range enforcement — ViewModel setters layer validation on top). ONE grammar,

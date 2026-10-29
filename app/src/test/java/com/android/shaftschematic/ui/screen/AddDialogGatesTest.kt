@@ -335,7 +335,7 @@ class AddDialogGatesTest {
 
     // ── Bolt-slot Count: a whole number ≥ 1, never coerced ──────────────────────
 
-    /** `0` used to be stored as 1 by the dialog and dropped without a word by the card. */
+    /** Coercing `0` to 1 in the dialog, or dropping it without a word on the card, hides the refusal. */
     @Test
     fun `a bolt-slot count that is not a whole number of at least 1 is named, not coerced`() {
         for (typed in listOf("0", "2.5", "1/2", "-1")) {
@@ -369,5 +369,53 @@ class AddDialogGatesTest {
         assertFalse(addDialogFwdStartPastAft(isFwd = true, enteredMm = 800f, lengthMm = 200f, oalMm = 1000f))
         assertFalse(addDialogFwdStartPastAft(isFwd = false, enteredMm = 900f, lengthMm = 200f, oalMm = 1000f))
         assertFalse("no OAL, no face to be past", addDialogFwdStartPastAft(true, 900f, 200f, 0f))
+    }
+
+    // ── Visible optional fields ─────────────────────────────────────────────────
+
+    @Test
+    fun `an unreadable keyway width holds Add while the keyway is ticked`() {
+        // KW W showed "Not a number" with Add live, and the keyway landed with W = 0.
+        assertFalse(optionalEntriesReadable(keywayEntryTexts(true, false, "1,500", "1/4", "3", "")))
+        // Unticked, the hidden fields never gate.
+        assertTrue(optionalEntriesReadable(keywayEntryTexts(false, false, "1,500", "1/4", "3", "")))
+    }
+
+    @Test
+    fun `a blank keyway field with the gate on behaves as before`() {
+        assertTrue(optionalEntriesReadable(keywayEntryTexts(true, false, "1", "1/2", "", "")))
+        assertTrue(optionalEntriesReadable(keywayEntryTexts(true, false, "", "", "", "")))
+    }
+
+    @Test
+    fun `the captured inset gates only while Captured is on`() {
+        assertFalse(optionalEntriesReadable(keywayEntryTexts(true, true, "1", "1/2", "3", "abc")))
+        assertTrue(optionalEntriesReadable(keywayEntryTexts(true, false, "1", "1/2", "3", "abc")))
+    }
+
+    @Test
+    fun `an unreadable relief holds Add Thread, and switching the relief off releases it`() {
+        assertFalse(optionalEntriesReadable(threadReliefEntryTexts(true, "0.25", "abc")))
+        assertTrue(optionalEntriesReadable(threadReliefEntryTexts(false, "0.25", "abc")))
+        assertTrue(optionalEntriesReadable(threadReliefEntryTexts(true, "0.25", "3 1/2")))
+    }
+
+    @Test
+    fun `hidden fields and blank fields never gate, suffixed lengths read`() {
+        assertTrue(optionalEntriesReadable(listOf(null, "", "  ", "2", "50mm", "10-1/4\"")))
+        assertFalse(optionalEntriesReadable(listOf(null, "12ft")))
+    }
+
+    // ── Negative Start ─────────────────────────────────────────────────────────
+
+    @Test
+    fun `a negative Start says why Add is disabled`() {
+        assertEquals("Must be ≥ 0", addDialogNegativeStartError(-5f))
+        assertEquals(com.android.shaftschematic.ui.util.MUST_BE_NON_NEGATIVE_MSG, addDialogNegativeStartError(-0.1f))
+        assertNull(addDialogNegativeStartError(0f))
+        assertNull(addDialogNegativeStartError(12f))
+        // Blank or unreadable text has its own handling.
+        assertNull(addDialogNegativeStartError(null))
+        assertFalse(bodyAddEnabled(startMm = -5f, lengthMm = 100f, diaMm = 80f))
     }
 }

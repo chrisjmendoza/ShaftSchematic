@@ -77,6 +77,7 @@ import com.android.shaftschematic.util.ThreadDesignation
 import com.android.shaftschematic.util.toMmOrNull
 import com.android.shaftschematic.util.UnitSystem
 import kotlin.math.max
+import java.util.Locale
 
 /* ────────────────────────────────────────────────────────────────────────────
  * Shared defaults for dialogs (no clash with other files)
@@ -137,9 +138,14 @@ internal fun addDialogBodyDiaMm(spec: ShaftSpec, fallbackDiaMm: Float): Float =
  * Dialog-local utilities
  * ──────────────────────────────────────────────────────────────────────────── */
 
-private fun toDisplayString(mm: Float, unit: UnitSystem, d: Int = 3): String {
+/**
+ * An Add-dialog seed's text. Formatted in [Locale.US] whatever the device locale: a comma-decimal
+ * locale formats 12.0000 as `12,0000`, which trims to `12,` — text the parser refuses, so every
+ * whole-number seed would open as "Not a number".
+ */
+internal fun toDisplayString(mm: Float, unit: UnitSystem, d: Int = 3): String {
     val v = if (unit == UnitSystem.MILLIMETERS) mm else mm / 25.4f
-    val s = "%.${d}f".format(v).trimEnd('0').trimEnd('.')
+    val s = "%.${d}f".format(Locale.US, v).trimEnd('0').trimEnd('.')
     return if (s.isEmpty()) "0" else s
 }
 
@@ -314,7 +320,10 @@ fun AddBodyDialog(
         },
         text = {
             Column(Modifier.padding(top = 4.dp).verticalScroll(scroll)) {
-                CommitNumField("Start (${abbr(unit)})", start.text) { start.onText(it) }
+                CommitNumField(
+                    "Start (${abbr(unit)})", start.text,
+                    errorText = addDialogNegativeStartError(start.mm(unit)),
+                ) { start.onText(it) }
                 Spacer(Modifier.height(8.dp))
                 CommitNumField("Length (${abbr(unit)})", length.text, requirePositive = true) { length.onText(it) }
                 Spacer(Modifier.height(8.dp))
@@ -464,7 +473,16 @@ fun AddBodyDialog(
             }
         },
         confirmButton = {
-            val ok = bodyAddEnabled(startMm, lengthMm, diaMm)
+            // Every visible optional field must read too: one showing "Not a number" would
+            // submit 0 in place of the typed value.
+            val ok = bodyAddEnabled(startMm, lengthMm, diaMm) && optionalEntriesReadable(
+                keywayEntryTexts(kwEnabled, kwCaptured, kwWidth, kwDepth, kwLength, kwOffset) + listOf(
+                    blendAft.text.takeIf { blendAftMode == BlendFaceMode.BLEND },
+                    blendFwd.text.takeIf { blendFwdMode == BlendFaceMode.BLEND },
+                    blendAftSealLen.text.takeIf { sealAft },
+                    blendFwdSealLen.text.takeIf { sealFwd },
+                )
+            )
             Button(enabled = ok, onClick = {
                 onSubmit(
                     startMm, lengthMm, diaMm,
@@ -542,7 +560,8 @@ fun AddLinerDialog(
     var shFwdOd by remember(unit) { mutableStateOf("") }
     var shFwdRadiusMm by remember { mutableStateOf(0f) }
 
-    val startEntered = (if (isFwd) startFwd else startAft).mm(unit) ?: -1f
+    val startEnteredOrNull = (if (isFwd) startFwd else startAft).mm(unit)
+    val startEntered = startEnteredOrNull ?: -1f
     val lengthMm = length.mm(unit) ?: -1f
     val odMm = od.mm(unit) ?: -1f
 
@@ -554,10 +573,10 @@ fun AddLinerDialog(
 
     // The inline line names every overlap BEFORE Add, the same way from either reference end:
     // another liner blocks (startError — the card refuses the same span), a taper or thread is
-    // shown here and confirmed through "Add Anyway?" (overlapNote). The confirm used to be the
-    // only place a crossing-kind overlap surfaced, which read as the FWD path skipping the check
-    // (emulator QA — the FWD seed happened to land on a taper, the AFT one on a liner).
-    val startError = when {
+    // shown here and confirmed through "Add Anyway?" (overlapNote). Surfacing a crossing-kind
+    // overlap only in the confirm would read as the FWD path skipping the check (emulator QA —
+    // the FWD seed happened to land on a taper, the AFT one on a liner).
+    val startError = addDialogNegativeStartError(startEnteredOrNull) ?: when {
         fwdStartPastAft -> ADD_PAST_AFT_END_MSG
         physStartMm >= 0f && lengthMm > 0f ->
             startOverlapErrorMm(spec, "", ComponentKind.LINER, lengthMm, physStartMm)
@@ -654,7 +673,12 @@ fun AddLinerDialog(
             }
         },
         confirmButton = {
-            val ok = linerAddEnabled(physStartMm, lengthMm, odMm, startError)
+            val ok = linerAddEnabled(physStartMm, lengthMm, odMm, startError) && optionalEntriesReadable(
+                if (!linerShouldersEnabled) emptyList() else listOf(
+                    shAftLen.takeIf { shAftOn }, shAftOd.takeIf { shAftOn },
+                    shFwdLen.takeIf { shFwdOn }, shFwdOd.takeIf { shFwdOn },
+                )
+            )
             Button(enabled = ok, onClick = {
                 val ref = if (isFwd) LinerAuthoredReference.FWD else LinerAuthoredReference.AFT
                 fun end(on: Boolean, len: String, sOd: String, rMm: Float): ShoulderEndDraft? {
@@ -891,7 +915,7 @@ fun AddThreadDialog(
     val effectiveMajorMm = if (initialMajorDiaMm > 0f) initialMajorDiaMm else d.lastDiaMm
     val initialTpi = pitchMmToTpi(initialPitchMm).takeIf { it > 0f } ?: 4f
 
-    fun formatTpi(v: Float): String = "%1.3f".format(v).trimEnd('0').trimEnd('.').ifEmpty { "0" }
+    fun formatTpi(v: Float): String = "%1.3f".format(Locale.US, v).trimEnd('0').trimEnd('.').ifEmpty { "0" }
 
     val start = rememberSaveableSeededMm(effectiveStartMm, unit)
     val length = rememberSaveableSeededMm(effectiveLengthMm, unit)
@@ -935,6 +959,7 @@ fun AddThreadDialog(
     )
 
     val startError = if (!countInOal) null
+                     else if (startMm < 0f) addDialogNegativeStartError(start.mm(unit))
                      else if (startMm >= 0f && lengthMm > 0f)
                          startOverlapErrorMm(spec, "", ComponentKind.THREAD, lengthMm, startMm)
                      else null
@@ -1073,7 +1098,8 @@ fun AddThreadDialog(
             }
         },
         confirmButton = {
-            val ok = threadAddEnabled(countInOal, startMm, lengthMm, majorMm, tpiGate, startError)
+            val ok = threadAddEnabled(countInOal, startMm, lengthMm, majorMm, tpiGate, startError) &&
+                optionalEntriesReadable(threadReliefEntryTexts(reliefOn, reliefLen.text, reliefDia.text))
             Button(enabled = ok, onClick = {
                 val excludeFromOAL = !countInOal
                 val designation = if (metricMode) parsedDesignation?.format() else null
@@ -1161,7 +1187,8 @@ fun AddTaperDialog(
     var clock90   by remember { mutableStateOf(spec.keyways90Apart) }
     var cw90      by remember { mutableStateOf(spec.keyways90Cw) }
 
-    val startEntered = (if (isFwd) startFwd else startAft).mm(unit) ?: -1f
+    val startEnteredOrNull = (if (isFwd) startFwd else startAft).mm(unit)
+    val startEntered = startEnteredOrNull ?: -1f
     val lengthMm = length.mm(unit) ?: -1f
     val setMm = setDia.mm(unit) ?: -1f   // -1 means "not provided"
     val letMm = toMmOrNull(letText, unit) ?: -1f
@@ -1202,8 +1229,9 @@ fun AddTaperDialog(
     // Resolve physical AFT-origin start from the entered value — a FWD entry past the AFT face
     // is refused, not clamped (addDialogPhysStartMm).
     val physStartMm = addDialogPhysStartMm(isFwd, startEntered, lengthMm, spec.overallLengthMm)
-    val startError = if (addDialogFwdStartPastAft(isFwd, startEntered, lengthMm, spec.overallLengthMm))
-        ADD_PAST_AFT_END_MSG else null
+    val startError = addDialogNegativeStartError(startEnteredOrNull)
+        ?: if (addDialogFwdStartPastAft(isFwd, startEntered, lengthMm, spec.overallLengthMm))
+            ADD_PAST_AFT_END_MSG else null
     // Tapers do not block on an overlap (no card refuses one either); the line names it before
     // Add and "Add Anyway?" confirms it — the same from either reference end.
     val overlapNote = if (startError == null) proposedSpanOverlapMessage(spec, physStartMm, lengthMm) else null
@@ -1415,6 +1443,9 @@ fun AddTaperDialog(
                 hasExactlyOneEnd = hasExactlyOneEnd,
                 manualRateParses =
                     parseTaperRateText(rateText, allowAmbiguousBareOne = false) != null
+            ) && optionalEntriesReadable(
+                listOf(setDia.text, letText) +
+                    keywayEntryTexts(kwEnabled, kwCaptured, kwWidth, kwDepth, kwLength, kwOffset)
             )
             Button(
                 enabled = ok,

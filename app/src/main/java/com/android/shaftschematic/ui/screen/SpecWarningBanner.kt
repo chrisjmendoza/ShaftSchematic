@@ -16,7 +16,7 @@ package com.android.shaftschematic.ui.screen
  *
  * The advisory styling is the contract: **only PROBLEMS the user can act on may reach this
  * banner.** A line stating normal behaviour reads as an error here (on-device report) and
- * cheapens the ones that matter — see `specIssues` for the note that was removed on those grounds.
+ * cheapens the ones that matter (see `specIssues`).
  *
  * Overlaps block export (the same pair the export gate names); every other line reports a legal,
  * already-committed state (`docs/contracts/OverallLength.md`), and nothing here clamps or

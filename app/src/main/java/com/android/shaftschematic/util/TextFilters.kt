@@ -15,11 +15,12 @@ package com.android.shaftschematic.util
  *   before the slash. Dropping that hyphen would join the whole number and the numerator into a
  *   different, valid number (`101/4`).
  * - One ':' for ratio entry like `1:12` when [allowColon] is true.
- * - A trailing unit suffix — the characters of `mm` and `in` and the inch marks `"`, `″`, `'` —
- *   is kept at the END of the text, so the parser can read it: `260mm` in an inch drawing is
- *   260 mm, and a suffix silently eaten here would be stored in the wrong unit. A stock numeric
- *   keypad cannot type letters; paste and hardware keyboards can.
- * - Anything else (other letters, scientific notation, extra dots or slashes) is dropped.
+ * - The trailing run of letters and inch marks (`"`, `″`, `'`) is kept at the END of the text as
+ *   typed, so the parser reads it or refuses it: `260mm` in an inch drawing is 260 mm, and `12ft`
+ *   or `10 inches` reaches the parser whole and is refused as not a number. A suffix eaten here
+ *   would be stored in the wrong unit, and a word eaten here would turn `12ft` into an accepted
+ *   12. A stock numeric keypad cannot type letters; paste and hardware keyboards can.
+ * - Anything else (letters before the end, scientific notation, extra dots or slashes) is dropped.
  */
 fun filterNumericInput(
     raw: String,
@@ -27,9 +28,9 @@ fun filterNumericInput(
     allowFraction: Boolean,
     allowColon: Boolean = false
 ): String {
-    // The trailing run of suffix characters survives as typed; the head is filtered below.
+    // The trailing run of letters and inch marks survives as typed; the head is filtered below.
     var tailStart = raw.length
-    while (tailStart > 0 && raw[tailStart - 1] in UNIT_SUFFIX_INPUT_CHARS) tailStart--
+    while (tailStart > 0 && raw[tailStart - 1].isTrailingWordChar()) tailStart--
     val head = raw.substring(0, tailStart)
     val tail = raw.substring(tailStart)
 
@@ -82,8 +83,11 @@ fun filterNumericInput(
     return sb.append(tail).toString()
 }
 
-/** Characters of the unit suffixes the parser reads (`mm`, `in`, `"`, `″`, `''`). */
-private const val UNIT_SUFFIX_INPUT_CHARS = "mMiInN\"″'"
+/** A character of the trailing run kept for the parser: any letter, or an inch mark. */
+private fun Char.isTrailingWordChar(): Boolean = isLetter() || this in INCH_MARK_INPUT_CHARS
+
+/** The inch marks the parser reads as a suffix (`"`, `″`, `''`). */
+private const val INCH_MARK_INPUT_CHARS = "\"″'"
 
 /**
  * Input filter for a taper-rate field — the ONE acceptance rule shared by the taper card and

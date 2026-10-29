@@ -151,8 +151,8 @@ class ThreadReliefCardTest {
     }
 
     /**
-     * Turning the relief off is the switch's job, so a typed 0 is refused AND named; it used to be
-     * dropped in the commit lambda with the 0 left on screen over the stored value (emulator QA).
+     * Turning the relief off is the switch's job, so a typed 0 is refused AND named; dropping it in
+     * the commit lambda would leave the 0 on screen over the stored value (emulator QA).
      */
     @Test
     fun `a zero relief value is refused and named, and the stored relief is kept`() {

@@ -245,7 +245,7 @@ class CardFieldRefusalTest {
         assertEquals(false, modeCommits.last().first)
     }
 
-    /** A typed 0 used to re-derive that end from the rate — a different value from the one typed. */
+    /** Re-deriving that end from the rate on a typed 0 would store a value other than the one typed. */
     @Test
     fun `a taper diameter of 0 is refused`() {
         showTaper(manual = true)

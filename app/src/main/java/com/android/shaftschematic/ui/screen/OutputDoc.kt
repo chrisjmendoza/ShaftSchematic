@@ -81,8 +81,8 @@ enum class ConsolidatedVariant(
  *
  * A job with no customer, vessel or job number is named by its saved [documentName] instead
  * (sanitized the same way, `.shaft` dropped), and only an unsaved, unnamed one falls back to the
- * document's [OutputDoc.fallbackBase]: every such export used to land as `Shaft_<doc>.pdf`, so
- * two jobs exported to one folder collided and no file said which shaft it was (on-device report).
+ * document's [OutputDoc.fallbackBase]: naming every such export `Shaft_<doc>.pdf` would make two
+ * jobs exported to one folder collide, with no file saying which shaft it was (on-device report).
  */
 internal fun buildOutputFilename(
     customer: String,

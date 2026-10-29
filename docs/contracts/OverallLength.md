@@ -131,9 +131,16 @@ warning on a legitimately flush taper.
 The re-anchor is silent in the model, so the editor SAYS what an OAL commit moved: on the editor's
 snackbar host, `OAL 234 3/16": moved FWD Liner 4 13/16" aft (measured from FWD)` — up to two card
 titles, then "+N more"; "aft" / "fwd" by direction; distances in the document unit
-(`formatLenWithUnit`). It carries **Undo**, which calls the session `undoEdit()`: the commit is ONE
-history step (the field's mm and raw-text callbacks land inside one coalescing window, and the
-second moves nothing), so Undo takes back the length and the move together. The pure diff is
+(`formatLenWithUnit`). It carries **Undo**: the commit is ONE history step (the field's mm and
+raw-text callbacks land inside one coalescing window, and the second moves nothing), so Undo takes
+back the length and the move together. The event carries the `EditState` the commit produced
+(`ShowOalMovedSnack.expected`) and the action calls `undoEditIfStillAt(expected)`, which undoes only
+while the editor is still in that state: the snackbar stays up while the user keeps editing (the
+route's event collector waits on it, so a delete's snackbar queues behind it), and a blind
+`undoEdit()` there took back the later card edit or delete and left the OAL and the moved parts in
+place. Once anything has changed, Undo does nothing and says so ("Nothing undone — the drawing has
+changed since. Use History → Undo."). The delete snackbar carries the same token
+(`ShowDeletedSnack.expected`). The pure diff is
 `oalMoveSummary(before, after, unit)` (`ui/util/OalMoveSummary.kt`): tapers, liners and coupler
 bolt rows whose stored start moved by more than `OAL_REANCHOR_SNAP_MM`, ordered AFT → FWD;
 excluded threads are left out (they follow the end by definition). `ShaftViewModel.onSetOverallLengthMm`

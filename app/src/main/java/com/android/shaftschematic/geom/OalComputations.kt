@@ -112,3 +112,26 @@ fun computeSetPositionsInMeasureSpace(win: OalWindow, spec: ShaftSpec): SetPosit
 
     return SetPositions(aftSETxMm = aftSET, fwdSETxMm = fwdSET)
 }
+
+/**
+ * Where the OAL dimension's arrows land, in measurement space: `(aft, fwd)`.
+ *
+ * The OAL label is always the typed length, so the arrows bracket what that number measures. An
+ * end thread INCLUDED in the OAL (`!excludeFromOAL`) is part of it: that end's arrow sits on the
+ * shaft face — 0 for a thread starting at 0, the OAL for one ending there, within [END_EPS_MM].
+ * Any other end (an excluded thread, or no thread) puts the arrow on that end's S.E.T. ([sets]),
+ * which an excluded thread leaves at the taper face. The schematic and the classic runout sheet
+ * both draw their OAL rail from this; the consolidated sheet's S.E.T.-to-S.E.T. rail does not.
+ */
+fun oalRailEndsMm(spec: ShaftSpec, sets: SetPositions, win: OalWindow = computeOalWindow(spec)): Pair<Double, Double> {
+    val oal = spec.overallLengthMm.toDouble()
+    val includedAft = spec.threads.any { t ->
+        !t.excludeFromOAL && abs(t.startFromAftMm.toDouble()) <= END_EPS_MM
+    }
+    val includedFwd = spec.threads.any { t ->
+        !t.excludeFromOAL && abs((t.startFromAftMm + t.lengthMm).toDouble() - oal) <= END_EPS_MM
+    }
+    val aft = if (includedAft) 0.0 else sets.aftSETxMm
+    val fwd = if (includedFwd) win.oalMm else sets.fwdSETxMm
+    return aft to fwd
+}

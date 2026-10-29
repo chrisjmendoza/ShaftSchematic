@@ -134,9 +134,9 @@ Responsibilities
     `UndercutDrawing.md`, Undo).
   - `canUndo` / `canRedo`: `StateFlow<Boolean>` mirroring `editHistory.canUndo` /
     `.canRedo`, updated by `updateHistoryFlags()` after every record/undo/redo.
-  - History is dropped at every session boundary: `newShaft()`, `newDocument()`,
-    `importJson()`, `applyTemplate()`, `continueDraft()`, and the autosave auto-restore path
-    in `init` — undo must never cross back into a different document's state. Each boundary
+  - History is dropped at every session boundary: `newDocument()`, `importJson()`,
+    `applyTemplate()`, `continueDraft()`, and the autosave auto-restore path in `init` — undo
+    must never cross back into a different document's state. Each boundary
     ends with `reseedEditHistory()`, which seeds the history head with the state the boundary
     produced (`SessionHistory.clear(seed)`), so the user's first edit after it is an undo step
     whether or not the recorder had already seen that state. A head cleared to null took the
@@ -144,11 +144,22 @@ Responsibilities
   - **Replaces the old delete-only undo entirely.** `LastDeleted`,
     `deleteHistory`/`redoHistory`, `isRedoing`, `canUndoDeletes`/`canRedoDeletes`,
     `undoLastDelete()`/`redoLastDelete()`, and `clearDeleteHistory()` are all removed;
-    the delete snackbar's "Undo" action now calls `undoEdit()` (see `ShaftRoute.kt`).
+    the delete snackbar's "Undo" action goes through `undoEditIfStillAt(expected)` (see
+    `ShaftRoute.kt` and the snackbar-token bullet below).
     The removers (`removeBody` / `removeTaper` / `removeThread` / `removeLiner` /
     `removeCouplerBoltSlot`, `ui/viewmodel/ShaftViewModelComponents.kt`) are unchanged in
     effect (body-merge behavior preserved) but push no per-delete history of their own —
     recovery goes through the general session history like any other edit.
+  - **Snackbar Undo is tokened.** A snackbar that announces ONE edit — `ShowDeletedSnack`
+    (`emitDeletedSnack`, right after the removal) and `ShowOalMovedSnack`
+    (`onSetOverallLengthMm`) — carries `expected: EditState`, the `currentEditState()` that edit
+    produced. Its action calls `undoEditIfStillAt(expected)`: `undoEdit()` only when the editor
+    is still in that state (returns `true`), otherwise nothing is undone and a
+    `ShowSnackbarMessage` ("Nothing undone — the drawing has changed since. Use History → Undo.")
+    says so (`false`). The route's collector waits inside `showSnackbar`, so the user keeps
+    editing under a visible snackbar; a blind `undoEdit()` from its action took back whichever
+    edit came last. `EditState` equality is structural, but an untouched editor still holds the
+    instances it recorded, so the compare settles on reference identity.
 
 Two specs, one editor
 - A document has **two** geometries: `spec` (the original schematic — what came in) and the
