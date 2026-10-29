@@ -1,6 +1,7 @@
 package com.android.shaftschematic.ui.util
 
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.collisionPartnerIdsForSpan
 import com.android.shaftschematic.util.UnitSystem
 
 /**
@@ -12,6 +13,11 @@ import com.android.shaftschematic.util.UnitSystem
  * through `outsideShaftSpanMessage` (`ui/util/ComponentWarnings.kt`), the ONE bounds
  * comparison this and the carousel cards' past-OAL chip share. The two messages differ in
  * wording only; do not fork the comparison back out into either surface.
+ *
+ * Each overlap names its partner by the title its carousel card shows ("Overlaps FWD Taper", a
+ * user label when one is set — [overlapsMessage]), one line per partner, AFT → FWD; an index
+ * ("Taper 1") left the user guessing which card that was (emulator QA). The partners are the
+ * export gate's (`collisionPartnerIdsForSpan`), the same set the dialogs' inline line names.
  *
  * Returns an empty list when everything is clean.  Callers should present the warnings and offer
  * an "Add Anyway" path rather than blocking the add.
@@ -25,29 +31,11 @@ fun collectAddWarnings(
     if (startMm < 0f || lengthMm <= 0f) return emptyList()
 
     val warnings = mutableListOf<String>()
-    val proposedEnd = startMm + lengthMm
-    val eps = 1e-3f
-
-    fun overlaps(bStart: Float, bLen: Float): Boolean {
-        val bEnd = bStart + bLen
-        return startMm < bEnd - eps && proposedEnd > bStart + eps
-    }
 
     outsideShaftSpanMessage(spec, startMm, lengthMm, unit)?.let { warnings.add(it) }
 
-    spec.tapers.forEachIndexed { i, t ->
-        if (overlaps(t.startFromAftMm, t.lengthMm))
-            warnings.add("Overlaps Taper ${i + 1}")
-    }
-
-    spec.threads.filter { !it.excludeFromOAL }.forEachIndexed { i, t ->
-        if (overlaps(t.startFromAftMm, t.lengthMm))
-            warnings.add("Overlaps Thread ${i + 1}")
-    }
-
-    spec.liners.forEachIndexed { i, l ->
-        if (overlaps(l.startFromAftMm, l.lengthMm))
-            warnings.add("Overlaps Liner ${i + 1}")
+    spec.collisionPartnerIdsForSpan(startMm, lengthMm).forEach { id ->
+        overlapsMessage(spec, listOf(id))?.let { warnings.add(it) }
     }
 
     return warnings

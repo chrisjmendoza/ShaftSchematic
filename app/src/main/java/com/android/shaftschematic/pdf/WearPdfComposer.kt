@@ -982,7 +982,7 @@ private fun drawWearNotesArea(
     y: Float,
     dyePenResult: DyePenResult? = null,
 ) {
-    var x = drawDyePenBoxes(c, text, left, y, "Dye pen inspection: ", dyePenResult) + 24f
+    var x = drawDyePenBoxes(c, text, left, y, "Dye pen inspection:", dyePenResult) + 24f
 
     // Notes fill-in line
     c.drawText("Notes:", x, y, text); x += text.measureText("Notes:") + 6f
@@ -1019,8 +1019,11 @@ internal fun drawDyePenBoxes(
         x += boxSize + 4f
     }
 
-    c.drawText(label, x, y, text)
-    x += text.measureText(label)
+    // A fixed gap after the label rather than whatever trailing spaces the caller passed: one
+    // space at sheet size left the first box touching the colon (on-device report).
+    val shown = label.trimEnd()
+    c.drawText(shown, x, y, text)
+    x += text.measureText(shown) + DYE_PEN_LABEL_GAP_PT
 
     drawCheckbox(marked = result == DyePenResult.PASS)
     c.drawText("PASS", x, y, text); x += text.measureText("PASS") + 20f
@@ -1035,6 +1038,8 @@ internal fun drawDyePenBoxes(
 // ──────────────────────────────────────────────────────────────────────────────
 
 internal const val WEAR_OUTLINE_PT = 2.0f
+/** Air between a dye pen row's label and its first checkbox. */
+private const val DYE_PEN_LABEL_GAP_PT = 6f
 internal const val WEAR_DIM_PT    = 1.2f
 private const val WEAR_TEXT_PT    = 10f
 private const val WEAR_MARGIN_PT  = 36f

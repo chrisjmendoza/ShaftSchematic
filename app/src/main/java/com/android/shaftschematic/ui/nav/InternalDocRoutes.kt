@@ -215,7 +215,6 @@ fun OpenLocalDocumentRoute(               // ← renamed (no clash with SAF)
                     files = withContext(Dispatchers.IO) { InternalStorage.listWithMetadata(ctx) }
                 }
             },
-            onError = { message -> scope.launch { snackbarHostState.showSnackbar(message) } },
         )
     }
 
@@ -535,6 +534,18 @@ private fun displayNameForUri(ctx: Context, uri: Uri): String? =
     }.getOrNull()?.takeIf { it.isNotBlank() }
 
 /** User-facing message for a failed document open. Version mismatches get their specific text. */
+/**
+ * The Save Drawing screen's existing-saves list for the File name text [typed]: every save while
+ * the field is blank or still holds the pre-filled [defaultName] (an untouched default is not a
+ * search — it matched nothing and hid every save), otherwise the saves whose name contains the
+ * typed text, ignoring case.
+ */
+internal fun filterExistingSaves(baseNames: List<String>, typed: String, defaultName: String): List<String> {
+    val query = typed.trim()
+    if (query.isBlank() || query == defaultName.trim()) return baseNames
+    return baseNames.filter { it.contains(query, ignoreCase = true) }
+}
+
 internal fun openFailureMessage(name: String, e: Throwable): String = when (e) {
     is ShaftDocCodec.UnsupportedDocVersionException ->
         e.message ?: "This file needs a newer version of the app."
@@ -589,7 +600,8 @@ fun SaveLocalDocumentRoute(               // ← renamed (no clash with SAF)
     var existingFiles by remember { mutableStateOf(listOf<String>()) }
     LaunchedEffect(Unit) { existingFiles = InternalStorage.list(ctx) }
 
-    var name by remember {
+    // The pre-filled name, kept so the existing-saves list can tell it from a typed filter.
+    val defaultName = remember {
         val default = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())
         val positionSuffix = shaftPosition.printableLabelOrNull()
         val suggested = DocumentNaming.suggestedBaseName(
@@ -598,8 +610,9 @@ fun SaveLocalDocumentRoute(               // ← renamed (no clash with SAF)
             vessel = vessel,
             suffix = positionSuffix
         )
-        mutableStateOf(TextFieldValue(suggested ?: "Shaft_$default"))
+        suggested ?: "Shaft_$default"
     }
+    var name by remember { mutableStateOf(TextFieldValue(defaultName)) }
     var error by remember { mutableStateOf<String?>(null) }
 
     val normalizedName = remember(name.text) { InternalStorage.normalizeShaftDocName(name.text) }
@@ -665,19 +678,16 @@ fun SaveLocalDocumentRoute(               // ← renamed (no clash with SAF)
                 modifier = Modifier.fillMaxWidth()
             )
 
-            // Existing saves list: shown under the input and filtered as the user types.
-            val query = name.text.trim()
+            // Existing saves list: shown under the input and filtered as the user types — but
+            // not by the untouched pre-filled name, which matches nothing and left the heading
+            // over an empty list (emulator QA).
             val existingBaseNames = remember(existingFiles) {
                 existingFiles.map(::stripShaftDocExtension).distinctBy { it.lowercase() }
             }
-            val filtered = remember(existingBaseNames, query) {
-                if (query.isBlank()) {
-                    existingBaseNames
-                } else {
-                    existingBaseNames.filter { it.contains(query, ignoreCase = true) }
-                }
+            val filtered = remember(existingBaseNames, name.text, defaultName) {
+                filterExistingSaves(existingBaseNames, name.text, defaultName)
             }
-            if (existingBaseNames.isNotEmpty()) {
+            if (filtered.isNotEmpty()) {
                 Text("Existing saves", style = MaterialTheme.typography.titleSmall)
                 LazyColumn(
                     modifier = Modifier

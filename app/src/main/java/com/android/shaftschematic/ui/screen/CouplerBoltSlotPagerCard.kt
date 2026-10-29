@@ -21,6 +21,9 @@ import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.SlotAuthoredReference
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.resolved.ResolvedCouplerBoltSlot
+import com.android.shaftschematic.ui.util.positiveDiaErrorMm
+import com.android.shaftschematic.ui.util.positiveLengthErrorMm
+import com.android.shaftschematic.util.isUnitlessNumberText
 import com.android.shaftschematic.util.toMmOrNull
 import com.android.shaftschematic.util.UnitSystem
 
@@ -69,8 +72,15 @@ internal fun CouplerBoltSlotPagerCard(
     // Recompute the aft-most physical start from an authored value.
     fun physFromAuthored(authoredMm: Float, count: Int, spacingMm: Float): Float {
         val span = (count - 1).coerceAtLeast(0) * spacingMm
-        return if (isFwdRef) (spec.overallLengthMm - authoredMm - span).coerceAtLeast(0f) else authoredMm
+        return if (isFwdRef) spec.overallLengthMm - authoredMm - span else authoredMm
     }
+    // A FWD-measured row that would reach past the AFT face is refused by the fields that move
+    // it (position, count, spacing) rather than stored clamped onto the face — a clamp would
+    // show the user a different position from the one typed. Past the FWD end stays legal: a
+    // row at the very end of the shaft is ordinary authoring.
+    fun pastAftError(authoredMm: Float, count: Int, spacingMm: Float): String? =
+        if (spec.overallLengthMm > 0f && physFromAuthored(authoredMm, count, spacingMm) < -1e-3f)
+            BOLT_ROW_PAST_AFT_MSG else null
 
     val selectedColors = FilterChipDefaults.filterChipColors(
         selectedContainerColor = Color.Black, selectedLabelColor = Color.White,
@@ -135,26 +145,47 @@ internal fun CouplerBoltSlotPagerCard(
             first = {
                 CommitNum(
                     label = slotStartFieldLabel(isFwd = isFwdRef, isCross = isCross, unit = unit),
-                    initialDisplay = disp(authoredStartMm, unit)
+                    initialDisplay = disp(authoredStartMm, unit),
+                    validator = { raw ->
+                        toMmOrNull(raw, unit)?.let { pastAftError(it, cs.count, cs.spacingMm) }
+                    },
                 ) { s ->
                     val authoredMm = toMmOrNull(s, unit) ?: return@CommitNum
                     onUpdateCouplerBoltSlot(idx, physFromAuthored(authoredMm, cs.count, cs.spacingMm), cs.holeDiaMm, cs.count, cs.spacingMm, cs.through, cs.depthMm)
                 }
             },
             second = {
-                CommitNum("Hole Ø (${abbr(unit)})", disp(cs.holeDiaMm, unit)) { s ->
+                CommitNum(
+                    "Hole Ø (${abbr(unit)})", disp(cs.holeDiaMm, unit),
+                    validator = { raw -> positiveDiaErrorMm(toMmOrNull(raw, unit)) },
+                ) { s ->
                     toMmOrNull(s, unit)?.let { onUpdateCouplerBoltSlot(idx, cs.startFromAftMm, it, cs.count, cs.spacingMm, cs.through, cs.depthMm) }
                 }
             },
         )
-        CommitNum("Count", cs.count.toString()) { s ->
-            val newCount = s.trim().toIntOrNull()?.coerceAtLeast(1) ?: return@CommitNum
+        // Any number passes the parse gate so the validator can say what a count must be: `0`,
+        // `2.5` and `1/2` are refused and named, never coerced to 1 or dropped.
+        CommitNum(
+            "Count", cs.count.toString(), parseValid = ::isUnitlessNumberText,
+            validator = { raw ->
+                boltSlotCountError(raw)
+                    ?: boltSlotCountOrNull(raw)?.let { pastAftError(authoredStartMm, it, cs.spacingMm) }
+            },
+        ) { s ->
+            val newCount = boltSlotCountOrNull(s) ?: return@CommitNum
             // Keep the authored (referenced) end fixed as count changes.
             val newPhys = physFromAuthored(authoredStartMm, newCount, cs.spacingMm)
             onUpdateCouplerBoltSlot(idx, newPhys, cs.holeDiaMm, newCount, cs.spacingMm, cs.through, cs.depthMm)
         }
         if (cs.count > 1) {
-            CommitNum("Spacing (${abbr(unit)})", disp(cs.spacingMm, unit)) { s ->
+            // A multi-hole row needs a pitch: > 0, the Add dialog's own gate.
+            CommitNum(
+                "Spacing (${abbr(unit)})", disp(cs.spacingMm, unit),
+                validator = { raw ->
+                    val mm = toMmOrNull(raw, unit)
+                    positiveLengthErrorMm(mm) ?: mm?.let { pastAftError(authoredStartMm, cs.count, it) }
+                },
+            ) { s ->
                 val newSpacing = toMmOrNull(s, unit) ?: return@CommitNum
                 val newPhys = physFromAuthored(authoredStartMm, cs.count, newSpacing)
                 onUpdateCouplerBoltSlot(idx, newPhys, cs.holeDiaMm, cs.count, newSpacing, cs.through, cs.depthMm)
@@ -173,7 +204,11 @@ internal fun CouplerBoltSlotPagerCard(
             )
         }
         if (!cs.through) {
-            CommitNum("Depth (${abbr(unit)})", disp(cs.depthMm, unit)) { s ->
+            // A blind hole needs a depth: > 0, the Add dialog's own gate.
+            CommitNum(
+                "Depth (${abbr(unit)})", disp(cs.depthMm, unit),
+                validator = { raw -> positiveLengthErrorMm(toMmOrNull(raw, unit)) },
+            ) { s ->
                 toMmOrNull(s, unit)?.let { onUpdateCouplerBoltSlot(idx, cs.startFromAftMm, cs.holeDiaMm, cs.count, cs.spacingMm, cs.through, it) }
             }
         }

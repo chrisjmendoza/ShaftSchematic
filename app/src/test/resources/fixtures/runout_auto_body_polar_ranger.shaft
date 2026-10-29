@@ -1,0 +1,350 @@
+{
+    "version": 1,
+    "preferred_unit": "INCHES",
+    "unit_locked": true,
+    "job_number": "935061",
+    "customer": "AML",
+    "vessel": "Polar Ranger",
+    "item": "",
+    "shaft_position": "STBD",
+    "notes": "",
+    "spec": {
+        "overallLengthMm": 10995.025,
+        "bodies": [],
+        "tapers": [
+            {
+                "id": "65bd1a75-0796-471d-80d8-df186d2dce94",
+                "startFromAftMm": 10688.638,
+                "lengthMm": 306.3875,
+                "startDiaMm": 247.7262,
+                "endDiaMm": 222.1484,
+                "keywayWidthMm": 57.15,
+                "keywayDepthMm": 15.875,
+                "keywayLengthMm": 276.225,
+                "keywayOffsetFromSetMm": 0.0,
+                "keywaySpooned": false,
+                "taperRateText": "1:12",
+                "authoredReference": "FWD",
+                "label": null,
+                "showNameOnDrawing": null,
+                "shadeOnDrawing": null
+            },
+            {
+                "id": "9e18aaa4-33d8-4379-8020-d2f331fe8f64",
+                "startFromAftMm": 0.0,
+                "lengthMm": 494.50626,
+                "startDiaMm": 212.8774,
+                "endDiaMm": 254.1016,
+                "keywayWidthMm": 50.8,
+                "keywayDepthMm": 15.875,
+                "keywayLengthMm": 457.2,
+                "keywayOffsetFromSetMm": 0.0,
+                "keywaySpooned": true,
+                "taperRateText": "1:12",
+                "authoredReference": "AFT",
+                "label": null,
+                "showNameOnDrawing": null,
+                "shadeOnDrawing": null
+            }
+        ],
+        "threads": [
+            {
+                "id": "1d8c06b4-e7b2-4f40-b307-2269b59f3453",
+                "startFromAftMm": -203.2,
+                "majorDiaMm": 127.0,
+                "pitchMm": 6.35,
+                "lengthMm": 203.2,
+                "excludeFromOAL": true,
+                "isAftEnd": true,
+                "tpi": 4.0,
+                "metricDesignation": null,
+                "label": null,
+                "showNameOnDrawing": null,
+                "reliefLenMm": 0.0,
+                "reliefDiaMm": 0.0,
+                "reliefAtAft": false
+            }
+        ],
+        "liners": [
+            {
+                "id": "02d0b768-87e8-422d-9707-45879b60f484",
+                "startMmPhysical": 10013.95,
+                "lengthMm": 517.525,
+                "odMm": 254.0,
+                "label": null,
+                "authoredReference": "FWD",
+                "endMmPhysical": 10531.476,
+                "showDiaOnDrawing": true,
+                "showNameOnDrawing": false,
+                "shadeOnDrawing": null,
+                "shoulderAftLenMm": 0.0,
+                "shoulderAftOdMm": 0.0,
+                "shoulderAftRadiusMm": 0.0,
+                "shoulderFwdLenMm": 0.0,
+                "shoulderFwdOdMm": 0.0,
+                "shoulderFwdRadiusMm": 0.0
+            },
+            {
+                "id": "213e92ef-be16-410e-9ba6-a651f382db60",
+                "startMmPhysical": 5435.6,
+                "lengthMm": 933.45,
+                "odMm": 254.0,
+                "label": null,
+                "authoredReference": "AFT",
+                "endMmPhysical": 6369.0503,
+                "showDiaOnDrawing": true,
+                "showNameOnDrawing": null,
+                "shadeOnDrawing": null,
+                "shoulderAftLenMm": 0.0,
+                "shoulderAftOdMm": 0.0,
+                "shoulderAftRadiusMm": 0.0,
+                "shoulderFwdLenMm": 0.0,
+                "shoulderFwdOdMm": 0.0,
+                "shoulderFwdRadiusMm": 0.0
+            },
+            {
+                "id": "26323d09-7e38-4a69-85e7-b8067936d81b",
+                "startMmPhysical": 585.7875,
+                "lengthMm": 1208.0875,
+                "odMm": 254.0,
+                "label": null,
+                "authoredReference": "AFT",
+                "endMmPhysical": 1793.875,
+                "showDiaOnDrawing": true,
+                "showNameOnDrawing": null,
+                "shadeOnDrawing": null,
+                "shoulderAftLenMm": 0.0,
+                "shoulderAftOdMm": 0.0,
+                "shoulderAftRadiusMm": 0.0,
+                "shoulderFwdLenMm": 0.0,
+                "shoulderFwdOdMm": 0.0,
+                "shoulderFwdRadiusMm": 0.0
+            }
+        ],
+        "couplerBoltSlots": [],
+        "keyways180Apart": false,
+        "keyways90Apart": false,
+        "keyways90Cw": true,
+        "autoBodyDiaMm": 0.0,
+        "showAutoBodyDia": false,
+        "autoDiaOverrides": [
+            {
+                "anchorMm": 6394.45,
+                "diaMm": 242.8875
+            },
+            {
+                "anchorMm": 10610.057,
+                "diaMm": 247.65
+            },
+            {
+                "anchorMm": 3614.7375,
+                "diaMm": 242.8875
+            }
+        ],
+        "autoBlends": [
+            {
+                "anchorMm": 10610.057,
+                "end": "AFT",
+                "lengthMm": 38.1,
+                "profile": "OGEE",
+                "seal": false,
+                "sealLenMm": 0.0
+            }
+        ]
+    },
+    "final_spec": null,
+    "runout_config": {
+        "componentOverrides": {
+            "auto_body_494.506_585.787": 0,
+            "auto_body_1793.875_5435.600": 4,
+            "auto_body_6369.050_10013.950": 4,
+            "auto_body_10531.476_10688.638": 0,
+            "26323d09-7e38-4a69-85e7-b8067936d81b": 2
+        },
+        "tirDirection": "AFT",
+        "heightScale": 0.5998273,
+        "linersProportional": true,
+        "linerCompression": 1.0,
+        "showCouplingFace": false,
+        "showDyePenTest": false
+    },
+    "wear_record": {
+        "spots": [],
+        "pits": [],
+        "diaReadings": [],
+        "wornSections": [],
+        "traceDepthFrac": null,
+        "dyePenResult": null,
+        "stripComponentIds": null,
+        "showShaftProfile": true,
+        "compactStrips": false,
+        "stripSizeFrac": 1.0
+    },
+    "runout_readings": {
+        "readings": [
+            {
+                "componentId": "auto_body_1793.875_5435.600",
+                "stationIndex": 1,
+                "valueMm": 0.0381,
+                "highSpotHalfHours": 12
+            },
+            {
+                "componentId": "auto_body_1793.875_5435.600",
+                "stationIndex": 3,
+                "valueMm": 0.396875,
+                "highSpotHalfHours": 18
+            },
+            {
+                "componentId": "213e92ef-be16-410e-9ba6-a651f382db60",
+                "stationIndex": 1,
+                "valueMm": 0.127,
+                "highSpotHalfHours": null
+            },
+            {
+                "componentId": "auto_body_6369.050_10013.950",
+                "stationIndex": 1,
+                "valueMm": 0.0508,
+                "highSpotHalfHours": null
+            },
+            {
+                "componentId": "26323d09-7e38-4a69-85e7-b8067936d81b",
+                "stationIndex": 1,
+                "valueMm": null,
+                "highSpotHalfHours": 6
+            }
+        ]
+    },
+    "runout_stations": {
+        "placements": [
+            {
+                "componentId": "26323d09-7e38-4a69-85e7-b8067936d81b",
+                "stationIndex": 0,
+                "axialMm": 141.63922
+            },
+            {
+                "componentId": "26323d09-7e38-4a69-85e7-b8067936d81b",
+                "stationIndex": 1,
+                "axialMm": 1117.692
+            },
+            {
+                "componentId": "213e92ef-be16-410e-9ba6-a651f382db60",
+                "stationIndex": 0,
+                "axialMm": 83.23926
+            },
+            {
+                "componentId": "213e92ef-be16-410e-9ba6-a651f382db60",
+                "stationIndex": 1,
+                "axialMm": 883.4497
+            },
+            {
+                "componentId": "02d0b768-87e8-422d-9707-45879b60f484",
+                "stationIndex": 0,
+                "axialMm": 106.70703
+            }
+        ]
+    },
+    "undercut_record": {
+        "undercuts": [
+            {
+                "id": "eb9709da-72f1-4fd2-9fde-46d5cb80d35d",
+                "startFromAftMm": 10436.226,
+                "lengthMm": 234.95,
+                "diaMm": 236.22,
+                "authoredReference": "FWD_SET",
+                "referenceLinerId": "",
+                "note": "",
+                "referenceCutId": ""
+            },
+            {
+                "id": "8f85d67e-8ebf-4d38-8547-06466a463830",
+                "startFromAftMm": 10342.563,
+                "lengthMm": 93.6625,
+                "diaMm": 230.505,
+                "authoredReference": "FWD_SET",
+                "referenceLinerId": "",
+                "note": "",
+                "referenceCutId": ""
+            },
+            {
+                "id": "ce3aa5f1-1433-444d-a6a5-c326c3583176",
+                "startFromAftMm": 10021.889,
+                "lengthMm": 320.675,
+                "diaMm": 247.904,
+                "authoredReference": "FWD_SET",
+                "referenceLinerId": "",
+                "note": "",
+                "referenceCutId": ""
+            },
+            {
+                "id": "748c4863-7f2a-4120-9ee5-1feee97075fd",
+                "startFromAftMm": 10142.538,
+                "lengthMm": 60.325,
+                "diaMm": 245.11,
+                "authoredReference": "PARENT_FWD",
+                "referenceLinerId": "",
+                "note": "",
+                "referenceCutId": "ce3aa5f1-1433-444d-a6a5-c326c3583176"
+            },
+            {
+                "id": "de3bedb8-46c2-429d-8d5b-da3cfd30b4d6",
+                "startFromAftMm": 9990.139,
+                "lengthMm": 31.75,
+                "diaMm": 239.268,
+                "authoredReference": "FWD_SET",
+                "referenceLinerId": "",
+                "note": "",
+                "referenceCutId": ""
+            },
+            {
+                "id": "4c9fdea5-159c-4fc2-bc41-848c7e6338e5",
+                "startFromAftMm": 9955.214,
+                "lengthMm": 34.925,
+                "diaMm": 241.808,
+                "authoredReference": "FWD_SET",
+                "referenceLinerId": "",
+                "note": "",
+                "referenceCutId": ""
+            },
+            {
+                "id": "cf660e55-3aaf-4ebe-b06a-c9bc88a55b78",
+                "startFromAftMm": 6354.7627,
+                "lengthMm": 77.7875,
+                "diaMm": 236.22,
+                "authoredReference": "FWD_SET",
+                "referenceLinerId": "",
+                "note": "",
+                "referenceCutId": ""
+            },
+            {
+                "id": "5a9ccea4-07f8-4350-bfd8-a72c8055b735",
+                "startFromAftMm": 5443.5376,
+                "lengthMm": 911.225,
+                "diaMm": 247.396,
+                "authoredReference": "FWD_SET",
+                "referenceLinerId": "",
+                "note": "",
+                "referenceCutId": ""
+            },
+            {
+                "id": "ee9db54b-dd93-435c-a5fc-5051500165ac",
+                "startFromAftMm": 5391.15,
+                "lengthMm": 52.3875,
+                "diaMm": 241.935,
+                "authoredReference": "FWD_SET",
+                "referenceLinerId": "",
+                "note": "",
+                "referenceCutId": ""
+            }
+        ],
+        "exaggerationFrac": 0.25,
+        "drawToSet": true,
+        "showTotalRail": false,
+        "pageOrientation": "AUTO",
+        "setDatum": "NEAREST",
+        "excludedLinerIds": [],
+        "excludedFreeCutIds": []
+    },
+    "station_interval_version": 1,
+    "unit_overrides": {},
+    "dual_units": false
+}

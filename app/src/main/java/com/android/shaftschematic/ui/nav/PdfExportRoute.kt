@@ -23,6 +23,7 @@ import com.android.shaftschematic.pdf.PdfExportOptions
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.util.startOverlapErrorMm
+import com.android.shaftschematic.ui.util.overlapExportMessage
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.SpecTarget
 import com.android.shaftschematic.ui.viewmodel.unlockAchievement
@@ -104,6 +105,7 @@ fun PdfExportRoute(
     val jobNumber by vm.jobNumber.collectAsState()
     val item by vm.item.collectAsState()
     val shaftPosition by vm.shaftPosition.collectAsState()
+    val currentDocumentName by vm.currentDocumentName.collectAsState()
 
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/pdf")
@@ -119,6 +121,7 @@ fun PdfExportRoute(
                     shaftPosition = shaftPosition,
                     blankDraft = pdfBlankDraft,
                     drawingSuffix = drawingSuffix,
+                    documentName = currentDocumentName,
                 )
             val project = ProjectInfo(
                 customer = customer,
@@ -184,6 +187,7 @@ fun PdfExportRoute(
                         shaftPosition = shaftPosition,
                         blankDraft = pdfBlankDraft,
                         drawingSuffix = drawingSuffix,
+                        documentName = currentDocumentName,
                     ),
                     what = "schematic export",
                 )
@@ -215,6 +219,20 @@ fun PdfExportRoute(
  * spec that exports is exactly a spec with no blocking badge.
  */
 internal fun blockingExportError(spec: ShaftSpec): String? {
+    // Every sacred overlap pair (Taper↔Taper/Thread/Liner, Thread↔Thread/Liner, Liner↔Liner)
+    // gates through `collidingIds()` — the very predicate behind every card's blocking badge
+    // and the toolbar `exportPdfGate()`, so the gate and both of those surfaces cannot
+    // disagree. It runs FIRST and names the pair the way the Schematic tab's warning banner does
+    // (`overlapExportMessage`, the banner's own first overlap line), so the refusal points at the
+    // same two parts the banner lists. `startOverlapErrorMm` below compares each kind only against
+    // its own kind, so the cross-kind pairs (Thread↔Liner included) MUST come from this pass —
+    // dropping it would let a cross-kind overlap export. Bodies are fillers, never collision
+    // participants: a taper or liner crossing a stored body span is normal (the resolve layer trims
+    // the drawn body around it), and `collidingIds()` already excludes bodies — so a taper over a
+    // body must not, and does not, block export.
+    if (spec.collidingIds().isNotEmpty()) {
+        return overlapExportMessage(spec) ?: "Overlaps another component"
+    }
     // Excluded threads sit outside the shaft envelope (negative or OAL+ start); skip them.
     // `startOverlapErrorMm` contributes the start ≥ 0 guard, same-kind overlaps, and the
     // thread-at-a-shaft-end rule; for tapers it contributes only the start guard (tapers
@@ -233,16 +251,6 @@ internal fun blockingExportError(spec: ShaftSpec): String? {
         startOverlapErrorMm(spec, t.id, ComponentKind.TAPER, t.lengthMm, t.startFromAftMm)
             ?.let { return it }
     }
-    // Every sacred overlap pair (Taper↔Taper/Thread/Liner, Thread↔Thread/Liner, Liner↔Liner)
-    // gates through `collidingIds()` — the very predicate behind every card's blocking badge
-    // and the toolbar `exportPdfGate()`, so the gate and both of those surfaces cannot
-    // disagree. `startOverlapErrorMm` compares each kind only against its own kind, so the
-    // cross-kind pairs (Thread↔Liner included) MUST come from this pass — dropping it would
-    // let a cross-kind overlap export. Bodies are fillers, never collision participants: a
-    // taper or liner crossing a stored body span is normal (the resolve layer trims the drawn
-    // body around it), and `collidingIds()` already excludes bodies — so a taper over a body
-    // must not, and does not, block export.
-    if (spec.collidingIds().isNotEmpty()) return "Overlaps another component"
     return null
 }
 
@@ -273,11 +281,14 @@ private fun defaultFilename(
     blankDraft: Boolean = false,
     /** Names which drawing this is — "_Final" for the final schematic, blank for the original. */
     drawingSuffix: String = "",
+    documentName: String? = null,
 ): String {
     // The original schematic is ONE of the document set: its name comes from the same
     // builder Export all uses, so the two exports of it can never differ.
     if (drawingSuffix.isEmpty()) {
-        return buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.SCHEMATIC, blankDraft)
+        return buildOutputFilename(
+            customer, vessel, jobNumber, shaftPosition, OutputDoc.SCHEMATIC, blankDraft, documentName,
+        )
     }
     val stamp = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())
     val suggested = DocumentNaming.suggestedBaseName(

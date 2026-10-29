@@ -188,4 +188,36 @@ class CollidingIdsTest {
         assertTrue("t2 collides with t1", ids.contains("t2"))
         assertFalse("t3 is clear and must not be flagged", ids.contains("t3"))
     }
+
+    // ── Partners (the names an overlap message gives) ─────────────────────
+
+    /** The partners come from the same pair rule as [ShaftSpec.collidingIds], ordered AFT → FWD. */
+    @Test
+    fun `collisionPartnerIds lists every partner by the collidingIds rule, AFT to FWD`() {
+        val spec = ShaftSpec(
+            overallLengthMm = 1000f,
+            tapers = listOf(Taper(id = "t", startFromAftMm = 600f, lengthMm = 200f, startDiaMm = 60f, endDiaMm = 50f)),
+            liners = listOf(
+                Liner(id = "wide", startFromAftMm = 100f, lengthMm = 650f, odMm = 70f),
+                Liner(id = "aft", startFromAftMm = 50f, lengthMm = 100f, odMm = 70f),
+            ),
+            bodies = listOf(Body(id = "b", startFromAftMm = 0f, lengthMm = 1000f, diaMm = 50f)),
+        )
+        assertEquals(listOf("aft", "t"), spec.collisionPartnerIds("wide"))
+        assertEquals(listOf("wide"), spec.collisionPartnerIds("t"))
+        assertTrue("a body is never a partner", spec.collisionPartnerIds("b").isEmpty())
+        spec.collidingIds().forEach { assertTrue(it, spec.collisionPartnerIds(it).isNotEmpty()) }
+    }
+
+    @Test
+    fun `an excluded thread has no partners and is no partner`() {
+        val spec = ShaftSpec(
+            overallLengthMm = 1000f,
+            threads = listOf(Threads(id = "x", startFromAftMm = 0f, lengthMm = 100f, majorDiaMm = 50f,
+                pitchMm = 2f, excludeFromOAL = true)),
+            liners = listOf(Liner(id = "l", startFromAftMm = 0f, lengthMm = 200f, odMm = 70f)),
+        )
+        assertTrue(spec.collisionPartnerIds("x").isEmpty())
+        assertTrue(spec.collisionPartnerIdsForSpan(0f, 50f, excludeId = "l").isEmpty())
+    }
 }

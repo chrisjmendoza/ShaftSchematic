@@ -27,6 +27,7 @@ import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.text.AnnotatedString
 import org.junit.Assert.assertEquals
 import org.junit.Rule
+import com.android.shaftschematic.util.isLengthText
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -65,6 +66,7 @@ class NumericInputFieldBlurTest {
         placeholder: String? = null,
         externalIssueText: String? = null,
         landRestoredEdit: Boolean = false,
+        parseValid: (String) -> Boolean = { it.toFloatOrNull() != null },
     ) {
         val focusManager = LocalFocusManager.current
         MaterialTheme {
@@ -79,7 +81,7 @@ class NumericInputFieldBlurTest {
                     externalIssueText = externalIssueText,
                     landRestoredEdit = landRestoredEdit,
                     onDirtyChange = { dirtyReports += it },
-                    parseValid = { it.toFloatOrNull() != null },
+                    parseValid = parseValid,
                     onCommit = { commits += it }
                 )
                 Button(
@@ -541,5 +543,43 @@ class NumericInputFieldBlurTest {
         const val AWAY = "away_button"
         const val OTHER = "other_field"
         const val HINT = "Decimals or fractions"
+    }
+
+    /* ── The card fields' spellings reach the commit as typed ─────────────────── */
+
+    // The keystroke filter once dropped the hyphen (10-1/4 became 101/4 = 25.25), the comma (1,5
+    // became 15) and the suffix (260mm became 260 in the document unit) — emulator QA.
+    private fun commitsAsTyped(typed: String) {
+        rule.setContent { Host(parseValid = ::isLengthText) }
+        focusField()
+        rule.onNodeWithTag(FIELD).performTextReplacement(typed)
+        rule.onNodeWithTag(FIELD).performImeAction()
+        rule.waitForIdle()
+        assertEquals(listOf(typed), commits)
+    }
+
+    @Test
+    fun `a hyphenated mixed fraction commits as typed`() = commitsAsTyped("10-1/4")
+
+    @Test
+    fun `a decimal comma commits as typed`() = commitsAsTyped("1,5")
+
+    @Test
+    fun `a mm suffix commits as typed`() = commitsAsTyped("260mm")
+
+    @Test
+    fun `an inch mark commits as typed`() = commitsAsTyped("11\"")
+
+    @Test
+    fun `an ambiguous comma is refused and named, never guessed`() {
+        rule.setContent { Host(parseValid = ::isLengthText) }
+        focusField()
+        rule.onNodeWithTag(FIELD).performTextReplacement("1,500")
+        rule.onNodeWithTag(FIELD).performImeAction()
+        rule.waitForIdle()
+
+        assertEquals(emptyList<String>(), commits)
+        fieldHolds("12.5")
+        notice("1,500 not applied — not a number").assertIsDisplayed()
     }
 }

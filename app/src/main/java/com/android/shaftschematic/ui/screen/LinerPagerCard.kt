@@ -25,8 +25,11 @@ import com.android.shaftschematic.model.hasShoulder
 import com.android.shaftschematic.model.shoulderOn
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.resolved.ResolvedLiner
+import com.android.shaftschematic.ui.util.collisionChipMessage
 import com.android.shaftschematic.ui.util.linerWarningMessages
+import com.android.shaftschematic.ui.util.positiveDiaErrorMm
 import com.android.shaftschematic.ui.util.positiveLengthErrorMm
+import com.android.shaftschematic.ui.util.spanOverlapErrorMm
 import com.android.shaftschematic.ui.util.startOverlapErrorMm
 import com.android.shaftschematic.util.toMmOrNull
 import com.android.shaftschematic.util.UnitSystem
@@ -96,7 +99,7 @@ internal fun LinerPagerCard(
         },
         debugText = if (showComponentDebugLabels) "id=${ln.id} • startMm=${f1(ln.startFromAftMm)} • endMm=${f1(ln.startFromAftMm + ln.lengthMm)}" else null,
         errorMessage = startOverlapErrorMm(spec, ln.id, ComponentKind.LINER, ln.lengthMm, ln.startFromAftMm)
-            ?: if (ln.id in collidingComponentIds) "Overlaps another component" else null,
+            ?: if (ln.id in collidingComponentIds) collisionChipMessage(spec, ln.id) else null,
         warningMessage = linerWarningMessages(spec, ln, unit).joinToString("; ").ifEmpty { null },
         componentId = ln.id, componentKind = ComponentKind.LINER,
         outerPaddingHorizontal = outerPaddingHorizontal,
@@ -141,22 +144,34 @@ internal fun LinerPagerCard(
                 }
             },
             second = {
+                // The span a new length makes: a FWD-referenced liner keeps its FWD end and grows
+                // AFT-ward. ONE derivation for the overlap gate and the commit.
+                fun physStartForLength(newLen: Float): Float = if (isFwdRef) {
+                    val authored = spec.overallLengthMm - ln.startFromAftMm - ln.lengthMm
+                    spec.overallLengthMm - authored - newLen
+                } else {
+                    ln.startFromAftMm
+                }
                 CommitNum(
                     "Length (${abbr(unit)})", disp(ln.lengthMm, unit),
-                    validator = { raw -> positiveLengthErrorMm(toMmOrNull(raw, unit)) },
+                    // The span the new length makes is checked exactly like a typed Start:
+                    // running into another liner is refused, running past the OAL is not.
+                    validator = { raw ->
+                        val newLen = toMmOrNull(raw, unit)
+                        positiveLengthErrorMm(newLen) ?: newLen?.let {
+                            spanOverlapErrorMm(spec, ln.id, ComponentKind.LINER, physStartForLength(it), it)
+                        }
+                    },
                 ) { s ->
                     val newLen    = toMmOrNull(s, unit) ?: return@CommitNum
-                    val physStart = if (isFwdRef) {
-                        val authored = spec.overallLengthMm - ln.startFromAftMm - ln.lengthMm
-                        spec.overallLengthMm - authored - newLen
-                    } else {
-                        ln.startFromAftMm
-                    }
-                    onUpdateLiner(idx, physStart, newLen, ln.odMm)
+                    onUpdateLiner(idx, physStartForLength(newLen), newLen, ln.odMm)
                 }
             },
         )
-        CommitNum("Outer Ø (${abbr(unit)})", disp(ln.odMm, unit)) { s ->
+        CommitNum(
+            "Outer Ø (${abbr(unit)})", disp(ln.odMm, unit),
+            validator = { raw -> positiveDiaErrorMm(toMmOrNull(raw, unit)) },
+        ) { s ->
             toMmOrNull(s, unit)?.let { onUpdateLiner(idx, ln.startFromAftMm, ln.lengthMm, it) }
         }
         ShowDiaToggleRow(

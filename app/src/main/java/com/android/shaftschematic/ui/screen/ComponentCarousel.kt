@@ -91,7 +91,7 @@ import com.android.shaftschematic.ui.util.startOverlapErrorMm
 import com.android.shaftschematic.util.LengthFormat
 import com.android.shaftschematic.util.ThreadDesignation
 import com.android.shaftschematic.util.DisplayUnits
-import com.android.shaftschematic.util.parseFractionOrDecimal
+import com.android.shaftschematic.util.isLengthText
 import com.android.shaftschematic.util.toMmOrNull
 import com.android.shaftschematic.util.UnitSystem
 import kotlinx.coroutines.launch
@@ -188,6 +188,7 @@ internal fun ComponentCarouselPager(
     onUpdateBodyShowLabel: (Int, Boolean) -> Unit,
     onUpdateBodyShade: (Int, Boolean) -> Unit = { _, _ -> },
     onUpdateBodyCompressOnDrawing: (Int, Boolean) -> Unit,
+    onUpdateBodyShowDimensionRail: (Int, Boolean) -> Unit = { _, _ -> },
     onUpdateBodyBlend: (index: Int, blendAftMm: Float, blendFwdMm: Float, profile: BlendProfile, sealAft: Boolean, sealFwd: Boolean, sealAftLenMm: Float, sealFwdLenMm: Float) -> Unit,
     onUpdateBodyLabel: (Int, String?) -> Unit,
     onUpdateBodyKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromEndMm: Float, end: LinerAuthoredReference, spooned: Boolean) -> Unit,
@@ -197,6 +198,7 @@ internal fun ComponentCarouselPager(
     onUpdateTaperShade: (Int, Boolean) -> Unit = { _, _ -> },
     onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromSetMm: Float, spooned: Boolean) -> Unit,
     onUpdateTaperReference: (Int, LinerAuthoredReference) -> Unit,
+    onUpdateTaperRateMode: (Int, Boolean, String?) -> Unit = { _, _, _ -> },
     onUpdateThread: (Int, Float, Float, Float, Float, String?) -> Unit,
     onUpdateThreadLabel: (Int, String?) -> Unit,
     onUpdateThreadShowLabel: (Int, Boolean) -> Unit,
@@ -379,6 +381,7 @@ internal fun ComponentCarouselPager(
                     onUpdateBodyShowLabel = onUpdateBodyShowLabel,
                     onUpdateBodyShade = onUpdateBodyShade,
                     onUpdateBodyCompressOnDrawing = onUpdateBodyCompressOnDrawing,
+                    onUpdateBodyShowDimensionRail = onUpdateBodyShowDimensionRail,
                     onUpdateBodyBlend = onUpdateBodyBlend,
                     onUpdateBodyLabel = onUpdateBodyLabel,
                     onUpdateBodyKeyway = onUpdateBodyKeyway,
@@ -388,6 +391,7 @@ internal fun ComponentCarouselPager(
                     onUpdateTaperShade = onUpdateTaperShade,
                     onUpdateTaperKeyway = onUpdateTaperKeyway,
                     onUpdateTaperReference = onUpdateTaperReference,
+                    onUpdateTaperRateMode = onUpdateTaperRateMode,
                     onUpdateThread = onUpdateThread,
                     onUpdateThreadLabel = onUpdateThreadLabel,
                     onUpdateThreadShowLabel = onUpdateThreadShowLabel,
@@ -669,6 +673,7 @@ internal fun ComponentPagerCard(
     onUpdateBodyShowLabel: (Int, Boolean) -> Unit,
     onUpdateBodyShade: (Int, Boolean) -> Unit = { _, _ -> },
     onUpdateBodyCompressOnDrawing: (Int, Boolean) -> Unit,
+    onUpdateBodyShowDimensionRail: (Int, Boolean) -> Unit = { _, _ -> },
     onUpdateBodyBlend: (index: Int, blendAftMm: Float, blendFwdMm: Float, profile: BlendProfile, sealAft: Boolean, sealFwd: Boolean, sealAftLenMm: Float, sealFwdLenMm: Float) -> Unit,
     onUpdateBodyLabel: (Int, String?) -> Unit,
     onUpdateBodyKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromEndMm: Float, end: LinerAuthoredReference, spooned: Boolean) -> Unit,
@@ -678,6 +683,7 @@ internal fun ComponentPagerCard(
     onUpdateTaperShade: (Int, Boolean) -> Unit = { _, _ -> },
     onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromSetMm: Float, spooned: Boolean) -> Unit,
     onUpdateTaperReference: (Int, LinerAuthoredReference) -> Unit,
+    onUpdateTaperRateMode: (Int, Boolean, String?) -> Unit = { _, _, _ -> },
     onUpdateThread: (Int, Float, Float, Float, Float, String?) -> Unit,
     onUpdateThreadLabel: (Int, String?) -> Unit,
     onUpdateThreadShowLabel: (Int, Boolean) -> Unit,
@@ -755,6 +761,7 @@ internal fun ComponentPagerCard(
             onUpdateBodyShowLabel = onUpdateBodyShowLabel,
             onUpdateBodyShade = onUpdateBodyShade,
             onUpdateBodyCompressOnDrawing = onUpdateBodyCompressOnDrawing,
+            onUpdateBodyShowDimensionRail = onUpdateBodyShowDimensionRail,
             onUpdateBodyBlend = onUpdateBodyBlend,
             onUpdateBodyLabel = onUpdateBodyLabel,
             onUpdateBodyKeyway = onUpdateBodyKeyway,
@@ -788,6 +795,7 @@ internal fun ComponentPagerCard(
             onUpdateTaperShade = onUpdateTaperShade,
             onUpdateTaperKeyway = onUpdateTaperKeyway,
             onUpdateTaperReference = onUpdateTaperReference,
+            onUpdateTaperRateMode = onUpdateTaperRateMode,
             onSetKeyways180Apart = onSetKeyways180Apart,
             onSetKeyways90Apart = onSetKeyways90Apart,
             onSetKeyways90Cw = onSetKeyways90Cw,
@@ -1188,7 +1196,8 @@ internal fun CommitNum(
     inputFilter: ((String) -> String)? = null,
     enabled: Boolean = true,
     externalIssueText: String? = null,
-    parseValid: (String) -> Boolean = { parseFractionOrDecimal(it) != null },
+    /** Lengths and diameters by default (a unit suffix is read); unitless fields pass their own. */
+    parseValid: (String) -> Boolean = ::isLengthText,
     validator: ((String) -> String?)? = null,
     onCommit: (String) -> Unit
 ) {
@@ -1252,7 +1261,7 @@ internal fun CommitDesignationField(
         label = { Text(label) },
         singleLine = true,
         isError = !isValid,
-        supportingText = if (!isValid) { { Text("e.g. M20×2.5") } } else null,
+        supportingText = if (!isValid) { { Text(ThreadDesignation.INVALID_MESSAGE) } } else null,
         modifier = Modifier.fillMaxWidth()
             .onFocusChanged { f ->
                 if (f.isFocused) {

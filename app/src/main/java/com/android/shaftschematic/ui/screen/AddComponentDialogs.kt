@@ -1,6 +1,11 @@
 // file: com/android/shaftschematic/ui/screen/AddComponentDialogs.kt
 package com.android.shaftschematic.ui.screen
 
+import androidx.compose.ui.text.input.TextFieldValue
+import com.android.shaftschematic.ui.input.rememberFieldCursor
+import com.android.shaftschematic.ui.input.insertAtCursor
+import com.android.shaftschematic.ui.input.LocalFractionKeyEnabled
+import com.android.shaftschematic.ui.input.FractionKey
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -55,13 +60,18 @@ import com.android.shaftschematic.ui.config.AddDefaultsConfig
 import com.android.shaftschematic.ui.input.classifyTaperSideByMidpoint
 import com.android.shaftschematic.ui.input.taperAddDiameterOrder
 import com.android.shaftschematic.ui.order.ComponentKind
+import com.android.shaftschematic.ui.util.MUST_BE_POSITIVE_MSG
 import com.android.shaftschematic.ui.util.collectAddWarnings
+import com.android.shaftschematic.ui.util.proposedSpanOverlapMessage
 import com.android.shaftschematic.ui.util.startOverlapErrorMm
 import com.android.shaftschematic.util.autoTaperRateText
 import com.android.shaftschematic.util.filterTaperRateInput
 import com.android.shaftschematic.util.manualTaperRateBlockingMessage
 import com.android.shaftschematic.util.manualTaperRateWarning
+import com.android.shaftschematic.util.isLengthText
+import com.android.shaftschematic.util.isUnitlessNumberText
 import com.android.shaftschematic.util.parseFractionOrDecimal
+import com.android.shaftschematic.util.parseLengthMmOrNull
 import com.android.shaftschematic.util.parseTaperRateText
 import com.android.shaftschematic.util.ThreadDesignation
 import com.android.shaftschematic.util.toMmOrNull
@@ -132,6 +142,18 @@ private fun toDisplayString(mm: Float, unit: UnitSystem, d: Int = 3): String {
     val s = "%.${d}f".format(v).trimEnd('0').trimEnd('.')
     return if (s.isEmpty()) "0" else s
 }
+
+/** An Add-dialog field seeded with [seedMm]: exact until edited (see [SeededMmField]). */
+@Composable
+private fun rememberSeededMm(seedMm: Float, unit: UnitSystem): SeededMmField =
+    remember(unit, seedMm) { SeededMmField(seedMm, toDisplayString(seedMm, unit)) }
+
+/** [rememberSeededMm] that survives a configuration change. */
+@Composable
+private fun rememberSaveableSeededMm(seedMm: Float, unit: UnitSystem): SeededMmField =
+    rememberSaveable(unit, seedMm, saver = SeededMmField.Saver) {
+        SeededMmField(seedMm, toDisplayString(seedMm, unit))
+    }
 
 /**
  * Title row shared by all five Add dialogs: the dialog's title text plus a launcher icon for
@@ -215,21 +237,21 @@ fun AddBodyDialog(
     val effectiveStartMm = initialStartMm ?: d.startMm
     val effectiveLengthMm = initialLengthMm ?: 100f
 
-    var start by remember(unit, effectiveStartMm) { mutableStateOf(toDisplayString(effectiveStartMm, unit)) }
-    var length by remember(unit, effectiveLengthMm) { mutableStateOf(toDisplayString(effectiveLengthMm, unit)) }
-    var dia by remember(unit, d.bodyDiaMm) { mutableStateOf(toDisplayString(max(1f, d.bodyDiaMm), unit)) }
+    val start = rememberSeededMm(effectiveStartMm, unit)
+    val length = rememberSeededMm(effectiveLengthMm, unit)
+    val dia = rememberSeededMm(max(1f, d.bodyDiaMm), unit)
 
     // Face finish + seal areas — mirror the body card by contract (they change drawn geometry,
     // so they are under the add-dialog-parity rule, not the card-only carve-out). Same shared
     // BlendSection. The seal flags are independent of the finish.
     var blendAftMode by remember { mutableStateOf(BlendFaceMode.SQUARE) }
     var blendFwdMode by remember { mutableStateOf(BlendFaceMode.SQUARE) }
-    var blendAft by remember { mutableStateOf("") }
-    var blendFwd by remember { mutableStateOf("") }
+    val blendAft = remember { SeededMmField.empty() }
+    val blendFwd = remember { SeededMmField.empty() }
     var sealAft by remember { mutableStateOf(false) }
     var sealFwd by remember { mutableStateOf(false) }
-    var blendAftSealLen by remember { mutableStateOf("") }
-    var blendFwdSealLen by remember { mutableStateOf("") }
+    val blendAftSealLen = remember { SeededMmField.empty() }
+    val blendFwdSealLen = remember { SeededMmField.empty() }
     var blendProfile by remember { mutableStateOf(BlendProfile.OGEE) }
 
     // Keyway — gated behind a checkbox (fields hidden until turned on); mirrors the body card.
@@ -253,9 +275,9 @@ fun AddBodyDialog(
     var clock90   by remember { mutableStateOf(spec.keyways90Apart) }
     var cw90      by remember { mutableStateOf(spec.keyways90Cw) }
 
-    val startMm = toMmOrNull(start, unit) ?: -1f
-    val lengthMm = toMmOrNull(length, unit) ?: -1f
-    val diaMm = toMmOrNull(dia, unit) ?: -1f
+    val startMm = start.mm(unit) ?: -1f
+    val lengthMm = length.mm(unit) ?: -1f
+    val diaMm = dia.mm(unit) ?: -1f
 
     // Keyway values only count when the Keyway checkbox is on.
     // Null = the keyway follows the document unit, the default and the common case.
@@ -280,8 +302,9 @@ fun AddBodyDialog(
         UnitConverterDialog(defaultUnit = unit, onDismiss = { converterOpen = false })
     }
 
-    AlertDialog(
-        onDismissRequest = onCancel,
+    DiscardGuardedDialog(
+        discardTitle = "Discard this body?",
+        onDismiss = onCancel,
         title = {
             if (dialogUnitConverterEnabled) {
                 addDialogTitleWithConverter("Add Body") { converterOpen = true }
@@ -291,11 +314,11 @@ fun AddBodyDialog(
         },
         text = {
             Column(Modifier.padding(top = 4.dp).verticalScroll(scroll)) {
-                CommitNumField("Start (${abbr(unit)})", start) { start = it }
+                CommitNumField("Start (${abbr(unit)})", start.text) { start.onText(it) }
                 Spacer(Modifier.height(8.dp))
-                CommitNumField("Length (${abbr(unit)})", length) { length = it }
+                CommitNumField("Length (${abbr(unit)})", length.text, requirePositive = true) { length.onText(it) }
                 Spacer(Modifier.height(8.dp))
-                CommitNumField("Diameter (${abbr(unit)})", dia) { dia = it }
+                CommitNumField("Diameter (${abbr(unit)})", dia.text, requirePositive = true) { dia.onText(it) }
                 Spacer(Modifier.height(12.dp))
                 BlendSection(
                     aftMode = blendAftMode,
@@ -305,40 +328,40 @@ fun AddBodyDialog(
                     fwdSeal = sealFwd,
                     onSetAftMode = { m ->
                         blendAftMode = m
-                        if (m == BlendFaceMode.BLEND && blendAft.isBlank()) {
-                            blendAft = toDisplayString(defaultBlendMm(lengthMm), unit)
+                        if (m == BlendFaceMode.BLEND && blendAft.text.isBlank()) {
+                            defaultBlendMm(lengthMm).let { blendAft.reseed(it, toDisplayString(it, unit)) }
                         }
                     },
                     onSetFwdMode = { m ->
                         blendFwdMode = m
-                        if (m == BlendFaceMode.BLEND && blendFwd.isBlank()) {
-                            blendFwd = toDisplayString(defaultBlendMm(lengthMm), unit)
+                        if (m == BlendFaceMode.BLEND && blendFwd.text.isBlank()) {
+                            defaultBlendMm(lengthMm).let { blendFwd.reseed(it, toDisplayString(it, unit)) }
                         }
                     },
                     onProfile = { blendProfile = it },
                     onSetAftSeal = { on ->
                         sealAft = on
-                        if (on && blendAftSealLen.isBlank()) {
-                            blendAftSealLen = toDisplayString(defaultSealLenMm(lengthMm), unit)
+                        if (on && blendAftSealLen.text.isBlank()) {
+                            defaultSealLenMm(lengthMm).let { blendAftSealLen.reseed(it, toDisplayString(it, unit)) }
                         }
                     },
                     onSetFwdSeal = { on ->
                         sealFwd = on
-                        if (on && blendFwdSealLen.isBlank()) {
-                            blendFwdSealLen = toDisplayString(defaultSealLenMm(lengthMm), unit)
+                        if (on && blendFwdSealLen.text.isBlank()) {
+                            defaultSealLenMm(lengthMm).let { blendFwdSealLen.reseed(it, toDisplayString(it, unit)) }
                         }
                     },
                     aftLengthField = {
-                        CommitNumField("Blend AFT (${abbr(unit)})", blendAft) { blendAft = it }
+                        CommitNumField("Blend AFT (${abbr(unit)})", blendAft.text) { blendAft.onText(it) }
                     },
                     fwdLengthField = {
-                        CommitNumField("Blend FWD (${abbr(unit)})", blendFwd) { blendFwd = it }
+                        CommitNumField("Blend FWD (${abbr(unit)})", blendFwd.text) { blendFwd.onText(it) }
                     },
                     aftSealLengthField = {
-                        CommitNumField("Seal area AFT (${abbr(unit)})", blendAftSealLen) { blendAftSealLen = it }
+                        CommitNumField("Seal area AFT (${abbr(unit)})", blendAftSealLen.text) { blendAftSealLen.onText(it) }
                     },
                     fwdSealLengthField = {
-                        CommitNumField("Seal area FWD (${abbr(unit)})", blendFwdSealLen) { blendFwdSealLen = it }
+                        CommitNumField("Seal area FWD (${abbr(unit)})", blendFwdSealLen.text) { blendFwdSealLen.onText(it) }
                     },
                 )
                 Spacer(Modifier.height(12.dp))
@@ -397,7 +420,7 @@ fun AddBodyDialog(
                             color = if (isCaptured) MaterialTheme.colorScheme.onSurfaceVariant
                                     else MaterialTheme.colorScheme.onSurface
                         )
-                        Switch(
+                        DialogSwitch(
                             checked = kwSpooned && !isCaptured,
                             enabled = !isCaptured,
                             onCheckedChange = { if (!isCaptured) kwSpooned = it }
@@ -410,7 +433,7 @@ fun AddBodyDialog(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text("Keyways 180° apart", modifier = Modifier.weight(1f))
-                        Switch(checked = clock180, onCheckedChange = { checked ->
+                        DialogSwitch(checked = clock180, onCheckedChange = { checked ->
                             clock180 = checked
                             if (checked) clock90 = false
                         })
@@ -420,7 +443,7 @@ fun AddBodyDialog(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text("Keyways 90° apart", modifier = Modifier.weight(1f))
-                        Switch(checked = clock90, onCheckedChange = { checked ->
+                        DialogSwitch(checked = clock90, onCheckedChange = { checked ->
                             clock90 = checked
                             if (checked) clock180 = false
                         })
@@ -452,13 +475,13 @@ fun AddBodyDialog(
                     if (showClockingToggle) clock90 else spec.keyways90Apart,
                     if (showClockingToggle) cw90 else spec.keyways90Cw,
                     if (kwEnabled) kwUnitOverride else null,
-                    if (blendAftMode == BlendFaceMode.BLEND) toMmOrNull(blendAft, unit) ?: 0f else 0f,
-                    if (blendFwdMode == BlendFaceMode.BLEND) toMmOrNull(blendFwd, unit) ?: 0f else 0f,
+                    if (blendAftMode == BlendFaceMode.BLEND) blendAft.mm(unit) ?: 0f else 0f,
+                    if (blendFwdMode == BlendFaceMode.BLEND) blendFwd.mm(unit) ?: 0f else 0f,
                     blendProfile,
                     sealAft,
                     sealFwd,
-                    if (sealAft) toMmOrNull(blendAftSealLen, unit) ?: 0f else 0f,
-                    if (sealFwd) toMmOrNull(blendFwdSealLen, unit) ?: 0f else 0f,
+                    if (sealAft) blendAftSealLen.mm(unit) ?: 0f else 0f,
+                    if (sealFwd) blendFwdSealLen.mm(unit) ?: 0f else 0f,
                 )
             }) { Text("Add") }
         },
@@ -497,13 +520,16 @@ fun AddLinerDialog(
 
     var isFwd by remember { mutableStateOf(false) }
 
-    // Independent start strings so toggling direction doesn't overwrite user input.
-    val defaultAftStartMm = initialStartMm ?: d.startMm
-    var startAft by remember(unit, defaultAftStartMm) { mutableStateOf(toDisplayString(defaultAftStartMm, unit)) }
-    var startFwd by remember(unit) { mutableStateOf("0") }
+    // Independent start strings so toggling direction doesn't overwrite user input. Both seeds
+    // come from the ONE seeder, each from its own reference end, so neither opens on an overlap
+    // while free shaft exists (addStartSeed).
+    val defaultAftStartMm = initialStartMm ?: addStartSeed(spec, effectiveLengthMm).startMm
+    val defaultFwdStartMm = remember(spec, effectiveLengthMm) { addSeedFromFwdMm(spec, effectiveLengthMm) }
+    val startAft = rememberSeededMm(defaultAftStartMm, unit)
+    val startFwd = rememberSeededMm(defaultFwdStartMm, unit)
 
-    var length by remember(unit, effectiveLengthMm) { mutableStateOf(toDisplayString(effectiveLengthMm, unit)) }
-    var od by remember(unit, d.linerOdMm) { mutableStateOf(toDisplayString(max(1f, d.linerOdMm), unit)) }
+    val length = rememberSeededMm(effectiveLengthMm, unit)
+    val od = rememberSeededMm(max(1f, d.linerOdMm), unit)
 
     // Shoulders (add-dialog-parity rule: they change drawn geometry, so the same section the
     // liner card shows appears here, under the same capability gate).
@@ -516,22 +542,28 @@ fun AddLinerDialog(
     var shFwdOd by remember(unit) { mutableStateOf("") }
     var shFwdRadiusMm by remember { mutableStateOf(0f) }
 
-    val startEntered = toMmOrNull(if (isFwd) startFwd else startAft, unit) ?: -1f
-    val lengthMm = toMmOrNull(length, unit) ?: -1f
-    val odMm = toMmOrNull(od, unit) ?: -1f
+    val startEntered = (if (isFwd) startFwd else startAft).mm(unit) ?: -1f
+    val lengthMm = length.mm(unit) ?: -1f
+    val odMm = od.mm(unit) ?: -1f
 
-    // Physical start from AFT.
-    val physStartMm = if (isFwd) {
-        if (startEntered >= 0f && lengthMm > 0f)
-            (spec.overallLengthMm - startEntered - lengthMm).coerceAtLeast(0f)
-        else -1f
-    } else {
-        startEntered
+    // Physical start from AFT. A FWD-measured liner that would reach past the AFT face is NOT
+    // clamped onto it — that would store a different FWD distance than the one typed; it is
+    // refused below, as the card refuses a negative start.
+    val fwdStartPastAft = addDialogFwdStartPastAft(isFwd, startEntered, lengthMm, spec.overallLengthMm)
+    val physStartMm = addDialogPhysStartMm(isFwd, startEntered, lengthMm, spec.overallLengthMm)
+
+    // The inline line names every overlap BEFORE Add, the same way from either reference end:
+    // another liner blocks (startError — the card refuses the same span), a taper or thread is
+    // shown here and confirmed through "Add Anyway?" (overlapNote). The confirm used to be the
+    // only place a crossing-kind overlap surfaced, which read as the FWD path skipping the check
+    // (emulator QA — the FWD seed happened to land on a taper, the AFT one on a liner).
+    val startError = when {
+        fwdStartPastAft -> ADD_PAST_AFT_END_MSG
+        physStartMm >= 0f && lengthMm > 0f ->
+            startOverlapErrorMm(spec, "", ComponentKind.LINER, lengthMm, physStartMm)
+        else -> null
     }
-
-    val startError = if (physStartMm >= 0f && lengthMm > 0f)
-        startOverlapErrorMm(spec, "", ComponentKind.LINER, lengthMm, physStartMm)
-    else null
+    val overlapNote = if (startError == null) proposedSpanOverlapMessage(spec, physStartMm, lengthMm) else null
 
     // Pre-submit collision / bounds warning state.
     var warningLines by remember { mutableStateOf(emptyList<String>()) }
@@ -561,8 +593,9 @@ fun AddLinerDialog(
         UnitConverterDialog(defaultUnit = unit, onDismiss = { converterOpen = false })
     }
 
-    AlertDialog(
-        onDismissRequest = onCancel,
+    DiscardGuardedDialog(
+        discardTitle = "Discard this liner?",
+        onDismiss = onCancel,
         title = {
             if (dialogUnitConverterEnabled) {
                 addDialogTitleWithConverter("Add Liner") { converterOpen = true }
@@ -571,7 +604,7 @@ fun AddLinerDialog(
             }
         },
         text = {
-            Column(Modifier.padding(top = 4.dp)) {
+            Column(Modifier.padding(top = 4.dp).verticalScroll(rememberScrollState())) {
                 Row(
                     Modifier.fillMaxWidth().padding(bottom = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -584,13 +617,15 @@ fun AddLinerDialog(
                 }
                 CommitNumField(
                     label = "Start from ${if (isFwd) "FWD" else "AFT"} (${abbr(unit)})",
-                    initial = if (isFwd) startFwd else startAft,
-                    errorText = startError
-                ) { if (isFwd) startFwd = it else startAft = it }
+                    initial = (if (isFwd) startFwd else startAft).text,
+                    errorText = startError,
+                    supportingText = overlapNote,
+                    highlight = overlapNote != null,
+                ) { (if (isFwd) startFwd else startAft).onText(it) }
                 Spacer(Modifier.height(8.dp))
-                CommitNumField("Length (${abbr(unit)})", length) { length = it }
+                CommitNumField("Length (${abbr(unit)})", length.text, requirePositive = true) { length.onText(it) }
                 Spacer(Modifier.height(8.dp))
-                CommitNumField("Outer Ø (${abbr(unit)})", od) { od = it }
+                CommitNumField("Outer Ø (${abbr(unit)})", od.text, requirePositive = true) { od.onText(it) }
 
                 if (linerShouldersEnabled) {
                     Spacer(Modifier.height(8.dp))
@@ -688,18 +723,19 @@ fun AddCouplerBoltSlotDialog(
         spacingMm = initialSpacingMm,
         fromFaceMm = AddDefaultsConfig.SLOT_FROM_END_IN * 25.4f,
     )
-    var startAft by remember(unit, initialStartMm) { mutableStateOf(toDisplayString(seed(fwd = false), unit)) }
-    var startFwd by remember(unit) { mutableStateOf(toDisplayString(seed(fwd = true), unit)) }
-    var holeDia by remember(unit, initialHoleDiaMm) { mutableStateOf(toDisplayString(seedHoleDiaMm, unit)) }
+    val startAft = rememberSeededMm(seed(fwd = false), unit)
+    val startFwd = rememberSeededMm(seed(fwd = true), unit)
+    val holeDia = rememberSeededMm(seedHoleDiaMm, unit)
     var countText by remember(initialCount) { mutableStateOf(seedCount.toString()) }
-    var spacing by remember(unit, initialSpacingMm) { mutableStateOf(toDisplayString(initialSpacingMm, unit)) }
-    var depth by remember(unit, initialDepthMm) { mutableStateOf(toDisplayString(initialDepthMm, unit)) }
+    val spacing = rememberSeededMm(initialSpacingMm, unit)
+    val depth = rememberSeededMm(initialDepthMm, unit)
 
-    val holeDiaMm = toMmOrNull(holeDia, unit) ?: -1f
-    val count = countText.toIntOrNull()?.coerceAtLeast(1) ?: 0
-    val spacingMm = toMmOrNull(spacing, unit) ?: 0f
-    val depthMm = toMmOrNull(depth, unit) ?: -1f
-    val startEntered = toMmOrNull(if (isFwd) startFwd else startAft, unit) ?: -1f
+    val holeDiaMm = holeDia.mm(unit) ?: -1f
+    // Never coerced: a typed 0 is refused and named (boltSlotCountError), not stored as 1.
+    val count = boltSlotCountOrNull(countText) ?: 0
+    val spacingMm = spacing.mm(unit) ?: 0f
+    val depthMm = depth.mm(unit) ?: -1f
+    val startEntered = (if (isFwd) startFwd else startAft).mm(unit) ?: -1f
 
     // Physical position (from AFT) of the aft-most cutout center. When measuring from FWD, the
     // entered value locates the fwd-most cutout; the row then extends aft.
@@ -716,8 +752,9 @@ fun AddCouplerBoltSlotDialog(
         UnitConverterDialog(defaultUnit = unit, onDismiss = { converterOpen = false })
     }
 
-    AlertDialog(
-        onDismissRequest = onCancel,
+    DiscardGuardedDialog(
+        discardTitle = "Discard this coupler bolt slot?",
+        onDismiss = onCancel,
         title = {
             if (dialogUnitConverterEnabled) {
                 addDialogTitleWithConverter("Add Coupler Bolt Slot") { converterOpen = true }
@@ -762,16 +799,21 @@ fun AddCouplerBoltSlotDialog(
                 }
                 CommitNumField(
                     label = slotStartFieldLabel(isFwd = isFwd, isCross = isCross, unit = unit),
-                    initial = if (isFwd) startFwd else startAft,
+                    initial = (if (isFwd) startFwd else startAft).text,
                     errorText = boundsError,
-                ) { if (isFwd) startFwd = it else startAft = it }
+                ) { (if (isFwd) startFwd else startAft).onText(it) }
                 Spacer(Modifier.height(8.dp))
-                CommitNumField("Hole Ø (${abbr(unit)})", holeDia) { holeDia = it }
+                CommitNumField("Hole Ø (${abbr(unit)})", holeDia.text, requirePositive = true) { holeDia.onText(it) }
                 Spacer(Modifier.height(8.dp))
-                CommitNumField("Count", countText) { countText = it }
+                CommitNumField(
+                    "Count", countText,
+                    errorText = boltSlotCountError(countText),
+                    parseValid = ::isUnitlessNumberText,
+                    fractionKey = false,
+                ) { countText = it }
                 if (count > 1 || countText.isBlank()) {
                     Spacer(Modifier.height(8.dp))
-                    CommitNumField("Spacing (${abbr(unit)})", spacing) { spacing = it }
+                    CommitNumField("Spacing (${abbr(unit)})", spacing.text, requirePositive = true) { spacing.onText(it) }
                 }
                 Spacer(Modifier.height(8.dp))
                 Row(
@@ -780,11 +822,11 @@ fun AddCouplerBoltSlotDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text("Through hole", Modifier.weight(1f))
-                    Switch(checked = through, onCheckedChange = { through = it })
+                    DialogSwitch(checked = through, onCheckedChange = { through = it })
                 }
                 if (!through) {
                     Spacer(Modifier.height(8.dp))
-                    CommitNumField("Depth (${abbr(unit)})", depth) { depth = it }
+                    CommitNumField("Depth (${abbr(unit)})", depth.text, requirePositive = true) { depth.onText(it) }
                 }
             }
         },
@@ -851,9 +893,9 @@ fun AddThreadDialog(
 
     fun formatTpi(v: Float): String = "%1.3f".format(v).trimEnd('0').trimEnd('.').ifEmpty { "0" }
 
-    var start by rememberSaveable(unit, effectiveStartMm) { mutableStateOf(toDisplayString(effectiveStartMm, unit)) }
-    var length by rememberSaveable(unit, effectiveLengthMm) { mutableStateOf(toDisplayString(effectiveLengthMm, unit)) }
-    var major by rememberSaveable(unit, effectiveMajorMm) { mutableStateOf(toDisplayString(max(1f, effectiveMajorMm), unit)) }
+    val start = rememberSaveableSeededMm(effectiveStartMm, unit)
+    val length = rememberSaveableSeededMm(effectiveLengthMm, unit)
+    val major = rememberSaveableSeededMm(max(1f, effectiveMajorMm), unit)
     var tpiText by rememberSaveable(initialTpi) { mutableStateOf(formatTpi(initialTpi)) }
     // Saveable: a configuration change (a system font-scale change recreates the activity) would
     // otherwise reset every switch and chip while the dialog itself stays open (on-device report).
@@ -866,8 +908,8 @@ fun AddThreadDialog(
     // seeding it once left it on the shaft-end side after "Thread end" or "Include thread in OAL"
     // changed (on-device report). A tapped chip is the user's choice and is kept.
     var reliefOn by rememberSaveable { mutableStateOf(false) }
-    var reliefLenText by rememberSaveable { mutableStateOf("") }
-    var reliefDiaText by rememberSaveable { mutableStateOf("") }
+    val reliefLen = rememberSaveable(saver = SeededMmField.Saver) { SeededMmField.empty() }
+    val reliefDia = rememberSaveable(saver = SeededMmField.Saver) { SeededMmField.empty() }
     var reliefEndChoice by rememberSaveable { mutableStateOf<Boolean?>(null) }
 
     // Imperial (TPI, entered in the session unit) vs Metric (a self-declaring M-designation
@@ -876,9 +918,9 @@ fun AddThreadDialog(
     var designationText by rememberSaveable { mutableStateOf("") }
     val parsedDesignation = if (metricMode) ThreadDesignation.parse(designationText) else null
 
-    val startMm = toMmOrNull(start, unit) ?: -1f
-    val lengthMm = toMmOrNull(length, unit) ?: -1f
-    val majorMmImperial = toMmOrNull(major, unit) ?: -1f
+    val startMm = start.mm(unit) ?: -1f
+    val lengthMm = length.mm(unit) ?: -1f
+    val majorMmImperial = major.mm(unit) ?: -1f
     val majorMm = if (metricMode) (parsedDesignation?.majorDiaMm ?: -1f) else majorMmImperial
     val tpi = parseFractionOrDecimal(tpiText)?.toFloat() ?: -1f   // allow e.g., "20", "10", "32"
     // Pitch omitted from a coarse designation (e.g. "M20") reads as 0 — not "unset" — so a
@@ -896,6 +938,10 @@ fun AddThreadDialog(
                      else if (startMm >= 0f && lengthMm > 0f)
                          startOverlapErrorMm(spec, "", ComponentKind.THREAD, lengthMm, startMm)
                      else null
+    // A taper or liner the thread would run into: named before Add, confirmed by "Add Anyway?"
+    // (the Liner and Taper dialogs' posture). An excluded thread never collides.
+    val overlapNote = if (!countInOal || startError != null) null
+                      else proposedSpanOverlapMessage(spec, startMm, lengthMm)
 
     // Pre-submit collision / bounds warning state.
     var warningLines by remember { mutableStateOf(emptyList<String>()) }
@@ -925,8 +971,11 @@ fun AddThreadDialog(
         UnitConverterDialog(defaultUnit = unit, onDismiss = { converterOpen = false })
     }
 
-    AlertDialog(
-        onDismissRequest = onCancel,
+    DiscardGuardedDialog(
+        discardTitle = "Discard this thread?",
+        onDismiss = onCancel,
+        // Saveable like the dialog's own fields, so a configuration change keeps the guard.
+        edits = rememberSaveableDialogEdits(),
         title = {
             if (dialogUnitConverterEnabled) {
                 addDialogTitleWithConverter("Add Thread") { converterOpen = true }
@@ -940,7 +989,12 @@ fun AddThreadDialog(
             // keyboard the bottom fields were unreachable (on-device report).
             Column(Modifier.padding(top = 4.dp).verticalScroll(rememberScrollState())) {
                 if (countInOal) {
-                    CommitNumField("Start (${abbr(unit)})", start, errorText = startError) { start = it }
+                    CommitNumField(
+                        "Start (${abbr(unit)})", start.text,
+                        errorText = startError,
+                        supportingText = overlapNote,
+                        highlight = overlapNote != null,
+                    ) { start.onText(it) }
                     Spacer(Modifier.height(8.dp))
                 } else {
                     ChipFlowRow(Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
@@ -960,18 +1014,19 @@ fun AddThreadDialog(
                         "Thread designation",
                         designationText,
                         errorText = if (designationText.isNotBlank() && parsedDesignation == null)
-                            "e.g. M20×2.5" else null,
+                            ThreadDesignation.INVALID_MESSAGE else null,
                         supportingText = if (designationText.isBlank()) "e.g. M20×2.5" else null,
                         keyboardType = KeyboardType.Ascii,
+                        parseValid = null,
                     ) { designationText = it }
                     Spacer(Modifier.height(8.dp))
                 } else {
-                    CommitNumField("Major Ø (${abbr(unit)})", major) { major = it }
+                    CommitNumField("Major Ø (${abbr(unit)})", major.text, requirePositive = true) { major.onText(it) }
                     Spacer(Modifier.height(8.dp))
-                    CommitNumField("TPI", tpiText) { tpiText = it }
+                    CommitNumField("TPI", tpiText, parseValid = ::isUnitlessNumberText, requirePositive = true) { tpiText = it }
                     Spacer(Modifier.height(8.dp))
                 }
-                CommitNumField("Length (${abbr(unit)})", length) { length = it }
+                CommitNumField("Length (${abbr(unit)})", length.text, requirePositive = true) { length.onText(it) }
                 Spacer(Modifier.height(4.dp))
                 // Thread relief — mirrors the thread card's `ThreadReliefCardSection` (parity rule).
                 ThreadReliefSwitchRow(checked = reliefOn, testTag = "add_thread_relief") { on ->
@@ -979,21 +1034,21 @@ fun AddThreadDialog(
                     if (on) {
                         val seed = threadReliefForSwitch(
                             on = true,
-                            currentLenMm = toMmOrNull(reliefLenText, unit) ?: 0f,
-                            currentDiaMm = toMmOrNull(reliefDiaText, unit) ?: 0f,
+                            currentLenMm = reliefLen.mm(unit) ?: 0f,
+                            currentDiaMm = reliefDia.mm(unit) ?: 0f,
                             rememberedLenMm = 0f,
                             rememberedDiaMm = 0f,
                             majorDiaMm = majorMm,
                             pitchMm = pitchMm,
                         )
-                        if (reliefLenText.isBlank()) reliefLenText = toDisplayString(seed.lenMm, unit)
-                        if (reliefDiaText.isBlank() && seed.diaMm > 0f) reliefDiaText = toDisplayString(seed.diaMm, unit)
+                        if (reliefLen.text.isBlank()) reliefLen.reseed(seed.lenMm, toDisplayString(seed.lenMm, unit))
+                        if (reliefDia.text.isBlank() && seed.diaMm > 0f) reliefDia.reseed(seed.diaMm, toDisplayString(seed.diaMm, unit))
                     }
                 }
                 if (reliefOn) {
-                    CommitNumField("Relief length (${abbr(unit)})", reliefLenText) { reliefLenText = it }
+                    CommitNumField("Relief length (${abbr(unit)})", reliefLen.text) { reliefLen.onText(it) }
                     Spacer(Modifier.height(8.dp))
-                    CommitNumField("Relief Ø (${abbr(unit)})", reliefDiaText) { reliefDiaText = it }
+                    CommitNumField("Relief Ø (${abbr(unit)})", reliefDia.text) { reliefDia.onText(it) }
                     Spacer(Modifier.height(8.dp))
                     ThreadReliefEndChips(
                         atAft = reliefAtAft,
@@ -1010,7 +1065,7 @@ fun AddThreadDialog(
                     verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
                 ) {
                     Text("Include thread in OAL")
-                    androidx.compose.material3.Switch(
+                    DialogSwitch(
                         checked = countInOal,
                         onCheckedChange = { countInOal = it }
                     )
@@ -1024,8 +1079,8 @@ fun AddThreadDialog(
                 val designation = if (metricMode) parsedDesignation?.format() else null
                 val relief = threadReliefSubmitValues(
                     reliefOn,
-                    toMmOrNull(reliefLenText, unit),
-                    toMmOrNull(reliefDiaText, unit),
+                    reliefLen.mm(unit),
+                    reliefDia.mm(unit),
                 )
                 val action = {
                     onSubmit(
@@ -1063,23 +1118,27 @@ fun AddTaperDialog(
                reference: LinerAuthoredReference,
                keywayWidthMm: Float, keywayDepthMm: Float, keywayLengthMm: Float,
                keywayOffsetFromSetMm: Float, keywaySpooned: Boolean, keyways180Apart: Boolean,
-               keyways90Apart: Boolean, keyways90Cw: Boolean, keywayUnit: UnitSystem?) -> Unit,
+               keyways90Apart: Boolean, keyways90Cw: Boolean, keywayUnit: UnitSystem?,
+               /** The Rate mode chips' choice (`true` = Manual), stored on the taper. */
+               rateManual: Boolean) -> Unit,
     onCancel: () -> Unit,
 ) {
     val d = rememberAddDialogDefaults(spec)
 
-    val defaultAftStartMm = initialStartMm ?: d.startMm
     val effectiveLengthMm = initialLengthMm ?: 100f
+    // Both seeds from the ONE seeder, each from its own reference end (see AddLinerDialog).
+    val defaultAftStartMm = initialStartMm ?: addStartSeed(spec, effectiveLengthMm).startMm
+    val defaultFwdStartMm = remember(spec, effectiveLengthMm) { addSeedFromFwdMm(spec, effectiveLengthMm) }
 
     // True = measuring from the FWD shaft face; false = from the AFT face.
     var isFwd by remember { mutableStateOf(false) }
 
     // Keep independent start strings per direction so toggling doesn't clobber user input.
-    var startAft by remember(unit, defaultAftStartMm) { mutableStateOf(toDisplayString(defaultAftStartMm, unit)) }
-    var startFwd by remember(unit) { mutableStateOf("0") }
+    val startAft = rememberSeededMm(defaultAftStartMm, unit)
+    val startFwd = rememberSeededMm(defaultFwdStartMm, unit)
 
-    var length  by remember(unit, effectiveLengthMm) { mutableStateOf(toDisplayString(effectiveLengthMm, unit)) }
-    var setText by remember(unit, d.lastDiaMm)       { mutableStateOf(toDisplayString(max(1f, d.lastDiaMm), unit)) }
+    val length  = rememberSeededMm(effectiveLengthMm, unit)
+    val setDia  = rememberSeededMm(max(1f, d.lastDiaMm), unit)
     var letText by remember(unit) { mutableStateOf("") }  // allow deriving via rate
     var rateText by remember { mutableStateOf("1:12") }   // manual-mode text; shop default
     var autoRate by remember { mutableStateOf(true) }
@@ -1102,9 +1161,9 @@ fun AddTaperDialog(
     var clock90   by remember { mutableStateOf(spec.keyways90Apart) }
     var cw90      by remember { mutableStateOf(spec.keyways90Cw) }
 
-    val startEntered = toMmOrNull(if (isFwd) startFwd else startAft, unit) ?: -1f
-    val lengthMm = toMmOrNull(length, unit) ?: -1f
-    val setMm = toMmOrNull(setText, unit) ?: -1f   // -1 means "not provided"
+    val startEntered = (if (isFwd) startFwd else startAft).mm(unit) ?: -1f
+    val lengthMm = length.mm(unit) ?: -1f
+    val setMm = setDia.mm(unit) ?: -1f   // -1 means "not provided"
     val letMm = toMmOrNull(letText, unit) ?: -1f
     val hasSet = setMm > 0f
     val hasLet = letMm > 0f
@@ -1140,14 +1199,14 @@ fun AddTaperDialog(
     // toggling Auto and back.
     val rateDisplayText = if (autoRate) computedRateText.orEmpty() else rateText
 
-    // Resolve physical AFT-origin start from the entered value.
-    val physStartMm = if (isFwd) {
-        if (startEntered >= 0f && lengthMm > 0f)
-            (spec.overallLengthMm - startEntered - lengthMm).coerceAtLeast(0f)
-        else -1f
-    } else {
-        startEntered
-    }
+    // Resolve physical AFT-origin start from the entered value — a FWD entry past the AFT face
+    // is refused, not clamped (addDialogPhysStartMm).
+    val physStartMm = addDialogPhysStartMm(isFwd, startEntered, lengthMm, spec.overallLengthMm)
+    val startError = if (addDialogFwdStartPastAft(isFwd, startEntered, lengthMm, spec.overallLengthMm))
+        ADD_PAST_AFT_END_MSG else null
+    // Tapers do not block on an overlap (no card refuses one either); the line names it before
+    // Add and "Add Anyway?" confirms it — the same from either reference end.
+    val overlapNote = if (startError == null) proposedSpanOverlapMessage(spec, physStartMm, lengthMm) else null
 
     // Pre-submit collision / bounds warning state.
     var warningLines by remember { mutableStateOf(emptyList<String>()) }
@@ -1194,8 +1253,9 @@ fun AddTaperDialog(
         UnitConverterDialog(defaultUnit = unit, onDismiss = { converterOpen = false })
     }
 
-    AlertDialog(
-        onDismissRequest = onCancel,
+    DiscardGuardedDialog(
+        discardTitle = "Discard this taper?",
+        onDismiss = onCancel,
         title = {
             if (dialogUnitConverterEnabled) {
                 addDialogTitleWithConverter("Add Taper") { converterOpen = true }
@@ -1219,16 +1279,19 @@ fun AddTaperDialog(
                 }
                 CommitNumField(
                     "Start from ${if (isFwd) "FWD" else "AFT"} (${abbr(unit)})",
-                    if (isFwd) startFwd else startAft
-                ) { if (isFwd) startFwd = it else startAft = it }
+                    (if (isFwd) startFwd else startAft).text,
+                    errorText = startError,
+                    supportingText = overlapNote,
+                    highlight = overlapNote != null,
+                ) { (if (isFwd) startFwd else startAft).onText(it) }
                 Spacer(Modifier.height(8.dp))
-                CommitNumField("Length (${abbr(unit)})", length) { length = it }
+                CommitNumField("Length (${abbr(unit)})", length.text, requirePositive = true) { length.onText(it) }
                 Spacer(Modifier.height(8.dp))
                 // SET is always Small End; LET is always Large End, whichever end the start
                 // was measured from. The model stores AFT→FWD diameters and SET faces the
                 // nearer shaft end, so the submit handler orders them by the taper's physical
                 // half — not by this dialog's direction chip.
-                CommitNumField("S.E.T. Ø (${abbr(unit)})", setText) { setText = it }
+                CommitNumField("S.E.T. Ø (${abbr(unit)})", setDia.text) { setDia.onText(it) }
                 Spacer(Modifier.height(8.dp))
                 CommitNumField("L.E.T. Ø (${abbr(unit)})", letText) { letText = it }
                 Spacer(Modifier.height(8.dp))
@@ -1250,7 +1313,9 @@ fun AddTaperDialog(
                     supportingText = rateIssueText,
                     highlight = rateIssueText != null,
                     // The taper card's rate field takes the same filter: one acceptance rule.
-                    inputFilter = ::filterTaperRateInput
+                    inputFilter = ::filterTaperRateInput,
+                    // The rate explains its own text (rateIssueText), ambiguity included.
+                    parseValid = null,
                 ) { rateText = it }
                 Spacer(Modifier.height(12.dp))
                 // The shared gate row the cards carry. No confirm on untick: nothing is stored
@@ -1296,7 +1361,7 @@ fun AddTaperDialog(
                             color = if (isCaptured) MaterialTheme.colorScheme.onSurfaceVariant
                                     else MaterialTheme.colorScheme.onSurface
                         )
-                        Switch(
+                        DialogSwitch(
                             checked = kwSpooned && !isCaptured,
                             enabled = !isCaptured,
                             onCheckedChange = { if (!isCaptured) kwSpooned = it }
@@ -1308,7 +1373,7 @@ fun AddTaperDialog(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text("Keyways 180° apart", modifier = Modifier.weight(1f))
-                            Switch(checked = clock180, onCheckedChange = { checked ->
+                            DialogSwitch(checked = clock180, onCheckedChange = { checked ->
                                 clock180 = checked
                                 if (checked) clock90 = false
                             })
@@ -1318,7 +1383,7 @@ fun AddTaperDialog(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text("Keyways 90° apart", modifier = Modifier.weight(1f))
-                            Switch(checked = clock90, onCheckedChange = { checked ->
+                            DialogSwitch(checked = clock90, onCheckedChange = { checked ->
                                 clock90 = checked
                                 if (checked) clock180 = false
                             })
@@ -1386,7 +1451,8 @@ fun AddTaperDialog(
                                  if (showClockingToggle) clock180 else spec.keyways180Apart,
                                  if (showClockingToggle) clock90 else spec.keyways90Apart,
                                  if (showClockingToggle) cw90 else spec.keyways90Cw,
-                                 if (kwDefined) kwUnitOverride else null)
+                                 if (kwDefined) kwUnitOverride else null,
+                                 !autoRate)
                     }
                     val warnings = collectAddWarnings(spec, physStartMm, lengthMm, unit)
                     if (warnings.isEmpty()) action() else { warningLines = warnings; warningAction = action }
@@ -1409,8 +1475,13 @@ private fun DirectionChip(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
+    // Moving to another option is an edit for the discard guard; re-tapping the selected one is not.
+    val edits = LocalDialogEdits.current
     OutlinedButton(
-        onClick = onClick,
+        onClick = {
+            if (!selected) edits?.mark()
+            onClick()
+        },
         modifier = modifier,
         border = if (selected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
                  else BorderStroke(0.dp, Color.Transparent),
@@ -1437,13 +1508,17 @@ private fun CapturedKeywayToggleRow(
     testTag: String,
     onCheckedChange: (Boolean) -> Unit,
 ) {
+    val edits = LocalDialogEdits.current
     Row(
         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
             .testTag(testTag)
             .toggleable(
                 value = checked,
                 role = androidx.compose.ui.semantics.Role.Switch,
-                onValueChange = onCheckedChange,
+                onValueChange = { on ->
+                    edits?.mark()
+                    onCheckedChange(on)
+                },
             ),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -1456,6 +1531,15 @@ private fun CapturedKeywayToggleRow(
  * Field composable that keeps local text; caller decides when to consume.
  * ──────────────────────────────────────────────────────────────────────────── */
 
+/**
+ * A dialog field's text box. [parseValid] says whether the text reads as this field's kind of
+ * value — a length or diameter (unit suffix read) by default, the caller's own rule for a
+ * unitless field, null for a field that explains its own text ([errorText] / [supportingText]).
+ * Non-blank text that fails it shows [unreadableEntryError] under the field, so a disabled Add
+ * button always has a visible reason; the caller's own [errorText] takes the line first.
+ * [requirePositive] marks a field the Add gate needs > 0 (a length, a diameter, a count's pitch):
+ * a typed `0` then shows "Must be > 0" — the card's own wording for the same refusal.
+ */
 @Composable
 private fun CommitNumField(
     label: String,
@@ -1467,6 +1551,10 @@ private fun CommitNumField(
     enabled: Boolean = true,
     highlight: Boolean = false,
     inputFilter: ((String) -> String)? = null,
+    parseValid: ((String) -> Boolean)? = ::isLengthText,
+    requirePositive: Boolean = false,
+    /** The in-field "/" key (inch documents, while focused); off for whole-number fields. */
+    fractionKey: Boolean = keyboardType == KeyboardType.Decimal,
     onCommit: (String) -> Unit
 ) {
     // text is the live value; initial only resets it when the parent externally
@@ -1476,22 +1564,34 @@ private fun CommitNumField(
     LaunchedEffect(initial) {
         if (text != initial) text = initial
     }
+    val shownError = errorText
+        ?: parseValid?.let { unreadableEntryError(text, it) }
+        ?: if (requirePositive) nonPositiveEntryError(text) else null
+    // A keystroke is an edit for the discard guard the moment it lands, before any commit.
+    val edits = LocalDialogEdits.current
+    val cursor = rememberFieldCursor()
+    fun applyEdit(raw: TextFieldValue) {
+        val newText = inputFilter?.invoke(raw.text) ?: raw.text
+        if (newText != text) edits?.mark()
+        cursor.track(if (newText == raw.text) raw else raw.copy(text = newText))
+        text = newText
+        onCommit(newText)   // commit on every keystroke so Add always has the current value
+    }
     OutlinedTextField(
-        value = text,
-        onValueChange = { raw ->
-            val newText = inputFilter?.invoke(raw) ?: raw
-            text = newText
-            onCommit(newText)   // commit on every keystroke so Add always has the current value
-        },
+        value = cursor.valueFor(text),
+        onValueChange = { raw -> applyEdit(raw) },
+        trailingIcon = if (fractionKey && enabled && cursor.focused && LocalFractionKeyEnabled.current) {
+            { FractionKey(onClick = { applyEdit(cursor.valueFor(text).insertAtCursor("/")) }) }
+        } else null,
         label = { Text(label) },
         enabled = enabled,
         singleLine = true,
-        isError = highlight || errorText != null,
-        supportingText = if (errorText != null || supportingText != null) {
+        isError = highlight || shownError != null,
+        supportingText = if (shownError != null || supportingText != null) {
             {
                 Text(
-                    errorText ?: supportingText.orEmpty(),
-                    color = if (highlight || errorText != null) MaterialTheme.colorScheme.error
+                    shownError ?: supportingText.orEmpty(),
+                    color = if (highlight || shownError != null) MaterialTheme.colorScheme.error
                             else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -1500,6 +1600,31 @@ private fun CommitNumField(
         keyboardActions = KeyboardActions(onDone = { onCommit(text) }),
         modifier = modifier
             .fillMaxWidth()
-            .onFocusChanged { f -> if (!f.isFocused) onCommit(text) }
+            .onFocusChanged { f ->
+                cursor.focused = f.isFocused
+                if (!f.isFocused) onCommit(text)
+            }
     )
+}
+
+/** The error line a numeric field shows under text that does not read as a number. */
+internal const val NOT_A_NUMBER_ERROR = "Not a number"
+
+/**
+ * The error a numeric dialog field shows for [text]: [NOT_A_NUMBER_ERROR] when it is non-blank
+ * and fails [parseValid], null otherwise (blank is "not entered yet", which the dialog's own
+ * gate handles). Shared by the Add dialogs and the new-shaft "Shaft diameter" prompt, so a
+ * disabled confirm button always has a visible reason.
+ */
+internal fun unreadableEntryError(text: String, parseValid: (String) -> Boolean): String? =
+    if (text.isNotBlank() && !parseValid(text)) NOT_A_NUMBER_ERROR else null
+
+/**
+ * "Must be > 0" for text that reads as a number at or below zero (a length or Ø, suffix read,
+ * or a unitless value such as TPI); null for anything else — blank and unreadable text have
+ * their own handling. The dialogs' wording for the refusal the cards make ([MUST_BE_POSITIVE_MSG]).
+ */
+internal fun nonPositiveEntryError(text: String): String? {
+    val v = parseLengthMmOrNull(text, UnitSystem.MILLIMETERS) ?: parseFractionOrDecimal(text) ?: return null
+    return if (v <= 0.0) MUST_BE_POSITIVE_MSG else null
 }

@@ -10,13 +10,13 @@ import org.junit.Test
  * Pure show/dismiss coverage for the Schematic tab's spec-level warning banner.
  *
  * The logic is message-AGNOSTIC — it keys off the set, never the text — but the multi-message
- * cases still use the real pair `specWarningMessages` can emit, so a dismissal is exercised
+ * cases still use real lines `specIssues` can emit, so a dismissal is exercised
  * against a set the banner can actually be shown with.
  */
 class SpecWarningVisibilityTest {
 
-    private val realMessage = "2 segments shorter than 1 mm"
-    private val otherRealMessage = "1 component extends past shaft length"
+    private val realMessage = "Body #2 is shorter than 1 mm"
+    private val otherRealMessage = "Body #1 runs 4 13/16\" past the FWD end"
 
     @Test
     fun `banner hidden when there are no messages`() {
@@ -30,17 +30,17 @@ class SpecWarningVisibilityTest {
 
     @Test
     fun `banner hidden once dismissed for the exact same message set`() {
-        val messages = listOf("2 segments shorter than 1 mm")
+        val messages = listOf("Body #2 is shorter than 1 mm")
         val key = warningSetKey(messages)
         assertFalse(bannerVisible(messages, dismissedKey = key))
     }
 
     @Test
     fun `banner reappears when the message set changes after dismissal`() {
-        val original = listOf("2 segments shorter than 1 mm")
+        val original = listOf("Body #2 is shorter than 1 mm")
         val dismissedKey = warningSetKey(original)
 
-        val grown = listOf("3 segments shorter than 1 mm")
+        val grown = listOf("Body #3 is shorter than 1 mm")
         assertTrue(bannerVisible(grown, dismissedKey))
 
         val extra = original + otherRealMessage

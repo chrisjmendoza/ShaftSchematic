@@ -27,6 +27,9 @@ class ComponentWarningsTest {
     private val DIA_SANITY = "Diameter exceeds 1 m — check for a typo"
     private val PAST_OAL_1000 = "Extends past shaft length (OAL 1000 mm)"
 
+    /** The banner's lines for [spec] on a millimetre document. */
+    private fun banner(spec: ShaftSpec) = specIssues(spec, UnitSystem.MILLIMETERS).map { it.message }
+
     // Mirrors the private thresholds in ComponentWarnings.kt.
     private val MAX_LEN = 15_000f
     private val MAX_DIA = 1_000f
@@ -307,7 +310,10 @@ class ComponentWarningsTest {
             bodies = listOf(Body(startFromAftMm = 0f, lengthMm = 0.5f, diaMm = 50f)),
             tapers = listOf(Taper(startFromAftMm = 100f, lengthMm = 0.8f, startDiaMm = 40f, endDiaMm = 40f)),
         )
-        assertTrue(specWarningMessages(spec).contains("2 segments shorter than 1 mm"))
+        assertEquals(
+            listOf("Body #1 is shorter than 1 mm", "AFT Taper is shorter than 1 mm"),
+            banner(spec).filter { it.contains("shorter than 1 mm") },
+        )
     }
 
     @Test
@@ -317,7 +323,7 @@ class ComponentWarningsTest {
             bodies = listOf(Body(startFromAftMm = 0f, lengthMm = 0f, diaMm = 50f)),
             tapers = listOf(Taper(startFromAftMm = 100f, lengthMm = 200f, startDiaMm = 40f, endDiaMm = 40f)),
         )
-        assertTrue(specWarningMessages(spec).none { it.contains("shorter than 1 mm") })
+        assertTrue(banner(spec).none { it.contains("shorter than 1 mm") })
     }
 
     @Test
@@ -329,7 +335,7 @@ class ComponentWarningsTest {
                 Threads(startFromAftMm = 0f, lengthMm = 0.5f, majorDiaMm = 40f, pitchMm = 2f, excludeFromOAL = true),
             ),
         )
-        assertTrue(specWarningMessages(spec).none { it.contains("shorter than 1 mm") })
+        assertTrue(banner(spec).none { it.contains("shorter than 1 mm") })
     }
 
     /* ── §4.3 The banner carries PROBLEMS only ──────────────────────────────── */
@@ -348,12 +354,12 @@ class ComponentWarningsTest {
             tapers = listOf(Taper(startFromAftMm = 0f, lengthMm = 200f, startDiaMm = 80f, endDiaMm = 60f)),
             liners = listOf(Liner(startFromAftMm = 300f, lengthMm = 200f, odMm = 60f)),
         )
-        assertTrue(specWarningMessages(spec).isEmpty())
+        assertTrue(banner(spec).isEmpty())
     }
 
     @Test
     fun `a fully empty spec raises nothing`() {
-        assertTrue(specWarningMessages(ShaftSpec(overallLengthMm = 1000f)).isEmpty())
+        assertTrue(banner(ShaftSpec(overallLengthMm = 1000f)).isEmpty())
     }
 
     /** The one surviving message still fires — removing the note must not silence the banner. */
@@ -363,7 +369,7 @@ class ComponentWarningsTest {
             overallLengthMm = 1000f,
             tapers = listOf(Taper(startFromAftMm = 0f, lengthMm = 0.5f, startDiaMm = 80f, endDiaMm = 60f)),
         )
-        assertEquals(listOf("1 segment shorter than 1 mm"), specWarningMessages(spec))
+        assertEquals(listOf("FWD Taper is shorter than 1 mm"), banner(spec))
     }
 
     /* ── Past-OAL bounds advisory (shared predicate) ────────────────────────── */
@@ -510,16 +516,16 @@ class ComponentWarningsTest {
     }
 
     @Test
-    fun `banner counts one past-OAL component in the singular`() {
+    fun `banner names a past-OAL component and how far it runs`() {
         val spec = ShaftSpec(
             overallLengthMm = 1000f,
             bodies = listOf(Body(startFromAftMm = 900f, lengthMm = 200f, diaMm = 50f)),
         )
-        assertTrue(specWarningMessages(spec).contains("1 component extends past shaft length"))
+        assertTrue(banner(spec).contains("Body #1 runs 100 mm past the FWD end"))
     }
 
     @Test
-    fun `banner counts several past-OAL components in the plural`() {
+    fun `banner names every past-OAL component`() {
         val spec = ShaftSpec(
             overallLengthMm = 1000f,
             bodies = listOf(Body(startFromAftMm = 900f, lengthMm = 200f, diaMm = 50f)),
@@ -530,7 +536,10 @@ class ComponentWarningsTest {
                         excludeFromOAL = true),
             ),
         )
-        assertTrue(specWarningMessages(spec).contains("2 components extend past shaft length"))
+        assertEquals(
+            listOf("Body #1 runs 100 mm past the FWD end", "FWD Liner runs 150 mm past the FWD end"),
+            banner(spec).filter { it.contains("past the FWD end") },
+        )
     }
 
     /**
@@ -542,10 +551,10 @@ class ComponentWarningsTest {
     fun `shortening the OAL alone raises the banner line`() {
         val body = Body(startFromAftMm = 0f, lengthMm = 900f, diaMm = 50f)
         val roomy = ShaftSpec(overallLengthMm = 1000f, bodies = listOf(body))
-        assertTrue(specWarningMessages(roomy).none { it.contains("past shaft length") })
+        assertTrue(banner(roomy).none { it.contains("past the FWD end") })
 
         val tight = roomy.copy(overallLengthMm = 500f)
-        assertTrue(specWarningMessages(tight).contains("1 component extends past shaft length"))
+        assertTrue(banner(tight).contains("Body #1 runs 400 mm past the FWD end"))
     }
 
     /**
@@ -562,7 +571,7 @@ class ComponentWarningsTest {
                 CouplerBoltSlot(startFromAftMm = 980f, holeDiaMm = 20f, count = 3, spacingMm = 30f),
             ),
         )
-        assertTrue(specWarningMessages(spec).none { it.contains("past shaft length") })
+        assertTrue(banner(spec).isEmpty())
     }
 
     /**
@@ -581,7 +590,7 @@ class ComponentWarningsTest {
 
         assertTrue(taperWarningMessages(spec, aftRef, UnitSystem.MILLIMETERS).contains(PAST_OAL_1000))
         assertTrue(taperWarningMessages(spec, fwdRef, UnitSystem.MILLIMETERS).contains(PAST_OAL_1000))
-        assertTrue(specWarningMessages(spec).contains("2 components extend past shaft length"))
+        assertEquals(2, specIssues(spec, UnitSystem.MILLIMETERS).count { it.kind == SpecIssueKind.PAST_FWD_END })
     }
 
     /* ── Thread relief advisories ──────────────────────────────────────────── */
@@ -620,5 +629,49 @@ class ComponentWarningsTest {
         threadWarnings(th)
         assertEquals(150f, th.reliefLenMm, 0f)
         assertEquals(75f, th.reliefDiaMm, 0f)
+    }
+
+    /* ── Which END a component runs past ───────────────────────────────────── */
+
+    /**
+     * Including an excluded AFT thread in the OAL leaves it at a negative start — hanging off the
+     * AFT end. "Past shaft length" read as wrong for that: nothing is longer than the shaft.
+     */
+    @Test
+    fun `a component starting before 0 is reported past the AFT end, not past shaft length`() {
+        val th = Threads(startFromAftMm = -147.6f, lengthMm = 147.6f, majorDiaMm = 100f, pitchMm = 6.35f)
+        val spec = ShaftSpec(overallLengthMm = 1000f, threads = listOf(th))
+        val banner = banner(spec)
+        assertTrue(banner.contains("AFT Thread starts 147.6 mm before the AFT end"))
+        assertTrue(banner.none { it.contains("past the FWD end") })
+        assertEquals(
+            "Extends past the AFT end of the shaft",
+            pastShaftEndMessage(spec, th.startFromAftMm, th.lengthMm, UnitSystem.MILLIMETERS),
+        )
+    }
+
+    @Test
+    fun `the AFT and FWD ends are counted separately`() {
+        val spec = ShaftSpec(
+            overallLengthMm = 1000f,
+            bodies = listOf(
+                Body(startFromAftMm = -10f, lengthMm = 200f, diaMm = 50f),
+                Body(startFromAftMm = -20f, lengthMm = 200f, diaMm = 50f),
+                Body(startFromAftMm = 900f, lengthMm = 200f, diaMm = 50f),
+            ),
+        )
+        val kinds = specIssues(spec, UnitSystem.MILLIMETERS).map { it.kind }
+        assertEquals(2, kinds.count { it == SpecIssueKind.PAST_AFT_END })
+        assertEquals(1, kinds.count { it == SpecIssueKind.PAST_FWD_END })
+    }
+
+    @Test
+    fun `a span past both ends names both on its card`() {
+        val spec = ShaftSpec(overallLengthMm = 1000f)
+        assertEquals(
+            "Extends past the AFT end of the shaft; $PAST_OAL_1000",
+            pastShaftEndMessage(spec, -10f, 1100f, UnitSystem.MILLIMETERS),
+        )
+        assertEquals(PAST_OAL_1000, pastShaftEndMessage(spec, 900f, 200f, UnitSystem.MILLIMETERS))
     }
 }

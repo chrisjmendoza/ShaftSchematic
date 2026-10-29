@@ -135,16 +135,41 @@ internal fun isBareFractionRateText(text: String): Boolean {
 }
 
 /**
+ * The steepest slope a BARE decimal may name: 0.25 (3" of diameter per foot, already far past
+ * any shaft taper). Above it a bare decimal under 1 is the inches-per-foot figure typed without
+ * its `/ft` — `.75` means 3/4"/ft (1:16), where a slope reader would make it 9"/ft.
+ */
+internal const val MAX_BARE_DECIMAL_SLOPE = 0.25f
+
+/** True for a bare decimal under 1 too steep to be a slope (see [MAX_BARE_DECIMAL_SLOPE]). */
+internal fun isBareSteepSlopeText(text: String): Boolean {
+    val v = text.trim().toFloatOrNull() ?: return false
+    return v > MAX_BARE_DECIMAL_SLOPE && v < 1f
+}
+
+/**
+ * True for a rate spelling the parser refuses because it could mean two different tapers — a
+ * bare fraction (`3/4`) or a bare steep decimal (`.75`) — so a field can pass it on to
+ * [manualTaperRateBlockingMessage], which explains the ambiguity, instead of calling it "not a
+ * number".
+ */
+fun isAmbiguousTaperRateText(text: String): Boolean =
+    isBareFractionRateText(text) || isBareSteepSlopeText(text)
+
+/**
  * Reads a typed taper rate as a slope (diameter change per unit length).
  *
  * Accepted, deterministically:
  * - a ratio `1:12` → 1/12 (any `N:D`, `D ≠ 0`);
  * - inches per foot `3/4"/ft` (see [parseInchesPerFoot]) → value / 12, so `3/4"/ft` = 1:16;
- * - a decimal: `12` reads as 1:12, a value under 1 as the slope itself (`0.0833`).
+ * - a decimal: `12` reads as 1:12, a value under 1 as the slope itself (`0.0833`, `.0625`) up to
+ *   [MAX_BARE_DECIMAL_SLOPE].
  *
  * A BARE slash fraction (`3/4`, `1/16`) is **never** read: a machinist writing 3/4 means 3/4
  * inch per foot (1:16), while a slope reader would make it 0.75 — an absurd taper — so the only
- * honest answer is to ask for the explicit form. [manualTaperRateBlockingMessage] names it.
+ * honest answer is to ask for the explicit form. A bare decimal steeper than
+ * [MAX_BARE_DECIMAL_SLOPE] (`.75`) is the same number typed as a decimal and is refused for the
+ * same reason. [manualTaperRateBlockingMessage] names both.
  *
  * [allowAmbiguousBareOne] keeps a bare `1` readable on the legacy derivation path only; strict
  * callers (every UI gate) reject it.
@@ -169,6 +194,7 @@ fun parseTaperRateText(text: String, allowAmbiguousBareOne: Boolean = true): Flo
 
     val v = t.toFloatOrNull() ?: return null
     if (!allowAmbiguousBareOne && v == 1f) return null
+    if (isBareSteepSlopeText(t)) return null
     return if (v >= 1f) 1f / v else v
 }
 
@@ -195,6 +221,10 @@ fun manualTaperRateBlockingMessage(
 
     if (isBareFractionRateText(raw)) {
         return "Write $raw\"/ft or a ratio like 1:16; a bare fraction is ambiguous"
+    }
+
+    if (isBareSteepSlopeText(raw)) {
+        return "Write $raw\"/ft or a ratio like 1:16; a bare $raw is ambiguous"
     }
 
     return if (parseTaperRateText(raw, allowAmbiguousBareOne = false) == null) {

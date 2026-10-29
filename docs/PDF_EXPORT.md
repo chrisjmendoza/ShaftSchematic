@@ -156,6 +156,11 @@ at all, the same growth put "TIR's taken looking:" through "AFT Taper" (on-devic
 `SheetTextOverlapTest` composes every export combination of the schematic, classic runout and
 consolidated sheets onto a recording canvas and fails on any two strings whose boxes overlap.
 
+A blank draft's band is the one reservation with give in it: on the consolidated sheet, when the
+page cannot afford the shaft at the height floor, the composer reserves less than
+`footerBlockHeightPt`, down to `footerBlockMinHeightPt` (every row at 1.7× the text size), and
+`drawFooter` fit-clamps its handwriting pitch to the band it is handed (§5.7).
+
 ---
 
 # 4. Title Block Specification
@@ -266,7 +271,13 @@ The bracket **position** changes based on `excludeFromOAL`:
 
 The label is passed as an explicit `labelMm` override to `oalSpan()` so it is always the typed OAL regardless of bracket width. Component dimension rails always reference SET positions.
 
-**What else is dimensioned** (all through the same planner, §5.4): the liner spans (`buildLinerSpans`), the taper spans (`buildTaperLengthSpans` — an **end taper** prints its length only, since its SET is one of its own edges; a **taper that stands off both SETs**, the mid-shaft step that brings the Ø down ahead of a liner, is located **like a liner**: a DATUM span from the nearer SET (or the forced "Measurement reference" SET) to its near edge plus its LOCAL length, through the same adapter rule (`mapToMidTaperDimsForPdf` → `buildLinerSpans`) — on-device request; the footer's AFT/FWD taper columns still note every taper's rate and diameters, untouched), and — per row, opt-in — a **coupler bolt row's authored position** (`buildCouplerSlotSpans`, beside the taper builder; the consolidated sheet calls the same function). That span is the only one that references a **shaft end rather than a SET**: it runs from the face the row was measured from (`Measure From` AFT = 0, FWD = OAL) to the nearest hole center, carries the stored distance (`authoredCenterMm`) in the row's own display unit, and tiers LOCAL like any other. Off by default, so untouched sheets print byte-identically; see `docs/contracts/CouplerBoltSlot.md` § Dimension rail.
+The runout-family sheets bracket SET → SET: the consolidated sheet's OAL rail (`oalDimSpan`) and
+the classic runout sheet's raised OAL line alike — the classic line's ends are `xAt(aftSET)` /
+`xAt(fwdSET)`, never the drawn window, which an excluded thread widens past the AFT face
+(Emulator QA: the classic sheet started its arrow at the excluded thread's end, reading the OAL as
+including it).
+
+**What else is dimensioned** (all through the same planner, §5.4): the liner spans (`buildLinerSpans`), the taper spans (`buildTaperLengthSpans` — an **end taper** prints its length only, since its SET is one of its own edges; a **taper that stands off both SETs**, the mid-shaft step that brings the Ø down ahead of a liner, is located **like a liner**: a DATUM span from the nearer SET (or the forced "Measurement reference" SET) to its near edge plus its LOCAL length, through the same adapter rule (`mapToMidTaperDimsForPdf` → `buildLinerSpans`) — on-device request; the footer's taper columns still note its rate and diameters — headed with its name or "Taper", never "AFT Taper"/"FWD Taper", since it is not that end's taper, see "Footer taper headings"), and — per row, opt-in — a **coupler bolt row's authored position** (`buildCouplerSlotSpans`, beside the taper builder; the consolidated sheet calls the same function). That span is the only one that references a **shaft end rather than a SET**: it runs from the face the row was measured from (`Measure From` AFT = 0, FWD = OAL) to the nearest hole center, carries the stored distance (`authoredCenterMm`) in the row's own display unit, and tiers LOCAL like any other. Off by default, so untouched sheets print byte-identically; see `docs/contracts/CouplerBoltSlot.md` § Dimension rail. Last, an **explicit body's own length** (`buildBodyLengthSpans`, beside the coupler builder; both sheets call it): one LOCAL span over the body's STORED span — never a drawn fragment, so a body an S-break foreshortens gets one span across its break — labelled with the stored length in the body's own display unit, the way an end taper's length prints. It follows the body card's "Show dimension rail" (`Body.showDimensionRail`, tri-state): unset, a body whose stored span touches a shaft end face (start at 0, or end at the OAL — the renderer's coverage end while no OAL is typed; `bodyAtShaftEnd`, within the 0.01 mm bounds slop) prints it and a mid-shaft body does not (on-device ruling: the FWD-end body is where the coupling goes, so its length must print); an explicit on/off wins wherever the body sits, through the ONE predicate `effectiveBodyDimensionRail` (`ui/resolved/BodyDimensionRail.kt`) the card reads too. Auto spans never get one. A span the sheet already prints is not printed twice: a body span that coincides with one the other builders emitted — typically the datum rail from the FWD SET to a liner butting the end body, which IS that body's length — is skipped, and so is a face-to-face body, whose length is the OAL rail's.
 
 **Label text (2026-07-28):** printed end-to-end spans keep their small `"OAL"` prefix —
 `oalSpan()` (`pdf/dim/LinerSpanBuilder.kt`) renders `"OAL " + formatLenDim(labelMm, unit)`,
@@ -472,6 +483,12 @@ they are now all-BELOW, same as liners.
   `geom/DiameterCalloutLayout.kt` (`assignTiers` — greedy left-to-right interval
   coloring, capped at `MAX_TIERS = 2`, `MIN_GAP = 4f` pt clearance); the renderer only
   measures label widths and reads back the tier.
+- **Labels stay inside the content area:** a label hangs right of its leader past the dogleg,
+  unless that would run past the content's right edge — then it hangs LEFT of the leader, the
+  dogleg running into its right edge; one that fits neither side is pushed back inside
+  (`DiameterCalloutLayout.labelLeft`, the one answer behind the tiers, the occupancy boxes and
+  the ink). The leader never leaves its anchor (Emulator QA: a `Ø 5.998"` off a FWD-end body ran
+  to within a quarter inch of the paper edge).
 - **The band is shared with the component-name labels** (§5.3b), which are placed against
   `DiameterLeaderRenderer.occupancy(calls)` — the value boxes and the leader lines, measured
   off the same geometry `drawOne` inks. The callouts are planned before the names for that
@@ -639,20 +656,50 @@ hand-drafting convention `|←—— 237 1/2" ——→|` — instead of floatin
   OAL rail included — treating both the placed labels and every rail **line** as
   obstacles, so no value is ever printed over another value or struck through by a
   neighbouring tier's dimension line.
-  - **Slide before bump.** A colliding value first slides **horizontally along its own
-    span** — the smallest shift from center that clears everything, bounded by
-    `[xa + textPad + half, xb − textPad − half]`, tightened by `arrowSize` on both sides
-    for an inline value so the break keeps its inward arrows. Only a floating value that
-    cannot slide clear bumps vertically (bounded, never past the content top).
+  - **Slide, then step outside, then bump — never onto another rail.** A colliding value
+    first slides **horizontally along its own span** — the smallest shift from center that
+    clears everything, bounded by `[xa + textPad + half, xb − textPad − half]`, tightened by
+    `arrowSize` on both sides for an inline value so the break keeps its inward arrows. A
+    floating value that still has no spot — typically one wider than its own span — next
+    tries the spot **just OUTSIDE its span at the same height**: right of the FWD extension
+    line (clear of an outward arrowhead, `textPad` off the line, sliding at most
+    `OUTSIDE_REACH` further to step over a neighbouring extension line), then left of the AFT
+    one, always inside the content area (`plan(contentLeft, contentRight)`, both composers
+    pass their geometry rect). A value outside its span never crosses its own extension
+    lines, and a value overhanging its own short span is not allowed to be struck by its own
+    boundary line where a HIGHER rail continues it upward (the AFT S.E.T. line rising to the
+    OAL). Only then does it bump vertically — bounded, never past the content top, and only
+    while it stays in the band directly above its OWN rail line: a bump that would put it
+    against, or nearer to, another rail's line over it is refused, and an unresolvable value
+    prints at its own rail's height. Emulator QA: on a 368 1/2" shaft whose 30" explicit body
+    draws at true scale, the ~24 pt AFT-taper and liner-datum spans floated their values two
+    bands up, each sitting over the wrong rail.
+  - **A value off its own line carries a leader.** A floating value the planner set BESIDE its
+    span (centre outside `[xa, xb]`) or bumped above its home height gets a thin leader to its
+    own span — `Placement.leader`, the undercut rails' construction (`geom/RailValueLeader.kt`,
+    `railValueLeader`): it lands on the span's line between its arrowheads (`[xa + arrowSize,
+    xb − arrowSize]`) and leaves the value's bottom edge straight down when the value stands over
+    that point, from its nearer bottom corner otherwise. A value at home over its span (the
+    ordinary fallback) or seated in its break has none, so a sheet with no displaced value is
+    unchanged. A leader is an obstacle like a label: its landing point slides along the span to
+    clear values already placed, an OUTSIDE spot whose leader would still cross one is not
+    taken, and every later value keeps clear of the leader's box. `drawPlanned` strokes it with
+    the line paint; blank drafts, which print no value, print no leader. Emulator QA: on the
+    QA_Titan rebuild the AFT taper's "25 3/16"" sat beside its span over the start of the next
+    one with nothing tying it to its own.
   - **Tiers lift.** A rail carrying at least one floating value pushes every rail
     **above** it — the OAL rail included — up by one label band (glyph height + gap),
     cumulatively per intervening fallback rail, so the lines clear the values.
   - **Budgets include the lifts.** `ShaftPdfComposer` folds `topLift` into its
     `computeTopY` fit loop (shrink rail gap, then text size, until the lifted block still
     clears `geomRect.top`); `RunoutPdfComposer` adds it to `railsBlockH` before the shaft
-    scale is solved — the inline/fallback split depends only on drawn width, so a prelim
-    plan on the linear map answers it, the same prelim-then-resolve posture the bubble
-    budget uses.
+    scale is solved — the inline/fallback split depends only on drawn width (an outside or
+    in-band placement never changes a lift), so a prelim plan on the linear map starts it.
+    The real map can float MORE values than the prelim (a narrower drawing does), so the
+    composer's vertical solve re-plans on the solved map and raises the reservation until
+    it covers the lift the drawn rails take; a reservation the real map does not use stays,
+    so a sheet that already fitted is unchanged. An under-reserved block crushed the OAL
+    rail onto the tier below it (§5.7, Emulator QA).
   - Placement order is least-slide-room-first, so a wide span is the one that moves.
     Pinned by `DimensionRailLayoutTest`.
 - **Top OAL rail included.** The OAL span is planned and drawn through the same path as
@@ -751,7 +798,11 @@ Rules (shared helpers in `pdf/BlankFormText.kt`):
   `buildOutputFilename` (`ui/screen/OutputDoc.kt`) with its historical suffix — `_schematic`,
   `_runout`, `_wear`, `_undercuts`, `_consolidated` — the Schematic tab's own export included,
   so that export and "Export all" name the schematic identically; with no job information the
-  one fallback base `Shaft` stands in (`Shaft_runout.pdf` — the suffix already names the sheet). The Final drawing keeps
+  saved document's name stands in (`documentNameFilenameBase` — `.shaft` dropped, sanitized
+  like every part: `QA_Titan_rebuild_runout.pdf`), and only an unsaved, unnamed job falls back
+  to the one base `Shaft` (`Shaft_runout.pdf` — the suffix already names the sheet). Every
+  `Shaft_<doc>.pdf` used to collide in a shared folder with nothing saying which shaft it was
+  (Emulator QA). The Final drawing keeps
   its `_Final*` suffixes through the same join (`docs/contracts/FinalSchematic.md`). Pinned by
   `OutputDocTest` and `ExportFilenameTest`.
 - On the schematic PDF preview the toggle surfaces **twice from one state**: an
@@ -938,7 +989,10 @@ so it returns the moment the sheet stops printing in-profile values. The classic
 **Also on this tab**: the per-job "Shaft height" slider (§5.7), the worn-section editor
 (sections print on this sheet), the blank-draft toggle, and **Export all** — checkboxes
 for the five documents (consolidated [current variant], schematic, runout, wear,
-undercut; all on by default) written to one picked folder (`OpenDocumentTree` +
+undercut; all on by default except the undercut drawing of a job with no undercuts recorded —
+`defaultExportAllChecks`, re-seeded when the job gains or loses its first cut; a half-blank
+write-in sheet was landing in every batch (Emulator QA) — and still tickable for a blank
+template) written to one picked folder (`OpenDocumentTree` +
 `createPdfInTree`), each through the hardened write path, with a written/failed result
 line. An undercut drawing with every section left off ("Sections to print") is skipped, not
 written as its note page, and the result line ends "Undercut drawing skipped: no sections
@@ -1125,7 +1179,16 @@ the height slider on every other preview: the route passes a `PreviewTuning` and
     (on-device report). It **never raises a shaft above the sizing curve**: a shaft whose
     standard height is already under the floor keeps that standard, so the proportional
     hand-sheet rule is untouched at 100% and a small shaft is never fattened into something
-    it isn't. The page budget still wins over both ends.
+    it isn't. The page budget still wins over both ends — but on the runout/consolidated
+    sheet the floor outranks a BLANK draft's handwriting pitch: when the budget cannot afford
+    the floored shaft, the write-in footer tightens toward `footerBlockMinHeightPt` (rows at
+    1.7× the text size, still writable) first, and only past that does the budget cut the
+    shaft. A long shaft the budget did cut below its width fit keeps its x axis at the scale
+    it would have drawn without the cap (up to the width fit), so the profile still spans the
+    content — a budget-capped 368" shaft no longer draws in true proportion across 40% of
+    the page. Sheets the budget does not cap map exactly as before (the ceiling-capped short
+    shaft included). Emulator QA: a blank Schematic + Runout sheet with the coupling face drew
+    a Ø11" × 368 1/2" shaft 0.2" tall across 40% of the width.
   - Pure arithmetic: `exaggeratedProfileScale` (`geom/ProfileCompression.kt`).
     **Everything derives from these two numbers** — the Settings anchor-height range
     (`PDF_CURVE_HEIGHT_MAX_IN`), the slider track, its caption, the Settings blurb and the
@@ -1140,6 +1203,15 @@ the height slider on every other preview: the route passes a `PreviewTuning` and
   ~0.29, 1 1/2" on a 2" shaft needs 6 — and the height clamp above means a wide multiplier
   range cannot produce a wide drawing. Commits near the standard height snap to exactly
   100% (`snappedHeightScale`); a "Standard (X″)" button restores the default.
+  **The readout never states a height the sheet does not print**: on the runout-family
+  surfaces (the Output tab, the consolidated and runout previews) the slider takes
+  `maxDrawnHeightPt` — the tallest that sheet really draws this job, which the page budget or a
+  true-scale pin can hold under the band — and the readout, the Standard chip and the track's
+  top all stop there. The figure comes from the composer itself
+  (`runoutSheetMaxShaftHeightPt` runs `composeRunoutPdfOnCanvas` at the slider's top on a 1×1
+  raster and reads its layout probe), re-solved on each sharp preview pass. Emulator QA: a
+  bubble sheet read 1.50″ while it drew 1.38″, the top of the track dead travel. The schematic
+  and wear surfaces keep the uncapped readout.
 - **Liner & taper compression (per-job pair, same two surfaces)**: the measured
   components — tapers and liners — are what the sheets are about, so BOTH kinds ride this
   one request and can be held proportional lengthwise. **The drawing height takes

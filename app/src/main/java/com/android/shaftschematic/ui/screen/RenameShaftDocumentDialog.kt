@@ -31,11 +31,22 @@ import kotlinx.coroutines.withContext
 /** Test tag on the rename dialog's name field. */
 const val RENAME_DOC_FIELD_TAG = "rename_doc_field"
 
+/** Test tag on the refusal message under the rename dialog's name field. */
+const val RENAME_DOC_REFUSAL_TAG = "rename_doc_refusal"
+
 /** Test tag on the rename dialog's confirm button. */
 const val RENAME_DOC_CONFIRM_TAG = "rename_doc_confirm"
 
-/** Reported through `onError` when the typed name holds no usable filename. */
+/** Shown under the name field when the typed name holds no usable filename. */
 const val RENAME_BLANK_NAME_MESSAGE = "Name cannot be blank."
+
+/** Shown under the name field when another saved shaft already has the typed name. */
+fun renameTakenMessage(toName: String): String =
+    "A saved shaft named ‘${stripShaftDocExtension(toName)}’ already exists."
+
+/** Shown under the name field when the store could not rename the file. */
+fun renameFailedMessage(toName: String): String =
+    "Could not rename to ‘${stripShaftDocExtension(toName)}’."
 
 /**
  * What confirming the rename dialog means, decided from the typed text ALONE — before any
@@ -80,16 +91,17 @@ fun renameOutcomeFor(fromName: String, typed: String): RenameOutcome {
  *
  * The dialog owns the typed name and the storage work; the caller owns the consequences, which
  * differ per surface (the Open screen refreshes its list, the editor updates the session's
- * document name so the title strip follows). Each outcome is terminal for its path:
- * [onRenamed] and [onDismiss] mean the dialog is finished and the caller closes it, while
- * [onError] leaves it open over the name the user still has to fix.
+ * document name so the title strip follows). [onRenamed] and [onDismiss] mean the dialog is
+ * finished and the caller closes it. A refusal — blank, a name another saved shaft already has,
+ * a failed rename — keeps the dialog open and says why UNDER THE NAME FIELD, where the user is
+ * looking: a snackbar sat behind the dialog and its keyboard, so a refused rename looked like a
+ * button that did nothing (emulator QA). Editing the name clears the message.
  */
 @Composable
 fun RenameShaftDocumentDialog(
     fromName: String,
     onDismiss: () -> Unit,
     onRenamed: (toName: String) -> Unit,
-    onError: (message: String) -> Unit,
 ) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -99,6 +111,8 @@ fun RenameShaftDocumentDialog(
         val base = stripShaftDocExtension(fromName)
         mutableStateOf(TextFieldValue(base, selection = TextRange(0, base.length)))
     }
+    // Why the last Rename was refused; null while there is nothing to say.
+    var refusal by remember(fromName) { mutableStateOf<String?>(null) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -108,9 +122,16 @@ fun RenameShaftDocumentDialog(
                 Text("Enter a new name. The file will be saved as $SHAFT_DOT_EXT.")
                 OutlinedTextField(
                     value = value,
-                    onValueChange = { value = it },
+                    onValueChange = {
+                        if (it.text != value.text) refusal = null
+                        value = it
+                    },
                     singleLine = true,
                     label = { Text("Name") },
+                    isError = refusal != null,
+                    supportingText = refusal?.let { msg ->
+                        { Text(msg, modifier = Modifier.testTag(RENAME_DOC_REFUSAL_TAG)) }
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag(RENAME_DOC_FIELD_TAG),
@@ -121,29 +142,24 @@ fun RenameShaftDocumentDialog(
             TextButton(
                 onClick = {
                     when (val outcome = renameOutcomeFor(fromName, value.text)) {
-                        RenameOutcome.Blank -> onError(RENAME_BLANK_NAME_MESSAGE)
+                        RenameOutcome.Blank -> refusal = RENAME_BLANK_NAME_MESSAGE
 
                         RenameOutcome.Unchanged -> onDismiss()
 
                         is RenameOutcome.Proceed -> {
                             val toName = outcome.toName
                             scope.launch {
-                                val ok = withContext(Dispatchers.IO) {
-                                    // A taken name reports failure rather than replacing the
-                                    // file behind it: a rename that silently destroyed another
-                                    // saved shaft would be unrecoverable.
-                                    if (InternalStorage.exists(ctx, toName)) {
-                                        return@withContext false
+                                // A taken name is refused rather than replacing the file behind
+                                // it: a rename that silently destroyed another saved shaft
+                                // would be unrecoverable.
+                                val message = withContext(Dispatchers.IO) {
+                                    when {
+                                        InternalStorage.exists(ctx, toName) -> renameTakenMessage(toName)
+                                        InternalStorage.rename(ctx, fromName, toName) -> null
+                                        else -> renameFailedMessage(toName)
                                     }
-                                    InternalStorage.rename(ctx, fromName, toName)
                                 }
-                                if (ok) {
-                                    onRenamed(toName)
-                                } else {
-                                    onError(
-                                        "Could not rename to ‘${stripShaftDocExtension(toName)}’."
-                                    )
-                                }
+                                if (message == null) onRenamed(toName) else refusal = message
                             }
                         }
                     }

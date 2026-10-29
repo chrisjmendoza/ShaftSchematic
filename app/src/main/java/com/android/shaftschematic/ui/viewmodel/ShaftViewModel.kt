@@ -21,7 +21,12 @@ import com.android.shaftschematic.model.*
 import com.android.shaftschematic.ui.input.TaperSide
 import com.android.shaftschematic.ui.input.classifyTaperSideByMidpoint
 import com.android.shaftschematic.ui.order.ComponentKind
+import com.android.shaftschematic.geom.AutoKeyedData
+import com.android.shaftschematic.geom.bodyKeySuccessors
+import com.android.shaftschematic.geom.storedBodyRuns
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
+import com.android.shaftschematic.ui.resolved.autoBodyRuns
+import com.android.shaftschematic.ui.resolved.isAutoBodyId
 import com.android.shaftschematic.ui.resolved.resolveComponents
 import com.android.shaftschematic.util.AppLog
 import com.android.shaftschematic.util.FractionStyle
@@ -39,6 +44,7 @@ import com.android.shaftschematic.util.VerboseLog
 import com.android.shaftschematic.data.AutosaveManager
 import com.android.shaftschematic.data.isDefaultSession
 import com.android.shaftschematic.data.shouldWriteDraft
+import com.android.shaftschematic.ui.util.oalMoveSummary
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.collectLatest
@@ -129,7 +135,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _currentDocumentName.value = entry.documentName
         draftPersisted = true
         // Session boundary: undo starts fresh from the restored draft.
-        clearEditHistory()
+        reseedEditHistory()
     }
 
     /**
@@ -243,9 +249,53 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
      */
     internal fun updateSpec(target: SpecTarget, transform: (ShaftSpec) -> ShaftSpec) {
         when (target) {
-            SpecTarget.ORIGINAL -> _spec.update(transform)
+            SpecTarget.ORIGINAL -> {
+                val before = _spec.value
+                _spec.update(transform)
+                followAutoBodyKeys(before, _spec.value)
+            }
             SpecTarget.FINAL -> _finalSpec.update { cur -> if (cur == null) null else transform(cur) }
         }
+    }
+
+    /**
+     * Carries the data keyed to a bare-shaft (auto) body across an ORIGINAL edit that gave it a
+     * new id. An auto body's id is its span, so a neighbour's length or position change
+     * re-identifies the gap, and the readings, dragged stations, count override, pits and Ø
+     * readings on it would stop drawing (emulator QA: a 7/16" liner correction took two typed
+     * TIRs off the sheet). Unambiguous successors only — a split or a merge leaves the old keys
+     * orphaned at render, as before (`geom/AutoBodyRekeyMath.kt`). The same carry follows a
+     * body through PROMOTION ("Explicit body" adds a stored body with a new id on exactly the
+     * run's span) and DEMOTION (the auto run that then fills exactly the removed body's span).
+     *
+     * Written synchronously with the spec edit, before the history recorder runs (it reads
+     * [currentEditState] at collection time), so the edit and the re-key are ONE undo step and
+     * Undo restores the old geometry with the old keys together. The FINAL drawing carries no
+     * id-keyed data, so only the original passes through here; loads and undo/redo write
+     * `_spec` directly and are never re-keyed.
+     */
+    private fun followAutoBodyKeys(before: ShaftSpec, after: ShaftSpec) {
+        if (before == after) return
+        val data = AutoKeyedData(
+            readings = _runoutReadings.value,
+            placements = _runoutStationPlacements.value,
+            stationCountOverrides = _runoutConfig.value.componentOverrides,
+            wearRecord = _wearRecord.value,
+        )
+        val beforeBodyIds = before.bodies.mapTo(HashSet()) { it.id }
+        if (data.referencedIds().none { isAutoBodyId(it) || it in beforeBodyIds }) return
+        val successors = bodyKeySuccessors(
+            autoBefore = autoBodyRuns(resolveComponents(before)),
+            autoAfter = autoBodyRuns(resolveComponents(after)),
+            explicitBefore = storedBodyRuns(before),
+            explicitAfter = storedBodyRuns(after),
+        )
+        val rekeyed = data.rekeyedFor(successors)
+        if (rekeyed == data) return
+        _runoutReadings.value = rekeyed.readings
+        _runoutStationPlacements.value = rekeyed.placements
+        _runoutConfig.update { it.copy(componentOverrides = rekeyed.stationCountOverrides) }
+        _wearRecord.value = rekeyed.wearRecord
     }
 
     /**
@@ -673,6 +723,17 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         updateHistoryFlags()
     }
 
+    /**
+     * Drop all undo/redo history and seed the head with the CURRENT state. Every boundary calls
+     * this once its state is fully applied: whether the recorder has already seen that state or
+     * sees it later, the user's first edit after the boundary is then an undo step (emulator
+     * QA: the first edit after resuming a draft could not be undone).
+     */
+    internal fun reseedEditHistory() {
+        editHistory.clear(seed = currentEditState())
+        updateHistoryFlags()
+    }
+
     /** Apply a restored [EditState] to every undoable flow without re-recording it. */
     private fun applyEditState(e: EditState) {
         isRestoringHistory = true
@@ -730,7 +791,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                     _currentDocumentName.value = newest.documentName
                     draftPersisted = true
                     // Session boundary: undo must not cross back into the pre-restore blank.
-                    clearEditHistory()
+                    reseedEditHistory()
                 } catch (t: Exception) {
                     // The session simply starts blank; the user sees a draft that silently
                     // failed to come back, which is unreportable without this line.
@@ -866,31 +927,24 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         // --- SESSION UNDO/REDO RECORDER ---
         // Central recording of every undoable edit. No debounce operator here on purpose —
         // coalescing (bursts → one step) is SessionHistory's job, driven by the wall clock.
-        // The first emission seeds the history head; subsequent genuine changes become steps.
+        // Session boundaries seed the head (reseedEditHistory); genuine changes become steps.
         // Restores (undo/redo) re-emit the restored state, but SessionHistory.record no-ops it
         // (equal to head) and isRestoringHistory guards the application block as well.
-        @Suppress("UNCHECKED_CAST")
-        // Flow.combine overload for >5 flows returns Array<Any?>. runoutConfig is observed
-        // but only its override slice reaches the EditState: a slider commit re-emits here,
-        // produces an identical snapshot, and SessionHistory.record no-ops it.
+        //
+        // The combine is only the TRIGGER: what gets recorded is currentEditState(), read at
+        // collection time. The combined tuple fills in one flow at a time, so a boundary that
+        // writes several flows (open, template, new) emitted a mixed state — the new spec with
+        // the previous job's wear, readings and undercuts — and recorded it as an undo step:
+        // one Undo after opening a job poured the last job's measurements into it (emulator QA).
+        // runoutConfig is observed but only its override slice reaches the EditState: a slider
+        // commit re-emits here, produces an identical snapshot, and SessionHistory.record no-ops it.
         viewModelScope.launch {
             combine(
                 spec, wearRecord, runoutReadings, undercutRecord,
                 runoutStationPlacements, runoutConfig, finalSpec
-            ) { values: Array<Any?> ->
-                check(values.size == 7) { "Undo combine expected 7 values, got ${values.size}" }
-                EditState(
-                    spec = values[0] as ShaftSpec,
-                    finalSpec = values[6] as ShaftSpec?,
-                    wearRecord = values[1] as WearRecord,
-                    runoutReadings = values[2] as RunoutReadings,
-                    runoutStationPlacements = values[4] as RunoutStationPlacements,
-                    stationCountOverrides = (values[5] as RunoutConfig).componentOverrides,
-                    undercutRecord = values[3] as UndercutRecord,
-                )
-            }.collect { edit ->
+            ) { _: Array<Any?> -> }.collect {
                 if (isRestoringHistory) return@collect
-                editHistory.record(edit, System.currentTimeMillis())
+                editHistory.record(currentEditState(), System.currentTimeMillis())
                 updateHistoryFlags()
             }
         }
@@ -1404,7 +1458,14 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Set shaft overall length (mm) on [target]'s drawing. Clamped to ≥ 0. */
     fun onSetOverallLengthMm(valueMm: Float, target: SpecTarget = SpecTarget.ORIGINAL) {
+        val before = specValue(target)
         updateSpec(target) { it.withNewOal(valueMm) }
+        // The re-anchor of FWD-measured parts is silent in the model; say what it moved, so an
+        // OAL correction that carries a liner into another part is not a mystery (on-device
+        // report). Nothing moved → no snackbar.
+        oalMoveSummary(before, specValue(target), _unit.value)?.let { message ->
+            viewModelScope.launch { _uiEvents.emit(UiEvent.ShowOalMovedSnack(message)) }
+        }
     }
 
     /** Parses text in current UI units and forwards to [onSetOverallLengthMm]. */

@@ -90,11 +90,16 @@ class SessionHistory<T>(
         return next
     }
 
-    /** Drop all history (both stacks and the head). Used at document/session boundaries. */
-    fun clear() {
+    /**
+     * Drop all history (both stacks). Used at document/session boundaries. With a [seed] the
+     * head is that state, so the next [record] of a different state is an undo step; with none
+     * the next [record] becomes the head and creates no step — which, when the boundary's own
+     * state was already recorded before the clear, swallows the user's first edit.
+     */
+    fun clear(seed: T? = null) {
         undoStack.clear()
         redoStack.clear()
-        current = null
+        current = seed
         lastRecordMs = null
     }
 

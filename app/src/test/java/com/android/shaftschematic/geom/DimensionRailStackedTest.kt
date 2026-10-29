@@ -83,8 +83,9 @@ class DimensionRailStackedTest {
         val label = plan.placements[0].label
 
         // Rail 1's extension at x=300 runs from ITS rail line (y=170) down to the object, so the
-        // label clears it either by sliding aside or by rising above its top end — this label is
-        // wider than its own span and has no slide room, so the planner lifts it instead.
+        // label clears it by sliding aside or rising above its top end — this label is wider than
+        // its own span and has no slide room over it, so it steps just outside its span, past the
+        // extension line, on its own rail's band.
         val extensionBox = DimensionRailLayout.Box(
             300f - DimensionRailLayout.LINE_HALF_CLEAR, 170f,
             300f + DimensionRailLayout.LINE_HALF_CLEAR, Float.MAX_VALUE,
@@ -93,7 +94,11 @@ class DimensionRailStackedTest {
             "label $label should not overlap the extension line at x=300",
             !label.intersects(extensionBox),
         )
-        assertTrue("the label should have been lifted clear", label.bottom < 170f)
+        assertTrue("the label should sit right of the extension line", label.left > 300f)
+        assertEquals(
+            "...at its own rail's height, not bumped",
+            200f - single.aboveDy + single.ascent, label.top, 1e-3f,
+        )
     }
 
     @Test

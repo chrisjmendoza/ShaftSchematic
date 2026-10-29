@@ -74,53 +74,56 @@ fun ShaftSpec.buildPhysicalKeyOrder(): List<ComponentKey> {
  * warnings against bodies that aren't even drawn there. Excluded threads
  * ([Threads.excludeFromOAL] = true) are skipped.
  */
-fun ShaftSpec.collidingIds(): Set<String> {
+fun ShaftSpec.collidingIds(): Set<String> =
+    collisionParticipants().let { parts ->
+        val result = mutableSetOf<String>()
+        for (i in parts.indices) for (j in i + 1 until parts.size) {
+            val a = parts[i]; val b = parts[j]
+            if (spansOverlapMm(a.startFromAftMm, a.lengthMm, b.startFromAftMm, b.lengthMm)) {
+                result += a.id; result += b.id
+            }
+        }
+        result
+    }
+
+/**
+ * The components [id] overlaps, by the same rule as [collidingIds] — every taper, OAL-counted
+ * thread and liner against every other — ordered AFT → FWD. Empty when [id] collides with
+ * nothing (or is a body, an excluded thread or not a component). The card's overlap chip and
+ * the Add dialogs name these partners by their card titles, so "overlaps" always says WHAT.
+ */
+fun ShaftSpec.collisionPartnerIds(id: String): List<String> {
+    val parts = collisionParticipants()
+    val self = parts.firstOrNull { it.id == id } ?: return emptyList()
+    return collisionPartnerIdsForSpan(self.startFromAftMm, self.lengthMm, excludeId = id)
+}
+
+/**
+ * The components a span [startMm] … [startMm] + [lengthMm] would overlap if it were a taper,
+ * OAL-counted thread or liner — [collidingIds]' rule applied to a span that is not stored yet
+ * (an Add dialog's proposal, a card's pending edit). [excludeId] is the span's own component,
+ * if it has one. Ordered AFT → FWD.
+ */
+fun ShaftSpec.collisionPartnerIdsForSpan(
+    startMm: Float,
+    lengthMm: Float,
+    excludeId: String? = null,
+): List<String> =
+    collisionParticipants()
+        .filter { it.id != excludeId && spansOverlapMm(startMm, lengthMm, it.startFromAftMm, it.lengthMm) }
+        .sortedWith(compareBy<Segment>({ it.startFromAftMm }, { it.id }))
+        .map { it.id }
+
+/** Tapers, OAL-counted threads and liners — the kinds that collide. Bodies are fillers. */
+private fun ShaftSpec.collisionParticipants(): List<Segment> =
+    tapers + threads.filter { !it.excludeFromOAL } + liners
+
+/** Strict overlap of two axial spans; endpoints touching within 1e-3 mm are allowed. */
+private fun spansOverlapMm(aStart: Float, aLen: Float, bStart: Float, bLen: Float): Boolean {
     val eps = 1e-3f
-
-    fun overlaps(aStart: Float, aLen: Float, bStart: Float, bLen: Float): Boolean {
-        val aEnd = aStart + aLen
-        val bEnd = bStart + bLen
-        return (aStart < bEnd - eps) && (aEnd > bStart + eps)
-    }
-
-    val result = mutableSetOf<String>()
-    val activeThreads = threads.filter { !it.excludeFromOAL }
-
-    for (i in tapers.indices) for (j in i + 1 until tapers.size) {
-        val a = tapers[i]; val b = tapers[j]
-        if (overlaps(a.startFromAftMm, a.lengthMm, b.startFromAftMm, b.lengthMm)) {
-            result += a.id; result += b.id
-        }
-    }
-    for (t in tapers) for (th in activeThreads) {
-        if (overlaps(t.startFromAftMm, t.lengthMm, th.startFromAftMm, th.lengthMm)) {
-            result += t.id; result += th.id
-        }
-    }
-    for (t in tapers) for (ln in liners) {
-        if (overlaps(t.startFromAftMm, t.lengthMm, ln.startFromAftMm, ln.lengthMm)) {
-            result += t.id; result += ln.id
-        }
-    }
-    for (i in activeThreads.indices) for (j in i + 1 until activeThreads.size) {
-        val a = activeThreads[i]; val b = activeThreads[j]
-        if (overlaps(a.startFromAftMm, a.lengthMm, b.startFromAftMm, b.lengthMm)) {
-            result += a.id; result += b.id
-        }
-    }
-    for (th in activeThreads) for (ln in liners) {
-        if (overlaps(th.startFromAftMm, th.lengthMm, ln.startFromAftMm, ln.lengthMm)) {
-            result += th.id; result += ln.id
-        }
-    }
-    for (i in liners.indices) for (j in i + 1 until liners.size) {
-        val a = liners[i]; val b = liners[j]
-        if (overlaps(a.startFromAftMm, a.lengthMm, b.startFromAftMm, b.lengthMm)) {
-            result += a.id; result += b.id
-        }
-    }
-
-    return result
+    val aEnd = aStart + aLen
+    val bEnd = bStart + bLen
+    return (aStart < bEnd - eps) && (aEnd > bStart + eps)
 }
 
 /**
@@ -353,8 +356,8 @@ internal fun carryBodyKeyway(from: Body, to: Body): Body {
 }
 
 /**
- * Carries [from]'s **draw-only** decisions — name, Ø/name visibility, the shade override, and
- * the compression opt-out — onto [to] (a fragment/merge/expansion of the same material). Nothing
+ * Carries [from]'s **draw-only** decisions — name, Ø/name visibility, the shade override, the
+ * compression opt-out, and the length-rail override — onto [to] (a fragment/merge/expansion of the same material). Nothing
  * here is geometry, so unlike the keyway there is no fit test: every piece of one authored
  * body prints the way that body was authored to print.
  *
@@ -368,6 +371,7 @@ internal fun carryBodyDisplay(from: Body, to: Body): Body = to.copy(
     showNameOnDrawing = from.showNameOnDrawing,
     shadeOnDrawing = from.shadeOnDrawing,
     compressOnDrawing = from.compressOnDrawing,
+    showDimensionRail = from.showDimensionRail,
 )
 
 /**

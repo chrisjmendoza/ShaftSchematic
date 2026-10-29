@@ -36,7 +36,17 @@ class DiameterLeaderRenderer(
     private val blankRuleWidth: Float = 40f,
     /** Set dual values as a two-line stack — see `util/DualLabelRenderer.kt`. */
     private val dualStacked: Boolean = false,
+    /**
+     * The content area a label must stay inside — a label that would run past [contentRight]
+     * hangs left of its leader instead ([DiameterCalloutLayout.labelLeft]). Unbounded by default.
+     */
+    private val contentLeft: Float = Float.NEGATIVE_INFINITY,
+    private val contentRight: Float = Float.POSITIVE_INFINITY,
 ) {
+    /** Where [call]'s label starts, left of or right of its leader — ONE answer for tiers, occupancy and ink. */
+    private fun textLeftFor(call: DiaCallout, anchorX: Float): Float =
+        DiameterCalloutLayout.labelLeft(anchorX, labelWidth(call), leaderDogleg, contentLeft, contentRight)
+
     /**
      * Vertical distance between stacked BELOW-side rows.
      *
@@ -60,9 +70,9 @@ class DiameterLeaderRenderer(
     private fun belowTiers(below: List<DiaCallout>): List<Int> {
         val footprints = below.map { call ->
             val anchorX = pageX(call.xMm)
-            val labelLeft = anchorX + leaderDogleg
+            val labelLeft = textLeftFor(call, anchorX)
             val labelRight = labelLeft + labelWidth(call)
-            DiameterCalloutLayout.Footprint(left = anchorX, right = labelRight)
+            DiameterCalloutLayout.Footprint(left = minOf(anchorX, labelLeft), right = maxOf(anchorX, labelRight))
         }
         return DiameterCalloutLayout.assignTiers(footprints)
     }
@@ -96,11 +106,12 @@ class DiameterLeaderRenderer(
                 val x = pageX(call.xMm)
                 val kinkY = shaftBottomY + leaderRise + tiers[i] * tierStep
                 val textY = kinkY + 10f
-                val textLeft = x + leaderDogleg
+                val textLeft = textLeftFor(call, x)
+                val textRight = textLeft + labelWidth(call)
                 add(
                     BelowShaftLabelLayout.Box(
                         left = textLeft,
-                        right = textLeft + labelWidth(call),
+                        right = textRight,
                         top = textY - above,
                         bottom = textY - above + textH,
                     )
@@ -108,8 +119,8 @@ class DiameterLeaderRenderer(
                 // Leader: the vertical drop from the shaft plus the horizontal dogleg into the text.
                 add(
                     BelowShaftLabelLayout.Box(
-                        left = x - LEADER_HALF_W,
-                        right = textLeft,
+                        left = minOf(x - LEADER_HALF_W, textRight),
+                        right = maxOf(textLeft, x + LEADER_HALF_W),
                         top = shaftBottomY,
                         bottom = kinkY + LEADER_HALF_W,
                     )
@@ -145,10 +156,13 @@ class DiameterLeaderRenderer(
                 Triple(s, s + depth, s + depth + 10f)
             }
         }
-        val textX = x + leaderDogleg
+        val textX = if (call.side == LeaderSide.BELOW) textLeftFor(call, x) else x + leaderDogleg
+        // The dogleg runs to the label's NEAR edge — its left edge normally, its right edge when
+        // the label hangs left of the leader.
+        val doglegEnd = if (textX >= x) textX else textX + labelWidth(call)
 
         canvas.drawLine(x, startY, x, kinkY, linePaint)
-        canvas.drawLine(x, kinkY, textX, kinkY, linePaint)
+        canvas.drawLine(x, kinkY, doglegEnd, kinkY, linePaint)
 
         val lbl = label(call)
         canvas.drawDualLabel(lbl, textX, textY, textPaint, dualStacked)

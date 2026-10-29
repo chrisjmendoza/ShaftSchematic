@@ -54,4 +54,46 @@ class AddStartSeedTest {
     fun `an empty shaft seeds at zero`() {
         assertEquals(0f, addStartSeed(ShaftSpec(overallLengthMm = oal)).startMm, 0f)
     }
+
+    /* ── A seed must be FREE for the dialog's own length ─────────────────────── */
+
+    private val covered = ShaftSpec(overallLengthMm = oal, tapers = listOf(aftTaper, fwdTaper), liners = listOf(liner))
+
+    @Test
+    fun `a span that fits the first bare span keeps it`() {
+        assertEquals(300f, addStartSeed(covered, lengthMm = 500f).startMm, 0.01f)
+    }
+
+    /** The bare span 300–1000 is too short for an 800 liner: it would open on "Overlaps AFT Liner". */
+    @Test
+    fun `an AFT seed that would collide moves to the first free span that holds the length`() {
+        assertEquals(1400f, addStartSeed(covered, lengthMm = 800f).startMm, 0.01f)
+    }
+
+    /** From FWD the seed is flush with the FWD face — onto the FWD taper here — so it fits from that end. */
+    @Test
+    fun `a FWD seed that would collide moves to the FWD-most free span, flush against its FWD end`() {
+        assertEquals(oal - 300f - 800f, addStartSeed(covered, lengthMm = 800f, fromFwd = true).startMm, 0.01f)
+        assertEquals("shown as 300 from the FWD face", 300f, addSeedFromFwdMm(covered, 800f), 0.01f)
+    }
+
+    @Test
+    fun `a free FWD face seeds at zero from FWD`() {
+        val open = ShaftSpec(overallLengthMm = oal, tapers = listOf(aftTaper), liners = listOf(liner))
+        assertEquals(0f, addSeedFromFwdMm(open, 800f), 0.01f)
+    }
+
+    /** Bodies are fillers: a liner seeded over an explicit body is not a collision. */
+    @Test
+    fun `an explicit body does not push the seed`() {
+        val withBody = covered.copy(
+            bodies = listOf(com.android.shaftschematic.model.Body(id = "b", startFromAftMm = 1400f, lengthMm = 2300f, diaMm = 200f)),
+        )
+        assertEquals(1400f, addStartSeed(withBody, lengthMm = 800f).startMm, 0.01f)
+    }
+
+    @Test
+    fun `with no free span long enough the seed stands`() {
+        assertEquals(300f, addStartSeed(covered, lengthMm = 3000f).startMm, 0.01f)
+    }
 }

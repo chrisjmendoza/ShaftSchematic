@@ -46,9 +46,15 @@ class TaperRateTest {
     }
 
     @Test fun parseRateText_bareDecimalBelowOne_returnedAsIs() {
-        val r = ShaftViewModel.parseRateText("0.5")
+        val r = ShaftViewModel.parseRateText("0.0625")
         assertNotNull(r)
-        assertEquals(0.5f, r!!, 1e-5f)
+        assertEquals(0.0625f, r!!, 1e-5f)
+    }
+
+    @Test fun parseRateText_bareSteepDecimal_isAmbiguous() {
+        // .5 would be a 6"/ft taper: it is the per-foot figure typed without its /ft.
+        assertNull(ShaftViewModel.parseRateText("0.5"))
+        assertNull(ShaftViewModel.parseRateText(".75"))
     }
 
     @Test fun parseRateText_blank_returnsNull() {

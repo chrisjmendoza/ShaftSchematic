@@ -1,15 +1,25 @@
 package com.android.shaftschematic.util
 
 /**
- * Canonical numeric input filter.
+ * Canonical numeric input filter — permissive while typing; whether the text is a number is the
+ * parser's call at commit (`util/Parsing.kt`), so this never judges the shape, only drops
+ * characters no spelling the parser reads could use.
  *
  * Rules:
  * - Digits 0–9 always allowed.
- * - One optional leading '-' when [allowNegative] is true.
- * - One '.' decimal point.
- * - One '/' fraction slash when [allowFraction] is true.
- * - Spaces allowed only when [allowFraction] is true (e.g., "1 1/2").
- * - Disallows alpha chars, scientific notation, units, multiple dots/slashes.
+ * - One optional leading '-' sign when [allowNegative] is true.
+ * - One '.' decimal point; ',' anywhere before it (a decimal comma `1,5`, or thousands groups
+ *   `1,234.5` — the parser decides which, and refuses the ambiguous `1,500`).
+ * - When [allowFraction] is true: one '/' fraction slash, spaces (`1 1/2`), and ONE hyphen
+ *   separating a whole number from its fraction (`10-1/4`) — only right after a digit and only
+ *   before the slash. Dropping that hyphen would join the whole number and the numerator into a
+ *   different, valid number (`101/4`).
+ * - One ':' for ratio entry like `1:12` when [allowColon] is true.
+ * - A trailing unit suffix — the characters of `mm` and `in` and the inch marks `"`, `″`, `'` —
+ *   is kept at the END of the text, so the parser can read it: `260mm` in an inch drawing is
+ *   260 mm, and a suffix silently eaten here would be stored in the wrong unit. A stock numeric
+ *   keypad cannot type letters; paste and hardware keyboards can.
+ * - Anything else (other letters, scientific notation, extra dots or slashes) is dropped.
  */
 fun filterNumericInput(
     raw: String,
@@ -17,38 +27,51 @@ fun filterNumericInput(
     allowFraction: Boolean,
     allowColon: Boolean = false
 ): String {
+    // The trailing run of suffix characters survives as typed; the head is filtered below.
+    var tailStart = raw.length
+    while (tailStart > 0 && raw[tailStart - 1] in UNIT_SUFFIX_INPUT_CHARS) tailStart--
+    val head = raw.substring(0, tailStart)
+    val tail = raw.substring(tailStart)
+
     var dotSeen = false
     var slashSeen = false
     var colonSeen = false
     var signSeen = false
+    var hyphenSeen = false
     var sawNonSpace = false
+    var lastNonSpace: Char? = null
     val sb = StringBuilder(raw.length)
 
-    raw.forEach { ch ->
+    fun keep(ch: Char) {
+        sb.append(ch)
+        sawNonSpace = true
+        lastNonSpace = ch
+    }
+
+    head.forEach { ch ->
         when {
-            ch.isDigit() -> {
-                sb.append(ch)
-                sawNonSpace = true
-            }
+            ch.isDigit() -> keep(ch)
             ch == '-' && allowNegative && !signSeen && !sawNonSpace -> {
-                sb.append(ch)
+                keep(ch)
                 signSeen = true
-                sawNonSpace = true
+            }
+            ch == '-' && allowFraction && !hyphenSeen && !slashSeen &&
+                lastNonSpace?.isDigit() == true -> {
+                keep(ch)
+                hyphenSeen = true
             }
             ch == '.' && !dotSeen -> {
-                sb.append(ch)
+                keep(ch)
                 dotSeen = true
-                sawNonSpace = true
             }
+            ch == ',' && !dotSeen -> keep(ch)
             ch == '/' && allowFraction && !slashSeen -> {
-                sb.append(ch)
+                keep(ch)
                 slashSeen = true
-                sawNonSpace = true
             }
             ch == ':' && allowColon && !colonSeen -> {
-                sb.append(ch)
+                keep(ch)
                 colonSeen = true
-                sawNonSpace = true
             }
             ch == ' ' && allowFraction -> {
                 sb.append(ch)
@@ -56,8 +79,11 @@ fun filterNumericInput(
         }
     }
 
-    return sb.toString()
+    return sb.append(tail).toString()
 }
+
+/** Characters of the unit suffixes the parser reads (`mm`, `in`, `"`, `″`, `''`). */
+private const val UNIT_SUFFIX_INPUT_CHARS = "mMiInN\"″'"
 
 /**
  * Input filter for a taper-rate field — the ONE acceptance rule shared by the taper card and

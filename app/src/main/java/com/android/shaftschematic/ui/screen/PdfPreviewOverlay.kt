@@ -576,6 +576,8 @@ internal fun RunoutWearOptionsSheet(
     heightScale: Float = 1f,
     heightSliderBase: Float = 1f,
     heightSliderMaxDiaMm: Float = 10f,
+    /** The tallest this document draws the shaft (`runoutSheetMaxShaftHeightPt`); no cap by default. */
+    heightSliderMaxDrawnPt: Float = Float.MAX_VALUE,
     /**
      * Shows the per-job "Liner compression" pair (`RunoutConfig.linersProportional` +
      * `linerCompression`). On for the two documents `composeRunoutPdf` produces — one
@@ -713,6 +715,7 @@ internal fun RunoutWearOptionsSheet(
                         heightScale = heightScale,
                         baseScale = heightSliderBase,
                         maxDiaMm = heightSliderMaxDiaMm,
+                        maxDrawnHeightPt = heightSliderMaxDrawnPt,
                         onCommit = { vm.setRunoutHeightScale(it) },
                         onDrag = { tuning?.heightScale = it },
                     )

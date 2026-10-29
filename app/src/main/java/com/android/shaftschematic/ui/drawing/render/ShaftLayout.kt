@@ -59,6 +59,9 @@ object ShaftLayout {
      * @param rightPx Canvas right
      * @param bottomPx Canvas bottom
      * @param marginPx Inner margin on all sides (default 12 px)
+     * @param extentMm An extra axial range (mm) the window must also hold — the editor preview's
+     *   problem marks, so a part hanging past an end stays on screen. Null (every other canvas)
+     *   leaves the window exactly as before; the OAL itself is never changed.
      */
     fun compute(
         spec: ShaftSpec,
@@ -67,7 +70,8 @@ object ShaftLayout {
         rightPx: Float,
         bottomPx: Float,
         marginPx: Float = 12f,
-        resolvedComponents: List<ResolvedComponent>? = null
+        resolvedComponents: List<ResolvedComponent>? = null,
+        extentMm: Pair<Float, Float>? = null,
     ): Result {
         // Normalize rect
         val L = min(leftPx, rightPx)
@@ -96,8 +100,8 @@ object ShaftLayout {
         val excludedFwdMax = spec.threads
             .filter { it.excludeFromOAL && !it.isAftEnd }
             .maxOfOrNull { it.startFromAftMm + it.lengthMm } ?: spec.overallLengthMm
-        val minXMm = min(0f, excludedAftMin)
-        val maxXMm = max(max(1f, spec.overallLengthMm), excludedFwdMax)
+        val minXMm = min(min(0f, excludedAftMin), extentMm?.first ?: 0f)
+        val maxXMm = max(max(max(1f, spec.overallLengthMm), excludedFwdMax), extentMm?.second ?: 0f)
         val axialSpanMm = maxXMm - minXMm
 
         // Radial span (mm) — use max diameter across all components (and at least a small minimum)

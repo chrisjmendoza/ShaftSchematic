@@ -13,6 +13,8 @@ import com.android.shaftschematic.model.WearSpot
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.settings.RunoutConfig
 import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.util.DisplayUnits
+import com.android.shaftschematic.geom.effectiveWearTraceDepthFrac
 import com.android.shaftschematic.ui.resolved.resolveComponents
 import com.android.shaftschematic.util.FractionStyle
 import com.android.shaftschematic.util.FractionTypography
@@ -38,6 +40,10 @@ import java.io.FileOutputStream
  * Run (PowerShell, repo root):
  * `$env:SCHEMATIC_RENDER_DIR = '<dir>'; .\gradlew.bat :app:testDebugUnitTest --tests "com.android.shaftschematic.pdf.SchematicRenderReviewTest" --rerun`
  * (`--rerun` because the env var is not a task input.)
+ *
+ * `SCHEMATIC_RENDER_FIXTURES` (optional, `;`-separated `.shaft` files or directories of them) adds
+ * the full document set for each job — schematic, consolidated (as saved, Schematic + Runout, and
+ * both as blank drafts), classic runout, wear and undercut — named `<job>_<sheet>.png`.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -178,6 +184,78 @@ class SchematicRenderReviewTest {
             config = midTaper.runoutConfig.copy(showDyePenTest = true, showCouplingFace = true),
             wearRecord = midTaper.wearRecord.copy(dyePenResult = DyePenResult.PASS),
         )
+    }
+
+    /** Every sheet of every job named by `SCHEMATIC_RENDER_FIXTURES`. */
+    @Test
+    fun `fixture jobs render every document`() {
+        val list = System.getenv("SCHEMATIC_RENDER_FIXTURES")
+        assumeTrue("SCHEMATIC_RENDER_FIXTURES not set; job renders skipped", list != null)
+        val files = list!!.split(';').filter { it.isNotBlank() }.map(::File).flatMap { f ->
+            if (f.isDirectory) f.listFiles { x -> x.name.endsWith(".shaft") }!!.sorted() else listOf(f)
+        }
+        for (f in files) renderJob(f.nameWithoutExtension, ShaftDocCodec.decode(f.readText()))
+    }
+
+    private fun renderJob(job: String, doc: ShaftDocCodec.Decoded) {
+        val unit = doc.preferredUnit ?: UnitSystem.INCHES
+        val units = DisplayUnits(unit, doc.unitOverrides, doc.dualUnits)
+        val resolved = resolveComponents(doc.spec)
+        val prefs = PdfPrefs()
+        fun consolidated(name: String, bubbles: Boolean, wear: Boolean, blank: Boolean, classic: Boolean = false) {
+            val (bmp, c) = bitmapPage()
+            composeRunoutPdfOnCanvas(
+                c, PDF_PAGE_WIDTH_PT.toFloat(), PDF_PAGE_HEIGHT_PT.toFloat(),
+                spec = doc.spec, config = doc.runoutConfig, project = doc.project(), unit = unit,
+                displayUnits = units, pdfPrefs = prefs, resolvedComponents = resolved,
+                runoutReadings = doc.runoutReadings, runoutStationPlacements = doc.runoutStationPlacements,
+                wearRecord = if (classic) WearRecord() else doc.wearRecord,
+                blankValues = blank, consolidated = !classic,
+                includeBubbles = bubbles, includeWearInfo = wear,
+            )
+            save("${job}_$name.png", bmp)
+        }
+        run {
+            val (bmp, c) = bitmapPage()
+            composeShaftPdfOnCanvas(
+                c, PDF_PAGE_WIDTH_PT.toFloat(), PDF_PAGE_HEIGHT_PT.toFloat(),
+                spec = doc.spec, unit = unit, project = doc.project(), appVersion = "review",
+                filename = job, pdfPrefs = prefs, resolvedComponents = resolved,
+                heightScale = doc.runoutConfig.heightScale,
+                linerMinFracOfTrue = doc.runoutConfig.linerMinFracOfTrue,
+                displayUnits = units,
+            )
+            save("${job}_schematic.png", bmp)
+        }
+        consolidated("consolidated", bubbles = true, wear = true, blank = false)
+        consolidated("consolidated_sr", bubbles = true, wear = false, blank = false)
+        consolidated("consolidated_blank", bubbles = true, wear = true, blank = true)
+        consolidated("consolidated_sr_blank", bubbles = true, wear = false, blank = true)
+        consolidated("runout", bubbles = true, wear = false, blank = false, classic = true)
+        run {
+            val (bmp, c) = bitmapPage()
+            composeWearPdf(
+                page = pageOn(c, PDF_PAGE_WIDTH_PT, PDF_PAGE_HEIGHT_PT),
+                spec = doc.spec, project = doc.project(), unit = unit, displayUnits = units,
+                pdfPrefs = prefs, resolvedComponents = resolved, wearRecord = doc.wearRecord,
+                traceDepthFrac = effectiveWearTraceDepthFrac(doc.wearRecord.traceDepthFrac, prefs.wearTraceDepthFrac),
+                heightScale = doc.runoutConfig.heightScale,
+            )
+            save("${job}_wear.png", bmp)
+        }
+        run {
+            val o = undercutSheetOrientation(doc.spec, resolved, doc.undercutRecord, false)
+            val bmp = Bitmap.createBitmap((o.widthPt * SCALE).toInt(), (o.heightPt * SCALE).toInt(), Bitmap.Config.ARGB_8888)
+            bmp.eraseColor(Color.WHITE)
+            val c = Canvas(bmp)
+            c.scale(SCALE, SCALE)
+            composeUndercutPdf(
+                pageOn(c, o.widthPt, o.heightPt), doc.spec, doc.project(), unit,
+                displayUnits = units, pdfPrefs = prefs, resolvedComponents = resolved,
+                undercutRecord = doc.undercutRecord,
+            )
+            save("${job}_undercuts.png", bmp)
+        }
     }
 
     private companion object {

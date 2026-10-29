@@ -1715,6 +1715,16 @@ strips minus a 22 pt orientation row, so a lone full-width strip owns ≈ 414 pt
   lateral deviation is ≈ 0.29 × amp (the S) and ≈ 0.43 × amp (the return sweep), so ≈ 8 pt at the
   cap — inside the 16 pt `UNDERCUT_STRIP_EDGE_INSET_PT`. The profile-form page's mid-run
   compression break is **not** capped (one shaft, one scale, nothing to collide with).
+- **Fills end ON the end break's S** — the body-run rule (`breakStubFillPath`) for a window end
+  that cuts any filled component, a TAPER included. Each component fill runs past a cut end by
+  the glyph's amplitude and is clipped to the band between the two end edges
+  (`breakWindowClipPath`, `pdf/BreakSymbol.kt`, built from the same `appendBreakEdgeS` the
+  stroke uses; a physical end clips flat). ONE `undercutWindowEndEdge` answers both the stroked
+  end and the clip on the sheet; the detail canvas clips its liner fill to the same path
+  (`asComposePath`) off its own end radii, and its bodies/tapers stay outline-only. A fill that
+  stopped on a straight vertical at the window end left a doubled grey lobe on one side of the S
+  and an unfilled crescent inside the outline on the other (Emulator QA, a liner strip's AFT end
+  cutting the AFT taper). Outlines keep the window range.
 - The strips-own-page banding calls `computeWearVerticalLayout`/`computeWearStripGridLayout` with
   the profile parameters **zeroed** (`minProfileHeightPt`/`preferredProfileHeightPt`/
   `profileToStripsGapPt` = 0) and no per-strip growth cap — the banding functions themselves are

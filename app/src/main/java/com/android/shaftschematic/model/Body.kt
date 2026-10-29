@@ -65,6 +65,14 @@ import java.util.UUID
  *   true proportion unless its author re-enables compression (on-device request), and the
  *   card's "Compress on drawing" checkbox is that escape hatch for a body big enough that
  *   pinning it would starve the rest of the shaft.
+ * @property showDimensionRail Whether this body's own LENGTH prints as a dimension span on the
+ *   schematic and the consolidated sheet. Tri-state, draw-only (no geometry, no value rewrite):
+ *   `null` — the default — follows the body's POSITION: on when its stored span touches a shaft
+ *   end face (the body a coupling goes on, whose length the shop needs), off mid-shaft
+ *   (`effectiveBodyDimensionRail`, `ui/resolved/BodyDimensionRail.kt`); an explicit `true` or
+ *   `false` is an authored choice and wins wherever the body sits. Nullable from the start for
+ *   the reason [shadeOnDrawing] is: a non-null default would stamp an authored-looking value onto
+ *   every body of every saved document.
  * @property blendAftMm Axial length of a machined **blend** cut into this body's AFT face
  *   (0 = a square face). The blend runs INWARD from the face, easing from the neighbouring
  *   component's diameter at the face to [diaMm] this far in, so it is machined entirely out
@@ -104,6 +112,7 @@ data class Body(
     val showNameOnDrawing: Boolean? = null,
     val shadeOnDrawing: Boolean? = null,
     val compressOnDrawing: Boolean = true,
+    val showDimensionRail: Boolean? = null,
     val blendAftMm: Float = 0f,
     val blendFwdMm: Float = 0f,
     val blendAftSeal: Boolean = false,

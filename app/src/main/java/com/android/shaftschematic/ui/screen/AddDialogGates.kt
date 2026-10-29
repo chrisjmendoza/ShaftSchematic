@@ -1,5 +1,7 @@
 package com.android.shaftschematic.ui.screen
 
+import com.android.shaftschematic.util.parseFractionOrDecimal
+
 /**
  * File: AddDialogGates.kt
  * Layer: UI → Screen
@@ -15,6 +17,33 @@ package com.android.shaftschematic.ui.screen
  * field that failed to parse arrives as a sentinel (`-1f` for an unresolvable start, `0f`
  * for an unparsed length/diameter) and fails the gate naturally.
  */
+
+/** A FWD-measured liner or taper whose length would carry it past the AFT face. */
+const val ADD_PAST_AFT_END_MSG = "Runs past the AFT end of the shaft"
+
+/**
+ * The Liner/Taper dialogs' physical start (mm from AFT) for the typed [enteredMm]: as typed from
+ * AFT; `OAL − entered − length` from FWD. `-1f` when the entry is unusable — not entered yet, or
+ * a FWD entry that would put the start before the AFT face, which is refused
+ * ([ADD_PAST_AFT_END_MSG], [addDialogFwdStartPastAft]) rather than clamped to 0: a clamp stores
+ * a different FWD distance from the one typed. With no OAL yet a FWD distance has no face to
+ * measure from, and the start is placed at 0.
+ */
+fun addDialogPhysStartMm(isFwd: Boolean, enteredMm: Float, lengthMm: Float, oalMm: Float): Float {
+    if (!isFwd) return enteredMm
+    if (enteredMm < 0f || lengthMm <= 0f) return -1f
+    if (oalMm <= 0f) return 0f
+    val start = oalMm - enteredMm - lengthMm
+    return when {
+        start >= 0f -> start
+        start > -1e-3f -> 0f
+        else -> -1f
+    }
+}
+
+/** True when a FWD-measured [enteredMm] + [lengthMm] would reach past the AFT face. */
+fun addDialogFwdStartPastAft(isFwd: Boolean, enteredMm: Float, lengthMm: Float, oalMm: Float): Boolean =
+    isFwd && oalMm > 0f && enteredMm >= 0f && lengthMm > 0f && oalMm - enteredMm - lengthMm <= -1e-3f
 
 /** Add Body: needs a placeable start and positive length and diameter. */
 fun bodyAddEnabled(startMm: Float, lengthMm: Float, diaMm: Float): Boolean =
@@ -99,10 +128,32 @@ fun couplerBoltSlotBoundsError(
     val lastCenterMm = physStartMm + rowSpanMm
     val eps = 1e-3f
     return when {
-        physStartMm - holeDiaMm * 0.5f < -eps -> "Row extends past the AFT end of the shaft"
+        physStartMm - holeDiaMm * 0.5f < -eps -> BOLT_ROW_PAST_AFT_MSG
         lastCenterMm + holeDiaMm * 0.5f > oalMm + eps -> "Row extends past the end of the shaft"
         else -> null
     }
+}
+
+/** A bolt row whose aft-most hole would sit before the AFT face. */
+const val BOLT_ROW_PAST_AFT_MSG = "Row extends past the AFT end of the shaft"
+
+/** The bolt-slot Count rule, on the card and in `AddCouplerBoltSlotDialog` alike. */
+const val BOLT_SLOT_COUNT_MSG = "Must be a whole number ≥ 1"
+
+/** A typed bolt-slot count: a whole number ≥ 1, or null. Never coerced — `0` is not `1`. */
+fun boltSlotCountOrNull(text: String): Int? = text.trim().toIntOrNull()?.takeIf { it >= 1 }
+
+/**
+ * Why a typed bolt-slot Count cannot be used — [BOLT_SLOT_COUNT_MSG] for a number that is not a
+ * whole number ≥ 1 (`0`, `2.5`, `1/2`). Null for a valid count, for blank, and for text that is
+ * not a number at all (the field's own "not a number" covers that). Shared by the card's
+ * validator and the dialog's error line, so `0` is refused and named on both instead of being
+ * stored as 1 by the dialog and dropped without a word by the card (emulator QA).
+ */
+fun boltSlotCountError(text: String): String? = when {
+    text.isBlank() || parseFractionOrDecimal(text) == null -> null
+    boltSlotCountOrNull(text) == null -> BOLT_SLOT_COUNT_MSG
+    else -> null
 }
 
 /**

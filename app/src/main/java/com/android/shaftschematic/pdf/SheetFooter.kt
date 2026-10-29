@@ -96,6 +96,11 @@ private const val FOOTER_GROWTH_MAX_PT = 48f
 // on the consolidated sheet) — a printed-density 1.35 factor leaves no room to write a value
 // between the rules (on-device report).
 private const val FOOTER_LINE_FACTOR_BLANK = 2.2f
+/**
+ * Tightest handwriting pitch a blank draft's footer gives up room down to when the drawing above
+ * needs it ([footerBlockMinHeightPt]) — ≈ 17 pt on the consolidated sheet, still writable.
+ */
+private const val FOOTER_LINE_FACTOR_BLANK_MIN = 1.7f
 
 // The "body-only" and "single-taper-only" shaft classifiers lived here to decide whether the
 // footer's compression note was worth printing. The note is gone (the S-break says it), and
@@ -310,6 +315,31 @@ internal fun footerBlockHeightPt(
     val base = if (blankValues) FOOTER_BLOCK_BLANK_PT else FOOTER_BLOCK_PT
     val plan = planFooter(rectLeft, rectRight, spec, unit, project, text, cfg, blankValues, displayUnits)
     return max(base, plan.neededHeightPt)
+}
+
+/**
+ * The tightest a BLANK draft's footer band may be squeezed: every wrapped row at
+ * [FOOTER_LINE_FACTOR_BLANK_MIN] — still a hand's width between the rules. A composer whose page
+ * cannot afford its drawing at the height floor reserves less than [footerBlockHeightPt], down to
+ * this, and [drawFooter] fit-clamps its pitch to the band it is handed. A printed footer has no
+ * give: this returns its full reservation.
+ */
+internal fun footerBlockMinHeightPt(
+    rectLeft: Float,
+    rectRight: Float,
+    spec: ShaftSpec,
+    unit: UnitSystem,
+    project: ProjectInfo,
+    text: Paint,
+    cfg: FooterConfig,
+    blankValues: Boolean = false,
+    displayUnits: DisplayUnits = DisplayUnits.single(unit),
+): Float {
+    val full = footerBlockHeightPt(rectLeft, rectRight, spec, unit, project, text, cfg, blankValues, displayUnits)
+    if (!blankValues) return full
+    val plan = planFooter(rectLeft, rectRight, spec, unit, project, text, cfg, blankValues, displayUnits)
+    val tight = plan.wrappedMaxLines * text.textSize * FOOTER_LINE_FACTOR_BLANK_MIN + FOOTER_BAND_PAD_PT
+    return min(full, max(tight, plan.neededHeightPt))
 }
 
 // Internal (not private): the consolidated runout sheet prints the SAME footer block —

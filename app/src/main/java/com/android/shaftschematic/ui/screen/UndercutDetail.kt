@@ -41,8 +41,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Redo
-import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -93,8 +91,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
@@ -168,6 +168,8 @@ import com.android.shaftschematic.model.Undercut
 import com.android.shaftschematic.model.UndercutRecord
 import com.android.shaftschematic.model.UndercutReference
 import com.android.shaftschematic.pdf.formatDiaWithUnit
+import com.android.shaftschematic.pdf.WindowEndEdge
+import com.android.shaftschematic.pdf.breakWindowClipPath
 import com.android.shaftschematic.pdf.buildUndercutStripTitle
 import com.android.shaftschematic.geom.undercutSectionCuts
 import com.android.shaftschematic.util.DisplayUnits
@@ -210,7 +212,7 @@ import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.DualLabel
 import com.android.shaftschematic.util.buildLinerTitleById
 import com.android.shaftschematic.util.toMmOrNull
-import com.android.shaftschematic.util.parseFractionOrDecimal
+import com.android.shaftschematic.util.isLengthText
 import com.android.shaftschematic.ui.input.NumericInputField
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
@@ -1258,20 +1260,7 @@ fun UndercutWindowDetailOverlay(
                         modifier = Modifier.padding(start = 4.dp).weight(1f),
                     )
                     // The document's ONE history, the same steps the Schematic tab's Undo walks.
-                    IconButton(
-                        onClick = onUndo,
-                        enabled = canUndo,
-                        modifier = Modifier.testTag("undercut_detail_undo"),
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = "Undo")
-                    }
-                    IconButton(
-                        onClick = onRedo,
-                        enabled = canRedo,
-                        modifier = Modifier.testTag("undercut_detail_redo"),
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = "Redo")
-                    }
+                    UndoRedoButtons(canUndo, canRedo, onUndo, onRedo, tagPrefix = "undercut_detail")
                     // The drawing's preview and its options without leaving this page or
                     // scrolling the tab to its foot (on-device request).
                     if (onPreview != null) {
@@ -1521,6 +1510,21 @@ fun UndercutWindowDetailOverlay(
                             // Liners paint last so a liner over a body reads as the surface, matching
                             // the max-wins envelope the notch math uses.
                             val eps = 1e-3f
+                            // The strip ends as drawn below — flat at the shaft's own extent, an
+                            // S-break otherwise. The liner fill runs past a cut end by the glyph's
+                            // reach and is clipped to that S, so the shade ends ON the curve (the
+                            // sheet's rule, `breakWindowClipPath`).
+                            val rAft = rPx(outerDiaAt(segs, drawStartMm + eps))
+                            val rFwd = rPx(outerDiaAt(segs, drawEndMm - eps))
+                            val ampAft = if (drawStartMm <= eps) 0f else rAft * UNDERCUT_BREAK_AMP_FRAC_OF_R
+                            val ampFwd = if (drawEndMm >= oalMm - eps) 0f else rFwd * UNDERCUT_BREAK_AMP_FRAC_OF_R
+                            val fillClip = breakWindowClipPath(
+                                WindowEndEdge(lay.startPx, cy - rAft, cy + rAft, ampAft),
+                                WindowEndEdge(lay.endPx, cy - rFwd, cy + rFwd, ampFwd),
+                                yMin = cy - size.height, yMax = cy + size.height,
+                            ).asComposePath()
+                            val fillW0Mm = drawStartMm - ampAft / lay.pxPerMm
+                            val fillW1Mm = drawEndMm + ampFwd / lay.pxPerMm
                             val drawn = resolvedComponents
                                 .filter { it !is ResolvedCouplerBoltSlot }
                                 .sortedBy { if (it is ResolvedLiner) 1 else 0 }
@@ -1582,13 +1586,6 @@ fun UndercutWindowDetailOverlay(
                                 if (rA <= 0f && rB <= 0f) return@forEach
                                 val xa = xPx(a)
                                 val xb = xPx(b)
-                                val path = Path().apply {
-                                    moveTo(xa, cy - rA)
-                                    lineTo(xb, cy - rB)
-                                    lineTo(xb, cy + rB)
-                                    lineTo(xa, cy + rA)
-                                    close()
-                                }
                                 if (rc is ResolvedThread) {
                                     drawThreadStubHatch(
                                         xa, cy - rA, xb, cy + rB, outlineColor,
@@ -1601,7 +1598,18 @@ fun UndercutWindowDetailOverlay(
                                     // second box (on-device report), while an outline reads as the
                                     // shaft continuing under the break edge, matching the wear
                                     // overlay's unfilled neighbor stubs.
-                                    drawPath(path, color = linerFillColor)
+                                    val fa = max(rc.startMmPhysical, fillW0Mm)
+                                    val fb = min(rc.endMmPhysical, fillW1Mm)
+                                    val rFa = rPx(componentDiaAt(rc, fa))
+                                    val rFb = rPx(componentDiaAt(rc, fb))
+                                    val fillPath = Path().apply {
+                                        moveTo(xPx(fa), cy - rFa)
+                                        lineTo(xPx(fb), cy - rFb)
+                                        lineTo(xPx(fb), cy + rFb)
+                                        lineTo(xPx(fa), cy + rFa)
+                                        close()
+                                    }
+                                    clipPath(fillClip) { drawPath(fillPath, color = linerFillColor) }
                                 }
                                 drawLine(outlineColor, Offset(xa, cy - rA), Offset(xb, cy - rB), outlineWidthPx)
                                 drawLine(outlineColor, Offset(xa, cy + rA), Offset(xb, cy + rB), outlineWidthPx)
@@ -1616,8 +1624,6 @@ fun UndercutWindowDetailOverlay(
                             }
 
                             // ── Strip ends: flat at the shaft's own extent, S-curve break otherwise ──
-                            val rAft = rPx(outerDiaAt(segs, drawStartMm + eps))
-                            val rFwd = rPx(outerDiaAt(segs, drawEndMm - eps))
                             if (rAft > 0f) {
                                 if (drawStartMm <= eps) {
                                     drawLine(
@@ -3539,9 +3545,9 @@ internal const val UNDERCUT_FRACTION_HINT = "Decimals or fractions — 5.748, 3 
 internal const val UNDERCUT_DIA_PLACEHOLDER = "e.g. 5.625 or 5 5/8"
 
 /**
- * A card's numeric field: [WearNum]'s arguments (fractions allowed, parsed by
- * [parseFractionOrDecimal], no validator — every card field commits what parses, verbatim) plus
- * the field's [placeholder] and [hint].
+ * A card's numeric field: [WearNum]'s arguments (fractions allowed and a unit suffix read, gated
+ * by [isLengthText]; no validator — every card field commits what parses, verbatim) plus the
+ * field's [placeholder] and [hint].
  */
 @Composable
 private fun UndercutNum(
@@ -3565,7 +3571,7 @@ private fun UndercutNum(
         // cannot reach — the draft was saved before it. A value the field restores still typed
         // is landed in the restored draft instead, so a leave or a confirm finds it there.
         landRestoredEdit = true,
-        parseValid = { parseFractionOrDecimal(it) != null },
+        parseValid = ::isLengthText,
         onCommit = onCommit,
     )
 }

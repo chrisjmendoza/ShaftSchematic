@@ -5,7 +5,7 @@ now implemented on the carousel cards too**, not only in the add dialogs. One sh
 `outsideShaftSpan` (`ui/util/ComponentWarnings.kt`), backs both surfaces — the dialogs' "Falls
 outside shaft span" pre-submit warning (`outsideShaftSpanMessage`, via `collectAddWarnings`) and
 the cards' new "Extends past shaft length" amber chip (`pastShaftEndMessage`, folded into all
-four per-component predicates), plus a spec-level count on the advisory banner. It is
+four per-component predicates), plus a spec-level line on the advisory banner. It is
 **advisory** — oversize is a legal state, the edit commits verbatim, and nothing clamps, blocks a
 commit, or gates export. Separately, a carousel card's **Length field now rejects `≤ 0`**
 (`positiveLengthErrorMm`, `ui/util/StartOverlapValidation.kt`) through the standard validator
@@ -26,7 +26,8 @@ already records the removal correctly. 2026-07-24 — corrected two stale "`Shaf
 (`ShaftSpecTest`, `SampleShaftAssetsTest` bundled-sample sanity checks) — test-only, kept
 deliberately (confirmed in the 2026-07-24 dead-code sweep, not deleted). 2026-07-24 — §3.2/§3.3/§3.5/§4.3: the five warning rules flagged
 "(planned — not yet implemented)" are now implemented in `ui/util/ComponentWarnings.kt`
-(`bodyWarningMessages`, `taperWarningMessages`, `linerWarningMessages`, `specWarningMessages`).
+(`bodyWarningMessages`, `taperWarningMessages`, `linerWarningMessages`, and the spec-level
+banner list, now `specIssues` in `ui/util/SpecIssues.kt`).
 All five are pure, non-blocking, and rules see only **stored** components (auto-bodies are
 invisible to them); thresholds are tunable named constants pending Chris's review. 2026-07-24 — §3.3 noted that taper slope validation/derivation is inert at
 `lengthMm <= 0` (guarded in `TaperRateAuto.kt` / `deriveTaperDiameters`; pinned by unit
@@ -176,7 +177,7 @@ a hard block today:
   overlap/bounds checks in §5 for what actually runs (`startOverlapErrorMm` in
   `ui/util/StartOverlapValidation.kt`). It **is** surfaced, as of 2026-08-29: the same
   comparison the add dialogs use now also runs on the carousel cards and raises an advisory
-  chip and a banner count (see below). Surfaced, never enforced — the edit commits verbatim.
+  chip and a named banner line (see below). Surfaced, never enforced — the edit commits verbatim.
 - `lengthMm > 0` **is** gated at the carousel card's Length field (2026-08-29):
   `positiveLengthErrorMm` (`ui/util/StartOverlapValidation.kt`) returns "Must be > 0" for
   `≤ 0`, and `NumericInputField`'s validator path shows the error, reverts the text, and skips
@@ -200,7 +201,7 @@ Two message wrappers read it, and nothing else may re-derive the comparison:
 | Wrapper | Surface | Text |
 |---------|---------|------|
 | `outsideShaftSpanMessage` | Add dialogs, via `collectAddWarnings` (§5.3) | "Falls outside shaft span (OAL *n*")" / "(OAL *n* mm)" — the OAL in the document's display unit through `formatLenWithUnit` |
-| `pastShaftEndMessage` | Carousel cards, via the four per-component predicates | "Extends past shaft length (OAL *n*")" / "(OAL *n* mm)" — same formatting |
+| `pastShaftEndMessage` | Carousel cards, via the four per-component predicates | "Extends past shaft length (OAL *n*")" / "(OAL *n* mm)" — same formatting — for a span past the OAL; "Extends past the AFT end of the shaft" for one that starts before 0 (both, joined, for one that does both) |
 
 Both are **advisory**: they ride the amber warning chip / advisory banner
 (`tertiaryContainer`), never the error chip, because oversize is a legal state
@@ -380,24 +381,29 @@ Coupler bolt slots are **excluded from all collision detection** (`collisionGrou
 - Unbounded thread or liner
 
 ### 4.3 Full-Spec Non-Blocking Warnings
-- Component overlaps (machinist may intend) *(implemented)*
+- Component overlaps *(implemented; named on the banner 2026-10-28)* — each colliding pair is
+  one banner line, "FWD Liner overlaps Body size transition taper", first in the banner (overlaps
+  block export, §5). The pairs are `collidingIds`/`collisionPartnerIds`'; the export gate's
+  refusal is the banner's first overlap line ("Can't export: …", `overlapExportMessage`).
 - Rapid diameter changes *(planned — not yet implemented)*
 - Tiny segments (e.g., < 1 mm) *(implemented, 2026-07-24 — spec-level count)* —
-  `specWarningMessages(spec)` in `ui/util/ComponentWarnings.kt` counts stored components with
+  `specIssues(spec, unit)` in `ui/util/SpecIssues.kt` names each stored component with
   length in `(0, SHORT_SEGMENT_MM]` (`SHORT_SEGMENT_MM = 1f` mm) across bodies, tapers, liners,
   and non-excluded threads (excluded threads are skipped, matching §3.1/§5.2's treatment of
-  them as outside the envelope), and emits `"1 segment shorter than 1 mm"` /
-  `"$n segments shorter than 1 mm"` when the count is `> 0` — singular/plural like the past-OAL
-  line below. This is in addition to the existing **component-level** short-segment check already
+  them as outside the envelope): "Body #2 is shorter than 1 mm" (2026-10-28 — a count named
+  nothing; on-device report). This is in addition to the existing **component-level** short-segment check already
   folded into `bodyWarningMessages`/`taperWarningMessages`/`linerWarningMessages`/
   `threadWarningMessages` (same `SHORT_SEGMENT_MM` threshold; all four are list-returning, so
   every applicable warning surfaces on the card).
-  `specWarningMessages` is pure and unit-tested and renders as a dismissable banner above the
-  component carousel on the Schematic tab (`ui/screen/SpecWarningBanner.kt`), 2026-08-25.
+  `specIssues` is pure and unit-tested and renders as a dismissable banner above the
+  component carousel on the Schematic tab (`ui/screen/SpecWarningBanner.kt`), each line a button
+  that selects its part; the editor preview marks the same issues in red (`ShaftScreen.md`).
 - Components past the shaft end *(implemented, 2026-08-29 — spec-level count)* —
-  `specWarningMessages` counts stored bodies, tapers, liners, and non-excluded threads failing
-  §3.1a's `outsideShaftSpan`, emitting `"1 component extends past shaft length"` /
-  `"$n components extend past shaft length"`. It qualifies for the banner because it names a
+  `specIssues` names each stored body, taper, liner and non-excluded thread failing
+  §3.1a's `outsideShaftSpan`, with how far, in the document unit: "Body #1 runs 4 13/16" past the
+  FWD end" for spans past the OAL and, separately, "AFT Thread starts 2" before the AFT end" for
+  spans that start before 0 (2026-10-28 — a count named nothing, on-device report; "past shaft
+  length" for a part hanging off the AFT end read as wrong, emulator QA). The two halves are the comparison itself, split only to name the end. It qualifies for the banner because it names a
   problem the user can act on — either the component or the overall length is wrong — and
   because the offending card can be several swipes away in the carousel, so its own chip may
   not be on screen. Still advisory: the state is legal and commits verbatim.
@@ -405,7 +411,7 @@ Coupler bolt slots are **excluded from all collision detection** (`collisionGrou
   also depends on `overallLengthMm`, and a list-only key left the banner stale when the OAL
   alone moved.
 - ~~Zero-body coverage~~ *(implemented 2026-07-24, surfaced 2026-08-25, **removed
-  2026-08-27**)* — `specWarningMessages` used to emit `"No explicit bodies — shaft body is all
+  2026-08-27**)* — the banner's message builder used to emit `"No explicit bodies — shaft body is all
   auto-fill"` when `spec.bodies` was empty. It was not a problem: auto-fill IS the design
   (§ *Bodies are fillers*), so the note fired on every ordinary taper-and-liner shaft, said what
   the carousel card underneath already says ("Body (auto)"), and — routed through an

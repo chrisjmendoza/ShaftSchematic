@@ -50,6 +50,7 @@ import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.filterNumericInput
 import com.android.shaftschematic.util.formatRunoutValue
 import com.android.shaftschematic.util.parseRunoutValueInput
+import com.android.shaftschematic.util.valueForSave
 import kotlin.math.min
 
 /**
@@ -68,12 +69,14 @@ import kotlin.math.min
  *   Save is disabled while the field holds text the parser cannot read, so nothing typed is
  *   ever silently dropped.
  *
- * Hosted in an [ImeResizingAlertDialog], so with the keyboard up the window shrinks to the room
+ * Hosted in an [ImeResizingAlertDialog], so with the keyboard up the dialog sits in the room
  * above it: the ring and the value field scroll, and the title and the three buttons stay on
  * screen (in landscape the keyboard otherwise covers Cancel and Save).
  *
  * Both value and marker are optional and independent. The working state seeds from the passed
- * initial values, so reopening a saved bubble shows its saved data until the user edits it.
+ * initial values, so reopening a saved bubble shows its saved data until the user edits it — and
+ * saving with the value text untouched keeps the STORED TIR exactly, never the rounded display
+ * the field was seeded with.
  *
  * See `docs/archive/RunoutBubbleEditor_PLAN.md` and `model/RunoutReading.kt`.
  *
@@ -91,9 +94,12 @@ fun RunoutBubbleDialog(
 ) {
     // Saveable so a rotation keeps the typed TIR and the placed high spot with the open dialog.
     var markerTick by rememberSaveable { mutableStateOf(initialHighSpotHalfHours) }
+    // The seed is the bubble's 3-decimal display of the stored TIR; Save keeps the stored value
+    // until the field is edited ([valueForSave]), so a re-save never rounds a typed .0015.
     var valueText by rememberSaveable {
         mutableStateOf(initialValueMm?.let { formatRunoutValue(it, unit) } ?: "")
     }
+    var valueEdited by rememberSaveable { mutableStateOf(false) }
     val unitSuffix = if (unit == UnitSystem.INCHES) "in" else "mm"
 
     val ringColor    = MaterialTheme.colorScheme.onSurface
@@ -104,7 +110,7 @@ fun RunoutBubbleDialog(
     val labelStyle   = MaterialTheme.typography.labelMedium.copy(color = labelColor)
 
     // An [ImeResizingAlertDialog]: in landscape the keyboard covered Cancel and Save (on-device
-    // report), so the window resizes above the keyboard and the ring, the value field and the
+    // report), so the dialog sits above the keyboard and the ring, the value field and the
     // high-spot line scroll in the text slot, which gives way while the title and the buttons
     // keep their place. Fixed at the editor's width, so the ring keeps its size.
     ImeResizingAlertDialog(
@@ -174,9 +180,11 @@ fun RunoutBubbleDialog(
                     OutlinedTextField(
                         value = valueText,
                         onValueChange = {
-                            valueText = filterNumericInput(
+                            val filtered = filterNumericInput(
                                 raw = it, allowNegative = false, allowFraction = true, allowColon = false,
                             )
+                            if (filtered != valueText) valueEdited = true
+                            valueText = filtered
                         },
                         singleLine = true,
                         label = { Text("TIR") },
@@ -202,7 +210,9 @@ fun RunoutBubbleDialog(
         // numeric field uses; unreadable text cannot be saved at all — the filter admits `1/64`,
         // so Save must read it, never drop it.
         confirmButton = {
-            val parsedMm = parseRunoutValueInput(valueText, unit)
+            val parsedMm = valueForSave(valueText, valueEdited, initialValueMm) {
+                parseRunoutValueInput(it, unit)
+            }
             Button(
                 onClick = { onSave(parsedMm, markerTick) },
                 enabled = valueText.isBlank() || parsedMm != null,
@@ -211,7 +221,7 @@ fun RunoutBubbleDialog(
         },
         dismissButton = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = { markerTick = null; valueText = "" }) { Text("Clear") }
+                TextButton(onClick = { markerTick = null; valueText = ""; valueEdited = true }) { Text("Clear") }
                 Spacer(Modifier.width(8.dp))
                 TextButton(onClick = onDismiss) { Text("Cancel") }
             }

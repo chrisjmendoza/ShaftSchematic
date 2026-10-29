@@ -113,9 +113,13 @@ Responsibilities
     history cannot flood. `applyEditState` restores only the override slice via
     `_runoutConfig.update { it.copy(componentOverrides = …) }`, never the whole config.
   - A central collector (`combine(spec, wearRecord, runoutReadings, undercutRecord,
-    runoutStationPlacements, runoutConfig, finalSpec)` in `init`) records an
-    `EditState` on every emission via
-    `editHistory.record(edit, System.currentTimeMillis())`. `SessionHistory` owns the
+    runoutStationPlacements, runoutConfig, finalSpec)` in `init`) records on every
+    emission via `editHistory.record(currentEditState(), System.currentTimeMillis())`.
+    The combine is only the TRIGGER: the recorded state is read whole at collection time,
+    never assembled from the combined tuple, which fills in one flow at a time — a boundary
+    writing several flows otherwise emitted a mixed state (the new spec with the previous
+    job's wear, readings and undercuts) that became an undo step into the job just left
+    (emulator QA). `SessionHistory` owns the
     policy: edits within 600 ms of the previous record coalesce into one undo step (a
     typing burst = one step), the stack caps at 50 (oldest evicted), redo clears on any
     genuine new state, and an identical-to-head state is a no-op.
@@ -130,9 +134,13 @@ Responsibilities
     `UndercutDrawing.md`, Undo).
   - `canUndo` / `canRedo`: `StateFlow<Boolean>` mirroring `editHistory.canUndo` /
     `.canRedo`, updated by `updateHistoryFlags()` after every record/undo/redo.
-  - History is dropped (`clearEditHistory()`) at every session boundary: `newShaft()`,
-    `newDocument()`, `importJson()`, `continueDraft()`, and the autosave auto-restore
-    path in `init` — undo must never cross back into a different document's state.
+  - History is dropped at every session boundary: `newShaft()`, `newDocument()`,
+    `importJson()`, `applyTemplate()`, `continueDraft()`, and the autosave auto-restore path
+    in `init` — undo must never cross back into a different document's state. Each boundary
+    ends with `reseedEditHistory()`, which seeds the history head with the state the boundary
+    produced (`SessionHistory.clear(seed)`), so the user's first edit after it is an undo step
+    whether or not the recorder had already seen that state. A head cleared to null took the
+    first edit after a draft resume as its seed, and that edit could not be undone.
   - **Replaces the old delete-only undo entirely.** `LastDeleted`,
     `deleteHistory`/`redoHistory`, `isRedoing`, `canUndoDeletes`/`canRedoDeletes`,
     `undoLastDelete()`/`redoLastDelete()`, and `clearDeleteHistory()` are all removed;
@@ -162,6 +170,12 @@ Two specs, one editor
   conjuring a final drawing out of a stray callback would be worse); a `FINAL` read then
   yields a blank spec. `selectAdded(id, target)` follows the same rule — a FINAL add that
   wrote nothing must select nothing.
+- An `ORIGINAL` write through the seam also runs `followAutoBodyKeys(before, after)`: data keyed
+  to a bare-shaft body whose span the edit re-identified (readings, placements, the count
+  override, wear pits/Ø readings, strip election) is renamed to the run's unambiguous successor
+  in the SAME synchronous call, so the recorder (which reads `currentEditState()` at collection
+  time) takes the edit and the re-key as one undo step. A no-op when no stored key names an auto
+  body. See `RunoutSheet.md` (Runout Bubble Editor, "Auto-body keys follow their body").
 - `finalResolvedComponents: StateFlow<List<ResolvedComponent>>` — derived from `finalSpec` by
   the same `resolveComponents` the original uses, empty while there is no final, so every
   presentational surface works over either without knowing which.

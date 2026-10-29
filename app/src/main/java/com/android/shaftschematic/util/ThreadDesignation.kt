@@ -26,9 +26,16 @@ data class ThreadDesignation(
         private val SEPARATORS = charArrayOf('×', 'x', 'X', '*')
 
         /**
+         * The error line a designation field shows while its text does not parse — the card and
+         * `AddThreadDialog` both, so the two surfaces explain a refused designation the same way.
+         */
+        const val INVALID_MESSAGE = "Not a metric designation — e.g. M20×2.5"
+
+        /**
          * Parses `M20×2.5`, `M20x2.5`, `M20` (coarse, pitch omitted), tolerating surrounding
-         * whitespace and either separator glyph. Returns null when the text is not a metric
-         * designation (empty, missing `M`, non-numeric) so callers can fall back to imperial.
+         * whitespace and either separator glyph, and a decimal comma in either number
+         * (`M20x2,5` — how DIN/ISO prints write the pitch). Returns null when the text is not a
+         * metric designation (empty, missing `M`, non-numeric) so callers can fall back to imperial.
          */
         fun parse(raw: String?): ThreadDesignation? {
             val t = raw?.trim() ?: return null
@@ -47,11 +54,17 @@ data class ThreadDesignation(
                 pitchText = body.substring(sepIndex + 1).trim().ifEmpty { null }
             }
 
-            val dia = diaText.toFloatOrNull() ?: return null
+            val dia = designationNumber(diaText) ?: return null
             if (dia <= 0f) return null
-            val pitch = pitchText?.toFloatOrNull()
+            val pitch = pitchText?.let { designationNumber(it) }
             if (pitchText != null && (pitch == null || pitch <= 0f)) return null
             return ThreadDesignation(dia, pitch)
+        }
+
+        /** A designation's number: a decimal with a `.` or a single decimal comma (`2,5`). */
+        private fun designationNumber(text: String): Float? {
+            val t = if (text.count { it == ',' } == 1 && !text.contains('.')) text.replace(',', '.') else text
+            return t.toFloatOrNull()
         }
 
         /** `M<dia>×<pitch>` with trailing zeros trimmed; pitch term dropped when null. */

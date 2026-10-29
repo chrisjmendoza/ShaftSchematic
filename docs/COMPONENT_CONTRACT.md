@@ -41,6 +41,11 @@ Features:
 ### Current components
 - **Body**: constant-diameter span.
   - Can be adjacent to other components; diameter discontinuities are allowed (may warn).
+  - An explicit body's own length prints as a LOCAL rail span on the schematic and the
+    consolidated sheet when `showDimensionRail` (card-only, tri-state) says so: unset, a body
+    whose stored span touches a shaft end face prints it and a mid-shaft body does not; an
+    explicit value wins. Draw-only, over the STORED span; auto spans never get one (see
+    `docs/PDF_EXPORT.md` §5.2).
 
 - **Taper**: linear transition span between two diameters.
   - Taper parameter derivation/normalization occurs in the ViewModel; renderer draws from diameters.

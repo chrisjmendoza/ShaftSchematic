@@ -4,6 +4,7 @@ package com.android.shaftschematic.pdf
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import com.android.shaftschematic.geom.railValueLeader
 import com.android.shaftschematic.settings.PDF_ARROW_SIZE_DEFAULT_PT
 import com.android.shaftschematic.util.drawDualLabelCentered
 import com.android.shaftschematic.util.dualStackMetrics
@@ -42,8 +43,8 @@ private const val UNDERCUT_RAIL_HALO_PAD_Y_PT = 0.5f
  * shaft's top surface — on-device report). Baselines come from [undercutRailFallbackBaselineY].
  *
  * Every fallback value carries a **leader** — one straight stroke from its near halo edge to its
- * own dimension line ([undercutRailLeader]) — so a value lifted a row or two off its line still
- * says which span it states (on-device request). The leaders are drawn in the line pass, so a
+ * own dimension line ([railValueLeader], the construction the schematic rails draw too) — so a
+ * value lifted a row or two off its line still says which span it states (on-device request). The leaders are drawn in the line pass, so a
  * later label's halo knocks out a leader that runs behind it exactly as it knocks out any line.
  *
  * [drawLabels] = false (blank write-in draft) keeps every line and arrowhead but skips the
@@ -147,10 +148,10 @@ internal fun drawUndercutRail(
         }
 
         fallbacks[i]?.let { f ->
-            undercutRailLeader(
+            railValueLeader(
                 s.x0Pt, s.x1Pt, s.labelCxPt, arrow, railY,
                 labelNearEdgeY = if (fallbackLabelAbove) f.haloBottom else f.haloTop,
-            )?.let { l -> c.drawLine(l.x, l.fromY, l.x, l.toY, dim) }
+            )?.let { l -> c.drawLine(l.fromX, l.fromY, l.x, l.toY, dim) }
         }
     }
     if (!drawLabels) return
@@ -204,36 +205,6 @@ internal fun undercutRailHaloSpan(
         }
     }
     return l to r
-}
-
-/** A fallback value's leader: one vertical stroke at [x] from [fromY] (the value) to [toY] (its line). */
-internal data class UndercutRailLeader(val x: Float, val fromY: Float, val toY: Float)
-
-/**
- * The leader joining a fallback rail value to its own dimension line — the pure endpoints
- * `drawUndercutRail` strokes.
- *
- * It drops (or rises) straight from [labelNearEdgeY] — the value's halo edge facing the line, its
- * bottom for a value above the line and its top for one below — to [railY], at the value's centre
- * [labelCxPt] clamped into `[x0Pt + arrowPt, x1Pt − arrowPt]`: it lands on the span's own line
- * between its arrowheads, never on a head and never on a neighbour's span, even where the value
- * slid along its row or overhangs its span. A span too short to hold that interval takes its
- * midpoint. [arrowPt] is the drawn head length in the caller's unit. Null when the value already
- * touches the line — there is nothing to bridge.
- */
-internal fun undercutRailLeader(
-    x0Pt: Float,
-    x1Pt: Float,
-    labelCxPt: Float,
-    arrowPt: Float,
-    railY: Float,
-    labelNearEdgeY: Float,
-): UndercutRailLeader? {
-    if (labelNearEdgeY == railY) return null
-    val lo = minOf(x0Pt, x1Pt) + arrowPt
-    val hi = maxOf(x0Pt, x1Pt) - arrowPt
-    val x = if (lo <= hi) labelCxPt.coerceIn(lo, hi) else (x0Pt + x1Pt) * 0.5f
-    return UndercutRailLeader(x, labelNearEdgeY, railY)
 }
 
 /**

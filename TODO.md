@@ -213,13 +213,6 @@ Found on the 2026-10-27 AVD pass and not fixed on its branch:
   once; the ring had never rotated, so attaching both files (`log.1.txt` too) has not been seen.
   Push the log past 256 KB, or check on a device that has rotated it.
 
-- [ ] **`ImeResizingAlertDialog` resizes above the keyboard only intermittently** (API 36 AVD,
-  2026-10-27): on 4 of 6 opens of the runout reading dialog, and 3 of 4 of the keyway calculator,
-  the window was resized to the keyboard (`adjustResize`, [0,136][1080,1517]) but the content still
-  laid out full height, so Cancel/Save sat under the keyboard. Suspected race between the
-  `doOnLayout` `setLayout(MATCH_PARENT, MATCH_PARENT)` pin in `ui/screen/DialogImeResize.kt` and the
-  IME animation under edge-to-edge. Pre-existing for the calculators; check on hardware first.
-
 ### Tech debt
 
 - [ ] Controller owns all VM-side intents (composables stateless) — design work, not a pure move.
@@ -267,6 +260,15 @@ androidTest) or the Add dialogs; their logic is pure and covered.
   app's first multi-page document. Page shape stays per page from the same `undercutSheetStrips`
   count. **Decide first:** it contradicts §4's "Multi-page PDF or foldouts" non-goal, so building
   it means lifting that non-goal for this one document.
+- [ ] **In-app number keypad** (a day or night run). Keyboard apps disagree about number fields:
+  Gboard's number pad has no `/` (the in-field "/" key, `ui/input/FractionKey.kt`, covers it),
+  and SwiftKey / Samsung Keyboard show their full layout instead of a pad. A keypad of the app's
+  own would behave the same on every device: digits, `.`, space, `-`, `/`, backspace, Done, plus a
+  row of common fractions (`1/2 1/4 1/8 1/16 …`). Work: number fields suppress the system IME and
+  take the keypad's input, it must work inside dialogs (Add dialogs, calculators), a way back to
+  the system keyboard (unit suffixes like `mm`, hardware keyboards), TalkBack, and a Settings
+  switch to turn it off. On-device ruling so far: do not force a phone-style keypad — leave the
+  regular keyboard until this exists (`docs/contracts/NumberField.md` §"Keyboard").
 - [ ] Undo/redo follow-ups (not blocking v1.0): cross-session/persisted history (currently
   in-memory, cleared on process death and at every new/open/import boundary), and metadata
   (customer/vessel/job/notes/shaft position/unit) is deliberately excluded from undoable state —

@@ -100,6 +100,8 @@ private fun ShoulderRadiusPicker(
     onSet: (Float) -> Unit,
 ) {
     var open by remember { mutableStateOf(false) }
+    // In the Add dialog a different radius is an edit for its discard guard.
+    val edits = LocalDialogEdits.current
     Box {
         OutlinedButton(
             onClick = { open = true },
@@ -112,7 +114,11 @@ private fun ShoulderRadiusPicker(
                 val rMm = rIn * 25.4f
                 DropdownMenuItem(
                     text = { Text(radiusLabel(rMm, unit)) },
-                    onClick = { onSet(rMm); open = false },
+                    onClick = {
+                        if (rMm != radiusMm) edits?.mark()
+                        onSet(rMm)
+                        open = false
+                    },
                     modifier = Modifier.testTag("${tag}_${(rIn * 64).toInt()}_64"),
                 )
             }

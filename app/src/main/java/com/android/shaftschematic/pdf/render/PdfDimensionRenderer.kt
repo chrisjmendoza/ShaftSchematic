@@ -29,6 +29,10 @@ private const val ARROW_BARB_FRAC = 0.5f
  * inward heads, and only one too narrow to hold both between its extension lines prints them
  * tips-in ([DimensionRailLayout.arrowsPointInward]).
  *
+ * A value the planner had to set off its own line — just outside its span, or bumped above its
+ * home height — is joined back to its span by the plan's leader
+ * ([DimensionRailLayout.Placement.leader]), stroked with the line paint.
+ *
  * Placement is not decided here: the pure [DimensionRailLayout] plans every span at once so
  * labels and rail lines across ALL tiers share one collision space (a floating value lives in
  * the next rail's band). This class measures the text, maps the spans to page x, and draws the
@@ -147,12 +151,17 @@ class PdfDimensionRenderer(
     fun topLift(inputs: List<DimensionRailLayout.SpanInput>): Float =
         DimensionRailLayout.topLift(inputs, metrics(), arrowSize, textPad)
 
-    /** Plans placements parallel to [inputs]; vertical bumps stay below [safeTopY]. */
+    /**
+     * Plans placements parallel to [inputs]; vertical bumps stay below [safeTopY], and a value
+     * placed outside its own span stays inside [[contentLeft], [contentRight]].
+     */
     fun plan(
         inputs: List<DimensionRailLayout.SpanInput>,
         safeTopY: Float = Float.NEGATIVE_INFINITY,
+        contentLeft: Float = Float.NEGATIVE_INFINITY,
+        contentRight: Float = Float.POSITIVE_INFINITY,
     ): DimensionRailLayout.Plan =
-        DimensionRailLayout.plan(inputs, metrics(), arrowSize, textPad, safeTopY)
+        DimensionRailLayout.plan(inputs, metrics(), arrowSize, textPad, safeTopY, contentLeft, contentRight)
 
     /** Draws one planned span: extension lines, the (broken or continuous) line, value, arrows. */
     fun drawPlanned(
@@ -182,6 +191,13 @@ class PdfDimensionRenderer(
         } else {
             // ---- fallback path: continuous line, value floating above it ----
             canvas.drawLine(xa, y, xb, y, linePaint)
+        }
+
+        // A value the planner set off its own line — beside its span, or bumped a band up —
+        // carries a thin leader back to it, the undercut rails' construction. Blank drafts print
+        // no value, so they print no leader to one.
+        if (!blankLabels) {
+            placement.leader?.let { canvas.drawLine(it.fromX, it.fromY, it.x, it.toY, linePaint) }
         }
 
         drawLabel(canvas, span.label, placement.label)

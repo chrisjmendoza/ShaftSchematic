@@ -37,7 +37,10 @@ import com.android.shaftschematic.model.suggestedBodyKeywayEnd
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
+import com.android.shaftschematic.ui.resolved.bodyAtShaftEnd
+import com.android.shaftschematic.ui.resolved.effectiveBodyDimensionRail
 import com.android.shaftschematic.ui.util.bodyWarningMessages
+import com.android.shaftschematic.ui.util.positiveDiaErrorMm
 import com.android.shaftschematic.ui.util.positiveLengthErrorMm
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.toMmOrNull
@@ -61,8 +64,8 @@ import com.android.shaftschematic.util.UnitSystem
  * shown only while captured, "Keyway spooned", and the clocking section.
  * Every control here that changes geometry, position, or a value is mirrored in
  * `AddBodyDialog` by the add-dialog-parity invariant; "Show Ø on drawing", "Show name on
- * drawing", "Compress on drawing", "Shade on drawing", and the "Prints in: in | mm" chip are
- * the documented card-only carve-outs — each changes only how an already-drawn body prints and
+ * drawing", "Show dimension rail", "Compress on drawing", "Shade on drawing", and the
+ * "Prints in: in | mm" chip are the documented card-only carve-outs — each changes only how an already-drawn body prints and
  * is reached for after looking at a printed sheet.
  *
  * [f1] and [startValidator] are supplied by [ComponentPagerCard] because the thread card shares
@@ -94,6 +97,7 @@ internal fun BodyPagerCard(
     onUpdateBodyShowLabel: (Int, Boolean) -> Unit,
     onUpdateBodyShade: (Int, Boolean) -> Unit = { _, _ -> },
     onUpdateBodyCompressOnDrawing: (Int, Boolean) -> Unit,
+    onUpdateBodyShowDimensionRail: (Int, Boolean) -> Unit = { _, _ -> },
     onUpdateBodyBlend: (index: Int, blendAftMm: Float, blendFwdMm: Float, profile: BlendProfile, sealAft: Boolean, sealFwd: Boolean, sealAftLenMm: Float, sealFwdLenMm: Float) -> Unit,
     onUpdateBodyLabel: (Int, String?) -> Unit,
     onUpdateBodyKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromEndMm: Float, end: LinerAuthoredReference, spooned: Boolean) -> Unit,
@@ -418,7 +422,13 @@ internal fun BodyPagerCard(
                 }
             },
         )
-        CommitNum("Diameter (${abbr(unit)})", disp(b.diaMm, unit)) { s ->
+        // An explicit body's Ø must be > 0, as AddBodyDialog requires; a 0 drew a hairline body
+        // with no word of it (emulator QA). The AUTO card's Ø stays ungated: ≤ 0 there clears
+        // that section's override.
+        CommitNum(
+            "Diameter (${abbr(unit)})", disp(b.diaMm, unit),
+            validator = { raw -> positiveDiaErrorMm(toMmOrNull(raw, unit)) },
+        ) { s ->
             toMmOrNull(s, unit)?.let { onUpdateBody(idx, b.startFromAftMm, b.lengthMm, it) }
         }
         ShowDiaToggleRow(
@@ -433,6 +443,17 @@ internal fun BodyPagerCard(
             caption = if (b.showNameOnDrawing == null) COMPONENT_NAMES_DEFAULT_CAPTION else null,
             testTag = "body_show_label_toggle",
             onCheckedChange = { onUpdateBodyShowLabel(idx, it) },
+        )
+        // The body's own length span. Unset follows the body's position — on at a shaft end
+        // (where a coupling goes), off mid-shaft — and the caption says which applies; a tap
+        // stores the choice, which then holds wherever the body sits.
+        val atShaftEnd = bodyAtShaftEnd(b, spec)
+        ShowDiaToggleRow(
+            label = "Show dimension rail",
+            checked = effectiveBodyDimensionRail(b, spec),
+            caption = if (b.showDimensionRail == null) bodyDimensionRailDefaultCaption(atShaftEnd) else null,
+            testTag = "body_dimension_rail_toggle",
+            onCheckedChange = { onUpdateBodyShowDimensionRail(idx, it) },
         )
         // Off by default on a newly authored body: a named section reads at TRUE
         // proportion. Ticking it lets this body foreshorten and carry the S-break again —
@@ -660,12 +681,14 @@ internal fun BodyPagerCard(
                 androidx.compose.material3.Switch(checked = isCaptured, onCheckedChange = null)
             }
             if (isCaptured) {
-                // A blank or ≤ 0 inset is not a way to un-capture: the toggle is the one control
-                // that clears the inset, so such a commit is a no-op.
-                CommitNum("KW Inset from ${if (isKwFwd) "FWD" else "AFT"} (${abbr(kwUnit)})", dispKw(b.keywayOffsetFromEndMm, kwUnit)) { s ->
-                    if (s.isBlank()) return@CommitNum
+                // A ≤ 0 inset is not a way to un-capture: the toggle is the one control that
+                // clears the inset, so the field refuses it and says so.
+                CommitNum(
+                    "KW Inset from ${if (isKwFwd) "FWD" else "AFT"} (${abbr(kwUnit)})",
+                    dispKw(b.keywayOffsetFromEndMm, kwUnit),
+                    validator = { raw -> capturedInsetErrorMm(toMmOrNull(raw, kwUnit)) },
+                ) { s ->
                     val v = toMmOrNull(s, kwUnit) ?: return@CommitNum
-                    if (v <= 0f) return@CommitNum
                     rememberedInsetMm = v
                     onUpdateBodyKeyway(idx, b.keywayWidthMm, b.keywayDepthMm, b.keywayLengthMm, v, kwEnd, b.keywaySpooned)
                 }
@@ -705,3 +728,10 @@ internal fun BodyPagerCard(
         }
     }
 }
+
+/** Caption under "Show dimension rail" while the body follows its position default. */
+internal fun bodyDimensionRailDefaultCaption(atShaftEnd: Boolean): String =
+    if (atShaftEnd) BODY_RAIL_DEFAULT_END_CAPTION else BODY_RAIL_DEFAULT_MID_CAPTION
+
+internal const val BODY_RAIL_DEFAULT_END_CAPTION = "On — body is at a shaft end"
+internal const val BODY_RAIL_DEFAULT_MID_CAPTION = "Off — mid-shaft body"

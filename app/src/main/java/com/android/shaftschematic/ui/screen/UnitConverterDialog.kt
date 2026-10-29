@@ -23,7 +23,7 @@ import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.MM_PER_IN
 import com.android.shaftschematic.util.LengthFormat
 import com.android.shaftschematic.util.UnitSystem
-import com.android.shaftschematic.util.parseFractionOrDecimal
+import com.android.shaftschematic.util.parseLengthInUnit
 import java.util.Locale
 
 /**
@@ -119,7 +119,8 @@ internal sealed class ConverterResult {
  */
 internal fun converterResult(raw: String, entryUnit: UnitSystem): ConverterResult {
     if (raw.isBlank()) return ConverterResult.Blank
-    val value = parseFractionOrDecimal(raw) ?: return ConverterResult.Invalid
+    // A unit suffix is read: `260mm` typed with the inch chip selected converts as 260 mm.
+    val value = parseLengthInUnit(raw, entryUnit) ?: return ConverterResult.Invalid
     return if (entryUnit == UnitSystem.INCHES) {
         val mm = value * MM_PER_IN
         ConverterResult.Value(listOf("${fmt(mm, 3)} mm"))

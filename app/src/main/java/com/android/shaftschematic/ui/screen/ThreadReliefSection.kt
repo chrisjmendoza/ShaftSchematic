@@ -26,6 +26,8 @@ import com.android.shaftschematic.geom.THREAD_HATCH_FALLBACK_PITCH_MM
 import com.android.shaftschematic.model.Threads
 import com.android.shaftschematic.model.suggestedThreadReliefAtAft
 import com.android.shaftschematic.ui.config.AddDefaultsConfig
+import com.android.shaftschematic.ui.util.positiveDiaErrorMm
+import com.android.shaftschematic.ui.util.positiveLengthErrorMm
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.toMmOrNull
 
@@ -109,13 +111,18 @@ internal fun ThreadReliefSwitchRow(
     testTag: String,
     onCheckedChange: (Boolean) -> Unit,
 ) {
+    // In the Add dialog a flip is an edit for its discard guard; on the card there is none.
+    val edits = LocalDialogEdits.current
     Row(
         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
             .testTag(testTag)
             .toggleable(
                 value = checked,
                 role = Role.Switch,
-                onValueChange = onCheckedChange,
+                onValueChange = { on ->
+                    edits?.mark()
+                    onCheckedChange(on)
+                },
             ).padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -208,19 +215,22 @@ internal fun ThreadReliefCardSection(
         onSetThreadRelief(th.id, v.lenMm, v.diaMm, atAft)
     }
     if (reliefOn) {
-        // A blank or ≤ 0 value is not a way to remove the relief: the switch is the one control
-        // that clears it, so such a commit is a no-op.
-        CommitNum("Relief length (${abbr(unit)})", disp(th.reliefLenMm, unit)) { s ->
-            if (s.isBlank()) return@CommitNum
+        // A ≤ 0 value is not a way to remove the relief: the switch is the one control that
+        // clears it, so the fields refuse one and say so ("0 not applied — Must be > 0"). Dropping
+        // it silently left the typed 0 on screen over the stored value (emulator QA).
+        CommitNum(
+            "Relief length (${abbr(unit)})", disp(th.reliefLenMm, unit),
+            validator = { raw -> positiveLengthErrorMm(toMmOrNull(raw, unit)) },
+        ) { s ->
             val v = toMmOrNull(s, unit) ?: return@CommitNum
-            if (v <= 0f) return@CommitNum
             rememberedLenMm = v
             onSetThreadRelief(th.id, v, th.reliefDiaMm, th.reliefAtAft)
         }
-        CommitNum("Relief Ø (${abbr(unit)})", disp(th.reliefDiaMm, unit)) { s ->
-            if (s.isBlank()) return@CommitNum
+        CommitNum(
+            "Relief Ø (${abbr(unit)})", disp(th.reliefDiaMm, unit),
+            validator = { raw -> positiveDiaErrorMm(toMmOrNull(raw, unit)) },
+        ) { s ->
             val v = toMmOrNull(s, unit) ?: return@CommitNum
-            if (v <= 0f) return@CommitNum
             rememberedDiaMm = v
             onSetThreadRelief(th.id, th.reliefLenMm, v, th.reliefAtAft)
         }

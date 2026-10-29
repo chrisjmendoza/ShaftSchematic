@@ -49,7 +49,9 @@ import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.ui.drawing.dimDebugLines
 import com.android.shaftschematic.ui.drawing.renderSpanSpec
 import com.android.shaftschematic.ui.drawing.render.GridRenderer.drawAdaptiveShaftGrid
+import com.android.shaftschematic.ui.drawing.render.PreviewIssueMark
 import com.android.shaftschematic.ui.drawing.render.RenderOptions
+import com.android.shaftschematic.ui.drawing.render.axialExtentMm
 import com.android.shaftschematic.ui.drawing.render.ShaftLayout
 import com.android.shaftschematic.ui.drawing.render.ShaftRenderer
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
@@ -141,6 +143,12 @@ fun ShaftDrawing(
      * preview fills so the box answers "what prints shaded" live; empty draws as before.
      */
     shadedComponentIds: Set<String> = emptySet(),
+    /**
+     * Problem marks — the warning banner's `specIssues` as red stretches
+     * (`previewIssueMarks`). The window widens to hold them, so a part hanging past an end stays
+     * in view; empty draws as before.
+     */
+    issueMarks: List<PreviewIssueMark> = emptyList(),
     // Highlight bridge (safe defaults)
     highlightEnabled: Boolean = false,
     highlightId: Any? = null,
@@ -176,7 +184,7 @@ fun ShaftDrawing(
         bodyFill, previewBodyFill, linerFill, previewLinerFill,
         taperFill, previewTaperFill, threadFill, previewThreadFill, threadHatch,
         highlightEnabled, highlightId, themeGlow,
-        shadedComponentIds, threadSlant, threadDensity,
+        shadedComponentIds, threadSlant, threadDensity, issueMarks,
     ) { RenderOptions(
         // Visual tuning
         paddingPx = 16,
@@ -196,6 +204,8 @@ fun ShaftDrawing(
         shadedComponentIds = shadedComponentIds,
         fillFollowsShade = true,
 
+        issueMarks = issueMarks,
+
         // Highlight preset (obvious: colored glow)
         highlightEnabled = highlightEnabled,
         highlightId = highlightId,
@@ -206,6 +216,7 @@ fun ShaftDrawing(
 
     // Preview-safe spec: if OAL is zero but parts exist, extend to last occupied end.
     val safeSpec = remember(spec) { spec.renderSpanSpec() }
+    val issueExtentMm = remember(issueMarks) { issueMarks.axialExtentMm() }
 
     // ──────────────────────────────
     // Pan / Zoom (UI only)
@@ -307,7 +318,8 @@ fun ShaftDrawing(
                 topPx = padY,
                 rightPx = size.width - padX,
                 bottomPx = size.height - padY,
-                resolvedComponents = resolvedComponents.takeIf { it.isNotEmpty() }
+                resolvedComponents = resolvedComponents.takeIf { it.isNotEmpty() },
+                extentMm = issueExtentMm,
             )
             latestLayoutRef.set(layout)
 

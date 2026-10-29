@@ -328,8 +328,18 @@ private fun resolveAutoBodyDia(startMm: Float, explicit: List<ResolvedComponent>
     return AddDefaultsConfig.BODY_DIA_MM
 }
 
+/**
+ * Prefix of every auto-body id. The rest of the id is the span itself, so an edit that moves
+ * either end of a gap gives its run a new id — see `geom/AutoBodyRekeyMath.kt` for how the
+ * data keyed to it follows.
+ */
+const val AUTO_BODY_ID_PREFIX = "auto_body_"
+
+/** True for an id [autoBodyId] built (a bare-shaft span), false for every stored component id. */
+fun isAutoBodyId(id: String): Boolean = id.startsWith(AUTO_BODY_ID_PREFIX)
+
 private fun autoBodyId(startMm: Float, endMm: Float): String =
-    "auto_body_${"%.3f".format(Locale.US, startMm)}_${"%.3f".format(Locale.US, endMm)}"
+    "$AUTO_BODY_ID_PREFIX${"%.3f".format(Locale.US, startMm)}_${"%.3f".format(Locale.US, endMm)}"
 
 private fun ResolvedComponent.typeSortKey(): Int = when (type) {
     ResolvedComponentType.BODY -> 0

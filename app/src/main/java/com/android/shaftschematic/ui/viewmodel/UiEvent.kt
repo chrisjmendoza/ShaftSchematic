@@ -19,4 +19,10 @@ sealed interface UiEvent {
      * @property kind The kind of component that was deleted.
      */
     data class ShowDeletedSnack(val kind: ComponentKind) : UiEvent
+
+    /**
+     * Request to show what an OAL commit moved ([message], `oalMoveSummary`), with "Undo" — the
+     * commit is one history step, so the action undoes the OAL change and the move together.
+     */
+    data class ShowOalMovedSnack(val message: String) : UiEvent
 }

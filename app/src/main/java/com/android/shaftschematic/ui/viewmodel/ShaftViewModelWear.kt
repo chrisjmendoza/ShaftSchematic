@@ -94,9 +94,39 @@ fun ShaftViewModel.updateWearSpotReference(id: String, reference: WearSpotRefere
     }
 }
 
-/** Remove a wear spot by [id]. Confirm-free, as authored in the detail-view UI. */
+/**
+ * Remove a wear spot by [id]. Confirm-free, as authored in the detail-view UI — the page offers
+ * a snackbar Undo that puts the exact spot back ([restoreWearSpot]).
+ */
 fun ShaftViewModel.removeWearSpot(id: String) {
     _wearRecord.update { rec -> rec.copy(spots = rec.spots.filterNot { it.id == id }) }
+}
+
+/**
+ * Put back a wear spot a delete removed — the snackbar Undo, the `restoreUndercut` pattern: the
+ * exact spot (typed Start / Length / notes verbatim) at its old [index] in the record, and a
+ * no-op when a spot with its id is already there (a history Undo got there first). Not a
+ * history step of its own: it is the delete's own Undo, and as a step it could fold in an edit
+ * coalesced with the delete.
+ */
+fun ShaftViewModel.restoreWearSpot(spot: WearSpot, index: Int) {
+    _wearRecord.update { rec ->
+        rec.copy(spots = rec.spots.withRestored(listOf(IndexedValue(index, spot))) { it.id })
+    }
+}
+
+/**
+ * The list with each of [removed] put back at its old index, in ascending index order so each
+ * lands where it was; an item whose id is already present is skipped. Shared by every wear
+ * snackbar Undo.
+ */
+internal fun <T> List<T>.withRestored(removed: List<IndexedValue<T>>, idOf: (T) -> String): List<T> {
+    val present = mapTo(HashSet()) { idOf(it) }
+    val back = removed.filter { idOf(it.value) !in present }.sortedBy { it.index }
+    if (back.isEmpty()) return this
+    val out = toMutableList()
+    back.forEach { (i, item) -> if (i in 0..out.size) out.add(i, item) else out.add(item) }
+    return out
 }
 
 // ── Wear pits (the "X" markers) ───────────────────────────────────────────────
@@ -127,6 +157,20 @@ fun ShaftViewModel.addWearPit(componentId: String, axialMm: Float, acrossFrac: F
 /** Remove a pit by [id]. Confirm-free — the detail canvas removes a pit by tapping its "X". */
 fun ShaftViewModel.removeWearPit(id: String) {
     _wearRecord.update { rec -> rec.copy(pits = rec.pits.filterNot { it.id == id }) }
+}
+
+/** Remove every pit in [ids] in ONE write — the detail page's "Clear all pits". */
+fun ShaftViewModel.removeWearPits(ids: Set<String>) {
+    if (ids.isEmpty()) return
+    _wearRecord.update { rec -> rec.copy(pits = rec.pits.filterNot { it.id in ids }) }
+}
+
+/**
+ * Put back the pits a "Clear all pits" removed, each at its old index (the [restoreWearSpot]
+ * posture: exact pits, ids already present skipped, never a history step).
+ */
+fun ShaftViewModel.restoreWearPits(pits: List<IndexedValue<WearPit>>) {
+    _wearRecord.update { rec -> rec.copy(pits = rec.pits.withRestored(pits) { it.id }) }
 }
 
 // ── Wear diameter readings (measured-Ø callouts) ─────────────────────────────
@@ -294,7 +338,20 @@ fun ShaftViewModel.updateWornSectionReference(id: String, reference: UndercutRef
     }
 }
 
-/** Remove a section by [id]. Confirm-free — deleted from its edit dialog. */
+/**
+ * Remove a section by [id]. Confirm-free — deleted from its edit dialog; the Output tab offers a
+ * snackbar Undo that puts the exact section back ([restoreWornSection]).
+ */
 fun ShaftViewModel.removeWornSection(id: String) {
     _wearRecord.update { rec -> rec.copy(wornSections = rec.wornSections.filterNot { it.id == id }) }
+}
+
+/**
+ * Put back a worn section a delete removed — its typed Ø list verbatim, at its old [index]; a
+ * no-op when its id is already there (the [restoreWearSpot] posture, never a history step).
+ */
+fun ShaftViewModel.restoreWornSection(section: WornSection, index: Int) {
+    _wearRecord.update { rec ->
+        rec.copy(wornSections = rec.wornSections.withRestored(listOf(IndexedValue(index, section))) { it.id })
+    }
 }

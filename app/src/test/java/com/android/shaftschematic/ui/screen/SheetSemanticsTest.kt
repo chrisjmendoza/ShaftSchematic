@@ -93,7 +93,7 @@ class SheetSemanticsTest {
     fun `wear detail zero`() {
         assertEquals(
             "Liner wear detail. 0 wear areas, 0 pits, 0 diameter readings in view.",
-            SheetSemantics.wearDetail(0, 0, 0),
+            SheetSemantics.wearDetail("Liner", 0, 0, 0),
         )
     }
 
@@ -101,7 +101,19 @@ class SheetSemanticsTest {
     fun `wear detail singular each`() {
         assertEquals(
             "Liner wear detail. 1 wear area, 1 pit, 1 diameter reading in view.",
-            SheetSemantics.wearDetail(1, 1, 1),
+            SheetSemantics.wearDetail("Liner", 1, 1, 1),
+        )
+    }
+
+    @Test
+    fun `wear detail names the component kind`() {
+        assertEquals(
+            "Taper wear detail. 0 wear areas, 2 pits, 0 diameter readings in view.",
+            SheetSemantics.wearDetail("Taper", 0, 2, 0),
+        )
+        assertEquals(
+            "Body wear detail. 0 wear areas, 0 pits, 1 diameter reading in view.",
+            SheetSemantics.wearDetail("Body", 0, 0, 1),
         )
     }
 
@@ -109,7 +121,7 @@ class SheetSemanticsTest {
     fun `wear detail plural mixed counts`() {
         assertEquals(
             "Liner wear detail. 4 wear areas, 2 pits, 6 diameter readings in view.",
-            SheetSemantics.wearDetail(4, 2, 6),
+            SheetSemantics.wearDetail("Liner", 4, 2, 6),
         )
     }
 

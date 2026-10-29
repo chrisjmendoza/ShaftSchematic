@@ -6,7 +6,16 @@ File: `ui/input/NumericInputField.kt` (composable `NumericInputField`; wrapped b
 `CommitNum` in `ComponentCarousel.kt` and `CommitNumField` in `AddComponentDialogs.kt`)  
 Purpose: Single-line numeric field that holds local text; commits on blur/IME Done via callback.
 
-Version: v0.7 (2026-10-27; the box's text, the settled text and the rejection notice survive an
+Version: v0.10 (2026-10-28; released focus parks on the window root — `FocusParkingRoot` — so
+clearing focus out of touch mode, and the dialog dismissal after it, never lands in the first
+text field on the screen).
+v0.9 (2026-10-28; every card rule a commit lambda used to enforce by returning early is
+the field's `validator` — diameters, relief, captured inset, bolt Count/spacing/depth, TPI, and
+the Length's span overlap — so a refused value always reverts and is named).
+v0.8 (2026-10-28; ONE grammar reads hyphenated mixed fractions, decimal commas and unit
+suffixes — a suffix converts, never drops; the unit-blind parser refuses any suffix; the filter
+keeps the hyphen, the comma and a trailing suffix; length/Ø fields gate on `isLengthText`).
+v0.7 (2026-10-27; the box's text, the settled text and the rejection notice survive an
 activity recreation, and the focus baseline is the settled text).
 v0.6 (2026-10-16; a rejected value is reverted to the caller's value AND named in a
 `"<typed> not applied — <reason>"` notice that only an edit clears; the unused `showValidationErrors` switch was removed).
@@ -92,9 +101,39 @@ Length validator convention
   silently landing a component with no span (the short-segment advisory starts *above* 0, so
   nothing downstream would have said a word). This is a gate on an *entry*, not a rewrite of a
   stored value — the golden rule is untouched.
-- Deliberately **not** applied to diameter fields (an auto-body Ø of `≤ 0` clears that
-  section's override, a documented feature), not to keyway fields (blank/0 clears a keyway),
-  and not to the Add dialogs, whose Submit gates already require a positive length.
+- Not applied to keyway W/D/L (the Keyway checkbox's confirmed removal clears a keyway), and
+  not to the Add dialogs, whose Submit gates already require a positive length (they name a `0`
+  under the field with the same "Must be > 0" — `requirePositive` on `CommitNumField`).
+
+A rule lives in the validator, never in the commit lambda
+- **A commit lambda must not early-return on a value it will not apply.** It runs AFTER the field
+  has settled on the typed text, so a `return@CommitNum` leaves that text on screen over the
+  stored value with no notice — the screen lies about what is stored (emulator QA: a thread
+  relief Ø of 0 stayed on screen, the reopened editor showed 4.925 again). The rule goes in the
+  `validator`; the lambda then commits whatever reaches it, verbatim. Remaining `?: return` null
+  guards in commit lambdas sit behind a `parseValid` that already proved the text parses, so they
+  never fire.
+- The card rules, each a validator (message in quotes):
+  - Diameters — explicit body Ø, liner OD, taper S.E.T./L.E.T. Ø, thread major Ø, relief Ø,
+    bolt-hole Ø: "Must be > 0" (`positiveDiaErrorMm`, `ui/util/StartOverlapValidation.kt`). A
+    taper Ø of 0 used to re-derive that end from the rate — a different value from the one typed.
+    **Not** the AUTO-body Ø: `≤ 0` there clears that section's override, a documented feature.
+  - Thread relief length and Ø (`ThreadReliefSection.kt`): "Must be > 0" — switching the relief
+    off is the switch's job.
+  - Captured-keyway inset, taper and body (`capturedInsetErrorMm`, `KeywaySection.kt`): "Must be
+    > 0" — un-capturing is the "Captured keyway" toggle's job.
+  - TPI: "Must be > 0".
+  - Bolt-slot Count (`boltSlotCountError`, `AddDialogGates.kt`): any number passes the parse gate
+    so the validator can say "Must be a whole number ≥ 1" for `0`, `2.5`, `1/2`. `0` was coerced
+    to 1 and `2.5` dropped without a word; `AddCouplerBoltSlotDialog` shows the same line and
+    keeps Add disabled.
+  - Bolt-slot Spacing (count > 1) and Depth (blind): "Must be > 0", the dialog's own gate.
+  - Bolt-slot position / Count / Spacing that would put a FWD-measured row's aft-most hole
+    before the AFT face: "Row extends past the AFT end of the shaft" — it was clamped onto the
+    face, showing a different position from the one typed. Past the FWD end stays legal.
+  - Liner and thread **Length**: the span with the new length is checked like a Start
+    (`spanOverlapErrorMm`) — "Overlaps <card title>" for another liner (thread). Running past
+    the OAL is not refused.
 
 Test coverage
 - `ui/input/BlurCommitPolicyTest` — the predicate, pure JVM.
@@ -114,7 +153,57 @@ Test coverage
 - `ui/screen/ComponentCardSaveButtonTest` — the Save button off the aggregate: several fields on
   one card, a field leaving composition, and instant-commit controls that never register, plus
   `CardDirtyState` itself.
-- `ui/util/StartOverlapValidationTest` — `positiveLengthErrorMm`, pure JVM.
+- `ui/util/StartOverlapValidationTest` — `positiveLengthErrorMm`, `positiveDiaErrorMm`, the
+  Length span check and partner naming, pure JVM.
+- `ui/screen/CardFieldRefusalTest` / `ThreadReliefCardTest` — the REAL cards refusing a bolt Count
+  of 0 or 2.5, a liner Length into its neighbour, a liner OD or taper Ø of 0, a relief value of 0,
+  each named and nothing committed (Robolectric).
+- `ui/input/FocusParkingRootTest` — out of touch mode a released focus jumps to the first field
+  without the root (the mechanism, pinned so a platform change shows) and lands on no field with
+  it; a tapped field still takes focus (Robolectric).
+
+Focus release
+- **Releasing focus never hands it to another field.** `FocusManager.clearFocus()` — the OAL
+  field's ✓/Done/✗, the auto-body Ø scope dialog opening, the undercut and wear editors' own
+  clears, a card's Save — ends with no text field focused. Out of touch mode (a hardware or
+  Bluetooth keyboard, or a key the IME sends as a raw key event) Android's `View.clearFocus()`
+  immediately refocuses the window, and the Compose view answers with an "enter" search that
+  picks the top-left focusable composable — on the editor, the Overall Length field. Cancelling
+  "Apply diameter to…" therefore left the OAL focused with the keyboard up, the next digits went
+  into the shaft length, and a blur would have committed them (emulator QA). The ONE rule that
+  prevents it is app-wide: `MainActivity` wraps its content in `FocusParkingRoot`
+  (`ui/input/FocusParking.kt`), a focusable box around everything that the enter search finds
+  first, so the refocus parks there — no field, no cursor, no keyboard. In touch mode the
+  platform does not refocus and the box is never focused. Do not answer a jump with a
+  per-dialog `requestFocus` or a hidden first field: either is a second mechanism, and a new
+  dialog would miss it.
+- A dialog dismissed while a field is focused returns focus to THAT field (the window regains
+  focus on the same node) — the field being edited, never an unrelated one.
+
+Keyboard
+- **Number fields ask for the number pad** (`KeyboardType.Decimal`); whether one appears is up to
+  the keyboard app. Gboard shows its pad; SwiftKey and Samsung Keyboard answer a number field with
+  their full layout (which carries `/`). The app does not force a pad: a phone-style keypad is
+  the only one those keyboards offer, and what it carries varies by device (on-device ruling:
+  leave the regular keyboard so every device keeps a way to type a fraction). The calculators,
+  the taper rate (`1:12`) and the thread designation ask for the text keyboard outright.
+- **A number pad has no `/`** (Gboard's offers digits, `-`, space, `,` and `.`), so a
+  fraction-capable number-pad field carries its own fraction key: a "/" button in the field's
+  trailing slot (`FractionKey`, `ui/input/FractionKey.kt`, testTag `fraction_key`) that types a
+  bar AT THE CURSOR, replacing a selection the way a typed key would. With the pad's space or
+  hyphen it enters `10 1/4` and `10-1/4`. The key shows only while the field is focused (an idle
+  field keeps its full width), only on fields that accept a fraction (`allowFraction`), and only
+  in an inch document — the app root provides `LocalFractionKeyEnabled` from the document unit.
+  A tap never takes focus from the field, so the keyboard stays up. Text-keyboard fields carry no
+  key: their keyboard already has `/`.
+- Hosts: `NumericInputField` (every card field, the undercut and wear editors), the Overall
+  Length field, the Add dialogs' number fields and the new-shaft diameter prompt. A field whose
+  state is a plain `String` cannot insert at its cursor (replacing its text from outside leaves
+  the cursor before the bar), so those hosts bridge through `FieldCursor`
+  (`rememberFieldCursor()`), which keeps the last edit's cursor and IME composition.
+- `ui/input/FractionKeyTest` — cursor arithmetic, the `String` bridge, and the key wired into
+  `NumericInputField`: shown only focused, only for fraction fields, only in inches; a tap
+  between keystrokes commits `10 1/4` (Robolectric).
 
 Responsibilities
 - Maintain internal `text` state; select-all on focus for quick overwrite.
@@ -169,29 +258,62 @@ The field composes two util layers (formerly documented in `TextFilters.md` and
 happens on commit. Pure transformations that drop offending characters rather than
 rejecting the edit:
 - `filterNumericInput(raw, allowNegative, allowFraction, allowColon = false)`:
-  digits, one leading `-` (if allowed), one decimal separator, one `/` fraction slash
-  and whitespace for `W N/D` (if allowed), and one `:` for ratio entry like `1:12`
-  when `allowColon = true` (taper rate text). This is the only typing filter (the
-  unused `filterDecimalPermissive` was deleted 2026-07-26).
+  digits; one leading `-` sign (if allowed); one `.` decimal point, and `,` anywhere before it
+  (a decimal comma `1,5` or thousands groups `1,234.5` — the parser decides which); one `/`
+  fraction slash, whitespace for `W N/D`, and ONE hyphen separating a whole number from its
+  fraction (`10-1/4` — only right after a digit and only before the slash) when
+  `allowFraction`; one `:` for ratio entry like `1:12` when `allowColon = true` (taper rate
+  text); and a **trailing unit suffix** — the run of `m`, `i`, `n`, `"`, `″`, `'` at the END of
+  the text — kept as typed so the parser can read it. Everything else is dropped. Dropping the
+  hyphen turned `10-1/4` into `101/4` (= 25.25), deleting the comma turned `1,5` into `15`, and
+  eating a pasted `mm` stored a metric value in the document unit (emulator QA) — each a valid,
+  wrong number. This is the only numeric typing filter (the taper rate has its own,
+  `filterTaperRateInput`).
 - Filters never enforce numeric validity (commit path does) and never block paste or
   select-all.
 
 **Parsing (`util/Parsing.kt`)** — pure, side-effect-free, neutral by design (no
-clamping, no range enforcement — ViewModel setters layer validation on top). All
-three parsers live here; there is no second copy elsewhere:
-- `parseFractionOrDecimal(raw): Double?` — decimal, `N/D`, `W N/D`, or a `N:D`
-  ratio (e.g. a typed taper rate like `1:12`) in entered units; tolerates trailing
-  unit suffixes; `null` on invalid. Explicit-import callers include
-  `BoreKeywayCalcDialog.kt` (ratio input is harmless there) and the `ui/screen`
-  commit paths listed below.
-- `parseToMm(raw, unit): Double` — converts to mm for inches; returns **`0.0`**
-  (not null) on invalid input. For callers that always need a number and treat
-  "couldn't parse" the same as "zero".
-- `toMmOrNull(text, unit): Float?` — converts to mm for inches, but returns
-  **`null`** on blank or invalid input instead of `0.0`. For commit-on-blur field
-  handlers (the `CommitNum` pattern above) that must distinguish "no edit" from
-  "typed zero" — a `null` result means the handler skips the commit entirely
-  rather than writing a zero the user never typed. Used across `ui/screen`
-  (`ShaftScreen.kt`, `AddComponentDialogs.kt`, the per-kind `*PagerCard.kt` files,
-  `ComponentCarousel.kt`, `LinerWearDetail.kt`, `UndercutDetail.kt`,
-  `WornSectionEditor.kt`).
+clamping, no range enforcement — ViewModel setters layer validation on top). ONE grammar,
+read by every parser here; there is no second copy elsewhere:
+- **Number shapes**: a decimal (`12`, `1.25`, `.5`); a fraction (`3/4`); a mixed fraction
+  with a space or a hyphen (`15 1/2`, `10-1/4`, `10 - 1/4`); a ratio (`1:12`). Only a `-`
+  BETWEEN a whole number and a fraction is a separator — a leading `-` is a sign (`-1/4`,
+  `-10-1/4` = −10.25, where the field allows negatives).
+- **Commas**: a value whose only separator is one comma with no `.` reads the comma as the
+  decimal point (`1,5` = 1.5, `12,75`) — a European-locale numeric keypad sends `,` as its
+  decimal key. EXCEPT the thousands-ambiguous shape, one comma before exactly three digits with
+  a non-zero whole part (`1,500`): it could be 1.5 or 1500, so it is **not a number** and the
+  field says so rather than guessing (`0,500` and `,500` have no thousands reading and read as
+  0.5). With a `.` present, commas are thousands separators only on 3-digit groups before the
+  dot (`1,234.5`); any other comma shape is not a number.
+- **Unit suffixes** (lengths only): `mm`, or `in` / `"` / `″` / `''` for inches, any case,
+  with or without a space before it. A suffix names the unit the value is in, whatever the
+  document unit: `260mm` in an inch drawing stores 260 mm, `11"` in a millimetre drawing
+  stores 279.4 mm. Any other trailing letters (`12ft`, `5'`, `4tpi`) make the text not a
+  number — a suffix is read or refused, **never dropped** (the old parser stripped any
+  trailing letters, so `260mm` in an inch drawing stored 260 INCHES, emulator QA). A
+  converted value displays afterwards in the document unit, which is correct: canonical is mm.
+- `parseFractionOrDecimal(raw): Double?` — the **unit-blind** parser, for unitless fields:
+  TPI, counts, ratios, runout TIR values. It returns `null` for a value carrying ANY unit
+  suffix, so no caller can multiply the result by the document unit and silently lose one.
+  Length and Ø code must not call it.
+- `parseLengthMmOrNull(raw, unit): Double?` — a length in canonical mm: the suffix's unit
+  when there is one, `unit` (the document unit) otherwise; `null` on blank or invalid.
+- `toMmOrNull(text, unit): Float?` — the same, as a `Float`, for commit-on-blur field
+  handlers (the `CommitNum` pattern above) that must distinguish "no edit" from "typed zero"
+  — a `null` result means the handler skips the commit entirely rather than writing a zero
+  the user never typed. Used across `ui/screen` (`ShaftScreen.kt`, `AddComponentDialogs.kt`,
+  the per-kind `*PagerCard.kt` files, `ComponentCarousel.kt`, `LinerWearDetail.kt`,
+  `UndercutDetail.kt`, `WornSectionEditor.kt`, `ShaftDiaPrompt.kt`).
+- `parseToMm(raw, unit): Double` — the same, returning **`0.0`** (not null) on invalid input,
+  for callers that always need a number and treat "couldn't parse" the same as "zero".
+- `parseLengthInUnit(raw, unit): Double?` — a length expressed IN `unit` (a suffix in the
+  other unit is converted), for tools that compute in the entry unit: the bore-keyway
+  calculator, the unit converter, the taper calculator's length entries.
+- `isLengthText(raw)` / `isUnitlessNumberText(raw)` — the two field gates. `CommitNum`'s,
+  `WearNum`'s, `UndercutNum`'s and the Add dialogs' default `parseValid` is `isLengthText`;
+  a unitless field passes its own (TPI: `isUnitlessNumberText`; the bolt-slot Count: a whole
+  number; the taper rate: its own parser). The card field and the Add-dialog field for the
+  same quantity therefore accept exactly the same spellings.
+- The taper rate has its own grammar (`parseTaperRateText`, `TaperRate.md`): a bare decimal
+  under 1 is a slope only up to 0.25 (3"/ft); `.75` is refused as ambiguous like a bare `3/4`.

@@ -7,6 +7,8 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import com.android.shaftschematic.util.isLengthText
+import com.android.shaftschematic.util.isUnitlessNumberText
 import org.junit.Test
 
 /**
@@ -303,5 +305,69 @@ class AddDialogGatesTest {
     fun `taper needs a placeable start and positive length`() {
         assertFalse(taper(physStartMm = -1f))
         assertFalse(taper(lengthMm = 0f))
+    }
+
+    // ── Unreadable entries are named under the field ────────────────────────────
+
+    @Test
+    fun `non-blank text that does not read is called out, blank is not`() {
+        assertEquals(NOT_A_NUMBER_ERROR, unreadableEntryError("12ft", ::isLengthText))
+        assertEquals(NOT_A_NUMBER_ERROR, unreadableEntryError("1,500", ::isLengthText))
+        assertEquals(NOT_A_NUMBER_ERROR, unreadableEntryError("10--1/4", ::isLengthText))
+        assertNull(unreadableEntryError("", ::isLengthText))
+        assertNull(unreadableEntryError("   ", ::isLengthText))
+    }
+
+    @Test
+    fun `the length fields read the same spellings as the cards`() {
+        // The card's CommitNum and the dialog's CommitNumField share isLengthText.
+        for (typed in listOf("10-1/4", "10-1/4\"", "25-3/16", "260mm", "11\"", "1,5", "12 3/4", "10.25in")) {
+            assertNull("$typed must read", unreadableEntryError(typed, ::isLengthText))
+        }
+    }
+
+    @Test
+    fun `unitless fields refuse a unit suffix`() {
+        assertEquals(NOT_A_NUMBER_ERROR, unreadableEntryError("4tpi", ::isUnitlessNumberText))
+        assertEquals(NOT_A_NUMBER_ERROR, unreadableEntryError("4in", ::isUnitlessNumberText))
+        assertNull(unreadableEntryError("4", ::isUnitlessNumberText))
+    }
+
+    // ── Bolt-slot Count: a whole number ≥ 1, never coerced ──────────────────────
+
+    /** `0` used to be stored as 1 by the dialog and dropped without a word by the card. */
+    @Test
+    fun `a bolt-slot count that is not a whole number of at least 1 is named, not coerced`() {
+        for (typed in listOf("0", "2.5", "1/2", "-1")) {
+            assertEquals("$typed is not a count", BOLT_SLOT_COUNT_MSG, boltSlotCountError(typed))
+            assertNull("$typed is never coerced", boltSlotCountOrNull(typed))
+        }
+        assertNull(boltSlotCountError("4"))
+        assertEquals(4, boltSlotCountOrNull(" 4 "))
+        assertNull("blank is not entered yet", boltSlotCountError(""))
+        assertNull("not a number is the field's own line", boltSlotCountError("abc"))
+    }
+
+    @Test
+    fun `the dialogs name a zero they need positive`() {
+        assertEquals("Must be > 0", nonPositiveEntryError("0"))
+        assertEquals("Must be > 0", nonPositiveEntryError("0mm"))
+        assertNull(nonPositiveEntryError("1/4"))
+        assertNull(nonPositiveEntryError(""))
+        assertNull(nonPositiveEntryError("abc"))
+    }
+
+    // ── FWD-measured Start in the Liner/Taper dialogs ───────────────────────────
+
+    @Test
+    fun `a FWD start resolves against the OAL and is never clamped onto the AFT face`() {
+        assertEquals(700f, addDialogPhysStartMm(isFwd = true, enteredMm = 100f, lengthMm = 200f, oalMm = 1000f), 0f)
+        assertEquals(300f, addDialogPhysStartMm(isFwd = false, enteredMm = 300f, lengthMm = 200f, oalMm = 1000f), 0f)
+        // 900 from FWD + 200 long reaches 100 past the AFT face: refused, not stored at 0.
+        assertEquals(-1f, addDialogPhysStartMm(isFwd = true, enteredMm = 900f, lengthMm = 200f, oalMm = 1000f), 0f)
+        assertTrue(addDialogFwdStartPastAft(isFwd = true, enteredMm = 900f, lengthMm = 200f, oalMm = 1000f))
+        assertFalse(addDialogFwdStartPastAft(isFwd = true, enteredMm = 800f, lengthMm = 200f, oalMm = 1000f))
+        assertFalse(addDialogFwdStartPastAft(isFwd = false, enteredMm = 900f, lengthMm = 200f, oalMm = 1000f))
+        assertFalse("no OAL, no face to be past", addDialogFwdStartPastAft(true, 900f, 200f, 0f))
     }
 }
