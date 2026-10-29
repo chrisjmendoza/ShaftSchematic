@@ -20,7 +20,14 @@ import com.android.shaftschematic.model.WearRecord
  * Only UNAMBIGUOUS successors are followed: a run split in two by an inserted component, or
  * two runs merged by a removed one, has no single answer, so its data stays keyed to the old
  * span — orphaned at render exactly as before, recoverable by Undo. Typed values (TIR, Ø) are
- * never touched; only keys and component-local axial positions move.
+ * never touched; only keys move, and component-local axial positions shift so each mark keeps
+ * its shaft position (or, on a gap an OAL change moved whole, its place in the gap).
+ *
+ * An OAL change moves every FWD-referenced part by the length delta (`withNewOal`), so a gap
+ * between two of them, or between one and the FWD end, moves WHOLE: `[a, b]` → `[a + d, b + d]`.
+ * Once `|d|` reaches the gap's length the old and new spans no longer overlap, and a gap next to
+ * it may overlap the old span instead, so [autoBodySuccessors] pairs rigidly-shifted spans first
+ * and only then falls back to overlap.
  *
  * The same transform carries a body through the two explicit actions that swap its identity
  * without moving it ([bodyIdentitySwaps]): PROMOTING a bare-shaft run ("Explicit body" — a new
@@ -32,9 +39,10 @@ import com.android.shaftschematic.model.WearRecord
  */
 
 /**
- * How closely two body spans must agree to be the SAME span across a promotion or demotion —
- * the 0.01 mm slop the bounds checks and [UNDERCUT_TOUCH_EPS_MM] use, wider than the float noise
- * of a span re-derived as `start + (end − start)` at shaft scale.
+ * How closely two body spans must agree to be the SAME span across a promotion, a demotion or
+ * an OAL change's rigid shift — the 0.01 mm slop the bounds checks and [UNDERCUT_TOUCH_EPS_MM]
+ * use, wider than the float noise of a span re-derived as `start + (end − start)` or re-anchored
+ * by `withNewOal` at shaft scale.
  */
 const val BODY_SPAN_MATCH_EPS_MM: Float = 0.01f
 
@@ -50,13 +58,24 @@ data class AutoBodyRun(
     val lengthMm: Float = endMm - startMm,
 )
 
-/** [oldRun]'s data now belongs to [newRun]. */
-data class AutoBodySuccessor(val oldRun: AutoBodyRun, val newRun: AutoBodyRun) {
+/**
+ * [oldRun]'s data now belongs to [newRun]. [movedWhole] marks a run that moved rigidly with the
+ * parts bounding it (an OAL change carrying two FWD-referenced neighbours): its marks move with
+ * it rather than staying at their old shaft position.
+ */
+data class AutoBodySuccessor(
+    val oldRun: AutoBodyRun,
+    val newRun: AutoBodyRun,
+    val movedWhole: Boolean = false,
+) {
     /**
-     * What a component-local axial value (measured from the AFT edge) gains so it stays at the
-     * same SHAFT position: `oldStart − newStart`.
+     * What a component-local axial value (measured from the AFT edge) gains. For a run whose
+     * edge moved under it, `oldStart − newStart`, so the value stays at the same SHAFT position.
+     * For a run that [movedWhole], 0: the gap and the parts bounding it moved together, so each
+     * mark keeps its place in the gap — holding the shaft position instead would leave every mark
+     * outside a gap shifted by more than its own length.
      */
-    val axialShiftMm: Float get() = oldRun.startMm - newRun.startMm
+    val axialShiftMm: Float get() = if (movedWhole) 0f else oldRun.startMm - newRun.startMm
 }
 
 private fun AutoBodyRun.overlaps(other: AutoBodyRun): Boolean =
@@ -65,15 +84,23 @@ private fun AutoBodyRun.overlaps(other: AutoBodyRun): Boolean =
 /**
  * The auto runs whose id changed under one edit, paired with the run that inherits their data.
  *
- * For each run of [before] whose id no longer resolves in [after], the successor is the single
- * run of [after] that (a) overlaps it, (b) is itself a NEW id (absent from [before]), and
- * (c) overlaps no other vanished run. Anything else — no overlapping run (the gap was filled),
- * two candidates (a split), or a candidate shared with another vanished run (a merge) — maps to
- * nothing. The result is therefore one-to-one.
+ * Two passes over the runs of [before] whose id no longer resolves in [after] ("vanished") and
+ * the runs of [after] that are NEW ids, absent from [before] ("fresh"):
+ * 1. RIGID SHIFT, only when [shiftMm] ≠ 0 (the OAL delta of an OAL change; 0 for every other
+ *    edit): a vanished `[a, b]` pairs with the single fresh run equal to `[a + shiftMm,
+ *    b + shiftMm]` within [BODY_SPAN_MATCH_EPS_MM], one-to-one both ways. Such a pair
+ *    [AutoBodySuccessor.movedWhole].
+ * 2. OVERLAP, over the runs neither side claimed in pass 1: the successor is the single fresh
+ *    run that overlaps the vanished one and overlaps no other unclaimed vanished run. No
+ *    overlapping run (the gap was filled), two candidates (a split), or a candidate shared with
+ *    another vanished run (a merge) maps to nothing.
+ *
+ * The result is therefore one-to-one, and with [shiftMm] = 0 it is the overlap pass alone.
  */
 fun autoBodySuccessors(
     before: List<AutoBodyRun>,
     after: List<AutoBodyRun>,
+    shiftMm: Float = 0f,
 ): List<AutoBodySuccessor> {
     val beforeIds = before.mapTo(HashSet()) { it.id }
     val afterIds = after.mapTo(HashSet()) { it.id }
@@ -82,9 +109,26 @@ fun autoBodySuccessors(
     val fresh = after.filter { it.id !in beforeIds }
     if (fresh.isEmpty()) return emptyList()
 
-    return vanished.mapNotNull { old ->
-        val candidate = fresh.filter { it.overlaps(old) }.singleOrNull() ?: return@mapNotNull null
-        if (vanished.count { it.overlaps(candidate) } != 1) return@mapNotNull null
+    val rigid = if (shiftMm == 0f) emptyList() else {
+        fun AutoBodyRun.shifted() = copy(startMm = startMm + shiftMm, endMm = endMm + shiftMm)
+        vanished.mapNotNull { old ->
+            val moved = old.shifted()
+            val candidate = fresh.filter { it.sameSpan(moved, BODY_SPAN_MATCH_EPS_MM) }.singleOrNull()
+                ?: return@mapNotNull null
+            if (vanished.count { it.shifted().sameSpan(candidate, BODY_SPAN_MATCH_EPS_MM) } != 1) {
+                return@mapNotNull null
+            }
+            AutoBodySuccessor(old, candidate, movedWhole = true)
+        }
+    }
+    val claimedOld = rigid.mapTo(HashSet()) { it.oldRun.id }
+    val claimedNew = rigid.mapTo(HashSet()) { it.newRun.id }
+    val openVanished = vanished.filter { it.id !in claimedOld }
+    val openFresh = fresh.filter { it.id !in claimedNew }
+
+    return rigid + openVanished.mapNotNull { old ->
+        val candidate = openFresh.filter { it.overlaps(old) }.singleOrNull() ?: return@mapNotNull null
+        if (openVanished.count { it.overlaps(candidate) } != 1) return@mapNotNull null
         AutoBodySuccessor(old, candidate)
     }
 }
@@ -142,8 +186,10 @@ fun bodyKeySuccessors(
     autoAfter: List<AutoBodyRun>,
     explicitBefore: List<AutoBodyRun>,
     explicitAfter: List<AutoBodyRun>,
+    /** The edit's OAL delta (`after − before`), for [autoBodySuccessors]' rigid-shift pass. */
+    shiftMm: Float = 0f,
 ): List<AutoBodySuccessor> {
-    val all = autoBodySuccessors(autoBefore, autoAfter) +
+    val all = autoBodySuccessors(autoBefore, autoAfter, shiftMm) +
         bodyIdentitySwaps(autoBefore, autoAfter, explicitBefore, explicitAfter)
     val oldCounts = all.groupingBy { it.oldRun.id }.eachCount()
     val newCounts = all.groupingBy { it.newRun.id }.eachCount()

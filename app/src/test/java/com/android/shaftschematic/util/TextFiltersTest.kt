@@ -69,9 +69,10 @@ class TextFiltersTest {
 
     @Test
     fun `the numeric filter is what blocked the per-foot form`() {
-        // The rate field ran this filter before: it leaves the bare fraction the parser refuses.
+        // The rate field ran this filter before: it drops the inch mark and the second slash,
+        // which leaves a shape the rate parser refuses.
         val numeric = filterNumericInput("3/4\"/ft", allowNegative = false, allowFraction = true, allowColon = true)
-        assertEquals("3/4", numeric)
+        assertEquals("3/4ft", numeric)
         assertNull(parseTaperRateText(numeric, allowAmbiguousBareOne = false))
     }
 
@@ -144,9 +145,31 @@ class TextFiltersTest {
     }
 
     @Test
-    fun `suffix characters away from the end are still dropped`() {
+    fun `letters away from the end are still dropped`() {
         assertEquals("260", card("2m60"))
-        assertEquals("4i", card("4tpi"))           // kept as typed at the end, then refused
+        assertEquals("12", card("1a2"))
+        assertEquals("4tpi", card("4tpi"))         // kept as typed at the end, then refused
         assertNull(parseFractionOrDecimal(card("4tpi")))
+    }
+
+    @Test
+    fun `a trailing word reaches the parser whole and is refused`() {
+        // Dropping the letters the suffix set does not name turned 12ft into an accepted 12.
+        for (typed in listOf("12ft", "10 inches", "6 1/2 inch", "12FT")) {
+            assertEquals(typed, card(typed))
+            assertNull("$typed must not read as a length", toMmOrNull(card(typed), UnitSystem.INCHES))
+        }
+        // The suffixes the parser reads are unchanged.
+        assertEquals("12in", card("12in"))
+        assertEquals("260mm", card("260mm"))
+        assertEquals("11\"", card("11\""))
+        assertEquals(12f * 25.4f, toMmOrNull(card("12in"), UnitSystem.MILLIMETERS)!!, 1e-3f)
+    }
+
+    @Test
+    fun `the sign path is unchanged by the trailing-word rule`() {
+        assertEquals("-", card("-", allowNegative = true))
+        assertEquals("", card("-"))
+        assertEquals("-5", card("-5", allowNegative = true))
     }
 }

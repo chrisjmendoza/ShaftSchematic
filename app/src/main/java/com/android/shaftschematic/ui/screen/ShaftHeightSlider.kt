@@ -99,6 +99,7 @@ import com.android.shaftschematic.util.PDF_PAGE_WIDTH_PT
 import com.android.shaftschematic.util.UnitSystem
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import java.util.Locale
 
 /** Test tag on the options sheets' scope caption. */
 internal const val OPTIONS_SCOPE_NOTE_TAG = "options_scope_note"
@@ -1543,7 +1544,7 @@ internal fun ShaftHeightSlider(
 }
 
 /** Paper-inch label, two decimals: 1.13″, 1.50″. */
-private fun fmtIn(inches: Float): String = "%.2f″".format(inches)
+private fun fmtIn(inches: Float): String = "%.2f″".format(Locale.US, inches)
 
 /**
  * The true largest OD a [ShaftHeightSlider] sizes against, floored so a spec with no

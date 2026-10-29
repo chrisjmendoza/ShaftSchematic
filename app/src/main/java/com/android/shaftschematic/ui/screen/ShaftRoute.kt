@@ -139,8 +139,11 @@ fun ShaftRoute(
                     )
                 }
                 is UiEvent.ShowOalMovedSnack -> {
-                    // A later snackbar (a delete, a message) replaces this one; the OAL commit is
-                    // one history step, so Undo takes back the length and the move together.
+                    // The collector waits here while the snackbar is up, so an event emitted
+                    // meanwhile (a delete's snackbar) queues behind it while the edits themselves
+                    // go on. Undo therefore names the state the commit produced: it takes back the
+                    // length and the move together (one history step) while the drawing is still
+                    // there, and undoes nothing once any later edit has changed it.
                     snackbarHostState.currentSnackbarData?.dismiss()
                     val result = snackbarHostState.showSnackbar(
                         message = event.message,
@@ -149,7 +152,7 @@ fun ShaftRoute(
                         duration = SnackbarDuration.Long,
                     )
                     if (result == SnackbarResult.ActionPerformed) {
-                        vm.undoEdit()
+                        vm.undoEditIfStillAt(event.expected)
                     }
                 }
                 is UiEvent.ShowDeletedSnack -> {
@@ -168,8 +171,9 @@ fun ShaftRoute(
                         duration = SnackbarDuration.Long // ~5s-ish, depends on platform
                     )
 
+                    // Same guarantee as the OAL snackbar: the delete, or nothing.
                     if (result == SnackbarResult.ActionPerformed) {
-                        vm.undoEdit()
+                        vm.undoEditIfStillAt(event.expected)
                     }
                 }
             }

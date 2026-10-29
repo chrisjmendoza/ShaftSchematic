@@ -137,6 +137,7 @@ import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.PreviewColorSetting
 import com.android.shaftschematic.util.toMmOrNull
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 /**
  * ShaftScreen — Editor surface
@@ -1581,11 +1582,13 @@ internal fun formatDisplay(valueMm: Float, unit: UnitSystem, d: Int = 3): String
         (valueMm.toDouble() / MM_PER_IN).toFloat()
     }
 
+    // Locale.US whatever the device locale: this text seeds the number fields, and a comma-decimal
+    // locale's `12,0000` trims to `12,`, which the parser refuses.
     // A value that rounds to zero at this precision prints "0", never "-0": a FWD-referenced
     // component flush with the FWD end recovers its distance as a negative zero or a hair
     // below it, and "-0" in a Start field reads as a negative position (on-device report).
     val text = "%.${decimals}f"
-        .format(v)
+        .format(Locale.US, v)
         .trimEnd('0')
         .trimEnd('.')
         .ifEmpty { "0" }

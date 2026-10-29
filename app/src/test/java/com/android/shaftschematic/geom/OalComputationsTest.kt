@@ -214,4 +214,61 @@ class OalComputationsTest {
         // Taper starts at physical x=0 — SET is at the shaft AFT face
         assertEquals(0.0, sets.aftSETxMm, EPS_EXACT)
     }
+
+    // ─── oalRailEndsMm — where the OAL arrows land ───────────────────────────
+
+    /** 1000 mm shaft: 100 mm end threads (included unless excluded), tapers on their shoulders. */
+    private fun railSpec(excludeAft: Boolean, excludeFwd: Boolean) = ShaftSpec(
+        overallLengthMm = 1000f,
+        threads = listOf(
+            Threads(startFromAftMm = 0f, lengthMm = 100f, majorDiaMm = 50f, pitchMm = 2f, excludeFromOAL = excludeAft),
+            Threads(startFromAftMm = 900f, lengthMm = 100f, majorDiaMm = 50f, pitchMm = 2f, excludeFromOAL = excludeFwd),
+        ),
+        tapers = listOf(
+            Taper(startFromAftMm = 100f, lengthMm = 200f, startDiaMm = 60f, endDiaMm = 100f),
+            Taper(startFromAftMm = 700f, lengthMm = 200f, startDiaMm = 100f, endDiaMm = 60f),
+        ),
+    )
+
+    private fun railEnds(spec: ShaftSpec): Pair<Double, Double> {
+        val win = computeOalWindow(spec)
+        return oalRailEndsMm(spec, computeSetPositionsInMeasureSpace(win, spec), win)
+    }
+
+    @Test
+    fun `an included end thread puts that OAL arrow on the shaft face`() {
+        val (aft, fwd) = railEnds(railSpec(excludeAft = false, excludeFwd = false))
+        assertEquals(0.0, aft, EPS_EXACT)
+        assertEquals(1000.0, fwd, EPS_EXACT)
+    }
+
+    @Test
+    fun `an excluded end thread puts that OAL arrow on the S_E_T_`() {
+        val spec = railSpec(excludeAft = true, excludeFwd = true)
+        val sets = computeSetPositionsInMeasureSpace(computeOalWindow(spec), spec)
+        val (aft, fwd) = railEnds(spec)
+        assertEquals(100.0, sets.aftSETxMm, EPS_LOOSE)
+        assertEquals(sets.aftSETxMm, aft, EPS_EXACT)
+        assertEquals(sets.fwdSETxMm, fwd, EPS_EXACT)
+    }
+
+    @Test
+    fun `each end of the OAL rail is decided on its own`() {
+        val (aft, fwd) = railEnds(railSpec(excludeAft = false, excludeFwd = true))
+        assertEquals(0.0, aft, EPS_EXACT)
+        assertEquals(900.0, fwd, EPS_LOOSE)
+    }
+
+    @Test
+    fun `with no end threads the OAL rail runs S_E_T_ to S_E_T_`() {
+        val spec = ShaftSpec(
+            overallLengthMm = 1000f,
+            tapers = listOf(
+                Taper(startFromAftMm = 0f, lengthMm = 200f, startDiaMm = 60f, endDiaMm = 100f),
+                Taper(startFromAftMm = 800f, lengthMm = 200f, startDiaMm = 100f, endDiaMm = 60f),
+            ),
+        )
+        val sets = computeSetPositionsInMeasureSpace(computeOalWindow(spec), spec)
+        assertEquals(sets.aftSETxMm to sets.fwdSETxMm, railEnds(spec))
+    }
 }

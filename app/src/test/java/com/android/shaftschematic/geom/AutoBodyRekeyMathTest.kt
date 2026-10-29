@@ -2,6 +2,7 @@ package com.android.shaftschematic.geom
 
 import com.android.shaftschematic.model.Body
 import com.android.shaftschematic.model.Liner
+import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.RunoutReading
 import com.android.shaftschematic.model.RunoutReadings
 import com.android.shaftschematic.model.RunoutStationPlacement
@@ -16,6 +17,7 @@ import com.android.shaftschematic.ui.resolved.autoBodyRuns
 import com.android.shaftschematic.ui.resolved.isAutoBodyId
 import com.android.shaftschematic.ui.resolved.resolveComponents
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
@@ -56,8 +58,11 @@ class AutoBodyRekeyMathTest {
     private fun ShaftSpec.withTaper(id: String, start: Float, length: Float) =
         copy(tapers = tapers.map { if (it.id == id) it.copy(startFromAftMm = start, lengthMm = length) else it })
 
-    private fun rekey(before: ShaftSpec, after: ShaftSpec, data: AutoKeyedData): AutoKeyedData =
-        data.rekeyedFor(autoBodySuccessors(runs(before), runs(after)))
+    private fun rekey(before: ShaftSpec, after: ShaftSpec, data: AutoKeyedData, shiftMm: Float = 0f): AutoKeyedData =
+        data.rekeyedFor(autoBodySuccessors(runs(before), runs(after), shiftMm))
+
+    /** The OAL delta of [before] → [after], what the editor's seam passes as `shiftMm`. */
+    private fun oalShift(before: ShaftSpec, after: ShaftSpec) = after.overallLengthMm - before.overallLengthMm
 
     private fun dataOn(id: String) = AutoKeyedData(
         readings = RunoutReadings(
@@ -165,6 +170,109 @@ class AutoBodyRekeyMathTest {
         assertEquals(4500f, newLast.endMm, 0f)
 
         assertFollowed(oldLast.id, newLast, shift = 0f, out = rekey(open, after, dataOn(oldLast.id)))
+    }
+
+    // ── OAL change: a gap between FWD-referenced parts moves whole ────────────────────────
+
+    // AFT taper [0,500] · gap [500,3000] · FWD liner [3000,3400] · gap G [3400,3500] (4") ·
+    // FWD taper [3500,4000]; the liner and the FWD taper are measured from FWD.
+    private val fwdPair = ShaftSpec(
+        overallLengthMm = 4000f,
+        tapers = listOf(
+            Taper(id = "t_aft", startFromAftMm = 0f, lengthMm = 500f, startDiaMm = 200f, endDiaMm = 240f),
+            Taper(
+                id = "t_fwd", startFromAftMm = 3500f, lengthMm = 500f, startDiaMm = 240f, endDiaMm = 210f,
+                authoredReference = LinerAuthoredReference.FWD,
+            ),
+        ),
+        liners = listOf(
+            Liner(
+                id = "l_fwd", startFromAftMm = 3000f, lengthMm = 400f, odMm = 254f,
+                authoredReference = LinerAuthoredReference.FWD,
+            ),
+        ),
+    )
+
+    @Test
+    fun `an OAL change moving a gap between two FWD parts by more than its length carries its data`() {
+        val oldG = autoAt(fwdPair, 3450f)
+        assertEquals(100f, oldG.lengthMm, 1e-3f)
+        val after = fwdPair.withNewOal(4000f - 120f) // −120 mm: past the 100 mm gap's own length
+        val newG = autoAt(after, 3330f)
+        assertEquals(oldG.startMm - 120f, newG.startMm, 1e-3f)
+        assertFalse("premise: the spans no longer overlap", newG.endMm > oldG.startMm)
+        assertTrue(
+            "premise: the overlap pass alone orphans it",
+            autoBodySuccessors(runs(fwdPair), runs(after)).none { it.oldRun.id == oldG.id },
+        )
+
+        val successors = autoBodySuccessors(runs(fwdPair), runs(after), oalShift(fwdPair, after))
+        assertTrue(successors.single { it.oldRun.id == oldG.id }.movedWhole)
+        // The gap moved with its neighbours, so every mark keeps its place IN the gap.
+        assertFollowed(oldG.id, newG, shift = 0f, out = rekey(fwdPair, after, dataOn(oldG.id), oalShift(fwdPair, after)))
+        // The long gap AFT of the liner lost length at its FWD end only: overlap pass, no shift.
+        val long = successors.single { it.oldRun.startMm == 500f }
+        assertFalse(long.movedWhole)
+        assertEquals(0f, long.axialShiftMm, 0f)
+    }
+
+    @Test
+    fun `an OAL change never hands one gap's data to the gap that slid over it`() {
+        // AFT taper [0,1000] · gap X [1000,1100] · FWD liner [1100,1200] · gap Y [1200,1300] ·
+        // FWD taper [1300,2000]. −150 mm: Y lands on [1050,1150], over old X, and X closes.
+        val spec = ShaftSpec(
+            overallLengthMm = 2000f,
+            tapers = listOf(
+                Taper(id = "t_aft", startFromAftMm = 0f, lengthMm = 1000f, startDiaMm = 200f, endDiaMm = 240f),
+                Taper(
+                    id = "t_fwd", startFromAftMm = 1300f, lengthMm = 700f, startDiaMm = 240f, endDiaMm = 210f,
+                    authoredReference = LinerAuthoredReference.FWD,
+                ),
+            ),
+            liners = listOf(
+                Liner(
+                    id = "l_fwd", startFromAftMm = 1100f, lengthMm = 100f, odMm = 254f,
+                    authoredReference = LinerAuthoredReference.FWD,
+                ),
+            ),
+        )
+        val oldX = autoAt(spec, 1050f)
+        val oldY = autoAt(spec, 1250f)
+        val after = spec.withNewOal(1850f)
+        val newY = autoAt(after, 1100f)
+        assertEquals(1050f, newY.startMm, 1e-3f)
+        assertTrue("X closed", runs(after).none { 1020f >= it.startMm && 1020f < it.endMm })
+        assertEquals(
+            "premise: overlap alone re-keys X onto what is physically Y",
+            listOf(oldX.id to newY.id),
+            autoBodySuccessors(runs(spec), runs(after)).map { it.oldRun.id to it.newRun.id },
+        )
+
+        val successors = autoBodySuccessors(runs(spec), runs(after), oalShift(spec, after))
+        assertEquals(listOf(oldY.id to newY.id), successors.map { it.oldRun.id to it.newRun.id })
+
+        val data = dataOn(oldX.id).let { x ->
+            x.copy(readings = RunoutReadings(x.readings.readings + RunoutReading(oldY.id, 0, 0.0254f)))
+        }
+        val out = rekey(spec, after, data, oalShift(spec, after))
+        assertEquals("Y's reading follows Y", 0.0254f, out.readings.find(newY.id, 0)!!.valueMm!!, 0f)
+        assertEquals("X stays orphaned", 2, out.readings.readings.count { it.componentId == oldX.id })
+        assertEquals(oldX.id, out.wearRecord.pits.single().componentId)
+    }
+
+    @Test
+    fun `a zero shift pairs exactly as the overlap pass always has`() {
+        val moved = base.withLiner("l2", 2500f + 76.2f, 500f)
+        assertEquals(autoBodySuccessors(runs(base), runs(moved)), autoBodySuccessors(runs(base), runs(moved), 0f))
+        assertTrue(autoBodySuccessors(runs(base), runs(moved), 0f).none { it.movedWhole })
+        // An OAL change with nothing FWD-referenced: no run moves whole, so the shift finds no
+        // rigid pair and the overlap pass gives the same answer it gives with no shift.
+        val open = base.copy(tapers = base.tapers.filter { it.id != "t_fwd" })
+        val longer = open.withNewOal(4500f)
+        assertEquals(
+            autoBodySuccessors(runs(open), runs(longer)),
+            autoBodySuccessors(runs(open), runs(longer), oalShift(open, longer)),
+        )
     }
 
     @Test

@@ -899,15 +899,21 @@ fun RunoutRoute(
             )
             // Appears only after a committed drag: one tap puts the moved bubble back
             // where it was (a first drag undoes to derived, un-pinning just that
-            // station — no other bubble is touched). Hidden once the component's station
+            // station — no other bubble is touched). RETIRED once the component's station
             // count differs from the one the drag was made at (a −/+ here, or a session
-            // Undo/Redo of one): the stored index may then name a different bubble.
+            // Undo/Redo of one): the stored index may then name a different bubble, and a
+            // later Redo that brings the count back must not revive a chip whose drag may
+            // itself have been undone since — so the state is cleared, not merely filtered.
+            val moveCount = lastBubbleMove?.let { move ->
+                entries.firstOrNull { it.id == move.componentId }
+                    ?.let { stationCountFor(it, runoutConfig.componentOverrides) }
+            }
+            LaunchedEffect(lastBubbleMove, moveCount) {
+                val move = lastBubbleMove ?: return@LaunchedEffect
+                if (!undoMoveStillApplies(move.countAtMove, moveCount)) lastBubbleMove = null
+            }
             lastBubbleMove?.takeIf { move ->
-                undoMoveStillApplies(
-                    move.countAtMove,
-                    entries.firstOrNull { it.id == move.componentId }
-                        ?.let { stationCountFor(it, runoutConfig.componentOverrides) },
-                )
+                undoMoveStillApplies(move.countAtMove, moveCount)
             }?.let { move ->
                 TextButton(
                     onClick = {

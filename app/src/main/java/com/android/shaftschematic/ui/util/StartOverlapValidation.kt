@@ -35,6 +35,9 @@ fun positiveLengthErrorMm(mm: Float?): String? =
 /** The reason every card's "> 0" gate gives. */
 const val MUST_BE_POSITIVE_MSG = "Must be > 0"
 
+/** The reason a negative Start is refused — on the cards and in the Add dialogs alike. */
+const val MUST_BE_NON_NEGATIVE_MSG = "Must be ≥ 0"
+
 /**
  * Field-level gate on a carousel card's **diameter** — explicit body Ø, liner OD, taper
  * S.E.T./L.E.T. Ø, thread major Ø, relief Ø, bolt-hole Ø: a zero diameter is not a shape, and
@@ -92,7 +95,7 @@ fun startOverlapErrorMm(
     selfLengthMm: Float,
     startMm: Float,
 ): String? {
-    if (startMm < 0f) return "Must be ≥ 0"
+    if (startMm < 0f) return MUST_BE_NON_NEGATIVE_MSG
 
     val group = selfKind.collisionGroup() ?: return null
 
@@ -127,8 +130,9 @@ fun startOverlapErrorMm(
  * The overlap half of [startOverlapErrorMm], for a span [startMm] … [startMm] + [lengthMm]:
  * another liner (for a liner) or thread (for a thread) it would run into, named by card title.
  * The card's LENGTH field calls it with the stored start and the new length, so a span is refused
- * whichever field grew it — a liner Length of 99999 used to land across every liner FWD of it
- * while the same span typed as a Start was refused (emulator QA). It does not check the start
+ * whichever field grew it — checking the Start alone would let a liner Length of 99999 land
+ * across every liner FWD of it while the same span typed as a Start is refused (emulator QA). It
+ * does not check the start
  * against 0 or the end against the OAL: a span past either end is the bounds warning's job (an OAL
  * shrink produces it legitimately). Null for kinds with no [collisionGroup].
  */

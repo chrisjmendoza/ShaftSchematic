@@ -492,7 +492,8 @@ under the fields and on the pill, with the Keep-editing/Discard prompt on leave.
 wear-spot Start/Length fields follow the same rule (verbatim commit, `wearSpotSpanIssue` shown under
 the fields and on the row, band clamped for DISPLAY only). Elsewhere, a
 `NumericInputField` that cannot accept a value restores the previous one but SAYS SO ("20 not
-applied — <reason>") until the next focus; a silent swap of a typed value is the violation
+applied — <reason>") until the next edit of that field (a focus change alone does not clear it); a
+silent swap of a typed value is the violation
 (on-device report). **A liner edge a cut has crossed into the body is not a datum**
 (`undercutLinerEdgeBuried`: a cut strictly spanning the edge — one floor runs across it, so there
 is no step; a cut that ends AT the edge leaves the step and the edge stays): the card disables
@@ -771,7 +772,14 @@ fine with neither. Keyed by `(componentId, stationIndex)` with render-layer orph
 — readings, dragged stations, its count override, wear pits, Ø readings, strip election — FOLLOW it
 when a neighbour's edit re-identifies its span (its id IS the span): the ORIGINAL `updateSpec` seam
 re-keys them in the same undo step, unambiguous successors only, a split or merge staying orphaned
-(`geom/AutoBodyRekeyMath.kt`) — and the same carry follows a body through PROMOTION ("Explicit
+(`geom/AutoBodyRekeyMath.kt`; a gap an OAL change moves RIGIDLY is paired by that shift first, since
+a move longer than the gap leaves no overlap to pair on). The keys move and, when ONE end of the gap
+moved, the component-local `axialMm` of a dragged station, pit or Ø reading is shifted by
+`oldStart − newStart` so the mark keeps its SHAFT position — the one re-derivation the
+authored-position rule allows, because the value it protects is where the mark sits on the shaft, not
+its offset from an edge that just moved; a gap that moved WHOLE keeps each mark's offset inside it
+instead (`movedWhole`), since holding the shaft position would strand every mark outside the new
+span; TIR and Ø VALUES are copied verbatim — and the same carry follows a body through PROMOTION ("Explicit
 body": the new stored body on exactly the run's span) and DEMOTION (the auto run that then fills
 exactly the removed body's span), `bodyIdentitySwaps`. The value + high-spot marker
 and the keyway cutout must be drawn **identically in both bubble draw sites** —

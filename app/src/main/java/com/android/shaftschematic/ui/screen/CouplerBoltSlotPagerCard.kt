@@ -167,6 +167,8 @@ internal fun CouplerBoltSlotPagerCard(
         // `2.5` and `1/2` are refused and named, never coerced to 1 or dropped.
         CommitNum(
             "Count", cs.count.toString(), parseValid = ::isUnitlessNumberText,
+            // A whole number: no "/" key, the Add dialog's Count field's posture.
+            fractionKey = false,
             validator = { raw ->
                 boltSlotCountError(raw)
                     ?: boltSlotCountOrNull(raw)?.let { pastAftError(authoredStartMm, it, cs.spacingMm) }

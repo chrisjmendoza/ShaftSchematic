@@ -2,6 +2,7 @@ package com.android.shaftschematic.ui.screen
 
 import com.android.shaftschematic.geom.PROFILE_MAX_SHAFT_HEIGHT_PT
 import com.android.shaftschematic.geom.PROFILE_MIN_SHAFT_HEIGHT_PT
+import java.util.Locale
 
 /**
  * The drawn-height band, spelled for user-facing copy — `0.5″` … `1.5″`.
@@ -11,7 +12,7 @@ import com.android.shaftschematic.geom.PROFILE_MIN_SHAFT_HEIGHT_PT
  * twice; a hard-coded figure left behind in a help topic is a lie the build cannot catch.
  */
 private fun inchLabel(pt: Float): String =
-    "%.2f".format(pt / 72f).trimEnd('0').trimEnd('.')
+    "%.2f".format(Locale.US, pt / 72f).trimEnd('0').trimEnd('.')
 
 internal val HEIGHT_CAP_LABEL: String = inchLabel(PROFILE_MAX_SHAFT_HEIGHT_PT) + "″"
 

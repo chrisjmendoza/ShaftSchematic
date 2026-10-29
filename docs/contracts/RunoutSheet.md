@@ -559,7 +559,8 @@ no autosave/snapshot/import/`newDocument` plumbing changed; it all rides `WearRe
   — auto-body/taper ids aren't known to the codec, same as runout readings. (Wear spots ARE pruned
   at decode, against the liner list — pits are deliberately not.)
 - **Auto bodies**: a pit (or Ø reading) on a bare-shaft body follows it through a neighbour's edit
-  — re-keyed, `axialMm` shifted to the same shaft position (see Runout Bubble Editor,
+  — re-keyed, `axialMm` shifted to the same shaft position, or kept in place on a gap an OAL
+  change moved whole (see Runout Bubble Editor,
   "Auto-body keys follow their body").
 
 **ViewModel** (`ShaftViewModel`): `addWearPit(componentId, axialMm, acrossFrac, size)` /
@@ -1238,11 +1239,21 @@ import/export, and `newDocument` exactly like `runoutConfig`/`wearRecord`.
   ORIGINAL spec seam (`ShaftViewModel.updateSpec` → `followAutoBodyKeys`) compares the auto runs
   before and after the edit (`autoBodyRuns(resolveComponents(..))`, the runout span ids) and, for
   each old id that vanished, takes as successor the ONE new-id run that overlaps it and overlaps no
-  other vanished run (`autoBodySuccessors`, `geom/AutoBodyRekeyMath.kt`). Every id-keyed
+  other vanished run (`autoBodySuccessors`, `geom/AutoBodyRekeyMath.kt`). An OAL change runs a
+  RIGID-SHIFT pass first: `withNewOal` moves every FWD-referenced part by the delta d, so a gap
+  between two of them (or between one and the FWD end) moves whole, `[a, b]` → `[a + d, b + d]`,
+  and once |d| reaches its length the overlap test either misses it or pairs it with the wrong
+  gap. The seam passes `shiftMm = after.overallLengthMm − before.overallLengthMm` (0 for every
+  other edit, which leaves the overlap pass alone); a vanished run pairs with the single new run
+  equal to its shifted span within `BODY_SPAN_MATCH_EPS_MM`, one-to-one both ways, and the
+  overlap pass runs over the runs neither side claimed. Every id-keyed
   collection is renamed in the same undo step — readings, dragged-station placements, the count
   override, wear pits, wear Ø readings, `WearRecord.stripComponentIds`; component-local `axialMm`
-  values shift by `oldStart − newStart` so each stays at the same shaft position (stored as-is
-  even if that leaves the new span — never clamped); and a body with readings or placements whose
+  values shift by `oldStart − newStart` so each stays at the same shaft position — except on a
+  rigid-shift pair (`movedWhole`), where the gap moved with the parts bounding it and each mark
+  keeps its place in the gap (shift 0; holding the shaft position would put every mark outside a
+  gap moved further than its own length). Values are stored as-is
+  even if that leaves the new span — never clamped; and a body with readings or placements whose
   derived count would change at the new length gets its OLD count frozen as an override (indices
   key the readings). A split (component inserted into the gap), a merge (component between two
   gaps removed), a gap filled completely, or a successor id that already holds stale data maps to

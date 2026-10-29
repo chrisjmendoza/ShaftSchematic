@@ -95,6 +95,7 @@ import com.android.shaftschematic.util.isLengthText
 import com.android.shaftschematic.util.toMmOrNull
 import com.android.shaftschematic.util.UnitSystem
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Carousel height constant
@@ -722,7 +723,7 @@ internal fun ComponentPagerCard(
     /** Sets (null clears) the unit a component's KEYWAY is authored and printed in. */
     onSetKeywayUnit: (String, UnitSystem?) -> Unit = { _, _ -> },
 ) {
-    fun f1(mm: Float): String = "%.1f".format(mm)
+    fun f1(mm: Float): String = "%.1f".format(Locale.US, mm)
 
     fun startValidator(selfId: String, selfKind: ComponentKind, selfLengthMm: Float): (String) -> String? {
         return fun(raw: String): String? {
@@ -1198,6 +1199,8 @@ internal fun CommitNum(
     externalIssueText: String? = null,
     /** Lengths and diameters by default (a unit suffix is read); unitless fields pass their own. */
     parseValid: (String) -> Boolean = ::isLengthText,
+    /** The in-field "/" key (number-pad fields, inch documents); off for whole-number fields. */
+    fractionKey: Boolean = true,
     validator: ((String) -> String?)? = null,
     onCommit: (String) -> Unit
 ) {
@@ -1219,6 +1222,7 @@ internal fun CommitNum(
         allowColon = allowColon,
         inputFilter = inputFilter,
         keyboardType = keyboardType,
+        fractionKey = fractionKey,
         validator = validator,
         onDirtyChange = { dirty -> dirtyState?.setDirty(fieldToken, dirty) },
         parseValid = parseValid,
@@ -1282,7 +1286,7 @@ internal fun dispKw(mm: Float, unit: UnitSystem): String = when (unit) {
     UnitSystem.MILLIMETERS -> disp(mm, unit)
 }
 
-internal fun Float.fmtTrim(d: Int) = "%.${d}f".format(this).trimEnd('0').trimEnd('.')
+internal fun Float.fmtTrim(d: Int) = "%.${d}f".format(Locale.US, this).trimEnd('0').trimEnd('.')
 
 internal fun pitchMmToTpi(pitchMm: Float): Float = if (pitchMm > 0f) 25.4f / pitchMm else 0f
 

@@ -55,6 +55,11 @@ import com.android.shaftschematic.util.filterNumericInput
  * spellings are not plain numbers (the taper rate's `3/4"/ft`); null keeps [filterNumericInput]
  * with the allow-flags above.
  *
+ * [fractionKey] gates the in-field "/" key ([FractionKey]): shown only on a fraction-capable field
+ * ([allowFraction]) that asks for the number pad ([KeyboardType.Decimal]), while it is enabled and
+ * focused in an inch document. A text-keyboard field already has `/`, and a whole-number field
+ * (a bolt Count) passes false.
+ *
  * [landRestoredEdit] is for a caller whose commits land in state that does NOT outlive an
  * activity recreation's teardown. The state is saved BEFORE the teardown, so the teardown's own
  * blur commits into the composition being thrown away, and the restored field then shows a typed
@@ -79,6 +84,7 @@ fun NumericInputField(
     singleLine: Boolean = true,
     maxLines: Int = if (singleLine) 1 else 5,
     keyboardType: KeyboardType = KeyboardType.Decimal,
+    fractionKey: Boolean = true,
     validator: ((String) -> String?)? = null,
     onDirtyChange: ((Boolean) -> Unit)? = null,
     placeholder: String? = null,
@@ -172,7 +178,8 @@ fun NumericInputField(
 
     // Shown only while the field is focused, so an idle field keeps its full width.
     var isFocused by remember { mutableStateOf(false) }
-    val showFractionKey = allowFraction && enabled && isFocused && LocalFractionKeyEnabled.current
+    val showFractionKey = fractionKey && allowFraction && keyboardType == KeyboardType.Decimal &&
+        enabled && isFocused && LocalFractionKeyEnabled.current
 
     OutlinedTextField(
         value = text,

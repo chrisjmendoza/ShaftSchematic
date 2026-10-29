@@ -38,7 +38,7 @@ data class SpecIssue(
  * **Only PROBLEMS belong here** — anything the user can act on, never a note about normal
  * behaviour. The banner is styled as an advisory, so a line describing ordinary authoring reads as
  * an error and makes the real ones easier to ignore (on-device report: a "no explicit bodies" note
- * that fired on every taper-and-liner shaft was removed on that ground).
+ * firing on every taper-and-liner shaft read as an error).
  *
  * The rules are the cards' own: overlaps are the export gate's pairs (`collisionPartnerIds`, which
  * the cards' "Overlaps …" chip also reads — bodies never collide), and the ends are the card

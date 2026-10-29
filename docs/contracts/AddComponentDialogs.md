@@ -1,4 +1,4 @@
-# AddComponentDialogs Contract (v1.15, 2026-10-28)
+# AddComponentDialogs Contract (v1.16, 2026-10-28)
 
 ## Purpose
 Composable dialogs for adding new components: `AddBodyDialog`, `AddLinerDialog`,
@@ -40,6 +40,20 @@ S.E.T./L.E.T. are not marked: a blank or 0 end is the dialog's documented way to
 the rate. The bolt-slot **Count** reads any number and shows **"Must be a whole number ≥ 1"** for
 `0`, `2.5`, `1/2` (`boltSlotCountError`, shared with the card's validator); it is never coerced —
 `0` used to be stored as 1 (emulator QA). Add stays disabled.
+
+A negative **Start** (the number pad has a `-` and the dialogs filter nothing) shows **"Must be
+≥ 0"** under the field — the cards' wording, ONE constant (`MUST_BE_NON_NEGATIVE_MSG`, through
+`addDialogNegativeStartError`) — on all four positioned dialogs, from either reference end. Add
+stays disabled; before, a typed `-5` left it disabled with nothing marked.
+
+The Add gate covers the **optional** fields too: every optional numeric field the dialog SHOWS —
+keyway W / D / L and the captured inset, blend and seal-area lengths, relief length and Ø, liner
+shoulder length and Ø, the taper's S.E.T. / L.E.T. — must be blank or readable
+(`optionalEntriesReadable`, with `keywayEntryTexts` / `threadReliefEntryTexts` naming each
+section's fields). A field showing "Not a number" holds Add: submitting it would store 0 in place
+of the typed value (a keyway ticked with W `1,500` landed with W = 0, emulator QA). Blank stays
+allowed where it was, and a HIDDEN section — keyway unticked, relief off, seal area unticked, a
+face left Square — never gates, whatever its fields hold.
 
 ## Overlaps are named before Add, the same from either reference end
 The Liner, Taper and Thread dialogs show an overlap **inline under the Start field**, naming the
@@ -487,6 +501,10 @@ the aft-most center as `startFromAftMm = OAL − enteredFwd − (count−1)·spa
 ---
 
 ## Change log
+**v1.16 (2026-10-28)**
+- A negative Start shows "Must be ≥ 0" (the cards' constant); the Add gate requires every visible
+  optional numeric field to be blank or readable (`optionalEntriesReadable`). Emulator QA.
+
 **v1.15 (2026-10-28)**
 - All five Add dialogs moved to `ImeResizingAlertDialog` (Add Liner's content now scrolls too):
   fields and buttons stay above the keyboard. Emulator QA.

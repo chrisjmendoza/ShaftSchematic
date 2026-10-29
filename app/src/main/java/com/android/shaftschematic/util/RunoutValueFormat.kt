@@ -1,5 +1,7 @@
 package com.android.shaftschematic.util
 
+import java.util.Locale
+
 /**
  * Reads a typed TIR back into canonical mm: a decimal, a shop fraction (`1/64`) or a mixed number,
  * in the active [unit] — the same length grammar every other numeric field takes
@@ -25,7 +27,7 @@ fun formatRunoutValue(valueMm: Float, unit: UnitSystem): String {
     val display = unit.fromMillimeters(valueMm.toDouble())
     // Fixed thousandths, trailing zeros KEPT. Normalize "-0.000" (a tiny negative that rounds to
     // zero) so it never prints a sign.
-    val fixed = "%.3f".format(display).let { if (it == "-0.000") "0.000" else it }
+    val fixed = "%.3f".format(Locale.US, display).let { if (it == "-0.000") "0.000" else it }
     // Drop the leading zero before the decimal (0.010 → .010, -0.010 → -.010) so the value
     // fits the bubble better — matches how a machinist hand-writes a TIR reading.
     return when {

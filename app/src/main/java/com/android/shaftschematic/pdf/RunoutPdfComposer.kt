@@ -40,6 +40,7 @@ import com.android.shaftschematic.geom.PROFILE_HEIGHT_SCALE_MAX
 import com.android.shaftschematic.geom.exaggeratedProfileScale
 import com.android.shaftschematic.geom.solveMaxProfileScale
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
+import com.android.shaftschematic.geom.oalRailEndsMm
 import com.android.shaftschematic.geom.WORN_VALUE_BAND_FIT_FRAC
 import com.android.shaftschematic.geom.WornValueColumn
 import com.android.shaftschematic.geom.fittedValueTextSize
@@ -771,13 +772,17 @@ internal fun composeRunoutPdfOnCanvas(
         drawRunoutHeader(c, text, contentLeft, contentRight,
             margin, HEADER_HEIGHT_PT, project, blankValues)
         val oalLineY = shaftCy - shaftHalfPt - OAL_LINE_SPACE_PT
-        // The OAL runs S.E.T. face to S.E.T. face, as on the schematic and the consolidated
-        // sheet — never the drawn window, which an excluded thread widens past the AFT face
-        // (on-device report: the arrow sat on the thread's end, reading the OAL as including it).
+        // The OAL arrows bracket what the typed OAL measures, the schematic's rule
+        // (`oalRailEndsMm`): the shaft face at an end whose thread is included in the OAL, that
+        // end's S.E.T. otherwise — never the drawn window, which an excluded thread widens past
+        // the taper face (on-device report: the arrow sat on the thread's end, reading the OAL as
+        // including it).
+        val (oalAftMm, oalFwdMm) = oalRailEndsMm(spec, setPositions, oalWindow)
+            .let { (a, f) -> a.toFloat() to f.toFloat() }
         drawOalSpanLine(
-            c, dim, text, xAt(aftSetMm), xAt(fwdSetMm), oalLineY,
-            aftShaftTopY = shaftCy - shaftOuterRPxAt(aftSetMm),
-            fwdShaftTopY = shaftCy - shaftOuterRPxAt(fwdSetMm),
+            c, dim, text, xAt(oalAftMm), xAt(oalFwdMm), oalLineY,
+            aftShaftTopY = shaftCy - shaftOuterRPxAt(oalAftMm),
+            fwdShaftTopY = shaftCy - shaftOuterRPxAt(oalFwdMm),
             unit = displayUnits.documentUnit, dual = displayUnits.dual, oalMm = spec.overallLengthMm,
             blankValues = blankValues,
         )
