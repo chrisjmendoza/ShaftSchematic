@@ -327,7 +327,11 @@ the escape hatch that keeps a huge explicit body renderable — is unticked. The
 yields to the pin (`solveMaxProfileScale`), which is exactly why the checkbox exists. Auto
 spans never opt out — bare shaft is the compression give. Split/merge fragments carry
 `label`, both show-flags, and `compressOnDrawing` (`carryBodyDisplay` — merge takes the AFT
-fragment's values; dropping them silently reset authored display choices).
+fragment's values; dropping them silently reset authored display choices), and each FACE's
+blend — length, seal, seal length, liner target, plus the profile — through `carryBodyBlendFace`:
+a split hands the AFT face to the AFT fragment and the FWD face to the FWD one (the cut faces are
+square), and a merge takes its AFT face from A and its FWD face from B; a split that dropped
+them silently squared an authored face.
 **Liners compress in SIZE only** (finite `PROFILE_MIN_LINER_PT` floor — proportional
 foreshortening, NEVER a body-style S-break cutout; the S-break glyph is a body-only draw
 path); the per-job **"Liner & taper compression" pair** (`RunoutConfig.linersProportional` +
@@ -800,7 +804,10 @@ changes, drawn or stored, so the golden rule holds by construction. The blend's 
 diameter the shaft steps to — EXCEPT where a liner butts the face (a seal area): the shaft is cut
 down under the liner but that seat is never drawn and its depth varies job to job, so the curve
 leaves from the **midpoint of the liner OD and the body Ø** (`seatDiaUnderLiner`), a derived visual
-cue nothing authors. A seat authored as its own body under a liner is NOT consulted —
+cue — the DEFAULT. A per-face `Body.blendAftToLinerOd`/`blendFwdToLinerOd` (`AutoBlend.toLinerOd`;
+the "At a liner: Seat | Liner OD" chips, under parity) runs the curve to the liner's full OD instead
+(on-device request: a body ramping straight up to the sleeve, no seat), resolved in the ONE `blendAt`
+and read only in its liner branch; unset draws the midpoint byte-identically. A seat authored as its own body under a liner is NOT consulted —
 `subtractBodiesAgainstNonBodies` trims a fully covered body out of the drawing.
 Explicit bodies carry blends as stored fields; **auto spans carry them as shaft-space anchors**
 (`AutoBlend`, `ShaftSpec.autoBlends` — the `AutoDiaOverride` keying: anchor at the span midpoint,
@@ -861,18 +868,18 @@ undercut end radius call it rather than reimplementing it. `surfaceSegsFrom` tak
 undercut or wear reading in a transition sees the real diameter — sampled at the blend's **true**
 mm span, never the drawn floor. The controls are under the **add-dialog-parity rule**, not the
 card-only carve-out (they change geometry): one shared `ui/screen/BlendSection.kt` renders them on
-both carousel cards and in `AddBodyDialog`. The **face finish** is one chip row per face —
-**Square | Blend** — deciding only whether the body END has a shoulder; **seal areas** are a
+both carousel cards and in `AddBodyDialog`. The **"Component blend"** heading carries one chip row
+per face — **Square | Blend** — deciding only whether the body END has a shoulder; **seal areas** are a
 separate "Seal areas" section (AFT / FWD checkboxes, a length field under each ticked face), on
-BOTH surfaces. A seal area is a SECTION property, independent of the finish (on-device report,
+BOTH surfaces. A seal area is a SECTION property, independent of the blend (on-device report,
 photo of a shaft on the lathe): nothing couples the two — the seal area is measured from the face
-and sits in the same place whatever ramp the face has, or none. A finish
+and sits in the same place whatever ramp the face has, or none. A Square | Blend
 change never touches the seal flags and a seal toggle never touches the blend length —
 `blendFaceMode`/`blendLenForMode`/`sealLenForSeal` are the only projection, and unticking a seal
 keeps its typed length. Do not restore the nested Blend-checkbox-reveals-Seal-checkbox
 layout: it hid the seal behind a control nobody thinks to tick first (on-device report); and do
-not fold the seal back into the finish chips as a third mode — a seal area is a section property,
-not a face finish (on-device report). Related: `normalizeBodies` never fuses an **explicit** body with
+not fold the seal back into the Square | Blend chips as a third mode — a seal area is a section
+property, not part of the blend (on-device report). Related: `normalizeBodies` never fuses an **explicit** body with
 anything — not with another explicit body (absorbing one drops its Ø and its carousel card, so a
 Ø6-to-Ø8 stepped shaft drew as one run) and not with adjacent auto fill (absorbing the gap made a
 shortened explicit body span the whole run again: the typed length had no visible effect, its

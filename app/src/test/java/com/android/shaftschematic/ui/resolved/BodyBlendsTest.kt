@@ -568,10 +568,10 @@ class BodyBlendsTest {
         assertEquals(101.6f, b.sealLenMm, eps)
     }
 
-    // ───────── seal areas independent of the face finish ─────────
+    // ───────── seal areas independent of the blend ─────────
 
     /**
-     * A seal area is a SECTION property, not a face finish: on a square face (no blend) it
+     * A seal area is a SECTION property, not part of the blend: on a square face (no blend) it
      * draws its grooves starting AT the face, with no ramp and the cap at the body radius.
      */
     @Test
@@ -844,5 +844,103 @@ class BodyBlendsTest {
         assertEquals(100f, owner.startMmPhysical, eps)
         assertNotNull(runs.firstOrNull { it.id != b.bodyId })
         assertNull(blends.firstOrNull { it.bodyId != owner.id })
+    }
+
+    // ───────── "At a liner": Seat | Liner OD ─────────
+
+    /** A Ø200 body (0..300) butting a Ø240 liner at its FWD face, blended there. */
+    private fun bodyIntoLiner(toLinerOd: Boolean) = ShaftSpec(
+        overallLengthMm = 800f,
+        bodies = listOf(
+            Body(
+                id = "run", startFromAftMm = 0f, lengthMm = 300f, diaMm = 200f,
+                blendFwdMm = 25.4f, blendFwdToLinerOd = toLinerOd,
+            ),
+        ),
+        liners = listOf(Liner(startFromAftMm = 300f, lengthMm = 400f, odMm = 240f)),
+    )
+
+    @Test
+    fun `an unset liner target keeps the derived midpoint seat`() {
+        val b = blendsOf(bodyIntoLiner(toLinerOd = false)).single()
+        assertEquals(220f, b.neighbourDiaMm, eps) // (240 liner + 200 body) / 2
+    }
+
+    /** On-device request: the shop photo's body ramps in a short cone right up to the sleeve. */
+    @Test
+    fun `a face set to Liner OD runs the curve to the liner's full OD`() {
+        val b = blendsOf(bodyIntoLiner(toLinerOd = true)).single()
+        assertEquals(LinerAuthoredReference.FWD, b.end)
+        assertEquals(300f, b.faceMm, eps)
+        assertEquals(240f, b.neighbourDiaMm, eps)
+        assertEquals(200f, b.bodyDiaMm, eps)
+        assertEquals(25.4f, b.lengthMm, eps)
+    }
+
+    @Test
+    fun `the liner target is per face`() {
+        val spec = ShaftSpec(
+            overallLengthMm = 900f,
+            bodies = listOf(
+                Body(
+                    id = "run", startFromAftMm = 300f, lengthMm = 300f, diaMm = 200f,
+                    blendAftMm = 25.4f, blendFwdMm = 25.4f, blendAftToLinerOd = true,
+                ),
+            ),
+            liners = listOf(
+                Liner(startFromAftMm = 0f, lengthMm = 300f, odMm = 260f),
+                Liner(startFromAftMm = 600f, lengthMm = 300f, odMm = 260f),
+            ),
+        )
+        val blends = blendsOf(spec)
+        assertEquals(260f, blends.single { it.end == LinerAuthoredReference.AFT }.neighbourDiaMm, eps)
+        assertEquals(230f, blends.single { it.end == LinerAuthoredReference.FWD }.neighbourDiaMm, eps)
+    }
+
+    /** The flag only answers "which liner diameter"; a drawn body across the face still wins. */
+    @Test
+    fun `a body across the face is followed whatever the liner target says`() {
+        val spec = ShaftSpec(
+            overallLengthMm = 400f,
+            bodies = listOf(
+                Body(id = "small", startFromAftMm = 0f, lengthMm = 200f, diaMm = 150f),
+                Body(
+                    id = "big", startFromAftMm = 200f, lengthMm = 200f, diaMm = 200f,
+                    blendAftMm = 25.4f, blendAftToLinerOd = true,
+                ),
+            ),
+        )
+        assertEquals(150f, blendsOf(spec).single().neighbourDiaMm, eps)
+    }
+
+    @Test
+    fun `an auto span anchor can run to the liner OD too`() {
+        val base = ShaftSpec(
+            overallLengthMm = 900f,
+            autoBodyDiaMm = 180f,
+            liners = listOf(
+                Liner(id = "aft", startFromAftMm = 0f, lengthMm = 300f, odMm = 220f),
+                Liner(id = "fwd", startFromAftMm = 600f, lengthMm = 300f, odMm = 220f),
+            ),
+        )
+        val seat = base.withAutoBlend(300f, 600f, LinerAuthoredReference.AFT, 25.4f)
+        val toOd = base.withAutoBlend(300f, 600f, LinerAuthoredReference.AFT, 25.4f, toLinerOd = true)
+
+        assertEquals(200f, blendsOf(seat).single().neighbourDiaMm, eps)
+        assertEquals(220f, blendsOf(toOd).single().neighbourDiaMm, eps)
+    }
+
+    /** An undercut or wear probe in the transition sees the diameter the curve really leaves from. */
+    @Test
+    fun `the surface envelope follows the liner target through the transition`() {
+        fun faceDia(toLinerOd: Boolean): Float {
+            val spec = bodyIntoLiner(toLinerOd)
+            val comps = resolveComponents(spec)
+            val run = comps.filterIsInstance<ResolvedBody>().single { it.id == "run" }
+            val segs = surfaceSegsFrom(listOf(run), bodyBlends(spec, comps))
+            return com.android.shaftschematic.geom.outerDiaAt(segs, 299.99f)
+        }
+        assertEquals(220f, faceDia(toLinerOd = false), 0.5f)
+        assertEquals(240f, faceDia(toLinerOd = true), 0.5f)
     }
 }

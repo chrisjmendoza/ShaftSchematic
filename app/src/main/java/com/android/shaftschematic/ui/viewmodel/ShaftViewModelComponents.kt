@@ -85,6 +85,9 @@ fun ShaftViewModel.addBodyAt(
     /** Seal-area lengths (mm) — drawing only, stored verbatim; 0 = follow the blend length. */
     blendAftSealLenMm: Float = 0f,
     blendFwdSealLenMm: Float = 0f,
+    /** Whether each face's blend runs to a butting liner's OD instead of the derived seat. */
+    blendAftToLinerOd: Boolean = false,
+    blendFwdToLinerOd: Boolean = false,
     target: SpecTarget = SpecTarget.ORIGINAL,
 ) {
     val id = newId()
@@ -115,6 +118,8 @@ fun ShaftViewModel.addBodyAt(
                     blendFwdSeal = blendFwdSeal,
                     blendAftSealLenMm = max(0f, blendAftSealLenMm),
                     blendFwdSealLenMm = max(0f, blendFwdSealLenMm),
+                    blendAftToLinerOd = blendAftToLinerOd,
+                    blendFwdToLinerOd = blendFwdToLinerOd,
                 )
             ) + s.bodies
         ).withAutoDiaOverridesSurviving(before = s)
@@ -995,6 +1000,9 @@ fun ShaftViewModel.updateLinerShade(
  * span, measured from the face whether it is square or blended — and are drawing-only in
  * exactly the same way; `0` lets the seal area follow the blend length. They are stored
  * independently of the seal flags, so a seal switched off keeps its typed length.
+ * [toLinerOdAft]/[toLinerOdFwd] choose where each face's curve leaves from when a liner butts it
+ * (the half-way seat, or the liner's full OD) — drawing-only the same way, and kept while the
+ * face is square so a face switched back to Blend still remembers it.
  */
 fun ShaftViewModel.updateBodyBlend(
     index: Int,
@@ -1005,6 +1013,8 @@ fun ShaftViewModel.updateBodyBlend(
     sealFwd: Boolean = false,
     sealAftLenMm: Float = 0f,
     sealFwdLenMm: Float = 0f,
+    toLinerOdAft: Boolean = false,
+    toLinerOdFwd: Boolean = false,
     target: SpecTarget = SpecTarget.ORIGINAL,
 ) =
     updateSpec(target) { s ->
@@ -1016,7 +1026,9 @@ fun ShaftViewModel.updateBodyBlend(
                 old.blendAftSeal == sealAft &&
                 old.blendFwdSeal == sealFwd &&
                 old.blendAftSealLenMm == sealAftLenMm &&
-                old.blendFwdSealLenMm == sealFwdLenMm
+                old.blendFwdSealLenMm == sealFwdLenMm &&
+                old.blendAftToLinerOd == toLinerOdAft &&
+                old.blendFwdToLinerOd == toLinerOdFwd
             ) return@updateSpec s
             s.copy(
                 bodies = s.bodies.toMutableList().also { l ->
@@ -1028,6 +1040,8 @@ fun ShaftViewModel.updateBodyBlend(
                         blendFwdSeal = sealFwd,
                         blendAftSealLenMm = sealAftLenMm.coerceAtLeast(0f),
                         blendFwdSealLenMm = sealFwdLenMm.coerceAtLeast(0f),
+                        blendAftToLinerOd = toLinerOdAft,
+                        blendFwdToLinerOd = toLinerOdFwd,
                     )
                 }
             )
@@ -1044,7 +1058,8 @@ fun ShaftViewModel.updateBodyBlend(
  * a seal on a square face draws its grooves from the face. [lengthMm] ≤ 0 with [seal] false
  * clears that face; the value is stored verbatim and clamped only where it is drawn.
  * [sealLenMm] sizes the face's seal area (the grooved span, measured from the face whether it
- * is square or blended), drawing-only the same way; `0` follows [lengthMm].
+ * is square or blended), drawing-only the same way; `0` follows [lengthMm]. [toLinerOd] runs the
+ * curve to a butting liner's OD instead of the derived half-way seat.
  */
 fun ShaftViewModel.setAutoBlend(
     spanStartMm: Float,
@@ -1054,8 +1069,11 @@ fun ShaftViewModel.setAutoBlend(
     profile: BlendProfile,
     seal: Boolean = false,
     sealLenMm: Float = 0f,
+    toLinerOd: Boolean = false,
     target: SpecTarget = SpecTarget.ORIGINAL,
-) = updateSpec(target) { s -> s.withAutoBlend(spanStartMm, spanEndMm, end, lengthMm, profile, seal, sealLenMm) }
+) = updateSpec(target) { s ->
+    s.withAutoBlend(spanStartMm, spanEndMm, end, lengthMm, profile, seal, sealLenMm, toLinerOd)
+}
 
 /** Liner mirror of [updateBodyShowDia]. */
 fun ShaftViewModel.updateLinerShowDia(

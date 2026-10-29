@@ -14,7 +14,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The face-finish chips project a stored blend length onto Square | Blend and back; the seal
+ * The Square | Blend chips project a stored blend length onto Square | Blend and back; the seal
  * area is a separate per-face toggle with its own length. Pins the round trips and the
  * independence a user would notice if it broke: a finish change never touches the seal flag, and
  * a seal toggle never touches the blend length.

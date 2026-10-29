@@ -175,7 +175,7 @@ Use job 935061 (Polar Ranger STBD), MID liner page.
 - [ ] Known open: a very full **dual-units consolidated sheet** can print overlapping rail labels
   when the footer grows a line. Try one if you print dual units.
 
-## Seal areas / face finish (2026-09-29 — `c212494`, `64a3434`, `eb2795a`, `80c4804`)
+## Seal areas / component blend (2026-09-29 — `c212494`, `64a3434`, `eb2795a`, `80c4804`)
 - [ ] Printed: the S-break gap stays clear of the seal cuts, and a blend at the same face does not
   push the dashes inward (neither was exercised on the AVD).
 - [ ] Footer reserves its height (no overlap on a long footer); the coupling switch.

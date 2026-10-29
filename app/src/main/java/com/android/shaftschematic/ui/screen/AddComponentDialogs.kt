@@ -236,7 +236,8 @@ fun AddBodyDialog(
                keyways90Cw: Boolean, keywayUnit: UnitSystem?,
                blendAftMm: Float, blendFwdMm: Float, blendProfile: BlendProfile,
                blendAftSeal: Boolean, blendFwdSeal: Boolean,
-               blendAftSealLenMm: Float, blendFwdSealLenMm: Float) -> Unit,
+               blendAftSealLenMm: Float, blendFwdSealLenMm: Float,
+               blendAftToLinerOd: Boolean, blendFwdToLinerOd: Boolean) -> Unit,
     onCancel: () -> Unit,
 ) {
     val d = rememberAddDialogDefaults(spec)
@@ -247,9 +248,9 @@ fun AddBodyDialog(
     val length = rememberSeededMm(effectiveLengthMm, unit)
     val dia = rememberSeededMm(max(1f, d.bodyDiaMm), unit)
 
-    // Face finish + seal areas — mirror the body card by contract (they change drawn geometry,
-    // so they are under the add-dialog-parity rule, not the card-only carve-out). Same shared
-    // BlendSection. The seal flags are independent of the finish.
+    // Component blend + seal areas — mirror the body card by contract (they change drawn
+    // geometry, so they are under the add-dialog-parity rule, not the card-only carve-out). Same
+    // shared BlendSection. The seal flags are independent of the blend.
     var blendAftMode by remember { mutableStateOf(BlendFaceMode.SQUARE) }
     var blendFwdMode by remember { mutableStateOf(BlendFaceMode.SQUARE) }
     val blendAft = remember { SeededMmField.empty() }
@@ -259,6 +260,9 @@ fun AddBodyDialog(
     val blendAftSealLen = remember { SeededMmField.empty() }
     val blendFwdSealLen = remember { SeededMmField.empty() }
     var blendProfile by remember { mutableStateOf(BlendProfile.OGEE) }
+    // "At a liner": Seat (the derived half-way shoulder) unless the user picks Liner OD.
+    var blendAftLinerTarget by remember { mutableStateOf(BlendLinerTarget.SEAT) }
+    var blendFwdLinerTarget by remember { mutableStateOf(BlendLinerTarget.SEAT) }
 
     // Keyway — gated behind a checkbox (fields hidden until turned on); mirrors the body card.
     var kwEnabled by remember { mutableStateOf(false) }
@@ -335,6 +339,10 @@ fun AddBodyDialog(
                     profile = blendProfile,
                     aftSeal = sealAft,
                     fwdSeal = sealFwd,
+                    aftLinerTarget = blendAftLinerTarget,
+                    fwdLinerTarget = blendFwdLinerTarget,
+                    onSetAftLinerTarget = { blendAftLinerTarget = it },
+                    onSetFwdLinerTarget = { blendFwdLinerTarget = it },
                     onSetAftMode = { m ->
                         blendAftMode = m
                         if (m == BlendFaceMode.BLEND && blendAft.text.isBlank()) {
@@ -500,6 +508,8 @@ fun AddBodyDialog(
                     sealFwd,
                     if (sealAft) blendAftSealLen.mm(unit) ?: 0f else 0f,
                     if (sealFwd) blendFwdSealLen.mm(unit) ?: 0f else 0f,
+                    blendAftMode == BlendFaceMode.BLEND && blendAftLinerTarget.toLinerOd,
+                    blendFwdMode == BlendFaceMode.BLEND && blendFwdLinerTarget.toLinerOd,
                 )
             }) { Text("Add") }
         },

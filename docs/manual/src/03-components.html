@@ -188,7 +188,7 @@
       <tr><td><span class="ui">Start</span></td><td>Distance from the AFT end of the shaft. Bodies have no Measure From chip.</td></tr>
       <tr><td><span class="ui">Length</span></td><td>Axial length.</td></tr>
       <tr><td><span class="ui">Diameter</span></td><td>The body diameter.</td></tr>
-      <tr><td><span class="ui">Face finish</span></td><td>Square or Blend at each end; see below.</td></tr>
+      <tr><td><span class="ui">Component blend</span></td><td>Square or Blend at each end; see below.</td></tr>
       <tr><td><span class="ui">Seal areas</span></td><td>Grooved fiberglass seat areas at either end; see below.</td></tr>
       <tr><td><span class="ui">Keyway</span> checkbox and section</td><td>See <a href="#components-keyways">Keyways</a>.</td></tr>
     </tbody>
@@ -197,28 +197,29 @@
   <aside class="note"><p>A body may run under a liner or up against a taper, and a body with a keyway is never split; see <a href="#editor-bodies">Bodies and bare shaft</a>.</p></aside>
 
   <h3>Bare-shaft card</h3>
-  <p>A bare-shaft card is titled <span class="ui">Body (auto)</span>. <span class="ui">Start</span> and <span class="ui">Length</span> are greyed out because the surrounding components decide them. <span class="ui">Diameter</span> is editable: with more than one stretch of bare shaft it asks whether the new diameter is for <span class="ui">This section</span> or <span class="ui">All auto sections</span> (see <a href="#editor-bodies">Bodies and bare shaft</a>). The card also carries <span class="ui">Show bare-shaft Ø on drawing</span>, the same <span class="ui">Face finish</span> and <span class="ui">Seal areas</span> controls as an explicit body, and the <span class="ui">Explicit body</span> checkbox that promotes it.</p>
+  <p>A bare-shaft card is titled <span class="ui">Body (auto)</span>. <span class="ui">Start</span> and <span class="ui">Length</span> are greyed out because the surrounding components decide them. <span class="ui">Diameter</span> is editable: with more than one stretch of bare shaft it asks whether the new diameter is for <span class="ui">This section</span> or <span class="ui">All auto sections</span> (see <a href="#editor-bodies">Bodies and bare shaft</a>). The card also carries <span class="ui">Show bare-shaft Ø on drawing</span>, the same <span class="ui">Component blend</span> and <span class="ui">Seal areas</span> controls as an explicit body, and the <span class="ui">Explicit body</span> checkbox that promotes it.</p>
   <aside class="note"><p>Blends and seal areas set on an auto section belong to that stretch of bare shaft and follow it when the components around it move. Promoting the section starts the new explicit body with square faces and no seal areas; set them again on its card.</p></aside>
 
-  <h3 id="components-blends">Face finish: Square or Blend</h3>
+  <h3 id="components-blends">Component blend: Square or Blend</h3>
   <p>A <strong>blend</strong> is a smooth machined transition at a body end, curving from the diameter on the other side of the face into the body's own diameter, with no square shoulder and no stated taper rate. The curve is cut from the body that carries it; no other component changes.</p>
   <table class="ref">
     <thead><tr><th>Field / control</th><th>What it means</th></tr></thead>
     <tbody>
-      <tr><td><span class="ui">AFT</span> row: <span class="ui">Square</span> | <span class="ui">Blend</span></td><td>Finish of the body's AFT face.</td></tr>
+      <tr><td><span class="ui">AFT</span> row: <span class="ui">Square</span> | <span class="ui">Blend</span></td><td>Whether the body's AFT face is square or blended.</td></tr>
       <tr><td><span class="ui">Blend AFT</span></td><td>Shown while AFT is Blend: how far in from the face the curve runs. Starts at 2″ (or a quarter of a short body).</td></tr>
+      <tr><td><span class="ui">At a liner</span>: <span class="ui">Seat</span> | <span class="ui">Liner OD</span></td><td>Shown under each blended face. Where a liner butts that face, <span class="ui">Seat</span> (default) starts the curve halfway between the liner OD and the body Ø; <span class="ui">Liner OD</span> runs it all the way up to the liner's OD, for a shaft that ramps straight to the liner with no seat. It makes no difference where no liner butts the face.</td></tr>
       <tr><td><span class="ui">FWD</span> row and <span class="ui">Blend FWD</span></td><td>The same for the FWD face.</td></tr>
       <tr><td><span class="ui">Shape</span>: <span class="ui">S-curve</span> | <span class="ui">Fillet</span> | <span class="ui">Eased cone</span></td><td>Shown once either face is blended; one shape for both faces. S-curve is smooth at both ends (default). Fillet is smooth at the large end and meets the small end at a corner. Eased cone is a straight cone with both corners softened.</td></tr>
     </tbody>
   </table>
   <ul>
     <li>The blend takes its starting diameter from whatever is across the face. If there is nothing there, or the neighbor has the same Ø, no blend is drawn.</li>
-    <li>Where a liner butts the face, as at a seal area, the curve starts from halfway between the liner OD and the body Ø. The seat under a liner is never drawn, so this is a visual cue only.</li>
+    <li>Where a liner butts the face, as at a seal area, the curve starts from halfway between the liner OD and the body Ø unless <span class="ui">At a liner</span> is set to <span class="ui">Liner OD</span>. The seat under a liner is never drawn, so the halfway start is a visual cue only.</li>
     <li>Switching a face back to Square sets its blend length to zero. The seal areas are not touched.</li>
   </ul>
 
   <h3>Seal areas</h3>
-  <p>A seal area is the stretch at a body end that the fiberglass seats into, cut with small radius grooves. It belongs to the body section, not to the face finish: a body can have grooves at a square end, grooves behind a blended end, or a blend with no grooves.</p>
+  <p>A seal area is the stretch at a body end that the fiberglass seats into, cut with small radius grooves. It belongs to the body section, not to the blend: a body can have grooves at a square end, grooves behind a blended end, or a blend with no grooves.</p>
   <table class="ref">
     <thead><tr><th>Field / control</th><th>What it means</th></tr></thead>
     <tbody>

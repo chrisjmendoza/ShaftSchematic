@@ -19,6 +19,7 @@ import com.android.shaftschematic.model.autoBlendFor
 import com.android.shaftschematic.model.blendMmOn
 import com.android.shaftschematic.model.blendSealLenMmOn
 import com.android.shaftschematic.model.blendSealOn
+import com.android.shaftschematic.model.blendToLinerOdOn
 import com.android.shaftschematic.model.hasBlendOn
 import kotlin.math.abs
 
@@ -82,16 +83,18 @@ data class BlendDrawSpan(
  *
  * A blend's CURVE is dropped (not drawn, never an error) when there is no step to blend:
  * nothing across the face, or a neighbour at the same diameter. A seal area is a property of
- * the body section, independent of the face finish, so a face with a seal keeps its grooves
+ * the body section, independent of the blend, so a face with a seal keeps its grooves
  * either way, measured from the face whether or not a ramp sits there.
  *
  * Liners are excluded from the ordinary neighbour lookup — a sleeve sitting over mid-body is
  * not a diameter the shaft steps to. The one exception is a face a liner butts directly
  * against, which is a real seal area: the shaft is cut down under the liner, but that seat is
  * covered by the liner and never drawn, and its true depth varies job to job (on-device: "the
- * size of the step can vary"). The blend there leaves from the MIDPOINT of the liner OD and
- * the body Ø — a derived visual cue, not a measurement, which is why nothing authors it. See
- * [seatDiaUnderLiner].
+ * size of the step can vary"). By default the blend there leaves from the MIDPOINT of the
+ * liner OD and the body Ø — a derived visual cue, not a measurement. A face whose
+ * [Body.blendAftToLinerOd]/[Body.blendFwdToLinerOd] (or [com.android.shaftschematic.model.AutoBlend.toLinerOd])
+ * is set runs the curve all the way up to the liner's OD instead — the shaft that ramps in a
+ * short cone straight to the sleeve, with no seat (on-device request). See [seatDiaUnderLiner].
  */
 fun bodyBlends(spec: ShaftSpec, components: List<ResolvedComponent>): List<BodyBlend> {
     val blended = spec.bodies.filter { b ->
@@ -122,7 +125,10 @@ fun bodyBlends(spec: ShaftSpec, components: List<ResolvedComponent>): List<BodyB
             for (end in LinerAuthoredReference.values()) {
                 val auto = spec.autoBlends.autoBlendFor(run.startMmPhysical, run.endMmPhysical, end)
                     ?: continue
-                blendAt(components, segs, run, end, auto.lengthMm, auto.profile, auto.seal, auto.sealLenMm)
+                blendAt(
+                    components, segs, run, end, auto.lengthMm, auto.profile, auto.seal, auto.sealLenMm,
+                    toLinerOd = auto.toLinerOd,
+                )
                     ?.let(::add)
             }
         }
@@ -149,6 +155,7 @@ fun bodyBlends(spec: ShaftSpec, components: List<ResolvedComponent>): List<BodyB
                 blendAt(
                     components, segs, run, end, stored, b.blendProfile,
                     b.blendSealOn(end), b.blendSealLenMmOn(end),
+                    toLinerOd = b.blendToLinerOdOn(end),
                 )?.let(::add)
             }
         }
@@ -166,6 +173,10 @@ fun bodyBlends(spec: ShaftSpec, components: List<ResolvedComponent>): List<BodyB
  * The curve and the seal area are independent: a face with no curve still draws its seal area,
  * returned as a seal-only [BodyBlend] (`lengthMm = 0`, neighbour Ø = the run's own). Either way
  * the seal area is measured from the face.
+ *
+ * [toLinerOd] matters only where a liner butts the face and so supplies the neighbour Ø: the
+ * curve then leaves from the liner's OD rather than the derived half-way seat. A body or taper
+ * across the face wins the lookup first and is followed whatever the flag says.
  */
 private fun blendAt(
     components: List<ResolvedComponent>,
@@ -176,6 +187,7 @@ private fun blendAt(
     profile: BlendProfile,
     seal: Boolean,
     storedSealLenMm: Float = 0f,
+    toLinerOd: Boolean = false,
 ): BodyBlend? {
     if (storedLengthMm <= 0f && !seal) return null
     val runLen = run.endMmPhysical - run.startMmPhysical
@@ -184,12 +196,13 @@ private fun blendAt(
 
     // The curve needs a step to climb. A square face has none by definition; otherwise sample
     // just OUTSIDE the face — that is the diameter the curve leaves from. Shaft surface first
-    // (liners excluded); a liner butting the face supplies a derived seat instead.
+    // (liners excluded); a liner butting the face supplies a derived seat instead, or its own
+    // OD when the face asks to run to the liner.
     val neighbourDia: Float? = if (storedLengthMm <= 0f) null else {
         val probeMm = if (end == LinerAuthoredReference.AFT) faceMm - BLEND_EPS_MM * 10f
                       else faceMm + BLEND_EPS_MM * 10f
         (outerDiaAt(segs, probeMm).takeIf { it > 0f }
-            ?: seatDiaUnderLiner(components, probeMm, run.diaMm))
+            ?: seatDiaUnderLiner(components, probeMm, run.diaMm, toLinerOd))
             ?.takeIf { abs(it - run.diaMm) > BLEND_EPS_MM }
     }
     // Clamping the DRAWN curve is not rewriting what was typed.
@@ -285,13 +298,16 @@ private fun sealSpanAtFace(end: LinerAuthoredReference, xFace: Float, w: Float):
 
 /**
  * Derived seat diameter where a liner butts a body face — the MIDPOINT of the liner's OD and
- * the body's own Ø, or null when no liner covers [probeMm].
+ * the body's own Ø, or the liner's OD itself when [toLinerOd] is set; null when no liner covers
+ * [probeMm].
  *
  * The shaft really is cut down under a liner, but that seat is never drawn (the liner covers
  * it) and how far down it goes varies from job to job. Stepping the blend straight to the
  * liner OD would overstate the shoulder; running it to a seat nobody entered would be a made-up
  * measurement. Half-way reads as a shoulder without claiming a number, which is all a seal area
- * needs on a schematic. An under-liner seat authored as its own body is not consulted — it is
+ * needs on a schematic, and it is the default. Some shafts carry no seat at all — the body
+ * ramps in a short cone right up to the sleeve — and [toLinerOd] draws that one; the face's
+ * author picks which. An under-liner seat authored as its own body is not consulted — it is
  * trimmed out of the drawing by `subtractBodiesAgainstNonBodies`, so there is nothing on the
  * sheet for the curve to arrive at.
  */
@@ -299,6 +315,7 @@ internal fun seatDiaUnderLiner(
     components: List<ResolvedComponent>,
     probeMm: Float,
     bodyDiaMm: Float,
+    toLinerOd: Boolean = false,
 ): Float? {
     val liner = components
         .filterIsInstance<ResolvedLiner>()
@@ -306,7 +323,7 @@ internal fun seatDiaUnderLiner(
         .maxByOrNull { it.odMm }
         ?: return null
     if (liner.odMm <= 0f) return null
-    return (liner.odMm + bodyDiaMm) / 2f
+    return if (toLinerOd) liner.odMm else (liner.odMm + bodyDiaMm) / 2f
 }
 
 /** One vertex of a body's drawn silhouette edge: x and RADIUS, both in drawn units. */

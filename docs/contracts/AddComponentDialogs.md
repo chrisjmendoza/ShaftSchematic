@@ -458,23 +458,33 @@ submit, but every control and every visibility condition is decided in one place
 
 | Control | Shown when |
 |---|---|
-| Face-finish chips, per face — **Square \| Blend** | always |
+| "Component blend" chips, per face — **Square \| Blend** | always |
 | Axial length field, per face ("Blend AFT/FWD") | that face is **Blend** |
+| "At a liner" chips, per face — **Seat \| Liner OD** (`body_blend_aft_liner_target_<SEAT\|LINER_OD>`, `body_blend_fwd_…`) | that face is **Blend** — shown whether or not a liner butts it today (the dialog cannot know the neighbour; one rule on both surfaces) |
 | Shape chips — S-curve \| Fillet \| Eased cone | either face is Blend |
 | Seal area checkbox, per face (AFT / FWD) — under its own "Seal areas" heading | always |
 | Seal area length field, per face ("Seal area AFT/FWD") | that face's seal is ON (both surfaces — parity) |
 
-**A seal area is a section property, not a face finish.** The finish only decides whether the body
+**"At a liner"** chooses where a blended face's curve leaves from when a liner butts it: **Seat**
+(default — the derived half-way shoulder between the liner OD and the body Ø) or **Liner OD** (the
+curve runs all the way up to the sleeve, no seat — on-device request). It changes drawn geometry,
+so it is under parity: the dialog holds it as local state and submits it with the body
+(`blendAftToLinerOd`/`blendFwdToLinerOd`; a square face submits `false`), the explicit card commits
+each tap verbatim through `updateBodyBlend` (one undo step, the seal-checkbox posture), and the auto
+card writes it onto the face's `AutoBlend` anchor. The "Component blend" heading was "Face finish",
+which read as nonsense on a component card (on-device report).
+
+**A seal area is a section property, not part of the blend.** The Square | Blend chips only decide whether the body
 END has a shoulder (a blend ramp up to the neighbour) or is square; the seal area — the grooves the
-fiberglass seats into — has its own per-face on/off and length, independent of the finish (on-device
+fiberglass seats into — has its own per-face on/off and length, independent of the blend (on-device
 report, photo of a shaft on the lathe). The seal area is measured from the face either way — it sits
 in the same place on a square end and a blended one (on-device report: a blend pushed the dashes
-inward). A finish change never touches the seal flags, and a seal toggle never
+inward). A Square | Blend change never touches the seal flags, and a seal toggle never
 touches the blend length. Ticking a seal seeds an empty seal length with the preset
 (`AddDefaultsConfig.SEAL_LEN_IN`, 4 in, capped at a quarter of the body — `defaultSealLenMm`);
 unticking keeps the typed value (`sealLenForSeal`). A stored `0` follows the blend length (documents
-saved before the field). The "Seal areas" section is a sibling of "Face finish" — never a third
-finish chip, never nested under a blend control.
+saved before the field). The "Seal areas" section is a sibling of "Component blend" — never a
+third Square | Blend chip, never nested under a blend control.
 
 The auto-body card carries the same section, anchored in shaft space (`AutoBlend`), so a template's
 seal areas survive liners moving under it; the dialog has no auto counterpart because an Add dialog

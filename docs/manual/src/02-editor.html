@@ -90,7 +90,7 @@
   <table class="ref">
     <thead><tr><th>Choice</th><th>The Add dialog asks for</th></tr></thead>
     <tbody>
-      <tr><td><span class="ui">Body</span></td><td>Start, Length and Diameter; optional face finish (Square or Blend) and seal areas at each end; an optional keyway behind the <span class="ui">Keyway</span> checkbox.</td></tr>
+      <tr><td><span class="ui">Body</span></td><td>Start, Length and Diameter; an optional component blend (Square or Blend) and seal areas at each end; an optional keyway behind the <span class="ui">Keyway</span> checkbox.</td></tr>
       <tr><td><span class="ui">Liner</span></td><td><span class="ui">Measure From:</span> AFT | FWD, start from that end, Length, Outer Ø; shoulders when they are switched on in Settings.</td></tr>
       <tr><td><span class="ui">Taper</span></td><td><span class="ui">Measure From:</span> AFT | FWD, start from that end, Length, S.E.T. (small end of taper) Ø, L.E.T. (large end of taper) Ø, rate (Auto or Manual), and an optional keyway.</td></tr>
       <tr><td><span class="ui">Thread</span></td><td>Start (or AFT | FWD end when the thread is not counted in the OAL), Imperial (TPI — threads per inch) or Metric (mm, a designation such as M20×2.5), diameter and pitch, Length, optional thread relief, and <span class="ui">Include thread in OAL</span>.</td></tr>
@@ -178,7 +178,7 @@
   <p>With only one section of bare shaft there is nothing to choose: the diameter you type is the shaft's. Clear the field, or enter 0, to let a section take its diameter from its neighbors again.</p>
   <p>A section's own diameter goes with it. If you delete the component that separated it from the section before it, the two join and the joined run keeps the earlier section's diameter; add a component later that splits it again and the new section takes the shaft's diameter, not the old value. <span class="ui">Undo</span> brings the old value back. Moving or resizing a component, or changing the overall length, never loses one: a section squeezed out by a resize gets its diameter back when the room returns.</p>
   <p>If two sections with different diameters are joined (because the component between them was deleted), the joined section takes the AFT section's diameter. The FWD section's diameter is kept in reserve and comes back if the two are split again.</p>
-  <p>The auto card also carries <span class="ui">Show bare-shaft Ø on drawing</span> (one switch for all bare shaft) and the face finish and seal area controls; see <a href="#components-bodies">Bodies</a>.</p>
+  <p>The auto card also carries <span class="ui">Show bare-shaft Ø on drawing</span> (one switch for all bare shaft) and the component blend and seal area controls; see <a href="#components-bodies">Bodies</a>.</p>
 
   <h3>Making a body explicit</h3>
   <p>An explicit body is a body you control: fixed start and length, its own diameter, a keyway, a name of its own. To turn bare shaft into one:</p>

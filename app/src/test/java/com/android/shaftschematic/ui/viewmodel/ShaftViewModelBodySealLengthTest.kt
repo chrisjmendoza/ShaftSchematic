@@ -109,6 +109,39 @@ class ShaftViewModelBodySealLengthTest {
         assertEquals(0f, b.blendFwdSealLenMm, 0f)
     }
 
+    /** The no-op guard includes the "At a liner" flags: flipping only one is a real edit. */
+    @Test
+    fun `changing only a liner target is not swallowed by the no-op guard`() {
+        val vm = vmWithBody()
+        vm.updateBodyBlend(
+            0, blendAftMm = 25.4f, blendFwdMm = 0f, profile = BlendProfile.OGEE,
+        )
+
+        vm.updateBodyBlend(
+            0, blendAftMm = 25.4f, blendFwdMm = 0f, profile = BlendProfile.OGEE,
+            toLinerOdAft = true,
+        )
+
+        val b = vm.spec.value.bodies.single()
+        assertTrue(b.blendAftToLinerOd)
+        assertEquals(false, b.blendFwdToLinerOd)
+        assertEquals(25.4f, b.blendAftMm, 0f)
+    }
+
+    @Test
+    fun `addBodyAt stores the liner targets`() {
+        val vm = vm()
+
+        vm.addBodyAt(
+            startMm = 0f, lengthMm = 800f, diaMm = 150f,
+            blendFwdMm = 25.4f, blendFwdToLinerOd = true,
+        )
+
+        val b = vm.spec.value.bodies.single()
+        assertTrue(b.blendFwdToLinerOd)
+        assertEquals(false, b.blendAftToLinerOd)
+    }
+
     // ── Auto span ────────────────────────────────────────────────────────────
 
     @Test
