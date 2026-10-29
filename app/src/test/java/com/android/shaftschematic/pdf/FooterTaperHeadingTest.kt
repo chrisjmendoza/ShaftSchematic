@@ -119,4 +119,28 @@ class FooterTaperHeadingTest {
         val cols = buildFooterEndColumns(spec, UnitSystem.INCHES, cfg)
         assertEquals(FOOTER_MID_TAPER_HEADER, cols.fwdLines.first())
     }
+
+    @Test
+    fun `a blank row separates a body keyway from the taper block above it`() {
+        val cols = buildFooterEndColumns(pacFish(), UnitSystem.INCHES, cfg)
+        val kw = cols.fwdLines.indexOfFirst { it.startsWith("Body #1 KW: ") }
+        assertTrue(cols.fwdLines.toString(), kw > 0)
+        assertEquals(FOOTER_GAP_LINE, cols.fwdLines[kw - 1])
+        assertTrue("the taper block ends right above the gap", cols.fwdLines[kw - 2].startsWith("Length: "))
+        assertEquals("one gap per column", 1, cols.fwdLines.count { it == FOOTER_GAP_LINE })
+    }
+
+    @Test
+    fun `the blank draft keeps the gap and draws no rule for it`() {
+        val cols = buildFooterEndColumns(pacFish(), UnitSystem.INCHES, cfg, blankValues = true)
+        val kw = cols.fwdLines.indexOf("Body #1 KW:")
+        assertEquals(FOOTER_GAP_LINE, cols.fwdLines[kw - 1])
+    }
+
+    @Test
+    fun `a body keyway with no taper in its column gets no gap`() {
+        val spec = pacFish().copy(tapers = pacFish().tapers.filter { it.id == "TA" })
+        val cols = buildFooterEndColumns(spec, UnitSystem.INCHES, cfg)
+        assertTrue(cols.fwdLines.none { it == FOOTER_GAP_LINE })
+    }
 }

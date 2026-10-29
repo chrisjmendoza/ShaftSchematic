@@ -15,8 +15,8 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
   the "FWD Taper", although the shaft's FWD end is a straight keyed body. A renamed taper now
   heads its block with its name on every sheet, blank drafts included. Unnamed, the taper at
   each end still reads "AFT Taper" / "FWD Taper", and one part-way along reads "Taper".
-- **A body keyway listed under a taper block names its body** ("Body #1 KW:"), so it no longer
-  reads as that taper's keyway.
+- **A body keyway listed under a taper block names its body** ("Body #1 KW:") and sits one blank
+  line below the taper's lines, so it no longer reads as that taper's keyway (on-device request).
 
 ## 2026-10-27
 

@@ -526,6 +526,11 @@ internal const val FOOTER_AFT_TAPER_HEADER = "AFT Taper"
 internal const val FOOTER_FWD_TAPER_HEADER = "FWD Taper"
 /** Heading of an unnamed mid-shaft taper's block — it is neither end's taper. */
 internal const val FOOTER_MID_TAPER_HEADER = "Taper"
+/**
+ * An empty footer line: one blank row in BOTH the measurement and the draw (an empty string wraps
+ * to one empty row), and never a write-in rule on a blank draft (it carries no label).
+ */
+internal const val FOOTER_GAP_LINE = ""
 
 /**
  * Builds the exact left/right footer text lines that [drawFooter] will render.
@@ -659,12 +664,22 @@ internal fun buildFooterEndColumns(
                 "${formatLenWithUnitDual(b.keywayLengthMm.toDouble(), kwUnit, dual)}$spoon"
         }
     }
+    // A blank row sets the body keyways apart from a taper block in the same column: the
+    // body's keyway is not part of the taper's spec, and printed straight under "Length:" it
+    // read as one (on-device request). One gap per column, before its first body keyway.
+    var aftKwGap = false
+    var fwdKwGap = false
     spec.bodies.filter { it.hasKeyway }.forEach { b ->
         val span = b.keywayAbsSpanMm() ?: return@forEach
         val centerMm = span.centerMm
         val aftHalf = centerMm <= spec.overallLengthMm * 0.5f
         val col = if (aftHalf) aft else fwd
-        col += bodyKwLine(b, underTaper = if (aftHalf) aftTaperBlock else fwdTaperBlock)
+        val underTaper = if (aftHalf) aftTaperBlock else fwdTaperBlock
+        if (underTaper && !(if (aftHalf) aftKwGap else fwdKwGap)) {
+            col += FOOTER_GAP_LINE
+            if (aftHalf) aftKwGap = true else fwdKwGap = true
+        }
+        col += bodyKwLine(b, underTaper = underTaper)
         if (b.keywayOffsetFromEndMm > 0f) {
             val kwUnit = displayUnits.keywayUnitFor(b.id)
             val face = if (b.keywayEnd == LinerAuthoredReference.FWD) "FWD" else "AFT"
