@@ -1,6 +1,8 @@
 package com.android.shaftschematic.util
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -285,5 +287,47 @@ class TaperRateAutoTest {
             "Enter a ratio (1:12), inches per foot (3/4\"/ft), or a decimal",
             manualTaperRateBlockingMessage(rateText = "xyz", lengthMm = 0f, setDiaMm = 100f, letDiaMm = 120f)
         )
+    }
+
+    // ─────────────────────────────────────────────
+    // A bare decimal under 1 is a slope only up to 0.25 (3"/ft). `.75` is 3/4 typed as a
+    // decimal: read as a slope it made a 9.129" S.E.T. into a 20.19" L.E.T. (emulator QA).
+    // ─────────────────────────────────────────────
+
+    @Test
+    fun `a bare decimal steeper than a quarter is ambiguous in both modes`() {
+        for (lenient in listOf(true, false)) {
+            for (typed in listOf(".75", "0.75", "0.5", ".26", "0.999")) {
+                assertNull("$typed lenient=$lenient", parseTaperRateText(typed, allowAmbiguousBareOne = lenient))
+            }
+        }
+    }
+
+    @Test
+    fun `a bare decimal slope at or under a quarter still reads`() {
+        assertEquals(0.0625f, parseTaperRateText(".0625", allowAmbiguousBareOne = false)!!, 1e-6f)
+        assertEquals(0.0833f, parseTaperRateText("0.0833", allowAmbiguousBareOne = false)!!, 1e-6f)
+        assertEquals(0.25f, parseTaperRateText("0.25", allowAmbiguousBareOne = false)!!, 1e-6f)
+        // The per-foot spelling of the same number is the explicit form.
+        assertEquals(1f / 16f, parseTaperRateText(".75\"/ft", allowAmbiguousBareOne = false)!!, 1e-6f)
+    }
+
+    @Test
+    fun `manualTaperRateBlockingMessage names the explicit forms for a bare steep decimal`() {
+        assertEquals(
+            "Write .75\"/ft or a ratio like 1:16; a bare .75 is ambiguous",
+            manualTaperRateBlockingMessage(rateText = ".75", lengthMm = 100f, setDiaMm = 100f, letDiaMm = 0f)
+        )
+        assertNull(manualTaperRateBlockingMessage(rateText = ".0625", lengthMm = 100f, setDiaMm = 100f, letDiaMm = 0f))
+    }
+
+    @Test
+    fun `the ambiguity predicate covers the bare fraction and the bare steep decimal`() {
+        assertTrue(isAmbiguousTaperRateText("3/4"))
+        assertTrue(isAmbiguousTaperRateText(".75"))
+        assertFalse(isAmbiguousTaperRateText(".0625"))
+        assertFalse(isAmbiguousTaperRateText("1:12"))
+        assertFalse(isAmbiguousTaperRateText("3/4\"/ft"))
+        assertFalse(isAmbiguousTaperRateText("12"))
     }
 }

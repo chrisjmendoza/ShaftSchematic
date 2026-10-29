@@ -75,6 +75,35 @@ internal fun breakStubFillPath(
 }
 
 /**
+ * One end of a zoomed window as the fill clip sees it: the S-break the window end strokes at [x]
+ * from [yTop] to [yBot] with [amplitude], or a flat cut (`amplitude = 0`, the S degenerates to the
+ * straight line) where the end is the shaft's own physical end.
+ */
+internal data class WindowEndEdge(val x: Float, val yTop: Float, val yBot: Float, val amplitude: Float)
+
+/**
+ * The material side of a window cut at both ends: the band from [aft]'s edge to [fwd]'s edge,
+ * running [yMin]..[yMax] beyond the shaft. Clipping a window's component fills to it makes every
+ * fill END ON the very S the end strokes — the body-run rule ([breakStubFillPath]) for a window
+ * whose end cuts a TAPER or any other filled component, which a straight-edged fill leaves a
+ * doubled lobe and an unfilled crescent beside (on-device report). Built from [appendBreakEdgeS],
+ * so the clip and the stroked glyph are one curve. Fills must run past the window ends by the
+ * glyph's reach for the clip to have something to cut.
+ */
+internal fun breakWindowClipPath(aft: WindowEndEdge, fwd: WindowEndEdge, yMin: Float, yMax: Float): Path =
+    Path().apply {
+        moveTo(aft.x, yMin)
+        lineTo(aft.x, aft.yTop)
+        appendBreakEdgeS(this, aft.x, aft.yTop, aft.yBot, aft.amplitude, downward = true)
+        lineTo(aft.x, yMax)
+        lineTo(fwd.x, yMax)
+        lineTo(fwd.x, fwd.yBot)
+        appendBreakEdgeS(this, fwd.x, fwd.yTop, fwd.yBot, fwd.amplitude, downward = false)
+        lineTo(fwd.x, yMin)
+        close()
+    }
+
+/**
  * Draw one round-stock "S-break" edge at position [x], spanning the shaft from
  * [yTop] to [yBot].
  *

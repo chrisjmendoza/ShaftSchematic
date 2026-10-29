@@ -1,6 +1,7 @@
 package com.android.shaftschematic.util
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -53,5 +54,25 @@ class ThreadDesignationTest {
         assertEquals("M20", ThreadDesignation.format(20f, null))
         val round = ThreadDesignation.parse("M12×1.75")!!
         assertEquals("M12×1.75", round.format())
+    }
+
+    @Test
+    fun `accepts a decimal comma as DIN and ISO prints write the pitch`() {
+        for (typed in listOf("M20x2,5", "M20X2,5", "M20 x 2,5", "m20×2,5")) {
+            val d = ThreadDesignation.parse(typed)
+            assertNotNull(typed, d)
+            assertEquals(typed, 20f, d!!.majorDiaMm, 1e-4f)
+            assertEquals(typed, 2.5f, d.pitchMm!!, 1e-4f)
+            assertEquals("M20×2.5", d.format())
+        }
+        assertEquals(20.5f, ThreadDesignation.parse("M20,5x1,5")!!.majorDiaMm, 1e-4f)
+    }
+
+    @Test
+    fun `still rejects other spellings`() {
+        assertNull(ThreadDesignation.parse("M20-2.5"))
+        assertNull(ThreadDesignation.parse("20x2.5"))
+        assertNull(ThreadDesignation.parse("M20x2,5,0"))
+        assertNull(ThreadDesignation.parse("M20x2,5.0"))
     }
 }

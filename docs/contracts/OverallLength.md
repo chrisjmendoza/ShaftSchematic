@@ -1,4 +1,4 @@
-# Overall Length (v2.3, 2026-10-27)
+# Overall Length (v2.4, 2026-10-28)
 
 ## Scope
 Defines how the **Overall Length** field behaves, how it interacts with components, and how the
@@ -23,6 +23,12 @@ UI signals errors. Applies to `ShaftViewModel`, `ShaftRoute`, and `ShaftScreen`.
   with the FWD taper re-anchored through the transient value (see Re-anchoring below).
 - **Empty field**: an IME-Done or a blur on an empty field commits **nothing**. The field text
   re-derives from the stored value (a revert). It never zeroes the shaft.
+- **Unreadable text says so**: ✓ / IME Done on text that does not parse commits nothing and
+  keeps the text (the user is mid-edit); a blur restores the stored value. Both show the numeric
+  fields' `"<typed> not applied — not a number"` line under the field until the text is edited
+  or the edit is cancelled — a ✓ that did nothing read as a broken button (emulator QA). The
+  field reads the shared grammar (`NumberField.md`): `368-1/2` and `368 1/2` commit, and a unit
+  suffix converts (`9360mm` in an inch drawing is 9360 mm).
 - **Blur discipline**: a commit on blur also requires the text to have changed since focus
   (`ui/input/BlurCommitPolicy.kt`) — a tap-and-leave is a no-op. A ✓ or ✗ resets that baseline
   before it clears focus, so the blur that follows cannot commit a second time or undo a cancel.
@@ -121,6 +127,21 @@ rewrite of a typed value (nobody authors a 0.005 mm offset; a real 1/32″ survi
 is 0.01 mm for the same reason: at exactly the float resolution, one unit of rounding lit the
 warning on a legitimately flush taper.
 
+### The move snackbar
+The re-anchor is silent in the model, so the editor SAYS what an OAL commit moved: on the editor's
+snackbar host, `OAL 234 3/16": moved FWD Liner 4 13/16" aft (measured from FWD)` — up to two card
+titles, then "+N more"; "aft" / "fwd" by direction; distances in the document unit
+(`formatLenWithUnit`). It carries **Undo**, which calls the session `undoEdit()`: the commit is ONE
+history step (the field's mm and raw-text callbacks land inside one coalescing window, and the
+second moves nothing), so Undo takes back the length and the move together. The pure diff is
+`oalMoveSummary(before, after, unit)` (`ui/util/OalMoveSummary.kt`): tapers, liners and coupler
+bolt rows whose stored start moved by more than `OAL_REANCHOR_SNAP_MM`, ordered AFT → FWD;
+excluded threads are left out (they follow the end by definition). `ShaftViewModel.onSetOverallLengthMm`
+emits `UiEvent.ShowOalMovedSnack` when it returns a line; nothing moved, no snackbar. Both
+targets: the Final tab's OAL field takes the same path (`ShaftRoute(target = FINAL)`). On-device
+report: an OAL correction from 239" to 234 3/16" carried a FWD-measured liner into a mid-shaft
+taper and nothing said why the two now overlapped.
+
 ### Load (open, template apply, template preview)
 There is nothing to decide. A document's stored `overallLengthMm` is restored verbatim and
 every load path resolves through the same one-argument `resolveComponents(spec)`, so a
@@ -129,6 +150,10 @@ template card's preview can never disagree with the drawing it becomes.
 ---
 
 ## Change Log
+**v2.4 (2026-10-28)** — **The move snackbar** (on-device report): an OAL commit that re-anchors
+FWD-measured parts says which moved, how far and which way, with Undo (`oalMoveSummary`). The
+warning banner now names a part past an end ("Body #1 runs 4 13/16" past the FWD end") instead of
+counting it, and the preview tints the overhang red (`ShaftScreen.md`).
 **v2.3 (2026-10-27)** — **New-shaft diameter prompt** (on-device request): the first OAL commit
 on a brand-new original drawing asks for the bare-shaft Ø (`shouldPromptShaftDia` /
 `ShaftDiaPromptDialog`); Set writes `autoBodyDiaMm`, Skip is final.

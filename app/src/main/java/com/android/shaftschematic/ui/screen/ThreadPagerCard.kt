@@ -20,9 +20,14 @@ import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.resolved.ResolvedThread
+import com.android.shaftschematic.ui.util.MUST_BE_POSITIVE_MSG
+import com.android.shaftschematic.ui.util.collisionChipMessage
+import com.android.shaftschematic.ui.util.positiveDiaErrorMm
 import com.android.shaftschematic.ui.util.positiveLengthErrorMm
+import com.android.shaftschematic.ui.util.spanOverlapErrorMm
 import com.android.shaftschematic.ui.util.startOverlapErrorMm
 import com.android.shaftschematic.ui.util.threadWarningMessages
+import com.android.shaftschematic.util.isUnitlessNumberText
 import com.android.shaftschematic.util.parseFractionOrDecimal
 import com.android.shaftschematic.util.ThreadDesignation
 import com.android.shaftschematic.util.toMmOrNull
@@ -88,7 +93,7 @@ internal fun ThreadPagerCard(
         debugText = if (showComponentDebugLabels) "id=${th.id} • startMm=${f1(th.startFromAftMm)} • endMm=${f1(th.startFromAftMm + th.lengthMm)}" else null,
         errorMessage = if (th.excludeFromOAL) null else (
             startOverlapErrorMm(spec, th.id, ComponentKind.THREAD, th.lengthMm, th.startFromAftMm)
-                ?: if (th.id in collidingComponentIds) "Overlaps another component" else null
+                ?: if (th.id in collidingComponentIds) collisionChipMessage(spec, th.id) else null
         ),
         warningMessage = threadWarningMessages(spec, th, unit).joinToString("; ").ifEmpty { null },
         componentId = th.id, componentKind = ComponentKind.THREAD,
@@ -150,13 +155,22 @@ internal fun ThreadPagerCard(
         } else {
             FieldPair(
                 first = {
-                    CommitNum("Major Ø (${abbr(unit)})", disp(th.majorDiaMm, unit)) { s ->
+                    CommitNum(
+                        "Major Ø (${abbr(unit)})", disp(th.majorDiaMm, unit),
+                        validator = { raw -> positiveDiaErrorMm(toMmOrNull(raw, unit)) },
+                    ) { s ->
                         toMmOrNull(s, unit)?.let { onUpdateThread(idx, th.startFromAftMm, th.lengthMm, it, th.pitchMm, th.metricDesignation) }
                     }
                 },
                 second = {
-                    CommitNum("TPI", tpiDisplay) { s ->
-                        parseFractionOrDecimal(s)?.toFloat()?.takeIf { it > 0f }?.let { tpi ->
+                    // A TPI of 0 has no pitch: refused and named, as AddThreadDialog's gate does.
+                    CommitNum(
+                        "TPI", tpiDisplay, parseValid = ::isUnitlessNumberText,
+                        validator = { raw ->
+                            parseFractionOrDecimal(raw)?.let { if (it <= 0.0) MUST_BE_POSITIVE_MSG else null }
+                        },
+                    ) { s ->
+                        parseFractionOrDecimal(s)?.toFloat()?.let { tpi ->
                             onUpdateThread(idx, th.startFromAftMm, th.lengthMm, th.majorDiaMm, tpiToPitchMm(tpi), th.metricDesignation)
                         }
                     }
@@ -165,7 +179,13 @@ internal fun ThreadPagerCard(
         }
         CommitNum(
             "Length (${abbr(unit)})", disp(th.lengthMm, unit),
-            validator = { raw -> positiveLengthErrorMm(toMmOrNull(raw, unit)) },
+            // A thread counted in the OAL is checked like its Start: running into another
+            // thread is refused. An excluded thread hangs off the shaft end and never collides.
+            validator = { raw ->
+                val newLen = toMmOrNull(raw, unit)
+                positiveLengthErrorMm(newLen) ?: if (th.excludeFromOAL || newLen == null) null
+                    else spanOverlapErrorMm(spec, th.id, ComponentKind.THREAD, th.startFromAftMm, newLen)
+            },
         ) { s ->
             toMmOrNull(s, unit)?.let { onUpdateThread(idx, th.startFromAftMm, it, th.majorDiaMm, th.pitchMm, th.metricDesignation) }
         }

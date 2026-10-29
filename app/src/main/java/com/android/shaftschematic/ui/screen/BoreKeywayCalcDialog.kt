@@ -34,7 +34,7 @@ import com.android.shaftschematic.geom.nearestFractionLabel
 import com.android.shaftschematic.geom.roughCutterTargetDepth
 import com.android.shaftschematic.geom.validateBoreKeyway
 import com.android.shaftschematic.util.UnitSystem
-import com.android.shaftschematic.util.parseFractionOrDecimal
+import com.android.shaftschematic.util.parseLengthInUnit
 import java.util.Locale
 
 /**
@@ -96,14 +96,16 @@ fun BoreKeywayCalcDialog(
                 // Everything is parsed and solved BEFORE the fields are laid out so each
                 // field can carry its own error state — an entry that cannot produce a
                 // depth has to read wrong AT THE FIELD, not only in the results block.
-                val d = parseFractionOrDecimal(boreDia)
-                val w = parseFractionOrDecimal(finalWidth)
-                val dep = parseFractionOrDecimal(finalDepth)
+                // A unit suffix is read and converted into the calculator's unit (`20mm` in an
+                // inch calculation is 0.7874).
+                val d = parseLengthInUnit(boreDia, unit)
+                val w = parseLengthInUnit(finalWidth, unit)
+                val dep = parseLengthInUnit(finalDepth, unit)
                 val baseIssue = if (d != null && w != null && dep != null) {
                     validateBoreKeyway(d, w, dep)
                 } else null
                 val rows = listOf(cutter1, cutter2).mapIndexed { i, raw ->
-                    val cw = if (raw.isBlank()) null else parseFractionOrDecimal(raw)
+                    val cw = if (raw.isBlank()) null else parseLengthInUnit(raw, unit)
                     CutterRow(
                         index = i + 1,
                         raw = raw,

@@ -128,4 +128,18 @@ class SessionHistoryTest {
         h.record("x", 5000)
         assertFalse(h.canUndo)
     }
+
+    @Test
+    fun `clear with a seed makes the next different state an undo step`() {
+        val h = SessionHistory<String>()
+        h.record("a", 0L)
+        h.clear(seed = "b")
+        assertFalse(h.canUndo)
+        h.record("b", 1L)  // the boundary state arriving late is a no-op against the seed
+        assertFalse(h.canUndo)
+        h.record("c", 2L)
+        assertTrue(h.canUndo)
+        assertEquals("b", h.undo("c"))
+        assertFalse(h.canUndo)
+    }
 }

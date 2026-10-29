@@ -8,6 +8,45 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-28
 
+### feat(pdf): an explicit body at the end of the shaft prints its own length
+
+- An explicit body whose stored span touches the AFT or FWD face of the shaft now prints a length
+  dimension over itself on the schematic and the consolidated sheet; a mid-shaft body does not.
+  The coupling-end body is the one whose length the shop needs, and without it the nearest number
+  was another part's datum rail (on-device report: a liner's rail from the FWD end read as the
+  body's length).
+- Every explicit-body card gets a "Show dimension rail" switch to override that default either
+  way. While untouched it follows the position ("On — body is at a shaft end" / "Off — mid-shaft
+  body"). Card-only, like the other drawing-display switches — the Add Body dialog has none.
+- No span is printed twice: a body span that another rail already dimensions (a liner's datum
+  rail ending at the same faces) is skipped, and so is a body that runs face to face (that length
+  is the OAL).
+- New field `Body.showDimensionRail` (optional; documents saved before it follow the position
+  default). Docs: `docs/PDF_EXPORT.md` §5.2, `docs/DATA_MODEL.md`, `docs/COMPONENT_CONTRACT.md`,
+  `docs/contracts/AddComponentDialogs.md`, User Manual (Components → Show dimension rail).
+
+### fix(editor): Back on a filled-in Add dialog asks before throwing it away
+
+- Back or a tap outside an Add dialog (body, taper, thread, liner, bolt slot) or the worn-section
+  editor that you have typed in or changed now asks "Discard this …? What you typed will be lost."
+  with Keep editing / Discard. An untouched dialog closes at once as before, and Cancel is still a
+  direct discard (on-device ruling: "it should ask to be safe").
+- The controls the dialogs are built from mark the dialog edited themselves
+  (`ui/screen/DialogDiscardGuard.kt`), so a new field or chip is covered without a list to keep up.
+  Docs: `docs/contracts/AddComponentDialogs.md`, User Manual (Editor, Recording).
+
+### feat(input): a "/" key in number fields, for keyboards whose number pad has none
+
+- Number fields ask for the keyboard's number pad, and Gboard's has no `/` — on such phones a
+  fraction could not be typed at all. While you type in an inch field, a "/" button now sits at the
+  right end of the field and types the fraction bar at the cursor (`10`, space, `1`, `/`, `4`;
+  `10-1/4` works too). Not shown in millimetre documents, on whole-number fields (bolt count), or
+  on text-keyboard fields (calculators, taper rate), whose keyboard already has `/`.
+- Keyboard types are unchanged: the app never forces a phone-style keypad (on-device ruling —
+  SwiftKey and Samsung Keyboard show their full layout for number fields, and keypads differ by
+  device). An app-owned number keypad is on the TODO list. Docs: `docs/contracts/NumberField.md`
+  §"Keyboard", User Manual (Editor → units), Help (Millimeters and inches).
+
 ### fix(pdf): the footer heads a taper with its own name
 
 - **A taper you named prints that name over its footer block.** On-device report: a step-down
@@ -17,6 +56,267 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
   each end still reads "AFT Taper" / "FWD Taper", and one part-way along reads "Taper".
 - **A body keyway listed under a taper block names its body** ("Body #1 KW:") and sits one blank
   line below the taper's lines, so it no longer reads as that taper's keyway (on-device request).
+
+### feat(editor): the warnings name the part that's wrong — and the drawing shows where
+
+- **Every banner line names its part.** On-device report: after correcting a job's OAL from 239" to
+  234 3/16" the banner said "1 component extends past shaft length" — a count — and the overlap it
+  caused was not on the banner at all. Now each problem is its own line, by the part's card title:
+  `FWD Liner overlaps Body size transition taper`, `Body #1 runs 4 13/16" past the FWD end`,
+  `AFT Thread starts 2" before the AFT end`, `Body #2 is shorter than 1 mm`. Overlaps come first
+  (they block printing); distances are in the drawing's unit, fractions in inches.
+- **Tap a line to go to the part.** Each line is a button ("Show") that selects its part the way a
+  tap on the drawing does, so the carousel turns to its card; an overlap line selects the first part
+  it names. More than three problems show three and "+N more".
+- **The drawing marks the same problems in red.** The stretch two overlapping parts share is a red
+  band; the part of a component beyond the end is tinted red, with the shaft's real end dashed
+  across it, and the drawing widens to show it. Nothing else changes: other drawings and every PDF
+  are as before.
+- **The export refusal names the pair too:** `Can't export: FWD Liner overlaps Body size transition
+  taper` (with "(+N more)" for further pairs), in place of "Fix component collisions before exporting."
+- **An OAL change says what it moved.** Parts measured from FWD move with the FWD end; when they
+  do, a message says so — `OAL 234 3/16": moved FWD Liner 4 13/16" aft (measured from FWD)` — with
+  Undo, which puts back the old length and everything it moved in one step. Nothing moved, no
+  message. Same on the Final tab.
+
+### fix(runout): re-opening a reading and saving it keeps the value you typed
+
+- **Moving only the high spot no longer rounds the TIR.** Emulator QA: a reading typed as
+  `0.0015` shows as `.002` on its bubble; re-opening it, tapping the ring at 12:00 and saving
+  stored 0.002" — a half-thou change to a measurement nobody touched. The same happened to a
+  `1/64` reading (re-saved as .016"). The reading dialog now keeps the stored value exactly until
+  you edit the TIR field; only a value you type (or Clear) is read again. The bubble and the
+  printed sheet still show three decimals, as before.
+- **The same for measured diameters and worn sections.** Re-saving an `Edit Ø reading` or a worn
+  section without touching a value keeps it exactly as typed (a `9 63/64` no longer comes back as
+  9.9844), field by field. Switching a worn section's S.E.T. chips still only changes how its
+  distance is shown.
+
+### fix(runout): readings stay on a body when you tick or untick "Explicit body"
+
+- **Making a bare-shaft stretch an explicit body keeps everything recorded on it.** Ticking
+  "Explicit body" (to add a keyway, say) gave the stretch a new identity, and its TIRs, dragged
+  bubbles, bubble count, pits and measured diameters dropped off the Runout tab and the sheet. They
+  now move to the new body, and unticking it (or deleting the body) hands them back to the bare
+  shaft that fills the same span. One Undo puts back both the change and the readings. A body added
+  over only part of a stretch, or one whose removal joins two stretches, is left alone, as before.
+
+### fix(pdf): a dimension value printed beside its span points back to it
+
+- **A value moved off its own line gets a thin leader to the span it measures.** Emulator QA: on
+  a long shaft with a true-scale body, the AFT taper's "25 3/16"" sat just right of its span, over
+  the start of the next dimension, with nothing tying it to its own. Any value the layout has to set
+  beside its span, or lift above its usual height, now carries a short line down to its own
+  dimension line — the same leader the undercut rails already draw. The leader never crosses
+  another value, and sheets where every value fits are unchanged.
+
+### fix(tabs): Undo and Redo on the Runout, Wear and Consolidated Output tabs
+
+- **Undo where you made the change.** The Runout Sheet, Wear Document (and each component's wear
+  page) and Consolidated Output tabs now carry the same Undo and Redo arrows as the Undercut tab.
+  An accidental "−", a dragged bubble, a pit or a worn section no longer needs a trip to the
+  Schematic tab's History menu (Emulator QA: two round trips to undo two taps).
+- **"Undo move" retires once the bubble count changes.** After a "−" or "+" on the same component
+  the stations are renumbered, and the button could have un-pinned a different bubble; it now goes
+  away, and the tab's Undo covers the count change.
+
+### fix(wear): deleting pits, a wear spot or a worn section offers Undo
+
+- **Clear all pits**, a wear spot's bin and a worn section's **Delete** removed their marks at once
+  with no way back from the page (Emulator QA). Each now shows a message — "3 pits cleared",
+  "Wear spot deleted", "Worn section 2 deleted" — with **Undo**, which puts back exactly what was
+  removed, where it was.
+- **Wear spot values on the zoomed drawing no longer run together.** A short spot's start and
+  length printed as "5.25in3.5in". They now print like the printed strip — fractions and `"` in
+  inches — each in a break in its own line, or on its own row when the spot is short.
+
+### fix(editor): clearer messages — rename refusals, mate copies, pilot runout, wording
+
+- **Renaming onto a name that is already saved says so in the dialog** ("A saved shaft named
+  ‘…’ already exists."), under the name field. The message used to go to the bottom of the screen
+  behind the dialog and the keyboard, so the Rename button looked like it did nothing.
+- **"Duplicate for mate" shows its "Created ‘…’" message longer**, with a close button, on every
+  tab that offers it.
+- **The pilot runout shows on the Runout tab once entered** ("Pilot runout: .003 in · high spot
+  3:00"); the tab draws no end view, so it was only visible by reopening the dialog.
+- **Wording:** the Final tab's "Reset to original?" no longer says edits "will be lost" — it says
+  they are replaced and Undo brings them back. The Wear tab's header now says it is where wear is
+  recorded, with the blank field form as a second line. The wear page's screen-reader description
+  names the component ("Taper wear detail", not "Liner wear detail" on every page).
+
+### fix(runout): readings on bare shaft stay put when a neighbouring liner or taper changes
+
+- **Correcting a liner's length no longer wipes the readings next to it.** Emulator QA: two TIRs
+  typed on the bare shaft between two liners, a dragged bubble and a "−" on the same stretch all
+  vanished from the Runout tab — and from the printed sheet — after the AFT liner's length was
+  corrected by 7/16". The values were still in the file (Undo brought them back), but nothing said
+  they had gone. A stretch of bare shaft is identified by where it starts and ends, so moving
+  either end lost track of what was recorded on it. Now the readings, dragged bubbles, bubble
+  count, wear pits and measured diameters on that stretch follow it when a neighbouring liner or
+  taper is lengthened, shortened or moved, or the overall length changes. Dragged bubbles, pits and
+  diameter readings keep their place on the shaft, and if the new length would give the stretch a
+  different number of bubbles, it keeps the old count so every TIR stays on the bubble it was
+  measured at. The typed values are never changed. One Undo puts back both the edit and the
+  readings.
+- **When the app can't tell which stretch the readings belong to, it leaves them alone** — a
+  component added in the middle of the stretch (splitting it in two), or one removed from between
+  two stretches (joining them). Those readings stay in the file, off the drawing, as before, and
+  Undo brings them back.
+
+### fix(input): numeric fields read shop spellings correctly — and say so when they can't
+
+- **`260mm` typed on an inch drawing is 260 millimeters, not 260 inches.** Emulator QA: every
+  length and diameter field threw a typed unit away and took the number in the drawing's unit,
+  so a value off a metric print landed 25.4× too big with no warning. A unit on the end of a
+  value is now read: `mm`, or `in`, `"`, `″` or `''` for inches, with or without a space. `11"`
+  on a millimeter drawing is 279.4 mm. The value then shows in the drawing's unit. Any other
+  letters after a number (`12ft`, `5'`, `4tpi`) are refused instead of ignored; TPI and other
+  plain-number fields refuse a unit outright.
+- **`10-1/4` is ten and a quarter.** Hyphenated mixed fractions — how prints and shop notes
+  write them — now read the same as `10 1/4`, on the cards, in the Add dialogs, in the
+  Shaft-diameter prompt and in the Overall Length field. A card used to delete the hyphen as you
+  typed, so `10-1/4` turned into `101/4` (25.25") and committed. A leading `-` is still a minus
+  sign where a field takes negatives (`-10-1/4` is −10.25).
+- **A decimal comma reads as a decimal point.** A phone's numeric keypad often shows `,` as its
+  decimal key: `1,5` is 1.5 and `12,75` is 12.75 (a card used to delete the comma, so `1,5`
+  became 15). `1,500` is refused, because it could be 1.5 or 1500; the app does not guess.
+  `1,234.5` still reads as thousands.
+- **A value a field can't read always says so.** In the Add dialogs and the new-shaft
+  "Shaft diameter" prompt the field shows **Not a number** in red under it, so a greyed-out Add
+  or Set always has a reason on screen (a `25-3/16` Length used to leave Add disabled with
+  nothing marked). The Overall Length field's ✓ and Done on such text used to do nothing; they
+  now show "… not applied — not a number" under the field, and leaving the field puts the old
+  length back with the same line. The cards already worked this way.
+- **The card and the Add dialog for the same field now take exactly the same spellings.**
+
+### fix(taper): a bare `.75` rate is refused as ambiguous, like `3/4`
+
+- **Emulator QA:** a Manual rate of `.75` was read as a slope of 0.75 — 9" of diameter per foot
+  — and turned a 9.129" S.E.T. into a 20.19" L.E.T. with no warning. `.75` is the 3/4"/ft figure
+  typed without its `/ft`. A bare decimal steeper than 0.25 is now refused on the card and in
+  Add Taper with "Write .75"/ft or a ratio like 1:16; a bare .75 is ambiguous", the same way a
+  bare `3/4` already was. Real decimal slopes (0.25 and under, such as `.0625` for 3/4"/ft) are
+  still accepted.
+
+### fix(thread): metric designations accept a decimal comma
+
+- **`M20x2,5` is M20×2.5.** Emulator QA: DIN/ISO prints write the pitch with a comma, and the
+  designation field refused it. `M20X2,5` and `M20 x 2,5` work too. A designation the field
+  can't read now says "Not a metric designation — e.g. M20×2.5" instead of showing only the
+  example, on the card and in Add Thread.
+
+### fix(editor): fields never quietly ignore a value, and overlaps name the part
+
+- **A card field that can't use a value says so and puts the stored value back.** Emulator QA:
+  a thread relief Ø of 0 stayed on screen as if it had been taken, while the drawing kept the
+  old 4.925 — the screen showed a value that wasn't stored. Now the field shows "0 not applied —
+  Must be > 0" and goes back to the stored value. The same goes for: a relief length of 0, a
+  captured keyway's inset of 0 (switch off **Captured keyway** to open the keyway, or **Thread
+  relief** to remove a relief), a 0 TPI, and a 0 bolt hole Ø, spacing or depth.
+- **A bolt-slot Count of 0 is refused, not turned into 1.** In Add Coupler Bolt Slot a `0` was
+  stored as 1, and on the card `2.5` was dropped without a word. Both now show "Must be a whole
+  number ≥ 1"; Add stays greyed until it is fixed.
+- **Diameters on the cards must be above zero.** An explicit body Ø of 0 drew a hairline body
+  with no warning, while Add Body refused the same 0. The body, liner OD, taper S.E.T./L.E.T.
+  and thread major Ø fields now refuse 0 like the Add dialogs. The bare-shaft (auto-body) Ø is
+  unchanged: clearing it still drops that section's own Ø.
+- **A liner Length that runs into another liner is refused, the same as its Start.** A Length
+  of 99999 used to land a liner across every liner after it while the same span typed as a
+  Start was refused. A thread's Length is checked the same way against other threads. A length
+  that only runs past the overall length is still accepted — the warning covers that.
+- **"Overlaps …" names the part, by the name on its card.** The card strip used to say
+  "Overlaps another component" and Add Anyway listed "Overlaps Taper 1" while the cards read
+  "AFT Taper" and "FWD Taper". Both now say, for example, "Overlaps FWD Taper", list every part
+  when there are several, and use a name you gave the part.
+- **Add Liner and Add Taper show an overlap before you press Add, from either end.** Measured
+  from FWD, an overlap with a taper only showed up after Add. It now shows in red under Start
+  from either end. Another liner still blocks the add; a different kind of part still asks
+  "Add Anyway?". A FWD measurement whose length would run past the AFT end is now refused
+  ("Runs past the AFT end of the shaft") instead of being quietly moved to the AFT end.
+- **Add Liner and Add Taper open on free shaft.** On a shaft that already had a liner or a FWD
+  taper where the dialog opened, it opened on an overlap. From AFT the Start now opens in the
+  first free stretch long enough for the length, and from FWD in the free stretch nearest the
+  FWD end. With no stretch long enough it opens where it did and names the overlap.
+- **A part hanging off the AFT end says so.** Switching an excluded AFT thread into the OAL
+  leaves it starting before 0; the banner said "1 component extends past shaft length". It now
+  says "1 component extends past the AFT end", and the card says "Extends past the AFT end of the
+  shaft". Running past the overall length keeps its wording.
+- **A Manual taper rate stays Manual.** A typed `1:12` came back as Auto after the drawing was
+  reopened, and the next Length edit replaced it with `1:13.029`. The Auto | Manual choice is now
+  saved with the taper (and from the Add Taper dialog), so a typed rate is kept. Tapers saved
+  before this keep working as they did until their chips are tapped.
+- **Save Drawing lists every save.** The suggested file name filtered the list down to nothing,
+  leaving an "Existing saves" heading over an empty list. The list now filters only once you
+  type, and the heading hides when nothing matches.
+
+### fix(history): Undo never reaches back into the job you just left
+
+- **Undo right after opening a job no longer pours the previous job's measurements into it.**
+  Emulator QA: on a freshly opened job (Open, Save As, or Start from template) Undo was already
+  enabled, and one tap gave the new job the last job's undercuts, wear record and runout readings
+  while its own geometry stayed put — a Save would have written them into the wrong job. The
+  history recorder could catch a half-loaded state (the new shaft with the old job's
+  measurements) and keep it as an undo step. It now records the editor's whole state at once, and
+  every document boundary starts its history from the state it ends in.
+- **The first edit after resuming an unsaved draft can be undone.** It used to become the
+  starting point of the history instead of a step in it, so a wrong value or a delete made right
+  after resuming could not be taken back.
+
+### fix(editor): the keyboard no longer covers dialogs, and closing one doesn't jump into the shaft length
+
+- **Every Add dialog stays above the keyboard.** Emulator QA: with the keyboard up, Add Taper's
+  Captured keyway and Keyway spooned switches and its Add button sat under the keys and could not
+  be scrolled to, and a tap aimed at KW L typed into the keyboard instead. The same went for Add
+  Thread, Add Coupler Bolt Slot, Add Body and Add Liner. Each dialog now moves up into the space
+  above the keyboard: the rest of its fields scroll into reach and Cancel / Add stay on screen.
+- **Add / Edit worn section** on the Output tab does the same — Ø 3, "Add another Ø" and Save
+  were under the keyboard and the dialog would not scroll.
+- **Entering runout readings one after another works every time.** After you saved a reading,
+  the next bubble's dialog often stayed full height with Save under the keyboard; a tap aimed at
+  Save landed on the keyboard and the reading was lost. Seven readings in a row on the emulator now
+  all open above the keyboard and all save. The keyway and taper calculators use the same dialog
+  and get the same fix.
+- **Cancelling "Apply diameter to…" leaves the Overall Length alone.** With a hardware or
+  Bluetooth keyboard, closing that dialog put the cursor and the keyboard in the Overall Length
+  field, so the next digits typed went into the shaft length (`10` → `10368.5`). Closing any
+  dialog, or pressing Enter in the Overall Length, now leaves no field selected and the keyboard
+  down; a dialog closed while you were typing in a field gives that same field back.
+
+### fix(pdf): shop sheets — values over the right rail, a squeezed blank sheet, footer headings
+
+- **A short dimension's value stays with its own rail.** Emulator QA, on a 368 1/2" shaft whose
+  30" body draws full size: the AFT taper's 25 3/16" and the liner's 25 9/16" each floated two
+  rails up, so reading top-down each value sat over the wrong dimension line, and the AFT
+  extension line ran through the first digit. A value too wide for its span now prints just
+  beside it on its own rail — right of the span, or left of it when there is no room — and is
+  never lifted against another rail's line. Schematic and consolidated sheets alike.
+- **A blank Schematic + Runout sheet keeps a full-size shaft.** With the bubbles, the coupling
+  face and the tall write-in footer, the page left the Titan shaft 0.2" tall across 40% of the
+  width. The shaft now never drops under 1/2" for want of room: the write-in footer lines
+  close up a little first, and the drawing always spans the page. The rails above it no longer
+  crush the OAL line onto the dimension below it.
+- **The runout sheet's OAL runs taper face to taper face**, as on the schematic, instead of
+  starting at the end of a thread that is excluded from the OAL.
+- **Runout bubbles no longer point into an S-break.** The middle bubble on a broken body ended
+  its pointer in the blank gap between the two S curves. A broken body now spreads its bubbles
+  evenly over the parts of it you can see, either side of the break, so no pointer ends in the
+  gap and no two pointers meet at one spot. Bubbles you dragged stay exactly where you put them.
+- **The Shaft height slider shows what the sheet really prints.** On a crowded runout or
+  consolidated sheet the page can't fit a 1 1/2" shaft; the readout said 1.50" while the sheet
+  drew 1.38". The slider now stops at the tallest height that sheet prints, and its readout and
+  Standard button match the drawing.
+- **Exports of a job with no customer, vessel or job number are named after the saved job**
+  instead of all landing as `Shaft_schematic.pdf`, `Shaft_runout.pdf`… and colliding in one
+  folder. An unsaved, unnamed job still gets `Shaft_…`.
+- **A Ø callout near the FWD end stays off the page margin** — it hangs left of its pointer
+  when there's no room to the right.
+- **Undercut strips: the shading ends on the S-break** where a strip end cuts through a taper,
+  instead of a doubled grey lobe and a white crescent beside the curve.
+- **Small spacing fixes.** "Dye pen inspection:" has a space before its first box on the wear
+  sheet (and the consolidated sheet's dye pen row matches). A wear strip's measured-Ø row no
+  longer sits right on the strip title.
+- **Export all leaves the Undercut drawing unticked on a job with no undercuts** — it printed a
+  half-blank write-in sheet in every batch. Tick it to get a blank undercut template.
 
 ## 2026-10-27
 

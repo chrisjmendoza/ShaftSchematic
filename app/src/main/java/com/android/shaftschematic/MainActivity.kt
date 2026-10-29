@@ -8,16 +8,20 @@ import androidx.activity.compose.setContent
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.shaftschematic.ui.adaptive.baseActivityOrientation
+import com.android.shaftschematic.ui.input.FocusParkingRoot
+import com.android.shaftschematic.ui.input.LocalFractionKeyEnabled
 import com.android.shaftschematic.ui.nav.AppNav
 import com.android.shaftschematic.ui.theme.ShaftSchematicTheme
 import com.android.shaftschematic.ui.theme.isAppDarkTheme
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModelFactory
+import com.android.shaftschematic.util.UnitSystem
 
 /**
  * MainActivity
@@ -77,7 +81,15 @@ class MainActivity : ComponentActivity() {
             }
             ShaftSchematicTheme(themeMode = themeMode, highContrast = highContrast) {
                 Surface {
-                    AppNav(vm = vm)
+                    FocusParkingRoot {
+                        // Fractions are inch entry: a millimetre document's fields show no "/" key.
+                        val unit by vm.unit.collectAsState()
+                        CompositionLocalProvider(
+                            LocalFractionKeyEnabled provides (unit == UnitSystem.INCHES),
+                        ) {
+                            AppNav(vm = vm)
+                        }
+                    }
                 }
             }
         }

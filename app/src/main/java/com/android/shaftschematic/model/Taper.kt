@@ -33,6 +33,13 @@ import kotlin.math.max
  *   `true` shades THIS taper with that checkbox off, an explicit `false` leaves it bare with
  *   the checkbox on. Read only by the schematic and the runout/consolidated sheet; the wear
  *   and undercut documents keep one fill per kind.
+ * @property taperRateManual The card's / Add dialog's Rate mode, as the user chose it: `true` =
+ *   Manual (the typed [taperRateText] is kept through geometry edits), `false` = Auto (the rate
+ *   follows Length + SET + LET). `null` — every taper saved before the field existed — seeds the
+ *   mode from the text the way the card always did (blank or equal to the computed rate ⇒ Auto).
+ *   Stored because a Manual `1:12` that happened to equal the computed rate came back as Auto
+ *   after a reopen, and the next Length edit replaced the typed rate with `1:13.029` (emulator
+ *   QA). Mode only — never geometry.
  */
 @Serializable
 data class Taper(
@@ -52,6 +59,7 @@ data class Taper(
     val label: String? = null,
     val showNameOnDrawing: Boolean? = null,
     val shadeOnDrawing: Boolean? = null,
+    val taperRateManual: Boolean? = null,
 ) : Segment
 
 /** Basic invariants for a Taper. */

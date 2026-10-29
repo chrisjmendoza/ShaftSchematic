@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import com.android.shaftschematic.ui.util.positiveLengthErrorMm
 
 /**
  * The "Keyway" header row that gates the whole keyway section — ONE composable behind the Body
@@ -38,12 +39,17 @@ internal fun KeywayGateRow(
     testTag: String,
     onCheckedChange: (Boolean) -> Unit,
 ) {
+    // In an Add dialog a tick is an edit for its discard guard; on a card there is none.
+    val edits = LocalDialogEdits.current
     Row(
         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
             .toggleable(
                 value = checked,
                 role = Role.Checkbox,
-                onValueChange = onCheckedChange,
+                onValueChange = { on ->
+                    edits?.mark()
+                    onCheckedChange(on)
+                },
             ).padding(vertical = 4.dp)
             .testTag(testTag),
         verticalAlignment = Alignment.CenterVertically
@@ -74,6 +80,14 @@ internal fun keywayGateAction(checked: Boolean, hasAnyKeywayValue: Boolean): Key
     hasAnyKeywayValue -> KeywayGateAction.CONFIRM_REMOVE
     else -> KeywayGateAction.HIDE
 }
+
+/**
+ * The captured-keyway inset field's gate on both keyway cards (taper "KW Inset from SET", body
+ * "KW Inset from AFT/FWD"): an inset must be > 0. Captured ⇔ inset > 0, and the "Captured keyway"
+ * toggle is the one control that opens the keyway, so a typed 0 is refused and named ("0 not
+ * applied — Must be > 0") rather than silently ignored while the field kept showing it.
+ */
+internal fun capturedInsetErrorMm(mm: Float?): String? = positiveLengthErrorMm(mm)
 
 /**
  * Confirmation before a card's Keyway checkbox clears a stored keyway. One tap would otherwise

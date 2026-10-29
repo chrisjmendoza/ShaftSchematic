@@ -24,6 +24,12 @@ class RunoutValueFormatTest {
         assertEquals(0.01f, parseRunoutValueInput("0.010", UnitSystem.MILLIMETERS)!!, 1e-6f)
     }
 
+    @Test fun `a unit suffix converts instead of being refused`() {
+        assertEquals(0.127f, parseRunoutValueInput(".005\"", UnitSystem.INCHES)!!, 1e-5f)
+        assertEquals(0.127f, parseRunoutValueInput("0.005in", UnitSystem.MILLIMETERS)!!, 1e-5f)
+        assertEquals(0.13f, parseRunoutValueInput("0.13mm", UnitSystem.INCHES)!!, 1e-5f)
+    }
+
     @Test fun `blank and unreadable text read as nothing`() {
         assertNull(parseRunoutValueInput("", UnitSystem.INCHES))
         assertNull(parseRunoutValueInput("   ", UnitSystem.INCHES))

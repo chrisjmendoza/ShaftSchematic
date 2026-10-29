@@ -4,9 +4,12 @@ ShaftScreen Contract
 Layer: UI → Screens  
 Purpose: Present the shaft editor surface and bind ViewModel state to user controls.
 
-Version: v0.21 (2026-10-27 — a MEDIUM window's carousel fills the column; the carousel and the
-warning banner keep their saved state across a rotation between width branches.
-v0.20 2026-10-27, v0.19 2026-10-23, v0.18 2026-09-16, v0.17 2026-08-29)
+Version: v0.23 (2026-10-28 — the warning banner names each problem part, lists overlaps, and
+each line selects its part; the preview marks the same problems in red; an OAL change says what
+it moved. v0.22 2026-10-28 — card fields refuse what they cannot apply through their validator,
+never in the commit lambda; overlap messages name the partner by its card title; a Length is
+checked for overlap like a Start; the banner and chip name the END a component runs past.
+v0.21 2026-10-27, v0.20 2026-10-27, v0.19 2026-10-23, v0.18 2026-09-16, v0.17 2026-08-29)
 
 ---
 
@@ -43,7 +46,9 @@ Invariants
   override); **Cancel**, back or an outside tap applies nothing and re-keys the field
   (`key(diaFieldResetNonce)`) so it shows the STORED value — a value that was not applied never
   stays in the box. The field's focus is cleared as the dialog opens, so the blur that IME Done
-  leaves pending cannot re-commit after a choice or from the field the re-key disposes. With
+  leaves pending cannot re-commit after a choice or from the field the re-key disposes; that
+clear parks focus on the window root (`FocusParkingRoot`, `NumberField.md` §"Focus release"), so
+closing the dialog never drops the cursor and keyboard into the OAL field. With
   one auto section the value is the shaft's Ø and goes straight to `onSetAllAutoSectionsDia`.
   Covered by `AutoBodyDiaScopeDialogTest`.
 - **New-shaft diameter prompt.** On the ORIGINAL drawing the first OAL commit on a brand-new
@@ -60,7 +65,7 @@ Invariants
   AND the text differs from the on-focus baseline); the slot is reserved so the row does not
   jump, and the field is a narrowed value box (160–240 dp), not a full-width banner.
   Unparseable text commits nothing: ✓/Done leave it as typed, a blur restores the stored
-  value. The OAL field's **display never rewrites the
+  value — both under a `"<typed> not applied — not a number"` line (`OverallLength.md`). The OAL field's **display never rewrites the
   user's own text**: a typed `150 3/4` stays a fraction rather than echoing back as
   `150.75` (on-device report). The text re-derives from the model only when the field is
   unfocused AND no longer parses to the model value (undo, an edit from elsewhere, a
@@ -285,10 +290,69 @@ Notes
   dialogs' bounds warning uses (`ui/util/ComponentWarnings.kt`; excluded threads skipped,
   bodies included). It is advisory, not the error chip: oversize is legal (`OverallLength.md`),
   the edit still commits verbatim, and neither `collidingIds()`, the export gate, nor the OAL
-  field's own red state is touched. Above the carousel, `SpecWarningBanner` adds a count line
-  for the same condition. Separately, the **Length** field rejects `≤ 0` ("Must be > 0",
-  `positiveLengthErrorMm`) through the standard validator path — the field errors, reverts,
-  and does not commit, so a zero length stops at the card. See `VALIDATION_RULES.md` §3.1a.  
+  field's own red state is touched. Above the carousel, `SpecWarningBanner` adds a NAMED line
+  for the same condition (see the banner bullet below). **The wording names the END**: a span
+  that starts before 0 reads "Extends past the AFT end of the shaft" on its card and "*Part*
+  starts *d* before the AFT end" on the banner; one that runs beyond the OAL keeps "past shaft
+  length" on the card and reads "*Part* runs *d* past the FWD end" on the banner. "Past shaft length"
+  for a part hanging off the AFT end (an excluded AFT thread switched into the OAL lands at a
+  negative start) read as wrong — emulator QA. The two halves (`startsBeforeAftEnd`,
+  `endsPastOal`) ARE `outsideShaftSpan` (it is their OR); they exist only to name the end.
+  Separately, the **Length** field rejects `≤ 0` ("Must be > 0", `positiveLengthErrorMm`)
+  through the standard validator path — the field errors, reverts, and does not commit, so a
+  zero length stops at the card. See `VALIDATION_RULES.md` §3.1a.  
+- **The warning banner names the parts, and each line goes to its part.** `specIssues(spec, unit)`
+  (`ui/util/SpecIssues.kt`) is the ONE problem list behind three surfaces — the banner, the
+  preview's red marks, and the export gate's overlap message (`overlapExportMessage`, used by
+  `blockingExportError` and `exportPdfGate`) — so they cannot name different parts. Kinds, in
+  banner order: OVERLAP (one line per colliding pair, from `collidingIds`/`collisionPartnerIds`,
+  the pairs the cards' "Overlaps …" chip names; bodies never collide) — "FWD Liner overlaps Body
+  size transition taper", the sleeve named first (liner, then thread, then taper; AFT first
+  within a kind); PAST_FWD_END — "Body #1 runs 4 13/16" past the FWD end"; PAST_AFT_END — "AFT
+  Thread starts 2" before the AFT end"; TINY_SEGMENT — "Body #2 is shorter than 1 mm". Within a
+  kind, AFT → FWD. Names are `componentCardTitles` (user labels win); distances print in the
+  document unit through `formatLenWithUnit` (fractions in inches). Each line is a ≥ 48 dp
+  `Role.Button` with a "Show" chevron that calls `onSelectComponentById` with the first named
+  part — the preview tap's selection path, which the carousel follows
+  (`ComponentCarouselPager`'s selection-following effect). More than `VISIBLE_ISSUE_LINES` (3)
+  problems show three and a "+N more" row that expands (view state only). Dismissal is unchanged:
+  keyed to the message set. A count line ("1 component extends past shaft length") left the
+  user unable to tell which part was wrong — on-device report. ONE implementation hosted by all
+  three width classes (the `warningBanner` movable content).
+- **The preview marks the problems.** `ShaftScreen` builds `previewIssueMarks(specIssues(…))`
+  (`ui/drawing/render/PreviewIssueMarks.kt`) and passes it through `PreviewCard` → `ShaftDrawing`
+  → `RenderOptions.issueMarks`: each overlapping pair's shared stretch draws as a translucent red
+  band with a red outline over the silhouette there, and each past-end overhang is red-tinted the
+  same way with the real shaft end dashed across the content height (the OAL end stays where it
+  is). Bands take a 10 px drawn floor so a short overlap is visible. The window widens to hold
+  the marks (`ShaftLayout.compute(extentMm)`), never the OAL. The ink is a fixed warning red
+  (`PREVIEW_ISSUE_INK`) that reads on the light, dark and high-contrast previews. Every other
+  canvas passes no marks and no extent and is byte-identical; no PDF composer reads
+  `RenderOptions`.
+- **A card field refuses what it cannot apply through its `validator`, never in the commit
+  lambda.** A lambda that early-returned on a value it would not apply left the typed text on
+  screen over the stored value with no word of it (emulator QA: a relief Ø of 0 "kept" until the
+  editor was reopened). Every such rule is the field's validator, so the field reverts and shows
+  "<typed> not applied — <reason>" (`NumberField.md`): explicit body Ø, liner OD, taper
+  S.E.T./L.E.T. Ø, thread major Ø, TPI, relief length/Ø, bolt-hole Ø, spacing and depth "Must be
+  > 0" (`positiveDiaErrorMm`/`positiveLengthErrorMm`); the captured-keyway inset "Must be > 0"
+  (`capturedInsetErrorMm` — un-capturing is the toggle's job, as removing a relief is the
+  switch's); the bolt-slot Count "Must be a whole number ≥ 1" (`boltSlotCountError` — never
+  coerced to 1); a bolt row measured from FWD that would reach past the AFT face "Row extends
+  past the AFT end of the shaft" (it was clamped onto the face). The AUTO-body Ø stays ungated
+  (≤ 0 clears that section's override). A value that passes is committed verbatim.
+- **Overlap is checked on the span, whichever field grew it.** A liner's or thread's Length
+  field runs the same overlap rule as its Start (`spanOverlapErrorMm` — another liner / thread,
+  the start/length validator posture), so a Length of 99999 no longer lands a liner across every
+  liner FWD of it while the same span as a Start was refused. Running past the OAL is NOT
+  refused (the advisory above — an OAL shrink makes that state legitimately). Tapers have no
+  same-kind refusal on either field; their overlaps show on the chip. Bolt slots never collide.
+- **Overlap messages name the partner by the title its card shows** (`componentCardTitles` —
+  the four card-title builders, a user label winning): the card chip (`collisionChipMessage`,
+  every partner by `collidingIds`' own pair rule, `collisionPartnerIds`), the field refusal and
+  the Add dialogs' inline line and "Add Anyway?" confirm all say "Overlaps FWD Taper" (several:
+  "Overlaps AFT Liner, FWD Taper"). "Overlaps another component" and "Overlaps Taper 1" left the
+  user guessing which card that was. The export gate's own message is unchanged.  
 - Persistence, serialization, and other business logic live strictly in the ViewModel.  
 - Scaffold uses system-bar insets only; the scroll column takes `imePadding` so the focused
   field (and the "+ Add Component" button beneath the carousel) stays above the keyboard.

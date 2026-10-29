@@ -158,19 +158,28 @@ fun NumericInputField(
         }
     }
 
+    fun applyEdit(raw: TextFieldValue) {
+        val filtered = inputFilter?.invoke(raw.text) ?: filterNumericInput(
+            raw = raw.text,
+            allowNegative = allowNegative,
+            allowFraction = allowFraction,
+            allowColon = allowColon
+        )
+        // A new edit supersedes the report about the old one; a cursor move is not an edit.
+        if (filtered != text.text) rejectedNotice = null
+        text = if (filtered == raw.text) raw else raw.copy(text = filtered)
+    }
+
+    // Shown only while the field is focused, so an idle field keeps its full width.
+    var isFocused by remember { mutableStateOf(false) }
+    val showFractionKey = allowFraction && enabled && isFocused && LocalFractionKeyEnabled.current
+
     OutlinedTextField(
         value = text,
-        onValueChange = { raw ->
-            val filtered = inputFilter?.invoke(raw.text) ?: filterNumericInput(
-                raw = raw.text,
-                allowNegative = allowNegative,
-                allowFraction = allowFraction,
-                allowColon = allowColon
-            )
-            // A new edit supersedes the report about the old one; a cursor move is not an edit.
-            if (filtered != text.text) rejectedNotice = null
-            text = if (filtered == raw.text) raw else raw.copy(text = filtered)
-        },
+        onValueChange = { raw -> applyEdit(raw) },
+        trailingIcon = if (showFractionKey) {
+            { FractionKey(onClick = { applyEdit(text.insertAtCursor("/")) }) }
+        } else null,
         label = { Text(label) },
         placeholder = placeholder?.let { p -> { Text(p) } },
         enabled = enabled,
@@ -190,6 +199,7 @@ fun NumericInputField(
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType, imeAction = ImeAction.Done),
         keyboardActions = KeyboardActions(onDone = { commitOrRevert() }),
         modifier = modifier.onFocusChanged { f ->
+            isFocused = f.isFocused
             if (f.isFocused) {
                 // The settled text equals the box's text on every focus gain but one: a restored
                 // edit that never landed. Against the settled text a blur lands that edit, where

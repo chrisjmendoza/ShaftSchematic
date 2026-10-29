@@ -56,6 +56,7 @@ import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.buildLinerTitleById
 import com.android.shaftschematic.util.drawRichText
 import com.android.shaftschematic.util.measureRichText
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -1309,6 +1310,19 @@ private fun drawUndercutDetailStrip(
     // paper (see the KDoc). The two outboard calls draw the neighbour slivers with their normal
     // outline + fill; the liner edge sits at a window END in each, so the profile draws no cap
     // there and the full-height end faces below are the only vertical lines at those stations.
+    // The window's two ends as the fills see them: each component fill runs past a cut end by the
+    // glyph's reach and is clipped to the S that end strokes, so the shade ends ON the curve.
+    val aftEdge = undercutWindowEndEdge(segs, drawStartMm, ::xAtStrip, ::rStrip, cy, shaftExtentMm)
+    val fwdEdge = undercutWindowEndEdge(segs, drawEndMm, ::xAtStrip, ::rStrip, cy, shaftExtentMm)
+    val fillClip = if (aftEdge != null && fwdEdge != null) {
+        breakWindowClipPath(aftEdge, fwdEdge, cy - 2f * rCap - 1f, cy + 2f * rCap + 1f)
+    } else null
+    val ptPerMmStrip = abs(xAtStrip(drawEndMm) - xAtStrip(drawStartMm)) / (drawEndMm - drawStartMm).coerceAtLeast(1e-3f)
+    fun fillReachMm(edge: WindowEndEdge?): Float =
+        if (edge == null || edge.amplitude <= 0f || ptPerMmStrip <= 0f) 0f else edge.amplitude / ptPerMmStrip
+    val fillStartMm = drawStartMm - fillReachMm(aftEdge)
+    val fillEndMm = drawEndMm + fillReachMm(fwdEdge)
+
     val blankLiner = if (linerSpanBlank) strip as? UndercutStrip.LinerStrip else null
     if (blankLiner != null) {
         val faceAftMm = blankLiner.linerStartMm.coerceIn(drawStartMm, drawEndMm)
@@ -1316,10 +1330,12 @@ private fun drawUndercutDetailStrip(
         drawUndercutWindowProfile(
             c, docSpec, drawStartMm, faceAftMm, cy, ::xAtStrip, ::rStrip,
             outline, bodyFill, taperFill, linerFill,
+            fillW0Mm = fillStartMm, fillW1Mm = faceAftMm, fillClip = fillClip,
         )
         drawUndercutWindowProfile(
             c, docSpec, faceFwdMm, drawEndMm, cy, ::xAtStrip, ::rStrip,
             outline, bodyFill, taperFill, linerFill,
+            fillW0Mm = faceFwdMm, fillW1Mm = fillEndMm, fillClip = fillClip,
         )
         // Full drawn height at the liner's own OD — the surface envelope over the liner's span
         // is the liner, so its maximum there IS that OD. Drawn at outline weight: with the
@@ -1332,6 +1348,7 @@ private fun drawUndercutDetailStrip(
         drawUndercutWindowProfile(
             c, docSpec, drawStartMm, drawEndMm, cy, ::xAtStrip, ::rStrip,
             outline, bodyFill, taperFill, linerFill,
+            fillW0Mm = fillStartMm, fillW1Mm = fillEndMm, fillClip = fillClip,
         )
     }
     // Cut ends: an S-break where the strip slices through material (void beyond it, so the
@@ -1473,16 +1490,35 @@ private fun drawUndercutWindowProfile(
     bodyFill: Paint?,
     taperFill: Paint?,
     linerFill: Paint?,
+    /**
+     * The range the FILLS cover — wider than [w0Mm]..[w1Mm] at a cut end by the break glyph's
+     * reach — and the clip that cuts them back to the S each end strokes ([breakWindowClipPath]).
+     * Outlines keep the window range. Defaults reproduce the plain window.
+     */
+    fillW0Mm: Float = w0Mm,
+    fillW1Mm: Float = w1Mm,
+    fillClip: Path? = null,
 ) {
     val dimPaint = Paint(outline).apply { strokeWidth = outline.strokeWidth * (UC_DIM_PT / UC_OUTLINE_PT) }
     fun inside(mm: Float) = mm > w0Mm + UC_EDGE_EPS_MM && mm < w1Mm - UC_EDGE_EPS_MM
+    fun clippedFill(draw: () -> Unit) {
+        if (fillClip == null) { draw(); return }
+        c.save()
+        c.clipPath(fillClip)
+        draw()
+        c.restore()
+    }
 
     fun drawConstant(startMm: Float, endMm: Float, diaMm: Float, fill: Paint?, capPaint: Paint) {
         if (diaMm <= 0f) return
+        val r = rAt(diaMm)
+        if (fill != null) {
+            val fa = max(startMm, fillW0Mm); val fb = min(endMm, fillW1Mm)
+            if (fb - fa > UC_EDGE_EPS_MM) clippedFill { c.drawRect(xAt(fa), cy - r, xAt(fb), cy + r, fill) }
+        }
         val a = max(startMm, w0Mm); val b = min(endMm, w1Mm)
         if (b - a <= UC_EDGE_EPS_MM) return
-        val x0 = xAt(a); val x1 = xAt(b); val r = rAt(diaMm)
-        fill?.let { c.drawRect(x0, cy - r, x1, cy + r, it) }
+        val x0 = xAt(a); val x1 = xAt(b)
         c.drawLine(x0, cy - r, x1, cy - r, outline)
         c.drawLine(x0, cy + r, x1, cy + r, outline)
         if (inside(startMm)) c.drawLine(x0, cy - r, x0, cy + r, capPaint)
@@ -1495,19 +1531,26 @@ private fun drawUndercutWindowProfile(
     spec.tapers.forEach { t ->
         if (t.lengthMm <= 0f || (t.startDiaMm <= 0f && t.endDiaMm <= 0f)) return@forEach
         val s = t.startFromAftMm; val e = s + t.lengthMm
+        fun diaAt(mm: Float) = t.startDiaMm + (t.endDiaMm - t.startDiaMm) * ((mm - s) / t.lengthMm).coerceIn(0f, 1f)
+        taperFill?.let { f ->
+            val fa = max(s, fillW0Mm); val fb = min(e, fillW1Mm)
+            if (fb - fa > UC_EDGE_EPS_MM) {
+                val fra = rAt(diaAt(fa)); val frb = rAt(diaAt(fb))
+                val fxa = xAt(fa); val fxb = xAt(fb)
+                clippedFill {
+                    c.drawPath(
+                        Path().apply {
+                            moveTo(fxa, cy - fra); lineTo(fxb, cy - frb); lineTo(fxb, cy + frb); lineTo(fxa, cy + fra); close()
+                        },
+                        f,
+                    )
+                }
+            }
+        }
         val a = max(s, w0Mm); val b = min(e, w1Mm)
         if (b - a <= UC_EDGE_EPS_MM) return@forEach
-        fun diaAt(mm: Float) = t.startDiaMm + (t.endDiaMm - t.startDiaMm) * ((mm - s) / t.lengthMm).coerceIn(0f, 1f)
         val ra = rAt(diaAt(a)); val rb = rAt(diaAt(b))
         val xa = xAt(a); val xb = xAt(b)
-        taperFill?.let { f ->
-            c.drawPath(
-                Path().apply {
-                    moveTo(xa, cy - ra); lineTo(xb, cy - rb); lineTo(xb, cy + rb); lineTo(xa, cy + ra); close()
-                },
-                f,
-            )
-        }
         c.drawLine(xa, cy - ra, xb, cy - rb, outline)
         c.drawLine(xa, cy + ra, xb, cy + rb, outline)
         if (inside(s)) c.drawLine(xa, cy - ra, xa, cy + ra, outline)
@@ -1571,22 +1614,39 @@ private fun drawUndercutWindowEnd(
     shaftExtentMm: Float,
     eyeAtTop: Boolean,
 ) {
+    val edge = undercutWindowEndEdge(segs, atMm, xAt, rAt, cy, shaftExtentMm) ?: return
+    if (edge.amplitude <= 0f) {
+        c.drawLine(edge.x, edge.yTop, edge.x, edge.yBot, outline)
+    } else {
+        drawBreakEdge(c, edge.x, edge.yTop, edge.yBot, edge.amplitude, outline, eyeAtTop = eyeAtTop)
+    }
+}
+
+/**
+ * The window end at [atMm] as drawn: the S-break where the window slices through material, flat
+ * (amplitude 0) where it is the shaft's physical end; null where there is no surface to cut. ONE
+ * answer for the stroked end and the fill clip ([breakWindowClipPath]).
+ */
+private fun undercutWindowEndEdge(
+    segs: List<SurfaceSeg>,
+    atMm: Float,
+    xAt: (Float) -> Float,
+    rAt: (Float) -> Float,
+    cy: Float,
+    shaftExtentMm: Float,
+): WindowEndEdge? {
     val dia = outerDiaAt(segs, atMm)
-    if (dia <= 0f) return
+    if (dia <= 0f) return null
     val r = rAt(dia)
-    if (r <= 0f) return
+    if (r <= 0f) return null
     val x = xAt(atMm)
     val isPhysicalEnd = atMm <= UC_EDGE_EPS_MM || atMm >= shaftExtentMm - UC_EDGE_EPS_MM
-    if (isPhysicalEnd) {
-        c.drawLine(x, cy - r, x, cy + r, outline)
-    } else {
-        // Amplitude tracks the drawn radius so a small section still gets a legible symbol, but
-        // is capped absolutely: uncapped, a tall strip's lobes sprawl past the cylinder corners
-        // and read as ears hung off the end (on-device report). See UNDERCUT_BREAK_AMP_MAX_PT
-        // for the deviation-vs-inset check.
-        val amp = min(r * UNDERCUT_BREAK_AMP_FRAC_OF_R, UNDERCUT_BREAK_AMP_MAX_PT)
-        drawBreakEdge(c, x, cy - r, cy + r, amp, outline, eyeAtTop = eyeAtTop)
-    }
+    // Amplitude tracks the drawn radius so a small section still gets a legible symbol, but is
+    // capped absolutely: uncapped, a tall strip's lobes sprawl past the cylinder corners and read
+    // as ears hung off the end (on-device report). See UNDERCUT_BREAK_AMP_MAX_PT for the
+    // deviation-vs-inset check.
+    val amp = if (isPhysicalEnd) 0f else min(r * UNDERCUT_BREAK_AMP_FRAC_OF_R, UNDERCUT_BREAK_AMP_MAX_PT)
+    return WindowEndEdge(x, cy - r, cy + r, amp)
 }
 
 /** Text note for detail strips that didn't fit on this page. */

@@ -182,6 +182,7 @@ data class Body(
     val showNameOnDrawing: Boolean? = null, // schematic name-label; tri-state: null follows the global titles switch, explicit true/false overrides it (all four kinds; retired showLabelOnDrawing key ignored at decode)
     val shadeOnDrawing: Boolean? = null,    // PDF fill; tri-state: null follows the kind's "Shade in Components" checkbox (auto runs also follow "Explicit bodies only"), explicit overrides (Body/Taper/Liner only)
     val compressOnDrawing: Boolean = true,  // draw-only; false pins this body's stored span at true scale and suppresses its S-break. Serialization default true (saved documents keep compressing); authoring creates explicit bodies with false
+    val showDimensionRail: Boolean? = null, // own-length dimension span on the schematic + consolidated sheet; tri-state: null follows position (on when the stored span touches a shaft end face, off mid-shaft), explicit true/false overrides it
     // Blended faces (draw-only): curve length inward from each face, 0 = square.
     val blendAftMm: Float = 0f,
     val blendFwdMm: Float = 0f,
@@ -212,6 +213,9 @@ data class Taper(
     val taperRateText: String = "",  // user-authored rate text (e.g. "1:12"); derived/validated in the ViewModel
     val authoredReference: LinerAuthoredReference = LinerAuthoredReference.AFT,
     val label: String? = null,  // optional user-defined display label; not used for geometry
+    // Rate mode as the user chose it: true = Manual (taperRateText kept through geometry edits),
+    // false = Auto, null = saved before the field (seeded from the text). Additive, mode only.
+    val taperRateManual: Boolean? = null,
 ) : Segment
 
 Blend fields on Body (drawing-only, additive, default 0/OGEE):
@@ -478,6 +482,14 @@ can never affect geometry resolution:
   and every station with no entry keeps deriving its position. Pins are stored verbatim
   (golden rule) — a pin stranded in a gap or beyond a shortened component is repaired at the
   **render layer**, never rewritten.
+- **Auto-body keys.** Everything above keyed by resolved component id — readings, placements,
+  `RunoutConfig.componentOverrides`, `WearPit`/`WearDiaReading`, `stripComponentIds` — may name
+  a bare-shaft body, whose id is its span (`auto_body_<start>_<end>`). When an ORIGINAL edit
+  re-identifies that span, the editor's spec seam renames those keys to the run's unambiguous
+  successor in the same undo step (`geom/AutoBodyRekeyMath.kt`): component-local `axialMm`
+  shifts by `oldStart − newStart` to hold its shaft position, and a derived station count that
+  would change is frozen at its old value. A split or merge maps to nothing (orphaned at render
+  as before). The id scheme itself is unchanged; nothing is re-keyed at decode.
 - `UndercutRecord(undercuts, exaggerationFrac, drawToSet, showTotalRail, pageOrientation,
   setDatum, excludedLinerIds, excludedFreeCutIds)` — its own envelope field
   (`@SerialName("undercut_record")`), sibling of `wear_record`. Each `Undercut` is a

@@ -39,6 +39,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -48,6 +52,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -69,6 +74,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
@@ -104,7 +110,11 @@ import com.android.shaftschematic.model.WearRecord
 import com.android.shaftschematic.model.WearSpot
 import com.android.shaftschematic.model.WearSpotReference
 import com.android.shaftschematic.geom.RETURN_SWEEP_FULLNESS
+import com.android.shaftschematic.pdf.WearRailSpan
 import com.android.shaftschematic.pdf.formatDiaWithUnit
+import com.android.shaftschematic.pdf.formatLenDim
+import com.android.shaftschematic.pdf.layoutWearStripRail
+import com.android.shaftschematic.util.measureRichText
 import com.android.shaftschematic.ui.input.NumericInputField
 import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.theme.SheetInk
@@ -120,8 +130,10 @@ import com.android.shaftschematic.ui.util.buildTaperTitleById
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.DualLabel
 import com.android.shaftschematic.util.drawRichText
-import com.android.shaftschematic.util.parseFractionOrDecimal
+import com.android.shaftschematic.util.isLengthText
 import com.android.shaftschematic.util.toMmOrNull
+import com.android.shaftschematic.util.valueForSave
+import kotlinx.coroutines.launch
 
 /**
  * ComponentWearDetail
@@ -207,6 +219,20 @@ fun ComponentWearDetailOverlay(
      * the same reason as [threadSlant].
      */
     threadDensity: Float = THREAD_DENSITY_DEFAULT,
+    /** The document's ONE history (`ShaftViewModel.canUndo`/`undoEdit`), shown in the top bar. */
+    canUndo: Boolean = false,
+    canRedo: Boolean = false,
+    onUndo: () -> Unit = {},
+    onRedo: () -> Unit = {},
+    /** "Clear all pits": every listed pit in ONE write. */
+    onRemovePits: (ids: Set<String>) -> Unit = { ids -> ids.forEach(onRemovePit) },
+    /**
+     * The snackbar Undo of a spot delete — puts the exact spot back at its record index
+     * (`ShaftViewModel.restoreWearSpot`, the `restoreUndercut` pattern). Never a history step.
+     */
+    onRestoreSpot: (spot: WearSpot, index: Int) -> Unit = { _, _ -> },
+    /** The snackbar Undo of "Clear all pits" — the exact pits back at their record indices. */
+    onRestorePits: (pits: List<IndexedValue<WearPit>>) -> Unit = {},
 ) {
     BackHandler { onClose() }
 
@@ -324,6 +350,38 @@ fun ComponentWearDetailOverlay(
     var diaDialog by remember { mutableStateOf<DiaDialogState?>(null) }
     val focusManager = LocalFocusManager.current
 
+    // "Clear all pits" and a wear spot's trash are confirm-free, with the undercut page's
+    // snackbar Undo (emulator QA: both deleted at once with no way back from this page). What
+    // was removed is captured BEFORE the removal, so Undo puts back exactly that, where it was.
+    val deleteSnackbar = remember { SnackbarHostState() }
+    val deleteSnackbarScope = rememberCoroutineScope()
+    fun offerUndo(message: String, undo: () -> Unit) {
+        deleteSnackbarScope.launch {
+            // One pending delete at a time: a second delete replaces the first's offer.
+            deleteSnackbar.currentSnackbarData?.dismiss()
+            val result = deleteSnackbar.showSnackbar(
+                message = message,
+                actionLabel = "Undo",
+                duration = SnackbarDuration.Long,
+            )
+            if (result == SnackbarResult.ActionPerformed) undo()
+        }
+    }
+    fun deleteSpot(spot: WearSpot) {
+        val index = wearRecord.spots.indexOfFirst { it.id == spot.id }
+        if (index < 0) return
+        val removed = wearRecord.spots[index]
+        onRemoveSpot(spot.id)
+        offerUndo("Wear spot deleted") { onRestoreSpot(removed, index) }
+    }
+    fun clearPits() {
+        val removed = wearRecord.pits.withIndex().filter { it.value.componentId == componentId }
+        if (removed.isEmpty()) return
+        onRemovePits(removed.mapTo(HashSet()) { it.value.id })
+        val n = removed.size
+        offerUndo(if (n == 1) "1 pit cleared" else "$n pits cleared") { onRestorePits(removed) }
+    }
+
     // Pinch-to-zoom on the broken-out canvas (on-device request: accurate pit / band / Ø
     // placement) — the RunoutRoute preview's exact pattern: transformable state drives a
     // graphicsLayer (scale about the centre pivot, then translate); the tap handler inverts
@@ -355,8 +413,12 @@ fun ComponentWearDetailOverlay(
                 Text(
                     text = "$title — wear inspection",
                     style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(start = 4.dp),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(start = 4.dp).weight(1f),
                 )
+                // The document's ONE history — the pits, spots and readings placed here are steps.
+                UndoRedoButtons(canUndo, canRedo, onUndo, onRedo, tagPrefix = "wear_detail")
             }
             HorizontalDivider()
 
@@ -398,6 +460,7 @@ fun ComponentWearDetailOverlay(
                         .background(Color.White)
                         .semantics {
                             contentDescription = SheetSemantics.wearDetail(
+                                kind = wearDetailKind(component),
                                 wearAreaCount = spots.size,
                                 pitCount = pits.size,
                                 diaReadingCount = diaReadings.size,
@@ -611,8 +674,12 @@ fun ComponentWearDetailOverlay(
                                     }
                                 }
                                 val railY = stubRowHeightPx + diaBandPx + railTopGapPx + railRowHeightPx * i + railRowHeightPx * 0.5f
-                                drawDimSegment(startPx, bx0, railY, dimLabel(spot.startMm, unit), textPaint)
-                                drawDimSegment(bx0, bx1, railY, dimLabel(spot.lengthMm, unit), textPaint)
+                                drawWearSpotRail(
+                                    startPx = startPx, bandStartPx = bx0, bandEndPx = bx1, y = railY,
+                                    startLabel = dimLabel(spot.startMm, unit),
+                                    lengthLabel = dimLabel(spot.lengthMm, unit),
+                                    paint = textPaint,
+                                )
                             }
                         }
 
@@ -751,7 +818,7 @@ fun ComponentWearDetailOverlay(
                 }
 
                 if (pits.isNotEmpty()) {
-                    OutlinedButton(onClick = { pits.forEach { onRemovePit(it.id) } }) {
+                    OutlinedButton(onClick = { clearPits() }) {
                         Icon(Icons.Filled.Delete, contentDescription = null)
                         Spacer(Modifier.width(6.dp))
                         Text("Clear all pits")
@@ -842,13 +909,25 @@ fun ComponentWearDetailOverlay(
                             oalMm = spec.overallLengthMm,
                             onCommit = { s, l, d, n -> onUpdateSpot(spot.id, s, l, d, n) },
                             onUpdateReference = { ref -> onUpdateSpotReference(spot.id, ref) },
-                            onDelete = { onRemoveSpot(spot.id) },
+                            onDelete = { deleteSpot(spot) },
                         )
                     }
                 }
 
                 Spacer(Modifier.height(8.dp))
             }
+        }
+
+        // The deletes' Undo, at the bottom of the page clear of the top bar.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .systemBarsPadding()
+                .imePadding()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            contentAlignment = Alignment.BottomCenter,
+        ) {
+            SnackbarHost(deleteSnackbar, Modifier.testTag("wear_detail_delete_snackbar"))
         }
     }
 
@@ -858,10 +937,11 @@ fun ComponentWearDetailOverlay(
     // only on Save, so Cancel never leaves a ghost station.
     diaDialog?.let { dlg ->
         val existing = dlg.existingId?.let { id -> diaReadings.firstOrNull { it.id == id } }
-        var valueText by remember(dlg) {
-            mutableStateOf(existing?.takeIf { it.diaMm > 0f }?.let { disp(it.diaMm, unit) } ?: "")
-        }
-        val parsedMm = toMmOrNull(valueText, unit)
+        val storedDiaMm = existing?.diaMm?.takeIf { it > 0f }
+        var valueText by remember(dlg) { mutableStateOf(storedDiaMm?.let { disp(it, unit) } ?: "") }
+        var valueEdited by remember(dlg) { mutableStateOf(false) }
+        // An untouched seed saves the stored Ø, never its rounded display (golden rule).
+        val parsedMm = valueForSave(valueText, valueEdited, storedDiaMm) { toMmOrNull(it, unit) }
         AlertDialog(
             onDismissRequest = { focusManager.clearFocus(); diaDialog = null },
             title = { Text(if (existing == null) "Add Ø reading" else "Edit Ø reading") },
@@ -874,7 +954,7 @@ fun ComponentWearDetailOverlay(
                     )
                     OutlinedTextField(
                         value = valueText,
-                        onValueChange = { valueText = it },
+                        onValueChange = { if (it != valueText) valueEdited = true; valueText = it },
                         label = { Text("Measured Ø (${abbr(unit)})") },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
@@ -1021,6 +1101,14 @@ private const val PIT_SMALL_HALF_DP = 2.25f
  * guarantees the break edges always render complete inside the canvas at 1× zoom.
  */
 private const val SEG_EDGE_PAD_DP = 32f
+
+/** The component kind a wear detail page is on, as its canvas description names it. */
+internal fun wearDetailKind(rc: ResolvedComponent): String = when (rc) {
+    is ResolvedLiner -> "Liner"
+    is ResolvedTaper -> "Taper"
+    is ResolvedBody -> "Body"
+    else -> "Component"
+}
 
 private fun componentWearTitle(spec: ShaftSpec, rc: ResolvedComponent): String = when (rc) {
     is ResolvedLiner -> buildLinerTitleById(spec)[rc.id] ?: "Liner"
@@ -1260,7 +1348,7 @@ internal fun WearNum(
         enabled = enabled,
         allowNegative = allowNegative,
         allowFraction = true,
-        parseValid = { parseFractionOrDecimal(it) != null },
+        parseValid = ::isLengthText,
         validator = validator,
         onCommit = onCommit,
     )
@@ -1279,7 +1367,11 @@ private fun touchingDiaMm(rc: ResolvedComponent, neighborIsLeft: Boolean): Float
     is ResolvedCouplerBoltSlot -> 0f
 }
 
-private fun dimLabel(mm: Float, unit: UnitSystem): String = disp(mm, unit) + abbr(unit)
+/**
+ * A wear-spot rail value, in the format the printed wear strips' rails use ([formatLenDim]:
+ * fractions and `"` in inches) rather than the card fields' decimals.
+ */
+private fun dimLabel(mm: Float, unit: UnitSystem): String = formatLenDim(mm.toDouble(), unit)
 
 /**
  * A pit "X" — two crossed strokes centred on `(cx, cy)`, half-arm [halfArm]. Drawn identically
@@ -1304,17 +1396,57 @@ private fun DrawScope.drawWearBand(x0: Float, x1: Float, top: Float, bottom: Flo
     drawRect(color = border, topLeft = Offset(x0, top), size = Size(x1 - x0, bottom - top), style = Stroke(width = 1.2f))
 }
 
-/** One labeled dimension segment (witness ticks + centered value) on the rail below the liner. */
-private fun DrawScope.drawDimSegment(x0: Float, x1: Float, y: Float, label: String, paint: android.graphics.Paint) {
-    val lo = kotlin.math.min(x0, x1)
-    val hi = kotlin.math.max(x0, x1)
-    if (hi - lo < 1f) return
+/**
+ * One wear spot's rail on the broken-out canvas: liner AFT edge → spot start, then the spot's
+ * length, each a witness-ticked segment with its value.
+ *
+ * Placement is the printed wear strip's ([layoutWearStripRail]): a value that fits seats in a
+ * break in its own segment; one that does not is centred on its span, and two values that would
+ * touch take separate rows — the first above the line, the next below it — so a short spot's
+ * Start and Length never run together into one number (emulator QA: "5.25in3.5in").
+ */
+private fun DrawScope.drawWearSpotRail(
+    startPx: Float,
+    bandStartPx: Float,
+    bandEndPx: Float,
+    y: Float,
+    startLabel: String,
+    lengthLabel: String,
+    paint: android.graphics.Paint,
+) {
+    val pad = 4.dp.toPx()
+    val spans = listOf(
+        WearRailSpan(startPx, bandStartPx, DualLabel.single(startLabel)),
+        WearRailSpan(bandStartPx, bandEndPx, DualLabel.single(lengthLabel)),
+    ).filter { kotlin.math.abs(it.endMm - it.startMm) >= 1f }
+    val layout = layoutWearStripRail(
+        spans,
+        xAtStripMm = { it },
+        labelWidthPt = { paint.measureRichText(it.primary) },
+        textPadPt = pad,
+        // The canvas rail carries witness ticks, not arrowheads.
+        arrowSizePt = 0f,
+        minLabelGapPt = pad,
+    )
     val tickH = 3.dp.toPx()
     val lineColor = Color.Black.copy(alpha = 0.55f)
-    drawLine(lineColor, Offset(lo, y), Offset(hi, y), strokeWidth = 1f)
-    drawLine(lineColor, Offset(lo, y - tickH), Offset(lo, y + tickH), strokeWidth = 1f)
-    drawLine(lineColor, Offset(hi, y - tickH), Offset(hi, y + tickH), strokeWidth = 1f)
-    drawContext.canvas.nativeCanvas.drawRichText(label, (lo + hi) / 2f, y - 6f, paint)
+    val fm = paint.fontMetrics
+    layout.forEach { s ->
+        val lo = s.x0Pt
+        val hi = s.x1Pt
+        drawLine(lineColor, Offset(lo, y - tickH), Offset(lo, y + tickH), strokeWidth = 1f)
+        drawLine(lineColor, Offset(hi, y - tickH), Offset(hi, y + tickH), strokeWidth = 1f)
+        val half = paint.measureRichText(s.label.primary) * 0.5f
+        val baseline = if (s.seatsInBreak) {
+            drawLine(lineColor, Offset(lo, y), Offset(s.labelCxPt - half - pad, y), strokeWidth = 1f)
+            drawLine(lineColor, Offset(s.labelCxPt + half + pad, y), Offset(hi, y), strokeWidth = 1f)
+            y - (fm.ascent + fm.descent) * 0.5f
+        } else {
+            drawLine(lineColor, Offset(lo, y), Offset(hi, y), strokeWidth = 1f)
+            if (s.labelRow == 0) y - 6f else y + 6f - fm.ascent
+        }
+        drawContext.canvas.nativeCanvas.drawRichText(s.label.primary, s.labelCxPt, baseline, paint)
+    }
 }
 
 /**

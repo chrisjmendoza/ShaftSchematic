@@ -6,6 +6,7 @@ import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Taper
 import com.android.shaftschematic.model.Threads
 import com.android.shaftschematic.util.UnitSystem
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -139,5 +140,20 @@ class CollisionWarningsTest {
     fun `invalid lengthMm zero returns empty`() {
         val spec = ShaftSpec(overallLengthMm = 1000f)
         assertTrue(collectAddWarnings(spec, 0f, 0f, UnitSystem.MILLIMETERS).isEmpty())
+    }
+
+    /** "Overlaps Taper 1" left the user guessing which card that was; the card's title says it. */
+    @Test
+    fun `an overlap names the partner by its card title`() {
+        val spec = ShaftSpec(
+            overallLengthMm = 1000f,
+            tapers = listOf(
+                Taper(id = "a", startFromAftMm = 0f, lengthMm = 100f, startDiaMm = 50f, endDiaMm = 60f),
+                Taper(id = "f", startFromAftMm = 900f, lengthMm = 100f, startDiaMm = 60f, endDiaMm = 50f),
+            ),
+            liners = listOf(Liner(id = "l", startFromAftMm = 850f, lengthMm = 40f, odMm = 70f, label = "Seal")),
+        )
+        val w = collectAddWarnings(spec, 800f, 150f, UnitSystem.MILLIMETERS)
+        assertEquals(listOf("Overlaps Seal", "Overlaps FWD Taper"), w)
     }
 }

@@ -98,8 +98,13 @@ Specifically:
 **Carve-out — post-hoc display toggles are card-only.** A control that only exists to change
 how an *already-drawn* component prints, has a stable default, and is reached for after
 looking at a printed sheet is not a property of the component being added; in an Add dialog
-it would be a permanently-preset box adding noise to every add. Exactly six qualify: the
-coupler slot's "show dimension rail", **"Show Ø on drawing"** (`Body`/`Liner`/auto-body
+it would be a permanently-preset box adding noise to every add. Exactly seven qualify: the
+coupler slot's "show dimension rail", the explicit body's **"Show dimension rail"**
+(`Body.showDimensionRail`, TRI-STATE: unset follows the body's POSITION — on when its stored span
+touches the AFT or FWD face, off mid-shaft, `effectiveBodyDimensionRail` — on-device ruling: the
+coupling-end body needs its length, a mid-shaft one usually doesn't; ONE builder
+`buildBodyLengthSpans` beside `buildCouplerSlotSpans`, skipped when another span already
+dimensions the same stretch or the body runs face to face), **"Show Ø on drawing"** (`Body`/`Liner`/auto-body
 cards), **"Shade on drawing"** (`shadeOnDrawing`, explicit `Body`/`Taper`/`Liner` cards —
 TRI-STATE like the name flag: unset follows the kind's "Shade in Components" checkbox
 (`shadedBodies`/`shadedTapers`/`shadedLiners` — shipped liners and tapers ON, bodies OFF,
@@ -364,7 +369,8 @@ moving one moves the whole system; do not restate the figures. The multiplier bo
 (`PROFILE_HEIGHT_SCALE_MIN`/`MAX` = 0.25–6.0) are deliberately wider than the band, since they
 only have to EXPRESS it on any shaft; the height clamp is what bounds the drawing. The slider
 selects the drawn height by VALUE in paper inches — the track spans the band
-(`drawnShaftHeightPt`/`heightFracForDrawnHeight`);
+(`drawnShaftHeightPt`/`heightFracForDrawnHeight`), stopping on the runout-family surfaces at the
+tallest height that sheet really prints (`runoutSheetMaxShaftHeightPt`);
 commits near the standard height snap to exactly 100%. **A tuning-slider drag is a
 visual-only override** (`ui/screen/PreviewTuning.kt`): while the finger is on Line
 thickness / Body S-break / Shaft height / Liner compression the open preview re-renders
@@ -626,7 +632,7 @@ the Side line, and a filename suffix — `_Final`, `_Final_Runout` with bubbles 
 collapsed onto one name); blank on every other caller, so existing output is
 byte-identical. Every OTHER export (the original schematic included) names its file through the
 ONE builder `buildOutputFilename` (`ui/screen/OutputDoc.kt`): `DocumentNaming`'s sanitized
-"Job - Customer - Vessel - SIDE" base + `_<document suffix>` (`_schematic`, `_runout`, `_wear`,
+"Job - Customer - Vessel - SIDE" base (the saved document's name when the job has none) + `_<document suffix>` (`_schematic`, `_runout`, `_wear`,
 `_undercuts`, `_consolidated`, then `_BlankDraft`), so the same sheet gets the same name from
 its own tab and from Export all, and a `/`, `:` or `*` in a customer name never reaches the
 filename (two schemes had drifted apart and one of them did not sanitize — manual-figure
@@ -678,7 +684,11 @@ capped at `MAX_STATIONS_PER_COMPONENT`). `componentOverrides` still wins.
 
 **Body stations space with EQUAL gaps, the ends included** — `k · length / (count + 1)`, in
 physical mm on the linear canvas and in drawn x on the compressed sheet (ONE fraction in
-`runoutStationPositionsMm` and `collectRunoutStations`). Cell midpoints left half a pitch at each
+`runoutStationPositionsMm` and `collectRunoutStations`; on the sheet a run cut by an S-break
+spaces its DERIVED stations the same way over its DRAWN length only — the visible pieces either
+side of the gap (`bodyRunBreakGapsX`, the body pass's own decision, widened by the bubble
+clearance), laid end to end — so no leader ends in the gap and none lands on its neighbour's
+anchor; a dragged one never moves). Cell midpoints left half a pitch at each
 face and read on-device as bubbles crowding the faces like a liner's; the shop reads a uniform
 body anywhere and simply spreads them out (ruling). Tapers (small and large end) and liners
 (near the edges — the wear is further in) keep the edge-inset convention; do not apply the body
@@ -757,7 +767,13 @@ clock marker per bubble) are **reference-only**, same posture as coupler bolt sl
 spots. They **never** affect `coverageEndMm`/OAL, body resolution, or
 collision, and live outside `ShaftSpec`. Both fields are optional; a sheet exports
 fine with neither. Keyed by `(componentId, stationIndex)` with render-layer orphan handling
-(a reading whose station no longer exists is simply not drawn). The value + high-spot marker
+(a reading whose station no longer exists is simply not drawn). A bare-shaft (auto) body's keys
+— readings, dragged stations, its count override, wear pits, Ø readings, strip election — FOLLOW it
+when a neighbour's edit re-identifies its span (its id IS the span): the ORIGINAL `updateSpec` seam
+re-keys them in the same undo step, unambiguous successors only, a split or merge staying orphaned
+(`geom/AutoBodyRekeyMath.kt`) — and the same carry follows a body through PROMOTION ("Explicit
+body": the new stored body on exactly the run's span) and DEMOTION (the auto run that then fills
+exactly the removed body's span), `bodyIdentitySwaps`. The value + high-spot marker
 and the keyway cutout must be drawn **identically in both bubble draw sites** —
 `RunoutRoute.drawRunoutMarkers` (canvas) and `RunoutPdfComposer.drawPlacedBubbles` (PDF).
 Pure clock/hit-test math lives in `geom/RunoutReadingMath.kt` (shared, no `pdf → ui` dep);
@@ -1047,7 +1063,11 @@ one shape at every rail site; its length is user-set — `PdfPrefs.arrowSizePt`,
 "Dimension arrows". It reaches the two dimension-rail composers (schematic, consolidated) and the
 undercut rail — its PDF strips and its detail canvas, one rail (on-device request: smaller arrows
 on the undercut drawing); the wear strips keep their own fixed head. On every undercut rail a
-value that falls back off its line carries a thin leader down (or up) to its own span.
+value that falls back off its line carries a thin leader down (or up) to its own span, and on the
+schematic/consolidated rails a value the planner set BESIDE its span or bumped above its home
+height carries one too (`Placement.leader`) — ONE construction, `geom/RailValueLeader.kt`, and a
+leader is a collision obstacle like a label (an outside spot whose leader would cross a value is
+not taken).
 
 **Labels and rail LINES share ONE collision space** — a floating value lives in the *next*
 rail's band, so per-rail collision tracking is blind exactly where the labels overlap. The
@@ -1056,8 +1076,11 @@ treating both placed labels and every rail line as obstacles; the renderer keeps
 Canvas work, and no collision logic may be duplicated back into it. Resolution order:
 (a) **slide the value horizontally along its own span** — smallest shift from center inside
 `[xa+textPad+half, xb−textPad−half]`, tightened by `arrowSize` on both sides for an inline
-value so the break keeps its inward arrows; (b) only then bump a floating value vertically
-(bounded, never past the content top). A rail carrying a floating value **lifts every rail
+value so the break keeps its inward arrows; (b) a floating value with no room over its span
+steps just OUTSIDE it at the same height (past the FWD extension line, then the AFT one, inside
+the content area, never crossing its own extension lines); (c) only then bump it vertically
+(bounded, never past the content top, and never nearer another rail's line than its own — a
+value floated two bands up read as the wrong rail's, Emulator QA). A rail carrying a floating value **lifts every rail
 above it** — the OAL rail included — by one label band (glyph height + gap), cumulative per
 intervening fallback rail. Inline-vs-fallback is decided from **x-geometry alone**, so the
 lifts are known before the vertical budget: both composers fold them in
@@ -1179,6 +1202,11 @@ the edit (.001 counts). The user changes component values; components get put in
 place; auto-bodies fill the gaps — that is the design. Derived values (auto rate text,
 auto-body spans) may move; authored values may not.
 
+An edit dialog that opens on a stored measurement (runout TIR, wear Ø reading, worn section) seeds
+its field with a ROUNDED display, so its Save keeps the STORED value for every field the user has
+not edited (`util/Parsing.kt` `valueForSave`) — re-parsing the seed turned a typed .0015" into
+.002" when only the high spot moved (Emulator QA).
+
 Concretely: carousel update callbacks (`onUpdateBody/Taper/Thread/Liner`) receive
 committed field values **verbatim** — no snap-to-anchor on any typed-commit path. The removed
 `applySnapped{…}Update` wrappers (2026-07-26) snapped recomputed start/end to
@@ -1199,6 +1227,14 @@ deliberately (on-device report). Components are added from the full-width "+ Add
 button's chooser (`InlineAddChooserDialog` — a `Button` in the scroll column, not a FAB), the
 single add entry point. Do not reintroduce a bare-canvas tap action without asking: the objection was to
 the gesture existing, not to its behavior. See `docs/UI_CONTRACT.md` §3.1.1.
+
+### Number fields keep the keyboard they ask for
+Number fields ask for the number pad (`KeyboardType.Decimal`) and never force a phone-style keypad
+(on-device ruling: SwiftKey and Samsung Keyboard show their full layout there, and a keypad's keys
+vary by device — leave the regular keyboard). Because a number pad has no `/`, every
+fraction-capable number-pad field carries the in-field "/" key (`ui/input/FractionKey.kt`), shown
+while focused in an inch document; text-keyboard fields carry none. An app-owned keypad is a
+TODO, not a reason to change keyboard types. See `docs/contracts/NumberField.md` §"Keyboard".
 
 ### Numeric input commit behavior
 `NumericInputField` only calls `onCommit` on blur **if the value changed** since focus

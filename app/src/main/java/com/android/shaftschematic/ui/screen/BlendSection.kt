@@ -137,13 +137,18 @@ private fun SealFaceCheckbox(
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // In an Add dialog a tick is an edit for its discard guard; on a card there is none.
+    val edits = LocalDialogEdits.current
     Row(
         modifier = modifier
             .heightIn(min = 48.dp)
             .toggleable(
                 value = checked,
                 role = Role.Checkbox,
-                onValueChange = onCheckedChange,
+                onValueChange = { on ->
+                    edits?.mark()
+                    onCheckedChange(on)
+                },
             )
             .testTag(tag),
         verticalAlignment = Alignment.CenterVertically,
@@ -216,6 +221,8 @@ internal fun <T> ChipRow(
     )
     val restingBorder = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
     val chosenBorder = BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+    // In an Add dialog a move to another option is an edit for its discard guard.
+    val edits = LocalDialogEdits.current
 
     Column(Modifier.fillMaxWidth().padding(top = 6.dp)) {
         Text(
@@ -234,7 +241,10 @@ internal fun <T> ChipRow(
                 val on = opt == selected
                 FilterChip(
                     selected = on,
-                    onClick = { onSelect(opt) },
+                    onClick = {
+                        if (!on) edits?.mark()
+                        onSelect(opt)
+                    },
                     label = {
                         Text(
                             labelOf(opt),

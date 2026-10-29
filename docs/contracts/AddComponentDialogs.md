@@ -1,4 +1,4 @@
-# AddComponentDialogs Contract (v1.12, 2026-10-03)
+# AddComponentDialogs Contract (v1.15, 2026-10-28)
 
 ## Purpose
 Composable dialogs for adding new components: `AddBodyDialog`, `AddLinerDialog`,
@@ -16,6 +16,116 @@ Slot**), lambda-based API (`onDismiss`, `onAddBody`, `onAddLiner`, `onAddThread`
 `onAddTaper`, `onAddCouplerBoltSlot`), invoke-then-dismiss semantics plus a Close
 button that only dismisses. It lives outside `ShaftScreen` so screen refactors don't
 remove it.
+
+## Unreadable entries say so
+Every numeric dialog field (`CommitNumField`) carries a `parseValid` gate — `isLengthText` by
+default (a length or Ø: decimals, fractions, `10-1/4`, a decimal comma, a `mm`/`in`/`"` suffix —
+`NumberField.md`), `isUnitlessNumberText` for TPI, a whole number for the bolt-slot Count, and
+none for the fields that explain their own text (the taper rate's issue line, the thread
+designation's "Not a metric designation — e.g. M20×2.5"). Non-blank text that fails it is
+marked in error with **"Not a number"** under the field (`unreadableEntryError`), in the same
+error line the dialogs already use for "Overlaps another component"; a caller's own `errorText`
+takes the line first. Blank is "not entered yet" and is left to the Add gate. So a disabled Add
+button always has a visible reason — a hyphenated `25-3/16` used to leave Add disabled with
+nothing marked (emulator QA). The new-shaft "Shaft diameter" prompt (`ShaftDiaPrompt.kt`,
+`shaftDiaPromptError`) carries the same line plus "Must be > 0".
+
+Because the dialog fields and the card fields gate on the SAME predicates, the card and the Add
+dialog for a quantity accept exactly the same spellings (parity applies to input grammar too).
+
+A field the Add gate needs above zero (`requirePositive` — every Length, the body Ø, liner OD,
+thread major Ø and TPI, bolt-hole Ø, Spacing and Depth) shows **"Must be > 0"** under a typed
+`0`, the card's own wording for the refusal the card makes (`nonPositiveEntryError`). The taper's
+S.E.T./L.E.T. are not marked: a blank or 0 end is the dialog's documented way to derive it from
+the rate. The bolt-slot **Count** reads any number and shows **"Must be a whole number ≥ 1"** for
+`0`, `2.5`, `1/2` (`boltSlotCountError`, shared with the card's validator); it is never coerced —
+`0` used to be stored as 1 (emulator QA). Add stays disabled.
+
+## Overlaps are named before Add, the same from either reference end
+The Liner, Taper and Thread dialogs show an overlap **inline under the Start field**, naming the
+partner by the title its carousel card shows (`proposedSpanOverlapMessage` → "Overlaps FWD
+Taper"; several: "Overlaps AFT Liner, FWD Taper" — `componentCardTitles`, a user label winning),
+for AFT- and FWD-measured starts alike. What blocks is unchanged: another liner (for a liner) or
+another thread (for a thread), or a thread off the shaft end, is a blocking `startError` (the card
+refuses the same span), Add disabled; a crossing kind (a liner over a taper, a taper over a
+thread, …) is shown in the same red line with Add still live, and "Add Anyway?" lists the same
+partners (`collectAddWarnings`, one "Overlaps <title>" line each, plus the bounds line). Before,
+a crossing-kind overlap surfaced only in the post-submit confirm, as "Overlaps Taper 1" — which
+read as the FWD path skipping the check (the FWD seed happened to land on a taper, the AFT one
+on a liner).
+
+A FWD-measured liner or taper whose length would carry it past the AFT face shows **"Runs past
+the AFT end of the shaft"** and cannot be added (`addDialogPhysStartMm` /
+`addDialogFwdStartPastAft`). It used to be clamped onto the face — a different FWD distance
+from the one typed. With no OAL yet a FWD start is placed at 0, as before.
+
+## Seeds that do not collide
+The Liner and Taper dialogs' Start seeds come from the ONE seeder, `addStartSeed(spec, length,
+fromFwd)` (`ShaftScreenController.kt`), each from its own reference end and for the length the
+dialog opens with: a seed whose span would overlap a taper, OAL-counted thread or liner moves to
+the first free span that holds it — the AFT-most from AFT, the FWD-most from FWD (flush against
+that span's FWD end; `addSeedFromFwdMm` shows it as a FWD distance, 0 when the FWD face is free).
+Bodies are fillers and never push a seed. With no free span long enough the seed stands and the
+inline line says what it overlaps. Add Body and Add Thread keep their seeds (a thread belongs at a
+shaft end, not in the first free gap).
+
+## A seed is exact until it is edited
+Every field an Add dialog fills from a stored or derived mm value — Start, Length, Ø, the coupler
+row's hole Ø / spacing / depth, and the blend, seal-area and thread-relief presets a section fills
+in when it opens — keeps that EXACT mm until the user edits the field (`SeededMmField`,
+`ui/screen/AddDialogSeededField.kt`, the `valueForSave` posture of the edit dialogs). The inline
+overlap line, the Add gate and the submitted value all read the exact seed while the field is
+untouched; an edited field is parsed as typed, even when retyped to read like the seed. The text
+shown is unchanged (3 decimals). Parsing the rounded display back moved the value: a Start seeded
+flush against a liner ending at 35.42422" showed 35.424 and opened on a false "Overlaps AFT
+Liner", and rounding the other way left a hairline auto body (emulator QA). A blur or Done that
+hands back the same text is not an edit. The captured-keyway inset preset (0.5 in) displays exactly
+in either keyway unit and stays plain text, since the keyway-unit chip reinterprets what it means.
+
+## The keyboard never covers the dialog
+All five Add dialogs are `ImeResizingAlertDialog`s (`ui/screen/DialogImeResize.kt`, shared with
+the calculators, the runout reading editor and the worn-section editor), and each one's `text`
+is a `verticalScroll` column. With the keyboard up the dialog box sits in the room ABOVE it:
+every field below the focused one scrolls into reach and Cancel / Add stay on screen. A plain
+`AlertDialog` pans instead — the window slides up only far enough to show the cursor — so the
+Taper dialog's Captured keyway / Keyway spooned and the Add button sat under the keyboard and a
+tap aimed at KW L typed into the keyboard (emulator QA). The box is lifted by the keyboard inset
+the dialog window receives, not by the platform's window resize alone, which on API 36 often did
+not happen (see the helper's KDoc). A new Add dialog — or any dialog that takes typed input —
+uses the same helper; the confirm dialogs over them ("Add Anyway?") take no input and stay plain.
+
+## Back on a filled dialog asks before discarding
+Back, or a tap outside, on an Add dialog the user has changed anything in opens a confirm instead
+of throwing the entry away (on-device ruling: "it should ask to be safe"): **"Discard this
+&lt;component&gt;?"** ("Discard this liner?", "… body?", "… taper?", "… thread?", "… coupler bolt
+slot?"), text "What you typed will be lost.", buttons **Keep editing** (the dialog stays, every
+field, chip and switch as it was) and **Discard** (the dialog closes through `onCancel`, nothing is
+added). Back or a tap outside on the confirm itself is Keep editing. An untouched dialog closes on
+Back exactly as before, with no prompt. The explicit **Cancel** button stays a direct discard — a
+deliberate choice, where the guard exists for the stray swipe or tap — and **Add** is unchanged.
+Test tags: `add_dialog_discard_confirm`, `add_dialog_keep_editing`, `add_dialog_discard`.
+
+"Changed anything" means any keystroke in any field — counted the moment it lands, before the
+field commits — any chip moved to another option, any switch or checkbox flipped. Re-tapping the
+selected chip is not a change; a section's preset seeded as it opens is part of the control change
+that opened it.
+
+Mechanism: every Add dialog hosts through ONE `DiscardGuardedDialog`
+(`ui/screen/DialogDiscardGuard.kt`), which wraps `ImeResizingAlertDialog` and guards only its
+`onDismissRequest` (the IME padding and window sizing are untouched). The dirty flag
+(`DialogEdits`) is **raised by the controls themselves**, through the `LocalDialogEdits`
+composition local the guard provides: the dialogs' number field (`CommitNumField`), their chip
+(`DirectionChip`, so `KeywayUnitEntryChips` and the relief end chips too), `DialogSwitch`, the
+captured-keyway row, and the shared sections' leaf controls (`KeywayGateRow`,
+`ThreadReliefSwitchRow`, `ChipRow` and the seal-area checkboxes in `BlendSection`, the shoulder
+radius picker). That is deliberate: a field or chip added to a dialog from those pieces is covered
+without the dialog listing it, where a per-dialog snapshot of state-vs-seeds would have to be
+extended by hand for every new control. The same controls on the carousel cards see no local and
+mark nothing. A raw Material control placed straight into an Add dialog would bypass the guard —
+use `DialogSwitch` or call `DialogEdits.mark()` in its callback. The worn-section editor
+(`WornSectionDialog`) uses the same guard ("Discard this worn section?", or "Discard changes to
+this worn section?" when editing one); its controls are its own, so each marks the guard in its
+callback. Pinned by `AddDialogDiscardGuardTest`.
 
 ---
 
@@ -238,7 +348,9 @@ Manual taper-rate rules (both surfaces carry the one label `Rate (1:12, 3/4"/ft,
   filter: it drops inch marks, letters and the second slash, leaving the bare `3/4` the
   parser refuses (on-device report).
 - A bare slash fraction (`3/4`, `1/1`) is ambiguous between a slope and inches per foot and is
-  blocked with a message naming the explicit forms; the parser never guesses.
+  blocked with a message naming the explicit forms; the parser never guesses. So is a bare
+  decimal steeper than 0.25 (`.75` — the 3/4"/ft figure without its `/ft`), on both surfaces
+  (`TaperRate.md`).
 - Bare `1` is invalid/ambiguous and must be rewritten as a full ratio or inches per foot.
 - When only one taper end is present, Manual mode requires a valid rate so the
   missing end can be derived.
@@ -250,9 +362,15 @@ Auto taper-rate rules (both surfaces — dialog and carousel card):
   values. The dialog's `-1` "not provided" and the model's `0` defaults are
   sentinels; a rate must never be fabricated from them (`autoTaperRate` returns
   null and the surface shows "Auto needs Length + SET + LET…").
-- Auto/Manual mode is **user-owned state** — seeded once per taper (blank stored
-  text or text matching the computed rate ⇒ Auto), never re-derived from string
-  comparison afterward. Re-deriving silently discards an explicit mode choice.
+- Auto/Manual mode is **user-owned state, STORED on the taper** (`Taper.taperRateManual`):
+  the dialog submits its chips' choice (`onSubmit(…, rateManual)` → `addTaperAt(rateManual)`),
+  and the card's chips write it (`setTaperRateMode` — Auto syncing the stored text to the
+  computed rate in the same edit). A Manual rate therefore survives a reopen and a Length edit
+  keeps it. Only a taper with no stored mode (saved before the field) seeds it from the text
+  (blank or equal to the computed rate ⇒ Auto) — which is what lost a Manual `1:12` equal to the
+  computed rate: it reopened as Auto and the next Length edit wrote `1:13.029` (emulator QA).
+  Never re-derived from string comparison afterward. Re-deriving silently discards an explicit
+  mode choice.
 - The model is written only on explicit user commits (geometry edits carry the
   recomputed rate; the Auto chip tap syncs the stored text). **Never** write
   `taperRateText` from a composition-time effect — merely viewing a card must
@@ -293,13 +411,14 @@ Add dialog — when all three hold:
    pre-set box on every add; and
 3. it is reached for **after looking at a printed sheet**, not while adding a component.
 
-Six controls qualify today — the two below plus "Shade on drawing", "Show name on drawing",
+Seven controls qualify today — the three below plus "Shade on drawing", "Show name on drawing",
 "Compress on drawing" and the per-component "Prints in" unit chip; `CLAUDE.md` holds the full
 list and the reasoning for each:
 
 | Control | Cards | Why card-only |
 |---|---|---|
 | **Show dimension rail** | `ResolvedCouplerBoltSlot` | Prints the row's position span (authored end → nearest hole center) on the rail sheets; off by default |
+| **Show dimension rail** | Body (explicit only) | Prints the body's own length span on the rail sheets (`buildBodyLengthSpans`). Tri-state `Body.showDimensionRail`: unset follows position — on for a body whose stored span touches a shaft end face (where a coupling goes, on-device ruling), off mid-shaft — with a caption saying which applies; a tap stores an explicit value. Position is only known once the body is placed, and the default is right for the common case, so in `AddBodyDialog` it would be a preset box. The auto-body card omits it: auto spans never get the rail |
 | **Show Ø on drawing** | Body (explicit + auto), Liner | Controls whether the Ø callout prints below the shaft. Bodies and the bare shaft default **off** — body Ø callouts are opt-in per card (on-device preference; the footer carries no body Ø line). Liners default on |
 
 Anything that moves a value or a component stays under the parity rule above. See
@@ -368,6 +487,17 @@ the aft-most center as `startFromAftMm = OAL − enteredFwd − (count−1)·spa
 ---
 
 ## Change log
+**v1.15 (2026-10-28)**
+- All five Add dialogs moved to `ImeResizingAlertDialog` (Add Liner's content now scrolls too):
+  fields and buttons stay above the keyboard. Emulator QA.
+
+**v1.14 (2026-10-28)**
+- Overlaps named inline before Add on the Liner/Taper/Thread dialogs from either reference end,
+  by card title; "Add Anyway?" lists the same named partners. FWD starts past the AFT face
+  refused, not clamped. Liner/Taper seeds fit their length from the chosen end (`addStartSeed`).
+  `requirePositive` "Must be > 0" lines; the bolt Count's "Must be a whole number ≥ 1", never
+  coerced. Taper Rate mode stored (`taperRateManual`) and submitted by the dialog. Emulator QA.
+
 **v1.13 (2026-10-23)**
 - **"Standard size…" picker removed** from the Body/Taper cards and both Add dialogs, with the
   ANSI B17.1 / DIN 6885-1 key-stock tables (`geom/KeyStockStandards.kt`,

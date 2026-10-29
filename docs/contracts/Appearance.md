@@ -75,6 +75,13 @@ over the cuts is fixed `SheetInk` on the canvases (theme-independent) and driven
 input aid are fixed `SheetInk.Outline` text with no pref; they print on no sheet. Its sibling `PdfPrefs.undercutSplitAtLinerEdge`
 (default off) decides whether the chain rail splits a cut at a liner edge it crosses.
 
+**The editor preview is NOT a paper canvas** — it is theme-styled (the preview-color presets) — but
+its problem marks (`RenderOptions.issueMarks`: overlap bands, past-end tints, the dashed real end;
+`ShaftScreen.md`) take ONE fixed warning red, `PREVIEW_ISSUE_INK`
+(`ui/drawing/render/PreviewIssueMarks.kt`), never a theme role: the mark is a statement about the
+drawing, it reads on the light, dark and high-contrast previews alike, and a scheme's `error` role
+would make the same problem a different colour per theme.
+
 **Tap and selection affordances are fixed ink too** — the overview canvases' tap tint,
 border and count badge (Wear, Undercut) and the undercut detail canvas's selection draw in
 `SheetInk.Selection` (with `SheetInk.OnSelection` badge text), the historical light-theme

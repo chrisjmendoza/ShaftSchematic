@@ -1,5 +1,6 @@
 package com.android.shaftschematic.ui.screen
 
+import com.android.shaftschematic.doc.stripShaftDocExtension
 import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.util.DocumentNaming
 import com.android.shaftschematic.util.exportPdfFilename
@@ -31,6 +32,15 @@ enum class OutputDoc(
     WEAR("Wear", "Wear Document", "wear"),
     UNDERCUT("Undercut", "Undercut Drawing", "undercuts"),
 }
+
+/**
+ * The "Export all" checkboxes' starting state, one per [OutputDoc] in enum order: every document,
+ * except the undercut drawing when the job records no undercut — it would print as a half-blank
+ * write-in sheet the batch did not ask for (on-device report). The box stays tickable for a blank
+ * undercut template.
+ */
+internal fun defaultExportAllChecks(jobHasUndercuts: Boolean): List<Boolean> =
+    OutputDoc.entries.map { it != OutputDoc.UNDERCUT || jobHasUndercuts }
 
 /** Base of every export filename when the job carries no customer, vessel or job number. */
 internal const val FALLBACK_FILENAME_BASE = "Shaft"
@@ -67,8 +77,12 @@ enum class ConsolidatedVariant(
  * [shaftPosition] is required, not defaulted: a twin-screw job runs two shafts under ONE job
  * number, so without the side both mates propose the same filename and the second export
  * silently replaces the first. The side is the last part of the base, dropped entirely for a
- * side that prints nothing, and never a filename on its own — with nothing else to go on the
- * document's [OutputDoc.fallbackBase] still wins.
+ * side that prints nothing, and never a filename on its own.
+ *
+ * A job with no customer, vessel or job number is named by its saved [documentName] instead
+ * (sanitized the same way, `.shaft` dropped), and only an unsaved, unnamed one falls back to the
+ * document's [OutputDoc.fallbackBase]: every such export used to land as `Shaft_<doc>.pdf`, so
+ * two jobs exported to one folder collided and no file said which shaft it was (on-device report).
  */
 internal fun buildOutputFilename(
     customer: String,
@@ -77,12 +91,21 @@ internal fun buildOutputFilename(
     shaftPosition: ShaftPosition,
     doc: OutputDoc,
     blankDraft: Boolean = false,
+    documentName: String? = null,
 ): String {
     val base = DocumentNaming.suggestedBaseName(
         jobNumber = jobNumber,
         customer = customer,
         vessel = vessel,
         suffix = shaftPosition.printableLabelOrNull(),
-    ) ?: doc.fallbackBase
+    ) ?: documentNameFilenameBase(documentName) ?: doc.fallbackBase
     return exportPdfFilename(base, "_${doc.filenameSuffix}", blankDraft)
 }
+
+/** A saved document's name as a filename base — sanitized, without `.shaft` — or null when blank. */
+internal fun documentNameFilenameBase(documentName: String?): String? =
+    documentName
+        ?.trim()
+        ?.let(::stripShaftDocExtension)
+        ?.let(DocumentNaming::sanitizePart)
+        ?.takeIf { it.isNotBlank() }

@@ -30,8 +30,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Redo
-import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandLess
@@ -365,7 +363,7 @@ fun UndercutRoute(
      * binder thread.
      */
     fun printUndercutDrawing() {
-        val jobName = buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.UNDERCUT, blankDraft)
+        val jobName = buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.UNDERCUT, blankDraft, currentDocumentName)
             .removeSuffix(".pdf")
         val specSnapshot = spec
         val projectSnapshot = ProjectInfo(customer = customer, vessel = vessel,
@@ -1154,7 +1152,7 @@ fun UndercutRoute(
             onExport = {
                 guardMissingDia(export = true) {
                     launcher.launchPicker(
-                        buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.UNDERCUT, blankDraft),
+                        buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.UNDERCUT, blankDraft, currentDocumentName),
                         what = "undercut export",
                     )
                 }
@@ -1201,20 +1199,7 @@ fun UndercutRoute(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(start = 4.dp).weight(1f),
                 )
-                IconButton(
-                    onClick = vm::undoEdit,
-                    enabled = canUndo,
-                    modifier = Modifier.testTag("undercut_undo"),
-                ) {
-                    Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = "Undo")
-                }
-                IconButton(
-                    onClick = vm::redoEdit,
-                    enabled = canRedo,
-                    modifier = Modifier.testTag("undercut_redo"),
-                ) {
-                    Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = "Redo")
-                }
+                UndoRedoButtons(canUndo, canRedo, vm::undoEdit, vm::redoEdit, tagPrefix = "undercut")
                 IconButton(
                     onClick = onSave,
                     modifier = Modifier.testTag("toolbar_save"),
@@ -1477,7 +1462,7 @@ fun UndercutRoute(
                 guardMissingDia(export = true) {
                     showPreview = false
                     launcher.launchPicker(
-                        buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.UNDERCUT, blankDraft),
+                        buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.UNDERCUT, blankDraft, currentDocumentName),
                         what = "undercut export",
                     )
                 }

@@ -6,7 +6,9 @@ File: `util/TaperRateAuto.kt`
 Purpose: Compute an auto-derived taper rate display string from Length + SET + LET
 geometry, and parse/validate user-entered manual taper rate text.
 
-Version: v1.1 (2026-09-01)  
+Version: v1.3 (2026-10-28; the Auto/Manual mode is stored on the taper, `Taper.taperRateManual`)  
+v1.2 (2026-10-28; a bare decimal steeper than 0.25 is ambiguous)  
+v1.1 (2026-09-01)  
 Supersedes: `TaperParser.md`, `TaperParserContract.md` — those documented
 `util/TaperParser.kt`, which was deleted 2026-07-11 alongside this file's introduction.
 Both old docs have since been removed from the repo as well; this file is the only taper-rate
@@ -18,6 +20,10 @@ Invariants
   whenever both diameters are real, positive values. Manual mode is an explicit,
   user-owned override — see `AddComponentDialogs.md` for the dialog/card mode-toggle
   contract (seeding, no re-derivation from string comparison, no composition-time writes).
+- **The mode is stored** (`Taper.taperRateManual`, additive and nullable — `null` for tapers
+  saved before it, which seed from the text as before). A typed Manual rate is the user's value
+  (golden rule): a Length edit in Manual carries the stored text unchanged, and the mode
+  survives leaving and reopening the document. Only Auto recomputes the text from geometry.
 - **Sentinel guard:** the dialog's `-1` ("not provided") and the model's `0` default are
   sentinels, never geometry. `autoTaperRate` returns `null` rather than fabricate a rate
   from `lengthMm <= 0`, either diameter `<= 0`, or `setDiaMm == letDiaMm` (zero slope).
@@ -27,7 +33,8 @@ Invariants
 - **Accepted spellings** (`parseTaperRateText`, deterministic — it never guesses): a ratio
   `1:12`; **inches per foot** `3/4"/ft` (also `3/4″/ft`, `3/4 in/ft`, `3/4/ft`, a mixed number
   `1 1/4"/ft`, a decimal `0.75"/ft`), read as value ÷ 12 so `3/4"/ft` = 1:16; a decimal (`12`
-  reads as 1:12, a value under 1 as the slope itself). The footer's `1"/ft` / `3/4"/ft`
+  reads as 1:12, a value under 1 as the slope itself up to `MAX_BARE_DECIMAL_SLOPE` = 0.25 —
+  `.0625` reads as 3/4"/ft). The footer's `1"/ft` / `3/4"/ft`
   notation therefore round-trips through the field, and every auto-rate text (`1:N`) parses.
 - **A bare slash fraction is blocked as ambiguous** (`3/4`, `1/16`, `1/1`): a machinist
   writing `3/4` means 3/4" per foot (1:16), while a slope reader would make it 0.75 — an absurd
@@ -35,6 +42,14 @@ Invariants
   fraction is ambiguous`, and `parseTaperRateText` returns null for it in BOTH modes (the
   lenient flag covers the legacy bare `1` only). The card and dialog labels advertise the real
   forms: `Rate (1:12, 3/4"/ft, or decimal)`.
+- **A bare decimal steeper than 0.25 is blocked as ambiguous** (`.75`, `0.5`): 0.25 is already
+  3" of diameter per foot, past any shaft taper, so `.75` is the 3/4"/ft figure typed as a
+  decimal without its `/ft` — read as a slope it made a 9.129" S.E.T. into a 20.19" L.E.T. with
+  no warning (emulator QA). `parseTaperRateText` returns null for it in both modes and
+  `manualTaperRateBlockingMessage` answers `Write .75"/ft or a ratio like 1:16; a bare .75 is
+  ambiguous`. `isAmbiguousTaperRateText` (bare fraction OR bare steep decimal) lets the card's
+  rate field pass such text to that message instead of calling it "not a number"; the Add
+  dialog shows the same message through its rate issue line.
 - **Bare `1` is blocked as ambiguous** manual rate text; must be rewritten as a full
   ratio or inches per foot (`1:1` is fine).
 - **Exact fallback format** is `1:N.NNN` (3 decimals, not trimmed) when no common rate
@@ -58,7 +73,7 @@ Responsibilities
 - `autoTaperRateText(...): String?` — convenience wrapper returning just `.text`.
 - `parseTaperRateText(text, allowAmbiguousBareOne = true): Float?` — parses `"a:b"`,
   `"a/b"`, or a bare number (interpreted as `1:N` when `≥ 1`, or as a direct slope when
-  `< 1`). Bare `"1"` is rejected only when `allowAmbiguousBareOne = false`.
+  `≤ 0.25`; between 0.25 and 1 it is null — ambiguous, see above). Bare `"1"` is rejected only when `allowAmbiguousBareOne = false`.
 - `manualTaperRateBlockingMessage(rateText, lengthMm, setDiaMm, letDiaMm): String?` —
   blocking (non-null) when: the rate is blank but required to derive a missing end
   (`lengthMm > 0` and exactly one of SET/LET is present); the text is exactly `"1"`;

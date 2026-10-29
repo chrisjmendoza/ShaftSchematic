@@ -33,6 +33,8 @@ import com.android.shaftschematic.ui.input.taperSetLetMapping
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.resolved.ResolvedTaper
 import com.android.shaftschematic.ui.util.positiveLengthErrorMm
+import com.android.shaftschematic.ui.util.collisionChipMessage
+import com.android.shaftschematic.ui.util.positiveDiaErrorMm
 import com.android.shaftschematic.ui.util.startOverlapErrorMm
 import com.android.shaftschematic.ui.util.taperWarningMessages
 import com.android.shaftschematic.util.DisplayUnits
@@ -41,6 +43,7 @@ import com.android.shaftschematic.util.autoTaperRateText
 import com.android.shaftschematic.util.filterTaperRateInput
 import com.android.shaftschematic.util.manualTaperRateBlockingMessage
 import com.android.shaftschematic.util.manualTaperRateWarning
+import com.android.shaftschematic.util.isAmbiguousTaperRateText
 import com.android.shaftschematic.util.parseTaperRateText
 import com.android.shaftschematic.util.toMmOrNull
 
@@ -57,8 +60,10 @@ import com.android.shaftschematic.util.toMmOrNull
  * with its "KW Inset from SET" field shown only while captured, "Keyway spooned", and the
  * clocking section.
  *
- * Rate mode is user-owned state seeded once per taper — it must not be re-derived from the
- * stored text, which would discard an explicit Auto/Manual choice. Every control that changes
+ * Rate mode is user-owned state, STORED on the taper ([Taper.taperRateManual], written by the
+ * Auto | Manual chips) — it must not be re-derived from the stored text, which would discard an
+ * explicit Auto/Manual choice; only a taper saved before the field existed seeds it from the
+ * text. Every control that changes
  * geometry, position, or a value is mirrored in `AddTaperDialog` by the add-dialog-parity
  * invariant; "Show name on drawing" and the "Prints in: in | mm" chip at the card's foot are the
  * documented carve-outs.
@@ -84,6 +89,8 @@ internal fun TaperPagerCard(
     onUpdateTaperShade: (Int, Boolean) -> Unit = { _, _ -> },
     onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromSetMm: Float, spooned: Boolean) -> Unit,
     onUpdateTaperReference: (Int, LinerAuthoredReference) -> Unit,
+    /** The Rate mode chips: (index, manual, rate text to store with Auto — or null). */
+    onUpdateTaperRateMode: (Int, Boolean, String?) -> Unit = { _, _, _ -> },
     onSetKeyways180Apart: (Boolean) -> Unit,
     onSetKeyways90Apart: (Boolean) -> Unit,
     onSetKeyways90Cw: (Boolean) -> Unit,
@@ -115,7 +122,7 @@ internal fun TaperPagerCard(
             )
         },
         debugText = if (showComponentDebugLabels) "id=${t.id} • startMm=${f1(t.startFromAftMm)} • endMm=${f1(t.startFromAftMm + t.lengthMm)}" else null,
-        errorMessage = if (t.id in collidingComponentIds) "Overlaps another component" else null,
+        errorMessage = if (t.id in collidingComponentIds) collisionChipMessage(spec, t.id) else null,
         warningMessage = taperWarningMessages(spec, t, unit).joinToString("; ").ifEmpty { null },
         componentId = t.id, componentKind = ComponentKind.TAPER,
         outerPaddingHorizontal = outerPaddingHorizontal,
@@ -132,12 +139,16 @@ internal fun TaperPagerCard(
                 exactDecimals = 3
             )
         }
-        // Mode is user-owned state, seeded once per taper from whether the
-        // stored text already matches the computed auto text. It must not be
-        // re-derived on text/geometry changes — that silently discards an
-        // explicit Auto/Manual choice.
-        var autoRate by rememberSaveable(t.id) {
-            mutableStateOf(t.taperRateText.isBlank() || t.taperRateText == computedRateText)
+        // Mode is user-owned state, stored on the taper by the chips below. Only a taper with no
+        // stored mode (saved before the field existed) seeds it from whether the stored text
+        // matches the computed auto text. It must not be re-derived on text/geometry changes —
+        // that silently discards an explicit Auto/Manual choice; keyed on the stored mode, so an
+        // undo of a chip tap moves the chips back.
+        var autoRate by rememberSaveable(t.id, t.taperRateManual) {
+            mutableStateOf(
+                t.taperRateManual?.not()
+                    ?: (t.taperRateText.isBlank() || t.taperRateText == computedRateText)
+            )
         }
         val hasExactlyOneEnd = (t.startDiaMm > 0f).xor(t.endDiaMm > 0f)
         val autoRateIssue = if (autoRate && hasExactlyOneEnd) {
@@ -216,14 +227,22 @@ internal fun TaperPagerCard(
         )
         FieldPair(
             first = {
-                CommitNum("${endMap.leftCode} Ø (${abbr(unit)})", disp(t.startDiaMm, unit)) { s ->
+                // A typed 0 would re-derive this end from the rate — a different value than the
+                // one typed — so a diameter must be > 0, as the Add dialog already requires.
+                CommitNum(
+                    "${endMap.leftCode} Ø (${abbr(unit)})", disp(t.startDiaMm, unit),
+                    validator = { raw -> positiveDiaErrorMm(toMmOrNull(raw, unit)) },
+                ) { s ->
                     toMmOrNull(s, unit)?.let {
                         onUpdateTaper(idx, t.startFromAftMm, t.lengthMm, it, t.endDiaMm, nextRateText(t.lengthMm, it, t.endDiaMm))
                     }
                 }
             },
             second = {
-                CommitNum("${endMap.rightCode} Ø (${abbr(unit)})", disp(t.endDiaMm, unit)) { s ->
+                CommitNum(
+                    "${endMap.rightCode} Ø (${abbr(unit)})", disp(t.endDiaMm, unit),
+                    validator = { raw -> positiveDiaErrorMm(toMmOrNull(raw, unit)) },
+                ) { s ->
                     toMmOrNull(s, unit)?.let {
                         onUpdateTaper(idx, t.startFromAftMm, t.lengthMm, t.startDiaMm, it, nextRateText(t.lengthMm, t.startDiaMm, it))
                     }
@@ -238,16 +257,17 @@ internal fun TaperPagerCard(
             Text("Rate mode:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             FilterChip(selected = autoRate, onClick = {
                 autoRate = true
-                // Explicit user action: sync the stored text to the computed
-                // rate so model/PDF match what the card now shows.
-                val autoText = computedRateText
-                if (autoText != null && autoText != t.taperRateText) {
-                    onUpdateTaper(idx, t.startFromAftMm, t.lengthMm, t.startDiaMm, t.endDiaMm, autoText)
-                }
+                // Explicit user action: store the mode, and sync the stored text to the computed
+                // rate so model/PDF match what the card now shows — one edit.
+                onUpdateTaperRateMode(idx, false, computedRateText)
             },
                 label = { Text("Auto") }, colors = selectedColors,
                 border = if (autoRate) BorderStroke(1.dp, Color.Black) else null)
-            FilterChip(selected = !autoRate, onClick = { autoRate = false },
+            FilterChip(selected = !autoRate, onClick = {
+                autoRate = false
+                // Stored, so a typed rate survives a reopen and the next Length edit.
+                onUpdateTaperRateMode(idx, true, null)
+            },
                 label = { Text("Manual") }, colors = selectedColors,
                 border = if (!autoRate) BorderStroke(1.dp, Color.Black) else null)
         }
@@ -260,10 +280,14 @@ internal fun TaperPagerCard(
             inputFilter = ::filterTaperRateInput,
             enabled = !autoRate,
             externalIssueText = rateIssue,
-            // Bare "1" passes parse so the validator can explain the ambiguity;
+            // Bare "1", a bare fraction and a bare steep decimal pass parse so the validator can
+            // explain the ambiguity;
             // blank must NOT pass — updateTaper keeps the old rate on blank, so
             // committing "" would leave the field empty while the model retains it.
-            parseValid = { parseTaperRateText(it, allowAmbiguousBareOne = false) != null || it.trim() == "1" },
+            parseValid = {
+                parseTaperRateText(it, allowAmbiguousBareOne = false) != null ||
+                    it.trim() == "1" || isAmbiguousTaperRateText(it)
+            },
             validator = { raw -> manualTaperRateBlockingMessage(raw, t.lengthMm, t.startDiaMm, t.endDiaMm) }
         ) { s ->
             onUpdateTaper(idx, t.startFromAftMm, t.lengthMm, t.startDiaMm, t.endDiaMm, s.trim())
@@ -348,12 +372,13 @@ internal fun TaperPagerCard(
                 androidx.compose.material3.Switch(checked = isCaptured, onCheckedChange = null)
             }
             if (isCaptured) {
-                // A blank or ≤ 0 inset is not a way to un-capture: the toggle is the one control
-                // that clears the inset, so such a commit is a no-op.
-                CommitNum("KW Inset from SET (${abbr(kwUnit)})", dispKw(t.keywayOffsetFromSetMm, kwUnit)) { s ->
-                    if (s.isBlank()) return@CommitNum
+                // A ≤ 0 inset is not a way to un-capture: the toggle is the one control that
+                // clears the inset, so the field refuses it and says so.
+                CommitNum(
+                    "KW Inset from SET (${abbr(kwUnit)})", dispKw(t.keywayOffsetFromSetMm, kwUnit),
+                    validator = { raw -> capturedInsetErrorMm(toMmOrNull(raw, kwUnit)) },
+                ) { s ->
                     val v = toMmOrNull(s, kwUnit) ?: return@CommitNum
-                    if (v <= 0f) return@CommitNum
                     rememberedInsetMm = v
                     onUpdateTaperKeyway(idx, t.keywayWidthMm, t.keywayDepthMm, t.keywayLengthMm, v, t.keywaySpooned)
                 }

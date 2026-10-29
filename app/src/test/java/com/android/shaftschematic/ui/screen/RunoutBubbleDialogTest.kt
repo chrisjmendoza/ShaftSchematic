@@ -5,6 +5,7 @@ import android.view.WindowManager
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -81,6 +82,34 @@ class RunoutBubbleDialogTest {
         rule.onNodeWithTag("runout_bubble_save").assertIsEnabled().performClick()
         assertTrue(saved != null)
         assertNull(requireNotNull(saved).first)
+    }
+
+    /**
+     * Emulator QA: a typed 0.0015" re-opened as `.002`, and a Save that only moved the high spot
+     * stored 0.002". An untouched seed saves the STORED value, bit for bit.
+     */
+    @Test
+    fun `re-saving an untouched reading keeps the stored value exactly`() {
+        show(initialMm = 0.0381f) // 0.0015"
+        rule.onNodeWithTag("runout_bubble_value").assertTextContains(".002")
+        rule.onNodeWithTag("runout_bubble_save").performClick()
+        assertEquals(0.0381f, requireNotNull(saved).first!!, 0f)
+    }
+
+    @Test
+    fun `a fraction re-saved untouched is not rounded to thousandths`() {
+        show(initialMm = 25.4f / 64f)
+        rule.onNodeWithTag("runout_bubble_save").performClick()
+        assertEquals(25.4f / 64f, requireNotNull(saved).first!!, 0f)
+    }
+
+    @Test
+    fun `an edited reading is re-parsed`() {
+        show(initialMm = 0.0381f)
+        rule.onNodeWithTag("runout_bubble_value").performTextClearance()
+        rule.onNodeWithTag("runout_bubble_value").performTextInput(".002")
+        rule.onNodeWithTag("runout_bubble_save").performClick()
+        assertEquals(0.0508f, requireNotNull(saved).first!!, 1e-6f)
     }
 
     @Test

@@ -70,4 +70,27 @@ object DiameterCalloutLayout {
         }
         return result.toList()
     }
+
+    /**
+     * Left x of a callout label hung off a leader at [anchorX]. The label normally sits right of
+     * the anchor past the [dogleg]; one that would run past [contentRight] flips to the LEFT of
+     * the anchor instead (the dogleg then runs left into its right edge), and one that fits on
+     * neither side is pushed back inside the content, so no value ever prints into the page
+     * margin (on-device report: a `Ø 5.998"` ran to within a quarter inch of the paper edge,
+     * where a printer's unprintable border takes the closing mark). The leader always stays on
+     * its anchor.
+     */
+    fun labelLeft(
+        anchorX: Float,
+        labelWidth: Float,
+        dogleg: Float,
+        contentLeft: Float = Float.NEGATIVE_INFINITY,
+        contentRight: Float = Float.POSITIVE_INFINITY,
+    ): Float {
+        val right = anchorX + dogleg
+        if (right + labelWidth <= contentRight) return right
+        val left = anchorX - dogleg - labelWidth
+        if (left >= contentLeft) return left
+        return (contentRight - labelWidth).coerceAtLeast(contentLeft)
+    }
 }

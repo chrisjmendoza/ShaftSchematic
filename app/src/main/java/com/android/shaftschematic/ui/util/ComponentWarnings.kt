@@ -53,7 +53,7 @@ private const val SANITY_MAX_DIA_MM = 1_000f
  * a taper authored flush with the FWD face (on-device report). 0.01 mm is a hundredth of the
  * finest value anyone types and still far below anything measurable on the shaft.
  */
-private const val BOUNDS_EPS_MM = 1e-2f
+internal const val BOUNDS_EPS_MM = 1e-2f
 
 private const val SHORT_SEGMENT_MSG = "Very short segment (< 1 mm)"
 private const val LENGTH_SANITY_MSG = "Length exceeds 15 m — check for a typo"
@@ -83,7 +83,7 @@ internal const val THREAD_RELIEF_LEN_MSG = "Relief longer than the thread"
  */
 fun outsideShaftSpan(spec: ShaftSpec, startMm: Float, lengthMm: Float): Boolean =
     spec.overallLengthMm > 0f &&
-        (startMm < -BOUNDS_EPS_MM || startMm + lengthMm > spec.overallLengthMm + BOUNDS_EPS_MM)
+        (startsBeforeAftEnd(startMm) || endsPastOal(spec, startMm, lengthMm))
 
 /**
  * The overall length rendered the way both bounds messages print it — in the document's
@@ -101,15 +101,36 @@ fun outsideShaftSpanMessage(spec: ShaftSpec, startMm: Float, lengthMm: Float, un
 
 /**
  * Carousel-card phrasing of [outsideShaftSpan] — a component that already exists and whose
- * edit committed verbatim. The wording names the shaft END because that is what a card edit
- * usually runs past; the comparison is the same one the dialog uses.
+ * edit committed verbatim. The wording names the END it runs past: "past the AFT end" for a
+ * span that starts before 0, "past shaft length" for one that runs beyond the OAL (both lines
+ * when it does both). "Past shaft length" for a part hanging off the AFT end read as wrong —
+ * nothing there is longer than the shaft (emulator QA). The comparison is the dialog's.
  */
-fun pastShaftEndMessage(spec: ShaftSpec, startMm: Float, lengthMm: Float, unit: UnitSystem): String? =
-    if (outsideShaftSpan(spec, startMm, lengthMm)) "Extends past shaft length (OAL ${oalText(spec, unit)})"
-    else null
+fun pastShaftEndMessage(spec: ShaftSpec, startMm: Float, lengthMm: Float, unit: UnitSystem): String? {
+    if (!outsideShaftSpan(spec, startMm, lengthMm)) return null
+    val lines = buildList {
+        if (startsBeforeAftEnd(startMm)) add(PAST_AFT_END_CARD_MSG)
+        if (endsPastOal(spec, startMm, lengthMm)) add("Extends past shaft length (OAL ${oalText(spec, unit)})")
+    }
+    return lines.joinToString("; ")
+}
+
+/** The card chip for a component that starts before the AFT face. */
+internal const val PAST_AFT_END_CARD_MSG = "Extends past the AFT end of the shaft"
+
+/**
+ * The AFT half of [outsideShaftSpan] — the span starts before the AFT face. The two halves are
+ * the comparison itself, not copies of it: [outsideShaftSpan] is their OR, and the banner and the
+ * card chip read the halves only to NAME the end.
+ */
+internal fun startsBeforeAftEnd(startMm: Float): Boolean = startMm < -BOUNDS_EPS_MM
+
+/** The FWD half of [outsideShaftSpan]: the span runs beyond the OAL. */
+internal fun endsPastOal(spec: ShaftSpec, startMm: Float, lengthMm: Float): Boolean =
+    startMm + lengthMm > spec.overallLengthMm + BOUNDS_EPS_MM
 
 /** True for a positive length at or below the short-segment threshold (0 excluded). */
-private fun isShortSegment(lengthMm: Float): Boolean =
+internal fun isShortSegment(lengthMm: Float): Boolean =
     lengthMm in Float.MIN_VALUE..SHORT_SEGMENT_MM
 
 /** True when [lengthMm] exceeds the implausible-length sanity ceiling. */
@@ -234,63 +255,6 @@ private fun linerOdBelowUnderlyingBody(spec: ShaftSpec, liner: Liner): Boolean {
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
- * Spec-scoped warnings (§4.3 — surfaced by the Schematic tab's `SpecWarningBanner`)
+ * Spec-scoped warnings (§4.3) — `specIssues` in `ui/util/SpecIssues.kt`, read by the Schematic
+ * tab's `SpecWarningBanner` and the preview's problem marks through the predicates above.
  * ──────────────────────────────────────────────────────────────────────────── */
-
-/**
- * Whole-spec advisory warnings (§4.3): a count of tiny segments (length in
- * (0, [SHORT_SEGMENT_MM]] mm) and a count of components running past the authored overall
- * length, both across bodies, tapers, liners, and non-excluded threads.
- *
- * The past-OAL line qualifies for the banner because it names a problem the user can act on —
- * either the component or the overall length is wrong — and because the offending card can be
- * several swipes away in the carousel, so its own chip may not be on screen. It stays advisory:
- * the state is legal, commits verbatim, and never blocks export.
- *
- * **Every message here must be a PROBLEM the user can act on.** The banner that surfaces these
- * is styled as an advisory, so anything routed through it reads as something being wrong; a line
- * describing normal behaviour spends that attention for nothing and makes the real anomalies
- * easier to ignore. A "no explicit bodies" note lived here and was removed on that ground —
- * auto-fill IS the design, not a deviation from it, the carousel card underneath already reads
- * "Body (auto)", and the note fired on every perfectly ordinary taper-and-liner shaft
- * (on-device report: it "looks like an error message rather than a notice").
- *
- * Pure — not consulted for export gating.
- */
-fun specWarningMessages(spec: ShaftSpec): List<String> {
-    val out = mutableListOf<String>()
-    val tiny = countTinySegments(spec)
-    if (tiny == 1) out += "1 segment shorter than 1 mm"
-    else if (tiny > 1) out += "$tiny segments shorter than 1 mm"
-    val past = countPastShaftEnd(spec)
-    if (past == 1) out += "1 component extends past shaft length"
-    else if (past > 1) out += "$past components extend past shaft length"
-    return out
-}
-
-/** Count of stored segments with length in (0, [SHORT_SEGMENT_MM]] mm. Excluded threads skipped. */
-private fun countTinySegments(spec: ShaftSpec): Int {
-    var n = 0
-    spec.bodies.forEach { if (isShortSegment(it.lengthMm)) n++ }
-    spec.tapers.forEach { if (isShortSegment(it.lengthMm)) n++ }
-    spec.liners.forEach { if (isShortSegment(it.lengthMm)) n++ }
-    spec.threads.forEach { if (!it.excludeFromOAL && isShortSegment(it.lengthMm)) n++ }
-    return n
-}
-
-/**
- * Count of stored components whose span leaves the authored shaft span ([outsideShaftSpan]).
- * Excluded threads are skipped — they live outside the envelope by design. Reference features
- * (coupler bolt slots, wear/runout marks, undercuts) are not components here and never count.
- */
-private fun countPastShaftEnd(spec: ShaftSpec): Int {
-    if (spec.overallLengthMm <= 0f) return 0
-    var n = 0
-    spec.bodies.forEach { if (outsideShaftSpan(spec, it.startFromAftMm, it.lengthMm)) n++ }
-    spec.tapers.forEach { if (outsideShaftSpan(spec, it.startFromAftMm, it.lengthMm)) n++ }
-    spec.liners.forEach { if (outsideShaftSpan(spec, it.startFromAftMm, it.lengthMm)) n++ }
-    spec.threads.forEach {
-        if (!it.excludeFromOAL && outsideShaftSpan(spec, it.startFromAftMm, it.lengthMm)) n++
-    }
-    return n
-}

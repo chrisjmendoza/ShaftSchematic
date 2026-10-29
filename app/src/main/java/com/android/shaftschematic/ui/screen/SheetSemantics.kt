@@ -36,9 +36,12 @@ object SheetSemantics {
             "${count(diaReadingCount, "diameter reading")}. " +
             "Tap a body, taper, or liner to inspect wear and mark pits."
 
-    /** Wear Document tab — one liner/body/taper's detail window. */
-    fun wearDetail(wearAreaCount: Int, pitCount: Int, diaReadingCount: Int): String =
-        "Liner wear detail. ${count(wearAreaCount, "wear area")}, ${count(pitCount, "pit")}, " +
+    /**
+     * Wear Document tab — one liner/body/taper's detail window. [kind] names the component
+     * ("Liner", "Taper", "Body"), so a taper's page is not read out as a liner's.
+     */
+    fun wearDetail(kind: String, wearAreaCount: Int, pitCount: Int, diaReadingCount: Int): String =
+        "$kind wear detail. ${count(wearAreaCount, "wear area")}, ${count(pitCount, "pit")}, " +
             "${count(diaReadingCount, "diameter reading")} in view."
 
     /**

@@ -62,6 +62,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.ExperimentalTextApi
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.WearTraceLiner
 import com.android.shaftschematic.geom.effectiveWearTraceDepthFrac
@@ -92,6 +93,9 @@ import com.android.shaftschematic.ui.util.exportPdfGate
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.addWearDiaReading
 import com.android.shaftschematic.ui.viewmodel.addWearPit
+import com.android.shaftschematic.ui.viewmodel.removeWearPits
+import com.android.shaftschematic.ui.viewmodel.restoreWearPits
+import com.android.shaftschematic.ui.viewmodel.restoreWearSpot
 import com.android.shaftschematic.ui.viewmodel.addWearSpot
 import com.android.shaftschematic.ui.viewmodel.removeWearDiaReading
 import com.android.shaftschematic.ui.viewmodel.removeWearPit
@@ -242,7 +246,7 @@ fun WearRoute(
      * thread.
      */
     fun printWearDocument() {
-        val jobName = buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.WEAR, blankDraft)
+        val jobName = buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.WEAR, blankDraft, currentDocumentName)
             .removeSuffix(".pdf")
         val specSnapshot = spec
         val projectSnapshot = ProjectInfo(customer = customer, vessel = vessel,
@@ -423,10 +427,17 @@ fun WearRoute(
     val canvasModifier = sheetCanvasModifier(widthClass)
 
     val introText: @Composable ColumnScope.() -> Unit = {
+        // Recording comes first: this is where wear is entered. The printed blank form is the
+        // secondary use, so it reads as the second line rather than as the tab's purpose
+        // (emulator QA: the old single line read as if the tab only printed a blank form).
         Text(
-            text = "Prints a blank shaft outline for field use. Mark damage, pitting, and " +
-                "dye-penetrant inspection results directly on the printed form.",
+            text = "Record wear here: tap a liner, taper or body to mark wear areas and pits, " +
+                "enter measured diameters and the dye pen result.",
             style = MaterialTheme.typography.bodyMedium,
+        )
+        Text(
+            text = "For field use, a blank draft prints the shaft outline to mark up by hand.",
+            style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
@@ -533,7 +544,7 @@ fun WearRoute(
             onPreview = { showPreview = true },
             onExport = {
                 launcher.launchPicker(
-                    buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.WEAR, blankDraft),
+                    buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.WEAR, blankDraft, currentDocumentName),
                     what = "wear export",
                 )
             },
@@ -610,9 +621,14 @@ fun WearRoute(
             Text(
                 text = "Wear Document",
                 style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(start = 4.dp),
+                // Weighted so the actions are measured first: on a phone the title yields
+                // (ellipsized) rather than squeezing the trailing icons to nothing.
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 4.dp).weight(1f),
             )
-            Spacer(Modifier.weight(1f))
+            // The document's ONE history — this tab's edits are steps in it too.
+            UndoRedoButtons(vm, tagPrefix = "wear")
             IconButton(
                 onClick = onSave,
                 modifier = Modifier.testTag("toolbar_save"),
@@ -673,7 +689,7 @@ fun WearRoute(
             onExport = {
                 showPreview = false
                 launcher.launchPicker(
-                    buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.WEAR, blankDraft),
+                    buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.WEAR, blankDraft, currentDocumentName),
                     what = "wear export",
                 )
             },
@@ -738,6 +754,8 @@ fun WearRoute(
 
     // ── Component wear detail overlay ─────────────────────────────────────────
     // ComponentWearDetailOverlay hosts its own BackHandler; only compose it while selected.
+    val canUndo by vm.canUndo.collectAsState()
+    val canRedo by vm.canRedo.collectAsState()
     selectedComponentId?.let { componentId ->
         ComponentWearDetailOverlay(
             componentId = componentId,
@@ -762,6 +780,13 @@ fun WearRoute(
             },
             threadSlant = pdfThreadSlant,
             threadDensity = pdfThreadDensity,
+            canUndo = canUndo,
+            canRedo = canRedo,
+            onUndo = vm::undoEdit,
+            onRedo = vm::redoEdit,
+            onRemovePits = vm::removeWearPits,
+            onRestoreSpot = vm::restoreWearSpot,
+            onRestorePits = vm::restoreWearPits,
         )
     }
 }

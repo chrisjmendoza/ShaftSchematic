@@ -7,8 +7,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.performImeAction
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -143,6 +148,26 @@ class ThreadReliefCardTest {
         rule.onNodeWithTag("thread_relief_end_fwd").performClick()
         rule.waitForIdle()
         assertFalse(current.reliefAtAft)
+    }
+
+    /**
+     * Turning the relief off is the switch's job, so a typed 0 is refused AND named; it used to be
+     * dropped in the commit lambda with the 0 left on screen over the stored value (emulator QA).
+     */
+    @Test
+    fun `a zero relief value is refused and named, and the stored relief is kept`() {
+        show(aftThread(reliefLen = 12f, reliefDia = 100f))
+        for (label in listOf("Relief Ø (in)", "Relief length (in)")) {
+            val f = rule.onNode(hasSetTextAction() and hasText(label))
+            f.performClick()
+            f.performTextReplacement("0")
+            f.performImeAction()
+            rule.waitForIdle()
+        }
+        assertEquals(12f, current.reliefLenMm, 0f)
+        assertEquals(100f, current.reliefDiaMm, 0f)
+        assertTrue(rule.onAllNodesWithText("0 not applied — Must be > 0", useUnmergedTree = true)
+            .fetchSemanticsNodes().isNotEmpty())
     }
 
     @Test

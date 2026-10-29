@@ -643,6 +643,65 @@ object ShaftRenderer {
                 }
             }
         }
+
+        // ───────── Problem marks (editor preview only; drawn over everything) ─────────
+        if (opts.issueMarks.isNotEmpty()) {
+            drawIssueMarks(opts.issueMarks, L, components, spec, outlineW)
+        }
+    }
+
+    /**
+     * The warning banner's problems drawn where they are: an overlap's shared stretch as a
+     * translucent red band with a red outline over the silhouette there, and a past-end overhang
+     * red-tinted the same way with the real shaft end dashed across it — the OAL end stays where
+     * it is, the part simply visibly runs past it. The band's height is the largest diameter on
+     * that stretch, so it covers the parts it is about.
+     */
+    private fun DrawScope.drawIssueMarks(
+        marks: List<PreviewIssueMark>,
+        L: Layout,
+        components: List<ResolvedComponent>?,
+        spec: ShaftSpec,
+        outlineW: Float,
+    ) {
+        val ink = Color(PREVIEW_ISSUE_INK)
+        val fill = ink.copy(alpha = PREVIEW_ISSUE_FILL_ALPHA)
+        val cy = L.centerlineYPx
+        fun maxDiaOver(startMm: Float, endMm: Float): Float {
+            var dia = 0f
+            components?.forEach { c ->
+                if (c is ResolvedCouplerBoltSlot) return@forEach
+                if (c.endMmPhysical <= startMm + 1e-3f || c.startMmPhysical >= endMm - 1e-3f) return@forEach
+                dia = max(dia, c.maxDiaMm())
+            }
+            return if (dia > 0f) dia else spec.maxOuterDiaMm()
+        }
+        for (m in marks) {
+            // A short stretch on a long shaft is a few pixels wide; the band takes a floor, centred
+            // on it, so the mark is always seen. It is a highlight, never a dimension.
+            val trueX0 = L.xPx(m.startMm)
+            val trueX1 = L.xPx(m.endMm)
+            val grow = ((PREVIEW_ISSUE_MIN_WIDTH_PX - (trueX1 - trueX0)) / 2f).coerceAtLeast(0f)
+            val x0 = trueX0 - grow
+            val x1 = trueX1 + grow
+            val r = L.rPx(maxDiaOver(m.startMm, m.endMm))
+            if (x1 <= x0 || r <= 0f) continue
+            val topLeft = Offset(x0, cy - r)
+            val size = Size(x1 - x0, 2f * r)
+            drawRect(color = fill, topLeft = topLeft, size = size)
+            drawRect(color = ink, topLeft = topLeft, size = size, style = Stroke(width = outlineW))
+            val bound = m.boundMm
+            if (m.kind == PreviewIssueMarkKind.OUT_OF_BOUNDS && bound != null) {
+                val bx = L.xPx(bound)
+                drawLine(
+                    color = ink,
+                    start = Offset(bx, L.contentTopPx),
+                    end = Offset(bx, L.contentBottomPx),
+                    strokeWidth = outlineW,
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(HIDDEN_DASH_ON, HIDDEN_DASH_OFF), 0f),
+                )
+            }
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────────

@@ -248,11 +248,11 @@
 
   <h3 id="editor-naming">Naming the job</h3>
   <p  class="keep">A job is named when it is first saved. Tap <span class="ui">Save</span> (or the title strip) on an unsaved job and the <span class="ui">Save Drawing</span> screen opens with a <span class="ui">File name</span> already suggested: job number, customer, vessel and side joined with dashes, for example “J-2214 - Acme Marine - Northern Star - PORT”. With no project information, the suggestion is “Shaft_” followed by the date and time. If the name matches a saved shaft, the screen says so and asks before overwriting.</p>
-  <p  class="keep">Once a job is saved, tapping the title strip opens <span class="ui">Rename saved shaft</span>. If you save a job and its project information now suggests a better name than the one it was saved under, a message offers <span class="ui">Rename</span>; it never renames over another saved shaft.</p>
+  <p  class="keep">Once a job is saved, tapping the title strip opens <span class="ui">Rename saved shaft</span>. A name another saved shaft already has is refused, and the reason shows under the name field (<span class="ui">A saved shaft named ‘…’ already exists.</span>); change the name and tap <span class="ui">Rename</span> again. If you save a job and its project information now suggests a better name than the one it was saved under, a message offers <span class="ui">Rename</span>; it never renames over another saved shaft.</p>
   <p  class="keep">Unsaved drafts on the home screen are listed by the name the job would be saved under, so three drafts are told apart by job, not just by age. A draft with no project information shows as <span class="ui">Untitled draft</span>.</p>
 
   <h3 id="editor-units">Units for the job</h3>
-  <p  class="keep">A new drawing starts in the unit chosen under <span class="path">Settings → Units</span> (<span class="ui">Millimeters</span> or <span class="ui">Inches</span>), so set it once for the shop and every new drawing follows it. The job remembers its unit from then on: it reopens the way it was drawn, and changing the setting later never flips an open or saved job. While a job is open, the same chips switch how it is shown and typed. Inch fields accept fractions: type “3 1/2” or “150 3/4”.</p>
+  <p>A new drawing starts in the unit chosen under <span class="path">Settings → Units</span> (<span class="ui">Millimeters</span> or <span class="ui">Inches</span>), so set it once for the shop and every new drawing follows it. The job remembers its unit from then on: it reopens the way it was drawn, and changing the setting later never flips an open or saved job. While a job is open, the same chips switch how it is shown and typed. Inch fields accept fractions: type “3 1/2” or “150 3/4”. Some keyboards answer a number field with a number pad that has no <span class="ui">/</span> key, so while you type in an inch field a <span class="ui">/</span> button sits at the right end of the field: tap it where the fraction bar goes (<span class="ui">10</span>, space, <span class="ui">1</span>, <span class="ui">/</span>, <span class="ui">4</span>). A hyphen works as the separator too: “10-1/4”.</p>
   <p  class="keep">Switching units never changes a dimension (see <a href="#intro-units">Millimeters and inches</a>). To print one component in the other unit (a metric thread on an inch shaft), see <a href="#components-prints-in">Prints in: in | mm</a>.</p>
 
   <h2 id="editor-oal">The overall length</h2>
@@ -281,6 +281,7 @@
     <li  class="keep">A thread excluded from the OAL stays hung off its end of the shaft.</li>
     <li  class="keep">Bare shaft fills whatever gap opens or closes. An explicit body keeps its own start and length, so after a big change check it against the new end.</li>
   </ul>
+  <p  class="keep">When an OAL change moves anything, a message at the bottom of the screen says what moved, how far and which way, for example <span class="ui">OAL 234 3/16": moved FWD Liner 4 13/16" aft (measured from FWD)</span>. Up to two parts are named, then a count (<span class="ui">+1 more</span>). Tap <span class="ui">Undo</span> on the message to put the old length back with everything it moved. Nothing moved, no message.</p>
   <aside class="shop"><p  class="keep">This is the way the print reads at the lathe: a FWD taper dimensioned from the FWD face is still dimensioned from the FWD face after the shaft is shortened. Only the overall length on the sheet changes.</p></aside>
 
   <h2 id="editor-add">Adding components</h2>
@@ -296,6 +297,7 @@
     </tbody>
   </table>
   <p  class="keep">Every field and option is described in <a href="#ch-components">Components Reference</a>. Tap <span class="ui">Add</span> to place the component, or <span class="ui">Cancel</span>. The new component is selected straight away: it highlights in the preview and the carousel moves to its card.</p>
+  <p  class="keep">If you press Back or tap outside a dialog you have already typed in, or changed a chip or switch in, the app asks first, for example <span class="ui">Discard this liner?</span>. <span class="ui">Keep editing</span> takes you back with everything as you left it; <span class="ui">Discard</span> closes the dialog and adds nothing. A dialog you have not touched closes straight away, and <span class="ui">Cancel</span> always closes without asking. The worn-section editor on the Consolidated Output tab asks the same way.</p>
 
   <h3>What the dialog fills in for you</h3>
   <ul>
@@ -307,9 +309,12 @@
   <h3>When the Add button is greyed, or asks first</h3>
   <ul>
     <li  class="keep"><span class="ui">Add</span> stays greyed until the required values are entered: a start, a length above zero, and a diameter.</li>
-    <li  class="keep">A liner that would overlap another liner, or a thread that would overlap another thread, shows <span class="ui">Overlaps another component</span> under its start field and cannot be added there.</li>
+    <li  class="keep">A liner that would overlap another liner, or a thread that would overlap another thread, shows <span class="ui">Overlaps</span> and the other card's name (for example <span class="ui">Overlaps AFT Liner</span>) under its start field and cannot be added there.</li>
+    <li  class="keep">A liner, taper or thread that would overlap a different kind of component shows the same line in red under its start field, naming the part (for example <span class="ui">Overlaps FWD Taper</span>), whichever end you measure from. <span class="ui">Add</span> stays live and asks first (next point).</li>
+    <li  class="keep">A liner or taper measured from FWD whose length would carry it past the AFT end shows <span class="ui">Runs past the AFT end of the shaft</span> and cannot be added there.</li>
+    <li  class="keep">A number a field needs above zero (a length, a diameter, a bolt spacing) shows <span class="ui">Must be &gt; 0</span> when it is 0, and a bolt <span class="ui">Count</span> that is not a whole number of 1 or more shows <span class="ui">Must be a whole number ≥ 1</span>. <span class="ui">Add</span> stays greyed until it is fixed.</li>
     <li  class="keep">A thread placed between two components shows <span class="ui">Thread must be at a shaft end, not between components</span>.</li>
-    <li  class="keep">A liner, taper or thread that would overlap a different kind of component, or fall outside the shaft, opens <span class="ui">Add Anyway?</span> with the reasons listed, for example <span class="ui">Overlaps Taper 1</span> or <span class="ui">Falls outside shaft span</span>. Tap <span class="ui">Add Anyway</span> to add it regardless, or <span class="ui">Cancel</span> to go back and fix the numbers. An overlap added this way blocks printing until it is cleared (see <a href="#editor-overlaps">Overlaps and the print gate</a>).</li>
+    <li  class="keep">A liner, taper or thread that would overlap a different kind of component, or fall outside the shaft, opens <span class="ui">Add Anyway?</span> with the reasons listed, for example <span class="ui">Overlaps FWD Taper</span> or <span class="ui">Falls outside shaft span</span>. Tap <span class="ui">Add Anyway</span> to add it regardless, or <span class="ui">Cancel</span> to go back and fix the numbers. An overlap added this way blocks printing until it is cleared (see <a href="#editor-overlaps">Overlaps and the print gate</a>).</li>
   </ul>
   <p  class="keep">Bodies never warn about overlap. They are the shaft's base stock and are meant to run under liners and up to tapers (see <a href="#editor-bodies">Bodies and bare shaft</a>).</p>
 
@@ -348,6 +353,7 @@
     <thead><tr><th>Message</th><th>Meaning</th></tr></thead>
     <tbody>
       <tr class="short"><td><span class="ui">Extends past shaft length</span></td><td>The component runs past the OAL. Either the component or the OAL is wrong.</td></tr>
+      <tr><td><span class="ui">Extends past the AFT end of the shaft</span></td><td>The component starts before the AFT end — for example a thread switched to <span class="ui">Include thread in OAL</span> while it still hangs off that end. Move it, or switch the thread back out of the OAL.</td></tr>
       <tr><td><span class="ui">Very short segment (&lt; 1 mm)</span></td><td>A length so short it is probably a typo.</td></tr>
       <tr><td><span class="ui">Length exceeds 15 m — check for a typo</span></td><td>A length no shaft has.</td></tr>
       <tr><td><span class="ui">Diameter exceeds 1 m — check for a typo</span></td><td>A diameter no shaft has.</td></tr>
@@ -404,21 +410,29 @@
 
   <h3>How a collision is shown</h3>
   <ul>
-    <li  class="keep">Each component involved carries the error strip <span class="ui">Overlaps another component</span> on its card.</li>
-    <li  class="keep">The <span class="ui">PDF preview</span> button on the toolbar is greyed. Tapping it shows <span class="ui">Fix component collisions before exporting.</span></li>
+    <li  class="keep">Each component involved carries an error strip on its card naming what it overlaps, by the title on that card — <span class="ui">Overlaps FWD Taper</span>, or a list such as <span class="ui">Overlaps AFT Liner, FWD Taper</span>. A name you gave a component is the name used.</li>
+    <li  class="keep">The warnings banner above the carousel lists each overlapping pair by name, for example <span class="ui">FWD Liner overlaps Body size transition taper</span>, and the drawing shows the stretch they share as a red band.</li>
+    <li  class="keep">The <span class="ui">PDF preview</span> button on the toolbar is greyed. Tapping it names the same pair: <span class="ui">Can't export: FWD Liner overlaps Body size transition taper</span>.</li>
   </ul>
   <p  class="keep">Printing, preview and export are blocked because a sheet with two features in one place cannot be machined from. A shaft with no components at all is blocked the same way, with the message <span class="ui">Please add at least 1 component before export is active.</span></p>
 
   <h3>Fixing a collision</h3>
   <ol class="steps">
-    <li  class="keep">Swipe through the carousel to a card with the error strip.</li>
+    <li  class="keep">Tap the overlap line on the warnings banner to jump to the first part it names (or swipe through the carousel to a card with the error strip).</li>
     <li  class="keep">Correct its start or length (or its partner's) so the two no longer share any length.</li>
     <li  class="keep">When the strip clears on every card, the <span class="ui">PDF preview</span> button comes back.</li>
   </ol>
   <p  class="keep">A thread placed between two components rather than at a shaft end shows <span class="ui">Thread must be at a shaft end, not between components</span>; move it to an end to print.</p>
 
-  <h3>The warnings banner</h3>
-  <p  class="keep">Above the carousel, a banner sums up shaft-wide advisories so they are not missed when the card concerned is several swipes away: <span class="ui">1 component extends past shaft length</span> (or the count), and segments shorter than 1 mm. Advisories never block printing. Tap the ✗ (<span class="ui">Dismiss warning</span>) to hide the banner; it comes back if the set of warnings changes.</p>
+  <h3 id="editor-warnings">The warnings banner</h3>
+  <p  class="keep">Above the carousel, a banner lists every problem on the shaft by the part's name, so none is missed when the card concerned is several swipes away:</p>
+  <ul>
+    <li  class="keep">overlaps first, one line per pair: <span class="ui">FWD Liner overlaps Body size transition taper</span> (these block printing);</li>
+    <li  class="keep">parts running past the OAL: <span class="ui">Body #1 runs 4 13/16" past the FWD end</span>;</li>
+    <li  class="keep">parts starting before the AFT end: <span class="ui">AFT Thread starts 2" before the AFT end</span>;</li>
+    <li  class="keep">parts shorter than 1 mm: <span class="ui">Body #2 is shorter than 1 mm</span>.</li>
+  </ul>
+  <p>Distances are in the drawing's unit. Tap a line (<span class="ui">Show</span>) to select that part: it is highlighted on the drawing and the carousel turns to its card. An overlap line selects the first part it names. With more than three problems the banner shows three and <span class="ui">+N more</span>; tap it for the rest. The drawing marks the same problems in red: the stretch two overlapping parts share, and the part of a component beyond the end, with the real end of the shaft dashed across it. Only overlaps block printing. Tap the ✗ (<span class="ui">Dismiss warning</span>) to hide the banner; it comes back if the set of problems changes.</p>
 
   <h2 id="editor-history">Undo and redo</h2>
   <p  class="keep">Tap <span class="ui">History</span> on the toolbar for <span class="ui">Undo</span> and <span class="ui">Redo</span>. Each is greyed when there is nothing to step to.</p>
@@ -431,7 +445,7 @@
   </ul>
   <p  class="keep">It does not cover project information, Settings, or the sheet sliders such as shaft height.</p>
   <p  class="keep">A quick burst of edits counts as one step, so undoing after typing a value takes you back to before you started typing, not one character at a time. History keeps the last 50 steps. It lasts for the editing session only: it is not saved with the file, and it starts fresh when you open, start or template a job.</p>
-  <aside class="tip"><p  class="keep">History lives on the <span class="ui">Schematic</span> and <span class="ui">Final Schematic</span> toolbars. To undo a reading or a bubble move made on another tab, come back to the Schematic tab and use <span class="ui">History</span>. The Runout tab also has its own quick <span class="ui">Undo move</span>; see <a href="#ch-recording">Recording Shop Measurements</a>.</p></aside>
+  <aside class="tip"><p  class="keep">History lives on the <span class="ui">Schematic</span> and <span class="ui">Final Schematic</span> toolbars. The <span class="ui">Runout Sheet</span>, <span class="ui">Wear Document</span> (and each component's wear page), <span class="ui">Undercut Drawing</span> and <span class="ui">Consolidated Output</span> tabs carry the same <span class="ui">Undo</span> and <span class="ui">Redo</span> as arrows in their top bar, so a reading, a bubble move or a worn section is undone where it was made. The Runout tab also has its own quick <span class="ui">Undo move</span>; see <a href="#ch-recording">Recording Shop Measurements</a>.</p></aside>
 
   <h2 id="editor-templates">Templates</h2>
   <p  class="keep">A template is a saved shaft shape: geometry without a job. Use one when the shop sees the same shaft again and again, so the next job starts with the tapers, liners and bodies already in place.</p>
@@ -531,7 +545,9 @@
   <ul>
     <li  class="keep"><strong>Units in labels.</strong> Every length and diameter field ends with the document unit, for example <span class="ui">Length (in)</span> or <span class="ui">Length (mm)</span>. The tables leave the unit off.</li>
     <li  class="keep"><strong>Positions.</strong> All positions run along the shaft from the AFT end toward FWD unless a <span class="ui">Measure From</span> chip says otherwise.</li>
-    <li  class="keep"><strong>Fractions.</strong> Every numeric field accepts decimals or shop fractions such as “3 1/2” or “11/16”.</li>
+    <li  class="keep"><strong>Fractions.</strong> Every numeric field accepts decimals or shop fractions such as “3 1/2”, “3-1/2” or “11/16”. A decimal comma works too: “12,75” is 12.75. “1,500” is refused, because it could be 1.5 or 1500.</li>
+    <li  class="keep"><strong>Units.</strong> A length or diameter may carry its unit: “260mm” on an inch drawing is 260 millimeters, and “11"” or “11in” on a millimeter drawing is 11 inches. The value then shows in the drawing's unit. Any other letters after a number (“12ft”, “4tpi”) are refused rather than ignored.</li>
+    <li  class="keep"><strong>Refused values say so.</strong> In an Add dialog a field that cannot read its text says <span class="ui">Not a number</span> under it, and <span class="ui">Add</span> stays greyed until it is fixed. On a card the field puts the previous value back and names what it did not apply.</li>
     <li  class="keep"><strong>Values are kept as typed.</strong> If two components disagree, the app warns you; it does not move either one (see <a href="#intro-sacred">What you type is what prints</a>).</li>
     <li  class="keep"><strong>Card vs. dialog.</strong> Everything that changes the shape, size or position of a component appears both on its card and in its Add dialog, under the same conditions. A handful of switches that only change how an already-drawn component prints are on the card only; see <a href="#components-drawing-toggles">Per-component drawing switches</a>.</li>
   </ul>
@@ -543,7 +559,7 @@
     <dt>Remove (trash icon)</dt>
     <dd  class="keep">Deletes the component. Undo brings it back.</dd>
     <dt>Red error strip</dt>
-    <dd  class="keep">A hard problem, for example <span class="ui">Overlaps another component</span>.</dd>
+    <dd  class="keep">A hard problem, for example <span class="ui">Overlaps FWD Taper</span> — naming the card it runs into.</dd>
     <dt>Amber advisory strip</dt>
     <dd  class="keep">An advisory, for example <span class="ui">Very short segment (&lt; 1 mm)</span> or <span class="ui">Liner OD smaller than shaft Ø beneath it</span>. The drawing still prints.</dd>
     <dt><span class="ui">Save</span></dt>
@@ -561,8 +577,8 @@
       <tr><td><span class="ui">Start from AFT</span> / <span class="ui">Start from FWD</span></td><td>Distance from the chosen shaft end to the near end of the taper. A propeller taper flush with the AFT end is “0” from AFT; a coupling taper flush with the FWD end is “0” from FWD.</td></tr>
       <tr><td><span class="ui">Length</span></td><td>Axial length of the taper. On a FWD-measured taper, a length change keeps the FWD end where it was and the taper grows toward AFT.</td></tr>
       <tr><td><span class="ui">S.E.T. Ø</span>, <span class="ui">L.E.T. Ø</span></td><td>Small-end and large-end diameters. On the card the two fields are listed in shaft order, AFT end first, so an aft-half taper shows S.E.T. then L.E.T., and a forward-half taper shows L.E.T. then S.E.T.</td></tr>
-      <tr><td><span class="ui">Rate mode:</span> <span class="ui">Auto</span> | <span class="ui">Manual</span></td><td>Auto works the rate out from Length, S.E.T. and L.E.T. Manual lets you type it. Default Auto.</td></tr>
-      <tr><td><span class="ui">Rate (1:12, 3/4"/ft, or decimal)</span></td><td>The taper rate: a ratio (1:12), inches per foot (3/4″/ft — the shop's 1:16; “3/4 in/ft” and “3/4/ft” are read the same way) or a decimal; a bare fraction like 3/4 is refused as ambiguous and the message names the forms to write. Greyed out in Auto, where it shows the computed rate. Editable in Manual.</td></tr>
+      <tr><td><span class="ui">Rate mode:</span> <span class="ui">Auto</span> | <span class="ui">Manual</span></td><td>Auto works the rate out from Length, S.E.T. and L.E.T. Manual lets you type it, and keeps what you typed through a Length edit and when the drawing is reopened. The choice is saved with the taper. Default Auto.</td></tr>
+      <tr><td><span class="ui">Rate (1:12, 3/4"/ft, or decimal)</span></td><td>The taper rate: a ratio (1:12), inches per foot (3/4″/ft — the shop's 1:16; “3/4 in/ft” and “3/4/ft” are read the same way) or a decimal; a bare fraction like 3/4, or a bare decimal steeper than 0.25 such as .75, is refused as ambiguous and the message names the forms to write. Greyed out in Auto, where it shows the computed rate. Editable in Manual.</td></tr>
       <tr><td><span class="ui">Keyway</span> checkbox and section</td><td>See <a href="#components-keyways">Keyways</a>.</td></tr>
     </tbody>
   </table>
@@ -574,7 +590,7 @@
     <li  class="keep"><strong>Manual</strong> keeps exactly what you type. If the typed rate disagrees with the three dimensions by more than 3%, the card shows <span class="ui">Rate does not match Length + SET + LET</span>. Nothing is changed; you decide which number is wrong.</li>
     <li  class="keep">A plain whole number is read as 1:N, so “16” means 1:16. A bare “1” is refused as ambiguous.</li>
   </ul>
-  <aside class="warn"><p  class="keep">Type rates as a ratio (“1:16”) or as inches per foot with the “/ft” written out (“3/4″/ft”). A bare fraction such as “3/4” is refused — it could mean 3/4″ per foot or a diameter change of 0.75 per unit of length, a very steep taper — and the card says <span class="ui">Write 3/4"/ft or a ratio like 1:16; a bare fraction is ambiguous</span>. The shop notation 3/4″/ft is 1:16; 1″/ft is 1:12.</p></aside>
+  <aside class="warn"><p>Type rates as a ratio (“1:16”) or as inches per foot with the “/ft” written out (“3/4″/ft”). A bare fraction such as “3/4” is refused — it could mean 3/4″ per foot or a diameter change of 0.75 per unit of length, a very steep taper — and the card says <span class="ui">Write 3/4"/ft or a ratio like 1:16; a bare fraction is ambiguous</span>. The same goes for “.75” typed as a decimal: it is 3/4 without the “/ft”, and the card asks for <span class="ui">.75"/ft</span> or a ratio. A decimal slope of 0.25 or less, such as .0625 (3/4″/ft), is still read as a slope. The shop notation 3/4″/ft is 1:16; 1″/ft is 1:12.</p></aside>
 
   <h3>Adding a taper from S.E.T. and rate</h3>
   <ol class="steps">
@@ -602,7 +618,7 @@
   <p  class="keep">The Add Thread dialog offers two chips: <span class="ui">Imperial (TPI)</span> and <span class="ui">Metric (mm)</span>. The choice is made when the thread is added and decides which fields the card shows from then on.</p>
   <ul>
     <li  class="keep"><strong>Imperial</strong>: <span class="ui">Major Ø</span> in the document unit and <span class="ui">TPI</span>.</li>
-    <li  class="keep"><strong>Metric</strong>: one <span class="ui">Thread designation</span> field, such as “M20×2.5”. You may type “x”, “X” or “*” for the ×. The designation carries both the major Ø and the pitch, so no other diameter field is shown. A metric thread prints in millimeters even on an inch drawing.</li>
+    <li  class="keep"><strong>Metric</strong>: one <span class="ui">Thread designation</span> field, such as “M20×2.5”. You may type “x”, “X” or “*” for the ×, and a decimal comma as DIN and ISO prints write it (“M20x2,5”). A designation the field cannot read says <span class="ui">Not a metric designation — e.g. M20×2.5</span>. The designation carries both the major Ø and the pitch, so no other diameter field is shown. A metric thread prints in millimeters even on an inch drawing.</li>
   </ul>
   <aside class="note"><p  class="keep">A coarse designation with no pitch, such as “M20”, is accepted and prints as typed, but the thread then has no pitch and the card warns <span class="ui">Zero pitch — thread renders flat</span>. Include the pitch.</p></aside>
   <aside class="tip"><p  class="keep">There is no Imperial/Metric switch on the card. To change a thread from TPI (threads per inch) to a metric designation, or back, remove it and add it again.</p></aside>
@@ -713,7 +729,7 @@
       <tr><td><span class="ui">Keyway</span> checkbox and section</td><td>See <a href="#components-keyways">Keyways</a>.</td></tr>
     </tbody>
   </table>
-  <p  class="keep">The card also carries <span class="ui">Show Ø on drawing</span>, <span class="ui">Show name on drawing</span>, <span class="ui">Compress on drawing</span> and <span class="ui">Shade on drawing</span>; see <a href="#components-drawing-toggles">Per-component drawing switches</a>.</p>
+  <p  class="keep">The card also carries <span class="ui">Show Ø on drawing</span>, <span class="ui">Show name on drawing</span>, <span class="ui">Show dimension rail</span>, <span class="ui">Compress on drawing</span> and <span class="ui">Shade on drawing</span>; see <a href="#components-drawing-toggles">Per-component drawing switches</a>.</p>
   <aside class="note"><p  class="keep">A body may run under a liner or up against a taper, and a body with a keyway is never split; see <a href="#editor-bodies">Bodies and bare shaft</a>.</p></aside>
 
   <h3>Bare-shaft card</h3>
@@ -822,7 +838,7 @@
   <ul>
     <li  class="keep"><strong>The slot in plan view</strong> on the shaft, at its true width relative to the drawn shaft. A body keyway and the stretch around it are never shortened on the drawing, even when the rest of the body is.</li>
     <li  class="keep"><strong>Clocking</strong>: at 180° the other keyways draw as dashed hidden slots. At 90° they draw as a notch in the shaft outline: on the bottom edge for CW (clockwise), the top edge for CCW (counter-clockwise). A footer note reads “Keyways 180° apart”, “Keyways 90° apart (CW from aft)” or “Keyways 90° apart (CCW from aft)”.</li>
-    <li  class="keep"><strong>Footer size line</strong> in that end's column — KW (keyway) is the footer's shorthand: “KW: W × D × L” for a taper, “Body KW: W × D × L” for a body, in the keyway's own unit.</li>
+    <li  class="keep"><strong>Footer size line</strong> in that end's column — KW (keyway) is the footer's shorthand: “KW: W × D × L” for a taper, “Body KW: W × D × L” for a body, in the keyway's own unit. When that column also holds a taper's block, the body line carries the body's name (“Body #1 KW: …”), so it can't be read as the taper's keyway.</li>
     <li  class="keep"><strong>Captured</strong>: a line below it, “Captured KW: inset &lt;distance&gt; from S.E.T.” (taper) or “… from AFT” / “… from FWD” (body). The slot draws closed at both ends.</li>
     <li  class="keep"><strong>Spooned</strong>: “(spooned)” after the size, and a note “KW length to base of spoon (mill end)”. The slot draws normally, with an enlarged spoon around its closed end; the mill end stays visible inside the spoon.</li>
   </ul>
@@ -890,6 +906,7 @@
       <tr><td><span class="ui">Compress on drawing</span></td><td>Explicit bodies</td><td>Off for new bodies</td></tr>
       <tr><td><span class="ui">Prints in:</span> <span class="ui">in</span> | <span class="ui">mm</span></td><td>Explicit bodies, tapers, threads, liners</td><td>The document unit</td></tr>
       <tr><td><span class="ui">Show dimension rail</span></td><td>Coupler bolt slots and holes</td><td>Off</td></tr>
+      <tr><td><span class="ui">Show dimension rail</span></td><td>Explicit bodies</td><td>On for a body at either end of the shaft, off for one in the middle</td></tr>
     </tbody>
   </table>
 
@@ -922,7 +939,15 @@
   <h3 id="components-prints-in">Prints in: in | mm</h3>
   <p  class="keep">Prints this one component's values in a different unit from the document. It appears at the foot of the card only when <span class="path">Settings → Drawing → Per-component units</span> is on. It changes how the component prints, not how you type it: the card's fields stay in the document unit. Tapping the document's own unit clears the choice.</p>
   <p  class="keep">A keyway has its own <span class="ui">Keyway in:</span> chip, which does change the unit you type the keyway in, because a metric keyway on an inch shaft should be entered in millimeters. That chip is in the Add dialogs as well as on the cards. A metric thread prints in millimeters without any chip.</p>
-  <p  class="keep"><span class="ui">Show dimension rail</span> is on coupler bolt slot and hole cards only. Off, the row prints no dimension; on, the schematic and consolidated sheets add one dimension rail from the end of the shaft the row is measured from (<span class="ui">Measure From</span>) to the center of the nearest hole, carrying the distance you entered. It changes nothing about the row itself, which is why it is not in the Add dialog. See <a href="#reading-bolts">Coupler bolt holes</a>.</p>
+  <h3 id="components-body-rail">Show dimension rail</h3>
+  <p  class="keep">On an explicit body's card, <span class="ui">Show dimension rail</span> prints the body's own length as a dimension above the shaft, on the schematic and the consolidated sheet. It works the same three ways as shading:</p>
+  <ul>
+    <li  class="keep"><strong>Untouched</strong>: it follows where the body sits. A body that runs to either end of the shaft, such as the coupling body at the FWD end, prints its length, and the line under the switch reads <span class="ui">On — body is at a shaft end</span>. A body in the middle of the shaft does not, and the line reads <span class="ui">Off — mid-shaft body</span>.</li>
+    <li  class="keep"><strong>Switched on</strong>: the length prints wherever the body sits.</li>
+    <li  class="keep"><strong>Switched off</strong>: the length is not printed, even for an end body.</li>
+  </ul>
+  <p  class="keep">The dimension runs over the whole body you entered, even where an S-break shortens it on the sheet. When another dimension on the sheet already spans exactly the same stretch (for example a liner's dimension from the shaft end to a liner that butts the end body), the length is printed once, not twice. A body that runs the full length of the shaft adds nothing, since the OAL is its length. Bare shaft never prints one.</p>
+  <p  class="keep">On coupler bolt slot and hole cards, <span class="ui">Show dimension rail</span> is off until you switch it on. Off, the row prints no dimension; on, the schematic and consolidated sheets add one dimension rail from the end of the shaft the row is measured from (<span class="ui">Measure From</span>) to the center of the nearest hole, carrying the distance you entered. It changes nothing about the row itself, which is why it is not in the Add dialog. See <a href="#reading-bolts">Coupler bolt holes</a>.</p>
 
   <h2 id="components-names">Component names</h2>
   <p  class="keep">Every taper, thread, liner and explicit body has a name. Until you give it one, the app names it by position:</p>
@@ -1245,7 +1270,8 @@
       <tr><td>Final schematic with Runout bubbles</td><td>…PORT_Final_Runout.pdf</td></tr>
       <tr><td>Final runout sheet (Final banner)</td><td>…PORT_Final_RunoutSheet.pdf</td></tr>
       <tr><td>Any blank draft</td><td>adds _BlankDraft at the end, for example …PORT_runout_BlankDraft.pdf</td></tr>
-      <tr><td>No job information at all</td><td>Shaft_schematic.pdf, Shaft_runout.pdf and so on; the Final documents use Shaft_&lt;date&gt;_&lt;time&gt;_Final.pdf</td></tr>
+      <tr><td>No job information, saved job</td><td>the saved job's name instead, for example QA Titan_schematic.pdf</td></tr>
+      <tr><td>No job information, never saved</td><td>Shaft_schematic.pdf, Shaft_runout.pdf and so on; the Final documents use Shaft_&lt;date&gt;_&lt;time&gt;_Final.pdf</td></tr>
     </tbody>
   </table>
   <p  class="keep">The schematic gets the same name whether it is exported from its own tab or by <span class="ui">Export all</span>. The three Final names are deliberately different, so the welding copy, the pre-ship measurement sheet and the blank final runout sheet never overwrite each other. The side is part of every name, so the PORT and STBD shafts of a twin-screw job don't overwrite each other either.</p>
@@ -1256,7 +1282,7 @@
     <thead><tr><th>Message</th><th>Fix</th></tr></thead>
     <tbody>
       <tr class="short"><td><span class="ui">Please add at least 1 component before export is active.</span></td><td>Add a body, taper, thread or liner.</td></tr>
-      <tr><td><span class="ui">Fix component collisions before exporting.</span></td><td>Two components overlap. Find the card with the overlap warning and correct its position or length. Bodies never count as overlapping; see <a href="#editor-overlaps">Overlaps and the print gate</a>.</td></tr>
+      <tr><td><span class="ui">Can't export: FWD Liner overlaps …</span></td><td>Two components overlap; the message names them (and counts any further pairs). Tap the overlap line on the warnings banner to go to the first one, and correct its position or length. Bodies never count as overlapping; see <a href="#editor-overlaps">Overlaps and the print gate</a>.</td></tr>
       <tr><td><span class="ui">Cannot export PDF</span> dialog</td><td>A component starts before the AFT end or overlaps another of its kind. The dialog names the problem.</td></tr>
     </tbody>
   </table>
@@ -1283,7 +1309,7 @@
   <h3>Export all</h3>
   <p  class="keep"><span class="ui">Export all</span> writes the whole document package to one folder in a single step.</p>
   <ol class="steps">
-    <li  class="keep">Under <span class="ui">Export all</span>, untick any document you don't want: <span class="ui">Consolidated</span>, <span class="ui">Runout</span>, <span class="ui">Schematic</span>, <span class="ui">Wear</span>, <span class="ui">Undercut</span>. All five are ticked to start.</li>
+    <li  class="keep">Under <span class="ui">Export all</span>, untick any document you don't want: <span class="ui">Consolidated</span>, <span class="ui">Runout</span>, <span class="ui">Schematic</span>, <span class="ui">Wear</span>, <span class="ui">Undercut</span>. All five are ticked to start, except <span class="ui">Undercut</span> on a job with no undercuts recorded. Tick it anyway for a blank undercut write-in sheet.</li>
     <li  class="keep">Tap <span class="ui">Export all to folder…</span>.</li>
     <li  class="keep">Pick a folder in the system picker and allow access.</li>
     <li  class="keep">Read the result line, for example <span class="ui">5 of 5 PDFs written.</span></li>
@@ -1311,6 +1337,8 @@
     <li  class="keep">It is saved with the job, and one setting drives the schematic, runout, consolidated and wear sheets.</li>
     <li  class="keep">The runout and consolidated sheets also stretch the shaft to the full page width, so a short shaft can stand taller there than on the schematic. The inches the slider shows may therefore differ between the schematic preview and the runout preview for the same job.</li>
     <li  class="keep">On a shaft that can't reach 1 1/2″, the caption tells you the most this shaft reaches.</li>
+    <li  class="keep">On the runout and consolidated sheets the page itself can set the limit: the dimension rails, the bubble rows, the coupling face and the footer all need room. The slider then stops at the tallest height that sheet really prints, and the readout and the <span class="ui">Standard</span> button show that height, never a taller one.</li>
+    <li  class="keep">A blank write-in sheet never squeezes the shaft under 1/2″ to make room. Its write-in footer lines move a little closer together first.</li>
   </ul>
 
   <h3>Long bodies compress and print an S-break</h3>
@@ -1350,7 +1378,7 @@
   <p  class="keep">Open the ⋮ menu on the Final banner:</p>
   <dl class="terms">
     <dt><span class="ui">Reset to original</span></dt>
-    <dd  class="keep">Replaces the Final drawing with a fresh copy of the original schematic. It asks first (<span class="ui">Reset to original?</span>), because every edit made on the Final tab is lost.</dd>
+    <dd  class="keep">Replaces the Final drawing with a fresh copy of the original schematic. It asks first (<span class="ui">Reset to original?</span>), because it replaces every edit made on the Final tab; Undo brings them back.</dd>
     <dt><span class="ui">Discard final drawing</span></dt>
     <dd  class="keep">Removes the Final drawing. It asks first (<span class="ui">Discard final drawing?</span>). The original is unaffected.</dd>
   </dl>
@@ -1503,6 +1531,7 @@
     <li  class="keep">A span too short to hold its value prints the value just above an unbroken line instead.</li>
     <li  class="keep">A span too narrow for two inward arrowheads gets outward-pointing heads outside its extension lines.</li>
     <li  class="keep">A value may sit off-center to clear a neighbor. It still belongs to the span whose extension lines bracket it.</li>
+    <li  class="keep">A value too wide even to sit above its own short span prints just beside it, on the same rail: right of the span's FWD extension line, or left of its AFT one. It is never lifted up against another rail's line, so read a value with the rail line just under it.</li>
   </ul>
 
   <h3 id="reading-datum">Datum and length dimensions</h3>
@@ -1553,7 +1582,7 @@
     <tbody>
       <tr class="short"><td>“(spooned)” after the KW line, plus “KW length to base of spoon (mill end)”</td><td>A spooned open keyway.</td></tr>
       <tr><td>“Captured KW: inset … from S.E.T.” (taper) or “… from AFT” / “… from FWD” (body)</td><td>A captured keyway: the distance from that face to the start of the slot.</td></tr>
-      <tr><td>“Body KW:”</td><td>A keyway in a body, width × depth × length.</td></tr>
+      <tr><td>“Body KW:”</td><td>A keyway in a body, width × depth × length. Under a taper's block it names the body, for example “Body #1 KW:”.</td></tr>
       <tr><td>“Keyways 180° apart”, “Keyways 90° apart (CW from aft)”, “Keyways 90° apart (CCW from aft)”</td><td>Two or more keyways with a set clocking (middle column).</td></tr>
       <tr><td>“Thread relief:”</td><td>A relieved thread: relief length × relief Ø, directly under its Thread line.</td></tr>
       <tr><td>“Liner shoulder R:”</td><td>One line per shouldered liner: the radius once when both ends match, “AFT r, FWD r” when they differ; the liner's name leads the line when more than one liner is shouldered.</td></tr>
@@ -1915,7 +1944,7 @@
   <aside class="note"><p  class="keep">Wear spots are the one exception: they belong to their liner, and if that liner is deleted from the shaft its wear spots are dropped the next time the job is opened.</p></aside>
 
   <h3>Undo</h3>
-  <p  class="keep">Typed readings, bubble moves, station count changes, wear marks, undercuts and worn sections all go into the job's single undo history. To undo, use the <span class="ui">Undo</span> and <span class="ui">Redo</span> arrows in the bar at the top of the Undercuts tab or of a liner's page, or the <span class="ui">History</span> icon on the <span class="ui">Schematic</span> tab's toolbar; see <a href="#editor-history">Undo and redo</a>. Deleting a cut from its card also offers <span class="ui">Undo</span> in a message at the bottom of the page. The Runout Sheet tab also has its own one-tap <span class="ui">Undo move</span> for the last bubble you dragged — see <a href="#recording-move">Moving bubbles</a>.</p>
+  <p>Typed readings, bubble moves, station count changes, wear marks, undercuts and worn sections all go into the job's single undo history. To undo, use the <span class="ui">Undo</span> and <span class="ui">Redo</span> arrows in the bar at the top of the Runout Sheet, Wear Document, Undercut Drawing or Consolidated Output tab — and of a component's wear page or an undercut detail page — or the <span class="ui">History</span> icon on the <span class="ui">Schematic</span> tab's toolbar; see <a href="#editor-history">Undo and redo</a>. Deleting a cut, a wear spot or a worn section, or tapping <span class="ui">Clear all pits</span>, also offers <span class="ui">Undo</span> in a message at the bottom of the page, which puts back exactly what was removed. Re-opening a reading to change only its high spot (or re-saving any measurement dialog without touching its value) keeps the value exactly as you typed it, even where the field shows it rounded. The Runout Sheet tab also has its own one-tap <span class="ui">Undo move</span> for the last bubble you dragged — see <a href="#recording-move">Moving bubbles</a>.</p>
 
   <h3>Units and typing values</h3>
   <ul>
@@ -1993,7 +2022,7 @@
     <li  class="keep">Without lifting, slide it along the shaft. Its leader line follows the station across the component.</li>
     <li  class="keep">Lift your finger. The new position is saved.</li>
   </ol>
-  <p  class="keep">After a drag, an <span class="ui">Undo move</span> button appears beside the hint under the preview. One tap puts that bubble back exactly where it was before the drag — if it had never been moved, back to automatic placement.</p>
+  <p  class="keep">After a drag, an <span class="ui">Undo move</span> button appears beside the hint under the preview. One tap puts that bubble back exactly where it was before the drag — if it had never been moved, back to automatic placement. It goes away once that component's station count changes (<span class="ui">−</span> / <span class="ui">+</span>, or an Undo of one), because the stations are then numbered differently; use the tab's <span class="ui">Undo</span> arrow instead.</p>
   <p  class="keep">The rules a moved bubble follows:</p>
   <ul>
     <li  class="keep"><strong>A moved bubble stays exactly where you put it.</strong> Nothing the app does later moves it — not a geometry change, not a sheet layout change.</li>
@@ -2013,7 +2042,7 @@
     <li  class="keep">Use the <span class="ui">−</span> and <span class="ui">+</span> buttons on the strip under the preview to remove or add a station on the selected component. The strip names the selection, for example <span class="ui">Body 2 · Station 3</span>, or <span class="ui">Nothing selected</span>.</li>
     <li  class="keep">Tap the pencil toggle again (<span class="ui">Done moving bubbles</span>) to go back to entering readings.</li>
   </ol>
-  <p  class="keep">In Move mode a tap never opens the reading dialog, and pinch-zoom still works from bare paper. The same movement rules apply as for a press-and-hold drag, and <span class="ui">Undo move</span> still appears after each drag. The <span class="ui">−</span> / <span class="ui">+</span> buttons are the same as the station rows; undo them from the History menu.</p>
+  <p  class="keep">In Move mode a tap never opens the reading dialog, and pinch-zoom still works from bare paper. The same movement rules apply as for a press-and-hold drag, and <span class="ui">Undo move</span> still appears after each drag. The <span class="ui">−</span> / <span class="ui">+</span> buttons are the same as the station rows; undo them with the tab's <span class="ui">Undo</span> arrow.</p>
 
   <figure class="detail">
     <img src="figures/runout-bubbles.webp" alt="Close-up of runout bubbles under the AFT end of a shaft: two bubbles under the taper, bubbles under the body and stern tube liner, each with a TIR value and a red high-spot dash, one bubble still empty.">
@@ -2026,7 +2055,7 @@
     <li  class="keep">Tick <span class="ui">Coupling face</span> on the Runout Sheet tab (<span class="ui">End view drawn bottom-right, taken looking forward.</span>).</li>
     <li  class="keep">Tap <span class="ui">Pilot runout…</span> beside it (it is greyed out until the face is ticked).</li>
     <li  class="keep">The bubble dialog opens titled <span class="ui">Coupling pilot</span>. Type the TIR and tap the ring at the high spot, exactly as for a station.</li>
-    <li  class="keep">Tap <span class="ui">Save</span>.</li>
+    <li  class="keep">Tap <span class="ui">Save</span>. The reading then shows under the row, for example <span class="ui">Pilot runout: .003 in · high spot 3:00</span>.</li>
   </ol>
   <p  class="keep">The coupling face is a per-job choice: one job may measure the coupling and the next may not. The same setting appears as a <span class="ui">Coupling face</span> chip on the runout preview's options and as a switch on the Consolidated Output tab — all three change the same thing. The number of bolt holes comes from the shaft's first coupler bolt slot; a shaft with none draws the plain two-circle face.</p>
   <figure class="detail">
@@ -2077,7 +2106,7 @@
     <li  class="keep">Pick <span class="ui">Size:</span> <span class="ui">Small</span> or <span class="ui">Large</span>. The size applies to the X marks you place next.</li>
     <li  class="keep">Tap the component where the pit is. The X lands where you tap — along the length and up or down across the face — so you can show roughly where on the surface it sits.</li>
   </ol>
-  <p  class="keep">To take one off, choose <span class="ui">Remove X</span> and tap the X; a tap that misses does nothing. <span class="ui">Clear all pits</span> removes every X on this component. The heading counts them, for example <span class="ui">3 placed</span>.</p>
+  <p  class="keep">To take one off, choose <span class="ui">Remove X</span> and tap the X; a tap that misses does nothing. <span class="ui">Clear all pits</span> removes every X on this component; the message that follows (<span class="ui">3 pits cleared</span>) has <span class="ui">Undo</span>, which puts them all back. The heading counts them, for example <span class="ui">3 placed</span>.</p>
 
   <h3>Record measured diameters</h3>
   <ol class="steps">
@@ -2106,7 +2135,7 @@
     <li  class="keep">Optionally add <span class="ui">Notes</span> (“scored”, “pitted at 6 o'clock”).</li>
   </ol>
   <p  class="keep">With an AFT datum (<span class="ui">AFT SET</span>, <span class="ui">Liner AFT</span>) the distance locates the band's AFT edge, measured forward. With a FWD datum (<span class="ui">FWD SET</span>, <span class="ui">Liner FWD</span>) it locates the band's FWD edge, measured aft. Switching the chip only changes how the distance is shown — the band itself does not move — so you can enter it from one datum and check it from another.</p>
-  <p  class="keep">Values commit when you leave the field, exactly as typed. A band should fit inside the liner; a value that pushes it past either end stays in the field and the card says so under it (<span class="ui">Wear spot extends past the liner's FWD edge</span>), the card's header carries a short note, and the drawing shows the band clipped to the liner until you correct it. If the liner is later shortened so that an existing band runs past its end, the card shows <span class="ui">Extends past liner end — re-measure</span>. Delete a band with the bin icon on its card.</p>
+  <p>Values commit when you leave the field, exactly as typed. A band should fit inside the liner; a value that pushes it past either end stays in the field and the card says so under it (<span class="ui">Wear spot extends past the liner's FWD edge</span>), the card's header carries a short note, and the drawing shows the band clipped to the liner until you correct it. If the liner is later shortened so that an existing band runs past its end, the card shows <span class="ui">Extends past liner end — re-measure</span>. Delete a band with the bin icon on its card; <span class="ui">Wear spot deleted</span> follows with <span class="ui">Undo</span>. On the drawing, the band's start and length print under the liner in the same form as the printed strip (fractions in inches), each value in a break in its own line or, on a short band, on its own row.</p>
 
   <h3 id="recording-trace">The worn-profile trace</h3>
   <p  class="keep">When a liner has measured diameters inside a wear spot, the liner's surface line on the detail strip dips through those diameters, so the sheet shows the shape of the wear, not just its numbers. The detail view on screen draws the same trace as the printed strip.</p>
@@ -2239,7 +2268,7 @@
     <li  class="keep">Under <span class="ui">Measured diameters</span>, type the readings into <span class="ui">Ø 1</span>, <span class="ui">Ø 2</span>, <span class="ui">Ø 3</span>, in order AFT to FWD. Tap <span class="ui">Add another Ø</span> for more, up to six.</li>
     <li  class="keep">Tap <span class="ui">Save</span>. It is greyed out until there is a distance and a length above zero.</li>
   </ol>
-  <p  class="keep">Empty Ø fields are dropped when you save, so you can record the area first and come back with the numbers. The list shows each area as <span class="ui">Worn section 1</span> with a summary such as “12in from AFT S.E.T. · L 8in · 3 Ø” (or “no readings yet”). Tap a row to edit it; the edit dialog adds <span class="ui">Delete</span>. As with undercuts, switching the S.E.T. chip re-shows the same area from the other datum without moving it.</p>
+  <p>Empty Ø fields are dropped when you save, so you can record the area first and come back with the numbers. The list shows each area as <span class="ui">Worn section 1</span> with a summary such as “12in from AFT S.E.T. · L 8in · 3 Ø” (or “no readings yet”). Tap a row to edit it; the edit dialog adds <span class="ui">Delete</span>, and a <span class="ui">Worn section 2 deleted</span> message with <span class="ui">Undo</span> follows a delete. As with undercuts, switching the S.E.T. chip re-shows the same area from the other datum without moving it. Pressing Back or tapping outside the dialog after you have typed something asks <span class="ui">Discard this worn section?</span> (<span class="ui">Discard changes to this worn section?</span> when editing one) with <span class="ui">Keep editing</span> or <span class="ui">Discard</span>; <span class="ui">Cancel</span> closes without asking.</p>
   <aside class="note"><p  class="keep">Worn sections print only on a consolidated sheet that carries wear information — <span class="ui">Sheet content</span> set to <span class="ui">All three</span> or <span class="ui">Schematic + Wear</span>. They do not appear on the Runout Sheet tab's preview, which shows runouts only.</p></aside>
 
   <h2 id="recording-paper">Working from paper</h2>
@@ -2485,7 +2514,7 @@
   <p  class="keep">The <span class="ui">Overall Length</span> field does not apply what you type key by key, because a half-typed value (36″ on the way to 367 3/4″) would collapse the drawing and move every FWD-referenced part. Tap the green ✓, press the keyboard's Done key, or leave the field after changing it. The red ✗ puts the stored length back, and an empty field changes nothing. See <a href="#editor-oal">The overall length</a>.</p>
 
   <h3>The Overall Length field is outlined in red</h3>
-  <p  class="keep">The overall length is shorter than the far end of your last component, so something runs off the FWD end of the shaft. The card that runs past shows an amber advisory strip, <span class="ui">Extends past shaft length</span>, and a dismissible banner above the carousel counts the problem (for example <span class="ui">1 component extends past shaft length</span>).</p>
+  <p>The overall length is shorter than the far end of your last component, so something runs off the FWD end of the shaft. The card that runs past shows an amber advisory strip, <span class="ui">Extends past shaft length</span>, the banner above the carousel names the part and how far it runs (for example <span class="ui">Body #1 runs 4 13/16" past the FWD end</span>; tap the line to go to its card), and the drawing tints the overhang red with the shaft's real end dashed. If you just shortened the OAL, the message at the bottom of the screen says which FWD-measured parts moved with the end.</p>
   <p  class="keep">This is a warning, not a block. Your values are kept exactly as typed. Fix it by lengthening the OAL (overall length) or by moving or shortening the component.</p>
 
   <h3>I changed the OAL and a taper (or liner) moved</h3>
@@ -2495,14 +2524,14 @@
   <p  class="keep">Both by design. The app keeps every value you type exactly as entered, down to the last thousandth; the bare shaft between components grows or shrinks to fill the gaps (see <a href="#intro-sacred">What you type is what prints</a>). A field applies its value when you leave it or press Done, and only if you changed something, so tapping in and out without an edit changes nothing.</p>
 
   <h3>A field shows “Must be &gt; 0” or “Must be ≥ 0” and won't keep my number</h3>
-  <p  class="keep">A component's <span class="ui">Length</span> must be greater than zero (<span class="ui">Must be &gt; 0</span>). A <span class="ui">Start</span> position can't be negative (<span class="ui">Must be ≥ 0</span>). The field shows the message, puts the previous value back, and changes nothing. Text that doesn't read as a number is treated the same way. Inch fields accept fractions such as 3 1/2 and decimals such as 3.5.</p>
+  <p>A component's <span class="ui">Length</span> and its diameters must be greater than zero (<span class="ui">Must be &gt; 0</span>) — the bare-shaft (auto-body) Ø is the exception: clearing it drops that section's own Ø. A <span class="ui">Start</span> position can't be negative (<span class="ui">Must be ≥ 0</span>). A thread relief's length and Ø, and a captured keyway's inset, must be above zero too: to remove them, switch off <span class="ui">Thread relief</span> or <span class="ui">Captured keyway</span>. A bolt <span class="ui">Count</span> must be a whole number of 1 or more. A liner's or thread's <span class="ui">Length</span> that would run into another liner or thread is refused like the same span typed as a Start (<span class="ui">Overlaps</span> and the other card's name); running past the OAL is not refused. The field puts the previous value back, says <span class="ui">… not applied</span> with the reason, and changes nothing. Text that doesn't read as a number is treated the same way. Inch fields accept fractions such as 3 1/2 and decimals such as 3.5.</p>
 
-  <h3>A card says “Overlaps another component”</h3>
-  <p  class="keep">Two components that can't share shaft length (tapers, threads and liners, in any pairing) overlap. Every card involved shows the message. While any overlap exists, the drawings can't be printed or exported.</p>
+  <h3>A card says “Overlaps …”</h3>
+  <p  class="keep">Two components that can't share shaft length (tapers, threads and liners, in any pairing) overlap. Every card involved shows the message, naming the card it runs into by that card's title (<span class="ui">Overlaps FWD Taper</span>). While any overlap exists, the drawings can't be printed or exported.</p>
   <p  class="keep">Bodies are never part of this check. A body running under a liner or up against a taper is normal: the drawing trims the body around them. If the warning shows, look at the tapers, threads and liners near that position.</p>
 
   <h3>An Add dialog asks “Add Anyway?”</h3>
-  <p  class="keep">The part you are adding conflicts with something already on the shaft. The dialog lists each problem, for example <span class="ui">Overlaps Taper 1</span> or <span class="ui">Falls outside shaft span</span> (with the shaft's OAL). Tap <span class="ui">Add Anyway</span> to add it and fix the position afterwards, or <span class="ui">Cancel</span> to go back and correct the numbers first.</p>
+  <p  class="keep">The part you are adding conflicts with something already on the shaft. The dialog lists each problem, for example <span class="ui">Overlaps FWD Taper</span> (the name on that part's card) or <span class="ui">Falls outside shaft span</span> (with the shaft's OAL). Tap <span class="ui">Add Anyway</span> to add it and fix the position afterwards, or <span class="ui">Cancel</span> to go back and correct the numbers first.</p>
 
   <h3>A thread card says “Thread must be at a shaft end, not between components”</h3>
   <p  class="keep">A thread counted in the overall length has to sit at one end of the shaft. Move it to the AFT or FWD end. If the OAL is quoted to the shoulder and the thread hangs off past it, switch off <span class="ui">Include thread in OAL</span> on the card or in the Add Thread dialog and choose which end it hangs from with the <span class="ui">Thread end:</span> <span class="ui">AFT</span> | <span class="ui">FWD</span> chips.</p>
@@ -2538,7 +2567,7 @@
   <h2 id="help-drawings">Troubleshooting: drawings, printing &amp; PDFs</h2>
 
   <h3>Print and Export are greyed out</h3>
-  <p  class="keep">The shaft has no components yet (<span class="ui">Please add at least 1 component before export is active.</span> — coupler bolt slots alone don't count), or two components overlap (<span class="ui">Fix component collisions before exporting.</span> — find the cards marked <span class="ui">Overlaps another component</span>). On the document tabs the message shows above the greyed buttons; on the Schematic tab, tap the greyed PDF button to see it. See <a href="#documents-blocked">Why Print and Export are greyed out</a>.</p>
+  <p  class="keep">The shaft has no components yet (<span class="ui">Please add at least 1 component before export is active.</span> — coupler bolt slots alone don't count), or two components overlap (<span class="ui">Can't export: FWD Liner overlaps …</span>, naming the pair — tap the overlap line on the warnings banner to go to the first part). On the document tabs the message shows above the greyed buttons; on the Schematic tab, tap the greyed PDF button to see it. See <a href="#documents-blocked">Why Print and Export are greyed out</a>.</p>
 
   <h3>The Runout, Wear, Undercut, Final and Consolidated tabs are greyed out</h3>
   <p  class="keep">Those documents need a shaft to work from: at least one component and a typed overall length. Until both exist, only the <span class="ui">Schematic</span> tab opens. A shaft with no OAL yet still draws in the preview, out to the end of its last component, but the other documents stay locked until you type the length.</p>
@@ -2666,7 +2695,7 @@
 
   <h3>Saving</h3>
   <ul>
-    <li  class="keep">The Save button (the disk icon) opens <span class="ui">Save Drawing</span> the first time. The suggested <span class="ui">File name</span> is built from the job number, customer, vessel and shaft side. <span class="ui">Existing saves</span> lists names you can reuse with <span class="ui">Use</span>.</li>
+    <li  class="keep">The Save button (the disk icon) opens <span class="ui">Save Drawing</span> the first time. The suggested <span class="ui">File name</span> is built from the job number, customer, vessel and shaft side. <span class="ui">Existing saves</span> lists names you can reuse with <span class="ui">Use</span> — all of them while the suggested name is untouched, then those matching what you type.</li>
     <li  class="keep">Saving over an existing name asks <span class="ui">Overwrite existing save?</span> first.</li>
     <li  class="keep">An asterisk in the title means unsaved changes. Leaving such a drawing asks <span class="ui">You have unsaved changes. Save before continuing?</span> with <span class="ui">Save</span>, <span class="ui">Don't save</span> and <span class="ui">Cancel</span>.</li>
     <li  class="keep"><span class="ui">Save As…</span> in the editor's overflow menu saves the drawing under a new name.</li>

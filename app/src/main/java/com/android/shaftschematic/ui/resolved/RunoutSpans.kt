@@ -1,5 +1,6 @@
 package com.android.shaftschematic.ui.resolved
 
+import com.android.shaftschematic.geom.AutoBodyRun
 import com.android.shaftschematic.geom.RunoutComponentKind
 import com.android.shaftschematic.geom.RunoutComponentSpan
 
@@ -45,3 +46,27 @@ fun runoutComponentSpans(resolved: List<ResolvedComponent>): List<RunoutComponen
             else -> null
         }
     }
+
+/**
+ * The bare-shaft (auto) bodies among [resolved], as the runout layer measures them — the same
+ * [runoutComponentSpans] base ids and lengths `collectRunoutStations` derives counts from, one
+ * [AutoBodyRun] per id (start of its aft-most run, end of its fwd-most, summed length). Input to
+ * `autoBodySuccessors`, which pairs the runs an edit re-identified.
+ */
+fun autoBodyRuns(resolved: List<ResolvedComponent>): List<AutoBodyRun> {
+    val autoIds = resolved
+        .filter { it is ResolvedBody && it.source == ResolvedComponentSource.AUTO }
+        .mapTo(HashSet()) { resolvedBodyBaseId(it.id) }
+    if (autoIds.isEmpty()) return emptyList()
+    return runoutComponentSpans(resolved)
+        .filter { it.id in autoIds }
+        .groupBy { it.id }
+        .map { (id, spans) ->
+            AutoBodyRun(
+                id = id,
+                startMm = spans.minOf { it.startMm },
+                endMm = spans.maxOf { it.startMm + it.lengthMm },
+                lengthMm = spans.fold(0f) { acc, sp -> acc + sp.lengthMm },
+            )
+        }
+}

@@ -214,7 +214,11 @@ internal fun drawWearStripWindow(
     // A stacked value is two lines tall, so a callout ROW is the whole stack — the reserved band
     // and `finish`'s row pitch below must read the same number or the rows overprint.
     val diaRowHeightPt = if (dualStacked) dimText.dualStackMetrics().height else dimText.textSize
-    val diaBandPt = diaPlan?.let { it.labelsHeightPt(diaRowHeightPt, WEAR_DIA_ROW_GAP_PT) + 2f } ?: 0f
+    // The band also keeps a little air above the strip title, so the last callout row and the
+    // title never read as one block (on-device report).
+    val diaBandPt = diaPlan?.let {
+        it.labelsHeightPt(diaRowHeightPt, WEAR_DIA_ROW_GAP_PT) + 2f + WEAR_DIA_TITLE_AIR_PT
+    } ?: 0f
 
     val sortedSpots = spots.sortedBy { it.startMm }
     // Bands clamp to the liner's own span for rendering; the stored spots are never touched.
@@ -785,3 +789,6 @@ private fun drawWearStripRail(
 }
 
 private const val WEAR_DIA_TICK_OVERSHOOT_PT = 2f   // witness tick overshoot past the cylinder edges (strips)
+
+/** Clear air between a strip's last measured-Ø callout row and its title below. */
+private const val WEAR_DIA_TITLE_AIR_PT = 4f

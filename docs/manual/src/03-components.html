@@ -9,7 +9,9 @@
   <ul>
     <li><strong>Units in labels.</strong> Every length and diameter field ends with the document unit, for example <span class="ui">Length (in)</span> or <span class="ui">Length (mm)</span>. The tables leave the unit off.</li>
     <li><strong>Positions.</strong> All positions run along the shaft from the AFT end toward FWD unless a <span class="ui">Measure From</span> chip says otherwise.</li>
-    <li><strong>Fractions.</strong> Every numeric field accepts decimals or shop fractions such as “3 1/2” or “11/16”.</li>
+    <li><strong>Fractions.</strong> Every numeric field accepts decimals or shop fractions such as “3 1/2”, “3-1/2” or “11/16”. A decimal comma works too: “12,75” is 12.75. “1,500” is refused, because it could be 1.5 or 1500.</li>
+    <li><strong>Units.</strong> A length or diameter may carry its unit: “260mm” on an inch drawing is 260 millimeters, and “11"” or “11in” on a millimeter drawing is 11 inches. The value then shows in the drawing's unit. Any other letters after a number (“12ft”, “4tpi”) are refused rather than ignored.</li>
+    <li><strong>Refused values say so.</strong> In an Add dialog a field that cannot read its text says <span class="ui">Not a number</span> under it, and <span class="ui">Add</span> stays greyed until it is fixed. On a card the field puts the previous value back and names what it did not apply.</li>
     <li><strong>Values are kept as typed.</strong> If two components disagree, the app warns you; it does not move either one (see <a href="#intro-sacred">What you type is what prints</a>).</li>
     <li><strong>Card vs. dialog.</strong> Everything that changes the shape, size or position of a component appears both on its card and in its Add dialog, under the same conditions. A handful of switches that only change how an already-drawn component prints are on the card only; see <a href="#components-drawing-toggles">Per-component drawing switches</a>.</li>
   </ul>
@@ -21,7 +23,7 @@
     <dt>Remove (trash icon)</dt>
     <dd>Deletes the component. Undo brings it back.</dd>
     <dt>Red error strip</dt>
-    <dd>A hard problem, for example <span class="ui">Overlaps another component</span>.</dd>
+    <dd>A hard problem, for example <span class="ui">Overlaps FWD Taper</span> — naming the card it runs into.</dd>
     <dt>Amber advisory strip</dt>
     <dd>An advisory, for example <span class="ui">Very short segment (&lt; 1 mm)</span> or <span class="ui">Liner OD smaller than shaft Ø beneath it</span>. The drawing still prints.</dd>
     <dt><span class="ui">Save</span></dt>
@@ -39,8 +41,8 @@
       <tr><td><span class="ui">Start from AFT</span> / <span class="ui">Start from FWD</span></td><td>Distance from the chosen shaft end to the near end of the taper. A propeller taper flush with the AFT end is “0” from AFT; a coupling taper flush with the FWD end is “0” from FWD.</td></tr>
       <tr><td><span class="ui">Length</span></td><td>Axial length of the taper. On a FWD-measured taper, a length change keeps the FWD end where it was and the taper grows toward AFT.</td></tr>
       <tr><td><span class="ui">S.E.T. Ø</span>, <span class="ui">L.E.T. Ø</span></td><td>Small-end and large-end diameters. On the card the two fields are listed in shaft order, AFT end first, so an aft-half taper shows S.E.T. then L.E.T., and a forward-half taper shows L.E.T. then S.E.T.</td></tr>
-      <tr><td><span class="ui">Rate mode:</span> <span class="ui">Auto</span> | <span class="ui">Manual</span></td><td>Auto works the rate out from Length, S.E.T. and L.E.T. Manual lets you type it. Default Auto.</td></tr>
-      <tr><td><span class="ui">Rate (1:12, 3/4"/ft, or decimal)</span></td><td>The taper rate: a ratio (1:12), inches per foot (3/4″/ft — the shop's 1:16; “3/4 in/ft” and “3/4/ft” are read the same way) or a decimal; a bare fraction like 3/4 is refused as ambiguous and the message names the forms to write. Greyed out in Auto, where it shows the computed rate. Editable in Manual.</td></tr>
+      <tr><td><span class="ui">Rate mode:</span> <span class="ui">Auto</span> | <span class="ui">Manual</span></td><td>Auto works the rate out from Length, S.E.T. and L.E.T. Manual lets you type it, and keeps what you typed through a Length edit and when the drawing is reopened. The choice is saved with the taper. Default Auto.</td></tr>
+      <tr><td><span class="ui">Rate (1:12, 3/4"/ft, or decimal)</span></td><td>The taper rate: a ratio (1:12), inches per foot (3/4″/ft — the shop's 1:16; “3/4 in/ft” and “3/4/ft” are read the same way) or a decimal; a bare fraction like 3/4, or a bare decimal steeper than 0.25 such as .75, is refused as ambiguous and the message names the forms to write. Greyed out in Auto, where it shows the computed rate. Editable in Manual.</td></tr>
       <tr><td><span class="ui">Keyway</span> checkbox and section</td><td>See <a href="#components-keyways">Keyways</a>.</td></tr>
     </tbody>
   </table>
@@ -52,7 +54,7 @@
     <li><strong>Manual</strong> keeps exactly what you type. If the typed rate disagrees with the three dimensions by more than 3%, the card shows <span class="ui">Rate does not match Length + SET + LET</span>. Nothing is changed; you decide which number is wrong.</li>
     <li>A plain whole number is read as 1:N, so “16” means 1:16. A bare “1” is refused as ambiguous.</li>
   </ul>
-  <aside class="warn"><p>Type rates as a ratio (“1:16”) or as inches per foot with the “/ft” written out (“3/4″/ft”). A bare fraction such as “3/4” is refused — it could mean 3/4″ per foot or a diameter change of 0.75 per unit of length, a very steep taper — and the card says <span class="ui">Write 3/4"/ft or a ratio like 1:16; a bare fraction is ambiguous</span>. The shop notation 3/4″/ft is 1:16; 1″/ft is 1:12.</p></aside>
+  <aside class="warn"><p>Type rates as a ratio (“1:16”) or as inches per foot with the “/ft” written out (“3/4″/ft”). A bare fraction such as “3/4” is refused — it could mean 3/4″ per foot or a diameter change of 0.75 per unit of length, a very steep taper — and the card says <span class="ui">Write 3/4"/ft or a ratio like 1:16; a bare fraction is ambiguous</span>. The same goes for “.75” typed as a decimal: it is 3/4 without the “/ft”, and the card asks for <span class="ui">.75"/ft</span> or a ratio. A decimal slope of 0.25 or less, such as .0625 (3/4″/ft), is still read as a slope. The shop notation 3/4″/ft is 1:16; 1″/ft is 1:12.</p></aside>
 
   <h3>Adding a taper from S.E.T. and rate</h3>
   <ol class="steps">
@@ -80,7 +82,7 @@
   <p>The Add Thread dialog offers two chips: <span class="ui">Imperial (TPI)</span> and <span class="ui">Metric (mm)</span>. The choice is made when the thread is added and decides which fields the card shows from then on.</p>
   <ul>
     <li><strong>Imperial</strong>: <span class="ui">Major Ø</span> in the document unit and <span class="ui">TPI</span>.</li>
-    <li><strong>Metric</strong>: one <span class="ui">Thread designation</span> field, such as “M20×2.5”. You may type “x”, “X” or “*” for the ×. The designation carries both the major Ø and the pitch, so no other diameter field is shown. A metric thread prints in millimeters even on an inch drawing.</li>
+    <li><strong>Metric</strong>: one <span class="ui">Thread designation</span> field, such as “M20×2.5”. You may type “x”, “X” or “*” for the ×, and a decimal comma as DIN and ISO prints write it (“M20x2,5”). A designation the field cannot read says <span class="ui">Not a metric designation — e.g. M20×2.5</span>. The designation carries both the major Ø and the pitch, so no other diameter field is shown. A metric thread prints in millimeters even on an inch drawing.</li>
   </ul>
   <aside class="note"><p>A coarse designation with no pitch, such as “M20”, is accepted and prints as typed, but the thread then has no pitch and the card warns <span class="ui">Zero pitch — thread renders flat</span>. Include the pitch.</p></aside>
   <aside class="tip"><p>There is no Imperial/Metric switch on the card. To change a thread from TPI (threads per inch) to a metric designation, or back, remove it and add it again.</p></aside>
@@ -191,7 +193,7 @@
       <tr><td><span class="ui">Keyway</span> checkbox and section</td><td>See <a href="#components-keyways">Keyways</a>.</td></tr>
     </tbody>
   </table>
-  <p>The card also carries <span class="ui">Show Ø on drawing</span>, <span class="ui">Show name on drawing</span>, <span class="ui">Compress on drawing</span> and <span class="ui">Shade on drawing</span>; see <a href="#components-drawing-toggles">Per-component drawing switches</a>.</p>
+  <p>The card also carries <span class="ui">Show Ø on drawing</span>, <span class="ui">Show name on drawing</span>, <span class="ui">Show dimension rail</span>, <span class="ui">Compress on drawing</span> and <span class="ui">Shade on drawing</span>; see <a href="#components-drawing-toggles">Per-component drawing switches</a>.</p>
   <aside class="note"><p>A body may run under a liner or up against a taper, and a body with a keyway is never split; see <a href="#editor-bodies">Bodies and bare shaft</a>.</p></aside>
 
   <h3>Bare-shaft card</h3>
@@ -300,7 +302,7 @@
   <ul>
     <li><strong>The slot in plan view</strong> on the shaft, at its true width relative to the drawn shaft. A body keyway and the stretch around it are never shortened on the drawing, even when the rest of the body is.</li>
     <li><strong>Clocking</strong>: at 180° the other keyways draw as dashed hidden slots. At 90° they draw as a notch in the shaft outline: on the bottom edge for CW (clockwise), the top edge for CCW (counter-clockwise). A footer note reads “Keyways 180° apart”, “Keyways 90° apart (CW from aft)” or “Keyways 90° apart (CCW from aft)”.</li>
-    <li><strong>Footer size line</strong> in that end's column — KW (keyway) is the footer's shorthand: “KW: W × D × L” for a taper, “Body KW: W × D × L” for a body, in the keyway's own unit.</li>
+    <li><strong>Footer size line</strong> in that end's column — KW (keyway) is the footer's shorthand: “KW: W × D × L” for a taper, “Body KW: W × D × L” for a body, in the keyway's own unit. When that column also holds a taper's block, the body line carries the body's name (“Body #1 KW: …”), so it can't be read as the taper's keyway.</li>
     <li><strong>Captured</strong>: a line below it, “Captured KW: inset &lt;distance&gt; from S.E.T.” (taper) or “… from AFT” / “… from FWD” (body). The slot draws closed at both ends.</li>
     <li><strong>Spooned</strong>: “(spooned)” after the size, and a note “KW length to base of spoon (mill end)”. The slot draws normally, with an enlarged spoon around its closed end; the mill end stays visible inside the spoon.</li>
   </ul>
@@ -368,6 +370,7 @@
       <tr><td><span class="ui">Compress on drawing</span></td><td>Explicit bodies</td><td>Off for new bodies</td></tr>
       <tr><td><span class="ui">Prints in:</span> <span class="ui">in</span> | <span class="ui">mm</span></td><td>Explicit bodies, tapers, threads, liners</td><td>The document unit</td></tr>
       <tr><td><span class="ui">Show dimension rail</span></td><td>Coupler bolt slots and holes</td><td>Off</td></tr>
+      <tr><td><span class="ui">Show dimension rail</span></td><td>Explicit bodies</td><td>On for a body at either end of the shaft, off for one in the middle</td></tr>
     </tbody>
   </table>
 
@@ -400,7 +403,15 @@
   <h3 id="components-prints-in">Prints in: in | mm</h3>
   <p>Prints this one component's values in a different unit from the document. It appears at the foot of the card only when <span class="path">Settings → Drawing → Per-component units</span> is on. It changes how the component prints, not how you type it: the card's fields stay in the document unit. Tapping the document's own unit clears the choice.</p>
   <p>A keyway has its own <span class="ui">Keyway in:</span> chip, which does change the unit you type the keyway in, because a metric keyway on an inch shaft should be entered in millimeters. That chip is in the Add dialogs as well as on the cards. A metric thread prints in millimeters without any chip.</p>
-  <p><span class="ui">Show dimension rail</span> is on coupler bolt slot and hole cards only. Off, the row prints no dimension; on, the schematic and consolidated sheets add one dimension rail from the end of the shaft the row is measured from (<span class="ui">Measure From</span>) to the center of the nearest hole, carrying the distance you entered. It changes nothing about the row itself, which is why it is not in the Add dialog. See <a href="#reading-bolts">Coupler bolt holes</a>.</p>
+  <h3 id="components-body-rail">Show dimension rail</h3>
+  <p>On an explicit body's card, <span class="ui">Show dimension rail</span> prints the body's own length as a dimension above the shaft, on the schematic and the consolidated sheet. It works the same three ways as shading:</p>
+  <ul>
+    <li><strong>Untouched</strong>: it follows where the body sits. A body that runs to either end of the shaft, such as the coupling body at the FWD end, prints its length, and the line under the switch reads <span class="ui">On — body is at a shaft end</span>. A body in the middle of the shaft does not, and the line reads <span class="ui">Off — mid-shaft body</span>.</li>
+    <li><strong>Switched on</strong>: the length prints wherever the body sits.</li>
+    <li><strong>Switched off</strong>: the length is not printed, even for an end body.</li>
+  </ul>
+  <p>The dimension runs over the whole body you entered, even where an S-break shortens it on the sheet. When another dimension on the sheet already spans exactly the same stretch (for example a liner's dimension from the shaft end to a liner that butts the end body), the length is printed once, not twice. A body that runs the full length of the shaft adds nothing, since the OAL is its length. Bare shaft never prints one.</p>
+  <p>On coupler bolt slot and hole cards, <span class="ui">Show dimension rail</span> is off until you switch it on. Off, the row prints no dimension; on, the schematic and consolidated sheets add one dimension rail from the end of the shaft the row is measured from (<span class="ui">Measure From</span>) to the center of the nearest hole, carrying the distance you entered. It changes nothing about the row itself, which is why it is not in the Add dialog. See <a href="#reading-bolts">Coupler bolt holes</a>.</p>
 
   <h2 id="components-names">Component names</h2>
   <p>Every taper, thread, liner and explicit body has a name. Until you give it one, the app names it by position:</p>

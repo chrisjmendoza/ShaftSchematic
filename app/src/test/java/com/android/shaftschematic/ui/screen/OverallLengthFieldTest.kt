@@ -13,7 +13,10 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performTextClearance
@@ -259,5 +262,54 @@ class OverallLengthFieldTest {
 
     private companion object {
         const val AWAY = "away_button"
+    }
+
+    /* ── Unreadable text is named, never ignored ─────────────────────────────── */
+
+    @Test
+    fun `the check on unreadable text says so and commits nothing`() {
+        rule.setContent { Host(measured) }
+
+        typeInField("368-1/2x")
+        rule.onNodeWithTag(OAL_ACCEPT_TAG).performClick()
+        rule.waitForIdle()
+
+        assertEquals(emptyList<Float>(), mmCommits)
+        assertEquals("the typed text stays to be fixed", "368-1/2x", fieldText())
+        rule.onNodeWithText("368-1/2x not applied — not a number", useUnmergedTree = true).assertIsDisplayed()
+
+        // An edit clears the notice.
+        rule.onNodeWithTag(OAL_FIELD_TAG).performTextReplacement("368")
+        rule.waitForIdle()
+        rule.onAllNodesWithText("368-1/2x not applied — not a number", useUnmergedTree = true).assertCountEquals(0)
+    }
+
+    @Test
+    fun `walking away from unreadable text restores the length and names what was dropped`() {
+        rule.setContent { Host(measured) }
+
+        typeInField("12ft")
+        rule.onNodeWithTag(AWAY).performClick()
+        rule.waitForIdle()
+
+        assertEquals(emptyList<Float>(), mmCommits)
+        assertEquals(storedText, fieldText())
+        rule.onNodeWithText("12ft not applied — not a number", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun `a hyphenated mixed fraction and a unit suffix commit`() {
+        rule.setContent { Host(measured) }
+
+        typeInField("100-1/2")
+        rule.onNodeWithTag(OAL_ACCEPT_TAG).performClick()
+        rule.waitForIdle()
+        assertEquals(listOf(100.5f), mmCommits)
+
+        // An inch suffix in this millimetre document is inches.
+        typeInField("10\"")
+        rule.onNodeWithTag(OAL_ACCEPT_TAG).performClick()
+        rule.waitForIdle()
+        assertEquals(254f, mmCommits.last(), 1e-3f)
     }
 }

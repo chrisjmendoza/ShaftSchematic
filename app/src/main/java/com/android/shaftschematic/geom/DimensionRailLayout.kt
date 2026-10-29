@@ -19,9 +19,18 @@ import kotlin.math.min
  *  - every rail above a rail that carries an above-line label LIFTS by one label band
  *    (text height + gap), cumulatively, so no rail line is ever drawn through a value;
  *  - a colliding label first SLIDES horizontally along its own span (smallest shift from
- *    center that clears everything), and only bumps vertically when the slide has no room;
+ *    center that clears everything); a floating value that still has no room — typically a
+ *    span narrower than its own value — then tries the spot just OUTSIDE its span on its own
+ *    rail's band (beyond the FWD extension line, then before the AFT one, inside the content
+ *    area), and only then bumps vertically — inside its own rail's band, past it only when
+ *    the alternative is printing over another value;
  *  - arrowheads point inward unless the span itself is too narrow to hold both
- *    ([arrowsPointInward]) — a fallback value overhead never costs a span its inward arrows.
+ *    ([arrowsPointInward]) — a fallback value overhead never costs a span its inward arrows;
+ *  - a value that ends up OFF its own line — beside its span, or bumped above its home height —
+ *    carries a leader to its own span ([Placement.leader], the undercut rails' [railValueLeader]
+ *    construction). A leader is an obstacle like a label: its landing point slides along the
+ *    span to clear the values already placed, an outside spot whose leader would still cross one
+ *    is not taken, and every later value keeps clear of it.
  *
  * Labels (inline and above) and rail lines are all obstacles, across every rail including the
  * topmost OAL rail. The renderer owns the pixels; this engine owns the geometry.
@@ -49,6 +58,13 @@ object DimensionRailLayout {
 
     /** Bounded vertical escape for an above-line label that cannot slide clear. */
     const val MAX_BUMPS: Int = 3
+
+    /**
+     * How far past its nearest outside spot a value placed OUTSIDE its span may slide to clear an
+     * obstacle — enough to step over a neighbouring extension line a few points beyond the span's
+     * end, never so far that the value reads as belonging to the next span.
+     */
+    const val OUTSIDE_REACH: Float = 12f
 
     /**
      * Daylight kept between the two inward arrowheads of a span whose value did NOT seat in a
@@ -103,6 +119,9 @@ object DimensionRailLayout {
      * @param arrowsInward true = arrowheads sit between the extension lines; false = the
      *   cramped-span (tips-in) convention, heads hanging outside them.
      * @param label the placed glyph box; its baseline is `label.top - metrics.ascent`.
+     * @param leader the stroke joining a value placed off its own line (beside its span, or
+     *   bumped above its home height) to that span; null for a value in its break or floating at
+     *   home over its span (emulator QA: a value set beside its span read as the next span's).
      */
     data class Placement(
         val inline: Boolean,
@@ -110,6 +129,7 @@ object DimensionRailLayout {
         val railY: Float,
         val arrowsInward: Boolean,
         val label: Box,
+        val leader: RailValueLeader? = null,
     )
 
     /** Placements parallel to the input spans, plus the per-rail lift that positioned them. */
@@ -165,7 +185,18 @@ object DimensionRailLayout {
      * before a wide span that can move around it), then left-to-right, then input order — so
      * the result is deterministic and the wide span is the one that slides.
      *
+     * A floating value with no clear spot over its own span tries the spot just OUTSIDE the
+     * span at the same height: right of the FWD extension line first, then left of the AFT one,
+     * clear of an outward arrowhead and inside [[contentLeft], [contentRight]]. Only then does it
+     * bump upward, and only while it stays in the band directly above its OWN rail line — never
+     * across another rail's line and never nearer to one than to its own (on-device report: two
+     * short AFT-end values floated two bands up, each over the wrong rail). A value with no clear
+     * spot in its own band prints at its own rail's height, centred on its span — unless that
+     * would set it on another value, the one case it may climb past its band.
+     *
      * @param safeTopY vertical bumps never carry a label above this y.
+     * @param contentLeft a value placed outside its span stays right of this x.
+     * @param contentRight a value placed outside its span stays left of this x.
      * @return placements parallel to [spans].
      */
     fun plan(
@@ -174,6 +205,8 @@ object DimensionRailLayout {
         arrowSize: Float,
         textPad: Float,
         safeTopY: Float = Float.NEGATIVE_INFINITY,
+        contentLeft: Float = Float.NEGATIVE_INFINITY,
+        contentRight: Float = Float.POSITIVE_INFINITY,
     ): Plan {
         if (spans.isEmpty()) return Plan(emptyList(), emptyMap())
         val liftByRail = lifts(spans, metrics, arrowSize, textPad)
@@ -197,6 +230,7 @@ object DimensionRailLayout {
                 hi = if (lo > hi) mid else hi,
                 xa = s.xa,
                 xb = s.xb,
+                overhangs = lo > hi,
             )
         }
 
@@ -223,44 +257,131 @@ object DimensionRailLayout {
         )
 
         val placedLabels = mutableListOf<Box>()
+        val placedLeaders = mutableListOf<Box>()
+        val placedIdx = HashSet<Int>()
         val result = arrayOfNulls<Placement>(rows.size)
 
         for (i in order) {
             val r = rows[i]
-            val obstacles = placedLabels +
+            val foreign = placedLabels + placedLeaders +
                 lineBoxes.filterIndexed { j, _ -> j != i } +
                 extLines.filterNot { it.belongsTo(r) }.map { it.box() }
+            // A span's own boundary line that a HIGHER rail continues upward (the AFT S.E.T. line
+            // rising to the OAL rail) crosses the band a floating value sits in; a value
+            // overhanging its own span there would print with the line through its first digit.
+            // Only a CROSSING counts: the box is narrowed by the clearance [clearCenter] adds, so
+            // a value may still sit right up to its own line, as a centred value just inside a
+            // short span does.
+            val ownAbove = extLines.filter { it.belongsTo(r) && it.topY < r.y - LINE_HALF_CLEAR }
+                .map { Box(it.x - LINE_HALF_CLEAR + pad, it.topY, it.x + LINE_HALF_CLEAR - pad, r.y - LINE_HALF_CLEAR) }
+            val insideObstacles = if (r.overhangs && !r.inline) foreign + ownAbove else foreign
+            // Outside its span a value must clear its own extension lines too — and must not take
+            // the spot a not-yet-placed floating neighbour on the same rail sits in over its own
+            // span, or the step outside just moves the collision onto that neighbour.
+            val neighbourHomes = rows.indices
+                .filter { j -> j != i && j !in placedIdx && !rows[j].inline && abs(rows[j].y - r.y) < 0.5f }
+                .map { j ->
+                    val o = rows[j]
+                    val c = o.mid.coerceIn(o.lo, o.hi)
+                    val t = o.y - metrics.aboveDy + metrics.ascent
+                    Box(c - o.half, t, c + o.half, t + metrics.height)
+                }
+            val outsideObstacles = foreign + extLines.filter { it.belongsTo(r) }.map { it.box() } + neighbourHomes
 
-            var top = if (r.inline) r.y - metrics.height * 0.5f else r.y - metrics.aboveDy + metrics.ascent
-            var bottom = top + metrics.height
-            var cx = clearCenter(r, top, bottom, obstacles, pad)
+            val outGap = textPad + if (arrowsPointInward(r.xa, r.xb, r.inline, arrowSize)) 0f else arrowSize
+            val rightLo = r.xb + outGap + r.half
+            val rightHi = min(rightLo + OUTSIDE_REACH, contentRight - r.half)
+            val leftHi = min(r.xa - outGap - r.half, contentRight - r.half)
+            val leftLo = max(leftHi - OUTSIDE_REACH, contentLeft + r.half)
+
+            val homeTop = if (r.inline) r.y - metrics.height * 0.5f else r.y - metrics.aboveDy + metrics.ascent
+
+            // The leader a value at (cxL, topL) needs, and whether it reaches its line clear of
+            // every value already placed. None for a value in its break or at home over its span.
+            fun leaderAt(cxL: Float, topL: Float): Pair<RailValueLeader?, Boolean> {
+                if (r.inline) return null to true
+                val beside = cxL > r.xb || cxL < r.xa
+                val lifted = topL < homeTop - LIFT_EPS
+                if (!beside && !lifted) return null to true
+                val nearEdge = topL + metrics.height
+                val preferred = railValueLeader(r.xa, r.xb, cxL, arrowSize, r.y, nearEdge, r.half)
+                    ?: return null to true
+                if (placedLabels.none { leaderHits(preferred, it) }) return preferred to true
+                // Slide the landing point along the span until the stroke clears the values in
+                // its way — the label stays where it was placed; only where it lands moves.
+                val inTheWay = placedLabels.filter { it.top < r.y && it.bottom > nearEdge }
+                val landings = inTheWay
+                    .flatMap { listOf(it.left - LEADER_CLEAR, it.right + LEADER_CLEAR) }
+                    .sortedBy { abs(it - preferred.x) }
+                for (x in landings) {
+                    val l = railValueLeader(r.xa, r.xb, cxL, arrowSize, r.y, nearEdge, r.half, anchorX = x)
+                        ?: continue
+                    if (placedLabels.none { leaderHits(l, it) }) return l to true
+                }
+                return preferred to false
+            }
+
+            // The best spot at one height: over the span, else just outside it (floating only).
+            // An outside spot whose leader could not reach the span without crossing a value is
+            // no spot at all — the value would read as the value it crosses.
+            fun spotAt(top: Float, bottom: Float): Float? {
+                clearCenter(r.lo, r.hi, r.mid.coerceIn(r.lo, r.hi), r.half, top, bottom, insideObstacles, pad)
+                    ?.let { return it }
+                if (r.inline) return null
+                if (rightLo <= rightHi) {
+                    clearCenter(rightLo, rightHi, rightLo, r.half, top, bottom, outsideObstacles, pad)
+                        ?.let { if (leaderAt(it, top).second) return it }
+                }
+                if (leftLo <= leftHi) {
+                    clearCenter(leftLo, leftHi, leftHi, r.half, top, bottom, outsideObstacles, pad)
+                        ?.let { if (leaderAt(it, top).second) return it }
+                }
+                return null
+            }
+
+            var top = homeTop
+            var cx = spotAt(top, top + metrics.height)
 
             if (cx == null && !r.inline) {
-                // No horizontal escape at this height — bump the floating label up a band at
-                // a time, bounded, never past the content top.
-                var bumps = 0
-                while (cx == null && bumps < MAX_BUMPS) {
-                    top -= metrics.band
-                    bottom -= metrics.band
-                    if (top < safeTopY) {
-                        val shift = safeTopY - top
-                        top += shift
-                        bottom += shift
+                // No spot at its own height — bump the floating label up a band at a time,
+                // bounded and never past the content top. First only while it stays in its own
+                // rail's band. A value that fits nowhere there prints at home — unless home
+                // would set it on top of another VALUE, the one outcome worse than a value away
+                // from its rail; only then may the bump climb past the band.
+                val homeCx = r.mid.coerceIn(r.lo, r.hi)
+                val homeBox = Box(homeCx - r.half, homeTop, homeCx + r.half, homeTop + metrics.height)
+                val homeHitsValue = placedLabels.any { it.intersects(homeBox) }
+                for (ownBandOnly in if (homeHitsValue) listOf(true, false) else listOf(true)) {
+                    var bumps = 0
+                    var t = homeTop
+                    while (cx == null && bumps < MAX_BUMPS) {
+                        val next = max(t - metrics.band, safeTopY)
+                        if (next >= t) break
+                        t = next
+                        bumps++
+                        val spot = spotAt(t, t + metrics.height) ?: continue
+                        val box = Box(spot - r.half, t, spot + r.half, t + metrics.height)
+                        if (ownBandOnly && !bumpStaysOwn(box, r.y, rows, i)) break
+                        cx = spot
+                        top = t
                     }
-                    cx = clearCenter(r, top, bottom, obstacles, pad)
-                    bumps++
+                    if (cx != null) break
                 }
             }
-            // Best effort: an unresolvable label still prints, centered on its span.
+            // Best effort: an unresolvable label still prints at its own rail, centered on its span.
             val finalCx = cx ?: r.mid.coerceIn(r.lo, r.hi)
-            val box = Box(finalCx - r.half, top, finalCx + r.half, bottom)
+            val box = Box(finalCx - r.half, top, finalCx + r.half, top + metrics.height)
+            val leader = leaderAt(finalCx, top).first
             placedLabels += box
+            leader?.let { placedLeaders += leaderBox(it) }
+            placedIdx += i
             result[i] = Placement(
                 inline = r.inline,
                 cx = finalCx,
                 railY = r.y,
                 arrowsInward = arrowsPointInward(r.xa, r.xb, r.inline, arrowSize),
                 label = box,
+                leader = leader,
             )
         }
 
@@ -340,6 +461,50 @@ object DimensionRailLayout {
         arrowClear: Float = ARROW_CLEAR,
     ): Boolean = seatsInBreak || (xb - xa) >= 2f * arrowSize + arrowClear
 
+    /** How far above its home height a floating value must sit to count as lifted off its line. */
+    private const val LIFT_EPS: Float = 0.5f
+
+    /** Clearance a leader keeps from a value it passes, each side. */
+    private const val LEADER_CLEAR: Float = 2f
+
+    /** A leader's bounding box, as the obstacle later values keep clear of. */
+    private fun leaderBox(l: RailValueLeader): Box = Box(
+        min(l.fromX, l.x) - LINE_HALF_CLEAR,
+        min(l.fromY, l.toY),
+        max(l.fromX, l.x) + LINE_HALF_CLEAR,
+        max(l.fromY, l.toY),
+    )
+
+    /**
+     * True when the leader's stroke passes through [b] grown by [LEADER_CLEAR] — the exact
+     * segment, not its bounding box, so a slanted leader is not refused for a value that only
+     * sits in its box's empty corner (Liang–Barsky clip).
+     */
+    private fun leaderHits(l: RailValueLeader, b: Box): Boolean {
+        val e = b.expanded(LEADER_CLEAR, LEADER_CLEAR)
+        val dx = l.x - l.fromX
+        val dy = l.toY - l.fromY
+        val p = floatArrayOf(-dx, dx, -dy, dy)
+        val q = floatArrayOf(l.fromX - e.left, e.right - l.fromX, l.fromY - e.top, e.bottom - l.fromY)
+        var t0 = 0f
+        var t1 = 1f
+        for (k in 0..3) {
+            if (p[k] == 0f) {
+                if (q[k] <= 0f) return false
+            } else {
+                val t = q[k] / p[k]
+                if (p[k] < 0f) {
+                    if (t > t1) return false
+                    if (t > t0) t0 = t
+                } else {
+                    if (t < t0) return false
+                    if (t < t1) t1 = t
+                }
+            }
+        }
+        return t0 < t1
+    }
+
     private class Row(
         val inline: Boolean,
         val y: Float,
@@ -349,6 +514,8 @@ object DimensionRailLayout {
         val hi: Float,
         val xa: Float,
         val xb: Float,
+        /** The value is wider than its own span's slide window, so it overhangs the span's ends. */
+        val overhangs: Boolean,
     )
 
     /**
@@ -390,11 +557,31 @@ object DimensionRailLayout {
     }
 
     /**
-     * The label center nearest the span's midpoint, inside `[lo, hi]`, that clears every
-     * obstacle overlapping the candidate's vertical band. Null when the band is fully blocked.
+     * True when a BUMPED label [box] still reads with its own rail (line at [ownY]): no other
+     * rail's line under it horizontally lies between the label and its own line, or sits nearer
+     * to the label's centre than its own line does.
+     */
+    private fun bumpStaysOwn(box: Box, ownY: Float, rows: List<Row>, self: Int): Boolean {
+        val cy = (box.top + box.bottom) * 0.5f
+        val ownDist = ownY - cy
+        return rows.indices.none { j ->
+            val o = rows[j]
+            j != self &&
+                o.y < ownY - LINE_HALF_CLEAR &&
+                o.xb > box.left && o.xa < box.right &&
+                (o.y > box.top - LINE_HALF_CLEAR || (cy - o.y) < ownDist)
+        }
+    }
+
+    /**
+     * The label center nearest [wanted], inside `[lo, hi]`, that clears every obstacle
+     * overlapping the candidate's vertical band. Null when the band is fully blocked.
      */
     private fun clearCenter(
-        r: Row,
+        lo: Float,
+        hi: Float,
+        wanted: Float,
+        half: Float,
         top: Float,
         bottom: Float,
         obstacles: List<Box>,
@@ -404,10 +591,10 @@ object DimensionRailLayout {
         // The rest forbid an open interval of centers.
         val forbidden = obstacles
             .filter { it.top < bottom + pad && top - pad < it.bottom }
-            .map { it.left - r.half - pad to it.right + r.half + pad }
+            .map { it.left - half - pad to it.right + half + pad }
             .sortedBy { it.first }
 
-        if (forbidden.isEmpty()) return r.mid.coerceIn(r.lo, r.hi)
+        if (forbidden.isEmpty()) return wanted
 
         val merged = mutableListOf<Pair<Float, Float>>()
         for (iv in forbidden) {
@@ -420,15 +607,14 @@ object DimensionRailLayout {
         }
 
         fun allowed(x: Float): Boolean =
-            x >= r.lo && x <= r.hi && merged.none { x > it.first && x < it.second }
+            x >= lo && x <= hi && merged.none { x > it.first && x < it.second }
 
-        val wanted = r.mid.coerceIn(r.lo, r.hi)
         if (allowed(wanted)) return wanted
 
         var best = Float.NaN
         for (iv in merged) {
             for (candidate in listOf(iv.first, iv.second)) {
-                val c = candidate.coerceIn(r.lo, r.hi)
+                val c = candidate.coerceIn(lo, hi)
                 if (!allowed(c)) continue
                 if (best.isNaN() || abs(c - wanted) < abs(best - wanted)) best = c
             }

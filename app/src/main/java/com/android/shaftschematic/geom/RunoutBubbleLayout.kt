@@ -235,6 +235,9 @@ fun apportionStations(runLengthsMm: List<Float>, total: Int): List<Int> {
     return out
 }
 
+/** Float slop when a broken body's station lands on a visible piece's end (output units). */
+private const val PIECE_EDGE_EPS_X = 1e-3f
+
 /** A component span eligible for runout stations, in physical mm. */
 data class RunoutComponentSpan(
     val id: String,
@@ -270,7 +273,13 @@ data class RunoutStationX(
  *   hand-sheet mapping, physical spacing bunches into the foreshortened run; drawn-even
  *   placement keeps the sheet readable. When the caller has no inverse ([mmAtX] = null),
  *   bodies fall back to the same rule in physical mm ([runoutStationPositionsMm], identical
- *   under a linear mapping).
+ *   under a linear mapping). A run the sheet cuts with an S-break ([bodyBreakGapsX] — the
+ *   paper gaps, widened by [breakGapClearX]) spreads its derived stations the same way over
+ *   its DRAWN length only: the visible pieces either side of the gap, laid end to end, so no
+ *   leader ends on blank paper and the spacing stays even (on-device reports: the middle of an
+ *   odd count sat in the centred gap; snapping it to the gap edge put it on its neighbour's
+ *   anchor). A station that lands exactly on a piece boundary takes the AFT piece's end. The
+ *   placement is monotone in x, so derived stations keep their AFT→FWD order.
  *
  * [placements] overrides the derived position of any station the user has dragged. An
  * authored position wins over every rule above — it is a typed input in the golden-rule sense,
@@ -286,8 +295,48 @@ fun collectRunoutStations(
     xAtMm: (Float) -> Float,
     mmAtX: ((Float) -> Float)? = null,
     placements: RunoutStationPlacements = RunoutStationPlacements(),
+    bodyBreakGapsX: List<ClosedFloatingPointRange<Float>> = emptyList(),
+    breakGapClearX: Float = 0f,
 ): List<RunoutStationX> {
     val out = mutableListOf<RunoutStationX>()
+
+    /**
+     * The drawn x of [count] derived body stations on the run `[x0, x1]`: equal gaps, ends
+     * included, over the run's visible length — the widened break gaps inside the run are
+     * skipped. A run with no gap inside it gets exactly `x0 + k · (x1 − x0) / (count + 1)`.
+     */
+    fun drawnEvenBodyXs(x0: Float, x1: Float, count: Int): List<Float> {
+        val lo = minOf(x0, x1); val hi = maxOf(x0, x1)
+        val cuts = bodyBreakGapsX
+            .map { maxOf(lo, it.start - breakGapClearX)..minOf(hi, it.endInclusive + breakGapClearX) }
+            .filter { it.endInclusive > it.start && it.start < hi && it.endInclusive > lo }
+            .sortedBy { it.start }
+        val plain = { List(count) { i -> x0 + (i + 1f) * (x1 - x0) / (count + 1) } }
+        if (cuts.isEmpty()) return plain()
+
+        // Visible pieces of the run, AFT→FWD in ascending x.
+        val pieces = ArrayList<ClosedFloatingPointRange<Float>>()
+        var cursor = lo
+        for (c in cuts) {
+            if (c.start > cursor) pieces.add(cursor..c.start)
+            cursor = maxOf(cursor, c.endInclusive)
+        }
+        if (hi > cursor) pieces.add(cursor..hi)
+        val visible = pieces.sumOf { (it.endInclusive - it.start).toDouble() }.toFloat()
+        if (visible <= 0f) return plain()
+
+        val ascending = List(count) { i ->
+            var remaining = (i + 1f) * visible / (count + 1)
+            var x = pieces.last().endInclusive
+            for (pc in pieces) {
+                val len = pc.endInclusive - pc.start
+                if (remaining <= len + PIECE_EDGE_EPS_X) { x = pc.start + minOf(remaining, len); break }
+                remaining -= len
+            }
+            x
+        }
+        return if (x1 >= x0) ascending else ascending.reversed()
+    }
 
     // Group by component id FIRST: a body split by liners arrives as several runs sharing one
     // id, and it is one component to the user — one carousel name, one station-editor row, one
@@ -320,8 +369,7 @@ fun collectRunoutStations(
             if (kind == RunoutComponentKind.BODY && mmAtX != null) {
                 val x0 = xAtMm(span.startMm)
                 val x1 = xAtMm(span.startMm + span.lengthMm)
-                repeat(runCount) { i ->
-                    val xs = x0 + (i + 1f) * (x1 - x0) / (runCount + 1)
+                drawnEvenBodyXs(x0, x1, runCount).forEach { xs ->
                     stations.add(RunoutStationX(id, mmAtX(xs), xs, stationIndex = nextIndex++))
                 }
             } else {

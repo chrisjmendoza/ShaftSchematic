@@ -87,6 +87,7 @@ import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.PlacedRunoutBubble
 import com.android.shaftschematic.geom.RunoutBubbleGeometry
@@ -101,12 +102,15 @@ import com.android.shaftschematic.geom.planRunoutBubbles
 import com.android.shaftschematic.geom.runoutComponentOriginMm
 import com.android.shaftschematic.geom.runoutComponentSpanMm
 import com.android.shaftschematic.model.COUPLING_PILOT_COMPONENT_ID
+import com.android.shaftschematic.model.RunoutReading
+import com.android.shaftschematic.geom.clockTickLabel
 import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.model.RunoutReadings
 import com.android.shaftschematic.model.RunoutStationPlacements
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.collidingIds
 import com.android.shaftschematic.pdf.composeRunoutPdf
+import com.android.shaftschematic.pdf.runoutSheetMaxShaftHeightPt
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.settings.RunoutConfig
 import com.android.shaftschematic.settings.TirDirection
@@ -123,6 +127,7 @@ import com.android.shaftschematic.ui.resolved.ResolvedLiner
 import com.android.shaftschematic.ui.resolved.ResolvedTaper
 import com.android.shaftschematic.ui.resolved.runoutComponentSpans
 import com.android.shaftschematic.util.DisplayUnits
+import com.android.shaftschematic.util.formatRunoutValue
 import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.FractionStyle
 import com.android.shaftschematic.util.OutputFont
@@ -265,7 +270,7 @@ fun RunoutRoute(
     val gate = remember(spec, collidingIds) { exportPdfGate(spec, collidingIds) }
 
     val outputFilename =
-        buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.RUNOUT, blankDraft)
+        buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.RUNOUT, blankDraft, currentDocumentName)
 
     // "Shaft height" / "Liner compression" slider inputs. The classic sheet honors both
     // (`config.heightScale`, `config.linerMinFracOfTrue`) exactly as the consolidated one
@@ -274,6 +279,8 @@ fun RunoutRoute(
     val heightSliderBase = remember(spec, heightSliderDiaMm, curveLoHeightIn, curveHiHeightIn) {
         runoutHeightSliderBase(spec, heightSliderDiaMm, curveLoHeightIn, curveHiHeightIn)
     }
+    // Filled by the preview's render loop — the sheet's own answer, `Float.MAX_VALUE` until then.
+    var heightCapPt by remember { mutableFloatStateOf(Float.MAX_VALUE) }
 
     /** The runout tab's one document: the classic standalone runout sheet. */
     fun composeClassicRunout(
@@ -421,6 +428,22 @@ fun RunoutRoute(
             previewBitmap = bmp?.asImageBitmap()
             if (!inputs.draft) previewInkBand = band
             previewLoading = false
+            // The tallest this sheet draws the shaft, for the preview's height slider — re-solved
+            // on sharp passes only (a drag frame keeps the last answer).
+            if (!inputs.draft) {
+                heightCapPt = withContext(Dispatchers.Default) {
+                    runoutSheetMaxShaftHeightPt(
+                        spec = inputs.spec, config = inputs.config, project = inputs.project,
+                        unit = inputs.unit, displayUnits = inputs.displayUnits, pdfPrefs = prefsSnapshot,
+                        resolvedComponents = inputs.resolved,
+                        lineThicknessScale = inputs.lineThicknessScale,
+                        runoutReadings = inputs.readings,
+                        runoutStationPlacements = inputs.stationPlacements,
+                        blankValues = inputs.blankValues,
+                        consolidated = false,
+                    )
+                }
+            }
         }
     }
 
@@ -617,6 +640,8 @@ fun RunoutRoute(
                         componentId = it.componentId,
                         stationIndex = it.stationIndex,
                         previousMm = it.previousPinMm,
+                        countAtMove = entries.firstOrNull { e -> e.id == it.componentId }
+                            ?.let { e -> stationCountFor(e, runoutConfig.componentOverrides) },
                     )
                 }
             }
@@ -829,8 +854,9 @@ fun RunoutRoute(
         }
         // −/+ on the selection, only while Move mode is on. Same count and same − rule as
         // the station editor's rows, and the same ViewModel calls; after either the component
-        // stays selected but its station drops, because the change renumbers its stations.
-        // "Undo move" is left alone — it is move-only, and the session Undo covers −/+.
+        // stays selected but its station drops, because the change renumbers its stations —
+        // which is also why either one retires that component's "Undo move": the stored index
+        // may now name a different bubble (the session Undo covers −/+).
         if (moveMode) {
             val selectedEntry = liveSelection?.let { sel ->
                 entries.firstOrNull { it.id == sel.componentId }
@@ -846,12 +872,14 @@ fun RunoutRoute(
                     if (selectedEntry != null && selectedCount != null) {
                         vm.removeRunoutStation(selectedEntry.id, selectedCount)
                         moveSelection = selectionAfterCountChange(moveSelection)
+                        lastBubbleMove = lastBubbleMove.retiredBy(selectedEntry.id)
                     }
                 },
                 onAdd = {
                     if (selectedEntry != null && selectedCount != null) {
                         vm.addRunoutStation(selectedEntry.id, selectedCount)
                         moveSelection = selectionAfterCountChange(moveSelection)
+                        lastBubbleMove = lastBubbleMove.retiredBy(selectedEntry.id)
                     }
                 },
             )
@@ -871,8 +899,16 @@ fun RunoutRoute(
             )
             // Appears only after a committed drag: one tap puts the moved bubble back
             // where it was (a first drag undoes to derived, un-pinning just that
-            // station — no other bubble is touched).
-            lastBubbleMove?.let { move ->
+            // station — no other bubble is touched). Hidden once the component's station
+            // count differs from the one the drag was made at (a −/+ here, or a session
+            // Undo/Redo of one): the stored index may then name a different bubble.
+            lastBubbleMove?.takeIf { move ->
+                undoMoveStillApplies(
+                    move.countAtMove,
+                    entries.firstOrNull { it.id == move.componentId }
+                        ?.let { stationCountFor(it, runoutConfig.componentOverrides) },
+                )
+            }?.let { move ->
                 TextButton(
                     onClick = {
                         if (move.previousMm == null) {
@@ -923,6 +959,17 @@ fun RunoutRoute(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                // The tab draws no end view, so the entered pilot reading is shown here — the
+                // only place to check it without reopening the dialog or previewing the sheet.
+                pilotRunoutSummary(
+                    runoutReadings.find(COUPLING_PILOT_COMPONENT_ID, 0), unit,
+                )?.let { summary ->
+                    Text(
+                        summary,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.testTag("runout_pilot_summary"),
+                    )
+                }
             }
             TextButton(
                 enabled = runoutConfig.showCouplingFace,
@@ -983,8 +1030,15 @@ fun RunoutRoute(
             entries = entries,
             overrides = runoutConfig.componentOverrides,
             placements = stationPlacements,
-            onIncrement = { entry, count -> vm.addRunoutStation(entry.id, count) },
-            onDecrement = { entry, count -> vm.removeRunoutStation(entry.id, count) },
+            // A count change renumbers the component's stations, so it retires its "Undo move".
+            onIncrement = { entry, count ->
+                vm.addRunoutStation(entry.id, count)
+                lastBubbleMove = lastBubbleMove.retiredBy(entry.id)
+            },
+            onDecrement = { entry, count ->
+                vm.removeRunoutStation(entry.id, count)
+                lastBubbleMove = lastBubbleMove.retiredBy(entry.id)
+            },
             // Resets also drop the "Undo move" chip: undoing a drag onto a component the
             // user just returned to derived would silently re-author it.
             onResetPositions = { id ->
@@ -1033,9 +1087,14 @@ fun RunoutRoute(
             Text(
                 text = "Runout Sheet",
                 style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(start = 4.dp),
+                // Weighted so the actions are measured first: on a phone the title yields
+                // (ellipsized) rather than squeezing the trailing icons to nothing.
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 4.dp).weight(1f),
             )
-            Spacer(Modifier.weight(1f))
+            // The document's ONE history — this tab's edits are steps in it too.
+            UndoRedoButtons(vm, tagPrefix = "runout")
             IconButton(
                 onClick = onSave,
                 modifier = Modifier.testTag("toolbar_save"),
@@ -1151,6 +1210,7 @@ fun RunoutRoute(
                     showHeightSlider = true,
                     heightScale = runoutConfig.heightScale,
                     heightSliderBase = heightSliderBase,
+                    heightSliderMaxDrawnPt = heightCapPt,
                     heightSliderMaxDiaMm = heightSliderDiaMm,
                     showLinerCompression = true,
                     linersProportional = runoutConfig.linersProportional,
@@ -1184,6 +1244,22 @@ fun RunoutRoute(
             },
             onDismiss = { editingBubble = null },
         )
+    }
+}
+
+/**
+ * The coupling-face row's line for an entered pilot reading — "Pilot runout: .003 in · high spot
+ * 3:00", in the bubble's own 3-decimal format — or null when nothing is entered.
+ */
+internal fun pilotRunoutSummary(reading: RunoutReading?, unit: UnitSystem): String? {
+    if (reading == null) return null
+    val value = reading.valueMm?.let { "${formatRunoutValue(it, unit)} ${abbr(unit)}" }
+    val spot = reading.highSpotHalfHours?.let { "high spot ${clockTickLabel(it)}" }
+    return when {
+        value != null && spot != null -> "Pilot runout: $value · $spot"
+        value != null -> "Pilot runout: $value"
+        spot != null -> "Pilot runout: $spot"
+        else -> null
     }
 }
 
@@ -1310,7 +1386,21 @@ private data class LastBubbleMove(
     val stationIndex: Int,
     /** Pre-drag pin, or null when the station was derived (undo un-pins it). */
     val previousMm: Float?,
+    /** The component's station count when the drag committed; null if it was not listed. */
+    val countAtMove: Int?,
 )
+
+/** This move, or null when a station-count change on [componentId] has retired it. */
+private fun LastBubbleMove?.retiredBy(componentId: String): LastBubbleMove? =
+    this?.takeUnless { it.componentId == componentId }
+
+/**
+ * Whether "Undo move" may still act: only while the moved component's station count is the
+ * one the drag was made at. A different count — or a component no longer listed — means its
+ * stations were renumbered, and the stored index could un-pin a different bubble.
+ */
+internal fun undoMoveStillApplies(countAtMove: Int?, currentCount: Int?): Boolean =
+    countAtMove != null && currentCount == countAtMove
 
 /**
  * Invert the Canvas `graphicsLayer` transform — scale about the centre pivot, then translate —

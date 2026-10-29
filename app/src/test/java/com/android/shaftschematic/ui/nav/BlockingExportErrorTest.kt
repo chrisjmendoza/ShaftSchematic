@@ -5,12 +5,24 @@ import com.android.shaftschematic.model.Liner
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Taper
 import com.android.shaftschematic.model.Threads
+import com.android.shaftschematic.ui.util.overlapExportMessage
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BlockingExportErrorTest {
+
+    /**
+     * A cross-kind overlap refuses export naming the pair, in the warning banner's own words
+     * (`overlapExportMessage` — "Can't export: FWD Liner overlaps AFT Taper").
+     */
+    private fun assertNamedOverlap(spec: ShaftSpec) {
+        val error = blockingExportError(spec)
+        assertEquals(overlapExportMessage(spec), error)
+        assertTrue(error!!.startsWith("Can't export: ") && error.contains(" overlaps "))
+    }
 
     @Test
     fun `clean spec returns null`() {
@@ -97,7 +109,7 @@ class BlockingExportErrorTest {
                 Liner(id = "l1", startFromAftMm = 250f, lengthMm = 200f, odMm = 95f)
             )
         )
-        assertEquals("Overlaps another component", blockingExportError(spec))
+        assertNamedOverlap(spec)
     }
 
     @Test
@@ -111,7 +123,7 @@ class BlockingExportErrorTest {
                 Threads(id = "t1", startFromAftMm = 150f, lengthMm = 80f, majorDiaMm = 60f, pitchMm = 2f)
             )
         )
-        assertEquals("Overlaps another component", blockingExportError(spec))
+        assertNamedOverlap(spec)
     }
 
     @Test
@@ -123,7 +135,7 @@ class BlockingExportErrorTest {
                 Taper(id = "tp2", startFromAftMm = 250f, lengthMm = 200f, startDiaMm = 90f, endDiaMm = 70f),
             )
         )
-        assertEquals("Overlaps another component", blockingExportError(spec))
+        assertNamedOverlap(spec)
     }
 
     /** Bodies are fillers, not collision participants — the resolve layer trims them. */
@@ -170,7 +182,7 @@ class BlockingExportErrorTest {
                 Liner(id = "l1", startFromAftMm = 100f, lengthMm = 200f, odMm = 95f)
             )
         )
-        assertEquals("Overlaps another component", blockingExportError(spec))
+        assertNamedOverlap(spec)
     }
 
     @Test

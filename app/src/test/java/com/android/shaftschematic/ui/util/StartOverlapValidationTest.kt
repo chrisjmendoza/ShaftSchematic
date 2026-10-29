@@ -76,7 +76,8 @@ class StartOverlapValidationTest {
             startMm = 50f,
         )
 
-        assertEquals("Overlaps another component", err)
+        // The partner is named by the title its card shows.
+        assertEquals("Overlaps AFT Thread", err)
     }
 
     @Test
@@ -119,7 +120,7 @@ class StartOverlapValidationTest {
             liners = listOf(Liner(id = "l1", startFromAftMm = 100f, lengthMm = 200f, odMm = 90f))
         )
         val err = startOverlapErrorMm(spec, "new", ComponentKind.LINER, 200f, 250f)
-        assertEquals("Overlaps another component", err)
+        assertEquals("Overlaps AFT Liner", err)
     }
 
     @Test
@@ -162,4 +163,87 @@ class StartOverlapValidationTest {
     fun `an unparsed value is deferred to the field's parse check`() {
         assertNull(positiveLengthErrorMm(null))
     }
+
+    /* ── Diameter must be > 0 (carousel card field gate) ─────────────────────── */
+
+    @Test
+    fun `a zero or negative diameter is refused, an unparsed one deferred`() {
+        assertEquals("Must be > 0", positiveDiaErrorMm(0f))
+        assertEquals("Must be > 0", positiveDiaErrorMm(-2f))
+        assertNull(positiveDiaErrorMm(254f))
+        assertNull(positiveDiaErrorMm(null))
+    }
+
+    /* ── The Length field's span check ───────────────────────────────────────── */
+
+    private val twoLiners = ShaftSpec(
+        overallLengthMm = 1000f,
+        liners = listOf(
+            Liner(id = "l1", startFromAftMm = 100f, lengthMm = 200f, odMm = 90f),
+            Liner(id = "l2", startFromAftMm = 500f, lengthMm = 200f, odMm = 90f),
+        ),
+    )
+
+    /** A Length that grows a liner into its neighbour is refused like the same span as a Start. */
+    @Test
+    fun `a length that runs into another liner is refused and names it`() {
+        assertEquals("Overlaps FWD Liner", spanOverlapErrorMm(twoLiners, "l1", ComponentKind.LINER, 100f, 500f))
+        assertNull(spanOverlapErrorMm(twoLiners, "l1", ComponentKind.LINER, 100f, 400f))
+    }
+
+    /** Past the OAL is the bounds warning's job (an OAL shrink makes it legitimately), not this gate's. */
+    @Test
+    fun `a length that only runs past the OAL is not refused`() {
+        val one = twoLiners.copy(liners = twoLiners.liners.take(1))
+        assertNull(spanOverlapErrorMm(one, "l1", ComponentKind.LINER, 100f, 99_999f))
+    }
+
+    @Test
+    fun `several partners are all named, AFT to FWD`() {
+        val three = twoLiners.copy(
+            liners = twoLiners.liners + Liner(id = "l3", startFromAftMm = 800f, lengthMm = 100f, odMm = 90f),
+        )
+        val titles = componentCardTitles(three)
+        assertEquals(
+            "Overlaps ${titles["l2"]}, ${titles["l3"]}",
+            spanOverlapErrorMm(three, "l1", ComponentKind.LINER, 100f, 850f),
+        )
+    }
+
+    @Test
+    fun `a user label is the name a message uses`() {
+        val labelled = twoLiners.copy(liners = listOf(twoLiners.liners[0], twoLiners.liners[1].copy(label = "Stern seal")))
+        assertEquals("Overlaps Stern seal", spanOverlapErrorMm(labelled, "l1", ComponentKind.LINER, 100f, 500f))
+    }
+
+    /** Tapers have no collision group: a taper's overlaps are its card chip's business. */
+    @Test
+    fun `tapers and bodies get no span check`() {
+        assertNull(spanOverlapErrorMm(twoLiners, "t", ComponentKind.TAPER, 0f, 1000f))
+        assertNull(spanOverlapErrorMm(twoLiners, "b", ComponentKind.BODY, 0f, 1000f))
+    }
+
+    /* ── The card chip and the dialogs' inline line ──────────────────────────── */
+
+    private val linerOverTaper = ShaftSpec(
+        overallLengthMm = 1000f,
+        tapers = listOf(Taper(id = "t1", startFromAftMm = 800f, lengthMm = 200f, startDiaMm = 120f, endDiaMm = 100f)),
+        liners = listOf(Liner(id = "l1", startFromAftMm = 700f, lengthMm = 200f, odMm = 130f)),
+    )
+
+    /** The chip names the partner the way its card is titled ("FWD Taper"), not "another component". */
+    @Test
+    fun `the card chip names the partner by card title`() {
+        assertEquals("Overlaps FWD Taper", collisionChipMessage(linerOverTaper, "l1"))
+        assertEquals("Overlaps FWD Liner", collisionChipMessage(linerOverTaper, "t1"))
+        assertNull(collisionChipMessage(twoLiners, "l1"))
+    }
+
+    @Test
+    fun `a proposed span names what it would overlap, and a free one nothing`() {
+        assertEquals("Overlaps FWD Taper", proposedSpanOverlapMessage(linerOverTaper, 920f, 80f))
+        assertNull(proposedSpanOverlapMessage(linerOverTaper, 0f, 100f))
+        assertNull("not entered yet", proposedSpanOverlapMessage(linerOverTaper, -1f, 100f))
+    }
 }
+

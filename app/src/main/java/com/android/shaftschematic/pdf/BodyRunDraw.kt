@@ -10,6 +10,7 @@ import com.android.shaftschematic.model.Body
 import com.android.shaftschematic.settings.PDF_SBREAK_THRESHOLD_DEFAULT
 import com.android.shaftschematic.model.KeywaySpan
 import com.android.shaftschematic.ui.resolved.BodyBlend
+import com.android.shaftschematic.ui.resolved.BodyDrawEdges
 import com.android.shaftschematic.ui.resolved.bodyDrawEdges
 import kotlin.math.abs
 import kotlin.math.min
@@ -75,58 +76,24 @@ internal fun drawBodyRunsWithBreaks(
     unfilledBodyIds: Set<String> = emptySet(),
 ) {
     val capPaint = Paint(outline).apply { style = Paint.Style.STROKE }
-    val avoidX = (keywayAvoidSpansMm + boltRowAvoidSpansMm).map {
-        val a = xAt(it.loMm); val b2 = xAt(it.hiMm)
-        minOf(a, b2)..maxOf(a, b2)
-    }
+    val avoidX = breakAvoidRangesX(xAt, keywayAvoidSpansMm, boltRowAvoidSpansMm)
     bodies.forEach { b ->
         if (b.lengthMm <= 0f || b.diaMm <= 0f) return@forEach
         val runFill = if (b.id in unfilledBodyIds) null else fill
         val x0 = xAt(b.startFromAftMm); val x1 = xAt(b.startFromAftMm + b.lengthMm)
         val r = rPx(b.diaMm); val top = cy - r; val bot = cy + r
 
-        val edges = bodyDrawEdges(
-            runId = b.id,
-            runStartMm = b.startFromAftMm,
-            runEndMm = b.startFromAftMm + b.lengthMm,
-            runDiaMm = b.diaMm,
-            blends = blends,
-            xAt = xAt,
-            rAt = { dia -> rPx(dia) },
-            minWidthPx = MIN_BLEND_WIDTH_PT,
+        val plan = bodyRunBreak(
+            b, xAt, rPx, capPaint.strokeWidth, truePtPerMm, breakMinFracOfTrue, blends, avoidX,
         )
+        val edges = plan.edges
         val fx0 = edges.flatX0
         val fx1 = edges.flatX1
-
-        // The break decision stays on the run's FULL drawn width — a blend is a face
-        // detail, not a reason for the body to read as more or less compressed.
-        val bodyLenPt = abs(x1 - x0)
-        val foreshortened = breakForCompression(bodyLenPt, b.lengthMm, truePtPerMm, breakMinFracOfTrue)
-        // A body whose author turned compression off pins at true width, so
-        // `foreshortened` is already false for it — but the long-span trigger fires on
-        // drawn length alone, and 220 pt of true-scale paper is exactly what an opted-out
-        // body is asking to keep. For every compressible body the trigger still fires at
-        // EVERY S-break slider setting, "Never" included: a run eating that much paper is
-        // not hidden compression.
-        val compress = foreshortened || (b.compressOnDrawing && bodyLenPt >= COMPRESS_TRIGGER_PT)
+        val pair = plan.pair
+        val gapCenter = plan.gapCenterX
 
         drawBlendCurvePdf(c, edges.aftCurve, cy, outline, runFill)
         drawBlendCurvePdf(c, edges.fwdCurve, cy, outline, runFill)
-
-        // Break layout first: the gap steers clear of any protected keyway window, any bolt-row
-        // window, AND this run's seal areas (a dashed seal line floating in the paper gap would be nonsense),
-        // and a run with no clear placement falls back to the plain rectangle. The gap is
-        // sized on the flat span, ramp to ramp — seal areas do not shrink it.
-        val flatLenPt = abs(fx1 - fx0)
-        val pair = if (compress) breakPairLayout(
-            runLenPt = flatLenPt,
-            desiredAmplitudePt = r * 0.6f,
-            classicGapPt = min(ZIGZAG_GAP_MAX_PT, 0.25f * flatLenPt),
-            strokeWidthPt = capPaint.strokeWidth,
-        ) else null
-        val gapCenter = pair?.let {
-            breakGapCenter(minOf(fx0, fx1), maxOf(fx0, fx1), it.gapPt, avoidX + edges.sealSpansX)
-        }
 
         if (pair == null || gapCenter == null) {
             // classic rectangle body
@@ -184,4 +151,112 @@ internal fun drawBodyRunsWithBreaks(
             }
         }
     }
+}
+
+/**
+ * One body run's S-break decision: its drawn edges, the break pair's size, and where the gap is
+ * centred — null pair or centre = the run prints as a plain outline. The ONE source for both the
+ * body pass above and the runout bubbles ([bodyRunBreakGapsX]), so a bubble can never be steered
+ * off a gap the sheet does not draw, or onto one it does.
+ */
+internal data class BodyRunBreak(
+    val edges: BodyDrawEdges,
+    val pair: BreakPairLayout?,
+    val gapCenterX: Float?,
+) {
+    /** The drawn paper gap between the two S edges, or null when the run does not break. */
+    val gapX: ClosedFloatingPointRange<Float>?
+        get() {
+            val p = pair ?: return null
+            val cx = gapCenterX ?: return null
+            return (cx - p.gapPt * 0.5f)..(cx + p.gapPt * 0.5f)
+        }
+}
+
+/** The protected keyway and bolt-row windows as drawn-x ranges — the break gap's fixed avoid list. */
+internal fun breakAvoidRangesX(
+    xAt: (Float) -> Float,
+    keywayAvoidSpansMm: List<KeywaySpan>,
+    boltRowAvoidSpansMm: List<KeywaySpan>,
+): List<ClosedFloatingPointRange<Float>> = (keywayAvoidSpansMm + boltRowAvoidSpansMm).map {
+    val a = xAt(it.loMm); val b2 = xAt(it.hiMm)
+    minOf(a, b2)..maxOf(a, b2)
+}
+
+internal fun bodyRunBreak(
+    b: Body,
+    xAt: (Float) -> Float,
+    rPx: (Float) -> Float,
+    strokeWidthPt: Float,
+    truePtPerMm: Float,
+    breakMinFracOfTrue: Float,
+    blends: List<BodyBlend>,
+    avoidX: List<ClosedFloatingPointRange<Float>>,
+): BodyRunBreak {
+    val x0 = xAt(b.startFromAftMm); val x1 = xAt(b.startFromAftMm + b.lengthMm)
+    val r = rPx(b.diaMm)
+    val edges = bodyDrawEdges(
+        runId = b.id,
+        runStartMm = b.startFromAftMm,
+        runEndMm = b.startFromAftMm + b.lengthMm,
+        runDiaMm = b.diaMm,
+        blends = blends,
+        xAt = xAt,
+        rAt = { dia -> rPx(dia) },
+        minWidthPx = MIN_BLEND_WIDTH_PT,
+    )
+    val fx0 = edges.flatX0
+    val fx1 = edges.flatX1
+
+    // The break decision stays on the run's FULL drawn width — a blend is a face
+    // detail, not a reason for the body to read as more or less compressed.
+    val bodyLenPt = abs(x1 - x0)
+    val foreshortened = breakForCompression(bodyLenPt, b.lengthMm, truePtPerMm, breakMinFracOfTrue)
+    // A body whose author turned compression off pins at true width, so
+    // `foreshortened` is already false for it — but the long-span trigger fires on
+    // drawn length alone, and 220 pt of true-scale paper is exactly what an opted-out
+    // body is asking to keep. For every compressible body the trigger still fires at
+    // EVERY S-break slider setting, "Never" included: a run eating that much paper is
+    // not hidden compression.
+    val compress = foreshortened || (b.compressOnDrawing && bodyLenPt >= COMPRESS_TRIGGER_PT)
+
+    // Break layout: the gap steers clear of any protected keyway window, any bolt-row window,
+    // AND this run's seal areas (a dashed seal line floating in the paper gap would be
+    // nonsense), and a run with no clear placement falls back to the plain rectangle. The gap
+    // is sized on the flat span, ramp to ramp — seal areas do not shrink it.
+    val flatLenPt = abs(fx1 - fx0)
+    val pair = if (compress) breakPairLayout(
+        runLenPt = flatLenPt,
+        desiredAmplitudePt = r * 0.6f,
+        classicGapPt = min(ZIGZAG_GAP_MAX_PT, 0.25f * flatLenPt),
+        strokeWidthPt = strokeWidthPt,
+    ) else null
+    val gapCenter = pair?.let {
+        breakGapCenter(minOf(fx0, fx1), maxOf(fx0, fx1), it.gapPt, avoidX + edges.sealSpansX)
+    }
+    return BodyRunBreak(edges, pair, gapCenter)
+}
+
+/**
+ * The drawn S-break gaps of [bodies] — exactly the gaps [drawBodyRunsWithBreaks] cuts when handed
+ * the same arguments. The runout sheet steers derived body stations off them: a bubble leader
+ * that ends in the paper gap points at nothing (on-device report).
+ */
+internal fun bodyRunBreakGapsX(
+    bodies: List<Body>,
+    xAt: (Float) -> Float,
+    rPx: (Float) -> Float,
+    outline: Paint,
+    truePtPerMm: Float,
+    breakMinFracOfTrue: Float,
+    blends: List<BodyBlend>,
+    keywayAvoidSpansMm: List<KeywaySpan>,
+    boltRowAvoidSpansMm: List<KeywaySpan>,
+): List<ClosedFloatingPointRange<Float>> {
+    val avoidX = breakAvoidRangesX(xAt, keywayAvoidSpansMm, boltRowAvoidSpansMm)
+    return bodies
+        .filter { it.lengthMm > 0f && it.diaMm > 0f }
+        .mapNotNull { b ->
+            bodyRunBreak(b, xAt, rPx, outline.strokeWidth, truePtPerMm, breakMinFracOfTrue, blends, avoidX).gapX
+        }
 }

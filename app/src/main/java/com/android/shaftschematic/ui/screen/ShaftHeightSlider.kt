@@ -1455,6 +1455,13 @@ internal fun BubbleDropSlider(
  * the sizing-curve scale at the configured anchor heights on the schematic;
  * max(width-fit, curve scale) on the runout/consolidated sheets.
  *
+ * [maxDrawnHeightPt] is the tallest the hosting document will actually draw this job's shaft —
+ * the page budget and any true-scale pins cap it below the band on a crowded sheet
+ * (`runoutSheetMaxShaftHeightPt`). The readout, the "Standard" chip and the track's top all
+ * stop there, so the slider never reads a height the sheet does not print (on-device report: a
+ * bubble sheet read 1.50″ while it drew 1.38″, the top of the track dead travel).
+ * `Float.MAX_VALUE` (the default) = no cap known.
+ *
  * Drag-local value, committed once on release (a per-frame commit would mark the job dirty
  * on every frame); commits near the standard height snap exactly to it; Reset returns to
  * standard.
@@ -1472,10 +1479,11 @@ internal fun ShaftHeightSlider(
     maxDiaMm: Float,
     onCommit: (Float) -> Unit,
     onDrag: (Float?) -> Unit = {},
+    maxDrawnHeightPt: Float = Float.MAX_VALUE,
 ) {
-    fun heightIn(frac: Float) = drawnShaftHeightPt(baseScale, frac, maxDiaMm) / 72f
+    fun heightIn(frac: Float) = minOf(drawnShaftHeightPt(baseScale, frac, maxDiaMm), maxDrawnHeightPt) / 72f
     val minIn = heightIn(PROFILE_HEIGHT_SCALE_MIN)
-    val maxIn = heightIn(PROFILE_HEIGHT_SCALE_MAX)
+    val maxIn = maxOf(heightIn(PROFILE_HEIGHT_SCALE_MAX), minIn + 0.01f)
     val standardIn = heightIn(1f)
 
     var heightDrag by remember { mutableStateOf<Float?>(null) }
@@ -1521,6 +1529,9 @@ internal fun ShaftHeightSlider(
                     "to ${fmtIn(PROFILE_MAX_SHAFT_HEIGHT_PT / 72f)}. The drawing keeps true " +
                     "proportion and narrows instead of overflowing — shrink a long shaft to " +
                     "uncramp the sheet, or grow it for room to write in. Saved with this job."
+            } else if (maxDrawnHeightPt < drawnShaftHeightPt(baseScale, PROFILE_HEIGHT_SCALE_MAX, maxDiaMm)) {
+                "Drawn height of the shaft on paper. With everything else this sheet carries, " +
+                    "the shaft reaches ${fmtIn(maxIn)} at most. Saved with this job."
             } else {
                 "Drawn height of the shaft on paper. This shaft reaches ${fmtIn(maxIn)} at " +
                     "most. Saved with this job."

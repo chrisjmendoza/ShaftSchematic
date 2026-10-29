@@ -125,7 +125,9 @@ Marking — a final sheet must never pass for the original:
     `spec`/`resolvedComponents` come from the final flows and every callback passes the
     target — titled "Final Schematic", under a persistent banner *"Final drawing — the
     original schematic is untouched"* carrying **Reset to original** and **Discard** (both
-    confirm) and the final runout sheet's Print / Export actions. Carousel, add dialogs,
+    confirm; Reset's message says the final drawing's edits are replaced and that Undo brings
+    them back — it is undoable, so it never claims they are lost) and the final runout sheet's
+    Print / Export actions. Carousel, add dialogs,
     preview box, collision badges and warnings work unchanged because they are presentational
     over whatever spec they are handed.
   - The toolbar PDF button opens the preview on the final (`pdfPreview?target=final`), whose

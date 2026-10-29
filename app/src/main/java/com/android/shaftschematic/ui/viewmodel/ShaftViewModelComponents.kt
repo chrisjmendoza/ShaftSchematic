@@ -243,6 +243,8 @@ fun ShaftViewModel.addTaperAt(
      */
     keywayUnit: UnitSystem? = null,
     target: SpecTarget = SpecTarget.ORIGINAL,
+    /** The dialog's Rate mode (`true` = Manual); `null` leaves it to the card's text seeding. */
+    rateManual: Boolean? = null,
 ) {
     val id = newId()
     // Which end is the Small End follows the taper's physical half, judged against the
@@ -275,6 +277,7 @@ fun ShaftViewModel.addTaperAt(
                     keywaySpooned = keywaySpooned,
                     taperRateText = rateText,
                     authoredReference = reference,
+                    taperRateManual = rateManual,
                 )
             ) + split.spec.tapers
         ).withAutoDiaOverridesSurviving(before = s)
@@ -380,6 +383,29 @@ fun ShaftViewModel.updateTaperAuthoredReference(
         s.copy(
             tapers = s.tapers.toMutableList().also { l ->
                 l[index] = old.copy(authoredReference = reference)
+            }
+        )
+    }
+}
+
+/**
+ * Set a taper's Rate mode ([Taper.taperRateManual]) — the card's Auto | Manual chips. Choosing
+ * Auto may carry [syncRateText] (the computed rate) so the stored text matches what the card now
+ * shows; both land in ONE edit, one undo step. Choosing Manual keeps the text as it is.
+ */
+fun ShaftViewModel.setTaperRateMode(
+    index: Int,
+    manual: Boolean,
+    syncRateText: String? = null,
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) = updateSpec(target) { s ->
+    if (index !in s.tapers.indices) s else {
+        val old = s.tapers[index]
+        val text = syncRateText?.takeIf { it.isNotBlank() } ?: old.taperRateText
+        if (old.taperRateManual == manual && old.taperRateText == text) return@updateSpec s
+        s.copy(
+            tapers = s.tapers.toMutableList().also { l ->
+                l[index] = old.copy(taperRateManual = manual, taperRateText = text)
             }
         )
     }
@@ -842,6 +868,25 @@ fun ShaftViewModel.updateBodyShowLabel(
         list = s.bodies, index = index, newValue = show,
         get = { it.showNameOnDrawing },
         copyField = { old, v -> old.copy(showNameOnDrawing = v) },
+        withList = { s.copy(bodies = it) },
+    )
+}
+
+/**
+ * Print/hide this body's own LENGTH as a dimension span on the schematic and the consolidated
+ * sheet, overriding the position default (on at a shaft end, off mid-shaft) either way.
+ * Draw-only, and the same identity-guarded [withItemField] path as [updateBodyShowDia]: one
+ * history step, and a write of the value already stored is a no-op.
+ */
+fun ShaftViewModel.updateBodyShowDimensionRail(
+    index: Int,
+    show: Boolean,
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) = updateSpec(target) { s ->
+    s.withItemField(
+        list = s.bodies, index = index, newValue = show,
+        get = { it.showDimensionRail },
+        copyField = { old, v -> old.copy(showDimensionRail = v) },
         withList = { s.copy(bodies = it) },
     )
 }

@@ -57,7 +57,13 @@
 
 Both tabs share the same shell: outer `Column` with `systemBarsPadding()`, the shared
 `EditorDocumentTitle` strip (`docs/contracts/Navigation.md`), a toolbar `Row` (hamburger + title +
-Save), `HorizontalDivider`, then a vertically-scrollable inner `Column`.
+Undo / Redo + Save + Help), `HorizontalDivider`, then a vertically-scrollable inner `Column`. The
+Undo / Redo pair is the ONE `UndoRedoButtons` (`ui/screen/UndoRedoButtons.kt`) over the document's
+single history — the same pair the Undercut tab, the undercut and wear detail pages and the
+Consolidated Output tab carry (tags `runout_undo`, `wear_undo`, `wear_detail_undo`, `output_undo`,
+`undercut_undo`, `undercut_detail_undo`), so a −/+, a drag, a reading, a pit or a worn section is
+undone on the tab where it was made (emulator QA: only the Schematic tab's History reached them).
+The title ellipsizes rather than squeezing the icons on a phone.
 
 **RunoutRoute additionally pins its preview.** The live canvas + its one-line tap hint sit
 **outside** the scroll region, between the toolbar divider and a second `HorizontalDivider`;
@@ -271,9 +277,13 @@ position state on every document; pinned by `RunoutStationEditorTest`):
   it back to automatic placement rather than freezing it at its old derived spot
   (`LastBubbleMove.previousMm == null`). No other bubble is touched either way. Screen state,
   not persistence: replaced by the next drag, cleared when used or when a reset makes it moot
-  (undoing a drag onto a component just returned to derived would silently re-pin it). The
-  session Undo covers the same edit — this chip is the zero-thought path for "I nudged that by
-  accident".
+  (undoing a drag onto a component just returned to derived would silently re-pin it). It also
+  retires once the moved component's station count changes — a −/+ on that component (Move-mode
+  toolbar or station row) clears it, and the chip shows only while the count equals the one the
+  drag was made at (`LastBubbleMove.countAtMove`, `undoMoveStillApplies`), which covers a session
+  Undo/Redo of a −/+ too: a count change renumbers the stations, and the stored index would
+  un-pin a different bubble. The session Undo covers the same edit — this chip is the
+  zero-thought path for "I nudged that by accident".
 - **Per-row "Reset"** (`runout_reset_positions`) — on a pinned component's station-editor
   row; returns that one component to derived placement.
 - **"Reset all bubble positions"** (`runout_reset_all_positions`) — below the station rows in
@@ -511,6 +521,22 @@ liner's own length so a new card never opens with a warning on a tiny liner.
 
 ---
 
+### Wear detail page — deletes, history, the spot rail
+
+- **Snackbar Undo** (`wear_detail_delete_snackbar`) on the page's two confirm-free deletes:
+  **Clear all pits** (one write, `removeWearPits`; "N pits cleared" → `restoreWearPits` puts the
+  exact pits back at their record indices) and a wear spot's bin ("Wear spot deleted" →
+  `restoreWearSpot`). Both follow `restoreUndercut`: captured before the removal, exact objects at
+  their old index, a no-op when the id is already back, never a history step of their own.
+- **Undo / Redo** in the page's top bar (`wear_detail_undo` / `wear_detail_redo`, the shared
+  `UndoRedoButtons`).
+- **The spot rail** (start → band, band length) is laid out by the printed strip's
+  `layoutWearStripRail`: a value that fits seats in a break in its own segment, otherwise it is
+  centred on its span, and two that would touch take separate rows (above the line, then below).
+  Values use the strip's `formatLenDim` — fractions and `"` in inches (emulator QA: a short spot
+  printed "5.25in3.5in").
+- The canvas's accessibility description names the component kind ("Taper wear detail. …").
+
 ## Wear Pits (interactive "X" markers, 2026-07-21)
 
 The shop hand-marks pits / dye-penetrant failures as little "X"s on the shaft — small for a tiny
@@ -532,6 +558,9 @@ no autosave/snapshot/import/`newDocument` plumbing changed; it all rides `WearRe
 - **Orphans** (component no longer resolves): skipped at the **render layer**, not pruned at decode
   — auto-body/taper ids aren't known to the codec, same as runout readings. (Wear spots ARE pruned
   at decode, against the liner list — pits are deliberately not.)
+- **Auto bodies**: a pit (or Ø reading) on a bare-shaft body follows it through a neighbour's edit
+  — re-keyed, `axialMm` shifted to the same shaft position (see Runout Bubble Editor,
+  "Auto-body keys follow their body").
 
 **ViewModel** (`ShaftViewModel`): `addWearPit(componentId, axialMm, acrossFrac, size)` /
 `removeWearPit(id)` — plain `_wearRecord` updates, no geometry side effects. (A pit's
@@ -756,6 +785,10 @@ through a measurement number ("the lines will not draw where the numbers are").
 - **Editor**: "Worn sections" list on the runout screen + `WornSectionDialog` (S.E.T.
   chips, Distance, Length, up to 6 Ø fields; delete inside the dialog). No carousel card
   and no Add-component dialog — outside the add-dialog-parity invariant, like undercuts.
+  The delete is confirm-free with a snackbar Undo on the Output tab ("Worn section N deleted",
+  `output_delete_snackbar`): `restoreWornSection` puts the exact section (typed Ø list verbatim)
+  back at its index, a no-op when it is already there — the `restoreUndercut` pattern, never a
+  history step of its own.
 - **Blank draft**: boundaries print (they are the write-in areas), values drop — same rule
   as the write-in bubbles.
 ### Consolidation step 5 (2026-08-05, morning review) — Consolidated Output tab, variants, batch export, bubble spread
@@ -862,7 +895,7 @@ Overnight wave (on-device request), three features on the Runout tab:
   The Schematic / Wear / Undercut tabs keep their own hard-wired buttons; the Undercut
   Drawing is deliberately absent from the picker (it authors on its own tab). Filenames
   follow each document's historical suffix via `buildOutputFilename`
-  (`{<DocumentNaming base> | fallback}_{suffix}[_BlankDraft].pdf` — the base is the ONE
+  (`{<DocumentNaming base> | saved document name | fallback}_{suffix}[_BlankDraft].pdf` — the base is the ONE
   `DocumentNaming.suggestedBaseName` builds for the document, `Job - Customer - Vessel - SIDE`
   with every part through `sanitizePart`, joined by `exportPdfFilename`; so the schematic
   exported from its own tab and from Export all share a name and a `/` in a customer name
@@ -889,7 +922,10 @@ Overnight wave (on-device request), three features on the Runout tab:
   `PROFILE_MAX_SHAFT_HEIGHT_PT` = 108 pt ceiling is **absolute** (on-device direction):
   a short shaft whose width-fit would draw taller is capped too — it keeps true
   proportion and simply doesn't span the page width, leaving room for the dimension
-  rails and the rest of the sheet; the page budget caps everything. (Step 4's percentage
+  rails and the rest of the sheet; the page budget caps everything — except that the height
+  floor outranks a blank draft's handwriting pitch, and a budget-capped long shaft still spans
+  the content (`docs/PDF_EXPORT.md` §5.7). The slider's readout and track top stop at the
+  height the sheet really prints (`runoutSheetMaxShaftHeightPt`, §5.7). (Step 4's percentage
   sliders ended their track at a computed `effectiveHeightScaleMax`; that helper is
   **gone** — step 5 replaced it with the value-based slider, which picks a drawn height in
   paper inches and converts back to the stored multiplier via
@@ -937,11 +973,25 @@ consolidated drawing —
   when the slide has no room, and every rail above a floating value lifts by one label
   band. The lift is folded into `railsBlockH` from a prelim linear-map plan —
   inline-vs-floating depends only on drawn width, but the real compressed map needs the
-  budget the lift feeds. See `docs/PDF_EXPORT.md` §5.4.
+  budget the lift feeds — and the **vertical solve** re-plans on the solved map, raising the
+  reservation while the drawn rails would lift more than was reserved (a narrower drawing floats
+  more values; an under-reserved block crushed the OAL rail onto the tier below). A
+  reservation the real map does not use stays, so a sheet that fitted is unchanged. A value
+  too wide for its span prints just outside it on its own rail's band, never nearer another
+  rail's line. See `docs/PDF_EXPORT.md` §5.4.
+- **Blank draft, tight page** — when rails, two bubble rows, the coupling face and the tall
+  write-in footer leave the shaft under the height floor, the footer's handwriting pitch
+  tightens first (`footerBlockMinHeightPt`, rows at 1.7× text), and a budget-capped profile
+  keeps its x axis at the width fit so it spans the content. Before: a Ø11" × 368 1/2" shaft
+  drew 0.2" tall across 40% of the width on the blank Schematic + Runout sheet (Emulator QA;
+  the cause was the budget, not an over-reserved prelim lift — the prelim UNDER-reserved
+  there). Pinned by `RunoutSheetLayoutTest`.
 - **Footer block at the bottom** — the schematic's `drawFooter` itself (made internal;
   ONE implementation for both documents): AFT/FWD taper columns (Rate, L.E.T., S.E.T.,
-  Length, KW incl. spooned note, Threads), work-order center (Customer/Vessel/Job#/Date,
-  bold Side, keyway-clocking note, Body Ø line), blank-draft write-in rules. Replaces
+  Length, KW incl. spooned note, Threads — headed "AFT/FWD Taper" only for the shaft's end
+  tapers, a mid-shaft taper by its label or "Taper"; `docs/PDF_EXPORT.md` §3 "Footer taper
+  columns"), work-order center (Customer/Vessel/Job#/Date, bold Side, keyway-clocking note),
+  blank-draft write-in rules. Replaces
   the sheet's old one-line header. No compression note — the S-break pair on a
   foreshortened body run already says it. The TIR line sits directly above the footer.
 - **Page order:** margin → OAL rail → dim tiers → shaft (compressed, with wear info) →
@@ -1183,6 +1233,34 @@ import/export, and `newDocument` exactly like `runoutConfig`/`wearRecord`.
   whose index no longer maps to a live station — it is simply not drawn (render-time lookup misses)
   and pruned on the next edit. No decode-time drop (station identity needs resolved components +
   overrides, which the codec lacks).
+- **Auto-body keys follow their body.** A bare-shaft body's id is its span
+  (`auto_body_<start>_<end>`), so a neighbour's length or position change re-identifies it. The
+  ORIGINAL spec seam (`ShaftViewModel.updateSpec` → `followAutoBodyKeys`) compares the auto runs
+  before and after the edit (`autoBodyRuns(resolveComponents(..))`, the runout span ids) and, for
+  each old id that vanished, takes as successor the ONE new-id run that overlaps it and overlaps no
+  other vanished run (`autoBodySuccessors`, `geom/AutoBodyRekeyMath.kt`). Every id-keyed
+  collection is renamed in the same undo step — readings, dragged-station placements, the count
+  override, wear pits, wear Ø readings, `WearRecord.stripComponentIds`; component-local `axialMm`
+  values shift by `oldStart − newStart` so each stays at the same shaft position (stored as-is
+  even if that leaves the new span — never clamped); and a body with readings or placements whose
+  derived count would change at the new length gets its OLD count frozen as an override (indices
+  key the readings). A split (component inserted into the gap), a merge (component between two
+  gaps removed), a gap filled completely, or a successor id that already holds stale data maps to
+  nothing — the old keys stay orphaned at render, recoverable by Undo. Typed TIR/Ø values are never
+  touched; explicit bodies (stable ids) never pass through it; loads and undo/redo write the spec
+  directly and are never re-keyed. `unit_overrides` is not re-keyed: its chip exists on explicit
+  cards only.
+- **Promotion and demotion keep the body's keys.** The two explicit actions that swap a body's
+  identity without moving it go through the same seam and the same transform
+  (`bodyIdentitySwaps`, combined with the neighbour-edit successors by `bodyKeySuccessors`, an id
+  either would claim twice pairing nothing): ticking "Explicit body" (`addBodyAt`, a fresh id)
+  maps the vanished auto id to the NEW explicit body whose STORED span equals the run's span; and
+  unticking it / deleting the body (`removeBody`) maps the removed body's id to the NEW auto run
+  that now occupies exactly its stored span. Spans match within `BODY_SPAN_MATCH_EPS_MM` (0.01 mm,
+  the bounds slop). Same ONE undo step, same stale-id skip; the axial shift is zero and a count is
+  frozen only if the body rule derives a different one. An explicit body added over PART of a gap,
+  or a demoted body whose gap merges with bare shaft on either side, matches no span and pairs
+  nothing.
 
 **Dialog interaction** (`RunoutBubbleDialog.kt`): a large bubble Canvas with 24 clock ticks, cardinal
 labels (12/3/6/9), and the keyway slot. Two `pointerInput`s (tap + `detectDragGestures`) map the
@@ -1192,6 +1270,12 @@ field) are ignored. The marker follows the finger until release. Three buttons: 
 working marker + value in place — the marker-removal affordance), **Cancel** (discard, close),
 **Save** (persist via `setRunoutReading`, close; saving with neither value nor marker removes the
 reading). Working state seeds from the stored reading, so reopening shows saved data until edited.
+The seed is the bubble's 3-decimal display, so **Save keeps the STORED TIR while the value field
+is unedited** (`valueForSave`, `util/Parsing.kt`); only an edited field (Clear included) is
+re-parsed (emulator QA: a typed 0.0015" re-saved as 0.002" when only the high spot moved). The same
+rule holds in the wear `Edit Ø reading` dialog and the worn-section dialog (per field — Distance,
+Length and each Ø; an unedited Distance follows a reference switch as its exact re-projection, and
+an unedited Distance + Length keeps the stored canonical start).
 The open bubble, the typed value and the placed marker are `rememberSaveable`, so a tablet
 rotation (an activity recreation) brings the dialog back mid-edit (on-device report: the typed
 TIR and high spot were lost). The dialog is an `ImeResizingAlertDialog` (`DialogImeResize.kt`):
@@ -1342,7 +1426,9 @@ previews' render-inputs records, which is what refreshes the page.
 
 The button opens the **existing** `RunoutBubbleDialog` titled "Coupling pilot", seeded from
 `runoutReadings.find(COUPLING_PILOT_COMPONENT_ID, 0)` and saving through the ordinary
-`vm.setRunoutReading` — the face's value and a station's value are authored identically.
+`vm.setRunoutReading` — the face's value and a station's value are authored identically. The
+tab draws no end view, so an entered pilot reading shows under the row (`pilotRunoutSummary`,
+`runout_pilot_summary`: "Pilot runout: .003 in · high spot 3:00", the bubble's own format).
 
 ---
 
@@ -1363,7 +1449,22 @@ be used for station placement or profile drawing (2026-07-18 fix).
 
 Per component (`runoutStationPositionsMm`):
 - **Bodies:** equal gaps, ends included — `(i + 1) · length / (count + 1)`, so the gap from each
-  face to its nearest station equals the gap between stations. Cell midpoints
+  face to its nearest station equals the gap between stations. **Broken runs space over the
+  drawn length:** on the sheet, a run cut by an S-break spaces its DERIVED stations with the same
+  equal gaps, ends included, over its VISIBLE length only — the pieces either side of the break
+  gap (widened by `BUBBLE_BREAK_CLEAR_PT`, 4 pt), laid end to end and mapped back to drawn x —
+  so no leader ends on blank paper between the two S curves and the spacing stays even. A
+  station that lands exactly on a piece boundary takes the AFT piece's end. (Emulator QA, twice:
+  plain drawn-even spacing put the middle station of an odd count in the centred gap; snapping
+  it to the nearer gap edge then put it on its neighbour's anchor, because the gap can be half
+  the run.) The gaps come from the body pass's own per-run decision (`bodyRunBreak` →
+  `bodyRunBreakGapsX`, `pdf/BodyRunDraw.kt`, the same arguments the profile is drawn with),
+  handed to `collectRunoutStations(bodyBreakGapsX, breakGapClearX)`, so the bubbles cannot
+  steer off a gap the sheet does not cut. An unbroken run keeps plain `k · width / (count + 1)`;
+  a fragmented body still apportions per run and applies the rule only to a run that breaks.
+  The placement is monotone in x — derived stations keep their AFT→FWD order — and a DRAGGED
+  station is never moved (the overlay applies after). The live canvas draws no breaks and passes
+  none. Cell midpoints
   (`(i + 0.5) · length / count`) leave only half a pitch at each face, and on-device the bubbles
   read as crowding the faces the way a liner's inset readings do (ruling 2026-10-23: "they can
   just be evenly spread out without crowding edges"; the hand-drawn sheet spaces them out
@@ -1493,6 +1594,11 @@ ptPerMm     = contentWidth / (drawEndMm − drawStartMm)      (prelim; the compr
 xAt(mm)     = contentLeft + (mm − drawStartMm) × ptPerMm
 ```
 
+The arrows ride `xAt(aftSetMm)` / `xAt(fwdSetMm)` on BOTH layouts — the consolidated rail and the
+classic sheet's raised OAL line. The classic line once took the drawn window's ends
+(`xMap.x0`/`x1`), so on every job with an excluded AFT thread its arrow sat on the thread's end
+and the OAL read as including it (Emulator QA). Pinned by `RunoutSheetLayoutTest`.
+
 **Why:** Measurements on these documents always originate from the SET faces (see `computeSetPositionsInMeasureSpace`), so the arrows bracket the SET-to-SET span regardless of end threads. Threads ARE drawn — hatched envelopes at their physical position, purely for visual reference — and end threads stick out past the arrow tips. Until 2026-10-23 the map spanned the SET window alone and let `xAt` extrapolate the excluded thread into the margin; a 6″ thread at the compressed scale ran past the edge of the page on the consolidated preview (on-device report), so the map now makes room for it. A shaft with no excluded thread maps exactly as before. The wear document keeps its own SET-to-SET span: it draws a thread-end STUB, not the thread's length.
 
 **Layout (2026-07-18):** the runout sheet's OAL dimension line sits `OAL_LINE_SPACE_PT` = 90 pt (≈ 1.25 in) above the shaft top — raised so it doesn't crowd the profile — with witness (extension) lines dropping to the shaft's actual top edge at each SET face (gap 3 pt, extending 5 pt past the line), matching the schematic/wear-document convention.
@@ -1561,7 +1667,13 @@ dimension line below it) — see "Label rule" above.
   deselect). A selection draws an "X" inside its checkbox (`drawWearNotesArea`); the other box
   stays present and blank so the form always reads as the same two-box row. No selection — and
   every blank write-in draft, via `effectiveRecord` — keeps both boxes blank for hand-marking,
-  the original posture. Reference-only: no geometry effect anywhere.
+  the original posture. Reference-only: no geometry effect anywhere. The ONE row builder
+  `drawDyePenBoxes` (the wear notes row and the consolidated "Dye pen test" row) sets a fixed
+  `DYE_PEN_LABEL_GAP_PT` (6 pt) between the label and the first box — trailing spaces in the
+  caller's label are trimmed — so the box never touches the colon (Emulator QA).
+- **A strip's measured-Ø callout band keeps air above the title** — `WEAR_DIA_TITLE_AIR_PT`
+  (4 pt) rides the reserved `diaBandPt`, so the last callout row and the strip title no longer
+  read as one block (Emulator QA). A strip with no callouts is unchanged.
 
 **Layout constants (`WearPdfComposer.kt`):**
 

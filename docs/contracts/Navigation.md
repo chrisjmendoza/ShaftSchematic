@@ -218,15 +218,18 @@ Document title strip (`ui/screen/EditorDocumentTitle.kt`)
   the same behaviour** — there is deliberately no "current tab" branch, so one strip can never
   come to mean different things on different tabs.
 - **Shared rename dialog** (`ui/screen/RenameShaftDocumentDialog.kt`, testTags
-  `rename_doc_field` / `rename_doc_confirm`): used by BOTH the editor's title tap and the Open
-  screen's per-file "Rename" menu item, which is where it came from. It owns the typed name and
-  the storage work — sanitize → `InternalStorage.normalizeShaftDocName` → blank check →
-  same-name check → `exists`-refuses-overwrite → `InternalStorage.rename` — and reports through
-  `onRenamed(toName)` / `onDismiss` / `onError(message)`. The callers own the consequences,
-  which differ: the Open screen refreshes its list and updates the session name when the renamed
-  file was the open one; the editor updates the session name and posts errors to its own
-  `SnackbarHost` (the one `offerRenameAfterQuickSave` uses). `onRenamed` and `onDismiss` are
-  terminal — the caller closes the dialog; `onError` leaves it open over the name to fix.
+  `rename_doc_field` / `rename_doc_confirm` / `rename_doc_refusal`): used by BOTH the editor's
+  title tap and the Open screen's per-file "Rename" menu item, which is where it came from. It
+  owns the typed name and the storage work — sanitize → `InternalStorage.normalizeShaftDocName` →
+  blank check → same-name check → `exists`-refuses-overwrite → `InternalStorage.rename` — and
+  reports through `onRenamed(toName)` / `onDismiss`. The callers own the consequences, which
+  differ: the Open screen refreshes its list and updates the session name when the renamed file
+  was the open one; the editor updates the session name. Both are terminal — the caller closes
+  the dialog. A REFUSAL (blank name, a name another saved shaft already has —
+  `renameTakenMessage`, a failed rename) keeps the dialog open and shows the reason as the name
+  field's error/supporting text, cleared by the next edit; it never goes to a snackbar, which sat
+  behind the dialog and its keyboard (emulator QA: a rename onto a taken name looked like a dead
+  button).
   A rename **never overwrites**, the same posture as the post-save rename offer.
 - **Rename offer after a quick-save.** A document saved before its Job # / Customer / Vessel
   existed keeps whatever name it was first given, so after the editor's quick-save AppNav

@@ -99,6 +99,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -122,8 +123,15 @@ import com.android.shaftschematic.ui.adaptive.currentWindowWidthClass
 import com.android.shaftschematic.ui.adaptive.twoPane
 import com.android.shaftschematic.ui.dialog.InlineAddChooserDialog
 import com.android.shaftschematic.ui.input.shouldCommitOnBlur
+import com.android.shaftschematic.ui.input.FractionKey
+import com.android.shaftschematic.ui.input.LocalFractionKeyEnabled
+import com.android.shaftschematic.ui.input.rememberFieldCursor
+import com.android.shaftschematic.ui.input.NOT_A_NUMBER_REASON
+import com.android.shaftschematic.ui.input.rejectedValueNotice
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.util.exportPdfGate
+import com.android.shaftschematic.ui.util.specIssues
+import com.android.shaftschematic.ui.drawing.render.previewIssueMarks
 import com.android.shaftschematic.ui.viewmodel.SessionAddDefaults
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.PreviewColorSetting
@@ -260,7 +268,7 @@ fun ShaftScreen(
                  rateText: String, reference: LinerAuthoredReference,
                  keywayWidthMm: Float, keywayDepthMm: Float, keywayLengthMm: Float,
                  keywayOffsetFromSetMm: Float, keywaySpooned: Boolean,
-                 keywayUnit: UnitSystem?) -> Unit,
+                 keywayUnit: UnitSystem?, rateManual: Boolean) -> Unit,
     onAddThread: (startMm: Float, lengthMm: Float, majorDiaMm: Float, pitchMm: Float, excludeFromOAL: Boolean,
                   isAftEnd: Boolean, metricDesignation: String?,
                   reliefLenMm: Float, reliefDiaMm: Float, reliefAtAft: Boolean) -> Unit,
@@ -273,6 +281,7 @@ fun ShaftScreen(
     onUpdateBodyShowLabel: (Int, Boolean) -> Unit,
     onUpdateBodyShade: (Int, Boolean) -> Unit = { _, _ -> },
     onUpdateBodyCompressOnDrawing: (Int, Boolean) -> Unit,
+    onUpdateBodyShowDimensionRail: (Int, Boolean) -> Unit = { _, _ -> },
     onUpdateBodyBlend: (index: Int, blendAftMm: Float, blendFwdMm: Float, profile: BlendProfile, sealAft: Boolean, sealFwd: Boolean, sealAftLenMm: Float, sealFwdLenMm: Float) -> Unit,
     onUpdateBodyLabel: (Int, String?) -> Unit,
     onUpdateBodyKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromEndMm: Float, end: LinerAuthoredReference, spooned: Boolean) -> Unit,
@@ -282,6 +291,7 @@ fun ShaftScreen(
     onUpdateTaperShade: (Int, Boolean) -> Unit = { _, _ -> },
     onUpdateTaperKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromSetMm: Float, spooned: Boolean) -> Unit,
     onUpdateTaperReference: (Int, LinerAuthoredReference) -> Unit,
+    onUpdateTaperRateMode: (Int, Boolean, String?) -> Unit = { _, _, _ -> },
     onUpdateThread: (Int, Float, Float, Float, Float, String?) -> Unit,
     onUpdateThreadLabel: (Int, String?) -> Unit,
     onUpdateThreadShowLabel: (Int, Boolean) -> Unit,
@@ -367,6 +377,9 @@ fun ShaftScreen(
     val topBarScope = rememberCoroutineScope()
 
     val collidingComponentIds = remember(spec) { spec.collidingIds() }
+    // The warning banner's problems, drawn on the preview where they are (the banner computes the
+    // same `specIssues` list, so the two always mark and name the same parts).
+    val issueMarks = remember(spec, unit) { previewIssueMarks(specIssues(spec, unit)) }
     val exportPdfGate = remember(spec, collidingComponentIds) {
         exportPdfGate(spec, collidingComponentIds)
     }
@@ -549,6 +562,7 @@ fun ShaftScreen(
                 threadSlant = threadSlant,
                 threadDensity = threadDensity,
                 shadedComponentIds = shadedComponentIds,
+                issueMarks = issueMarks,
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 120.dp, max = previewMaxHeight)
@@ -669,6 +683,7 @@ fun ShaftScreen(
                 onUpdateBodyShowLabel = onUpdateBodyShowLabel,
                 onUpdateBodyShade = onUpdateBodyShade,
                 onUpdateBodyCompressOnDrawing = onUpdateBodyCompressOnDrawing,
+                onUpdateBodyShowDimensionRail = onUpdateBodyShowDimensionRail,
                 onUpdateBodyBlend = onUpdateBodyBlend,
                 onUpdateBodyLabel = onUpdateBodyLabel,
                 onUpdateBodyKeyway = onUpdateBodyKeyway,
@@ -678,6 +693,7 @@ fun ShaftScreen(
                 onUpdateTaperShade = onUpdateTaperShade,
                 onUpdateTaperKeyway = onUpdateTaperKeyway,
                 onUpdateTaperReference = onUpdateTaperReference,
+                onUpdateTaperRateMode = onUpdateTaperRateMode,
                 onUpdateThread = onUpdateThread,
                 onUpdateThreadLabel = onUpdateThreadLabel,
                 onUpdateThreadShowLabel = onUpdateThreadShowLabel,
@@ -734,7 +750,9 @@ fun ShaftScreen(
                     },
                     onAddLiner = {
                         chooserOpen = false
-                        addStartMm = d.startMm
+                        // Seeded where the dialog's own length FITS, so it does not open on an
+                        // overlap while free shaft exists (addStartSeed).
+                        addStartMm = addStartSeed(spec, sessionAddDefaults.linerLenMm).startMm
                         addLengthMm = sessionAddDefaults.linerLenMm
                         addLinerOpen = true
                     },
@@ -745,7 +763,7 @@ fun ShaftScreen(
                     },
                     onAddTaper = {
                         chooserOpen = false
-                        addStartMm = d.startMm
+                        addStartMm = addStartSeed(spec, sessionAddDefaults.taperLenMm).startMm
                         addLengthMm = sessionAddDefaults.taperLenMm
                         addTaperOpen = true
                     },
@@ -852,9 +870,9 @@ fun ShaftScreen(
                     initialLengthMm = addLengthMm,
                     perComponentUnitsEnabled = perComponentUnitsEnabled,
                     dialogUnitConverterEnabled = dialogUnitConverterEnabled,
-                    onSubmit = { s, l, startDia, endDia, rate, ref, kwW, kwD, kwL, kwO, kwSpooned, k180, k90, cw90, kwUnit ->
+                    onSubmit = { s, l, startDia, endDia, rate, ref, kwW, kwD, kwL, kwO, kwSpooned, k180, k90, cw90, kwUnit, rateManual ->
                         addTaperOpen = false
-                        onAddTaper(s, l, startDia, endDia, rate, ref, kwW, kwD, kwL, kwO, kwSpooned, kwUnit)
+                        onAddTaper(s, l, startDia, endDia, rate, ref, kwW, kwD, kwL, kwO, kwSpooned, kwUnit, rateManual)
                         onSetKeyways180Apart(k180)
                         onSetKeyways90Apart(k90)
                         if (k90) onSetKeyways90Cw(cw90)
@@ -878,8 +896,17 @@ fun ShaftScreen(
             }
         }
         val latestSpec by rememberUpdatedState(spec)
+        val latestUnit by rememberUpdatedState(unit)
+        val latestSelectComponent by rememberUpdatedState(onSelectComponentById)
         val warningBanner: @Composable () -> Unit = remember {
-            movableContentOf { SpecWarningBanner(spec = latestSpec) }
+            movableContentOf {
+                // A line's tap takes the preview's selection path, so the carousel follows it.
+                SpecWarningBanner(
+                    spec = latestSpec,
+                    unit = latestUnit,
+                    onSelectComponent = { id -> latestSelectComponent(id) },
+                )
+            }
         }
 
         // [warningSlot] is emitted between the add button and the carousel — where the spec
@@ -1593,8 +1620,10 @@ internal fun oalFieldLabel(unit: UnitSystem, fontScale: Float): String =
  *    (on-device report). See `docs/contracts/ShaftScreen.md`.
  *  • **An empty field commits nothing.** Every accept path on empty text restores the stored
  *    length instead of zeroing the shaft, so clearing the field to retype cannot wipe the OAL.
- *    Unparseable text also commits nothing: ✓/Done leave it as typed (the user is mid-edit),
- *    a blur restores the stored length.
+ *    Unparseable text also commits nothing, and SAYS so: ✓/Done leave it as typed (the user
+ *    is mid-edit) and a blur restores the stored length, both under a
+ *    "<typed> not applied — not a number" line that stays until the text is edited (the
+ *    numeric fields' notice) — a ✓ that did nothing read as a broken button (emulator QA).
  *  • **Oversize is an error STYLE, not a rejection.** A component past the authored length is a
  *    legal, advisory state; the field is only tinted. A not-yet-typed length (0) is not
  *    oversize — the renderer draws to the coverage end until a length is authored.
@@ -1620,6 +1649,7 @@ internal fun OverallLengthField(
     var lenTextOnFocus by remember { mutableStateOf<String?>(null) }
 
     val displayMm = spec.overallLengthMm
+    val oalCursor = rememberFieldCursor()
     var lengthText by remember(unit) {
         mutableStateOf(formatDisplay(displayMm, unit))
     }
@@ -1635,6 +1665,9 @@ internal fun OverallLengthField(
     val isOversized = spec.overallLengthMm > 0f &&
         spec.overallLengthMm < lastOccupiedEndMm(spec)
 
+    // Why the last accept was refused, naming the refused text; cleared by an edit or a cancel.
+    var rejectedNotice by remember { mutableStateOf<String?>(null) }
+
     val focusManager = LocalFocusManager.current
 
     // Being modified = focused AND the text differs from the on-focus baseline. The cleared
@@ -1645,6 +1678,7 @@ internal fun OverallLengthField(
     // Restores the stored length and ends the edit. The baseline moves to the restored text
     // first, so the blur that clearFocus() triggers sees no change and commits nothing.
     fun cancelEdit() {
+        rejectedNotice = null
         val stored = formatDisplay(spec.overallLengthMm, unit)
         lengthText = stored
         lenTextOnFocus = stored
@@ -1660,7 +1694,11 @@ internal fun OverallLengthField(
             cancelEdit()
             return
         }
-        val mm = toMmOrNull(t, unit) ?: return
+        val mm = toMmOrNull(t, unit)
+        if (mm == null) {
+            rejectedNotice = rejectedValueNotice(t, NOT_A_NUMBER_REASON)
+            return
+        }
         onSetOverallLengthMm(mm)
         onSetOverallLengthRaw(t) // keeps the user's display text, fractions included
         lenTextOnFocus = lengthText
@@ -1676,13 +1714,22 @@ internal fun OverallLengthField(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        fun applyLengthEdit(input: TextFieldValue) {
+            if (input.text != lengthText) rejectedNotice = null
+            oalCursor.track(input)
+            lengthText = input.text
+        }
         OutlinedTextField(
-            value = lengthText,
-            onValueChange = { input -> lengthText = input },
+            value = oalCursor.valueFor(lengthText),
+            onValueChange = { input -> applyLengthEdit(input) },
+            trailingIcon = if (hasLenFocus && LocalFractionKeyEnabled.current) {
+                { FractionKey(onClick = { applyLengthEdit(oalCursor.insertBar(lengthText)) }) }
+            } else null,
             label = { Text(oalLabel, maxLines = 1, overflow = TextOverflow.Ellipsis) },
             singleLine = true,
             enabled = true,
-            isError = isOversized,
+            isError = isOversized || rejectedNotice != null,
+            supportingText = rejectedNotice?.let { n -> { Text(n) } },
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Decimal,
                 imeAction = ImeAction.Done
@@ -1714,7 +1761,9 @@ internal fun OverallLengthField(
                         val t = lengthText.trim()
                         val mm = if (t.isEmpty()) null else toMmOrNull(t, unit)
                         if (mm == null) {
-                            // Empty or unparseable: nothing commits, the stored length returns.
+                            // Empty or unparseable: nothing commits, the stored length returns —
+                            // and an unparseable entry is named, so the swap is not silent.
+                            if (t.isNotEmpty()) rejectedNotice = rejectedValueNotice(t, NOT_A_NUMBER_REASON)
                             lengthText = formatDisplay(spec.overallLengthMm, unit)
                         } else {
                             onSetOverallLengthMm(mm)

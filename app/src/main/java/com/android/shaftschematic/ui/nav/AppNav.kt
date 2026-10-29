@@ -374,9 +374,14 @@ fun AppNav(vm: ShaftViewModel) {
                                 val ok = withContext(Dispatchers.IO) {
                                     runCatching { InternalStorage.save(ctx, fileName, json) }.isSuccess
                                 }
+                                // Long, with a dismiss action: the message names the new file,
+                                // which is the only sign the copy was written, and it shows over
+                                // every tab that offers the action (Schematic and Final alike).
                                 editorSnackbarHostState.showSnackbar(
-                                    if (ok) "Created ‘${stripShaftDocExtension(fileName)}’"
-                                    else "Could not create ‘${stripShaftDocExtension(fileName)}’."
+                                    message = if (ok) "Created ‘${stripShaftDocExtension(fileName)}’"
+                                    else "Could not create ‘${stripShaftDocExtension(fileName)}’.",
+                                    withDismissAction = true,
+                                    duration = SnackbarDuration.Long,
                                 )
                             }
                         },
@@ -393,9 +398,6 @@ fun AppNav(vm: ShaftViewModel) {
                             onRenamed = { toName ->
                                 renameDialogOpen = false
                                 vm.setCurrentDocumentName(toName)
-                            },
-                            onError = { message ->
-                                scope.launch { editorSnackbarHostState.showSnackbar(message) }
                             },
                         )
                     }

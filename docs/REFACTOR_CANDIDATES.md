@@ -167,8 +167,8 @@ honest at the "~" level (the drawn height simply stops growing past the pin ceil
 
 ## 5d. Spec-level warnings: pick a UI surface — DONE (banner shipped 2026-08-25)
 
-**What:** `specWarningMessages` (`ui/util/ComponentWarnings.kt`) is pure and unit-tested, and
-the open question was where its spec-level aggregate should show. It is no longer unwired: the
+**What:** the spec-level warnings (now `specIssues`, `ui/util/SpecIssues.kt`) are pure and unit-tested, and
+the open question was where the spec-level aggregate should show. It is no longer unwired: the
 surface is the editor banner, `ui/screen/SpecWarningBanner.kt`, with dismissal keyed to the
 exact warning message set (`ui/util/SpecWarningVisibility.kt`) so a changed set reappears.
 

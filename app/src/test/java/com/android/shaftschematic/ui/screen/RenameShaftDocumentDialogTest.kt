@@ -10,7 +10,7 @@ import org.junit.Test
  *
  * These are the outcomes reached before any storage is touched — a blank name is refused and a
  * name that comes back to the current one is a plain dismissal, neither of them a disk write.
- * The dialog itself is a thin shell over this: [RenameOutcome.Blank] → `onError`,
+ * The dialog itself is a thin shell over this: [RenameOutcome.Blank] → a refusal under the field,
  * [RenameOutcome.Unchanged] → `onDismiss`, [RenameOutcome.Proceed] → the rename attempt, whose
  * own refusal to overwrite lives in `InternalStorage.rename` and is covered by
  * `InternalStorageRenameTest`.

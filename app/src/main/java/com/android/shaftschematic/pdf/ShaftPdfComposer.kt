@@ -41,6 +41,9 @@ import com.android.shaftschematic.ui.resolved.BodyEdgePoint
 import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.bodyBlends
 import com.android.shaftschematic.ui.resolved.bodyDrawEdges
+import com.android.shaftschematic.ui.resolved.effectiveBodyDimensionRail
+import com.android.shaftschematic.ui.drawing.renderSpanSpec
+import com.android.shaftschematic.ui.util.BOUNDS_EPS_MM
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
 import com.android.shaftschematic.ui.resolved.resolvedBodyBaseId
@@ -382,6 +385,8 @@ internal fun composeShaftPdfOnCanvas(
         textPaint = sheetTextPaint(TEXT_PT - 2f),
         blankValues = blank,
         dualStacked = displayUnits.dual && pdfPrefs.dualUnitLayout == DualUnitLayout.STACKED,
+        contentLeft = geomRect.left,
+        contentRight = geomRect.right,
     )
 
     // The global titles switch is the per-component flags' DEFAULT, not a master gate — an
@@ -419,7 +424,7 @@ internal fun composeShaftPdfOnCanvas(
             xAt((dimMm + win.measureStartMm).toFloat())
         }
         val sets = computeSetPositionsInMeasureSpace(win, spec)
-        val spans = buildLinerSpans(
+        val componentDimSpans = buildLinerSpans(
             liners = linerDims,
             sets = sets,
             unit = unit,
@@ -427,6 +432,7 @@ internal fun composeShaftPdfOnCanvas(
             displayUnits = displayUnits,
         ) + buildTaperLengthSpans(spec, win, unit, displayUnits, measureFromMode) +
             buildCouplerSlotSpans(spec, win, unit, displayUnits)
+        val spans = componentDimSpans + buildBodyLengthSpans(spec, win, unit, displayUnits, componentDimSpans)
         val planner = RailPlanner()
         val tierOriginMm = tierOriginMmFor(pdfPrefs.tieringMode, win.oalMm)
         val assignments = planner.assignAll(spans, tierOriginMm)
@@ -535,7 +541,10 @@ internal fun composeShaftPdfOnCanvas(
         val topLift = renderer.topLift(rows(renderer, railGap, 0f))
         val topY = max(computeTopY(railGap) - topLift, contentTopY)
 
-        val plan = renderer.plan(rows(renderer, railGap, topY + topLift), safeTopY = contentTopY)
+        val plan = renderer.plan(
+            rows(renderer, railGap, topY + topLift), safeTopY = contentTopY,
+            contentLeft = geomRect.left, contentRight = geomRect.right,
+        )
         assignments.forEachIndexed { i, rs ->
             renderer.drawPlanned(c, rs.span, plan.placements[i], true)
         }
@@ -919,6 +928,52 @@ internal fun buildCouplerSlotSpans(
         label = formatLenDimDualLabel(distanceMm.toDouble(), displayUnits.unitFor(s.id), displayUnits.dual),
         kind = SpanKind.LOCAL,
     )
+}
+
+/**
+ * One LOCAL length span per explicit body whose length rail is on
+ * ([effectiveBodyDimensionRail] — the card's "Show dimension rail", or while unset the position
+ * default: on at a shaft end, off mid-shaft). The span runs over the body's STORED span and is
+ * labelled with its stored length in the body's own display unit, the way an end taper's length
+ * prints; a rail dimensions the stored span, never a drawn fragment, so a body a liner splits or
+ * an S-break foreshortens still gets ONE span across it. Shared by the schematic and the
+ * consolidated sheet beside [buildTaperLengthSpans]; blank drafts rule the value like every
+ * other span.
+ *
+ * A span the sheet already prints is not printed twice: a body whose stored span coincides
+ * (both ends within the bounds slop) with one of [existing] — the usual case is a liner's datum
+ * rail from the FWD SET to a liner butting an end body — is skipped, and so is a body running
+ * face to face, whose length is the OAL rail's.
+ *
+ * Draw-only: the span changes no geometry, and auto spans never get one.
+ */
+internal fun buildBodyLengthSpans(
+    spec: ShaftSpec,
+    win: com.android.shaftschematic.geom.OalWindow,
+    unit: UnitSystem,
+    displayUnits: DisplayUnits = DisplayUnits.single(unit),
+    existing: List<DimSpan> = emptyList(),
+): List<DimSpan> {
+    val eps = BOUNDS_EPS_MM.toDouble()
+    val shaftEndMm = spec.renderSpanSpec().overallLengthMm
+    fun coincides(lo: Double, hi: Double, s: DimSpan) =
+        abs(min(s.x1Mm, s.x2Mm) - lo) <= eps && abs(max(s.x1Mm, s.x2Mm) - hi) <= eps
+    return spec.bodies.mapNotNull { b ->
+        if (b.lengthMm <= 0f || !effectiveBodyDimensionRail(b, spec)) return@mapNotNull null
+        val endMm = b.startFromAftMm + b.lengthMm
+        val faceToFace = abs(b.startFromAftMm) <= BOUNDS_EPS_MM &&
+            shaftEndMm > 0f && abs(endMm - shaftEndMm) <= BOUNDS_EPS_MM
+        if (faceToFace) return@mapNotNull null
+        val x0 = win.toMeasureX(b.startFromAftMm.toDouble())
+        val x1 = win.toMeasureX(endMm.toDouble())
+        if (existing.any { coincides(min(x0, x1), max(x0, x1), it) }) return@mapNotNull null
+        DimSpan(
+            x0,
+            x1,
+            label = formatLenDimDualLabel(b.lengthMm.toDouble(), displayUnits.unitFor(b.id), displayUnits.dual),
+            kind = SpanKind.LOCAL,
+        )
+    }
 }
 
 

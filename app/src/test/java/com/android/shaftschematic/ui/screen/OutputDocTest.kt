@@ -154,6 +154,45 @@ class OutputDocTest {
     }
 
     @Test
+    fun `a job with no job info is named by its saved document`() {
+        // On-device report: every export of such a job was `Shaft_<doc>.pdf`, so two of them
+        // exported to one folder collided and no file said which shaft it was.
+        assertEquals(
+            "QA_Titan_rebuild_schematic.pdf",
+            buildOutputFilename("", "", "", noSide, OutputDoc.SCHEMATIC, documentName = "QA_Titan_rebuild.shaft"),
+        )
+        assertEquals(
+            "QA_Titan_rebuild_runout_BlankDraft.pdf",
+            buildOutputFilename(
+                "", "", "", ShaftPosition.PORT, OutputDoc.RUNOUT, blankDraft = true,
+                documentName = "QA_Titan_rebuild",
+            ),
+        )
+    }
+
+    @Test
+    fun `the document name is sanitized like every other part`() {
+        assertEquals(
+            "Titan_STBD_ 2_wear.pdf",
+            buildOutputFilename("", "", "", noSide, OutputDoc.WEAR, documentName = "Titan/STBD: 2"),
+        )
+    }
+
+    @Test
+    fun `job info still outranks the document name`() {
+        assertEquals(
+            "C - A - B_consolidated.pdf",
+            buildOutputFilename("A", "B", "C", noSide, OutputDoc.CONSOLIDATED, documentName = "Saved name"),
+        )
+    }
+
+    @Test
+    fun `an unnamed or blank-named document keeps the plain fallback`() {
+        assertEquals("Shaft_schematic.pdf", buildOutputFilename("", "", "", noSide, OutputDoc.SCHEMATIC, documentName = null))
+        assertEquals("Shaft_schematic.pdf", buildOutputFilename("", "", "", noSide, OutputDoc.SCHEMATIC, documentName = "  "))
+    }
+
+    @Test
     fun `side and blank draft compose`() {
         assertEquals(
             "C - A - B - STBD_schematic_BlankDraft.pdf",
@@ -177,5 +216,15 @@ class OutputDocTest {
         assertEquals(false, ConsolidatedVariant.SCHEMATIC_RUNOUT.includeWearInfo)
         assertEquals(false, ConsolidatedVariant.SCHEMATIC_WEAR.includeBubbles)
         assertEquals(true, ConsolidatedVariant.SCHEMATIC_WEAR.includeWearInfo)
+    }
+
+    @Test
+    fun `Export all pre-checks the undercut drawing only for a job with undercuts`() {
+        val without = defaultExportAllChecks(jobHasUndercuts = false)
+        assertEquals(OutputDoc.entries.size, without.size)
+        OutputDoc.entries.forEachIndexed { i, doc ->
+            assertEquals(doc.name, doc != OutputDoc.UNDERCUT, without[i])
+        }
+        assertEquals(List(OutputDoc.entries.size) { true }, defaultExportAllChecks(jobHasUndercuts = true))
     }
 }

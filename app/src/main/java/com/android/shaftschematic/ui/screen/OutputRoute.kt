@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -35,6 +36,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -42,8 +47,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -53,6 +60,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.effectiveWearTraceDepthFrac
 import com.android.shaftschematic.geom.computeOalWindow
@@ -72,6 +80,7 @@ import com.android.shaftschematic.pdf.undercutSheetNoneSelected
 import com.android.shaftschematic.pdf.undercutSheetOrientation
 import com.android.shaftschematic.pdf.composeWearPdf
 import com.android.shaftschematic.pdf.consolidatedSheetHasInProfileValues
+import com.android.shaftschematic.pdf.runoutSheetMaxShaftHeightPt
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.settings.RunoutConfig
@@ -85,6 +94,7 @@ import com.android.shaftschematic.ui.viewmodel.addRunoutStation
 import com.android.shaftschematic.ui.viewmodel.addWornSection
 import com.android.shaftschematic.ui.viewmodel.removeRunoutStation
 import com.android.shaftschematic.ui.viewmodel.removeWornSection
+import com.android.shaftschematic.ui.viewmodel.restoreWornSection
 import com.android.shaftschematic.ui.viewmodel.resetAllRunoutStationPositions
 import com.android.shaftschematic.ui.viewmodel.resetRunoutStationPositions
 import com.android.shaftschematic.ui.viewmodel.setLinerCompression
@@ -110,6 +120,7 @@ import com.android.shaftschematic.util.renderPdfPageBitmap
 import com.android.shaftschematic.util.writeShaftPdfToUri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /** Worn-section editor dialog target — [section] null means "add a new one". */
@@ -274,15 +285,42 @@ fun OutputRoute(
     var previewInkBand by remember { mutableStateOf<InkBand?>(null) }
     var previewLoading by remember { mutableStateOf(false) }
     var wornSectionDialog by remember { mutableStateOf<OutputWornSectionTarget?>(null) }
+    // A worn section's Delete is confirm-free, with the undercut page's snackbar Undo: the
+    // removed section and its index are captured BEFORE the removal, so Undo puts that exact
+    // section back where it was (`restoreWornSection` — its typed Ø values verbatim, a no-op when
+    // a history Undo already restored it).
+    val deleteSnackbar = remember { SnackbarHostState() }
+    val deleteSnackbarScope = rememberCoroutineScope()
+    fun deleteWornSection(id: String) {
+        val index = wearRecord.wornSections.indexOfFirst { it.id == id }
+        if (index < 0) return
+        val removed = wearRecord.wornSections[index]
+        vm.removeWornSection(id)
+        deleteSnackbarScope.launch {
+            // One pending delete at a time: a second delete replaces the first's offer.
+            deleteSnackbar.currentSnackbarData?.dismiss()
+            val result = deleteSnackbar.showSnackbar(
+                message = "Worn section ${index + 1} deleted",
+                actionLabel = "Undo",
+                duration = SnackbarDuration.Long,
+            )
+            if (result == SnackbarResult.ActionPerformed) vm.restoreWornSection(removed, index)
+        }
+    }
     // Live slider drags — on this tab's own Shaft height / Liner compression controls and
     // on the preview's options sheet. Visual-only overrides, never a write, so a drag
     // frame can't mark the job dirty. See [PreviewTuning].
     val tuning = rememberPreviewTuning()
 
-    // "Export all" election, one flag per OutputDoc in enum order. Everything on by default:
+    // "Export all" election, one flag per OutputDoc in enum order. Everything on by default —
     // the normal hand-off is the complete document package, and an unchecked box is a
-    // deliberate omission the user re-makes each session.
-    var batchChecked by rememberSaveable { mutableStateOf(List(OutputDoc.entries.size) { true }) }
+    // deliberate omission the user re-makes each session — except the undercut drawing of a job
+    // with no undercuts ([defaultExportAllChecks]); re-seeded when the job gains or loses its
+    // first undercut.
+    val jobHasUndercuts = undercutRecord.undercuts.isNotEmpty()
+    var batchChecked by rememberSaveable(jobHasUndercuts) {
+        mutableStateOf(defaultExportAllChecks(jobHasUndercuts))
+    }
     var batchResult by remember { mutableStateOf<String?>(null) }
 
     // The consolidated sheet embeds the schematic's dimensions — the schematic's export
@@ -302,6 +340,8 @@ fun OutputRoute(
     val heightSliderBase = remember(spec, heightSliderDiaMm, curveLoHeightIn, curveHiHeightIn) {
         runoutHeightSliderBase(spec, heightSliderDiaMm, curveLoHeightIn, curveHiHeightIn)
     }
+    // Filled by the render loop below — the sheet's own answer, `Float.MAX_VALUE` until then.
+    var heightCapPt by remember { mutableFloatStateOf(Float.MAX_VALUE) }
 
     // Liner shading is unavailable exactly when this sheet prints measured Ø values inside
     // the profile — the composer draws liners unfilled there so the sheet-white value halos
@@ -319,7 +359,7 @@ fun OutputRoute(
     }
 
     val outputFilename =
-        buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.CONSOLIDATED, blankDraft)
+        buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.CONSOLIDATED, blankDraft, currentDocumentName)
 
     /**
      * The consolidated sheet with the elected content. Everything arrives as a parameter
@@ -434,7 +474,7 @@ fun OutputRoute(
                 if (!batchChecked.getOrElse(i) { true }) return@forEachIndexed
                 if (doc == OutputDoc.UNDERCUT && undercutSkipped) return@forEachIndexed
                 attempted++
-                val name = buildOutputFilename(customer, vessel, jobNumber, shaftPosition, doc, blankDraft)
+                val name = buildOutputFilename(customer, vessel, jobNumber, shaftPosition, doc, blankDraft, currentDocumentName)
                 // A null uri means the provider refused to create the file — counted as a
                 // failure, but there is no document to carry an error page.
                 val docUri = createPdfInTree(ctx, treeUri, name) ?: return@forEachIndexed
@@ -548,6 +588,26 @@ fun OutputRoute(
                 draft = tuning.active,
             )
         }.conflate().collect { inputs ->
+            // The tallest this sheet draws the shaft, for the height slider's readout and track
+            // top — re-solved on every sharp pass (a drag frame keeps the last answer), preview
+            // open or not, since the slider also sits on the tab itself.
+            if (!inputs.draft) {
+                val capPrefs = tunedPdfPrefs(vm.currentPdfPrefs, inputs.sBreakThresholdFrac)
+                heightCapPt = withContext(Dispatchers.Default) {
+                    runoutSheetMaxShaftHeightPt(
+                        spec = inputs.spec, config = inputs.config, project = inputs.project,
+                        unit = inputs.unit, displayUnits = inputs.displayUnits, pdfPrefs = capPrefs,
+                        resolvedComponents = inputs.resolved,
+                        lineThicknessScale = inputs.lineThicknessScale,
+                        runoutReadings = inputs.readings,
+                        runoutStationPlacements = inputs.stationPlacements,
+                        wearRecord = inputs.wearRecord, blankValues = inputs.blankValues,
+                        consolidated = true,
+                        includeBubbles = inputs.variant.includeBubbles,
+                        includeWearInfo = inputs.variant.includeWearInfo,
+                    )
+                }
+            }
             if (!inputs.showPreview) {
                 previewBitmap = null
                 previousWasDraft = false
@@ -609,9 +669,14 @@ fun OutputRoute(
             Text(
                 text = "Consolidated Output",
                 style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(start = 4.dp),
+                // Weighted so the actions are measured first: on a phone the title yields
+                // (ellipsized) rather than squeezing the trailing icons to nothing.
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 4.dp).weight(1f),
             )
-            Spacer(Modifier.weight(1f))
+            // The document's ONE history — this tab's edits are steps in it too.
+            UndoRedoButtons(vm, tagPrefix = "output")
             IconButton(
                 onClick = onSave,
                 modifier = Modifier.testTag("toolbar_save"),
@@ -805,6 +870,7 @@ fun OutputRoute(
                 maxDiaMm = heightSliderDiaMm,
                 onCommit = { vm.setRunoutHeightScale(it) },
                 onDrag = { tuning.heightScale = it },
+                maxDrawnHeightPt = heightCapPt,
             )
 
             LinerCompressionControl(
@@ -894,6 +960,14 @@ fun OutputRoute(
         }
     }
 
+    // The worn-section delete's Undo, at the bottom of the tab clear of the top bar.
+    Box(
+        modifier = Modifier.fillMaxSize().systemBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp),
+        contentAlignment = Alignment.BottomCenter,
+    ) {
+        SnackbarHost(deleteSnackbar, Modifier.testTag("output_delete_snackbar"))
+    }
+
     // ── Worn-section editor dialog ────────────────────────────────────────────
     wornSectionDialog?.let { target ->
         WornSectionDialog(
@@ -914,7 +988,7 @@ fun OutputRoute(
                 wornSectionDialog = null
             },
             onDelete = target.section?.let { s ->
-                { vm.removeWornSection(s.id); wornSectionDialog = null }
+                { deleteWornSection(s.id); wornSectionDialog = null }
             },
             onDismiss = { wornSectionDialog = null },
         )
@@ -965,6 +1039,7 @@ fun OutputRoute(
                     showHeightSlider = true,
                     heightScale = runoutConfig.heightScale,
                     heightSliderBase = heightSliderBase,
+                    heightSliderMaxDrawnPt = heightCapPt,
                     heightSliderMaxDiaMm = heightSliderDiaMm,
                     showLinerCompression = true,
                     linersProportional = runoutConfig.linersProportional,

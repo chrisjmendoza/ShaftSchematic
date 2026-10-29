@@ -1,6 +1,8 @@
 package com.android.shaftschematic.pdf
 
 import com.android.shaftschematic.geom.NOTCH_FACE_MIN_STEP_PX
+import com.android.shaftschematic.geom.RailValueLeader
+import com.android.shaftschematic.geom.railValueLeader
 import com.android.shaftschematic.geom.UNDERCUT_BREAK_AMP_FRAC_OF_R
 import com.android.shaftschematic.geom.UNDERCUT_SECTION_FILL_ALPHA
 import com.android.shaftschematic.geom.undercutBreakRoomMm
@@ -357,7 +359,7 @@ class UndercutStripSvgPreviewTest {
      * One arrowed rail span with its value seated in a break, mirroring `drawUndercutRail` —
      * including its label spacing: a fallback label clears the arrowheads by
      * `UC_RAIL_LABEL_GAP_PT` and stacks by [UNDERCUT_RAIL_ROW_HEIGHT_PT], the same pitch the
-     * inner layout budgets, and carries its leader to the line ([undercutRailLeader], the
+     * inner layout budgets, and carries its leader to the line ([railValueLeader], the
      * composer's own endpoints) off its near halo edge. [arrow] is the drawn head — the composer's
      * `PdfPrefs.arrowSizePt`; the label rows clear the fixed [UNDERCUT_RAIL_LABEL_CLEAR_ARROW_PT]
      * whatever the head. Each drawn leader is recorded in [leaders] by label, with its rail line Y.
@@ -368,7 +370,7 @@ class UndercutStripSvgPreviewTest {
         railY: Float,
         labelAbove: Boolean,
         arrow: Float = PDF_ARROW_SIZE_DEFAULT_PT,
-        leaders: MutableMap<String, Pair<UndercutRailLeader, Float>>? = null,
+        leaders: MutableMap<String, Pair<RailValueLeader, Float>>? = null,
     ) {
         val clear = UNDERCUT_RAIL_LABEL_CLEAR_ARROW_PT
         val labelGap = 5f
@@ -391,7 +393,7 @@ class UndercutStripSvgPreviewTest {
                 railY + clear + labelGap + textH + row * UNDERCUT_RAIL_ROW_HEIGHT_PT
             }
             val nearEdge = if (labelAbove) baseline + textH * 0.25f + 0.5f else baseline - textH * 0.9f - 0.5f
-            undercutRailLeader(s.x0Pt, s.x1Pt, s.labelCxPt, arrow, railY, nearEdge)?.let { l ->
+            railValueLeader(s.x0Pt, s.x1Pt, s.labelCxPt, arrow, railY, nearEdge)?.let { l ->
                 line(l.x, l.fromY, l.x, l.toY, w = 0.6f)
                 leaders?.put(s.label.inline(), l to railY)
             }
@@ -473,7 +475,7 @@ class UndercutStripSvgPreviewTest {
         /** The strip's printed title. */
         val title: String,
         /** Each drawn fallback leader by its value's label, with the Y of the rail line it serves. */
-        val leaders: Map<String, Pair<UndercutRailLeader, Float>> = emptyMap(),
+        val leaders: Map<String, Pair<RailValueLeader, Float>> = emptyMap(),
         /** Every rail span whose value fell back off its line, by label. */
         val fallbackSpans: Map<String, WearRailSpanLayout> = emptyMap(),
     )
@@ -730,7 +732,7 @@ class UndercutStripSvgPreviewTest {
                 svg.line(xAt(mm), inner.cylTop - 3f, xAt(mm), inner.chainRailY, w = 0.6f)
             }
         }
-        val leaders = mutableMapOf<String, Pair<UndercutRailLeader, Float>>()
+        val leaders = mutableMapOf<String, Pair<RailValueLeader, Float>>()
         chain.forEach {
             svg.railSpan(it, inner.cylTop - 3f, inner.chainRailY, labelAbove = railPlan.aboveRows > 0, leaders = leaders)
         }

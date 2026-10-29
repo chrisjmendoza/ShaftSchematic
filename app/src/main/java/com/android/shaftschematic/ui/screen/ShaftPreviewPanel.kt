@@ -33,6 +33,7 @@ import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.lastOccupiedEndMm
 import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.ui.drawing.compose.ShaftDrawing
+import com.android.shaftschematic.ui.drawing.render.PreviewIssueMark
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.util.PreviewColorSetting
 import com.android.shaftschematic.util.UnitSystem
@@ -69,6 +70,8 @@ internal fun PreviewCard(
     threadDensity: Float = THREAD_DENSITY_DEFAULT,
     /** PDF-shade mirror: components the PDF will print shaded — see [ShaftDrawing]. */
     shadedComponentIds: Set<String> = emptySet(),
+    /** The warning banner's problems as red marks on the drawing — see [ShaftDrawing]. */
+    issueMarks: List<PreviewIssueMark> = emptyList(),
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -94,6 +97,7 @@ internal fun PreviewCard(
                 threadSlant = threadSlant,
                 threadDensity = threadDensity,
                 shadedComponentIds = shadedComponentIds,
+                issueMarks = issueMarks,
                 highlightEnabled = highlightEnabled && (highlightId != null),
                 highlightId = highlightId,
                 onTapComponentId = onTapComponentId,

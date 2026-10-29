@@ -29,7 +29,7 @@
   <aside class="note"><p>Wear spots are the one exception: they belong to their liner, and if that liner is deleted from the shaft its wear spots are dropped the next time the job is opened.</p></aside>
 
   <h3>Undo</h3>
-  <p>Typed readings, bubble moves, station count changes, wear marks, undercuts and worn sections all go into the job's single undo history. To undo, use the <span class="ui">Undo</span> and <span class="ui">Redo</span> arrows in the bar at the top of the Undercuts tab or of a liner's page, or the <span class="ui">History</span> icon on the <span class="ui">Schematic</span> tab's toolbar; see <a href="#editor-history">Undo and redo</a>. Deleting a cut from its card also offers <span class="ui">Undo</span> in a message at the bottom of the page. The Runout Sheet tab also has its own one-tap <span class="ui">Undo move</span> for the last bubble you dragged — see <a href="#recording-move">Moving bubbles</a>.</p>
+  <p>Typed readings, bubble moves, station count changes, wear marks, undercuts and worn sections all go into the job's single undo history. To undo, use the <span class="ui">Undo</span> and <span class="ui">Redo</span> arrows in the bar at the top of the Runout Sheet, Wear Document, Undercut Drawing or Consolidated Output tab — and of a component's wear page or an undercut detail page — or the <span class="ui">History</span> icon on the <span class="ui">Schematic</span> tab's toolbar; see <a href="#editor-history">Undo and redo</a>. Deleting a cut, a wear spot or a worn section, or tapping <span class="ui">Clear all pits</span>, also offers <span class="ui">Undo</span> in a message at the bottom of the page, which puts back exactly what was removed. Re-opening a reading to change only its high spot (or re-saving any measurement dialog without touching its value) keeps the value exactly as you typed it, even where the field shows it rounded. The Runout Sheet tab also has its own one-tap <span class="ui">Undo move</span> for the last bubble you dragged — see <a href="#recording-move">Moving bubbles</a>.</p>
 
   <h3>Units and typing values</h3>
   <ul>
@@ -107,7 +107,7 @@
     <li>Without lifting, slide it along the shaft. Its leader line follows the station across the component.</li>
     <li>Lift your finger. The new position is saved.</li>
   </ol>
-  <p>After a drag, an <span class="ui">Undo move</span> button appears beside the hint under the preview. One tap puts that bubble back exactly where it was before the drag — if it had never been moved, back to automatic placement.</p>
+  <p>After a drag, an <span class="ui">Undo move</span> button appears beside the hint under the preview. One tap puts that bubble back exactly where it was before the drag — if it had never been moved, back to automatic placement. It goes away once that component's station count changes (<span class="ui">−</span> / <span class="ui">+</span>, or an Undo of one), because the stations are then numbered differently; use the tab's <span class="ui">Undo</span> arrow instead.</p>
   <p>The rules a moved bubble follows:</p>
   <ul>
     <li><strong>A moved bubble stays exactly where you put it.</strong> Nothing the app does later moves it — not a geometry change, not a sheet layout change.</li>
@@ -127,7 +127,7 @@
     <li>Use the <span class="ui">−</span> and <span class="ui">+</span> buttons on the strip under the preview to remove or add a station on the selected component. The strip names the selection, for example <span class="ui">Body 2 · Station 3</span>, or <span class="ui">Nothing selected</span>.</li>
     <li>Tap the pencil toggle again (<span class="ui">Done moving bubbles</span>) to go back to entering readings.</li>
   </ol>
-  <p>In Move mode a tap never opens the reading dialog, and pinch-zoom still works from bare paper. The same movement rules apply as for a press-and-hold drag, and <span class="ui">Undo move</span> still appears after each drag. The <span class="ui">−</span> / <span class="ui">+</span> buttons are the same as the station rows; undo them from the History menu.</p>
+  <p>In Move mode a tap never opens the reading dialog, and pinch-zoom still works from bare paper. The same movement rules apply as for a press-and-hold drag, and <span class="ui">Undo move</span> still appears after each drag. The <span class="ui">−</span> / <span class="ui">+</span> buttons are the same as the station rows; undo them with the tab's <span class="ui">Undo</span> arrow.</p>
 
   <figure class="detail">
     <img src="figures/runout-bubbles.png" alt="Close-up of runout bubbles under the AFT end of a shaft: two bubbles under the taper, bubbles under the body and stern tube liner, each with a TIR value and a red high-spot dash, one bubble still empty.">
@@ -140,7 +140,7 @@
     <li>Tick <span class="ui">Coupling face</span> on the Runout Sheet tab (<span class="ui">End view drawn bottom-right, taken looking forward.</span>).</li>
     <li>Tap <span class="ui">Pilot runout…</span> beside it (it is greyed out until the face is ticked).</li>
     <li>The bubble dialog opens titled <span class="ui">Coupling pilot</span>. Type the TIR and tap the ring at the high spot, exactly as for a station.</li>
-    <li>Tap <span class="ui">Save</span>.</li>
+    <li>Tap <span class="ui">Save</span>. The reading then shows under the row, for example <span class="ui">Pilot runout: .003 in · high spot 3:00</span>.</li>
   </ol>
   <p>The coupling face is a per-job choice: one job may measure the coupling and the next may not. The same setting appears as a <span class="ui">Coupling face</span> chip on the runout preview's options and as a switch on the Consolidated Output tab — all three change the same thing. The number of bolt holes comes from the shaft's first coupler bolt slot; a shaft with none draws the plain two-circle face.</p>
   <figure class="detail">
@@ -191,7 +191,7 @@
     <li>Pick <span class="ui">Size:</span> <span class="ui">Small</span> or <span class="ui">Large</span>. The size applies to the X marks you place next.</li>
     <li>Tap the component where the pit is. The X lands where you tap — along the length and up or down across the face — so you can show roughly where on the surface it sits.</li>
   </ol>
-  <p>To take one off, choose <span class="ui">Remove X</span> and tap the X; a tap that misses does nothing. <span class="ui">Clear all pits</span> removes every X on this component. The heading counts them, for example <span class="ui">3 placed</span>.</p>
+  <p>To take one off, choose <span class="ui">Remove X</span> and tap the X; a tap that misses does nothing. <span class="ui">Clear all pits</span> removes every X on this component; the message that follows (<span class="ui">3 pits cleared</span>) has <span class="ui">Undo</span>, which puts them all back. The heading counts them, for example <span class="ui">3 placed</span>.</p>
 
   <h3>Record measured diameters</h3>
   <ol class="steps">
@@ -220,7 +220,7 @@
     <li>Optionally add <span class="ui">Notes</span> (“scored”, “pitted at 6 o'clock”).</li>
   </ol>
   <p>With an AFT datum (<span class="ui">AFT SET</span>, <span class="ui">Liner AFT</span>) the distance locates the band's AFT edge, measured forward. With a FWD datum (<span class="ui">FWD SET</span>, <span class="ui">Liner FWD</span>) it locates the band's FWD edge, measured aft. Switching the chip only changes how the distance is shown — the band itself does not move — so you can enter it from one datum and check it from another.</p>
-  <p>Values commit when you leave the field, exactly as typed. A band should fit inside the liner; a value that pushes it past either end stays in the field and the card says so under it (<span class="ui">Wear spot extends past the liner's FWD edge</span>), the card's header carries a short note, and the drawing shows the band clipped to the liner until you correct it. If the liner is later shortened so that an existing band runs past its end, the card shows <span class="ui">Extends past liner end — re-measure</span>. Delete a band with the bin icon on its card.</p>
+  <p>Values commit when you leave the field, exactly as typed. A band should fit inside the liner; a value that pushes it past either end stays in the field and the card says so under it (<span class="ui">Wear spot extends past the liner's FWD edge</span>), the card's header carries a short note, and the drawing shows the band clipped to the liner until you correct it. If the liner is later shortened so that an existing band runs past its end, the card shows <span class="ui">Extends past liner end — re-measure</span>. Delete a band with the bin icon on its card; <span class="ui">Wear spot deleted</span> follows with <span class="ui">Undo</span>. On the drawing, the band's start and length print under the liner in the same form as the printed strip (fractions in inches), each value in a break in its own line or, on a short band, on its own row.</p>
 
   <h3 id="recording-trace">The worn-profile trace</h3>
   <p>When a liner has measured diameters inside a wear spot, the liner's surface line on the detail strip dips through those diameters, so the sheet shows the shape of the wear, not just its numbers. The detail view on screen draws the same trace as the printed strip.</p>
@@ -353,7 +353,7 @@
     <li>Under <span class="ui">Measured diameters</span>, type the readings into <span class="ui">Ø 1</span>, <span class="ui">Ø 2</span>, <span class="ui">Ø 3</span>, in order AFT to FWD. Tap <span class="ui">Add another Ø</span> for more, up to six.</li>
     <li>Tap <span class="ui">Save</span>. It is greyed out until there is a distance and a length above zero.</li>
   </ol>
-  <p>Empty Ø fields are dropped when you save, so you can record the area first and come back with the numbers. The list shows each area as <span class="ui">Worn section 1</span> with a summary such as “12in from AFT S.E.T. · L 8in · 3 Ø” (or “no readings yet”). Tap a row to edit it; the edit dialog adds <span class="ui">Delete</span>. As with undercuts, switching the S.E.T. chip re-shows the same area from the other datum without moving it.</p>
+  <p>Empty Ø fields are dropped when you save, so you can record the area first and come back with the numbers. The list shows each area as <span class="ui">Worn section 1</span> with a summary such as “12in from AFT S.E.T. · L 8in · 3 Ø” (or “no readings yet”). Tap a row to edit it; the edit dialog adds <span class="ui">Delete</span>, and a <span class="ui">Worn section 2 deleted</span> message with <span class="ui">Undo</span> follows a delete. As with undercuts, switching the S.E.T. chip re-shows the same area from the other datum without moving it. Pressing Back or tapping outside the dialog after you have typed something asks <span class="ui">Discard this worn section?</span> (<span class="ui">Discard changes to this worn section?</span> when editing one) with <span class="ui">Keep editing</span> or <span class="ui">Discard</span>; <span class="ui">Cancel</span> closes without asking.</p>
   <aside class="note"><p>Worn sections print only on a consolidated sheet that carries wear information — <span class="ui">Sheet content</span> set to <span class="ui">All three</span> or <span class="ui">Schematic + Wear</span>. They do not appear on the Runout Sheet tab's preview, which shows runouts only.</p></aside>
 
   <h2 id="recording-paper">Working from paper</h2>

@@ -81,4 +81,27 @@ class DiameterCalloutLayoutTest {
         )
         assertEquals(listOf(0, 0, 0), tiers)
     }
+
+    // ── Label placement against the content edge ──────────────────────────────────────
+
+    @Test
+    fun `a label with room hangs right of its leader as before`() {
+        assertEquals(114f, DiameterCalloutLayout.labelLeft(100f, 40f, 14f, 36f, 756f), 1e-4f)
+        assertEquals("unbounded = unchanged", 114f, DiameterCalloutLayout.labelLeft(100f, 40f, 14f), 1e-4f)
+    }
+
+    @Test
+    fun `a label that would run past the content right flips left of its leader`() {
+        // On-device report: Ø 5.998" ran into the page margin off a body at the FWD end.
+        val left = DiameterCalloutLayout.labelLeft(730f, 40f, 14f, 36f, 756f)
+        assertEquals(730f - 14f - 40f, left, 1e-4f)
+        assertTrue(left + 40f <= 756f)
+    }
+
+    @Test
+    fun `a label that fits neither side is kept inside the content`() {
+        val left = DiameterCalloutLayout.labelLeft(60f, 60f, 14f, 36f, 100f)
+        assertTrue(left >= 36f)
+        assertTrue(left + 60f <= 100f + 1e-4f)
+    }
 }

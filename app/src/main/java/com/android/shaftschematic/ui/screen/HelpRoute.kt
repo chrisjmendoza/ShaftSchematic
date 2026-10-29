@@ -464,7 +464,9 @@ internal val helpSections: List<HelpSection> = listOf(
                     "drawing's values are displayed and typed. Internally every " +
                     "value is stored in millimeters, so switching units never changes your " +
                     "numbers — it only changes how they are shown. Inch fields accept " +
-                    "fractions like 3 1/2.",
+                    "fractions like 3 1/2. Some keyboards' number pads have no / key, so while " +
+                    "you type in an inch field a / button sits at the right end of the field " +
+                    "— tap it where the fraction bar goes. 10-1/4 works too.",
                 manualAnchor = "intro-units",
             ),
             HelpTopic(
@@ -479,7 +481,9 @@ internal val helpSections: List<HelpSection> = listOf(
             HelpTopic(
                 "Undo and redo",
                 "The History button in the editor's toolbar (the clock icon) holds Undo and " +
-                    "Redo. Each greys out when there is nothing to step to.\n\n" +
+                    "Redo. Each greys out when there is nothing to step to. The Runout, Wear, " +
+                    "Undercut and Consolidated Output tabs — and the wear and undercut detail " +
+                    "pages — carry the same Undo and Redo as arrows in their top bar.\n\n" +
                     "A burst of quick " +
                     "edits collapses into a single undo step, so undoing after typing a value " +
                     "returns you to before you started typing rather than stepping back one " +
@@ -515,6 +519,9 @@ internal val helpSections: List<HelpSection> = listOf(
                     "Tick \"Explicit body\" on an auto-body " +
                     "card to promote it to a real, editable body; untick it on an explicit body " +
                     "to make it automatic again.\n\n" +
+                    "An explicit body at either end of the shaft — the coupling body — prints " +
+                    "its own length as a dimension; one in the middle does not. \"Show " +
+                    "dimension rail\" on its card overrides that either way.\n\n" +
                     "Adding a taper, thread, or liner over a body " +
                     "splits it; deleting one merges the fragments back.",
                 manualAnchor = "editor-bodies",
@@ -523,9 +530,12 @@ internal val helpSections: List<HelpSection> = listOf(
                 "Tapers, keyways, and spooned ends",
                 "Tapers measure from the AFT or FWD end (\"Measure From\" chips on the card and " +
                     "in the Add dialog). The rate field takes a ratio (1:12), inches per foot " +
-                    "(3/4\"/ft — the shop's 1:16), or a decimal; a bare fraction like 3/4 is " +
-                    "refused because it could mean either, and the message names the two " +
-                    "forms to write instead.\n\n" +
+                    "(3/4\"/ft — the shop's 1:16), or a decimal; a bare fraction like 3/4, or " +
+                    "a bare decimal steeper than 0.25 like .75, is refused because it could " +
+                    "mean either, and the message names the two forms to write instead. " +
+                    "Rate mode Auto works the rate out from Length, S.E.T. and L.E.T.; Manual " +
+                    "keeps the rate you typed — through a Length edit and when the drawing is " +
+                    "reopened.\n\n" +
                     "Tapers and explicit bodies can carry a keyway (width × " +
                     "depth, length): tick \"Keyway\" on the card or in the Add dialog to show " +
                     "its fields; unticking a card that has keyway values asks before clearing " +
@@ -604,8 +614,9 @@ internal val helpSections: List<HelpSection> = listOf(
                     "to arrange bubbles: a bubble moves the moment you touch it, a tap selects " +
                     "a bubble or a component instead of opening its reading, and the − / + " +
                     "under the preview add or remove a station on whatever is selected. " +
-                    "\"Undo move\" puts the last moved bubble back. Switch the mode off to " +
-                    "enter readings again.\n\n" +
+                    "\"Undo move\" puts the last moved bubble back; it goes away once that " +
+                    "component's station count changes, since its stations are then numbered " +
+                    "differently. Switch the mode off to enter readings again.\n\n" +
                     "Station counts follow length: a body gets one station per 20 in (at least " +
                     "one), a liner the same but never fewer than two (set in an inch from each " +
                     "edge, where the geometry changes and an indicator reads unreliably), and a " +
@@ -840,7 +851,9 @@ internal val helpSections: List<HelpSection> = listOf(
                 "OAL (overall length)",
                 "The shaft's overall length, end to end, and the span every drawing is laid out " +
                     "against. Any part of it you don't cover with a component is filled with " +
-                    "bare shaft (an auto-body), so the drawing is always continuous.",
+                    "bare shaft (an auto-body), so the drawing is always continuous. Parts " +
+                    "measured from FWD move with the FWD end when it changes; a message then " +
+                    "says which moved and how far, with Undo.",
                 manualAnchor = "editor-oal",
             ),
             HelpTopic(
@@ -901,7 +914,8 @@ internal val helpSections: List<HelpSection> = listOf(
                     "typed: fields, badges, drawings, and PDFs.\n\n" +
                     "Nothing in the file is converted — the model is always millimeters — so " +
                     "you can switch back and forth as often as you like with no drift. Inch " +
-                    "fields also accept fractions like 3 1/2.",
+                    "fields also accept fractions like 3 1/2 or 3-1/2, and any length can name " +
+                    "its own unit: 260mm on an inch drawing is 260 millimeters.",
                 manualAnchor = "settings-units",
             ),
             HelpTopic(
@@ -1231,7 +1245,10 @@ internal val helpSections: List<HelpSection> = listOf(
                 "By design. A value you type is never rounded, snapped, or \"helpfully\" " +
                     "adjusted — down to .001. Components sit exactly where you put them, and " +
                     "the automatic bare-shaft spans absorb the consequences. Only derived " +
-                    "values (auto-body spans, auto taper rate text) move on their own.",
+                    "values (auto-body spans, auto taper rate text) move on their own.\n\n" +
+                    "A value a field cannot use — a 0 Ø, a 2.5 bolt count, a length that " +
+                    "would run into another liner — is not applied: the field goes back to " +
+                    "the stored value and says \"<what you typed> not applied\" and why.",
                 manualAnchor = "intro-sacred",
             ),
             HelpTopic(
@@ -1246,12 +1263,26 @@ internal val helpSections: List<HelpSection> = listOf(
                 manualAnchor = "intro-reference",
             ),
             HelpTopic(
+                "What does the warnings banner mean?",
+                "The banner above the carousel lists every problem on the shaft by the part's " +
+                    "name: overlaps first (\"FWD Liner overlaps AFT Taper\" — these block " +
+                    "printing), then parts that run past the FWD end or start before the AFT " +
+                    "end (\"Body #1 runs 4 13/16\" past the FWD end\"), then parts shorter than " +
+                    "1 mm. Tap a line to select that part; the carousel turns to its card. The " +
+                    "drawing marks the same problems in red.\n\n" +
+                    "A part past an end often comes from an OAL change: parts measured from FWD " +
+                    "move with the FWD end, and the message after the change says which ones " +
+                    "moved and how far. Its Undo puts the old length back.",
+                manualAnchor = "editor-warnings",
+            ),
+            HelpTopic(
                 "Why is Export PDF greyed out?",
                 "Two reasons, and the button's message says which. Either the shaft has no " +
                     "components yet — add at least one taper, thread, liner, or body, since " +
                     "coupler bolt slots alone give nothing to dimension — or two components " +
-                    "overlap. Overlapping cards are flagged in the carousel; fix the " +
-                    "positions and export re-enables itself.\n\n" +
+                    "overlap: the message names them (\"Can't export: FWD Liner overlaps AFT " +
+                    "Taper\"), the warnings banner lists the same pair, and a tap on that line " +
+                    "takes you to the part. Fix the positions and export re-enables itself.\n\n" +
                     "Bodies never trigger this: a body " +
                     "running under a liner or up against a taper is normal, and the drawing " +
                     "trims it around them.",

@@ -1,6 +1,10 @@
 // file: app/src/main/java/com/android/shaftschematic/ui/screen/ShaftDiaPrompt.kt
 package com.android.shaftschematic.ui.screen
 
+import com.android.shaftschematic.ui.input.LocalFractionKeyEnabled
+import com.android.shaftschematic.ui.input.rememberFieldCursor
+import com.android.shaftschematic.ui.input.FractionKey
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -28,6 +32,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.util.isLengthText
 import com.android.shaftschematic.util.toMmOrNull
 
 /**
@@ -51,9 +56,10 @@ fun shouldPromptShaftDia(before: ShaftSpec): Boolean =
 /**
  * The new-shaft diameter prompt shown after the first OAL commit ([shouldPromptShaftDia]).
  *
- * One numeric field in the DOCUMENT [unit] (fractions accepted), converted to mm at this edge
- * and handed to [onSet] verbatim; "Set" is enabled only while the entry parses to a positive
- * value. "Skip" (and a dismiss) set nothing.
+ * One numeric field in the DOCUMENT [unit] (fractions accepted, a unit suffix read), converted
+ * to mm at this edge and handed to [onSet] verbatim; "Set" is enabled only while the entry parses
+ * to a positive value, and while it does not the field says why ([shaftDiaPromptError]). "Skip"
+ * (and a dismiss) set nothing.
  */
 @Composable
 fun ShaftDiaPromptDialog(
@@ -63,8 +69,10 @@ fun ShaftDiaPromptDialog(
 ) {
     var text by rememberSaveable { mutableStateOf("") }
     val parsedMm = toMmOrNull(text, unit)?.takeIf { it > 0f }
+    val entryError = shaftDiaPromptError(text, unit)
     val focusRequester = remember { FocusRequester() }
 
+    val diaCursor = rememberFieldCursor()
     AlertDialog(
         onDismissRequest = onSkip,
         modifier = Modifier.testTag("shaft_dia_prompt"),
@@ -77,10 +85,15 @@ fun ShaftDiaPromptDialog(
                 )
                 Spacer(Modifier.height(12.dp))
                 OutlinedTextField(
-                    value = text,
-                    onValueChange = { text = it },
+                    value = diaCursor.valueFor(text),
+                    onValueChange = { v -> diaCursor.track(v); text = v.text },
                     label = { Text("Diameter (${abbr(unit)})") },
+                    trailingIcon = if (diaCursor.focused && LocalFractionKeyEnabled.current) {
+                        { FractionKey(onClick = { text = diaCursor.insertBar(text).text }) }
+                    } else null,
                     singleLine = true,
+                    isError = entryError != null,
+                    supportingText = entryError?.let { e -> { Text(e) } },
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Decimal,
                         imeAction = ImeAction.Done,
@@ -89,6 +102,7 @@ fun ShaftDiaPromptDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .focusRequester(focusRequester)
+                        .onFocusChanged { diaCursor.focused = it.isFocused }
                         .testTag("shaft_dia_prompt_field"),
                 )
                 // Inside the dialog's own composition, so the requester is attached to the
@@ -114,4 +128,19 @@ fun ShaftDiaPromptDialog(
             ) { Text("Skip") }
         },
     )
+}
+
+/** The prompt's error line for a diameter of zero or less. */
+internal const val SHAFT_DIA_NOT_POSITIVE = "Must be > 0"
+
+/**
+ * Why the prompt's "Set" is disabled for [text], or null when it is not (or nothing is typed):
+ * [NOT_A_NUMBER_ERROR] for text that does not read as a length, [SHAFT_DIA_NOT_POSITIVE] for a
+ * value of zero or less.
+ */
+internal fun shaftDiaPromptError(text: String, unit: UnitSystem): String? {
+    unreadableEntryError(text, ::isLengthText)?.let { return it }
+    if (text.isBlank()) return null
+    val mm = toMmOrNull(text, unit) ?: return null
+    return if (mm > 0f) null else SHAFT_DIA_NOT_POSITIVE
 }

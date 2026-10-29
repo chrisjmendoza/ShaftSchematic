@@ -16,7 +16,7 @@
   <p>The <span class="ui">Overall Length</span> field does not apply what you type key by key, because a half-typed value (36″ on the way to 367 3/4″) would collapse the drawing and move every FWD-referenced part. Tap the green ✓, press the keyboard's Done key, or leave the field after changing it. The red ✗ puts the stored length back, and an empty field changes nothing. See <a href="#editor-oal">The overall length</a>.</p>
 
   <h3>The Overall Length field is outlined in red</h3>
-  <p>The overall length is shorter than the far end of your last component, so something runs off the FWD end of the shaft. The card that runs past shows an amber advisory strip, <span class="ui">Extends past shaft length</span>, and a dismissible banner above the carousel counts the problem (for example <span class="ui">1 component extends past shaft length</span>).</p>
+  <p>The overall length is shorter than the far end of your last component, so something runs off the FWD end of the shaft. The card that runs past shows an amber advisory strip, <span class="ui">Extends past shaft length</span>, the banner above the carousel names the part and how far it runs (for example <span class="ui">Body #1 runs 4 13/16" past the FWD end</span>; tap the line to go to its card), and the drawing tints the overhang red with the shaft's real end dashed. If you just shortened the OAL, the message at the bottom of the screen says which FWD-measured parts moved with the end.</p>
   <p>This is a warning, not a block. Your values are kept exactly as typed. Fix it by lengthening the OAL (overall length) or by moving or shortening the component.</p>
 
   <h3>I changed the OAL and a taper (or liner) moved</h3>
@@ -26,14 +26,14 @@
   <p>Both by design. The app keeps every value you type exactly as entered, down to the last thousandth; the bare shaft between components grows or shrinks to fill the gaps (see <a href="#intro-sacred">What you type is what prints</a>). A field applies its value when you leave it or press Done, and only if you changed something, so tapping in and out without an edit changes nothing.</p>
 
   <h3>A field shows “Must be &gt; 0” or “Must be ≥ 0” and won't keep my number</h3>
-  <p>A component's <span class="ui">Length</span> must be greater than zero (<span class="ui">Must be &gt; 0</span>). A <span class="ui">Start</span> position can't be negative (<span class="ui">Must be ≥ 0</span>). The field shows the message, puts the previous value back, and changes nothing. Text that doesn't read as a number is treated the same way. Inch fields accept fractions such as 3 1/2 and decimals such as 3.5.</p>
+  <p>A component's <span class="ui">Length</span> and its diameters must be greater than zero (<span class="ui">Must be &gt; 0</span>) — the bare-shaft (auto-body) Ø is the exception: clearing it drops that section's own Ø. A <span class="ui">Start</span> position can't be negative (<span class="ui">Must be ≥ 0</span>). A thread relief's length and Ø, and a captured keyway's inset, must be above zero too: to remove them, switch off <span class="ui">Thread relief</span> or <span class="ui">Captured keyway</span>. A bolt <span class="ui">Count</span> must be a whole number of 1 or more. A liner's or thread's <span class="ui">Length</span> that would run into another liner or thread is refused like the same span typed as a Start (<span class="ui">Overlaps</span> and the other card's name); running past the OAL is not refused. The field puts the previous value back, says <span class="ui">… not applied</span> with the reason, and changes nothing. Text that doesn't read as a number is treated the same way. Inch fields accept fractions such as 3 1/2 and decimals such as 3.5.</p>
 
-  <h3>A card says “Overlaps another component”</h3>
-  <p>Two components that can't share shaft length (tapers, threads and liners, in any pairing) overlap. Every card involved shows the message. While any overlap exists, the drawings can't be printed or exported.</p>
+  <h3>A card says “Overlaps …”</h3>
+  <p>Two components that can't share shaft length (tapers, threads and liners, in any pairing) overlap. Every card involved shows the message, naming the card it runs into by that card's title (<span class="ui">Overlaps FWD Taper</span>). While any overlap exists, the drawings can't be printed or exported.</p>
   <p>Bodies are never part of this check. A body running under a liner or up against a taper is normal: the drawing trims the body around them. If the warning shows, look at the tapers, threads and liners near that position.</p>
 
   <h3>An Add dialog asks “Add Anyway?”</h3>
-  <p>The part you are adding conflicts with something already on the shaft. The dialog lists each problem, for example <span class="ui">Overlaps Taper 1</span> or <span class="ui">Falls outside shaft span</span> (with the shaft's OAL). Tap <span class="ui">Add Anyway</span> to add it and fix the position afterwards, or <span class="ui">Cancel</span> to go back and correct the numbers first.</p>
+  <p>The part you are adding conflicts with something already on the shaft. The dialog lists each problem, for example <span class="ui">Overlaps FWD Taper</span> (the name on that part's card) or <span class="ui">Falls outside shaft span</span> (with the shaft's OAL). Tap <span class="ui">Add Anyway</span> to add it and fix the position afterwards, or <span class="ui">Cancel</span> to go back and correct the numbers first.</p>
 
   <h3>A thread card says “Thread must be at a shaft end, not between components”</h3>
   <p>A thread counted in the overall length has to sit at one end of the shaft. Move it to the AFT or FWD end. If the OAL is quoted to the shoulder and the thread hangs off past it, switch off <span class="ui">Include thread in OAL</span> on the card or in the Add Thread dialog and choose which end it hangs from with the <span class="ui">Thread end:</span> <span class="ui">AFT</span> | <span class="ui">FWD</span> chips.</p>
@@ -69,7 +69,7 @@
   <h2 id="help-drawings">Troubleshooting: drawings, printing &amp; PDFs</h2>
 
   <h3>Print and Export are greyed out</h3>
-  <p>The shaft has no components yet (<span class="ui">Please add at least 1 component before export is active.</span> — coupler bolt slots alone don't count), or two components overlap (<span class="ui">Fix component collisions before exporting.</span> — find the cards marked <span class="ui">Overlaps another component</span>). On the document tabs the message shows above the greyed buttons; on the Schematic tab, tap the greyed PDF button to see it. See <a href="#documents-blocked">Why Print and Export are greyed out</a>.</p>
+  <p>The shaft has no components yet (<span class="ui">Please add at least 1 component before export is active.</span> — coupler bolt slots alone don't count), or two components overlap (<span class="ui">Can't export: FWD Liner overlaps …</span>, naming the pair — tap the overlap line on the warnings banner to go to the first part). On the document tabs the message shows above the greyed buttons; on the Schematic tab, tap the greyed PDF button to see it. See <a href="#documents-blocked">Why Print and Export are greyed out</a>.</p>
 
   <h3>The Runout, Wear, Undercut, Final and Consolidated tabs are greyed out</h3>
   <p>Those documents need a shaft to work from: at least one component and a typed overall length. Until both exist, only the <span class="ui">Schematic</span> tab opens. A shaft with no OAL yet still draws in the preview, out to the end of its last component, but the other documents stay locked until you type the length.</p>
@@ -197,7 +197,7 @@
 
   <h3>Saving</h3>
   <ul>
-    <li>The Save button (the disk icon) opens <span class="ui">Save Drawing</span> the first time. The suggested <span class="ui">File name</span> is built from the job number, customer, vessel and shaft side. <span class="ui">Existing saves</span> lists names you can reuse with <span class="ui">Use</span>.</li>
+    <li>The Save button (the disk icon) opens <span class="ui">Save Drawing</span> the first time. The suggested <span class="ui">File name</span> is built from the job number, customer, vessel and shaft side. <span class="ui">Existing saves</span> lists names you can reuse with <span class="ui">Use</span> — all of them while the suggested name is untouched, then those matching what you type.</li>
     <li>Saving over an existing name asks <span class="ui">Overwrite existing save?</span> first.</li>
     <li>An asterisk in the title means unsaved changes. Leaving such a drawing asks <span class="ui">You have unsaved changes. Save before continuing?</span> with <span class="ui">Save</span>, <span class="ui">Don't save</span> and <span class="ui">Cancel</span>.</li>
     <li><span class="ui">Save As…</span> in the editor's overflow menu saves the drawing under a new name.</li>

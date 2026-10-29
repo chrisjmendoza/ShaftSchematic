@@ -286,7 +286,8 @@
       <tr><td>Final schematic with Runout bubbles</td><td>…PORT_Final_Runout.pdf</td></tr>
       <tr><td>Final runout sheet (Final banner)</td><td>…PORT_Final_RunoutSheet.pdf</td></tr>
       <tr><td>Any blank draft</td><td>adds _BlankDraft at the end, for example …PORT_runout_BlankDraft.pdf</td></tr>
-      <tr><td>No job information at all</td><td>Shaft_schematic.pdf, Shaft_runout.pdf and so on; the Final documents use Shaft_&lt;date&gt;_&lt;time&gt;_Final.pdf</td></tr>
+      <tr><td>No job information, saved job</td><td>the saved job's name instead, for example QA Titan_schematic.pdf</td></tr>
+      <tr><td>No job information, never saved</td><td>Shaft_schematic.pdf, Shaft_runout.pdf and so on; the Final documents use Shaft_&lt;date&gt;_&lt;time&gt;_Final.pdf</td></tr>
     </tbody>
   </table>
   <p>The schematic gets the same name whether it is exported from its own tab or by <span class="ui">Export all</span>. The three Final names are deliberately different, so the welding copy, the pre-ship measurement sheet and the blank final runout sheet never overwrite each other. The side is part of every name, so the PORT and STBD shafts of a twin-screw job don't overwrite each other either.</p>
@@ -297,7 +298,7 @@
     <thead><tr><th>Message</th><th>Fix</th></tr></thead>
     <tbody>
       <tr><td><span class="ui">Please add at least 1 component before export is active.</span></td><td>Add a body, taper, thread or liner.</td></tr>
-      <tr><td><span class="ui">Fix component collisions before exporting.</span></td><td>Two components overlap. Find the card with the overlap warning and correct its position or length. Bodies never count as overlapping; see <a href="#editor-overlaps">Overlaps and the print gate</a>.</td></tr>
+      <tr><td><span class="ui">Can't export: FWD Liner overlaps …</span></td><td>Two components overlap; the message names them (and counts any further pairs). Tap the overlap line on the warnings banner to go to the first one, and correct its position or length. Bodies never count as overlapping; see <a href="#editor-overlaps">Overlaps and the print gate</a>.</td></tr>
       <tr><td><span class="ui">Cannot export PDF</span> dialog</td><td>A component starts before the AFT end or overlaps another of its kind. The dialog names the problem.</td></tr>
     </tbody>
   </table>
@@ -324,7 +325,7 @@
   <h3>Export all</h3>
   <p><span class="ui">Export all</span> writes the whole document package to one folder in a single step.</p>
   <ol class="steps">
-    <li>Under <span class="ui">Export all</span>, untick any document you don't want: <span class="ui">Consolidated</span>, <span class="ui">Runout</span>, <span class="ui">Schematic</span>, <span class="ui">Wear</span>, <span class="ui">Undercut</span>. All five are ticked to start.</li>
+    <li>Under <span class="ui">Export all</span>, untick any document you don't want: <span class="ui">Consolidated</span>, <span class="ui">Runout</span>, <span class="ui">Schematic</span>, <span class="ui">Wear</span>, <span class="ui">Undercut</span>. All five are ticked to start, except <span class="ui">Undercut</span> on a job with no undercuts recorded. Tick it anyway for a blank undercut write-in sheet.</li>
     <li>Tap <span class="ui">Export all to folder…</span>.</li>
     <li>Pick a folder in the system picker and allow access.</li>
     <li>Read the result line, for example <span class="ui">5 of 5 PDFs written.</span></li>
@@ -352,6 +353,8 @@
     <li>It is saved with the job, and one setting drives the schematic, runout, consolidated and wear sheets.</li>
     <li>The runout and consolidated sheets also stretch the shaft to the full page width, so a short shaft can stand taller there than on the schematic. The inches the slider shows may therefore differ between the schematic preview and the runout preview for the same job.</li>
     <li>On a shaft that can't reach 1 1/2″, the caption tells you the most this shaft reaches.</li>
+    <li>On the runout and consolidated sheets the page itself can set the limit: the dimension rails, the bubble rows, the coupling face and the footer all need room. The slider then stops at the tallest height that sheet really prints, and the readout and the <span class="ui">Standard</span> button show that height, never a taller one.</li>
+    <li>A blank write-in sheet never squeezes the shaft under 1/2″ to make room. Its write-in footer lines move a little closer together first.</li>
   </ul>
 
   <h3>Long bodies compress and print an S-break</h3>
@@ -391,7 +394,7 @@
   <p>Open the ⋮ menu on the Final banner:</p>
   <dl class="terms">
     <dt><span class="ui">Reset to original</span></dt>
-    <dd>Replaces the Final drawing with a fresh copy of the original schematic. It asks first (<span class="ui">Reset to original?</span>), because every edit made on the Final tab is lost.</dd>
+    <dd>Replaces the Final drawing with a fresh copy of the original schematic. It asks first (<span class="ui">Reset to original?</span>), because it replaces every edit made on the Final tab; Undo brings them back.</dd>
     <dt><span class="ui">Discard final drawing</span></dt>
     <dd>Removes the Final drawing. It asks first (<span class="ui">Discard final drawing?</span>). The original is unaffected.</dd>
   </dl>

@@ -2,7 +2,7 @@ package com.android.shaftschematic.ui.util
 
 /**
  * Pure show/dismiss logic for the Schematic tab's spec-level warning banner
- * ([specWarningMessages]). Dismissal is keyed to the exact warning message set so a changed set
+ * ([specIssues] messages). Dismissal is keyed to the exact warning message set so a changed set
  * (a new or different warning) re-shows the banner even while an unchanged set stays hidden. This
  * is a view-state helper only -- the dismissed key itself lives in Compose `rememberSaveable` at
  * the call site, never in the document, `EditState`, or undo history.

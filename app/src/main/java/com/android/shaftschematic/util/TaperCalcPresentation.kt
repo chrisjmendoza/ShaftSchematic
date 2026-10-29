@@ -88,8 +88,7 @@ data class TaperCalcPresentation(
  */
 private fun entryToMm(raw: String, unit: UnitSystem): Double? {
     if (raw.isBlank()) return null
-    val v = parseFractionOrDecimal(raw) ?: return null
-    return unit.toMillimeters(v)
+    return parseLengthMmOrNull(raw, unit)
 }
 
 /** Typed something, and it does not read as a number (or, for the rate, as a ratio). */
@@ -98,7 +97,7 @@ private fun isUnreadable(field: TaperCalcField, raw: String): Boolean {
     return when (field) {
         // Bare "1" stays blocked as ambiguous, the same rule the taper card applies.
         TaperCalcField.RATE -> parseTaperRateText(raw, allowAmbiguousBareOne = false) == null
-        else -> parseFractionOrDecimal(raw) == null
+        else -> !isLengthText(raw)
     }
 }
 

@@ -49,6 +49,7 @@ import com.android.shaftschematic.ui.viewmodel.updateBodyBlend
 import com.android.shaftschematic.ui.viewmodel.updateBodyKeyway
 import com.android.shaftschematic.ui.viewmodel.updateBodyLabel
 import com.android.shaftschematic.ui.viewmodel.updateBodyCompressOnDrawing
+import com.android.shaftschematic.ui.viewmodel.updateBodyShowDimensionRail
 import com.android.shaftschematic.ui.viewmodel.updateBodyShowDia
 import com.android.shaftschematic.ui.viewmodel.updateBodyShade
 import com.android.shaftschematic.ui.viewmodel.updateBodyShowLabel
@@ -66,6 +67,7 @@ import com.android.shaftschematic.ui.viewmodel.updateLinerShade
 import com.android.shaftschematic.ui.viewmodel.updateLinerShowLabel
 import com.android.shaftschematic.ui.viewmodel.updateTaper
 import com.android.shaftschematic.ui.viewmodel.updateTaperAuthoredReference
+import com.android.shaftschematic.ui.viewmodel.setTaperRateMode
 import com.android.shaftschematic.ui.viewmodel.updateTaperKeyway
 import com.android.shaftschematic.ui.viewmodel.updateTaperLabel
 import com.android.shaftschematic.ui.viewmodel.updateTaperShade
@@ -135,6 +137,20 @@ fun ShaftRoute(
                         withDismissAction = true,
                         duration = SnackbarDuration.Short,
                     )
+                }
+                is UiEvent.ShowOalMovedSnack -> {
+                    // A later snackbar (a delete, a message) replaces this one; the OAL commit is
+                    // one history step, so Undo takes back the length and the move together.
+                    snackbarHostState.currentSnackbarData?.dismiss()
+                    val result = snackbarHostState.showSnackbar(
+                        message = event.message,
+                        actionLabel = "Undo",
+                        withDismissAction = true,
+                        duration = SnackbarDuration.Long,
+                    )
+                    if (result == SnackbarResult.ActionPerformed) {
+                        vm.undoEdit()
+                    }
                 }
                 is UiEvent.ShowDeletedSnack -> {
                     val label = when (event.kind) {
@@ -354,8 +370,8 @@ fun ShaftRoute(
         onSetAllAutoSectionsDia = { d -> vm.setAutoBodyDiaMm(d, target) },
         onSetAutoBlend = { s0, s1, end, len, prof, seal, sealLen -> vm.setAutoBlend(s0, s1, end, len, prof, seal, sealLen, target) },
         onSetShowAutoBodyDia = { show -> vm.setShowAutoBodyDia(show, target) },
-        onAddTaper  = { s, l, sd, ed, rate, ref, kwW, kwD, kwL, kwO, kwS, kwUnit ->
-            vm.addTaperAt(s, l, sd, ed, rate, ref, kwW, kwD, kwL, kwO, kwS, kwUnit, target)
+        onAddTaper  = { s, l, sd, ed, rate, ref, kwW, kwD, kwL, kwO, kwS, kwUnit, rateManual ->
+            vm.addTaperAt(s, l, sd, ed, rate, ref, kwW, kwD, kwL, kwO, kwS, kwUnit, target, rateManual)
         },
         onAddThread = { s, l, maj, p, ex, aft, desig, rLen, rDia, rAft ->
             vm.addThreadAt(
@@ -380,6 +396,7 @@ fun ShaftRoute(
         onUpdateBodyShowLabel = { i, show  -> vm.updateBodyShowLabel(i, show, target) },
         onUpdateBodyShade = { i, shade -> vm.updateBodyShade(i, shade, target) },
         onUpdateBodyCompressOnDrawing = { i, on -> vm.updateBodyCompressOnDrawing(i, on, target) },
+        onUpdateBodyShowDimensionRail = { i, show -> vm.updateBodyShowDimensionRail(i, show, target) },
         onUpdateBodyBlend = { i, aft, fwd, p, sAft, sFwd, sAftLen, sFwdLen -> vm.updateBodyBlend(i, aft, fwd, p, sAft, sFwd, sAftLen, sFwdLen, target) },
         onUpdateBodyLabel = { i, label     -> vm.updateBodyLabel(i, label, target) },
         onUpdateBodyKeyway = { i, w, d, l, offset, end, spooned -> vm.updateBodyKeyway(i, w, d, l, offset, end, spooned, target) },
@@ -389,6 +406,7 @@ fun ShaftRoute(
         onUpdateTaperShade = { i, shade -> vm.updateTaperShade(i, shade, target) },
         onUpdateTaperKeyway = { i, w, d, l, offset, spooned -> vm.updateTaperKeyway(i, w, d, l, offset, spooned, target) },
         onUpdateTaperReference = { i, ref -> vm.updateTaperAuthoredReference(i, ref, target) },
+        onUpdateTaperRateMode = { i, manual, text -> vm.setTaperRateMode(i, manual, text, target) },
         onUpdateThread = { i, s, l, maj, p, desig -> vm.updateThread(i, s, l, maj, p, desig, target) },
         onUpdateThreadLabel = { i, label   -> vm.updateThreadLabel(i, label, target) },
         onUpdateThreadShowLabel = { i, show -> vm.updateThreadShowLabel(i, show, target) },

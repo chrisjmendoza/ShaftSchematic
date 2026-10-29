@@ -291,6 +291,7 @@ fun ShaftViewModel.applyTemplate(raw: String) {
     // Deliberately NOT markDocumentSaved() — see the KDoc. The baseline stays where it
     // was, so the session reads as unsaved work and autosave keeps a draft of it.
     _currentDocumentName.value = null
+    reseedEditHistory()
 }
 
 /**
@@ -338,6 +339,7 @@ fun ShaftViewModel.importJson(raw: String) {
     _dualUnits.value = decoded.dualUnits
 
     markDocumentSaved()
+    reseedEditHistory()
 }
 
 /**
@@ -393,4 +395,5 @@ fun ShaftViewModel.newDocument() {
 
     _currentDocumentName.value = null
     markDocumentSaved()
+    reseedEditHistory()
 }

@@ -253,4 +253,202 @@ class DimensionRailLayoutTest {
         val p = plan(spans, safeTopY = 20f)
         p.placements.forEach { assertTrue("label stays below the safe top", it.label.top >= 20f - 1e-3f) }
     }
+
+    // ── Values that cannot seat over their own span (QA_Titan_rebuild AFT end) ───────────
+
+    /**
+     * The squeezed AFT end of a 368 1/2" shaft whose 30" explicit body draws at true scale: the
+     * AFT taper (25 3/16") and the liner datum (25 9/16") are each ~24 pt of rail at the content's
+     * left edge, under the 133" datum rail and the OAL. Unlifted rail y as the schematic composer
+     * passes them (30 pt pitch).
+     */
+    private val contentLeft = 36f
+    private val contentRight = 756f
+    private val aftEnd = listOf(
+        span(rail = 0, railY = 400f, xa = 41f, xb = 64f, w = 30f),         // 25 3/16" taper
+        span(rail = 0, railY = 400f, xa = 66.5f, xb = 122.5f, w = 30f),    // 52 3/8" liner (inline)
+        span(rail = 1, railY = 370f, xa = 41f, xb = 66.5f, w = 30f),       // 25 9/16" liner datum
+        span(rail = 2, railY = 340f, xa = 41f, xb = 163.5f, w = 25f),      // 133" datum
+        span(rail = DimensionRailLayout.TOP_RAIL, railY = 310f, xa = 41f, xb = 755f, w = 50f),
+    )
+
+    private fun planAftEnd() = DimensionRailLayout.plan(
+        aftEnd, metrics, arrow, pad, safeTopY = 0f, contentLeft = contentLeft, contentRight = contentRight,
+    )
+
+    @Test
+    fun `a value too wide for its span steps outside it on its own rail's band`() {
+        val p = planAftEnd()
+        assertLabelsClear(aftEnd, p)
+        for (i in listOf(0, 2)) {
+            val s = aftEnd[i]
+            val pl = p.placements[i]
+            assertFalse("span $i falls back", pl.inline)
+            assertTrue("span $i's value sits beyond its FWD extension line", pl.label.left > s.xb)
+            assertEquals(
+                "span $i's value stays at its own rail's height",
+                pl.railY - metrics.aboveDy + metrics.ascent, pl.label.top, 1e-3f,
+            )
+            assertTrue("span $i's value stays inside the content", pl.label.right <= contentRight)
+        }
+    }
+
+    @Test
+    fun `a floating value is never nearer another rail's line than its own`() {
+        val p = planAftEnd()
+        aftEnd.forEachIndexed { i, s ->
+            val pl = p.placements[i]
+            if (pl.inline) return@forEachIndexed
+            val cy = (pl.label.top + pl.label.bottom) * 0.5f
+            val own = pl.railY - cy
+            aftEnd.forEachIndexed { j, o ->
+                if (j == i || o.railIndex == s.railIndex) return@forEachIndexed
+                val oy = p.placements[j].railY
+                if (oy >= pl.railY || o.xb <= pl.label.left || o.xa >= pl.label.right) return@forEachIndexed
+                assertTrue(
+                    "span $i's value (own line ${own}pt below) reads with span $j's rail",
+                    cy - oy > own,
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `a value placed outside its span never crosses its own extension lines`() {
+        val p = planAftEnd()
+        aftEnd.forEachIndexed { i, s ->
+            val pl = p.placements[i]
+            if (pl.inline || (pl.cx >= s.xa && pl.cx <= s.xb)) return@forEachIndexed
+            for (x in listOf(s.xa, s.xb)) {
+                assertFalse(
+                    "span $i's value crosses its own extension line at x=$x",
+                    pl.label.left < x + DimensionRailLayout.LINE_HALF_CLEAR &&
+                        pl.label.right > x - DimensionRailLayout.LINE_HALF_CLEAR,
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `an overhanging value is not struck by its own boundary line rising to a higher rail`() {
+        // A lone short span starting at the AFT S.E.T., whose line also carries the OAL above it:
+        // centred over the span, the value would print with that line through its first digit.
+        val spans = listOf(
+            span(rail = 0, railY = 400f, xa = 41f, xb = 64f, w = 30f),
+            span(rail = DimensionRailLayout.TOP_RAIL, railY = 370f, xa = 41f, xb = 600f, w = 50f),
+        )
+        val p = DimensionRailLayout.plan(spans, metrics, arrow, pad, safeTopY = 0f, contentLeft = contentLeft)
+        val label = p.placements[0].label
+        assertFalse(
+            "the AFT S.E.T. line runs through the value",
+            label.left < 41f + DimensionRailLayout.LINE_HALF_CLEAR && label.right > 41f - DimensionRailLayout.LINE_HALF_CLEAR,
+        )
+    }
+
+    @Test
+    fun `a value with no room outside falls back to its own rail rather than another`() {
+        // Hemmed in on both sides by extension lines that rise to the rail directly above:
+        // nothing at its own height clears, and a bump would put it against that rail's line.
+        val spans = listOf(
+            span(rail = 0, railY = 400f, xa = 100f, xb = 120f, w = 40f),
+            span(rail = 1, railY = 370f, xa = 60f, xb = 160f, w = 30f),
+            span(rail = 1, railY = 370f, xa = 90f, xb = 92f, w = 1f),
+            span(rail = 1, railY = 370f, xa = 128f, xb = 130f, w = 1f),
+        )
+        val p = DimensionRailLayout.plan(spans, metrics, arrow, pad, safeTopY = 0f)
+        val pl = p.placements[0]
+        assertEquals(
+            "stays at its own rail's height",
+            pl.railY - metrics.aboveDy + metrics.ascent, pl.label.top, 1e-3f,
+        )
+    }
+
+    @Test
+    fun `a value never steps outside onto a floating neighbour's own spot`() {
+        // Two short neighbours on one rail at the FWD end, both values wider than their spans
+        // (a dual-unit sheet): the AFT one stepping right would sit exactly where the FWD one
+        // has to print, and the FWD one, hemmed in by the page edge, would land on top of it.
+        val spans = listOf(
+            span(rail = 0, railY = 400f, xa = 587f, xb = 643f, w = 70f),
+            span(rail = 0, railY = 400f, xa = 683f, xb = 738.7f, w = 70f),
+            span(rail = 1, railY = 370f, xa = 643f, xb = 738.7f, w = 70f),
+            span(rail = DimensionRailLayout.TOP_RAIL, railY = 340f, xa = 41f, xb = 738.7f, w = 60f),
+        )
+        val p = DimensionRailLayout.plan(
+            spans, metrics, arrow, pad, safeTopY = 0f, contentLeft = contentLeft, contentRight = contentRight,
+        )
+        for (a in p.placements.indices) for (b in p.placements.indices) {
+            if (a != b) assertFalse("value $a prints over value $b", p.placements[a].label.intersects(p.placements[b].label))
+        }
+    }
+
+    // ── Leaders: a value off its own line says which span it states ───────────────────────
+
+    /** True when the leader's stroke passes through [b] (sampled — the test's own check). */
+    private fun crosses(l: RailValueLeader, b: DimensionRailLayout.Box): Boolean =
+        (0..100).any { k ->
+            val t = k / 100f
+            val x = l.fromX + (l.x - l.fromX) * t
+            val y = l.fromY + (l.toY - l.fromY) * t
+            x > b.left && x < b.right && y > b.top && y < b.bottom
+        }
+
+    @Test
+    fun `a value set beside its span carries a leader onto its own span`() {
+        val p = planAftEnd()
+        for (i in listOf(0, 2)) {
+            val s = aftEnd[i]
+            val l = requireNotNull(p.placements[i].leader) { "span $i's displaced value has no leader" }
+            assertEquals("lands on its own line", p.placements[i].railY, l.toY, 1e-3f)
+            assertTrue("lands inside its own span", l.x > s.xa && l.x < s.xb)
+            assertEquals("leaves from the value's bottom", p.placements[i].label.bottom, l.fromY, 1e-3f)
+            assertTrue("leaves from the value's box", l.fromX >= p.placements[i].label.left - 1e-3f)
+        }
+    }
+
+    @Test
+    fun `no leader crosses another value`() {
+        val p = planAftEnd()
+        p.placements.forEachIndexed { i, pl ->
+            val l = pl.leader ?: return@forEachIndexed
+            p.placements.forEachIndexed { j, o ->
+                if (j != i) assertFalse("span $i's leader crosses value $j", crosses(l, o.label))
+            }
+        }
+    }
+
+    @Test
+    fun `values in their break or at home over their span carry no leader`() {
+        val p = planAftEnd()
+        assertTrue("the inline 52 3/8 value", p.placements[1].inline)
+        assertEquals(null, p.placements[1].leader)
+        assertEquals("the OAL", null, p.placements[4].leader)
+        val inlineOnly = listOf(
+            span(rail = 0, railY = 400f, xa = 100f, xb = 300f, w = 30f),
+            span(rail = 1, railY = 370f, xa = 100f, xb = 500f, w = 30f),
+        )
+        plan(inlineOnly).placements.forEach { assertEquals(null, it.leader) }
+        // A short span's value floating over its own span at home height needs none either.
+        val home = plan(listOf(span(rail = 0, railY = 400f, xa = 100f, xb = 130f, w = 24f))).placements[0]
+        assertFalse(home.inline)
+        assertEquals(null, home.leader)
+    }
+
+    @Test
+    fun `a bumped value's leader steps around the value under it`() {
+        val spans = listOf(
+            span(rail = 0, railY = 60f, xa = 100f, xb = 140f, w = 30f),
+            span(rail = 0, railY = 60f, xa = 102f, xb = 142f, w = 30f),
+        )
+        // Content edges hug the spans, so neither value can step outside: the second one bumps.
+        val p = DimensionRailLayout.plan(
+            spans, metrics, arrow, pad, safeTopY = 0f, contentLeft = 95f, contentRight = 150f,
+        )
+        val bumped = p.placements.single { it.label.top < it.railY - metrics.aboveDy + metrics.ascent - 0.5f }
+        val l = requireNotNull(bumped.leader) { "a value bumped off its home height has no leader" }
+        assertEquals(bumped.railY, l.toY, 1e-3f)
+        p.placements.filter { it !== bumped }.forEach {
+            assertFalse("the leader runs through the value below it", crosses(l, it.label))
+        }
+    }
 }

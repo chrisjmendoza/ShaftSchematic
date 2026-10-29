@@ -146,7 +146,7 @@ fun FinalRoute(
             ConfirmDialog(
                 title = "Reset to original?",
                 message = "Replace the final drawing with a fresh copy of the original " +
-                    "schematic? Edits made here will be lost.",
+                    "schematic? Edits made here are replaced — Undo brings them back.",
                 confirmLabel = "Reset",
                 testTag = "final_reset_confirm",
                 onConfirm = { confirmReset = false; vm.resetFinalSpec() },
