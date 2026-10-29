@@ -343,6 +343,7 @@ fun composeUndercutPdf(
             (contentLeft + contentRight) * 0.5f, (midTopFull + midBotFull) * 0.5f, note,
         )
         drawUndercutNotesRow(c, text, contentLeft, contentRight, notesY)
+        if (pdfPrefs.showUnitsNote) drawUnitsNote(c, pageW, pageH, margin, displayUnits.documentUnit)
         return
     }
 
@@ -532,6 +533,10 @@ fun composeUndercutPdf(
     // Notes only: the dye-pen PASS/FAIL checkboxes are a wear/inspection concern and have no
     // place on a machining record (`docs/archive/UndercutDrawing_PLAN.md` §11.4).
     drawUndercutNotesRow(c, text, contentLeft, contentRight, notesY)
+
+    // Last, in the bottom margin strip: the opt-in "Units in …" note (landscape or portrait —
+    // the helper reads the page's own size).
+    if (pdfPrefs.showUnitsNote) drawUnitsNote(c, pageW, pageH, margin, displayUnits.documentUnit)
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

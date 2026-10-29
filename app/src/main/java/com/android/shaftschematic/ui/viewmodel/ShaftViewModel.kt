@@ -484,6 +484,14 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     internal val _pdfDualUnitLayout = MutableStateFlow(PdfPrefs().dualUnitLayout)
     val pdfDualUnitLayout: StateFlow<DualUnitLayout> = _pdfDualUnitLayout.asStateFlow()
 
+    // Settings → Drawing → "Units note on sheets" (`PdfPrefs.showUnitsNote`).
+    internal val _pdfShowUnitsNote = MutableStateFlow(PdfPrefs().showUnitsNote)
+    val pdfShowUnitsNote: StateFlow<Boolean> = _pdfShowUnitsNote.asStateFlow()
+
+    // Settings → Drawing / Output tab options: "Shade wear areas on the shaft drawing".
+    internal val _pdfWearAreasShaded = MutableStateFlow(PdfPrefs().wearAreasShaded)
+    val pdfWearAreasShaded: StateFlow<Boolean> = _pdfWearAreasShaded.asStateFlow()
+
     internal val _pdfExportMode = MutableStateFlow(PdfExportMode.Standard)
     val pdfExportMode: StateFlow<PdfExportMode> = _pdfExportMode.asStateFlow()
 
@@ -1222,6 +1230,18 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             SettingsStore.pdfDualUnitLayoutFlow(getApplication()).collectLatest { persisted ->
                 _pdfDualUnitLayout.value = persisted
                 SettingsStore.updatePdfPrefs { it.copy(dualUnitLayout = persisted) }
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.pdfShowUnitsNoteFlow(getApplication()).collectLatest { persisted ->
+                _pdfShowUnitsNote.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(showUnitsNote = persisted) }
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.pdfWearAreasShadedFlow(getApplication()).collectLatest { persisted ->
+                _pdfWearAreasShaded.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(wearAreasShaded = persisted) }
             }
         }
         viewModelScope.launch {

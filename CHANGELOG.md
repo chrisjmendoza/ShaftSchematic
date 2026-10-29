@@ -8,6 +8,70 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-29
 
+### feat(output): wear areas print as a light grey highlight on the consolidated sheet
+
+- On the consolidated sheet each measured wear area now prints as a light grey (about 10%)
+  highlight over the liner instead of rows of vertical lines, and the measured diameters inside the
+  shaft print straight on it — no white box around them. A liner face or break line that runs under
+  a value is still interrupted at the value, so nothing crosses the numbers.
+- This is the new default. To go back to the vertical lines, switch off **Shade wear areas on the
+  shaft drawing** in Settings → Drawing or in the Output tab's PDF options (Shading). A saved
+  Drawing profile keeps the choice, and "Restore Drawing defaults" turns it back on.
+- The wear sheet is unchanged — it keeps its own "Wear area shade" setting.
+- Docs: `docs/contracts/RunoutSheet.md`, `docs/PDF_EXPORT.md` §5.6, the User Manual (Settings →
+  Drawing), Help → "Drawing — Shade wear areas on the shaft drawing".
+
+### fix(output): a value prints on a white box so a line never strikes through it; values stay centred over their rail
+
+- Every dimension value on the schematic and the consolidated sheet — the overall length
+  included — now prints on a small white box. A line that passes under a value (an extension line,
+  another span's line) stops at the box instead of running through the numbers, the way it is done
+  on a hand drawing.
+- A value too wide for its span now sits centred over its own rail, overhanging the ends of the
+  span if it has to, instead of being pushed off to the side. It only moves aside when it would
+  otherwise print on top of another value. On the Titan job the AFT taper's 25 3/16" now sits over
+  its own span.
+- No value runs off the page any more: one near the edge of the sheet shifts inward to stay on
+  the paper (a dual-units 14 3/4" [374.7 mm] at the FWD end used to run past the right edge).
+- Blank drafts are unchanged — the write-in gaps print no box.
+- Docs: `docs/PDF_EXPORT.md` §5.4, the User Manual (Reading the sheets → Dimension rails; Help).
+
+### fix(output): measured diameters print in one unit on a dual-units job
+
+- With dual units on, the measured Ø values printed inside the shaft on the consolidated sheet
+  carried the converted value too ("Ø10.985" [279.0 mm]"), and the column stood taller than the
+  shaft. Every measured diameter from the wear work — the values inside the shaft on the
+  consolidated sheet (point readings and worn sections) and the Ø callouts on the wear sheet — now
+  prints in the drawing's unit only (or the component's own unit, when it has one).
+- Dimension lines, the overall length and the footer still print both units, as before.
+- Docs: `docs/contracts/RunoutSheet.md`, `docs/PDF_EXPORT.md` §4.
+
+### feat(settings): an optional "Units in inches / mm" note on every sheet
+
+- New switch in Settings → Drawing, under "Dual-unit layout": **Units note on sheets**. On, every
+  printed sheet — schematic (Final included), runout, consolidated, wear and undercut, landscape
+  or portrait — prints a small "Units in inches" or "Units in mm" in its lower-right corner. It
+  names the drawing's own unit.
+- The note sits in the bottom margin, below the drawing and the footer, so nothing else on the
+  sheet moves. Off by default; with it off the sheets print exactly as before.
+- Settings only (it is not on the PDF options panel). A saved Drawing profile keeps it, and
+  "Restore Drawing defaults" turns it off.
+- Docs: `docs/PDF_EXPORT.md` §4, `docs/UI_CONTRACT.md` §5.3, the User Manual (Settings → Lines,
+  threads and text; Drawing profiles), Help → "Drawing — Units note on sheets".
+
+### fix(runout): the keyway notch in each runout bubble matches the shaft's own keyway
+
+- The notch at the top of every runout bubble was a fixed size, about three times deeper than a
+  real keyway, and read large on the sheet. It is now drawn in proportion to the shaft's keyway:
+  the bubble is the shaft's cross-section, so a 1 3/4" × 3/4" keyway on a 10 3/8" taper draws a
+  slot of that width and depth on the circle. The first keyway from the AFT end sets it for every
+  bubble on the sheet (a taper is measured at its large end); a shaft with no keyway gets a
+  standard square key. The notch keeps a minimum depth so it still reads as a slot at sheet size,
+  so on most jobs it prints a little deeper than true — still well under half the old depth.
+- Same notch on the Runout tab's drawing, the classic and consolidated sheets, and blank drafts.
+  Nothing on the job changes; only the drawing.
+- Docs: `docs/contracts/RunoutSheet.md`.
+
 ### fix(tablet): the editor's drawing band makes room for the keyboard and the warnings
 
 - On a landscape tablet, typing in a component card left the card about an inch of screen above

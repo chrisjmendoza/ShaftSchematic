@@ -148,6 +148,8 @@ private data class ConsolidatedRenderInputs(
     val shadedBodies: Boolean,
     val shadedTapers: Boolean,
     val shadedLiners: Boolean,
+    /** `PdfPrefs.wearAreasShaded` — rides the `PdfPrefs` snapshot to the composer. Key only. */
+    val wearAreasShaded: Boolean,
     val sBreakThresholdFrac: Float,
     val shadeExplicitBodiesOnly: Boolean,
     /** Bubble size and drop — keys only; both travel inside the `PdfPrefs` snapshot. */
@@ -229,6 +231,7 @@ fun OutputRoute(
     val pdfShadedBodies    by vm.pdfShadedBodies.collectAsState()
     val pdfShadedTapers    by vm.pdfShadedTapers.collectAsState()
     val pdfShadedLiners    by vm.pdfShadedLiners.collectAsState()
+    val pdfWearAreasShaded by vm.pdfWearAreasShaded.collectAsState()
     val curveLoHeightIn    by vm.pdfCurveLoHeightIn.collectAsState()
     val curveHiHeightIn    by vm.pdfCurveHiHeightIn.collectAsState()
     val pdfSBreakThresholdFrac by vm.pdfSBreakThresholdFrac.collectAsState()
@@ -567,6 +570,7 @@ fun OutputRoute(
                 shadedBodies = pdfShadedBodies,
                 shadedTapers = pdfShadedTapers,
                 shadedLiners = pdfShadedLiners,
+                wearAreasShaded = pdfWearAreasShaded,
                 sBreakThresholdFrac = tuning.sBreakFrac ?: pdfSBreakThresholdFrac,
                 shadeExplicitBodiesOnly = pdfShadeExplicitBodiesOnly,
                 runoutBubbleScale = pdfRunoutBubbleScale,
@@ -1017,6 +1021,8 @@ fun OutputRoute(
                     shadeExplicitBodiesOnly = pdfShadeExplicitBodiesOnly,
                     vm = vm,
                     linerShadeLocked = linerShadeLocked,
+                    showWearAreasShadedRow = true,
+                    wearAreasShaded = pdfWearAreasShaded,
                     showCouplingFaceRow = true,
                     couplingFaceOn = runoutConfig.showCouplingFace,
                     showDyePenRow = true,

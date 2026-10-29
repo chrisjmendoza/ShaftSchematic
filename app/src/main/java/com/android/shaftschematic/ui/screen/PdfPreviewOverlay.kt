@@ -103,6 +103,7 @@ import com.android.shaftschematic.ui.viewmodel.setPdfShadedBodies
 import com.android.shaftschematic.ui.viewmodel.setPdfShadedLiners
 import com.android.shaftschematic.ui.viewmodel.setPdfUndercutLineArt
 import com.android.shaftschematic.ui.viewmodel.setPdfUndercutLinerOutline
+import com.android.shaftschematic.ui.viewmodel.setPdfWearAreasShaded
 import com.android.shaftschematic.ui.viewmodel.setPdfUndercutSplitAtLinerEdge
 import com.android.shaftschematic.ui.viewmodel.setPdfShadedTapers
 import com.android.shaftschematic.ui.viewmodel.setPdfTieringMode
@@ -481,6 +482,14 @@ internal fun RunoutWearOptionsSheet(
     showShadeExplicitBodiesOnly: Boolean = true,
     /** Locks the "Liners" shade row — see [ShadeInPdfChecks]. */
     linerShadeLocked: Boolean = false,
+    /**
+     * Shows the app-wide "Shade wear areas on the shaft drawing" switch (`PdfPrefs.wearAreasShaded`)
+     * in the Shading section. On only for the consolidated sheet — the one document whose wear
+     * areas it restyles; a remote control for the one Settings value.
+     */
+    showWearAreasShadedRow: Boolean = false,
+    /** The app-wide `PdfPrefs.wearAreasShaded`; read only when [showWearAreasShadedRow]. */
+    wearAreasShaded: Boolean = true,
     /**
      * Shows the "Undercut drawing: line art (no shading)" row at the foot of the shade section.
      * On only for the UNDERCUT preview — `PdfPrefs.undercutLineArt` reaches one composer, so on
@@ -896,6 +905,9 @@ internal fun RunoutWearOptionsSheet(
                 undercutLinerOutline = undercutLinerOutline,
                 onSetUndercutLinerOutline = { vm.setPdfUndercutLinerOutline(it) },
             )
+            if (showWearAreasShadedRow) {
+                WearAreasShadedRow(checked = wearAreasShaded, onCheckedChange = { vm.setPdfWearAreasShaded(it) })
+            }
         }
 
         // ── Measurement reference ────────────────────────────────────────────

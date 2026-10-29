@@ -10,6 +10,7 @@ import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.WearDiaReading
 import com.android.shaftschematic.model.WearPit
 import com.android.shaftschematic.model.WearRecord
+import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.settings.RunoutConfig
 import com.android.shaftschematic.ui.resolved.resolveComponents
 import com.android.shaftschematic.util.PDF_PAGE_HEIGHT_PT
@@ -28,7 +29,8 @@ import kotlin.math.abs
  * On the consolidated sheet a pit X that would cross an in-profile value's halo is not drawn
  * (on-device ruling: the value stands above the pits). Driven through the real composer: a LARGE
  * pit centred under a valued liner reading is skipped, a LARGE pit clear of every halo still
- * draws, and with no value printed both draw.
+ * draws, and with no value printed both draw — with the wear areas shaded (no halo, the rule
+ * guards the text box) and with them stroked (the halo) alike.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -61,7 +63,9 @@ class ConsolidatedPitUnderValueTest {
     private val clearPit = WearPit(componentId = "L1", axialMm = 35f * inch, acrossFrac = 0.5f, size = PitSize.LARGE)
     private val reading = WearDiaReading(componentId = "L1", axialMm = 10f * inch, diaMm = 10.5f * inch)
 
-    private fun compose(wear: WearRecord): PitRecordingCanvas {
+    private val modes = listOf(true, false)
+
+    private fun compose(wear: WearRecord, shaded: Boolean): PitRecordingCanvas {
         val c = PitRecordingCanvas(
             Bitmap.createBitmap(PDF_PAGE_WIDTH_PT, PDF_PAGE_HEIGHT_PT, Bitmap.Config.ARGB_8888),
         )
@@ -70,6 +74,7 @@ class ConsolidatedPitUnderValueTest {
             config = RunoutConfig(),
             project = ProjectInfo(),
             unit = UnitSystem.INCHES,
+            pdfPrefs = PdfPrefs(wearAreasShaded = shaded),
             resolvedComponents = resolveComponents(spec),
             wearRecord = wear,
             consolidated = true, includeBubbles = false, includeWearInfo = true,
@@ -78,27 +83,28 @@ class ConsolidatedPitUnderValueTest {
     }
 
     @Test
-    fun `with no value printed both pits draw`() {
-        val c = compose(WearRecord(pits = listOf(underPit, clearPit)))
+    fun `with no value printed both pits draw`() = modes.forEach { shaded ->
+        val c = compose(WearRecord(pits = listOf(underPit, clearPit)), shaded)
         // Two strokes per X.
-        assertEquals("pit strokes ${c.pitStrokeCentersX}", 4, c.pitStrokeCentersX.size)
+        assertEquals("shaded=$shaded pit strokes ${c.pitStrokeCentersX}", 4, c.pitStrokeCentersX.size)
     }
 
     @Test
-    fun `a pit under a valued reading is hidden and a pit clear of every halo still draws`() {
-        val withValue = compose(WearRecord(pits = listOf(underPit, clearPit), diaReadings = listOf(reading)))
-        val bare = compose(WearRecord(pits = listOf(underPit, clearPit)))
-        assertEquals("pit strokes ${withValue.pitStrokeCentersX}", 2, withValue.pitStrokeCentersX.size)
+    fun `a pit under a valued reading is hidden and a pit clear of every halo still draws`() = modes.forEach { shaded ->
+        val withValue = compose(WearRecord(pits = listOf(underPit, clearPit), diaReadings = listOf(reading)), shaded)
+        val bare = compose(WearRecord(pits = listOf(underPit, clearPit)), shaded)
+        assertEquals("shaded=$shaded pit strokes ${withValue.pitStrokeCentersX}", 2, withValue.pitStrokeCentersX.size)
         // The X that survives is the clear pit's — the right-hand pair on the bare sheet.
         val clearX = bare.pitStrokeCentersX.max()
         assertTrue(withValue.pitStrokeCentersX.all { abs(it - clearX) < 0.01f })
     }
 
     @Test
-    fun `a zero reading prints no value and hides no pit`() {
+    fun `a zero reading prints no value and hides no pit`() = modes.forEach { shaded ->
         val c = compose(
             WearRecord(pits = listOf(underPit, clearPit), diaReadings = listOf(reading.copy(diaMm = 0f))),
+            shaded,
         )
-        assertEquals(4, c.pitStrokeCentersX.size)
+        assertEquals("shaded=$shaded", 4, c.pitStrokeCentersX.size)
     }
 }

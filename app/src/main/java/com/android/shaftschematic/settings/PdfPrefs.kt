@@ -270,6 +270,23 @@ data class PdfPrefs(
      */
     val dualUnitLayout: DualUnitLayout = DualUnitLayout.Default,
     /**
+     * Print a small "Units in inches" / "Units in mm" note — the DOCUMENT unit — in the bottom
+     * margin's right corner of every sheet (`drawUnitsNote`, `pdf/SheetFooter.kt`). Settings →
+     * Drawing → "Units note on sheets" only, never the PDF options sheets (on-device request).
+     * Default OFF, and OFF prints byte-identically to a sheet from before the note existed.
+     */
+    val showUnitsNote: Boolean = false,
+    /**
+     * Draw each wear area on the CONSOLIDATED sheet as a light grey fill (≈10%,
+     * `CONSOLIDATED_WEAR_SHADE_ALPHA`) instead of vertical strokes, with the in-profile Ø values
+     * printed straight on it — no knockout halo. Settings → Drawing → "Shade wear areas on the
+     * shaft drawing" and the Output tab's PDF options sheet (remote control for this one value).
+     * Default ON (on-device ruling: the shade is the preferred look); OFF prints today's strokes
+     * and halos byte-identically. The wear document keeps its own band fill
+     * ([wearBandShadeFrac]) and is not affected.
+     */
+    val wearAreasShaded: Boolean = true,
+    /**
      * Default worn-profile trace exaggeration (`geom/WearTraceMath.kt`): how deep a record's
      * deepest liner reading draws, as a fraction of the drawn radius. Settings → Drawing →
      * "Wear depth exaggeration", [WEAR_TRACE_MIN_DEPTH_FRAC]..[WEAR_TRACE_MAX_DEPTH_FRAC].

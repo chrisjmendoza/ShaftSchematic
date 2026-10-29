@@ -121,13 +121,24 @@ fun ShaftSpec.keywayClocking(): KeywayClocking = when {
  */
 fun ShaftSpec.secondaryKeywayHostIds(): Set<String> {
     if (keywayClocking() == KeywayClocking.NONE) return emptySet()
-    val centers = buildList {
-        tapers.forEach { t -> t.keywayAbsSpanMm()?.let { add(t.id to it.centerMm) } }
-        bodies.forEach { b -> b.keywayAbsSpanMm()?.let { add(b.id to it.centerMm) } }
-    }
+    val centers = keywayHostCentersMm()
     if (centers.size < 2) return emptySet()
     val nearId = centers.minByOrNull { it.second }!!.first
     return centers.asSequence().map { it.first }.filterNot { it == nearId }.toSet()
+}
+
+/**
+ * Host component ID of the shaft's **datum** keyway — the one nearest the AFT face (smallest
+ * absolute [keywayAbsSpanMm] center; a taper wins a tie, being listed first). `null` when the
+ * shaft has no keyway. The same pick [secondaryKeywayHostIds] keeps primary.
+ */
+fun ShaftSpec.datumKeywayHostId(): String? =
+    keywayHostCentersMm().minByOrNull { it.second }?.first
+
+/** Every keyway host (tapers, then bodies) paired with its keyway's absolute center in mm. */
+private fun ShaftSpec.keywayHostCentersMm(): List<Pair<String, Float>> = buildList {
+    tapers.forEach { t -> t.keywayAbsSpanMm()?.let { add(t.id to it.centerMm) } }
+    bodies.forEach { b -> b.keywayAbsSpanMm()?.let { add(b.id to it.centerMm) } }
 }
 
 /**

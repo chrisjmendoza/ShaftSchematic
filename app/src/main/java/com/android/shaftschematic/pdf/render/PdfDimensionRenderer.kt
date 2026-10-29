@@ -1,6 +1,7 @@
 package com.android.shaftschematic.pdf.render
 
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Paint
 import com.android.shaftschematic.geom.DimensionRailLayout
 import com.android.shaftschematic.pdf.DIM_BREAK_TEXT_PAD_PT
@@ -17,8 +18,22 @@ import kotlin.math.min
 private const val ARROW_BARB_FRAC = 0.5f
 
 /**
+ * Sheet-white margin a rail value's knockout box (its halo) extends past the value's measured box
+ * on every side. The measured box is the planner's — full width, and on a stacked dual sheet the
+ * full two-line height (`dualStackMetrics`) — so the halo covers every term the value prints.
+ */
+internal const val RAIL_VALUE_HALO_PAD_PT = 1.5f
+
+/**
  * Stacked dimension rails with extension lines, in-line labels, and smart arrowheads.
  * Uses the same world→page X mapper as geometry so spans align with parts.
+ *
+ * Every value prints over a sheet-white knockout box — its halo, [RAIL_VALUE_HALO_PAD_PT] around
+ * the measured text — and [drawPlan] draws in TWO passes: every span's extension lines, rail line
+ * or stubs, leader and arrowheads first, then every halo and its value. A line passing under any
+ * value is therefore knocked out rather than striking through the numbers (on-device ruling: the
+ * hand-drawing convention, still clear where the line is). A value seated in its break gets the
+ * same halo — nothing lies under it there — so there is one draw path.
  *
  * The dimension value is seated in a BREAK in the line (drafting convention): the main line
  * is drawn as two stubs [xa..gapLeft] and [gapRight..xb] with the value vertically centered on
@@ -33,14 +48,14 @@ private const val ARROW_BARB_FRAC = 0.5f
  * home height — is joined back to its span by the plan's leader
  * ([DimensionRailLayout.Placement.leader]), stroked with the line paint.
  *
- * Placement is not decided here: the pure [DimensionRailLayout] plans every span at once so
- * labels and rail lines across ALL tiers share one collision space (a floating value lives in
- * the next rail's band). This class measures the text, maps the spans to page x, and draws the
- * planned result — the plan owns inline-vs-above, the label center, and the rail lift.
+ * Placement is not decided here: the pure [DimensionRailLayout] plans every span at once so the
+ * labels across ALL tiers share one collision space (a floating value lives in the next rail's
+ * band). This class measures the text, maps the spans to page x, and draws the planned result —
+ * the plan owns inline-vs-above, the label center, and the rail lift.
  *
  * Blank-draft mode ([blankLabels]): the break is still cut — at a writable width — but no value
- * text is drawn, leaving the gap as a hand-write-in spot. A span too short for the full gap
- * cuts a narrower one instead of losing it, down to [blankLabelMinWidthPx].
+ * text (and no halo) is drawn, leaving the gap as a hand-write-in spot. A span too short for the
+ * full gap cuts a narrower one instead of losing it, down to [blankLabelMinWidthPx].
  */
 class PdfDimensionRenderer(
     private val pageX: (Double) -> Float,   // mm → page X
@@ -78,7 +93,7 @@ class PdfDimensionRenderer(
      * The width this renderer occupies for a value — blank drafts reserve the write-in gap,
      * shrunk toward [blankLabelMinWidthPx] on a span too short for the full one so it still
      * gets somewhere to write. Both the planner (via [spanInput]) and the break in
-     * [drawPlanned] read this, so the reserved box and the cut gap are the same width.
+     * [drawPlan] read this, so the reserved box and the cut gap are the same width.
      */
     fun labelWidth(span: DimSpan): Float =
         if (blankLabels) {
@@ -152,8 +167,8 @@ class PdfDimensionRenderer(
         DimensionRailLayout.topLift(inputs, metrics(), arrowSize, textPad)
 
     /**
-     * Plans placements parallel to [inputs]; vertical bumps stay below [safeTopY], and a value
-     * placed outside its own span stays inside [[contentLeft], [contentRight]].
+     * Plans placements parallel to [inputs]; vertical bumps stay below [safeTopY], and every
+     * value's full box stays inside [[contentLeft], [contentRight]].
      */
     fun plan(
         inputs: List<DimensionRailLayout.SpanInput>,
@@ -163,12 +178,44 @@ class PdfDimensionRenderer(
     ): DimensionRailLayout.Plan =
         DimensionRailLayout.plan(inputs, metrics(), arrowSize, textPad, safeTopY, contentLeft, contentRight)
 
-    /** Draws one planned span: extension lines, the (broken or continuous) line, value, arrows. */
-    fun drawPlanned(
+    /** Sheet-white fill for the value halos — paper, never a theme color. */
+    private val haloPaint = Paint().apply {
+        style = Paint.Style.FILL
+        color = Color.WHITE
+    }
+
+    /**
+     * Draws a whole plan — [spans] and [placements] parallel, as [plan] returned them. Every
+     * span's lines first, then every value over its halo, so no line drawn for ANY span can cross
+     * a value afterwards. Drawing span by span would let a later span's extension line strike
+     * through an earlier span's value.
+     */
+    fun drawPlan(
+        canvas: Canvas,
+        spans: List<DimSpan>,
+        placements: List<DimensionRailLayout.Placement>,
+        drawExtensions: Boolean = true,
+    ) {
+        require(spans.size == placements.size) { "spans and placements must be parallel" }
+        spans.forEachIndexed { i, span -> drawSpanLines(canvas, span, placements[i], drawExtensions) }
+        if (blankLabels) return  // the gap itself is the write-in spot; the plan still reserved it
+        spans.forEachIndexed { i, span ->
+            val box = placements[i].label
+            canvas.drawRect(
+                box.left - RAIL_VALUE_HALO_PAD_PT, box.top - RAIL_VALUE_HALO_PAD_PT,
+                box.right + RAIL_VALUE_HALO_PAD_PT, box.bottom + RAIL_VALUE_HALO_PAD_PT,
+                haloPaint,
+            )
+            drawLabel(canvas, span.label, box)
+        }
+    }
+
+    /** One planned span's ink below the value: extension lines, the (broken or continuous) line, leader, arrows. */
+    private fun drawSpanLines(
         canvas: Canvas,
         span: DimSpan,
         placement: DimensionRailLayout.Placement,
-        drawExtensions: Boolean = true,
+        drawExtensions: Boolean,
     ) {
         val x1 = pageX(span.x1Mm)
         val x2 = pageX(span.x2Mm)
@@ -200,15 +247,12 @@ class PdfDimensionRenderer(
             placement.leader?.let { canvas.drawLine(it.fromX, it.fromY, it.x, it.toY, linePaint) }
         }
 
-        drawLabel(canvas, span.label, placement.label)
-
         // ---- arrowheads: outward only on a span too narrow to hold both (planner's call) ----
         drawArrow(canvas, xAt = xa, y = y, inward = placement.arrowsInward, isLeftEnd = true)
         drawArrow(canvas, xAt = xb, y = y, inward = placement.arrowsInward, isLeftEnd = false)
     }
 
     private fun drawLabel(canvas: Canvas, label: DualLabel, bounds: DimensionRailLayout.Box) {
-        if (blankLabels) return  // the gap itself is the write-in spot; the plan still reserved it
         // The REAL paint ascent, deliberately — see [metrics]. On a stacked sheet the box top is
         // one advance higher than a single line's would be, so this baseline is the PRIMARY line's
         // and `drawDualLabel` steps down to the secondary from there.

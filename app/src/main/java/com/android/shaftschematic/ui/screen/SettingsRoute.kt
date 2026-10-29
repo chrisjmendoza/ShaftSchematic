@@ -172,6 +172,8 @@ fun SettingsRoute(
     val pdfFractionStyle by vm.pdfFractionStyle.collectAsState()
     val pdfOutputFont by vm.pdfOutputFont.collectAsState()
     val pdfDualUnitLayout by vm.pdfDualUnitLayout.collectAsState()
+    val pdfShowUnitsNote by vm.pdfShowUnitsNote.collectAsState()
+    val pdfWearAreasShaded by vm.pdfWearAreasShaded.collectAsState()
 
     // App-wide defaults for mixed per-component units + inline dual-unit display. Not
     // document state (no ViewModel StateFlow), so this route reads/writes SettingsStore
@@ -399,6 +401,13 @@ fun SettingsRoute(
                         onCommit = { vm.setPdfWearJoinGapMaxMm(it) },
                     )
 
+                    // The consolidated sheet's wear-area look — last of the wear rows. The Output
+                    // tab's PDF options sheet carries the same row for the same one PdfPrefs value.
+                    WearAreasShadedRow(
+                        checked = pdfWearAreasShaded,
+                        onCheckedChange = { vm.setPdfWearAreasShaded(it) },
+                    )
+
                     // Same picker both PDF options sheets carry — one PdfPrefs.arrowSizePt.
                     DimensionArrowSizeChips(
                         arrowSizePt = pdfArrowSizePt,
@@ -451,6 +460,23 @@ fun SettingsRoute(
                         layout = pdfDualUnitLayout,
                         onCommit = { vm.setPdfDualUnitLayout(it) },
                     )
+                    // The last look row of the units group, ahead of the capability switches.
+                    // Settings-only, never on the PDF options sheets: a shop decides once
+                    // whether its sheets carry the note.
+                    SettingSwitchRow(
+                        checked = pdfShowUnitsNote,
+                        onCheckedChange = { vm.setPdfShowUnitsNote(it) },
+                        modifier = Modifier.testTag("settings_units_note"),
+                    ) {
+                        Column {
+                            Text(UNITS_NOTE_SETTING_TITLE)
+                            Text(
+                                UNITS_NOTE_SETTING_CAPTION,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
 
                     SettingSwitchRow(
                         checked = perComponentUnits,
@@ -1448,3 +1474,8 @@ internal fun SettingSwitchRow(
         content()
     }
 }
+
+/** Settings → Drawing switch for `PdfPrefs.showUnitsNote`; one wording for the row and Help. */
+internal const val UNITS_NOTE_SETTING_TITLE = "Units note on sheets"
+internal const val UNITS_NOTE_SETTING_CAPTION =
+    "Prints \"Units in inches\" or \"Units in mm\" small in the lower-right corner of every sheet"

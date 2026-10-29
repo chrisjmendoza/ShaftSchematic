@@ -44,6 +44,10 @@ import java.io.FileOutputStream
  * `SCHEMATIC_RENDER_FIXTURES` (optional, `;`-separated `.shaft` files or directories of them) adds
  * the full document set for each job — schematic, consolidated (as saved, Schematic + Runout, and
  * both as blank drafts), classic runout, wear and undercut — named `<job>_<sheet>.png`.
+ * `SCHEMATIC_RENDER_UNITS_NOTE` (optional, any value) renders those job sheets with the
+ * "Units in …" note on (`PdfPrefs.showUnitsNote`), to inspect each sheet's lower-right corner.
+ * `SCHEMATIC_RENDER_WEAR_STROKES` (optional, any value) renders them with the consolidated sheet's
+ * wear areas as vertical strokes (`PdfPrefs.wearAreasShaded` off) instead of the default shade.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -201,7 +205,10 @@ class SchematicRenderReviewTest {
         val unit = doc.preferredUnit ?: UnitSystem.INCHES
         val units = DisplayUnits(unit, doc.unitOverrides, doc.dualUnits)
         val resolved = resolveComponents(doc.spec)
-        val prefs = PdfPrefs()
+        val prefs = PdfPrefs(
+            showUnitsNote = System.getenv("SCHEMATIC_RENDER_UNITS_NOTE") != null,
+            wearAreasShaded = System.getenv("SCHEMATIC_RENDER_WEAR_STROKES") == null,
+        )
         fun consolidated(name: String, bubbles: Boolean, wear: Boolean, blank: Boolean, classic: Boolean = false) {
             val (bmp, c) = bitmapPage()
             composeRunoutPdfOnCanvas(

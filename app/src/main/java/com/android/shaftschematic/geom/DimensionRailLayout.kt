@@ -10,20 +10,30 @@ import kotlin.math.min
  * The PDF dimension renderer seats a value in a BREAK in its dimension line whenever the span
  * is wide enough to keep an inward arrowhead on both residual stubs; a span too short for that
  * falls back to a continuous line with the value floating above it. A floating value lives in
- * the vertical band of the NEXT rail up, so labels and rail lines from different tiers share
- * one collision space — they cannot be resolved rail by rail.
+ * the vertical band of the NEXT rail up, so labels from different tiers share one collision
+ * space — they cannot be resolved rail by rail.
  *
- * This engine owns that whole decision:
+ * Every value prints over a sheet-white knockout box (the renderer's halo), drawn after every
+ * line, so a rail line or an extension line passing under a value never strikes through it
+ * (on-device ruling: "I do that on my hand drawings and it is still clear where the line is").
+ * Lines are therefore NOT obstacles here; only labels (and the leaders that tie a displaced value
+ * back to its span) are.
+ *
+ * This engine owns the whole decision:
  *  - inline vs above is decided from x-geometry ALONE ([canFitInwardArrows]), so the fallback
  *    set — and therefore the tier lifts — are known before any vertical budget is chosen;
  *  - every rail above a rail that carries an above-line label LIFTS by one label band
- *    (text height + gap), cumulatively, so no rail line is ever drawn through a value;
- *  - a colliding label first SLIDES horizontally along its own span (smallest shift from
- *    center that clears everything); a floating value that still has no room — typically a
- *    span narrower than its own value — then tries the spot just OUTSIDE its span on its own
- *    rail's band (beyond the FWD extension line, then before the AFT one, inside the content
- *    area), and only then bumps vertically — inside its own rail's band, past it only when
+ *    (text height + gap), cumulatively, so no rail line runs through a floating value's band;
+ *  - a floating value sits CENTRED over its own span, just above its own line — even when it is
+ *    wider than the span and overhangs its own extension lines or crosses a neighbour's (the
+ *    halo covers the crossing; on-device ruling: centred over its rail beats pushed away from
+ *    it). Only when that spot would overlap another VALUE does it slide, with its centre kept
+ *    over its span; then try the spot just OUTSIDE the span (beyond the FWD extension line, then
+ *    before the AFT one); then bump vertically — inside its own rail's band, past it only when
  *    the alternative is printing over another value;
+ *  - every placement keeps its FULL measured width (a dual secondary included) inside
+ *    [contentLeft, contentRight] — a centred value near the page edge shifts inward, and an
+ *    outside spot that does not fit is skipped;
  *  - arrowheads point inward unless the span itself is too narrow to hold both
  *    ([arrowsPointInward]) — a fallback value overhead never costs a span its inward arrows;
  *  - a value that ends up OFF its own line — beside its span, or bumped above its home height —
@@ -32,8 +42,7 @@ import kotlin.math.min
  *    span to clear the values already placed, an outside spot whose leader would still cross one
  *    is not taken, and every later value keeps clear of it.
  *
- * Labels (inline and above) and rail lines are all obstacles, across every rail including the
- * topmost OAL rail. The renderer owns the pixels; this engine owns the geometry.
+ * The renderer owns the pixels; this engine owns the geometry.
  *
  * Follows the `geom/` convention — no Android imports, no `pdf`/`ui` dependency — so it is
  * unit-testable on the JVM.
@@ -43,18 +52,14 @@ object DimensionRailLayout {
     /** The topmost rail (OAL). It sits above every numbered rail, whatever its page y. */
     const val TOP_RAIL: Int = -1
 
-    /** Clearance kept between two labels, and between a label and a rail line. */
+    /** Clearance kept between two labels, and the gap inside one label band. */
     const val LABEL_GAP: Float = 6f
 
-    /** Vertical half-thickness a rail line occupies as a label obstacle. */
-    const val LINE_HALF_CLEAR: Float = 1f
-
     /**
-     * How far apart two extension lines' page-x must be to count as different lines. Chained
-     * spans SHARE a boundary, so the same drawn line belongs to both of them; anything inside
-     * this tolerance is treated as one line and as "own" to either span that ends there.
+     * Vertical half-thickness of a rail line — the clearance the band rule ([bumpStaysOwn]) and a
+     * composer's lane pitch keep between a value and another rail's line.
      */
-    const val EXT_SAME_X_EPS: Float = 0.5f
+    const val LINE_HALF_CLEAR: Float = 1f
 
     /** Bounded vertical escape for an above-line label that cannot slide clear. */
     const val MAX_BUMPS: Int = 3
@@ -185,18 +190,19 @@ object DimensionRailLayout {
      * before a wide span that can move around it), then left-to-right, then input order — so
      * the result is deterministic and the wide span is the one that slides.
      *
-     * A floating value with no clear spot over its own span tries the spot just OUTSIDE the
-     * span at the same height: right of the FWD extension line first, then left of the AFT one,
-     * clear of an outward arrowhead and inside [[contentLeft], [contentRight]]. Only then does it
-     * bump upward, and only while it stays in the band directly above its OWN rail line — never
-     * across another rail's line and never nearer to one than to its own (on-device report: two
-     * short AFT-end values floated two bands up, each over the wrong rail). A value with no clear
-     * spot in its own band prints at its own rail's height, centred on its span — unless that
-     * would set it on another value, the one case it may climb past its band.
+     * A floating value prints centred over its span at its own height. Only when that would
+     * overlap another value does it move: first along its span (centre kept between the span's
+     * ends), then to the spot just OUTSIDE the span at the same height — right of the FWD
+     * extension line first, then left of the AFT one, clear of an outward arrowhead. Only then
+     * does it bump upward, and only while it stays in the band directly above its OWN rail line —
+     * never across another rail's line and never nearer to one than to its own (on-device report:
+     * two short AFT-end values floated two bands up, each over the wrong rail). A value with no
+     * clear spot in its own band prints at its own rail's height, centred on its span — unless
+     * that would set it on another value, the one case it may climb past its band.
      *
      * @param safeTopY vertical bumps never carry a label above this y.
-     * @param contentLeft a value placed outside its span stays right of this x.
-     * @param contentRight a value placed outside its span stays left of this x.
+     * @param contentLeft no value's box extends left of this x.
+     * @param contentRight no value's box extends right of this x.
      * @return placements parallel to [spans].
      */
     fun plan(
@@ -212,45 +218,40 @@ object DimensionRailLayout {
         val liftByRail = lifts(spans, metrics, arrowSize, textPad)
         val pad = metrics.labelGap * 0.5f
 
+        // Every box keeps its FULL width inside the content area: the centre range a value may
+        // take, whatever else limits it, is [cLo, cHi] (on-device report: a dual value centred
+        // over the last span ran off the page edge).
+        fun contentLo(half: Float) = contentLeft + half
+        fun contentHi(half: Float) = contentRight - half
+
         val rows = spans.map { s ->
             val inline = fitsInline(s, arrowSize, textPad)
             val half = s.labelWidth * 0.5f
-            val slack = textPad + half + (if (inline) arrowSize else 0f)
-            val lo = s.xa + slack
-            val hi = s.xb - slack
             val mid = (s.xa + s.xb) * 0.5f
+            // In its break a value keeps both stubs arrow-wide; floating, its centre may go
+            // anywhere over its own span — the box overhangs the extension lines freely, the halo
+            // covers them.
+            var lo = if (inline) s.xa + textPad + half + arrowSize else s.xa
+            var hi = if (inline) s.xb - textPad - half - arrowSize else s.xb
+            if (lo > hi) { lo = mid; hi = mid }
+            lo = max(lo, contentLo(half))
+            hi = min(hi, contentHi(half))
+            // A span whose range the page edge cuts off entirely: the content bound wins.
+            if (lo > hi) {
+                val c = mid.coerceIn(contentLo(half), max(contentLo(half), contentHi(half)))
+                lo = c; hi = c
+            }
             Row(
                 inline = inline,
                 y = s.railY - (liftByRail[s.railIndex] ?: 0f),
                 half = half,
                 mid = mid,
-                // A label wider than its own span has no slide room at all: it centers on the
-                // span and overhangs symmetrically.
-                lo = if (lo > hi) mid else lo,
-                hi = if (lo > hi) mid else hi,
+                lo = lo,
+                hi = hi,
                 xa = s.xa,
                 xb = s.xb,
-                overhangs = lo > hi,
             )
         }
-
-        // Rail lines are obstacles: a value must never be struck through by a neighbouring
-        // tier's dimension line. A span's OWN line is excluded — an inline value sits in the
-        // break that line leaves for it.
-        val lineBoxes = rows.map { Box(it.xa, it.y - LINE_HALF_CLEAR, it.xb, it.y + LINE_HALF_CLEAR) }
-
-        // EXTENSION lines are obstacles too. Each runs from the object up to its OWN rail, so it
-        // crosses the band of every rail below it — which is exactly where those rails park a
-        // floating value. Leaving them out is what let an extension line print straight through
-        // the tail of a fallback label (on-device sheet, `docs/DualUnitStacking_PLAN.md` §1b);
-        // dual labels are simply wide enough to be hit every time.
-        //
-        // Collinear lines at one x (the same boundary dimensioned on several rails) are ONE
-        // obstacle spanning from the topmost of them downward, and a span's own boundaries are
-        // excluded: a chained neighbour shares that line, and a label wider than its own span
-        // legitimately overhangs its own extensions — counting them would make that case
-        // unsolvable and bump every such label to [MAX_BUMPS].
-        val extLines = buildExtensionLines(rows)
 
         val order = rows.indices.sortedWith(
             compareBy({ rows[it].hi - rows[it].lo }, { rows[it].xa }, { it })
@@ -263,21 +264,12 @@ object DimensionRailLayout {
 
         for (i in order) {
             val r = rows[i]
-            val foreign = placedLabels + placedLeaders +
-                lineBoxes.filterIndexed { j, _ -> j != i } +
-                extLines.filterNot { it.belongsTo(r) }.map { it.box() }
-            // A span's own boundary line that a HIGHER rail continues upward (the AFT S.E.T. line
-            // rising to the OAL rail) crosses the band a floating value sits in; a value
-            // overhanging its own span there would print with the line through its first digit.
-            // Only a CROSSING counts: the box is narrowed by the clearance [clearCenter] adds, so
-            // a value may still sit right up to its own line, as a centred value just inside a
-            // short span does.
-            val ownAbove = extLines.filter { it.belongsTo(r) && it.topY < r.y - LINE_HALF_CLEAR }
-                .map { Box(it.x - LINE_HALF_CLEAR + pad, it.topY, it.x + LINE_HALF_CLEAR - pad, r.y - LINE_HALF_CLEAR) }
-            val insideObstacles = if (r.overhangs && !r.inline) foreign + ownAbove else foreign
-            // Outside its span a value must clear its own extension lines too — and must not take
-            // the spot a not-yet-placed floating neighbour on the same rail sits in over its own
-            // span, or the step outside just moves the collision onto that neighbour.
+            // Values (and the leaders tying displaced values to their spans) are the only
+            // obstacles: a line under a value is knocked out by its halo (on-device ruling).
+            val insideObstacles = placedLabels + placedLeaders
+            // Outside its span a value must not take the spot a not-yet-placed floating neighbour
+            // on the same rail sits in over its own span, or the step outside just moves the
+            // collision onto that neighbour.
             val neighbourHomes = rows.indices
                 .filter { j -> j != i && j !in placedIdx && !rows[j].inline && abs(rows[j].y - r.y) < 0.5f }
                 .map { j ->
@@ -286,13 +278,14 @@ object DimensionRailLayout {
                     val t = o.y - metrics.aboveDy + metrics.ascent
                     Box(c - o.half, t, c + o.half, t + metrics.height)
                 }
-            val outsideObstacles = foreign + extLines.filter { it.belongsTo(r) }.map { it.box() } + neighbourHomes
+            val outsideObstacles = insideObstacles + neighbourHomes
 
+            // The outside spots, each skipped when the full box cannot fit inside the content area.
             val outGap = textPad + if (arrowsPointInward(r.xa, r.xb, r.inline, arrowSize)) 0f else arrowSize
             val rightLo = r.xb + outGap + r.half
-            val rightHi = min(rightLo + OUTSIDE_REACH, contentRight - r.half)
-            val leftHi = min(r.xa - outGap - r.half, contentRight - r.half)
-            val leftLo = max(leftHi - OUTSIDE_REACH, contentLeft + r.half)
+            val rightHi = min(rightLo + OUTSIDE_REACH, contentHi(r.half))
+            val leftHi = r.xa - outGap - r.half
+            val leftLo = max(leftHi - OUTSIDE_REACH, contentLo(r.half))
 
             val homeTop = if (r.inline) r.y - metrics.height * 0.5f else r.y - metrics.aboveDy + metrics.ascent
 
@@ -510,39 +503,12 @@ object DimensionRailLayout {
         val y: Float,
         val half: Float,
         val mid: Float,
+        /** The centre range the value may slide in: over its span, inside the content area. */
         val lo: Float,
         val hi: Float,
         val xa: Float,
         val xb: Float,
-        /** The value is wider than its own span's slide window, so it overhangs the span's ends. */
-        val overhangs: Boolean,
     )
-
-    /**
-     * One drawn extension line as an obstacle: a vertical segment at [x] running from [topY] (its
-     * highest owning rail) DOWN to the object. Modelled as unbounded below — every label sits
-     * above the object, so nothing is lost and no caller has to pass the object's y in.
-     */
-    private class ExtLine(val x: Float, val topY: Float) {
-        fun box(): Box = Box(x - LINE_HALF_CLEAR, topY, x + LINE_HALF_CLEAR, Float.MAX_VALUE)
-
-        /** True when this line is one of [r]'s own boundaries — shared lines count as own. */
-        fun belongsTo(r: Row): Boolean =
-            abs(x - r.xa) <= EXT_SAME_X_EPS || abs(x - r.xb) <= EXT_SAME_X_EPS
-    }
-
-    /** Extension lines, collinear ones merged: one obstacle per x, topped by its highest rail. */
-    private fun buildExtensionLines(rows: List<Row>): List<ExtLine> {
-        val topByX = LinkedHashMap<Long, Pair<Float, Float>>(rows.size * 2)
-        rows.forEach { r ->
-            listOf(r.xa, r.xb).forEach { x ->
-                val key = (x / EXT_SAME_X_EPS).toLong()
-                val prev = topByX[key]
-                topByX[key] = if (prev == null) x to r.y else prev.first to min(prev.second, r.y)
-            }
-        }
-        return topByX.values.map { (x, topY) -> ExtLine(x, topY) }
-    }
 
     /** Rails stack upward; the OAL rail is above every numbered one. */
     private fun order(railIndex: Int): Int = if (railIndex == TOP_RAIL) Int.MAX_VALUE else railIndex

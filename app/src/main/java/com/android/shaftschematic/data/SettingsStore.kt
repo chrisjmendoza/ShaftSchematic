@@ -205,6 +205,8 @@ object SettingsStore {
     private val KEY_PDF_FRACTION_STYLE = stringPreferencesKey("pdf_fraction_style")
     private val KEY_PDF_OUTPUT_FONT = stringPreferencesKey("pdf_output_font")
     private val KEY_PDF_DUAL_UNIT_LAYOUT = stringPreferencesKey("pdf_dual_unit_layout")
+    private val KEY_PDF_SHOW_UNITS_NOTE = booleanPreferencesKey("pdf_show_units_note")
+    private val KEY_PDF_WEAR_AREAS_SHADED = booleanPreferencesKey("pdf_wear_areas_shaded")
     private val KEY_PDF_WEAR_TRACE_DEPTH_FRAC = floatPreferencesKey("pdf_wear_trace_depth_frac")
     private val KEY_PDF_WEAR_BAND_SHADE_FRAC = floatPreferencesKey("pdf_wear_band_shade_frac")
     private val KEY_PDF_WEAR_JOIN_GAP_MAX_MM = floatPreferencesKey("pdf_wear_join_gap_max_mm")
@@ -434,6 +436,22 @@ object SettingsStore {
         ctx.settingsPrefs.map { p -> DualUnitLayout.fromName(p[KEY_PDF_DUAL_UNIT_LAYOUT]) }
     suspend fun setPdfDualUnitLayout(ctx: Context, layout: DualUnitLayout) {
         ctx.editSettings { it[KEY_PDF_DUAL_UNIT_LAYOUT] = layout.name }
+    }
+
+    // The small "Units in inches / mm" note in every sheet's bottom-right margin. A missing key
+    // reads the one `PdfPrefs()` default (OFF), so stores written before the pref load unchanged.
+    fun pdfShowUnitsNoteFlow(ctx: Context): Flow<Boolean> =
+        ctx.settingsPrefs.map { p -> p[KEY_PDF_SHOW_UNITS_NOTE] ?: PdfPrefs().showUnitsNote }
+    suspend fun setPdfShowUnitsNote(ctx: Context, v: Boolean) {
+        ctx.editSettings { it[KEY_PDF_SHOW_UNITS_NOTE] = v }
+    }
+
+    // Consolidated sheet: wear areas as a light grey fill instead of strokes. A missing key reads
+    // the one `PdfPrefs()` default (ON), so every existing store prints shaded.
+    fun pdfWearAreasShadedFlow(ctx: Context): Flow<Boolean> =
+        ctx.settingsPrefs.map { p -> p[KEY_PDF_WEAR_AREAS_SHADED] ?: PdfPrefs().wearAreasShaded }
+    suspend fun setPdfWearAreasShaded(ctx: Context, v: Boolean) {
+        ctx.editSettings { it[KEY_PDF_WEAR_AREAS_SHADED] = v }
     }
 
     fun pdfArrowSizePtFlow(ctx: Context): Flow<Float> =
