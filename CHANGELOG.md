@@ -8,6 +8,12 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-29
 
+### fix(editor): Add Thread leads with "Include thread in OAL"
+
+- The switch moved from the foot of **Add Thread** to its first row, where the thread card
+  already has it: it decides whether the next row is **Start** or the **Thread end** chips, so
+  it is set before them.
+
 ### feat(tools): Fraction chart
 
 - New **Fraction chart** in the navigation menu's tools, below **Unit converter**: every step of
@@ -15,13 +21,11 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
   **Interval** chips pick 1/8 | 1/16 | 1/32 | 1/64, opening on 1/32; the eighths are set bold on
   the finer intervals. Read-only — it reads and writes nothing in the shaft.
 
-
 ### fix(calculator): Calculate sits in the taper calculator's button row
 
 - The taper calculator's full-width **Calculate** button under the fields scrolled behind the
   keyboard while a value was typed. It is now a filled button in the bottom row beside
   **Clear** and **Close**, which stays above the keyboard.
-
 
 ### feat(units): inch fields read back as fractions; 32nds print as fractions; exact sixteenths print their fourth place
 

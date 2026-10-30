@@ -1048,9 +1048,24 @@ fun AddThreadDialog(
         },
         text = {
             // Scrollable like every other add dialog: with Thread relief on, its three rows push
-            // "Include thread in OAL" and the buttons below the dialog's bounds, and under the
-            // keyboard the bottom fields were unreachable (on-device report).
+            // the buttons below the dialog's bounds, and under the keyboard the bottom fields
+            // were unreachable (on-device report).
             Column(Modifier.padding(top = 4.dp).verticalScroll(rememberScrollState())) {
+                // "Include thread in OAL" leads, as on the thread card: it decides whether the
+                // next row is the Start field or the "Thread end" chips, so it is set first
+                // (on-device report: at the foot it changed the top of the dialog out of view).
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                ) {
+                    Text("Include thread in OAL")
+                    DialogSwitch(
+                        checked = countInOal,
+                        onCheckedChange = { countInOal = it }
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
                 if (countInOal) {
                     CommitNumField(
                         "Start (${abbr(unit)})", start.text,
@@ -1120,18 +1135,6 @@ fun AddThreadDialog(
                             DirectionChip(label, selected, modifier, onClick)
                         },
                     ) { reliefEndChoice = it }
-                }
-                Spacer(Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
-                ) {
-                    Text("Include thread in OAL")
-                    DialogSwitch(
-                        checked = countInOal,
-                        onCheckedChange = { countInOal = it }
-                    )
                 }
             }
         },
