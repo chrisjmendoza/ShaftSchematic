@@ -299,9 +299,19 @@ internal fun CalcField(
  * Snap-grid denominator for the scale-check fraction line — 64 | 32 | 16, a coarser scale
  * reads fewer, coarser ticks. Affects only that label; the decimal result is unchanged.
  * Same chip conventions as [UnitChipRow]: label above, outline on EVERY chip.
+ *
+ * Shared with [FractionChartDialog], whose interval chips are the same control over a
+ * different set of denominators ([options], [chipLabel], [title], [tagPrefix]).
  */
 @Composable
-private fun ScaleChipRow(denominator: Int, onSelect: (Int) -> Unit) {
+internal fun ScaleChipRow(
+    denominator: Int,
+    onSelect: (Int) -> Unit,
+    options: List<Int> = listOf(64, 32, 16),
+    title: String = "Scale",
+    chipLabel: (Int) -> String = { it.toString() },
+    tagPrefix: String = "bore_kw_calc_scale_",
+) {
     val colors = FilterChipDefaults.filterChipColors(
         containerColor = MaterialTheme.colorScheme.surface,
         selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
@@ -311,7 +321,7 @@ private fun ScaleChipRow(denominator: Int, onSelect: (Int) -> Unit) {
 
     Column(Modifier.fillMaxWidth()) {
         Text(
-            "Scale",
+            title,
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 2.dp),
@@ -321,14 +331,14 @@ private fun ScaleChipRow(denominator: Int, onSelect: (Int) -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            listOf(64, 32, 16).forEach { d ->
+            options.forEach { d ->
                 val on = d == denominator
                 FilterChip(
                     selected = on,
                     onClick = { onSelect(d) },
                     label = {
                         Text(
-                            d.toString(),
+                            chipLabel(d),
                             style = MaterialTheme.typography.labelMedium,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -337,7 +347,7 @@ private fun ScaleChipRow(denominator: Int, onSelect: (Int) -> Unit) {
                     },
                     colors = colors,
                     border = if (on) chosenBorder else restingBorder,
-                    modifier = Modifier.weight(1f).testTag("bore_kw_calc_scale_$d"),
+                    modifier = Modifier.weight(1f).testTag("$tagPrefix$d"),
                 )
             }
         }

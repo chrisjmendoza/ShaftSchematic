@@ -6,6 +6,7 @@ import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -16,7 +17,7 @@ import org.robolectric.annotation.Config
 
 /**
  * The sidebar's tools group and its order: Keyway calculator · Taper calculator ·
- * Unit converter · Help & FAQ · Settings.
+ * Unit converter · Fraction chart · Help & FAQ · Settings.
  *
  * The two calculators are adjacent (a shop calculation is reached for as one kind of thing),
  * and Help is reachable from the main menu rather than only from inside Settings, sitting
@@ -32,6 +33,7 @@ class EditorSidebarHelpTest {
 
     private var helpTaps = 0
     private var taperCalcTaps = 0
+    private var fractionChartTaps = 0
     private var closes = 0
 
     /** The tools group, top to bottom. */
@@ -39,6 +41,7 @@ class EditorSidebarHelpTest {
         "Keyway calculator",
         "Taper calculator",
         "Unit converter",
+        "Fraction chart",
         "Help & FAQ",
         "Settings",
     )
@@ -56,6 +59,7 @@ class EditorSidebarHelpTest {
                     onHome = {},
                     onSettings = {},
                     onTaperCalculator = { taperCalcTaps++ },
+                    onFractionChart = { fractionChartTaps++ },
                     onHelp = { helpTaps++ },
                 )
             }
@@ -66,7 +70,8 @@ class EditorSidebarHelpTest {
     fun `tools group shows every utility`() {
         hostSidebar()
 
-        toolOrder.forEach { rule.onNodeWithText(it).assertIsDisplayed() }
+        // The list scrolls once it outgrows the panel, so each utility is reached, then seen.
+        toolOrder.forEach { rule.onNodeWithText(it).performScrollTo().assertIsDisplayed() }
     }
 
     @Test
@@ -86,6 +91,16 @@ class EditorSidebarHelpTest {
         rule.onNodeWithText("Help & FAQ").performClick()
 
         assertEquals(1, helpTaps)
+        assertEquals(1, closes)
+    }
+
+    @Test
+    fun `tapping the fraction chart opens it and closes the sidebar`() {
+        hostSidebar()
+
+        rule.onNodeWithText("Fraction chart").performClick()
+
+        assertEquals(1, fractionChartTaps)
         assertEquals(1, closes)
     }
 

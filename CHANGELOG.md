@@ -8,6 +8,14 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-29
 
+### feat(tools): Fraction chart
+
+- New **Fraction chart** in the navigation menu's tools, below **Unit converter**: every step of
+  an inch up to 1" with its reduced fraction, its EXACT decimal (1/64 = 0.015625) and its mm.
+  **Interval** chips pick 1/8 | 1/16 | 1/32 | 1/64, opening on 1/32; the eighths are set bold on
+  the finer intervals. Read-only — it reads and writes nothing in the shaft.
+
+
 ### fix(calculator): Calculate sits in the taper calculator's button row
 
 - The taper calculator's full-width **Calculate** button under the fields scrolled behind the

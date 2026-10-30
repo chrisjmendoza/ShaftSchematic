@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Schema
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SquareFoot
+import androidx.compose.material.icons.filled.Straighten
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.TrackChanges
 import androidx.compose.material3.HorizontalDivider
@@ -78,7 +79,7 @@ import androidx.compose.ui.unit.dp
  * ## Items
  * Top group:  Home · Schematic · Runout Sheet · Wear Document · Undercut Drawing ·
  *             Final Schematic · Consolidated Output
- * Bottom group: Keyway calculator · Taper calculator · Unit converter · Help & FAQ ·
+ * Bottom group: Keyway calculator · Taper calculator · Unit converter · Fraction chart · Help & FAQ ·
  * Settings — tools, not document views, so they are never dimmed by the "built" gate (no
  * calculator reads anything from the shaft). The two calculators sit adjacent. Help sits with
  * them rather than behind Settings: reference content is reached for mid-job, and Settings is
@@ -98,6 +99,7 @@ import androidx.compose.ui.unit.dp
  * @param onKeywayCalculator Called when the user taps the Keyway calculator tool item.
  * @param onTaperCalculator Called when the user taps the Taper calculator tool item.
  * @param onUnitConverter Called when the user taps the Unit converter tool item.
+ * @param onFractionChart Called when the user taps the Fraction chart tool item.
  * @param onHelp        Called when the user taps the Help & FAQ item.
  */
 @Composable
@@ -113,6 +115,7 @@ fun EditorSidebarOverlay(
     onKeywayCalculator: () -> Unit = {},
     onTaperCalculator: () -> Unit = {},
     onUnitConverter: () -> Unit = {},
+    onFractionChart: () -> Unit = {},
     onHelp: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -155,6 +158,7 @@ fun EditorSidebarOverlay(
                         onKeywayCalculator = onKeywayCalculator,
                         onTaperCalculator = onTaperCalculator,
                         onUnitConverter = onUnitConverter,
+                        onFractionChart = onFractionChart,
                         onHelp = onHelp,
                         onNavigated = onClose,
                     )
@@ -185,6 +189,7 @@ fun EditorSidebarPanel(
     onKeywayCalculator: () -> Unit = {},
     onTaperCalculator: () -> Unit = {},
     onUnitConverter: () -> Unit = {},
+    onFractionChart: () -> Unit = {},
     onHelp: () -> Unit = {},
     onNavigated: () -> Unit = {},
     modifier: Modifier = Modifier,
@@ -313,6 +318,13 @@ fun EditorSidebarPanel(
                 selected = false,
                 enabled = true,
                 onClick = { onUnitConverter(); onNavigated() },
+            )
+            NavItem(
+                icon = Icons.Filled.Straighten,
+                label = "Fraction chart",
+                selected = false,
+                enabled = true,
+                onClick = { onFractionChart(); onNavigated() },
             )
 
             NavItem(
