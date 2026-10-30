@@ -181,7 +181,7 @@ internal fun composeShaftPdfOnCanvas(
     // customer name) climbed into the name band and printed its "FWD Taper" heading through a
     // liner's name (found by `SheetTextOverlapTest`). Reserving the measured height keeps the
     // label rows above the footer by construction; the gap stays air.
-    val footerCfg = if (effectiveOptions.showFooter) sheetFooterConfig(spec) else null
+    val footerCfg = if (effectiveOptions.showFooter) sheetFooterConfig(spec, pdfPrefs) else null
     val footerBlockPt = footerCfg?.let {
         footerBlockHeightPt(
             PAGE_MARGIN_PT, pageW - PAGE_MARGIN_PT, spec, unit, project, text, it,

@@ -8,6 +8,15 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-30
 
+### fix(pdf): spooned keyways print nothing on the footer; captured inset and bolt hole Ø can be switched off
+
+- A spooned keyway no longer adds "(spooned)" or "KW length to base of spoon (mill end)" to the
+  footer (on-device ruling: the drawing shows the spoon).
+- Two new switches in **Settings → Drawing**, captured by Drawing profiles:
+  **Captured keyway inset on footer** (the "Captured KW: inset …" line; on by default, so it
+  prints as before) and **Bolt hole Ø on footer** (the cross-drilled "Bolt hole: Ø …" line; OFF
+  by default — on-device ruling — while the hole center and clocking note still print).
+
 ### fix(pdf): thread relief no longer prints on the footer
 
 - The "Thread relief: <length> × Ø <diameter>" line under a relieved thread's "Thread:" line is

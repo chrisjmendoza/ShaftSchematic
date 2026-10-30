@@ -322,6 +322,20 @@ fun ShaftViewModel.setPdfShowUnitsNote(v: Boolean, persist: Boolean = true) {
     if (persist) viewModelScope.launch { SettingsStore.setPdfShowUnitsNote(getApplication(), v) }
 }
 
+/** Settings → Drawing → "Captured keyway inset on footer". */
+fun ShaftViewModel.setPdfFooterCapturedKwInset(v: Boolean, persist: Boolean = true) {
+    _pdfFooterCapturedKwInset.value = v
+    SettingsStore.updatePdfPrefs { it.copy(footerCapturedKwInset = v) }
+    if (persist) viewModelScope.launch { SettingsStore.setPdfFooterCapturedKwInset(getApplication(), v) }
+}
+
+/** Settings → Drawing → "Bolt hole Ø on footer". */
+fun ShaftViewModel.setPdfFooterBoltHoleDia(v: Boolean, persist: Boolean = true) {
+    _pdfFooterBoltHoleDia.value = v
+    SettingsStore.updatePdfPrefs { it.copy(footerBoltHoleDia = v) }
+    if (persist) viewModelScope.launch { SettingsStore.setPdfFooterBoltHoleDia(getApplication(), v) }
+}
+
 /**
  * "Wear areas on the shaft drawing" — how the consolidated sheet draws each wear area (none,
  * lines, grey, both). One pref, set from Settings → Drawing and the Output tab's sheet.
@@ -461,6 +475,8 @@ fun ShaftViewModel.applyDrawingProfile(profile: DrawingProfile) {
     setPdfOutputFont(prefs.outputFont)
     setPdfDualUnitLayout(prefs.dualUnitLayout)
     setPdfShowUnitsNote(prefs.showUnitsNote)
+    setPdfFooterCapturedKwInset(prefs.footerCapturedKwInset)
+    setPdfFooterBoltHoleDia(prefs.footerBoltHoleDia)
     setPdfWearAreaStyle(prefs.wearAreaStyle)
     setPdfWearTraceDepthFrac(prefs.wearTraceDepthFrac)
     setPdfWearBandShadeFrac(prefs.wearBandShadeFrac)

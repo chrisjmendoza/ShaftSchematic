@@ -468,7 +468,7 @@ internal fun composeRunoutPdfOnCanvas(
     // page with give in it: when the shaft would otherwise be squeezed under the height floor,
     // its handwriting pitch tightens toward `footerBlockMinHeightPt` first (see the vertical
     // solve below). The printed footer has no such give.
-    val footerCfg = if (consolidated) sheetFooterConfig(spec) else null
+    val footerCfg = if (consolidated) sheetFooterConfig(spec, pdfPrefs) else null
     val footerBlockFullH = footerCfg?.let {
         footerBlockHeightPt(
             contentLeft, contentRight, spec, unit, project, text, it,

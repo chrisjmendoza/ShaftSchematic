@@ -4,20 +4,21 @@ import com.android.shaftschematic.model.Body
 import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Taper
+import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.util.UnitSystem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * A spooned keyway's footer spec is followed by a reader note that the stated KW length
- * runs to the base of the spoon (where the mill cut ends). Non-spooned keyways get no note.
+ * A spooned keyway prints NOTHING extra on the footer — no "(spooned)" and no note; the bowl on the
+ * drawing shows it (on-device ruling). Its KW column reads exactly as the plain keyway's.
  *
- * A captured keyway (inset > 0) likewise gets ONE line directly under its KW line stating the
- * inset and the face it is measured from; an open keyway gets none. A captured keyway never
- * prints a spoon, whatever its stored flag says — it has no open end to spoon.
+ * A captured keyway (inset > 0) gets ONE line directly under its KW line stating the inset and the
+ * face it is measured from, while `PdfPrefs.footerCapturedKwInset` is on (the default); off, or on
+ * an open keyway, there is none.
  */
-class SpoonedKeywayFooterNoteTest {
+class KeywayFooterLinesTest {
 
     private val cfg = FooterConfig(
         showAftThread = false,
@@ -32,44 +33,40 @@ class SpoonedKeywayFooterNoteTest {
         keywaySpooned = true,
     )
 
+    private fun spoonedBody(spooned: Boolean = true) = Body(
+        startFromAftMm = 1400f, lengthMm = 600f, diaMm = 100f,
+        keywayWidthMm = 30f, keywayDepthMm = 15f, keywayLengthMm = 150f,
+        keywayEnd = LinerAuthoredReference.FWD,
+        keywaySpooned = spooned,
+    )
+
+    private fun noSpoonWording(lines: List<String>) =
+        assertTrue("got: $lines", lines.none { it.contains("spoon", ignoreCase = true) })
+
     @Test
-    fun `note follows the KW line for a spooned taper keyway`() {
-        val spec = ShaftSpec(overallLengthMm = 2000f, tapers = listOf(spoonedTaper()))
-        val cols = buildFooterEndColumns(spec, UnitSystem.MILLIMETERS, cfg)
-        val kwIdx = cols.aftLines.indexOfFirst { it.startsWith("KW: ") }
-        assertTrue(kwIdx >= 0)
-        assertEquals(SPOONED_KW_NOTE, cols.aftLines[kwIdx + 1])
+    fun `a spooned taper keyway prints the same footer as a plain one`() {
+        val spooned = buildFooterEndColumns(
+            ShaftSpec(overallLengthMm = 2000f, tapers = listOf(spoonedTaper())), UnitSystem.MILLIMETERS, cfg,
+        )
+        val plain = buildFooterEndColumns(
+            ShaftSpec(overallLengthMm = 2000f, tapers = listOf(spoonedTaper().copy(keywaySpooned = false))),
+            UnitSystem.MILLIMETERS, cfg,
+        )
+        assertEquals(plain.aftLines, spooned.aftLines)
+        noSpoonWording(spooned.aftLines)
     }
 
     @Test
-    fun `no note for a plain taper keyway`() {
-        val spec = ShaftSpec(
-            overallLengthMm = 2000f,
-            tapers = listOf(spoonedTaper().copy(keywaySpooned = false)),
+    fun `a spooned body keyway prints the same footer as a plain one`() {
+        val spooned = buildFooterEndColumns(
+            ShaftSpec(overallLengthMm = 2000f, bodies = listOf(spoonedBody())), UnitSystem.MILLIMETERS, cfg,
         )
-        val cols = buildFooterEndColumns(spec, UnitSystem.MILLIMETERS, cfg)
-        assertTrue(cols.aftLines.any { it.startsWith("KW: ") })
-        assertTrue(cols.aftLines.none { it == SPOONED_KW_NOTE })
-    }
-
-    @Test
-    fun `note follows the Body KW line in the matching column`() {
-        val spec = ShaftSpec(
-            overallLengthMm = 2000f,
-            bodies = listOf(
-                Body(
-                    startFromAftMm = 1400f, lengthMm = 600f, diaMm = 100f,
-                    keywayWidthMm = 30f, keywayDepthMm = 15f, keywayLengthMm = 150f,
-                    keywayEnd = LinerAuthoredReference.FWD,
-                    keywaySpooned = true,
-                ),
-            ),
+        val plain = buildFooterEndColumns(
+            ShaftSpec(overallLengthMm = 2000f, bodies = listOf(spoonedBody(spooned = false))),
+            UnitSystem.MILLIMETERS, cfg,
         )
-        val cols = buildFooterEndColumns(spec, UnitSystem.MILLIMETERS, cfg)
-        val kwIdx = cols.fwdLines.indexOfFirst { it.startsWith("Body KW: ") }
-        assertTrue(kwIdx >= 0)
-        assertEquals(SPOONED_KW_NOTE, cols.fwdLines[kwIdx + 1])
-        assertTrue(cols.aftLines.none { it == SPOONED_KW_NOTE })
+        assertEquals(plain.fwdLines, spooned.fwdLines)
+        noSpoonWording(spooned.aftLines + spooned.fwdLines)
     }
 
     // ── Captured keyways (inset > 0): one inset line directly under the KW line ──
@@ -130,35 +127,28 @@ class SpoonedKeywayFooterNoteTest {
     }
 
     @Test
-    fun `a captured taper keyway with a stale spooned flag prints no spoon`() {
+    fun `the captured inset line follows the setting, on every keyway and on blank drafts`() {
         val spec = ShaftSpec(
             overallLengthMm = 2000f,
-            tapers = listOf(spoonedTaper().copy(keywayOffsetFromSetMm = 25f)),
+            tapers = listOf(spoonedTaper().copy(keywaySpooned = false, keywayOffsetFromSetMm = 25f)),
+            bodies = listOf(spoonedBody(spooned = false).copy(keywayOffsetFromEndMm = 40f)),
         )
-        val cols = buildFooterEndColumns(spec, UnitSystem.MILLIMETERS, cfg)
-        val kw = cols.aftLines.single { it.startsWith("KW: ") }
-        assertTrue("got: $kw", !kw.contains("(spooned)"))
-        assertTrue(cols.aftLines.none { it == SPOONED_KW_NOTE })
+        val off = cfg.copy(capturedKwInset = false)
+        for (blank in listOf(false, true)) {
+            val on = buildFooterEndColumns(spec, UnitSystem.MILLIMETERS, cfg, blankValues = blank)
+            assertEquals(2, (on.aftLines + on.fwdLines).count { it.startsWith(CAPTURED_KW_PREFIX) })
+            val cols = buildFooterEndColumns(spec, UnitSystem.MILLIMETERS, off, blankValues = blank)
+            assertTrue((cols.aftLines + cols.fwdLines).none { it.startsWith(CAPTURED_KW_PREFIX) })
+            assertTrue(cols.aftLines.any { it.startsWith("KW:") })
+            assertTrue(cols.fwdLines.any { it.startsWith("Body KW:") })
+        }
     }
 
     @Test
-    fun `a captured body keyway with a stale spooned flag prints no spoon`() {
-        val spec = ShaftSpec(
-            overallLengthMm = 2000f,
-            bodies = listOf(
-                Body(
-                    startFromAftMm = 1400f, lengthMm = 600f, diaMm = 100f,
-                    keywayWidthMm = 30f, keywayDepthMm = 15f, keywayLengthMm = 150f,
-                    keywayOffsetFromEndMm = 40f,
-                    keywayEnd = LinerAuthoredReference.FWD,
-                    keywaySpooned = true,
-                ),
-            ),
-        )
-        val cols = buildFooterEndColumns(spec, UnitSystem.MILLIMETERS, cfg)
-        val kw = cols.fwdLines.single { it.startsWith("Body KW: ") }
-        assertTrue("got: $kw", !kw.contains("(spooned)"))
-        assertTrue((cols.aftLines + cols.fwdLines).none { it == SPOONED_KW_NOTE })
+    fun `the footer config reads the captured inset setting, default on`() {
+        val spec = ShaftSpec(overallLengthMm = 2000f)
+        assertTrue(sheetFooterConfig(spec).capturedKwInset)
+        assertEquals(false, sheetFooterConfig(spec, PdfPrefs(footerCapturedKwInset = false)).capturedKwInset)
     }
 
     @Test

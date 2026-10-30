@@ -77,6 +77,8 @@ data class DrawingProfile(
     val outputFont: String = SHIPPED_PDF_PREFS.outputFont.name,
     val dualUnitLayout: String = SHIPPED_PDF_PREFS.dualUnitLayout.name,
     val showUnitsNote: Boolean = SHIPPED_PDF_PREFS.showUnitsNote,
+    val footerCapturedKwInset: Boolean = SHIPPED_PDF_PREFS.footerCapturedKwInset,
+    val footerBoltHoleDia: Boolean = SHIPPED_PDF_PREFS.footerBoltHoleDia,
     /**
      * Null in a profile saved before the style existed, so its [wearAreasShaded] is what decides —
      * a non-null default here would read every old "off" profile as the grey. Null with neither
@@ -118,6 +120,8 @@ data class DrawingProfile(
         outputFont = OutputFont.fromName(outputFont),
         dualUnitLayout = DualUnitLayout.fromName(dualUnitLayout),
         showUnitsNote = showUnitsNote,
+        footerCapturedKwInset = footerCapturedKwInset,
+        footerBoltHoleDia = footerBoltHoleDia,
         wearAreaStyle = wearAreaStyle?.let { WearAreaStyle.fromName(it) }
             ?: wearAreasShaded?.let { WearAreaStyle.fromLegacyShaded(it) }
             ?: WearAreaStyle.Default,
@@ -155,6 +159,8 @@ data class DrawingProfile(
             outputFont = prefs.outputFont.name,
             dualUnitLayout = prefs.dualUnitLayout.name,
             showUnitsNote = prefs.showUnitsNote,
+            footerCapturedKwInset = prefs.footerCapturedKwInset,
+            footerBoltHoleDia = prefs.footerBoltHoleDia,
             wearAreaStyle = prefs.wearAreaStyle.name,
             wearTraceDepthFrac = prefs.wearTraceDepthFrac,
             wearBandShadeFrac = prefs.wearBandShadeFrac,

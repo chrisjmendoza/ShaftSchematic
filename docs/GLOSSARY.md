@@ -248,7 +248,8 @@ The app formerly called it a "floating" keyway. Stored as nothing more than
 `keywayOffsetFromSetMm` / `keywayOffsetFromEndMm` > 0 — no separate flag. Authored through the
 "Captured keyway" toggle, which reveals the "KW Inset from SET / AFT / FWD" field (first-on seed
 0.5 in, `AddDefaultsConfig.KEYWAY_INSET_IN`); printed in the footer as
-"Captured KW: inset … from S.E.T. / AFT / FWD" under the KW line. Cannot be spooned (no open end).
+"Captured KW: inset … from S.E.T. / AFT / FWD" under the KW line (Settings → Drawing →
+"Captured keyway inset on footer" turns the line off). Cannot be spooned (no open end).
 
 Non-goal:
 - Keyways will never exist as standalone components.

@@ -121,8 +121,7 @@
   <h3>Why does a taper print with two keyway lines in the footer?</h3>
   <p>The second line describes the keyway further:</p>
   <ul>
-    <li>“Captured KW: inset … from S.E.T.” — KW (keyway), S.E.T. (small end of taper) — prints under the “KW:” line when the keyway is captured, giving the inset you typed. On a body it reads “from AFT” or “from FWD”.</li>
-    <li>“KW length to base of spoon (mill end)” prints when the keyway is spooned, and the “KW:” line ends with “(spooned)”. The keyway length is measured to the base of the spoon, where the mill stops.</li>
+    <li>“Captured KW: inset … from S.E.T.” — KW (keyway), S.E.T. (small end of taper) — prints under the “KW:” line when the keyway is captured, giving the inset you typed. On a body it reads “from AFT” or “from FWD”. <span class="path">Settings → Drawing → Captured keyway inset on footer</span> turns it off.</li>
   </ul>
   <p>If no keyway line prints at all, the keyway is missing its width or its depth. The footer needs both.</p>
 
@@ -398,7 +397,7 @@
     <dd>The per-job slider setting how tall the shaft draws on paper, between 1/2″ and 1 1/2″. It changes only the drawing size, never a value. <span class="ui">Standard (…)</span> returns to the default size.</dd>
 
     <dt>Spooned keyway</dt>
-    <dd>An open keyway whose closed end runs out into an enlarged, spoon-shaped bowl, drawn around the mill end. Drawing-only: it changes no keyway dimension, and the footer adds “(spooned)” and a note that the length runs to the base of the spoon.</dd>
+    <dd>An open keyway whose closed end runs out into an enlarged, spoon-shaped bowl, drawn around the mill end. Drawing-only: it changes no keyway dimension and prints nothing on the footer. The keyway length runs to the base of the spoon.</dd>
 
     <dt>STBD</dt>
     <dd>Starboard: the right-hand shaft of a twin-screw vessel, facing forward; PORT is the left-hand one. Set under <span class="ui">Shaft Position</span>, printed as the side badge, and flipped by <span class="ui">Duplicate for mate…</span>.</dd>

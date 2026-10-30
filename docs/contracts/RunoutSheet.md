@@ -989,7 +989,7 @@ consolidated drawing —
   there). Pinned by `RunoutSheetLayoutTest`.
 - **Footer block at the bottom** — the schematic's `drawFooter` itself (made internal;
   ONE implementation for both documents): AFT/FWD taper columns (Rate, L.E.T., S.E.T.,
-  Length, KW incl. spooned note, Threads — headed "AFT/FWD Taper" only for the shaft's end
+  Length, KW incl. captured inset, Threads — headed "AFT/FWD Taper" only for the shaft's end
   tapers, a mid-shaft taper by its label or "Taper"; `docs/PDF_EXPORT.md` §3 "Footer taper
   columns"), work-order center (Customer/Vessel/Job#/Date, bold Side, keyway-clocking note),
   blank-draft write-in rules. Replaces

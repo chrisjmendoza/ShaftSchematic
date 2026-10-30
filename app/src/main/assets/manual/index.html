@@ -845,8 +845,8 @@
     <li  class="keep"><strong>The slot in plan view</strong> on the shaft, at its true width relative to the drawn shaft. A body keyway and the stretch around it are never shortened on the drawing, even when the rest of the body is.</li>
     <li  class="keep"><strong>Clocking</strong>: at 180° the other keyways draw as dashed hidden slots. At 90° they draw as a notch in the shaft outline: on the bottom edge for CW (clockwise), the top edge for CCW (counter-clockwise). A footer note reads “Keyways 180° apart”, “Keyways 90° apart (CW from aft)” or “Keyways 90° apart (CCW from aft)”.</li>
     <li  class="keep"><strong>Footer size line</strong> in that end's column — KW (keyway) is the footer's shorthand: “KW: W × D × L” for a taper, “Body KW: W × D × L” for a body, in the keyway's own unit. When that column also holds a taper's block, the body line carries the body's name (“Body #1 KW: …”), so it can't be read as the taper's keyway.</li>
-    <li  class="keep"><strong>Captured</strong>: a line below it, “Captured KW: inset &lt;distance&gt; from S.E.T.” (taper) or “… from AFT” / “… from FWD” (body). The slot draws closed at both ends.</li>
-    <li  class="keep"><strong>Spooned</strong>: “(spooned)” after the size, and a note “KW length to base of spoon (mill end)”. The slot draws normally, with an enlarged spoon around its closed end; the mill end stays visible inside the spoon.</li>
+    <li  class="keep"><strong>Captured</strong>: a line below it, “Captured KW: inset &lt;distance&gt; from S.E.T.” (taper) or “… from AFT” / “… from FWD” (body). The slot draws closed at both ends. <span class="path">Settings → Drawing → Captured keyway inset on footer</span> turns the line off.</li>
+    <li  class="keep"><strong>Spooned</strong>: nothing extra on the footer. The slot draws normally, with an enlarged spoon around its closed end; the mill end stays visible inside the spoon.</li>
   </ul>
   <div class="figrow"><figure class="detail half">
     <img src="figures/feature-keyway-spooned.webp" alt="Close-up of a keyway slot on a taper in plan view, with a larger rounded spoon around the closed end.">
@@ -856,7 +856,7 @@
     <img src="figures/feature-keyway-captured.webp" alt="Close-up of a keyway slot in plan view, rounded and closed at both ends and set in from the end of the component.">
     <figcaption>A captured keyway: closed at both ends and set in from the face.</figcaption>
   </figure></div>
-  <aside class="shop"><p  class="keep">The footer is the keyway's specification; the slot on the drawing shows where it is. The KW length on a spooned keyway is to the base of the spoon, where the mill cut ends, not to the tip of the spoon. A captured keyway never prints as spooned.</p></aside>
+  <aside class="shop"><p  class="keep">The footer is the keyway's specification; the slot on the drawing shows where it is. The KW length on a spooned keyway is to the base of the spoon, where the mill cut ends, not to the tip of the spoon. The spoon itself shows only on the drawing.</p></aside>
 
   <h2 id="components-bolt-slots">Coupler bolt slots and cross-drilled holes</h2>
   <p  class="keep">This component is one axial row of bolt holes at a coupling. Add it with <span class="ui">Coupler Bolt Slot / Hole</span> in the Add Component chooser. It comes in two styles:</p>
@@ -892,7 +892,7 @@
     <li  class="keep"><strong>Either style</strong>: the row is never shortened on paper. Its holes keep their true spacing even inside a body that is compressed around them, and the body's S-break is placed clear of the row.</li>
     <li  class="keep"><strong>Cross-drilled, 90° from keyway</strong>: the bore drawn as hidden lines, two dashed walls one hole width apart running down from the top of the shaft, all the way through or, for a blind hole, to the drill depth with a dashed bottom.</li>
     <li  class="keep"><strong>Cross-drilled, in line with keyway</strong>: one circle on the shaft centerline at the hole position.</li>
-    <li  class="keep"><strong>Cross-drilled footer lines</strong>, in the column of the end it was measured from: “Bolt hole: Ø &lt;dia&gt;” (with “× &lt;count&gt;” for more than one), “Hole center from FWD:” or “Hole center from AFT:” with the distance (and “@ &lt;spacing&gt;” for more than one), and, when the shaft has a keyway, “90° from keyway” or “In line with keyway”.</li>
+    <li  class="keep"><strong>Cross-drilled footer lines</strong>, in the column of the end it was measured from: “Bolt hole: Ø &lt;dia&gt;” (with “× &lt;count&gt;” for more than one; prints only when <span class="path">Settings → Drawing → Bolt hole Ø on footer</span> is on; it is off by default), “Hole center from FWD:” or “Hole center from AFT:” with the distance (and “@ &lt;spacing&gt;” for more than one), and, when the shaft has a keyway, “90° from keyway” or “In line with keyway”.</li>
   </ul>
   <figure class="detail">
     <img src="figures/feature-bolt-holes.webp" alt="Close-up of the coupling end of the schematic: two dashed lines through the shaft for a cross-drilled hole, then a row of three circles straddling the top outline with the matching row on the bottom outline.">
@@ -1588,8 +1588,7 @@
   <table class="ref">
     <thead><tr><th>Line</th><th>When it appears</th></tr></thead>
     <tbody>
-      <tr class="short"><td>“(spooned)” after the KW line, plus “KW length to base of spoon (mill end)”</td><td>A spooned open keyway.</td></tr>
-      <tr><td>“Captured KW: inset … from S.E.T.” (taper) or “… from AFT” / “… from FWD” (body)</td><td>A captured keyway: the distance from that face to the start of the slot.</td></tr>
+      <tr class="short"><td>“Captured KW: inset … from S.E.T.” (taper) or “… from AFT” / “… from FWD” (body)</td><td>A captured keyway: the distance from that face to the start of the slot.</td></tr>
       <tr><td>“Body KW:”</td><td>A keyway in a body, width × depth × length. Under a taper's block it names the body, for example “Body #1 KW:”.</td></tr>
       <tr><td>“Keyways 180° apart”, “Keyways 90° apart (CW from aft)”, “Keyways 90° apart (CCW from aft)”</td><td>Two or more keyways with a set clocking (middle column).</td></tr>
       <tr><td>“Liner shoulder R:”</td><td>One line per shouldered liner: the radius once when both ends match, “AFT r, FWD r” when they differ; the liner's name leads the line when more than one liner is shouldered.</td></tr>
@@ -1634,7 +1633,7 @@
     <dt>Open</dt>
     <dd  class="keep">The slot runs out through the small end of the taper and stops in a rounded mill end, as on both tapers of the tailshaft schematic. The KW length is measured from the S.E.T. face to the end of the mill.</dd>
     <dt>Spooned</dt>
-    <dd  class="keep">An open keyway with a spoon at its closed end, drawn as an oval bowl around the mill end. The mill end still shows inside the bowl as a reference line. The footer adds “(spooned)” to the KW line and the note “KW length to base of spoon (mill end)”: the length runs to where the mill stops, not to the edge of the spoon.</dd>
+    <dd  class="keep">An open keyway with a spoon at its closed end, drawn as an oval bowl around the mill end. The mill end still shows inside the bowl as a reference line. The spoon is shown on the drawing only; the footer's KW line reads the same as for a plain keyway, and its length runs to where the mill stops, not to the edge of the spoon.</dd>
     <dt>Captured</dt>
     <dd  class="keep">A slot closed at both ends, sitting inside the taper or body. The footer adds a “Captured KW:” line giving the inset from its face — “Captured KW: inset 4″ from AFT” means the slot starts 4″ in from the body's AFT end.</dd>
   </dl>
@@ -1682,7 +1681,7 @@
     <dt>Seam holes (muff coupling)</dt>
     <dd  class="keep">A row of circles straddling the top and bottom outline of the shaft, one per bolt at its spacing. These are reference marks: they print no footer line, and a dimension only when the row's card has <span class="ui">Show dimension rail</span> on — then one rail runs from the end of the shaft the row was measured from to the nearest hole center, carrying the entered distance. The row itself is never shortened on paper: its holes keep their true spacing even inside a body that is, and a body's S-break is placed clear of them.</dd>
     <dt>Cross-drilled hole</dt>
-    <dd>A bolt hole drilled through the coupling end. When it is clocked 90° from the keyway — the usual case, since a bolt in line with the keyway would pass through the key — it is out of sight and draws as two dashed lines one hole width apart. When it is in line with the keyway it draws as a circle on the centerline. The footer gives “Bolt hole: Ø 0.875″” (with × count for more than one), “Hole center from FWD: 16″” (measured from that end of the shaft to the hole center, with the spacing for more than one), and “90° from keyway” or “In line with keyway” when the shaft has a keyway.</dd>
+    <dd>A bolt hole drilled through the coupling end. When it is clocked 90° from the keyway — the usual case, since a bolt in line with the keyway would pass through the key — it is out of sight and draws as two dashed lines one hole width apart. When it is in line with the keyway it draws as a circle on the centerline. The footer gives “Hole center from FWD: 16″” (measured from that end of the shaft to the hole center, with the spacing for more than one), and “90° from keyway” or “In line with keyway” when the shaft has a keyway. With <span class="path">Settings → Drawing → Bolt hole Ø on footer</span> on, it also gives “Bolt hole: Ø 0.875″” (with × count for more than one).</dd>
   </dl>
 
   <h2 id="reading-runout">The runout sheet</h2>
@@ -2395,6 +2394,8 @@
       <tr><td><span class="ui">Fractions</span></td><td>Diagonal</td><td>How a fraction is set: <span class="ui">Stacked</span> (numerator over denominator with a bar, the shop-ruler fraction), <span class="ui">Diagonal</span> (raised numerator, slanted divider) or <span class="ui">Plain</span> (3/16 on one line). Applies to the on-screen sheets and the printed sheets alike. Also on the PDF options panel (Lines &amp; text section).</td></tr>
       <tr><td><span class="ui">Dual-unit layout</span></td><td>Inline</td><td>How a value printed in both units is set: <span class="ui">Inline</span> puts both on one line — 1 1/2″ [38.1 mm]; <span class="ui">Stacked</span> puts the second unit under the first. Stacked is about half as wide, so more values sit in the dimension line; a sheet too tight for the taller value falls back to Inline for the whole sheet. Has an effect only on a document with dual units on. Also on the PDF options panel (Units section, greyed out while that document's dual units are off).</td></tr>
       <tr><td><span class="ui">Units note on sheets</span></td><td>Off</td><td>Prints a small <span class="ui">Units in inches</span> or <span class="ui">Units in mm</span> — the drawing's own unit — in the lower-right corner of every sheet, below the drawing and the footer, so nothing else moves. Settings only; it is not on the PDF options panel.</td></tr>
+      <tr><td><span class="ui">Captured keyway inset on footer</span></td><td>On</td><td>Prints the <span class="ui">Captured KW: inset …</span> line under a captured keyway's KW line. Off, the footer gives the keyway size only; the drawing still shows the inset. Settings only.</td></tr>
+      <tr><td><span class="ui">Bolt hole Ø on footer</span></td><td>Off</td><td>Prints the <span class="ui">Bolt hole: Ø …</span> line of a cross-drilled bolt hole (with the count when there is more than one). Off, the hole center distance and the clocking note still print. Settings only.</td></tr>
     </tbody>
   </table>
   <aside class="note"><p  class="keep">Changing the font, fraction style or dual-unit layout never makes text collide. Every rail break and label is measured from the text as it will actually print.</p></aside>
@@ -2629,8 +2630,7 @@
   <h3>Why does a taper print with two keyway lines in the footer?</h3>
   <p  class="keep">The second line describes the keyway further:</p>
   <ul>
-    <li  class="keep">“Captured KW: inset … from S.E.T.” — KW (keyway), S.E.T. (small end of taper) — prints under the “KW:” line when the keyway is captured, giving the inset you typed. On a body it reads “from AFT” or “from FWD”.</li>
-    <li  class="keep">“KW length to base of spoon (mill end)” prints when the keyway is spooned, and the “KW:” line ends with “(spooned)”. The keyway length is measured to the base of the spoon, where the mill stops.</li>
+    <li  class="keep">“Captured KW: inset … from S.E.T.” — KW (keyway), S.E.T. (small end of taper) — prints under the “KW:” line when the keyway is captured, giving the inset you typed. On a body it reads “from AFT” or “from FWD”. <span class="path">Settings → Drawing → Captured keyway inset on footer</span> turns it off.</li>
   </ul>
   <p  class="keep">If no keyway line prints at all, the keyway is missing its width or its depth. The footer needs both.</p>
 
@@ -2906,7 +2906,7 @@
     <dd  class="keep">The per-job slider setting how tall the shaft draws on paper, between 1/2″ and 1 1/2″. It changes only the drawing size, never a value. <span class="ui">Standard (…)</span> returns to the default size.</dd>
 
     <dt>Spooned keyway</dt>
-    <dd  class="keep">An open keyway whose closed end runs out into an enlarged, spoon-shaped bowl, drawn around the mill end. Drawing-only: it changes no keyway dimension, and the footer adds “(spooned)” and a note that the length runs to the base of the spoon.</dd>
+    <dd  class="keep">An open keyway whose closed end runs out into an enlarged, spoon-shaped bowl, drawn around the mill end. Drawing-only: it changes no keyway dimension and prints nothing on the footer. The keyway length runs to the base of the spoon.</dd>
 
     <dt>STBD</dt>
     <dd  class="keep">Starboard: the right-hand shaft of a twin-screw vessel, facing forward; PORT is the left-hand one. Set under <span class="ui">Shaft Position</span>, printed as the side badge, and flipped by <span class="ui">Duplicate for mate…</span>.</dd>

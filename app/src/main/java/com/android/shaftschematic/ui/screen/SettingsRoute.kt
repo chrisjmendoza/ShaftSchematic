@@ -175,6 +175,8 @@ fun SettingsRoute(
     val pdfOutputFont by vm.pdfOutputFont.collectAsState()
     val pdfDualUnitLayout by vm.pdfDualUnitLayout.collectAsState()
     val pdfShowUnitsNote by vm.pdfShowUnitsNote.collectAsState()
+    val pdfFooterCapturedKwInset by vm.pdfFooterCapturedKwInset.collectAsState()
+    val pdfFooterBoltHoleDia by vm.pdfFooterBoltHoleDia.collectAsState()
     val pdfWearAreaStyle by vm.pdfWearAreaStyle.collectAsState()
 
     // App-wide defaults for mixed per-component units + inline dual-unit display. Not
@@ -491,6 +493,36 @@ fun SettingsRoute(
                             Text(UNITS_NOTE_SETTING_TITLE)
                             Text(
                                 UNITS_NOTE_SETTING_CAPTION,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    // Optional footer lines, beside the other sheet-wide text switch. Settings
+                    // only: a shop decides once what its footers carry.
+                    SettingSwitchRow(
+                        checked = pdfFooterCapturedKwInset,
+                        onCheckedChange = { vm.setPdfFooterCapturedKwInset(it) },
+                        modifier = Modifier.testTag("settings_footer_captured_kw"),
+                    ) {
+                        Column {
+                            Text(FOOTER_CAPTURED_KW_SETTING_TITLE)
+                            Text(
+                                FOOTER_CAPTURED_KW_SETTING_CAPTION,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    SettingSwitchRow(
+                        checked = pdfFooterBoltHoleDia,
+                        onCheckedChange = { vm.setPdfFooterBoltHoleDia(it) },
+                        modifier = Modifier.testTag("settings_footer_bolt_hole_dia"),
+                    ) {
+                        Column {
+                            Text(FOOTER_BOLT_HOLE_DIA_SETTING_TITLE)
+                            Text(
+                                FOOTER_BOLT_HOLE_DIA_SETTING_CAPTION,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -1505,6 +1537,14 @@ private fun InchFieldStyle.uiLabel(): String = when (this) {
     InchFieldStyle.FRACTION -> "Fractions"
     InchFieldStyle.DECIMAL -> "Decimals"
 }
+
+/** Settings → Drawing switches for the optional footer lines; one wording for the rows and Help. */
+internal const val FOOTER_CAPTURED_KW_SETTING_TITLE = "Captured keyway inset on footer"
+internal const val FOOTER_CAPTURED_KW_SETTING_CAPTION =
+    "The \"Captured KW: inset …\" line under a captured keyway's KW line"
+internal const val FOOTER_BOLT_HOLE_DIA_SETTING_TITLE = "Bolt hole Ø on footer"
+internal const val FOOTER_BOLT_HOLE_DIA_SETTING_CAPTION =
+    "The \"Bolt hole: Ø …\" line of a cross-drilled bolt hole"
 
 internal const val UNITS_NOTE_SETTING_TITLE = "Units note on sheets"
 internal const val UNITS_NOTE_SETTING_CAPTION =

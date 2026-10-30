@@ -211,6 +211,8 @@ object SettingsStore {
     private val KEY_PDF_OUTPUT_FONT = stringPreferencesKey("pdf_output_font")
     private val KEY_PDF_DUAL_UNIT_LAYOUT = stringPreferencesKey("pdf_dual_unit_layout")
     private val KEY_PDF_SHOW_UNITS_NOTE = booleanPreferencesKey("pdf_show_units_note")
+    private val KEY_PDF_FOOTER_CAPTURED_KW_INSET = booleanPreferencesKey("pdf_footer_captured_kw_inset")
+    private val KEY_PDF_FOOTER_BOLT_HOLE_DIA = booleanPreferencesKey("pdf_footer_bolt_hole_dia")
     // The old on/off switch the style replaced; read only when the style key was never written.
     private val KEY_PDF_WEAR_AREAS_SHADED = booleanPreferencesKey("pdf_wear_areas_shaded")
     private val KEY_PDF_WEAR_AREA_STYLE = stringPreferencesKey("pdf_wear_area_style")
@@ -458,6 +460,19 @@ object SettingsStore {
         ctx.settingsPrefs.map { p -> p[KEY_PDF_SHOW_UNITS_NOTE] ?: PdfPrefs().showUnitsNote }
     suspend fun setPdfShowUnitsNote(ctx: Context, v: Boolean) {
         ctx.editSettings { it[KEY_PDF_SHOW_UNITS_NOTE] = v }
+    }
+
+    // Optional footer lines. A missing key reads the one `PdfPrefs()` default (ON), so stores
+    // written before the switches keep printing what they printed.
+    fun pdfFooterCapturedKwInsetFlow(ctx: Context): Flow<Boolean> =
+        ctx.settingsPrefs.map { p -> p[KEY_PDF_FOOTER_CAPTURED_KW_INSET] ?: PdfPrefs().footerCapturedKwInset }
+    suspend fun setPdfFooterCapturedKwInset(ctx: Context, v: Boolean) {
+        ctx.editSettings { it[KEY_PDF_FOOTER_CAPTURED_KW_INSET] = v }
+    }
+    fun pdfFooterBoltHoleDiaFlow(ctx: Context): Flow<Boolean> =
+        ctx.settingsPrefs.map { p -> p[KEY_PDF_FOOTER_BOLT_HOLE_DIA] ?: PdfPrefs().footerBoltHoleDia }
+    suspend fun setPdfFooterBoltHoleDia(ctx: Context, v: Boolean) {
+        ctx.editSettings { it[KEY_PDF_FOOTER_BOLT_HOLE_DIA] = v }
     }
 
     // Consolidated sheet: how a wear area draws. A store written before the style existed carries

@@ -7,6 +7,7 @@ import com.android.shaftschematic.model.CouplerBoltSlot
 import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.SlotAuthoredReference
+import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.util.UnitSystem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -95,5 +96,24 @@ class CrossDrilledHoleFooterTest {
         val spec = ShaftSpec(overallLengthMm = 2000f, bodies = listOf(keyedBody()), couplerBoltSlots = listOf(seam))
         val cols = buildFooterEndColumns(spec, UnitSystem.MILLIMETERS, cfg)
         assertTrue((cols.aftLines + cols.fwdLines).none { it.startsWith("Bolt hole") || it.startsWith("Hole center") })
+    }
+
+    @Test
+    fun `the bolt hole diameter line follows the setting, the rest of the spec stays`() {
+        val spec = ShaftSpec(
+            overallLengthMm = 2000f, bodies = listOf(keyedBody()),
+            couplerBoltSlots = listOf(crossHole().copy(count = 4, spacingMm = 50f)),
+        )
+        assertEquals(false, PdfPrefs().footerBoltHoleDia)
+        assertEquals(false, sheetFooterConfig(spec).boltHoleDia)
+        assertTrue(sheetFooterConfig(spec, PdfPrefs(footerBoltHoleDia = true)).boltHoleDia)
+        val off = cfg.copy(boltHoleDia = false)
+        for (blank in listOf(false, true)) {
+            val cols = buildFooterEndColumns(spec, UnitSystem.MILLIMETERS, off, blankValues = blank)
+            assertTrue(cols.fwdLines.none { it.startsWith("Bolt hole") })
+            val i = cols.fwdLines.indexOfFirst { it.startsWith("Hole center from FWD:") }
+            assertTrue(i >= 0)
+            assertEquals(BOLT_HOLE_90_NOTE, cols.fwdLines[i + 1])
+        }
     }
 }
