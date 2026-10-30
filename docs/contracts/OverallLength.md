@@ -32,6 +32,16 @@ UI signals errors. Applies to `ShaftViewModel`, `ShaftRoute`, and `ShaftScreen`.
 - **Blur discipline**: a commit on blur also requires the text to have changed since focus
   (`ui/input/BlurCommitPolicy.kt`) — a tap-and-leave is a no-op. A ✓ or ✗ resets that baseline
   before it clears focus, so the blur that follows cannot commit a second time or undo a cancel.
+- **A pending card edit is settled before the OAL takes focus** (on-device request). While a
+  carousel card field holds a typed value that has not landed (its ✓ / ✗ showing), a guard over
+  the OAL text box (`oal_pending_guard`) takes the tap instead of the field — focus moving to the
+  OAL would blur-commit the card value with its ✓ / ✗ never answered — and asks "Keep your
+  change?", naming the field and its card (`pendingCardEditMessage`). **Keep** answers the card
+  field's ✓, **Discard** its ✗, and each then moves focus into the OAL; **Cancel** leaves the card
+  field holding its typed value. The card fields register through `PendingCardEdits` /
+  `LocalPendingCardEdits` (`ui/screen/PendingCardEdit.kt`), provided once around the editor, and
+  `NumericInputField.onPendingEdit` hands out the ✓ / ✗ answers. Pinned by
+  `OalPendingCardEditTest`.
 - **Oversize**: if components extend past a **set** Overall (`> 0`), the input shows an
   **error**. A not-yet-set Overall (`0`) is never an error.
 - **New-shaft diameter prompt** (on-device request: components added onto the default-sized
@@ -204,6 +214,10 @@ template card's preview can never disagree with the drawing it becomes.
 ---
 
 ## Change Log
+**v2.7 (2026-10-30)** — **Pending card edit prompt** (on-device request): a tap on the OAL while a
+card field holds an unsaved value asks Keep | Discard | Cancel before the OAL takes focus; the ✓ / ✗
+pair is now the ONE `AcceptCancelButtons`, shared with the card fields.
+
 **v2.6 (2026-10-29)** — **Explicit bodies re-anchor** (on-device request: an explicit body exists to
 sit at an exact point, often off the coupling end): an explicit body carries "Measure From: AFT |
 FWD" (`Body.authoredReference`), and `withNewOal` keeps a FWD body's distance from the FWD face like

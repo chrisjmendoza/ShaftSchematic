@@ -35,7 +35,7 @@ import org.robolectric.annotation.Config
 
 /**
  * Compose-level coverage of the field's two wired behaviours: commit-on-blur, and the
- * `onDirtyChange` reporting the card's Save button is enabled off.
+ * `onDirtyChange` reporting — the same condition that shows a card field's ✓ / ✗ pair.
  *
  * [BlurCommitPolicyTest] pins the commit decision; this pins that the decision is actually
  * *wired into* the field — that real focus and blur events reach it, and that the captured
@@ -339,7 +339,7 @@ class NumericInputFieldBlurTest {
         assertEquals("a placeholder is never a value", emptyList<String>(), commits)
     }
 
-    /* ── onDirtyChange — what the carousel card's Save button is enabled off ──── */
+    /* ── onDirtyChange — the condition behind a card field's ✓ / ✗ pair ──────── */
 
     @Test
     fun `a freshly composed field reports itself clean`() {
@@ -374,7 +374,7 @@ class NumericInputFieldBlurTest {
     @Test
     fun `reverting an invalid edit reports clean again`() {
         // The field reverts to its last valid text instead of committing, so nothing is
-        // pending afterwards — Save must grey back out rather than stay lit forever.
+        // pending afterwards — the ✓ / ✗ pair must go rather than stay forever.
         rule.setContent { Host() }
         focusField()
         rule.onNodeWithTag(FIELD).performTextReplacement("abc")
@@ -411,8 +411,7 @@ class NumericInputFieldBlurTest {
     @Test
     fun `a run of edits past the first reports nothing further`() {
         // Edge-triggered for real: three divergent values in a row are still ONE report. A
-        // level-triggered listener would fire on every keystroke and recompose the card's Save
-        // button with it.
+        // level-triggered listener would fire on every keystroke.
         rule.setContent { Host() }
         focusField()
         rule.onNodeWithTag(FIELD).performTextReplacement("13")
