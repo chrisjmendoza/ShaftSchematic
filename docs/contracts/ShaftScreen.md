@@ -290,20 +290,18 @@ Notes
 - `formatDisplay(mm, unit)` converts and formats a value once for display; it always expects
   mm input.  
 - `ComponentCard` handles its own remove button; callers simply supply `onRemove = { … }`.  
-- `ComponentCard` also ends every card with a **Save** button (`card_save_button`) — a
-  full-width, centered, filled `Button`. Fields commit on blur and IME Done, but
-  chips/toggles/checkboxes never TAKE focus, so a typed value followed by a chip tap sat
-  uncommitted (on-device report). Save force-clears focus, driving the one existing
-  commit-on-blur path — no second commit pipeline. Card-only: the Add dialogs commit through
-  their own Add button.
-  **It is DISABLED while nothing is pending** (on-device request): greyed out is a solid
-  statement that every field on this card is saved, and filled is the visible thing to press.
-  The state is the aggregate of the fields' own `onDirtyChange` reports, collected by the
-  card's `CardDirtyState` through the `LocalCardDirtyState` composition local — fields
-  register themselves, there is no per-call-site key list to keep in sync. Commit-on-blur is
-  otherwise **completely unchanged**; the button only reflects and flushes it. Accepted
-  trade-off: with nothing pending it is no longer a tap-anywhere keyboard dismissal — IME
-  back and Done still are. See `NumberField.md`.  
+- Every field on a `ComponentCard` shows the Overall Length field's **green ✓ / red ✗** pair
+  beside itself while it holds an edit that has not landed (`ui/input/AcceptCancelButtons.kt`,
+  the ONE construction both use; tags `field_accept` / `field_cancel`). ✓ commits and drops
+  the keyboard, ✗ puts the stored value back and commits nothing. Fields still commit on blur
+  and IME Done; the pair is there for the case those miss — chips/toggles/checkboxes never TAKE
+  focus, so a typed value followed by a chip tap sits uncommitted (on-device report), and its
+  pair stays beside it. It replaced a full-width Save button at the foot of the card that was
+  hard to find on a long card (on-device request). `ComponentCard` turns it on for its
+  `content` through `LocalFieldAcceptCancel`; the Add dialogs commit through their own Add
+  button and show none. Commit-on-blur is otherwise **completely unchanged**. A tap on the
+  Overall Length field while such a value is pending asks Keep | Discard | Cancel first
+  (`PendingCardEdits`, `OverallLength.md`). See `NumberField.md`.  
 - **Card fields carry two card-level validations, and neither rewrites a stored value.**
   A card whose component runs past `spec.overallLengthMm` shows the amber advisory chip
   "Extends past shaft length (OAL *n*")" (the OAL in the document's display unit, inch or

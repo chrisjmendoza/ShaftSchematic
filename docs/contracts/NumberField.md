@@ -6,7 +6,10 @@ File: `ui/input/NumericInputField.kt` (composable `NumericInputField`; wrapped b
 `CommitNum` in `ComponentCarousel.kt` and `CommitNumField` in `AddComponentDialogs.kt`)  
 Purpose: Single-line numeric field that holds local text; commits on blur/IME Done via callback.
 
-Version: v0.11 (2026-10-28; the filter keeps the trailing run of LETTERS and inch marks, so
+Version: v0.12 (2026-10-30; the carousel card's Save button is replaced by the OAL's ✓ / ✗ pair
+on each card field while it holds an edit — `acceptCancel`, `LocalFieldAcceptCancel`; the
+`CardDirtyState` registry went with the button).
+v0.11 (2026-10-28; the filter keeps the trailing run of LETTERS and inch marks, so
 `12ft` reaches the parser whole and is refused; seeds format in `Locale.US`; the "/" key needs a
 number-pad keyboard as well as a fraction-capable field).
 v0.10 (2026-10-28; released focus parks on the window root — `FocusParkingRoot` — so
@@ -153,9 +156,10 @@ Test coverage
   divergent edits still reports exactly once (edge-triggered, not per keystroke), and an
   external model refresh arriving while the field holds focus settles it clean **without**
   writing anything back. Runs on the JVM under Robolectric.
-- `ui/screen/ComponentCardSaveButtonTest` — the Save button off the aggregate: several fields on
-  one card, a field leaving composition, and instant-commit controls that never register, plus
-  `CardDirtyState` itself.
+- `ui/screen/ComponentCardAcceptCancelTest` — the card fields' ✓ / ✗ pair: ✓ lands a
+  still-focused value (the chip-tap case) with no second commit on the blur after it, ✗ restores
+  without committing, the pair shows only beside the field holding an edit, a refused ✓ names
+  the value, a departing field still lands its edit, and a field outside a card shows none.
 - `ui/util/StartOverlapValidationTest` — `positiveLengthErrorMm`, `positiveDiaErrorMm`, the
   Length span check and partner naming, pure JVM.
 - `ui/screen/CardFieldRefusalTest` / `ThreadReliefCardTest` — the REAL cards refusing a bolt Count
@@ -168,7 +172,7 @@ Test coverage
 Focus release
 - **Releasing focus never hands it to another field.** `FocusManager.clearFocus()` — the OAL
   field's ✓/Done/✗, the auto-body Ø scope dialog opening, the undercut and wear editors' own
-  clears, a card's Save — ends with no text field focused. Out of touch mode (a hardware or
+  clears, a card field's ✓ / ✗ — ends with no text field focused. Out of touch mode (a hardware or
   Bluetooth keyboard, or a key the IME sends as a raw key event) Android's `View.clearFocus()`
   immediately refocuses the window, and the Compose view answers with an "enter" search that
   picks the top-left focusable composable — on the editor, the Overall Length field. Cancelling
@@ -216,24 +220,31 @@ Keyboard
 Responsibilities
 - Maintain internal `text` state; select-all on focus for quick overwrite.
 - Invoke `onCommit(rawText)` on blur or IME Done, only when changed.
-- **The carousel card's Save button is a third path to the SAME commit** — chips, toggles,
-  and checkboxes never take focus, so a typed value followed by a chip tap sits uncommitted
-  in a still-focused field with nothing visibly wrong (on-device report: a body keyway
-  length that never landed). `ComponentCard`'s Save (`card_save_button`) force-clears focus,
-  which drives this field's blur commit; it adds no second commit pipeline, and the
-  no-change rule above still applies (Save after tap-without-edit is a no-op). Pinned by
-  `ComponentCardSaveButtonTest`.
-- **Save is enabled off the aggregate of `onDirtyChange`.** A `CommitNum` inside a
-  `ComponentCard` registers itself with that card's `CardDirtyState`
-  (`ui/screen/CardDirtyState.kt`) through the `LocalCardDirtyState` composition local, keyed
-  by an identity token the field instance owns and dropped on dispose. There is deliberately
-  **no per-call-site key list**: a card carries dozens of fields across four kinds, and a
-  hand-maintained list is a second place for the button and the fields to drift — the first
-  field added without a key would silently stop lighting Save up. `CommitDesignationField`
-  (the metric thread designation) registers the same way. The card title's rename editor does
-  not: only `content` is wrapped, and that editor is a bespoke field with its own commit.
-  Instant-commit controls (chips, checkboxes, switches, sliders) never register — they have no
-  uncommitted state.
+- **A card field carries the OAL's ✓ / ✗ pair while it holds an edit** — the third path to
+  the SAME commit. Chips, toggles and checkboxes never take focus, so a typed value followed by
+  a chip tap sits uncommitted in a still-focused field (on-device report: a body keyway length
+  that never landed); the pair stays beside that field until it is answered. It replaced a
+  full-width Save button at the foot of the card, which was hard to find on a long card
+  (on-device request). ONE construction, `AcceptCancelButtons` (`ui/input/AcceptCancelButtons.kt`
+  — the green ✓ `ACCEPT_GREEN`, the red ✗ in the theme's error colour, neither button
+  focusable), behind the Overall Length field and every card field, so the two read as the
+  same control. In `NumericInputField` it is `acceptCancel`, shown in the trailing slot (after
+  the "/" key) exactly while `onDirtyChange` would report dirty (`field_accept` /
+  `field_cancel`). ✓ runs the IME Done commit (`commitOrRevert`) and, when it lands, releases
+  focus; a refusal keeps focus with its notice, as the OAL's ✓ does. ✗ puts the settled text
+  back, commits nothing, and releases focus. Both move the focus baseline to the settled text
+  BEFORE releasing focus, so the blur that follows cannot commit a second time. The default
+  reads `LocalFieldAcceptCancel`, which `ComponentCard` provides `true` around its `content` —
+  no per-call-site wiring, so a field added to a card cannot miss it; the Add dialogs (their own
+  Add button) and the undercut and wear editors keep `false`. `CommitDesignationField` (the
+  metric thread designation) shows the same pair. The card title's rename editor does not:
+  only `content` is wrapped, and that editor is a bespoke field with its own commit. Pinned by
+  `ComponentCardAcceptCancelTest`.
+- **`onPendingEdit` hands the ✓ / ✗ answers to the host** — a `FieldEditHandle(accept, cancel)`
+  while the field is dirty, null once it settles or leaves composition. `CommitNum` and
+  `CommitDesignationField` register it with the editor's `PendingCardEdits`, so a tap on the
+  Overall Length field can ask Keep | Discard | Cancel before focus moves there (on-device
+  request; `OverallLength.md`). Keep and Discard run exactly the ✓ and ✗.
 - Support decimals and shop fractions in display. **Inch fields read back through ONE formatter,
   `inchFieldText` (`util/InchFieldFormat.kt`)**, behind `formatDisplay`/`disp` (cards) and
   `toDisplayString` (Add-dialog seeds), keyway fields included: a value on the 1/32 grid

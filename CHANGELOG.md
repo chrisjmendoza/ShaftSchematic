@@ -8,6 +8,16 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-30
 
+### feat(ui): card fields accept with the OAL's ✓ / ✗ instead of a Save button; the OAL asks before taking over a pending card edit
+
+- While a card field holds a typed value that has not been saved, the green ✓ and red ✗ from
+  the Overall Length field show at its right end: ✓ saves it, ✗ puts the old value back. The
+  full-width Save button at the foot of each card is gone (on-device request: it was hard to
+  find on a long card). Done and moving to another field still save as before.
+- Tapping Overall Length while a card field holds an unsaved value asks "Keep your change?"
+  first: Keep saves the card value, Discard puts the old one back (either then moves into the
+  OAL), Cancel stays on the card.
+
 ### fix(pdf): spooned keyways print nothing on the footer; captured inset and bolt hole Ø can be switched off
 
 - A spooned keyway no longer adds "(spooned)" or "KW length to base of spoon (mill end)" to the

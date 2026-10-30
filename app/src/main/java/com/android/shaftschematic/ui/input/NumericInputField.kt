@@ -1,10 +1,12 @@
 package com.android.shaftschematic.ui.input
 
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -12,8 +14,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -43,8 +48,21 @@ import com.android.shaftschematic.util.filterNumericInput
  * against the baseline a blur-with-no-edit would keep. It fires `true` the moment the text
  * diverges and `false` again on a successful commit, on a revert, and when an external model
  * update refreshes the text; it is edge-triggered, so typing does not spam it. It reports
- * state and never drives a commit — the blur/IME pipeline above is still the only writer. The
- * carousel card's Save button is enabled off the aggregate of these reports.
+ * state and never drives a commit — the blur/IME pipeline above is still the only writer.
+ *
+ * [acceptCancel] shows the green ✓ / red ✗ pair ([AcceptCancelButtons], the Overall Length
+ * field's own) in the trailing slot while the field holds an uncommitted edit — the same
+ * condition [onDirtyChange] reports. ✓ runs the IME Done commit and, when it lands, releases
+ * focus (keyboard down); a rejection keeps focus with its notice, like the OAL's ✓. ✗ puts the
+ * settled text back without committing anything and releases focus. Both move the focus
+ * baseline to the settled text first, so the blur that follows cannot commit again. The
+ * default reads [LocalFieldAcceptCancel], which the carousel cards provide `true`; off, the
+ * field is exactly as it was.
+ *
+ * [onPendingEdit] hands the host a [FieldEditHandle] — the ✓ and ✗ answers — while the field
+ * holds an uncommitted edit, and null once it settles or leaves composition, so a control
+ * elsewhere on the screen can resolve the edit before it takes focus (the Overall Length field's
+ * "keep your change?" prompt).
  *
  * [placeholder] shows inside an empty box (an example of what to type); [hint] is supporting
  * text shown only while the field has nothing to report — a rejection notice or an
@@ -87,6 +105,8 @@ fun NumericInputField(
     fractionKey: Boolean = true,
     validator: ((String) -> String?)? = null,
     onDirtyChange: ((Boolean) -> Unit)? = null,
+    acceptCancel: Boolean = LocalFieldAcceptCancel.current,
+    onPendingEdit: ((FieldEditHandle?) -> Unit)? = null,
     placeholder: String? = null,
     hint: String? = null,
     landRestoredEdit: Boolean = false,
@@ -180,12 +200,52 @@ fun NumericInputField(
     var isFocused by remember { mutableStateOf(false) }
     val showFractionKey = fractionKey && allowFraction && keyboardType == KeyboardType.Decimal &&
         enabled && isFocused && LocalFractionKeyEnabled.current
+    val showAcceptCancel = acceptCancel && enabled && isDirty
+
+    val focusManager = LocalFocusManager.current
+
+    fun acceptEdit() {
+        commitOrRevert()
+        if (rejectedNotice == null) {
+            textWhenFocused = settledText
+            focusManager.clearFocus()
+        }
+    }
+
+    fun cancelEdit() {
+        rejectedNotice = null
+        text = TextFieldValue(settledText)
+        textWhenFocused = settledText
+        focusManager.clearFocus()
+    }
+
+    val pendingListener by rememberUpdatedState(onPendingEdit)
+    DisposableEffect(isDirty) {
+        pendingListener?.invoke(
+            if (isDirty) FieldEditHandle(accept = { acceptEdit() }, cancel = { cancelEdit() }) else null
+        )
+        onDispose { if (isDirty) pendingListener?.invoke(null) }
+    }
 
     OutlinedTextField(
         value = text,
         onValueChange = { raw -> applyEdit(raw) },
-        trailingIcon = if (showFractionKey) {
-            { FractionKey(onClick = { applyEdit(text.insertAtCursor("/")) }) }
+        trailingIcon = if (showFractionKey || showAcceptCancel) {
+            {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (showFractionKey) FractionKey(onClick = { applyEdit(text.insertAtCursor("/")) })
+                    if (showAcceptCancel) {
+                        AcceptCancelButtons(
+                            onAccept = { acceptEdit() },
+                            onCancel = { cancelEdit() },
+                            acceptDescription = "Accept $label",
+                            cancelDescription = "Cancel $label change",
+                            acceptTag = FIELD_ACCEPT_TAG,
+                            cancelTag = FIELD_CANCEL_TAG,
+                        )
+                    }
+                }
+            }
         } else null,
         label = { Text(label) },
         placeholder = placeholder?.let { p -> { Text(p) } },
@@ -224,6 +284,20 @@ fun NumericInputField(
         }
     )
 }
+
+/** The ✓ and ✗ answers to a field's uncommitted edit, handed out through `onPendingEdit`. */
+class FieldEditHandle(val accept: () -> Unit, val cancel: () -> Unit)
+
+/** testTags of a [NumericInputField]'s ✓ / ✗ pair (shown only with `acceptCancel`). */
+const val FIELD_ACCEPT_TAG = "field_accept"
+const val FIELD_CANCEL_TAG = "field_cancel"
+
+/**
+ * Whether the [NumericInputField]s under it show the ✓ / ✗ pair while they hold an edit. The
+ * carousel card provides `true` around its content; everywhere else (Add dialogs, which commit
+ * through their own Add button, and the undercut and wear editors) keeps the default `false`.
+ */
+val LocalFieldAcceptCancel = staticCompositionLocalOf { false }
 
 /** The reason a [NumericInputField] notice gives for text that does not parse. */
 internal const val NOT_A_NUMBER_REASON = "not a number"

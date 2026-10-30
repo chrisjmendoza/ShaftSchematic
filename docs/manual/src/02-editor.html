@@ -64,7 +64,7 @@
     <li>Type the length.</li>
     <li>Tap the green ✓, or the keyboard's Done key. Tapping away from the field after changing it also accepts the new length.</li>
   </ol>
-  <p>The green ✓ and red ✗ appear beside the field only while you are changing the value. The ✗ puts back the stored length and changes nothing. The drawing does not follow your typing digit by digit; it changes once, when you accept the new length, so an edit from 368 1/2″ to 367 3/4″ never passes through a 36″ shaft on the way.</p>
+  <p>The green ✓ and red ✗ appear beside the field only while you are changing the value. The ✗ puts back the stored length and changes nothing. If a card field still holds a value you have typed but not saved when you tap <span class="ui">Overall Length</span>, the app asks <span class="ui">Keep your change?</span> first: <span class="ui">Keep</span> saves the card value, <span class="ui">Discard</span> puts its old value back, and either one then moves you into <span class="ui">Overall Length</span>; <span class="ui">Cancel</span> leaves you on the card. The drawing does not follow your typing digit by digit; it changes once, when you accept the new length, so an edit from 368 1/2″ to 367 3/4″ never passes through a 36″ shaft on the way.</p>
   <ul>
     <li><strong>An empty field changes nothing.</strong> Clear the field to retype it, change your mind, and the stored length comes back. You cannot zero a shaft by accident.</li>
     <li><strong>No length yet is not an error.</strong> Until an OAL is typed, the preview draws the shaft out to its last component and no “past the end” warnings appear. The other document tabs wait for a length.</li>
@@ -140,8 +140,8 @@
 
   <h3 id="editor-commit">How values are saved</h3>
   <p>A value on a card is saved when you leave the field, either by tapping elsewhere or tapping Done. It is not saved on every keystroke. Tapping into a field and leaving without changing it does nothing at all.</p>
-  <p>Each card has a <span class="ui">Save</span> button at the bottom. It is greyed while everything on the card is saved and lights up while a field holds a value you have typed but not yet saved. Tap it to save that value.</p>
-  <aside class="tip"><p>Chips, checkboxes and switches do not take the keyboard's focus, so typing a value and then tapping a chip can leave the typed value unsaved in its field. If <span class="ui">Save</span> is lit, tap it.</p></aside>
+  <p>While a field on a card holds a value you have typed but not yet saved, a green <span class="ui">✓</span> and a red <span class="ui">✗</span> show at its right end, the same pair as on <span class="ui">Overall Length</span>. Tap <span class="ui">✓</span> to save the value or <span class="ui">✗</span> to put the old value back. Tapping <span class="ui">Done</span> on the keyboard or moving to another field also saves it.</p>
+  <aside class="tip"><p>Chips, checkboxes and switches do not take the keyboard's focus, so typing a value and then tapping a chip can leave the typed value unsaved in its field. The <span class="ui">✓</span> stays beside it until you answer it.</p></aside>
   <p>A value the field cannot accept, such as a length of zero (<span class="ui">Must be &gt; 0</span>), a negative start (<span class="ui">Must be ≥ 0</span>), or text that is not a number, shows a message under the field and is not saved; the field goes back to the stored value.</p>
   <aside class="note"><p>A typed value is never rounded, snapped or adjusted; bare shaft fills the gaps around it. See <a href="#intro-sacred">What you type is what prints</a>.</p></aside>
 
