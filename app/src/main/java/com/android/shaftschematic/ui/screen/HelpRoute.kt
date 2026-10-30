@@ -467,7 +467,11 @@ internal val helpSections: List<HelpSection> = listOf(
                     "fractions like 3 1/2. Some keyboards' number pads have no / key, so while " +
                     "you type in an inch field a small grey fraction button (n over d) sits at " +
                     "the right end of the field. It types the fraction bar — tap it where the / " +
-                    "goes. 10-1/4 works too.",
+                    "goes. 10-1/4 works too.\n\n" +
+                    "A value typed as a fraction reads back as that fraction, down to 1/32. " +
+                    "Settings → Units → Inch fields show: Decimals shows the exact decimal " +
+                    "instead (12.34375, never rounded). Printed diameters keep three decimals, " +
+                    "or four for an exact sixteenth like .9375.",
                 manualAnchor = "intro-units",
             ),
             HelpTopic(

@@ -252,7 +252,7 @@
   <p  class="keep">Unsaved drafts on the home screen are listed by the name the job would be saved under, so three drafts are told apart by job, not just by age. A draft with no project information shows as <span class="ui">Untitled draft</span>.</p>
 
   <h3 id="editor-units">Units for the job</h3>
-  <p>A new drawing starts in the unit chosen under <span class="path">Settings → Units</span> (<span class="ui">Millimeters</span> or <span class="ui">Inches</span>), so set it once for the shop and every new drawing follows it. The job remembers its unit from then on: it reopens the way it was drawn, and changing the setting later never flips an open or saved job. While a job is open, the same chips switch how it is shown and typed. Inch fields accept fractions: type “3 1/2” or “150 3/4”. Some keyboards answer a number field with a number pad that has no <span class="ui">/</span> key, so while you type in an inch field a small grey fraction button — an <span class="ui">n</span> over a bar over a <span class="ui">d</span> — sits at the right end of the field. It types the fraction bar (<span class="ui">/</span>): tap it where the bar goes (<span class="ui">10</span>, space, <span class="ui">1</span>, <span class="ui">/</span>, <span class="ui">4</span>). A hyphen works as the separator too: “10-1/4”.</p>
+  <p>A new drawing starts in the unit chosen under <span class="path">Settings → Units</span> (<span class="ui">Millimeters</span> or <span class="ui">Inches</span>), so set it once for the shop and every new drawing follows it. The job remembers its unit from then on: it reopens the way it was drawn, and changing the setting later never flips an open or saved job. While a job is open, the same chips switch how it is shown and typed. Inch fields accept fractions: type “3 1/2” or “150 3/4”. Some keyboards answer a number field with a number pad that has no <span class="ui">/</span> key, so while you type in an inch field a small grey fraction button — an <span class="ui">n</span> over a bar over a <span class="ui">d</span> — sits at the right end of the field. It types the fraction bar (<span class="ui">/</span>): tap it where the bar goes (<span class="ui">10</span>, space, <span class="ui">1</span>, <span class="ui">/</span>, <span class="ui">4</span>). A hyphen works as the separator too: “10-1/4”. A value you typed as a fraction reads back as that fraction (down to 1/32), so the field never shows a rounded decimal to convert in your head; to see decimals instead, set <span class="path">Settings → Units → Inch fields show</span> to <span class="ui">Decimals</span>.</p>
   <p  class="keep">Switching units never changes a dimension (see <a href="#intro-units">Millimeters and inches</a>). To print one component in the other unit (a metric thread on an inch shaft), see <a href="#components-prints-in">Prints in: in | mm</a>.</p>
 
   <h2 id="editor-oal">The overall length</h2>
@@ -1462,8 +1462,8 @@
   <table class="ref">
     <thead><tr><th>Kind of value</th><th>How it prints</th><th>Example</th></tr></thead>
     <tbody>
-      <tr class="short"><td>Length, inches</td><td>Whole numbers bare; a value that lands on a sixteenth as a fraction; anything else to three decimals.</td><td>14″ · 11 1/2″ · 2 1/2″</td></tr>
-      <tr><td>Diameter, inches</td><td>Whole numbers bare; every other value at exactly three decimals.</td><td>Ø 8″ · Ø 5.750″ · 3.833″</td></tr>
+      <tr class="short"><td>Length, inches</td><td>Whole numbers bare; a value that lands on a 32nd as a fraction; anything else to three decimals.</td><td>14″ · 11 1/2″ · 12 11/32″</td></tr>
+      <tr><td>Diameter, inches</td><td>Whole numbers bare; every other value at three decimals, or four when the value is exactly an odd sixteenth, so 15/16 prints as its true .9375 instead of rounded.</td><td>Ø 8″ · Ø 5.750″ · 3.833″ · Ø 10.9375″</td></tr>
       <tr><td>Millimeters</td><td>Dimension rails to three decimals; footer lines and Ø callouts to one decimal, trailing zero dropped. Always with the unit.</td><td>38.1 mm</td></tr>
       <tr><td>Runout (TIR)</td><td>Thousandths, leading zero dropped, the way a TIR (total indicated runout) is hand-written.</td><td>.001 · .002 · .010</td></tr>
     </tbody>
@@ -2333,10 +2333,11 @@
 
   <h2 id="settings-units">Units</h2>
   <p  class="keep"><span class="path">Settings → Units</span> — the unit every new drawing starts in, and how values are shown and typed in the open document.</p>
-  <table class="ref whole">
+  <table class="ref">
     <thead><tr><th>Setting</th><th>Default</th><th>What it does</th></tr></thead>
     <tbody>
       <tr><td><span class="ui">Millimeters</span> | <span class="ui">Inches</span></td><td>Millimeters</td><td>Every new drawing starts in this unit, so a metric shop sets it once. While a drawing is open the chips also switch it: every field, badge, drawing and printed sheet shows values in the chosen unit. Inch fields accept fractions such as 3 1/2. The choice is saved with the document, so a shaft reopens in the unit it was drawn in, and changing the setting later never flips a saved job.</td></tr>
+      <tr><td><span class="ui">Inch fields show</span>: <span class="ui">Fractions</span> | <span class="ui">Decimals</span></td><td>Fractions</td><td>How an inch value reads back in a number field once you have typed it. Under <span class="ui">Fractions</span> a typed 12 11/32 shows as 12 11/32; under <span class="ui">Decimals</span> it shows as its exact decimal, 12.34375 — never rounded. Fractions go down to 1/32; a value that is not a whole number of 32nds, such as 10.990, shows as a decimal either way. A typed 0.5 is the same number as 1/2, so it follows this setting. Display only: the stored value is never changed, and it is a setting of this phone or tablet, not of the document.</td></tr>
     </tbody>
   </table>
   <aside class="note"><p  class="keep">Switching units never changes a number; see <a href="#intro-units">Millimeters and inches</a>.</p></aside>

@@ -192,6 +192,11 @@ Top of page, full width.
   gets machined wrong — and the SECONDARY always uses the compact format (mm to one decimal),
   never the dimension formatter's 3 decimals.
 
+  Inch LENGTHS (`formatLenDim`, `formatLenWithUnit`) print as fractions to the nearest **1/32**
+  (`PRINT_LENGTH_INCH_FORMAT`) — the finest step the input fields show (on-device ruling: a
+  typed `12 11/32` printed as `12.344"`) — and as 3 decimals off that grid. Inch diameters are
+  decimals (§5.3).
+
   Builders are `formatLenDimDual*` / `formatLenWithUnitDual*` / `formatDiaWithUnitDual*` in
   `pdf/UnitFormat.kt`: the `*Dual` forms return the joined one-liner, the `*DualLabel` forms
   return the two terms as a `DualLabel` (`util/DualLabel.kt`) — a stack needs them apart, so any
@@ -487,10 +492,10 @@ they are now all-BELOW, same as liners.
   *longest* segment carrying that OD. Bodies group by `Body.diaMm`; liners group by
   `Liner.odMm`. Bodies and liners are **separate groups** — a liner OD is never merged
   with a body OD even when the values match numerically.
-- **Formatting:** labels use `formatDiaWithUnit` (inches: whole numbers print bare, any other value prints exactly 3 decimals — `11"`, `10.990"`; mm stays compact 1-decimal),
+- **Formatting:** labels use `formatDiaWithUnit` (inches: whole numbers print bare, any other value prints 3 decimals — `11"`, `10.990"` — or 4 when it is exactly an odd sixteenth, `10.9375"`, through `LengthFormat.formatInchesDecimal`, on-device ruling: a fraction whose decimal ends in the fourth place prints exactly; mm stays compact 1-decimal),
   the same convention as the footer's "Ø" text — not the old raw 4-decimal formatting.
   **One exception:** the footer's `Thread:` line prints the thread's major Ø through
-  `formatThreadDiaWithUnit` — inches at most 3 decimals with trailing zeros dropped (`4.5"`,
+  `formatThreadDiaWithUnit` — inches at most 3 decimals (4 at an exact odd sixteenth) with trailing zeros dropped (`4.5"`,
   `3.75"`, never `4.500"`), on-device ruling: a thread size is called out the way it is written.
   Every other diameter, the thread relief's Ø included, keeps the whole-or-3-decimals rule.
 - **Two-tier stacking:** horizontally-close labels stack onto a second row instead of

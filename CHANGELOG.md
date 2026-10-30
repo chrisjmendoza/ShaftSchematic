@@ -8,6 +8,22 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-29
 
+### feat(units): inch fields read back as fractions; 32nds print as fractions; exact sixteenths print their fourth place
+
+- An inch value typed as a fraction now reads back in its field as that fraction —
+  `12 11/32`, not `12.3438` — down to 1/32, on every card, Add dialog and keyway field. A value
+  that is not a whole number of 32nds (a typed `10.990`) still shows as a decimal.
+- New **Settings → Units → Inch fields show: Fractions | Decimals** (default Fractions).
+  Decimals shows a 32nd's EXACT decimal (`12.34375`), never a rounded one. Display only; no
+  stored value changes, and it is a device setting, not saved with a document.
+- Printed inch diameters keep three decimals, except a value that is exactly an odd sixteenth
+  prints its fourth place: Ø 10 15/16 prints `10.9375"`, not `10.938"`. The footer's
+  `Thread:` Ø follows the same rule.
+- Printed inch LENGTHS — dimension rails and footer lengths — now set fractions down to 1/32,
+  so a 12 11/32 length prints `12 11/32"`, not `12.344"`.
+- Keyway fields no longer have their own fraction display (`dispKw` removed); they read through
+  the same formatter as every other field.
+
 ### feat(editor): explicit bodies can be measured from the FWD end
 
 - An explicit body's card now carries **Measure From: AFT | FWD**, like a taper's or a liner's,

@@ -29,7 +29,12 @@ class ThreadDiaFooterFormatTest {
 
     @Test
     fun `more than three decimals still rounds to three`() {
-        assertEquals("4.188\"", storedInches(4.1875))
+        assertEquals("4.123\"", storedInches(4.1234))
+    }
+
+    @Test
+    fun `an exact odd sixteenth keeps its fourth place`() {
+        assertEquals("4.1875\"", storedInches(4.1875))
     }
 
     @Test

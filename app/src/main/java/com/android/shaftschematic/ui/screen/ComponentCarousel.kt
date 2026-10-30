@@ -88,7 +88,6 @@ import com.android.shaftschematic.ui.util.buildLinerTitleById
 import com.android.shaftschematic.ui.util.buildTaperTitleById
 import com.android.shaftschematic.ui.util.buildThreadTitleById
 import com.android.shaftschematic.ui.util.startOverlapErrorMm
-import com.android.shaftschematic.util.LengthFormat
 import com.android.shaftschematic.util.ThreadDesignation
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.isLengthText
@@ -1280,13 +1279,6 @@ internal fun CommitDesignationField(
                 }
             }
     )
-}
-
-/** Display keyway dimensions, preferring shop fractions in imperial. */
-internal fun dispKw(mm: Float, unit: UnitSystem): String = when (unit) {
-    UnitSystem.INCHES -> if (kotlin.math.abs(mm) < 1e-6f) "0" else
-        LengthFormat.formatInchesSmart(inches = mm.toDouble() / 25.4, opts = LengthFormat.InchFormatOptions(maxDenominator = 32))
-    UnitSystem.MILLIMETERS -> disp(mm, unit)
 }
 
 internal fun Float.fmtTrim(d: Int) = "%.${d}f".format(Locale.US, this).trimEnd('0').trimEnd('.')

@@ -76,8 +76,8 @@ class AddDialogSeedExactTest {
     @Test
     fun `a Start seeded flush against a liner shows no overlap and submits the liner's exact end`() {
         showThread()
-        // The display is still the 3-decimal rounding the dialog always showed.
-        rule.onNodeWithText("35.424", useUnmergedTree = true).assertExists()
+        // The display is the cards' rounding (four decimals off the 1/32 grid).
+        rule.onNodeWithText("35.4242", useUnmergedTree = true).assertExists()
         assertFalse("no false overlap line on the flush seed", overlapShown())
         rule.onNode(hasText("Add") and hasSetTextAction().not()).performClick()
         rule.waitForIdle()
@@ -119,7 +119,8 @@ class AddDialogSeedExactTest {
             }
         }
         rule.waitForIdle()
-        rule.onNodeWithText("25.188", useUnmergedTree = true).assertExists()
+        // 25.1875" is a 32nd: the seed reads as the fraction, as the card does.
+        rule.onNodeWithText("25 3/16", useUnmergedTree = true).assertExists()
         rule.onNode(hasText("Add") and hasSetTextAction().not()).performClick()
         rule.waitForIdle()
         assertEquals(taperEndMm, assertNotNullAndGet(linerStart), 0f)

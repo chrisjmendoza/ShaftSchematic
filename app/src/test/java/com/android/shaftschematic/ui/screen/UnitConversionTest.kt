@@ -1,6 +1,8 @@
 package com.android.shaftschematic.ui.screen
 
+import com.android.shaftschematic.util.InchFieldStyle
 import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.util.inchFieldText
 import com.android.shaftschematic.util.toMmOrNull
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -85,10 +87,10 @@ class UnitConversionTest {
 
     @Test
     fun `formatDisplay inch precision for 5 15 16`() {
-        // 5.9375" → 150.8125 mm → back to 5.9375"
+        // 5.9375" → 150.8125 mm → back to the fraction it was typed as, or its exact decimal.
         val mm = (5.9375 * 25.4).toFloat()
-        val s = formatDisplay(mm, UnitSystem.INCHES, 4)
-        assertEquals("5.9375", s)
+        assertEquals("5 15/16", inchFieldText(mm.toDouble() / 25.4, InchFieldStyle.FRACTION))
+        assertEquals("5.9375", inchFieldText(mm.toDouble() / 25.4, InchFieldStyle.DECIMAL))
     }
 
     @Test

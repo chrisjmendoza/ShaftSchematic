@@ -90,6 +90,8 @@ import com.android.shaftschematic.util.AppLog
 import com.android.shaftschematic.util.launchPicker
 import com.android.shaftschematic.util.NO_PICKER_MESSAGE
 import com.android.shaftschematic.util.FeedbackIntentFactory
+import com.android.shaftschematic.util.InchFieldDisplay
+import com.android.shaftschematic.util.InchFieldStyle
 import com.android.shaftschematic.util.PreviewColorPreset
 import com.android.shaftschematic.util.PreviewColorRole
 import com.android.shaftschematic.util.PreviewColorSetting
@@ -184,6 +186,7 @@ fun SettingsRoute(
     val dualUnitsDefault by SettingsStore.dualUnitsDefaultFlow(ctx).collectAsState(initial = false)
     val linerShoulders by SettingsStore.linerShouldersEnabledFlow(ctx).collectAsState(initial = false)
     val dialogUnitConverter by SettingsStore.dialogUnitConverterEnabledFlow(ctx).collectAsState(initial = false)
+    val inchFieldStyle by SettingsStore.inchFieldStyleFlow(ctx).collectAsState(initial = InchFieldDisplay.style)
     // Named drawing-look presets. App-wide device preferences, read the same way.
     val drawingProfiles by SettingsStore.drawingProfilesFlow(ctx)
         .collectAsState(initial = emptyMap())
@@ -258,6 +261,22 @@ fun SettingsRoute(
                             label = { Text("Inches") }
                         )
                     }
+                    Text(INCH_FIELD_STYLE_SETTING_TITLE, style = MaterialTheme.typography.bodyMedium)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        InchFieldStyle.entries.forEach { style ->
+                            FilterChip(
+                                selected = inchFieldStyle == style,
+                                onClick = { scope.launch { SettingsStore.setInchFieldStyle(ctx, style) } },
+                                label = { Text(style.uiLabel()) },
+                                modifier = Modifier.testTag("settings_inch_field_${style.name.lowercase()}"),
+                            )
+                        }
+                    }
+                    Text(
+                        INCH_FIELD_STYLE_SETTING_BLURB,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
 
                     HorizontalDivider()
                     Text("Appearance", style = MaterialTheme.typography.titleMedium)
@@ -1476,6 +1495,17 @@ internal fun SettingSwitchRow(
 }
 
 /** Settings → Drawing switch for `PdfPrefs.showUnitsNote`; one wording for the row and Help. */
+internal const val INCH_FIELD_STYLE_SETTING_TITLE = "Inch fields show"
+internal const val INCH_FIELD_STYLE_SETTING_BLURB =
+    "How an inch value reads back in a number field: a typed 12 11/32 shows as 12 11/32, or as " +
+        "12.34375. Fractions go down to 1/32; any other value shows as a decimal either way. " +
+        "Display only — the value you typed is never changed."
+
+private fun InchFieldStyle.uiLabel(): String = when (this) {
+    InchFieldStyle.FRACTION -> "Fractions"
+    InchFieldStyle.DECIMAL -> "Decimals"
+}
+
 internal const val UNITS_NOTE_SETTING_TITLE = "Units note on sheets"
 internal const val UNITS_NOTE_SETTING_CAPTION =
     "Prints \"Units in inches\" or \"Units in mm\" small in the lower-right corner of every sheet"
