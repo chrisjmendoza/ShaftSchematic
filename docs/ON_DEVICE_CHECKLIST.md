@@ -71,7 +71,7 @@ look at, what good looks like.
 - [ ] **Taper card Rate** (Manual): type `3/4"/ft` — it is accepted and the footer prints
   "Rate: ¾"/ft".
 - [ ] A FWD-referenced taper flush with the FWD end shows **`0`, not `-0`**, in "Start from FWD".
-- [ ] **Footer fraction spacing**: "Rate: ¾"/ft", "Thread relief: ⅜" × …", "KW: 1¼" × ⁹⁄₁₆" × …" each
+- [ ] **Footer fraction spacing**: "Rate: ¾"/ft", "KW: 1¼" × ⁹⁄₁₆" × …" each
   keep the space before the fraction.
 - [ ] **Phone editor bar** shows its icons with no ".." title; a tablet still shows "Shaft Editor".
 - [ ] **Add Body after the new-shaft prompt** offers the bare-shaft Ø (8″ on an 8″ shaft, not 0.984″).

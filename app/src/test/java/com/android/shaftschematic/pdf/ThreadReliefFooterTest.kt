@@ -2,18 +2,15 @@ package com.android.shaftschematic.pdf
 
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Threads
-import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.UnitSystem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The footer's thread-relief line: ONE "Thread relief: <len> × Ø <dia>" line directly under a
- * relieved thread's "Thread:" line, in the thread's own display unit, for the AFT and FWD thread
- * blocks alike; the STORED values print (never the drawn clamps); none without a relief; none on
- * a blank draft.
+ * A thread relief prints NO footer line (on-device ruling: the groove is drawing detail only). A
+ * relieved thread's footer column is exactly the column it prints without a relief, AFT and FWD
+ * blocks alike, standard and blank.
  */
 class ThreadReliefFooterTest {
 
@@ -37,55 +34,21 @@ class ThreadReliefFooterTest {
     private fun spec(vararg th: Threads) = ShaftSpec(overallLengthMm = 2000f, threads = th.toList())
 
     @Test
-    fun `a relieved aft thread prints its relief line right under the thread line`() {
-        val cols = buildFooterEndColumns(spec(aftThread(9.525f, 106.045f)), UnitSystem.INCHES, cfg)
-        val i = cols.aftLines.indexOfFirst { it.startsWith("Thread:") }
-        assertTrue(i >= 0)
-        val len = formatLenWithUnitDual(9.525, UnitSystem.INCHES, false)
-        assertEquals("Thread relief: $len × Ø 4.175\"", cols.aftLines[i + 1])
+    fun `a relieved thread prints the same footer as an unrelieved one`() {
+        val plain = buildFooterEndColumns(spec(aftThread(), fwdThread()), UnitSystem.INCHES, cfg)
+        val relieved = buildFooterEndColumns(
+            spec(aftThread(9.525f, 106.045f), fwdThread(9.525f, 106.045f)), UnitSystem.INCHES, cfg,
+        )
+        assertEquals(plain.aftLines, relieved.aftLines)
+        assertEquals(plain.fwdLines, relieved.fwdLines)
+        assertFalse((relieved.aftLines + relieved.fwdLines).any { it.contains("relief", ignoreCase = true) })
     }
 
     @Test
-    fun `a relieved fwd thread prints its relief line in the fwd block`() {
-        val cols = buildFooterEndColumns(spec(fwdThread(9.525f, 106.045f)), UnitSystem.INCHES, cfg)
-        val i = cols.fwdLines.indexOfFirst { it.startsWith("Thread:") }
-        assertTrue(i >= 0)
-        assertTrue(cols.fwdLines[i + 1].startsWith(THREAD_RELIEF_PREFIX))
-        assertFalse(cols.aftLines.any { it.startsWith(THREAD_RELIEF_PREFIX) })
-    }
-
-    @Test
-    fun `no relief line without a relief`() {
-        val cols = buildFooterEndColumns(spec(aftThread(), fwdThread()), UnitSystem.INCHES, cfg)
-        assertFalse((cols.aftLines + cols.fwdLines).any { it.startsWith(THREAD_RELIEF_PREFIX) })
-        // A length with no Ø is no relief either.
-        val half = buildFooterEndColumns(spec(aftThread(9.525f, 0f)), UnitSystem.INCHES, cfg)
-        assertFalse(half.aftLines.any { it.startsWith(THREAD_RELIEF_PREFIX) })
-    }
-
-    @Test
-    fun `the relief prints in the thread's own unit`() {
-        val units = DisplayUnits(UnitSystem.INCHES, overrides = mapOf("aft" to UnitSystem.MILLIMETERS))
-        val cols = buildFooterEndColumns(spec(aftThread(10f, 106f)), UnitSystem.INCHES, cfg, displayUnits = units)
-        val line = cols.aftLines.single { it.startsWith(THREAD_RELIEF_PREFIX) }
-        assertTrue(line, line.contains("mm"))
-        assertFalse(line, line.contains("\""))
-    }
-
-    @Test
-    fun `the stored values print, never the drawn clamps`() {
-        // A relief Ø above the major Ø draws clamped below it; the footer states what was typed.
-        val cols = buildFooterEndColumns(spec(aftThread(9.525f, 120f)), UnitSystem.MILLIMETERS, cfg)
-        val line = cols.aftLines.single { it.startsWith(THREAD_RELIEF_PREFIX) }
-        assertTrue(line, line.contains("120"))
-    }
-
-    @Test
-    fun `a blank draft prints no relief line`() {
+    fun `a blank draft prints no relief line either`() {
         val cols = buildFooterEndColumns(
             spec(aftThread(9.525f, 106.045f)), UnitSystem.INCHES, cfg, blankValues = true,
         )
-        assertTrue(cols.aftLines.contains("Thread:"))
-        assertFalse(cols.aftLines.any { it.startsWith(THREAD_RELIEF_PREFIX) })
+        assertFalse(cols.aftLines.any { it.contains("relief", ignoreCase = true) })
     }
 }

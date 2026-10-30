@@ -455,14 +455,10 @@ note): `Captured KW: inset <len> from S.E.T.` on a taper, `… from AFT` / `… 
 (its `keywayEnd`), in the keyway's own unit (`CAPTURED_KW_PREFIX`, `pdf/SheetFooter.kt`). An open
 keyway prints nothing new, so its sheets are byte-identical.
 
-A **thread relief** (`Threads.hasRelief`, 2026-10-03) is the same kind of machining value: the
-footer prints ONE line directly under that thread's `Thread:` line, in the AFT and FWD thread
-blocks alike — `Thread relief: <len> × Ø <dia>` (`THREAD_RELIEF_PREFIX`,
-`threadReliefFooterLine`), the STORED length and Ø through the dual-aware
-`formatLenWithUnitDual`/`formatDiaWithUnitDual` in the thread's own display unit (never the drawn
-clamps of `geom/ThreadReliefMath.kt`). A thread with no relief prints nothing new. The line
-counts toward the measured footer height like any other row. The drawing itself shows the
-groove as a reduced, unhatched rectangle at the relief end (see `docs/contracts/Rendering.md`,
+A **thread relief** (`Threads.hasRelief`) prints **no footer line** (on-device ruling: the
+groove is drawing detail only — the `Thread relief:` line it once printed under the `Thread:` line
+was removed), so a relieved thread's footer is byte-identical to an unrelieved one. The drawing
+shows the groove as a reduced, unhatched rectangle at the relief end (see `docs/contracts/Rendering.md`,
 threads bullet — the PDF sites share `drawThreadPdf`).
 
 A **liner shoulder's edge radius** prints as ONE footer line per shouldered liner — its only
@@ -805,9 +801,7 @@ Rules (shared helpers in `pdf/BlankFormText.kt`):
   names — and on a value-less sheet only makes the FWD rules short. Both blank footers — schematic and
   consolidated — share this one implementation. `buildFooterEndColumns(blankValues =
   true)` returns label-only lines — same count and order as standard, no digits
-  (JVM-tested in `BlankDraftFooterTest`) — with one deliberate exception: a blank draft prints
-  no `Thread relief:` line (a write-in sheet has no relief to describe), so a relieved thread's
-  standard column is one line longer than its blank one.
+  (JVM-tested in `BlankDraftFooterTest`).
 - **Runout sheet**: header labels get rules; the OAL dimension line carries no label of any
   kind (2026-07-28) — it cuts an empty `BLANK_DIM_GAP_PT`-wide break at mid-span instead,
   the same convention as the dimension-line rule above, so the machinist writes the value
