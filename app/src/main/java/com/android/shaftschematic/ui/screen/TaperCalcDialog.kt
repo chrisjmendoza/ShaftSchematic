@@ -152,11 +152,6 @@ fun TaperCalcDialog(
                     }
                 }
 
-                Button(
-                    onClick = calculate,
-                    modifier = Modifier.fillMaxWidth().testTag("taper_calc_calculate"),
-                ) { Text("Calculate") }
-
                 shown.message?.let { msg ->
                     Text(
                         msg,
@@ -176,9 +171,17 @@ fun TaperCalcDialog(
                 modifier = Modifier.testTag("taper_calc_clear"),
             ) { Text("Clear") }
         },
+        // Calculate rides the button row, filled so it reads as the primary action: a
+        // full-width button under the fields scrolled behind the keyboard while a value was
+        // being typed (on-device report). The row stays on screen above the IME.
         confirmButton = {
-            TextButton(onClick = onDismiss, modifier = Modifier.testTag("taper_calc_close")) {
-                Text("Close")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onDismiss, modifier = Modifier.testTag("taper_calc_close")) {
+                    Text("Close")
+                }
+                Button(onClick = calculate, modifier = Modifier.testTag("taper_calc_calculate")) {
+                    Text("Calculate")
+                }
             }
         },
     )

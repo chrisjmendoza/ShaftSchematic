@@ -8,6 +8,13 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-29
 
+### fix(calculator): Calculate sits in the taper calculator's button row
+
+- The taper calculator's full-width **Calculate** button under the fields scrolled behind the
+  keyboard while a value was typed. It is now a filled button in the bottom row beside
+  **Clear** and **Close**, which stays above the keyboard.
+
+
 ### feat(units): inch fields read back as fractions; 32nds print as fractions; exact sixteenths print their fourth place
 
 - An inch value typed as a fraction now reads back in its field as that fraction —
