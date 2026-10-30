@@ -1036,7 +1036,7 @@ half-height plus the poke-past clearance (see the keyway-scale invariant above).
 ### Diameter callouts are BELOW-only, tiered, and footer-formatted
 On-shaft diameter callouts (body OD, liner OD — `buildBodyOdCallouts`/`buildLinerOdCallouts`
 in `ShaftPdfComposer.kt`) all hang **BELOW** the shaft; do not reintroduce above/below
-alternation. Labels use `formatDiaWithUnit` (inches: a whole number bare, any other value at exactly 3 decimals — `10.990"`, never `10.99"`, on-device report; mm compact 1-decimal; the ONE exception is the footer `Thread:` line's major Ø, `formatThreadDiaWithUnit`, which drops trailing zeros — `4.5"` — on-device ruling) to match the
+alternation. Labels use `formatDiaWithUnit` (inches: a whole number bare, any other value at 3 decimals — `10.990"`, never `10.99"`, on-device report — or 4 when it is exactly an odd sixteenth, `10.9375"`, `LengthFormat.formatInchesDecimal`, on-device ruling; mm compact 1-decimal; the ONE exception is the footer `Thread:` line's major Ø, `formatThreadDiaWithUnit`, which drops trailing zeros — `4.5"` — on-device ruling) to match the
 footer's "Ø" text — never the raw 4-decimal format. Bodies and liners are **separate OD
 groups** — a liner OD is never deduped against a body OD. Horizontally-close labels stack onto
 a second row via `geom/DiameterCalloutLayout.kt` (pure, unit-tested), the same two-tier
@@ -1167,7 +1167,7 @@ value off-centre in its break (`ellipsizeToWidth(rich = …)` carries the same f
 neighbour guard keeps dates (`12/25/2026`), decimals (`1.5/2`) and ratios (`1:12`) plain,
 but it CANNOT save a job number like `24/1138` — free-text footer fields (Customer /
 Vessel / Job # / Date) therefore stay on plain `drawText` by caller choice, and editable
-text (`dispKw`, numeric fields) is never prettified because it must round-trip through
+text (numeric fields, `inchFieldText`) is never prettified because it must round-trip through
 `parseFractionOrDecimal`. **Spacing is per-style** (`FractionTextStyle.Stacked`/`.Diagonal`/
 `.Plain`, via `forStyle` — never `copy(style = …)` one preset onto another): stacked leads with
 the BAR at mid-height, which binds to the preceding digit like a hyphen, and closes on a
@@ -1294,6 +1294,14 @@ vary by device — leave the regular keyboard). Because a number pad has no `/`,
 fraction-capable number-pad field carries the in-field "/" key (`ui/input/FractionKey.kt`), shown
 while focused in an inch document; text-keyboard fields carry none. An app-owned keypad is a
 TODO, not a reason to change keyboard types. See `docs/contracts/NumberField.md` §"Keyboard".
+
+### Inch fields read back as fractions, never rounded decimals
+Every editable inch field formats through ONE `inchFieldText` (`util/InchFieldFormat.kt`, behind
+`formatDisplay`/`disp` and `toDisplayString`): a value on the 1/32 grid shows as its fraction
+under Settings → Units "Inch fields show: Fractions" (default) or its EXACT decimal under
+"Decimals"; off the grid, at least 4 decimals. A rounded decimal of a typed fraction made the
+reader convert back by eye (on-device report). Display only — a device preference, never in a
+document, and no stored value moves. See `docs/contracts/NumberField.md`.
 
 ### Numeric input commit behavior
 `NumericInputField` only calls `onCommit` on blur **if the value changed** since focus

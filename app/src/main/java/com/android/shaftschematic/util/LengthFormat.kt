@@ -54,6 +54,25 @@ object LengthFormat {
         return sign + formatDecimal(a, opts.decimalPlaces)
     }
 
+    /**
+     * Decimal inches for print: three places, FOUR when the value is exactly an odd sixteenth
+     * (`15/16` = `0.9375`), so a fraction whose decimal ends in the fourth place prints exactly
+     * instead of rounded at the thousandth (on-device ruling). An odd 32nd still prints at three
+     * — the ruling keeps the typical three and spends a fourth place only where it is exact.
+     */
+    fun formatInchesDecimal(inches: Double): String {
+        val sixteenths = inches * 16.0
+        val n = sixteenths.roundToInt()
+        val exactOddSixteenth = n % 2 != 0 && abs(inches - n / 16.0) <= SIXTEENTH_TOLERANCE_IN
+        return formatDecimal(inches, if (exactOddSixteenth) 4 else 3)
+    }
+
+    /**
+     * How near an odd sixteenth a value must sit to print its fourth place. A diameter's `Float`
+     * storage noise is under 0.000003″; a typed `10.9374` is not `10 15/16` and keeps three places.
+     */
+    private const val SIXTEENTH_TOLERANCE_IN = 1e-5
+
     private fun formatDecimal(value: Double, places: Int): String =
         String.format(Locale.US, "%.${places}f", value)
 

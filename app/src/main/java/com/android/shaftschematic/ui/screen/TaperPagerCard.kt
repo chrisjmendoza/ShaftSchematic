@@ -332,12 +332,12 @@ internal fun TaperPagerCard(
                 KeywayUnitChip(t.id, unit, unitOverrides, onSetKeywayUnit)
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
-                CommitNum("KW W (${abbr(kwUnit)})", dispKw(t.keywayWidthMm, kwUnit), modifier = Modifier.weight(1f), fillMaxWidth = false) { s ->
+                CommitNum("KW W (${abbr(kwUnit)})", disp(t.keywayWidthMm, kwUnit), modifier = Modifier.weight(1f), fillMaxWidth = false) { s ->
                     val v = if (s.isBlank()) 0f else (toMmOrNull(s, kwUnit) ?: return@CommitNum)
                     onUpdateTaperKeyway(idx, v, t.keywayDepthMm, t.keywayLengthMm, t.keywayOffsetFromSetMm, t.keywaySpooned)
                 }
                 KeywayTimesSign()
-                CommitNum("KW D (${abbr(kwUnit)})", dispKw(t.keywayDepthMm, kwUnit), modifier = Modifier.weight(1f), fillMaxWidth = false) { s ->
+                CommitNum("KW D (${abbr(kwUnit)})", disp(t.keywayDepthMm, kwUnit), modifier = Modifier.weight(1f), fillMaxWidth = false) { s ->
                     val v = if (s.isBlank()) 0f else (toMmOrNull(s, kwUnit) ?: return@CommitNum)
                     onUpdateTaperKeyway(idx, t.keywayWidthMm, v, t.keywayLengthMm, t.keywayOffsetFromSetMm, t.keywaySpooned)
                 }
@@ -345,7 +345,7 @@ internal fun TaperPagerCard(
             // KW L / Inset parse in `kwUnit` like KW W/D — the keyway-unit chip governs what
             // EVERY keyway number means; parsing these two in the document unit under a kwUnit
             // label read a metric keyway's length as inches.
-            CommitNum("KW L (${abbr(kwUnit)})", dispKw(t.keywayLengthMm, kwUnit)) { s ->
+            CommitNum("KW L (${abbr(kwUnit)})", disp(t.keywayLengthMm, kwUnit)) { s ->
                 val v = if (s.isBlank()) 0f else (toMmOrNull(s, kwUnit) ?: return@CommitNum)
                 onUpdateTaperKeyway(idx, t.keywayWidthMm, t.keywayDepthMm, v, t.keywayOffsetFromSetMm, t.keywaySpooned)
             }
@@ -375,7 +375,7 @@ internal fun TaperPagerCard(
                 // A ≤ 0 inset is not a way to un-capture: the toggle is the one control that
                 // clears the inset, so the field refuses it and says so.
                 CommitNum(
-                    "KW Inset from SET (${abbr(kwUnit)})", dispKw(t.keywayOffsetFromSetMm, kwUnit),
+                    "KW Inset from SET (${abbr(kwUnit)})", disp(t.keywayOffsetFromSetMm, kwUnit),
                     validator = { raw -> capturedInsetErrorMm(toMmOrNull(raw, kwUnit)) },
                 ) { s ->
                     val v = toMmOrNull(s, kwUnit) ?: return@CommitNum

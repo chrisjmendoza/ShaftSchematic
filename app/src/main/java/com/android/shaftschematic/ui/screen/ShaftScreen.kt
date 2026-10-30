@@ -138,6 +138,7 @@ import com.android.shaftschematic.ui.util.specIssues
 import com.android.shaftschematic.ui.drawing.render.previewIssueMarks
 import com.android.shaftschematic.ui.viewmodel.SessionAddDefaults
 import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.util.inchFieldText
 import com.android.shaftschematic.util.PreviewColorSetting
 import com.android.shaftschematic.util.toMmOrNull
 import kotlinx.coroutines.launch
@@ -1643,19 +1644,12 @@ private fun DraftTextField(
 internal fun abbr(unit: UnitSystem) = if (unit == UnitSystem.MILLIMETERS) "mm" else "in"
 
 internal fun formatDisplay(valueMm: Float, unit: UnitSystem, d: Int = 3): String {
-    // Decimals:
-    // • Millimeters: use the requested precision (default 3).
-    // • Inches: force at least 4 decimals so common fractions (1/16, 1/32) are exact
-    //   when entered as decimals (0.4375, 0.3125, etc.).
-    val decimals = when (unit) {
-        UnitSystem.INCHES -> maxOf(d, 4)
-        UnitSystem.MILLIMETERS -> d
-    }
-
-    val v = if (unit == UnitSystem.MILLIMETERS) {
-        valueMm
-    } else {
-        (valueMm.toDouble() / MM_PER_IN).toFloat()
+    // Inches read through the ONE inch-field formatter: a value on the 1/32 grid shows as the
+    // fraction it was typed as (or its exact decimal under Settings → Units "Inch fields show:
+    // Decimals"), never as a rounded decimal to convert back by eye (on-device report). Off the
+    // grid, at least 4 decimals.
+    if (unit == UnitSystem.INCHES) {
+        return inchFieldText(valueMm.toDouble() / MM_PER_IN, decimalPlaces = maxOf(d, 4))
     }
 
     // Locale.US whatever the device locale: this text seeds the number fields, and a comma-decimal
@@ -1663,8 +1657,8 @@ internal fun formatDisplay(valueMm: Float, unit: UnitSystem, d: Int = 3): String
     // A value that rounds to zero at this precision prints "0", never "-0": a FWD-referenced
     // component flush with the FWD end recovers its distance as a negative zero or a hair
     // below it, and "-0" in a Start field reads as a negative position (on-device report).
-    val text = "%.${decimals}f"
-        .format(Locale.US, v)
+    val text = "%.${d}f"
+        .format(Locale.US, valueMm)
         .trimEnd('0')
         .trimEnd('.')
         .ifEmpty { "0" }

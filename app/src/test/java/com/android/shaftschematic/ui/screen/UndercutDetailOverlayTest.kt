@@ -1364,7 +1364,7 @@ class UndercutDetailOverlayTest {
         // 1000 mm + 588.9 mm ends 88.9 mm (3.5 in) past the liner's 1500 mm FWD edge.
         show(listOf(cut("u1", 1000f, len = 588.9f)))
         val expected = undercutOverhangInfo(aft = null, fwd = "${disp(88.9f, UnitSystem.INCHES)} in")!!
-        assertEquals("Extends 3.5 in past the liner's FWD edge", expected)
+        assertEquals("Extends 3 1/2 in past the liner's FWD edge", expected)
         rule.onNodeWithTag("undercut_overhang_info", useUnmergedTree = true)
             .performScrollTo()
             .assert(hasText(expected))
@@ -1378,7 +1378,7 @@ class UndercutDetailOverlayTest {
             aft = "${disp(25.4f, UnitSystem.INCHES)} in",
             fwd = "${disp(88.9f, UnitSystem.INCHES)} in",
         )!!
-        assertEquals("Extends 1 in past the liner's AFT edge and 3.5 in past its FWD edge", expected)
+        assertEquals("Extends 1 in past the liner's AFT edge and 3 1/2 in past its FWD edge", expected)
         rule.onNodeWithTag("undercut_overhang_info", useUnmergedTree = true).assert(hasText(expected))
     }
 

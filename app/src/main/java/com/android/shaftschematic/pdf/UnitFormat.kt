@@ -5,17 +5,21 @@ import com.android.shaftschematic.util.LengthFormat
 import com.android.shaftschematic.util.UnitSystem
 import java.util.Locale
 
+/** Printed inch lengths: fractions down to 1/32, the same finest step the input fields show. */
+private val PRINT_LENGTH_INCH_FORMAT = LengthFormat.InchFormatOptions(maxDenominator = 32)
+
 /**
  * Formats a *length* dimension for PDF labels.
  *
  * - Model geometry remains in millimeters.
- * - In inches mode, prefers mixed fractions snapped to nearest 1/16 (reduced),
- *   with fallback to 3-decimal inches.
+ * - In inches mode, prefers mixed fractions to the nearest 1/32 (reduced) — the shop's finest
+ *   step, so a typed `12 11/32` prints as itself, not as `12.344"` (on-device ruling) — with
+ *   fallback to 3-decimal inches.
  */
 fun formatLenDim(mm: Double, unit: Any?): String {
     val name = unit?.toString()?.uppercase(Locale.US) ?: "MM"
     return when {
-        name.contains("INCH") -> LengthFormat.formatInchesSmart(mm / 25.4) + "\""
+        name.contains("INCH") -> LengthFormat.formatInchesSmart(mm / 25.4, PRINT_LENGTH_INCH_FORMAT) + "\""
         else -> String.format(Locale.US, "%.3f mm", mm)
     }
 }
@@ -23,13 +27,13 @@ fun formatLenDim(mm: Double, unit: Any?): String {
 /**
  * Formats a *length* for footer fields, always including a unit suffix.
  *
- * - Inches: uses the existing smart inch formatter (fractions when appropriate).
+ * - Inches: the smart inch formatter, fractions to the nearest 1/32 as [formatLenDim].
  * - Millimeters: uses a compact 1-decimal format to keep footer lines readable.
  */
 fun formatLenWithUnit(mm: Double, unit: Any?): String {
     val name = unit?.toString()?.uppercase(Locale.US) ?: "MM"
     return when {
-        name.contains("INCH") -> LengthFormat.formatInchesSmart(mm / 25.4) + "\""
+        name.contains("INCH") -> LengthFormat.formatInchesSmart(mm / 25.4, PRINT_LENGTH_INCH_FORMAT) + "\""
         else -> {
             val s = String.format(Locale.US, "%.1f", mm).trimEnd('0').trimEnd('.')
             "$s mm"
@@ -42,7 +46,8 @@ fun formatLenWithUnit(mm: Double, unit: Any?): String {
  *
  * - Inches: a whole number prints bare (`11"`); anything else prints all three decimals
  *   (`10.990"`, `10.500"`). Trimming trailing zeros made one sheet read `10.99"` beside `8.266"`
- *   (on-device report), so a value with any decimal keeps the same three places.
+ *   (on-device report), so a value with any decimal keeps the same three places — and an exact
+ *   odd sixteenth takes its fourth (`10.9375"`, [LengthFormat.formatInchesDecimal]).
  * - Millimeters: compact 1-decimal, trailing zeros trimmed.
  */
 fun formatDiaWithUnit(mm: Double, unit: Any?): String {
@@ -54,7 +59,7 @@ fun formatDiaWithUnit(mm: Double, unit: Any?): String {
             val s = if (kotlin.math.abs(inches - rounded) < 5e-4) {
                 rounded.toString()
             } else {
-                String.format(Locale.US, "%.3f", inches)
+                LengthFormat.formatInchesDecimal(inches)
             }
             "$s\""
         }
@@ -70,14 +75,15 @@ fun formatDiaWithUnit(mm: Double, unit: Any?): String {
  * three-decimal diameter rule of [formatDiaWithUnit] (on-device ruling).
  *
  * - Inches: at most three decimals with trailing zeros dropped, so a typed `4.5` prints `4.5"`
- *   and `3.75` prints `3.75"`; a whole number prints bare. A thread's major Ø is a nominal size,
+ *   and `3.75` prints `3.75"`; a whole number prints bare; an exact odd sixteenth keeps its
+ *   fourth place (`1.9375"`). A thread's major Ø is a nominal size,
  *   called out the way it is written, not a ground diameter read off a micrometer.
  * - Millimeters: the same compact 1-decimal form as [formatDiaWithUnit].
  */
 fun formatThreadDiaWithUnit(mm: Double, unit: Any?): String {
     val name = unit?.toString()?.uppercase(Locale.US) ?: "MM"
     if (!name.contains("INCH")) return formatDiaWithUnit(mm, unit)
-    val s = String.format(Locale.US, "%.3f", mm / 25.4).trimEnd('0').trimEnd('.')
+    val s = LengthFormat.formatInchesDecimal(mm / 25.4).trimEnd('0').trimEnd('.')
     return "$s\""
 }
 
@@ -147,6 +153,6 @@ fun formatLenDimDualLabel(mm: Double, primary: UnitSystem, dual: Boolean): DualL
 fun formatLenWithUnitDualLabel(mm: Double, primary: UnitSystem, dual: Boolean): DualLabel =
     composeDual(primary, dual, fmt = { formatLenWithUnit(mm, it) })
 
-/** [formatDiaWithUnit] as a two-term label — compact mm, inches whole or 3-decimal. */
+/** [formatDiaWithUnit] as a two-term label — compact mm, inches whole or 3-decimal (4 at an exact odd sixteenth). */
 fun formatDiaWithUnitDualLabel(mm: Double, primary: UnitSystem, dual: Boolean): DualLabel =
     composeDual(primary, dual, fmt = { formatDiaWithUnit(mm, it) })

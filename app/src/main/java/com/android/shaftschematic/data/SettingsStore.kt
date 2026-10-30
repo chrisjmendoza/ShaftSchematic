@@ -45,6 +45,7 @@ import com.android.shaftschematic.util.AppLog
 import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.FractionStyle
 import com.android.shaftschematic.util.FractionTypography
+import com.android.shaftschematic.util.InchFieldStyle
 import com.android.shaftschematic.util.OutputFont
 import com.android.shaftschematic.util.OutputTypography
 import com.android.shaftschematic.util.ThreadHatchStyle
@@ -172,6 +173,9 @@ object SettingsStore {
     // global default for new documents' dual-unit display (a document persists its own value).
     private val KEY_PER_COMPONENT_UNITS = booleanPreferencesKey("per_component_units")
     private val KEY_DUAL_UNITS_DEFAULT  = booleanPreferencesKey("dual_units_default")
+    // How an inch value on the 1/32 grid reads in an editable field: as its fraction or its exact
+    // decimal. Device preference, display only — the stored millimetres never change.
+    private val KEY_INCH_FIELD_STYLE = stringPreferencesKey("inch_field_style")
     // Liner shoulders. Capability gate for the AUTHORING UI only (liner card + Add Liner
     // dialog sections) — most shop drawings never carry shoulders, so the controls stay
     // hidden until wanted. Stored shoulder data always draws and a liner that carries any
@@ -237,6 +241,13 @@ object SettingsStore {
         ctx.settingsPrefs.map { p -> p[KEY_PER_COMPONENT_UNITS] ?: false }
     suspend fun setPerComponentUnits(ctx: Context, v: Boolean) {
         ctx.editSettings { it[KEY_PER_COMPONENT_UNITS] = v }
+    }
+
+    /** Settings → Units "Inch fields show: Fractions | Decimals" (see [InchFieldStyle]). */
+    fun inchFieldStyleFlow(ctx: Context): Flow<InchFieldStyle> =
+        ctx.settingsPrefs.map { p -> InchFieldStyle.fromName(p[KEY_INCH_FIELD_STYLE]) }
+    suspend fun setInchFieldStyle(ctx: Context, style: InchFieldStyle) {
+        ctx.editSettings { it[KEY_INCH_FIELD_STYLE] = style.name }
     }
 
     /**

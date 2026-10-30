@@ -733,12 +733,12 @@ internal fun BodyPagerCard(
                 KeywayUnitChip(b.id, unit, unitOverrides, onSetKeywayUnit)
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
-                CommitNum("KW W (${abbr(kwUnit)})", dispKw(b.keywayWidthMm, kwUnit), modifier = Modifier.weight(1f), fillMaxWidth = false) { s ->
+                CommitNum("KW W (${abbr(kwUnit)})", disp(b.keywayWidthMm, kwUnit), modifier = Modifier.weight(1f), fillMaxWidth = false) { s ->
                     val v = if (s.isBlank()) 0f else (toMmOrNull(s, kwUnit) ?: return@CommitNum)
                     onUpdateBodyKeyway(idx, v, b.keywayDepthMm, b.keywayLengthMm, b.keywayOffsetFromEndMm, kwEnd, b.keywaySpooned)
                 }
                 KeywayTimesSign()
-                CommitNum("KW D (${abbr(kwUnit)})", dispKw(b.keywayDepthMm, kwUnit), modifier = Modifier.weight(1f), fillMaxWidth = false) { s ->
+                CommitNum("KW D (${abbr(kwUnit)})", disp(b.keywayDepthMm, kwUnit), modifier = Modifier.weight(1f), fillMaxWidth = false) { s ->
                     val v = if (s.isBlank()) 0f else (toMmOrNull(s, kwUnit) ?: return@CommitNum)
                     onUpdateBodyKeyway(idx, b.keywayWidthMm, v, b.keywayLengthMm, b.keywayOffsetFromEndMm, kwEnd, b.keywaySpooned)
                 }
@@ -746,7 +746,7 @@ internal fun BodyPagerCard(
             // KW L / Inset parse in `kwUnit` like KW W/D — the keyway-unit chip governs what
             // EVERY keyway number means; parsing these two in the document unit under a kwUnit
             // label read a metric keyway's length as inches.
-            CommitNum("KW L (${abbr(kwUnit)})", dispKw(b.keywayLengthMm, kwUnit)) { s ->
+            CommitNum("KW L (${abbr(kwUnit)})", disp(b.keywayLengthMm, kwUnit)) { s ->
                 val v = if (s.isBlank()) 0f else (toMmOrNull(s, kwUnit) ?: return@CommitNum)
                 onUpdateBodyKeyway(idx, b.keywayWidthMm, b.keywayDepthMm, v, b.keywayOffsetFromEndMm, kwEnd, b.keywaySpooned)
             }
@@ -778,7 +778,7 @@ internal fun BodyPagerCard(
                 // clears the inset, so the field refuses it and says so.
                 CommitNum(
                     "KW Inset from ${if (isKwFwd) "FWD" else "AFT"} (${abbr(kwUnit)})",
-                    dispKw(b.keywayOffsetFromEndMm, kwUnit),
+                    disp(b.keywayOffsetFromEndMm, kwUnit),
                     validator = { raw -> capturedInsetErrorMm(toMmOrNull(raw, kwUnit)) },
                 ) { s ->
                     val v = toMmOrNull(s, kwUnit) ?: return@CommitNum

@@ -188,8 +188,8 @@ shop convention and never carried a fraction.
 - `ui/screen/LinerWearDetail.kt`, `ui/screen/UndercutDetail.kt` — the on-screen sheets' dim
   segments, so the preview and the paper construct a fraction the same way.
 
-Editable text is deliberately **not** included: `dispKw` and the numeric input fields still show
-plain `1 1/2`, which is what round-trips through `parseFractionOrDecimal`.
+Editable text is deliberately **not** included: the numeric input fields show plain `1 1/2`
+(`inchFieldText`, `NumberField.md`), which is what round-trips through `parseLengthMmOrNull`.
 
 ## 6. Output font — the sibling mirror
 

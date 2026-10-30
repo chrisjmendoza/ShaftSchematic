@@ -234,7 +234,18 @@ Responsibilities
   not: only `content` is wrapped, and that editor is a bespoke field with its own commit.
   Instant-commit controls (chips, checkboxes, switches, sliders) never register — they have no
   uncommitted state.
-- Support decimals and shop fractions in display.
+- Support decimals and shop fractions in display. **Inch fields read back through ONE formatter,
+  `inchFieldText` (`util/InchFieldFormat.kt`)**, behind `formatDisplay`/`disp` (cards) and
+  `toDisplayString` (Add-dialog seeds), keyway fields included: a value on the 1/32 grid
+  (within `INCH_FIELD_GRID_TOLERANCE_IN`, the `Float` storage noise) shows as its reduced
+  fraction (`12 11/32`) under Settings → Units "Inch fields show: Fractions" (the default), or
+  as its EXACT decimal (`12.34375`) under "Decimals" — never a rounded one, which the reader had
+  to convert back by eye (on-device report). Off the grid, at least 4 decimals in both styles.
+  The style only decides values where both spellings are the same number (`0.5` is `1/2`); the
+  formatter cannot tell how a value was typed and does not try. Every form parses back through
+  `parseLengthMmOrNull`. Display only: device preference (`SettingsStore.inchFieldStyleFlow`),
+  mirrored into the snapshot-state `InchFieldDisplay.style` by ONE writer, the root collector in
+  `MainActivity`, so a field recomposes when the setting changes.
 - Optional `validator` and `externalIssueText` parameters surface inline field issues. There is
   no switch to suppress the rejection notice: a refused value is always reported.
 - Optional `placeholder: String?` and `hint: String?` (both default `null`; byte-identical to the

@@ -139,15 +139,14 @@ internal fun addDialogBodyDiaMm(spec: ShaftSpec, fallbackDiaMm: Float): Float =
  * ──────────────────────────────────────────────────────────────────────────── */
 
 /**
- * An Add-dialog seed's text. Formatted in [Locale.US] whatever the device locale: a comma-decimal
- * locale formats 12.0000 as `12,0000`, which trims to `12,` — text the parser refuses, so every
- * whole-number seed would open as "Not a number".
+ * An Add-dialog seed's text — the carousel cards' [formatDisplay], so a seed reads in a dialog
+ * exactly as the stored value will read on the card (an inch seed on the 1/32 grid as its
+ * fraction). Formatted in [Locale.US] whatever the device locale: a comma-decimal locale formats
+ * 12.0000 as `12,0000`, which trims to `12,` — text the parser refuses, so every whole-number
+ * seed would open as "Not a number".
  */
-internal fun toDisplayString(mm: Float, unit: UnitSystem, d: Int = 3): String {
-    val v = if (unit == UnitSystem.MILLIMETERS) mm else mm / 25.4f
-    val s = "%.${d}f".format(Locale.US, v).trimEnd('0').trimEnd('.')
-    return if (s.isEmpty()) "0" else s
-}
+internal fun toDisplayString(mm: Float, unit: UnitSystem, d: Int = 3): String =
+    formatDisplay(mm, unit, d)
 
 /** An Add-dialog field seeded with [seedMm]: exact until edited (see [SeededMmField]). */
 @Composable
@@ -449,7 +448,7 @@ fun AddBodyDialog(
                         testTag = "add_body_kw_captured",
                     ) { on ->
                         kwCaptured = on
-                        if (on && kwOffset.isBlank()) kwOffset = dispKw(defaultKeywayInsetMm(), kwUnit)
+                        if (on && kwOffset.isBlank()) kwOffset = disp(defaultKeywayInsetMm(), kwUnit)
                     }
                     if (kwCaptured) {
                         CommitNumField("KW Inset from ${if (kwFwd) "FWD" else "AFT"} (${abbr(kwUnit)})", kwOffset) { kwOffset = it }
@@ -1412,7 +1411,7 @@ fun AddTaperDialog(
                         testTag = "add_taper_kw_captured",
                     ) { on ->
                         kwCaptured = on
-                        if (on && kwOffset.isBlank()) kwOffset = dispKw(defaultKeywayInsetMm(), kwUnit)
+                        if (on && kwOffset.isBlank()) kwOffset = disp(defaultKeywayInsetMm(), kwUnit)
                     }
                     if (kwCaptured) {
                         CommitNumField("KW Inset from SET (${abbr(kwUnit)})", kwOffset) { kwOffset = it }
