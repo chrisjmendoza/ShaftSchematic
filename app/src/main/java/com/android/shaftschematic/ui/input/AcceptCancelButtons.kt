@@ -20,9 +20,9 @@ import androidx.compose.ui.platform.testTag
  *
  * The green ✓ / red ✗ pair an edited value shows while it holds an edit that has not landed:
  * ✓ accepts it, ✗ puts the stored value back. ONE construction behind the Overall Length field
- * and every carousel card field, so the two read as the same control (on-device request: the
- * card's Save button at the foot of a long card was hard to find; the OAL's pair sits where the
- * edit is).
+ * and the card Save / Cancel bar that takes its place while a card field holds an unsaved value,
+ * so the two read as the same control (on-device ruling: a Save button at the foot of a long card
+ * was hidden; the Overall Length row is always on screen).
  *
  * Neither button can take focus: a click that pulled focus off the field would blur-commit the
  * field before the button's own handler ran, and ✗ would then cancel an edit that had already

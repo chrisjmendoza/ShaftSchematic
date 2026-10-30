@@ -509,12 +509,14 @@ internal val helpSections: List<HelpSection> = listOf(
                 "Values commit when you leave a field (tap elsewhere or Done) — not on every " +
                     "keystroke. Tapping into a field and leaving without editing changes " +
                     "nothing.\n\n" +
-                    "While a field holds a value you have typed but not saved, the green ✓ " +
-                    "and red ✗ from Overall Length show at its right end: ✓ saves the value, " +
-                    "✗ puts the old one back. A chip or checkbox tap does not save a typed " +
-                    "value, so the ✓ stays beside it until you answer it. Tapping Overall " +
-                    "Length with such a value waiting asks Keep your change? first: Keep " +
-                    "saves it, Discard puts the old value back, Cancel stays on the card.\n\n" +
+                    "While a field holds a value you have typed but not saved, a Save bar " +
+                    "takes the place of Overall Length at the top of the editor. It names the " +
+                    "field and its card: the green ✓ saves the value, the red ✗ puts the old " +
+                    "one back, and Overall Length returns once the card is saved. A chip or " +
+                    "checkbox tap does not save a typed value, so the bar stays until you " +
+                    "answer it. Swiping to another card, or tapping another component on the " +
+                    "drawing, with such a value waiting asks Save changes? first: Save keeps " +
+                    "it, Discard puts the old value back, Keep editing stays on the card.\n\n" +
                     "The Add dialog for each component shows the same controls as its " +
                     "carousel card, so anything you can set at add time you can also edit later.",
                 manualAnchor = "editor-carousel",

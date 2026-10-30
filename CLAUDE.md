@@ -1372,7 +1372,11 @@ rejoins flanking fragments but **never merges across a component still occupying
 The OAL is **always user-typed** — there is no auto mode. It commits on **accept**, like the
 component cards — the green ✓ beside the field, IME-Done, or a blur after the text changed
 (`BlurCommitPolicy`) — and the red ✗ reverts the text and commits nothing; the pair shows only
-while the value is being modified, and the field is a value box, not a full-width banner. It
+while the value is being modified, and the field is a value box, not a full-width banner.
+While a carousel card field holds an unsaved value the OAL row shows the card's Save / Cancel bar
+in the field's place (`OverallLengthRow`, `CardSaveBar` — same ✓ / ✗, same slot; on-device ruling:
+a Save at the end of a long card was hidden), and the field returns when the card is clean; a card
+change under a pending edit asks Save | Discard | Keep editing (`UnsavedCardEditDialog`). It
 does NOT commit per keystroke: that was the documented exception for a live preview, and on
 device an edit from 368.5″ to 367.75″ committed 36″ on the way through, collapsed the drawing,
 and re-anchored the FWD taper through that transient (on-device report). Do not reintroduce the

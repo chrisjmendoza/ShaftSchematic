@@ -1,4 +1,4 @@
-# Overall Length (v2.6, 2026-10-29)
+# Overall Length (v2.7, 2026-10-30)
 
 ## Scope
 Defines how the **Overall Length** field behaves, how it interacts with components, and how the
@@ -32,16 +32,20 @@ UI signals errors. Applies to `ShaftViewModel`, `ShaftRoute`, and `ShaftScreen`.
 - **Blur discipline**: a commit on blur also requires the text to have changed since focus
   (`ui/input/BlurCommitPolicy.kt`) — a tap-and-leave is a no-op. A ✓ or ✗ resets that baseline
   before it clears focus, so the blur that follows cannot commit a second time or undo a cancel.
-- **A pending card edit is settled before the OAL takes focus** (on-device request). While a
-  carousel card field holds a typed value that has not landed (its ✓ / ✗ showing), a guard over
-  the OAL text box (`oal_pending_guard`) takes the tap instead of the field — focus moving to the
-  OAL would blur-commit the card value with its ✓ / ✗ never answered — and asks "Keep your
-  change?", naming the field and its card (`pendingCardEditMessage`). **Keep** answers the card
-  field's ✓, **Discard** its ✗, and each then moves focus into the OAL; **Cancel** leaves the card
-  field holding its typed value. The card fields register through `PendingCardEdits` /
-  `LocalPendingCardEdits` (`ui/screen/PendingCardEdit.kt`), provided once around the editor, and
-  `NumericInputField.onPendingEdit` hands out the ✓ / ✗ answers. Pinned by
-  `OalPendingCardEditTest`.
+- **The OAL row yields to the card Save / Cancel bar** (on-device ruling: a Save at the end of a
+  long card was hidden; this row is always on screen above the carousel). While a carousel card
+  field holds a typed value that has not landed, `OverallLengthRow` shows `CardSaveBar` in the
+  OAL field's place: "Unsaved change" over the waiting field and its card
+  (`pendingEditName` — "“Length” on AFT Taper"), and the SAME green ✓ / red ✗
+  (`AcceptCancelButtons`) in the OAL's own fixed action slot, so it reads as one control. ✓ saves
+  the card value, ✗ puts its stored value back — the field's own handle
+  (`NumericInputField.onPendingEdit`), never a second commit pipeline. The OAL field returns the
+  moment the card is clean. With the field hidden, nothing can focus the OAL under a pending
+  edit, so no prompt guards it. The card fields register through `PendingCardEdits` /
+  `LocalPendingCardEdits` (`ui/screen/PendingCardEdit.kt`), provided once around the editor. A
+  card change under a pending edit (swipe, edge arrow, peek tap, drawing tap) asks Save | Discard
+  | Keep editing (`UnsavedCardEditDialog`). Pinned by `CardSaveBarTest` and
+  `UnsavedCardEditDialogTest`.
 - **Oversize**: if components extend past a **set** Overall (`> 0`), the input shows an
   **error**. A not-yet-set Overall (`0`) is never an error.
 - **New-shaft diameter prompt** (on-device request: components added onto the default-sized
@@ -214,9 +218,9 @@ template card's preview can never disagree with the drawing it becomes.
 ---
 
 ## Change Log
-**v2.7 (2026-10-30)** — **Pending card edit prompt** (on-device request): a tap on the OAL while a
-card field holds an unsaved value asks Keep | Discard | Cancel before the OAL takes focus; the ✓ / ✗
-pair is now the ONE `AcceptCancelButtons`, shared with the card fields.
+**v2.7 (2026-10-30)** — OAL row yields to the card Save / Cancel bar while a card field holds an
+unsaved value; the field is hidden, so nothing can focus it under a pending edit. The ✓ / ✗ pair is
+the ONE `AcceptCancelButtons`, shared with the bar.
 
 **v2.6 (2026-10-29)** — **Explicit bodies re-anchor** (on-device request: an explicit body exists to
 sit at an exact point, often off the coupling end): an explicit body carries "Measure From: AFT |
