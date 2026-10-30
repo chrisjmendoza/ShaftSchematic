@@ -315,6 +315,19 @@ data class PdfPrefs(
      */
     val showUnitsNote: Boolean = false,
     /**
+     * Print the "Captured KW: inset …" footer line under a captured keyway's KW line. Settings →
+     * Drawing → "Captured keyway inset on footer". Default ON (the line printed before the switch
+     * existed); off drops the line on every sheet, the drawing still shows the inset to scale.
+     */
+    val footerCapturedKwInset: Boolean = true,
+    /**
+     * Print the "Bolt hole: Ø …" footer line (Ø and count) of a cross-drilled coupler bolt row.
+     * Settings → Drawing → "Bolt hole Ø on footer". Default OFF (on-device ruling: the drawing
+     * shows the hole); off drops that one line — the "Hole center from …" line and the clocking
+     * note still print.
+     */
+    val footerBoltHoleDia: Boolean = false,
+    /**
      * How each wear area draws on the CONSOLIDATED sheet ([WearAreaStyle]): nothing, vertical
      * lines, a light grey fill (≈10%, `CONSOLIDATED_WEAR_SHADE_ALPHA`), or both. Settings →
      * Drawing → "Wear areas on the shaft drawing" and the Output tab's PDF options sheet (remote

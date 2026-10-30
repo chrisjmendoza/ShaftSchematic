@@ -450,10 +450,18 @@ split: a keyway shorter than half its own width would run its arcs past its stra
 invert the slot.
 
 A captured keyway's inset (offset > 0) is a machining value the drawing only shows to scale, so
-the footer prints it on its own line directly under the `KW:` / `Body KW:` line (before the spoon
-note): `Captured KW: inset <len> from S.E.T.` on a taper, `… from AFT` / `… from FWD` on a body
+the footer prints it on its own line directly under the `KW:` / `Body KW:` line:
+`Captured KW: inset <len> from S.E.T.` on a taper, `… from AFT` / `… from FWD` on a body
 (its `keywayEnd`), in the keyway's own unit (`CAPTURED_KW_PREFIX`, `pdf/SheetFooter.kt`). An open
-keyway prints nothing new, so its sheets are byte-identical.
+keyway prints nothing new, so its sheets are byte-identical. The line is optional —
+`PdfPrefs.footerCapturedKwInset` (Settings → Drawing → "Captured keyway inset on footer", default
+ON, app-wide, captured by Drawing profiles) reaches the footer through `sheetFooterConfig(spec,
+prefs)` → `FooterConfig.capturedKwInset`; off drops the line on every sheet with a footer, blank
+drafts included.
+
+A **spooned** keyway prints NO footer text — no `(spooned)` after the KW line and no note
+(on-device ruling: the bowl on the drawing shows it). Its KW column is byte-identical to the
+plain keyway's.
 
 A **thread relief** (`Threads.hasRelief`) prints **no footer line** (on-device ruling: the
 groove is drawing detail only — the `Thread relief:` line it once printed under the `Thread:` line
@@ -789,7 +797,7 @@ Rules (shared helpers in `pdf/BlankFormText.kt`):
   becomes a `Side:` rule. Lines space out to a handwriting pitch
   (`FOOTER_LINE_FACTOR_BLANK` = 2.2 vs 1.35) inside a taller band
   (`FOOTER_BLOCK_BLANK_PT` = 200 pt vs 96 pt); `drawFooter` fit-clamps the pitch to the
-  band, so the fullest column (taper + spooned note + thread) tightens toward printed
+  band, so the fullest column (taper + captured inset + thread) tightens toward printed
   density instead of overrunning the page. The middle job-info column starts one line
   **lower** than the end columns (`midLeadLines`) whenever those lead with a taper
   block's heading (`FooterColumns.aftLeadsWithHeading`/`fwdLeadsWithHeading`): the middle block has no heading, so flush tops would

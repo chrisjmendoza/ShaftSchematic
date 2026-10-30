@@ -20,6 +20,7 @@ import com.android.shaftschematic.model.keywayAbsSpanMm
 import com.android.shaftschematic.model.keywayClocking
 import com.android.shaftschematic.model.keywayCount
 import com.android.shaftschematic.model.shoulderOn
+import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.autoTaperRateText
@@ -70,7 +71,7 @@ internal fun footerBandTop(
 ): Float = max(pageH - marginPt - footerBlockPt, shaftBottomY + INFO_GAP_MIN_PT)
 internal const val FOOTER_BLOCK_PT = 96f
 // Blank drafts reserve a taller footer band: line spacing opens up for handwriting.
-// Sized for the fullest column (taper header + Rate/L.E.T./S.E.T./Length/KW + spooned note
+// Sized for the fullest column (taper header + Rate/L.E.T./S.E.T./Length/KW + captured inset
 // + Thread = 8 lines) at the blank pitch; drawFooter additionally fit-clamps its pitch to
 // the band, so an overloaded column tightens up instead of running off the page.
 internal const val FOOTER_BLOCK_BLANK_PT = 200f
@@ -483,25 +484,29 @@ internal const val BOLT_HOLE_90_NOTE = "90° from keyway"
 internal const val BOLT_HOLE_IN_LINE_NOTE = "In line with keyway"
 
 /**
- * Footer lines for ONE cross-drilled coupler bolt row: "Bolt hole:" (Ø, × count above one),
- * "Hole center from FWD/AFT:" (the authored distance, plus pitch above one), and the clocking
- * note — printed only when the shaft carries a keyway, since "from keyway" says nothing without
- * one (the keyway-clocking-note rule). [line] is the caller's label/value joiner so blank drafts
- * keep the labels and rule the values, like every other spec line.
+ * Footer lines for ONE cross-drilled coupler bolt row: "Bolt hole:" (Ø, × count above one — only
+ * while [showDia], `PdfPrefs.footerBoltHoleDia`), "Hole center from FWD/AFT:" (the authored
+ * distance, plus pitch above one), and the clocking note — printed only when the shaft carries a
+ * keyway, since "from keyway" says nothing without one (the keyway-clocking-note rule). [line] is
+ * the caller's label/value joiner so blank drafts keep the labels and rule the values, like every
+ * other spec line.
  */
 internal fun crossDrilledHoleLines(
     slot: CouplerBoltSlot,
     spec: ShaftSpec,
     displayUnits: DisplayUnits,
     line: (String, () -> String) -> String,
+    showDia: Boolean = true,
 ): List<String> = buildList {
     val unit = displayUnits.unitFor(slot.id)
     val dual = displayUnits.dual
     val face = if (slot.authoredReference == SlotAuthoredReference.FWD) "FWD" else "AFT"
-    add(line("Bolt hole:") {
-        val count = if (slot.count > 1) " × ${slot.count}" else ""
-        "Ø ${formatDiaWithUnitDual(slot.holeDiaMm.toDouble(), unit, dual)}$count"
-    })
+    if (showDia) {
+        add(line("Bolt hole:") {
+            val count = if (slot.count > 1) " × ${slot.count}" else ""
+            "Ø ${formatDiaWithUnitDual(slot.holeDiaMm.toDouble(), unit, dual)}$count"
+        })
+    }
     add(line("Hole center from $face:") {
         val pitch = if (slot.count > 1) " @ ${formatLenWithUnitDual(slot.spacingMm.toDouble(), unit, dual)}" else ""
         "${formatLenWithUnitDual(slot.authoredCenterMm(spec.overallLengthMm).toDouble(), unit, dual)}$pitch"
@@ -511,28 +516,16 @@ internal fun crossDrilledHoleLines(
     }
 }
 
-/**
- * Reader note printed directly under a spooned keyway's footer spec line: the stated KW
- * length runs to the base of the spoon bowl (where the mill cut ends), not to the tip
- * of the spoon.
- */
-internal const val SPOONED_KW_NOTE = "KW length to base of spoon (mill end)"
+// A spooned keyway prints NOTHING on the footer — no "(spooned)" and no note: the bowl on the
+// drawing shows it (on-device ruling). The KW line reads the same spooned or not.
 
 /**
  * Label of the line printed directly under a captured keyway's footer spec line (inset > 0):
- * "Captured KW: inset <len> from S.E.T." on a taper, "... from AFT|FWD" on a body. The inset is
- * a machining value the drawing only shows to scale; an open keyway (inset 0) prints no such line.
+ * "Captured KW: inset <len> from S.E.T." on a taper, "... from AFT|FWD" on a body, while
+ * `PdfPrefs.footerCapturedKwInset` is on. The inset is a machining value the drawing only shows to
+ * scale; an open keyway (inset 0) prints no such line.
  */
 internal const val CAPTURED_KW_PREFIX = "Captured KW:"
-
-/**
- * Whether a keyway's spoon prints in the footer (" (spooned)" and [SPOONED_KW_NOTE]). A captured
- * keyway (inset > 0) has no open end for a spoon — the rule the drawing and the card's disabled
- * switch already apply (on-device rule) — so a stale stored flag never prints. One definition for
- * the taper and body keyway lines and the note alike.
- */
-internal fun effectiveKeywaySpooned(spooned: Boolean, offsetMm: Float): Boolean =
-    spooned && offsetMm <= 0f
 
 // The footer carries NO compression note. The S-break pair IS the drawing's statement that a
 // body run is foreshortened — a line of prose repeating it is redundant (on-device direction),
@@ -585,24 +578,21 @@ internal fun buildFooterEndColumns(
         add(line("S.E.T.:") { formatDiaWithUnitDual(ls.set.toDouble(), tpUnit, dual) })
         add(line("Length:") { formatLenWithUnitDual(tp.lengthMm.toDouble(), tpUnit, dual) })
         if (tp.keywayWidthMm > 0f && tp.keywayDepthMm > 0f) {
-            val spooned = effectiveKeywaySpooned(tp.keywaySpooned, tp.keywayOffsetFromSetMm)
-            val spoon = if (spooned) " (spooned)" else ""
             // The keyway resolves its OWN unit, falling back to the taper's: a metric keyway on an
             // imperial taper is the common European case, and the rest of this column stays inches.
             val kwUnit = displayUnits.keywayUnitFor(tp.id)
             add(line("KW:") {
                 if (tp.keywayLengthMm > 0f) {
-                    "${formatLenWithUnitDual(tp.keywayWidthMm.toDouble(), kwUnit, dual)} × ${formatLenWithUnitDual(tp.keywayDepthMm.toDouble(), kwUnit, dual)} × ${formatLenWithUnitDual(tp.keywayLengthMm.toDouble(), kwUnit, dual)}$spoon"
+                    "${formatLenWithUnitDual(tp.keywayWidthMm.toDouble(), kwUnit, dual)} × ${formatLenWithUnitDual(tp.keywayDepthMm.toDouble(), kwUnit, dual)} × ${formatLenWithUnitDual(tp.keywayLengthMm.toDouble(), kwUnit, dual)}"
                 } else {
-                    "${formatLenWithUnitDual(tp.keywayWidthMm.toDouble(), kwUnit, dual)} × ${formatLenWithUnitDual(tp.keywayDepthMm.toDouble(), kwUnit, dual)}$spoon"
+                    "${formatLenWithUnitDual(tp.keywayWidthMm.toDouble(), kwUnit, dual)} × ${formatLenWithUnitDual(tp.keywayDepthMm.toDouble(), kwUnit, dual)}"
                 }
             })
-            if (tp.keywayOffsetFromSetMm > 0f) {
+            if (cfg.capturedKwInset && tp.keywayOffsetFromSetMm > 0f) {
                 add(line(CAPTURED_KW_PREFIX) {
                     "inset ${formatLenWithUnitDual(tp.keywayOffsetFromSetMm.toDouble(), kwUnit, dual)} from S.E.T."
                 })
             }
-            if (spooned) add(SPOONED_KW_NOTE)
         }
     }
 
@@ -659,7 +649,7 @@ internal fun buildFooterEndColumns(
     // in the column of the face it was quoted from. Seam rows print nothing, as before.
     spec.couplerBoltSlots.filter { it.holeStyle == BoltHoleStyle.CROSS }.forEach { slot ->
         val col = if (slot.authoredReference == SlotAuthoredReference.FWD) fwd else aft
-        col += crossDrilledHoleLines(slot, spec, displayUnits, ::line)
+        col += crossDrilledHoleLines(slot, spec, displayUnits, ::line, showDia = cfg.boltHoleDia)
     }
 
     // Body-hosted keyways (fitted couplings on intermediate shafts): list in the column
@@ -668,13 +658,12 @@ internal fun buildFooterEndColumns(
     // (on-device report: a FWD body's keyway printed under a mid-shaft taper's block).
     val bodyTitles = buildBodyTitleById(spec)
     fun bodyKwLine(b: Body, underTaper: Boolean): String {
-        val spoon = if (effectiveKeywaySpooned(b.keywaySpooned, b.keywayOffsetFromEndMm)) " (spooned)" else ""
         val kwUnit = displayUnits.keywayUnitFor(b.id)
         val label = if (underTaper) "${bodyTitles[b.id] ?: "Body"} KW:" else "Body KW:"
         return line(label) {
             "${formatLenWithUnitDual(b.keywayWidthMm.toDouble(), kwUnit, dual)} × " +
                 "${formatLenWithUnitDual(b.keywayDepthMm.toDouble(), kwUnit, dual)} × " +
-                "${formatLenWithUnitDual(b.keywayLengthMm.toDouble(), kwUnit, dual)}$spoon"
+                formatLenWithUnitDual(b.keywayLengthMm.toDouble(), kwUnit, dual)
         }
     }
     // A blank row sets the body keyways apart from a taper block in the same column: the
@@ -693,14 +682,13 @@ internal fun buildFooterEndColumns(
             if (aftHalf) aftKwGap = true else fwdKwGap = true
         }
         col += bodyKwLine(b, underTaper = underTaper)
-        if (b.keywayOffsetFromEndMm > 0f) {
+        if (cfg.capturedKwInset && b.keywayOffsetFromEndMm > 0f) {
             val kwUnit = displayUnits.keywayUnitFor(b.id)
             val face = if (b.keywayEnd == LinerAuthoredReference.FWD) "FWD" else "AFT"
             col += line(CAPTURED_KW_PREFIX) {
                 "inset ${formatLenWithUnitDual(b.keywayOffsetFromEndMm.toDouble(), kwUnit, dual)} from $face"
             }
         }
-        if (effectiveKeywaySpooned(b.keywaySpooned, b.keywayOffsetFromEndMm)) col += SPOONED_KW_NOTE
     }
 
     // Liner shoulder edge radii — the radius's ONLY printed value (the drawing shows the
@@ -943,6 +931,14 @@ data class FooterConfig(
     val showFwdThread: Boolean,
     val showAftTaper: Boolean,
     val showFwdTaper: Boolean,
+    /** `PdfPrefs.footerCapturedKwInset`: the "Captured KW: inset …" line under a captured keyway. */
+    val capturedKwInset: Boolean = true,
+    /**
+     * `PdfPrefs.footerBoltHoleDia`: the "Bolt hole: Ø …" line of a cross-drilled bolt row. The
+     * shipped pref is OFF; [sheetFooterConfig] always passes it, so this default only serves
+     * direct builders.
+     */
+    val boltHoleDia: Boolean = true,
 )
 
 /**
@@ -957,13 +953,15 @@ data class FooterConfig(
  * `detectEndFeatures()`; the taper flags here only decide whether the footer carries that
  * end's spec column at all.
  */
-internal fun sheetFooterConfig(spec: ShaftSpec): FooterConfig {
+internal fun sheetFooterConfig(spec: ShaftSpec, prefs: PdfPrefs = PdfPrefs()): FooterConfig {
     val tapers = selectFooterTapers(spec)
     return FooterConfig(
         showAftThread = hasAftThread(spec),
         showFwdThread = hasFwdThread(spec),
         showAftTaper = tapers.aft != null,
         showFwdTaper = tapers.fwd != null,
+        capturedKwInset = prefs.footerCapturedKwInset,
+        boltHoleDia = prefs.footerBoltHoleDia,
     )
 }
 

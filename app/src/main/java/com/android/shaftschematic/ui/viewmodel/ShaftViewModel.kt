@@ -489,6 +489,13 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     internal val _pdfShowUnitsNote = MutableStateFlow(PdfPrefs().showUnitsNote)
     val pdfShowUnitsNote: StateFlow<Boolean> = _pdfShowUnitsNote.asStateFlow()
 
+    // Settings → Drawing → the optional footer lines (`PdfPrefs.footerCapturedKwInset`,
+    // `PdfPrefs.footerBoltHoleDia`).
+    internal val _pdfFooterCapturedKwInset = MutableStateFlow(PdfPrefs().footerCapturedKwInset)
+    val pdfFooterCapturedKwInset: StateFlow<Boolean> = _pdfFooterCapturedKwInset.asStateFlow()
+    internal val _pdfFooterBoltHoleDia = MutableStateFlow(PdfPrefs().footerBoltHoleDia)
+    val pdfFooterBoltHoleDia: StateFlow<Boolean> = _pdfFooterBoltHoleDia.asStateFlow()
+
     // Settings → Drawing / Output tab options: "Wear areas on the shaft drawing".
     internal val _pdfWearAreaStyle = MutableStateFlow(PdfPrefs().wearAreaStyle)
     val pdfWearAreaStyle: StateFlow<WearAreaStyle> = _pdfWearAreaStyle.asStateFlow()
@@ -1237,6 +1244,18 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             SettingsStore.pdfShowUnitsNoteFlow(getApplication()).collectLatest { persisted ->
                 _pdfShowUnitsNote.value = persisted
                 SettingsStore.updatePdfPrefs { it.copy(showUnitsNote = persisted) }
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.pdfFooterCapturedKwInsetFlow(getApplication()).collectLatest { persisted ->
+                _pdfFooterCapturedKwInset.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(footerCapturedKwInset = persisted) }
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.pdfFooterBoltHoleDiaFlow(getApplication()).collectLatest { persisted ->
+                _pdfFooterBoltHoleDia.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(footerBoltHoleDia = persisted) }
             }
         }
         viewModelScope.launch {

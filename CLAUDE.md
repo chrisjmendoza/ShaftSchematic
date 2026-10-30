@@ -165,8 +165,8 @@ branch on it identically. A CROSS hole also carries `clocking` — **DEG_90 from
 (default: a bolt in line with the keyway would pass through the key)** draws the bore HIDDEN
 (dashed walls one hole width apart, entering from the top silhouette, via the ONE pure
 `crossBoreLines` in `geom/BoltHoleMath.kt`), IN_LINE draws the circle. CROSS rows print
-footer lines (Ø, "Hole center from FWD/AFT", and the clocking note ONLY when the shaft has a
-keyway); SEAM rows print no footer line. Either style may additionally print ONE opt-in
+footer lines ("Hole center from FWD/AFT", the clocking note ONLY when the shaft has a keyway, and
+the "Bolt hole: Ø" line ONLY under `PdfPrefs.footerBoltHoleDia`, default OFF — on-device ruling); SEAM rows print no footer line. Either style may additionally print ONE opt-in
 dimension span: the card's "Show dimension rail" switch (`showDimensionRail`, default OFF —
 byte-identical off) adds a LOCAL `DimSpan` from the shaft END the row is measured from (the
 AFT face at 0 or the FWD face at OAL — the only span that references an end rather than a SET)
@@ -1022,14 +1022,13 @@ true-scale pin (`keywayPinnedBodySpans`) still protects the axial term. See
 
 ### Spooned keyways are a draw-only variant
 `keywaySpooned` (on `Taper` and `Body`) is a **drawing** flag — it changes nothing in the model,
-resolve, OAL, collision, or footer geometry (only the footer *text* gains `(spooned)` plus a
-`SPOONED_KW_NOTE` line under the KW spec: KW length runs to the base of the spoon, where the
-mill ends). A spooned
+resolve, OAL, collision, or the footer: a spooned keyway prints NO footer text — no `(spooned)`,
+no note (on-device ruling: the drawing shows it; do not reintroduce footer wording without
+asking). A spooned
 **open** keyway keeps the normal keyway (full-length walls + mill semicircle) and **adds** an
 enlarged circle around the closed (LET) end — the mill semicircle stays as an inner reference line
-inside the bowl. It is **ignored for captured keyways** (inset > 0), the footer text included — the
-UI disables the toggle there, and a stale stored flag never prints " (spooned)" or the note (ONE
-predicate, `effectiveKeywaySpooned` in `pdf/SheetFooter.kt`). The bowl must be drawn **identically in both keyway draw sites** —
+inside the bowl. It is **ignored for captured keyways** (inset > 0) — the UI disables the toggle
+there. The bowl must be drawn **identically in both keyway draw sites** —
 `ShaftRenderer.drawKeywaySlot` (canvas) and `ShaftPdfComposer.drawKeywaySlotPdf` (PDF). Pure bowl
 math (radius, y-semi, wall tangent, major-arc sweep) lives in `geom/KeywaySpoonMath.kt` (shared,
 no `pdf → ui` dep); `SPOON_BOWL_WIDTH_RATIO` sizes its axial term and the y-semi is the slot

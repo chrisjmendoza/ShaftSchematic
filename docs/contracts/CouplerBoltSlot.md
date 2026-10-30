@@ -126,7 +126,10 @@ A cross-drilled row prints, in the end column of the face it was **quoted from**
 and the clocking note `90° from keyway` / `In line with keyway` — the note prints ONLY when the
 shaft carries at least one keyway ("from keyway" says nothing without one, the
 `keywayClockingFooterNote` rule). Values resolve the row's own display unit and honor dual
-display; blank drafts keep the labels and rule the values. **SEAM rows still print nothing**
+display; blank drafts keep the labels and rule the values. The `Bolt hole:` line is optional —
+`PdfPrefs.footerBoltHoleDia` (Settings → Drawing → "Bolt hole Ø on footer", default OFF — on-device ruling, app-wide)
+reaches it as `FooterConfig.boltHoleDia`; off drops that one line (Ø and count), and the center
+line and clocking note still print. **SEAM rows still print nothing**
 (existing sheets byte-identical). Either style may additionally opt into the dimension rail
 below.
 

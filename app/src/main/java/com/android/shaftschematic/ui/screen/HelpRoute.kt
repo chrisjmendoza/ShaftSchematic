@@ -571,11 +571,12 @@ internal val helpSections: List<HelpSection> = listOf(
                     "A keyway runs out the end of its host unless you switch " +
                     "on \"Captured keyway\" — the shop term for a slot inset from the S.E.T. " +
                     "(taper) or the chosen end face (body), rounded at both ends — which " +
-                    "reveals its Inset field; the footer then prints the inset.\n\n" +
+                    "reveals its Inset field; the footer then prints the inset (Settings → " +
+                    "Drawing → \"$FOOTER_CAPTURED_KW_SETTING_TITLE\" turns that line off).\n\n" +
                     "A spooned " +
                     "keyway adds the enlarged bowl at the " +
-                    "closed end on the drawing — it is drawing-only and never changes the " +
-                    "keyway's dimensions.\n\n" +
+                    "closed end on the drawing — it is drawing-only: it never changes the " +
+                    "keyway's dimensions and prints nothing on the footer.\n\n" +
                     "With two or more keyways, clocking toggles " +
                     "(180°/90°, CW/CCW) appear on the keyway cards.",
                 illustration = { SpoonedKeywayFigure() },
@@ -819,8 +820,9 @@ internal val helpSections: List<HelpSection> = listOf(
                 "A keyway that does not run out the end of its host as an open slot: it is " +
                     "inset from the S.E.T. (taper) or the chosen end face (body), so both ends " +
                     "are rounded by the mill. Switch on \"Captured keyway\" on the card or in the " +
-                    "Add dialog to enter the inset; the footer prints it under the KW line. A " +
-                    "captured keyway cannot be spooned.",
+                    "Add dialog to enter the inset; the footer prints it under the KW line " +
+                    "unless Settings → Drawing → \"$FOOTER_CAPTURED_KW_SETTING_TITLE\" is off. " +
+                    "A captured keyway cannot be spooned.",
                 manualAnchor = "components-keyways",
             ),
             HelpTopic(
@@ -1064,6 +1066,22 @@ internal val helpSections: List<HelpSection> = listOf(
                     "suffix.\n\n" +
                     "App-wide and captured by Drawing profiles; \"Restore Drawing defaults\" " +
                     "turns it off. Settings only — it is not on the PDF options panel.",
+                manualAnchor = "settings-drawing-lines",
+            ),
+            HelpTopic(
+                "Drawing — optional footer lines",
+                "Settings → Drawing, under \"$UNITS_NOTE_SETTING_TITLE\".\n\n" +
+                    "• \"$FOOTER_CAPTURED_KW_SETTING_TITLE\" (on by default) — the " +
+                    "\"Captured KW: inset …\" line under a captured keyway's KW line. Off, the footer gives the keyway " +
+                    "size only; the drawing still shows the slot inset to scale.\n" +
+                    "• \"$FOOTER_BOLT_HOLE_DIA_SETTING_TITLE\" (off by default) — the " +
+                    "\"Bolt hole: Ø …\" line of " +
+                    "a cross-drilled bolt hole (the diameter, and the count when there is more " +
+                    "than one). Off, the \"Hole center from …\" line and the clocking note " +
+                    "still print.\n\n" +
+                    "Every sheet with a footer follows them. App-wide and captured by Drawing " +
+                    "profiles; \"Restore Drawing defaults\" puts both back. Settings only — " +
+                    "they are not on the PDF options panel.",
                 manualAnchor = "settings-drawing-lines",
             ),
             HelpTopic(
