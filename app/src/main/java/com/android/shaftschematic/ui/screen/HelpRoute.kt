@@ -520,6 +520,9 @@ internal val helpSections: List<HelpSection> = listOf(
                     "Tick \"Explicit body\" on an auto-body " +
                     "card to promote it to a real, editable body; untick it on an explicit body " +
                     "to make it automatic again.\n\n" +
+                    "Explicit bodies carry \"Measure From: AFT | FWD\" like tapers and liners " +
+                    "(on the card and in Add Body). A body measured from FWD keeps its distance " +
+                    "from the FWD end when the OAL changes; switching the chips never moves it.\n\n" +
                     "An explicit body at either end of the shaft — the coupling body — prints " +
                     "its own length as a dimension; one in the middle does not. \"Show " +
                     "dimension rail\" on its card overrides that either way.\n\n" +
@@ -877,7 +880,8 @@ internal val helpSections: List<HelpSection> = listOf(
                 "The shaft's overall length, end to end, and the span every drawing is laid out " +
                     "against. Any part of it you don't cover with a component is filled with " +
                     "bare shaft (an auto-body), so the drawing is always continuous. Parts " +
-                    "measured from FWD move with the FWD end when it changes; a message then " +
+                    "measured from FWD — tapers, liners, explicit bodies and bolt rows — move " +
+                    "with the FWD end when it changes; a message then " +
                     "says which moved and how far, with Undo.",
                 manualAnchor = "editor-oal",
             ),

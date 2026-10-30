@@ -75,6 +75,9 @@ Specifically:
   ruling ("we always type them in anyway"), its ANSI/DIN tables with it. W and D are typed. Do
   not reintroduce it without asking.
 - **Taper AFT/FWD reference**: `AddTaperDialog` must show AFT/FWD direction chips.
+- **Body AFT/FWD reference**: `AddBodyDialog` and the explicit-body card both show "Measure
+  From: AFT | FWD" (`Body.authoredReference`; a switch never moves the body, a FWD body keeps its
+  FWD distance through an OAL change); the auto-body card omits it (its span is derived).
 - **Thread relief**: the thread card and `AddThreadDialog` both carry the "Thread relief"
   switch (`thread_relief` / `add_thread_relief`) + Relief length + Relief Ø + "Relief at:
   AFT | FWD" chips, the last three shown only while it is on (shared
@@ -1365,7 +1368,7 @@ device an edit from 368.5″ to 367.75″ committed 36″ on the way through, co
 and re-anchored the FWD taper through that transient (on-device report). Do not reintroduce the
 per-keystroke commit. An **empty** field on IME-Done or blur commits nothing and reverts the text
 to the stored value; it never zeroes the shaft. `ShaftSpec.withNewOal` (the ONE OAL-change
-helper) re-anchors FWD-referenced components in `Double` and snaps a recovered FWD distance
+helper) re-anchors FWD-referenced explicit bodies, tapers, liners and bolt rows in `Double` and snaps a recovered FWD distance
 under `OAL_REANCHOR_SNAP_MM` (0.01 mm) to the zero it was authored as — `Float` noise at 9 m
 is ~0.001 mm, and one unit of it put a flush taper "past the shaft end"; the bounds slop
 `BOUNDS_EPS_MM` is 0.01 mm for the same reason.

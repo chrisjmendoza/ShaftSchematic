@@ -423,6 +423,55 @@ class BodySplitMergeTest {
         assertCarried(merged.spec.bodies.single(), "the round-tripped body")
     }
 
+    // ── AFT | FWD reference ───────────────────────────────────────────────────
+
+    @Test
+    fun `split - both fragments carry the parent's FWD reference`() {
+        resetIds()
+        val body = Body(id = "b1", startFromAftMm = 0f, lengthMm = 600f, diaMm = 60f,
+            authoredReference = LinerAuthoredReference.FWD)
+        val spec = ShaftSpec(overallLengthMm = 600f, bodies = listOf(body))
+
+        val result = spec.splitBodiesAround(200f, 350f, ::nextId)
+
+        assertEquals(2, result.spec.bodies.size)
+        result.spec.bodies.forEach { assertEquals(LinerAuthoredReference.FWD, it.authoredReference) }
+    }
+
+    @Test
+    fun `merge - the fused body takes the AFT fragment's reference`() {
+        resetIds()
+        val left = Body(id = "bl", startFromAftMm = 0f, lengthMm = 200f, diaMm = 60f,
+            authoredReference = LinerAuthoredReference.FWD)
+        val right = Body(id = "br", startFromAftMm = 350f, lengthMm = 250f, diaMm = 60f,
+            authoredReference = LinerAuthoredReference.AFT)
+        val spec = ShaftSpec(overallLengthMm = 600f, bodies = listOf(left, right))
+
+        val merged = spec.mergeBodiesAround(200f, 350f, ::nextId).spec.bodies.single()
+        assertEquals(LinerAuthoredReference.FWD, merged.authoredReference)
+
+        // And the other way round: an AFT fragment A wins over a FWD fragment B.
+        resetIds()
+        val swapped = ShaftSpec(overallLengthMm = 600f, bodies = listOf(
+            left.copy(authoredReference = LinerAuthoredReference.AFT),
+            right.copy(authoredReference = LinerAuthoredReference.FWD),
+        ))
+        assertEquals(LinerAuthoredReference.AFT,
+            swapped.mergeBodiesAround(200f, 350f, ::nextId).spec.bodies.single().authoredReference)
+    }
+
+    @Test
+    fun `merge - a one-sided expansion keeps the reference`() {
+        resetIds()
+        val right = Body(id = "br", startFromAftMm = 200f, lengthMm = 300f, diaMm = 60f,
+            authoredReference = LinerAuthoredReference.FWD)
+        val spec = ShaftSpec(overallLengthMm = 500f, bodies = listOf(right))
+
+        val result = spec.mergeBodiesAround(0f, 200f, ::nextId)
+
+        assertEquals(LinerAuthoredReference.FWD, result.spec.bodies.single().authoredReference)
+    }
+
     // ── Split then merge round-trip ───────────────────────────────────────────
 
     @Test

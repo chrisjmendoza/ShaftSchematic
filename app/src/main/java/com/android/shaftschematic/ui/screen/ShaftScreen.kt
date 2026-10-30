@@ -258,6 +258,7 @@ fun ShaftScreen(
 
     // Adds (all mm)
     onAddBody: (startMm: Float, lengthMm: Float, diaMm: Float,
+                reference: LinerAuthoredReference,
                 keywayWidthMm: Float, keywayDepthMm: Float, keywayLengthMm: Float,
                 keywayOffsetFromEndMm: Float, keywayEnd: LinerAuthoredReference,
                 keywaySpooned: Boolean, keywayUnit: UnitSystem?,
@@ -283,6 +284,7 @@ fun ShaftScreen(
 
     // Updates (all mm)
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
+    onUpdateBodyReference: (Int, LinerAuthoredReference) -> Unit,
     onUpdateBodyShowDia: (Int, Boolean) -> Unit,
     onUpdateBodyShowLabel: (Int, Boolean) -> Unit,
     onUpdateBodyShade: (Int, Boolean) -> Unit = { _, _ -> },
@@ -689,7 +691,7 @@ fun ShaftScreen(
                 // later via the promoted card's own fields.
                 onAddBody = { s, l, d ->
                     onAddBody(
-                        s, l, d, 0f, 0f, 0f, 0f, LinerAuthoredReference.AFT, false, null,
+                        s, l, d, LinerAuthoredReference.AFT, 0f, 0f, 0f, 0f, LinerAuthoredReference.AFT, false, null,
                         0f, 0f, BlendProfile.OGEE, false, false, 0f, 0f, false, false,
                     )
                 },
@@ -698,6 +700,7 @@ fun ShaftScreen(
                 onSetAutoBlend = onSetAutoBlend,
                 onSetShowAutoBodyDia = onSetShowAutoBodyDia,
                 onUpdateBody = onUpdateBody,
+                onUpdateBodyReference = onUpdateBodyReference,
                 onUpdateBodyShowDia = onUpdateBodyShowDia,
                 onUpdateBodyShowLabel = onUpdateBodyShowLabel,
                 onUpdateBodyShade = onUpdateBodyShade,
@@ -854,9 +857,9 @@ fun ShaftScreen(
                     initialLengthMm = addLengthMm,
                     perComponentUnitsEnabled = perComponentUnitsEnabled,
                     dialogUnitConverterEnabled = dialogUnitConverterEnabled,
-                    onSubmit = { s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSpooned, k180, k90, cw90, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd, bSAftLen, bSFwdLen, bOdAft, bOdFwd ->
+                    onSubmit = { s, l, d, ref, kwW, kwD, kwL, kwO, kwEnd, kwSpooned, k180, k90, cw90, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd, bSAftLen, bSFwdLen, bOdAft, bOdFwd ->
                         addBodyOpen = false
-                        onAddBody(s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSpooned, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd, bSAftLen, bSFwdLen, bOdAft, bOdFwd)
+                        onAddBody(s, l, d, ref, kwW, kwD, kwL, kwO, kwEnd, kwSpooned, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd, bSAftLen, bSFwdLen, bOdAft, bOdFwd)
                         onSetKeyways180Apart(k180)
                         onSetKeyways90Apart(k90)
                         if (k90) onSetKeyways90Cw(cw90)

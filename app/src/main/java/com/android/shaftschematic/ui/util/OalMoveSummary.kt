@@ -13,7 +13,7 @@ private const val OAL_MOVE_NAMED_MAX = 2
 /**
  * What an OAL commit moved, as the editor's snackbar line — or null when it moved nothing.
  *
- * `withNewOal` keeps every FWD-measured taper, liner and coupler bolt row the same distance from
+ * `withNewOal` keeps every FWD-measured explicit body, taper, liner and coupler bolt row the same distance from
  * the FWD face, so a shorter shaft carries them aft with the end. That is the design, but it is
  * silent: an OAL correction moved a FWD liner into a mid-shaft taper and the user could not tell
  * why the two now overlapped (on-device report). This says so:
@@ -31,11 +31,13 @@ fun oalMoveSummary(before: ShaftSpec, after: ShaftSpec, unit: UnitSystem): Strin
     data class Moved(val id: String, val newStartMm: Float, val deltaMm: Float)
 
     val beforeStarts: Map<String, Float> =
-        before.tapers.associate { it.id to it.startFromAftMm } +
+        before.bodies.associate { it.id to it.startFromAftMm } +
+            before.tapers.associate { it.id to it.startFromAftMm } +
             before.liners.associate { it.id to it.startFromAftMm } +
             before.couplerBoltSlots.associate { it.id to it.startFromAftMm }
     val afterStarts: List<Pair<String, Float>> =
-        after.tapers.map { it.id to it.startFromAftMm } +
+        after.bodies.map { it.id to it.startFromAftMm } +
+            after.tapers.map { it.id to it.startFromAftMm } +
             after.liners.map { it.id to it.startFromAftMm } +
             after.couplerBoltSlots.map { it.id to it.startFromAftMm }
 

@@ -60,6 +60,12 @@ fun ShaftViewModel.addBodyAt(
     startMm: Float,
     lengthMm: Float,
     diaMm: Float,
+    /**
+     * Which shaft end the body's Start is measured from ("Measure From: AFT | FWD"). [startMm]
+     * is always the canonical AFT-origin start; this only decides what the card shows and
+     * whether an OAL change keeps the body's distance from the FWD face.
+     */
+    reference: LinerAuthoredReference = LinerAuthoredReference.AFT,
     keywayWidthMm: Float = 0f,
     keywayDepthMm: Float = 0f,
     keywayLengthMm: Float = 0f,
@@ -121,6 +127,7 @@ fun ShaftViewModel.addBodyAt(
                     blendFwdSealLenMm = max(0f, blendFwdSealLenMm),
                     blendAftToLinerOd = blendAftToLinerOd,
                     blendFwdToLinerOd = blendFwdToLinerOd,
+                    authoredReference = reference,
                 )
             ) + s.bodies
         ).withAutoDiaOverridesSurviving(before = s)
@@ -737,6 +744,27 @@ fun ShaftViewModel.updateLiner(
 }.also {
     if (index in specValue(target).liners.indices) {
         rememberLinerDefaults(lengthMm = lengthMm, odMm = odMm)
+    }
+}
+
+/**
+ * Sets explicit body [index]'s "Measure From" reference. A display/entry and OAL-anchor choice
+ * only: `startFromAftMm` never moves on a switch, and an unchanged reference is a no-op (no dirty
+ * mark, no undo step) — the [updateLinerAuthoredReference] posture.
+ */
+fun ShaftViewModel.updateBodyAuthoredReference(
+    index: Int,
+    reference: LinerAuthoredReference,
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) = updateSpec(target) { s ->
+    if (index !in s.bodies.indices) s else {
+        val old = s.bodies[index]
+        if (old.authoredReference == reference) return@updateSpec s
+        s.copy(
+            bodies = s.bodies.toMutableList().also { l ->
+                l[index] = old.copy(authoredReference = reference)
+            }
+        )
     }
 }
 

@@ -75,12 +75,12 @@
   <p>On a new drawing, the first time you accept an overall length the app asks for the <span class="ui">Shaft diameter</span>: “What is the bare-shaft diameter? Components you add will sit on a shaft of this size.” Type it in the drawing's unit (fractions are fine) and tap <span class="ui">Set</span>; every stretch of bare shaft takes that diameter. Tap <span class="ui">Skip</span> to leave it for later. The question comes once per drawing: it is not asked again after a Skip, and never when you open a saved job or start from a template. You can change the diameter at any time on a <span class="ui">Body (auto)</span> card (see <a href="#editor-bodies">Bodies and bare shaft</a>).</p>
 
   <h3 id="editor-oal-change">What moves when the OAL changes</h3>
-  <p>Each taper, liner and coupler bolt slot is measured from the end you chose for it with its AFT | FWD chips. When the OAL changes:</p>
+  <p>Each explicit body, taper, liner and coupler bolt slot is measured from the end you chose for it with its AFT | FWD chips. When the OAL changes:</p>
   <ul>
     <li>Components measured from <strong>AFT</strong> stay exactly where they are.</li>
     <li>Components measured from <strong>FWD</strong> keep their distance from the FWD end and move with it. A FWD taper set flush with the end stays flush.</li>
     <li>A thread excluded from the OAL stays hung off its end of the shaft.</li>
-    <li>Bare shaft fills whatever gap opens or closes. An explicit body keeps its own start and length, so after a big change check it against the new end.</li>
+    <li>Bare shaft fills whatever gap opens or closes. An explicit body keeps its length; measured from AFT it keeps its start, so after a big change check an AFT-measured body near the FWD end against the new end.</li>
   </ul>
   <p>When an OAL change moves anything, a message at the bottom of the screen says what moved, how far and which way, for example <span class="ui">OAL 234 3/16": moved FWD Liner 4 13/16" aft (measured from FWD)</span>. Up to two parts are named, then a count (<span class="ui">+1 more</span>). Tap <span class="ui">Undo</span> on the message to put the old length back with everything it moved. Nothing moved, no message.</p>
   <aside class="shop"><p>This is the way the print reads at the lathe: a FWD taper dimensioned from the FWD face is still dimensioned from the FWD face after the shaft is shortened. Only the overall length on the sheet changes.</p></aside>
@@ -90,7 +90,7 @@
   <table class="ref">
     <thead><tr><th>Choice</th><th>The Add dialog asks for</th></tr></thead>
     <tbody>
-      <tr><td><span class="ui">Body</span></td><td>Start, Length and Diameter; an optional component blend (Square or Blend) and seal areas at each end; an optional keyway behind the <span class="ui">Keyway</span> checkbox.</td></tr>
+      <tr><td><span class="ui">Body</span></td><td><span class="ui">Measure From:</span> AFT | FWD, start from that end, Length and Diameter; an optional component blend (Square or Blend) and seal areas at each end; an optional keyway behind the <span class="ui">Keyway</span> checkbox.</td></tr>
       <tr><td><span class="ui">Liner</span></td><td><span class="ui">Measure From:</span> AFT | FWD, start from that end, Length, Outer Ø; shoulders when they are switched on in Settings.</td></tr>
       <tr><td><span class="ui">Taper</span></td><td><span class="ui">Measure From:</span> AFT | FWD, start from that end, Length, S.E.T. (small end of taper) Ø, L.E.T. (large end of taper) Ø, rate (Auto or Manual), and an optional keyway.</td></tr>
       <tr><td><span class="ui">Thread</span></td><td>Start (or AFT | FWD end when the thread is not counted in the OAL), Imperial (TPI — threads per inch) or Metric (mm, a designation such as M20×2.5), diameter and pitch, Length, optional thread relief, and <span class="ui">Include thread in OAL</span>.</td></tr>
@@ -112,7 +112,7 @@
     <li><span class="ui">Add</span> stays greyed until the required values are entered: a start, a length above zero, and a diameter.</li>
     <li>A liner that would overlap another liner, or a thread that would overlap another thread, shows <span class="ui">Overlaps</span> and the other card's name (for example <span class="ui">Overlaps AFT Liner</span>) under its start field and cannot be added there.</li>
     <li>A liner, taper or thread that would overlap a different kind of component shows the same line in red under its start field, naming the part (for example <span class="ui">Overlaps FWD Taper</span>), whichever end you measure from. <span class="ui">Add</span> stays live and asks first (next point).</li>
-    <li>A liner or taper measured from FWD whose length would carry it past the AFT end shows <span class="ui">Runs past the AFT end of the shaft</span> and cannot be added there.</li>
+    <li>A body, liner or taper measured from FWD whose length would carry it past the AFT end shows <span class="ui">Runs past the AFT end of the shaft</span> and cannot be added there.</li>
     <li>A number a field needs above zero (a length, a diameter, a bolt spacing) shows <span class="ui">Must be &gt; 0</span> when it is 0, and a bolt <span class="ui">Count</span> that is not a whole number of 1 or more shows <span class="ui">Must be a whole number ≥ 1</span>. <span class="ui">Add</span> stays greyed until it is fixed.</li>
     <li>A thread placed between two components shows <span class="ui">Thread must be at a shaft end, not between components</span>.</li>
     <li>A liner, taper or thread that would overlap a different kind of component, or fall outside the shaft, opens <span class="ui">Add Anyway?</span> with the reasons listed, for example <span class="ui">Overlaps FWD Taper</span> or <span class="ui">Falls outside shaft span</span>. Tap <span class="ui">Add Anyway</span> to add it regardless, or <span class="ui">Cancel</span> to go back and fix the numbers. An overlap added this way blocks printing until it is cleared (see <a href="#editor-overlaps">Overlaps and the print gate</a>).</li>

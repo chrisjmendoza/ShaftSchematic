@@ -102,6 +102,13 @@ import java.util.UUID
  *   a body or taper across the face is followed as it always is.
  * @property blendFwdToLinerOd The same for the FWD face.
  * @property blendProfile How both faces ease. Drawing-only, like the blend lengths.
+ * @property authoredReference Which shaft end this body's Start is measured from — the
+ *   "Measure From: AFT | FWD" chips, the liner/taper field. It is a display/entry choice and an
+ *   OAL anchor: under FWD the card shows and accepts the distance from the FWD end, and
+ *   `ShaftSpec.withNewOal` keeps that distance when the overall length changes (on-device
+ *   request: an explicit body exists to sit at an exact point, often off the coupling end).
+ *   Canonical [startFromAftMm] never moves on a reference SWITCH. Default AFT, so every
+ *   document saved before the field decodes unchanged.
  */
 @Serializable
 data class Body(
@@ -129,6 +136,7 @@ data class Body(
     val blendAftToLinerOd: Boolean = false,
     val blendFwdToLinerOd: Boolean = false,
     val blendProfile: BlendProfile = BlendProfile.OGEE,
+    val authoredReference: LinerAuthoredReference = LinerAuthoredReference.AFT,
     /** Optional user-defined label for display (not used for geometry). */
     val label: String? = null,
 ) : Segment

@@ -183,7 +183,7 @@ class AddDialogDiscardGuardTest {
             AddBodyDialog(
                 unit = UnitSystem.INCHES,
                 spec = spec,
-                onSubmit = { _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _ -> submitted++ },
+                onSubmit = { _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _ -> submitted++ },
                 onCancel = onCancel,
             )
         }

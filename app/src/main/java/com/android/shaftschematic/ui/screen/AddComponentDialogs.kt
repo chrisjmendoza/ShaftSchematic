@@ -230,6 +230,7 @@ fun AddBodyDialog(
     /** Settings → Drawing → "Unit converter in Add dialogs": gates the title-row calculator icon. */
     dialogUnitConverterEnabled: Boolean = false,
     onSubmit: (startMm: Float, lengthMm: Float, diaMm: Float,
+               reference: LinerAuthoredReference,
                keywayWidthMm: Float, keywayDepthMm: Float, keywayLengthMm: Float,
                keywayOffsetFromEndMm: Float, keywayEnd: LinerAuthoredReference,
                keywaySpooned: Boolean, keyways180Apart: Boolean, keyways90Apart: Boolean,
@@ -244,7 +245,14 @@ fun AddBodyDialog(
     val effectiveStartMm = initialStartMm ?: d.startMm
     val effectiveLengthMm = initialLengthMm ?: 100f
 
-    val start = rememberSeededMm(effectiveStartMm, unit)
+    // "Measure From: AFT | FWD" — mirrors the explicit-body card (parity rule). Independent start
+    // strings so toggling the reference never overwrites what was typed; the FWD seed comes from
+    // the same seeder the liner dialog uses, from its own end.
+    var isFwd by remember { mutableStateOf(false) }
+    val defaultFwdStartMm = remember(spec, effectiveLengthMm) { addSeedFromFwdMm(spec, effectiveLengthMm) }
+    val startAft = rememberSeededMm(effectiveStartMm, unit)
+    val startFwd = rememberSeededMm(defaultFwdStartMm, unit)
+    val start = if (isFwd) startFwd else startAft
     val length = rememberSeededMm(effectiveLengthMm, unit)
     val dia = rememberSeededMm(max(1f, d.bodyDiaMm), unit)
 
@@ -285,9 +293,16 @@ fun AddBodyDialog(
     var clock90   by remember { mutableStateOf(spec.keyways90Apart) }
     var cw90      by remember { mutableStateOf(spec.keyways90Cw) }
 
-    val startMm = start.mm(unit) ?: -1f
+    val startEnteredOrNull = start.mm(unit)
+    val startEntered = startEnteredOrNull ?: -1f
     val lengthMm = length.mm(unit) ?: -1f
     val diaMm = dia.mm(unit) ?: -1f
+    // Physical start from AFT. A FWD-measured body that would reach past the AFT face is refused,
+    // never clamped onto it — a clamp would store a different FWD distance than the one typed.
+    val fwdStartPastAft = addDialogFwdStartPastAft(isFwd, startEntered, lengthMm, spec.overallLengthMm)
+    val startMm = addDialogPhysStartMm(isFwd, startEntered, lengthMm, spec.overallLengthMm)
+    val startError = addDialogNegativeStartError(startEnteredOrNull)
+        ?: if (fwdStartPastAft) ADD_PAST_AFT_END_MSG else null
 
     // Keyway values only count when the Keyway checkbox is on.
     // Null = the keyway follows the document unit, the default and the common case.
@@ -324,9 +339,19 @@ fun AddBodyDialog(
         },
         text = {
             Column(Modifier.padding(top = 4.dp).verticalScroll(scroll)) {
+                Row(
+                    Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Measure From:", style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    DirectionChip("AFT", selected = !isFwd, modifier = Modifier.testTag("add_body_ref_aft")) { isFwd = false }
+                    DirectionChip("FWD", selected =  isFwd, modifier = Modifier.testTag("add_body_ref_fwd")) { isFwd = true  }
+                }
                 CommitNumField(
-                    "Start (${abbr(unit)})", start.text,
-                    errorText = addDialogNegativeStartError(start.mm(unit)),
+                    "Start from ${if (isFwd) "FWD" else "AFT"} (${abbr(unit)})", start.text,
+                    errorText = startError,
                 ) { start.onText(it) }
                 Spacer(Modifier.height(8.dp))
                 CommitNumField("Length (${abbr(unit)})", length.text, requirePositive = true) { length.onText(it) }
@@ -497,6 +522,7 @@ fun AddBodyDialog(
             Button(enabled = ok, onClick = {
                 onSubmit(
                     startMm, lengthMm, diaMm,
+                    if (isFwd) LinerAuthoredReference.FWD else LinerAuthoredReference.AFT,
                     kwW, kwD, kwL, kwO,
                     if (kwFwd) LinerAuthoredReference.FWD else LinerAuthoredReference.AFT,
                     kwEnabled && kwSpooned && !isCaptured,

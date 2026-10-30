@@ -34,6 +34,7 @@ import com.android.shaftschematic.model.autoBlendFor
 import com.android.shaftschematic.model.hasAnyKeywayValue
 import com.android.shaftschematic.model.hasKeyway
 import com.android.shaftschematic.model.suggestedBodyKeywayEnd
+import com.android.shaftschematic.ui.input.bodyPhysStartForNewLength
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
@@ -42,6 +43,7 @@ import com.android.shaftschematic.ui.resolved.effectiveBodyDimensionRail
 import com.android.shaftschematic.ui.util.bodyWarningMessages
 import com.android.shaftschematic.ui.util.positiveDiaErrorMm
 import com.android.shaftschematic.ui.util.positiveLengthErrorMm
+import com.android.shaftschematic.ui.util.startOverlapErrorMm
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.toMmOrNull
 import com.android.shaftschematic.util.UnitSystem
@@ -56,7 +58,10 @@ import com.android.shaftschematic.util.UnitSystem
  * An AUTO span (`ResolvedComponentSource.AUTO`) shows derived Start/Length read-only with an
  * editable Ø — committed to "This section" (a per-section override) or "All auto sections" (the
  * shaft-wide bare-shaft Ø) through a scope dialog whenever [autoSectionCount] > 1 — and the
- * "Explicit body" checkbox that promotes it; an explicit body shows the editable Start/Length/Ø, the component blends and seal areas, and the keyway
+ * "Explicit body" checkbox that promotes it; an explicit body shows the "Measure From: AFT | FWD"
+ * chips (the liner card's row — the Start field shows and accepts the distance from the chosen
+ * end, a switch never moves the body, and a FWD body keeps its FWD distance through an OAL change),
+ * the editable Start/Length/Ø, the component blends and seal areas, and the keyway
  * section. That section is gated by the shared "Keyway" checkbox ([KeywayGateRow]), seeded open
  * whenever any of W/D/L is typed; unticking it with values present confirms through
  * [RemoveKeywayConfirmDialog] before clearing them. Inside the gate: KW from AFT | FWD, the keyway
@@ -68,8 +73,9 @@ import com.android.shaftschematic.util.UnitSystem
  * "Prints in: in | mm" chip are the documented card-only carve-outs — each changes only how an already-drawn body prints and
  * is reached for after looking at a printed sheet.
  *
- * [f1] and [startValidator] are supplied by [ComponentPagerCard] because the thread card shares
- * them; [startValidator] closes over the spec and document unit that validate an overlap.
+ * [f1] is supplied by [ComponentPagerCard] because the thread card shares it. The Start field
+ * validates the PHYSICAL start it converts to (`startOverlapErrorMm`, the liner card's posture) —
+ * for a body that is the `≥ 0` gate only, since bodies are collision-exempt.
  */
 @Composable
 internal fun BodyPagerCard(
@@ -84,7 +90,6 @@ internal fun BodyPagerCard(
     componentShadeDefaults: ComponentShadeDefaults = ComponentShadeDefaults(),
     bodyTitleById: Map<String, String>,
     f1: (Float) -> String,
-    startValidator: (String, ComponentKind, Float) -> (String) -> String?,
     onAddBody: (Float, Float, Float) -> Unit,
     onSetAutoSectionDia: (spanStartMm: Float, spanEndMm: Float, diaMm: Float) -> Unit,
     onSetAllAutoSectionsDia: (diaMm: Float) -> Unit,
@@ -93,6 +98,8 @@ internal fun BodyPagerCard(
     onSetAutoBlend: (spanStartMm: Float, spanEndMm: Float, end: LinerAuthoredReference, lengthMm: Float, profile: BlendProfile, seal: Boolean, sealLenMm: Float, toLinerOd: Boolean) -> Unit,
     onSetShowAutoBodyDia: (Boolean) -> Unit,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
+    /** Sets an explicit body's "Measure From" reference — never moves its stored start. */
+    onUpdateBodyReference: (Int, LinerAuthoredReference) -> Unit,
     onUpdateBodyShowDia: (Int, Boolean) -> Unit,
     onUpdateBodyShowLabel: (Int, Boolean) -> Unit,
     onUpdateBodyShade: (Int, Boolean) -> Unit = { _, _ -> },
@@ -366,6 +373,12 @@ internal fun BodyPagerCard(
     val idx = explicitIndex ?: return
     val b   = spec.bodies.getOrNull(idx) ?: return
     val computedBodyTitle = bodyTitleById[b.id] ?: "Body"
+    val isFwdRef = b.authoredReference == LinerAuthoredReference.FWD
+    val authoredStartMm = if (isFwdRef) {
+        spec.overallLengthMm - b.startFromAftMm - b.lengthMm
+    } else {
+        b.startFromAftMm
+    }
     var showDemoteDialog by remember(b.id) { mutableStateOf(false) }
     ComponentCard(
         title = computedBodyTitle,
@@ -429,18 +442,53 @@ internal fun BodyPagerCard(
                 }
             )
         }
+        // AFT / FWD reference toggle — the liner card's row. A switch changes what the Start
+        // field shows and what an OAL change keeps; the stored start never moves.
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Measure From:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            val selectedColors = FilterChipDefaults.filterChipColors(
+                selectedContainerColor = Color.Black, selectedLabelColor = Color.White,
+                containerColor = Color.Transparent, labelColor = MaterialTheme.colorScheme.onSurface
+            )
+            FilterChip(selected = !isFwdRef, onClick = { onUpdateBodyReference(idx, LinerAuthoredReference.AFT) },
+                label = { Text("AFT") }, colors = selectedColors,
+                border = if (!isFwdRef) BorderStroke(1.dp, Color.Black) else null,
+                modifier = Modifier.testTag("body_ref_aft"))
+            FilterChip(selected = isFwdRef, onClick = { onUpdateBodyReference(idx, LinerAuthoredReference.FWD) },
+                label = { Text("FWD") }, colors = selectedColors,
+                border = if (isFwdRef) BorderStroke(1.dp, Color.Black) else null,
+                modifier = Modifier.testTag("body_ref_fwd"))
+        }
         FieldPair(
             first = {
-                CommitNum("Start (${abbr(unit)})", disp(b.startFromAftMm, unit), validator = startValidator(b.id, ComponentKind.BODY, b.lengthMm)) { s ->
-                    toMmOrNull(s, unit)?.let { onUpdateBody(idx, it, b.lengthMm, b.diaMm) }
+                CommitNum(
+                    label = "Start from ${if (isFwdRef) "FWD" else "AFT"} (${abbr(unit)})",
+                    initialDisplay = disp(authoredStartMm, unit),
+                    validator = { raw ->
+                        val authoredMm = toMmOrNull(raw, unit) ?: return@CommitNum "Enter a number"
+                        val physStart = if (isFwdRef) spec.overallLengthMm - authoredMm - b.lengthMm else authoredMm
+                        startOverlapErrorMm(spec, b.id, ComponentKind.BODY, b.lengthMm, physStart)
+                    }
+                ) { s ->
+                    val authoredMm = toMmOrNull(s, unit) ?: return@CommitNum
+                    val physStart = if (isFwdRef) spec.overallLengthMm - authoredMm - b.lengthMm else authoredMm
+                    onUpdateBody(idx, physStart, b.lengthMm, b.diaMm)
                 }
             },
             second = {
+                // A FWD-measured body keeps its FWD end and grows AFT-ward; ONE derivation,
+                // bodyPhysStartForNewLength, places the new span.
                 CommitNum(
                     "Length (${abbr(unit)})", disp(b.lengthMm, unit),
                     validator = { raw -> positiveLengthErrorMm(toMmOrNull(raw, unit)) },
                 ) { s ->
-                    toMmOrNull(s, unit)?.let { onUpdateBody(idx, b.startFromAftMm, it, b.diaMm) }
+                    toMmOrNull(s, unit)?.let {
+                        onUpdateBody(idx, bodyPhysStartForNewLength(b, it, spec.overallLengthMm), it, b.diaMm)
+                    }
                 }
             },
         )

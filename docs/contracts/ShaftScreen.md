@@ -4,7 +4,8 @@ ShaftScreen Contract
 Layer: UI → Screens  
 Purpose: Present the shaft editor surface and bind ViewModel state to user controls.
 
-Version: v0.25 (2026-10-29 — the thread card's "Include thread in OAL" switch asks whether the
+Version: v0.26 (2026-10-29 — the explicit-body card and Add Body carry "Measure From: AFT | FWD".
+v0.25 2026-10-29 — the thread card's "Include thread in OAL" switch asks whether the
 OAL follows. v0.24 2026-10-29 — the EXPANDED drawing band grows to its side column under the cap
 and yields height to the keyboard; the editor snackbar clears the navigation bar; the delete
 snackbar's Undo returns the carousel to the restored card. v0.23
@@ -433,6 +434,14 @@ Future Enhancements
 
 Change Log
 -----------
+**v0.26 (2026-10-29)**
+- **Explicit bodies carry "Measure From: AFT | FWD"** (on-device request: an explicit body exists
+  to sit at an exact point). The chips (`body_ref_aft` / `body_ref_fwd`) sit under the "Explicit
+  body" checkbox and above Start/Length; Start reads "Start from AFT|FWD" and commits the physical
+  start; a Length commit under FWD keeps the FWD end (`bodyPhysStartForNewLength`). Wired
+  `onUpdateBodyReference → updateBodyAuthoredReference`; `onAddBody` takes the reference after Ø.
+  `AddBodyDialog` mirrors the row (parity). The auto-body card carries none.
+
 **v0.25 (2026-10-29)**
 - **"Include thread in OAL" asks whether the OAL follows** (on-device report: an OAL measured over
   the FWD thread, the thread marked out of it). Shorten/Lengthen OAL, Keep OAL or Cancel; an
