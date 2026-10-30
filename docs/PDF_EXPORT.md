@@ -1321,10 +1321,11 @@ the height slider on every other preview: the route passes a `PreviewTuning` and
    body is drawn as two shortened stubs, each capped with an S-curve "round-stock break" symbol
    (`pdf/BreakSymbol.kt`, `drawBreakEdge()`) instead of a straight end cap, so the drawing reads as
    a foreshortened cylindrical bar rather than a literal-length rectangle. The pair's gap and
-   amplitude come from `breakPairLayout` (same file, unit-tested): the classic gap (≤ 20 pt,
-   ≤ ¼ of the run) widens up to half the run when the glyph needs the room, then the amplitude
-   flattens, so the two edges' curves always keep ≥ 1 pt of daylight and never overlap
-   (on-device report). **The footer prints no compression note.** The S-break pair is itself the
+   amplitude come from `breakPairLayout` (same file, unit-tested): the gap is exactly what the
+   full glyph needs for `BREAK_PAIR_DAYLIGHT_PT` (3 pt) of paper between the curves — sized off
+   the glyph's reach, so it is tight at every shaft height (a fixed 20 pt gap read as a missing
+   piece, on-device report) — capped at half the run, then the amplitude flattens, so the two
+   edges' curves always keep ≥ 1 pt of daylight and never overlap (on-device report). **The footer prints no compression note.** The S-break pair is itself the
    drawing's statement that the run is foreshortened, so a line of prose saying so again is
    redundant (on-device direction) — and it cost a footer row on exactly the long shafts with the
    least room to spare. Only bodies are compressed this way — tapers/threads/liners are never

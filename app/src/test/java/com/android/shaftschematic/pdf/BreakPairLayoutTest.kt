@@ -4,24 +4,20 @@ import com.android.shaftschematic.geom.BREAK_PAIR_REACH_FRAC
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import kotlin.math.min
 import kotlin.math.sqrt
 
 /**
  * breakPairLayout — the paired S-break glyphs must never overlap (on-device report:
- * the two edges crossed on a tall shaft's narrow compressed runs). Pins: the clearance
- * invariant (gap − reach·amp − stroke ≥ the 1pt minimum), the classic gap surviving
- * untouched when it already clears, gap widening before amplitude flattening, the
+ * the two edges crossed on a tall shaft's narrow compressed runs), and must not stand
+ * further apart than the glyph needs (on-device report: a fixed 20 pt gap read as a
+ * missing piece). Pins: the clearance invariant (gap − reach·amp − stroke ≥ the 1pt
+ * minimum), [BREAK_PAIR_DAYLIGHT_PT] of daylight exactly wherever the run has room, the
  * half-run gap ceiling, and the amplitude clamp on runs too narrow for the full glyph.
  */
 class BreakPairLayoutTest {
 
-    private val classicCap = 20f // ZIGZAG_GAP_MAX_PT at every composer site
-
-    private fun classicGap(runLenPt: Float) = min(classicCap, 0.25f * runLenPt)
-
     private fun layout(runLenPt: Float, amp: Float, stroke: Float = 1f) =
-        breakPairLayout(runLenPt, amp, classicGap(runLenPt), stroke)
+        breakPairLayout(runLenPt, amp, stroke)
 
     /** The invariant itself: daylight between the pair's nearest curves. */
     private fun clearance(l: BreakPairLayout, stroke: Float) =
@@ -50,21 +46,21 @@ class BreakPairLayoutTest {
     }
 
     @Test
-    fun `small glyphs keep the classic gap untouched`() {
-        // A thin shaft's amplitude clears the classic gap easily — layout is identity.
-        val l = layout(200f, desiredAmp(10f))
-        assertEquals(classicGap(200f), l.gapPt, 1e-4f)
-        assertEquals(desiredAmp(10f), l.amplitudePt, 1e-4f)
+    fun `with room the pair keeps exactly the daylight at every shaft height`() {
+        for (r in listOf(10f, 25f, 40f, 54f)) {
+            val l = layout(500f, desiredAmp(r))
+            assertEquals("r=$r", BREAK_PAIR_DAYLIGHT_PT, clearance(l, 1f), 1e-3f)
+            assertEquals("full glyph r=$r", desiredAmp(r), l.amplitudePt, 1e-4f)
+        }
     }
 
     @Test
-    fun `tall shafts widen the gap before flattening the glyph`() {
-        // 1.5in-tall shaft (r=54, amp=32.4) on a long run: the needed gap exceeds the
-        // classic 20pt cap — the gap grows and the full amplitude survives.
-        val amp = desiredAmp(54f)
-        val l = layout(500f, amp)
-        assertTrue(l.gapPt > classicCap)
-        assertEquals(amp, l.amplitudePt, 1e-4f)
+    fun `the on-device 9 inch shaft's gap tightens from the old 20 pt`() {
+        // The report's sheet drew the shaft ~51 pt tall (r ≈ 25.5): the old fixed 20 pt gap
+        // left ~8 pt of paper between the curves.
+        val l = layout(300f, desiredAmp(25.5f))
+        assertTrue("gap=${l.gapPt}", l.gapPt < 16f)
+        assertTrue(clearance(l, 1f) < 8f)
     }
 
     @Test
@@ -78,7 +74,7 @@ class BreakPairLayoutTest {
 
     @Test
     fun `amplitude never goes negative on degenerate runs`() {
-        val l = breakPairLayout(runLenPt = 4f, desiredAmplitudePt = 30f, classicGapPt = 1f, strokeWidthPt = 2f)
+        val l = breakPairLayout(runLenPt = 4f, desiredAmplitudePt = 30f, strokeWidthPt = 2f)
         assertTrue(l.amplitudePt >= 0f)
     }
 

@@ -75,7 +75,6 @@ class SimpleProfileBreakFillTest {
     private val pair = breakPairLayout(
         runLenPt = 400f,
         desiredAmplitudePt = 40f * 0.6f,
-        classicGapPt = kotlin.math.min(ZIGZAG_GAP_MAX_PT, 0.25f * 400f),
         strokeWidthPt = strokePt,
     )
     private val leftEnd = 200f - pair.gapPt / 2f

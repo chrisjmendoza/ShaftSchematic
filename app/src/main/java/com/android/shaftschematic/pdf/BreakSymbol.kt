@@ -172,6 +172,14 @@ private const val EYE_SHADE_COLOR = 0x2E000000
 internal const val BREAK_PAIR_MIN_CLEAR_PT = 1f
 
 /**
+ * Daylight the pair keeps between its nearest curves wherever the run has room. The gap is
+ * sized off the glyph — its reach plus the stroke plus this — so it stays tight at every shaft
+ * height: a fixed 20 pt gap left ~8 pt of paper between the curves on a 9" shaft and read as
+ * a missing piece rather than a cut (on-device report).
+ */
+internal const val BREAK_PAIR_DAYLIGHT_PT = 3f
+
+/**
  * True when a body run drawn [drawnPt] wide represents less than [minFracOfTrue] of its
  * true width ([trueLenMm] × [truePtPerMm]) — the compressed x mapping squeezed it far
  * enough that the S-break pair must mark the longer span. Mild foreshortening prints a
@@ -203,9 +211,6 @@ internal fun breakForCompression(
  * composer; a per-file copy invites tuning one sheet and missing the other three.
  */
 internal const val COMPRESS_TRIGGER_PT = 220f
-
-/** Classic central gap; [breakPairLayout] may widen it to keep the pair clear. */
-internal const val ZIGZAG_GAP_MAX_PT = 20f
 
 /** Minimum stub a break gap must leave at each end of the flat span it cuts. */
 internal const val BREAK_GAP_MIN_STUB_PT = 6f
@@ -257,19 +262,18 @@ internal data class BreakPairLayout(val gapPt: Float, val amplitudePt: Float)
  * between its nearest curves; drawn closer, the glyphs cross (on-device report:
  * overlapping S-breaks on a tall shaft's narrow compressed runs).
  *
- * The classic gap widens when the full amplitude needs more room — up to half the run,
- * so each stub keeps at least a quarter — and the amplitude then clamps to whatever the
- * final gap can host with [BREAK_PAIR_MIN_CLEAR_PT] of daylight: on a run too narrow to
- * host the full glyph, the S flattens slightly rather than ever overlap.
+ * The gap is exactly what the full glyph needs for [BREAK_PAIR_DAYLIGHT_PT] of daylight —
+ * capped at half the run, so each stub keeps at least a quarter — and the amplitude then
+ * clamps to whatever the final gap can host with [BREAK_PAIR_MIN_CLEAR_PT] of daylight: on a
+ * run too narrow to host the full glyph, the S flattens slightly rather than ever overlap.
  */
 internal fun breakPairLayout(
     runLenPt: Float,
     desiredAmplitudePt: Float,
-    classicGapPt: Float,
     strokeWidthPt: Float,
 ): BreakPairLayout {
-    val neededGap = desiredAmplitudePt * BREAK_PAIR_REACH_FRAC + strokeWidthPt + BREAK_PAIR_MIN_CLEAR_PT
-    val gap = maxOf(classicGapPt, minOf(neededGap, runLenPt * 0.5f))
+    val neededGap = desiredAmplitudePt * BREAK_PAIR_REACH_FRAC + strokeWidthPt + BREAK_PAIR_DAYLIGHT_PT
+    val gap = minOf(neededGap, runLenPt * 0.5f)
     val amp = minOf(
         desiredAmplitudePt,
         ((gap - strokeWidthPt - BREAK_PAIR_MIN_CLEAR_PT) / BREAK_PAIR_REACH_FRAC).coerceAtLeast(0f),

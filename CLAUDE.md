@@ -309,9 +309,10 @@ on rails/callouts, so proportion wins); the runout/consolidated sheet keeps the
 writable `PROFILE_MIN_*` floors.
 Body runs compressed below a threshold fraction of their true drawn width
 (`breakForCompression`, `pdf/BreakSymbol.kt` — milder foreshortening prints a plain
-outline; bodies ONLY) draw the S-break pair laid out by `breakPairLayout` — gap widens up to half
-the run, then amplitude flattens, so the two edges always keep ≥ 1 pt of daylight and
-never overlap. The threshold is **user-set** — `PdfPrefs.sBreakThresholdFrac`, Settings →
+outline; bodies ONLY) draw the S-break pair laid out by `breakPairLayout` — the gap is sized off the glyph
+(its reach + stroke + `BREAK_PAIR_DAYLIGHT_PT`, 3 pt of paper between the curves; never a fixed
+gap — a fixed 20 pt read as a missing piece, on-device report), capped at half the run, then
+amplitude flattens, so the two edges always keep ≥ 1 pt of daylight and never overlap. The threshold is **user-set** — `PdfPrefs.sBreakThresholdFrac`, Settings →
 Drawing → "Body S-break", default **half** (`PDF_SBREAK_THRESHOLD_DEFAULT`), 5% steps,
 **Never** (0) at the low end = compression stays entirely hidden, 100% = break on any
 foreshortening ("why lock it in one way when different users may want different outputs"
