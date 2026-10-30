@@ -97,6 +97,7 @@ fun ShaftEditorRoute(
     // Same posture as the keyway calculator — a read-only tool, not a document surface.
     var taperCalcOpen by rememberSaveable { mutableStateOf(false) }
     var converterOpen by rememberSaveable { mutableStateOf(false) }
+    var fractionChartOpen by rememberSaveable { mutableStateOf(false) }
 
     val spec by vm.spec.collectAsState()
     val unit by vm.unit.collectAsState()
@@ -218,6 +219,7 @@ fun ShaftEditorRoute(
                         onKeywayCalculator = { keywayCalcOpen = true },
                         onTaperCalculator = { taperCalcOpen = true },
                         onUnitConverter = { converterOpen = true },
+                        onFractionChart = { fractionChartOpen = true },
                         onHelp = onOpenHelp,
                         // Nothing to close — the panel stays put and the selection moves.
                     )
@@ -248,6 +250,7 @@ fun ShaftEditorRoute(
                 onKeywayCalculator = { keywayCalcOpen = true },
                 onTaperCalculator = { taperCalcOpen = true },
                 onUnitConverter = { converterOpen = true },
+                onFractionChart = { fractionChartOpen = true },
                 onHelp = onOpenHelp,
             )
         }
@@ -271,6 +274,10 @@ fun ShaftEditorRoute(
                 defaultUnit = unit,
                 onDismiss = { converterOpen = false },
             )
+        }
+
+        if (fractionChartOpen) {
+            FractionChartDialog(onDismiss = { fractionChartOpen = false })
         }
     }
 }

@@ -70,7 +70,7 @@ data class TaperCalcFieldState(
 )
 
 /**
- * The whole dialog's display state. [message] is the one line under the Calculate button;
+ * The whole dialog's display state. [message] is the one line under the fields;
  * [messageIsError] colours it. [isSolved] is true whenever a full taper exists on screen.
  */
 data class TaperCalcPresentation(

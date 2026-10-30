@@ -267,6 +267,7 @@ by definition, so there is nothing to toggle. This is intentional and not a pari
 ### AddThreadDialog
 | Field / control | Condition |
 |-----------------|-----------|
+| "Include thread in OAL" switch | Always — the card's label, verbatim (the dialog once said "Count in OAL"; one control, one name on both surfaces). FIRST row, as on the card: it decides whether the next row is Start or the Thread end chips (on-device report) |
 | Start | Only when `countInOal = true` |
 | Thread end: AFT \| FWD chips | Only when `countInOal = false` |
 | Thread spec mode: Imperial (TPI) \| Metric (mm) chips | Always |
@@ -278,7 +279,6 @@ by definition, so there is nothing to toggle. This is intentional and not a pari
 | Relief length | Only while the relief switch is on |
 | Relief Ø | Only while the relief switch is on |
 | Relief at: AFT \| FWD chips (`add_thread_relief_end`) | Only while the relief switch is on |
-| "Include thread in OAL" switch | Always — the card's label, verbatim (the dialog once said "Count in OAL"; one control, one name on both surfaces) |
 
 The Start field is **replaced** by the AFT/FWD chips when excluded from OAL — it is
 not hidden in addition to them. Matches `ThreadPagerCard.kt`,
