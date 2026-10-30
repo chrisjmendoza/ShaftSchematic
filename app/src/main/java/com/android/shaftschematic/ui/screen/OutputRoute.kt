@@ -62,6 +62,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.android.shaftschematic.settings.WearAreaStyle
 import com.android.shaftschematic.geom.effectiveWearTraceDepthFrac
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
@@ -148,8 +149,8 @@ private data class ConsolidatedRenderInputs(
     val shadedBodies: Boolean,
     val shadedTapers: Boolean,
     val shadedLiners: Boolean,
-    /** `PdfPrefs.wearAreasShaded` — rides the `PdfPrefs` snapshot to the composer. Key only. */
-    val wearAreasShaded: Boolean,
+    /** `PdfPrefs.wearAreaStyle` — rides the `PdfPrefs` snapshot to the composer. Key only. */
+    val wearAreaStyle: WearAreaStyle,
     val sBreakThresholdFrac: Float,
     val shadeExplicitBodiesOnly: Boolean,
     /** Bubble size and drop — keys only; both travel inside the `PdfPrefs` snapshot. */
@@ -231,7 +232,7 @@ fun OutputRoute(
     val pdfShadedBodies    by vm.pdfShadedBodies.collectAsState()
     val pdfShadedTapers    by vm.pdfShadedTapers.collectAsState()
     val pdfShadedLiners    by vm.pdfShadedLiners.collectAsState()
-    val pdfWearAreasShaded by vm.pdfWearAreasShaded.collectAsState()
+    val pdfWearAreaStyle by vm.pdfWearAreaStyle.collectAsState()
     val curveLoHeightIn    by vm.pdfCurveLoHeightIn.collectAsState()
     val curveHiHeightIn    by vm.pdfCurveHiHeightIn.collectAsState()
     val pdfSBreakThresholdFrac by vm.pdfSBreakThresholdFrac.collectAsState()
@@ -570,7 +571,7 @@ fun OutputRoute(
                 shadedBodies = pdfShadedBodies,
                 shadedTapers = pdfShadedTapers,
                 shadedLiners = pdfShadedLiners,
-                wearAreasShaded = pdfWearAreasShaded,
+                wearAreaStyle = pdfWearAreaStyle,
                 sBreakThresholdFrac = tuning.sBreakFrac ?: pdfSBreakThresholdFrac,
                 shadeExplicitBodiesOnly = pdfShadeExplicitBodiesOnly,
                 runoutBubbleScale = pdfRunoutBubbleScale,
@@ -1021,8 +1022,8 @@ fun OutputRoute(
                     shadeExplicitBodiesOnly = pdfShadeExplicitBodiesOnly,
                     vm = vm,
                     linerShadeLocked = linerShadeLocked,
-                    showWearAreasShadedRow = true,
-                    wearAreasShaded = pdfWearAreasShaded,
+                    showWearAreaStyleRow = true,
+                    wearAreaStyle = pdfWearAreaStyle,
                     showCouplingFaceRow = true,
                     couplingFaceOn = runoutConfig.showCouplingFace,
                     showDyePenRow = true,

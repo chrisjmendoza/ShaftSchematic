@@ -175,7 +175,7 @@ fun SettingsRoute(
     val pdfOutputFont by vm.pdfOutputFont.collectAsState()
     val pdfDualUnitLayout by vm.pdfDualUnitLayout.collectAsState()
     val pdfShowUnitsNote by vm.pdfShowUnitsNote.collectAsState()
-    val pdfWearAreasShaded by vm.pdfWearAreasShaded.collectAsState()
+    val pdfWearAreaStyle by vm.pdfWearAreaStyle.collectAsState()
 
     // App-wide defaults for mixed per-component units + inline dual-unit display. Not
     // document state (no ViewModel StateFlow), so this route reads/writes SettingsStore
@@ -422,9 +422,9 @@ fun SettingsRoute(
 
                     // The consolidated sheet's wear-area look — last of the wear rows. The Output
                     // tab's PDF options sheet carries the same row for the same one PdfPrefs value.
-                    WearAreasShadedRow(
-                        checked = pdfWearAreasShaded,
-                        onCheckedChange = { vm.setPdfWearAreasShaded(it) },
+                    WearAreaStyleChips(
+                        style = pdfWearAreaStyle,
+                        onCommit = { vm.setPdfWearAreaStyle(it) },
                     )
 
                     // Same picker both PDF options sheets carry — one PdfPrefs.arrowSizePt.

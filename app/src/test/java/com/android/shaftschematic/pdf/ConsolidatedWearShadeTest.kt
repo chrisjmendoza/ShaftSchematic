@@ -12,8 +12,10 @@ import com.android.shaftschematic.model.WearRecord
 import com.android.shaftschematic.model.WearSpot
 import com.android.shaftschematic.model.WornSection
 import com.android.shaftschematic.settings.DrawingProfile
+import com.android.shaftschematic.settings.decodeDrawingProfiles
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.settings.RunoutConfig
+import com.android.shaftschematic.settings.WearAreaStyle
 import com.android.shaftschematic.ui.resolved.resolveComponents
 import com.android.shaftschematic.util.PDF_PAGE_HEIGHT_PT
 import com.android.shaftschematic.util.PDF_PAGE_WIDTH_PT
@@ -30,11 +32,11 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * "Shade wear areas on the shaft drawing" (`PdfPrefs.wearAreasShaded`, default ON — on-device
- * ruling): on the consolidated sheet each wear area is ONE light grey fill, and an in-profile Ø
- * value's knockout is re-shaded with that grey wherever it overlaps the band — no white box shows,
- * yet a line under the digits is still knocked out. OFF keeps the vertical strokes and plain white
- * halos.
+ * "Wear areas on the shaft drawing" (`PdfPrefs.wearAreaStyle`, default Grey — on-device ruling):
+ * on the consolidated sheet each wear area is ONE light grey fill, vertical strokes, both (the
+ * strokes over the grey — the grey alone read on-device as a shaded liner), or nothing. Wherever
+ * the grey is drawn, an in-profile Ø value's knockout is re-shaded with it — no white box shows,
+ * yet a line under the digits is still knocked out; without the grey the halos stay white.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -60,12 +62,12 @@ class ConsolidatedWearShadeTest {
     /** One reading + two worn-section values, each over a wear area. */
     private val inProfileValueCount = 3
 
-    private fun compose(shaded: Boolean): SheetTextRecorder {
+    private fun compose(style: WearAreaStyle): SheetTextRecorder {
         val w = PDF_PAGE_WIDTH_PT.toFloat(); val h = PDF_PAGE_HEIGHT_PT.toFloat()
         val c = SheetTextRecorder(w, h)
         composeRunoutPdfOnCanvas(
             c, w, h, spec, config = RunoutConfig(), project = ProjectInfo(), unit = UnitSystem.INCHES,
-            pdfPrefs = PdfPrefs(wearAreasShaded = shaded), resolvedComponents = resolveComponents(spec),
+            pdfPrefs = PdfPrefs(wearAreaStyle = style), resolvedComponents = resolveComponents(spec),
             wearRecord = wear, consolidated = true, includeBubbles = false, includeWearInfo = true,
         )
         return c
@@ -84,23 +86,37 @@ class ConsolidatedWearShadeTest {
 
     private fun abs(v: Float) = kotlin.math.abs(v)
 
-    @Test fun `the pref is on by default and the profile captures and restores it`() {
-        assertTrue(PdfPrefs().wearAreasShaded)
-        assertTrue("Restore Drawing defaults turns it back on", DrawingProfile().toPdfPrefs().wearAreasShaded)
-        assertFalse(DrawingProfile.of(PdfPrefs(wearAreasShaded = false), lineThicknessScale = 1f).toPdfPrefs().wearAreasShaded)
+    @Test fun `the pref is grey by default and the profile captures and restores it`() {
+        assertEquals(WearAreaStyle.SHADE, PdfPrefs().wearAreaStyle)
+        assertEquals("Restore Drawing defaults puts it back", WearAreaStyle.SHADE, DrawingProfile().toPdfPrefs().wearAreaStyle)
+        WearAreaStyle.entries.forEach { style ->
+            assertEquals(style, DrawingProfile.of(PdfPrefs(wearAreaStyle = style), lineThicknessScale = 1f).toPdfPrefs().wearAreaStyle)
+        }
+    }
+
+    @Test fun `a profile saved by the old on-off switch keeps meaning what it printed`() {
+        val profiles = decodeDrawingProfiles("""{"On":{"wearAreasShaded":true},"Off":{"wearAreasShaded":false}}""")
+        assertEquals(WearAreaStyle.SHADE, profiles.getValue("On").toPdfPrefs().wearAreaStyle)
+        assertEquals(WearAreaStyle.LINES, profiles.getValue("Off").toPdfPrefs().wearAreaStyle)
+    }
+
+    @Test fun `the chip order is None, Lines, Grey, Both`() {
+        assertEquals(listOf("None", "Lines", "Grey", "Both"), WearAreaStyle.entries.map { it.uiLabel() })
+        assertFalse(WearAreaStyle.NONE.fills || WearAreaStyle.NONE.strokes)
+        assertTrue(WearAreaStyle.BOTH.fills && WearAreaStyle.BOTH.strokes)
     }
 
     @Test fun `the setting round-trips through the settings store`() = runBlocking {
         val ctx = ApplicationProvider.getApplicationContext<Context>()
-        SettingsStore.setPdfWearAreasShaded(ctx, false)
-        assertFalse(SettingsStore.pdfWearAreasShadedFlow(ctx).first())
-        SettingsStore.setPdfWearAreasShaded(ctx, true)
-        assertTrue(SettingsStore.pdfWearAreasShadedFlow(ctx).first())
+        WearAreaStyle.entries.forEach { style ->
+            SettingsStore.setPdfWearAreaStyle(ctx, style)
+            assertEquals(style, SettingsStore.pdfWearAreaStyleFlow(ctx).first())
+        }
     }
 
-    @Test fun `shaded - one 10 percent fill per wear area, no strokes, every knockout re-shaded`() {
-        val on = compose(shaded = true)
-        val off = compose(shaded = false)
+    @Test fun `grey - one 10 percent fill per wear area, no strokes, every knockout re-shaded`() {
+        val on = compose(WearAreaStyle.SHADE)
+        val off = compose(WearAreaStyle.LINES)
         val shades = on.shadeFills()
         // The band fills are the full drawn liner height; the re-shades are clipped to a value's box.
         val bandHeight = shades.maxOf { it.rect.height() }
@@ -132,11 +148,28 @@ class ConsolidatedWearShadeTest {
         assertEquals(bands[0].rect.bottom, bands[1].rect.bottom, 1e-3f)
     }
 
-    @Test fun `stroked - today's vertical strokes and halos, no shade fill`() {
-        val off = compose(shaded = false)
+    @Test fun `lines - vertical strokes and halos, no shade fill`() {
+        val off = compose(WearAreaStyle.LINES)
         assertEquals(0, off.shadeFills().size)
         assertTrue("vertical band strokes", off.bandStrokes() > 0)
         assertTrue("white value knockouts", off.whiteFills().isNotEmpty())
+    }
+
+    @Test fun `both - the strokes over the grey, knockouts re-shaded`() {
+        val both = compose(WearAreaStyle.BOTH)
+        val grey = compose(WearAreaStyle.SHADE)
+        val lines = compose(WearAreaStyle.LINES)
+        assertEquals("the grey's fills and re-shades", grey.shadeFills().size, both.shadeFills().size)
+        assertEquals("the lines' strokes", lines.bandStrokes(), both.bandStrokes())
+        assertTrue(both.bandStrokes() > 0)
+    }
+
+    @Test fun `none - no wear marks, values still print on white halos`() {
+        val none = compose(WearAreaStyle.NONE)
+        assertEquals(0, none.shadeFills().size)
+        assertEquals(0, none.bandStrokes())
+        assertTrue("white value knockouts", none.whiteFills().isNotEmpty())
+        assertTrue(("Ø" + formatDiaWithUnit(10.95 * inch, UnitSystem.INCHES)) in none.strings)
     }
 
     @Test fun `with no wear areas the shade draws nothing`() {
@@ -144,7 +177,7 @@ class ConsolidatedWearShadeTest {
         val c = SheetTextRecorder(w, h)
         composeRunoutPdfOnCanvas(
             c, w, h, spec, config = RunoutConfig(), project = ProjectInfo(), unit = UnitSystem.INCHES,
-            pdfPrefs = PdfPrefs(wearAreasShaded = true), resolvedComponents = resolveComponents(spec),
+            pdfPrefs = PdfPrefs(wearAreaStyle = WearAreaStyle.BOTH), resolvedComponents = resolveComponents(spec),
             wearRecord = wear.copy(spots = emptyList()), consolidated = true, includeBubbles = false, includeWearInfo = true,
         )
         assertEquals(0, c.shadeFills().size)

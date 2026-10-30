@@ -16,6 +16,44 @@ import com.android.shaftschematic.util.FractionStyle
 import com.android.shaftschematic.util.OutputFont
 
 /**
+ * How a wear area draws on the consolidated sheet — `PdfPrefs.wearAreaStyle`.
+ *
+ * The grey alone read on-device as a shaded LINER rather than wear, so the shop's vertical lines
+ * are offered on their own and over the grey (on-device request: "none, lines only, grey only,
+ * both"). Where the grey is drawn, an in-profile value's knockout is re-shaded with it; where it
+ * is not, the knockout stays white.
+ */
+enum class WearAreaStyle {
+    NONE,
+    LINES,
+    SHADE,
+    BOTH;
+
+    /** The light grey fill is drawn. */
+    val fills: Boolean get() = this == SHADE || this == BOTH
+
+    /** The vertical lines are drawn. */
+    val strokes: Boolean get() = this == LINES || this == BOTH
+
+    fun uiLabel(): String = when (this) {
+        NONE -> "None"
+        LINES -> "Lines"
+        SHADE -> "Grey"
+        BOTH -> "Both"
+    }
+
+    companion object {
+        /** The shipped look (on-device ruling: the grey), and [fromName]'s fallback. */
+        val Default: WearAreaStyle = SHADE
+
+        fun fromName(raw: String?): WearAreaStyle = entries.firstOrNull { it.name == raw } ?: Default
+
+        /** The style a store or profile written by the old on/off switch meant. */
+        fun fromLegacyShaded(shaded: Boolean): WearAreaStyle = if (shaded) SHADE else LINES
+    }
+}
+
+/**
  * Controls how liner dimension rails are anchored in the PDF export.
  */
 enum class PdfTieringMode {
@@ -277,15 +315,13 @@ data class PdfPrefs(
      */
     val showUnitsNote: Boolean = false,
     /**
-     * Draw each wear area on the CONSOLIDATED sheet as a light grey fill (≈10%,
-     * `CONSOLIDATED_WEAR_SHADE_ALPHA`) instead of vertical strokes, with the in-profile Ø values
-     * printed straight on it — no knockout halo. Settings → Drawing → "Shade wear areas on the
-     * shaft drawing" and the Output tab's PDF options sheet (remote control for this one value).
-     * Default ON (on-device ruling: the shade is the preferred look); OFF prints today's strokes
-     * and halos byte-identically. The wear document keeps its own band fill
-     * ([wearBandShadeFrac]) and is not affected.
+     * How each wear area draws on the CONSOLIDATED sheet ([WearAreaStyle]): nothing, vertical
+     * lines, a light grey fill (≈10%, `CONSOLIDATED_WEAR_SHADE_ALPHA`), or both. Settings →
+     * Drawing → "Wear areas on the shaft drawing" and the Output tab's PDF options sheet (remote
+     * control for this one value). Default [WearAreaStyle.SHADE]. The wear document keeps its own
+     * band fill ([wearBandShadeFrac]) and is not affected.
      */
-    val wearAreasShaded: Boolean = true,
+    val wearAreaStyle: WearAreaStyle = WearAreaStyle.Default,
     /**
      * Default worn-profile trace exaggeration (`geom/WearTraceMath.kt`): how deep a record's
      * deepest liner reading draws, as a fraction of the drawn radius. Settings → Drawing →

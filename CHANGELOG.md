@@ -8,6 +8,15 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-29
 
+### feat(pdf): wear areas print as None, Lines, Grey or Both
+
+- The consolidated sheet's "Shade wear areas on the shaft drawing" switch is now **Wear areas on
+  the shaft drawing: None | Lines | Grey | Both** (Settings → Drawing, and the Output tab's PDF
+  options, Shading section). The grey alone read on-device as a shaded liner; **Both** draws the
+  vertical lines over it. **None** leaves the wear areas unmarked; the values still print.
+- Grey stays the default. A device or drawing profile saved with the old switch keeps what it
+  printed: on reads as Grey, off as Lines.
+
 ### fix(editor): Add Thread leads with "Include thread in OAL"
 
 - The switch moved from the foot of **Add Thread** to its first row, where the thread card

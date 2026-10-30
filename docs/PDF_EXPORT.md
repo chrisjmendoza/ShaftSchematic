@@ -1022,12 +1022,13 @@ print inside the profile on this sheet") — display-only; the stored pref is ne
 so it returns the moment the sheet stops printing in-profile values. The classic runout sheet
 (`consolidated = false`) has no in-profile text and simply honors the pref.
 
-**Wear areas shade by default**: `PdfPrefs.wearAreasShaded` (app-wide, default ON — on-device
-ruling; Settings → Drawing "Shade wear areas on the shaft drawing" and this tab's PDF options,
-Shading section) draws each wear area as a ≈10% grey fill (`CONSOLIDATED_WEAR_SHADE_ALPHA`) instead
-of the vertical strokes, and re-shades each in-profile value's knockout where it overlaps a band,
-so the values read on the highlight with no white box while lines under them stay knocked out.
-OFF restores the strokes and white halos exactly. See `docs/contracts/RunoutSheet.md`.
+**Wear-area style**: `PdfPrefs.wearAreaStyle` (app-wide, None | Lines | Grey | Both, default
+Grey — on-device ruling; Settings → Drawing "Wear areas on the shaft drawing" and this tab's PDF
+options, Shading section). Grey draws each wear area as a ≈10% fill (`CONSOLIDATED_WEAR_SHADE_ALPHA`)
+and re-shades each in-profile value's knockout where it overlaps a band, so the values read on the
+highlight with no white box while lines under them stay knocked out. Lines draws the vertical
+strokes with white halos; Both draws the strokes over the grey (the grey alone read on-device as a
+shaded liner); None marks nothing. See `docs/contracts/RunoutSheet.md`.
 
 **Also on this tab**: the per-job "Shaft height" slider (§5.7), the worn-section editor
 (sections print on this sheet), the blank-draft toggle, and **Export all** — checkboxes

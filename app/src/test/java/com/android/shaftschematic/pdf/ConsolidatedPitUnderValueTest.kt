@@ -11,6 +11,7 @@ import com.android.shaftschematic.model.WearDiaReading
 import com.android.shaftschematic.model.WearPit
 import com.android.shaftschematic.model.WearRecord
 import com.android.shaftschematic.settings.PdfPrefs
+import com.android.shaftschematic.settings.WearAreaStyle
 import com.android.shaftschematic.settings.RunoutConfig
 import com.android.shaftschematic.ui.resolved.resolveComponents
 import com.android.shaftschematic.util.PDF_PAGE_HEIGHT_PT
@@ -74,7 +75,7 @@ class ConsolidatedPitUnderValueTest {
             config = RunoutConfig(),
             project = ProjectInfo(),
             unit = UnitSystem.INCHES,
-            pdfPrefs = PdfPrefs(wearAreasShaded = shaded),
+            pdfPrefs = PdfPrefs(wearAreaStyle = if (shaded) WearAreaStyle.SHADE else WearAreaStyle.LINES),
             resolvedComponents = resolveComponents(spec),
             wearRecord = wear,
             consolidated = true, includeBubbles = false, includeWearInfo = true,

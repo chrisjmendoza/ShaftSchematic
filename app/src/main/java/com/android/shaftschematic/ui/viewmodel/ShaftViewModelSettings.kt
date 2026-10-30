@@ -11,6 +11,7 @@ import com.android.shaftschematic.settings.AppThemeMode
 import com.android.shaftschematic.settings.DRAWING_LINE_THICKNESS_MAX
 import com.android.shaftschematic.settings.DRAWING_LINE_THICKNESS_MIN
 import com.android.shaftschematic.settings.DrawingProfile
+import com.android.shaftschematic.settings.WearAreaStyle
 import com.android.shaftschematic.settings.PDF_ARROW_SIZE_LARGE_PT
 import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_MAX
 import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_MIN
@@ -322,13 +323,13 @@ fun ShaftViewModel.setPdfShowUnitsNote(v: Boolean, persist: Boolean = true) {
 }
 
 /**
- * "Shade wear areas on the shaft drawing" — the consolidated sheet's wear areas as a light grey
- * fill with halo-free values. One pref, set from Settings → Drawing and the Output tab's sheet.
+ * "Wear areas on the shaft drawing" — how the consolidated sheet draws each wear area (none,
+ * lines, grey, both). One pref, set from Settings → Drawing and the Output tab's sheet.
  */
-fun ShaftViewModel.setPdfWearAreasShaded(v: Boolean, persist: Boolean = true) {
-    _pdfWearAreasShaded.value = v
-    SettingsStore.updatePdfPrefs { it.copy(wearAreasShaded = v) }
-    if (persist) viewModelScope.launch { SettingsStore.setPdfWearAreasShaded(getApplication(), v) }
+fun ShaftViewModel.setPdfWearAreaStyle(style: WearAreaStyle, persist: Boolean = true) {
+    _pdfWearAreaStyle.value = style
+    SettingsStore.updatePdfPrefs { it.copy(wearAreaStyle = style) }
+    if (persist) viewModelScope.launch { SettingsStore.setPdfWearAreaStyle(getApplication(), style) }
 }
 
 fun ShaftViewModel.setPdfExportMode(mode: PdfExportMode, persist: Boolean = true) {
@@ -460,7 +461,7 @@ fun ShaftViewModel.applyDrawingProfile(profile: DrawingProfile) {
     setPdfOutputFont(prefs.outputFont)
     setPdfDualUnitLayout(prefs.dualUnitLayout)
     setPdfShowUnitsNote(prefs.showUnitsNote)
-    setPdfWearAreasShaded(prefs.wearAreasShaded)
+    setPdfWearAreaStyle(prefs.wearAreaStyle)
     setPdfWearTraceDepthFrac(prefs.wearTraceDepthFrac)
     setPdfWearBandShadeFrac(prefs.wearBandShadeFrac)
     setPdfWearJoinGapMaxMm(prefs.wearJoinGapMaxMm)

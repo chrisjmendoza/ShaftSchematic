@@ -11,6 +11,7 @@ import com.android.shaftschematic.model.WearDiaReading
 import com.android.shaftschematic.model.WearRecord
 import com.android.shaftschematic.model.WearSpot
 import com.android.shaftschematic.settings.PdfPrefs
+import com.android.shaftschematic.settings.WearAreaStyle
 import com.android.shaftschematic.settings.RunoutConfig
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.DisplayUnits
@@ -47,7 +48,7 @@ import java.io.FileOutputStream
  * `SCHEMATIC_RENDER_UNITS_NOTE` (optional, any value) renders those job sheets with the
  * "Units in …" note on (`PdfPrefs.showUnitsNote`), to inspect each sheet's lower-right corner.
  * `SCHEMATIC_RENDER_WEAR_STROKES` (optional, any value) renders them with the consolidated sheet's
- * wear areas as vertical strokes (`PdfPrefs.wearAreasShaded` off) instead of the default shade.
+ * wear areas as vertical strokes (`PdfPrefs.wearAreaStyle` Lines) instead of the default grey.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -207,7 +208,8 @@ class SchematicRenderReviewTest {
         val resolved = resolveComponents(doc.spec)
         val prefs = PdfPrefs(
             showUnitsNote = System.getenv("SCHEMATIC_RENDER_UNITS_NOTE") != null,
-            wearAreasShaded = System.getenv("SCHEMATIC_RENDER_WEAR_STROKES") == null,
+            wearAreaStyle = if (System.getenv("SCHEMATIC_RENDER_WEAR_STROKES") == null) WearAreaStyle.SHADE
+            else WearAreaStyle.LINES,
         )
         fun consolidated(name: String, bubbles: Boolean, wear: Boolean, blank: Boolean, classic: Boolean = false) {
             val (bmp, c) = bitmapPage()
