@@ -6,6 +6,14 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-10-30
+
+### fix(pdf): thread relief no longer prints on the footer
+
+- The "Thread relief: <length> × Ø <diameter>" line under a relieved thread's "Thread:" line is
+  gone from every sheet's footer (on-device ruling: the relief is for the drawing only). The groove
+  still draws on the shaft.
+
 ## 2026-10-29
 
 ### fix(pdf): tighter S-break gaps
