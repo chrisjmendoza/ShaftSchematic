@@ -179,7 +179,6 @@ class BodyBreakFillSvgPreviewTest {
         val pair = breakPairLayout(
             runLenPt = runLenPt,
             desiredAmplitudePt = r * 0.6f,
-            classicGapPt = kotlin.math.min(ZIGZAG_GAP_MAX_PT, 0.25f * runLenPt),
             strokeWidthPt = 1.5f,
         )
         val peak = pair.amplitudePt * kotlin.math.sqrt(3f) / 6f

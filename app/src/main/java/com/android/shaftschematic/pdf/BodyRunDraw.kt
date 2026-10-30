@@ -13,7 +13,6 @@ import com.android.shaftschematic.ui.resolved.BodyBlend
 import com.android.shaftschematic.ui.resolved.BodyDrawEdges
 import com.android.shaftschematic.ui.resolved.bodyDrawEdges
 import kotlin.math.abs
-import kotlin.math.min
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Body runs with the S-break pair — ONE implementation for the schematic and the
@@ -228,7 +227,6 @@ internal fun bodyRunBreak(
     val pair = if (compress) breakPairLayout(
         runLenPt = flatLenPt,
         desiredAmplitudePt = r * 0.6f,
-        classicGapPt = min(ZIGZAG_GAP_MAX_PT, 0.25f * flatLenPt),
         strokeWidthPt = strokeWidthPt,
     ) else null
     val gapCenter = pair?.let {

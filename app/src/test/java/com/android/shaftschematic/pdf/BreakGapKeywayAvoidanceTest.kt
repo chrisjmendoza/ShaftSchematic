@@ -208,7 +208,6 @@ class BreakGapKeywayAvoidanceTest {
         val pair = breakPairLayout(
             runLenPt = runPt,
             desiredAmplitudePt = r * 0.6f,
-            classicGapPt = kotlin.math.min(ZIGZAG_GAP_MAX_PT, 0.25f * runPt),
             strokeWidthPt = strokePt,
         )
         val center = breakGapCenter(0f, runPt, pair.gapPt, avoid.map { it.loMm..it.hiMm })!!

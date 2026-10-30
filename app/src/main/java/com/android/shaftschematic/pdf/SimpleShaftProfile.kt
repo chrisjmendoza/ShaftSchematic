@@ -206,7 +206,6 @@ private fun simpleBodyBreak(
     val (gap, amp) = breakPairLayout(
         runLenPt = lenPt,
         desiredAmplitudePt = r * 0.6f,
-        classicGapPt = min(ZIGZAG_GAP_MAX_PT, 0.25f * lenPt),
         strokeWidthPt = strokeWidthPt,
     )
     val mid = (x0 + x1) * 0.5f

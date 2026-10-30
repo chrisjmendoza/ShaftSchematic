@@ -1143,9 +1143,10 @@ On-device request following the worn-sections review:
     one way when different users may want different outputs", on-device request); the
     classic long-span trigger `COMPRESS_TRIGGER_PT` is independent of the slider and
     fires at every setting. The pair lays out via `breakPairLayout` — same file, unit-tested —
-    which widens the classic gap up to half the run before flattening the glyph, so the
-    two edges' curves always keep ≥ 1 pt of daylight and never overlap (on-device
-    report); liners/tapers/threads foreshorten silently, like the hand sheets. Everything rides
+    which sizes the gap off the glyph (3 pt of paper between the curves,
+    `BREAK_PAIR_DAYLIGHT_PT`; a fixed 20 pt gap read as a missing piece, on-device report),
+    capped at half the run before flattening the glyph, so the two edges' curves always keep
+    ≥ 1 pt of daylight and never overlap (on-device report); liners/tapers/threads foreshorten silently, like the hand sheets. Everything rides
     the one `xAt` — dimension rails, bubble stations, worn sections, wear marks. The
     bubble-row budget is solved on a prelim linear map (scale ↔ rows cycle), and the
     drawing plan re-solves on the real mapping. The SCHEMATIC composer uses the same

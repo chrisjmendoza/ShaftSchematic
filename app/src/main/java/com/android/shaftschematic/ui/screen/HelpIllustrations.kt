@@ -278,7 +278,6 @@ internal fun SBreakFigure() = SheetFigure(
     val (gap, amp) = breakPairLayout(
         runLenPt = runLen,
         desiredAmplitudePt = halfH * 0.6f,
-        classicGapPt = minOf(18.dp.toPx(), 0.25f * runLen),
         strokeWidthPt = w,
     )
     val mid = (x0 + x1) * 0.5f

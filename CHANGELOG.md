@@ -8,6 +8,14 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-29
 
+### fix(pdf): tighter S-break gaps
+
+- The gap between an S-break pair is now sized off the break glyph — 3 pt of paper between the
+  curves — instead of a fixed 20 pt, which left about 8 pt of paper on a 9" shaft and read as a
+  missing piece (on-device report). The curves still never touch. The drawn shaft is unchanged; each
+  stub of a broken body run is a few points longer. Same on the schematic, the runout and
+  consolidated sheets, the wear sheet, and the Help figure.
+
 ### feat(pdf): wear areas print as None, Lines, Grey or Both
 
 - The consolidated sheet's "Shade wear areas on the shaft drawing" switch is now **Wear areas on
