@@ -32,7 +32,7 @@ lands on (`docs/contracts/FinalSchematic.md`). The core order is the load-bearin
 what the UI passes positionally.
 
 ```text
-addBodyAt(startMm, lengthMm, diaMm,
+addBodyAt(startMm, lengthMm, diaMm, reference,
           keywayWidthMm, keywayDepthMm, keywayLengthMm, keywayOffsetFromEndMm,
           keywayEnd, keywaySpooned, keywayUnit,
           blendAftMm, blendFwdMm, blendProfile, blendAftSeal, blendFwdSeal, target)

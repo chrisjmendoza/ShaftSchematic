@@ -72,7 +72,6 @@ class BlendLinerTargetUiTest {
                     showComponentDebugLabels = false,
                     bodyTitleById = emptyMap(),
                     f1 = { it.toString() },
-                    startValidator = { _, _, _ -> { null } },
                     onAddBody = { _, _, _ -> },
                     onSetAutoSectionDia = { _, _, _ -> },
                     onSetAllAutoSectionsDia = {},
@@ -82,6 +81,7 @@ class BlendLinerTargetUiTest {
                     },
                     onSetShowAutoBodyDia = {},
                     onUpdateBody = { _, _, _, _ -> },
+                    onUpdateBodyReference = { _, _ -> },
                     onUpdateBodyShowDia = { _, _ -> },
                     onUpdateBodyShowLabel = { _, _ -> },
                     onUpdateBodyCompressOnDrawing = { _, _ -> },
@@ -172,7 +172,7 @@ class BlendLinerTargetUiTest {
                 AddBodyDialog(
                     unit = UnitSystem.INCHES,
                     spec = ShaftSpec(overallLengthMm = 100f * 25.4f),
-                    onSubmit = { _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, odAft, odFwd ->
+                    onSubmit = { _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, odAft, odFwd ->
                         submitted = odAft to odFwd
                     },
                     onCancel = {},

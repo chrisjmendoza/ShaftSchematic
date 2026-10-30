@@ -8,6 +8,20 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-29
 
+### feat(editor): explicit bodies can be measured from the FWD end
+
+- An explicit body's card now carries **Measure From: AFT | FWD**, like a taper's or a liner's,
+  and so does **Add Body**. Under **FWD** the Start field shows and takes the distance from the
+  FWD end of the shaft; switching the chips never moves the body.
+- A body measured from FWD keeps its distance from the FWD end when the overall length changes —
+  typing a new OAL, or **Shorten/Lengthen OAL** on the thread card — and the "moved …" message
+  names it. A body measured from AFT stays where it is, as before.
+- Under FWD a Length edit keeps the body's FWD end where it is and grows or shrinks it toward
+  AFT. In Add Body, a FWD distance that would put the body past the AFT end is refused with a
+  message rather than squeezed onto the shaft.
+- Bodies saved before this open measured from AFT, exactly as they were. The auto-body card has
+  no chips: its span comes from the components around it.
+
 ### feat(editor): "Include thread in OAL" asks whether the overall length follows the thread
 
 - On a thread card, tapping **Include thread in OAL** now asks before it changes anything. Taking

@@ -45,6 +45,7 @@ import com.android.shaftschematic.ui.viewmodel.setThreadEndPosition
 import com.android.shaftschematic.ui.viewmodel.setThreadExcludeFromOal
 import com.android.shaftschematic.ui.viewmodel.setThreadRelief
 import com.android.shaftschematic.ui.viewmodel.updateBody
+import com.android.shaftschematic.ui.viewmodel.updateBodyAuthoredReference
 import com.android.shaftschematic.ui.viewmodel.updateBodyBlend
 import com.android.shaftschematic.ui.viewmodel.updateBodyKeyway
 import com.android.shaftschematic.ui.viewmodel.updateBodyLabel
@@ -368,8 +369,8 @@ fun ShaftRoute(
         },
         onSelectComponentById = vm::selectComponentById,
 
-        onAddBody   = { s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSp, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd, bSAftLen, bSFwdLen, bOdAft, bOdFwd ->
-            vm.addBodyAt(s, l, d, kwW, kwD, kwL, kwO, kwEnd, kwSp, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd, bSAftLen, bSFwdLen, bOdAft, bOdFwd, target)
+        onAddBody   = { s, l, d, ref, kwW, kwD, kwL, kwO, kwEnd, kwSp, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd, bSAftLen, bSFwdLen, bOdAft, bOdFwd ->
+            vm.addBodyAt(s, l, d, ref, kwW, kwD, kwL, kwO, kwEnd, kwSp, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd, bSAftLen, bSFwdLen, bOdAft, bOdFwd, target)
         },
         onSetAutoSectionDia = { s0, s1, d -> vm.setAutoSectionDiaMm(s0, s1, d, target) },
         onSetAllAutoSectionsDia = { d -> vm.setAutoBodyDiaMm(d, target) },
@@ -397,6 +398,7 @@ fun ShaftRoute(
         onAddCouplerBoltSlot = { s, dia, cnt, sp, thru, dep, ref, style, clocking -> vm.addCouplerBoltSlotAt(s, dia, cnt, sp, thru, dep, ref, style, clocking, target) },
 
         onUpdateBody   = { i, s, l, d      -> vm.updateBody(i, s, l, d, target) },
+        onUpdateBodyReference = { i, ref  -> vm.updateBodyAuthoredReference(i, ref, target) },
         onUpdateBodyShowDia = { i, show    -> vm.updateBodyShowDia(i, show, target) },
         onUpdateBodyShowLabel = { i, show  -> vm.updateBodyShowLabel(i, show, target) },
         onUpdateBodyShade = { i, shade -> vm.updateBodyShade(i, shade, target) },

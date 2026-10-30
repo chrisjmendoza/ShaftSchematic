@@ -50,6 +50,22 @@ class OalMoveSummaryTest {
     }
 
     @Test
+    fun `a FWD-measured explicit body is named`() {
+        val before = ShaftSpec(
+            overallLengthMm = 1000f,
+            bodies = listOf(
+                Body(id = "ba", startFromAftMm = 0f, lengthMm = 200f, diaMm = 50f),
+                Body(id = "bf", startFromAftMm = 800f, lengthMm = 200f, diaMm = 60f, label = "Coupling body",
+                    authoredReference = LinerAuthoredReference.FWD),
+            ),
+        )
+        assertEquals(
+            "OAL 950 mm: moved Coupling body 50 mm aft (measured from FWD)",
+            oalMoveSummary(before, before.withNewOal(950f), mm),
+        )
+    }
+
+    @Test
     fun `a longer shaft carries FWD parts fwd`() {
         val before = ShaftSpec(overallLengthMm = 1000f, liners = listOf(fwdLiner("l", 800f)))
         assertEquals(

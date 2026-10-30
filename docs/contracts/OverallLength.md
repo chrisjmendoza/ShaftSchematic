@@ -1,4 +1,4 @@
-# Overall Length (v2.5, 2026-10-29)
+# Overall Length (v2.6, 2026-10-29)
 
 ## Scope
 Defines how the **Overall Length** field behaves, how it interacts with components, and how the
@@ -115,8 +115,8 @@ fun ShaftSpec.lastOccupiedEndMm(): Float {
 
 ### Re-anchoring on an OAL change
 `ShaftSpec.withNewOal` (`model/ShaftSpecExtensions.kt`) is the ONE OAL-change helper. AFT-referenced
-components keep `startFromAftMm`; FWD-referenced tapers, liners and coupler bolt slots keep their
-authored distance from the FWD face, recovered from the stored start as `oldOal − start − span`.
+components keep `startFromAftMm`; FWD-referenced explicit bodies, tapers, liners and coupler bolt
+slots keep their authored distance from the FWD face, recovered from the stored start as `oldOal − start − span`.
 That recovery is float-noisy on a long shaft: a `Float` at 9 m resolves to ~0.001 mm, so a taper
 authored flush with the face ("0 from the FWD end") came back a few thousandths of a millimetre
 past the shaft end after a round trip, the card printed a stray offset and the past-end warning lit
@@ -141,8 +141,8 @@ route's event collector waits on it, so a delete's snackbar queues behind it), a
 place. Once anything has changed, Undo does nothing and says so ("Nothing undone — the drawing has
 changed since. Use History → Undo."). The delete snackbar carries the same token
 (`ShowDeletedSnack.expected`). The pure diff is
-`oalMoveSummary(before, after, unit)` (`ui/util/OalMoveSummary.kt`): tapers, liners and coupler
-bolt rows whose stored start moved by more than `OAL_REANCHOR_SNAP_MM`, ordered AFT → FWD;
+`oalMoveSummary(before, after, unit)` (`ui/util/OalMoveSummary.kt`): explicit bodies, tapers,
+liners and coupler bolt rows whose stored start moved by more than `OAL_REANCHOR_SNAP_MM`, ordered AFT → FWD;
 excluded threads are left out (they follow the end by definition). `ShaftViewModel.onSetOverallLengthMm`
 emits `UiEvent.ShowOalMovedSnack` when it returns a line; nothing moved, no snackbar. Both
 targets: the Final tab's OAL field takes the same path (`ShaftRoute(target = FINAL)`). On-device
@@ -167,7 +167,7 @@ the STORED state until a choice is made.
 
 The ONE model helper is `ShaftSpec.withThreadOalInclusion(id, excludeFromOAL, adjustOal)`
 (`model/ShaftSpecExtensions.kt`), and its OAL change IS `withNewOal` — exactly what typing the new
-OAL into the field does: FWD-referenced tapers, liners and bolt rows keep their distance from the
+OAL into the field does: FWD-referenced explicit bodies, tapers, liners and bolt rows keep their distance from the
 FWD face, AFT-referenced parts keep their start, nothing else moves. There is no second OAL-change
 path. (A "nothing else moves" variant that would hold FWD-measured parts in place was considered
 and deferred — a product question, not built.)
@@ -204,6 +204,10 @@ template card's preview can never disagree with the drawing it becomes.
 ---
 
 ## Change Log
+**v2.6 (2026-10-29)** — **Explicit bodies re-anchor** (on-device request: an explicit body exists to
+sit at an exact point, often off the coupling end): an explicit body carries "Measure From: AFT |
+FWD" (`Body.authoredReference`), and `withNewOal` keeps a FWD body's distance from the FWD face like
+a FWD taper's or liner's; the move snackbar names it.
 **v2.5 (2026-10-29)** — **Thread inclusion prompt** (on-device report): the thread card's "Include
 thread in OAL" switch asks whether the OAL follows (Shorten/Lengthen through `withNewOal`, or Keep);
 a thread taken out goes out at the end it sits at, and one brought in lands inside the shaft at its

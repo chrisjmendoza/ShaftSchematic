@@ -57,8 +57,8 @@ import com.android.shaftschematic.util.UnitSystem
  * are under the same rule."Show name on drawing" and the "Prints in: in | mm" chip at
  * the card's foot are the documented card-only carve-outs.
  *
- * [f1] and [startValidator] are supplied by [ComponentPagerCard] because the body card shares
- * them; [startValidator] closes over the spec and document unit that validate an overlap.
+ * [f1] and [startValidator] are supplied by [ComponentPagerCard]; [f1] is shared with the body
+ * card, and [startValidator] closes over the spec and document unit that validate an overlap.
  */
 @Composable
 internal fun ThreadPagerCard(

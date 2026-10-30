@@ -1,5 +1,6 @@
 package com.android.shaftschematic.ui.input
 
+import com.android.shaftschematic.model.Body
 import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.Taper
 
@@ -26,4 +27,24 @@ fun taperPhysStartForNewLength(
         overallLengthMm - authoredFromFwd - newLengthMm
     } else {
         taper.startFromAftMm
+    }
+
+/**
+ * The canonical AFT-origin start an explicit body takes when only its LENGTH changes — the
+ * [taperPhysStartForNewLength] rule for a body's own "Measure From" reference: under AFT the
+ * start stays and the FWD end moves; under FWD the FWD end is the anchor and the start slides
+ * by exactly the length change, so the authored distance from the FWD face comes back out
+ * unchanged. The card's Length validator and its commit both call this, so the two can never
+ * disagree about where the body lands.
+ */
+fun bodyPhysStartForNewLength(
+    body: Body,
+    newLengthMm: Float,
+    overallLengthMm: Float,
+): Float =
+    if (body.authoredReference == LinerAuthoredReference.FWD) {
+        val authoredFromFwd = overallLengthMm - body.startFromAftMm - body.lengthMm
+        overallLengthMm - authoredFromFwd - newLengthMm
+    } else {
+        body.startFromAftMm
     }

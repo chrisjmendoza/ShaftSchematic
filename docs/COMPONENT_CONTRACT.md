@@ -46,6 +46,12 @@ Features:
     whose stored span touches a shaft end face prints it and a mid-shaft body does not; an
     explicit value wins. Draw-only, over the STORED span; auto spans never get one (see
     `docs/PDF_EXPORT.md` §5.2).
+  - An explicit body carries **"Measure From: AFT | FWD"** (`Body.authoredReference`, default
+    AFT) like a taper or liner: the card's and `AddBodyDialog`'s Start shows and accepts the
+    distance from the chosen end, a switch never moves `startFromAftMm`, and `withNewOal` keeps a
+    FWD body's distance from the FWD face (a Length edit under FWD keeps the FWD end,
+    `bodyPhysStartForNewLength`). Split fragments inherit it and a merge takes the AFT
+    fragment's (`carryBodyDisplay`). Auto spans have none — their span is derived.
 
 - **Taper**: linear transition span between two diameters.
   - Taper parameter derivation/normalization occurs in the ViewModel; renderer draws from diameters.

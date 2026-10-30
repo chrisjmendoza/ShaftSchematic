@@ -128,8 +128,9 @@ private fun spansOverlapMm(aStart: Float, aLen: Float, bStart: Float, bLen: Floa
 
 /**
  * Returns a copy of this [ShaftSpec] with [overallLengthMm] set to [newOal], reanchoring
- * any FWD-referenced tapers and liners so their authored distance from the FWD face is
- * preserved.  AFT-referenced components keep their [startFromAftMm] unchanged.
+ * any FWD-referenced explicit bodies, tapers, liners and bolt rows so their authored distance
+ * from the FWD face is preserved.  AFT-referenced components keep their [startFromAftMm]
+ * unchanged.
  *
  * After reanchoring, excluded end threads are repositioned via [syncExcludedThreadPositions].
  *
@@ -162,6 +163,14 @@ fun ShaftSpec.withNewOal(newOal: Float): ShaftSpec {
         val recovered = oldOal - startMm - spanMm
         val authoredFromFwd = if (abs(recovered) < OAL_REANCHOR_SNAP_MM) 0.0 else recovered
         return (clampedOal - authoredFromFwd - spanMm).toFloat()
+    }
+
+    val newBodies = bodies.map { b ->
+        if (b.authoredReference == LinerAuthoredReference.FWD) {
+            b.copy(startFromAftMm = reanchoredStart(b.startFromAftMm, b.lengthMm))
+        } else {
+            b
+        }
     }
 
     val newTapers = tapers.map { t ->
@@ -197,6 +206,7 @@ fun ShaftSpec.withNewOal(newOal: Float): ShaftSpec {
 
     return copy(
         overallLengthMm = clampedOal,
+        bodies = newBodies,
         tapers = newTapers,
         liners = newLiners,
         couplerBoltSlots = newSlots,
@@ -430,9 +440,10 @@ internal fun carryBodyKeyway(from: Body, to: Body): Body {
 
 /**
  * Carries [from]'s **draw-only** decisions — name, Ø/name visibility, the shade override, the
- * compression opt-out, and the length-rail override — onto [to] (a fragment/merge/expansion of the same material). Nothing
- * here is geometry, so unlike the keyway there is no fit test: every piece of one authored
- * body prints the way that body was authored to print.
+ * compression opt-out, and the length-rail override — onto [to] (a fragment/merge/expansion of the same material),
+ * together with its AFT | FWD reference — an authored choice, not geometry. Nothing here is
+ * geometry, so unlike the keyway there is no fit test: every piece of one authored body prints,
+ * and follows an OAL change, the way that body was authored to.
  *
  * The one-sided expansions in [mergeBodiesAround] already `copy()` the source and so keep
  * these implicitly; the fragment and two-sided-merge paths build a fresh [Body] and need
@@ -445,6 +456,7 @@ internal fun carryBodyDisplay(from: Body, to: Body): Body = to.copy(
     shadeOnDrawing = from.shadeOnDrawing,
     compressOnDrawing = from.compressOnDrawing,
     showDimensionRail = from.showDimensionRail,
+    authoredReference = from.authoredReference,
 )
 
 /**

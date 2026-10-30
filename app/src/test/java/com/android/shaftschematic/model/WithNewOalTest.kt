@@ -11,8 +11,8 @@ private const val EPS = 0.001f
  * Tests for [ShaftSpec.withNewOal].
  *
  * Contract:
- *  - AFT-referenced tapers and liners keep their [startFromAftMm] unchanged.
- *  - FWD-referenced tapers and liners keep their authored-from-FWD distance constant,
+ *  - AFT-referenced explicit bodies, tapers and liners keep their [startFromAftMm] unchanged.
+ *  - FWD-referenced explicit bodies, tapers and liners keep their authored-from-FWD distance constant,
  *    so their physical start slides as OAL changes.
  *  - Excluded end threads are repositioned by syncExcludedThreadPositions().
  *  - OAL is clamped to ≥ 0.
@@ -385,5 +385,64 @@ class WithNewOalTest {
         val result = spec.withNewOal(600f)
 
         assertEquals(590f, result.couplerBoltSlots[0].startFromAftMm, EPS)
+    }
+
+    // ── Explicit bodies ──────────────────────────────────────────────────────
+
+    private fun authoredFromFwd(spec: ShaftSpec, b: Body): Float =
+        spec.overallLengthMm - b.startFromAftMm - b.lengthMm
+
+    @Test
+    fun `fwd-ref body keeps its fwd distance when oal grows and shrinks`() {
+        val body = Body(id = "b1", startFromAftMm = 250f, lengthMm = 100f, diaMm = 80f,
+            authoredReference = LinerAuthoredReference.FWD)
+        val spec = ShaftSpec(overallLengthMm = 400f, bodies = listOf(body))
+
+        val grown = spec.withNewOal(600f)
+        assertEquals(50f, authoredFromFwd(grown, grown.bodies[0]), EPS)
+        assertEquals(450f, grown.bodies[0].startFromAftMm, EPS)
+        assertEquals("length untouched", 100f, grown.bodies[0].lengthMm, 0f)
+
+        val shrunk = spec.withNewOal(300f)
+        assertEquals(50f, authoredFromFwd(shrunk, shrunk.bodies[0]), EPS)
+        assertEquals(150f, shrunk.bodies[0].startFromAftMm, EPS)
+    }
+
+    @Test
+    fun `aft-ref body keeps its start on oal change`() {
+        val body = Body(id = "b1", startFromAftMm = 250f, lengthMm = 100f, diaMm = 80f)
+        val spec = ShaftSpec(overallLengthMm = 400f, bodies = listOf(body))
+
+        assertEquals(250f, spec.withNewOal(600f).bodies[0].startFromAftMm, 0f)
+        assertEquals(250f, spec.withNewOal(380f).bodies[0].startFromAftMm, 0f)
+    }
+
+    @Test
+    fun `a flush fwd body on a long shaft comes back exactly flush`() {
+        val inch = 25.4f
+        val oal0 = 368.5f * inch
+        val len = 40.125f * inch
+        var spec = ShaftSpec(overallLengthMm = oal0, bodies = listOf(
+            Body(id = "b1", startFromAftMm = oal0 - len, lengthMm = len, diaMm = 200f,
+                authoredReference = LinerAuthoredReference.FWD)))
+
+        for (oalIn in listOf(368f, 36f, 367f, 367.75f)) {
+            spec = spec.withNewOal(oalIn * inch)
+            val exact = (spec.overallLengthMm.toDouble() - len).toFloat()
+            assertEquals("start re-derived exactly at ${oalIn}\"", exact, spec.bodies[0].startFromAftMm, 0f)
+        }
+    }
+
+    @Test
+    fun `mixed shaft - only the fwd-ref body moves`() {
+        val aft = Body(id = "ba", startFromAftMm = 0f, lengthMm = 100f, diaMm = 80f)
+        val fwd = Body(id = "bf", startFromAftMm = 300f, lengthMm = 100f, diaMm = 80f,
+            authoredReference = LinerAuthoredReference.FWD)
+        val spec = ShaftSpec(overallLengthMm = 400f, bodies = listOf(aft, fwd))
+
+        val result = spec.withNewOal(500f)
+
+        assertEquals(0f, result.bodies.single { it.id == "ba" }.startFromAftMm, 0f)
+        assertEquals(400f, result.bodies.single { it.id == "bf" }.startFromAftMm, EPS)
     }
 }

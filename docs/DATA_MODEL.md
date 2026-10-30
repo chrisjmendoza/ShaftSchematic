@@ -193,6 +193,7 @@ data class Body(
     val blendAftToLinerOd: Boolean = false,  // at a butting liner: false = half-way seat, true = the liner's full OD
     val blendFwdToLinerOd: Boolean = false,
     val blendProfile: BlendProfile = BlendProfile.OGEE,
+    val authoredReference: LinerAuthoredReference = LinerAuthoredReference.AFT,  // "Measure From" (explicit bodies): display/entry + OAL anchor — withNewOal keeps a FWD body's distance from the FWD face; never moves startFromAftMm on a switch
 ) : Segment
 Taper
 @Serializable

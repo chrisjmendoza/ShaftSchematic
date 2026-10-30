@@ -1,4 +1,4 @@
-# AddComponentDialogs Contract (v1.16, 2026-10-28)
+# AddComponentDialogs Contract (v1.17, 2026-10-29)
 
 ## Purpose
 Composable dialogs for adding new components: `AddBodyDialog`, `AddLinerDialog`,
@@ -221,7 +221,8 @@ still authored in inches on an inch document. That asymmetry is a known follow-u
 ### AddBodyDialog
 | Field / control | Condition |
 |-----------------|-----------|
-| Start | Always |
+| Measure From: AFT \| FWD chips | Always (mirrors the explicit-body card; switching never moves the body; FWD re-anchors on an OAL change). Stored as `Body.authoredReference`. testTags `add_body_ref_aft` / `add_body_ref_fwd` (card: `body_ref_aft` / `body_ref_fwd`) |
+| Start from AFT / FWD | Always (label follows chip). Independent AFT/FWD seeds, as in `AddLinerDialog`; submits the PHYSICAL start (`addDialogPhysStartMm`). A FWD start that would reach past the AFT face shows `ADD_PAST_AFT_END_MSG` and holds Add — refused, never clamped |
 | Length | Always |
 | Diameter | Always — labelled "Diameter (unit)" on the dialog AND on both body cards (auto and explicit); the cards once said a bare "Ø (unit)", which a new user has nothing to read against |
 | Keyway checkbox | Always. The gate for the whole keyway section (shared `KeywayGateRow`, `KeywaySection.kt`); default OFF in the dialog. On the card it seeds from `hasAnyKeywayValue` so a half-typed keyway keeps its section open, and unticking a card with any value opens "Remove keyway?" (`kw_remove_confirm`) before clearing W/D/L/inset/spooned |
@@ -235,7 +236,7 @@ still authored in inches on an inch document. That asymmetry is a known follow-u
 | CW \| CCW direction chips | Only when the Keyways 90° apart toggle is on (and so only while the Keyway checkbox is ON) |
 
 Matches `BodyPagerCard.kt`'s explicit-body branch. The **auto-body**
-card intentionally shows only Start/Length/Ø — Start/Length disabled/greyed (derived),
+card intentionally shows only Start/Length/Ø — no Measure From chips (its span is derived) — Start/Length disabled/greyed (derived),
 Ø editable (sets the shared bare-shaft `ShaftSpec.autoBodyDiaMm` without promoting) —
 auto-bodies are derived and cannot host a keyway until promoted; that reduced card is
 not a parity violation. The 180°/90°-apart toggles write spec-level
@@ -517,6 +518,11 @@ the aft-most center as `startFromAftMm = OAL − enteredFwd − (count−1)·spa
 ---
 
 ## Change log
+**v1.17 (2026-10-29)**
+- `AddBodyDialog` gains the "Measure From: AFT | FWD" chips and a "Start from AFT / FWD" field,
+  mirroring the explicit-body card's new row (`Body.authoredReference`); `onSubmit` takes the
+  reference right after `diaMm`. On-device request.
+
 **v1.16 (2026-10-28)**
 - A negative Start shows "Must be ≥ 0" (the cards' constant); the Add gate requires every visible
   optional numeric field to be blank or readable (`optionalEntriesReadable`). Emulator QA.
