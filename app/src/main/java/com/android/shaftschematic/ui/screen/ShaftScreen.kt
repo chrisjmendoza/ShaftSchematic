@@ -2,8 +2,6 @@ package com.android.shaftschematic.ui.screen
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -92,8 +90,6 @@ import androidx.compose.ui.Modifier
 import com.android.shaftschematic.geom.THREAD_DENSITY_DEFAULT
 import com.android.shaftschematic.geom.THREAD_SLANT_DEFAULT
 import com.android.shaftschematic.geom.computeOalWindow
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
@@ -405,6 +401,33 @@ fun ShaftScreen(
     // See the golden rule (user inputs are sacred) in CLAUDE.md.
 
     val pendingCardEdits = remember { PendingCardEdits() }
+
+    // A tap on a component in the drawing (or on a warning line, which takes the same selection
+    // path) changes cards, so while a card field holds an unsaved value it asks first, like a
+    // carousel swipe. Plain `remember`: the edit's lambdas are not saveable.
+    var unsavedTap by remember { mutableStateOf<UnsavedTap?>(null) }
+    val selectFromDrawing: (String?) -> Unit = { id ->
+        val pending = pendingCardEdits.current
+        if (pending == null || id == selectedComponentId) onSelectComponentById(id)
+        else unsavedTap = UnsavedTap(pending, id)
+    }
+    unsavedTap?.let { tap ->
+        UnsavedCardEditDialog(
+            edit = tap.edit,
+            onSave = {
+                unsavedTap = null
+                // A refused value stays on its card with its notice: the change is not made.
+                if (tap.edit.accept()) onSelectComponentById(tap.targetId)
+            },
+            onDiscard = {
+                unsavedTap = null
+                tap.edit.cancel()
+                onSelectComponentById(tap.targetId)
+            },
+            onKeepEditing = { unsavedTap = null },
+        )
+    }
+
     CompositionLocalProvider(LocalPendingCardEdits provides pendingCardEdits) {
     Scaffold(
         // The content insets below are horizontal only (each branch pads its own bottom), so
@@ -572,7 +595,7 @@ fun ShaftScreen(
                 showOalInPreviewBox = showOalInPreviewBox,
                 highlightEnabled = showHighlightSelection,
                 highlightId = selectedComponentId,
-                onTapComponentId = { onSelectComponentById(it) },
+                onTapComponentId = { selectFromDrawing(it) },
                 showRenderLayoutDebugOverlay = showRenderLayoutDebugOverlay,
                 showRenderOalMarkers = showRenderOalMarkers,
                 showDimDebugOverlay = showDimDebugOverlay,
@@ -601,7 +624,7 @@ fun ShaftScreen(
         // text box's width cap — the phone's 240 dp, or none where the field should fill a
         // column the width of the control under it.
         val oalBlock: @Composable (fieldMaxWidth: Dp) -> Unit = { fieldMaxWidth ->
-            OverallLengthField(
+            OverallLengthRow(
                 spec = spec,
                 unit = unit,
                 onSetOverallLengthMm = onSetOverallLengthMm,
@@ -924,7 +947,7 @@ fun ShaftScreen(
         }
         val latestSpec by rememberUpdatedState(spec)
         val latestUnit by rememberUpdatedState(unit)
-        val latestSelectComponent by rememberUpdatedState(onSelectComponentById)
+        val latestSelectComponent by rememberUpdatedState(selectFromDrawing)
         val warningBanner: @Composable () -> Unit = remember {
             movableContentOf {
                 // A line's tap takes the preview's selection path, so the carousel follows it.
@@ -1162,6 +1185,14 @@ fun ShaftScreen(
                     CAROUSEL_HEIGHT
                 }
 
+                // The Overall Length row stands ABOVE the scrolling content, so it is on screen
+                // whatever the column has scrolled to — and so is the card Save / Cancel bar that
+                // takes its place while a field holds an unsaved value (on-device report: inside
+                // the column the bar scrolled above the keyboard together with the focused field,
+                // leaving Save no more visible than the button it replaced).
+                oalBlock(OAL_FIELD_MAX_WIDTH)
+                Spacer(Modifier.height(12.dp))
+
                 // Scrollable editor content
                 Column(
                     modifier = Modifier
@@ -1187,7 +1218,6 @@ fun ShaftScreen(
                         ),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    oalBlock(OAL_FIELD_MAX_WIDTH)
                     componentsBlock({ warningBanner() }, if (medium) mediumCarouselDp else null)
                 }
             }
@@ -1684,6 +1714,96 @@ internal fun oalFieldLabel(unit: UnitSystem, fontScale: Float): String =
     else "Overall Length (${abbr(unit)})"
 
 /**
+ * The Overall Length row: the OAL field while every card field is settled, and the card
+ * Save / Cancel bar while one holds an unsaved value (on-device ruling: a Save button at the end
+ * of a long card was hidden; this row is always on screen above the carousel). The bar names the
+ * waiting field and puts the ✓ / ✗ exactly where the OAL's own pair sits, so it reads as the one
+ * control. With the field hidden, nothing can focus the OAL under a pending edit.
+ */
+@Composable
+internal fun OverallLengthRow(
+    spec: ShaftSpec,
+    unit: UnitSystem,
+    onSetOverallLengthMm: (Float) -> Unit,
+    onSetOverallLengthRaw: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    /** The text box's width cap; [Dp.Unspecified] lets it take the row's width beside the ✓/✗ slot. */
+    fieldMaxWidth: Dp = OAL_FIELD_MAX_WIDTH,
+) {
+    val pending = LocalPendingCardEdits.current?.current
+    if (pending != null) {
+        CardSaveBar(pending, modifier, fieldMaxWidth)
+    } else {
+        OverallLengthField(
+            spec = spec,
+            unit = unit,
+            onSetOverallLengthMm = onSetOverallLengthMm,
+            onSetOverallLengthRaw = onSetOverallLengthRaw,
+            modifier = modifier,
+            fieldMaxWidth = fieldMaxWidth,
+        )
+    }
+}
+
+/**
+ * The card Save / Cancel bar, standing in the Overall Length row while a card field holds an
+ * unsaved value. That row is always on screen above the carousel, where a Save at the foot of a
+ * long card scrolled out of sight. The text block takes the OAL text box's width and height, and
+ * the ✓ / ✗ sit in the OAL's own fixed action slot, so the swap moves nothing else on screen.
+ * ✓ and ✗ are the field's own answers ([PendingCardEdit.accept] / [PendingCardEdit.cancel] — the
+ * IME Done commit and the revert to the stored value), never a second commit pipeline.
+ */
+@Composable
+private fun CardSaveBar(edit: PendingCardEdit, modifier: Modifier, fieldMaxWidth: Dp) {
+    val field = fieldLabelWithoutUnit(edit.fieldLabel)
+    Row(
+        modifier = modifier.testTag(CARD_SAVE_BAR_TAG),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // Exactly the OAL text box's footprint — its capped width (the box always fills its cap)
+        // and its height — so the ✓ / ✗ land where the OAL's own pair sits and nothing else on
+        // screen moves when the row swaps (on-device report: a shorter bar shifted the carousel up
+        // and left the returning OAL label clipped).
+        Column(
+            modifier = Modifier
+                .then(
+                    if (fieldMaxWidth == Dp.Unspecified) Modifier.weight(1f)
+                    else Modifier.width(fieldMaxWidth)
+                )
+                .heightIn(min = OAL_FIELD_ROW_HEIGHT),
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Text(
+                "Unsaved change",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                pendingEditName(edit),
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Box(
+            modifier = Modifier
+                .width(OAL_ACTION_SLOT_WIDTH)
+                .height(OAL_ACTION_SLOT_HEIGHT),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            AcceptCancelButtons(
+                onAccept = { edit.accept() },
+                onCancel = edit.cancel,
+                acceptDescription = "Save $field",
+                cancelDescription = "Cancel $field change",
+                acceptTag = CARD_SAVE_TAG,
+                cancelTag = CARD_CANCEL_TAG,
+            )
+        }
+    }
+}
+
+/**
  * The shaft's Overall Length entry field.
  *
  * Three behaviours it owns, each deliberate:
@@ -1783,44 +1903,6 @@ internal fun OverallLengthField(
         focusManager.clearFocus()
     }
 
-    // The card field holding an unsaved value, if any, and the prompt that settles it before the
-    // OAL takes focus. Keep and Discard answer it exactly as its own ✓ and ✗ would, then hand
-    // focus here; Cancel leaves the card field as it was.
-    val pendingCardEdit = LocalPendingCardEdits.current?.current
-    var promptEdit by remember { mutableStateOf<PendingCardEdit?>(null) }
-    val oalFocus = remember { FocusRequester() }
-    promptEdit?.let { edit ->
-        fun answer(resolve: () -> Unit) {
-            promptEdit = null
-            resolve()
-            oalFocus.requestFocus()
-        }
-        AlertDialog(
-            onDismissRequest = { promptEdit = null },
-            title = { Text("Keep your change?") },
-            text = { Text(pendingCardEditMessage(edit)) },
-            confirmButton = {
-                TextButton(
-                    onClick = { answer(edit.accept) },
-                    modifier = Modifier.testTag(OAL_PENDING_KEEP_TAG),
-                ) { Text("Keep") }
-            },
-            dismissButton = {
-                Row {
-                    TextButton(
-                        onClick = { answer(edit.cancel) },
-                        modifier = Modifier.testTag(OAL_PENDING_DISCARD_TAG),
-                    ) { Text("Discard") }
-                    TextButton(
-                        onClick = { promptEdit = null },
-                        modifier = Modifier.testTag(OAL_PENDING_CANCEL_TAG),
-                    ) { Text("Cancel") }
-                }
-            },
-            modifier = Modifier.testTag(OAL_PENDING_DIALOG_TAG),
-        )
-    }
-
     // At a large system font the full label wrapped inside the outline and its first line was
     // clipped by the field's top edge (on-device report, 200%): it shortens past
     // OAL_SHORT_LABEL_FONT_SCALE and never takes a second line at any scale.
@@ -1835,81 +1917,59 @@ internal fun OverallLengthField(
             oalCursor.track(input)
             lengthText = input.text
         }
-        Box(
+        OutlinedTextField(
+            value = oalCursor.valueFor(lengthText),
+            onValueChange = { input -> applyLengthEdit(input) },
+            trailingIcon = if (hasLenFocus && LocalFractionKeyEnabled.current) {
+                { FractionKey(onClick = { applyLengthEdit(oalCursor.insertBar(lengthText)) }) }
+            } else null,
+            label = { Text(oalLabel, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+            singleLine = true,
+            enabled = true,
+            isError = isOversized || rejectedNotice != null,
+            supportingText = rejectedNotice?.let { n -> { Text(n) } },
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Decimal,
+                imeAction = ImeAction.Done
+            ),
+            keyboardActions = KeyboardActions(onDone = { acceptEdit() }),
             modifier = Modifier
                 .weight(1f, fill = fieldMaxWidth == Dp.Unspecified)
-                .widthIn(min = 160.dp, max = fieldMaxWidth),
-        ) {
-            OutlinedTextField(
-                value = oalCursor.valueFor(lengthText),
-                onValueChange = { input -> applyLengthEdit(input) },
-                trailingIcon = if (hasLenFocus && LocalFractionKeyEnabled.current) {
-                    { FractionKey(onClick = { applyLengthEdit(oalCursor.insertBar(lengthText)) }) }
-                } else null,
-                label = { Text(oalLabel, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                singleLine = true,
-                enabled = true,
-                isError = isOversized || rejectedNotice != null,
-                supportingText = rejectedNotice?.let { n -> { Text(n) } },
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Decimal,
-                    imeAction = ImeAction.Done
-                ),
-                keyboardActions = KeyboardActions(onDone = { acceptEdit() }),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .focusRequester(oalFocus)
-                    .testTag(OAL_FIELD_TAG)
-                    .onFocusChanged { f ->
-                        val wasFocused = hasLenFocus
-                        hasLenFocus = f.isFocused
+                .widthIn(min = 160.dp, max = fieldMaxWidth)
+                .testTag(OAL_FIELD_TAG)
+                .onFocusChanged { f ->
+                    val wasFocused = hasLenFocus
+                    hasLenFocus = f.isFocused
 
-                        if (!wasFocused && f.isFocused) {
-                            // Baseline for the commit-on-change rule.
-                            lenTextOnFocus = lengthText
-                            // A not-yet-set length reads "0"; clear it so the user can
-                            // type without a leading zero. Leaving without typing reverts.
-                            if (lengthText.trim() == "0") lengthText = ""
-                        }
+                    if (!wasFocused && f.isFocused) {
+                        // Baseline for the commit-on-change rule.
+                        lenTextOnFocus = lengthText
+                        // A not-yet-set length reads "0"; clear it so the user can
+                        // type without a leading zero. Leaving without typing reverts.
+                        if (lengthText.trim() == "0") lengthText = ""
+                    }
 
-                        if (wasFocused && !f.isFocused) {
-                            val baseline = lenTextOnFocus
-                            lenTextOnFocus = null
+                    if (wasFocused && !f.isFocused) {
+                        val baseline = lenTextOnFocus
+                        lenTextOnFocus = null
 
-                            // Commit only what changed since focus (BlurCommitPolicy).
-                            if (!shouldCommitOnBlur(baseline, lengthText)) return@onFocusChanged
+                        // Commit only what changed since focus (BlurCommitPolicy).
+                        if (!shouldCommitOnBlur(baseline, lengthText)) return@onFocusChanged
 
-                            val t = lengthText.trim()
-                            val mm = if (t.isEmpty()) null else toMmOrNull(t, unit)
-                            if (mm == null) {
-                                // Empty or unparseable: nothing commits, the stored length returns —
-                                // and an unparseable entry is named, so the swap is not silent.
-                                if (t.isNotEmpty()) rejectedNotice = rejectedValueNotice(t, NOT_A_NUMBER_REASON)
-                                lengthText = formatDisplay(spec.overallLengthMm, unit)
-                            } else {
-                                onSetOverallLengthMm(mm)
-                                onSetOverallLengthRaw(t)
-                            }
+                        val t = lengthText.trim()
+                        val mm = if (t.isEmpty()) null else toMmOrNull(t, unit)
+                        if (mm == null) {
+                            // Empty or unparseable: nothing commits, the stored length returns —
+                            // and an unparseable entry is named, so the swap is not silent.
+                            if (t.isNotEmpty()) rejectedNotice = rejectedValueNotice(t, NOT_A_NUMBER_REASON)
+                            lengthText = formatDisplay(spec.overallLengthMm, unit)
+                        } else {
+                            onSetOverallLengthMm(mm)
+                            onSetOverallLengthRaw(t)
                         }
                     }
-            )
-            // A card field holding a typed value that has not landed takes the tap instead of the
-            // field: focus moving here would blur-commit that value with its ✓ / ✗ unanswered, so
-            // the prompt below settles it first (on-device request). Siblings do not share a
-            // pointer event, so the field under the guard never sees the tap.
-            if (pendingCardEdit != null && !hasLenFocus) {
-                Box(
-                    Modifier
-                        .matchParentSize()
-                        .testTag(OAL_PENDING_GUARD_TAG)
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClickLabel = "Edit overall length",
-                        ) { promptEdit = pendingCardEdit }
-                )
-            }
-        }
+                }
+        )
 
         // Fixed-size slot so the row does not jump when the pair appears. The buttons cannot
         // take focus: a click that pulled focus off the field would blur-commit before the
@@ -1943,22 +2003,19 @@ private fun oalGhostNormalized(text: String?): String? {
 internal const val OAL_FIELD_TAG = "overall_length_field"
 internal const val OAL_ACCEPT_TAG = "oal_accept"
 internal const val OAL_CANCEL_TAG = "oal_cancel"
-internal const val OAL_PENDING_GUARD_TAG = "oal_pending_guard"
-internal const val OAL_PENDING_DIALOG_TAG = "oal_pending_dialog"
-internal const val OAL_PENDING_KEEP_TAG = "oal_pending_keep"
-internal const val OAL_PENDING_DISCARD_TAG = "oal_pending_discard"
-internal const val OAL_PENDING_CANCEL_TAG = "oal_pending_cancel"
+internal const val CARD_SAVE_BAR_TAG = "card_save_bar"
+internal const val CARD_SAVE_TAG = "card_save"
+internal const val CARD_CANCEL_TAG = "card_cancel"
 
-/** The OAL's "keep your change?" prompt body, naming the field and the card it sits on. */
-internal fun pendingCardEditMessage(edit: PendingCardEdit): String {
-    val where = if (edit.cardTitle.isBlank()) "\u201C${edit.fieldLabel}\u201D"
-    else "\u201C${edit.fieldLabel}\u201D on ${edit.cardTitle}"
-    return "$where holds a value you have not saved. Keep it before you change the overall length?"
-}
+/** A tap on the drawing waiting on the "Save changes?" answer: the held edit and the tapped component. */
+private data class UnsavedTap(val edit: PendingCardEdit, val targetId: String?)
 
 /** Two 48 dp icon buttons side by side. */
 /** The OAL text box's width cap in a column — the phone's historical 240 dp. */
 private val OAL_FIELD_MAX_WIDTH = 240.dp
+
+/** The OAL text box's height as laid out: the 56 dp outlined box plus the 8 dp its floating label stands above it. */
+private val OAL_FIELD_ROW_HEIGHT = 64.dp
 
 private val OAL_ACTION_SLOT_WIDTH = 96.dp
 private val OAL_ACTION_SLOT_HEIGHT = 48.dp

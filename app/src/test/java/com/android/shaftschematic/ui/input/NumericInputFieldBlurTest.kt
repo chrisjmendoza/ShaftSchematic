@@ -35,7 +35,7 @@ import org.robolectric.annotation.Config
 
 /**
  * Compose-level coverage of the field's two wired behaviours: commit-on-blur, and the
- * `onDirtyChange` reporting — the same condition that shows a card field's ✓ / ✗ pair.
+ * `onDirtyChange` reporting — the same condition that brings up the card Save / Cancel bar.
  *
  * [BlurCommitPolicyTest] pins the commit decision; this pins that the decision is actually
  * *wired into* the field — that real focus and blur events reach it, and that the captured
@@ -67,6 +67,8 @@ class NumericInputFieldBlurTest {
         externalIssueText: String? = null,
         landRestoredEdit: Boolean = false,
         parseValid: (String) -> Boolean = { it.toFloatOrNull() != null },
+        /** A model-backed host: the committed value comes back as the next seed. */
+        onCommitted: ((String) -> Unit)? = null,
     ) {
         val focusManager = LocalFocusManager.current
         MaterialTheme {
@@ -82,7 +84,7 @@ class NumericInputFieldBlurTest {
                     landRestoredEdit = landRestoredEdit,
                     onDirtyChange = { dirtyReports += it },
                     parseValid = parseValid,
-                    onCommit = { commits += it }
+                    onCommit = { commits += it; onCommitted?.invoke(it) }
                 )
                 Button(
                     onClick = { focusManager.clearFocus() },
@@ -189,6 +191,28 @@ class NumericInputFieldBlurTest {
         rule.onNodeWithTag(FIELD).performImeAction()
 
         assertEquals(listOf("12.5"), commits)
+    }
+
+    @Test
+    fun `after an IME Done the blur baseline is what Done landed`() {
+        // Done keeps focus, and the caller hands the committed value straight back as the new
+        // seed. Retyping the value the field held BEFORE Done, then leaving, is an edit against
+        // what Done landed — it must commit (on-device report: the box showed the old value
+        // while the model kept the Done value).
+        var initial by mutableStateOf("12.5")
+        rule.setContent {
+            Host(initialText = initial, onCommitted = { initial = it })
+        }
+
+        focusField()
+        rule.onNodeWithTag(FIELD).performTextReplacement("13")
+        rule.onNodeWithTag(FIELD).performImeAction()
+        rule.waitForIdle()
+        rule.onNodeWithTag(FIELD).performTextReplacement("12.5")
+        focusElsewhere()
+        rule.waitForIdle()
+
+        assertEquals(listOf("13", "12.5"), commits)
     }
 
     /* ── A refused value is reported, never swapped out silently ───────────────── */
@@ -339,7 +363,7 @@ class NumericInputFieldBlurTest {
         assertEquals("a placeholder is never a value", emptyList<String>(), commits)
     }
 
-    /* ── onDirtyChange — the condition behind a card field's ✓ / ✗ pair ──────── */
+    /* ── onDirtyChange — the condition behind the card Save / Cancel bar ─────── */
 
     @Test
     fun `a freshly composed field reports itself clean`() {
@@ -374,7 +398,7 @@ class NumericInputFieldBlurTest {
     @Test
     fun `reverting an invalid edit reports clean again`() {
         // The field reverts to its last valid text instead of committing, so nothing is
-        // pending afterwards — the ✓ / ✗ pair must go rather than stay forever.
+        // pending afterwards — the card Save / Cancel bar must go rather than stay forever.
         rule.setContent { Host() }
         focusField()
         rule.onNodeWithTag(FIELD).performTextReplacement("abc")

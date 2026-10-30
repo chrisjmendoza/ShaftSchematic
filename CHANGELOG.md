@@ -8,6 +8,31 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-30
 
+### fix(ui): "Add spot" on the wear detail page scrolls to the new spot card
+
+- Tapping **Add spot** now brings the new spot card into view. The drawing at the top of the page
+  grows a rail row per spot, so the add used to push the button and the new card down the screen
+  while the page stayed where it was — it read as scrolling away from the section just opened
+  (on-device report).
+
+### fix(ui): a card's Save / Cancel takes the Overall Length field's place
+
+- The ✓ / ✗ moved out of the card fields and into the Overall Length row while a card value is
+  unsaved: the row names the waiting field and its card, ✓ saves the value and ✗ puts the old one
+  back. Inside the field the pair hid the value on half-width fields (on-device report); on-device
+  ruling: the control belongs where the OAL's own pair already lives, always on screen above the
+  carousel.
+- The Overall Length field returns as soon as the card is clean, so the "Keep your change?"
+  prompt is gone — the field cannot be reached while a card value is unsaved.
+- On phones (and the medium single-column layout) the Overall Length row now stays above the
+  scrolling editor content, so the Save / Cancel bar is on screen with the keyboard up instead of
+  scrolling away with the field.
+- Keyboard Done on a card field, then retyping the old value and moving on, now saves the retyped
+  value (the field's "unchanged since focus" check was still measured against the pre-Done text).
+- Swiping to another card, the edge arrows, and tapping a component on the drawing ask "Save
+  changes?" (Save | Discard | Keep editing) while a card value is unsaved. A Save the field
+  refuses (a 0 length) stays on that card with its "not applied" notice instead of changing cards.
+
 ### feat(ui): card fields accept with the OAL's ✓ / ✗ instead of a Save button; the OAL asks before taking over a pending card edit
 
 - While a card field holds a typed value that has not been saved, the green ✓ and red ✗ from

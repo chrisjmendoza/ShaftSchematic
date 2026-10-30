@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -423,11 +424,26 @@ fun ComponentWearDetailOverlay(
             HorizontalDivider()
 
             // ── Scrollable content ───────────────────────────────────────────
+            val scroll = rememberScrollState()
+            // Set by "Add spot" and consumed once the new card is in the column. The canvas at
+            // the top of this column grows a rail row per spot, so an add pushed the button and
+            // the new card DOWN the screen while the scroll stayed put — the page read as
+            // scrolling away from the section just opened (on-device report). The new card is
+            // always the column's last item, so the end of the content is where it is.
+            var scrollToNewSpot by remember { mutableStateOf(false) }
+            LaunchedEffect(spots.size) {
+                if (!scrollToNewSpot) return@LaunchedEffect
+                scrollToNewSpot = false
+                // One frame so the taller canvas and the new card are laid out and the
+                // scroll's extent includes them.
+                withFrameNanos { }
+                scroll.animateScrollTo(scroll.maxValue)
+            }
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .imePadding()
-                    .verticalScroll(rememberScrollState())
+                    .verticalScroll(scroll)
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
@@ -882,7 +898,10 @@ fun ComponentWearDetailOverlay(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text("Wear spots", style = MaterialTheme.typography.titleMedium)
-                        Button(onClick = { onAddSpot(componentId) }) {
+                        Button(
+                            onClick = { scrollToNewSpot = true; onAddSpot(componentId) },
+                            modifier = Modifier.testTag(WEAR_ADD_SPOT_TAG),
+                        ) {
                             Icon(Icons.Filled.Add, contentDescription = null)
                             Spacer(Modifier.width(6.dp))
                             Text("Add spot")
@@ -1548,3 +1567,6 @@ internal fun DrawScope.drawBreakEdgeCompose(
     )
     drawPath(sweep, color = color, style = Stroke(width = strokeWidthPx))
 }
+
+/** testTag of the wear detail page's "Add spot" button. */
+internal const val WEAR_ADD_SPOT_TAG = "wear_add_spot"

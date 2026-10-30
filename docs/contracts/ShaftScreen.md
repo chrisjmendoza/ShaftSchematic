@@ -290,18 +290,31 @@ Notes
 - `formatDisplay(mm, unit)` converts and formats a value once for display; it always expects
   mm input.  
 - `ComponentCard` handles its own remove button; callers simply supply `onRemove = { … }`.  
-- Every field on a `ComponentCard` shows the Overall Length field's **green ✓ / red ✗** pair
-  beside itself while it holds an edit that has not landed (`ui/input/AcceptCancelButtons.kt`,
-  the ONE construction both use; tags `field_accept` / `field_cancel`). ✓ commits and drops
-  the keyboard, ✗ puts the stored value back and commits nothing. Fields still commit on blur
-  and IME Done; the pair is there for the case those miss — chips/toggles/checkboxes never TAKE
-  focus, so a typed value followed by a chip tap sits uncommitted (on-device report), and its
-  pair stays beside it. It replaced a full-width Save button at the foot of the card that was
-  hard to find on a long card (on-device request). `ComponentCard` turns it on for its
-  `content` through `LocalFieldAcceptCancel`; the Add dialogs commit through their own Add
-  button and show none. Commit-on-blur is otherwise **completely unchanged**. A tap on the
-  Overall Length field while such a value is pending asks Keep | Discard | Cancel first
-  (`PendingCardEdits`, `OverallLength.md`). See `NumberField.md`.  
+- On the phone and MEDIUM single-column layouts the Overall Length row stands ABOVE the
+  scrolling editor column, not inside it, so it — and the card Save / Cancel bar that takes its
+  place — stays on screen with the keyboard up (on-device report: inside the column the bar
+  scrolled above the keyboard with the focused field). EXPANDED already keeps it beside the
+  drawing.
+- While a field on a `ComponentCard` holds an edit that has not landed, the **Overall Length row
+  shows the card Save / Cancel bar in the OAL field's place** (`OverallLengthRow` →
+  `CardSaveBar`; tags `card_save_bar` / `card_save` / `card_cancel`): "Unsaved change" over the
+  waiting field and its card, and the OAL's own **green ✓ / red ✗** (`ui/input/AcceptCancelButtons.kt`,
+  the ONE construction both use) in the OAL's own action slot. ✓ commits through the field's own
+  handle and drops the keyboard, ✗ puts the stored value back and commits nothing; the OAL field
+  returns once the card is clean. Why there: the OAL row is always on screen above the carousel,
+  where a Save at the end of a long card was hidden (on-device ruling), and a pair inside each
+  field hid the value in a half-width field (on-device report). Fields still commit on blur and
+  IME Done; the bar is there for the case those miss — chips/toggles/checkboxes never TAKE focus,
+  so a typed value followed by a chip tap sits uncommitted (on-device report), and the bar stays
+  until it is answered. Fields register through `PendingCardEdits` (`ui/screen/PendingCardEdit.kt`),
+  provided once around the editor; the Add dialogs commit through their own Add button and
+  register nothing. Commit-on-blur is otherwise **completely unchanged**.
+  **A card change under a pending edit asks first** — a carousel swipe, an edge arrow, a tap on a
+  peeking card, or a tap on a component in the drawing (or a warning line) opens "Save changes?"
+  (`UnsavedCardEditDialog`: Save | Discard | Keep editing); Keep editing after a swipe scrolls the
+  pager back to the card holding the edit, since the selection never moved. The hidden field
+  would otherwise keep focus and the keyboard, and typing would land on a card the user cannot see
+  (on-device ruling). See `NumberField.md` and `OverallLength.md`.  
 - **Card fields carry two card-level validations, and neither rewrites a stored value.**
   A card whose component runs past `spec.overallLengthMm` shows the amber advisory chip
   "Extends past shaft length (OAL *n*")" (the OAL in the document's display unit, inch or

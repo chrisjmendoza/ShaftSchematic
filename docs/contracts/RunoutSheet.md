@@ -456,6 +456,12 @@ length, formatted via the existing `disp`/`abbr` helpers in the active unit). Sp
 the canvas use `NumericInputField` for Start/Length (commit-on-blur, tap-and-leave no-op,
 per `NumberField.md`; no validator — see "never revert" below) plus a same-discipline Notes field, a delete icon per card, and an
 "Add spot" button wired to `ShaftViewModel.addWearSpot`/`updateWearSpot`/`removeWearSpot`.
+**"Add spot" scrolls the page to the new card** (`scrollToNewSpot`, consumed by a
+`LaunchedEffect(spots.size)` that animates the column to its end once the taller canvas and the
+new card are laid out): the canvas grows a rail row per spot, so an add pushed the button and the
+new card DOWN while the scroll stayed put, and the page read as scrolling away from the section it
+had just opened (on-device report). An Undo that restores a spot does not scroll. Pinned by
+`WearAddSpotScrollTest`.
 
 **Break-edge eye orientation (2026-07-18 fix):** `drawBreakEdgeCompose`'s `eyeAtTop` must be
 chosen so the eye's larger "sweep" curve bulges into the **void** side of the break, never the

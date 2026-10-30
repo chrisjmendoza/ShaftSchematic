@@ -72,10 +72,6 @@ import com.android.shaftschematic.model.BoltHoleClocking
 import com.android.shaftschematic.model.BoltHoleStyle
 import com.android.shaftschematic.model.SlotAuthoredReference
 import com.android.shaftschematic.model.keywayCount
-import com.android.shaftschematic.ui.input.AcceptCancelButtons
-import com.android.shaftschematic.ui.input.FIELD_ACCEPT_TAG
-import com.android.shaftschematic.ui.input.FIELD_CANCEL_TAG
-import com.android.shaftschematic.ui.input.LocalFieldAcceptCancel
 import com.android.shaftschematic.ui.input.NumericInputField
 import com.android.shaftschematic.ui.input.shouldCommitOnBlur
 import com.android.shaftschematic.ui.order.ComponentKind
@@ -120,6 +116,17 @@ internal fun carouselPeekTag(page: Int): String = "carousel_peek_$page"
 internal data class RowRef(
     val component: ResolvedComponent,
     val explicitIndex: Int? = null
+)
+
+/**
+ * A card change waiting on the "Save changes?" answer: the held [edit], the component the change
+ * goes to, and the page the pager left — set only when a swipe already moved it, so "Keep editing"
+ * can bring the card holding the edit back.
+ */
+private data class UnsavedSwipe(
+    val edit: PendingCardEdit,
+    val targetId: String?,
+    val pageToReturnTo: Int?,
 )
 
 /**
@@ -271,6 +278,33 @@ internal fun ComponentCarouselPager(
 
     val rowIds = remember(rowsSorted) { rowsSorted.map { it.component.id } }
 
+    // Plain `remember`: the edit's lambdas are not saveable. A recreation drops the dialog and the
+    // edit simply stays pending, with the Save / Cancel bar still showing.
+    val pendingEdits = LocalPendingCardEdits.current
+    var unsavedPrompt by remember { mutableStateOf<UnsavedSwipe?>(null) }
+    // True while "Keep editing" scrolls the pager back to the card holding the edit, so that
+    // scroll is never adopted as a swipe of its own.
+    var returningToEdit by remember { mutableStateOf(false) }
+
+    // A card change while a field holds an unsaved value asks first (on-device ruling): the
+    // hidden field would otherwise keep focus and the keyboard, and typing would land on the
+    // card the user cannot see.
+    fun selectOrAsk(targetId: String?, moved: Boolean, startPage: Int?) {
+        val pending = pendingEdits?.current
+        if (pending == null) onSelectComponentById(targetId)
+        else unsavedPrompt = UnsavedSwipe(pending, targetId, if (moved) startPage else null)
+    }
+
+    // The edge arrows and a peeking neighbour's tap: a plain scroll while every field is settled
+    // (the settled swipe then adopts the card), the prompt BEFORE the pager moves otherwise.
+    fun goToPage(page: Int) {
+        if (pendingEdits?.current == null) {
+            scope.launch { pagerState.animateScrollToPage(page) }
+        } else if (page != pagerState.currentPage) {
+            selectOrAsk(rowsSorted.getOrNull(page)?.component?.id, moved = false, startPage = null)
+        }
+    }
+
     // Seed selection on open (nothing selected → FIRST card, the AFT-most component) and
     // self-heal an orphaned selection (id no longer resolves — auto-body ids are
     // position-derived and regenerate on every edit) by adopting the current page WITHOUT
@@ -310,18 +344,56 @@ internal fun ComponentCarouselPager(
     LaunchedEffect(pagerState.isScrollInProgress, selectedComponentId, rowsSorted) {
         if (pagerState.isScrollInProgress) {
             val selectedIndex = carouselTargetIndex(rowIds, selectedComponentId)
-            if (isUserInitiatedScroll(selectedComponentId, selectedIndex, pagerState.currentPage)) {
+            if (!returningToEdit &&
+                isUserInitiatedScroll(selectedComponentId, selectedIndex, pagerState.currentPage)
+            ) {
                 pagerScrollStartedByUser = true
                 pagerStartPage = pagerState.currentPage
             }
         } else if (pagerScrollStartedByUser) {
             val endPage = pagerState.currentPage
-            if (shouldAdoptSwipeSelection(pagerStartPage, endPage)) {
-                onSelectComponentById(rowsSorted.getOrNull(endPage)?.component?.id)
-            }
+            val startPage = pagerStartPage
             pagerScrollStartedByUser = false
             pagerStartPage = null
+            if (shouldAdoptSwipeSelection(startPage, endPage)) {
+                selectOrAsk(rowsSorted.getOrNull(endPage)?.component?.id, moved = true, startPage = startPage)
+            }
         }
+    }
+
+    // A swipe moved the pager but never the selection, so neither sync effect above re-runs to
+    // bring it back: the card holding the edit is scrolled to here. Null = the pager never moved.
+    fun returnToEdit(page: Int?) {
+        if (page == null) return
+        scope.launch {
+            returningToEdit = true
+            try {
+                pagerState.animateScrollToPage(page)
+            } finally {
+                returningToEdit = false
+            }
+        }
+    }
+
+    unsavedPrompt?.let { prompt ->
+        UnsavedCardEditDialog(
+            edit = prompt.edit,
+            onSave = {
+                unsavedPrompt = null
+                // A refused value stays on its card with its notice: the change is not made.
+                if (prompt.edit.accept()) onSelectComponentById(prompt.targetId)
+                else returnToEdit(prompt.pageToReturnTo)
+            },
+            onDiscard = {
+                unsavedPrompt = null
+                prompt.edit.cancel()
+                onSelectComponentById(prompt.targetId)
+            },
+            onKeepEditing = {
+                unsavedPrompt = null
+                returnToEdit(prompt.pageToReturnTo)
+            },
+        )
     }
 
     val rowHeight = if (fillHeight) Modifier.fillMaxHeight() else Modifier.height(CAROUSEL_HEIGHT)
@@ -329,11 +401,7 @@ internal fun ComponentCarouselPager(
         if (showEdgeArrows) {
             EdgeNavButton(
                 left = true,
-                onClick = {
-                    scope.launch {
-                        pagerState.animateScrollToPage((pagerState.currentPage - 1).coerceAtLeast(0))
-                    }
-                },
+                onClick = { goToPage((pagerState.currentPage - 1).coerceAtLeast(0)) },
                 modifier = Modifier.fillMaxHeight().width(arrowWidth).padding(start = edgeGap)
             )
         }
@@ -444,7 +512,7 @@ internal fun ComponentCarouselPager(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null,
                                 onClickLabel = "Show this component",
-                            ) { scope.launch { pagerState.animateScrollToPage(page) } }
+                            ) { goToPage(page) }
                     )
                 }
             }
@@ -454,13 +522,7 @@ internal fun ComponentCarouselPager(
         if (showEdgeArrows) {
             EdgeNavButton(
                 left = false,
-                onClick = {
-                    scope.launch {
-                        pagerState.animateScrollToPage(
-                            (pagerState.currentPage + 1).coerceAtMost(pageCount - 1)
-                        )
-                    }
-                },
+                onClick = { goToPage((pagerState.currentPage + 1).coerceAtMost(pageCount - 1)) },
                 modifier = Modifier.fillMaxHeight().width(arrowWidth).padding(end = edgeGap)
             )
         }
@@ -1100,14 +1162,11 @@ internal fun ComponentCard(
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
                     }
                 }
-                // Every field on the card shows the OAL's ✓ / ✗ pair beside itself while it holds
-                // an edit (on-device request: a Save button at the foot of a long card was hard to
-                // find). Only `content` is wrapped: the title row's rename editor is a bespoke
-                // field with its own commit.
-                CompositionLocalProvider(
-                    LocalFieldAcceptCancel provides true,
-                    LocalCardTitle provides title,
-                ) {
+                // The card's fields register a held edit with the editor's PendingCardEdits, which
+                // swaps the Overall Length field for the card Save / Cancel bar; the title names
+                // the card there. Only `content` is wrapped: the title row's rename editor is a
+                // bespoke field with its own commit.
+                CompositionLocalProvider(LocalCardTitle provides title) {
                     content()
                 }
             }
@@ -1159,8 +1218,9 @@ internal fun FieldPair(first: @Composable () -> Unit, second: @Composable () -> 
 /**
  * Numeric input field with commit-on-blur, fraction support, and optional inline validator.
  *
- * Inside a [ComponentCard] it shows the ✓ / ✗ pair while it holds an uncommitted edit
- * ([LocalFieldAcceptCancel]) — no per-call-site wiring, so a newly added field cannot miss it.
+ * Inside the editor it registers an uncommitted edit with [LocalPendingCardEdits], so the card
+ * Save / Cancel bar in the Overall Length row can land or drop it — no per-call-site wiring, so a
+ * newly added field cannot miss it.
  */
 @Composable
 internal fun CommitNum(
@@ -1214,9 +1274,10 @@ internal fun CommitNum(
  * carries a leading "M" and a "×"/"x" separator — so it commits the raw typed text
  * verbatim and lets the caller parse it (`ThreadDesignation.parse`).
  *
- * Shows the card's ✓ / ✗ pair like [CommitNum] while it holds an edit — it is the same
- * commit-on-blur shape. ✓ commits the typed text and releases focus; ✗ puts the settled text
- * back. Both move the focus baseline first, so the blur that follows commits nothing more.
+ * Registers a held edit with [LocalPendingCardEdits] like [CommitNum] — it is the same
+ * commit-on-blur shape — so the card Save / Cancel bar acts on it: save commits the typed text
+ * and releases focus; cancel puts the settled text back. Both move the focus baseline first, so
+ * the blur that follows commits nothing more.
  */
 @Composable
 internal fun CommitDesignationField(
@@ -1231,14 +1292,15 @@ internal fun CommitDesignationField(
     // field from reporting itself dirty forever after one.
     var settledText by remember(initialText) { mutableStateOf(initialText) }
     val isDirty = text != settledText
-    val showAcceptCancel = LocalFieldAcceptCancel.current && isDirty
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
 
-    fun acceptEdit() {
+    // Always lands: the caller drops a designation that does not parse, so there is no refusal.
+    fun acceptEdit(): Boolean {
         settledText = text
         textWhenFocused = text
         onCommit(text)
         focusManager.clearFocus()
+        return true
     }
 
     fun cancelEdit() {
@@ -1263,18 +1325,6 @@ internal fun CommitDesignationField(
         value = text,
         onValueChange = { text = it },
         label = { Text(label) },
-        trailingIcon = if (showAcceptCancel) {
-            {
-                AcceptCancelButtons(
-                    onAccept = { acceptEdit() },
-                    onCancel = { cancelEdit() },
-                    acceptDescription = "Accept $label",
-                    cancelDescription = "Cancel $label change",
-                    acceptTag = FIELD_ACCEPT_TAG,
-                    cancelTag = FIELD_CANCEL_TAG,
-                )
-            }
-        } else null,
         singleLine = true,
         isError = !isValid,
         supportingText = if (!isValid) { { Text(ThreadDesignation.INVALID_MESSAGE) } } else null,
