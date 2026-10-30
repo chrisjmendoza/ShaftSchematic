@@ -1041,11 +1041,14 @@ On-device request following the worn-sections review:
   (`pitXTouchesHalo`, `geom/WearPitMath.kt`). Wear-area bands are never hidden, and the z-order
   is unchanged. Consolidated sheet only — the wear document and the canvas overlays draw every
   pit, the same posture as the sheet's in-profile liner-shade lock.
-- **Shaded wear areas (default; on-device request, ruled the preferred look).** App-wide look pref
-  `PdfPrefs.wearAreasShaded` — Settings → Drawing "Shade wear areas on the shaft drawing" (last of
-  the wear rows) and the Output tab's PDF options sheet (`RunoutWearOptionsSheet(
-  showWearAreasShadedRow)`, Shading section — a remote control for the one value); captured by
-  Drawing profiles. ON: each wear area is ONE black fill at `CONSOLIDATED_WEAR_SHADE_ALPHA` (26/255
+- **Wear-area style (Grey by default; on-device request, ruled the preferred look).** App-wide
+  look pref `PdfPrefs.wearAreaStyle` — None | Lines | Grey | Both — Settings → Drawing "Wear areas
+  on the shaft drawing" (last of the wear rows) and the Output tab's PDF options sheet
+  (`RunoutWearOptionsSheet(showWearAreaStyleRow)`, Shading section — a remote control for the one
+  value); captured by Drawing profiles. Both draws the vertical lines over the grey (on-device
+  report: the grey alone read as a shaded liner); None marks nothing and the values print on white
+  halos. A store or profile from the old on/off switch (`wearAreasShaded`) reads on = Grey,
+  off = Lines. Grey: each wear area is ONE black fill at `CONSOLIDATED_WEAR_SHADE_ALPHA` (26/255
   ≈ 10% — fixed; the wear document's own `wearBandShadeFrac`, default ≈16%, is a different mark
   under its own slider) over the clamped liner span at the full drawn liner height, from the ONE
   `consolidatedWearBandRects`, drawn first in the marks pass, no vertical strokes. Every in-profile

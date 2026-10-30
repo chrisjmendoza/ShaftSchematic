@@ -1038,15 +1038,18 @@ internal val helpSections: List<HelpSection> = listOf(
                 manualAnchor = "settings-drawing-lines",
             ),
             HelpTopic(
-                "Drawing — $WEAR_AREAS_SHADED_TITLE",
+                "Drawing — $WEAR_AREA_STYLE_TITLE",
                 "Settings → Drawing, the last of the wear rows, and the Output tab's PDF options " +
-                    "(Shading). Default on. On the consolidated sheet each measured wear area " +
-                    "prints as a light grey highlight over the liner instead of vertical lines, and " +
-                    "the measured diameters print straight on it with no white box — a line that " +
-                    "runs under a value is still interrupted at the value.\n\n" +
-                    "Switch it off for the vertical lines. The wear sheet keeps its own \"Wear area " +
-                    "shade\". App-wide and captured by Drawing profiles; \"Restore Drawing " +
-                    "defaults\" turns it back on.",
+                    "(Shading). How each measured wear area is marked on the consolidated sheet:\n\n" +
+                    "None — not marked; the measured values still print.\n" +
+                    "Lines — vertical lines across the wear area, the hand-drawn mark.\n" +
+                    "Grey (default) — a light grey highlight over the liner; the measured " +
+                    "diameters print straight on it with no white box.\n" +
+                    "Both — the vertical lines over the grey, so a wear area cannot be mistaken " +
+                    "for a shaded liner.\n\n" +
+                    "A line that runs under a value is always interrupted at the value. The wear " +
+                    "sheet keeps its own \"Wear area shade\". App-wide and captured by Drawing " +
+                    "profiles; \"Restore Drawing defaults\" puts it back to Grey.",
                 manualAnchor = "settings-drawing-wear",
             ),
             HelpTopic(

@@ -54,6 +54,7 @@ import com.android.shaftschematic.pdf.dim.RailPlanner
 import com.android.shaftschematic.pdf.dim.buildLinerSpans
 import com.android.shaftschematic.pdf.dim.oalSpan
 import com.android.shaftschematic.pdf.render.PdfDimensionRenderer
+import com.android.shaftschematic.settings.WearAreaStyle
 import com.android.shaftschematic.settings.PDF_SBREAK_THRESHOLD_DEFAULT
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.settings.RunoutConfig
@@ -866,12 +867,11 @@ internal fun composeRunoutPdfOnCanvas(
             minTextSize = WORN_VALUE_MIN_TEXT_PT,
         )
     } else emptyList()
-    // Settings → Drawing "Shade wear areas on the shaft drawing" (`PdfPrefs.wearAreasShaded`,
-    // default ON — on-device ruling): each wear area is a light grey fill instead of vertical
-    // strokes, and a value's knockout takes the shade under it ([shadeUnder]) so it reads as no
-    // box at all while still breaking any line under the digits.
-    val shadeWearAreas = pdfPrefs.wearAreasShaded
-    val wearBandRects = if (printValues && shadeWearAreas) {
+    // Settings → Drawing "Wear areas on the shaft drawing" (`PdfPrefs.wearAreaStyle`): where the
+    // light grey fill is drawn, a value's knockout takes the shade under it ([shadeUnder]) so it
+    // reads as no box at all while still breaking any line under the digits.
+    val wearAreaStyle = pdfPrefs.wearAreaStyle
+    val wearBandRects = if (printValues && wearAreaStyle.fills) {
         consolidatedWearBandRects(wearRecord, docSpec.liners, shaftCy, ::xAt, ::rPx)
     } else emptyList()
     if (printValues) {
@@ -880,7 +880,7 @@ internal fun composeRunoutPdfOnCanvas(
             cy = shaftCy, xAt = ::xAt, rPx = ::rPx, outline = outline,
             pitSmallHalf = WEAR_PIT_SMALL_HALF_PROFILE_PT,
             valueHalos = (wornValues + readingValues).map { it.column },
-            shaded = shadeWearAreas,
+            style = wearAreaStyle,
         )
     }
     if (drawWear) {
@@ -1266,7 +1266,7 @@ internal fun drawWornSections(
  * Draw planned in-profile values — each a knockout halo, then its rotated text.
  *
  * Where a halo lies over a shaded wear area ([shadeUnder], the consolidated sheet's
- * `PdfPrefs.wearAreasShaded` mode) the knockout is re-shaded with the band's own grey inside the
+ * `PdfPrefs.wearAreaStyle` grey) the knockout is re-shaded with the band's own grey inside the
  * band, so it matches what surrounds it: no white box punches a hole in the highlight (on-device
  * request), yet a line passing under the value — a liner face, an S-break, a section boundary —
  * is still knocked out rather than striking the digits. Empty [shadeUnder] prints today's white
@@ -1364,12 +1364,13 @@ internal fun consolidatedWearBandRects(
  * `geom/WearPitMath.kt`). Marks only — value text is drawn later by [drawWornSections] /
  * [drawDiaReadingsInProfile] (text always on top).
  *
- * A band is a light grey fill ([consolidatedWearBandRects]: the clamped liner span at the full drawn
- * liner height), black at [CONSOLIDATED_WEAR_SHADE_ALPHA], when [shaded] (`PdfPrefs.wearAreasShaded`,
- * the default — on-device request: "clearer, and you don't need a white box around the wear
- * diameter text"); otherwise thin vertical strokes across the span (the wear composer's
- * [drawVerticalBand]), the shop's hand mark. Drawn first in this pass, so pits, boundaries and text
- * sit on top.
+ * A band draws per [style] (`PdfPrefs.wearAreaStyle`): a light grey fill
+ * ([consolidatedWearBandRects]: the clamped liner span at the full drawn liner height, black at
+ * [CONSOLIDATED_WEAR_SHADE_ALPHA] — the default, on-device request: "clearer, and you don't need a
+ * white box around the wear diameter text"), thin vertical strokes across the span (the wear
+ * composer's [drawVerticalBand], the shop's hand mark), both — the lines over the grey, since the
+ * grey alone read on-device as a shaded liner — or nothing. Drawn first in this pass, so pits,
+ * boundaries and text sit on top.
  *
  * Orphan spots (liner no longer in the spec) and orphan pits are simply skipped —
  * render-layer orphan handling, stored record never mutated.
@@ -1390,16 +1391,15 @@ internal fun drawWearMarksOnRunoutProfile(
     pitSmallHalf: Float,
     /** The halos of every value the sheet will print in the profile — planned before this pass. */
     valueHalos: List<WornValueColumn> = emptyList(),
-    /** Fill each wear area light grey instead of stroking it. */
-    shaded: Boolean = false,
+    /** How each wear area draws — grey, lines, both or nothing. */
+    style: WearAreaStyle = WearAreaStyle.LINES,
 ) {
-    if (record.spots.isNotEmpty()) {
+    if (record.spots.isNotEmpty() && style != WearAreaStyle.NONE) {
         val bandLines = Paint(outline).apply { strokeWidth = outline.strokeWidth * 0.5f; alpha = 120 }
         val bandFill = consolidatedWearShadePaint()
         consolidatedWearBandRects(record, liners, cy, xAt, rPx).forEach { band ->
-            if (shaded) {
-                c.drawRect(band, bandFill)
-            } else {
+            if (style.fills) c.drawRect(band, bandFill)
+            if (style.strokes) {
                 drawVerticalBand(c, band.left, band.right, band.top, band.bottom, bandLines, pitchPt = 6f)
             }
         }

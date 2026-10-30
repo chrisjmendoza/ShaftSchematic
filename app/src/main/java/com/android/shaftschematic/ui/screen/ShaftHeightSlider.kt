@@ -43,6 +43,7 @@ import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.android.shaftschematic.settings.WearAreaStyle
 import com.android.shaftschematic.geom.profileFeatureSpans
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
@@ -1751,37 +1752,47 @@ internal fun estimatedLinerKeptFracOfTrue(
     return requestedFracOfTrue * lambda
 }
 
-/** "Shade wear areas on the shaft drawing" — one wording for Settings, the Output sheet and Help. */
-internal const val WEAR_AREAS_SHADED_TITLE = "Shade wear areas on the shaft drawing"
-internal const val WEAR_AREAS_SHADED_CAPTION =
-    "Light grey instead of the vertical lines on the consolidated sheet; the measured values " +
-        "print without their white box"
+/** "Wear areas on the shaft drawing" — one wording for Settings, the Output sheet and Help. */
+internal const val WEAR_AREA_STYLE_TITLE = "Wear areas on the shaft drawing"
+
+/** One-line description of what the selected wear-area style draws on the consolidated sheet. */
+internal fun wearAreaStyleHint(style: WearAreaStyle): String = when (style) {
+    WearAreaStyle.NONE -> "Wear areas are not marked; the measured values still print."
+    WearAreaStyle.LINES -> "Vertical lines across each wear area, the hand-drawn mark."
+    WearAreaStyle.SHADE -> "A light grey highlight; the measured values print without a white box."
+    WearAreaStyle.BOTH -> "Vertical lines over the light grey, so a wear area cannot be read as a shaded liner."
+}
 
 /**
- * The app-wide `PdfPrefs.wearAreasShaded` switch — Settings → Drawing and the Output tab's PDF
- * options sheet, one construction for the one value (the options-sheet rule: a look control on a
- * sheet is a remote control for the shared pref).
+ * The app-wide `PdfPrefs.wearAreaStyle` chips — None | Lines | Grey | Both — in Settings →
+ * Drawing and the Output tab's PDF options sheet, one construction for the one value (the
+ * options-sheet rule: a look control on a sheet is a remote control for the shared pref).
  */
 @Composable
-internal fun WearAreasShadedRow(
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
+internal fun WearAreaStyleChips(
+    style: WearAreaStyle,
+    onCommit: (WearAreaStyle) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text(WEAR_AREAS_SHADED_TITLE, style = MaterialTheme.typography.bodyLarge)
-            Text(
-                WEAR_AREAS_SHADED_CAPTION,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+    Column(modifier) {
+        Text(WEAR_AREA_STYLE_TITLE, style = MaterialTheme.typography.titleSmall)
+        Spacer(Modifier.height(4.dp))
+        ChipFlowRow(spacing = 0.dp) {
+            WearAreaStyle.entries.forEach { option ->
+                FilterChip(
+                    selected = style == option,
+                    onClick = { onCommit(option) },
+                    label = { ChipLabel(option.uiLabel()) },
+                    modifier = Modifier
+                        .padding(end = 8.dp)
+                        .testTag("pdf_wear_area_style_${option.name.lowercase()}"),
+                )
+            }
         }
-        Spacer(Modifier.width(8.dp))
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-            modifier = Modifier.testTag("pdf_wear_areas_shaded"),
+        Text(
+            wearAreaStyleHint(style),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }

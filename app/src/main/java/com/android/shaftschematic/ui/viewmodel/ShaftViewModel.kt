@@ -2,6 +2,7 @@ package com.android.shaftschematic.ui.viewmodel
 import com.android.shaftschematic.settings.AppThemeMode
 import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.settings.PdfPrefs
+import com.android.shaftschematic.settings.WearAreaStyle
 import com.android.shaftschematic.settings.RunoutConfig
 import com.android.shaftschematic.pdf.PdfExportMode
 
@@ -488,9 +489,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     internal val _pdfShowUnitsNote = MutableStateFlow(PdfPrefs().showUnitsNote)
     val pdfShowUnitsNote: StateFlow<Boolean> = _pdfShowUnitsNote.asStateFlow()
 
-    // Settings → Drawing / Output tab options: "Shade wear areas on the shaft drawing".
-    internal val _pdfWearAreasShaded = MutableStateFlow(PdfPrefs().wearAreasShaded)
-    val pdfWearAreasShaded: StateFlow<Boolean> = _pdfWearAreasShaded.asStateFlow()
+    // Settings → Drawing / Output tab options: "Wear areas on the shaft drawing".
+    internal val _pdfWearAreaStyle = MutableStateFlow(PdfPrefs().wearAreaStyle)
+    val pdfWearAreaStyle: StateFlow<WearAreaStyle> = _pdfWearAreaStyle.asStateFlow()
 
     internal val _pdfExportMode = MutableStateFlow(PdfExportMode.Standard)
     val pdfExportMode: StateFlow<PdfExportMode> = _pdfExportMode.asStateFlow()
@@ -1239,9 +1240,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         viewModelScope.launch {
-            SettingsStore.pdfWearAreasShadedFlow(getApplication()).collectLatest { persisted ->
-                _pdfWearAreasShaded.value = persisted
-                SettingsStore.updatePdfPrefs { it.copy(wearAreasShaded = persisted) }
+            SettingsStore.pdfWearAreaStyleFlow(getApplication()).collectLatest { persisted ->
+                _pdfWearAreaStyle.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(wearAreaStyle = persisted) }
             }
         }
         viewModelScope.launch {

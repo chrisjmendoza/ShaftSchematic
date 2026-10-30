@@ -11,6 +11,7 @@ import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import com.android.shaftschematic.settings.WearAreaStyle
 import com.android.shaftschematic.ui.adaptive.currentWindowWidthClass
 import com.android.shaftschematic.ui.adaptive.restoreBaseOrientation
 import com.android.shaftschematic.ui.adaptive.unlockRotation
@@ -103,7 +104,7 @@ import com.android.shaftschematic.ui.viewmodel.setPdfShadedBodies
 import com.android.shaftschematic.ui.viewmodel.setPdfShadedLiners
 import com.android.shaftschematic.ui.viewmodel.setPdfUndercutLineArt
 import com.android.shaftschematic.ui.viewmodel.setPdfUndercutLinerOutline
-import com.android.shaftschematic.ui.viewmodel.setPdfWearAreasShaded
+import com.android.shaftschematic.ui.viewmodel.setPdfWearAreaStyle
 import com.android.shaftschematic.ui.viewmodel.setPdfUndercutSplitAtLinerEdge
 import com.android.shaftschematic.ui.viewmodel.setPdfShadedTapers
 import com.android.shaftschematic.ui.viewmodel.setPdfTieringMode
@@ -483,13 +484,13 @@ internal fun RunoutWearOptionsSheet(
     /** Locks the "Liners" shade row — see [ShadeInPdfChecks]. */
     linerShadeLocked: Boolean = false,
     /**
-     * Shows the app-wide "Shade wear areas on the shaft drawing" switch (`PdfPrefs.wearAreasShaded`)
-     * in the Shading section. On only for the consolidated sheet — the one document whose wear
-     * areas it restyles; a remote control for the one Settings value.
+     * Shows the app-wide "Wear areas on the shaft drawing" chips (`PdfPrefs.wearAreaStyle`) in the
+     * Shading section. On only for the consolidated sheet — the one document whose wear areas it
+     * restyles; a remote control for the one Settings value.
      */
-    showWearAreasShadedRow: Boolean = false,
-    /** The app-wide `PdfPrefs.wearAreasShaded`; read only when [showWearAreasShadedRow]. */
-    wearAreasShaded: Boolean = true,
+    showWearAreaStyleRow: Boolean = false,
+    /** The app-wide `PdfPrefs.wearAreaStyle`; read only when [showWearAreaStyleRow]. */
+    wearAreaStyle: WearAreaStyle = WearAreaStyle.Default,
     /**
      * Shows the "Undercut drawing: line art (no shading)" row at the foot of the shade section.
      * On only for the UNDERCUT preview — `PdfPrefs.undercutLineArt` reaches one composer, so on
@@ -905,8 +906,8 @@ internal fun RunoutWearOptionsSheet(
                 undercutLinerOutline = undercutLinerOutline,
                 onSetUndercutLinerOutline = { vm.setPdfUndercutLinerOutline(it) },
             )
-            if (showWearAreasShadedRow) {
-                WearAreasShadedRow(checked = wearAreasShaded, onCheckedChange = { vm.setPdfWearAreasShaded(it) })
+            if (showWearAreaStyleRow) {
+                WearAreaStyleChips(style = wearAreaStyle, onCommit = { vm.setPdfWearAreaStyle(it) })
             }
         }
 

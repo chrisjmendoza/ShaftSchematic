@@ -263,16 +263,18 @@ last** — wear-area bands and pit X's (migrated from the retired wear tab,
 knockout halos (worn values, then `drawDiaReadingsInProfile`); do not draw any mark after
 the text passes. A pit X that would cross a value's halo is not drawn (on-device ruling: the
 value stands above the pits) — the values are planned before the marks pass and their halos
-handed to it (`pitXTouchesHalo`); wear-area bands are never hidden. **Shaded wear areas**
-(`PdfPrefs.wearAreasShaded`, app-wide look, default ON — on-device ruling): each band is ONE light
-grey fill (`CONSOLIDATED_WEAR_SHADE_ALPHA` ≈ 10%) over the clamped liner span at the full drawn
-liner height instead of vertical strokes, from the ONE `consolidatedWearBandRects`, drawn first in
-the marks pass; a value's knockout is then re-shaded with the band grey wherever it overlaps a band
+handed to it (`pitXTouchesHalo`); wear-area bands are never hidden. **Wear-area style**
+(`PdfPrefs.wearAreaStyle`, app-wide look: None | Lines | Grey | Both, default Grey — on-device
+ruling; Both because the grey alone read on-device as a shaded liner): the grey is ONE light
+fill (`CONSOLIDATED_WEAR_SHADE_ALPHA` ≈ 10%) over the clamped liner span at the full drawn liner
+height, the lines are the vertical strokes, both from the ONE `consolidatedWearBandRects`, drawn
+first in the marks pass (fill, then strokes); wherever the grey is drawn a value's knockout is then re-shaded with the band grey wherever it overlaps a band
 (the knockout and its re-shade drawn without anti-aliasing so no seam outlines them), so no white
 box shows on the highlight yet a liner face or S-break under the digits is still knocked out — text
 printed with no knockout at all had a liner face running between the digits, read as decimal
-points. The pit rule is unchanged (it guards the same halo); OFF prints today's strokes and white
-halos byte-identically; the liner-shade lock stands (a liner's own fill under a 10% band would hide
+points. The pit rule is unchanged (it guards the same halo); without the grey (Lines, None) the
+halos stay white; a store or profile from the old on/off switch reads on = Grey, off = Lines
+(`WearAreaStyle.fromLegacyShaded`); the liner-shade lock stands (a liner's own fill under a 10% band would hide
 the band). Values **auto-fit their local band** (`fittedValueTextSize`, floor
 `WORN_VALUE_MIN_TEXT_PT`/14 px canvas); the PDF profile follows the **hand-sheet
 compression convention** — drawn height follows TRUE diameter on the **default sizing
@@ -473,8 +475,8 @@ height" slider, the per-job **"Dye pen test" row** (`RunoutConfig.showDyePenTest
 OFF — `Dye pen test: ☐ PASS ☐ FAIL` in the TIR line's lane, the boxes marked from the ONE
 `WearRecord.dyePenResult` the wear sheet prints through the ONE `drawDyePenBoxes`; none or one,
 never both — the shared `DyePenResultChips` clears on re-tap, a blank draft prints both blank),
-the app-wide **"Shade wear areas on the shaft drawing"** switch in its PDF options' Shading
-section (a remote control for `PdfPrefs.wearAreasShaded`, also in Settings → Drawing),
+the app-wide **"Wear areas on the shaft drawing"** chips in its PDF options' Shading
+section (a remote control for `PdfPrefs.wearAreaStyle`, also in Settings → Drawing),
 and **Export all** (checked documents batch-written to a picked folder).
 Every SAF export goes through the hardened `util/PdfSafExport.writeShaftPdfToUri`
 (composer throw → valid error page, never a truncated file) and the collision export

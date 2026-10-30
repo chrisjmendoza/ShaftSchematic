@@ -41,6 +41,7 @@ import com.android.shaftschematic.settings.PDF_RUNOUT_BUBBLE_SCALE_MIN
 import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MAX_IN
 import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MIN_IN
 import com.android.shaftschematic.settings.PdfPrefs
+import com.android.shaftschematic.settings.WearAreaStyle
 import com.android.shaftschematic.util.AppLog
 import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.FractionStyle
@@ -210,7 +211,9 @@ object SettingsStore {
     private val KEY_PDF_OUTPUT_FONT = stringPreferencesKey("pdf_output_font")
     private val KEY_PDF_DUAL_UNIT_LAYOUT = stringPreferencesKey("pdf_dual_unit_layout")
     private val KEY_PDF_SHOW_UNITS_NOTE = booleanPreferencesKey("pdf_show_units_note")
+    // The old on/off switch the style replaced; read only when the style key was never written.
     private val KEY_PDF_WEAR_AREAS_SHADED = booleanPreferencesKey("pdf_wear_areas_shaded")
+    private val KEY_PDF_WEAR_AREA_STYLE = stringPreferencesKey("pdf_wear_area_style")
     private val KEY_PDF_WEAR_TRACE_DEPTH_FRAC = floatPreferencesKey("pdf_wear_trace_depth_frac")
     private val KEY_PDF_WEAR_BAND_SHADE_FRAC = floatPreferencesKey("pdf_wear_band_shade_frac")
     private val KEY_PDF_WEAR_JOIN_GAP_MAX_MM = floatPreferencesKey("pdf_wear_join_gap_max_mm")
@@ -457,12 +460,17 @@ object SettingsStore {
         ctx.editSettings { it[KEY_PDF_SHOW_UNITS_NOTE] = v }
     }
 
-    // Consolidated sheet: wear areas as a light grey fill instead of strokes. A missing key reads
-    // the one `PdfPrefs()` default (ON), so every existing store prints shaded.
-    fun pdfWearAreasShadedFlow(ctx: Context): Flow<Boolean> =
-        ctx.settingsPrefs.map { p -> p[KEY_PDF_WEAR_AREAS_SHADED] ?: PdfPrefs().wearAreasShaded }
-    suspend fun setPdfWearAreasShaded(ctx: Context, v: Boolean) {
-        ctx.editSettings { it[KEY_PDF_WEAR_AREAS_SHADED] = v }
+    // Consolidated sheet: how a wear area draws. A store written before the style existed carries
+    // only the old on/off switch, which keeps meaning what it printed (on = grey, off = lines);
+    // neither key reads the one `PdfPrefs()` default.
+    fun pdfWearAreaStyleFlow(ctx: Context): Flow<WearAreaStyle> =
+        ctx.settingsPrefs.map { p ->
+            p[KEY_PDF_WEAR_AREA_STYLE]?.let { WearAreaStyle.fromName(it) }
+                ?: p[KEY_PDF_WEAR_AREAS_SHADED]?.let { WearAreaStyle.fromLegacyShaded(it) }
+                ?: PdfPrefs().wearAreaStyle
+        }
+    suspend fun setPdfWearAreaStyle(ctx: Context, style: WearAreaStyle) {
+        ctx.editSettings { it[KEY_PDF_WEAR_AREA_STYLE] = style.name }
     }
 
     fun pdfArrowSizePtFlow(ctx: Context): Flow<Float> =

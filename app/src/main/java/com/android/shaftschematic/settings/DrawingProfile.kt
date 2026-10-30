@@ -77,7 +77,14 @@ data class DrawingProfile(
     val outputFont: String = SHIPPED_PDF_PREFS.outputFont.name,
     val dualUnitLayout: String = SHIPPED_PDF_PREFS.dualUnitLayout.name,
     val showUnitsNote: Boolean = SHIPPED_PDF_PREFS.showUnitsNote,
-    val wearAreasShaded: Boolean = SHIPPED_PDF_PREFS.wearAreasShaded,
+    /**
+     * Null in a profile saved before the style existed, so its [wearAreasShaded] is what decides —
+     * a non-null default here would read every old "off" profile as the grey. Null with neither
+     * set is the shipped default.
+     */
+    val wearAreaStyle: String? = null,
+    /** The old on/off switch; read only from a profile saved before [wearAreaStyle] existed. */
+    val wearAreasShaded: Boolean? = null,
     val wearTraceDepthFrac: Float = SHIPPED_PDF_PREFS.wearTraceDepthFrac,
     val wearBandShadeFrac: Float = SHIPPED_PDF_PREFS.wearBandShadeFrac,
     val wearJoinGapMaxMm: Float = SHIPPED_PDF_PREFS.wearJoinGapMaxMm,
@@ -111,7 +118,9 @@ data class DrawingProfile(
         outputFont = OutputFont.fromName(outputFont),
         dualUnitLayout = DualUnitLayout.fromName(dualUnitLayout),
         showUnitsNote = showUnitsNote,
-        wearAreasShaded = wearAreasShaded,
+        wearAreaStyle = wearAreaStyle?.let { WearAreaStyle.fromName(it) }
+            ?: wearAreasShaded?.let { WearAreaStyle.fromLegacyShaded(it) }
+            ?: WearAreaStyle.Default,
         wearTraceDepthFrac = wearTraceDepthFrac,
         wearBandShadeFrac = wearBandShadeFrac,
         wearJoinGapMaxMm = wearJoinGapMaxMm,
@@ -146,7 +155,7 @@ data class DrawingProfile(
             outputFont = prefs.outputFont.name,
             dualUnitLayout = prefs.dualUnitLayout.name,
             showUnitsNote = prefs.showUnitsNote,
-            wearAreasShaded = prefs.wearAreasShaded,
+            wearAreaStyle = prefs.wearAreaStyle.name,
             wearTraceDepthFrac = prefs.wearTraceDepthFrac,
             wearBandShadeFrac = prefs.wearBandShadeFrac,
             wearJoinGapMaxMm = prefs.wearJoinGapMaxMm,
