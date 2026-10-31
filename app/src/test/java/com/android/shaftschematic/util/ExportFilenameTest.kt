@@ -30,6 +30,15 @@ class ExportFilenameTest {
             "Job12_Acme_Final_RunoutSheet.pdf",
             exportPdfFilename("Job12_Acme", "_Final_RunoutSheet"),
         )
+        // The before/after sheet — the original above the final — is a fourth document.
+        assertEquals(
+            "Job12_Acme_Final_BeforeAfter.pdf",
+            exportPdfFilename("Job12_Acme", "_Final_BeforeAfter"),
+        )
+        assertEquals(
+            "Job12_Acme_Final_BeforeAfter_BlankDraft.pdf",
+            exportPdfFilename("Job12_Acme", "_Final_BeforeAfter", blankDraft = true),
+        )
     }
 
     @Test

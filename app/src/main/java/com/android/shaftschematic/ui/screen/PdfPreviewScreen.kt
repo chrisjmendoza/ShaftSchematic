@@ -200,6 +200,9 @@ fun PdfPreviewScreen(
     // The final drawing's optional runout stations. Session-only and off by default; consulted
     // only on the FINAL target — see `ShaftViewModel.finalRunoutBubbles`.
     val finalRunoutBubbles by vm.finalRunoutBubbles.collectAsState()
+    // The final drawing's before/after election — the original above the final on one sheet.
+    // Session-only and ON by default; consulted only on the FINAL target, and bubbles win.
+    val finalBeforeAfter by vm.finalBeforeAfter.collectAsState()
 
     // A final sheet is marked so it can never be mistaken for the original — the label
     // prints in the footer job block and as a badge beside the Side badge.
@@ -237,6 +240,7 @@ fun PdfPreviewScreen(
         var previousWasDraft = false
         snapshotFlow {
             val config = tunedRunoutConfig(runoutConfig, tuning.heightScale, tuning.linerCompression)
+            val kind = finalSheetKind(target, finalRunoutBubbles, finalBeforeAfter)
             SchematicRenderInputs(
                 spec = spec,
                 unit = unit,
@@ -270,7 +274,9 @@ fun PdfPreviewScreen(
                 runoutConfig = config,
                 displayUnits = DisplayUnits(unit, unitOverrides, dualUnits),
                 target = target,
-                sheetKind = finalSheetKind(target, finalRunoutBubbles),
+                sheetKind = kind,
+                originalSpec = originalSpec.takeIf { kind == FinalSheetKind.BEFORE_AFTER },
+                originalResolved = if (kind == FinalSheetKind.BEFORE_AFTER) originalResolved else emptyList(),
                 draft = tuning.active,
             )
         }.conflate().collect { inputs ->
@@ -302,6 +308,8 @@ fun PdfPreviewScreen(
                         pdfPrefs = pdfPrefsSnapshot,
                         options = inputs.options,
                         resolvedComponents = inputs.resolved.takeIf { it.isNotEmpty() },
+                        originalSpec = inputs.originalSpec,
+                        originalResolved = inputs.originalResolved.takeIf { it.isNotEmpty() },
                         lineThicknessScale = inputs.lineThicknessScale,
                         runoutConfig = inputs.runoutConfig,
                         displayUnits = inputs.displayUnits,
@@ -426,12 +434,17 @@ fun PdfPreviewScreen(
                         // The print job carries the drawing's identity too — a job queue full
                         // of same-named sheets is how a final gets handed out as the original.
                         val baseName =
-                            if (isFinal) suggested + finalDrawingSuffix(finalRunoutBubbles)
+                            if (isFinal) suggested + finalDrawingSuffix(finalRunoutBubbles, finalBeforeAfter)
                             else suggested
                         val jobName = if (pdfBlankDraft) "$baseName (blank draft)" else baseName
                         // Snapshot state on the UI thread; onWrite runs on a binder thread.
-                        val kindSnapshot = finalSheetKind(target, finalRunoutBubbles)
+                        val kindSnapshot = finalSheetKind(target, finalRunoutBubbles, finalBeforeAfter)
                         val specSnapshot = spec
+                        // The before/after sheet's top band — the ORIGINAL drawing, read only for it.
+                        val beforeAfter = kindSnapshot == FinalSheetKind.BEFORE_AFTER
+                        val originalSpecSnapshot = originalSpec.takeIf { beforeAfter }
+                        val originalResolvedSnapshot =
+                            originalResolved.takeIf { beforeAfter && it.isNotEmpty() }
                         val unitSnapshot = unit
                         val projectSnapshot = project
                         val optionsSnapshot = options
@@ -453,6 +466,8 @@ fun PdfPreviewScreen(
                                 pdfPrefs = prefsSnapshot,
                                 options = optionsSnapshot,
                                 resolvedComponents = resolvedSnapshot,
+                                originalSpec = originalSpecSnapshot,
+                                originalResolved = originalResolvedSnapshot,
                                 lineThicknessScale = thicknessSnapshot,
                                 runoutConfig = configSnapshot,
                                 displayUnits = displayUnitsSnapshot,
@@ -670,6 +685,7 @@ fun PdfPreviewScreen(
                         // are the Runout and Consolidated Output tabs' documents.
                         showFinalRunoutBubbles = isFinal,
                         finalRunoutBubbles = finalRunoutBubbles,
+                        finalBeforeAfter = finalBeforeAfter,
                         tuning = tuning,
                     )
                 }
@@ -748,6 +764,14 @@ private data class SchematicRenderInputs(
      * nothing else the loop already watches.
      */
     val sheetKind: FinalSheetKind,
+    /**
+     * The ORIGINAL drawing, set ONLY when [sheetKind] is the before/after sheet (`null` otherwise,
+     * so the record stays a minimal re-render key). That sheet draws two geometries, the original
+     * above the final, and a geometry the record cannot express is a stale-preview bug.
+     */
+    val originalSpec: ShaftSpec?,
+    /** The original's resolved components, under the same rule as [originalSpec] (empty otherwise). */
+    val originalResolved: List<ResolvedComponent>,
     /** A tuning slider is mid-drag: raster at draft resolution and hold the spinner back. */
     val draft: Boolean,
 )
@@ -797,6 +821,11 @@ internal fun PdfOptionsSheet(
      */
     showFinalRunoutBubbles: Boolean = false,
     finalRunoutBubbles: Boolean = false,
+    /**
+     * The before/after election ("Original + Final"), offered under the same FINAL-only rule as
+     * [showFinalRunoutBubbles]. Inert while bubbles are elected — they win.
+     */
+    finalBeforeAfter: Boolean = false,
     /**
      * Live-tuning sink: every slider here reports its in-progress value so the preview
      * above the panel reshapes under the finger. Visual only — the commit path is
@@ -857,15 +886,27 @@ internal fun PdfOptionsSheet(
                     onClick = { vm.setFinalRunoutBubbles(!finalRunoutBubbles) },
                     modifier = Modifier.testTag("final_runout_bubbles_toggle"),
                 )
+                // The bubbled sheet is the consolidated composer, which cannot stack the original
+                // above it — bubbles win, so this chip greys out while they are elected.
+                ContentChip(
+                    label = "Original + Final",
+                    selected = finalBeforeAfter,
+                    enabled = !finalRunoutBubbles,
+                    onClick = { vm.setFinalBeforeAfter(!finalBeforeAfter) },
+                    modifier = Modifier.testTag("final_before_after_toggle"),
+                )
             }
         }
 
         if (showFinalRunoutBubbles) {
             Spacer(Modifier.height(6.dp))
             Text(
-                "Adds runout stations to the final drawing. Off for the welding and machining " +
-                    "copy; on for the pre-ship measurement sheet, which prints as the " +
-                    "consolidated sheet — Ø callouts and Template mode do not apply to it.",
+                "Original + Final prints the original shaft above the final one, each with its " +
+                    "own dimensions, under one footer for the final — turn it off for the final " +
+                    "drawing alone. Runout bubbles adds runout stations to the final drawing " +
+                    "instead: on for the pre-ship measurement sheet, which prints as the " +
+                    "consolidated sheet — Ø callouts, Template mode and Original + Final do not " +
+                    "apply to it.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

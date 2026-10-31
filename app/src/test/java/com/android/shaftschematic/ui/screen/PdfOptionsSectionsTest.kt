@@ -10,6 +10,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -218,8 +219,13 @@ class PdfOptionsSectionsTest {
         threads = listOf(Threads(id = "t1", majorDiaMm = 50f, pitchMm = 2.5f, lengthMm = 60f)),
     )
 
-    private fun hostSchematicSheet(spec: ShaftSpec) {
-        val vm = vm()
+    private fun hostSchematicSheet(
+        spec: ShaftSpec,
+        vm: ShaftViewModel = vm(),
+        showFinalElections: Boolean = false,
+        finalRunoutBubbles: Boolean = false,
+        finalBeforeAfter: Boolean = false,
+    ) {
         rule.setContent {
             MaterialTheme {
                 PdfOptionsSheet(
@@ -246,10 +252,43 @@ class PdfOptionsSectionsTest {
                     pdfShadeExplicitBodiesOnly = false,
                     pdfBlankDraft = false,
                     pdfBlankDiaCallouts = false,
+                    showFinalRunoutBubbles = showFinalElections,
+                    finalRunoutBubbles = finalRunoutBubbles,
+                    finalBeforeAfter = finalBeforeAfter,
                     tuning = PreviewTuning(),
                 )
             }
         }
+    }
+
+    // ── The final drawing's "Original + Final" election ─────────────────────────
+
+    @Test
+    fun `the original schematic's sheet offers no before-after election`() {
+        hostSchematicSheet(bareSpec)
+
+        rule.onNodeWithTag("final_before_after_toggle").assertDoesNotExist()
+    }
+
+    @Test
+    fun `the final sheet offers Original + Final beside Runout bubbles, and a tap elects it off`() {
+        val vm = vm()
+        hostSchematicSheet(bareSpec, vm, showFinalElections = true, finalBeforeAfter = true)
+
+        rule.onNodeWithTag("final_runout_bubbles_toggle").assertExists()
+        rule.onNodeWithTag("final_before_after_toggle").assertIsEnabled().assertIsSelected()
+        rule.onNodeWithTag("final_before_after_toggle").performClick()
+        rule.waitForIdle()
+        assertEquals(false, vm.finalBeforeAfter.value)
+    }
+
+    @Test
+    fun `Original + Final is untappable while runout bubbles are elected`() {
+        val vm = vm()
+        hostSchematicSheet(bareSpec, vm, showFinalElections = true, finalRunoutBubbles = true, finalBeforeAfter = true)
+
+        rule.onNodeWithTag("final_before_after_toggle").assertIsNotEnabled()
+        assertEquals(true, vm.finalBeforeAfter.value)
     }
 
     /** The shared sheet as the Consolidated Output preview configures it. */

@@ -656,15 +656,22 @@ for the document) AND the autosave `SessionSnapshot` combine (a field in the bui
 the combine is the autosave-incident data-loss gap). Outputs: the Schematic, Runout, Wear,
 Undercut and Consolidated Output tabs draw the ORIGINAL, untouched; the Final tab
 (`EditorTab.FINAL`, after UNDERCUT, same built-shaft gate) draws the FINAL — the schematic PDF
-(plain by default — the welding/machining copy that gets the liner placements updated; with the
-session-only "Runout bubbles" election on its options sheet, the consolidated Schematic + Runout
+(by default the **"Original + Final"** before/after sheet — the original shaft in a top band, the
+final in a bottom one, each labelled ORIGINAL / FINAL, ONE footer, the final's, so it still prints
+`Drawing: Final` and the FINAL badge; ONE composer, `pdf/BeforeAfterPdfComposer.kt`, draws both
+bands through the ONE schematic composer's optional `SheetBand` parameter, `null` = the whole page,
+byte-identical; the two bands share one SCALE (`diaPtPerMmCap`, the smaller of the two bands'
+capped pt/mm — a diameter change must read as a height change), and they are the ONE place the
+drawn shaft may fall under the 1/2" paper floor, so the "Shaft height" slider only lowers there; a session flag like "Runout bubbles" but default ON, on-device request, and
+bubbles win when both are elected; with that chip off, the plain schematic — the welding/machining
+copy that gets the liner placements updated; with the session-only "Runout bubbles" election on its options sheet, the consolidated Schematic + Runout
 sheet over the final geometry, empty readings, ONE compose helper behind preview/print/export)
 and a blank classic runout sheet (no readings/placements/wear, default stations: the final
 measurement sheet before shipping). Every final sheet is MARKED (`ProjectInfo.drawingLabel` =
 "Final": `Drawing: Final` in the footer job block and the runout header, a bold FINAL badge on
 the Side line, and a filename suffix — `_Final`, `_Final_Runout` with bubbles elected,
-`_Final_RunoutSheet` for the banner's blank classic sheet: THREE distinct documents, never
-collapsed onto one name); blank on every other caller, so existing output is
+`_Final_RunoutSheet` for the banner's blank classic sheet, and `_Final_BeforeAfter` for the
+Original + Final sheet: FOUR distinct documents, never collapsed onto one name); blank on every other caller, so existing output is
 byte-identical. Every OTHER export (the original schematic included) names its file through the
 ONE builder `buildOutputFilename` (`ui/screen/OutputDoc.kt`): `DocumentNaming`'s sanitized
 "Job - Customer - Vessel - SIDE" base (the saved document's name when the job has none) + `_<document suffix>` (`_schematic`, `_runout`, `_wear`,

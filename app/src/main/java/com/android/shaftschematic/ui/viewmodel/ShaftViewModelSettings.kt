@@ -376,6 +376,19 @@ fun ShaftViewModel.setFinalRunoutBubbles(enabled: Boolean) {
     _finalRunoutBubbles.value = enabled
 }
 
+/**
+ * Elects the before/after sheet — the ORIGINAL shaft above the FINAL one, under one footer —
+ * as the FINAL drawing's schematic sheet.
+ *
+ * Session-only like [setFinalRunoutBubbles], but default ON: the comparison is the Final tab's
+ * primary output (on-device request: seeing both drawings on one sheet is what shows the
+ * change), so turning it off is the election that prints the final drawing alone. Consulted only
+ * when the surface's target is FINAL, and runout bubbles win when both are elected.
+ */
+fun ShaftViewModel.setFinalBeforeAfter(enabled: Boolean) {
+    _finalBeforeAfter.value = enabled
+}
+
 // ── Appearance (app-wide theme) ──────────────────────────────────────────────
 
 fun ShaftViewModel.setThemeMode(mode: AppThemeMode, persist: Boolean = true) {

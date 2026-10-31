@@ -523,6 +523,14 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     internal val _finalRunoutBubbles = MutableStateFlow(false)
     val finalRunoutBubbles: StateFlow<Boolean> = _finalRunoutBubbles.asStateFlow()
 
+    // Whether the FINAL drawing's schematic sheet prints the ORIGINAL shaft above the final one
+    // (the before/after sheet). Session-only like _finalRunoutBubbles, but default ON: the
+    // comparison sheet is the Final tab's primary output (on-device request: seeing both on one
+    // sheet is what shows the change), and "Final only" is the election. Read only when the
+    // target is FINAL; runout bubbles take precedence over it (`finalSheetKind`).
+    internal val _finalBeforeAfter = MutableStateFlow(true)
+    val finalBeforeAfter: StateFlow<Boolean> = _finalBeforeAfter.asStateFlow()
+
     internal val _previewBlackWhiteOnly = MutableStateFlow(false)
     val previewBlackWhiteOnly: StateFlow<Boolean> = _previewBlackWhiteOnly.asStateFlow()
 

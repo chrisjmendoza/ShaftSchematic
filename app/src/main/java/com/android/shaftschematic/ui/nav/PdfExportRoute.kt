@@ -89,10 +89,19 @@ fun PdfExportRoute(
     // The final drawing's optional runout stations — session-only, off by default, and read
     // only here so the exported file matches the sheet the preview showed.
     val finalRunoutBubbles by vm.finalRunoutBubbles.collectAsState()
-    val sheetKind = finalSheetKind(target, finalRunoutBubbles)
+    // The final drawing's before/after election — session-only, ON by default.
+    val finalBeforeAfter by vm.finalBeforeAfter.collectAsState()
+    val sheetKind = finalSheetKind(target, finalRunoutBubbles, finalBeforeAfter)
     val drawingSuffix = when {
         target != SpecTarget.FINAL -> ""
-        else -> finalDrawingSuffix(finalRunoutBubbles)
+        else -> finalDrawingSuffix(finalRunoutBubbles, finalBeforeAfter)
+    }
+    // The before/after sheet's top band is the ORIGINAL drawing; read only on the FINAL target.
+    val exportOriginalSpec: () -> ShaftSpec? = {
+        if (target == SpecTarget.FINAL) vm.spec.value else null
+    }
+    val exportOriginalResolved: () -> List<ResolvedComponent>? = {
+        if (target == SpecTarget.FINAL) vm.resolvedComponents.value.takeIf { it.isNotEmpty() } else null
     }
 
     val openAfterExport by vm.openPdfAfterExport.collectAsState()
@@ -154,6 +163,8 @@ fun PdfExportRoute(
                         blankDiaCallouts = pdfBlankDiaCallouts,
                     ),
                     resolvedComponents = exportResolved(),
+                    originalSpec = exportOriginalSpec(),
+                    originalResolved = exportOriginalResolved(),
                     lineThicknessScale = vm.lineThicknessScale.value,
                     runoutConfig = vm.runoutConfig.value,
                     displayUnits = vm.currentDisplayUnits(),
@@ -315,9 +326,23 @@ internal const val FINAL_FILENAME_SUFFIX = "_Final"
  */
 internal const val FINAL_BUBBLES_FILENAME_SUFFIX = "_Final_Runout"
 
-/** The filename suffix a final schematic takes, given whether it carries stations. */
-internal fun finalDrawingSuffix(runoutBubbles: Boolean): String =
-    if (runoutBubbles) FINAL_BUBBLES_FILENAME_SUFFIX else FINAL_FILENAME_SUFFIX
+/**
+ * The final schematic's suffix as the before/after sheet — the original above the final on one
+ * page. A different document from the final drawing alone, so it never shares its name.
+ */
+internal const val FINAL_BEFORE_AFTER_FILENAME_SUFFIX = "_Final_BeforeAfter"
+
+/**
+ * The filename suffix a final schematic takes, given its elections — the same precedence as
+ * [finalSheetKind]: stations win, then the before/after sheet, else the final drawing alone.
+ * With the banner's `_Final_RunoutSheet` that makes FOUR distinct final documents, never
+ * collapsed onto one name.
+ */
+internal fun finalDrawingSuffix(runoutBubbles: Boolean, beforeAfter: Boolean): String = when {
+    runoutBubbles -> FINAL_BUBBLES_FILENAME_SUFFIX
+    beforeAfter -> FINAL_BEFORE_AFTER_FILENAME_SUFFIX
+    else -> FINAL_FILENAME_SUFFIX
+}
 
 /**
  * App version string stamped into the schematic PDF footer. Shared with the Runout tab's
