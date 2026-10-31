@@ -235,7 +235,10 @@ Top of page, full width.
   `"Final"`, which prints `Drawing: Final` in the footer job block (after Item, before Date)
   and in the runout/wear/undercut header line (`jobInfoHeaderLine`), plus a bold **FINAL**
   badge sharing the Side badge's line. The schematic's title-block header never carries it —
-  the schematic gets the footer line and the badge. In the footer job block a blank draft
+  the schematic gets the footer line and the badge. The Final tab's default "Original + Final"
+  sheet (`pdf/BeforeAfterPdfComposer.kt`) stacks the original above the final, each band drawn by
+  the one schematic composer through `SheetBand` and badged ORIGINAL / FINAL, under ONE footer —
+  the final's, so it carries `Drawing: Final` and the FINAL badge. In the footer job block a blank draft
   rules a `Drawing:` line only when the label is set; the header's blank-label set
   (`JOB_INFO_BLANK_LABELS`) is untouched. See `docs/contracts/FinalSchematic.md`.
 
@@ -841,7 +844,9 @@ Rules (shared helpers in `pdf/BlankFormText.kt`):
   to the one base `Shaft` (`Shaft_runout.pdf` — the suffix already names the sheet). Every
   `Shaft_<doc>.pdf` used to collide in a shared folder with nothing saying which shaft it was
   (Emulator QA). The Final drawing keeps
-  its `_Final*` suffixes through the same join (`docs/contracts/FinalSchematic.md`). Pinned by
+  its `_Final*` suffixes through the same join — `_Final`, `_Final_BeforeAfter` for the Original +
+  Final sheet, `_Final_Runout`, `_Final_RunoutSheet`: four distinct documents
+  (`docs/contracts/FinalSchematic.md`). Pinned by
   `OutputDocTest` and `ExportFilenameTest`.
 - On the schematic PDF preview the toggle surfaces **twice from one state**: an
   always-visible `FilterChip` overlaid top-center on the preview itself (testTag

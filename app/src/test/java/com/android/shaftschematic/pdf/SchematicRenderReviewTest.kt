@@ -91,6 +91,45 @@ class SchematicRenderReviewTest {
         renderConsolidated("mid_taper_consolidated.png", midTaper)
     }
 
+    /**
+     * The Final tab's before/after sheet: the job as it came in above the same job with its FWD
+     * liner moved 2" FWD — at the default height, at twice it, and as a blank draft.
+     */
+    @Test
+    fun `before-after sheet`() {
+        val final = BeforeAfterPdfComposerTest.movedFwdLinerFinal(midTaper.spec)
+        renderBeforeAfter("mid_taper_before_after.png", midTaper, final)
+        renderBeforeAfter("mid_taper_before_after_tall.png", midTaper, final, heightScale = 2f)
+        renderBeforeAfter(
+            "mid_taper_before_after_blank.png", midTaper, final,
+            options = PdfExportOptions(blankValues = true),
+        )
+    }
+
+    private fun renderBeforeAfter(
+        name: String,
+        doc: ShaftDocCodec.Decoded,
+        finalSpec: com.android.shaftschematic.model.ShaftSpec,
+        heightScale: Float = 1f,
+        options: PdfExportOptions = PdfExportOptions(),
+    ) {
+        val (bmp, c) = bitmapPage()
+        composeBeforeAfterPdfOnCanvas(
+            c, PDF_PAGE_WIDTH_PT.toFloat(), PDF_PAGE_HEIGHT_PT.toFloat(),
+            originalSpec = doc.spec,
+            finalSpec = finalSpec,
+            unit = doc.preferredUnit ?: UnitSystem.INCHES,
+            project = doc.project().copy(drawingLabel = "Final"),
+            appVersion = "review",
+            filename = name,
+            options = options,
+            originalResolved = resolveComponents(doc.spec),
+            finalResolved = resolveComponents(finalSpec),
+            heightScale = heightScale,
+        )
+        save(name, bmp)
+    }
+
     /** The same job with a wear band and three measured stations on the FWD liner. */
     @Test
     fun `wear sheet traces the main profile at both ends of the slider`() {

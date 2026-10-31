@@ -74,7 +74,7 @@ internal fun specValue(target: SpecTarget): ShaftSpec
 | Surface | Draws |
 |---|---|
 | Schematic tab · Runout tab · Wear document · Undercut drawing · Consolidated Output (every variant, Export all) | the ORIGINAL — unchanged by this feature |
-| Final tab → schematic PDF (preview, export, print) | the FINAL — by default the plain schematic (the welding / machining copy that gets the liner placements updated); with **"Runout bubbles"** elected on its PDF options sheet, the consolidated **Schematic + Runout** sheet over the final geometry (`composeRunoutPdf(consolidated = true, includeBubbles = true, includeWearInfo = false)`, empty readings / placements / wear, default station counts). `composeRunoutPdf` takes only `blankValues` from `PdfExportOptions` — the schematic-only Ø-callout election and Template mode do NOT reach the bubbled sheet, exactly as they do not reach the Output tab's consolidated sheet; the options sheet's caption says so and the "Ø callouts" chip greys out while bubbles are elected |
+| Final tab → schematic PDF (preview, export, print) | the FINAL, in one of three kinds (`FinalSheetKind`, precedence below) — by default the **Original + Final** before/after sheet (the original above the final, one footer; see "Before/after sheet"); with that election off, the plain final schematic (the welding / machining copy that gets the liner placements updated); with **"Runout bubbles"** elected on its PDF options sheet, the consolidated **Schematic + Runout** sheet over the final geometry (`composeRunoutPdf(consolidated = true, includeBubbles = true, includeWearInfo = false)`, empty readings / placements / wear, default station counts). `composeRunoutPdf` takes only `blankValues` from `PdfExportOptions` — the schematic-only Ø-callout election and Template mode do NOT reach the bubbled sheet, exactly as they do not reach the Output tab's consolidated sheet; the options sheet's caption says so and the "Ø callouts" chip greys out while bubbles are elected |
 | Final tab → runout sheet (classic standalone, `consolidated = false`, banner overflow) | the FINAL — no readings, no placements, no wear, default station counts: a blank **final measurement sheet** to take runouts on before the job ships |
 
 The "Runout bubbles" election is a **session flag** (`ShaftViewModel.finalRunoutBubbles`,
@@ -89,18 +89,34 @@ composes the sheet for the preview's render loop, its Print button and the expor
 so the three can never disagree; the preview's render-inputs record carries the kind (and the
 whole tuned `RunoutConfig`, since the bubbled sheet also reads the coupling-face election).
 
+The **"Original + Final"** election is the second session flag (`ShaftViewModel.finalBeforeAfter`,
+`setFinalBeforeAfter`), the bubbles flag's posture — never persisted, per app session, final
+preview's options sheet only — with one difference: it defaults **ON**. The comparison sheet is
+the Final tab's primary output (on-device request: seeing both on one sheet is what shows the
+change), so "Final only" is the election, not the original + final sheet. Precedence, in
+`finalSheetKind(target, finalRunoutBubbles, finalBeforeAfter)`: ORIGINAL target → `PLAIN`; FINAL
+with bubbles → `WITH_BUBBLES` (bubbles win — the consolidated composer has no band mode, and the
+chip greys out while bubbles are elected); else FINAL with before/after → `BEFORE_AFTER`; else
+`PLAIN`. The render-inputs record carries the original spec and its resolved components ONLY for
+`BEFORE_AFTER` (that sheet draws two geometries; a field the record cannot express is a
+stale-preview bug).
+
 Marking — a final sheet must never pass for the original:
 
 - `ProjectInfo.drawingLabel` (blank on every existing caller → byte-identical output).
   Set to `"Final"` by every Final-tab surface.
 - Schematic footer job block prints `Drawing: Final` (after Item, before Date); the bold
-  **FINAL** badge shares the Side badge's line. A blank draft rules a `Drawing:` line only when
+  **FINAL** badge shares the Side badge's line. The before/after sheet's one footer is the
+  final's, so it carries both. A blank draft rules a `Drawing:` line only when
   the label is set.
 - Runout header line appends `Drawing: Final`.
 - Filenames take a `_Final` suffix through the ONE join `util/ExportFilename.kt`
   (`exportPdfFilename(base, drawingSuffix, blankDraft)` → `<base><suffix>[_BlankDraft].pdf`,
-  so `…_Final.pdf`, `…_Final_BlankDraft.pdf`, `…_Final_Runout.pdf` with bubbles elected, and
-  `…_Final_RunoutSheet.pdf` for the banner's blank classic sheet). The label and the suffix
+  so `…_Final.pdf` for the final alone, `…_Final_BeforeAfter.pdf` for the Original + Final
+  sheet, `…_Final_BlankDraft.pdf`, `…_Final_Runout.pdf` with bubbles elected, and
+  `…_Final_RunoutSheet.pdf` for the banner's blank classic sheet — FOUR distinct documents, never
+  collapsed onto one name; `finalDrawingSuffix(runoutBubbles, beforeAfter)` applies the kind's
+  precedence). The label and the suffix
   are one internal pair, `FINAL_DRAWING_LABEL` / `FINAL_FILENAME_SUFFIX`
   (`ui/nav/PdfExportRoute.kt`), read by the preview, the export and the Final tab, so a
   sheet and its filename cannot disagree about which drawing they are. The preview titles
@@ -109,6 +125,41 @@ Marking — a final sheet must never pass for the original:
   A blocked final runout sheet reports through an AlertDialog ("Cannot print final runout
   sheet"), the `PdfExportRoute` pattern — the banner lambda has no reach into the editor's
   snackbar host.
+
+### Before/after sheet
+
+One landscape page, two bands, equal drawing room: the **ORIGINAL** shaft in the top band, the
+**FINAL** in the bottom one, a thin grey divider rule (`BAND_DIVIDER_PT`, drawn after both bands
+so no halo covers it) between them, and ONE footer below the bottom band — the final's (the shaft
+being made), so the sheet still prints `Drawing: Final` and the FINAL badge. Each band is labelled
+by a bold badge at its top-left (`BEFORE_AFTER_ORIGINAL_BADGE` / `BEFORE_AFTER_FINAL_BADGE`).
+
+- **One composer draws both bands.** `pdf/BeforeAfterPdfComposer.kt` (`composeBeforeAfterPdf`)
+  calls `composeShaftPdfOnCanvas` twice, once per geometry, through its optional `SheetBand`
+  parameter (`topPt`, `bottomPt`, `badge`, `hostsFooter`); `null` = the whole page, byte-identical
+  to the single-shaft sheet. Each band therefore carries everything its schematic carries — OAL
+  rail, component rails, Ø callouts, component names, S-breaks — and nothing can drift between
+  the two drawings or the single-shaft sheet. Only the band with `hostsFooter` reserves and draws
+  the footer; its reserve comes from the ONE `schematicFooterBlockPt`, which the composer also
+  uses to place the divider (`beforeAfterDividerY`) so the two cannot disagree.
+- **Band height budget.** A band solves its x map at `BAND_SHAFT_BUDGET_FRAC` (30%) of the
+  band's drawing rect and then draws the shaft no taller than the room its rail block leaves
+  (`schematicBandLayout` — rails measured at `BAND_RAIL_GAP_PT`, the names / callouts band at
+  `BAND_INFO_GAP_PT` yielding toward `BAND_INFO_GAP_MIN_PT`, the shaft never under
+  `BAND_MIN_SHAFT_HEIGHT_PT`); the fraction is the one knob to turn for crowded sheets. The bands
+  are the ONE place the drawn shaft may fall below the 1/2" paper floor the single sheets hold —
+  half a page cannot carry two dimensioned shafts at it — so the "Shaft height" slider only ever
+  LOWERS a band's shaft (its readout still names the single sheet's height; raising it past the
+  band's room changes nothing).
+- **One scale for both bands.** `beforeAfterBands` hands both bands the smaller of their two
+  capped scales (`SheetBand.diaPtPerMmCap`, points per mm), never a shared height: a final whose
+  largest diameter changed draws shorter or taller than the original by exactly that ratio, so a
+  diameter change reads as a height change and the two never print at different scales.
+- **Tuned alike.** Both bands receive the same options, `PdfPrefs`, line thickness, display units,
+  per-job Shaft height and Liner & taper compression, so the two drawings are always at the same
+  settings.
+- Draw-only: nothing on the sheet reads or writes a stored value, and the Ø callouts / Template
+  mode / blank-draft elections apply to both bands as they do to the single sheet.
 
 ## 4. UI
 
@@ -130,6 +181,10 @@ Marking — a final sheet must never pass for the original:
     Print / Export actions. Carousel, add dialogs,
     preview box, collision badges and warnings work unchanged because they are presentational
     over whatever spec they are handed.
+  - The final preview's options sheet carries the **"Original + Final"** `ContentChip`
+    (`final_before_after_toggle`) right after "Runout bubbles", selected by default; it is greyed
+    out (disabled) while "Runout bubbles" is elected, since bubbles win. The caption beneath the
+    chips explains both elections.
   - The toolbar PDF button opens the preview on the final (`pdfPreview?target=final`), whose
     Export forwards its OWN target (`exportPdf?target=final`). Both routes take the argument
     as OPTIONAL with default `original` (`ui/nav/SpecTargetArg.kt`: `targetArg` /
@@ -150,9 +205,10 @@ Marking — a final sheet must never pass for the original:
 
 ## 5. Not in this step
 
-"Create a new job from the final" (promote `final_spec` → a new document's `spec`); any
-before/after diff or overlay on one sheet; wear/undercut/runout records re-keyed to the final;
-a consolidated output of the final.
+"Create a new job from the final" (promote `final_spec` → a new document's `spec`);
+wear/undercut/runout records re-keyed to the final; a consolidated output of the final. The
+stacked before/after sheet exists (above); a diff or overlay that compares the two drawings'
+VALUES — highlighting what moved, a change table — does not.
 
 ## 6. Tests
 
@@ -164,4 +220,9 @@ reset/discard, newDocument / template / applyTemplate / mate exclusion, save-and
 undo of start and of a final edit), `pdf/DrawingLabelPrintTest` (footer line placement on
 both branches, header line), `ui/screen/EditorTabTest` (order, label), `ui/screen/FinalRouteTest`
 (Robolectric over the real VM: start button vs banner), `ui/nav/SpecTargetArgTest`,
-`util/ExportFilenameTest`.
+`util/ExportFilenameTest`, `pdf/BeforeAfterPdfComposerTest` (badges once each and ordered, the
+OAL rail once per band, the footer once below the divider, nothing printed on the rule, a
+full-page `SheetBand` records the same draw ops as `null`), `ui/nav/FinalSheetComposeTest`
+(`finalSheetKind` precedence across the three kinds), `ui/viewmodel/ShaftViewModelFinalBeforeAfterTest`
+(default ON, setter round-trip, survives `newDocument`), `pdf/SchematicRenderReviewTest`
+(`mid_taper_before_after*.png`).

@@ -1089,6 +1089,7 @@
       <tr><td><span class="ui">Split cuts at liner edges</span></td><td>Off</td><td>Undercut only</td><td>Off: every cut prints its full length as one dimension. On: a cut that runs past a liner edge is dimensioned as two spans meeting at the edge. It sits under <span class="ui">Distance to S.E.T.</span> because it decides how a cut is dimensioned. App-wide, the same switch as in Settings.</td></tr>
       <tr><td><span class="ui">Total length of cuts</span></td><td>On</td><td>Undercut only</td><td>On: a section with two or more cuts prints one dimension across all of them, above the cut lengths. Off: only the cut lengths print. Some jobs read better without the overall figure. Saved with the job; a job that has never changed it follows the default in Settings.</td></tr>
       <tr><td><span class="ui">Sections to print</span></td><td>All ticked</td><td>Undercut only</td><td>One checkbox per section, shown when the sheet has two or more. Unticked sections are left off the printed sheet. Saved with this job. See <a href="#recording-sections">Sections to print</a>.</td></tr>
+      <tr><td><span class="ui">Original + Final</span></td><td>On</td><td>Final only</td><td>Prints the original shaft above the final one on one sheet, each with its dimensions, under the final's footer. Off prints the final alone. Greyed out while Runout bubbles is on. See <a href="#documents-final">The Final Schematic tab</a>.</td></tr>
       <tr><td><span class="ui">Runout bubbles</span></td><td>Off</td><td>Final only</td><td>Turns the Final schematic into a Schematic + Runout sheet. See <a href="#documents-final">The Final Schematic tab</a>.</td></tr>
     </tbody>
   </table>
@@ -1111,7 +1112,7 @@
   <table class="ref">
     <thead><tr><th>Sheet</th><th>Content chips</th><th>Sections and controls</th></tr></thead>
     <tbody>
-      <tr class="short"><td>Schematic / Final</td><td>Blank draft, Ø callouts, Component names (+ Runout bubbles on Final)</td><td>Shaft (all four controls) · Thread · Lines &amp; text (all three) · Shade in Components · Measurement reference · Units</td></tr>
+      <tr class="short"><td>Schematic / Final</td><td>Blank draft, Ø callouts, Component names (+ Original + Final and Runout bubbles on Final)</td><td>Shaft (all four controls) · Thread · Lines &amp; text (all three) · Shade in Components · Measurement reference · Units</td></tr>
       <tr><td>Runout Sheet</td><td>Blank draft, Coupling face</td><td>Shaft (all four) · Runout bubbles · Thread · Lines &amp; text (Line thickness, Fractions) · Shade in Components · Units</td></tr>
       <tr><td>Consolidated Sheet</td><td>Blank draft, Coupling face</td><td>Every section except Wear. The fullest panel.</td></tr>
       <tr><td>Wear Document</td><td>Blank draft</td><td>Shaft (Shaft height only) · Wear · Thread · Lines &amp; text (Line thickness, Fractions) · Shade in Components (no Explicit bodies only) · Units</td></tr>
@@ -1274,7 +1275,8 @@
       <tr><td>Wear Document</td><td>…PORT_wear.pdf</td></tr>
       <tr><td>Undercut Drawing</td><td>…PORT_undercuts.pdf</td></tr>
       <tr><td>Consolidated Sheet</td><td>…PORT_consolidated.pdf</td></tr>
-      <tr><td>Final schematic</td><td>…PORT_Final.pdf</td></tr>
+      <tr><td>Original + Final sheet</td><td>…PORT_Final_BeforeAfter.pdf</td></tr>
+      <tr><td>Final schematic (Original + Final turned off)</td><td>…PORT_Final.pdf</td></tr>
       <tr><td>Final schematic with Runout bubbles</td><td>…PORT_Final_Runout.pdf</td></tr>
       <tr><td>Final runout sheet (Final banner)</td><td>…PORT_Final_RunoutSheet.pdf</td></tr>
       <tr><td>Any blank draft</td><td>adds _BlankDraft at the end, for example …PORT_runout_BlankDraft.pdf</td></tr>
@@ -1396,12 +1398,16 @@
   <table class="ref">
     <thead><tr><th>Sheet</th><th>How to produce it</th><th>Use</th></tr></thead>
     <tbody>
-      <tr class="short"><td>Final schematic</td><td><span class="ui">PDF preview</span> icon → <span class="ui">Final PDF Preview</span> → <span class="ui">Print</span> or <span class="ui">Export PDF</span></td><td>The welding and machining copy, with the liner positions updated.</td></tr>
-      <tr><td>Final schematic with <span class="ui">Runout bubbles</span></td><td>Same preview; tick the <span class="ui">Runout bubbles</span> chip in its options panel</td><td>The pre-ship measurement sheet: a Schematic + Runout sheet over the Final geometry, with empty bubbles at the default station counts. <span class="ui">Ø callouts</span> and Template mode don't apply to it. The chip is off each time the app starts.</td></tr>
+      <tr><td>Original + Final sheet</td><td><span class="ui">PDF preview</span> icon → <span class="ui">Final PDF Preview</span> → <span class="ui">Print</span> or <span class="ui">Export PDF</span></td><td>The default. The original shaft on the top half of the page, labelled ORIGINAL, and the Final on the bottom half, labelled FINAL, each with its own dimensions, callouts and names, under one footer for the Final. See below.</td></tr>
+      <tr><td>Final schematic</td><td>Same preview; untick the <span class="ui">Original + Final</span> chip in its options panel</td><td>The Final alone: the welding and machining copy, with the liner positions updated.</td></tr>
+      <tr><td>Final schematic with <span class="ui">Runout bubbles</span></td><td>Same preview; tick the <span class="ui">Runout bubbles</span> chip in its options panel</td><td>The pre-ship measurement sheet: a Schematic + Runout sheet over the Final geometry, with empty bubbles at the default station counts. <span class="ui">Ø callouts</span> and Template mode don't apply to it. The chip is off each time the app starts, and it takes over from <span class="ui">Original + Final</span> while it is on.</td></tr>
       <tr><td>Final runout sheet</td><td>Banner ⋮ → <span class="ui">Print final runout sheet</span> or <span class="ui">Export final runout sheet…</span></td><td>A blank classic runout sheet over the Final geometry, with no readings and default stations, for taking the final runouts before the job ships. It follows the job's Shaft height and compression settings. It has no preview.</td></tr>
     </tbody>
   </table>
-  <p  class="keep">Every Final sheet is marked so it can never be handed out as the original: “Drawing: Final” in the footer job block (or the runout sheet's header), a bold FINAL stamp beside the side stamp, and _Final, _Final_Runout or _Final_RunoutSheet in the file and print job name (see <a href="#reading-final">Reading the Printed Sheets</a>).</p>
+  <h3>The Original + Final sheet</h3>
+  <p>The Final preview opens on one sheet that shows both drawings: the original shaft in the top half, the Final in the bottom half, with a thin grey line between them. Each half is drawn exactly as its own schematic would be, with its rails, diameter callouts and component names, and carries its label (ORIGINAL or FINAL) at its top left. The footer is the Final's, so the sheet still reads “Drawing: Final”. Both halves are drawn at one scale and follow the same <span class="ui">Shaft height</span> and compression settings, so the before and the after can be compared directly; on this sheet the shafts draw smaller than on a single-shaft sheet, and the <span class="ui">Shaft height</span> slider can only make them smaller still.</p>
+  <p  class="keep">To print the Final on its own, open the options panel in the Final preview and untick <span class="ui">Original + Final</span>. The chip is on each time the app starts. It is greyed out while <span class="ui">Runout bubbles</span> is ticked, because that sheet replaces it.</p>
+  <p  class="keep">Every Final sheet is marked so it can never be handed out as the original: “Drawing: Final” in the footer job block (or the runout sheet's header), a bold FINAL stamp beside the side stamp, and _Final, _Final_BeforeAfter, _Final_Runout or _Final_RunoutSheet in the file and print job name (see <a href="#reading-final">Reading the Printed Sheets</a>).</p>
   <figure class="wide">
     <img src="figures/schematic-final.webp" alt="A Final schematic: the same shaft with the seal liner now 18 inches long, Drawing: Final in the footer job block, and a bold PORT FINAL stamp.">
     <figcaption>A Final schematic. The seal liner was lengthened to 18″ after the repair; the footer reads “Drawing: Final” and the stamp reads PORT FINAL.</figcaption>
@@ -1868,7 +1874,7 @@
     <li  class="keep">The footer's job block has a “Drawing: Final” line between Item and Date.</li>
     <li  class="keep">A bold “FINAL” badge prints beside the side badge: “PORT  FINAL”.</li>
     <li  class="keep">On a final runout sheet, the job header carries “Drawing: Final”.</li>
-    <li  class="keep">The file name ends in “_Final” (or “_Final_Runout” for a Final schematic with runout bubbles, and “_Final_RunoutSheet” for the final runout sheet).</li>
+    <li  class="keep">The file name ends in “_Final_BeforeAfter” for the Original + Final sheet, “_Final” for the Final alone (or “_Final_Runout” for a Final schematic with runout bubbles, and “_Final_RunoutSheet” for the final runout sheet).</li>
   </ul>
   <p  class="keep">An original sheet carries none of these marks.</p>
 

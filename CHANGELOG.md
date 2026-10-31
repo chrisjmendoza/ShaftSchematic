@@ -8,6 +8,21 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-10-30
 
+### feat(pdf): the Final tab prints the original and the final shaft on one sheet
+
+- The Final schematic PDF now opens as one landscape sheet with the **original** shaft in the top
+  half and the **final** in the bottom half, each labelled (ORIGINAL / FINAL) and drawn with its
+  own rails, Ø callouts and component names, a thin grey rule between them (on-device request:
+  seeing both on one sheet is what shows the change).
+- One footer, the final's, so the sheet still prints `Drawing: Final` and the FINAL badge. Both
+  halves follow the job's Shaft height and Liner & taper compression alike.
+- A new **Original + Final** chip on the Final preview's options panel turns it off for the final
+  drawing alone; it is on by default, lasts for the app session, and greys out while **Runout
+  bubbles** is elected (bubbles win).
+- The file and print job name ends `_Final_BeforeAfter`; the Final tab now names four distinct
+  documents (`_Final`, `_Final_BeforeAfter`, `_Final_Runout`, `_Final_RunoutSheet`). The manual and
+  the Help topic cover the new sheet.
+
 ### fix(ui): "Add spot" on the wear detail page scrolls to the new spot card
 
 - Tapping **Add spot** now brings the new spot card into view. The drawing at the top of the page

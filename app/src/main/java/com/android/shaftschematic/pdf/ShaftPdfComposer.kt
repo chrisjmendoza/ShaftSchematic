@@ -23,9 +23,11 @@ import com.android.shaftschematic.geom.keywayPinnedBodySpans
 import com.android.shaftschematic.geom.profileFeatureSpans
 import com.android.shaftschematic.geom.defaultVisualScale
 import com.android.shaftschematic.geom.buildCompressedProfileXMap
+import com.android.shaftschematic.geom.CompressedProfileXMap
 import com.android.shaftschematic.geom.exaggeratedProfileScale
 import com.android.shaftschematic.geom.solveMaxProfileScale
 import com.android.shaftschematic.geom.computeOalWindow
+import com.android.shaftschematic.geom.OalWindow
 import com.android.shaftschematic.geom.drawnExtentMm
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
 import com.android.shaftschematic.geom.oalRailEndsMm
@@ -153,19 +155,26 @@ internal fun composeShaftPdfOnCanvas(
      * collapses to its single-unit form.
      */
     displayUnits: DisplayUnits = DisplayUnits.single(unit),
+    /**
+     * The vertical band of the page this schematic draws in. `null` = the whole page, drawn exactly
+     * as the full-page sheet. The before/after sheet stacks two bands — the original above the
+     * final — and only the band that hosts the footer reserves and draws it.
+     */
+    band: SheetBand? = null,
 ) {
-    val effectiveOptions = when (options.mode) {
-        PdfExportMode.Template -> options.copy(
-            showDimensions = false,
-            showLabels = false,
-            showFooter = false,
-        )
-        PdfExportMode.Standard -> options
-    }
+    val effectiveOptions = effectiveSchematicOptions(options)
+
+    // The band this drawing owns. With no band it is the page inside its margins, so every
+    // expression below reduces to the full-page sheet's.
+    val bandTop = band?.topPt ?: PAGE_MARGIN_PT
+    val bandBottom = band?.bottomPt ?: (pageH - PAGE_MARGIN_PT)
+    val hostsFooter = band?.hostsFooter ?: true
 
     // PDF safety: explicitly paint a white page background so geometry/labels are visible
     // even if the viewer/app is in dark mode (some viewers treat an unpainted page as dark).
-    c.drawColor(Color.WHITE)
+    // A band never paints: the sheet that stacks bands paints its page once, and a second band's
+    // white would erase the first.
+    if (band == null) c.drawColor(Color.WHITE)
 
     // Blank-draft (write-in) mode: keep drawing + layout, blank every value. The footer band
     // grows and its lines space out because handwriting is larger than printed text.
@@ -173,32 +182,32 @@ internal fun composeShaftPdfOnCanvas(
 
     val text = sheetTextPaint(TEXT_PT)
 
-    // The footer band is reserved at the height the footer will actually PRINT
-    // (`footerBlockHeightPt`): its mode's default block, or taller when a column wraps or runs to
-    // the full eight spec lines. The band used to reserve the default and let `drawFooter` grow
-    // upward into the 1-inch info gap — but the component-name rows and the Ø callouts live in
-    // that gap, so a fully loaded footer (two tapers with keyways, both threads, a wrapped
-    // customer name) climbed into the name band and printed its "FWD Taper" heading through a
-    // liner's name (found by `SheetTextOverlapTest`). Reserving the measured height keeps the
-    // label rows above the footer by construction; the gap stays air.
-    val footerCfg = if (effectiveOptions.showFooter) sheetFooterConfig(spec, pdfPrefs) else null
-    val footerBlockPt = footerCfg?.let {
-        footerBlockHeightPt(
-            PAGE_MARGIN_PT, pageW - PAGE_MARGIN_PT, spec, unit, project, text, it,
-            blankValues = blank, displayUnits = displayUnits,
-        )
-    } ?: (if (blank) FOOTER_BLOCK_BLANK_PT else FOOTER_BLOCK_PT)
+    // The band's label, in its own row above the drawing — the footer Side badge's construction.
+    band?.badge?.let { badge ->
+        c.drawText(badge, PAGE_MARGIN_PT, bandTop + TEXT_PT, sheetTextPaint(TEXT_PT).apply { isFakeBoldText = true })
+    }
+
+    // The footer band is reserved at the height the footer will actually PRINT — see
+    // [schematicFooterBlockPt]. A band that does not host the footer reserves nothing: its
+    // drawing runs down to the band's own bottom edge.
+    val footerCfg = if (effectiveOptions.showFooter && hostsFooter) sheetFooterConfig(spec, pdfPrefs) else null
+    val footerBlockPt = if (band != null && !hostsFooter) {
+        0f
+    } else {
+        schematicFooterBlockPt(pageW, spec, unit, project, pdfPrefs, options, displayUnits)
+    }
 
     VerboseLog.d(VerboseLog.Category.PDF, "ShaftPdf") {
         "compose start: page=${pageW.toInt()}x${pageH.toInt()}pt filename=$filename unit=$unit oalMm=${"%.3f".format(spec.overallLengthMm)}" +
-            " parts(bodies=${spec.bodies.size}, tapers=${spec.tapers.size}, threads=${spec.threads.size}, liners=${spec.liners.size})"
+            " parts(bodies=${spec.bodies.size}, tapers=${spec.tapers.size}, threads=${spec.threads.size}, liners=${spec.liners.size})" +
+            (band?.let { " band=${it.topPt}..${it.bottomPt} footer=${it.hostsFooter}" } ?: "")
     }
 
     val geomRect = RectF(
         PAGE_MARGIN_PT,
-        PAGE_MARGIN_PT + TOP_TEXT_PAD_PT,
+        bandTop + (if (band?.badge != null) BAND_BADGE_ROW_PT else TOP_TEXT_PAD_PT),
         pageW - PAGE_MARGIN_PT,
-        pageH - PAGE_MARGIN_PT - footerBlockPt
+        bandBottom - footerBlockPt
     )
 
     val resolvedBodies = resolvedComponents
@@ -224,10 +233,8 @@ internal fun composeShaftPdfOnCanvas(
     // ptPerMm must be derived from this full span so neither end clips the page margin.
     // The ONE drawn-extent rule (`geom/DrawnExtent.kt`) — shared with the runout/consolidated
     // sheet so no composer can start its x map at a datum a drawn thread sits outside of.
-    val drawnExtent = spec.drawnExtentMm()
-    val contentMinMm = drawnExtent.startMm
-    val contentMaxMm = drawnExtent.endMm
-    val contentSpanMm = drawnExtent.spanMm
+    // [schematicProfileFit] maps exactly this span.
+    val contentSpanMm = spec.drawnExtentMm().spanMm
 
     // ── Visual diameter scale + compressed x mapping (hand-sheet convention) ──
     // On-device rule (with rulered reference sketches): drawn shaft height follows TRUE
@@ -238,39 +245,26 @@ internal fun composeShaftPdfOnCanvas(
     // (geom/ProfileCompression.kt); plain body runs absorb the squeeze with center-breaks.
     // Shafts that fit at the visual scale keep a plain linear map.
     val maxDiaMm = spec.maxOuterDiaMm().coerceAtLeast(1f)
-    // ONE shared structure (`geom/ProfileFeatureSpans.kt`): the schematic differs from the
-    // runout/consolidated sheet and the UI estimator only by its LEAN floors — its values
-    // live on rails and callouts, so proportion wins over write-in room here.
-    val featureSpans: List<ProfileFeatureSpan> = profileFeatureSpans(
-        spec,
-        linerFloorPt = SCHEMATIC_MIN_LINER_PT,
-        threadFloorPt = SCHEMATIC_MIN_THREAD_PT,
-        linerMinFracOfTrue = linerMinFracOfTrue,
-    )
-    // Pinned spans (tapers, keyway bodies) demand true width → when one needs the room,
-    // the HEIGHT yields ("doesn't have to be perfectly proportional, just close" —
-    // on-device rule). The per-job "Shaft height" slider multiplies the default sizing
-    // curve (standard: proportional, 8" → 1.125"; anchor heights user-adjustable via
-    // Settings → Drawing); the absolute ceiling and the page budget cap the result
-    // (exaggeratedProfileScale, pure, unit-tested).
-    val desiredScale = exaggeratedProfileScale(
-        baseScale = defaultVisualScale(maxDiaMm, pdfPrefs.curveLoHeightPt, pdfPrefs.curveHiHeightPt),
-        heightFrac = heightScale,
-        budgetCapPt = geomRect.height(),
-        maxDiaMm = maxDiaMm,
-    )
-    val diaPtPerMm = solveMaxProfileScale(
-        windowStartMm = contentMinMm, windowEndMm = contentMaxMm,
-        features = featureSpans, contentWidth = geomRect.width(), scaleHi = desiredScale,
-        gapMinWidthPt = SCHEMATIC_MIN_BODY_RUN_PT,
-    ).coerceAtLeast(1e-6f)
-    val xMap = buildCompressedProfileXMap(
-        windowStartMm = contentMinMm, windowEndMm = contentMaxMm,
-        features = featureSpans,
+    // A band solves its x map at its budget share's height ([BAND_SHAFT_BUDGET_FRAC]) and then
+    // draws the shaft at a scale no larger than the room its rails leave (see
+    // [schematicBandLayout]) — the map stays the one the rails were measured on, so a short band
+    // cannot narrow the drawing, float more values and outgrow the room it was given. The
+    // before/after sheet hands both bands the smaller of their two scales, so a changed largest
+    // diameter reads as a changed height.
+    val bandLayout = band?.let { b ->
+        schematicBandLayout(pageW, spec, unit, pdfPrefs, options, displayUnits, b, footerBlockPt, heightScale, linerMinFracOfTrue)
+    }
+    val profile = schematicProfileFit(
+        spec, pdfPrefs, heightScale, linerMinFracOfTrue,
         contentLeft = geomRect.left, contentRight = geomRect.right,
-        diaPtPerMm = diaPtPerMm,
-        gapMinWidthPt = SCHEMATIC_MIN_BODY_RUN_PT,
+        budgetCapPt = if (band == null) geomRect.height() else geomRect.height() * BAND_SHAFT_BUDGET_FRAC,
     )
+    val diaPtPerMm = if (band != null && bandLayout != null) {
+        bandLayout.diaPtPerMm.let { own -> band.diaPtPerMmCap?.let { min(it, own) } ?: own }
+    } else {
+        profile.diaPtPerMm
+    }
+    val xMap = profile.xMap
 
     val winDbg = computeOalWindow(spec)
     VerboseLog.d(VerboseLog.Category.PDF, "ShaftPdf") {
@@ -284,9 +278,12 @@ internal fun composeShaftPdfOnCanvas(
     val minCy = geomRect.top + halfHeightPx
     val maxCy = min(
         geomRect.bottom - halfHeightPx,
-        pageH - PAGE_MARGIN_PT - footerBlockPt - INFO_GAP_PT - halfHeightPx
+        bandBottom - footerBlockPt - (bandLayout?.infoGapPt ?: INFO_GAP_PT) - halfHeightPx
     )
-    val desiredCy = pageH * 0.5f + SHAFT_DOWN_PT
+    // A band centres on its own span with the same downward bias — the page's middle is
+    // `(margin + (pageH - margin)) / 2`, so a band covering the whole page asks for exactly the
+    // full-page position.
+    val desiredCy = if (band == null) pageH * 0.5f + SHAFT_DOWN_PT else (bandTop + bandBottom) * 0.5f + SHAFT_DOWN_PT
     val cy = if (minCy <= maxCy) desiredCy.coerceIn(minCy, maxCy) else (geomRect.top + geomRect.bottom) * 0.5f
     val yTopOfShaft = cy - halfHeightPx
 
@@ -411,34 +408,20 @@ internal fun composeShaftPdfOnCanvas(
         val baseY = yTopOfShaft - BAND_CLEAR_PT - BASE_DIM_OFFSET_PT
 
         // Fit-to-band safety for dimensional rails (OAL always visible)
-        val topSafePad = 6f
+        val topSafePad = RAIL_TOP_SAFE_PAD_PT
         val startRailGap = LANE_GAP_PT + 6f
         val startDimTextSize = TEXT_PT - 2f
         val minDimTextSize = 7f
         val dimText = sheetTextPaint(startDimTextSize)
 
-        // Measurement reference (AFT/FWD/AUTO) is separate from tier origin.
-        val measureFromMode = pdfPrefs.tieringMode
-        val linerDims = mapToLinerDimsForPdf(spec, measureFromMode)
-        val win  = computeOalWindow(spec)
+        val railSpans = schematicRailSpans(spec, unit, displayUnits, pdfPrefs)
+        val win = railSpans.win
         val pageX: (Double) -> Float = { dimMm ->
             xAt((dimMm + win.measureStartMm).toFloat())
         }
-        val sets = computeSetPositionsInMeasureSpace(win, spec)
-        val componentDimSpans = buildLinerSpans(
-            liners = linerDims,
-            sets = sets,
-            unit = unit,
-            measureFrom = measureFromMode,
-            displayUnits = displayUnits,
-        ) + buildTaperLengthSpans(spec, win, unit, displayUnits, measureFromMode) +
-            buildCouplerSlotSpans(spec, win, unit, displayUnits)
-        val spans = componentDimSpans + buildBodyLengthSpans(spec, win, unit, displayUnits, componentDimSpans)
-        val planner = RailPlanner()
-        val tierOriginMm = tierOriginMmFor(pdfPrefs.tieringMode, win.oalMm)
-        val assignments = planner.assignAll(spans, tierOriginMm)
+        val assignments = railSpans.assignments
 
-        val maxRail = assignments.maxOfOrNull { it.rail } ?: 0
+        val maxRail = railSpans.maxRail
 
         // Stacked dual values are a whole-SHEET choice, taken here and either honoured below or
         // given up on entirely (`docs/DualUnitStacking_PLAN.md` §7): a sheet with some two-line and
@@ -457,11 +440,7 @@ internal fun composeShaftPdfOnCanvas(
             dualStacked = stacked,
         )
 
-        val (oalAft, oalFwd) = oalRailEndsMm(spec, sets, win)
-        val oalDimSpan = oalSpan(
-            oalAft, oalFwd, displayUnits.documentUnit,
-            labelMm = spec.overallLengthMm.toDouble(), dual = displayUnits.dual,
-        )
+        val oalDimSpan = railSpans.oalDimSpan
 
         // Planner rows, OAL topmost. Rail y values here are UNLIFTED; the plan returns the
         // lifted line positions.
@@ -494,8 +473,8 @@ internal fun composeShaftPdfOnCanvas(
             var gap = startRailGap
             var textSize = startDimTextSize
             fun minGap(): Float =
-                if (!stacked) 10f
-                else max(10f, r.labelHeight() + 2f * DimensionRailLayout.LINE_HALF_CLEAR + 2f)
+                if (!stacked) RAIL_MIN_GAP_PT
+                else max(RAIL_MIN_GAP_PT, r.labelHeight() + 2f * DimensionRailLayout.LINE_HALF_CLEAR + 2f)
             fun topYFor(g: Float): Float = computeTopY(g) - r.topLift(rows(r, g, 0f))
             var topY = topYFor(gap)
             repeat(12) {
@@ -549,17 +528,290 @@ internal fun composeShaftPdfOnCanvas(
     diaLeader?.draw(c, diaCalls)
 
     if (footerCfg != null) {
-        val infoBottom = pageH - PAGE_MARGIN_PT
-        val infoTop = footerBandTop(pageH, PAGE_MARGIN_PT, footerBlockPt, cy + halfHeightPx)
+        val infoBottom = bandBottom
+        // `footerBandTop` measures from a page bottom and subtracts the margin itself; handing it
+        // the band's bottom plus that margin is the same arithmetic against the band's edge.
+        val footerPageBottom = band?.let { it.bottomPt + PAGE_MARGIN_PT } ?: pageH
+        val infoTop = footerBandTop(footerPageBottom, PAGE_MARGIN_PT, footerBlockPt, cy + halfHeightPx)
         val infoRect = RectF(geomRect.left, infoTop, geomRect.right, infoBottom)
 
         drawFooter(c, infoRect, spec, unit, project, filename, appVersion, text, footerCfg, blankValues = blank, displayUnits = displayUnits)
     }
 
-    // Last, in the bottom margin strip: the opt-in "Units in …" note.
-    if (pdfPrefs.showUnitsNote) drawUnitsNote(c, pageW, pageH, PAGE_MARGIN_PT, displayUnits.documentUnit)
+    // Last, in the bottom margin strip: the opt-in "Units in …" note. Page coordinates — it is
+    // the page's note, so only the band that hosts the footer prints it.
+    if (pdfPrefs.showUnitsNote && hostsFooter) drawUnitsNote(c, pageW, pageH, PAGE_MARGIN_PT, displayUnits.documentUnit)
 }
 
+/**
+ * One vertical band of a schematic page, in page points: the drawing's top and bottom edges,
+ * the bold label printed in the band's own row above the drawing ([badge], `null` = no label row),
+ * and whether this band reserves and draws the sheet's footer ([hostsFooter]).
+ */
+internal data class SheetBand(
+    val topPt: Float,
+    val bottomPt: Float,
+    val badge: String? = null,
+    val hostsFooter: Boolean = true,
+    /**
+     * The largest diameter scale (points per mm) this band may draw at; `null` = the scale this
+     * band's own room allows ([schematicBandLayout]). A sheet stacking several bands passes the
+     * smallest of their scales to every band, so all of them draw at ONE scale and a shaft whose
+     * largest diameter changed reads as a changed height.
+     */
+    val diaPtPerMmCap: Float? = null,
+)
+
+/** Template mode drops the dimensions, the names and the footer; Standard prints [options] as given. */
+private fun effectiveSchematicOptions(options: PdfExportOptions): PdfExportOptions = when (options.mode) {
+    PdfExportMode.Template -> options.copy(
+        showDimensions = false,
+        showLabels = false,
+        showFooter = false,
+    )
+    PdfExportMode.Standard -> options
+}
+
+/**
+ * The height a full-page schematic reserves for its footer band, in points.
+ *
+ * The band is reserved at the height the footer will actually PRINT (`footerBlockHeightPt`): its
+ * mode's default block, or taller when a column wraps or runs to the full eight spec lines.
+ * Reserving only the default and letting `drawFooter` grow upward would put the footer into the
+ * 1-inch info gap — where the component-name rows and the Ø callouts live — so a fully loaded
+ * footer (two tapers with keyways, both threads, a wrapped customer name) would print its
+ * "FWD Taper" heading through a liner's name (`SheetTextOverlapTest`). Reserving the measured
+ * height keeps the label rows above the footer by construction; the gap stays air.
+ *
+ * A sheet that prints no footer (Template mode, `showFooter` off) still reserves its mode's
+ * default block, so the drawing sits where it always has. The before/after sheet places its
+ * divider off this same value, so the divider and the footer it sits above can never disagree.
+ */
+internal fun schematicFooterBlockPt(
+    pageW: Float,
+    spec: ShaftSpec,
+    unit: UnitSystem,
+    project: ProjectInfo,
+    pdfPrefs: PdfPrefs,
+    options: PdfExportOptions,
+    displayUnits: DisplayUnits,
+): Float {
+    val effectiveOptions = effectiveSchematicOptions(options)
+    val blank = effectiveOptions.blankValues
+    val footerCfg = if (effectiveOptions.showFooter) sheetFooterConfig(spec, pdfPrefs) else null
+    return footerCfg?.let {
+        footerBlockHeightPt(
+            PAGE_MARGIN_PT, pageW - PAGE_MARGIN_PT, spec, unit, project, sheetTextPaint(TEXT_PT), it,
+            blankValues = blank, displayUnits = displayUnits,
+        )
+    } ?: (if (blank) FOOTER_BLOCK_BLANK_PT else FOOTER_BLOCK_PT)
+}
+
+/** The schematic's dimension spans and their rail assignment — pure mm, no page geometry. */
+private class SchematicRailSpans(
+    val win: OalWindow,
+    val assignments: List<RailSpan>,
+    val oalDimSpan: DimSpan,
+) {
+    val maxRail: Int get() = assignments.maxOfOrNull { it.rail } ?: 0
+}
+
+/**
+ * Builds the schematic's dimension spans — liner, taper, coupler-slot and body-length spans on
+ * their planned rails, plus the top OAL span. ONE builder behind the composer's rail pass and the
+ * band layout's rail estimate, so the estimate counts exactly the rails that print.
+ */
+private fun schematicRailSpans(
+    spec: ShaftSpec,
+    unit: UnitSystem,
+    displayUnits: DisplayUnits,
+    pdfPrefs: PdfPrefs,
+): SchematicRailSpans {
+    // Measurement reference (AFT/FWD/AUTO) is separate from tier origin.
+    val measureFromMode = pdfPrefs.tieringMode
+    val linerDims = mapToLinerDimsForPdf(spec, measureFromMode)
+    val win = computeOalWindow(spec)
+    val sets = computeSetPositionsInMeasureSpace(win, spec)
+    val componentDimSpans = buildLinerSpans(
+        liners = linerDims,
+        sets = sets,
+        unit = unit,
+        measureFrom = measureFromMode,
+        displayUnits = displayUnits,
+    ) + buildTaperLengthSpans(spec, win, unit, displayUnits, measureFromMode) +
+        buildCouplerSlotSpans(spec, win, unit, displayUnits)
+    val spans = componentDimSpans + buildBodyLengthSpans(spec, win, unit, displayUnits, componentDimSpans)
+    val tierOriginMm = tierOriginMmFor(pdfPrefs.tieringMode, win.oalMm)
+    val assignments = RailPlanner().assignAll(spans, tierOriginMm)
+
+    val (oalAft, oalFwd) = oalRailEndsMm(spec, sets, win)
+    val oalDimSpan = oalSpan(
+        oalAft, oalFwd, displayUnits.documentUnit,
+        labelMm = spec.overallLengthMm.toDouble(), dual = displayUnits.dual,
+    )
+    return SchematicRailSpans(win, assignments, oalDimSpan)
+}
+
+/**
+ * How a [SheetBand]'s height divides below its rails: the drawn shaft height it has room for
+ * ([shaftRoomPt]) and the names / Ø callouts band under the shaft ([infoGapPt]), in points — and
+ * the diameter scale that room allows ([diaPtPerMm]: the band's own profile scale, capped so its
+ * largest diameter fits the room, never below [BAND_MIN_SHAFT_HEIGHT_PT]).
+ */
+internal class SchematicBandLayout(val shaftRoomPt: Float, val infoGapPt: Float, val diaPtPerMm: Float)
+
+/**
+ * Lays a [band] out top to bottom — its badge row, the rail block, the shaft, the names / Ø
+ * callouts — and answers how tall the shaft may draw, and at what diameter scale.
+ *
+ * The rail block is measured at [BAND_RAIL_GAP_PT] lane pitch and the starting value size — its
+ * lift from above-line values taken off the band's x map, which the composer solves at
+ * [BAND_SHAFT_BUDGET_FRAC] of the band whatever height the shaft then draws at, so the estimate
+ * and the sheet see the same spans. The composer's rail fit then settles the real pitch.
+ *
+ * A band too short for that (a blank draft's tall write-in footer halves what is left) gives way
+ * in order: the rails drop to the fit's minimum pitch ([RAIL_MIN_GAP_PT]), then the names band
+ * yields from [BAND_INFO_GAP_PT] toward [BAND_INFO_GAP_MIN_PT] (the name planner sets its rows a
+ * size smaller there), and the shaft keeps [BAND_MIN_SHAFT_HEIGHT_PT]. A rail block that spills
+ * over the band's top would print across the rule into the band above, which is the one outcome
+ * this order exists to prevent. Template mode prints no rails, so the rails take nothing there.
+ */
+internal fun schematicBandLayout(
+    pageW: Float,
+    spec: ShaftSpec,
+    unit: UnitSystem,
+    pdfPrefs: PdfPrefs,
+    options: PdfExportOptions,
+    displayUnits: DisplayUnits,
+    band: SheetBand,
+    footerBlockPt: Float,
+    heightScale: Float,
+    linerMinFracOfTrue: Float,
+): SchematicBandLayout {
+    val effectiveOptions = effectiveSchematicOptions(options)
+    val top = band.topPt + (if (band.badge != null) BAND_BADGE_ROW_PT else TOP_TEXT_PAD_PT)
+    val bottom = band.bottomPt - footerBlockPt
+    val height = bottom - top
+    // The band's profile — the x map and scale the composer draws on (see the band branch there).
+    val provisional = schematicProfileFit(
+        spec, pdfPrefs, heightScale, linerMinFracOfTrue,
+        contentLeft = PAGE_MARGIN_PT, contentRight = pageW - PAGE_MARGIN_PT,
+        budgetCapPt = height * BAND_SHAFT_BUDGET_FRAC,
+    )
+    val maxDiaMm = spec.maxOuterDiaMm().coerceAtLeast(1f)
+    fun layout(shaftRoomPt: Float, infoGapPt: Float) = SchematicBandLayout(
+        shaftRoomPt, infoGapPt,
+        diaPtPerMm = min(provisional.diaPtPerMm, max(shaftRoomPt, BAND_MIN_SHAFT_HEIGHT_PT) / maxDiaMm),
+    )
+    if (!effectiveOptions.showDimensions) {
+        return layout(height - BAND_INFO_GAP_PT, BAND_INFO_GAP_PT)
+    }
+    fun rails(gap: Float) = schematicRailBlockPt(
+        spec, unit, displayUnits, pdfPrefs, effectiveOptions.blankValues,
+        xAt = provisional.xMap::xAt,
+        gap = gap,
+    )
+
+    val comfortable = height - rails(BAND_RAIL_GAP_PT) - BAND_INFO_GAP_PT
+    if (comfortable >= BAND_MIN_SHAFT_HEIGHT_PT) return layout(comfortable, BAND_INFO_GAP_PT)
+
+    // At the minimum pitch the fit has no give left, so the room keeps a point of slack for it.
+    val tightRails = rails(RAIL_MIN_GAP_PT) + 1f
+    val infoGap = (height - tightRails - BAND_MIN_SHAFT_HEIGHT_PT).coerceIn(BAND_INFO_GAP_MIN_PT, BAND_INFO_GAP_PT)
+    return layout(height - tightRails - infoGap, infoGap)
+}
+
+/** The schematic's diameter scale and compressed x map — what [schematicProfileFit] solves. */
+private class SchematicProfileFit(val diaPtPerMm: Float, val xMap: CompressedProfileXMap)
+
+/**
+ * The schematic's drawn diameter scale and its compressed x map for a content width and a height
+ * budget — ONE pipeline behind the composer and the band layout's rail estimate.
+ */
+private fun schematicProfileFit(
+    spec: ShaftSpec,
+    pdfPrefs: PdfPrefs,
+    heightScale: Float,
+    linerMinFracOfTrue: Float,
+    contentLeft: Float,
+    contentRight: Float,
+    budgetCapPt: Float,
+): SchematicProfileFit {
+    // Total content span: shaft body (0..OAL) plus any excluded end threads that sit outside the
+    // OAL range — the ONE drawn-extent rule (`geom/DrawnExtent.kt`).
+    val drawnExtent = spec.drawnExtentMm()
+    val contentMinMm = drawnExtent.startMm
+    val contentMaxMm = drawnExtent.endMm
+    val maxDiaMm = spec.maxOuterDiaMm().coerceAtLeast(1f)
+    // ONE shared structure (`geom/ProfileFeatureSpans.kt`): the schematic differs from the
+    // runout/consolidated sheet and the UI estimator only by its LEAN floors — its values
+    // live on rails and callouts, so proportion wins over write-in room here.
+    val featureSpans: List<ProfileFeatureSpan> = profileFeatureSpans(
+        spec,
+        linerFloorPt = SCHEMATIC_MIN_LINER_PT,
+        threadFloorPt = SCHEMATIC_MIN_THREAD_PT,
+        linerMinFracOfTrue = linerMinFracOfTrue,
+    )
+    // Pinned spans (tapers, keyway bodies) demand true width → when one needs the room,
+    // the HEIGHT yields ("doesn't have to be perfectly proportional, just close" —
+    // on-device rule). The per-job "Shaft height" slider multiplies the default sizing
+    // curve (standard: proportional, 8" → 1.125"; anchor heights user-adjustable via
+    // Settings → Drawing); the absolute ceiling and the page budget cap the result
+    // (exaggeratedProfileScale, pure, unit-tested).
+    val desiredScale = exaggeratedProfileScale(
+        baseScale = defaultVisualScale(maxDiaMm, pdfPrefs.curveLoHeightPt, pdfPrefs.curveHiHeightPt),
+        heightFrac = heightScale,
+        budgetCapPt = budgetCapPt,
+        maxDiaMm = maxDiaMm,
+    )
+    val diaPtPerMm = solveMaxProfileScale(
+        windowStartMm = contentMinMm, windowEndMm = contentMaxMm,
+        features = featureSpans, contentWidth = contentRight - contentLeft, scaleHi = desiredScale,
+        gapMinWidthPt = SCHEMATIC_MIN_BODY_RUN_PT,
+    ).coerceAtLeast(1e-6f)
+    val xMap = buildCompressedProfileXMap(
+        windowStartMm = contentMinMm, windowEndMm = contentMaxMm,
+        features = featureSpans,
+        contentLeft = contentLeft, contentRight = contentRight,
+        diaPtPerMm = diaPtPerMm,
+        gapMinWidthPt = SCHEMATIC_MIN_BODY_RUN_PT,
+    )
+    return SchematicProfileFit(diaPtPerMm, xMap)
+}
+
+/**
+ * Height from the content top to the shaft top that the rail block takes at lane pitch [gap] and
+ * the starting value size: the safe pad, the clearance above the shaft, one pitch per rail (OAL
+ * included) and the lift every above-line value adds — the same terms the composer's rail fit
+ * measures, over the x map [xAt].
+ */
+private fun schematicRailBlockPt(
+    spec: ShaftSpec,
+    unit: UnitSystem,
+    displayUnits: DisplayUnits,
+    pdfPrefs: PdfPrefs,
+    blank: Boolean,
+    xAt: (Float) -> Float,
+    gap: Float,
+): Float {
+    val rails = schematicRailSpans(spec, unit, displayUnits, pdfPrefs)
+    val renderer = PdfDimensionRenderer(
+        pageX = { dimMm -> xAt((dimMm + rails.win.measureStartMm).toFloat()) },
+        linePaint = Paint(),
+        textPaint = sheetTextPaint(TEXT_PT - 2f),
+        objectTopY = 0f,
+        objectClearance = 6f,
+        arrowSize = pdfPrefs.arrowSizePt,
+        blankLabels = blank,
+        blankLabelWidthPx = BLANK_DIM_GAP_PT,
+        blankLabelMinWidthPx = BLANK_DIM_GAP_MIN_PT,
+        dualStacked = displayUnits.dual && pdfPrefs.dualUnitLayout == DualUnitLayout.STACKED,
+    )
+    val rows = rails.assignments.map { renderer.spanInput(it.rail, -gap * it.rail, it.span) } +
+        renderer.spanInput(DimensionRailLayout.TOP_RAIL, -gap * (rails.maxRail + 1), rails.oalDimSpan)
+    return RAIL_TOP_SAFE_PAD_PT + BAND_CLEAR_PT + BASE_DIM_OFFSET_PT +
+        gap * (rails.maxRail + 1) + renderer.topLift(rows)
+}
 // ──────────────────────────────────────────────────────────────────────────────
 // Constants
 // ──────────────────────────────────────────────────────────────────────────────
@@ -575,9 +827,45 @@ private const val TEXT_PT = 12f
 
 // Layout
 private const val PAGE_MARGIN_PT = 36f       // 0.5 in
+/** The page margin every schematic band is inset by — the before/after sheet lays its bands out on it. */
+internal const val SCHEMATIC_PAGE_MARGIN_PT = PAGE_MARGIN_PT
 private const val TOP_TEXT_PAD_PT = 12f
 private const val SHAFT_DOWN_PT = 36f        // 0.5 in downward shift (moves footer down too)
 private const val BAND_CLEAR_PT = 12f        // breathing room above shaft before first dim line
+/** A labelled [SheetBand]'s badge row: the drawing starts this far below the band's top. */
+private const val BAND_BADGE_ROW_PT = 16f
+/**
+ * The share of a [SheetBand]'s drawing height the shaft itself may take. The rails need ~40 pt
+ * above it and the names / Ø callouts band 72 pt below, so a shaft sized to the whole band would
+ * leave room for neither. The tunable knob for a crowded band: lower it and the shaft draws
+ * smaller, leaving the rails and names more air.
+ */
+private const val BAND_SHAFT_BUDGET_FRAC = 0.30f
+/**
+ * The rail lane pitch a [SheetBand] budgets for when it sizes its shaft — tighter than the full
+ * page's starting pitch ([LANE_GAP_PT] + 6), which has a whole page of air to spend; the rail fit
+ * still opens the pitch up to whatever the band's room allows.
+ */
+private const val BAND_RAIL_GAP_PT = 14f
+/**
+ * The names / Ø callouts band under a [SheetBand]'s shaft — two name rows at the starting size
+ * (the first [COMPONENT_LABEL_OFFSET_PT] below the shaft, one row pitch more) plus the air that
+ * keeps the second row off the footer's first line, which sets right at the band's top. The full
+ * page keeps its 1-inch [INFO_GAP_PT]; a half-page band cannot, and the name planner shrinks into
+ * further rows down to the band's bottom when a job needs them.
+ */
+private const val BAND_INFO_GAP_PT = 64f
+/**
+ * The floor the names / Ø callouts band under a [SheetBand]'s shaft yields to when the band is
+ * short: two name rows still fit, the planner setting them a size or two smaller.
+ */
+private const val BAND_INFO_GAP_MIN_PT = 46f
+/** The smallest shaft a [SheetBand] draws: under it, the rails tighten rather than the shaft shrink. */
+private const val BAND_MIN_SHAFT_HEIGHT_PT = 18f
+/** The rail fit's tightest lane pitch for single-line values. */
+private const val RAIL_MIN_GAP_PT = 10f
+/** Air the rail block keeps under the content top. */
+private const val RAIL_TOP_SAFE_PAD_PT = 6f
 /**
  * Outcome of one rail-block fit attempt: the lane pitch and text size it settled on, the resulting
  * unlifted top-rail y, and whether that actually cleared the content top.

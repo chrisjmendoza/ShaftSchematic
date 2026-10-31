@@ -63,7 +63,7 @@ work ships they move to `docs/archive/`; each is listed under the contract it be
   measure and draw must convert together.
 - **FinalSchematic.md** — the document's second drawing (`final_spec`): one editor, two
   targets (`SpecTarget` on every mutator), what draws the original vs the final, how every
-  final sheet is marked. Design plan: `docs/archive/FinalSchematic_PLAN.md`.
+  final sheet is marked, and the Original + Final before/after sheet. Design plan: `docs/archive/FinalSchematic_PLAN.md`.
 
 ## State & persistence
 
