@@ -29,6 +29,7 @@ import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.hasAnyKeywayValue
 import com.android.shaftschematic.ui.input.taperPhysStartForNewLength
+import com.android.shaftschematic.ui.input.taperRateIsAuto
 import com.android.shaftschematic.ui.input.taperSetLetMapping
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.resolved.ResolvedTaper
@@ -145,10 +146,7 @@ internal fun TaperPagerCard(
         // that silently discards an explicit Auto/Manual choice; keyed on the stored mode, so an
         // undo of a chip tap moves the chips back.
         var autoRate by rememberSaveable(t.id, t.taperRateManual) {
-            mutableStateOf(
-                t.taperRateManual?.not()
-                    ?: (t.taperRateText.isBlank() || t.taperRateText == computedRateText)
-            )
+            mutableStateOf(taperRateIsAuto(t, computedRateText))
         }
         val hasExactlyOneEnd = (t.startDiaMm > 0f).xor(t.endDiaMm > 0f)
         val autoRateIssue = if (autoRate && hasExactlyOneEnd) {

@@ -72,12 +72,15 @@ data class TaperCalcFieldState(
 /**
  * The whole dialog's display state. [message] is the one line under the fields;
  * [messageIsError] colours it. [isSolved] is true whenever a full taper exists on screen.
+ * [applicable] is that taper when it may be written to the shaft: four typed values that disagree
+ * are a question the user has not settled yet, so there is nothing to apply until they do.
  */
 data class TaperCalcPresentation(
     val fields: Map<TaperCalcField, TaperCalcFieldState>,
     val message: String? = null,
     val messageIsError: Boolean = false,
     val isSolved: Boolean = false,
+    val applicable: TaperCalcResult.Solved? = null,
 ) {
     fun field(f: TaperCalcField): TaperCalcFieldState = fields.getValue(f)
 }
@@ -176,6 +179,7 @@ fun presentTaperCalc(entries: TaperCalcEntries, calculated: Boolean): TaperCalcP
                 message = message,
                 messageIsError = result.typedSlopeAgrees == false,
                 isSolved = true,
+                applicable = result.takeIf { it.typedSlopeAgrees != false },
             )
         }
     }

@@ -81,7 +81,7 @@ import androidx.compose.ui.unit.dp
  *             Final Schematic · Consolidated Output
  * Bottom group: Keyway calculator · Taper calculator · Unit converter · Fraction chart · Help & FAQ ·
  * Settings — tools, not document views, so they are never dimmed by the "built" gate (no
- * calculator reads anything from the shaft). The two calculators sit adjacent. Help sits with
+ * calculator needs a shaft to calculate). The two calculators sit adjacent. Help sits with
  * them rather than behind Settings: reference content is reached for mid-job, and Settings is
  * for changing things.
  * Runout, Wear, Undercut, Final Schematic, and Consolidated Output are dimmed when

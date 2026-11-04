@@ -151,5 +151,9 @@ internal fun addSeedFromFwdMm(spec: ShaftSpec, lengthMm: Float): Float {
     return (spec.overallLengthMm - start - lengthMm).coerceAtLeast(0f)
 }
 
+/** The start of the AFT-most free span that holds [lengthMm], or `null` when none does. */
+internal fun firstFreeStartMm(spec: ShaftSpec, lengthMm: Float): Float? =
+    freeSpansMm(spec).firstOrNull { (s, e) -> e - s >= lengthMm - ADD_START_SEED_EPS_MM }?.first
+
 /** [addStartSeed]'s Start alone — the Add dialogs' own fallback when no Start is passed in. */
 internal fun addDialogStartMm(spec: ShaftSpec): Float = addStartSeed(spec).startMm

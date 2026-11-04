@@ -38,6 +38,9 @@ import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.ui.input.TaperCalcValues
+import com.android.shaftschematic.ui.input.toApplyValues
 import com.android.shaftschematic.util.TaperCalcEntries
 import com.android.shaftschematic.util.TaperCalcField
 import com.android.shaftschematic.util.TaperCalcFieldState
@@ -48,9 +51,12 @@ import com.android.shaftschematic.util.presentTaperCalc
  * TaperCalcDialog — standalone taper solver: enter any three of L.E.T. / S.E.T. / length /
  * rate, tap Calculate, and read the fourth IN its own field.
  *
- * Same tool posture as [BoreKeywayCalcDialog] and [UnitConverterDialog]: it reads nothing from
- * the shaft, stores nothing (fields start blank every open), marks nothing dirty, and prints on
- * no sheet.
+ * Same tool posture as [BoreKeywayCalcDialog] and [UnitConverterDialog] while it calculates: it
+ * stores nothing (fields start blank every open), marks nothing dirty, and prints on no sheet. The
+ * one way it reaches the document is Apply, which takes the place of Calculate once a taper is
+ * solved and asks where the values go ([TaperCalcApplyDialog]) before anything is written. It stays
+ * in that slot for the same reason Calculate does: above the keyboard. A double tap on Calculate
+ * can only open that question.
  *
  * Button-driven, by on-device request: a value appearing at the bottom while typing read as
  * the calculator answering a question that had not been asked yet. Calculate is the one
@@ -75,8 +81,14 @@ import com.android.shaftschematic.util.presentTaperCalc
  * common-rate tolerance stay in `util/TaperRateAuto.kt`.
  */
 @Composable
-fun TaperCalcDialog(
+internal fun TaperCalcDialog(
     defaultUnit: UnitSystem,
+    /** The drawing Apply writes to; read only for the question Apply asks. */
+    spec: ShaftSpec,
+    selectedComponentId: String?,
+    /** Names that drawing once the document has two; `null` while it has one. */
+    drawingLabel: String?,
+    onApply: (TaperCalcChoice, TaperCalcValues) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var entries by rememberSaveable(stateSaver = TaperCalcEntriesNonNullSaver) {
@@ -90,6 +102,8 @@ fun TaperCalcDialog(
     val calculated = calculatedFor == entries
     val shown = presentTaperCalc(entries, calculated)
     val calculate = { calculatedFor = entries }
+    var applyOpen by rememberSaveable { mutableStateOf(false) }
+    val applicable = shown.applicable
 
     ImeResizingAlertDialog(
         onDismissRequest = onDismiss,
@@ -102,7 +116,8 @@ fun TaperCalcDialog(
             ) {
                 Text(
                     "Enter any three of the four values and tap Calculate; the fourth appears " +
-                        "in its field. Enter all four to check them against each other.",
+                        "in its field. Enter all four to check them against each other. Apply " +
+                        "then puts the answer on a taper on the shaft.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -179,12 +194,36 @@ fun TaperCalcDialog(
                 TextButton(onClick = onDismiss, modifier = Modifier.testTag("taper_calc_close")) {
                     Text("Close")
                 }
-                Button(onClick = calculate, modifier = Modifier.testTag("taper_calc_calculate")) {
-                    Text("Calculate")
+                if (applicable != null) {
+                    Button(
+                        onClick = { applyOpen = true },
+                        modifier = Modifier.testTag("taper_calc_apply"),
+                    ) {
+                        Text("Apply…")
+                    }
+                } else {
+                    Button(onClick = calculate, modifier = Modifier.testTag("taper_calc_calculate")) {
+                        Text("Calculate")
+                    }
                 }
             }
         },
     )
+
+    // Composed after the calculator, so its window stacks on top when a rotation restores both.
+    if (applyOpen && applicable != null) {
+        val values = applicable.toApplyValues(entries)
+        TaperCalcApplyDialog(
+            spec = spec,
+            values = values,
+            entryUnit = entries.unit,
+            documentUnit = defaultUnit,
+            selectedComponentId = selectedComponentId,
+            drawingLabel = drawingLabel,
+            onConfirm = { choice -> onApply(choice, values) },
+            onBack = { applyOpen = false },
+        )
+    }
 }
 
 /**

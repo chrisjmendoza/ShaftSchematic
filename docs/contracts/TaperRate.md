@@ -108,6 +108,11 @@ Notes
   `autoTaperRate` to be named, so the two surfaces cannot disagree about what a taper is
   called. Its inch-per-foot line (`12 / N`) is the general form of the footer's `1:12` → 1"/ft
   and `1:16` → 3/4"/ft, derived from the EXACT N rather than the snapped name.
+- The calculator's Apply (`withTaperCalcValues`, `ui/input/TaperCalcValues.kt`) keeps a taper's
+  rate mode, which stays user-owned, and writes it explicitly so a taper saved before the mode
+  existed cannot flip. Auto recomputes from the new geometry and ignores a typed rate. Manual takes
+  the typed rate verbatim, or the computed text when the calculator derived the rate, because the
+  old text would contradict the new geometry. A new taper from Apply is Auto.
 
 Change Log
 ----------
