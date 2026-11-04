@@ -501,7 +501,7 @@
   <aside class="warn"><p  class="keep">Measurements belong to the shaft they were taken on. The mate starts with none so that one shaft's readings can never appear on the other's sheets as if they had been measured there. Take the mate's own readings.</p></aside>
 
   <h2 id="editor-tools">Calculators and tools</h2>
-  <p  class="keep">Three shop calculators and a fraction chart sit in the navigation menu under the document tabs. Each opens over the current screen and starts fresh every time; the calculators have their own <span class="ui">Units</span> chips (<span class="ui">in</span> | <span class="ui">mm</span>, starting on the job's unit). They read nothing from the shaft and write nothing into it: read the answer and type it where you need it.</p>
+  <p  class="keep">Three shop calculators and a fraction chart sit in the navigation menu under the document tabs. Each opens over the current screen and starts fresh every time; the calculators have their own <span class="ui">Units</span> chips (<span class="ui">in</span> | <span class="ui">mm</span>, starting on the job's unit). They work without a shaft and change nothing on one, with one exception: the taper calculator can put its answer on a taper when you ask it to.</p>
 
   <h3>Taper calculator</h3>
   <p  class="keep"><span class="ui">Taper calculator</span> in the navigation menu opens <span class="ui">Taper calculator</span>, which solves the fourth value of a taper from any three:</p>
@@ -517,6 +517,12 @@
     <li  class="keep">To use the answer as a starting point for the next question, tap the ✓ beside it (<span class="ui">Keep calculated value as an input</span>).</li>
   </ol>
   <p  class="keep">Enter all four values and <span class="ui">Calculate</span> checks them against each other. Change any entry and the old answer clears, so a number that no longer follows from the fields is never left on screen. <span class="ui">Clear</span> empties the fields; <span class="ui">Close</span> leaves. In inches, the rate is also shown in inches per foot.</p>
+  <p  class="keep">Once a taper is solved, <span class="ui">Apply…</span> takes the place of <span class="ui">Calculate</span> and asks where the values go:</p>
+  <ul>
+    <li  class="keep">Pick a taper on the drawing, or a new taper at an end that has none. A shaft with no taper is asked only which end.</li>
+    <li  class="keep">The dialog shows each value before and after, which end a length change moves, and any warning, such as an overlap with the next part. Read it, then tap <span class="ui">Apply</span> or <span class="ui">Add taper</span>, or <span class="ui">Back</span> to return to the calculator.</li>
+  </ul>
+  <p  class="keep"><span class="ui">Apply</span> changes the two diameters, the length and the rate. The taper's keyway, name, Auto or Manual rate mode and the overall length stay as they are. A snackbar offers <span class="ui">Undo</span>. On the Final tab it writes to the final drawing, and the dialog names the drawing whenever the job has two. If all four values were typed and do not agree, there is no <span class="ui">Apply…</span> until you correct them.</p>
 
   <h3>Keyway calculator</h3>
   <p  class="keep"><span class="ui">Keyway calculator</span> in the navigation menu opens <span class="ui">Keyway rough-cutter depth</span>, for roughing a keyway in a bore with a cutter narrower than the finished keyway. Enter <span class="ui">Bore Ø</span>, the finished <span class="ui">Keyway width</span> and <span class="ui">Keyway depth</span>, and up to two rough cutters (<span class="ui">Cutter 1 width</span>, <span class="ui">Cutter 2 width</span>). For each cutter it shows the depth to measure at the cutter's outer edges so its flat bottom lands on the finished keyway's floor. The answer updates as you type.</p>

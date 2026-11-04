@@ -51,8 +51,13 @@ Route graph (AppNav.kt NavHost)
     route owning only a `rememberSaveable` open flag and passing the document unit as
     `defaultUnit`: `BoreKeywayCalcDialog`, `TaperCalcDialog`
     (`docs/DESIGN_INTENT.md` §3.8, solve in `util/TaperCalcMath.kt`), `UnitConverterDialog`.
-    Calculators are document-free — they read nothing from the spec, write nothing back, and
-    never mark the session dirty. The keyway and taper calculators are an
+    Calculators are document-free — while calculating they read nothing from the spec, write
+    nothing back, and never mark the session dirty. The one write is the taper calculator's
+    Apply (`docs/DESIGN_INTENT.md` §3.8): the route passes it the drawing on screen (the FINAL on
+    the Final tab once one exists, else the ORIGINAL, named in the dialog whenever the document
+    has two) and hosts the Undo snackbar itself, because only `ShaftRoute` collects the
+    ViewModel's snackbar events and the calculator opens from every tab. The keyway and taper
+    calculators are an
     `ImeResizingAlertDialog` (`ui/screen/DialogImeResize.kt`): the dialog window RESIZES above
     the keyboard instead of panning, so the scroll column can reach the fields below the focused
     one and the Close button (a panned dialog left the cutter fields under the keyboard —

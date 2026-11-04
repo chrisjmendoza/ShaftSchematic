@@ -729,7 +729,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     val canRedo: StateFlow<Boolean> = _canRedo.asStateFlow()
 
     /** Snapshot the current undoable slice of editor state. */
-    private fun currentEditState(): EditState = EditState(
+    internal fun currentEditState(): EditState = EditState(
         spec = _spec.value,
         finalSpec = _finalSpec.value,
         wearRecord = _wearRecord.value,

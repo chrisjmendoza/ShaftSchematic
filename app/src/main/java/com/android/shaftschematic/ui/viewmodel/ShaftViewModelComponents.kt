@@ -24,6 +24,8 @@ import com.android.shaftschematic.model.withKeyways180Apart
 import com.android.shaftschematic.model.withKeyways90Apart
 import com.android.shaftschematic.model.withKeyways90Cw
 import com.android.shaftschematic.model.withPhysical
+import com.android.shaftschematic.ui.input.TaperCalcValues
+import com.android.shaftschematic.ui.input.withTaperCalcValues
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.resolved.withAutoDiaOverridesSurviving
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel.Companion.deriveTaperDiameters
@@ -422,6 +424,33 @@ fun ShaftViewModel.setTaperRateMode(
             }
         )
     }
+}
+
+/**
+ * Write a solved taper calculator onto the taper [taperId]: both diameters, the length and the
+ * rate in ONE edit, so one Undo takes the whole Apply back (the card's two mutators would be two
+ * steps). What the write changes and keeps is `withTaperCalcValues`. Selects the taper, so its card
+ * shows the result. An unknown id writes nothing.
+ */
+internal fun ShaftViewModel.applyTaperCalcValues(
+    taperId: String,
+    values: TaperCalcValues,
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) {
+    if (specValue(target).tapers.none { it.id == taperId }) return
+    updateSpec(target) { s ->
+        s.copy(
+            tapers = s.tapers.map {
+                if (it.id == taperId) it.withTaperCalcValues(values, s.overallLengthMm) else it
+            },
+        )
+    }
+    rememberTaperDefaults(
+        lengthMm = values.lengthMm,
+        setDiaMm = values.smallDiaMm,
+        letDiaMm = values.largeDiaMm,
+    )
+    selectAdded(taperId, target)
 }
 
 /** Remove a [Taper] by id. Recoverable via [undoEdit] (spec + order restored together). */

@@ -6,6 +6,24 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-11-04
+
+### feat(ui): the taper calculator can apply its answer to the shaft
+
+- Once a taper is solved, **Apply…** takes Calculate's place and asks where it goes: any taper on
+  the drawing, or a new taper at an end that has none. A shaft with no taper is asked only which
+  end (on-device request: retyping a solved taper into its card).
+- The question shows each value before → after, which end a length change moves, and any warning
+  the card would raise: an overlap, running past the OAL or past the keyway. Warnings inform and
+  never block.
+- Apply writes both diameters, the length and the rate as one Undo, offered on a snackbar on every
+  tab. The facing, keyway, name, Auto/Manual mode and overall length stay. A derived value is stored
+  exact, not as the rounded text in its field. Four typed values that disagree offer no Apply until
+  settled.
+- On the Final tab it writes to the final drawing, and the dialog names the drawing whenever the
+  document has two. A new taper goes flush with its end or against whatever already holds that end
+  (a thread), measured from that end.
+
 ## 2026-10-30
 
 ### feat(pdf): the Final tab prints the original and the final shaft on one sheet

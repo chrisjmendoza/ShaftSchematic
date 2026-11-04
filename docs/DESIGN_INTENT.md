@@ -186,9 +186,19 @@ one tap from the work rather than a scroll through five sections.
 
 Small shop calculations should not require building a shaft document. The bore keyway
 calculator set the pattern; a **taper calculator** (enter the known values, read the
-taper rate) joins it. Calculators are document-free utilities: they never write into the
-open document, and their entry point sits with the other utilities, not inside a
-component card.
+taper rate) joins it. Calculators are document-free utilities: they work with no shaft in
+hand, and their entry point sits with the other utilities, not inside a component card.
+
+**The one exception is the taper calculator's Apply (on-device request):** retyping a solved
+taper into its card was the work the calculator should have saved. Once a taper is solved,
+**Apply…** takes Calculate's place and asks where it goes — every taper on the drawing, plus a
+new taper at each end that has none, so a shaft with no taper is asked only which end — showing
+before → after and any warning first. Nothing is written until that second tap, and the write is
+one Undo. It writes the four values the calculator owns and nothing else: the position follows
+the card's Length rule (`taperPhysStartForNewLength`), and the facing, keyway, name, Auto/Manual
+mode and OAL stay. Four typed values that disagree offer no Apply until settled. The tool stays
+reachable with no taper, and the other calculators still write nothing. Pure rules:
+`ui/input/TaperCalcValues.kt`, `ui/screen/TaperCalcApply.kt`.
 
 **Interaction model (ruled on-device for the taper calculator, the pattern for the rest):**
 a calculator answers when asked, not while the question is being typed — a **Calculate**

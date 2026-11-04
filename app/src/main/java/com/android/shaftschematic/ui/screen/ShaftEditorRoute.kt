@@ -8,6 +8,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
@@ -16,13 +20,44 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.android.shaftschematic.ui.adaptive.LocalSidebarPermanent
 import com.android.shaftschematic.ui.adaptive.currentWindowWidthClass
 import com.android.shaftschematic.ui.adaptive.twoPane
+import com.android.shaftschematic.ui.input.TaperCalcValues
+import com.android.shaftschematic.ui.input.TaperSide
+import com.android.shaftschematic.ui.util.buildTaperTitleById
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
+import com.android.shaftschematic.ui.viewmodel.SpecTarget
+import com.android.shaftschematic.ui.viewmodel.addTaperAt
+import com.android.shaftschematic.ui.viewmodel.applyTaperCalcValues
+import kotlinx.coroutines.launch
+
+/**
+ * Adds a new taper from a solved calculator at [side] through the ONE add path, so bodies split and
+ * the new card is selected exactly as an Add dialog's would be.
+ */
+internal fun ShaftViewModel.addTaperFromCalc(
+    values: TaperCalcValues,
+    side: TaperSide,
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) {
+    val taper = newTaperFromCalc(specValue(target), values, side)
+    addTaperAt(
+        startMm = taper.startFromAftMm,
+        lengthMm = taper.lengthMm,
+        startDiaMm = taper.startDiaMm,
+        endDiaMm = taper.endDiaMm,
+        rateText = taper.taperRateText,
+        reference = taper.authoredReference,
+        target = target,
+        rateManual = taper.taperRateManual,
+    )
+}
 
 /**
  * ShaftEditorRoute
@@ -94,13 +129,19 @@ fun ShaftEditorRoute(
     // Standalone shop-floor tool, reachable from every tab; the dialog owns its own blank
     // state, so all the route holds is whether it is open.
     var keywayCalcOpen by rememberSaveable { mutableStateOf(false) }
-    // Same posture as the keyway calculator — a read-only tool, not a document surface.
+    // Same posture as the keyway calculator until its Apply, which names the drawing it writes to.
     var taperCalcOpen by rememberSaveable { mutableStateOf(false) }
     var converterOpen by rememberSaveable { mutableStateOf(false) }
     var fractionChartOpen by rememberSaveable { mutableStateOf(false) }
 
     val spec by vm.spec.collectAsState()
+    val finalSpec by vm.finalSpec.collectAsState()
+    val selectedComponentId by vm.selectedComponentId.collectAsState()
     val unit by vm.unit.collectAsState()
+    // The calculator is reachable from every tab, and only ShaftRoute collects the ViewModel's
+    // snackbar events, so the Undo for its Apply is hosted here where every tab shows it.
+    val calcSnackbar = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
     val isBuilt = remember(spec.bodies, spec.tapers, spec.threads, spec.liners, spec.overallLengthMm) {
         (spec.bodies.isNotEmpty() || spec.tapers.isNotEmpty() ||
             spec.threads.isNotEmpty() || spec.liners.isNotEmpty()) &&
@@ -263,11 +304,51 @@ fun ShaftEditorRoute(
         }
 
         if (taperCalcOpen) {
+            // The drawing on screen, decided here and passed down explicitly. The Final tab with
+            // no final drawing yet has nothing to write to, so the label says Original instead.
+            val onFinalTab = activeTab == EditorTab.FINAL
+            val calcFinal = finalSpec.takeIf { onFinalTab }
+            val calcTarget = if (calcFinal != null) SpecTarget.FINAL else SpecTarget.ORIGINAL
             TaperCalcDialog(
                 defaultUnit = unit,
+                spec = calcFinal ?: spec,
+                selectedComponentId = selectedComponentId,
+                drawingLabel = when {
+                    calcFinal != null -> "On the Final drawing"
+                    finalSpec != null || onFinalTab -> "On the Original drawing"
+                    else -> null
+                },
+                onApply = { choice, values ->
+                    taperCalcOpen = false
+                    val message = when (choice) {
+                        is TaperCalcChoice.Existing -> {
+                            vm.applyTaperCalcValues(choice.taperId, values, calcTarget)
+                            val title = buildTaperTitleById(vm.specValue(calcTarget))[choice.taperId]
+                            "Applied to ${title ?: "the taper"}"
+                        }
+                        is TaperCalcChoice.NewAtEnd -> {
+                            vm.addTaperFromCalc(values, choice.side, calcTarget)
+                            "Added a taper at the ${choice.side.name} end"
+                        }
+                    }
+                    // Undo takes back this Apply or nothing, never an edit made while it was up.
+                    val expected = vm.currentEditState()
+                    scope.launch {
+                        calcSnackbar.currentSnackbarData?.dismiss()
+                        val result = calcSnackbar.showSnackbar(
+                            message = message,
+                            actionLabel = "Undo",
+                            withDismissAction = true,
+                            duration = SnackbarDuration.Long,
+                        )
+                        if (result == SnackbarResult.ActionPerformed) vm.undoEditIfStillAt(expected)
+                    }
+                },
                 onDismiss = { taperCalcOpen = false },
             )
         }
+
+        SnackbarHost(calcSnackbar, Modifier.align(Alignment.BottomCenter))
 
         if (converterOpen) {
             UnitConverterDialog(
