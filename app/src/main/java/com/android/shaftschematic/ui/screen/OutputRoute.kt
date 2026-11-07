@@ -167,6 +167,10 @@ private data class ConsolidatedRenderInputs(
      * `OutputTypography.active`. Key only.
      */
     val outputFont: OutputFont,
+    /** `PdfPrefs.showUnitsNote` / `footerCapturedKwInset` / `footerBoltHoleDia` — keys only, inside the `PdfPrefs` snapshot. */
+    val showUnitsNote: Boolean,
+    val footerCapturedKwInset: Boolean,
+    val footerBoltHoleDia: Boolean,
     /**
      * The thread-hatch slant. Not a composer argument — it reaches the ink via
      * `ThreadHatchStyle.slant`. Key only.
@@ -253,6 +257,9 @@ fun OutputRoute(
     // which the loop cannot observe, so it rides along as an input key.
     val pdfFractionStyle   by vm.pdfFractionStyle.collectAsState()
     val pdfOutputFont      by vm.pdfOutputFont.collectAsState()
+    val pdfShowUnitsNote   by vm.pdfShowUnitsNote.collectAsState()
+    val pdfFooterCapturedKwInset by vm.pdfFooterCapturedKwInset.collectAsState()
+    val pdfFooterBoltHoleDia by vm.pdfFooterBoltHoleDia.collectAsState()
     val pdfThreadSlant     by vm.pdfThreadSlant.collectAsState()
     val pdfThreadDensity   by vm.pdfThreadDensity.collectAsState()
     val pdfDualUnitLayout  by vm.pdfDualUnitLayout.collectAsState()
@@ -586,6 +593,9 @@ fun OutputRoute(
                 dimTextScale = pdfDimTextScale,
                 fractionStyle = pdfFractionStyle,
                 outputFont = pdfOutputFont,
+                showUnitsNote = pdfShowUnitsNote,
+                footerCapturedKwInset = pdfFooterCapturedKwInset,
+                footerBoltHoleDia = pdfFooterBoltHoleDia,
                 threadSlant = pdfThreadSlant,
                 threadDensity = pdfThreadDensity,
                 dualUnitLayout = pdfDualUnitLayout,
@@ -1058,6 +1068,7 @@ fun OutputRoute(
                     heightSliderBase = heightSliderBase,
                     heightSliderMaxDrawnPt = heightCapPt,
                     heightSliderMaxDiaMm = heightSliderDiaMm,
+                    showDrawingSize = true,
                     showLinerCompression = true,
                     linersProportional = runoutConfig.linersProportional,
                     linerCompression = runoutConfig.linerCompression,

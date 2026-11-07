@@ -6,6 +6,29 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-11-07
+
+### feat(ui): the PDF options panel carries every setting that changes the printed sheet
+
+On-device request: the choices that affect PDF output belong in the preview's options panel, where
+their effect is in view, organized into its sections. Each is the same app-wide setting as in
+Settings — a remote control, never a per-document copy — and each appears only on the sheets it
+changes:
+
+- **Output font** — "Lines & text", every sheet.
+- **Units note on sheets** — "Units", every sheet.
+- **Footer lines** (new section) — "Captured keyway inset on footer" and "Bolt hole Ø on footer",
+  on the schematic and consolidated sheets (the two that print the shaft footer).
+- **Default drawing size** (new section) — the 4″ / 8″ sizing anchors and their Standard reset,
+  on the schematic, runout and consolidated sheets (the wear sheet sizes its profile its own way).
+- **Template** — a Content chip on the schematic, beside Blank draft; greyed out on the bubbled
+  Final sheet, whose composer takes no export mode.
+
+Each preview re-renders when the units note or a footer line is switched (new render-loop keys).
+Settings' "Default drawing size" block is now one shared composable behind both surfaces. Help,
+the manual, `DESIGN_INTENT.md` §3.3 (ruling recorded), `UI_CONTRACT.md`, `PDF_EXPORT.md` and
+`FractionTypography.md` updated.
+
 ## 2026-11-06
 
 ### fix(ui): the pit X size slider greys out instead of disappearing

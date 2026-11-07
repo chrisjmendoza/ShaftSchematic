@@ -346,55 +346,12 @@ fun SettingsRoute(
                         style = MaterialTheme.typography.titleSmall,
                         modifier = Modifier.padding(top = 4.dp)
                     )
-                    Text(
-                        "Drawn shaft height on paper at 100% “Shaft height”. Set what a " +
-                            "4″ and an 8″ shaft draw; sizes between and beyond follow " +
-                            "the line, capped at $HEIGHT_CAP_LABEL on paper.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    DefaultDrawingSizeControls(
+                        loHeightIn = pdfCurveLoHeightIn,
+                        hiHeightIn = pdfCurveHiHeightIn,
+                        onCommitLo = { vm.setPdfCurveLoHeightIn(it) },
+                        onCommitHi = { vm.setPdfCurveHiHeightIn(it) },
                     )
-                    CurveAnchorControl(
-                        label = "4″ shaft draws",
-                        valueIn = pdfCurveLoHeightIn,
-                        onCommit = { vm.setPdfCurveLoHeightIn(it) },
-                    )
-                    CurveAnchorControl(
-                        label = "8″ shaft draws",
-                        valueIn = pdfCurveHiHeightIn,
-                        onCommit = { vm.setPdfCurveHiHeightIn(it) },
-                    )
-                    if (pdfCurveHiHeightIn < pdfCurveLoHeightIn) {
-                        Text(
-                            "8″ is set below 4″ — larger shafts never draw smaller, so " +
-                                "drawings flatten the line at the 4″ value.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        val sixInHeight = defaultShaftHeightPt(
-                            152.4f, pdfCurveLoHeightIn * 72f, pdfCurveHiHeightIn * 72f
-                        ) / 72f
-                        Text(
-                            "Example: a 6″ shaft draws ${fmtCurveInches(sixInHeight)}.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.weight(1f),
-                        )
-                        TextButton(
-                            onClick = {
-                                vm.setPdfCurveLoHeightIn(PdfPrefs().curveLoHeightIn)
-                                vm.setPdfCurveHiHeightIn(PdfPrefs().curveHiHeightIn)
-                            },
-                            enabled = pdfCurveLoHeightIn != PdfPrefs().curveLoHeightIn ||
-                                pdfCurveHiHeightIn != PdfPrefs().curveHiHeightIn,
-                        ) {
-                            Text(
-                                "Standard (${fmtCurveInches(PdfPrefs().curveLoHeightIn)} / " +
-                                    fmtCurveInches(PdfPrefs().curveHiHeightIn) + ")"
-                            )
-                        }
-                    }
 
                     SBreakThresholdControl(
                         frac = pdfSBreakThresholdFrac,
@@ -471,8 +428,7 @@ fun SettingsRoute(
                         },
                     )
 
-                    // Settings-only, unlike the pickers around it: the face is a house style
-                    // a shop sets once, so it stays off the per-document options sheets.
+                    // Same picker both PDF options sheets carry — one PdfPrefs.outputFont.
                     OutputFontChips(
                         outputFont = pdfOutputFont,
                         onCommit = { vm.setPdfOutputFont(it) },
@@ -493,8 +449,7 @@ fun SettingsRoute(
                         onCommit = { vm.setPdfDualUnitLayout(it) },
                     )
                     // The last look row of the units group, ahead of the capability switches.
-                    // Settings-only, never on the PDF options sheets: a shop decides once
-                    // whether its sheets carry the note.
+                    // Both PDF options sheets carry it too, in their Units section.
                     SettingSwitchRow(
                         checked = pdfShowUnitsNote,
                         onCheckedChange = { vm.setPdfShowUnitsNote(it) },
@@ -509,8 +464,8 @@ fun SettingsRoute(
                             )
                         }
                     }
-                    // Optional footer lines, beside the other sheet-wide text switch. Settings
-                    // only: a shop decides once what its footers carry.
+                    // Optional footer lines, beside the other sheet-wide text switch. The
+                    // schematic and consolidated PDF options carry them as "Footer lines".
                     SettingSwitchRow(
                         checked = pdfFooterCapturedKwInset,
                         onCheckedChange = { vm.setPdfFooterCapturedKwInset(it) },
@@ -1142,6 +1097,68 @@ fun SettingsRoute(
 }
 
 private enum class SettingsPage { MAIN, PREVIEW_COLORS, PDF_EXPORT }
+
+/**
+ * The sizing-curve controls under "Default drawing size" (`PdfPrefs.curveLoHeightIn` /
+ * `curveHiHeightIn`): the caption, the 4″ and 8″ anchors, the inverted-pair warning, and the
+ * 6″ example with its Standard reset. ONE construction behind Settings → Drawing and the
+ * "Default drawing size" section of the PDF options sheets that size the shaft off the curve
+ * (schematic, runout, consolidated). The caller supplies the heading.
+ */
+@Composable
+internal fun DefaultDrawingSizeControls(
+    loHeightIn: Float,
+    hiHeightIn: Float,
+    onCommitLo: (Float) -> Unit,
+    onCommitHi: (Float) -> Unit,
+) {
+    val standard = PdfPrefs()
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(
+            "Drawn shaft height on paper at 100% “Shaft height”. Set what a " +
+                "4″ and an 8″ shaft draw; sizes between and beyond follow " +
+                "the line, capped at $HEIGHT_CAP_LABEL on paper.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        CurveAnchorControl(label = "4″ shaft draws", valueIn = loHeightIn, onCommit = onCommitLo)
+        CurveAnchorControl(label = "8″ shaft draws", valueIn = hiHeightIn, onCommit = onCommitHi)
+        if (hiHeightIn < loHeightIn) {
+            Text(
+                "8″ is set below 4″ — larger shafts never draw smaller, so " +
+                    "drawings flatten the line at the 4″ value.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            val sixInHeight = defaultShaftHeightPt(152.4f, loHeightIn * 72f, hiHeightIn * 72f) / 72f
+            Text(
+                "Example: a 6″ shaft draws ${fmtCurveInches(sixInHeight)}.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(
+                onClick = {
+                    onCommitLo(standard.curveLoHeightIn)
+                    onCommitHi(standard.curveHiHeightIn)
+                },
+                enabled = loHeightIn != standard.curveLoHeightIn || hiHeightIn != standard.curveHiHeightIn,
+                modifier = Modifier.testTag("drawing_size_standard"),
+            ) {
+                Text(
+                    "Standard (${fmtCurveInches(standard.curveLoHeightIn)} / " +
+                        fmtCurveInches(standard.curveHiHeightIn) + ")"
+                )
+            }
+        }
+    }
+}
+
+/** The Default drawing size section's header summary: the 4″ and 8″ anchors. */
+internal fun drawingSizeSectionSummary(loHeightIn: Float, hiHeightIn: Float): String =
+    "${fmtCurveInches(loHeightIn)} / ${fmtCurveInches(hiHeightIn)}"
 
 /**
  * One sizing-curve anchor: label + value readout and a slider over the settable range,

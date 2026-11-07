@@ -1009,7 +1009,9 @@ internal val helpSections: List<HelpSection> = listOf(
                     "value a warning appears and drawings simply flatten at the 4 in height — " +
                     "a larger shaft never draws smaller than a smaller one.\n\n" +
                     "The per-job " +
-                    "\"Shaft height\" slider works on top of this default.",
+                    "\"Shaft height\" slider works on top of this default. The same two sliders " +
+                    "sit in the \"Default drawing size\" section of the schematic, runout and " +
+                    "consolidated PDF Options sheets.",
                 manualAnchor = "settings-drawing-size",
             ),
             HelpTopic(
@@ -1050,7 +1052,9 @@ internal val helpSections: List<HelpSection> = listOf(
                     "• \"Monospace\" — fixed pitch, so digits line up in a column.\n\n" +
                     "App-wide like the other Drawing settings: one choice serves every " +
                     "document, and a saved Drawing profile captures it along with the rest of " +
-                    "the look. \"Restore Drawing defaults\" puts it back to Standard.\n\n" +
+                    "the look. \"Restore Drawing defaults\" puts it back to Standard. The same " +
+                    "chips sit in every document's PDF Options sheet, under \"Lines & text\", so " +
+                    "a face can be judged against the page it prints.\n\n" +
                     "Nothing on a sheet collides or shifts when you change it — fractions, " +
                     "dual-unit stacks and every rail break are measured from the face as it " +
                     "will actually print, not from a fixed width. A device that does not carry " +
@@ -1084,7 +1088,8 @@ internal val helpSections: List<HelpSection> = listOf(
                     "the converted second value on a dual-units job, still carries its own unit " +
                     "suffix.\n\n" +
                     "App-wide and captured by Drawing profiles; \"Restore Drawing defaults\" " +
-                    "turns it off. Settings only — it is not on the PDF options panel.",
+                    "turns it off. Also on every document's PDF options panel, in the Units " +
+                    "section.",
                 manualAnchor = "settings-drawing-lines",
             ),
             HelpTopic(
@@ -1099,8 +1104,9 @@ internal val helpSections: List<HelpSection> = listOf(
                     "than one). Off, the \"Hole center from …\" line and the clocking note " +
                     "still print.\n\n" +
                     "Every sheet with a footer follows them. App-wide and captured by Drawing " +
-                    "profiles; \"Restore Drawing defaults\" puts both back. Settings only — " +
-                    "they are not on the PDF options panel.",
+                    "profiles; \"Restore Drawing defaults\" puts both back. Also on the " +
+                    "schematic and consolidated PDF options panels, as the \"Footer lines\" " +
+                    "section.",
                 manualAnchor = "settings-drawing-lines",
             ),
             HelpTopic(
@@ -1196,9 +1202,10 @@ internal val helpSections: List<HelpSection> = listOf(
             HelpTopic(
                 "PDF Export — Template mode and dimension reference",
                 "• \"Template (shaft only)\" — default off. Prints the shaft outline with no " +
-                    "dimensions, for marking up by hand. (Blank draft, the other write-in " +
-                    "mode, keeps the dimension lines and empties the values; it lives on each " +
-                    "document's preview, not here.)\n" +
+                    "dimensions, for marking up by hand. The schematic's PDF Options sheet " +
+                    "carries the same switch as its \"Template\" Content chip. (Blank draft, the " +
+                    "other write-in mode, keeps the dimension lines and empties the values; it " +
+                    "lives on each document's preview, not here.)\n" +
                     "• \"Measurement reference\" — \"Auto (closest end)\" (default), " +
                     "\"AFT (force AFT SET)\", or \"FWD (force FWD SET)\". Picks which end " +
                     "printed dimensions measure from. Auto anchors each dimension to whichever " +
@@ -1254,8 +1261,9 @@ internal val helpSections: List<HelpSection> = listOf(
                     "and close with a tap on the heading, the most used first and in the same " +
                     "order on every sheet: \"Shaft\" (open), \"Wear\" (open, wear sheet " +
                     "only), \"Runout bubbles\", \"Thread\" (only when the shaft has a thread), " +
-                    "\"Lines & text\", \"Shade in Components\", \"Measurement reference\", and " +
-                    "\"Units\" last. A sheet leaves out any section it has nothing for.\n\n" +
+                    "\"Lines & text\", \"Footer lines\", \"Shade in Components\", \"Measurement " +
+                    "reference\", \"Default drawing size\", and \"Units\" last. A sheet leaves out " +
+                    "any section it has nothing for.\n\n" +
                     "Saved with this job — a reopened document prints exactly as it did:\n" +
                     "• \"Shaft height\" — on the Consolidated Output tab and in the schematic, " +
                     "runout, and wear PDF Options sheets. Sets the drawn shaft height on paper " +
@@ -1304,6 +1312,11 @@ internal val helpSections: List<HelpSection> = listOf(
                     "reference, and — on the schematic and the runout/consolidated sheets, the " +
                     "drawings that can break — Body S-break: the same app-wide settings, " +
                     "reachable without leaving the drawing.\n" +
+                    "• Every sheet's \"Lines & text\" carries the Output font and its \"Units\" " +
+                    "the Units note; the schematic and consolidated sheets add \"Footer lines\" " +
+                    "(captured keyway inset, bolt hole Ø); the schematic, runout and " +
+                    "consolidated sheets add \"Default drawing size\"; and the schematic's " +
+                    "Content chips include \"Template\" (shaft only).\n" +
                     "• \"Bubble size\" and \"Bubble height\" — on the runout and consolidated " +
                     "sheets. How large the runout bubbles draw and how far they hang below the " +
                     "shaft; both move the canvas markers and the printed sheet together. " +

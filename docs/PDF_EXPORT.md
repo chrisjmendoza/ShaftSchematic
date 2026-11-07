@@ -216,8 +216,8 @@ Top of page, full width.
   layout alike; their rows and rotated columns are one text line thick. Dimension rails, the OAL
   and the footer keep dual.
 - Units note (opt-in, on-device request) — Settings → Drawing → "Units note on sheets"
-  (`PdfPrefs.showUnitsNote`, default OFF, Settings only — not on the PDF options sheets;
-  app-wide, captured by Drawing profiles). On, EVERY sheet — schematic (Final included), classic
+  (`PdfPrefs.showUnitsNote`, default OFF, also in every PDF options sheet's Units section via
+  `UnitsNoteSwitchRow`; app-wide, captured by Drawing profiles). On, EVERY sheet — schematic (Final included), classic
   and consolidated runout, wear, undercut in either orientation, the undercut "no sections" note
   page included — prints `Units in inches` / `Units in mm` from the DOCUMENT unit
   (`DisplayUnits.documentUnit`) at `UNITS_NOTE_TEXT_PT` (8 pt, the sheet face), right-aligned at

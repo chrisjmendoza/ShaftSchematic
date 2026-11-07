@@ -179,6 +179,7 @@ fun WearRoute(
     val pdfShadedLiners    by vm.pdfShadedLiners.collectAsState()
     val pdfFractionStyle   by vm.pdfFractionStyle.collectAsState()
     val pdfOutputFont      by vm.pdfOutputFont.collectAsState()
+    val pdfShowUnitsNote   by vm.pdfShowUnitsNote.collectAsState()
     val pdfThreadSlant     by vm.pdfThreadSlant.collectAsState()
     val pdfThreadDensity   by vm.pdfThreadDensity.collectAsState()
     // Dual-unit layout: this document stacks its dual values like every other
@@ -337,6 +338,7 @@ fun WearRoute(
                 wearJoinGapMaxMm = wearJoinGapMaxMm,
                 fractionStyle = pdfFractionStyle,
                 outputFont = pdfOutputFont,
+                showUnitsNote = pdfShowUnitsNote,
                 threadSlant = pdfThreadSlant,
                 threadDensity = pdfThreadDensity,
                 dualUnitLayout = pdfDualUnitLayout,
@@ -1063,6 +1065,8 @@ private data class WearRenderInputs(
     val wearJoinGapMaxMm: Float,
     val fractionStyle: FractionStyle,
     val outputFont: OutputFont,
+    /** `PdfPrefs.showUnitsNote` — key only, inside the `PdfPrefs` snapshot. */
+    val showUnitsNote: Boolean,
     val threadSlant: Float,
     val threadDensity: Float,
     val dualUnitLayout: DualUnitLayout,

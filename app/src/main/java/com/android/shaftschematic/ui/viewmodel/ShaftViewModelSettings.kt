@@ -308,8 +308,8 @@ fun ShaftViewModel.setPdfFractionStyle(style: FractionStyle, persist: Boolean = 
 }
 
 /**
- * Wired to Settings → Drawing → "Output font" — Settings only, unlike the fraction chips: a shop
- * picks a face once, so the PDF options sheets stay as they are.
+ * Wired to Settings → Drawing → "Output font" and the "Lines & text" section of both PDF options
+ * sheets — one pref, like the fraction chips beside it.
  *
  * The `updatePdfPrefs` call is what actually changes the ink — it mirrors the choice into
  * `OutputTypography.active`, which the four composers build their root text paint from. The

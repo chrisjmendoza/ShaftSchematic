@@ -192,6 +192,7 @@ fun RunoutRoute(
     // cannot observe, so it rides along as an input key.
     val pdfFractionStyle   by vm.pdfFractionStyle.collectAsState()
     val pdfOutputFont      by vm.pdfOutputFont.collectAsState()
+    val pdfShowUnitsNote   by vm.pdfShowUnitsNote.collectAsState()
     val pdfThreadSlant     by vm.pdfThreadSlant.collectAsState()
     val pdfThreadDensity   by vm.pdfThreadDensity.collectAsState()
     val pdfDualUnitLayout  by vm.pdfDualUnitLayout.collectAsState()
@@ -391,6 +392,7 @@ fun RunoutRoute(
                 runoutBubbleDropScale = pdfRunoutBubbleDropScale,
                 fractionStyle = pdfFractionStyle,
                 outputFont = pdfOutputFont,
+                showUnitsNote = pdfShowUnitsNote,
                 threadSlant = pdfThreadSlant,
                 threadDensity = pdfThreadDensity,
                 dualUnitLayout = pdfDualUnitLayout,
@@ -1225,6 +1227,7 @@ fun RunoutRoute(
                     heightSliderBase = heightSliderBase,
                     heightSliderMaxDrawnPt = heightCapPt,
                     heightSliderMaxDiaMm = heightSliderDiaMm,
+                    showDrawingSize = true,
                     showLinerCompression = true,
                     linersProportional = runoutConfig.linersProportional,
                     linerCompression = runoutConfig.linerCompression,
@@ -1309,6 +1312,8 @@ private data class RunoutRenderInputs(
      * `OutputTypography.active`. Key only.
      */
     val outputFont: OutputFont,
+    /** `PdfPrefs.showUnitsNote` — key only, inside the `PdfPrefs` snapshot. */
+    val showUnitsNote: Boolean,
     /**
      * The thread-hatch slant. Not a composer argument — it reaches the ink via
      * `ThreadHatchStyle.slant`. Key only.

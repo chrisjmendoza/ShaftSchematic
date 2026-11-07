@@ -55,6 +55,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -95,6 +96,12 @@ import com.android.shaftschematic.ui.viewmodel.setLinersProportional
 import com.android.shaftschematic.ui.viewmodel.setPdfArrowSizePt
 import com.android.shaftschematic.ui.viewmodel.setPdfDimTextScale
 import com.android.shaftschematic.ui.viewmodel.setPdfFooterTextScale
+import com.android.shaftschematic.ui.viewmodel.setPdfCurveHiHeightIn
+import com.android.shaftschematic.ui.viewmodel.setPdfCurveLoHeightIn
+import com.android.shaftschematic.ui.viewmodel.setPdfFooterBoltHoleDia
+import com.android.shaftschematic.ui.viewmodel.setPdfFooterCapturedKwInset
+import com.android.shaftschematic.ui.viewmodel.setPdfOutputFont
+import com.android.shaftschematic.ui.viewmodel.setPdfShowUnitsNote
 import com.android.shaftschematic.ui.viewmodel.setPdfThreadDensity
 import com.android.shaftschematic.ui.viewmodel.setPdfThreadSlant
 import com.android.shaftschematic.ui.viewmodel.setPdfDualUnitLayout
@@ -638,6 +645,13 @@ internal fun RunoutWearOptionsSheet(
     /** The tallest this document draws the shaft (`runoutSheetMaxShaftHeightPt`); no cap by default. */
     heightSliderMaxDrawnPt: Float = Float.MAX_VALUE,
     /**
+     * Shows the "Default drawing size" section — the app-wide sizing curve
+     * (`PdfPrefs.curveLoHeightIn` / `curveHiHeightIn`) the Shaft height slider multiplies. On for
+     * the classic runout and consolidated sheets, whose composers size the shaft off that curve;
+     * the wear document sizes its profile band its own way, so the anchors would be inert there.
+     */
+    showDrawingSize: Boolean = false,
+    /**
      * Shows the per-job "Liner compression" pair (`RunoutConfig.linersProportional` +
      * `linerCompression`). On for the two documents `composeRunoutPdf` produces — one
      * composer, one liner floor — and off everywhere else, whose composers take neither.
@@ -679,6 +693,16 @@ internal fun RunoutWearOptionsSheet(
      */
     undercutContentRows: (@Composable () -> Unit)? = null,
 ) {
+    // App-wide prefs every document's sheet carries (on-device request: every choice that changes
+    // the printed sheet belongs in this menu). Collected here rather than added to each of the
+    // four hosts' argument lists; each host collects the ones its page reads as render keys.
+    val outputFont by vm.pdfOutputFont.collectAsState()
+    val showUnitsNote by vm.pdfShowUnitsNote.collectAsState()
+    val footerCapturedKwInset by vm.pdfFooterCapturedKwInset.collectAsState()
+    val footerBoltHoleDia by vm.pdfFooterBoltHoleDia.collectAsState()
+    val curveLoHeightIn by vm.pdfCurveLoHeightIn.collectAsState()
+    val curveHiHeightIn by vm.pdfCurveHiHeightIn.collectAsState()
+
     // Scrollable: without its own scroll a short screen clips the bottom rows mid-checkbox
     // (same posture as PdfOptionsSheet). The title and the height cap belong to the hosting
     // [PreviewOptionsPanel] — only `PdfPreviewOverlay` knows the page strip a tuning panel must
@@ -878,8 +902,8 @@ internal fun RunoutWearOptionsSheet(
         }
 
         // ── Lines & text ─────────────────────────────────────────────────────
-        // Line thickness and the fraction style are ungated: every document this sheet
-        // serves draws lines and prints lengths. The arrowhead picker only where rails print.
+        // Line thickness, the output font and the fraction style are ungated: every document
+        // this sheet serves draws lines and prints text. The arrowhead picker only where rails print.
         sections[OptionsSection.LINES] = OptionsSectionBody(
             summary = linesSectionSummary(lineThicknessScale),
         ) {
@@ -902,10 +926,44 @@ internal fun RunoutWearOptionsSheet(
                     onCommitDim = { vm.setPdfDimTextScale(it) },
                 )
             }
+            OutputFontChips(
+                outputFont = outputFont,
+                onCommit = { vm.setPdfOutputFont(it) },
+            )
             FractionStyleChips(
                 fractionStyle = fractionStyle,
                 onCommit = { vm.setPdfFractionStyle(it) },
             )
+        }
+
+        // ── Footer lines ─────────────────────────────────────────────────────
+        // Gated with the text-size pickers: both serve the shared shaft footer, which only the
+        // consolidated sheet prints among the documents this sheet serves.
+        if (showSheetTextSizes) {
+            sections[OptionsSection.FOOTER] = OptionsSectionBody(
+                summary = footerSectionSummary(footerCapturedKwInset, footerBoltHoleDia),
+            ) {
+                FooterLineSwitchRows(
+                    capturedKwInset = footerCapturedKwInset,
+                    boltHoleDia = footerBoltHoleDia,
+                    onSetCapturedKwInset = { vm.setPdfFooterCapturedKwInset(it) },
+                    onSetBoltHoleDia = { vm.setPdfFooterBoltHoleDia(it) },
+                )
+            }
+        }
+
+        // ── Default drawing size ─────────────────────────────────────────────
+        if (showDrawingSize) {
+            sections[OptionsSection.DRAWING_SIZE] = OptionsSectionBody(
+                summary = drawingSizeSectionSummary(curveLoHeightIn, curveHiHeightIn),
+            ) {
+                DefaultDrawingSizeControls(
+                    loHeightIn = curveLoHeightIn,
+                    hiHeightIn = curveHiHeightIn,
+                    onCommitLo = { vm.setPdfCurveLoHeightIn(it) },
+                    onCommitHi = { vm.setPdfCurveHiHeightIn(it) },
+                )
+            }
         }
 
         // ── Shading ──────────────────────────────────────────────────────────
@@ -957,6 +1015,7 @@ internal fun RunoutWearOptionsSheet(
                 enabled = dualUnits,
                 onCommit = { vm.setPdfDualUnitLayout(it) },
             )
+            UnitsNoteSwitchRow(checked = showUnitsNote, onCheckedChange = { vm.setPdfShowUnitsNote(it) })
         }
 
         OptionsSections(sections)

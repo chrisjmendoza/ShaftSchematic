@@ -770,12 +770,11 @@ internal fun ThreadDensitySlider(
 }
 
 /**
- * The "Output font" picker — Settings → Drawing only, unlike its fraction neighbour.
- *
- * A shop picks a face once and prints every job in it, so this is a house style rather than a
- * per-sheet decision, and the PDF options sheets stay as they are. A tap IS the commit: the
- * choice lands in `PdfPrefs.outputFont`, which mirrors into `OutputTypography.active`, and each
- * open preview re-renders from its own font key.
+ * The "Output font" picker — Settings → Drawing and both PDF options sheets' "Lines & text"
+ * section, ONE `PdfPrefs.outputFont` behind all three (on-device request: every choice that
+ * changes the printed sheet lives in the preview menu too, where its effect is in view). A tap
+ * IS the commit: the choice lands in `PdfPrefs.outputFont`, which mirrors into
+ * `OutputTypography.active`, and each open preview re-renders from its own font key.
  *
  * Each chip is labelled in the face it selects, so the row reads as a specimen sheet.
  */
@@ -1031,8 +1030,10 @@ internal enum class OptionsSection(
     BUBBLES("Runout bubbles", "options_bubbles_expander", initiallyExpanded = false, contentSpacing = 12.dp),
     THREAD("Thread", "options_thread_expander", initiallyExpanded = false, contentSpacing = 12.dp),
     LINES("Lines & text", "options_lines_expander", initiallyExpanded = false, contentSpacing = 12.dp),
+    FOOTER("Footer lines", "options_footer_expander", initiallyExpanded = false, contentSpacing = 12.dp),
     SHADING("Shade in Components", "options_shade_expander", initiallyExpanded = false, contentSpacing = 0.dp),
     MEASUREMENT("Measurement reference", "options_measure_ref_expander", initiallyExpanded = false, contentSpacing = 0.dp),
+    DRAWING_SIZE("Default drawing size", "options_drawing_size_expander", initiallyExpanded = false, contentSpacing = 12.dp),
     UNITS("Units", "options_units_expander", initiallyExpanded = false, contentSpacing = 12.dp),
 }
 
@@ -1120,6 +1121,84 @@ internal fun DualUnitsSwitchRow(
         }
     }
 }
+
+/**
+ * One app-wide on/off pref as a PDF options sheet row: a switch beside its [title] and
+ * [caption] — the [DualUnitsSwitchRow] construction, so the sheet's switches read alike.
+ * Settings → Drawing shows the same prefs with the same wording ([UNITS_NOTE_SETTING_TITLE],
+ * [FOOTER_CAPTURED_KW_SETTING_TITLE], [FOOTER_BOLT_HOLE_DIA_SETTING_TITLE] and their captions).
+ */
+@Composable
+internal fun OptionsSwitchRow(
+    title: String,
+    caption: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    testTag: String,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Switch(checked = checked, onCheckedChange = onCheckedChange, modifier = Modifier.testTag(testTag))
+        Spacer(Modifier.width(12.dp))
+        Column {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                caption,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/**
+ * The "Units note" switch (`PdfPrefs.showUnitsNote` — "Units in inches"/"Units in mm" in the
+ * lower-right corner): every document prints it, so both sheets carry it in their Units section.
+ */
+@Composable
+internal fun UnitsNoteSwitchRow(checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    OptionsSwitchRow(
+        title = UNITS_NOTE_SETTING_TITLE,
+        caption = UNITS_NOTE_SETTING_CAPTION,
+        checked = checked,
+        onCheckedChange = onCheckedChange,
+        testTag = "options_units_note",
+    )
+}
+
+/**
+ * The optional footer lines (`PdfPrefs.footerCapturedKwInset`, `footerBoltHoleDia`) — the
+ * "Footer lines" section, on the two sheets that print the shaft footer (`sheetFooterConfig`:
+ * the schematic and the consolidated sheet).
+ */
+@Composable
+internal fun FooterLineSwitchRows(
+    capturedKwInset: Boolean,
+    boltHoleDia: Boolean,
+    onSetCapturedKwInset: (Boolean) -> Unit,
+    onSetBoltHoleDia: (Boolean) -> Unit,
+) {
+    OptionsSwitchRow(
+        title = FOOTER_CAPTURED_KW_SETTING_TITLE,
+        caption = FOOTER_CAPTURED_KW_SETTING_CAPTION,
+        checked = capturedKwInset,
+        onCheckedChange = onSetCapturedKwInset,
+        testTag = "options_footer_captured_kw",
+    )
+    OptionsSwitchRow(
+        title = FOOTER_BOLT_HOLE_DIA_SETTING_TITLE,
+        caption = FOOTER_BOLT_HOLE_DIA_SETTING_CAPTION,
+        checked = boltHoleDia,
+        onCheckedChange = onSetBoltHoleDia,
+        testTag = "options_footer_bolt_hole_dia",
+    )
+}
+
+/** The Footer lines section's header summary: how many of its optional lines are on. */
+internal fun footerSectionSummary(capturedKwInset: Boolean, boltHoleDia: Boolean): String =
+    when (val on = listOf(capturedKwInset, boltHoleDia).count { it }) {
+        0 -> "None"
+        else -> "$on on"
+    }
 
 /**
  * The "Content" heading + wrapping chip row both PDF options sheets lead with: what this

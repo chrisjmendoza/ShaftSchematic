@@ -197,8 +197,9 @@ The *face* the app sets its sheets in is a separate user choice from the fractio
 is held in exactly the same shape: `PdfPrefs.outputFont` (`util/OutputTypography.kt` —
 `OutputFont.STANDARD` / `MEDIUM` / `HYPERLEGIBLE` / `CONDENSED` / `SERIF` / `MONOSPACE`, Standard being the historical look and
 the default), **Settings → Drawing → "Output font"**. It is app-wide, captured by a named Drawing
-profile, restored by "Restore Drawing defaults", and deliberately absent from the PDF options
-sheets — a shop picks a face once, so it is a house style rather than a per-sheet decision.
+profile, restored by "Restore Drawing defaults", and — like the fraction chips — also on both PDF
+options sheets (`OutputFontChips` in "Lines & text"), on-device request: every choice that changes
+the printed sheet belongs in the preview menu too, where the face can be judged against the page.
 
 The draw sites take no typeface parameter. Every FRESH text paint under `pdf/` is built by the
 ONE factory `sheetTextPaint(size, align)` (`pdf/SheetTextPaint.kt`), which sets
