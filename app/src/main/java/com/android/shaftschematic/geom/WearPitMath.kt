@@ -2,6 +2,7 @@
 package com.android.shaftschematic.geom
 
 import com.android.shaftschematic.model.PitSize
+import com.android.shaftschematic.model.WearPit
 
 /**
  * Wear-pit ("X" marker) pure math — shared by the two draw sites and the tap handler.
@@ -31,13 +32,51 @@ const val PIT_ACROSS_MIN = 0.08f
 const val PIT_ACROSS_MAX = 0.92f
 
 /**
- * Half-arm length (centre to a tip) of a pit "X" for [size], given the [PitSize.SMALL] half-arm
- * [smallHalf] expressed in the destination's own units (px on canvas, pt in the PDF). The caller
- * picks [smallHalf] per surface; the small:large ratio ([PIT_LARGE_TO_SMALL_RATIO]) is shared so
- * the two surfaces stay proportional.
+ * The X-size slider's range on the wear inspection page, as a multiple of the [PitSize.SMALL]
+ * arm: half a Small X up to three times one, in [PIT_SIZE_FACTOR_STEP] steps. 1× is Small and
+ * 2× ([PIT_LARGE_TO_SMALL_RATIO]) is Large, so the two original sizes sit on the track.
  */
-fun pitHalfArm(size: PitSize, smallHalf: Float): Float =
-    if (size == PitSize.LARGE) smallHalf * PIT_LARGE_TO_SMALL_RATIO else smallHalf
+const val PIT_SIZE_FACTOR_MIN = 0.5f
+const val PIT_SIZE_FACTOR_MAX = 3f
+const val PIT_SIZE_FACTOR_STEP = 0.25f
+const val PIT_SIZE_FACTOR_DEFAULT = 1f
+
+/**
+ * The size a pit DRAWS at, as a multiple of the [PitSize.SMALL] arm: its own
+ * [WearPit.sizeFactor] when it has one (chosen on the slider when it was placed), else its
+ * [WearPit.size] — 1× Small, [PIT_LARGE_TO_SMALL_RATIO] Large — for a pit placed before the
+ * slider existed. The stored factor is never rewritten; an out-of-range one is clamped here, where
+ * it is drawn.
+ */
+fun pitSizeFactor(pit: WearPit): Float =
+    pit.sizeFactor?.takeIf { it > 0f }?.coerceIn(PIT_SIZE_FACTOR_MIN, PIT_SIZE_FACTOR_MAX)
+        ?: if (pit.size == PitSize.LARGE) PIT_LARGE_TO_SMALL_RATIO else 1f
+
+/**
+ * Half-arm length (centre to a tip) of [pit]'s X, given the [PitSize.SMALL] half-arm [smallHalf]
+ * in the destination's own units (px on canvas, pt in the PDF). The caller picks [smallHalf] per
+ * surface; the pit's own [pitSizeFactor] is shared — ONE sizing rule for every draw site and the
+ * hit test, so a pit keeps the same proportion to its surface's Small X everywhere it draws.
+ */
+fun pitHalfArm(pit: WearPit, smallHalf: Float): Float = smallHalf * pitSizeFactor(pit)
+
+/**
+ * The [PitSize] a pit placed at [factor] also records — the nearer of Small and Large — so a build
+ * from before the slider, which reads only [WearPit.size], still draws it at a sensible size.
+ */
+fun pitSizeForFactor(factor: Float): PitSize =
+    if (factor >= (1f + PIT_LARGE_TO_SMALL_RATIO) / 2f) PitSize.LARGE else PitSize.SMALL
+
+/** A dragged slider value snapped to [PIT_SIZE_FACTOR_STEP] inside the range. */
+fun snappedPitSizeFactor(factor: Float): Float =
+    (Math.round(factor / PIT_SIZE_FACTOR_STEP) * PIT_SIZE_FACTOR_STEP)
+        .coerceIn(PIT_SIZE_FACTOR_MIN, PIT_SIZE_FACTOR_MAX)
+
+/** A size factor as the slider reads it: `1×`, `1.25×`, `0.5×`. */
+fun pitSizeFactorLabel(factor: Float): String {
+    val text = "%.2f".format(java.util.Locale.US, factor).trimEnd('0').trimEnd('.')
+    return "$text×"
+}
 
 /**
  * Largest SMALL half-arm, as a fraction of the drawn local radius, on a surface whose X is a fixed

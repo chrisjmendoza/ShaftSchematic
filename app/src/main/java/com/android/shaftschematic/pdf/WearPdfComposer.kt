@@ -830,7 +830,7 @@ internal fun drawWearPitsOnProfile(
         val cx = xAt(rc.startMmPhysical + local)
         val r = rPx(diaMm)
         val py = pitCenterY(cy - r, cy + r, pit.acrossFrac)
-        val half = pitHalfArm(pit.size, smallHalf)
+        val half = pitHalfArm(pit, smallHalf)
         if (hideUnderHalos.any { pitXTouchesHalo(cx, py, half, strokePad, it) }) return@forEach
         drawWearPitX(c, cx, py, half, pitPaint)
     }

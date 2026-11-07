@@ -5,6 +5,9 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.size
+import kotlin.math.roundToInt
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
@@ -45,12 +48,14 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -73,6 +78,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
@@ -92,8 +99,14 @@ import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
 import com.android.shaftschematic.geom.deepestWearDepthMm
 import com.android.shaftschematic.geom.pickDiaReadingAt
 import com.android.shaftschematic.geom.pitCenterY
+import com.android.shaftschematic.geom.PIT_SIZE_FACTOR_DEFAULT
+import com.android.shaftschematic.geom.PIT_SIZE_FACTOR_MAX
+import com.android.shaftschematic.geom.PIT_SIZE_FACTOR_MIN
+import com.android.shaftschematic.geom.PIT_SIZE_FACTOR_STEP
 import com.android.shaftschematic.geom.pitHalfArm
+import com.android.shaftschematic.geom.pitSizeFactorLabel
 import com.android.shaftschematic.geom.pitSmallHalfOnSegment
+import com.android.shaftschematic.geom.snappedPitSizeFactor
 import com.android.shaftschematic.geom.pickPitAt
 import com.android.shaftschematic.geom.planDiaCallouts
 import com.android.shaftschematic.geom.sequenceWearTraces
@@ -105,7 +118,6 @@ import com.android.shaftschematic.geom.threadHatchReferenceLean
 import com.android.shaftschematic.geom.threadHatchReferenceSpacing
 import com.android.shaftschematic.geom.threadHatchRun
 import com.android.shaftschematic.geom.threadHatchSpacing
-import com.android.shaftschematic.model.PitSize
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.WearPit
 import com.android.shaftschematic.model.WearRecord
@@ -189,7 +201,7 @@ fun ComponentWearDetailOverlay(
     onUpdateSpot: (id: String, startMm: Float, lengthMm: Float, minDiaMm: Float, note: String) -> Unit,
     onUpdateSpotReference: (id: String, reference: WearSpotReference) -> Unit,
     onRemoveSpot: (id: String) -> Unit,
-    onAddPit: (componentId: String, axialMm: Float, acrossFrac: Float, size: PitSize) -> Unit,
+    onAddPit: (componentId: String, axialMm: Float, acrossFrac: Float, sizeFactor: Float) -> Unit,
     onRemovePit: (id: String) -> Unit,
     onAddDiaReading: (componentId: String, axialMm: Float, diaMm: Float) -> Unit,
     onUpdateDiaReading: (id: String, diaMm: Float) -> Unit,
@@ -235,6 +247,12 @@ fun ComponentWearDetailOverlay(
     onRestoreSpot: (spot: WearSpot, index: Int) -> Unit = { _, _ -> },
     /** The snackbar Undo of "Clear all pits" — the exact pits back at their record indices. */
     onRestorePits: (pits: List<IndexedValue<WearPit>>) -> Unit = {},
+    /**
+     * The X-size slider's value — the size the NEXT placed pit takes, as a multiple of the Small X
+     * (`ShaftViewModel.wearPitBrushSizeFactor`, session state). A placed pit keeps its own size.
+     */
+    pitSizeFactor: Float = PIT_SIZE_FACTOR_DEFAULT,
+    onPitSizeFactorChange: (Float) -> Unit = {},
 ) {
     BackHandler { onClose() }
 
@@ -339,9 +357,6 @@ fun ComponentWearDetailOverlay(
     }
     val cardShape = MaterialTheme.shapes.medium
 
-    // Brush size for the NEXT placed pit (small X's mark little holes, large for bigger
-    // cavities — matching the hand convention).
-    var brushSize by remember { mutableStateOf(PitSize.SMALL) }
     // ONE active canvas tool across both feature sections (Pits, Diameter measurements) so a
     // stray tap can't place or delete unexpectedly — in the remove modes a miss is a no-op; in
     // Add X mode a tap always places; in Add Ø mode a tap on a tick edits that reading and a
@@ -466,6 +481,8 @@ fun ComponentWearDetailOverlay(
                     rightNeighbor?.maxDiaMm() ?: 0f,
                 ).coerceAtLeast(1f)
 
+                // The X-size preview draws at this canvas's own scale, which needs its width.
+                var canvasWidthPx by remember { mutableIntStateOf(0) }
                 // Read live inside the tap pointerInput without re-keying it on every pinch.
                 val scaleForTap = rememberUpdatedState(zoomScale)
                 val offsetForTap = rememberUpdatedState(zoomOffset)
@@ -484,7 +501,9 @@ fun ComponentWearDetailOverlay(
                             )
                         }
                         .transformable(zoomTransformState)
-                        .pointerInput(componentId, pits, diaReadings, brushSize, tool, lenMm, startDiaMm, endDiaMm) {
+                        .testTag("wear_detail_canvas")
+                        .onSizeChanged { canvasWidthPx = it.width }
+                        .pointerInput(componentId, pits, diaReadings, pitSizeFactor, tool, lenMm, startDiaMm, endDiaMm) {
                             detectTapGestures { rawTap ->
                                 // Focus must leave the wear-spot cards before any canvas tool
                                 // runs: a card field that still holds focus while a dialog takes
@@ -537,7 +556,7 @@ fun ComponentWearDetailOverlay(
                                         val localMm = ((tap.x - lay.startPx) / lay.pxPerMm).coerceIn(0f, lenMm)
                                         val r = radiusLocalPx(lay, startDiaMm, endDiaMm, lenMm, localMm)
                                         val frac = acrossFracFromTapY(tap.y, lay.cy - r, lay.cy + r)
-                                        onAddPit(componentId, localMm, frac, brushSize)
+                                        onAddPit(componentId, localMm, frac, pitSizeFactor)
                                     }
                                     WearCanvasTool.ADD_DIA -> {
                                         // Tap an existing witness tick → edit that reading;
@@ -816,19 +835,31 @@ fun ComponentWearDetailOverlay(
                     WearChip("Remove X", tool == WearCanvasTool.REMOVE_PIT) { tool = WearCanvasTool.REMOVE_PIT }
                 }
 
-                // Size — only affects newly placed pits, so shown while adding.
+                // Size — the X the NEXT tap places (on-device request: pick the size, then place;
+                // a placed X keeps its own size until it is removed), so shown while adding. The
+                // preview draws that X on a slice of this component at this canvas's own scale —
+                // the size it will land at, before the canvas is pinch-zoomed.
                 if (tool == WearCanvasTool.ADD_PIT) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            "Size:", style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    val density = LocalDensity.current
+                    val previewRadiusPx = if (canvasWidthPx <= 0) null else with(density) {
+                        val lay = computeSegDetailLayout(
+                            widthPx = canvasWidthPx.toFloat(),
+                            stubRowHeightPx = stubRowHeightDp.toPx(),
+                            stubWidthPx = stubWidthDp.toPx(),
+                            lenMm = lenMm,
+                            maxOdMm = maxOdMm,
+                            edgePadPx = SEG_EDGE_PAD_DP.dp.toPx(),
                         )
-                        WearChip("Small", brushSize == PitSize.SMALL) { brushSize = PitSize.SMALL }
-                        WearChip("Large", brushSize == PitSize.LARGE) { brushSize = PitSize.LARGE }
+                        (startDiaMm + endDiaMm) * 0.25f * lay.pxPerMm
                     }
+                    PitSizeSlider(
+                        factor = pitSizeFactor,
+                        onChange = onPitSizeFactorChange,
+                        surfaceRadiusPx = previewRadiusPx,
+                        fillColor = fillColor,
+                        outlineColor = outlineColor,
+                        pitColor = pitColor,
+                    )
                 }
 
                 when (tool) {
@@ -1130,7 +1161,7 @@ private fun pitHalfArmPx(
     minSmallHalfPx: Float,
 ): Float {
     val r = radiusLocalPx(lay, startDiaMm, endDiaMm, lenMm, pit.axialMm.coerceIn(0f, lenMm))
-    return pitHalfArm(pit.size, pitSmallHalfOnSegment(r, maxSmallHalfPx, minSmallHalfPx))
+    return pitHalfArm(pit, pitSmallHalfOnSegment(r, maxSmallHalfPx, minSmallHalfPx))
 }
 
 /**
@@ -1426,6 +1457,70 @@ private fun dimLabel(mm: Float, unit: UnitSystem): String = formatLenDim(mm.toDo
  * A pit "X" — two crossed strokes centred on `(cx, cy)`, half-arm [halfArm]. Drawn identically
  * (by construction) to the PDF's `drawWearPitX` (`WearPdfComposer.kt`); see `geom/WearPitMath.kt`.
  */
+/**
+ * The inspection page's X-size slider ([PIT_SIZE_FACTOR_MIN]..[PIT_SIZE_FACTOR_MAX] × the Small X)
+ * with a live preview beside it: the X drawn through [drawPitX] — the canvas's own construction —
+ * over a slice of the component at the canvas's drawn radius [surfaceRadiusPx], with the canvas's
+ * own Small-arm rule ([pitSmallHalfOnSegment]), so the preview shows the size the next tap places.
+ * A null radius (canvas not laid out yet) previews on a nominal band.
+ */
+@Composable
+private fun PitSizeSlider(
+    factor: Float,
+    onChange: (Float) -> Unit,
+    surfaceRadiusPx: Float?,
+    fillColor: Color,
+    outlineColor: Color,
+    pitColor: Color,
+) {
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "Size:", style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Slider(
+                value = factor,
+                onValueChange = { onChange(snappedPitSizeFactor(it)) },
+                valueRange = PIT_SIZE_FACTOR_MIN..PIT_SIZE_FACTOR_MAX,
+                steps = ((PIT_SIZE_FACTOR_MAX - PIT_SIZE_FACTOR_MIN) / PIT_SIZE_FACTOR_STEP).roundToInt() - 1,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 8.dp)
+                    .testTag("wear_pit_size_slider"),
+            )
+            Text(
+                pitSizeFactorLabel(factor),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.width(44.dp),
+            )
+            val maxSmallHalf = with(LocalDensity.current) { PIT_SMALL_HALF_DP.dp.toPx() }
+            val minSmallHalf = with(LocalDensity.current) { PIT_SMALL_HALF_MIN_DP.dp.toPx() }
+            Canvas(
+                modifier = Modifier
+                    .size(width = 72.dp, height = 48.dp)
+                    .clip(MaterialTheme.shapes.small)
+                    .background(Color.White)
+                    .border(1.dp, outlineColor.copy(alpha = 0.3f), MaterialTheme.shapes.small)
+                    .testTag("wear_pit_size_preview"),
+            ) {
+                val cy = size.height / 2f
+                val r = surfaceRadiusPx ?: (size.height * 0.35f)
+                drawRect(fillColor, topLeft = Offset(0f, cy - r), size = Size(size.width, 2f * r))
+                drawLine(outlineColor, Offset(0f, cy - r), Offset(size.width, cy - r), 1.5.dp.toPx())
+                drawLine(outlineColor, Offset(0f, cy + r), Offset(size.width, cy + r), 1.5.dp.toPx())
+                val half = pitSmallHalfOnSegment(r, maxSmallHalf, minSmallHalf) * factor
+                drawPitX(size.width / 2f, cy, half, pitColor)
+            }
+        }
+        Text(
+            "1× is the original Small X, 2× the Large. Each X keeps the size it was placed at.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
 private fun DrawScope.drawPitX(cx: Float, cy: Float, halfArm: Float, color: Color) {
     val w = (halfArm * 0.30f).coerceAtLeast(2f)
     drawLine(color, Offset(cx - halfArm, cy - halfArm), Offset(cx + halfArm, cy + halfArm), w, cap = StrokeCap.Round)

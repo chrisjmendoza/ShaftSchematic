@@ -549,7 +549,7 @@ The shop hand-marks pits / dye-penetrant failures as little "X"s on the shaft �
 hole, larger for a bigger cavity. This digitizes that, and answers the proposal's §10.5 open
 question ("wear on bodies/tapers"). Pits are the fourth reference-only feature (see `CLAUDE.md`).
 
-**Data model** (`model/WearSpot.kt`): `WearPit(id, componentId, axialMm, acrossFrac, size: PitSize)`
+**Data model** (`model/WearSpot.kt`): `WearPit(id, componentId, axialMm, acrossFrac, size: PitSize, sizeFactor: Float?)`
 in `WearRecord.pits` — stored in the **existing** `wear_record` envelope field (no new field, so
 no autosave/snapshot/import/`newDocument` plumbing changed; it all rides `WearRecord` as before).
 - **Keyed by resolved component id.** Unlike a `WearSpot` (liner-only, keyed by `linerId`), a pit
@@ -559,8 +559,16 @@ no autosave/snapshot/import/`newDocument` plumbing changed; it all rides `WearRe
   being repositioned — same convention as `WearSpot.startMm`. Shaft-space = `startMmPhysical + axialMm`.
 - **`acrossFrac`** ∈ interior band (`clampPitAcrossFrac`, `[0.08, 0.92]`) places the X vertically
   within the drawn segment (`0` = top outline, `1` = bottom) — purely visual.
-- **`size`** = `SMALL` | `LARGE`, a **symbol** size (how big the X is drawn), not the pit's true
-  diameter. `LARGE` arm = `SMALL` arm × `PIT_LARGE_TO_SMALL_RATIO` (2.0 — small is half of large).
+- **`sizeFactor`** — the X's **symbol** size (how big it is drawn, not the pit's true diameter) as
+  a multiple of the Small X, `PIT_SIZE_FACTOR_MIN`..`MAX` (0.5–3×, 0.25 steps), chosen on the
+  inspection page's size slider when the pit is placed and kept until the pit is removed
+  (on-device request, 2026-11-06: "pick the size, then add it at that size"; a placed X is never
+  resized). Additive and optional, stored verbatim; an out-of-range value is clamped where drawn.
+  `null` on a pit placed before the slider, which draws from **`size`** = `SMALL` (1×) | `LARGE`
+  (`PIT_LARGE_TO_SMALL_RATIO`, 2×). A slider pit records the nearer of the two in `size` too
+  (`pitSizeForFactor`) so a build from before the slider still draws it sensibly. ONE resolver,
+  `pitSizeFactor(pit)`, and ONE arm rule, `pitHalfArm(pit, smallHalf)`, behind every draw site and
+  the hit test.
 - **Orphans** (component no longer resolves): skipped at the **render layer**, not pruned at decode
   — auto-body/taper ids aren't known to the codec, same as runout readings. (Wear spots ARE pruned
   at decode, against the liner list — pits are deliberately not.)
@@ -569,9 +577,11 @@ no autosave/snapshot/import/`newDocument` plumbing changed; it all rides `WearRe
   change moved whole (see Runout Bubble Editor,
   "Auto-body keys follow their body").
 
-**ViewModel** (`ShaftViewModel`): `addWearPit(componentId, axialMm, acrossFrac, size)` /
+**ViewModel** (`ShaftViewModel`): `addWearPit(componentId, axialMm, acrossFrac, sizeFactor)` /
 `removeWearPit(id)` — plain `_wearRecord` updates, no geometry side effects. (A pit's
-size is chosen at add time; resizing an existing pit has no UI and no VM method.)
+size is chosen at add time; resizing an existing pit has no UI and no VM method, by request.)
+The slider's value is `wearPitBrushSizeFactor` / `setWearPitBrushSizeFactor` — session state,
+snapped to the step, carried from one component's page to the next, in no document and no history.
 
 **UI** — the overview canvas (`WearRoute.drawWearAffordances`) now tints **every** pit-eligible
 component (body/taper/liner) as a tap target and badges each with its total recorded wear
@@ -582,13 +592,17 @@ enlarged — a rect for a body/liner, a trapezoid for a taper (`componentEdgeDia
 reference (AFT drawn left, FWD right — the schematic/PDF convention). **Liners** still get the full
 wear-band editor (`WearSpotCard`s, dimension rail); **bodies/tapers** get pits only. Pit interaction
 uses **explicit tool chips** so a stray tap can't edit by accident: **Add X** (tap places at the
-current Small/Large brush), **Remove X** (tap deletes the X hit; a miss is a no-op), and a **Clear
-all pits** button. The tap handler and the Canvas renderer share one layout
+size slider's value), **Remove X** (tap deletes the X hit; a miss is a no-op), and a **Clear
+all pits** button. While Add X is selected a **Size** slider (`PitSizeSlider`, tag
+`wear_pit_size_slider`) replaces the old Small / Large chips, with a preview box beside it
+(`wear_pit_size_preview`) that draws the X through `drawPitX` over a slice of this component at
+the canvas's own drawn radius and Small-arm rule — the size the next tap places, before pinch-zoom. The tap handler and the Canvas renderer share one layout
 (`computeSegDetailLayout`) so a tapped X removes exactly the X that was drawn (`pickPitAt` from
 `geom/WearPitMath.kt`, generous touch pad).
 
-**Rendering** (all draw sites, in lockstep — same crossed-line construction, same small:large
-ratio; only the destination units and API differ, exactly like the runout marker). The detail
+**Rendering** (all draw sites, in lockstep — same crossed-line construction, same per-pit size
+factor over each surface's Small arm; only the destination units and API differ, exactly like the
+runout marker). The detail
 canvas's base half-arm was halved 2026-08-14 so LARGE lands where SMALL used to draw — an
 OVERLAY-only correction (on-device clarification: the overlay drew its X's oversized; the
 printed sizes below were confirmed right and are untouched):

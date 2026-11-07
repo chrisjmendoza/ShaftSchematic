@@ -3,8 +3,9 @@ package com.android.shaftschematic.ui.viewmodel
 import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
 import com.android.shaftschematic.geom.WEAR_TRACE_MIN_DEPTH_FRAC
 import com.android.shaftschematic.geom.clampPitAcrossFrac
+import com.android.shaftschematic.geom.pitSizeForFactor
+import com.android.shaftschematic.geom.snappedPitSizeFactor
 import com.android.shaftschematic.model.DyePenResult
-import com.android.shaftschematic.model.PitSize
 import com.android.shaftschematic.model.UndercutReference
 import com.android.shaftschematic.model.WearDiaReading
 import com.android.shaftschematic.model.WearPit
@@ -138,20 +139,31 @@ internal fun <T> List<T>.withRestored(removed: List<IndexedValue<T>>, idOf: (T) 
 
 /**
  * Drop a new pit "X" on [componentId] at component-local [axialMm] (from the AFT edge) and
- * [acrossFrac] (0 = top outline .. 1 = bottom), with the given [size]. `acrossFrac` is
- * clamped to the interior band ([clampPitAcrossFrac]) and `axialMm` to non-negative.
+ * [acrossFrac] (0 = top outline .. 1 = bottom), drawn at [sizeFactor] × the Small X — the
+ * inspection page's size slider, stored verbatim on the pit and kept until it is removed. The
+ * nearer of Small / Large is recorded beside it for builds that predate the slider. `acrossFrac`
+ * is clamped to the interior band ([clampPitAcrossFrac]) and `axialMm` to non-negative.
  */
-fun ShaftViewModel.addWearPit(componentId: String, axialMm: Float, acrossFrac: Float, size: PitSize) {
+fun ShaftViewModel.addWearPit(componentId: String, axialMm: Float, acrossFrac: Float, sizeFactor: Float) {
     _wearRecord.update { rec ->
         rec.copy(
             pits = rec.pits + WearPit(
                 componentId = componentId,
                 axialMm = max(0f, axialMm),
                 acrossFrac = clampPitAcrossFrac(acrossFrac),
-                size = size,
+                size = pitSizeForFactor(sizeFactor),
+                sizeFactor = sizeFactor,
             )
         )
     }
+}
+
+/**
+ * The inspection page's X-size slider: the size the NEXT placed pit takes. Session state only —
+ * it carries from one component's page to the next, and is in no document and no history.
+ */
+fun ShaftViewModel.setWearPitBrushSizeFactor(factor: Float) {
+    _wearPitBrushSizeFactor.value = snappedPitSizeFactor(factor)
 }
 
 /** Remove a pit by [id]. Confirm-free — the detail canvas removes a pit by tapping its "X". */

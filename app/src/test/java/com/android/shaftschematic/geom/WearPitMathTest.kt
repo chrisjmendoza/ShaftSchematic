@@ -1,6 +1,7 @@
 package com.android.shaftschematic.geom
 
 import com.android.shaftschematic.model.PitSize
+import com.android.shaftschematic.model.WearPit
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -14,9 +15,46 @@ import org.junit.Test
 class WearPitMathTest {
 
     @Test
-    fun `a large pit draws at twice the small arm`() {
-        assertEquals(10f, pitHalfArm(PitSize.SMALL, 10f), 0f)
-        assertEquals(20f, pitHalfArm(PitSize.LARGE, 10f), 1e-4f)
+    fun `a pit placed before the slider draws from its small or large size`() {
+        assertEquals(10f, pitHalfArm(WearPit(size = PitSize.SMALL), 10f), 0f)
+        assertEquals(20f, pitHalfArm(WearPit(size = PitSize.LARGE), 10f), 1e-4f)
+    }
+
+    @Test
+    fun `a pit placed with the slider draws at its own size, whatever size it also records`() {
+        assertEquals(15f, pitHalfArm(WearPit(size = PitSize.SMALL, sizeFactor = 1.5f), 10f), 1e-4f)
+        assertEquals(5f, pitHalfArm(WearPit(size = PitSize.LARGE, sizeFactor = 0.5f), 10f), 1e-4f)
+    }
+
+    @Test
+    fun `an out-of-range stored size is clamped where it draws, never rewritten`() {
+        val pit = WearPit(sizeFactor = 9f)
+        assertEquals(PIT_SIZE_FACTOR_MAX, pitSizeFactor(pit), 0f)
+        assertEquals(9f, pit.sizeFactor!!, 0f)
+        assertEquals(PIT_SIZE_FACTOR_MIN, pitSizeFactor(WearPit(sizeFactor = 0.1f)), 0f)
+        // A zero or negative factor is no size at all: the recorded Small / Large decides.
+        assertEquals(PIT_LARGE_TO_SMALL_RATIO, pitSizeFactor(WearPit(size = PitSize.LARGE, sizeFactor = 0f)), 0f)
+    }
+
+    @Test
+    fun `a slider pit also records the nearer of small and large`() {
+        assertEquals(PitSize.SMALL, pitSizeForFactor(0.5f))
+        assertEquals(PitSize.SMALL, pitSizeForFactor(1.25f))
+        assertEquals(PitSize.LARGE, pitSizeForFactor(1.5f))
+        assertEquals(PitSize.LARGE, pitSizeForFactor(3f))
+    }
+
+    @Test
+    fun `the slider snaps to its steps and labels them`() {
+        assertEquals(1.25f, snappedPitSizeFactor(1.2f), 0f)
+        assertEquals(PIT_SIZE_FACTOR_MIN, snappedPitSizeFactor(0f), 0f)
+        assertEquals(PIT_SIZE_FACTOR_MAX, snappedPitSizeFactor(7f), 0f)
+        assertEquals("1×", pitSizeFactorLabel(1f))
+        assertEquals("1.25×", pitSizeFactorLabel(1.25f))
+        assertEquals("0.5×", pitSizeFactorLabel(0.5f))
+        // Small and Large both sit on the track.
+        assertEquals(1f, snappedPitSizeFactor(1f), 0f)
+        assertEquals(PIT_LARGE_TO_SMALL_RATIO, snappedPitSizeFactor(PIT_LARGE_TO_SMALL_RATIO), 0f)
     }
 
     @Test
@@ -30,7 +68,7 @@ class WearPitMathTest {
         val small = pitSmallHalfOnSegment(localRadius = 20f, maxSmallHalf = 6f, minSmallHalf = 1f)
         assertEquals(20f * PIT_SMALL_HALF_MAX_FRAC_OF_RADIUS, small, 1e-5f)
         // A LARGE X then spans well under half the drawn diameter.
-        assertTrue(2f * pitHalfArm(PitSize.LARGE, small) < 0.5f * (2f * 20f))
+        assertTrue(2f * pitHalfArm(WearPit(size = PitSize.LARGE), small) < 0.5f * (2f * 20f))
     }
 
     @Test

@@ -639,6 +639,10 @@ internal val helpSections: List<HelpSection> = listOf(
                     "measured diameters. Tap a liner strip to zoom in, then place marks and " +
                     "type measured Ø values. These are reference marks only — they never " +
                     "change the shaft's geometry.\n\n" +
+                    "Set an X's size on the Size slider before you tap (0.5× to 3× the " +
+                    "original small X; the box beside it previews the X on that component). " +
+                    "Each X keeps the size it was placed at until you remove it, on screen " +
+                    "and on the printed sheets.\n\n" +
                     "Blank mode prints a write-in template with " +
                     "the drawing but no values, for taking measurements on the job.",
                 manualAnchor = "recording-wear",
