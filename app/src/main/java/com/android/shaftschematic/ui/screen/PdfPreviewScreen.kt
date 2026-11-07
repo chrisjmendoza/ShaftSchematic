@@ -72,6 +72,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.pdf.PdfExportMode
 import com.android.shaftschematic.pdf.PdfExportOptions
 import com.android.shaftschematic.settings.RunoutConfig
 import com.android.shaftschematic.ui.nav.FINAL_DRAWING_LABEL
@@ -188,6 +189,11 @@ fun PdfPreviewScreen(
     // loop cannot observe, so it rides along as an input key.
     val pdfFractionStyle by vm.pdfFractionStyle.collectAsState()
     val pdfOutputFont by vm.pdfOutputFont.collectAsState()
+    // The units note and the optional footer lines: switches on the options sheet that change
+    // only what the `PdfPrefs` snapshot carries, so they ride along as keys.
+    val pdfShowUnitsNote by vm.pdfShowUnitsNote.collectAsState()
+    val pdfFooterCapturedKwInset by vm.pdfFooterCapturedKwInset.collectAsState()
+    val pdfFooterBoltHoleDia by vm.pdfFooterBoltHoleDia.collectAsState()
     val pdfDualUnitLayout by vm.pdfDualUnitLayout.collectAsState()
     // Sizing-curve anchors: the composer sizes the drawn shaft off them, so a Settings
     // change to "Default drawing size" has to re-render an open preview. Collected here,
@@ -271,6 +277,9 @@ fun PdfPreviewScreen(
                 dimTextScale = pdfDimTextScale,
                 fractionStyle = pdfFractionStyle,
                 outputFont = pdfOutputFont,
+                showUnitsNote = pdfShowUnitsNote,
+                footerCapturedKwInset = pdfFooterCapturedKwInset,
+                footerBoltHoleDia = pdfFooterBoltHoleDia,
                 threadSlant = pdfThreadSlant,
                 threadDensity = pdfThreadDensity,
                 dualUnitLayout = pdfDualUnitLayout,
@@ -737,6 +746,10 @@ private data class SchematicRenderInputs(
      * `OutputTypography.active`. Key only.
      */
     val outputFont: OutputFont,
+    /** `PdfPrefs.showUnitsNote` / `footerCapturedKwInset` / `footerBoltHoleDia` — keys only, inside the `PdfPrefs` snapshot. */
+    val showUnitsNote: Boolean,
+    val footerCapturedKwInset: Boolean,
+    val footerBoltHoleDia: Boolean,
     /**
      * The thread-hatch slant. Not a composer argument — it reaches the ink via
      * `ThreadHatchStyle.slant`. Key only.
@@ -854,6 +867,16 @@ internal fun PdfOptionsSheet(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 8.dp),
     ) {
+        // App-wide prefs this sheet also carries (on-device request: every choice that changes
+        // the printed sheet belongs in this menu). Collected here rather than threaded through
+        // the host — the host already collects each one as a render-loop key.
+        val pdfExportMode by vm.pdfExportMode.collectAsState()
+        val outputFont by vm.pdfOutputFont.collectAsState()
+        val showUnitsNote by vm.pdfShowUnitsNote.collectAsState()
+        val footerCapturedKwInset by vm.pdfFooterCapturedKwInset.collectAsState()
+        val footerBoltHoleDia by vm.pdfFooterBoltHoleDia.collectAsState()
+        val bubbledFinal = showFinalRunoutBubbles && finalRunoutBubbles
+
         // This sheet carries the per-job Shaft height and Liner compression alongside the
         // app-wide look prefs, so the note points at their captions.
         OptionsScopeNote(hasJobControls = true)
@@ -877,9 +900,24 @@ internal fun PdfOptionsSheet(
             ContentChip(
                 label = "Ø callouts",
                 selected = pdfBlankDiaCallouts,
-                enabled = pdfBlankDraft && !(showFinalRunoutBubbles && finalRunoutBubbles),
+                enabled = pdfBlankDraft && !bubbledFinal,
                 onClick = { vm.setPdfBlankDiaCallouts(!pdfBlankDiaCallouts) },
                 modifier = Modifier.testTag("pdf_blank_dia_callouts_toggle"),
+            )
+            // Template mode (`PdfExportMode.Template`, app-wide — Settings → PDF Export): the
+            // shaft alone, no dimensions, names or footer. Inert on the bubbled final sheet,
+            // whose consolidated composer takes no export mode.
+            ContentChip(
+                label = "Template",
+                selected = pdfExportMode == PdfExportMode.Template,
+                enabled = !bubbledFinal,
+                onClick = {
+                    vm.setPdfExportMode(
+                        if (pdfExportMode == PdfExportMode.Template) PdfExportMode.Standard
+                        else PdfExportMode.Template,
+                    )
+                },
+                modifier = Modifier.testTag("pdf_template_chip"),
             )
             // The global default under each component's tri-state "Show name on drawing"
             // gate — an authored per-component choice still wins over it.
@@ -1004,9 +1042,38 @@ internal fun PdfOptionsSheet(
                 onCommitFooter = { vm.setPdfFooterTextScale(it) },
                 onCommitDim = { vm.setPdfDimTextScale(it) },
             )
+            OutputFontChips(
+                outputFont = outputFont,
+                onCommit = { vm.setPdfOutputFont(it) },
+            )
             FractionStyleChips(
                 fractionStyle = fractionStyle,
                 onCommit = { vm.setPdfFractionStyle(it) },
+            )
+        }
+
+        // ── Footer lines ─────────────────────────────────────────────────────
+        sections[OptionsSection.FOOTER] = OptionsSectionBody(
+            summary = footerSectionSummary(footerCapturedKwInset, footerBoltHoleDia),
+        ) {
+            FooterLineSwitchRows(
+                capturedKwInset = footerCapturedKwInset,
+                boltHoleDia = footerBoltHoleDia,
+                onSetCapturedKwInset = { vm.setPdfFooterCapturedKwInset(it) },
+                onSetBoltHoleDia = { vm.setPdfFooterBoltHoleDia(it) },
+            )
+        }
+
+        // ── Default drawing size ─────────────────────────────────────────────
+        // The app-wide sizing curve the Shaft height slider multiplies — what 100% draws.
+        sections[OptionsSection.DRAWING_SIZE] = OptionsSectionBody(
+            summary = drawingSizeSectionSummary(curveLoHeightIn, curveHiHeightIn),
+        ) {
+            DefaultDrawingSizeControls(
+                loHeightIn = curveLoHeightIn,
+                hiHeightIn = curveHiHeightIn,
+                onCommitLo = { vm.setPdfCurveLoHeightIn(it) },
+                onCommitHi = { vm.setPdfCurveHiHeightIn(it) },
             )
         }
 
@@ -1044,6 +1111,7 @@ internal fun PdfOptionsSheet(
                 enabled = dualUnits,
                 onCommit = { vm.setPdfDualUnitLayout(it) },
             )
+            UnitsNoteSwitchRow(checked = showUnitsNote, onCheckedChange = { vm.setPdfShowUnitsNote(it) })
         }
 
         OptionsSections(sections)

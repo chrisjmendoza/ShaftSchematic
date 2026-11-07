@@ -1206,8 +1206,9 @@ exaggeration" commit at the stale depth, because `traceDepthFrac` was such a val
 report; `WearRenderInputsSourceTest` pins it). `OutputTypography.active`
 (`PdfPrefs.outputFont`, Settings → Drawing → "Output font" — the FACE every sheet is set in, and
 the composers' root text paint) is the sibling mirror with the same single writer, the same
-re-render-key rule, and the same tolerant `fromName` fallback; it is Settings-only, never on the
-PDF options sheets. See `docs/contracts/FractionTypography.md`.
+re-render-key rule, and the same tolerant `fromName` fallback; like the fraction chips it is on
+both PDF options sheets ("Lines & text") as well as Settings → Drawing. See
+`docs/contracts/FractionTypography.md`.
 
 ### Mixed units and dual display are a DISPLAY AXIS
 Per-component display units (`unit_overrides` — resolved component id → `UnitSystem`) and

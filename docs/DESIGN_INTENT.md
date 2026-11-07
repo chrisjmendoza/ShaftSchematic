@@ -127,13 +127,15 @@ fallback), so it carries neither the height slider nor the S-break slider.
   exaggeration" already works (`WearRecord.traceDepthFrac` over
   `PdfPrefs.wearTraceDepthFrac`). Case by case (the Q2 rule), never a blanket override
   system.
-- **What earns a sheet row.** A look control gets a row on a document's options sheet when
-  it must be *judged against the page it changes* (line weight, S-break, shading,
-  fractions, arrows, dual-unit layout, the wear sliders, runout bubbles). It stays
-  Settings-only when it is a baseline the sheet's own controls already stand on (the
-  sizing-curve anchors — the per-job Shaft height multiplies them), a capability gate
-  (per-component units, liner shoulders), a default for a document field (dual-units
-  default), or profile management. A control that only means something on one document
+- **What earns a sheet row.** Every Settings choice that changes a printed sheet also gets
+  a row on the options sheet of each document it changes, grouped into that sheet's
+  sections (ruling 2026-11-07, below) — line weight, S-break, shading, fractions, the output
+  font, arrows, text sizes, dual-unit layout, the units note, the optional footer lines,
+  Template mode, the sizing-curve anchors ("Default drawing size", which the per-job Shaft
+  height multiplies), the wear sliders, runout bubbles. It stays Settings-only when it is a
+  capability gate (per-component units, liner shoulders), a default for a document field
+  (dual-units default), export plumbing that prints nothing (open after export), or profile
+  management. A control that only means something on one document
   may live on that document's sheet alone (runout bubble size/height) — still app-wide,
   still captured by profiles. Legibility rule: a sheet's header says its drawing settings
   are app-wide, and the per-job controls on it say "saved with this job" in their own
@@ -280,6 +282,15 @@ waits for the button.
   override slot per look pref — and he took the recommendation of (a): consistency by
   construction, no fight with Drawing profiles, and any real divergence need promotes one
   control to per-job case by case (the trace-depth precedent). → §3.3.
+
+### Resolved 2026-11-07
+
+- **Every output choice on the preview menu.** Chris: "I want as many of our selection aspects
+  that affect pdf output to live in that menu as organized as we can keep it." The rows that
+  had been Settings-only as house styles or baselines — output font, units note, footer lines,
+  Template mode, the sizing-curve anchors — joined the options sheets, each on the sheets it
+  changes. The Q3 posture is unchanged: every such row is a remote control for the one
+  app-wide pref, never a per-document copy. → §3.3.
 
 ### Open
 

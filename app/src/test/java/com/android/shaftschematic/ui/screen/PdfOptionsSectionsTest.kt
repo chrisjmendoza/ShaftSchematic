@@ -22,8 +22,11 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ApplicationProvider
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Threads
+import com.android.shaftschematic.pdf.PdfExportMode
 import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
+import com.android.shaftschematic.ui.viewmodel.setPdfFooterCapturedKwInset
+import com.android.shaftschematic.ui.viewmodel.setPdfShowUnitsNote
 import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.FractionStyle
 import org.junit.Assert.assertEquals
@@ -307,10 +310,12 @@ class PdfOptionsSectionsTest {
                     showCouplingFaceRow = true,
                     showSBreak = true,
                     showDimensionArrows = true,
+                    showSheetTextSizes = true,
                     hasThreads = hasThreads,
                     onDualUnitsChange = {},
                     onSetBlankDraft = {},
                     showHeightSlider = true,
+                    showDrawingSize = true,
                     showLinerCompression = true,
                     showBubbleControls = true,
                     showMeasurementReference = true,
@@ -411,8 +416,10 @@ class PdfOptionsSectionsTest {
             "options_shaft_expander",
             "options_thread_expander",
             "options_lines_expander",
+            "options_footer_expander",
             "options_shade_expander",
             "options_measure_ref_expander",
+            "options_drawing_size_expander",
             "options_units_expander",
         )
     }
@@ -426,10 +433,131 @@ class PdfOptionsSectionsTest {
             "options_bubbles_expander",
             "options_thread_expander",
             "options_lines_expander",
+            "options_footer_expander",
             "options_shade_expander",
             "options_measure_ref_expander",
+            "options_drawing_size_expander",
             "options_units_expander",
         )
+    }
+
+    // ── Every choice that changes the printed sheet, in the menu ────────────────
+    // On-device request: the output font, the units note, the optional footer lines, Template
+    // mode and the default drawing size live on the preview's options panel as well as in
+    // Settings, each on the sheets it changes.
+
+    @Test
+    fun `the output font picker sits in Lines and text on both sheets`() {
+        hostSchematicSheet(bareSpec)
+        rule.onNodeWithTag("output_font_HYPERLEGIBLE").assertDoesNotExist()
+        rule.onNodeWithTag("options_lines_expander").performScrollTo().performClick()
+        rule.onNodeWithText("Output font").assertExists()
+        rule.onNodeWithTag("output_font_HYPERLEGIBLE").assertExists()
+        rule.onNodeWithTag("output_font_MEDIUM").assertExists()
+    }
+
+    @Test
+    fun `the shared sheet offers the output font on every document`() {
+        val vm = vm()
+        rule.setContent {
+            MaterialTheme {
+                RunoutWearOptionsSheet(
+                    lineThicknessScale = 1f,
+                    pdfShadedBodies = false,
+                    pdfShadedTapers = false,
+                    pdfShadedLiners = false,
+                    vm = vm,
+                    showShadeExplicitBodiesOnly = false,
+                    showUndercutLineArt = true,
+                    onDualUnitsChange = {},
+                    onSetBlankDraft = {},
+                )
+            }
+        }
+        rule.onNodeWithTag("options_lines_expander").performScrollTo().performClick()
+        rule.onNodeWithTag("output_font_HYPERLEGIBLE").assertExists()
+    }
+
+    @Test
+    fun `Template is a Content chip on the schematic sheet and a tap sets the export mode`() {
+        val vm = vm()
+        hostSchematicSheet(bareSpec, vm)
+        assertEquals(PdfExportMode.Standard, vm.pdfExportMode.value)
+
+        rule.onNodeWithTag("pdf_template_chip").assertIsEnabled().performClick()
+        rule.waitForIdle()
+        assertEquals(PdfExportMode.Template, vm.pdfExportMode.value)
+
+        rule.onNodeWithTag("pdf_template_chip").performClick()
+        rule.waitForIdle()
+        assertEquals(PdfExportMode.Standard, vm.pdfExportMode.value)
+    }
+
+    @Test
+    fun `Template is untappable on the bubbled final sheet`() {
+        hostSchematicSheet(bareSpec, showFinalElections = true, finalRunoutBubbles = true)
+
+        rule.onNodeWithTag("pdf_template_chip").assertIsNotEnabled()
+    }
+
+    @Test
+    fun `the footer lines and the units note toggle the shared prefs`() {
+        val vm = vm()
+        val kw0 = vm.pdfFooterCapturedKwInset.value
+        val note0 = vm.pdfShowUnitsNote.value
+        try {
+            hostSchematicSheet(bareSpec, vm)
+            rule.onNodeWithTag("options_footer_captured_kw").assertDoesNotExist()
+            rule.onNodeWithTag("options_footer_expander").performScrollTo().performClick()
+            rule.onNodeWithTag("options_footer_bolt_hole_dia").assertExists()
+            rule.onNodeWithTag("options_footer_captured_kw").performScrollTo().performClick()
+            rule.waitForIdle()
+            assertEquals(!kw0, vm.pdfFooterCapturedKwInset.value)
+
+            rule.onNodeWithTag("options_units_expander").performScrollTo().performClick()
+            rule.onNodeWithTag("options_units_note").performScrollTo().performClick()
+            rule.waitForIdle()
+            assertEquals(!note0, vm.pdfShowUnitsNote.value)
+        } finally {
+            // The setters also write the process-wide PdfPrefs mirror; put it back.
+            vm.setPdfFooterCapturedKwInset(kw0, persist = false)
+            vm.setPdfShowUnitsNote(note0, persist = false)
+        }
+    }
+
+    @Test
+    fun `the default drawing size section carries both anchors`() {
+        hostConsolidatedSheet(hasThreads = false)
+        rule.onNodeWithText("4″ shaft draws", substring = true).assertDoesNotExist()
+        rule.onNodeWithTag("options_drawing_size_expander").performScrollTo().performClick()
+        rule.onNodeWithText("4″ shaft draws", substring = true).assertExists()
+        rule.onNodeWithText("8″ shaft draws", substring = true).assertExists()
+        rule.onNodeWithTag("drawing_size_standard").assertExists()
+    }
+
+    @Test
+    fun `the wear sheet carries the units note but no footer lines or drawing size`() {
+        val vm = vm()
+        rule.setContent {
+            MaterialTheme {
+                RunoutWearOptionsSheet(
+                    lineThicknessScale = 1f,
+                    pdfShadedBodies = false,
+                    pdfShadedTapers = false,
+                    pdfShadedLiners = false,
+                    vm = vm,
+                    showWearControls = true,
+                    showHeightSlider = true,
+                    showShadeExplicitBodiesOnly = false,
+                    onDualUnitsChange = {},
+                    onSetBlankDraft = {},
+                )
+            }
+        }
+        rule.onNodeWithTag("options_footer_expander").assertDoesNotExist()
+        rule.onNodeWithTag("options_drawing_size_expander").assertDoesNotExist()
+        rule.onNodeWithTag("options_units_expander").performScrollTo().performClick()
+        rule.onNodeWithTag("options_units_note").assertExists()
     }
 
     @Test

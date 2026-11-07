@@ -1075,7 +1075,7 @@
   <p  class="keep">The scope note reads: <span class="ui">Drawing settings here are app-wide — the same ones as Settings → Drawing — so every document follows them. Controls saved with this job say so.</span> The panel holds two kinds of control:</p>
   <dl class="terms">
     <dt>App-wide (a look setting)</dt>
-    <dd  class="keep">A shortcut to the same setting found in Settings. Changing it changes every document, on every job, from now on. Line thickness, fractions, shading, arrowheads, thread hatch and bubble size are all app-wide. There is no per-document copy of a look setting.</dd>
+    <dd  class="keep">A shortcut to the same setting found in Settings. Changing it changes every document, on every job, from now on. Line thickness, the output font, fractions, shading, arrowheads, thread hatch, footer lines, the default drawing size and bubble size are all app-wide. The Settings choices that change a printed sheet are on the panel of the sheets they change. There is no per-document copy of a look setting.</dd>
     <dt>Saved with this job</dt>
     <dd  class="keep">Stored in the job file. It changes only this job, and a reopened job prints exactly as it did. These controls end their caption with <span class="ui">Saved with this job</span>: <span class="ui">Shaft height</span>, the liner and taper compression pair, <span class="ui">Coupling face</span>, and the wear sheet's strip and trace controls. <span class="ui">Dual units</span> is stored with the document too (its caption reads <span class="ui">Saved with the document</span>).</dd>
   </dl>
@@ -1088,6 +1088,7 @@
     <tbody>
       <tr class="short"><td><span class="ui">Blank draft</span></td><td>Off</td><td>Every sheet</td><td>Prints the drawing with every value blanked for handwriting. Off each time the app starts.</td></tr>
       <tr><td><span class="ui">Ø callouts</span></td><td>On</td><td>Schematic, Final</td><td>Can be tapped only while Blank draft is on. On: the blank sheet keeps its Ø leaders with a write-in rule. Off: the leaders are left out so diameters can be written in wherever they belong.</td></tr>
+      <tr><td><span class="ui">Template</span></td><td>Off</td><td>Schematic, Final</td><td>Prints the shaft outline alone — no dimensions, no component names, no footer. App-wide, the same switch as <span class="path">Settings → PDF Export → Template (shaft only)</span>. Greyed out while Runout bubbles is on. See <a href="#documents-blank">Blank drafts and Template mode</a>.</td></tr>
       <tr><td><span class="ui">Component names</span></td><td>On</td><td>Schematic, Final</td><td>Component names under the shaft. This is the default for every component; a card's <span class="ui">Show name on drawing</span> toggle overrides it in either direction (see <a href="#components-show-name">Show name on drawing</a>). The same setting is <span class="path">Settings → Drawing → Component names on drawing</span> (see <a href="#settings-component-names">Component names</a>).</td></tr>
       <tr><td><span class="ui">Coupling face</span></td><td>Off</td><td>Runout, Consolidated</td><td>Prints the coupling end view, looking forward, at the bottom right. Saved with this job and shared with the Runout tab.</td></tr>
       <tr><td><span class="ui">Page</span></td><td>Auto</td><td>Undercut only</td><td>Auto, Landscape or Portrait. Auto prints portrait when the sheet has two or more sections to print, landscape otherwise. Saved with this job. See <a href="#recording-page">Page</a>.</td></tr>
@@ -1107,10 +1108,12 @@
     <li  class="keep"><span class="ui">Wear</span> (wear sheet only): <span class="ui">Components</span>, <span class="ui">Strip size</span>, <span class="ui">Trace depth exaggeration</span>, <span class="ui">Wear area shade</span>, <span class="ui">Taper–liner join</span>.</li>
     <li  class="keep"><span class="ui">Runout bubbles</span>: <span class="ui">Bubble size</span>, <span class="ui">Bubble height</span>.</li>
     <li  class="keep"><span class="ui">Thread</span> (only when the shaft has a thread): <span class="ui">Thread slant</span>, <span class="ui">Thread density</span>.</li>
-    <li  class="keep"><span class="ui">Lines &amp; text</span>: <span class="ui">Line thickness</span>, <span class="ui">Dimension arrows</span>, <span class="ui">Footer text size</span> and <span class="ui">Dimension text size</span> (schematic and consolidated sheets), <span class="ui">Fractions</span>.</li>
+    <li  class="keep"><span class="ui">Lines &amp; text</span>: <span class="ui">Line thickness</span>, <span class="ui">Dimension arrows</span>, <span class="ui">Footer text size</span> and <span class="ui">Dimension text size</span> (schematic and consolidated sheets), <span class="ui">Output font</span>, <span class="ui">Fractions</span>.</li>
+    <li  class="keep"><span class="ui">Footer lines</span> (schematic and consolidated sheets): <span class="ui">Captured keyway inset on footer</span>, <span class="ui">Bolt hole Ø on footer</span>.</li>
     <li  class="keep"><span class="ui">Shade in Components</span>: <span class="ui">Bodies</span> (with <span class="ui">Explicit bodies only</span>), <span class="ui">Tapers</span>, <span class="ui">Liners</span>, on the undercut sheet <span class="ui">Undercut drawing: line art (no shading)</span>, and on the consolidated sheet <span class="ui">Wear areas on the shaft drawing</span>.</li>
     <li  class="keep"><span class="ui">Measurement reference</span>: <span class="ui">Auto (closest end)</span>, <span class="ui">AFT</span>, <span class="ui">FWD</span>.</li>
-    <li  class="keep"><span class="ui">Units</span>: the <span class="ui">Dual units</span> switch and <span class="ui">Dual-unit layout</span>.</li>
+    <li  class="keep"><span class="ui">Default drawing size</span> (schematic, runout and consolidated sheets): <span class="ui">4″ shaft draws</span>, <span class="ui">8″ shaft draws</span>.</li>
+    <li  class="keep"><span class="ui">Units</span>: the <span class="ui">Dual units</span> switch, <span class="ui">Dual-unit layout</span> and <span class="ui">Units note on sheets</span>.</li>
   </ol>
 
   <h3>Which sheet shows which controls</h3>
@@ -1118,11 +1121,11 @@
   <table class="ref">
     <thead><tr><th>Sheet</th><th>Content chips</th><th>Sections and controls</th></tr></thead>
     <tbody>
-      <tr class="short"><td>Schematic / Final</td><td>Blank draft, Ø callouts, Component names (+ Original + Final and Runout bubbles on Final)</td><td>Shaft (all four controls) · Thread · Lines &amp; text (all three) · Shade in Components · Measurement reference · Units</td></tr>
-      <tr><td>Runout Sheet</td><td>Blank draft, Coupling face</td><td>Shaft (all four) · Runout bubbles · Thread · Lines &amp; text (Line thickness, Fractions) · Shade in Components · Units</td></tr>
+      <tr><td>Schematic / Final</td><td>Blank draft, Ø callouts, Template, Component names (+ Original + Final and Runout bubbles on Final)</td><td>Shaft (all four controls) · Thread · Lines &amp; text (all of it) · Footer lines · Shade in Components · Measurement reference · Default drawing size · Units</td></tr>
+      <tr><td>Runout Sheet</td><td>Blank draft, Coupling face</td><td>Shaft (all four) · Runout bubbles · Thread · Lines &amp; text (Line thickness, Output font, Fractions) · Shade in Components · Default drawing size · Units</td></tr>
       <tr><td>Consolidated Sheet</td><td>Blank draft, Coupling face</td><td>Every section except Wear. The fullest panel.</td></tr>
-      <tr><td>Wear Document</td><td>Blank draft</td><td>Shaft (Shaft height only) · Wear · Thread · Lines &amp; text (Line thickness, Fractions) · Shade in Components (no Explicit bodies only) · Units</td></tr>
-      <tr><td>Undercut Drawing</td><td>Blank draft, Page, Distance to S.E.T., Split cuts at liner edges, Total length of cuts, Sections to print</td><td>Thread · Lines &amp; text (Line thickness, Fractions) · Shade in Components (with the line-art row, no Explicit bodies only) · Units</td></tr>
+      <tr><td>Wear Document</td><td>Blank draft</td><td>Shaft (Shaft height only) · Wear · Thread · Lines &amp; text (Line thickness, Output font, Fractions) · Shade in Components (no Explicit bodies only) · Units</td></tr>
+      <tr><td>Undercut Drawing</td><td>Blank draft, Page, Distance to S.E.T., Split cuts at liner edges, Total length of cuts, Sections to print</td><td>Thread · Lines &amp; text (Line thickness, Output font, Fractions) · Shade in Components (with the line-art row, no Explicit bodies only) · Units</td></tr>
     </tbody>
   </table>
 
@@ -1179,10 +1182,21 @@
       <tr><td><span class="ui">Dimension arrows</span></td><td><span class="ui">Small</span></td><td>App-wide</td><td><span class="ui">Small</span>, <span class="ui">Medium</span> or <span class="ui">Large</span> arrowheads. Schematic and consolidated sheets only (the sheets with dimension rails).</td></tr>
       <tr><td><span class="ui">Footer text size</span></td><td>100%</td><td>App-wide</td><td><span class="ui">100%</span>, <span class="ui">125%</span>, <span class="ui">150%</span> or <span class="ui">175%</span> for the footer block; a sheet without room prints the largest size that fits. Schematic and consolidated sheets.</td></tr>
       <tr><td><span class="ui">Dimension text size</span></td><td>100%</td><td>App-wide</td><td>The same steps for the rail lengths and Ø values. Schematic and consolidated sheets.</td></tr>
+      <tr><td><span class="ui">Output font</span></td><td><span class="ui">Standard</span></td><td>App-wide</td><td>The typeface every printed sheet is set in. <span class="ui">Medium</span> and <span class="ui">Hyperlegible</span> are the easiest to read. Every sheet.</td></tr>
       <tr><td><span class="ui">Fractions</span></td><td><span class="ui">Diagonal</span></td><td>App-wide</td><td><span class="ui">Stacked</span>, <span class="ui">Diagonal</span> or <span class="ui">Plain</span>.</td></tr>
     </tbody>
   </table>
-  <p  class="keep">Each of these is described in full in <a href="#settings-drawing-lines">Lines, threads and text</a>, along with <span class="path">Settings → Drawing → Output font</span>, which is not on the options panel.</p>
+  <p  class="keep">Each of these is described in full in <a href="#settings-drawing-lines">Lines, threads and text</a>.</p>
+
+  <h3>Footer lines section</h3>
+  <table class="ref whole">
+    <thead><tr><th>Control</th><th>Default</th><th>Scope</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr class="short"><td><span class="ui">Captured keyway inset on footer</span></td><td>On</td><td>App-wide</td><td>The <span class="ui">Captured KW: inset …</span> line under a captured keyway's KW line.</td></tr>
+      <tr><td><span class="ui">Bolt hole Ø on footer</span></td><td>Off</td><td>App-wide</td><td>The <span class="ui">Bolt hole: Ø …</span> line of a cross-drilled bolt hole.</td></tr>
+    </tbody>
+  </table>
+  <p  class="keep">Schematic and consolidated sheets, the two that print the shaft footer. The same switches are in <span class="path">Settings → Drawing</span>.</p>
 
   <h3>Shade in Components section</h3>
   <table class="ref">
@@ -1198,13 +1212,15 @@
   </table>
   <p  class="keep">A card's <span class="ui">Shade on drawing</span> toggle can shade or unshade one component against these defaults (see <a href="#components-shade">Shade on drawing</a>). The liner lock above still applies over it.</p>
 
-  <h3>Measurement reference and Units</h3>
+  <h3>Measurement reference, Default drawing size and Units</h3>
   <table class="ref">
     <thead><tr><th>Control</th><th>Default</th><th>Scope</th><th>What it does</th></tr></thead>
     <tbody>
       <tr class="short"><td><span class="ui">Measurement reference</span></td><td><span class="ui">Auto (closest end)</span></td><td>App-wide</td><td>Which end the dimension rails measure from: each from its closer end, or all from <span class="ui">AFT</span> or <span class="ui">FWD</span> (see <a href="#reading-datum">Datum and length dimensions</a>). Schematic and consolidated sheets.</td></tr>
+      <tr><td><span class="ui">Default drawing size</span>: <span class="ui">4″ shaft draws</span>, <span class="ui">8″ shaft draws</span></td><td>0.5″ / 1″</td><td>App-wide</td><td>The drawn height every shaft starts from at 100% <span class="ui">Shaft height</span> — the same sliders as in Settings. <span class="ui">Standard (0.5″ / 1″)</span> restores the pair. Schematic, runout and consolidated sheets.</td></tr>
       <tr><td><span class="ui">Dual units</span></td><td>Off</td><td>This document</td><td>Prints every dimension in both inches and millimeters.</td></tr>
       <tr><td><span class="ui">Dual-unit layout</span></td><td><span class="ui">Inline</span></td><td>App-wide</td><td><span class="ui">Inline</span> (1 1/2″ [38.1 mm] on one line) or <span class="ui">Stacked</span> (the second unit under the first; see <a href="#settings-drawing-lines">Lines, threads and text</a>). Greyed out while Dual units is off.</td></tr>
+      <tr><td><span class="ui">Units note on sheets</span></td><td>Off</td><td>App-wide</td><td>A small <span class="ui">Units in inches</span> or <span class="ui">Units in mm</span> in the lower-right corner. Every sheet.</td></tr>
     </tbody>
   </table>
 
@@ -2380,7 +2396,7 @@
     <thead><tr><th>Setting</th><th>Default</th><th>What it does</th></tr></thead>
     <tbody>
       <tr class="short"><td><span class="ui">Default drawing size</span>: <span class="ui">4″ shaft draws</span></td><td>0.5″</td><td>How tall a 4″ shaft draws on paper at 100% <span class="ui">Shaft height</span>. Slider 0.25″ to 1.5″ in 1/16″ steps.</td></tr>
-      <tr><td><span class="ui">Default drawing size</span>: <span class="ui">8″ shaft draws</span></td><td>1″</td><td>How tall an 8″ shaft draws. Same range and steps. Every other diameter follows the straight line through the two points; the line under the sliders shows the result live (for example, <span class="ui">Example: a 6″ shaft draws 0.75″.</span>). <span class="ui">Standard (0.5″ / 1″)</span> restores the standard pair.</td></tr>
+      <tr><td><span class="ui">Default drawing size</span>: <span class="ui">8″ shaft draws</span></td><td>1″</td><td>How tall an 8″ shaft draws. Same range and steps. Every other diameter follows the straight line through the two points; the line under the sliders shows the result live (for example, <span class="ui">Example: a 6″ shaft draws 0.75″.</span>). <span class="ui">Standard (0.5″ / 1″)</span> restores the standard pair. Also on the PDF options panel of the schematic, runout and consolidated sheets (Default drawing size section).</td></tr>
       <tr><td><span class="ui">Body S-break</span></td><td>below 50%</td><td>How much a body run must be shortened before it prints the S-break symbol. Slider from <span class="ui">Never</span> to <span class="ui">Always</span> in 5% steps; the readout shows <span class="ui">Never</span> or <span class="ui">below 50%</span> (or your value). <span class="ui">Default (50%)</span> resets it. Also on the PDF options panel (schematic, runout and consolidated sheets).</td></tr>
     </tbody>
   </table>
@@ -2407,12 +2423,12 @@
       <tr><td><span class="ui">Dimension text size</span></td><td>100%</td><td>Size of the lengths on the dimension rails and of the Ø values, on the same sheets and in the same steps. The rails spread apart to match, and a value too wide to sit in its line prints above it, as at any size. Also on the PDF options panel.</td></tr>
       <tr><td><span class="ui">Thread slant</span></td><td>3×</td><td>How far the thread hatch leans. It follows each thread's own pitch; 1× is the true crest angle and higher values lean it further so the thread reads at print size. Slider from <span class="ui">1× true</span> to 10× in 0.5× steps; <span class="ui">Default (3×)</span> resets it. Restyles the on-screen previews too. Also on the PDF options panel (Thread section, shown when the shaft has a thread).</td></tr>
       <tr><td><span class="ui">Thread density</span></td><td>50%</td><td>How many of the thread's crests the hatch draws. Slider from <span class="ui">Sparse</span> (15%) to <span class="ui">100% true</span> (every crest at true pitch) in 5% steps; <span class="ui">Default (50%)</span> resets it. Fine threads stay at a legible minimum spacing. Also on the PDF options panel (Thread section).</td></tr>
-      <tr><td><span class="ui">Output font</span></td><td>Standard</td><td>The typeface every printed sheet is set in: <span class="ui">Standard</span>, <span class="ui">Medium</span>, <span class="ui">Hyperlegible</span>, <span class="ui">Condensed</span>, <span class="ui">Serif</span> or <span class="ui">Monospace</span>. Each chip is labeled in its own face. For readers with weak eyes, Medium sets the standard face with heavier strokes, and Hyperlegible (Atkinson Hyperlegible, from the Braille Institute) keeps look-alike characters such as 1, l and I or 0 and O distinct; either pairs well with a larger <span class="ui">Footer text size</span> and <span class="ui">Dimension text size</span>. Condensed fits more values inside the dimension line; Monospace lines digits up in columns. Paper only — app screens are unaffected. Settings only; it is not on the PDF options panel. A device that lacks a face prints in Standard.</td></tr>
+      <tr><td><span class="ui">Output font</span></td><td>Standard</td><td>The typeface every printed sheet is set in: <span class="ui">Standard</span>, <span class="ui">Medium</span>, <span class="ui">Hyperlegible</span>, <span class="ui">Condensed</span>, <span class="ui">Serif</span> or <span class="ui">Monospace</span>. Each chip is labeled in its own face. For readers with weak eyes, Medium sets the standard face with heavier strokes, and Hyperlegible (Atkinson Hyperlegible, from the Braille Institute) keeps look-alike characters such as 1, l and I or 0 and O distinct; either pairs well with a larger <span class="ui">Footer text size</span> and <span class="ui">Dimension text size</span>. Condensed fits more values inside the dimension line; Monospace lines digits up in columns. Paper only — app screens are unaffected. Also on the PDF options panel (Lines &amp; text section). A device that lacks a face prints in Standard.</td></tr>
       <tr><td><span class="ui">Fractions</span></td><td>Diagonal</td><td>How a fraction is set: <span class="ui">Stacked</span> (numerator over denominator with a bar, the shop-ruler fraction), <span class="ui">Diagonal</span> (raised numerator, slanted divider) or <span class="ui">Plain</span> (3/16 on one line). Applies to the on-screen sheets and the printed sheets alike. Also on the PDF options panel (Lines &amp; text section).</td></tr>
       <tr><td><span class="ui">Dual-unit layout</span></td><td>Inline</td><td>How a value printed in both units is set: <span class="ui">Inline</span> puts both on one line — 1 1/2″ [38.1 mm]; <span class="ui">Stacked</span> puts the second unit under the first. Stacked is about half as wide, so more values sit in the dimension line; a sheet too tight for the taller value falls back to Inline for the whole sheet. Has an effect only on a document with dual units on. Also on the PDF options panel (Units section, greyed out while that document's dual units are off).</td></tr>
-      <tr><td><span class="ui">Units note on sheets</span></td><td>Off</td><td>Prints a small <span class="ui">Units in inches</span> or <span class="ui">Units in mm</span> — the drawing's own unit — in the lower-right corner of every sheet, below the drawing and the footer, so nothing else moves. Settings only; it is not on the PDF options panel.</td></tr>
-      <tr><td><span class="ui">Captured keyway inset on footer</span></td><td>On</td><td>Prints the <span class="ui">Captured KW: inset …</span> line under a captured keyway's KW line. Off, the footer gives the keyway size only; the drawing still shows the inset. Settings only.</td></tr>
-      <tr><td><span class="ui">Bolt hole Ø on footer</span></td><td>Off</td><td>Prints the <span class="ui">Bolt hole: Ø …</span> line of a cross-drilled bolt hole (with the count when there is more than one). Off, the hole center distance and the clocking note still print. Settings only.</td></tr>
+      <tr><td><span class="ui">Units note on sheets</span></td><td>Off</td><td>Prints a small <span class="ui">Units in inches</span> or <span class="ui">Units in mm</span> — the drawing's own unit — in the lower-right corner of every sheet, below the drawing and the footer, so nothing else moves. Also on the PDF options panel (Units section).</td></tr>
+      <tr><td><span class="ui">Captured keyway inset on footer</span></td><td>On</td><td>Prints the <span class="ui">Captured KW: inset …</span> line under a captured keyway's KW line. Off, the footer gives the keyway size only; the drawing still shows the inset. Also on the PDF options panel (Footer lines section, schematic and consolidated sheets).</td></tr>
+      <tr><td><span class="ui">Bolt hole Ø on footer</span></td><td>Off</td><td>Prints the <span class="ui">Bolt hole: Ø …</span> line of a cross-drilled bolt hole (with the count when there is more than one). Off, the hole center distance and the clocking note still print. Also on the PDF options panel (Footer lines section).</td></tr>
     </tbody>
   </table>
   <aside class="note"><p  class="keep">Changing the font, fraction style, dual-unit layout or text sizes never makes text collide. Every rail break and label is measured from the text as it will actually print.</p></aside>
@@ -2488,7 +2504,7 @@
       <tr><td><span class="ui">Undercut drawing: liner outline</span></td><td>On</td><td>A faint dotted outline of each liner's original edges and outside diameter is drawn over the cuts, so a cut that runs from the liner into the body still shows where the liner was. Applies to the printed undercut sheet and the Undercut Drawing screens. Also on the PDF options panel (undercut sheet).</td></tr>
       <tr><td><span class="ui">Undercut drawing: split cuts at liner edges</span></td><td>Off</td><td>Off: every cut prints its full length. On: a cut machined past a liner edge is dimensioned as two spans meeting at the edge. App-wide; also under <span class="ui">Distance to S.E.T.</span> in the Undercut tab's <span class="ui">Drawing settings</span> and the undercut PDF options.</td></tr>
       <tr><td><span class="ui">Undercut drawing: total length of cuts</span></td><td>On</td><td>A section with two or more cuts prints one dimension across all of them, above the cut lengths. This is the default every job follows until its own <span class="ui">Total length of cuts</span> switch (Undercut tab, <span class="ui">Drawing settings</span>) is used; turn it off here and every job you have not set yourself prints without it.</td></tr>
-      <tr><td><span class="ui">Template (shaft only)</span></td><td>Off</td><td>Prints the schematic as the shaft outline alone — no dimensions, no component names, no footer — for marking up by hand. Settings only. (A blank draft, which keeps the dimension lines and leaves the values empty, is chosen per sheet on the PDF options panel instead.)</td></tr>
+      <tr><td><span class="ui">Template (shaft only)</span></td><td>Off</td><td>Prints the schematic as the shaft outline alone — no dimensions, no component names, no footer — for marking up by hand. Also a <span class="ui">Template</span> chip under Content on the schematic's PDF options panel. (A blank draft, which keeps the dimension lines and leaves the values empty, is the <span class="ui">Blank draft</span> chip beside it.)</td></tr>
       <tr><td><span class="ui">Measurement reference</span></td><td><span class="ui">Auto (closest end)</span></td><td>Which end printed dimensions measure from: <span class="ui">Auto (closest end)</span>, <span class="ui">AFT (force AFT SET)</span> or <span class="ui">FWD (force FWD SET)</span>. Auto measures each dimension from whichever end is closer. Also on the PDF options panel (schematic and consolidated sheets), where the choices read <span class="ui">Auto (closest end)</span>, <span class="ui">AFT</span> and <span class="ui">FWD</span>.</td></tr>
     </tbody>
   </table>
