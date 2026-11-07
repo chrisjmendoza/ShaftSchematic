@@ -246,6 +246,31 @@ class SchematicRenderReviewTest {
         }
     }
 
+    /** Settings → Drawing → "Output font": the job in each readable face, footer at 150%. */
+    @Test
+    fun `readable output fonts`() {
+        com.android.shaftschematic.util.BundledFonts.init(
+            androidx.test.core.app.ApplicationProvider.getApplicationContext(),
+        )
+        val before = com.android.shaftschematic.data.SettingsStore.pdfPrefs.outputFont
+        try {
+            for (font in listOf(
+                com.android.shaftschematic.util.OutputFont.MEDIUM,
+                com.android.shaftschematic.util.OutputFont.HYPERLEGIBLE,
+            )) {
+                com.android.shaftschematic.data.SettingsStore.updatePdfPrefs { it.copy(outputFont = font) }
+                val prefs = PdfPrefs(footerTextScale = 1.5f, dimTextScale = 1.5f)
+                renderConsolidated(
+                    "font_${font.name.lowercase()}_consolidated.png", midTaper, pdfPrefs = prefs,
+                    config = midTaper.runoutConfig.copy(showDyePenTest = true),
+                )
+                renderSchematic("font_${font.name.lowercase()}_schematic.png", midTaper, pdfPrefs = prefs)
+            }
+        } finally {
+            com.android.shaftschematic.data.SettingsStore.updatePdfPrefs { it.copy(outputFont = before) }
+        }
+    }
+
     /** Every sheet of every job named by `SCHEMATIC_RENDER_FIXTURES`. */
     @Test
     fun `fixture jobs render every document`() {

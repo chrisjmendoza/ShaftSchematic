@@ -160,7 +160,11 @@ photographs in the top-level `assets/` directory are **not** covered by the lice
 must not be redistributed (the app's own bundled assets under `app/src/main/assets/`
 are covered), and the license grants no rights to the "ShaftSchematic" name or icon, so
 forks should ship under their own branding. Third-party components (Android SDK,
-AndroidX, Jetpack Compose) remain under their own licenses.
+AndroidX, Jetpack Compose) remain under their own licenses. The bundled font
+`app/src/main/res/font/atkinson_hyperlegible_regular.ttf` (Atkinson Hyperlegible, © 2020
+Braille Institute of America, Inc.) is licensed under the SIL Open Font License 1.1, not the
+MIT License; its license text ships with the app at
+`app/src/main/assets/licenses/AtkinsonHyperlegible-OFL.txt`.
 
 ShaftSchematic is a drafting aid — it does not verify or certify any design, and all
 dimensions remain the responsibility of the engineer or machinist who reviews them.

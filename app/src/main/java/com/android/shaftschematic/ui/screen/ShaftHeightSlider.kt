@@ -40,6 +40,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.font.DeviceFontFamilyName
 import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontWeight
+import com.android.shaftschematic.R
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -791,13 +793,24 @@ internal fun OutputFontChips(
                 FilterChip(
                     selected = outputFont == font,
                     onClick = { onCommit(font) },
-                    label = { ChipLabel(font.uiLabel(), fontFamily = outputFontPreviewFamily(font)) },
+                    // The chip text style is medium weight; each specimen is set at the weight its
+                    // face prints at, or Standard would read heavier than the Medium chip beside it.
+                    label = {
+                        ChipLabel(
+                            font.uiLabel(),
+                            style = MaterialTheme.typography.labelLarge.copy(
+                                fontWeight = if (font == OutputFont.MEDIUM) FontWeight.Medium else FontWeight.Normal,
+                            ),
+                            fontFamily = outputFontPreviewFamily(font),
+                        )
+                    },
                     modifier = Modifier.testTag("output_font_${font.name}"),
                 )
             }
         }
         Text(
-            "Every printed sheet is set in this face. Standard is the historical look.",
+            "Every printed sheet is set in this face. Standard is the historical look. Medium " +
+                "(heavier strokes) and Hyperlegible (made for low vision) are the easiest to read.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -812,6 +825,8 @@ internal fun OutputFontChips(
 @OptIn(ExperimentalTextApi::class)
 private fun outputFontPreviewFamily(font: OutputFont): FontFamily = when (font) {
     OutputFont.STANDARD -> FontFamily.SansSerif
+    OutputFont.MEDIUM -> FontFamily.SansSerif
+    OutputFont.HYPERLEGIBLE -> FontFamily(Font(R.font.atkinson_hyperlegible_regular))
     OutputFont.CONDENSED -> FontFamily(Font(DeviceFontFamilyName("sans-serif-condensed")))
     OutputFont.SERIF -> FontFamily.Serif
     OutputFont.MONOSPACE -> FontFamily.Monospace

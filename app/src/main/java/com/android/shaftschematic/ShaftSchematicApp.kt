@@ -3,6 +3,7 @@ package com.android.shaftschematic
 
 import android.app.Application
 import com.android.shaftschematic.util.AppLog
+import com.android.shaftschematic.util.BundledFonts
 import com.android.shaftschematic.util.CrashReporter
 import java.io.File
 
@@ -11,7 +12,7 @@ import java.io.File
  *
  * Purpose
  * Process-start wiring, and nothing else: the diagnostic log file, the crash-reporting probe,
- * and the uncaught-exception handler. No business logic, no file I/O beyond opening the log
+ * the bundled fonts, and the uncaught-exception handler. No business logic, no file I/O beyond opening the log
  * directory — everything a screen needs still comes from the ViewModel.
  *
  * Order matters here. Firebase initializes from its own auto-init ContentProvider, which runs
@@ -29,6 +30,10 @@ class ShaftSchematicApp : Application() {
 
         AppLog.i(TAG, "app start v${BuildConfig.VERSION_NAME} (${BuildConfig.GIT_SHA})")
         AppLog.i(TAG, "crash reporting ${if (CrashReporter.isActive) "active" else "inactive"}")
+
+        // Before any ViewModel applies the persisted output font, so a sheet set in a bundled
+        // face never draws its first page in the fallback.
+        BundledFonts.init(this)
 
         AppLog.installCrashHandler()
     }

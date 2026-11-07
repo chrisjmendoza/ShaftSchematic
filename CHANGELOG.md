@@ -8,6 +8,17 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-06
 
+### feat(pdf): two easy-to-read output fonts, Medium and Hyperlegible
+
+- Settings → Drawing → **Output font** gains **Medium** (the standard face with heavier strokes)
+  and **Hyperlegible** (Atkinson Hyperlegible, the Braille Institute's face for low-vision
+  readers, which keeps 1 / l / I, 0 / O and 5 / S distinct) — on-device request: readers with
+  poor eyesight. Each chip is labeled in its own face; drawing profiles capture the choice.
+- Hyperlegible is the app's first bundled font (54 KB, SIL Open Font License 1.1, license text
+  shipped in the app and noted in `LICENSE` and the README), loaded once at app start. If it ever
+  fails to load, sheets print in Standard. The few symbols it lacks (← → ″ ✓) are drawn from the
+  system font.
+
 ### feat(ui): pick a pit X's size on a slider before placing it
 
 - On the wear inspection page the **Size** Small / Large chips become a slider, **0.5× to 3×** the

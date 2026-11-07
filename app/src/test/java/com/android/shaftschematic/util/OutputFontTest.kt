@@ -21,6 +21,8 @@ class OutputFontTest {
     @Test
     fun `a stored name decodes to its own face`() {
         assertSame(OutputFont.STANDARD, OutputFont.fromName("STANDARD"))
+        assertSame(OutputFont.MEDIUM, OutputFont.fromName("MEDIUM"))
+        assertSame(OutputFont.HYPERLEGIBLE, OutputFont.fromName("HYPERLEGIBLE"))
         assertSame(OutputFont.CONDENSED, OutputFont.fromName("CONDENSED"))
         assertSame(OutputFont.SERIF, OutputFont.fromName("SERIF"))
         assertSame(OutputFont.MONOSPACE, OutputFont.fromName("MONOSPACE"))
@@ -46,6 +48,8 @@ class OutputFontTest {
 
         assertEquals(labels.size, labels.toSet().size)
         assertEquals("Standard", OutputFont.STANDARD.uiLabel())
+        assertEquals("Medium", OutputFont.MEDIUM.uiLabel())
+        assertEquals("Hyperlegible", OutputFont.HYPERLEGIBLE.uiLabel())
         assertEquals("Condensed", OutputFont.CONDENSED.uiLabel())
         assertEquals("Serif", OutputFont.SERIF.uiLabel())
         assertEquals("Monospace", OutputFont.MONOSPACE.uiLabel())
