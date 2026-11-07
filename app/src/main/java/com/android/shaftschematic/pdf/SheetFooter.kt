@@ -20,6 +20,7 @@ import com.android.shaftschematic.model.keywayAbsSpanMm
 import com.android.shaftschematic.model.keywayClocking
 import com.android.shaftschematic.model.keywayCount
 import com.android.shaftschematic.model.shoulderOn
+import com.android.shaftschematic.settings.PDF_TEXT_SCALES
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.UnitSystem
@@ -949,6 +950,16 @@ data class FooterConfig(
      */
     val textScale: Float = 1f,
 )
+
+/**
+ * The text scale a sheet prints at: [requested] when [fits] accepts it, else the largest step of
+ * `PDF_TEXT_SCALES` under it that [fits] accepts, else 100% (the shipped size, which every sheet
+ * laid out at before the pref existed). Decided once per sheet — a sheet never mixes sizes.
+ */
+internal fun fittedTextScale(requested: Float, fits: (Float) -> Boolean): Float {
+    val candidates = listOf(requested) + PDF_TEXT_SCALES.filter { it < requested - 1e-4f }.sortedDescending()
+    return candidates.firstOrNull { it <= 1f || fits(it) } ?: 1f
+}
 
 /**
  * How much further the first footer baseline sits below the band top at a [FooterConfig.textScale]

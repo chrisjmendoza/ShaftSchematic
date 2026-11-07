@@ -1306,13 +1306,16 @@ internal val helpSections: List<HelpSection> = listOf(
                     "undercut detail page's rail too). Heads point inward unless the span is " +
                     "too narrow to hold both; on the undercut strips a larger head also needs " +
                     "more room before a value fits in its line.\n" +
-                    "• \"Footer text size\" and \"Dimension text size\" — 100% / 125% / 150%, " +
-                    "on the schematic and consolidated sheets (and the Final tab's). Footer " +
-                    "sizes the job and spec block at the foot of the sheet, plus the TIR and " +
-                    "dye pen row above it on the consolidated sheet; Dimension sizes the " +
+                    "• \"Footer text size\" and \"Dimension text size\" — 100% / 125% / 150% / " +
+                    "175%, on the schematic and consolidated sheets (and the Final tab's). " +
+                    "Footer sizes the job and spec block at the foot of the sheet, plus the TIR " +
+                    "and dye pen row above it on the consolidated sheet; Dimension sizes the " +
                     "lengths on the rails and the Ø values. Larger text takes room from the " +
-                    "drawing, so the shaft may draw a little shorter. The Original + Final " +
-                    "sheet holds its footer at 125%.\n" +
+                    "drawing, so the shaft may draw a little shorter. A sheet without room for " +
+                    "the footer size you picked prints it at the largest size that fits — a " +
+                    "busy consolidated sheet with the coupling end view most often. The " +
+                    "Original + Final sheet holds its footer at 125% and its dimensions at " +
+                    "150%.\n" +
                     "• \"Thread slant\" — in the Thread section of every document's sheet, " +
                     "shown whenever the shaft has a thread. How far the thread " +
                     "hatch leans: it follows each thread's own pitch, 1× being the true crest " +

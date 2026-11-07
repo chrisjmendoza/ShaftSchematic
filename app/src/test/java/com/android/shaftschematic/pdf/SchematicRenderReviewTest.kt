@@ -234,10 +234,14 @@ class SchematicRenderReviewTest {
     @Test
     fun `sheet text sizes`() {
         val config = midTaper.runoutConfig.copy(showDyePenTest = true, showCouplingFace = true)
-        for (s in listOf(1f, com.android.shaftschematic.settings.PDF_TEXT_SCALE_MAX)) {
+        for (s in com.android.shaftschematic.settings.PDF_TEXT_SCALES) {
             val pct = (s * 100).toInt()
             val prefs = PdfPrefs(footerTextScale = s, dimTextScale = s)
             renderConsolidated("text_${pct}_consolidated.png", midTaper, pdfPrefs = prefs, config = config)
+            renderConsolidated(
+                "text_${pct}_consolidated_no_face.png", midTaper, pdfPrefs = prefs,
+                config = config.copy(showCouplingFace = false),
+            )
             renderSchematic("text_${pct}_schematic.png", midTaper, pdfPrefs = prefs)
         }
     }

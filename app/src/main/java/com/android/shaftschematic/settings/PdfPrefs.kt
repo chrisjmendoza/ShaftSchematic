@@ -161,17 +161,18 @@ const val PDF_ARROW_SIZE_DEFAULT_PT = PDF_ARROW_SIZE_SMALL_PT
  * than a slider, the [PDF_ARROW_SIZES_PT] posture: the size is picked once for the readers' eyes,
  * not tuned against a drawing. 100% prints the shipped sizes exactly.
  *
- * The ceiling is the largest step the fullest footer the app prints (`SheetTextOverlapTest`'s
- * fixture: both tapers with keyways, both threads, wrapping customer and vessel names) still lays
- * out at with no colliding text: at 175% that footer took more of the page than the drawing above
- * it could give up, and the component names, Ø callouts and runout bubbles ran into it.
+ * A sheet whose page cannot afford the requested footer size prints it at the largest step that
+ * fits (`fittedTextScale`, decided once per sheet), so no step can make text collide. The
+ * ceiling is the largest step an everyday job's footer actually prints at: the on-device Pac-Fish
+ * job's schematic prints its footer at 175%, while at 200% it fell ~5 pt short of the page and
+ * stepped down on every sheet — a choice that never prints as chosen would only mislead.
  */
 const val PDF_TEXT_SCALE_DEFAULT = 1f
 const val PDF_TEXT_SCALE_MIN = 1f
-const val PDF_TEXT_SCALE_MAX = 1.5f
+const val PDF_TEXT_SCALE_MAX = 1.75f
 
 /** The choices, smallest → largest — the single source for the pickers and the tests. */
-val PDF_TEXT_SCALES = listOf(1f, 1.25f, PDF_TEXT_SCALE_MAX)
+val PDF_TEXT_SCALES = listOf(1f, 1.25f, 1.5f, PDF_TEXT_SCALE_MAX)
 
 /**
  * PDF-only preferences. Add more knobs here as you grow the exporter.

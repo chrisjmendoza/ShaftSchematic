@@ -35,6 +35,7 @@ import com.android.shaftschematic.util.PDF_PAGE_HEIGHT_PT
 import com.android.shaftschematic.util.PDF_PAGE_WIDTH_PT
 import com.android.shaftschematic.util.UnitSystem
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -438,23 +439,95 @@ class SheetTextOverlapTest {
         assertTrue("${failures.size} sheet(s) overlap:\n" + failures.joinToString("\n"), failures.isEmpty())
     }
 
-    @Test
-    fun `a larger footer prints larger and keeps the TIR line above it`() {
-        val big = PDF_TEXT_SCALES.last()
-        val base = consolidated(includeBubbles = true, includeWearInfo = false, blank = false, face = false, dyePen = true)
-        val c = consolidated(
-            includeBubbles = true, includeWearInfo = false, blank = false, face = false,
-            prefs = PdfPrefs(footerTextScale = big), dyePen = true,
+    /** An ordinary job: one taper and its thread at each end, short names — a footer of ~7 rows. */
+    private val plainSpec: ShaftSpec = spec.copy(
+        bodies = emptyList(),
+        couplerBoltSlots = emptyList(),
+        threads = spec.threads.map { it.copy(reliefLenMm = 0f, reliefDiaMm = 0f) },
+        tapers = spec.tapers.map { it.copy(keywaySpooned = false) },
+    )
+    private val plainProject = ProjectInfo(customer = "Pac-Fish", vessel = "Preston", jobNumber = "935066")
+
+    /** The footer's AFT heading — the LAST such string, since a schematic's component names come first. */
+    private fun footerHeadingHeight(c: RecordingCanvas) =
+        c.boxes.last { it.text == FOOTER_AFT_TAPER_HEADER }.rect.height()
+
+    private fun plainConsolidated(prefs: PdfPrefs): RecordingCanvas {
+        val c = canvas()
+        composeRunoutPdfOnCanvas(
+            c, pageW, pageH, plainSpec,
+            config = RunoutConfig(tirDirection = TirDirection.AFT, showCouplingFace = true, showDyePenTest = true),
+            project = plainProject, unit = UnitSystem.INCHES, pdfPrefs = prefs,
+            resolvedComponents = resolveComponents(plainSpec), runoutReadings = readings,
+            consolidated = true, includeBubbles = true, includeWearInfo = false,
         )
-        fun heading(r: RecordingCanvas) = r.boxes.first { it.text == FOOTER_AFT_TAPER_HEADER }.rect
+        return c
+    }
+
+    /** The on-device Pac-Fish job: one taper, thread and keyway at each end — an everyday footer. */
+    private val pacFish by lazy {
+        com.android.shaftschematic.doc.ShaftDocCodec.decode(
+            requireNotNull(javaClass.classLoader?.getResource("fixtures/mid_taper_pac_fish.shaft")).readText(),
+        ).spec
+    }
+
+    private fun plainSchematic(prefs: PdfPrefs): RecordingCanvas {
+        val c = canvas()
+        composeShaftPdfOnCanvas(
+            c, pageW, pageH, pacFish, UnitSystem.INCHES, plainProject,
+            appVersion = "test", filename = "plain.pdf", pdfPrefs = prefs,
+            resolvedComponents = resolveComponents(pacFish),
+        )
+        return c
+    }
+
+    @Test
+    fun `an everyday schematic prints its footer at the largest size`() {
+        val big = PDF_TEXT_SCALES.last()
+        val base = plainSchematic(PdfPrefs())
+        val c = plainSchematic(PdfPrefs(footerTextScale = big, dimTextScale = big))
+        assertNoOverlap("plain schematic at ${big}x", c)
         assertTrue(
-            "footer heading should grow ~${big}x: ${heading(base).height()} → ${heading(c).height()}",
-            heading(c).height() > heading(base).height() * (big - 0.1f),
+            "footer heading should grow ${big}x: ${footerHeadingHeight(base)} → ${footerHeadingHeight(c)}",
+            footerHeadingHeight(c) > footerHeadingHeight(base) * (big - 0.05f),
+        )
+    }
+
+    @Test
+    fun `a consolidated sheet asked for the largest size prints larger and keeps the TIR line above it`() {
+        // Bubbles, the coupling face lane and the rails all share this page with the footer, so it
+        // may step down — but it never prints at 100% when a larger step fits, and never collides.
+        val base = plainConsolidated(PdfPrefs())
+        val c = plainConsolidated(PdfPrefs(footerTextScale = PDF_TEXT_SCALES.last()))
+        assertNoOverlap("plain consolidated, largest footer", c)
+        assertTrue(
+            "footer heading should grow: ${footerHeadingHeight(base)} → ${footerHeadingHeight(c)}",
+            footerHeadingHeight(c) > footerHeadingHeight(base) * 1.2f,
         )
         val tir = c.boxes.first { it.text.startsWith("TIR's taken") }
+        val heading = c.boxes.first { it.text == FOOTER_AFT_TAPER_HEADER }
         assertTrue(
-            "TIR line (bottom ${tir.rect.bottom}) must sit above the footer heading (top ${heading(c).top})",
-            tir.rect.bottom <= heading(c).top,
+            "TIR line (bottom ${tir.rect.bottom}) must sit above the footer heading (top ${heading.rect.top})",
+            tir.rect.bottom <= heading.rect.top,
         )
+    }
+
+    @Test
+    fun `a footer too full for the largest size steps down but still prints larger`() {
+        val base = consolidated(includeBubbles = true, includeWearInfo = false, blank = false, face = true, dyePen = true)
+        val c = consolidated(
+            includeBubbles = true, includeWearInfo = false, blank = false, face = true,
+            prefs = PdfPrefs(footerTextScale = PDF_TEXT_SCALES.last()), dyePen = true,
+        )
+        val ratio = footerHeadingHeight(c) / footerHeadingHeight(base)
+        assertTrue("stepped-down footer ratio $ratio should sit between 125% and the largest step", ratio > 1.2f && ratio < PDF_TEXT_SCALES.last() - 0.05f)
+    }
+
+    @Test
+    fun `the fitted scale takes the largest step that fits`() {
+        assertEquals(2f, fittedTextScale(2f) { true }, 0f)
+        assertEquals(1.5f, fittedTextScale(2f) { it <= 1.5f }, 0f)
+        assertEquals(1f, fittedTextScale(2f) { false }, 0f)
+        assertEquals(1f, fittedTextScale(1f) { false }, 0f)
     }
 }

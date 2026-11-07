@@ -8,6 +8,20 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-06
 
+### feat(pdf): text sizes up to 175%, and a sheet without room prints the largest size that fits
+
+- Footer and Dimension text size gain a **175%** step (on-device request: try 200%, fall back to
+  175% if it crowds). 200% was tried: on the everyday Pac-Fish job its footer fell about 5 pt
+  short of the page on the schematic and stepped down on every sheet, so it would never print as
+  chosen.
+- A sheet that cannot afford the chosen footer size now prints it at the largest step that fits,
+  decided once for the whole sheet, instead of letting the drawing run into the footer. A busy
+  consolidated sheet with the coupling end view and bubbles is the usual case: at 175% it prints
+  its footer at 125%, and without the end view it prints 175%.
+- The TIR row's lane grows with its text, so a large footer no longer brings the TIR line up
+  against the bottom bubble row. The Original + Final sheet holds its dimensions at 150% as well
+  as its footer at 125%.
+
 ### feat(pdf): larger footer and dimension text on the schematic and consolidated sheets
 
 - Two app-wide sizes, **Footer text size** and **Dimension text size**: 100% (the shipped size),
