@@ -163,6 +163,12 @@ internal fun composeShaftPdfOnCanvas(
     band: SheetBand? = null,
 ) {
     val effectiveOptions = effectiveSchematicOptions(options)
+    // The full page fits its footer size to the room the drawing leaves (`schematicFittedPrefs`);
+    // a band's sheet sizes its footer itself (`beforeAfterPrefs`).
+    @Suppress("NAME_SHADOWING")
+    val pdfPrefs = if (band == null) {
+        schematicFittedPrefs(pageW, pageH, spec, unit, project, pdfPrefs, options, displayUnits, heightScale, linerMinFracOfTrue)
+    } else pdfPrefs
 
     // The band this drawing owns. With no band it is the page inside its margins, so every
     // expression below reduces to the full-page sheet's.
@@ -612,6 +618,55 @@ internal fun schematicFooterBlockPt(
             blankValues = blank, displayUnits = displayUnits,
         )
     } ?: (if (blank) FOOTER_BLOCK_BLANK_PT else FOOTER_BLOCK_PT)
+}
+
+/**
+ * [pdfPrefs] with the footer text at the size this full-page schematic can afford, decided ONCE
+ * for the sheet (the dual-stacking posture): the requested `PdfPrefs.footerTextScale`, or the
+ * largest step under it at which the rail block (at its tightest lane), the drawn shaft, the
+ * 1-inch names / Ø callouts gap and the footer still stack inside the page. A full job at a
+ * large step otherwise forced the shaft into a page too short for that stack, and the names and
+ * callouts ran into the footer.
+ */
+internal fun schematicFittedPrefs(
+    pageW: Float,
+    pageH: Float,
+    spec: ShaftSpec,
+    unit: UnitSystem,
+    project: ProjectInfo,
+    pdfPrefs: PdfPrefs,
+    options: PdfExportOptions,
+    displayUnits: DisplayUnits,
+    heightScale: Float,
+    linerMinFracOfTrue: Float,
+): PdfPrefs {
+    val effectiveOptions = effectiveSchematicOptions(options)
+    if (!effectiveOptions.showFooter || pdfPrefs.footerTextScale <= 1f) return pdfPrefs
+    fun fits(s: Float): Boolean {
+        val prefs = pdfPrefs.copy(footerTextScale = s)
+        val top = PAGE_MARGIN_PT + TOP_TEXT_PAD_PT
+        val bottom = pageH - PAGE_MARGIN_PT - schematicFooterBlockPt(pageW, spec, unit, project, prefs, options, displayUnits)
+        val profile = schematicProfileFit(
+            spec, prefs, heightScale, linerMinFracOfTrue,
+            contentLeft = PAGE_MARGIN_PT, contentRight = pageW - PAGE_MARGIN_PT,
+            budgetCapPt = bottom - top,
+        )
+        val shaftH = profile.diaPtPerMm * spec.maxOuterDiaMm().coerceAtLeast(1f)
+        val rails = if (!effectiveOptions.showDimensions) 0f else schematicRailBlockPt(
+            spec, unit, displayUnits, prefs, effectiveOptions.blankValues,
+            xAt = profile.xMap::xAt,
+            gap = RAIL_MIN_GAP_PT * prefs.dimTextScale,
+        )
+        return top + rails + shaftH + INFO_GAP_PT <= bottom
+    }
+    val s = fittedTextScale(pdfPrefs.footerTextScale, ::fits)
+    if (s < pdfPrefs.footerTextScale) {
+        VerboseLog.i(VerboseLog.Category.PDF, "ShaftPdf") {
+            "footer text: printed at ${(s * 100).toInt()}% — the requested " +
+                "${(pdfPrefs.footerTextScale * 100).toInt()}% leaves the drawing too little of the page"
+        }
+    }
+    return pdfPrefs.copy(footerTextScale = s)
 }
 
 /**

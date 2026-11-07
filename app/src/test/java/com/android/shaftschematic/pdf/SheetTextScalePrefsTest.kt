@@ -66,6 +66,6 @@ class SheetTextScalePrefsTest {
 
     @Test
     fun `chips read as percentages`() {
-        assertEquals(listOf("100%", "125%", "150%"), PDF_TEXT_SCALES.map(::textScaleLabel))
+        assertEquals(listOf("100%", "125%", "150%", "175%"), PDF_TEXT_SCALES.map(::textScaleLabel))
     }
 }

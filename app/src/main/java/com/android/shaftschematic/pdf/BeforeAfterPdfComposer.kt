@@ -112,15 +112,21 @@ internal fun composeBeforeAfterPdfOnCanvas(
 
 /**
  * The prefs both bands draw with: [prefs] with the footer text held at
- * [BEFORE_AFTER_MAX_FOOTER_TEXT_SCALE]. Two drawings and one footer share this page, and at the
- * full-page sheets' largest step the fullest footer left the bands too short for their rails
- * (`SheetTextOverlapTest`); the dimension text is not capped, since the bands' rails absorb it.
+ * [BEFORE_AFTER_MAX_FOOTER_TEXT_SCALE] and the dimension text at
+ * [BEFORE_AFTER_MAX_DIM_TEXT_SCALE]. Two drawings and one footer share this page: past those steps
+ * the fullest footer left the bands too short for their rails, and the larger Ø callouts and names
+ * ran into each other in a half-page band (`SheetTextOverlapTest`).
  */
-internal fun beforeAfterPrefs(prefs: PdfPrefs): PdfPrefs =
-    prefs.copy(footerTextScale = min(prefs.footerTextScale, BEFORE_AFTER_MAX_FOOTER_TEXT_SCALE))
+internal fun beforeAfterPrefs(prefs: PdfPrefs): PdfPrefs = prefs.copy(
+    footerTextScale = min(prefs.footerTextScale, BEFORE_AFTER_MAX_FOOTER_TEXT_SCALE),
+    dimTextScale = min(prefs.dimTextScale, BEFORE_AFTER_MAX_DIM_TEXT_SCALE),
+)
 
 /** The largest footer text step the before/after sheet prints at. */
 internal const val BEFORE_AFTER_MAX_FOOTER_TEXT_SCALE = 1.25f
+
+/** The largest dimension text step the before/after sheet prints at. */
+internal const val BEFORE_AFTER_MAX_DIM_TEXT_SCALE = 1.5f
 
 /** The before/after sheet's two bands and the rule between them, in page points. */
 internal class BeforeAfterBands(val original: SheetBand, val final: SheetBand, val dividerY: Float)

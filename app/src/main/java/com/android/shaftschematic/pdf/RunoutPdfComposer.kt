@@ -325,11 +325,9 @@ internal fun composeRunoutPdfOnCanvas(
     val text = sheetTextPaint(TEXT_PT)
     // The footer block and the TIR / dye pen row above it (`PdfPrefs.footerTextScale`), and the
     // in-profile Ø values' base size (`PdfPrefs.dimTextScale`). Both are 100% = [text]'s size.
-    // The classic sheet carries no footer, so its TIR row keeps the shipped size.
-    val footerScale = if (consolidated) pdfPrefs.footerTextScale else 1f
-    val footerText = sheetTextPaint(TEXT_PT * footerScale)
+    // The footer's size is fitted to the page below (`footerScale`); the classic sheet carries no
+    // footer, so its TIR row keeps the shipped size.
     val valueText = sheetTextPaint(TEXT_PT * pdfPrefs.dimTextScale)
-    val tirLineH = TIR_LINE_HEIGHT_PT * footerScale
     // ── Page regions ─────────────────────────────────────────────────────────
     val margin = PAGE_MARGIN_PT
     val contentLeft  = margin
@@ -478,7 +476,70 @@ internal fun composeRunoutPdfOnCanvas(
     // page with give in it: when the shaft would otherwise be squeezed under the height floor,
     // its handwriting pitch tightens toward `footerBlockMinHeightPt` first (see the vertical
     // solve below). The printed footer has no such give.
-    val footerCfg = if (consolidated) sheetFooterConfig(spec, pdfPrefs) else null
+    // The dye pen row shares the TIR line's lane (consolidated only, per-job election); the
+    // boxes mark from the ONE WearRecord.dyePenResult the wear sheet prints, blank on a draft.
+    val drawDyePen = consolidated && config.showDyePenTest
+
+    // Prelim bubble rows on the linear map — the BUDGET's term only (see the vertical solve).
+    val prelimPlan     = planRunoutBubbles(
+        collectRunoutStations(
+            stationSpans, config.componentOverrides, ::xAtLinear,
+            mmAtX = { x -> drawStartMm + (x - contentLeft) / widthFitPtPerMm },
+            placements = runoutStationPlacements,
+        ),
+        bubbleGeom,
+    )
+    val prelimBubbleSectionH = prelimPlan.sectionHeight(BUBBLE_GAP_PT)
+
+    // ── Bottom lane ───────────────────────────────────────────────────────────
+    // The TIR line (left) and the coupling end view (right) share the band above the
+    // footer. They never collide in x, so everything above reserves the TALLER of the two
+    // lanes and the TIR line keeps its own y. Reserving off `tirY` alone would let the
+    // shaft and its bubbles run down through the face.
+    val couplingCx = contentRight - COUPLING_FACE_PAD_PT - COUPLING_FACE_OUTER_R_PT
+    // The TIR row's lane at a footer size: its baseline sits `TIR_LINE_HEIGHT_PT × s` above the
+    // footer, and the lane grows by the ascent the scale added, so the row's text rises no
+    // further above its lane — toward the bubble rows — than it does at 100%.
+    fun tirLaneHAt(footerScale: Float): Float {
+        val extraRise = if (footerScale <= 1f) 0f
+            else -sheetTextPaint(TEXT_PT * footerScale).fontMetrics.ascent * (1f - 1f / footerScale)
+        return TIR_LINE_HEIGHT_PT * footerScale + extraRise
+    }
+    fun bottomLaneHAt(footerScale: Float): Float = maxOf(
+        if (drawBubbles || drawDyePen) tirLaneHAt(footerScale) else 0f,
+        if (drawFace) COUPLING_FACE_BLOCK_PT else 0f,
+    )
+    fun footerCfgAt(footerScale: Float): FooterConfig =
+        sheetFooterConfig(spec, pdfPrefs.copy(footerTextScale = footerScale))
+
+    // The footer size this sheet can afford, decided ONCE for the whole sheet (the dual-stacking
+    // posture): the requested `PdfPrefs.footerTextScale`, or the largest step under it at which
+    // the footer, its TIR / dye pen lane, the rails and the bubble rows still leave the shaft its
+    // height floor. A full job at a large step otherwise ran its bubbles into the TIR line. A
+    // blank draft is measured at its footer's tightest pitch, the give the vertical solve takes.
+    fun footerFitsAt(s: Float): Boolean {
+        val paint = sheetTextPaint(TEXT_PT * s)
+        val cfg = footerCfgAt(s)
+        val footerH = if (blankValues) {
+            footerBlockMinHeightPt(contentLeft, contentRight, spec, unit, project, paint, cfg, blankValues = true, displayUnits = displayUnits)
+        } else {
+            footerBlockHeightPt(contentLeft, contentRight, spec, unit, project, paint, cfg, displayUnits = displayUnits)
+        }
+        val budget = (pageH - margin - footerH - bottomLaneHAt(s)) - (margin + railsBlockHFor(false)) - prelimBubbleSectionH
+        return budget >= PROFILE_MIN_SHAFT_HEIGHT_PT + SHAFT_BUDGET_CLEAR_PT
+    }
+    val footerScale = if (!consolidated) 1f else fittedTextScale(pdfPrefs.footerTextScale, ::footerFitsAt)
+    if (footerScale < pdfPrefs.footerTextScale && consolidated) {
+        VerboseLog.i(VerboseLog.Category.PDF, "RunoutPdf") {
+            "footer text: printed at ${(footerScale * 100).toInt()}% — the requested " +
+                "${(pdfPrefs.footerTextScale * 100).toInt()}% leaves the shaft under its height floor"
+        }
+    }
+    val footerText = sheetTextPaint(TEXT_PT * footerScale)
+    val tirLineH = TIR_LINE_HEIGHT_PT * footerScale
+    val bottomLaneH = bottomLaneHAt(footerScale)
+
+    val footerCfg = if (consolidated) footerCfgAt(footerScale) else null
     val footerBlockFullH = footerCfg?.let {
         footerBlockHeightPt(
             contentLeft, contentRight, spec, unit, project, footerText, it,
@@ -491,20 +552,6 @@ internal fun composeRunoutPdfOnCanvas(
             blankValues = blankValues, displayUnits = displayUnits,
         )
     } ?: 0f
-    // The dye pen row shares the TIR line's lane (consolidated only, per-job election); the
-    // boxes mark from the ONE WearRecord.dyePenResult the wear sheet prints, blank on a draft.
-    val drawDyePen = consolidated && config.showDyePenTest
-
-    // ── Bottom lane ───────────────────────────────────────────────────────────
-    // The TIR line (left) and the coupling end view (right) share the band above the
-    // footer. They never collide in x, so everything above reserves the TALLER of the two
-    // lanes and the TIR line keeps its own y. Reserving off `tirY` alone would let the
-    // shaft and its bubbles run down through the face.
-    val couplingCx = contentRight - COUPLING_FACE_PAD_PT - COUPLING_FACE_OUTER_R_PT
-    val bottomLaneH = maxOf(
-        if (drawBubbles || drawDyePen) tirLineH else 0f,
-        if (drawFace) COUPLING_FACE_BLOCK_PT else 0f,
-    )
 
     // ── Vertical budget ───────────────────────────────────────────────────────
     // The diameter scale needs the shaft's height budget, the budget needs the bubble row
@@ -527,15 +574,6 @@ internal fun composeRunoutPdfOnCanvas(
     val railGap = railGapFor(dualStacked)
 
     val maxOuterDiaMm  = docSpec.maxOuterDiaMm().coerceAtLeast(10f)
-    val prelimPlan     = planRunoutBubbles(
-        collectRunoutStations(
-            stationSpans, config.componentOverrides, ::xAtLinear,
-            mmAtX = { x -> drawStartMm + (x - contentLeft) / widthFitPtPerMm },
-            placements = runoutStationPlacements,
-        ),
-        bubbleGeom,
-    )
-    val prelimBubbleSectionH = prelimPlan.sectionHeight(BUBBLE_GAP_PT)
 
     /** Height left for the shaft once the footer, bottom lane, rails and bubble rows are paid for. */
     fun shaftBudgetFor(footerH: Float, railLift: Float): Float =

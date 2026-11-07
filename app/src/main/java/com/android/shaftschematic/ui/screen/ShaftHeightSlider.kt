@@ -602,7 +602,8 @@ internal fun SheetTextSizeChips(
         )
         Text(
             "Footer: the job and spec block at the foot of the sheet. Dimension: lengths on " +
-                "the rails and Ø values. Schematic, consolidated and Final sheets.",
+                "the rails and Ø values. Schematic, consolidated and Final sheets. A sheet " +
+                "without room prints its footer at the largest size that fits.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

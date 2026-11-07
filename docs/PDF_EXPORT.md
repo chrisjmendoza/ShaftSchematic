@@ -679,7 +679,7 @@ hand-drafting convention `|←—— 237 1/2" ——→|` — instead of floatin
   strip rails keep their own fixed 4 pt head. A smaller head also widens inline eligibility
   slightly, since the stub requirement is `arrowSize`.
 - **Value size.** `PdfPrefs.dimTextScale` ("Dimension text size", **100% (default) / 125% /
-  150%**, Settings → Drawing and the schematic / consolidated PDF options; on-device request:
+  150% / 175%**, Settings → Drawing and the schematic / consolidated PDF options; on-device request:
   readers with poor eyesight) multiplies the rail values' starting size AND the lane pitch with
   them (schematic `startRailGap` / `railMinGap` and the band layout's pitches, consolidated
   `RUNOUT_RAIL_GAP_PT`), so a larger value seated in its line keeps the same air to the next
