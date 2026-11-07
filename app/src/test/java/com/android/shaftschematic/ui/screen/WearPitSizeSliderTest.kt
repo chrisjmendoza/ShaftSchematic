@@ -11,6 +11,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.click
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.performSemanticsAction
@@ -28,7 +30,9 @@ import org.robolectric.annotation.Config
 
 /**
  * The wear inspection page's X-size slider (on-device request: pick the size, then place; each X
- * keeps its size until it is removed): the slider and its preview show while adding, a tap places
+ * keeps its size until it is removed): the slider and its preview are live while adding and greyed
+ * out in place under any other tool (on-device report: appearing and disappearing made the page
+ * jump), a tap places
  * the pit at the slider's size, and a slider move reports the snapped value.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -100,10 +104,28 @@ class WearPitSizeSliderTest {
     }
 
     @Test
-    fun `the slider shows only while adding`() {
+    fun `the slider stays in place but disabled while not adding`() {
         show(WearRecord())
+        rule.onNodeWithTag("wear_pit_size_slider").assertIsEnabled()
+        val topWhileAdding = rule.onNodeWithTag("wear_pit_size_slider").fetchSemanticsNode().boundsInRoot.top
+        val helperTopWhileAdding = rule.onNodeWithText("Add mode — tap the segment to place an X.")
+            .fetchSemanticsNode().boundsInRoot.top
+
         rule.onNodeWithText("Remove X").performScrollTo().performClick()
         rule.waitForIdle()
-        rule.onNodeWithTag("wear_pit_size_slider").assertDoesNotExist()
+        rule.onNodeWithTag("wear_pit_size_slider").assertExists().assertIsNotEnabled()
+        rule.onNodeWithTag("wear_pit_size_preview").assertExists()
+        assertEquals(topWhileAdding, rule.onNodeWithTag("wear_pit_size_slider").fetchSemanticsNode().boundsInRoot.top, 0.5f)
+        assertEquals(
+            helperTopWhileAdding,
+            rule.onNodeWithText("Remove mode — tap an X to delete it.").fetchSemanticsNode().boundsInRoot.top,
+            0.5f,
+        )
+
+        // A disabled slider keeps the chosen size for when Add X comes back.
+        rule.onNodeWithText("Add X").performScrollTo().performClick()
+        rule.waitForIdle()
+        rule.onNodeWithTag("wear_pit_size_slider").assertIsEnabled()
+        rule.onNodeWithText("1×").assertExists()
     }
 }

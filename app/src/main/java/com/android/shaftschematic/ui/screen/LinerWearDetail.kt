@@ -63,6 +63,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
@@ -836,10 +837,12 @@ fun ComponentWearDetailOverlay(
                 }
 
                 // Size — the X the NEXT tap places (on-device request: pick the size, then place;
-                // a placed X keeps its own size until it is removed), so shown while adding. The
+                // a placed X keeps its own size until it is removed), so live only while adding.
+                // It stays laid out under every tool, greyed out when not adding: showing it only
+                // in Add X made the page jump each time the tool changed (on-device report). The
                 // preview draws that X on a slice of this component at this canvas's own scale —
                 // the size it will land at, before the canvas is pinch-zoomed.
-                if (tool == WearCanvasTool.ADD_PIT) {
+                run {
                     val density = LocalDensity.current
                     val previewRadiusPx = if (canvasWidthPx <= 0) null else with(density) {
                         val lay = computeSegDetailLayout(
@@ -855,6 +858,7 @@ fun ComponentWearDetailOverlay(
                     PitSizeSlider(
                         factor = pitSizeFactor,
                         onChange = onPitSizeFactorChange,
+                        enabled = tool == WearCanvasTool.ADD_PIT,
                         surfaceRadiusPx = previewRadiusPx,
                         fillColor = fillColor,
                         outlineColor = outlineColor,
@@ -862,11 +866,12 @@ fun ComponentWearDetailOverlay(
                     )
                 }
 
+                // One line under every tool, for the same reason the slider stays laid out.
                 when (tool) {
                     WearCanvasTool.ADD_PIT -> "Add mode — tap the segment to place an X."
                     WearCanvasTool.REMOVE_PIT -> "Remove mode — tap an X to delete it."
-                    else -> null
-                }?.let { helper ->
+                    else -> "Pick Add X to place pits at the size above."
+                }.let { helper ->
                     Text(
                         text = helper,
                         style = MaterialTheme.typography.bodySmall,
@@ -1462,26 +1467,30 @@ private fun dimLabel(mm: Float, unit: UnitSystem): String = formatLenDim(mm.toDo
  * with a live preview beside it: the X drawn through [drawPitX] — the canvas's own construction —
  * over a slice of the component at the canvas's drawn radius [surfaceRadiusPx], with the canvas's
  * own Small-arm rule ([pitSmallHalfOnSegment]), so the preview shows the size the next tap places.
- * A null radius (canvas not laid out yet) previews on a nominal band.
+ * A null radius (canvas not laid out yet) previews on a nominal band. When not [enabled] (a tool
+ * other than Add X) the whole row greys out but keeps its place and its value.
  */
 @Composable
 private fun PitSizeSlider(
     factor: Float,
     onChange: (Float) -> Unit,
+    enabled: Boolean,
     surfaceRadiusPx: Float?,
     fillColor: Color,
     outlineColor: Color,
     pitColor: Color,
 ) {
+    val dim = if (enabled) 1f else DISABLED_CONTENT_ALPHA
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 "Size:", style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = dim),
             )
             Slider(
                 value = factor,
                 onValueChange = { onChange(snappedPitSizeFactor(it)) },
+                enabled = enabled,
                 valueRange = PIT_SIZE_FACTOR_MIN..PIT_SIZE_FACTOR_MAX,
                 steps = ((PIT_SIZE_FACTOR_MAX - PIT_SIZE_FACTOR_MIN) / PIT_SIZE_FACTOR_STEP).roundToInt() - 1,
                 modifier = Modifier
@@ -1492,6 +1501,7 @@ private fun PitSizeSlider(
             Text(
                 pitSizeFactorLabel(factor),
                 style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = dim),
                 modifier = Modifier.width(44.dp),
             )
             val maxSmallHalf = with(LocalDensity.current) { PIT_SMALL_HALF_DP.dp.toPx() }
@@ -1499,6 +1509,7 @@ private fun PitSizeSlider(
             Canvas(
                 modifier = Modifier
                     .size(width = 72.dp, height = 48.dp)
+                    .alpha(dim)
                     .clip(MaterialTheme.shapes.small)
                     .background(Color.White)
                     .border(1.dp, outlineColor.copy(alpha = 0.3f), MaterialTheme.shapes.small)
@@ -1516,10 +1527,13 @@ private fun PitSizeSlider(
         Text(
             "1× is the original Small X, 2× the Large. Each X keeps the size it was placed at.",
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = dim),
         )
     }
 }
+
+/** Material's disabled-content alpha, for the greyed-out size row. */
+private const val DISABLED_CONTENT_ALPHA = 0.38f
 
 private fun DrawScope.drawPitX(cx: Float, cy: Float, halfArm: Float, color: Color) {
     val w = (halfArm * 0.30f).coerceAtLeast(2f)

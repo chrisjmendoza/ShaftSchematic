@@ -8,6 +8,13 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-06
 
+### fix(ui): the pit X size slider greys out instead of disappearing
+
+On the wear inspection page the X Size slider showed only while Add X was selected, so the page
+jumped every time a tool changed (on-device report). It now stays where it is under every tool,
+greyed out and keeping its value unless Add X is selected. The hint line under it always holds one
+line too ("Pick Add X to place pits at the size above." when no pit tool is chosen).
+
 ### feat(pdf): two easy-to-read output fonts, Medium and Hyperlegible
 
 - Settings → Drawing → **Output font** gains **Medium** (the standard face with heavier strokes)
