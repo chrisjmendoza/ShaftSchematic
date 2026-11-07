@@ -593,8 +593,11 @@ reference (AFT drawn left, FWD right — the schematic/PDF convention). **Liners
 wear-band editor (`WearSpotCard`s, dimension rail); **bodies/tapers** get pits only. Pit interaction
 uses **explicit tool chips** so a stray tap can't edit by accident: **Add X** (tap places at the
 size slider's value), **Remove X** (tap deletes the X hit; a miss is a no-op), and a **Clear
-all pits** button. While Add X is selected a **Size** slider (`PitSizeSlider`, tag
-`wear_pit_size_slider`) replaces the old Small / Large chips, with a preview box beside it
+all pits** button. A **Size** slider (`PitSizeSlider`, tag `wear_pit_size_slider`) replaces the
+old Small / Large chips; it is live while Add X is selected and greyed out IN PLACE under every
+other tool, keeping its value — never removed from the layout, since appearing and disappearing
+made the page jump on each tool change (on-device report; the pit hint line under it likewise
+always holds one line). A preview box sits beside it
 (`wear_pit_size_preview`) that draws the X through `drawPitX` over a slice of this component at
 the canvas's own drawn radius and Small-arm rule — the size the next tap places, before pinch-zoom. The tap handler and the Canvas renderer share one layout
 (`computeSegDetailLayout`) so a tapped X removes exactly the X that was drawn (`pickPitAt` from
