@@ -121,6 +121,12 @@ enum class DyePenResult { PASS, FAIL }
  * @property axialMm Offset from the component's AFT edge, component-local (not shaft space).
  * @property acrossFrac Vertical position across the drawn segment, `0` (top) .. `1` (bottom).
  * @property size Drawn X size — [PitSize.SMALL] (little hole) or [PitSize.LARGE] (bigger cavity).
+ *   A pit placed with the size slider also records the nearer of the two, so a build from before
+ *   the slider still draws it sensibly; [sizeFactor] decides when present.
+ * @property sizeFactor The X's size as a multiple of the Small X, chosen on the wear inspection
+ *   page's size slider when the pit was placed and kept until the pit is removed (on-device
+ *   request: pick the size, then place). `null` for a pit placed before the slider, which draws
+ *   from [size]. Additive and optional — stored verbatim, read through `pitSizeFactor`.
  */
 @Serializable
 data class WearPit(
@@ -129,6 +135,7 @@ data class WearPit(
     val axialMm: Float = 0f,
     val acrossFrac: Float = 0.5f,
     val size: PitSize = PitSize.SMALL,
+    val sizeFactor: Float? = null,
 )
 
 /**

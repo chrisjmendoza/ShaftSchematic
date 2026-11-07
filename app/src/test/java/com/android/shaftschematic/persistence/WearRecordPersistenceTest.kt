@@ -222,6 +222,19 @@ class WearRecordPersistenceTest {
         assertEquals(30f, decodedPit.axialMm, 0.001f)
         assertEquals(0.25f, decodedPit.acrossFrac, 0.001f)
         assertEquals(PitSize.LARGE, decodedPit.size)
+        // Placed before the slider: no size of its own.
+        assertNull(decodedPit.sizeFactor)
+    }
+
+    @Test
+    fun `envelope round trip keeps a pit's slider size verbatim`() {
+        val pit = WearPit(id = "pit-2", componentId = "ln1", axialMm = 12f, size = PitSize.SMALL, sizeFactor = 1.25f)
+        val doc = ShaftDocCodec.ShaftDocV1(spec = linerSpec("ln1"), wearRecord = WearRecord(pits = listOf(pit)))
+
+        val decoded = ShaftDocCodec.decode(ShaftDocCodec.encodeV1(doc)).wearRecord.pits.single()
+
+        assertEquals(1.25f, decoded.sizeFactor!!, 0f)
+        assertEquals(PitSize.SMALL, decoded.size)
     }
 
     @Test

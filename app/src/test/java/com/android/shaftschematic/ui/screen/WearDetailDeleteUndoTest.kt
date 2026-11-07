@@ -13,7 +13,6 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ApplicationProvider
 import com.android.shaftschematic.model.Liner
-import com.android.shaftschematic.model.PitSize
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.ui.resolved.resolveComponents
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
@@ -55,9 +54,9 @@ class WearDetailDeleteUndoTest {
     private fun vmWithWear(): ShaftViewModel {
         val vm = ShaftViewModel(ApplicationProvider.getApplicationContext<Application>())
         vm.addWearSpot("L1")
-        vm.addWearPit("L1", 100f, 0.5f, PitSize.SMALL)
-        vm.addWearPit("other", 50f, 0.5f, PitSize.LARGE) // another component's pit sits between
-        vm.addWearPit("L1", 300f, 0.4f, PitSize.LARGE)
+        vm.addWearPit("L1", 100f, 0.5f, sizeFactor = 1f)
+        vm.addWearPit("other", 50f, 0.5f, sizeFactor = 2f) // another component's pit sits between
+        vm.addWearPit("L1", 300f, 0.4f, sizeFactor = 2f)
         idle()
         return vm
     }

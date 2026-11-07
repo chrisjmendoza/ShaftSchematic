@@ -93,6 +93,7 @@ import com.android.shaftschematic.ui.util.exportPdfGate
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.addWearDiaReading
 import com.android.shaftschematic.ui.viewmodel.addWearPit
+import com.android.shaftschematic.ui.viewmodel.setWearPitBrushSizeFactor
 import com.android.shaftschematic.ui.viewmodel.removeWearPits
 import com.android.shaftschematic.ui.viewmodel.restoreWearPits
 import com.android.shaftschematic.ui.viewmodel.restoreWearSpot
@@ -756,6 +757,7 @@ fun WearRoute(
     // ComponentWearDetailOverlay hosts its own BackHandler; only compose it while selected.
     val canUndo by vm.canUndo.collectAsState()
     val canRedo by vm.canRedo.collectAsState()
+    val pitBrushSizeFactor by vm.wearPitBrushSizeFactor.collectAsState()
     selectedComponentId?.let { componentId ->
         ComponentWearDetailOverlay(
             componentId = componentId,
@@ -787,6 +789,8 @@ fun WearRoute(
             onRemovePits = vm::removeWearPits,
             onRestoreSpot = vm::restoreWearSpot,
             onRestorePits = vm::restoreWearPits,
+            pitSizeFactor = pitBrushSizeFactor,
+            onPitSizeFactorChange = vm::setWearPitBrushSizeFactor,
         )
     }
 }

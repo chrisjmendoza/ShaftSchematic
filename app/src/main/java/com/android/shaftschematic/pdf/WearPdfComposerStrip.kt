@@ -469,7 +469,7 @@ internal fun drawWearStripWindow(
             val r = rOf(comp.diaAtLocalMm(local))
             val cxp = xAtStrip(comp.startMm + local)
             val pyp = pitCenterY(cy - r, cy + r, pit.acrossFrac)
-            drawWearPitX(c, cxp, pyp, pitHalfArm(pit.size, WEAR_PIT_SMALL_HALF_STRIP_PT), pitPaintStrip)
+            drawWearPitX(c, cxp, pyp, pitHalfArm(pit, WEAR_PIT_SMALL_HALF_STRIP_PT), pitPaintStrip)
         }
     }
 

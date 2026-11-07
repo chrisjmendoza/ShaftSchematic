@@ -23,6 +23,7 @@ import com.android.shaftschematic.ui.input.TaperSide
 import com.android.shaftschematic.ui.input.classifyTaperSideByMidpoint
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.geom.AutoKeyedData
+import com.android.shaftschematic.geom.PIT_SIZE_FACTOR_DEFAULT
 import com.android.shaftschematic.geom.bodyKeySuccessors
 import com.android.shaftschematic.geom.storedBodyRuns
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
@@ -456,6 +457,11 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     // rasterizes with the current PdfPrefs.
     internal val _pdfArrowSizePt = MutableStateFlow(PdfPrefs().arrowSizePt)
     val pdfArrowSizePt: StateFlow<Float> = _pdfArrowSizePt.asStateFlow()
+
+    // The wear inspection page's X-size slider: the size the next placed pit takes, as a multiple
+    // of the Small X. Session state only — no document, no history, no persistence.
+    internal val _wearPitBrushSizeFactor = MutableStateFlow(PIT_SIZE_FACTOR_DEFAULT)
+    val wearPitBrushSizeFactor: StateFlow<Float> = _wearPitBrushSizeFactor.asStateFlow()
 
     // Sheet text sizes — multipliers on the footer block's text and on the dimension values.
     // Also preview re-render keys: the composers read them through the PdfPrefs snapshot, which

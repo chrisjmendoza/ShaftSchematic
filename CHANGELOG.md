@@ -8,6 +8,17 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-06
 
+### feat(ui): pick a pit X's size on a slider before placing it
+
+- On the wear inspection page the **Size** Small / Large chips become a slider, **0.5× to 3×** the
+  original small X in quarter steps (1× = Small, 2× = Large), with a preview box beside it that
+  draws the X on a slice of the component at the size the next tap will place (on-device request:
+  pick the size, then add it at that size).
+- Each X keeps the size it was placed at until it is removed; moving the slider later changes no
+  placed X. The inspection page and the printed wear and consolidated sheets draw every X at its
+  own size. Pits placed before this keep their Small / Large size, and a file saved with sized X's
+  still opens in an older build at the nearer of Small / Large.
+
 ### feat(pdf): text sizes up to 175%, and a sheet without room prints the largest size that fits
 
 - Footer and Dimension text size gain a **175%** step (on-device request: try 200%, fall back to

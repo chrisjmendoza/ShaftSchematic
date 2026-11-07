@@ -3,7 +3,6 @@ package com.android.shaftschematic.ui.viewmodel
 import android.app.Application
 import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
-import com.android.shaftschematic.model.PitSize
 import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.autoBodyRuns
 import com.android.shaftschematic.ui.resolved.resolveComponents
@@ -137,7 +136,7 @@ class ShaftViewModelAutoBodyKeysTest {
     fun `a drag pin and a pit on the auto body keep their shaft position`() {
         val vm = openJob()
         vm.setRunoutStationPosition(oldId, 0, 500f)
-        vm.addWearPit(oldId, axialMm = 800f, acrossFrac = 0.5f, size = PitSize.SMALL)
+        vm.addWearPit(oldId, axialMm = 800f, acrossFrac = 0.5f, sizeFactor = 1f)
         idle()
         vm.reseedEditHistory()
 

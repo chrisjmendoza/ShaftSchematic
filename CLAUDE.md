@@ -196,7 +196,10 @@ keyed by `linerId`), a pit sits on **any** pit-eligible component — a liner, t
 `axialMm` from the AFT edge + a visual `acrossFrac`. Orphan pits (component no longer resolves) are
 skipped at the **render layer**, not pruned at decode (auto-body/taper ids aren't known to the
 codec) — same rule as runout readings; wear spots, by contrast, ARE pruned at decode. The "X" must
-be drawn **identically** (same crossed-line construction, same small:large ratio) in all draw sites:
+be drawn **identically** (same crossed-line construction, same per-pit size — `WearPit.sizeFactor`,
+chosen on the inspection page's size slider when the pit is placed and never changed after, `null`
+on older pits which draw from Small 1× / Large 2×, resolved by the ONE `pitSizeFactor` /
+`pitHalfArm(pit, smallHalf)`) in all draw sites:
 `ComponentWearDetailOverlay`'s `drawPitX` (canvas), `WearPdfComposer`'s `drawWearPitsOnProfile` +
 strip pits (PDF), and the consolidated runout sheet (canvas + PDF), which reuses
 `drawWearPitsOnProfile` itself (per-surface `smallHalf`). Pure sizing/hit-test/clamp math lives in `geom/WearPitMath.kt` (shared, no
