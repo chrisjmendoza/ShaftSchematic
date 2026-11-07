@@ -1009,9 +1009,9 @@ internal val helpSections: List<HelpSection> = listOf(
                     "value a warning appears and drawings simply flatten at the 4 in height — " +
                     "a larger shaft never draws smaller than a smaller one.\n\n" +
                     "The per-job " +
-                    "\"Shaft height\" slider works on top of this default. The same two sliders " +
-                    "sit in the \"Default drawing size\" section of the schematic, runout and " +
-                    "consolidated PDF Options sheets.",
+                    "\"Shaft height\" slider works on top of this default. Settings only: this " +
+                    "is the starting point for every shaft, and each sheet's Shaft height " +
+                    "adjusts that job from it.",
                 manualAnchor = "settings-drawing-size",
             ),
             HelpTopic(
@@ -1262,8 +1262,8 @@ internal val helpSections: List<HelpSection> = listOf(
                     "order on every sheet: \"Shaft\" (open), \"Wear\" (open, wear sheet " +
                     "only), \"Runout bubbles\", \"Thread\" (only when the shaft has a thread), " +
                     "\"Lines & text\", \"Footer lines\", \"Shade in Components\", \"Measurement " +
-                    "reference\", \"Default drawing size\", and \"Units\" last. A sheet leaves out " +
-                    "any section it has nothing for.\n\n" +
+                    "reference\", and \"Units\" last. A sheet leaves out any section it has " +
+                    "nothing for.\n\n" +
                     "Saved with this job — a reopened document prints exactly as it did:\n" +
                     "• \"Shaft height\" — on the Consolidated Output tab and in the schematic, " +
                     "runout, and wear PDF Options sheets. Sets the drawn shaft height on paper " +
@@ -1314,9 +1314,9 @@ internal val helpSections: List<HelpSection> = listOf(
                     "reachable without leaving the drawing.\n" +
                     "• Every sheet's \"Lines & text\" carries the Output font and its \"Units\" " +
                     "the Units note; the schematic and consolidated sheets add \"Footer lines\" " +
-                    "(captured keyway inset, bolt hole Ø); the schematic, runout and " +
-                    "consolidated sheets add \"Default drawing size\"; and the schematic's " +
-                    "Content chips include \"Template\" (shaft only).\n" +
+                    "(captured keyway inset, bolt hole Ø); and the schematic's Content chips " +
+                    "include \"Template\" (shaft only). Default drawing size stays in Settings: " +
+                    "each sheet's Shaft height adjusts from it.\n" +
                     "• \"Bubble size\" and \"Bubble height\" — on the runout and consolidated " +
                     "sheets. How large the runout bubbles draw and how far they hang below the " +
                     "shaft; both move the canvas markers and the printed sheet together. " +

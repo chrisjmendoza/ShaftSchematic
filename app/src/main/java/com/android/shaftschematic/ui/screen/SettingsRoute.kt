@@ -1099,14 +1099,17 @@ fun SettingsRoute(
 private enum class SettingsPage { MAIN, PREVIEW_COLORS, PDF_EXPORT }
 
 /**
- * The sizing-curve controls under "Default drawing size" (`PdfPrefs.curveLoHeightIn` /
- * `curveHiHeightIn`): the caption, the 4″ and 8″ anchors, the inverted-pair warning, and the
- * 6″ example with its Standard reset. ONE construction behind Settings → Drawing and the
- * "Default drawing size" section of the PDF options sheets that size the shaft off the curve
- * (schematic, runout, consolidated). The caller supplies the heading.
+ * The sizing-curve controls under Settings → Drawing → "Default drawing size"
+ * (`PdfPrefs.curveLoHeightIn` / `curveHiHeightIn`): the caption, the 4″ and 8″ anchors, the
+ * inverted-pair warning, and the 6″ example with its Standard reset.
+ *
+ * Settings ONLY, never on a PDF options sheet (on-device ruling): this is the app-wide baseline
+ * every shaft starts from, and each sheet already adjusts its own shaft against it with the
+ * per-job "Shaft height" slider. A second copy of the baseline beside that slider would make the
+ * default look like a per-sheet choice.
  */
 @Composable
-internal fun DefaultDrawingSizeControls(
+private fun DefaultDrawingSizeControls(
     loHeightIn: Float,
     hiHeightIn: Float,
     onCommitLo: (Float) -> Unit,
@@ -1155,10 +1158,6 @@ internal fun DefaultDrawingSizeControls(
         }
     }
 }
-
-/** The Default drawing size section's header summary: the 4″ and 8″ anchors. */
-internal fun drawingSizeSectionSummary(loHeightIn: Float, hiHeightIn: Float): String =
-    "${fmtCurveInches(loHeightIn)} / ${fmtCurveInches(hiHeightIn)}"
 
 /**
  * One sizing-curve anchor: label + value readout and a slider over the settable range,

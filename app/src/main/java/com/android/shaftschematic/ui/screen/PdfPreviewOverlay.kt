@@ -96,8 +96,6 @@ import com.android.shaftschematic.ui.viewmodel.setLinersProportional
 import com.android.shaftschematic.ui.viewmodel.setPdfArrowSizePt
 import com.android.shaftschematic.ui.viewmodel.setPdfDimTextScale
 import com.android.shaftschematic.ui.viewmodel.setPdfFooterTextScale
-import com.android.shaftschematic.ui.viewmodel.setPdfCurveHiHeightIn
-import com.android.shaftschematic.ui.viewmodel.setPdfCurveLoHeightIn
 import com.android.shaftschematic.ui.viewmodel.setPdfFooterBoltHoleDia
 import com.android.shaftschematic.ui.viewmodel.setPdfFooterCapturedKwInset
 import com.android.shaftschematic.ui.viewmodel.setPdfOutputFont
@@ -645,13 +643,6 @@ internal fun RunoutWearOptionsSheet(
     /** The tallest this document draws the shaft (`runoutSheetMaxShaftHeightPt`); no cap by default. */
     heightSliderMaxDrawnPt: Float = Float.MAX_VALUE,
     /**
-     * Shows the "Default drawing size" section — the app-wide sizing curve
-     * (`PdfPrefs.curveLoHeightIn` / `curveHiHeightIn`) the Shaft height slider multiplies. On for
-     * the classic runout and consolidated sheets, whose composers size the shaft off that curve;
-     * the wear document sizes its profile band its own way, so the anchors would be inert there.
-     */
-    showDrawingSize: Boolean = false,
-    /**
      * Shows the per-job "Liner compression" pair (`RunoutConfig.linersProportional` +
      * `linerCompression`). On for the two documents `composeRunoutPdf` produces — one
      * composer, one liner floor — and off everywhere else, whose composers take neither.
@@ -700,8 +691,6 @@ internal fun RunoutWearOptionsSheet(
     val showUnitsNote by vm.pdfShowUnitsNote.collectAsState()
     val footerCapturedKwInset by vm.pdfFooterCapturedKwInset.collectAsState()
     val footerBoltHoleDia by vm.pdfFooterBoltHoleDia.collectAsState()
-    val curveLoHeightIn by vm.pdfCurveLoHeightIn.collectAsState()
-    val curveHiHeightIn by vm.pdfCurveHiHeightIn.collectAsState()
 
     // Scrollable: without its own scroll a short screen clips the bottom rows mid-checkbox
     // (same posture as PdfOptionsSheet). The title and the height cap belong to the hosting
@@ -948,20 +937,6 @@ internal fun RunoutWearOptionsSheet(
                     boltHoleDia = footerBoltHoleDia,
                     onSetCapturedKwInset = { vm.setPdfFooterCapturedKwInset(it) },
                     onSetBoltHoleDia = { vm.setPdfFooterBoltHoleDia(it) },
-                )
-            }
-        }
-
-        // ── Default drawing size ─────────────────────────────────────────────
-        if (showDrawingSize) {
-            sections[OptionsSection.DRAWING_SIZE] = OptionsSectionBody(
-                summary = drawingSizeSectionSummary(curveLoHeightIn, curveHiHeightIn),
-            ) {
-                DefaultDrawingSizeControls(
-                    loHeightIn = curveLoHeightIn,
-                    hiHeightIn = curveHiHeightIn,
-                    onCommitLo = { vm.setPdfCurveLoHeightIn(it) },
-                    onCommitHi = { vm.setPdfCurveHiHeightIn(it) },
                 )
             }
         }

@@ -1033,7 +1033,6 @@ internal enum class OptionsSection(
     FOOTER("Footer lines", "options_footer_expander", initiallyExpanded = false, contentSpacing = 12.dp),
     SHADING("Shade in Components", "options_shade_expander", initiallyExpanded = false, contentSpacing = 0.dp),
     MEASUREMENT("Measurement reference", "options_measure_ref_expander", initiallyExpanded = false, contentSpacing = 0.dp),
-    DRAWING_SIZE("Default drawing size", "options_drawing_size_expander", initiallyExpanded = false, contentSpacing = 12.dp),
     UNITS("Units", "options_units_expander", initiallyExpanded = false, contentSpacing = 12.dp),
 }
 

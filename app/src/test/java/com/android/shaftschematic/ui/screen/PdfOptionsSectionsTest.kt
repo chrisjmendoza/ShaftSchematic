@@ -315,7 +315,6 @@ class PdfOptionsSectionsTest {
                     onDualUnitsChange = {},
                     onSetBlankDraft = {},
                     showHeightSlider = true,
-                    showDrawingSize = true,
                     showLinerCompression = true,
                     showBubbleControls = true,
                     showMeasurementReference = true,
@@ -419,7 +418,6 @@ class PdfOptionsSectionsTest {
             "options_footer_expander",
             "options_shade_expander",
             "options_measure_ref_expander",
-            "options_drawing_size_expander",
             "options_units_expander",
         )
     }
@@ -436,15 +434,14 @@ class PdfOptionsSectionsTest {
             "options_footer_expander",
             "options_shade_expander",
             "options_measure_ref_expander",
-            "options_drawing_size_expander",
             "options_units_expander",
         )
     }
 
     // ── Every choice that changes the printed sheet, in the menu ────────────────
-    // On-device request: the output font, the units note, the optional footer lines, Template
-    // mode and the default drawing size live on the preview's options panel as well as in
-    // Settings, each on the sheets it changes.
+    // On-device request: the output font, the units note, the optional footer lines and Template
+    // mode live on the preview's options panel as well as in Settings, each on the sheets it
+    // changes. The default drawing size is the exception — Settings only (on-device ruling).
 
     @Test
     fun `the output font picker sits in Lines and text on both sheets`() {
@@ -526,17 +523,17 @@ class PdfOptionsSectionsTest {
     }
 
     @Test
-    fun `the default drawing size section carries both anchors`() {
+    fun `the default drawing size stays in Settings, off every sheet`() {
+        // The per-job Shaft height slider adjusts each sheet against the app-wide baseline; the
+        // baseline itself is set once, in Settings → Drawing (on-device ruling).
         hostConsolidatedSheet(hasThreads = false)
         rule.onNodeWithText("4″ shaft draws", substring = true).assertDoesNotExist()
-        rule.onNodeWithTag("options_drawing_size_expander").performScrollTo().performClick()
-        rule.onNodeWithText("4″ shaft draws", substring = true).assertExists()
-        rule.onNodeWithText("8″ shaft draws", substring = true).assertExists()
-        rule.onNodeWithTag("drawing_size_standard").assertExists()
+        rule.onNodeWithTag("drawing_size_standard").assertDoesNotExist()
+        rule.onNodeWithText("Default drawing size").assertDoesNotExist()
     }
 
     @Test
-    fun `the wear sheet carries the units note but no footer lines or drawing size`() {
+    fun `the wear sheet carries the units note but no footer lines`() {
         val vm = vm()
         rule.setContent {
             MaterialTheme {
@@ -555,7 +552,6 @@ class PdfOptionsSectionsTest {
             }
         }
         rule.onNodeWithTag("options_footer_expander").assertDoesNotExist()
-        rule.onNodeWithTag("options_drawing_size_expander").assertDoesNotExist()
         rule.onNodeWithTag("options_units_expander").performScrollTo().performClick()
         rule.onNodeWithTag("options_units_note").assertExists()
     }

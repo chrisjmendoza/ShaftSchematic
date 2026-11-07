@@ -78,7 +78,7 @@
   <p>The scope note reads: <span class="ui">Drawing settings here are app-wide — the same ones as Settings → Drawing — so every document follows them. Controls saved with this job say so.</span> The panel holds two kinds of control:</p>
   <dl class="terms">
     <dt>App-wide (a look setting)</dt>
-    <dd>A shortcut to the same setting found in Settings. Changing it changes every document, on every job, from now on. Line thickness, the output font, fractions, shading, arrowheads, thread hatch, footer lines, the default drawing size and bubble size are all app-wide. The Settings choices that change a printed sheet are on the panel of the sheets they change. There is no per-document copy of a look setting.</dd>
+    <dd>A shortcut to the same setting found in Settings. Changing it changes every document, on every job, from now on. Line thickness, the output font, fractions, shading, arrowheads, thread hatch, footer lines and bubble size are all app-wide. The Settings choices that change a printed sheet are on the panel of the sheets they change, except <span class="ui">Default drawing size</span>: that is the starting point every shaft is drawn from, set once in Settings, and the panel's <span class="ui">Shaft height</span> adjusts each job from it. There is no per-document copy of a look setting.</dd>
     <dt>Saved with this job</dt>
     <dd>Stored in the job file. It changes only this job, and a reopened job prints exactly as it did. These controls end their caption with <span class="ui">Saved with this job</span>: <span class="ui">Shaft height</span>, the liner and taper compression pair, <span class="ui">Coupling face</span>, and the wear sheet's strip and trace controls. <span class="ui">Dual units</span> is stored with the document too (its caption reads <span class="ui">Saved with the document</span>).</dd>
   </dl>
@@ -115,7 +115,6 @@
     <li><span class="ui">Footer lines</span> (schematic and consolidated sheets): <span class="ui">Captured keyway inset on footer</span>, <span class="ui">Bolt hole Ø on footer</span>.</li>
     <li><span class="ui">Shade in Components</span>: <span class="ui">Bodies</span> (with <span class="ui">Explicit bodies only</span>), <span class="ui">Tapers</span>, <span class="ui">Liners</span>, on the undercut sheet <span class="ui">Undercut drawing: line art (no shading)</span>, and on the consolidated sheet <span class="ui">Wear areas on the shaft drawing</span>.</li>
     <li><span class="ui">Measurement reference</span>: <span class="ui">Auto (closest end)</span>, <span class="ui">AFT</span>, <span class="ui">FWD</span>.</li>
-    <li><span class="ui">Default drawing size</span> (schematic, runout and consolidated sheets): <span class="ui">4″ shaft draws</span>, <span class="ui">8″ shaft draws</span>.</li>
     <li><span class="ui">Units</span>: the <span class="ui">Dual units</span> switch, <span class="ui">Dual-unit layout</span> and <span class="ui">Units note on sheets</span>.</li>
   </ol>
 
@@ -124,8 +123,8 @@
   <table class="ref">
     <thead><tr><th>Sheet</th><th>Content chips</th><th>Sections and controls</th></tr></thead>
     <tbody>
-      <tr><td>Schematic / Final</td><td>Blank draft, Ø callouts, Template, Component names (+ Original + Final and Runout bubbles on Final)</td><td>Shaft (all four controls) · Thread · Lines &amp; text (all of it) · Footer lines · Shade in Components · Measurement reference · Default drawing size · Units</td></tr>
-      <tr><td>Runout Sheet</td><td>Blank draft, Coupling face</td><td>Shaft (all four) · Runout bubbles · Thread · Lines &amp; text (Line thickness, Output font, Fractions) · Shade in Components · Default drawing size · Units</td></tr>
+      <tr><td>Schematic / Final</td><td>Blank draft, Ø callouts, Template, Component names (+ Original + Final and Runout bubbles on Final)</td><td>Shaft (all four controls) · Thread · Lines &amp; text (all of it) · Footer lines · Shade in Components · Measurement reference · Units</td></tr>
+      <tr><td>Runout Sheet</td><td>Blank draft, Coupling face</td><td>Shaft (all four) · Runout bubbles · Thread · Lines &amp; text (Line thickness, Output font, Fractions) · Shade in Components · Units</td></tr>
       <tr><td>Consolidated Sheet</td><td>Blank draft, Coupling face</td><td>Every section except Wear. The fullest panel.</td></tr>
       <tr><td>Wear Document</td><td>Blank draft</td><td>Shaft (Shaft height only) · Wear · Thread · Lines &amp; text (Line thickness, Output font, Fractions) · Shade in Components (no Explicit bodies only) · Units</td></tr>
       <tr><td>Undercut Drawing</td><td>Blank draft, Page, Distance to S.E.T., Split cuts at liner edges, Total length of cuts, Sections to print</td><td>Thread · Lines &amp; text (Line thickness, Output font, Fractions) · Shade in Components (with the line-art row, no Explicit bodies only) · Units</td></tr>
@@ -215,12 +214,11 @@
   </table>
   <p>A card's <span class="ui">Shade on drawing</span> toggle can shade or unshade one component against these defaults (see <a href="#components-shade">Shade on drawing</a>). The liner lock above still applies over it.</p>
 
-  <h3>Measurement reference, Default drawing size and Units</h3>
+  <h3>Measurement reference and Units</h3>
   <table class="ref">
     <thead><tr><th>Control</th><th>Default</th><th>Scope</th><th>What it does</th></tr></thead>
     <tbody>
       <tr><td><span class="ui">Measurement reference</span></td><td><span class="ui">Auto (closest end)</span></td><td>App-wide</td><td>Which end the dimension rails measure from: each from its closer end, or all from <span class="ui">AFT</span> or <span class="ui">FWD</span> (see <a href="#reading-datum">Datum and length dimensions</a>). Schematic and consolidated sheets.</td></tr>
-      <tr><td><span class="ui">Default drawing size</span>: <span class="ui">4″ shaft draws</span>, <span class="ui">8″ shaft draws</span></td><td>0.5″ / 1″</td><td>App-wide</td><td>The drawn height every shaft starts from at 100% <span class="ui">Shaft height</span> — the same sliders as in Settings. <span class="ui">Standard (0.5″ / 1″)</span> restores the pair. Schematic, runout and consolidated sheets.</td></tr>
       <tr><td><span class="ui">Dual units</span></td><td>Off</td><td>This document</td><td>Prints every dimension in both inches and millimeters.</td></tr>
       <tr><td><span class="ui">Dual-unit layout</span></td><td><span class="ui">Inline</span></td><td>App-wide</td><td><span class="ui">Inline</span> (1 1/2″ [38.1 mm] on one line) or <span class="ui">Stacked</span> (the second unit under the first; see <a href="#settings-drawing-lines">Lines, threads and text</a>). Greyed out while Dual units is off.</td></tr>
       <tr><td><span class="ui">Units note on sheets</span></td><td>Off</td><td>App-wide</td><td>A small <span class="ui">Units in inches</span> or <span class="ui">Units in mm</span> in the lower-right corner. Every sheet.</td></tr>

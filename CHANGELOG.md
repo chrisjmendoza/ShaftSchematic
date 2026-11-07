@@ -8,6 +8,30 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-07
 
+### fix(pdf): a wrapped footer line keeps a number and its fraction together
+
+At 175% footer text a keyway line wrapped between the whole number and its fraction — `8` at the
+end of one row, `1/4"` under it — which reads as two values (on-device report). The wrap
+(`util/TextWrap.kt`, behind both the footer draw and its height budget) no longer breaks the space
+inside a mixed number (`8 1/4"`) or between a value and its `mm`; the value moves to the next line
+whole.
+
+### fix(ui): Default drawing size is Settings-only again
+
+The previous build put the 4″ / 8″ sizing anchors on the schematic, runout and consolidated PDF
+options panels. Reverted (on-device ruling): the default drawing size is the app-wide range every
+shaft starts from and lives in Settings → Drawing; each sheet's own "Shaft height" slider already
+adjusts the job against it. The rest of that change — output font, units note, footer lines,
+Template — stays on the panels. `DESIGN_INTENT.md` §3.3, Help and the manual updated.
+
+### test: the output fonts print as distinct faces on a device
+
+On-device report: Standard, Condensed, Serif and Monospace printed identically on a Samsung phone
+while the bundled Hyperlegible came through. On the stock Android 16 emulator every face prints
+distinctly through the real `PdfDocument` → `PdfRenderer` path, so the device substitutes its
+own font for the system families. New instrumented `OutputFontPdfProbeTest` checks it on any
+connected device.
+
 ### feat(ui): the PDF options panel carries every setting that changes the printed sheet
 
 On-device request: the choices that affect PDF output belong in the preview's options panel, where

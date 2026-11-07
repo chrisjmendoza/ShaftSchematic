@@ -1064,19 +1064,6 @@ internal fun PdfOptionsSheet(
             )
         }
 
-        // ── Default drawing size ─────────────────────────────────────────────
-        // The app-wide sizing curve the Shaft height slider multiplies — what 100% draws.
-        sections[OptionsSection.DRAWING_SIZE] = OptionsSectionBody(
-            summary = drawingSizeSectionSummary(curveLoHeightIn, curveHiHeightIn),
-        ) {
-            DefaultDrawingSizeControls(
-                loHeightIn = curveLoHeightIn,
-                hiHeightIn = curveHiHeightIn,
-                onCommitLo = { vm.setPdfCurveLoHeightIn(it) },
-                onCommitHi = { vm.setPdfCurveHiHeightIn(it) },
-            )
-        }
-
         // ── Shading ──────────────────────────────────────────────────────────
         sections[OptionsSection.SHADING] = OptionsSectionBody {
             ShadeInPdfCheckRows(

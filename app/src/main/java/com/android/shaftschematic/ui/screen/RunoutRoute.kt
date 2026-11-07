@@ -1227,7 +1227,6 @@ fun RunoutRoute(
                     heightSliderBase = heightSliderBase,
                     heightSliderMaxDrawnPt = heightCapPt,
                     heightSliderMaxDiaMm = heightSliderDiaMm,
-                    showDrawingSize = true,
                     showLinerCompression = true,
                     linersProportional = runoutConfig.linersProportional,
                     linerCompression = runoutConfig.linerCompression,
