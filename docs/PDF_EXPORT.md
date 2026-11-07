@@ -678,6 +678,14 @@ hand-drafting convention `|←—— 237 1/2" ——→|` — instead of floatin
   tab's detail canvas alike — the undercut options sheet carries the chips too); the wear
   strip rails keep their own fixed 4 pt head. A smaller head also widens inline eligibility
   slightly, since the stub requirement is `arrowSize`.
+- **Value size.** `PdfPrefs.dimTextScale` ("Dimension text size", **100% (default) / 125% /
+  150%**, Settings → Drawing and the schematic / consolidated PDF options; on-device request:
+  readers with poor eyesight) multiplies the rail values' starting size AND the lane pitch with
+  them (schematic `startRailGap` / `railMinGap` and the band layout's pitches, consolidated
+  `RUNOUT_RAIL_GAP_PT`), so a larger value seated in its line keeps the same air to the next
+  rail. Everything else follows from the paint: the planner measures every box and every lift
+  off it, so a value too wide for its break at the larger size floats like any other. Its sibling
+  `footerTextScale` sizes the footer block — see `docs/contracts/PdfExport.md`.
 - **Every value on a white box (the halo).** On-device ruling: "put a white box behind every
   rail value so a line crossing it never strikes through the numbers — I do that on my hand
   drawings and it is still clear where the line is." Every rail value — OAL included, seated in
@@ -881,7 +889,8 @@ the rows inside one). On this sheet:
    on release). Only while the drawn spec has a thread of length > 0 (`hasDrawnThreads` —
    the Final preview reads its own target spec). Header summary: `3× · 50%`.
 3. **Lines & text** (collapsed, `options_lines_expander`) — Line thickness (its live `onDrag`
-   channel unchanged), Dimension arrows, Fractions. Header summary: the line weight.
+   channel unchanged), Dimension arrows, Footer / Dimension text size, Fractions. Header
+   summary: the line weight.
 4. **"Shade in Components"** (collapsed, `options_shade_expander`; renamed from "Shade in
    PDF") — a new "Explicit bodies only" sub-checkbox sits under its Bodies row — see below.
 5. **"Measurement reference"** (collapsed, `options_measure_ref_expander`).
@@ -1056,7 +1065,8 @@ Coupling face), then **Shaft** (open: **"Shaft height"**, Body S-break, **liner
 compression** — §5.7, the same per-job `RunoutConfig` values as the tab's own controls),
 **Runout bubbles** (collapsed: the **Bubble size** / **Bubble height** sliders, see below),
 **Thread** (collapsed, only on a threaded shaft: Thread slant, Thread density), **Lines &
-text** (collapsed: Line thickness, Dimension arrows, Fractions), **Shade in Components**
+text** (collapsed: Line thickness, Dimension arrows, Footer / Dimension text size, Fractions),
+**Shade in Components**
 (collapsed, + its "Explicit bodies only" sub-checkbox), **Measurement reference**
 (collapsed) — **Units** (collapsed: Dual units + layout) LAST. This is the fullest instance
 of the shared sheet: every gated row is on. The sheet takes `hasThreads`, which the schematic,
@@ -1072,7 +1082,7 @@ gated off by what their composer actually reads (a section left with nothing is 
   tuning block (Components election, Strip size, Trace depth, Wear area shade,
   Taper–liner join — `showWearControls`), **and now "Shaft height"** (the wear composer's
   MAIN profile band takes the shared multiplier too, §5.7) plus Line thickness — off:
-  Body S-break, Liner & taper compression, Runout bubbles, Dimension arrows, and Measurement
+  Body S-break, Liner & taper compression, Runout bubbles, Dimension arrows, the text sizes, and Measurement
   reference (the wear composer takes none of them). Its sections run Shaft (open, height
   only) → Wear (open, the tuning block) → [Thread] → Lines & text → Shade → Units.
 - **Undercut** keeps only the Content chip (Blank draft) and Line thickness — its normal

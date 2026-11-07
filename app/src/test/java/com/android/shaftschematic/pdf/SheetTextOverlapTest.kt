@@ -23,6 +23,8 @@ import com.android.shaftschematic.model.WearDiaReading
 import com.android.shaftschematic.model.WearPit
 import com.android.shaftschematic.model.WearRecord
 import com.android.shaftschematic.model.WornSection
+import com.android.shaftschematic.settings.PDF_TEXT_SCALES
+import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.settings.RunoutConfig
 import com.android.shaftschematic.settings.TirDirection
 import com.android.shaftschematic.ui.resolved.resolveComponents
@@ -263,12 +265,15 @@ class SheetTextOverlapTest {
         face: Boolean,
         dual: Boolean = false,
         sheetSpec: ShaftSpec = spec,
+        prefs: PdfPrefs = PdfPrefs(),
+        dyePen: Boolean = false,
     ): RecordingCanvas {
         val c = canvas()
         composeRunoutPdfOnCanvas(
             c, pageW, pageH, sheetSpec,
-            config = RunoutConfig(tirDirection = TirDirection.AFT, showCouplingFace = face),
+            config = RunoutConfig(tirDirection = TirDirection.AFT, showCouplingFace = face, showDyePenTest = dyePen),
             project = project, unit = UnitSystem.INCHES,
+            pdfPrefs = prefs,
             displayUnits = DisplayUnits(UnitSystem.INCHES, dual = dual),
             resolvedComponents = if (sheetSpec === spec) resolved else resolveComponents(sheetSpec),
             runoutReadings = readings, wearRecord = wear,
@@ -377,5 +382,79 @@ class SheetTextOverlapTest {
             )
             assertNoOverlap("schematic blank=$blank dual=$dual", c)
         }
+    }
+
+    // ── Larger sheet text (Settings → Drawing → Footer / Dimension text size) ─────
+
+    @Test
+    fun `every text size prints with no overlapping text`() {
+        // Each step on its own and both together: the footer band, the rail lanes and the Ø
+        // callouts are each measured from the scaled paint, so none may crowd another.
+        val combos = PDF_TEXT_SCALES.flatMap { s ->
+            listOf(PdfPrefs(footerTextScale = s), PdfPrefs(dimTextScale = s), PdfPrefs(footerTextScale = s, dimTextScale = s))
+        }
+        val failures = mutableListOf<String>()
+        fun check(name: String, c: RecordingCanvas) {
+            val bad = overlaps(c.boxes)
+            if (bad.isNotEmpty()) failures += "$name: " + bad.joinToString("; ") { (a, b) -> "\"${a.text}\" × \"${b.text}\"" }
+        }
+        for (prefs in combos) {
+            val tag = "footer=${prefs.footerTextScale} dim=${prefs.dimTextScale}"
+            for (wearInfo in listOf(true, false)) for (blank in listOf(false, true)) {
+                check(
+                    "consolidated wear=$wearInfo blank=$blank $tag",
+                    consolidated(
+                        includeBubbles = true, includeWearInfo = wearInfo, blank = blank, face = true,
+                        prefs = prefs, dyePen = true,
+                    ),
+                )
+            }
+            for (blank in listOf(false, true)) {
+                val c = canvas()
+                composeShaftPdfOnCanvas(
+                    c, pageW, pageH, spec, UnitSystem.INCHES, project,
+                    appVersion = "test", filename = "935037_Titan_PORT.pdf",
+                    pdfPrefs = prefs,
+                    options = PdfExportOptions(blankValues = blank),
+                    resolvedComponents = resolved,
+                    displayUnits = DisplayUnits(UnitSystem.INCHES),
+                )
+                check("schematic blank=$blank $tag", c)
+            }
+            // The Final tab's Original + Final sheet: two drawings and one footer on one page —
+            // the tightest page a larger footer has to fit.
+            val finalSpec = spec.copy(
+                liners = spec.liners.map { if (it.id == "L2") it.copy(lengthMm = 30f * inch) else it },
+            )
+            val ba = canvas()
+            composeBeforeAfterPdfOnCanvas(
+                ba, pageW, pageH, spec, finalSpec, UnitSystem.INCHES, project,
+                appVersion = "test", filename = "935037_Titan_PORT_Final_BeforeAfter.pdf",
+                pdfPrefs = prefs,
+                originalResolved = resolved, finalResolved = resolveComponents(finalSpec),
+            )
+            check("before/after $tag", ba)
+        }
+        assertTrue("${failures.size} sheet(s) overlap:\n" + failures.joinToString("\n"), failures.isEmpty())
+    }
+
+    @Test
+    fun `a larger footer prints larger and keeps the TIR line above it`() {
+        val big = PDF_TEXT_SCALES.last()
+        val base = consolidated(includeBubbles = true, includeWearInfo = false, blank = false, face = false, dyePen = true)
+        val c = consolidated(
+            includeBubbles = true, includeWearInfo = false, blank = false, face = false,
+            prefs = PdfPrefs(footerTextScale = big), dyePen = true,
+        )
+        fun heading(r: RecordingCanvas) = r.boxes.first { it.text == FOOTER_AFT_TAPER_HEADER }.rect
+        assertTrue(
+            "footer heading should grow ~${big}x: ${heading(base).height()} → ${heading(c).height()}",
+            heading(c).height() > heading(base).height() * (big - 0.1f),
+        )
+        val tir = c.boxes.first { it.text.startsWith("TIR's taken") }
+        assertTrue(
+            "TIR line (bottom ${tir.rect.bottom}) must sit above the footer heading (top ${heading(c).top})",
+            tir.rect.bottom <= heading(c).top,
+        )
     }
 }

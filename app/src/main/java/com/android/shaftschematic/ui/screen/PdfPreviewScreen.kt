@@ -179,6 +179,9 @@ fun PdfPreviewScreen(
     // Arrowhead size: a chip tap commits straight to PdfPrefs, so the render loop needs it as
     // an input key or the page would keep the old heads.
     val pdfArrowSizePt by vm.pdfArrowSizePt.collectAsState()
+    // Text sizes: same posture as the arrowheads.
+    val pdfFooterTextScale by vm.pdfFooterTextScale.collectAsState()
+    val pdfDimTextScale by vm.pdfDimTextScale.collectAsState()
     val pdfThreadSlant by vm.pdfThreadSlant.collectAsState()
     val pdfThreadDensity by vm.pdfThreadDensity.collectAsState()
     // Fraction style: same posture — a chip tap changes the renderer's active style, which the
@@ -264,6 +267,8 @@ fun PdfPreviewScreen(
                 shadeExplicitBodiesOnly = pdfShadeExplicitBodiesOnly,
                 sBreakThresholdFrac = tuning.sBreakFrac ?: pdfSBreakThresholdFrac,
                 arrowSizePt = pdfArrowSizePt,
+                footerTextScale = pdfFooterTextScale,
+                dimTextScale = pdfDimTextScale,
                 fractionStyle = pdfFractionStyle,
                 outputFont = pdfOutputFont,
                 threadSlant = pdfThreadSlant,
@@ -665,6 +670,8 @@ fun PdfPreviewScreen(
                         lineThicknessScale = lineThicknessScale,
                         sBreakThresholdFrac = pdfSBreakThresholdFrac,
                         arrowSizePt = pdfArrowSizePt,
+                        footerTextScale = pdfFooterTextScale,
+                        dimTextScale = pdfDimTextScale,
                         threadSlant = pdfThreadSlant,
                         threadDensity = pdfThreadDensity,
                         fractionStyle = pdfFractionStyle,
@@ -721,6 +728,9 @@ private data class SchematicRenderInputs(
     val shadeExplicitBodiesOnly: Boolean,
     val sBreakThresholdFrac: Float,
     val arrowSizePt: Float,
+    /** `PdfPrefs.footerTextScale` / `dimTextScale` — keys only, inside the `PdfPrefs` snapshot. */
+    val footerTextScale: Float,
+    val dimTextScale: Float,
     val fractionStyle: FractionStyle,
     /**
      * The typeface the sheet is set in. Not a composer argument either — it reaches the ink via
@@ -798,6 +808,8 @@ internal fun PdfOptionsSheet(
     lineThicknessScale: Float,
     sBreakThresholdFrac: Float,
     arrowSizePt: Float,
+    footerTextScale: Float,
+    dimTextScale: Float,
     threadSlant: Float,
     threadDensity: Float,
     fractionStyle: FractionStyle,
@@ -985,6 +997,12 @@ internal fun PdfOptionsSheet(
             DimensionArrowSizeChips(
                 arrowSizePt = arrowSizePt,
                 onCommit = { vm.setPdfArrowSizePt(it) },
+            )
+            SheetTextSizeChips(
+                footerTextScale = footerTextScale,
+                dimTextScale = dimTextScale,
+                onCommitFooter = { vm.setPdfFooterTextScale(it) },
+                onCommitDim = { vm.setPdfDimTextScale(it) },
             )
             FractionStyleChips(
                 fractionStyle = fractionStyle,

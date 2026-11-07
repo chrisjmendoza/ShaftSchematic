@@ -457,6 +457,14 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     internal val _pdfArrowSizePt = MutableStateFlow(PdfPrefs().arrowSizePt)
     val pdfArrowSizePt: StateFlow<Float> = _pdfArrowSizePt.asStateFlow()
 
+    // Sheet text sizes — multipliers on the footer block's text and on the dimension values.
+    // Also preview re-render keys: the composers read them through the PdfPrefs snapshot, which
+    // is not snapshot state.
+    internal val _pdfFooterTextScale = MutableStateFlow(PdfPrefs().footerTextScale)
+    val pdfFooterTextScale: StateFlow<Float> = _pdfFooterTextScale.asStateFlow()
+    internal val _pdfDimTextScale = MutableStateFlow(PdfPrefs().dimTextScale)
+    val pdfDimTextScale: StateFlow<Float> = _pdfDimTextScale.asStateFlow()
+
     // Thread-hatch slant factor. The composers read it via `ThreadHatchStyle.slant` (not
     // snapshot state), so this flow keys each preview's re-render; the Compose canvases take
     // its value directly so a change recomposes them.
@@ -1198,6 +1206,18 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             SettingsStore.pdfArrowSizePtFlow(getApplication()).collectLatest { persisted ->
                 _pdfArrowSizePt.value = persisted
                 SettingsStore.updatePdfPrefs { it.copy(arrowSizePt = persisted) }
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.pdfFooterTextScaleFlow(getApplication()).collectLatest { persisted ->
+                _pdfFooterTextScale.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(footerTextScale = persisted) }
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.pdfDimTextScaleFlow(getApplication()).collectLatest { persisted ->
+                _pdfDimTextScale.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(dimTextScale = persisted) }
             }
         }
         viewModelScope.launch {

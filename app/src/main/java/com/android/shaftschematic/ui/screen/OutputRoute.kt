@@ -157,6 +157,9 @@ private data class ConsolidatedRenderInputs(
     val runoutBubbleScale: Float,
     val runoutBubbleDropScale: Float,
     val arrowSizePt: Float,
+    /** `PdfPrefs.footerTextScale` / `dimTextScale` — keys only, inside the `PdfPrefs` snapshot. */
+    val footerTextScale: Float,
+    val dimTextScale: Float,
     /** Not a composer argument — it reaches the ink via `FractionTypography.active`. Key only. */
     val fractionStyle: FractionStyle,
     /**
@@ -244,6 +247,8 @@ fun OutputRoute(
     // Dimension-rail arrowhead size: a chip tap commits straight to PdfPrefs, so the render
     // loop needs it as an input key or the sheet would keep the old heads.
     val pdfArrowSizePt     by vm.pdfArrowSizePt.collectAsState()
+    val pdfFooterTextScale by vm.pdfFooterTextScale.collectAsState()
+    val pdfDimTextScale    by vm.pdfDimTextScale.collectAsState()
     // Fraction style: same posture — it reaches the ink through the renderer's active style,
     // which the loop cannot observe, so it rides along as an input key.
     val pdfFractionStyle   by vm.pdfFractionStyle.collectAsState()
@@ -577,6 +582,8 @@ fun OutputRoute(
                 runoutBubbleScale = pdfRunoutBubbleScale,
                 runoutBubbleDropScale = pdfRunoutBubbleDropScale,
                 arrowSizePt = pdfArrowSizePt,
+                footerTextScale = pdfFooterTextScale,
+                dimTextScale = pdfDimTextScale,
                 fractionStyle = pdfFractionStyle,
                 outputFont = pdfOutputFont,
                 threadSlant = pdfThreadSlant,
@@ -1033,6 +1040,9 @@ fun OutputRoute(
                     sBreakThresholdFrac = pdfSBreakThresholdFrac,
                     showDimensionArrows = true,
                     arrowSizePt = pdfArrowSizePt,
+                    showSheetTextSizes = true,
+                    footerTextScale = pdfFooterTextScale,
+                    dimTextScale = pdfDimTextScale,
                     fractionStyle = pdfFractionStyle,
                     hasThreads = hasDrawnThreads(spec),
                     threadSlant = pdfThreadSlant,

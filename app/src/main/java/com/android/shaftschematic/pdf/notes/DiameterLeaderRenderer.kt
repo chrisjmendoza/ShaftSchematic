@@ -58,6 +58,14 @@ class DiameterLeaderRenderer(
         get() = if (dualStacked) textPaint.dualStackMetrics().height + textPaint.textSize * 0.4f
                 else textPaint.textSize * 1.4f
 
+    /**
+     * How far a BELOW label's first baseline sits under its leader's kink: [TEXT_DROP_MIN_PT], or
+     * one text size once the text is larger (`PdfPrefs.dimTextScale`), so a larger value still
+     * hangs below the dogleg rather than rising across it.
+     */
+    private val textDrop: Float
+        get() = maxOf(TEXT_DROP_MIN_PT, textPaint.textSize)
+
     fun draw(canvas: Canvas, calls: List<DiaCallout>) {
         val below = calls.filter { it.side == LeaderSide.BELOW }
         val tiers = belowTiers(below)
@@ -105,7 +113,7 @@ class DiameterLeaderRenderer(
             below.forEachIndexed { i, call ->
                 val x = pageX(call.xMm)
                 val kinkY = shaftBottomY + leaderRise + tiers[i] * tierStep
-                val textY = kinkY + 10f
+                val textY = kinkY + textDrop
                 val textLeft = textLeftFor(call, x)
                 val textRight = textLeft + labelWidth(call)
                 add(
@@ -153,7 +161,7 @@ class DiameterLeaderRenderer(
             LeaderSide.BELOW -> {
                 val s = shaftBottomY
                 val depth = leaderRise + tier * tierStep
-                Triple(s, s + depth, s + depth + 10f)
+                Triple(s, s + depth, s + depth + textDrop)
             }
         }
         val textX = if (call.side == LeaderSide.BELOW) textLeftFor(call, x) else x + leaderDogleg
@@ -177,3 +185,6 @@ class DiameterLeaderRenderer(
 
 /** Half-width reserved around a leader line, so a neighbouring label clears the stroke itself. */
 private const val LEADER_HALF_W = 1f
+
+/** The baseline drop under the kink at the shipped 10 pt callout size and below. */
+private const val TEXT_DROP_MIN_PT = 10f

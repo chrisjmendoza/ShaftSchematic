@@ -236,6 +236,8 @@ class PdfOptionsSectionsTest {
                     lineThicknessScale = 1f,
                     sBreakThresholdFrac = 0.5f,
                     arrowSizePt = 4f,
+                    footerTextScale = 1f,
+                    dimTextScale = 1f,
                     threadSlant = 3f,
                     threadDensity = 0.5f,
                     fractionStyle = FractionStyle.Default,

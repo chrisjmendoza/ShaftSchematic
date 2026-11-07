@@ -292,7 +292,7 @@ internal fun planFooter(
         leftX = leftX, midX = midX, rightX = rightX,
         leftMaxW = leftMaxW, midMaxW = midMaxW, rightMaxW = rightMaxW,
         wrappedMaxLines = wrappedMaxLines,
-        neededHeightPt = wrappedMaxLines * printedPitch + FOOTER_BAND_PAD_PT,
+        neededHeightPt = wrappedMaxLines * printedPitch + FOOTER_BAND_PAD_PT + footerFirstLineExtraDrop(text, cfg),
     )
 }
 
@@ -339,7 +339,8 @@ internal fun footerBlockMinHeightPt(
     val full = footerBlockHeightPt(rectLeft, rectRight, spec, unit, project, text, cfg, blankValues, displayUnits)
     if (!blankValues) return full
     val plan = planFooter(rectLeft, rectRight, spec, unit, project, text, cfg, blankValues, displayUnits)
-    val tight = plan.wrappedMaxLines * text.textSize * FOOTER_LINE_FACTOR_BLANK_MIN + FOOTER_BAND_PAD_PT
+    val tight = plan.wrappedMaxLines * text.textSize * FOOTER_LINE_FACTOR_BLANK_MIN + FOOTER_BAND_PAD_PT +
+        footerFirstLineExtraDrop(text, cfg)
     return min(full, max(tight, plan.neededHeightPt))
 }
 
@@ -376,13 +377,14 @@ internal fun drawFooter(
     // [footerBlockHeightPt] hands a rect the plan already fits, and no growth happens.
     val neededH = plan.neededHeightPt
     val bandH = maxOf(rect.height(), minOf(neededH, rect.height() + FOOTER_GROWTH_MAX_PT))
-    val top = rect.bottom - bandH + 6f
+    val extraDrop = footerFirstLineExtraDrop(text, cfg)
+    val top = rect.bottom - bandH + 6f + extraDrop
 
     // Blank drafts open the line pitch up for handwriting; both modes then fit-clamp to the band
     // so the fullest column tightens instead of running off the page.
     val lh = min(
         text.textSize * (if (blankValues) FOOTER_LINE_FACTOR_BLANK else FOOTER_LINE_FACTOR),
-        (bandH - FOOTER_BAND_PAD_PT) / wrappedMaxLines,
+        (bandH - FOOTER_BAND_PAD_PT - extraDrop) / wrappedMaxLines,
     ).coerceAtLeast(text.textSize * FOOTER_LINE_FACTOR_MIN)
 
     // Blank drafts: any line that ends with ":" (or a bare "Ø") is a label whose value gets
@@ -939,7 +941,25 @@ data class FooterConfig(
      * direct builders.
      */
     val boltHoleDia: Boolean = true,
+    /**
+     * `PdfPrefs.footerTextScale`: the multiplier the composer applied to the footer's text paint.
+     * The paint carries the size; this tells the layout how much of that size is the scale, so the
+     * first line drops by the extra ascent and the block never reaches higher above its band than it
+     * does at 100% ([footerFirstLineExtraDrop]).
+     */
+    val textScale: Float = 1f,
 )
+
+/**
+ * How much further the first footer baseline sits below the band top at a [FooterConfig.textScale]
+ * above 1: the ascent the scale added. The block's first line rises above the band by the same
+ * amount at every size, which is what the component-name rows above the band are planned against;
+ * the band grows by this much so the last line still fits. Zero at 100%.
+ */
+private fun footerFirstLineExtraDrop(text: Paint, cfg: FooterConfig): Float {
+    if (cfg.textScale <= 1f) return 0f
+    return -text.fontMetrics.ascent * (1f - 1f / cfg.textScale)
+}
 
 /**
  * The footer configuration both sheets print from — which end columns print. ONE builder so
@@ -962,6 +982,7 @@ internal fun sheetFooterConfig(spec: ShaftSpec, prefs: PdfPrefs = PdfPrefs()): F
         showFwdTaper = tapers.fwd != null,
         capturedKwInset = prefs.footerCapturedKwInset,
         boltHoleDia = prefs.footerBoltHoleDia,
+        textScale = prefs.footerTextScale,
     )
 }
 
