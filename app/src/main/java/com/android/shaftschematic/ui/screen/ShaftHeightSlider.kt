@@ -76,6 +76,7 @@ import com.android.shaftschematic.model.maxOuterDiaMm
 import com.android.shaftschematic.pdf.WEAR_STRIP_SIZE_FRAC_MAX
 import com.android.shaftschematic.pdf.WEAR_STRIP_SIZE_FRAC_MIN
 import com.android.shaftschematic.settings.PDF_ARROW_SIZES_PT
+import com.android.shaftschematic.settings.PDF_TEXT_SCALES
 import com.android.shaftschematic.settings.PDF_ARROW_SIZE_LARGE_PT
 import com.android.shaftschematic.settings.PDF_ARROW_SIZE_MEDIUM_PT
 import com.android.shaftschematic.settings.PDF_ARROW_SIZE_SMALL_PT
@@ -569,6 +570,70 @@ internal fun DimensionArrowSizeChips(
         )
     }
 }
+
+/**
+ * The "Footer text size" and "Dimension text size" pickers, shared by the schematic and
+ * consolidated PDF options and Settings → Drawing — ONE `PdfPrefs.footerTextScale` /
+ * `PdfPrefs.dimTextScale` behind all three (on-device request: readers with poor eyesight).
+ *
+ * Fixed steps, the [DimensionArrowSizeChips] posture: a tap IS the commit, and the preview
+ * re-renders from the stored value.
+ */
+@Composable
+internal fun SheetTextSizeChips(
+    footerTextScale: Float,
+    dimTextScale: Float,
+    onCommitFooter: (Float) -> Unit,
+    onCommitDim: (Float) -> Unit,
+) {
+    Column {
+        TextScaleChipRow(
+            title = "Footer text size",
+            value = footerTextScale,
+            tagPrefix = "footer_text_scale",
+            onCommit = onCommitFooter,
+        )
+        Spacer(Modifier.height(8.dp))
+        TextScaleChipRow(
+            title = "Dimension text size",
+            value = dimTextScale,
+            tagPrefix = "dim_text_scale",
+            onCommit = onCommitDim,
+        )
+        Text(
+            "Footer: the job and spec block at the foot of the sheet. Dimension: lengths on " +
+                "the rails and Ø values. Schematic, consolidated and Final sheets.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun TextScaleChipRow(
+    title: String,
+    value: Float,
+    tagPrefix: String,
+    onCommit: (Float) -> Unit,
+) {
+    Text(title, style = MaterialTheme.typography.titleSmall)
+    Spacer(Modifier.height(4.dp))
+    ChipFlowRow(spacing = 0.dp) {
+        PDF_TEXT_SCALES.forEach { s ->
+            FilterChip(
+                selected = abs(value - s) < 1e-3f,
+                onClick = { onCommit(s) },
+                label = { ChipLabel(textScaleLabel(s)) },
+                modifier = Modifier
+                    .padding(end = 8.dp)
+                    .testTag("${tagPrefix}_${(s * 100).roundToInt()}"),
+            )
+        }
+    }
+}
+
+/** A text-size step as its chip reads: `100%`, `125%`. */
+internal fun textScaleLabel(scale: Float): String = "${(scale * 100).roundToInt()}%"
 
 /** A thread-slant factor as the slider reads it: `3×`, `2.5×` — one decimal only when it has one. */
 internal fun fmtThreadSlant(slant: Float): String {

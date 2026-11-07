@@ -1014,34 +1014,47 @@ internal fun drawDyePenBoxes(
     y: Float,
     label: String,
     result: DyePenResult?,
+    /** Grows the boxes and gaps with a [text] the caller has scaled (`PdfPrefs.footerTextScale`). */
+    scale: Float = 1f,
 ): Float {
-    val boxSize = 10f
+    val boxSize = 10f * scale
     var x = left
 
     fun drawCheckbox(marked: Boolean) {
         c.drawRect(x, y - boxSize, x + boxSize, y, Paint(text).apply { style = Paint.Style.STROKE; strokeWidth = 1f })
         if (marked) {
             // Inset X so the strokes read inside the box rather than merging with its border.
-            val inset = 1.6f
+            val inset = 1.6f * scale
             val mark = Paint(text).apply { style = Paint.Style.STROKE; strokeWidth = 1.2f }
             c.drawLine(x + inset, y - boxSize + inset, x + boxSize - inset, y - inset, mark)
             c.drawLine(x + inset, y - inset, x + boxSize - inset, y - boxSize + inset, mark)
         }
-        x += boxSize + 4f
+        x += boxSize + 4f * scale
     }
 
     // A fixed gap after the label rather than whatever trailing spaces the caller passed: one
     // space at sheet size left the first box touching the colon (on-device report).
     val shown = label.trimEnd()
     c.drawText(shown, x, y, text)
-    x += text.measureText(shown) + DYE_PEN_LABEL_GAP_PT
+    x += text.measureText(shown) + DYE_PEN_LABEL_GAP_PT * scale
 
     drawCheckbox(marked = result == DyePenResult.PASS)
-    c.drawText("PASS", x, y, text); x += text.measureText("PASS") + 20f
+    c.drawText("PASS", x, y, text); x += text.measureText("PASS") + 20f * scale
 
     drawCheckbox(marked = result == DyePenResult.FAIL)
     c.drawText("FAIL", x, y, text); x += text.measureText("FAIL")
     return x
+}
+
+/**
+ * How wide [drawDyePenBoxes] prints for the same [text], [label] and [scale] — the advance it
+ * returns, measured without drawing, so a caller can place the row before inking it.
+ */
+internal fun dyePenRowWidth(text: Paint, label: String, scale: Float = 1f): Float {
+    val box = 10f * scale + 4f * scale
+    return text.measureText(label.trimEnd()) + DYE_PEN_LABEL_GAP_PT * scale +
+        box + text.measureText("PASS") + 20f * scale +
+        box + text.measureText("FAIL")
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

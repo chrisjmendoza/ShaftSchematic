@@ -83,6 +83,7 @@ import com.android.shaftschematic.pdf.WEAR_STRIP_SIZE_FRAC_DEFAULT
 import com.android.shaftschematic.settings.PDF_ARROW_SIZE_DEFAULT_PT
 import com.android.shaftschematic.settings.PDF_RUNOUT_BUBBLE_DROP_SCALE_DEFAULT
 import com.android.shaftschematic.settings.PDF_RUNOUT_BUBBLE_SCALE_DEFAULT
+import com.android.shaftschematic.settings.PDF_TEXT_SCALE_DEFAULT
 import com.android.shaftschematic.settings.PDF_SBREAK_THRESHOLD_DEFAULT
 import com.android.shaftschematic.settings.PDF_WEAR_BAND_SHADE_DEFAULT
 import com.android.shaftschematic.settings.PDF_WEAR_JOIN_GAP_DEFAULT_MM
@@ -92,6 +93,8 @@ import com.android.shaftschematic.ui.viewmodel.setLineThicknessScale
 import com.android.shaftschematic.ui.viewmodel.setLinerCompression
 import com.android.shaftschematic.ui.viewmodel.setLinersProportional
 import com.android.shaftschematic.ui.viewmodel.setPdfArrowSizePt
+import com.android.shaftschematic.ui.viewmodel.setPdfDimTextScale
+import com.android.shaftschematic.ui.viewmodel.setPdfFooterTextScale
 import com.android.shaftschematic.ui.viewmodel.setPdfThreadDensity
 import com.android.shaftschematic.ui.viewmodel.setPdfThreadSlant
 import com.android.shaftschematic.ui.viewmodel.setPdfDualUnitLayout
@@ -577,6 +580,16 @@ internal fun RunoutWearOptionsSheet(
     /** The app-wide `PdfPrefs.arrowSizePt`; read only when [showDimensionArrows]. */
     arrowSizePt: Float = PDF_ARROW_SIZE_DEFAULT_PT,
     /**
+     * Shows the "Footer text size" / "Dimension text size" pickers. On for the consolidated sheet
+     * only — the one document here that prints the shared footer and the schematic's rails; the
+     * classic runout, wear and undercut sheets keep their own sizes, so the pickers would be inert.
+     */
+    showSheetTextSizes: Boolean = false,
+    /** The app-wide `PdfPrefs.footerTextScale`; read only when [showSheetTextSizes]. */
+    footerTextScale: Float = PDF_TEXT_SCALE_DEFAULT,
+    /** The app-wide `PdfPrefs.dimTextScale`; read only when [showSheetTextSizes]. */
+    dimTextScale: Float = PDF_TEXT_SCALE_DEFAULT,
+    /**
      * The app-wide `PdfPrefs.fractionStyle`. Ungated, unlike the arrowhead size: every document
      * this sheet serves prints lengths, so every one of them draws fractions.
      */
@@ -879,6 +892,14 @@ internal fun RunoutWearOptionsSheet(
                 DimensionArrowSizeChips(
                     arrowSizePt = arrowSizePt,
                     onCommit = { vm.setPdfArrowSizePt(it) },
+                )
+            }
+            if (showSheetTextSizes) {
+                SheetTextSizeChips(
+                    footerTextScale = footerTextScale,
+                    dimTextScale = dimTextScale,
+                    onCommitFooter = { vm.setPdfFooterTextScale(it) },
+                    onCommitDim = { vm.setPdfDimTextScale(it) },
                 )
             }
             FractionStyleChips(

@@ -38,6 +38,8 @@ import com.android.shaftschematic.settings.PDF_RUNOUT_BUBBLE_DROP_SCALE_MAX
 import com.android.shaftschematic.settings.PDF_RUNOUT_BUBBLE_DROP_SCALE_MIN
 import com.android.shaftschematic.settings.PDF_RUNOUT_BUBBLE_SCALE_MAX
 import com.android.shaftschematic.settings.PDF_RUNOUT_BUBBLE_SCALE_MIN
+import com.android.shaftschematic.settings.PDF_TEXT_SCALE_MAX
+import com.android.shaftschematic.settings.PDF_TEXT_SCALE_MIN
 import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MAX_IN
 import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MIN_IN
 import com.android.shaftschematic.settings.PdfPrefs
@@ -224,6 +226,8 @@ object SettingsStore {
     private val KEY_PDF_RUNOUT_BUBBLE_SCALE = floatPreferencesKey("pdf_runout_bubble_scale")
     private val KEY_PDF_RUNOUT_BUBBLE_DROP_SCALE =
         floatPreferencesKey("pdf_runout_bubble_drop_scale")
+    private val KEY_PDF_FOOTER_TEXT_SCALE = floatPreferencesKey("pdf_footer_text_scale")
+    private val KEY_PDF_DIM_TEXT_SCALE = floatPreferencesKey("pdf_dim_text_scale")
 
     // Drawing line thickness (applies to both preview and PDF)
     private val KEY_LINE_THICKNESS_SCALE = floatPreferencesKey("line_thickness_scale")
@@ -427,6 +431,25 @@ object SettingsStore {
             it[KEY_PDF_RUNOUT_BUBBLE_DROP_SCALE] =
                 v.coerceIn(PDF_RUNOUT_BUBBLE_DROP_SCALE_MIN, PDF_RUNOUT_BUBBLE_DROP_SCALE_MAX)
         }
+    }
+
+    // Sheet text sizes: multipliers on the footer block's text and on the dimension values. A
+    // missing key reads the one `PdfPrefs()` default (100%), so older stores print as before.
+    fun pdfFooterTextScaleFlow(ctx: Context): Flow<Float> =
+        ctx.settingsPrefs.map { p ->
+            (p[KEY_PDF_FOOTER_TEXT_SCALE] ?: PdfPrefs().footerTextScale)
+                .coerceIn(PDF_TEXT_SCALE_MIN, PDF_TEXT_SCALE_MAX)
+        }
+    suspend fun setPdfFooterTextScale(ctx: Context, v: Float) {
+        ctx.editSettings { it[KEY_PDF_FOOTER_TEXT_SCALE] = v.coerceIn(PDF_TEXT_SCALE_MIN, PDF_TEXT_SCALE_MAX) }
+    }
+    fun pdfDimTextScaleFlow(ctx: Context): Flow<Float> =
+        ctx.settingsPrefs.map { p ->
+            (p[KEY_PDF_DIM_TEXT_SCALE] ?: PdfPrefs().dimTextScale)
+                .coerceIn(PDF_TEXT_SCALE_MIN, PDF_TEXT_SCALE_MAX)
+        }
+    suspend fun setPdfDimTextScale(ctx: Context, v: Float) {
+        ctx.editSettings { it[KEY_PDF_DIM_TEXT_SCALE] = v.coerceIn(PDF_TEXT_SCALE_MIN, PDF_TEXT_SCALE_MAX) }
     }
 
     // Dimension-rail arrowhead size (pt): one of PDF_ARROW_SIZES_PT.

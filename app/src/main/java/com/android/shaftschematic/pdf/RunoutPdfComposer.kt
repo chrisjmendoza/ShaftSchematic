@@ -323,6 +323,13 @@ internal fun composeRunoutPdfOnCanvas(
         unshadedLinerIds(spec, pdfPrefs.shadedLiners)
     }
     val text = sheetTextPaint(TEXT_PT)
+    // The footer block and the TIR / dye pen row above it (`PdfPrefs.footerTextScale`), and the
+    // in-profile Ø values' base size (`PdfPrefs.dimTextScale`). Both are 100% = [text]'s size.
+    // The classic sheet carries no footer, so its TIR row keeps the shipped size.
+    val footerScale = if (consolidated) pdfPrefs.footerTextScale else 1f
+    val footerText = sheetTextPaint(TEXT_PT * footerScale)
+    val valueText = sheetTextPaint(TEXT_PT * pdfPrefs.dimTextScale)
+    val tirLineH = TIR_LINE_HEIGHT_PT * footerScale
     // ── Page regions ─────────────────────────────────────────────────────────
     val margin = PAGE_MARGIN_PT
     val contentLeft  = margin
@@ -403,7 +410,10 @@ internal fun composeRunoutPdfOnCanvas(
         RailPlanner().assignAll(dimSpans, tierOriginMmFor(measureFromMode, oalWindow.oalMm))
     } else emptyList()
     val maxRail = railAssignments.maxOfOrNull { it.rail } ?: -1
-    val dimText = Paint(text).apply { textSize = RUNOUT_DIM_TEXT_PT }
+    // Rail values and their lane pitch scale together (`PdfPrefs.dimTextScale`), so a larger value
+    // seated in its line keeps the same air to the rails beside it.
+    val dimScale = pdfPrefs.dimTextScale
+    val dimText = Paint(text).apply { textSize = RUNOUT_DIM_TEXT_PT * dimScale }
     // OAL brackets the SET-to-SET span; the label is ALWAYS the typed OAL (the number is
     // sacred; see docs/contracts/OverallLength.md).
     val oalDimSpan = oalSpan(
@@ -417,9 +427,9 @@ internal fun composeRunoutPdfOnCanvas(
     val wantDualStacked = consolidated && displayUnits.dual &&
         pdfPrefs.dualUnitLayout == DualUnitLayout.STACKED
     fun railGapFor(stacked: Boolean): Float =
-        if (!stacked) RUNOUT_RAIL_GAP_PT
+        if (!stacked) RUNOUT_RAIL_GAP_PT * dimScale
         else maxOf(
-            RUNOUT_RAIL_GAP_PT,
+            RUNOUT_RAIL_GAP_PT * dimScale,
             dimText.dualStackMetrics().height + 2f * DimensionRailLayout.LINE_HALF_CLEAR + 2f,
         )
 
@@ -471,13 +481,13 @@ internal fun composeRunoutPdfOnCanvas(
     val footerCfg = if (consolidated) sheetFooterConfig(spec, pdfPrefs) else null
     val footerBlockFullH = footerCfg?.let {
         footerBlockHeightPt(
-            contentLeft, contentRight, spec, unit, project, text, it,
+            contentLeft, contentRight, spec, unit, project, footerText, it,
             blankValues = blankValues, displayUnits = displayUnits,
         )
     } ?: 0f
     val footerBlockMinH = footerCfg?.let {
         footerBlockMinHeightPt(
-            contentLeft, contentRight, spec, unit, project, text, it,
+            contentLeft, contentRight, spec, unit, project, footerText, it,
             blankValues = blankValues, displayUnits = displayUnits,
         )
     } ?: 0f
@@ -492,7 +502,7 @@ internal fun composeRunoutPdfOnCanvas(
     // shaft and its bubbles run down through the face.
     val couplingCx = contentRight - COUPLING_FACE_PAD_PT - COUPLING_FACE_OUTER_R_PT
     val bottomLaneH = maxOf(
-        if (drawBubbles || drawDyePen) TIR_LINE_HEIGHT_PT else 0f,
+        if (drawBubbles || drawDyePen) tirLineH else 0f,
         if (drawFace) COUPLING_FACE_BLOCK_PT else 0f,
     )
 
@@ -582,13 +592,13 @@ internal fun composeRunoutPdfOnCanvas(
     val valueNeedScale: Float = run {
         // No in-profile values without wear info — they place no demand on the scale.
         if (blankValues || !drawWear) return@run 0f
-        val fm = text.fontMetrics
+        val fm = valueText.fontMetrics
         val baseLine = fm.descent - fm.ascent
         var need = 0f
         fun consider(labels: List<String>, stationDiaMm: Float) {
             if (labels.isEmpty() || stationDiaMm <= 0f) return
             val neededPt = labels.maxOf {
-                wornValueBandHeightNeeded(text.measureRichText(it), baseLine)
+                wornValueBandHeightNeeded(valueText.measureRichText(it), baseLine)
             }
             need = maxOf(need, neededPt / (stationDiaMm * WORN_VALUE_BAND_FIT_FRAC))
         }
@@ -720,7 +730,7 @@ internal fun composeRunoutPdfOnCanvas(
     )
     // No TIR line when bubbles are elected out — its lane returns to the shaft area, unless
     // the dye pen row still needs it.
-    val tirY = footerTop - (if (drawBubbles || drawDyePen) TIR_LINE_HEIGHT_PT else 0f)
+    val tirY = footerTop - (if (drawBubbles || drawDyePen) tirLineH else 0f)
     val bottomLaneTopY = footerTop - bottomLaneH
     val railsBlockH = railsBlockHFor(dualStacked, railLiftReserve)
     val shaftTopBudgetY = margin + railsBlockH
@@ -855,7 +865,7 @@ internal fun composeRunoutPdfOnCanvas(
             windowStartMm = aftSetMm, windowEndMm = fwdSetMm,
             unit = displayUnits.documentUnit,
             xAt = ::xAt, surfaceRAt = ::shaftOuterRPxAt, cy = shaftCy,
-            text = text,
+            text = valueText,
             minTextSize = WORN_VALUE_MIN_TEXT_PT,
         )
     } else emptyList()
@@ -863,7 +873,7 @@ internal fun composeRunoutPdfOnCanvas(
         planDiaReadingsInProfile(
             wearRecord.diaReadings, resolvedComponents,
             cy = shaftCy, xAt = ::xAt, surfaceRAt = ::shaftOuterRPxAt,
-            displayUnits = displayUnits, text = text,
+            displayUnits = displayUnits, text = valueText,
             minTextSize = WORN_VALUE_MIN_TEXT_PT,
         )
     } else emptyList()
@@ -908,27 +918,36 @@ internal fun composeRunoutPdfOnCanvas(
         keywayProportion = sheetKeywayProportion(spec),
     )
 
-    // ── Draw TIR direction line (directly above the footer block) ─────────────
+    // ── TIR direction line + dye pen boxes (directly above the footer block) ──
+    // The lane stops short of the coupling face's block rather than running under it — the two
+    // share this band. The dye pen row sits after the TIR rule (or at the left without one); a
+    // row too wide for that spot — a larger footer size — pulls left toward the TIR label and
+    // shortens the rule to match, so the boxes never reach the face. At the shipped size the
+    // preferred spot always fits and nothing moves.
+    val laneRight =
+        if (drawFace) couplingCx - COUPLING_FACE_OUTER_R_PT - COUPLING_FACE_PAD_PT
+        else contentRight
+    val dyePenLabel = "Dye pen test:"
+    val dyePenX = if (!drawDyePen) laneRight else if (drawBubbles) {
+        val labelEnd = contentLeft + footerText.measureText("TIR's taken looking:  ")
+        val preferred = labelEnd + TIR_FILL_RULE_PT + DYE_PEN_GAP_PT
+        min(preferred, laneRight - dyePenRowWidth(footerText, dyePenLabel, footerScale))
+            .coerceAtLeast(labelEnd + DYE_PEN_GAP_PT)
+    } else contentLeft
     // Runout content only — elected out with the bubbles on a Schematic + Wear sheet.
     if (drawBubbles) {
         val effectiveTir = if (blankValues) TirDirection.UNSET else config.tirDirection
-        // The write-in rule stops short of the coupling face's block rather than running
-        // under it — the two share this band.
-        val tirRight =
-            if (drawFace) couplingCx - COUPLING_FACE_OUTER_R_PT - COUPLING_FACE_PAD_PT
-            else contentRight
-        drawTirLine(c, text, contentLeft, tirRight, tirY, effectiveTir)
+        val tirRight = if (drawDyePen) min(laneRight, dyePenX - DYE_PEN_GAP_PT) else laneRight
+        drawTirLine(c, footerText, contentLeft, tirRight, tirY, effectiveTir)
     }
-    // ── Dye pen test boxes — same lane, after the TIR rule (or at the left without one) ──
     // ONE construction with the wear sheet's notes row (drawDyePenBoxes); a blank draft leaves
     // both boxes empty for hand-marking.
     if (drawDyePen) {
-        val x = if (drawBubbles) {
-            contentLeft + text.measureText("TIR's taken looking:  ") + TIR_FILL_RULE_PT + DYE_PEN_GAP_PT
-        } else contentLeft
+        val x = dyePenX
         drawDyePenBoxes(
-            c, text, x, tirY, "Dye pen test:",
+            c, footerText, x, tirY, dyePenLabel,
             if (blankValues) null else wearRecord.dyePenResult,
+            scale = footerScale,
         )
     }
 
@@ -965,7 +984,7 @@ internal fun composeRunoutPdfOnCanvas(
             c, RectF(contentLeft, footerTop, contentRight, pageH - margin),
             spec, unit, project,
             filename = "", appVersion = "",
-            text = text, cfg = footerCfg, blankValues = blankValues,
+            text = footerText, cfg = footerCfg, blankValues = blankValues,
             // The same resolver the reservation above measured with — reserve and draw must
             // agree — and the same one the schematic's footer prints with.
             displayUnits = displayUnits,

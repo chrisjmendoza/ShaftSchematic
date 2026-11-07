@@ -230,6 +230,18 @@ class SchematicRenderReviewTest {
         )
     }
 
+    /** "Footer text size" / "Dimension text size": the job at the shipped size and at the largest step. */
+    @Test
+    fun `sheet text sizes`() {
+        val config = midTaper.runoutConfig.copy(showDyePenTest = true, showCouplingFace = true)
+        for (s in listOf(1f, com.android.shaftschematic.settings.PDF_TEXT_SCALE_MAX)) {
+            val pct = (s * 100).toInt()
+            val prefs = PdfPrefs(footerTextScale = s, dimTextScale = s)
+            renderConsolidated("text_${pct}_consolidated.png", midTaper, pdfPrefs = prefs, config = config)
+            renderSchematic("text_${pct}_schematic.png", midTaper, pdfPrefs = prefs)
+        }
+    }
+
     /** Every sheet of every job named by `SCHEMATIC_RENDER_FIXTURES`. */
     @Test
     fun `fixture jobs render every document`() {

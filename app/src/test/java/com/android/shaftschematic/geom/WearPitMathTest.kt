@@ -20,6 +20,25 @@ class WearPitMathTest {
     }
 
     @Test
+    fun `a tall drawing keeps the fixed small arm`() {
+        // radius 100 → 18 by fraction, capped at the fixed 6.
+        assertEquals(6f, pitSmallHalfOnSegment(localRadius = 100f, maxSmallHalf = 6f, minSmallHalf = 2f), 0f)
+    }
+
+    @Test
+    fun `a thin drawing scales the arm with the drawn radius`() {
+        val small = pitSmallHalfOnSegment(localRadius = 20f, maxSmallHalf = 6f, minSmallHalf = 1f)
+        assertEquals(20f * PIT_SMALL_HALF_MAX_FRAC_OF_RADIUS, small, 1e-5f)
+        // A LARGE X then spans well under half the drawn diameter.
+        assertTrue(2f * pitHalfArm(PitSize.LARGE, small) < 0.5f * (2f * 20f))
+    }
+
+    @Test
+    fun `a very thin drawing still draws a visible mark`() {
+        assertEquals(2f, pitSmallHalfOnSegment(localRadius = 1f, maxSmallHalf = 6f, minSmallHalf = 2f), 0f)
+    }
+
+    @Test
     fun `across fraction clamps into the interior band`() {
         assertEquals(PIT_ACROSS_MIN, clampPitAcrossFrac(-0.5f), 1e-6f)
         assertEquals(PIT_ACROSS_MAX, clampPitAcrossFrac(1.5f), 1e-6f)

@@ -83,6 +83,7 @@ internal fun composeBeforeAfterPdfOnCanvas(
     // The page is painted once here; the bands never paint, or the second would erase the first.
     c.drawColor(Color.WHITE)
 
+    val pdfPrefs = beforeAfterPrefs(pdfPrefs)
     val bands = beforeAfterBands(
         pageW, pageH, originalSpec, finalSpec, unit, project, pdfPrefs, options, displayUnits,
         heightScale, linerMinFracOfTrue,
@@ -108,6 +109,18 @@ internal fun composeBeforeAfterPdfOnCanvas(
     }
     c.drawLine(SCHEMATIC_PAGE_MARGIN_PT, bands.dividerY, pageW - SCHEMATIC_PAGE_MARGIN_PT, bands.dividerY, rule)
 }
+
+/**
+ * The prefs both bands draw with: [prefs] with the footer text held at
+ * [BEFORE_AFTER_MAX_FOOTER_TEXT_SCALE]. Two drawings and one footer share this page, and at the
+ * full-page sheets' largest step the fullest footer left the bands too short for their rails
+ * (`SheetTextOverlapTest`); the dimension text is not capped, since the bands' rails absorb it.
+ */
+internal fun beforeAfterPrefs(prefs: PdfPrefs): PdfPrefs =
+    prefs.copy(footerTextScale = min(prefs.footerTextScale, BEFORE_AFTER_MAX_FOOTER_TEXT_SCALE))
+
+/** The largest footer text step the before/after sheet prints at. */
+internal const val BEFORE_AFTER_MAX_FOOTER_TEXT_SCALE = 1.25f
 
 /** The before/after sheet's two bands and the rule between them, in page points. */
 internal class BeforeAfterBands(val original: SheetBand, val final: SheetBand, val dividerY: Float)

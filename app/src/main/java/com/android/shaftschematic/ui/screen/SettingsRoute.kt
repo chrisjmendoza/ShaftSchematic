@@ -169,6 +169,8 @@ fun SettingsRoute(
     val pdfWearBandShadeFrac by vm.pdfWearBandShadeFrac.collectAsState()
     val pdfWearJoinGapMaxMm by vm.pdfWearJoinGapMaxMm.collectAsState()
     val pdfArrowSizePt by vm.pdfArrowSizePt.collectAsState()
+    val pdfFooterTextScale by vm.pdfFooterTextScale.collectAsState()
+    val pdfDimTextScale by vm.pdfDimTextScale.collectAsState()
     val pdfThreadSlant by vm.pdfThreadSlant.collectAsState()
     val pdfThreadDensity by vm.pdfThreadDensity.collectAsState()
     val pdfFractionStyle by vm.pdfFractionStyle.collectAsState()
@@ -433,6 +435,15 @@ fun SettingsRoute(
                     DimensionArrowSizeChips(
                         arrowSizePt = pdfArrowSizePt,
                         onCommit = { vm.setPdfArrowSizePt(it) },
+                    )
+
+                    // Same pickers the schematic and consolidated PDF options carry — one
+                    // PdfPrefs.footerTextScale and one PdfPrefs.dimTextScale.
+                    SheetTextSizeChips(
+                        footerTextScale = pdfFooterTextScale,
+                        dimTextScale = pdfDimTextScale,
+                        onCommitFooter = { vm.setPdfFooterTextScale(it) },
+                        onCommitDim = { vm.setPdfDimTextScale(it) },
                     )
 
                     // Same slider both PDF options sheets carry — one PdfPrefs.threadSlant. Like

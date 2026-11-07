@@ -6,6 +6,29 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-11-06
+
+### feat(pdf): larger footer and dimension text on the schematic and consolidated sheets
+
+- Two app-wide sizes, **Footer text size** and **Dimension text size**: 100% (the shipped size),
+  125% or 150%. Set them in Settings → Drawing or on the PDF options panel of the schematic and
+  consolidated sheets (on-device request: readers with poor eyesight, and the footer has room).
+- Footer sizes the job and spec block. On the consolidated sheet the TIR / dye pen row above the
+  footer grows with it. Dimension sizes the rail lengths, the schematic's Ø callouts and the
+  consolidated sheet's in-profile Ø values. The rails spread apart to match.
+- The drawing gives up the room, so the shaft may draw shorter. The Original + Final sheet holds
+  its footer at 125%, since two drawings share its page. Every step is checked for colliding text
+  on the fullest footer the app prints. 100% prints exactly as before, and drawing profiles
+  capture both sizes.
+
+### fix(ui): wear pit X marks scale with the drawn shaft on the inspection page
+
+- On a component's wear inspection page, a pit X is capped at a fraction of the drawn diameter
+  where it sits: a Large X spans at most about a third of the shaft, a Small one half that. A long
+  body draws as a thin band, and the fixed-size X nearly covered it (on-device report: a 7.5"
+  body). Where the shaft draws tall, liners included, the X's are the size they were.
+- Remove X reaches exactly the smaller mark that is drawn. Printed sheets are unchanged.
+
 ## 2026-11-04
 
 ### feat(ui): the taper calculator can apply its answer to the shaft

@@ -380,7 +380,7 @@ internal fun composeShaftPdfOnCanvas(
         shaftTopY = yTopOfShaft,
         shaftBottomY = cy + halfHeightPx,
         linePaint = dim,
-        textPaint = sheetTextPaint(TEXT_PT - 2f),
+        textPaint = sheetTextPaint(schematicDimTextPt(pdfPrefs)),
         blankValues = blank,
         dualStacked = displayUnits.dual && pdfPrefs.dualUnitLayout == DualUnitLayout.STACKED,
         contentLeft = geomRect.left,
@@ -409,8 +409,12 @@ internal fun composeShaftPdfOnCanvas(
 
         // Fit-to-band safety for dimensional rails (OAL always visible)
         val topSafePad = RAIL_TOP_SAFE_PAD_PT
-        val startRailGap = LANE_GAP_PT + 6f
-        val startDimTextSize = TEXT_PT - 2f
+        // The lane pitch grows with the value size (`PdfPrefs.dimTextScale`), so a larger value
+        // seated in its line keeps the same air to the rails beside it.
+        val dimScale = pdfPrefs.dimTextScale
+        val startRailGap = (LANE_GAP_PT + 6f) * dimScale
+        val railMinGap = RAIL_MIN_GAP_PT * dimScale
+        val startDimTextSize = schematicDimTextPt(pdfPrefs)
         val minDimTextSize = 7f
         val dimText = sheetTextPaint(startDimTextSize)
 
@@ -473,8 +477,8 @@ internal fun composeShaftPdfOnCanvas(
             var gap = startRailGap
             var textSize = startDimTextSize
             fun minGap(): Float =
-                if (!stacked) RAIL_MIN_GAP_PT
-                else max(RAIL_MIN_GAP_PT, r.labelHeight() + 2f * DimensionRailLayout.LINE_HALF_CLEAR + 2f)
+                if (!stacked) railMinGap
+                else max(railMinGap, r.labelHeight() + 2f * DimensionRailLayout.LINE_HALF_CLEAR + 2f)
             fun topYFor(g: Float): Float = computeTopY(g) - r.topLift(rows(r, g, 0f))
             var topY = topYFor(gap)
             repeat(12) {
@@ -535,7 +539,10 @@ internal fun composeShaftPdfOnCanvas(
         val infoTop = footerBandTop(footerPageBottom, PAGE_MARGIN_PT, footerBlockPt, cy + halfHeightPx)
         val infoRect = RectF(geomRect.left, infoTop, geomRect.right, infoBottom)
 
-        drawFooter(c, infoRect, spec, unit, project, filename, appVersion, text, footerCfg, blankValues = blank, displayUnits = displayUnits)
+        drawFooter(
+            c, infoRect, spec, unit, project, filename, appVersion, schematicFooterTextPaint(pdfPrefs), footerCfg,
+            blankValues = blank, displayUnits = displayUnits,
+        )
     }
 
     // Last, in the bottom margin strip: the opt-in "Units in …" note. Page coordinates — it is
@@ -601,11 +608,26 @@ internal fun schematicFooterBlockPt(
     val footerCfg = if (effectiveOptions.showFooter) sheetFooterConfig(spec, pdfPrefs) else null
     return footerCfg?.let {
         footerBlockHeightPt(
-            PAGE_MARGIN_PT, pageW - PAGE_MARGIN_PT, spec, unit, project, sheetTextPaint(TEXT_PT), it,
+            PAGE_MARGIN_PT, pageW - PAGE_MARGIN_PT, spec, unit, project, schematicFooterTextPaint(pdfPrefs), it,
             blankValues = blank, displayUnits = displayUnits,
         )
     } ?: (if (blank) FOOTER_BLOCK_BLANK_PT else FOOTER_BLOCK_PT)
 }
+
+/**
+ * The schematic footer's text paint: [TEXT_PT] × `PdfPrefs.footerTextScale`. ONE builder behind the
+ * band [schematicFooterBlockPt] reserves and the block the composer draws, so a larger footer
+ * reserves exactly the height it prints at.
+ */
+private fun schematicFooterTextPaint(pdfPrefs: PdfPrefs): Paint =
+    sheetTextPaint(TEXT_PT * pdfPrefs.footerTextScale)
+
+/**
+ * The schematic's starting dimension-value size — the rails and the Ø callouts — scaled by
+ * `PdfPrefs.dimTextScale`. The rail fit may still shrink the rail values toward 7 pt on a crowded
+ * page; the callouts print at this size.
+ */
+private fun schematicDimTextPt(pdfPrefs: PdfPrefs): Float = (TEXT_PT - 2f) * pdfPrefs.dimTextScale
 
 /** The schematic's dimension spans and their rail assignment — pure mm, no page geometry. */
 private class SchematicRailSpans(
@@ -712,11 +734,13 @@ internal fun schematicBandLayout(
         gap = gap,
     )
 
-    val comfortable = height - rails(BAND_RAIL_GAP_PT) - BAND_INFO_GAP_PT
+    // Lane pitches scale with the value size, as the composer's rail fit does.
+    val dimScale = pdfPrefs.dimTextScale
+    val comfortable = height - rails(BAND_RAIL_GAP_PT * dimScale) - BAND_INFO_GAP_PT
     if (comfortable >= BAND_MIN_SHAFT_HEIGHT_PT) return layout(comfortable, BAND_INFO_GAP_PT)
 
     // At the minimum pitch the fit has no give left, so the room keeps a point of slack for it.
-    val tightRails = rails(RAIL_MIN_GAP_PT) + 1f
+    val tightRails = rails(RAIL_MIN_GAP_PT * dimScale) + 1f
     val infoGap = (height - tightRails - BAND_MIN_SHAFT_HEIGHT_PT).coerceIn(BAND_INFO_GAP_MIN_PT, BAND_INFO_GAP_PT)
     return layout(height - tightRails - infoGap, infoGap)
 }
@@ -798,7 +822,7 @@ private fun schematicRailBlockPt(
     val renderer = PdfDimensionRenderer(
         pageX = { dimMm -> xAt((dimMm + rails.win.measureStartMm).toFloat()) },
         linePaint = Paint(),
-        textPaint = sheetTextPaint(TEXT_PT - 2f),
+        textPaint = sheetTextPaint(schematicDimTextPt(pdfPrefs)),
         objectTopY = 0f,
         objectClearance = 6f,
         arrowSize = pdfPrefs.arrowSizePt,

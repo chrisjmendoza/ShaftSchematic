@@ -21,6 +21,8 @@ import com.android.shaftschematic.settings.PDF_RUNOUT_BUBBLE_DROP_SCALE_MAX
 import com.android.shaftschematic.settings.PDF_RUNOUT_BUBBLE_DROP_SCALE_MIN
 import com.android.shaftschematic.settings.PDF_RUNOUT_BUBBLE_SCALE_MAX
 import com.android.shaftschematic.settings.PDF_RUNOUT_BUBBLE_SCALE_MIN
+import com.android.shaftschematic.settings.PDF_TEXT_SCALE_MAX
+import com.android.shaftschematic.settings.PDF_TEXT_SCALE_MIN
 import com.android.shaftschematic.settings.PDF_ARROW_SIZE_SMALL_PT
 import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MAX_IN
 import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MIN_IN
@@ -246,6 +248,22 @@ fun ShaftViewModel.setPdfArrowSizePt(v: Float, persist: Boolean = true) {
     _pdfArrowSizePt.value = clamped
     SettingsStore.updatePdfPrefs { it.copy(arrowSizePt = clamped) }
     if (persist) viewModelScope.launch { SettingsStore.setPdfArrowSizePt(getApplication(), clamped) }
+}
+
+/** Wired to the schematic / consolidated PDF options and Settings → Drawing → "Footer text size". */
+fun ShaftViewModel.setPdfFooterTextScale(v: Float, persist: Boolean = true) {
+    val clamped = v.coerceIn(PDF_TEXT_SCALE_MIN, PDF_TEXT_SCALE_MAX)
+    _pdfFooterTextScale.value = clamped
+    SettingsStore.updatePdfPrefs { it.copy(footerTextScale = clamped) }
+    if (persist) viewModelScope.launch { SettingsStore.setPdfFooterTextScale(getApplication(), clamped) }
+}
+
+/** Wired to the schematic / consolidated PDF options and Settings → Drawing → "Dimension text size". */
+fun ShaftViewModel.setPdfDimTextScale(v: Float, persist: Boolean = true) {
+    val clamped = v.coerceIn(PDF_TEXT_SCALE_MIN, PDF_TEXT_SCALE_MAX)
+    _pdfDimTextScale.value = clamped
+    SettingsStore.updatePdfPrefs { it.copy(dimTextScale = clamped) }
+    if (persist) viewModelScope.launch { SettingsStore.setPdfDimTextScale(getApplication(), clamped) }
 }
 
 /**
@@ -496,6 +514,8 @@ fun ShaftViewModel.applyDrawingProfile(profile: DrawingProfile) {
     setPdfWearJoinGapMaxMm(prefs.wearJoinGapMaxMm)
     setPdfRunoutBubbleScale(prefs.runoutBubbleScale)
     setPdfRunoutBubbleDropScale(prefs.runoutBubbleDropScale)
+    setPdfFooterTextScale(prefs.footerTextScale)
+    setPdfDimTextScale(prefs.dimTextScale)
     setLineThicknessScale(profile.clampedLineThicknessScale)
 }
 

@@ -156,6 +156,24 @@ val PDF_ARROW_SIZES_PT = listOf(PDF_ARROW_SIZE_SMALL_PT, PDF_ARROW_SIZE_MEDIUM_P
 const val PDF_ARROW_SIZE_DEFAULT_PT = PDF_ARROW_SIZE_SMALL_PT
 
 /**
+ * Sheet text sizes: the multipliers on the footer block's text (`PdfPrefs.footerTextScale`) and on
+ * the dimension values — rail lengths and Ø values (`PdfPrefs.dimTextScale`). Fixed steps rather
+ * than a slider, the [PDF_ARROW_SIZES_PT] posture: the size is picked once for the readers' eyes,
+ * not tuned against a drawing. 100% prints the shipped sizes exactly.
+ *
+ * The ceiling is the largest step the fullest footer the app prints (`SheetTextOverlapTest`'s
+ * fixture: both tapers with keyways, both threads, wrapping customer and vessel names) still lays
+ * out at with no colliding text: at 175% that footer took more of the page than the drawing above
+ * it could give up, and the component names, Ø callouts and runout bubbles ran into it.
+ */
+const val PDF_TEXT_SCALE_DEFAULT = 1f
+const val PDF_TEXT_SCALE_MIN = 1f
+const val PDF_TEXT_SCALE_MAX = 1.5f
+
+/** The choices, smallest → largest — the single source for the pickers and the tests. */
+val PDF_TEXT_SCALES = listOf(1f, 1.25f, PDF_TEXT_SCALE_MAX)
+
+/**
  * PDF-only preferences. Add more knobs here as you grow the exporter.
  */
 data class PdfPrefs(
@@ -384,6 +402,22 @@ data class PdfPrefs(
      * was added to explore.
      */
     val runoutBubbleDropScale: Float = PDF_RUNOUT_BUBBLE_DROP_SCALE_DEFAULT,
+    /**
+     * Multiplier on the FOOTER block's text — the three columns the schematic and the consolidated
+     * sheet share (`drawFooter`, `pdf/SheetFooter.kt`), one of [PDF_TEXT_SCALES]. Settings → Drawing
+     * → "Footer text size" and both of those sheets' PDF options (on-device request: readers with
+     * poor eyesight, and the footer has room). The band is measured from the scaled paint, so a
+     * larger size reserves its own height and the drawing above gives it up.
+     */
+    val footerTextScale: Float = PDF_TEXT_SCALE_DEFAULT,
+    /**
+     * Multiplier on the DIMENSION values — the rail lengths, the schematic's Ø callouts and the
+     * consolidated sheet's in-profile Ø values — one of [PDF_TEXT_SCALES]; the rail lane pitch grows
+     * with it so a larger value never crowds the next rail. Settings → Drawing → "Dimension text
+     * size" and the same PDF options as [footerTextScale]. The wear and undercut sheets keep their
+     * own sizes.
+     */
+    val dimTextScale: Float = PDF_TEXT_SCALE_DEFAULT,
 ) {
     /** The anchor heights in PDF points (72 pt per paper inch) — what the geometry consumes. */
     val curveLoHeightPt: Float get() = curveLoHeightIn * 72f
@@ -407,5 +441,7 @@ data class PdfPrefs(
                 .coerceIn(PDF_RUNOUT_BUBBLE_SCALE_MIN, PDF_RUNOUT_BUBBLE_SCALE_MAX),
             runoutBubbleDropScale = runoutBubbleDropScale
                 .coerceIn(PDF_RUNOUT_BUBBLE_DROP_SCALE_MIN, PDF_RUNOUT_BUBBLE_DROP_SCALE_MAX),
+            footerTextScale = footerTextScale.coerceIn(PDF_TEXT_SCALE_MIN, PDF_TEXT_SCALE_MAX),
+            dimTextScale = dimTextScale.coerceIn(PDF_TEXT_SCALE_MIN, PDF_TEXT_SCALE_MAX),
         )
 }

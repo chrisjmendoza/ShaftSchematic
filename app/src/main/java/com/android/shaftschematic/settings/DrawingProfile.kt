@@ -90,6 +90,8 @@ data class DrawingProfile(
     val wearTraceDepthFrac: Float = SHIPPED_PDF_PREFS.wearTraceDepthFrac,
     val wearBandShadeFrac: Float = SHIPPED_PDF_PREFS.wearBandShadeFrac,
     val wearJoinGapMaxMm: Float = SHIPPED_PDF_PREFS.wearJoinGapMaxMm,
+    val footerTextScale: Float = SHIPPED_PDF_PREFS.footerTextScale,
+    val dimTextScale: Float = SHIPPED_PDF_PREFS.dimTextScale,
     val lineThicknessScale: Float = DRAWING_LINE_THICKNESS_DEFAULT,
 ) {
     /**
@@ -128,6 +130,8 @@ data class DrawingProfile(
         wearTraceDepthFrac = wearTraceDepthFrac,
         wearBandShadeFrac = wearBandShadeFrac,
         wearJoinGapMaxMm = wearJoinGapMaxMm,
+        footerTextScale = footerTextScale,
+        dimTextScale = dimTextScale,
     ).clamped()
 
     /** Line thickness inside the settable range — [toPdfPrefs]'s clamp for the one field outside it. */
@@ -165,6 +169,8 @@ data class DrawingProfile(
             wearTraceDepthFrac = prefs.wearTraceDepthFrac,
             wearBandShadeFrac = prefs.wearBandShadeFrac,
             wearJoinGapMaxMm = prefs.wearJoinGapMaxMm,
+            footerTextScale = prefs.footerTextScale,
+            dimTextScale = prefs.dimTextScale,
             lineThicknessScale = lineThicknessScale
                 .coerceIn(DRAWING_LINE_THICKNESS_MIN, DRAWING_LINE_THICKNESS_MAX),
         )

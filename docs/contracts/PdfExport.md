@@ -87,6 +87,29 @@ with this job", so the reader never has to guess which kind a row is.
   `PdfDimensionRenderer` — the schematic and the consolidated sheet; the wear/undercut strip
   rails keep their own fixed 4 pt head. A smaller head also slightly widens inline
   eligibility, since a break's stubs must each be at least `arrowSize` long.
+- **Footer text size / Dimension text size** (`footerTextScale`, `dimTextScale`; on-device
+  request: readers with poor eyesight): chips **100% (default)** / 125% / 150%
+  (`PDF_TEXT_SCALES`), in Settings → Drawing and in the schematic and consolidated PDF options
+  (one shared `SheetTextSizeChips`; the overlay shows them only with `showSheetTextSizes`, the
+  Output tab). Same chip-tap-is-the-commit posture and render-input keys as the arrows. 100%
+  prints byte-identically to before the prefs existed.
+  - *Footer*: the shared footer block's paint (`schematicFooterTextPaint`, the consolidated
+    composer's `footerText`) and, on the consolidated sheet, the TIR / dye pen row above it (its
+    lane height and boxes scale too; the classic runout sheet's TIR row does not). The band is
+    measured from the scaled paint, and `FooterConfig.textScale` drops the first baseline by the
+    ascent the scale added (`footerFirstLineExtraDrop`), so the block never rises further above
+    its band than at 100%. A dye pen row too wide for its spot pulls left and shortens the TIR
+    write-in rule (`dyePenRowWidth`) rather than reach the coupling face. The before/after sheet
+    caps its footer at 125% (`beforeAfterPrefs`): two drawings share its page.
+  - *Dimension*: the rail values and their lane pitch (schematic `startRailGap`/`railMinGap`
+    and the band layout's pitches; consolidated `RUNOUT_RAIL_GAP_PT`), the schematic's Ø
+    callouts (their baseline drop under the kink grows with the size, `TEXT_DROP_MIN_PT` at
+    10 pt and below), and the consolidated sheet's in-profile Ø values' base size. The rail fit
+    may still shrink a crowded schematic's values toward 7 pt.
+  - The ceiling is the largest step `SheetTextOverlapTest`'s fullest-footer fixture lays out at
+    with no colliding text, on every consolidated variant, the schematic and the before/after
+    sheet; at 175% the footer took more room than the drawing could give. The wear and undercut
+    sheets keep their own sizes.
 - **Thread slant** (`threadSlant`): slider 1×–10× in 0.5 steps, default 3×, commits on
   release (no `PreviewTuning` drag channel) — in Settings → Drawing → "Thread slant" (with a
   "Default (3×)" reset) and in both PDF Options sheets' "Thread" section, which a sheet shows
@@ -156,7 +179,8 @@ Full-resolution preview through the shared `util/PdfRaster.renderPdfPageBitmap`
      undercut sheet narrows it to strips that reach a thread, `undercutStripsReachThread`).
      Header summary: slant · density (`3× · 50%`).
   3. **Lines & text** (`options_lines_expander`, collapsed) — line thickness (50–200%, its
-     live `onDrag` channel intact), "Dimension arrows" size, fractions. Header summary: the
+     live `onDrag` channel intact), "Dimension arrows" size, footer / dimension text size
+     (schematic and consolidated sheets), fractions. Header summary: the
      line weight (`100%`).
   4. **Shade in Components** (`options_shade_expander`, collapsed) — bodies/tapers/liners +
      an "Explicit bodies only" sub-checkbox under Bodies.
