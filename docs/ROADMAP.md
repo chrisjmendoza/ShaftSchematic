@@ -36,7 +36,7 @@ This roadmap defines the grounded, realistic, and approved feature trajectory fo
   (dark fill vs hatch vs label) is **undecided and blocked on a sketch or photographed sheet**,
   the same way the "indicated wear" squiggle convention is
 - [x] **Additional output fonts** — shipped 2026-09-14 as Settings → Drawing → "Output font"
-  (`util/OutputTypography.kt`): Standard / Condensed / Serif / Monospace, app-wide like every
+  (`util/OutputTypography.kt`): Standard / Medium / Hyperlegible / Condensed / Serif / Monospace, app-wide like every
   other drawing pref. Safe by construction as predicted — every metric is measured live from
   the `Paint` — and `FractionTextRendererTest` now runs its ink-bounds checks in every face, so
   a fraction stack that breaks out of the line box in a condensed or slab font fails there

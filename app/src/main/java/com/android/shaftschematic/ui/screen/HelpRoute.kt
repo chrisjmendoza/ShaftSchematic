@@ -1039,6 +1039,11 @@ internal val helpSections: List<HelpSection> = listOf(
                     "values, callouts, component names and the footer alike.\n\n" +
                     "• \"Standard\" — the default, and the historical look: the device's " +
                     "regular sans.\n" +
+                    "• \"Medium\" — the same sans with heavier strokes. Easier on weak eyes and " +
+                    "holds up better on a photocopy.\n" +
+                    "• \"Hyperlegible\" — Atkinson Hyperlegible, made by the Braille Institute " +
+                    "for low-vision readers: 1, l and I, 0 and O, 5 and S stay distinct. " +
+                    "Pair it with a larger Footer or Dimension text size for the easiest read.\n" +
                     "• \"Condensed\" — a narrower sans. Values take less room, so more of them " +
                     "seat inside the dimension line instead of above it.\n" +
                     "• \"Serif\" — for shops whose paperwork is set that way.\n" +

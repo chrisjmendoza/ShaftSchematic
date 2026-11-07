@@ -195,7 +195,7 @@ Editable text is deliberately **not** included: the numeric input fields show pl
 
 The *face* the app sets its sheets in is a separate user choice from the fraction *glyph*, and it
 is held in exactly the same shape: `PdfPrefs.outputFont` (`util/OutputTypography.kt` —
-`OutputFont.STANDARD` / `CONDENSED` / `SERIF` / `MONOSPACE`, Standard being the historical look and
+`OutputFont.STANDARD` / `MEDIUM` / `HYPERLEGIBLE` / `CONDENSED` / `SERIF` / `MONOSPACE`, Standard being the historical look and
 the default), **Settings → Drawing → "Output font"**. It is app-wide, captured by a named Drawing
 profile, restored by "Restore Drawing defaults", and deliberately absent from the PDF options
 sheets — a shop picks a face once, so it is a house style rather than a per-sheet decision.
@@ -233,6 +233,17 @@ simply seats more values in a break. What it *can* disturb is the §3 size contr
 descent and cap height are the face's own: `FractionTextRendererTest` therefore runs its stacked
 and diagonal ink-bounds checks in **every** `OutputFont`.
 
-No font files are bundled; these are system families only. A device that lacks one gets its
-default sans back from `Typeface.create`, and `OutputFont.fromName` decodes an unreadable stored
-name to `OutputFont.Default` — a sheet in the wrong face, never a sheet with no type.
+The faces are system families plus ONE bundled font (on-device request, 2026-11-06: readers with
+poor eyesight). `MEDIUM` is the platform sans at medium weight (`sans-serif-medium`).
+`HYPERLEGIBLE` is Atkinson Hyperlegible Regular (Braille Institute, SIL OFL 1.1 —
+`res/font/atkinson_hyperlegible_regular.ttf`, license text shipped at
+`assets/licenses/AtkinsonHyperlegible-OFL.txt`, noted in `LICENSE` and the README). `OutputFont.typeface`
+has no Context and the composers draw off the main thread, so the bundled face is loaded ONCE in
+`ShaftSchematicApp.onCreate` by `BundledFonts.init` — before any ViewModel applies the persisted
+font — and cached; `BundledFontsTest` proves it packages, loads, and sets type unlike Standard. It
+lacks ← → ″ ✓, which the platform draws from its system fallback fonts.
+
+A device that lacks a system family gets its default sans back from `Typeface.create`, a bundled
+font that failed to load stands in as Standard (logged), and `OutputFont.fromName` decodes an
+unreadable stored name to `OutputFont.Default` — a sheet in the wrong face, never a sheet with no
+type.
