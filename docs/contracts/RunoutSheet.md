@@ -593,7 +593,12 @@ canvas's base half-arm was halved 2026-08-14 so LARGE lands where SMALL used to 
 OVERLAY-only correction (on-device clarification: the overlay drew its X's oversized; the
 printed sizes below were confirmed right and are untouched):
 - **Canvas detail:** `LinerWearDetail.kt`'s `drawPitX` (Compose `DrawScope`), base half-arm
-  `PIT_SMALL_HALF_DP` (2.25dp; large 4.5dp).
+  `PIT_SMALL_HALF_DP` (2.25dp; large 4.5dp) where the component draws tall, capped at
+  `PIT_SMALL_HALF_MAX_FRAC_OF_RADIUS` (0.18) of the drawn radius at the pit's station through
+  `pitSmallHalfOnSegment`, floored at `PIT_SMALL_HALF_MIN_DP` (1dp). A long component draws as a
+  thin band, and a fixed-size X there nearly covered the shaft (on-device report, 2026-11-06: a
+  7.5" body); under the cap a LARGE X spans 36% of the drawn diameter and a SMALL one 18%. Draw
+  and hit-test read the same `pitHalfArmPx`. The printed sizes below are unchanged.
 - **PDF main profile:** `WearPdfComposer.drawWearPitsOnProfile` — X at each pit's true axial +
   across position, taper diameter interpolated at the pit's axial. Base half-arm
   `WEAR_PIT_SMALL_HALF_PROFILE_PT` (1.7pt; large 3.4pt). The shaft profile is always drawn now (see "Wear PDF

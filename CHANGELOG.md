@@ -6,6 +6,16 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-11-06
+
+### fix(ui): wear pit X marks scale with the drawn shaft on the inspection page
+
+- On a component's wear inspection page, a pit X is capped at a fraction of the drawn diameter
+  where it sits: a Large X spans at most about a third of the shaft, a Small one half that. A long
+  body draws as a thin band, and the fixed-size X nearly covered it (on-device report: a 7.5"
+  body). Where the shaft draws tall, liners included, the X's are the size they were.
+- Remove X reaches exactly the smaller mark that is drawn. Printed sheets are unchanged.
+
 ## 2026-11-04
 
 ### feat(ui): the taper calculator can apply its answer to the shaft

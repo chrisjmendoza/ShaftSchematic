@@ -40,6 +40,25 @@ fun pitHalfArm(size: PitSize, smallHalf: Float): Float =
     if (size == PitSize.LARGE) smallHalf * PIT_LARGE_TO_SMALL_RATIO else smallHalf
 
 /**
+ * Largest SMALL half-arm, as a fraction of the drawn local radius, on a surface whose X is a fixed
+ * screen size. At this fraction a LARGE X spans 36% of the drawn diameter and a SMALL one 18%.
+ * A long component draws as a thin band, and a fixed-size X there nearly covered the shaft
+ * (on-device report: a 7.5" body).
+ */
+const val PIT_SMALL_HALF_MAX_FRAC_OF_RADIUS = 0.18f
+
+/**
+ * The SMALL half-arm for a pit on a segment drawn with local radius [localRadius]: [maxSmallHalf]
+ * where the segment draws tall, scaled down to [PIT_SMALL_HALF_MAX_FRAC_OF_RADIUS] of the radius
+ * where it draws thin, never below [minSmallHalf] so the mark stays visible. All in the caller's
+ * units. [pitHalfArm] applies the shared small:large ratio on top.
+ */
+fun pitSmallHalfOnSegment(localRadius: Float, maxSmallHalf: Float, minSmallHalf: Float): Float =
+    (localRadius * PIT_SMALL_HALF_MAX_FRAC_OF_RADIUS)
+        .coerceAtMost(maxSmallHalf)
+        .coerceAtLeast(minSmallHalf)
+
+/**
  * Clamp an across-fraction into `[PIT_ACROSS_MIN, PIT_ACROSS_MAX]` so a placed X's centre keeps
  * the symbol inside the drawn segment rather than half-hanging into empty space above/below it.
  */

@@ -93,6 +93,7 @@ import com.android.shaftschematic.geom.deepestWearDepthMm
 import com.android.shaftschematic.geom.pickDiaReadingAt
 import com.android.shaftschematic.geom.pitCenterY
 import com.android.shaftschematic.geom.pitHalfArm
+import com.android.shaftschematic.geom.pitSmallHalfOnSegment
 import com.android.shaftschematic.geom.pickPitAt
 import com.android.shaftschematic.geom.planDiaCallouts
 import com.android.shaftschematic.geom.sequenceWearTraces
@@ -510,6 +511,7 @@ fun ComponentWearDetailOverlay(
                                     edgePadPx = SEG_EDGE_PAD_DP.dp.toPx(),
                                 )
                                 val smallHalfPx = PIT_SMALL_HALF_DP.dp.toPx()
+                                val minSmallHalfPx = PIT_SMALL_HALF_MIN_DP.dp.toPx()
                                 fun diaTargets() = diaReadings.map { r ->
                                     val local = r.axialMm.coerceIn(0f, lenMm)
                                     val cx = lay.startPx + local * lay.pxPerMm
@@ -521,7 +523,10 @@ fun ComponentWearDetailOverlay(
                                         // Tap an X to delete it; a miss does nothing.
                                         val targets = pits.map { p ->
                                             val (cx, cy) = pitCenterPx(lay, startDiaMm, endDiaMm, lenMm, p)
-                                            PitHitTarget(p.id, cx, cy, pitHalfArm(p.size, smallHalfPx))
+                                            PitHitTarget(
+                                                p.id, cx, cy,
+                                                pitHalfArmPx(lay, startDiaMm, endDiaMm, lenMm, p, smallHalfPx, minSmallHalfPx),
+                                            )
                                         }
                                         pickPitAt(tap.x, tap.y, targets, padPx = 11.dp.toPx())
                                             ?.let { onRemovePit(it) }
@@ -574,6 +579,7 @@ fun ComponentWearDetailOverlay(
                         val railTopGapPx = railTopGapDp.toPx()
                         val diaBandPx = diaBandDp.toPx()
                         val smallHalfPx = PIT_SMALL_HALF_DP.dp.toPx()
+                        val minSmallHalfPx = PIT_SMALL_HALF_MIN_DP.dp.toPx()
 
                         val lay = computeSegDetailLayout(
                             widthPx = size.width,
@@ -702,7 +708,11 @@ fun ComponentWearDetailOverlay(
                         // ── Pit "X" markers (all component types) ──
                         pits.forEach { p ->
                             val (px, py) = pitCenterPx(lay, startDiaMm, endDiaMm, lenMm, p)
-                            drawPitX(px, py, pitHalfArm(p.size, smallHalfPx), pitColor)
+                            drawPitX(
+                                px, py,
+                                pitHalfArmPx(lay, startDiaMm, endDiaMm, lenMm, p, smallHalfPx, minSmallHalfPx),
+                                pitColor,
+                            )
                         }
 
                         // ── Measured-Ø readings: witness tick across the segment at each
@@ -1106,12 +1116,32 @@ private fun pitCenterPx(
 }
 
 /**
- * Base half-arm (dp) of a SMALL pit "X" on the detail canvas; LARGE scales by the shared ratio.
- * Halved from its original value so LARGE lands where SMALL used to draw — an OVERLAY-only
- * correction (on-device clarification: this canvas drew its X's oversized; the printed sizes
- * were already right and are untouched).
+ * Half-arm (px) of [pit]'s "X" on the focus component: the SMALL half-arm capped to a fraction of
+ * the drawn radius at the pit's station (`pitSmallHalfOnSegment`), then the shared small:large
+ * ratio. Draw and hit-test both read it, so a tap reaches exactly the X that is drawn.
+ */
+private fun pitHalfArmPx(
+    lay: SegDetailLayout,
+    startDiaMm: Float,
+    endDiaMm: Float,
+    lenMm: Float,
+    pit: WearPit,
+    maxSmallHalfPx: Float,
+    minSmallHalfPx: Float,
+): Float {
+    val r = radiusLocalPx(lay, startDiaMm, endDiaMm, lenMm, pit.axialMm.coerceIn(0f, lenMm))
+    return pitHalfArm(pit.size, pitSmallHalfOnSegment(r, maxSmallHalfPx, minSmallHalfPx))
+}
+
+/**
+ * Largest half-arm (dp) of a SMALL pit "X" on the detail canvas, reached where the component draws
+ * tall; a thin drawing scales it down with the drawn radius. LARGE scales by the shared ratio.
+ * The printed sizes are separate per-surface constants and are untouched by this one.
  */
 private const val PIT_SMALL_HALF_DP = 2.25f
+
+/** Smallest half-arm (dp) of a SMALL pit "X" on the detail canvas, so the mark stays visible. */
+private const val PIT_SMALL_HALF_MIN_DP = 1f
 
 /**
  * Clear space (dp) reserved outside each neighbor stub for its S-curve break edge. The
