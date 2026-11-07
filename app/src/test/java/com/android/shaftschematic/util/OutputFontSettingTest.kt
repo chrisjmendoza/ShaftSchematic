@@ -45,11 +45,11 @@ class OutputFontSettingTest {
 
     @Test
     fun `a pref change reaches the mirror`() {
-        SettingsStore.updatePdfPrefs { it.copy(outputFont = OutputFont.SERIF) }
-        assertEquals(OutputFont.SERIF.typeface(), OutputTypography.active)
+        SettingsStore.updatePdfPrefs { it.copy(outputFont = OutputFont.B612) }
+        assertEquals(OutputFont.B612.typeface(), OutputTypography.active)
 
-        SettingsStore.updatePdfPrefs { it.copy(outputFont = OutputFont.MONOSPACE) }
-        assertEquals(OutputFont.MONOSPACE.typeface(), OutputTypography.active)
+        SettingsStore.updatePdfPrefs { it.copy(outputFont = OutputFont.HYPERLEGIBLE_MONO) }
+        assertEquals(OutputFont.HYPERLEGIBLE_MONO.typeface(), OutputTypography.active)
 
         SettingsStore.updatePdfPrefs { it.copy(outputFont = OutputFont.STANDARD) }
         assertEquals(OutputFont.STANDARD.typeface(), OutputTypography.active)
@@ -67,9 +67,9 @@ class OutputFontSettingTest {
     /** Changing an unrelated PDF pref must not disturb the face. */
     @Test
     fun `an unrelated pref edit leaves the active face alone`() {
-        SettingsStore.updatePdfPrefs { it.copy(outputFont = OutputFont.SERIF) }
+        SettingsStore.updatePdfPrefs { it.copy(outputFont = OutputFont.B612) }
         SettingsStore.updatePdfPrefs { it.copy(arrowSizePt = 5f) }
-        assertEquals(OutputFont.SERIF.typeface(), OutputTypography.active)
+        assertEquals(OutputFont.B612.typeface(), OutputTypography.active)
     }
 
     /**
@@ -78,8 +78,8 @@ class OutputFontSettingTest {
      */
     @Test
     fun `applying a default drawing profile restores the shipped face`() {
-        SettingsStore.updatePdfPrefs { it.copy(outputFont = OutputFont.MONOSPACE) }
-        assertEquals(OutputFont.MONOSPACE.typeface(), OutputTypography.active)
+        SettingsStore.updatePdfPrefs { it.copy(outputFont = OutputFont.HYPERLEGIBLE_MONO) }
+        assertEquals(OutputFont.HYPERLEGIBLE_MONO.typeface(), OutputTypography.active)
 
         val restored = DrawingProfile().toPdfPrefs()
         SettingsStore.updatePdfPrefs { it.copy(outputFont = restored.outputFont) }
@@ -92,11 +92,18 @@ class OutputFontSettingTest {
     @Test
     fun `a drawing profile round-trips the face`() {
         val captured = DrawingProfile.of(
-            PdfPrefs(outputFont = OutputFont.CONDENSED),
+            PdfPrefs(outputFont = OutputFont.HYPERLEGIBLE_BOLD),
             lineThicknessScale = 1f,
         )
 
-        assertEquals("CONDENSED", captured.outputFont)
-        assertSame(OutputFont.CONDENSED, captured.toPdfPrefs().outputFont)
+        assertEquals("HYPERLEGIBLE_BOLD", captured.outputFont)
+        assertSame(OutputFont.HYPERLEGIBLE_BOLD, captured.toPdfPrefs().outputFont)
+    }
+
+    /** A profile saved with a retired face still decodes to a face that prints. */
+    @Test
+    fun `a profile holding a retired face decodes to its successor`() {
+        assertSame(OutputFont.HYPERLEGIBLE_MONO, DrawingProfile(outputFont = "MONOSPACE").toPdfPrefs().outputFont)
+        assertSame(OutputFont.STANDARD, DrawingProfile(outputFont = "SERIF").toPdfPrefs().outputFont)
     }
 }

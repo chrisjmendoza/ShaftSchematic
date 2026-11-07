@@ -15,10 +15,10 @@ import java.io.File
 
 /**
  * Every Output font must print as its OWN face on a real device — through the real path a sheet
- * takes: [PdfDocument] embeds the face, [PdfRenderer] rasterizes it back. On-device report:
- * Standard, Condensed, Serif and Monospace printed identically while the bundled Hyperlegible
- * came through. Robolectric cannot answer this (it carries no device fonts), so this runs on a
- * device or emulator.
+ * takes: [PdfDocument] embeds the face, [PdfRenderer] rasterizes it back. On-device report: the
+ * old system-family faces (Standard, Condensed, Serif, Monospace) printed identically on a Samsung
+ * while the bundled Hyperlegible came through — which is why every face is now bundled. Robolectric
+ * cannot answer this (it renders no real PDF), so this runs on a device or emulator.
  */
 @RunWith(AndroidJUnit4::class)
 class OutputFontPdfProbeTest {
@@ -51,11 +51,11 @@ class OutputFontPdfProbeTest {
     }
 
     @Test
-    fun everyOutputFontPrintsDifferentlyFromStandard() {
-        val standard = rasterize(OutputFont.STANDARD)
-        val same = OutputFont.entries.filter { it != OutputFont.STANDARD }.filter { font ->
-            rasterize(font).contentEquals(standard)
+    fun everyOutputFontPrintsAsItsOwnFace() {
+        val pages = OutputFont.entries.associateWith { rasterize(it) }
+        val alike = pages.entries.flatMapIndexed { i, a ->
+            pages.entries.drop(i + 1).filter { b -> a.value.contentEquals(b.value) }.map { b -> "${a.key}=${b.key}" }
         }
-        assertTrue("printed identically to Standard: $same", same.isEmpty())
+        assertTrue("faces printed identically: $alike", alike.isEmpty())
     }
 }

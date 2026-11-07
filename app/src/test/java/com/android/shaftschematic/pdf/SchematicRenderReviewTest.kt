@@ -254,10 +254,7 @@ class SchematicRenderReviewTest {
         )
         val before = com.android.shaftschematic.data.SettingsStore.pdfPrefs.outputFont
         try {
-            for (font in listOf(
-                com.android.shaftschematic.util.OutputFont.MEDIUM,
-                com.android.shaftschematic.util.OutputFont.HYPERLEGIBLE,
-            )) {
+            for (font in com.android.shaftschematic.util.OutputFont.entries) {
                 com.android.shaftschematic.data.SettingsStore.updatePdfPrefs { it.copy(outputFont = font) }
                 val prefs = PdfPrefs(footerTextScale = 1.5f, dimTextScale = 1.5f)
                 renderConsolidated(

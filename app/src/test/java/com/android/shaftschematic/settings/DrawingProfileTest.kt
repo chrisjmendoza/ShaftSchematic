@@ -63,7 +63,7 @@ class DrawingProfileTest {
             threadSlant = 6.5f,
             threadDensity = 0.85f,
             fractionStyle = FractionStyle.STACKED,
-            outputFont = OutputFont.CONDENSED,
+            outputFont = OutputFont.B612,
             dualUnitLayout = DualUnitLayout.STACKED,
             wearTraceDepthFrac = 0.11f,
             wearBandShadeFrac = 0.22f,
@@ -87,7 +87,7 @@ class DrawingProfileTest {
                     shadedLiners = !PdfPrefs().shadedLiners,
                     arrowSizePt = PDF_ARROW_SIZE_MEDIUM_PT,
                     fractionStyle = FractionStyle.STACKED,
-                    outputFont = OutputFont.MONOSPACE,
+                    outputFont = OutputFont.HYPERLEGIBLE_MONO,
                     curveHiHeightIn = 1.25f,
                 ),
                 lineThicknessScale = 1.75f,
@@ -102,7 +102,7 @@ class DrawingProfileTest {
             decoded.getValue("Customer A").toPdfPrefs().fractionStyle,
         )
         assertEquals(
-            OutputFont.MONOSPACE,
+            OutputFont.HYPERLEGIBLE_MONO,
             decoded.getValue("Customer A").toPdfPrefs().outputFont,
         )
     }

@@ -244,8 +244,9 @@ Top of page, full width.
 
 ### Font Rules:
 - Sans-serif by default, but the face is user-set: **Settings → Drawing → "Output font"**
-  (`PdfPrefs.outputFont` — Standard / Medium / Hyperlegible / Condensed / Serif / Monospace;
-  Hyperlegible is the one bundled font, see `docs/contracts/FractionTypography.md` §6). Every fresh text `Paint`
+  (`PdfPrefs.outputFont` — Standard / Medium / Hyperlegible / Hyperlegible Bold / Hyperlegible
+  Mono / B612, every one a bundled font so a sheet prints the same on every device, see
+  `docs/contracts/FractionTypography.md` §6). Every fresh text `Paint`
   a composer builds comes from `sheetTextPaint` (`pdf/SheetTextPaint.kt`), which applies
   `OutputTypography.active`, the process-wide mirror `SettingsStore.updatePdfPrefs` writes; every
   other text paint on a sheet is a copy-constructor of one of those and inherits the face

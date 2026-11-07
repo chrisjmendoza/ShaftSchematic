@@ -37,11 +37,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.ExperimentalTextApi
-import androidx.compose.ui.text.font.DeviceFontFamilyName
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontWeight
-import com.android.shaftschematic.R
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -792,15 +789,14 @@ internal fun OutputFontChips(
                 FilterChip(
                     selected = outputFont == font,
                     onClick = { onCommit(font) },
-                    // The chip text style is medium weight; each specimen is set at the weight its
-                    // face prints at, or Standard would read heavier than the Medium chip beside it.
+                    // Each specimen is set in the very font file the sheet prints with. The chip
+                    // text style is medium weight; the label asks for Normal so the file's own
+                    // weight shows, or Standard would read heavier than the Medium chip beside it.
                     label = {
                         ChipLabel(
                             font.uiLabel(),
-                            style = MaterialTheme.typography.labelLarge.copy(
-                                fontWeight = if (font == OutputFont.MEDIUM) FontWeight.Medium else FontWeight.Normal,
-                            ),
-                            fontFamily = outputFontPreviewFamily(font),
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Normal),
+                            fontFamily = FontFamily(Font(font.fontRes)),
                         )
                     },
                     modifier = Modifier.testTag("output_font_${font.name}"),
@@ -808,27 +804,14 @@ internal fun OutputFontChips(
             }
         }
         Text(
-            "Every printed sheet is set in this face. Standard is the historical look. Medium " +
-                "(heavier strokes) and Hyperlegible (made for low vision) are the easiest to read.",
+            "Every printed sheet is set in this face, the same on every phone. Standard is the " +
+                "historical look. Medium and Hyperlegible Bold are heavier; the Hyperlegible faces " +
+                "(made for low vision) keep 1, l and I or 0 and O apart; Hyperlegible Mono lines " +
+                "digits up in columns; B612 was made for reading figures on cockpit displays.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
-}
-
-/**
- * The Compose family matching what an [OutputFont] draws with on paper, so a chip is a specimen
- * of its own choice. A device without the named family falls back to its default sans, exactly
- * as the printed sheet would.
- */
-@OptIn(ExperimentalTextApi::class)
-private fun outputFontPreviewFamily(font: OutputFont): FontFamily = when (font) {
-    OutputFont.STANDARD -> FontFamily.SansSerif
-    OutputFont.MEDIUM -> FontFamily.SansSerif
-    OutputFont.HYPERLEGIBLE -> FontFamily(Font(R.font.atkinson_hyperlegible_regular))
-    OutputFont.CONDENSED -> FontFamily(Font(DeviceFontFamilyName("sans-serif-condensed")))
-    OutputFont.SERIF -> FontFamily.Serif
-    OutputFont.MONOSPACE -> FontFamily.Monospace
 }
 
 /**
