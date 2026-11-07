@@ -19,6 +19,11 @@ import android.graphics.Paint
  * overhangs, because a dimension chopped through the middle is worse than one that touches its
  * neighbour.
  *
+ * **A value never splits from its own parts** ([isGluedSpace]): the space inside a mixed number
+ * (`8 1/4"`) and the space between a number and its `mm` are not break opportunities, so a value
+ * moves to the next line whole. A wrap that left `8` at a line end and `1/4"` under it read as two
+ * values, an 8 and a quarter (on-device report, footer text at 175%).
+ *
  * ## Measuring
  * Widths come from [measureRichText] when [rich] is set, so a wrapped line carrying a built-up
  * fraction is measured exactly as it will be drawn — the same measure/draw pairing rule as
@@ -45,13 +50,13 @@ fun wrapRichLines(
 
     if (text.isEmpty() || maxWidth <= 0f || width(text) <= maxWidth) return listOf(text)
 
-    // Break opportunities: after every space, and after every "×". Tokens keep their own trailing
-    // space so joining them back up reproduces the source text exactly.
+    // Break opportunities: after every space a value does not glue, and after every "×". Tokens
+    // keep their own trailing space so joining them back up reproduces the source text exactly.
     val tokens = mutableListOf<String>()
     val sb = StringBuilder()
-    text.forEach { ch ->
+    text.forEachIndexed { i, ch ->
         sb.append(ch)
-        if (ch == ' ' || ch == '×') {
+        if ((ch == ' ' && !isGluedSpace(text, i)) || ch == '×') {
             tokens += sb.toString()
             sb.clear()
         }
@@ -79,4 +84,17 @@ fun wrapRichLines(
     }
     flush()
     return if (out.isEmpty()) listOf(text) else out
+}
+
+private val FRACTION_AHEAD = Regex("""\d+/\d+""")
+private val MM_AHEAD = Regex("""mm(?![A-Za-z])""")
+
+/**
+ * Whether the space at [i] in [text] holds a value together, so a wrap may not break there: a
+ * digit before it and, after it, either a fraction (`8 1/4"` — the mixed number) or the `mm` unit
+ * (`38.1 mm`). Any other space is an ordinary break opportunity.
+ */
+internal fun isGluedSpace(text: String, i: Int): Boolean {
+    if (i <= 0 || i >= text.length - 1 || text[i] != ' ' || !text[i - 1].isDigit()) return false
+    return FRACTION_AHEAD.matchesAt(text, i + 1) || MM_AHEAD.matchesAt(text, i + 1)
 }

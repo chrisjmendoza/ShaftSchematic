@@ -131,8 +131,10 @@ fallback), so it carries neither the height slider nor the S-break slider.
   a row on the options sheet of each document it changes, grouped into that sheet's
   sections (ruling 2026-11-07, below) — line weight, S-break, shading, fractions, the output
   font, arrows, text sizes, dual-unit layout, the units note, the optional footer lines,
-  Template mode, the sizing-curve anchors ("Default drawing size", which the per-job Shaft
-  height multiplies), the wear sliders, runout bubbles. It stays Settings-only when it is a
+  Template mode, the wear sliders, runout bubbles. It stays Settings-only when it is a
+  baseline the sheet's own controls already stand on (the sizing-curve anchors, "Default
+  drawing size" — the app-wide range every shaft starts from; the per-job Shaft height on the
+  sheet multiplies it, so a copy beside that slider would read as a per-sheet choice), a
   capability gate (per-component units, liner shoulders), a default for a document field
   (dual-units default), export plumbing that prints nothing (open after export), or profile
   management. A control that only means something on one document
@@ -287,9 +289,12 @@ waits for the button.
 
 - **Every output choice on the preview menu.** Chris: "I want as many of our selection aspects
   that affect pdf output to live in that menu as organized as we can keep it." The rows that
-  had been Settings-only as house styles or baselines — output font, units note, footer lines,
-  Template mode, the sizing-curve anchors — joined the options sheets, each on the sheets it
-  changes. The Q3 posture is unchanged: every such row is a remote control for the one
+  had been Settings-only as house styles — output font, units note, footer lines, Template
+  mode — joined the options sheets, each on the sheets it changes. The sizing-curve anchors
+  went with them for one build and came straight back (Chris: "My original rule is intended to
+  stay where that lives in settings. The user can adjust already in shaft section, the default
+  option was for the user to be able to set overall default range"): the baseline stays
+  Settings-only. The Q3 posture is unchanged: every sheet row is a remote control for the one
   app-wide pref, never a per-document copy. → §3.3.
 
 ### Open

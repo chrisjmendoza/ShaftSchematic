@@ -62,6 +62,48 @@ class TextWrapTest {
         assertEquals(listOf(s), lines)
     }
 
+    // On-device report, footer text at 175%: "KW: … × 8 1/4"" wrapped as "8" at the line end and
+    // "1/4"" under it, which reads as two values. A value moves to the next line whole.
+
+    @Test
+    fun `a mixed number moves to the next line as one unit`() {
+        val s = "KW: 1 3/4\" × 3/4\" × 8 1/4\""
+        // Narrow enough that "8 1/4"" cannot stay on the first line, wide enough for "× 8" alone.
+        val width = paint.measureRichText("KW: 1 3/4\" × 3/4\" × 8")
+        val lines = wrapRichLines(s, paint, width, rich = true)
+
+        assertTrue("expected a wrap at this width", lines.size > 1)
+        assertTrue(
+            "the mixed number split across rows: $lines",
+            lines.any { it.contains("8 1/4\"") },
+        )
+        lines.forEach { row -> assertTrue("row ends on a bare whole number: '$row'", !row.trimEnd().endsWith(" 8")) }
+        assertEquals(joined(listOf(s)), joined(lines))
+    }
+
+    @Test
+    fun `a metric value keeps its mm`() {
+        val s = "Length: 12 5/8\" [320.7 mm] × 2\" [50.8 mm]"
+        val width = paint.measureRichText("Length: 12 5/8\" [320.7")
+        val lines = wrapRichLines(s, paint, width, rich = true)
+
+        assertTrue(lines.size > 1)
+        lines.forEach { row ->
+            assertTrue("a number was split from its mm: '$row'", !row.trimStart().startsWith("mm"))
+        }
+        assertTrue(lines.any { it.contains("[320.7 mm]") })
+    }
+
+    @Test
+    fun `only the spaces inside a value are glued`() {
+        val s = "KW: 8 1/4\" [209.6 mm] x 2 TPI"
+        assertTrue(isGluedSpace(s, s.indexOf(" 1/4")))       // 8 ␣1/4
+        assertTrue(isGluedSpace(s, s.indexOf(" mm")))        // 209.6 ␣mm
+        assertTrue(!isGluedSpace(s, s.indexOf(" 8")))        // KW: ␣8 — a label, breakable
+        assertTrue(!isGluedSpace(s, s.indexOf(" TPI")))      // 2 ␣TPI — not mm, breakable
+        assertTrue(!isGluedSpace(s, s.indexOf(" [")))        // 1/4" ␣[ — between two values
+    }
+
     @Test
     fun `every wrapped row fits the width when the text has somewhere to break`() {
         val s = "Thread: 5.25\" [133.4 mm] × 4 TPI × 5 13/16\" [147.6 mm]"
