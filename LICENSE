@@ -30,10 +30,14 @@ Scope notes (informational, not additional restrictions on the code):
   reserved, no redistribution. The app's own bundled assets under
   `app/src/main/assets/` ARE covered, except the third-party license texts in
   `app/src/main/assets/licenses/`.
-- The bundled font `app/src/main/res/font/atkinson_hyperlegible_regular.ttf`
-  (Atkinson Hyperlegible, Copyright 2020 Braille Institute of America, Inc.)
-  is not covered by this license; it is distributed under the SIL Open Font
-  License 1.1, whose text is `app/src/main/assets/licenses/AtkinsonHyperlegible-OFL.txt`.
+- The bundled fonts in `app/src/main/res/font/` are not covered by this
+  license; each is distributed under its own, whose text ships in
+  `app/src/main/assets/licenses/`:
+  Atkinson Hyperlegible Regular and Bold (Copyright 2020 Braille Institute of
+  America, Inc.) and Atkinson Hyperlegible Mono (Copyright 2020-2024 The
+  Atkinson Hyperlegible Mono Project Authors) under the SIL Open Font License
+  1.1; B612 (Copyright 2012 The B612 Project Authors) under the SIL Open Font
+  License 1.1; Roboto Regular and Medium (Google) under the Apache License 2.0.
 - This license grants no rights to the "ShaftSchematic" name or icon; forks
   should ship under their own branding.
 - ShaftSchematic is a drafting aid. It does not verify or certify any design;

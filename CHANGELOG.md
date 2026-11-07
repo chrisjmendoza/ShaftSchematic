@@ -8,6 +8,23 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-07
 
+### feat(pdf): every output font ships inside the app; Hyperlegible Bold, Hyperlegible Mono and B612 added
+
+On a Samsung phone Standard, Condensed, Serif and Monospace printed identically while the bundled
+Hyperlegible came through (on-device report): the phone substitutes its own font for the system
+families. Every face is now a font file in `res/font`, so a sheet prints the same on every phone
+and tablet:
+
+- **Standard** and **Medium** — Roboto Regular and Medium (Apache 2.0), the stock Android look.
+- **Hyperlegible** (unchanged), **Hyperlegible Bold** and **Hyperlegible Mono** (fixed width, digits
+  line up) — Atkinson Hyperlegible, Braille Institute (SIL OFL 1.1).
+- **B612** — the Airbus cockpit-display face, made to read figures at a glance (SIL OFL 1.1).
+
+Condensed, Serif and Monospace are gone: a stored Monospace choice (pref or Drawing profile) now
+prints in Hyperlegible Mono, Condensed and Serif in Standard. The Settings and options-panel chips
+are each set in the very file the sheet prints with. Licence texts ship in `assets/licenses/`;
+`LICENSE` and the README list them. The app grows about 1.3 MB, mostly Roboto.
+
 ### fix(pdf): a wrapped footer line keeps a number and its fraction together
 
 At 175% footer text a keyway line wrapped between the whole number and its fraction — `8` at the

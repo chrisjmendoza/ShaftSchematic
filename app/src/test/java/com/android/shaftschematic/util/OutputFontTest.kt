@@ -20,12 +20,19 @@ class OutputFontTest {
 
     @Test
     fun `a stored name decodes to its own face`() {
-        assertSame(OutputFont.STANDARD, OutputFont.fromName("STANDARD"))
-        assertSame(OutputFont.MEDIUM, OutputFont.fromName("MEDIUM"))
-        assertSame(OutputFont.HYPERLEGIBLE, OutputFont.fromName("HYPERLEGIBLE"))
-        assertSame(OutputFont.CONDENSED, OutputFont.fromName("CONDENSED"))
-        assertSame(OutputFont.SERIF, OutputFont.fromName("SERIF"))
-        assertSame(OutputFont.MONOSPACE, OutputFont.fromName("MONOSPACE"))
+        OutputFont.entries.forEach { assertSame(it, OutputFont.fromName(it.name)) }
+    }
+
+    /**
+     * The retired system-family faces printed identically on a phone that substitutes its own
+     * font (on-device report), so they were dropped. A stored choice maps to its nearest bundled
+     * successor rather than an error: Monospace keeps its fixed pitch in Hyperlegible Mono.
+     */
+    @Test
+    fun `a retired face decodes to its successor`() {
+        assertSame(OutputFont.HYPERLEGIBLE_MONO, OutputFont.fromName("MONOSPACE"))
+        assertSame(OutputFont.STANDARD, OutputFont.fromName("CONDENSED"))
+        assertSame(OutputFont.STANDARD, OutputFont.fromName("SERIF"))
     }
 
     /**
@@ -38,7 +45,7 @@ class OutputFontTest {
         assertSame(OutputFont.Default, OutputFont.fromName(null))
         assertSame(OutputFont.Default, OutputFont.fromName(""))
         assertSame(OutputFont.Default, OutputFont.fromName("   "))
-        assertSame(OutputFont.Default, OutputFont.fromName("serif"))
+        assertSame(OutputFont.Default, OutputFont.fromName("b612"))
         assertSame(OutputFont.Default, OutputFont.fromName("COPPERPLATE"))
     }
 
@@ -47,11 +54,15 @@ class OutputFontTest {
         val labels = OutputFont.entries.map { it.uiLabel() }
 
         assertEquals(labels.size, labels.toSet().size)
-        assertEquals("Standard", OutputFont.STANDARD.uiLabel())
-        assertEquals("Medium", OutputFont.MEDIUM.uiLabel())
-        assertEquals("Hyperlegible", OutputFont.HYPERLEGIBLE.uiLabel())
-        assertEquals("Condensed", OutputFont.CONDENSED.uiLabel())
-        assertEquals("Serif", OutputFont.SERIF.uiLabel())
-        assertEquals("Monospace", OutputFont.MONOSPACE.uiLabel())
+        assertEquals(
+            listOf("Standard", "Medium", "Hyperlegible", "Hyperlegible Bold", "Hyperlegible Mono", "B612"),
+            labels,
+        )
+    }
+
+    @Test
+    fun `every face has its own font file`() {
+        val files = OutputFont.entries.map { it.fontRes }
+        assertEquals(files.size, files.toSet().size)
     }
 }

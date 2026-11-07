@@ -1039,17 +1039,19 @@ internal val helpSections: List<HelpSection> = listOf(
                 "Drawing — Output font",
                 "Settings → Drawing. The typeface every exported PDF is set in — dimension " +
                     "values, callouts, component names and the footer alike.\n\n" +
-                    "• \"Standard\" — the default, and the historical look: the device's " +
-                    "regular sans.\n" +
-                    "• \"Medium\" — the same sans with heavier strokes. Easier on weak eyes and " +
+                    "• \"Standard\" — the default, and the historical look (Roboto).\n" +
+                    "• \"Medium\" — the same face with heavier strokes. Easier on weak eyes and " +
                     "holds up better on a photocopy.\n" +
                     "• \"Hyperlegible\" — Atkinson Hyperlegible, made by the Braille Institute " +
                     "for low-vision readers: 1, l and I, 0 and O, 5 and S stay distinct. " +
                     "Pair it with a larger Footer or Dimension text size for the easiest read.\n" +
-                    "• \"Condensed\" — a narrower sans. Values take less room, so more of them " +
-                    "seat inside the dimension line instead of above it.\n" +
-                    "• \"Serif\" — for shops whose paperwork is set that way.\n" +
-                    "• \"Monospace\" — fixed pitch, so digits line up in a column.\n\n" +
+                    "• \"Hyperlegible Bold\" — the same letters, heavier.\n" +
+                    "• \"Hyperlegible Mono\" — the same letters at a fixed width, so digits " +
+                    "line up in a column.\n" +
+                    "• \"B612\" — designed for aircraft cockpit displays, to read figures at a " +
+                    "glance in poor light.\n\n" +
+                    "Every face ships inside the app, so a sheet prints the same on every " +
+                    "phone and tablet.\n\n" +
                     "App-wide like the other Drawing settings: one choice serves every " +
                     "document, and a saved Drawing profile captures it along with the rest of " +
                     "the look. \"Restore Drawing defaults\" puts it back to Standard. The same " +
@@ -1057,8 +1059,8 @@ internal val helpSections: List<HelpSection> = listOf(
                     "a face can be judged against the page it prints.\n\n" +
                     "Nothing on a sheet collides or shifts when you change it — fractions, " +
                     "dual-unit stacks and every rail break are measured from the face as it " +
-                    "will actually print, not from a fixed width. A device that does not carry " +
-                    "one of these families simply prints in Standard.\n\n" +
+                    "will actually print, not from a fixed width. A wider face may push a few " +
+                    "more values above their dimension lines.\n\n" +
                     "App screens are unaffected; this styles the paper only.",
                 manualAnchor = "settings-drawing-lines",
             ),

@@ -17,6 +17,8 @@ import org.robolectric.annotation.GraphicsMode
  * [sheetTextPaint] carries the Output font into every text paint a composer builds — the rail
  * values and the Ø callouts included, which once printed sans under a Serif choice.
  */
+// Robolectric loads no res/font files without an init, so each face falls back — the paint must
+// still carry exactly what the mirror resolves.
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -29,18 +31,18 @@ class SheetTextPaintTest {
 
     @Test
     fun `a sheet text paint takes the chosen output face`() {
-        SettingsStore.updatePdfPrefs { it.copy(outputFont = OutputFont.SERIF) }
-        assertEquals(OutputFont.SERIF.typeface(), sheetTextPaint(10f).typeface)
+        SettingsStore.updatePdfPrefs { it.copy(outputFont = OutputFont.B612) }
+        assertEquals(OutputFont.B612.typeface(), sheetTextPaint(10f).typeface)
 
-        SettingsStore.updatePdfPrefs { it.copy(outputFont = OutputFont.MONOSPACE) }
-        assertEquals(OutputFont.MONOSPACE.typeface(), sheetTextPaint(10f).typeface)
+        SettingsStore.updatePdfPrefs { it.copy(outputFont = OutputFont.HYPERLEGIBLE_MONO) }
+        assertEquals(OutputFont.HYPERLEGIBLE_MONO.typeface(), sheetTextPaint(10f).typeface)
     }
 
     @Test
     fun `a copy of a sheet text paint keeps the face`() {
-        SettingsStore.updatePdfPrefs { it.copy(outputFont = OutputFont.SERIF) }
+        SettingsStore.updatePdfPrefs { it.copy(outputFont = OutputFont.B612) }
         val derived = Paint(sheetTextPaint(12f)).apply { textSize = 8f }
-        assertEquals(OutputFont.SERIF.typeface(), derived.typeface)
+        assertEquals(OutputFont.B612.typeface(), derived.typeface)
     }
 
     @Test

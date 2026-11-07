@@ -195,8 +195,8 @@ Editable text is deliberately **not** included: the numeric input fields show pl
 
 The *face* the app sets its sheets in is a separate user choice from the fraction *glyph*, and it
 is held in exactly the same shape: `PdfPrefs.outputFont` (`util/OutputTypography.kt` —
-`OutputFont.STANDARD` / `MEDIUM` / `HYPERLEGIBLE` / `CONDENSED` / `SERIF` / `MONOSPACE`, Standard being the historical look and
-the default), **Settings → Drawing → "Output font"**. It is app-wide, captured by a named Drawing
+`OutputFont.STANDARD` / `MEDIUM` / `HYPERLEGIBLE` / `HYPERLEGIBLE_BOLD` / `HYPERLEGIBLE_MONO` /
+`B612`, Standard being the historical look and the default), **Settings → Drawing → "Output font"**. It is app-wide, captured by a named Drawing
 profile, restored by "Restore Drawing defaults", and — like the fraction chips — also on both PDF
 options sheets (`OutputFontChips` in "Lines & text"), on-device request: every choice that changes
 the printed sheet belongs in the preview menu too, where the face can be judged against the page.
@@ -205,7 +205,7 @@ The draw sites take no typeface parameter. Every FRESH text paint under `pdf/` i
 ONE factory `sheetTextPaint(size, align)` (`pdf/SheetTextPaint.kt`), which sets
 `typeface = OutputTypography.active`; every other text paint is a copy-constructor of one of those
 and inherits the face. A text paint built by hand once printed the schematic's rail values and Ø
-callouts in the platform sans beside a Serif sheet (on-device report), so
+callouts in the platform sans beside a sheet set in another face (on-device report), so
 `SheetTextPaintSourceTest` scans `pdf/` and fails on a fresh `Paint(...)` whose `apply` block sets a
 text property. The factory's call sites:
 
@@ -234,17 +234,28 @@ simply seats more values in a break. What it *can* disturb is the §3 size contr
 descent and cap height are the face's own: `FractionTextRendererTest` therefore runs its stacked
 and diagonal ink-bounds checks in **every** `OutputFont`.
 
-The faces are system families plus ONE bundled font (on-device request, 2026-11-06: readers with
-poor eyesight). `MEDIUM` is the platform sans at medium weight (`sans-serif-medium`).
-`HYPERLEGIBLE` is Atkinson Hyperlegible Regular (Braille Institute, SIL OFL 1.1 —
-`res/font/atkinson_hyperlegible_regular.ttf`, license text shipped at
-`assets/licenses/AtkinsonHyperlegible-OFL.txt`, noted in `LICENSE` and the README). `OutputFont.typeface`
-has no Context and the composers draw off the main thread, so the bundled face is loaded ONCE in
-`ShaftSchematicApp.onCreate` by `BundledFonts.init` — before any ViewModel applies the persisted
-font — and cached; `BundledFontsTest` proves it packages, loads, and sets type unlike Standard. It
-lacks ← → ″ ✓, which the platform draws from its system fallback fonts.
+**Every face is BUNDLED, never a system family** (`OutputFont.fontRes`, one `res/font` file each).
+The first build offered system families — Condensed, Serif, Monospace, and Standard/Medium as the
+platform sans — and a Samsung phone printed four of them identically while the bundled Hyperlegible
+came through (on-device report, 2026-11-07): a device may substitute its own font for the platform
+families, and the stock emulator printing them distinctly proved nothing about the shop's phones.
+Bundled, a sheet prints the same on every device. The faces (on-device requests, readers with poor
+eyesight): `STANDARD` Roboto Regular and `MEDIUM` Roboto Medium (Apache 2.0 — stock Android's own
+sans, so the historical look is unchanged), `HYPERLEGIBLE` / `HYPERLEGIBLE_BOLD` Atkinson
+Hyperlegible (Braille Institute), `HYPERLEGIBLE_MONO` Atkinson Hyperlegible Mono (fixed pitch), and
+`B612` (Airbus cockpit-display face) — all static Regular/Bold instances, never a variable font, all
+SIL OFL 1.1 except Roboto. Licence texts ship in `assets/licenses/`, noted in `LICENSE` and the
+README.
 
-A device that lacks a system family gets its default sans back from `Typeface.create`, a bundled
-font that failed to load stands in as Standard (logged), and `OutputFont.fromName` decodes an
-unreadable stored name to `OutputFont.Default` — a sheet in the wrong face, never a sheet with no
-type.
+`OutputFont.typeface` has no Context and the composers draw off the main thread, so the faces are
+loaded ONCE in `ShaftSchematicApp.onCreate` by `BundledFonts.init` and cached; `OutputTypography`
+holds the CHOICE and resolves the face on every read, so a read before the load cannot pin a
+fallback for the life of the process. `BundledFontsTest` proves every face packages, loads, and
+measures unlike every other; the instrumented `OutputFontPdfProbeTest` proves they PRINT distinctly
+through `PdfDocument` → `PdfRenderer` on a real device. The Atkinson faces lack ← → ″ ✓, which the
+platform draws from its system fallback fonts.
+
+A face whose file failed to load draws in the platform sans (logged). `OutputFont.fromName` maps
+the retired names to their nearest successor — `MONOSPACE` → `HYPERLEGIBLE_MONO`, `CONDENSED` and
+`SERIF` → `STANDARD` — and any other unreadable stored name to `OutputFont.Default`: a sheet in the
+wrong face, never a sheet with no type.
