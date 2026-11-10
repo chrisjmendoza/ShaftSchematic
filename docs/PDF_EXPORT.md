@@ -529,14 +529,26 @@ they are now all-BELOW, same as liners.
 - **PDF-only:** there is no on-screen canvas diameter leader, so the "draw identically
   in both sites" rule that applies to coupler bolt slots / wear pits / runout markers
   does not apply here.
+- **Rows and label sides are placed together** — `DiameterCalloutLayout.place`
+  (`DiameterCalloutLayoutTest`). A callout may not overlap another's label-and-dogleg on its own
+  row, drop its leader through a value on a row above, or set its value across the leader of a
+  callout on a row below; the row-by-row `assignTiers` checked only the first, so a blend's leader
+  under a liner's `Ø 9.750"` ran straight through the value (on-device report). Each callout takes
+  the first clear spot: row 0 on its usual side, row 1 on its usual side, then the same rows with
+  the value hung on the OTHER side of its leader — rows before sides, so a sheet that never
+  conflicted or only needed a second row is placed as before. Feature callouts (a blend's) are
+  placed first, since their leaders point at one spot; a diameter's value reads from either row.
+  `DiameterLeaderRenderer` takes row and side from that ONE answer for both `occupancy` and ink.
 - **Angle-mode blends join the same pass** (on-device request: "some blends have expressions in
-  degrees"). A body face entered by angle prints its STORED angle as `45°` (trimmed, unitless, no
-  dual term — `blendAngleCalloutText`) with a leader to the midpoint of the chamfer's cone, and its
-  corner radius, when it has one, as a length with an `R` (`3/8" R` — inches set as a fraction to
-  1/32 like every printed length, `10 mm R` compact, the dual secondary after it,
-  `blendRadiusCalloutLabel`) with a leader to the midpoint of the round, as on the shop's hand
-  sketch. `buildBlendAngleCallouts` reads both anchors off the same `bodyDrawEdges` the body pass
-  draws (`BodyDrawEdges.angleMarks`), so a leader lands on the bottom outline the sheet inked
+  degrees"). A body face entered by angle prints ONE callout on ONE leader to the midpoint of
+  the chamfer's cone: its STORED angle as `45°` (trimmed, unitless — `blendAngleCalloutText`),
+  followed, when it has a corner radius, by the radius as a length with an `R` — `45°, 3/8" R`
+  (inches set as a fraction to 1/32 like every printed length, `10 mm R` compact, the dual
+  secondary after it; `blendAngleRadiusCalloutLabel`). A leader each was the first build: the
+  chamfer and its round are a point or two apart on paper, so the two leaders drew as a doubled
+  line with the two values printed on top of each other (on-device report).
+  `buildBlendAngleCallouts` reads the anchor off the same `bodyDrawEdges` the body pass
+  draws (`BodyDrawEdges.angleMarks`), so the leader lands on the bottom outline the sheet inked
   (`DiaCallout.anchorXPt`/`anchorYPt` — the leader leaves the feature; the kink and value keep the
   shaft's bottom edge as datum, so they sit in the Ø tier rows). The callouts are appended to the
   SAME `DiaCallout` list — same tiers, same `occupancy` the name labels plan around — never a

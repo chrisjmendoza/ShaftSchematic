@@ -245,9 +245,9 @@ material.
   list behind both the mm surface envelope and the drawn silhouette, so `surfaceSegsFrom` sees the
   true derived span and every draw site the same shape).
 - Silhouette only — no dimension rail, no footer row, no effect on OAL, coverage, or collision.
-  The one print: an **Angle-mode** face's stored angle (`45°`) and corner radius (`3/8" R`) hang
-  below the schematic as leader callouts (`buildBlendAngleCallouts`, `docs/PDF_EXPORT.md` §5.3),
-  leaders landing on the drawn chamfer and round (`BodyDrawEdges.angleMarks`). They print the
+  The one print: an **Angle-mode** face's stored angle and corner radius hang below the schematic
+  as ONE leader callout (`45°, 3/8" R` — `buildBlendAngleCallouts`, `docs/PDF_EXPORT.md` §5.3),
+  its leader landing on the drawn chamfer (`BodyDrawEdges.angleMarks`). They print the
   STORED values, never anything measured off the drawing — the axial map is compressed and the
   drawn width floored, on a different scale from the diameters, so the drawn slope is not the true
   angle — which is why the drawn-width floor still never reaches a printed number. A Length-mode

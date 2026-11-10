@@ -926,10 +926,12 @@ normalized vertex list (`blendFracPoints`) feeds the mm surface envelope and eve
 silhouette, so no site carries shape code of its own. Length-mode blends print **no dimension rail,
 no footer row and no callout** — the rails keep dimensioning the STORED span (dimension to the
 theoretical sharp corner), which is why nothing in `DimensionRailLayout` or either composer's rail
-pass changed. An **Angle-mode** face prints its STORED angle (`45°`) and corner radius (`3/8" R`)
-as below-shaft leader callouts on the schematic (`buildBlendAngleCallouts`, leaders landing on the
-drawn chamfer and round via `BodyDrawEdges.angleMarks`), appended to the Ø callout list so they
-share its tiers and the ONE below-shaft collision space with the Ø values and the component names;
+pass changed. An **Angle-mode** face prints its STORED angle and corner radius as ONE below-shaft
+leader callout on the schematic (`45°, 3/8" R` — `buildBlendAngleCallouts`, the leader landing on
+the drawn chamfer via `BodyDrawEdges.angleMarks`; a leader each drew as a doubled line with the two
+values on top of each other, on-device report), appended to the Ø callout list so it shares the
+ONE below-shaft collision space with the Ø values and the component names — rows AND label sides
+placed together by `DiameterCalloutLayout.place`, so no leader drops through another callout's value;
 schematic composer only (the Final schematic and its Original + Final sheet included), no other
 sheet. Those are typed values, never measured off the drawing — the axial map is compressed and
 the drawn width floored, on a different scale from the diameters, so the drawn slope is NOT the
