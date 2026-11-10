@@ -548,8 +548,12 @@ internal val helpSections: List<HelpSection> = listOf(
                     "body's own face, from the neighbour's Ø into the body's Ø, instead of a " +
                     "square shoulder. Each face has its own Square | Blend chips under " +
                     "\"Component blend\" on the body card (explicit or auto) and in Add Body; " +
-                    "Blend shows the length the curve runs in from the face, and one Shape — " +
-                    "S-curve, Fillet or Eased cone — serves both faces. Where a liner butts a " +
+                    "Blend by Length gives how far the curve runs in from the face, and one Shape — " +
+                    "S-curve, Fillet or Eased cone — serves both faces. Blend by Angle gives a " +
+                    "straight chamfer in degrees from the centerline (45° climbs one for one): " +
+                    "its length comes from the diameter step, shown under the angle, and an " +
+                    "optional Corner radius rounds it into the smaller diameter. Switching " +
+                    "between the two keeps the length you typed. Where a liner butts a " +
                     "blended face, \"At a liner: Seat | Liner OD\" picks where the curve starts: " +
                     "halfway between the liner OD and the body Ø (Seat, the default), or the " +
                     "full liner OD for a shaft that ramps straight up to the liner.\n\n" +
@@ -559,7 +563,9 @@ internal val helpSections: List<HelpSection> = listOf(
                     "dashed cuts across the body.\n\n" +
                     "Neither prints a dimension or a footer line — the rails still dimension the " +
                     "body ends as if they were square — so a short blend is drawn wider than " +
-                    "scale just so it can be seen.",
+                    "scale just so it can be seen. The one exception: an Angle blend prints the " +
+                    "angle and radius you typed below the shaft (45°, 3/8\" R), never a value " +
+                    "measured off the drawing.",
                 manualAnchor = "components-blends",
             ),
             HelpTopic(

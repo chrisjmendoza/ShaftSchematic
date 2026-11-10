@@ -36,6 +36,7 @@ import com.android.shaftschematic.ui.viewmodel.removeLiner
 import com.android.shaftschematic.ui.viewmodel.removeTaper
 import com.android.shaftschematic.ui.viewmodel.removeThread
 import com.android.shaftschematic.ui.viewmodel.setAutoBlend
+import com.android.shaftschematic.ui.viewmodel.setAutoBlendAngle
 import com.android.shaftschematic.ui.viewmodel.setKeywayUnit
 import com.android.shaftschematic.ui.viewmodel.setKeyways180Apart
 import com.android.shaftschematic.ui.viewmodel.setKeyways90Apart
@@ -47,6 +48,7 @@ import com.android.shaftschematic.ui.viewmodel.setThreadRelief
 import com.android.shaftschematic.ui.viewmodel.updateBody
 import com.android.shaftschematic.ui.viewmodel.updateBodyAuthoredReference
 import com.android.shaftschematic.ui.viewmodel.updateBodyBlend
+import com.android.shaftschematic.ui.viewmodel.updateBodyBlendAngle
 import com.android.shaftschematic.ui.viewmodel.updateBodyKeyway
 import com.android.shaftschematic.ui.viewmodel.updateBodyLabel
 import com.android.shaftschematic.ui.viewmodel.updateBodyCompressOnDrawing
@@ -369,12 +371,20 @@ fun ShaftRoute(
         },
         onSelectComponentById = vm::selectComponentById,
 
-        onAddBody   = { s, l, d, ref, kwW, kwD, kwL, kwO, kwEnd, kwSp, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd, bSAftLen, bSFwdLen, bOdAft, bOdFwd ->
-            vm.addBodyAt(s, l, d, ref, kwW, kwD, kwL, kwO, kwEnd, kwSp, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd, bSAftLen, bSFwdLen, bOdAft, bOdFwd, target)
+        onAddBody   = { s, l, d, ref, kwW, kwD, kwL, kwO, kwEnd, kwSp, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd, bSAftLen, bSFwdLen, bOdAft, bOdFwd, bAngles ->
+            vm.addBodyAt(
+                s, l, d, ref, kwW, kwD, kwL, kwO, kwEnd, kwSp, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd, bSAftLen, bSFwdLen, bOdAft, bOdFwd,
+                blendAftAngleDeg = bAngles.aftAngleDeg,
+                blendFwdAngleDeg = bAngles.fwdAngleDeg,
+                blendAftRadiusMm = bAngles.aftRadiusMm,
+                blendFwdRadiusMm = bAngles.fwdRadiusMm,
+                target = target,
+            )
         },
         onSetAutoSectionDia = { s0, s1, d -> vm.setAutoSectionDiaMm(s0, s1, d, target) },
         onSetAllAutoSectionsDia = { d -> vm.setAutoBodyDiaMm(d, target) },
         onSetAutoBlend = { s0, s1, end, len, prof, seal, sealLen, toOd -> vm.setAutoBlend(s0, s1, end, len, prof, seal, sealLen, toOd, target) },
+        onSetAutoBlendAngle = { s0, s1, end, deg, r -> vm.setAutoBlendAngle(s0, s1, end, deg, r, target) },
         onSetShowAutoBodyDia = { show -> vm.setShowAutoBodyDia(show, target) },
         onAddTaper  = { s, l, sd, ed, rate, ref, kwW, kwD, kwL, kwO, kwS, kwUnit, rateManual ->
             vm.addTaperAt(s, l, sd, ed, rate, ref, kwW, kwD, kwL, kwO, kwS, kwUnit, target, rateManual)
@@ -405,6 +415,7 @@ fun ShaftRoute(
         onUpdateBodyCompressOnDrawing = { i, on -> vm.updateBodyCompressOnDrawing(i, on, target) },
         onUpdateBodyShowDimensionRail = { i, show -> vm.updateBodyShowDimensionRail(i, show, target) },
         onUpdateBodyBlend = { i, aft, fwd, p, sAft, sFwd, sAftLen, sFwdLen, odAft, odFwd -> vm.updateBodyBlend(i, aft, fwd, p, sAft, sFwd, sAftLen, sFwdLen, odAft, odFwd, target) },
+        onUpdateBodyBlendAngle = { i, end, deg, r -> vm.updateBodyBlendAngle(i, end, deg, r, target) },
         onUpdateBodyLabel = { i, label     -> vm.updateBodyLabel(i, label, target) },
         onUpdateBodyKeyway = { i, w, d, l, offset, end, spooned -> vm.updateBodyKeyway(i, w, d, l, offset, end, spooned, target) },
         onUpdateTaper  = { i, s, l, sd, ed, rate -> vm.updateTaper(i, s, l, sd, ed, rate, target) },

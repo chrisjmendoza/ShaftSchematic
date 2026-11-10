@@ -466,9 +466,11 @@ submit, but every control and every visibility condition is decided in one place
 | Control | Shown when |
 |---|---|
 | "Component blend" chips, per face — **Square \| Blend** | always |
-| Axial length field, per face ("Blend AFT/FWD") | that face is **Blend** |
+| "Blend by" chips, per face — **Length \| Angle** (`body_blend_aft_entry_<LENGTH\|ANGLE>`, `body_blend_fwd_…`) | that face is **Blend** |
+| Axial length field, per face ("Blend AFT/FWD") | that face is **Blend** by **Length** |
+| Angle field, per face ("Angle AFT/FWD (°)") + the derived-length line under it (`body_blend_aft_angle_note`) + "Corner radius AFT/FWD" field | that face is **Blend** by **Angle** |
 | "At a liner" chips, per face — **Seat \| Liner OD** (`body_blend_aft_liner_target_<SEAT\|LINER_OD>`, `body_blend_fwd_…`) | that face is **Blend** — shown whether or not a liner butts it today (the dialog cannot know the neighbour; one rule on both surfaces) |
-| Shape chips — S-curve \| Fillet \| Eased cone | either face is Blend |
+| Shape chips — S-curve \| Fillet \| Eased cone | either face is Blend by **Length** (an Angle face is a straight cone) |
 | Seal area checkbox, per face (AFT / FWD) — under its own "Seal areas" heading | always |
 | Seal area length field, per face ("Seal area AFT/FWD") | that face's seal is ON (both surfaces — parity) |
 
@@ -480,6 +482,19 @@ so it is under parity: the dialog holds it as local state and submits it with th
 each tap verbatim through `updateBodyBlend` (one undo step, the seal-checkbox posture), and the auto
 card writes it onto the face's `AutoBlend` anchor. The "Component blend" heading was "Face finish",
 which read as nonsense on a component card (on-device report).
+
+**"Blend by: Length | Angle"** (on-device request: "some blends have expressions in degrees")
+chooses how a blended face is entered. Angle stores the angle from the shaft axis verbatim
+(`blendAftAngleDeg`/`blendFwdAngleDeg`, `AutoBlend.angleDeg`; 0 < θ < 90 — a value outside is
+refused with its reason, "Angle must be between 0° and 90° from the axis", never clamped) and the
+axial length is derived from the face's diameter step; the line under the field reads
+"Length … from the step" from the same lookup the drawing climbs (`angleBlendConeLengthMm` — the
+dialog places the body on a copy of the shaft to read it, `addBodyAngleConeLengthMm`) or says there
+is no step yet. Switching to Angle seeds 45° (`DEFAULT_BLEND_ANGLE_DEG`; a card restores the last
+angle of its session), and a switch either way never touches the typed length. The optional
+"Corner radius" (document length unit, blank = 0) is stored verbatim. The card commits through
+`updateBodyBlendAngle` / `setAutoBlendAngle` (every other blend field passed through); the dialog
+submits a `BlendAngleDraft` (a Length face submits a null angle and 0 radius).
 
 **A seal area is a section property, not part of the blend.** The Square | Blend chips only decide whether the body
 END has a shoulder (a blend ramp up to the neighbour) or is square; the seal area — the grooves the

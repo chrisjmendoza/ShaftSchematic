@@ -1,6 +1,9 @@
 # PDF Export Specification
 Version: v0.5.x
-Last updated: 2026-10-03 — §5.5/§5.6: both PDF options sheets group their controls into
+Last updated: 2026-11-09 — §5.3: an Angle-mode body blend prints its STORED angle (`45°`) and
+corner radius (`3/8" R`) as below-shaft leader callouts on the schematic, in the same pass and
+collision space as the Ø values (on-device request: "some blends have expressions in degrees").
+2026-10-03 — §5.5/§5.6: both PDF options sheets group their controls into
 collapsible sections from ONE ordered list (`OptionsSection`) — Shaft (open), Wear (open),
 Runout bubbles, Thread (only on a threaded shaft), Lines & text, Shade in Components,
 Measurement reference, Units last — most-used on top (on-device request).
@@ -526,6 +529,25 @@ they are now all-BELOW, same as liners.
 - **PDF-only:** there is no on-screen canvas diameter leader, so the "draw identically
   in both sites" rule that applies to coupler bolt slots / wear pits / runout markers
   does not apply here.
+- **Angle-mode blends join the same pass** (on-device request: "some blends have expressions in
+  degrees"). A body face entered by angle prints its STORED angle as `45°` (trimmed, unitless, no
+  dual term — `blendAngleCalloutText`) with a leader to the midpoint of the chamfer's cone, and its
+  corner radius, when it has one, as a length with an `R` (`3/8" R` — inches set as a fraction to
+  1/32 like every printed length, `10 mm R` compact, the dual secondary after it,
+  `blendRadiusCalloutLabel`) with a leader to the midpoint of the round, as on the shop's hand
+  sketch. `buildBlendAngleCallouts` reads both anchors off the same `bodyDrawEdges` the body pass
+  draws (`BodyDrawEdges.angleMarks`), so a leader lands on the bottom outline the sheet inked
+  (`DiaCallout.anchorXPt`/`anchorYPt` — the leader leaves the feature; the kink and value keep the
+  shaft's bottom edge as datum, so they sit in the Ø tier rows). The callouts are appended to the
+  SAME `DiaCallout` list — same tiers, same `occupancy` the name labels plan around — never a
+  collision space of their own. **The printed numbers are the stored ones, never measured off the
+  drawing**: the sheet's axial map is compressed and a blend's drawn width floored, on a different
+  scale from the diameters, so the drawn slope is not the true angle, and a radius too large for
+  its cone is clamped only where drawn. A Length-mode blend prints nothing, so a document with no
+  Angle-mode face prints byte-identically. Gated with the Ø pass (`showDiaCallouts`); a blank draft
+  prints the identifier (`°`, `R`) with a write-in rule. Schematic only — the Final schematic and
+  its Original + Final sheet through the same composer; the runout/consolidated, wear and undercut
+  sheets print no blend values.
 - **Distinct from the wear document's measured-Ø callouts.** These schematic callouts label
   *nominal* body/liner ODs from the spec. The wear document has its own callout system for
   *measured* diameters (`WearRecord.diaReadings` → `geom/WearDiaCalloutLayout.kt`, drawn on

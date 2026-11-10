@@ -85,6 +85,43 @@ class SchematicRenderReviewTest {
         item = item,
     )
 
+    /**
+     * Blend by angle: the hand sketch's 9.750" liner stepping down to a 9.030" body through a 45°
+     * chamfer with a 3/8" R at its foot — to the liner OD, and from the default seat.
+     */
+    @Test
+    fun `blend by angle callouts`() {
+        val inch = 25.4f
+        fun spec(toLinerOd: Boolean) = com.android.shaftschematic.model.ShaftSpec(
+            overallLengthMm = 44.5f * inch,
+            liners = listOf(
+                com.android.shaftschematic.model.Liner(
+                    id = "LN", startFromAftMm = 0f, lengthMm = 30.5f * inch, odMm = 9.75f * inch,
+                    endMmPhysical = 30.5f * inch,
+                ),
+            ),
+            bodies = listOf(
+                com.android.shaftschematic.model.Body(
+                    id = "B1", startFromAftMm = 30.5f * inch, lengthMm = 14f * inch, diaMm = 9.03f * inch,
+                    showDiaOnDrawing = true,
+                    blendAftMm = 1f * inch, blendAftAngleDeg = 45f, blendAftRadiusMm = 0.375f * inch,
+                    blendAftToLinerOd = toLinerOd,
+                ),
+            ),
+            autoBodyDiaMm = 9.03f * inch,
+        )
+        for ((name, s) in listOf("blend_angle_liner_od.png" to spec(true), "blend_angle_seat.png" to spec(false))) {
+            val (bmp, c) = bitmapPage()
+            composeShaftPdfOnCanvas(
+                c, PDF_PAGE_WIDTH_PT.toFloat(), PDF_PAGE_HEIGHT_PT.toFloat(),
+                spec = s, unit = UnitSystem.INCHES, project = ProjectInfo(customer = "Curtin Marine"),
+                appVersion = "review", filename = name, pdfPrefs = PdfPrefs(),
+                resolvedComponents = resolveComponents(s),
+            )
+            save(name, bmp)
+        }
+    }
+
     @Test
     fun `mid-shaft taper job`() {
         renderSchematic("mid_taper_schematic.png", midTaper)

@@ -264,11 +264,13 @@ fun ShaftScreen(
                 blendAftMm: Float, blendFwdMm: Float, blendProfile: BlendProfile,
                 blendAftSeal: Boolean, blendFwdSeal: Boolean,
                 blendAftSealLenMm: Float, blendFwdSealLenMm: Float,
-                blendAftToLinerOd: Boolean, blendFwdToLinerOd: Boolean) -> Unit,
+                blendAftToLinerOd: Boolean, blendFwdToLinerOd: Boolean,
+                blendAngles: BlendAngleDraft) -> Unit,
     onSetAutoSectionDia: (spanStartMm: Float, spanEndMm: Float, diaMm: Float) -> Unit,
     /** Sets the bare-shaft Ø of EVERY auto section together (the card's "All auto sections"). */
     onSetAllAutoSectionsDia: (diaMm: Float) -> Unit,
     onSetAutoBlend: (spanStartMm: Float, spanEndMm: Float, end: LinerAuthoredReference, lengthMm: Float, profile: BlendProfile, seal: Boolean, sealLenMm: Float, toLinerOd: Boolean) -> Unit,
+    onSetAutoBlendAngle: (spanStartMm: Float, spanEndMm: Float, end: LinerAuthoredReference, angleDeg: Float?, radiusMm: Float) -> Unit = { _, _, _, _, _ -> },
     onSetShowAutoBodyDia: (Boolean) -> Unit,
     onAddTaper: (startMm: Float, lengthMm: Float, startDiaMm: Float, endDiaMm: Float,
                  rateText: String, reference: LinerAuthoredReference,
@@ -290,6 +292,7 @@ fun ShaftScreen(
     onUpdateBodyCompressOnDrawing: (Int, Boolean) -> Unit,
     onUpdateBodyShowDimensionRail: (Int, Boolean) -> Unit = { _, _ -> },
     onUpdateBodyBlend: (index: Int, blendAftMm: Float, blendFwdMm: Float, profile: BlendProfile, sealAft: Boolean, sealFwd: Boolean, sealAftLenMm: Float, sealFwdLenMm: Float, toLinerOdAft: Boolean, toLinerOdFwd: Boolean) -> Unit,
+    onUpdateBodyBlendAngle: (index: Int, end: LinerAuthoredReference, angleDeg: Float?, radiusMm: Float) -> Unit = { _, _, _, _ -> },
     onUpdateBodyLabel: (Int, String?) -> Unit,
     onUpdateBodyKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromEndMm: Float, end: LinerAuthoredReference, spooned: Boolean) -> Unit,
     onUpdateTaper: (Int, Float, Float, Float, Float, String) -> Unit,
@@ -720,12 +723,13 @@ fun ShaftScreen(
                 onAddBody = { s, l, d ->
                     onAddBody(
                         s, l, d, LinerAuthoredReference.AFT, 0f, 0f, 0f, 0f, LinerAuthoredReference.AFT, false, null,
-                        0f, 0f, BlendProfile.OGEE, false, false, 0f, 0f, false, false,
+                        0f, 0f, BlendProfile.OGEE, false, false, 0f, 0f, false, false, BlendAngleDraft(),
                     )
                 },
                 onSetAutoSectionDia = onSetAutoSectionDia,
                 onSetAllAutoSectionsDia = onSetAllAutoSectionsDia,
                 onSetAutoBlend = onSetAutoBlend,
+                onSetAutoBlendAngle = onSetAutoBlendAngle,
                 onSetShowAutoBodyDia = onSetShowAutoBodyDia,
                 onUpdateBody = onUpdateBody,
                 onUpdateBodyReference = onUpdateBodyReference,
@@ -735,6 +739,7 @@ fun ShaftScreen(
                 onUpdateBodyCompressOnDrawing = onUpdateBodyCompressOnDrawing,
                 onUpdateBodyShowDimensionRail = onUpdateBodyShowDimensionRail,
                 onUpdateBodyBlend = onUpdateBodyBlend,
+                onUpdateBodyBlendAngle = onUpdateBodyBlendAngle,
                 onUpdateBodyLabel = onUpdateBodyLabel,
                 onUpdateBodyKeyway = onUpdateBodyKeyway,
                 onUpdateTaper = onUpdateTaper,
@@ -885,9 +890,9 @@ fun ShaftScreen(
                     initialLengthMm = addLengthMm,
                     perComponentUnitsEnabled = perComponentUnitsEnabled,
                     dialogUnitConverterEnabled = dialogUnitConverterEnabled,
-                    onSubmit = { s, l, d, ref, kwW, kwD, kwL, kwO, kwEnd, kwSpooned, k180, k90, cw90, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd, bSAftLen, bSFwdLen, bOdAft, bOdFwd ->
+                    onSubmit = { s, l, d, ref, kwW, kwD, kwL, kwO, kwEnd, kwSpooned, k180, k90, cw90, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd, bSAftLen, bSFwdLen, bOdAft, bOdFwd, bAngles ->
                         addBodyOpen = false
-                        onAddBody(s, l, d, ref, kwW, kwD, kwL, kwO, kwEnd, kwSpooned, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd, bSAftLen, bSFwdLen, bOdAft, bOdFwd)
+                        onAddBody(s, l, d, ref, kwW, kwD, kwL, kwO, kwEnd, kwSpooned, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd, bSAftLen, bSFwdLen, bOdAft, bOdFwd, bAngles)
                         onSetKeyways180Apart(k180)
                         onSetKeyways90Apart(k90)
                         if (k90) onSetKeyways90Cw(cw90)

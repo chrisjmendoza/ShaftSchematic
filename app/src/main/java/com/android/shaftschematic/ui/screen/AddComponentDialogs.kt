@@ -47,7 +47,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
+import com.android.shaftschematic.geom.formatBlendAngleDeg
+import com.android.shaftschematic.geom.isValidBlendAngle
 import com.android.shaftschematic.model.BlendProfile
+import com.android.shaftschematic.model.Body
 import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.BoltHoleClocking
@@ -60,6 +63,9 @@ import com.android.shaftschematic.ui.config.AddDefaultsConfig
 import com.android.shaftschematic.ui.input.classifyTaperSideByMidpoint
 import com.android.shaftschematic.ui.input.taperAddDiameterOrder
 import com.android.shaftschematic.ui.order.ComponentKind
+import com.android.shaftschematic.ui.resolved.angleBlendConeLengthMm
+import com.android.shaftschematic.ui.resolved.explicitBodyFaceRun
+import com.android.shaftschematic.ui.resolved.resolveComponents
 import com.android.shaftschematic.ui.util.MUST_BE_POSITIVE_MSG
 import com.android.shaftschematic.ui.util.collectAddWarnings
 import com.android.shaftschematic.ui.util.proposedSpanOverlapMessage
@@ -218,6 +224,17 @@ internal fun KeywayUnitEntryChips(
     }
 }
 
+/**
+ * The Angle-mode entries a new body is created with, per face: the angle from the shaft axis
+ * (null = Length mode) and the corner radius (mm, 0 = a sharp corner).
+ */
+data class BlendAngleDraft(
+    val aftAngleDeg: Float? = null,
+    val fwdAngleDeg: Float? = null,
+    val aftRadiusMm: Float = 0f,
+    val fwdRadiusMm: Float = 0f,
+)
+
 @Composable
 fun AddBodyDialog(
     unit: UnitSystem,
@@ -237,7 +254,8 @@ fun AddBodyDialog(
                blendAftMm: Float, blendFwdMm: Float, blendProfile: BlendProfile,
                blendAftSeal: Boolean, blendFwdSeal: Boolean,
                blendAftSealLenMm: Float, blendFwdSealLenMm: Float,
-               blendAftToLinerOd: Boolean, blendFwdToLinerOd: Boolean) -> Unit,
+               blendAftToLinerOd: Boolean, blendFwdToLinerOd: Boolean,
+               blendAngles: BlendAngleDraft) -> Unit,
     onCancel: () -> Unit,
 ) {
     val d = rememberAddDialogDefaults(spec)
@@ -270,6 +288,14 @@ fun AddBodyDialog(
     // "At a liner": Seat (the derived half-way shoulder) unless the user picks Liner OD.
     var blendAftLinerTarget by remember { mutableStateOf(BlendLinerTarget.SEAT) }
     var blendFwdLinerTarget by remember { mutableStateOf(BlendLinerTarget.SEAT) }
+    // "Blend by: Length | Angle" — the card's entry chips. The angle and corner-radius texts are
+    // local like every dialog field; the length text is kept through a switch, as on the card.
+    var blendAftEntry by remember { mutableStateOf(BlendEntry.LENGTH) }
+    var blendFwdEntry by remember { mutableStateOf(BlendEntry.LENGTH) }
+    var blendAftAngle by remember { mutableStateOf("") }
+    var blendFwdAngle by remember { mutableStateOf("") }
+    val blendAftRadius = remember { SeededMmField.empty() }
+    val blendFwdRadius = remember { SeededMmField.empty() }
 
     // Keyway — gated behind a checkbox (fields hidden until turned on); mirrors the body card.
     var kwEnabled by remember { mutableStateOf(false) }
@@ -317,6 +343,21 @@ fun AddBodyDialog(
     // Same condition as the carousel card's switch: it appears once the shaft will
     // have ≥ 2 keyways (≥ 1 existing plus the one being defined here).
     val showClockingToggle = kwEnabled && spec.keywayCount() >= 1 && kwW > 0f && kwD > 0f && kwL > 0f
+
+    // Angle mode reads the face's step off the shaft the body would join: the same neighbour
+    // lookup the drawing climbs, run over the spec with this body placed (`addBodyAngleConeLengthMm`).
+    val aftAngleActive = blendAftMode == BlendFaceMode.BLEND && blendAftEntry == BlendEntry.ANGLE
+    val fwdAngleActive = blendFwdMode == BlendFaceMode.BLEND && blendFwdEntry == BlendEntry.ANGLE
+    val aftAngleDeg = parseBlendAngleDeg(blendAftAngle)?.takeIf(::isValidBlendAngle)
+    val fwdAngleDeg = parseBlendAngleDeg(blendFwdAngle)?.takeIf(::isValidBlendAngle)
+    val aftConeMm = remember(spec, startMm, lengthMm, diaMm, aftAngleDeg, blendAftLinerTarget, aftAngleActive) {
+        if (!aftAngleActive || aftAngleDeg == null) null
+        else addBodyAngleConeLengthMm(spec, startMm, lengthMm, diaMm, LinerAuthoredReference.AFT, aftAngleDeg, blendAftLinerTarget.toLinerOd)
+    }
+    val fwdConeMm = remember(spec, startMm, lengthMm, diaMm, fwdAngleDeg, blendFwdLinerTarget, fwdAngleActive) {
+        if (!fwdAngleActive || fwdAngleDeg == null) null
+        else addBodyAngleConeLengthMm(spec, startMm, lengthMm, diaMm, LinerAuthoredReference.FWD, fwdAngleDeg, blendFwdLinerTarget.toLinerOd)
+    }
 
     val scroll = rememberScrollState()
 
@@ -407,6 +448,46 @@ fun AddBodyDialog(
                     fwdSealLengthField = {
                         CommitNumField("Seal area FWD (${abbr(unit)})", blendFwdSealLen.text, reserveSupportingLine = true) { blendFwdSealLen.onText(it) }
                     },
+                    aftEntry = blendAftEntry,
+                    fwdEntry = blendFwdEntry,
+                    onSetAftEntry = { e ->
+                        blendAftEntry = e
+                        if (e == BlendEntry.ANGLE && blendAftAngle.isBlank()) blendAftAngle = formatBlendAngleDeg(DEFAULT_BLEND_ANGLE_DEG)
+                    },
+                    onSetFwdEntry = { e ->
+                        blendFwdEntry = e
+                        if (e == BlendEntry.ANGLE && blendFwdAngle.isBlank()) blendFwdAngle = formatBlendAngleDeg(DEFAULT_BLEND_ANGLE_DEG)
+                    },
+                    aftAngleField = {
+                        CommitNumField(
+                            "Angle AFT (°)", blendAftAngle,
+                            errorText = blendAngleError(blendAftAngle),
+                            parseValid = null, fractionKey = false, reserveSupportingLine = true,
+                        ) { blendAftAngle = it }
+                    },
+                    fwdAngleField = {
+                        CommitNumField(
+                            "Angle FWD (°)", blendFwdAngle,
+                            errorText = blendAngleError(blendFwdAngle),
+                            parseValid = null, fractionKey = false, reserveSupportingLine = true,
+                        ) { blendFwdAngle = it }
+                    },
+                    aftRadiusField = {
+                        CommitNumField(
+                            "Corner radius AFT (${abbr(unit)})", blendAftRadius.text,
+                            errorText = addBlendRadiusError(blendAftRadius.text, unit),
+                            reserveSupportingLine = true,
+                        ) { blendAftRadius.onText(it) }
+                    },
+                    fwdRadiusField = {
+                        CommitNumField(
+                            "Corner radius FWD (${abbr(unit)})", blendFwdRadius.text,
+                            errorText = addBlendRadiusError(blendFwdRadius.text, unit),
+                            reserveSupportingLine = true,
+                        ) { blendFwdRadius.onText(it) }
+                    },
+                    aftAngleNote = if (aftAngleDeg == null) "" else angleBlendNote(aftConeMm, unit, ::disp),
+                    fwdAngleNote = if (fwdAngleDeg == null) "" else angleBlendNote(fwdConeMm, unit, ::disp),
                 )
                 Spacer(Modifier.height(12.dp))
                 // The shared gate row the cards carry. No confirm on untick: nothing is stored
@@ -516,8 +597,13 @@ fun AddBodyDialog(
                     blendFwd.text.takeIf { blendFwdMode == BlendFaceMode.BLEND },
                     blendAftSealLen.text.takeIf { sealAft },
                     blendFwdSealLen.text.takeIf { sealFwd },
+                    blendAftRadius.text.takeIf { aftAngleActive },
+                    blendFwdRadius.text.takeIf { fwdAngleActive },
                 )
-            )
+            ) &&
+                // An Angle-mode face needs a usable angle, and a radius that is not negative.
+                (!aftAngleActive || (aftAngleDeg != null && addBlendRadiusError(blendAftRadius.text, unit) == null)) &&
+                (!fwdAngleActive || (fwdAngleDeg != null && addBlendRadiusError(blendFwdRadius.text, unit) == null))
             Button(enabled = ok, onClick = {
                 onSubmit(
                     startMm, lengthMm, diaMm,
@@ -538,12 +624,52 @@ fun AddBodyDialog(
                     if (sealFwd) blendFwdSealLen.mm(unit) ?: 0f else 0f,
                     blendAftMode == BlendFaceMode.BLEND && blendAftLinerTarget.toLinerOd,
                     blendFwdMode == BlendFaceMode.BLEND && blendFwdLinerTarget.toLinerOd,
+                    BlendAngleDraft(
+                        aftAngleDeg = if (aftAngleActive) aftAngleDeg else null,
+                        fwdAngleDeg = if (fwdAngleActive) fwdAngleDeg else null,
+                        aftRadiusMm = if (aftAngleActive) blendAftRadius.mm(unit) ?: 0f else 0f,
+                        fwdRadiusMm = if (fwdAngleActive) blendFwdRadius.mm(unit) ?: 0f else 0f,
+                    ),
                 )
             }) { Text("Add") }
         },
         dismissButton = { TextButton(onClick = onCancel) { Text("Cancel") } }
     )
 }
+
+/**
+ * The error an Add dialog's corner-radius field shows: none while blank (a sharp corner) or a
+ * usable length, else why not.
+ */
+internal fun addBlendRadiusError(text: String, unit: UnitSystem): String? {
+    if (text.isBlank()) return null
+    if (!isLengthText(text)) return NOT_A_NUMBER_ERROR
+    return blendCornerRadiusError(toMmOrNull(text, unit))
+}
+
+/**
+ * The cone length an Angle-mode face of a body NOT YET ADDED would derive — the body is placed on
+ * a copy of [spec] at [startMm] for [lengthMm] at [diaMm] and the copy resolved, so the dialog
+ * reads the step from the same lookup the card and the drawing use. Null when the body cannot be
+ * placed yet (unreadable fields) or its face has no step.
+ */
+internal fun addBodyAngleConeLengthMm(
+    spec: ShaftSpec,
+    startMm: Float,
+    lengthMm: Float,
+    diaMm: Float,
+    end: LinerAuthoredReference,
+    angleDeg: Float,
+    toLinerOd: Boolean,
+): Float? {
+    if (startMm < 0f || lengthMm <= 0f || diaMm <= 0f) return null
+    val probe = Body(id = ADD_BODY_PREVIEW_ID, startFromAftMm = startMm, lengthMm = lengthMm, diaMm = diaMm)
+    val resolved = resolveComponents(spec.copy(bodies = listOf(probe) + spec.bodies))
+    val run = explicitBodyFaceRun(resolved, ADD_BODY_PREVIEW_ID, end) ?: return null
+    return angleBlendConeLengthMm(resolved, run, end, angleDeg, toLinerOd)
+}
+
+private const val ADD_BODY_PREVIEW_ID = "add_body_dialog_preview"
 
 /* ────────────────────────────────────────────────────────────────────────────
  * Liner — Start, Length, Outer Diameter

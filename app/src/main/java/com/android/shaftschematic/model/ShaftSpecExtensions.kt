@@ -460,8 +460,9 @@ internal fun carryBodyDisplay(from: Body, to: Body): Body = to.copy(
 )
 
 /**
- * [to] with the blend authored on ONE face of [from] — that face's blend length, seal area,
- * seal length and liner target — plus [from]'s blend profile. A face is a property of the body
+ * [to] with the blend authored on ONE face of [from] — that face's blend length, Angle-mode
+ * entry (angle and corner radius), seal area, seal length and liner target — plus [from]'s blend
+ * profile. A face is a property of the body
  * END it sits on: a split hands the AFT face to the AFT fragment and the FWD face to the FWD
  * fragment (the two faces cut at the component are square, as any new face is), and a merge
  * takes its AFT face from the AFT fragment and its FWD face from the FWD one. Dropping the blends
@@ -473,6 +474,8 @@ internal fun carryBodyBlendFace(from: Body, to: Body, face: LinerAuthoredReferen
         blendAftSeal = from.blendAftSeal,
         blendAftSealLenMm = from.blendAftSealLenMm,
         blendAftToLinerOd = from.blendAftToLinerOd,
+        blendAftAngleDeg = from.blendAftAngleDeg,
+        blendAftRadiusMm = from.blendAftRadiusMm,
         blendProfile = from.blendProfile,
     )
     LinerAuthoredReference.FWD -> to.copy(
@@ -480,6 +483,8 @@ internal fun carryBodyBlendFace(from: Body, to: Body, face: LinerAuthoredReferen
         blendFwdSeal = from.blendFwdSeal,
         blendFwdSealLenMm = from.blendFwdSealLenMm,
         blendFwdToLinerOd = from.blendFwdToLinerOd,
+        blendFwdAngleDeg = from.blendFwdAngleDeg,
+        blendFwdRadiusMm = from.blendFwdRadiusMm,
         blendProfile = from.blendProfile,
     )
 }

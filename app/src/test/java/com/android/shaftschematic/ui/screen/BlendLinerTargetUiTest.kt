@@ -172,7 +172,7 @@ class BlendLinerTargetUiTest {
                 AddBodyDialog(
                     unit = UnitSystem.INCHES,
                     spec = ShaftSpec(overallLengthMm = 100f * 25.4f),
-                    onSubmit = { _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, odAft, odFwd ->
+                    onSubmit = { _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, odAft, odFwd, _ ->
                         submitted = odAft to odFwd
                     },
                     onCancel = {},

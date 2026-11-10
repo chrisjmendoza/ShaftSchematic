@@ -6,6 +6,40 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-11-09
+
+### feat(blend): a blended body face can be given as an angle, with an optional corner radius
+
+"Some blends have expressions in degrees. I'd like to be able to add that" (on-device request, with
+a hand sketch: a 9.750" liner, a 45° chamfer down to a 9.030" body, 3/8" R at the bottom). Each
+blended face now carries **"Blend by: Length | Angle"** — on the explicit and auto body cards and
+in Add Body, from the one shared blend section:
+
+- **Angle** types the angle from the shaft centerline (more than 0°, less than 90°; 45° is the same
+  either way). The blend's length is worked out from the diameter step the face climbs —
+  `rise / tan(angle)`, from the same neighbour diameter a Length blend already uses, so the liner's
+  Seat / Liner OD choice counts — and shown read-only under the field ("Length 0.36 in from the
+  step", or a hint when there is no step). If a diameter changes later, the length follows the
+  stored angle. An angle outside the range is refused with its reason, never clamped.
+- **Corner radius** (optional, the drawing's length unit): a true round where the chamfer meets the
+  smaller diameter, tangent to both. A radius too big for the chamfer is drawn at the largest that
+  fits; the typed value is kept.
+- An angle face is a straight chamfer, so the Shape chips show only for Length faces (the stored
+  shape is kept). Switching between Length and Angle never changes the typed length.
+- **The schematic prints the angle and radius** below the shaft, as on the sketch: `45°` with a
+  leader to the chamfer and `3/8" R` with a leader to the round (the Final schematic too). They
+  share the one below-shaft layout with the Ø callouts and component names. The printed numbers
+  are the ones typed, never measured off the drawing — a sheet's lengths are compressed and its
+  diameters on their own scale, so the drawn slope is not the true angle. Length blends still
+  print nothing, so existing sheets are unchanged; other sheets print no blend values.
+
+Model: `Body.blendAftAngleDeg`/`blendFwdAngleDeg` (null = Length) and
+`blendAftRadiusMm`/`blendFwdRadiusMm`, `AutoBlend.angleDeg`/`radiusMm` — additive and defaulted, so
+saved documents open unchanged; split and merge carry them with each face. Geometry:
+`ChamferShape`/`blendFracPoints` (`geom/BlendProfileMath.kt`), resolved in the one `blendAt`, so the
+canvas, both PDF composers and the surface envelope draw the same shape. Callouts:
+`buildBlendAngleCallouts` (`pdf/ShaftPdfComposer.kt`) on the existing `DiaCallout` pass.
+
 ## 2026-11-07
 
 ### feat(pdf): every output font ships inside the app; Hyperlegible Bold, Hyperlegible Mono and B612 added

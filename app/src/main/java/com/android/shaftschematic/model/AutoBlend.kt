@@ -69,6 +69,15 @@ data class AutoBlend(
      * [Body.blendAftToLinerOd] rule. Drawing-only, like [lengthMm].
      */
     val toLinerOd: Boolean = false,
+    /**
+     * The face's blend entry: `null` (the default, and every anchor saved before the field) is
+     * Length mode, [lengthMm] the curve's axial length; a value is Angle mode — a straight cone at
+     * this many degrees from the shaft axis whose length derives from the diameter step, the
+     * [Body.blendAftAngleDeg] rule. Stored verbatim; [lengthMm] stays as typed for a switch back.
+     */
+    val angleDeg: Float? = null,
+    /** Angle mode's optional corner radius, canonical mm, stored verbatim — [Body.blendAftRadiusMm]. */
+    val radiusMm: Float = 0f,
 )
 
 /**
@@ -98,8 +107,11 @@ fun List<AutoBlend>.autoBlendFor(
  * stored **verbatim** against a fresh anchor at the span midpoint. [lengthMm] ≤ 0 with
  * [seal] = false is a clear; a seal on a square face stores an anchor with `lengthMm = 0`.
  * The other face, and anchors outside the span — including dormant ones — are left alone, so
- * they resurrect unchanged if their span reappears. Returns `this` when nothing moves, so a
- * no-op set never emits new state or marks the document dirty.
+ * they resurrect unchanged if their span reappears. The face's Angle-mode entry
+ * ([AutoBlend.angleDeg], [AutoBlend.radiusMm]) rides through from the anchor it replaces — it is
+ * set only by [withAutoBlendAngle] — so a length, seal or liner-target edit never drops a typed
+ * angle. Returns `this` when nothing moves, so a no-op set never emits new state or marks the
+ * document dirty.
  */
 fun ShaftSpec.withAutoBlend(
     spanStartMm: Float,
@@ -111,6 +123,7 @@ fun ShaftSpec.withAutoBlend(
     sealLenMm: Float = 0f,
     toLinerOd: Boolean = false,
 ): ShaftSpec {
+    val current = autoBlends.autoBlendFor(spanStartMm, spanEndMm, end)
     val kept = autoBlends.filterNot {
         it.end == end && it.anchorMm >= spanStartMm && it.anchorMm < spanEndMm
     }
@@ -123,7 +136,33 @@ fun ShaftSpec.withAutoBlend(
             seal = seal,
             sealLenMm = sealLenMm.coerceAtLeast(0f),
             toLinerOd = toLinerOd,
+            angleDeg = current?.angleDeg,
+            radiusMm = current?.radiusMm ?: 0f,
         )
         else kept
     return if (next == autoBlends) this else copy(autoBlends = next)
+}
+
+/**
+ * Returns a copy whose face [end] of the auto span `[spanStartMm, spanEndMm)` takes the
+ * Angle-mode entry [angleDeg] (`null` = back to Length mode) and corner radius [radiusMm], both
+ * stored **verbatim**. Every other field of that face's anchor — its typed length, seal pair,
+ * liner target and profile — is kept.
+ *
+ * Acts only on the face's live anchor ([autoBlendFor]): the entry is edited while the face is
+ * blended, so the anchor exists; with none there is nothing to set and `this` comes back, as it
+ * does when nothing moves.
+ */
+fun ShaftSpec.withAutoBlendAngle(
+    spanStartMm: Float,
+    spanEndMm: Float,
+    end: LinerAuthoredReference,
+    angleDeg: Float?,
+    radiusMm: Float,
+): ShaftSpec {
+    val current = autoBlends.autoBlendFor(spanStartMm, spanEndMm, end) ?: return this
+    val updated = current.copy(angleDeg = angleDeg, radiusMm = radiusMm.coerceAtLeast(0f))
+    if (updated == current) return this
+    val i = autoBlends.indexOf(current)
+    return copy(autoBlends = autoBlends.toMutableList().also { it[i] = updated })
 }

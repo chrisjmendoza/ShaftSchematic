@@ -19,6 +19,7 @@ import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.splitBodiesAround
 import com.android.shaftschematic.model.syncExcludedThreadPositions
 import com.android.shaftschematic.model.withAutoBlend
+import com.android.shaftschematic.model.withAutoBlendAngle
 import com.android.shaftschematic.model.withBodyAt
 import com.android.shaftschematic.model.withKeyways180Apart
 import com.android.shaftschematic.model.withKeyways90Apart
@@ -97,6 +98,14 @@ fun ShaftViewModel.addBodyAt(
     /** Whether each face's blend runs to a butting liner's OD instead of the derived seat. */
     blendAftToLinerOd: Boolean = false,
     blendFwdToLinerOd: Boolean = false,
+    /**
+     * Each face's Angle-mode entry (degrees from the axis; null = Length mode) and corner radius
+     * (mm) — drawing values stored verbatim, the length derived from the step at draw time.
+     */
+    blendAftAngleDeg: Float? = null,
+    blendFwdAngleDeg: Float? = null,
+    blendAftRadiusMm: Float = 0f,
+    blendFwdRadiusMm: Float = 0f,
     target: SpecTarget = SpecTarget.ORIGINAL,
 ) {
     val id = newId()
@@ -129,6 +138,10 @@ fun ShaftViewModel.addBodyAt(
                     blendFwdSealLenMm = max(0f, blendFwdSealLenMm),
                     blendAftToLinerOd = blendAftToLinerOd,
                     blendFwdToLinerOd = blendFwdToLinerOd,
+                    blendAftAngleDeg = blendAftAngleDeg,
+                    blendFwdAngleDeg = blendFwdAngleDeg,
+                    blendAftRadiusMm = max(0f, blendAftRadiusMm),
+                    blendFwdRadiusMm = max(0f, blendFwdRadiusMm),
                     authoredReference = reference,
                 )
             ) + s.bodies
@@ -1092,6 +1105,49 @@ fun ShaftViewModel.updateBodyBlend(
             )
         }
     }
+
+/**
+ * Sets one face's blend ENTRY on a body: [angleDeg] null is Length mode (the stored length is the
+ * curve's length), a value is Angle mode — a straight cone at that many degrees from the axis whose
+ * length derives from the diameter step at draw time — with [radiusMm] its optional corner radius.
+ *
+ * Both values are stored VERBATIM, and nothing else on the body moves: the typed blend length stays
+ * as it was so a switch back to Length restores it, and the seal pair, liner target and profile are
+ * untouched. Drawing-only, like every blend field. A no-op set returns the spec unchanged.
+ */
+fun ShaftViewModel.updateBodyBlendAngle(
+    index: Int,
+    end: LinerAuthoredReference,
+    angleDeg: Float?,
+    radiusMm: Float,
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) = updateSpec(target) { s ->
+    if (index !in s.bodies.indices) s else {
+        val old = s.bodies[index]
+        val r = radiusMm.coerceAtLeast(0f)
+        val next = when (end) {
+            LinerAuthoredReference.AFT -> old.copy(blendAftAngleDeg = angleDeg, blendAftRadiusMm = r)
+            LinerAuthoredReference.FWD -> old.copy(blendFwdAngleDeg = angleDeg, blendFwdRadiusMm = r)
+        }
+        if (next == old) s else s.copy(bodies = s.bodies.toMutableList().also { it[index] = next })
+    }
+}
+
+/**
+ * Auto-span mirror of [updateBodyBlendAngle]: sets face [end]'s Angle-mode entry on the auto span
+ * `[spanStartMm, spanEndMm)` through its live anchor ([withAutoBlendAngle]), keeping that anchor's
+ * typed length, seal pair, liner target and profile.
+ */
+fun ShaftViewModel.setAutoBlendAngle(
+    spanStartMm: Float,
+    spanEndMm: Float,
+    end: LinerAuthoredReference,
+    angleDeg: Float?,
+    radiusMm: Float,
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) = updateSpec(target) { s ->
+    s.withAutoBlendAngle(spanStartMm, spanEndMm, end, angleDeg, radiusMm)
+}
 
 /**
  * Sets a blended face on ONE auto-body span, keyed in shaft space by an anchor at the span

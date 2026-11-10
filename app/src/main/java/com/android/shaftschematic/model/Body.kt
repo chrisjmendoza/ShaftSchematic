@@ -101,6 +101,22 @@ import java.util.UUID
  *   Drawing-only like the blend length, and read only where a liner supplies the neighbour Ø;
  *   a body or taper across the face is followed as it always is.
  * @property blendFwdToLinerOd The same for the FWD face.
+ * @property blendAftAngleDeg The AFT face's blend ENTRY: `null` — the default, and every document
+ *   saved before the field — is Length mode, where [blendAftMm] is the curve's axial length; a
+ *   value is Angle mode (on-device request: "some blends have expressions in degrees"), a
+ *   straight cone at this many degrees from the shaft AXIS (0 < θ < 90, 45° climbs one for one).
+ *   In Angle mode the axial length is DERIVED from the diameter step across the face —
+ *   `(|neighbour Ø − [diaMm]| / 2) / tan θ`, the neighbour Ø the blend already derives (a
+ *   butting liner's seat or OD under [blendAftToLinerOd]) — so it follows a later step change,
+ *   and [blendAftMm] is kept untouched for a switch back to Length. Stored verbatim. The face is
+ *   blended only while [blendAftMm] > 0 (the Square | Blend choice); the angle and radius PRINT
+ *   as below-shaft callouts on the schematic — the stored values, never measured off the drawing.
+ * @property blendFwdAngleDeg The same for the FWD face.
+ * @property blendAftRadiusMm Angle mode's optional corner radius on the AFT face, canonical mm,
+ *   stored verbatim (0 = a sharp corner): the round at the cone's small-diameter end, tangent to
+ *   the cone and to the smaller surface. A radius too large for the cone is clamped only where it
+ *   is DRAWN. Ignored in Length mode, and kept through a mode switch.
+ * @property blendFwdRadiusMm The same for the FWD face.
  * @property blendProfile How both faces ease. Drawing-only, like the blend lengths.
  * @property authoredReference Which shaft end this body's Start is measured from — the
  *   "Measure From: AFT | FWD" chips, the liner/taper field. It is a display/entry choice and an
@@ -135,6 +151,10 @@ data class Body(
     val blendFwdSealLenMm: Float = 0f,
     val blendAftToLinerOd: Boolean = false,
     val blendFwdToLinerOd: Boolean = false,
+    val blendAftAngleDeg: Float? = null,
+    val blendFwdAngleDeg: Float? = null,
+    val blendAftRadiusMm: Float = 0f,
+    val blendFwdRadiusMm: Float = 0f,
     val blendProfile: BlendProfile = BlendProfile.OGEE,
     val authoredReference: LinerAuthoredReference = LinerAuthoredReference.AFT,
     /** Optional user-defined label for display (not used for geometry). */
@@ -217,6 +237,18 @@ fun Body.blendSealOn(end: LinerAuthoredReference): Boolean = when (end) {
 fun Body.blendToLinerOdOn(end: LinerAuthoredReference): Boolean = when (end) {
     LinerAuthoredReference.AFT -> blendAftToLinerOd
     LinerAuthoredReference.FWD -> blendFwdToLinerOd
+}
+
+/** Stored Angle-mode angle on the given face (degrees from the axis); null = Length mode. */
+fun Body.blendAngleDegOn(end: LinerAuthoredReference): Float? = when (end) {
+    LinerAuthoredReference.AFT -> blendAftAngleDeg
+    LinerAuthoredReference.FWD -> blendFwdAngleDeg
+}
+
+/** Stored Angle-mode corner radius on the given face (mm); 0 = a sharp corner. */
+fun Body.blendRadiusMmOn(end: LinerAuthoredReference): Float = when (end) {
+    LinerAuthoredReference.AFT -> blendAftRadiusMm
+    LinerAuthoredReference.FWD -> blendFwdRadiusMm
 }
 
 /** Stored seal-area length on the given face (mm); 0 = follow the blend length. */
