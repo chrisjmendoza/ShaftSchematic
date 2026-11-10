@@ -8,6 +8,15 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-09
 
+### fix(undercut): "Next cut" goes away from the datum
+
+Recording a run right to left from the FWD S.E.T., every "Next cut" opened on the right of the
+last cut, back toward the datum, and its Distance had to be retyped (on-device report). The next
+cut now opens on the end of the last cut AWAY from what it is measured from: FWD under an AFT
+datum, AFT under a FWD one, so its Distance is where the last length ended. Where a cut already
+sits there, the new one opens at the open end of the run. "Add undercut" on a strip measured from
+FWD datums tries the AFT side first for the same reason.
+
 ### fix(undercut): a "Next cut" keeps its edge on the cut before it when its length is typed
 
 "Next cut" opens a new 1" cut on the FWD end of the last one. Measured from the FWD S.E.T., typing

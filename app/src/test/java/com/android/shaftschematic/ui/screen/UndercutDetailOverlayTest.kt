@@ -47,6 +47,7 @@ import com.android.shaftschematic.geom.UndercutStrip
 import com.android.shaftschematic.geom.UndercutWindow
 import com.android.shaftschematic.geom.linerStripFor
 import com.android.shaftschematic.geom.nearestSetReference
+import com.android.shaftschematic.geom.isFwdUndercutReference
 import com.android.shaftschematic.geom.undercutAddSeedSpan
 import com.android.shaftschematic.geom.undercutReferenceLabel
 import com.android.shaftschematic.geom.undercutSetPositions
@@ -764,7 +765,11 @@ class UndercutDetailOverlayTest {
     /** Where "Add undercut in this liner" seeds over [stored]: butted on the strip's cuts. */
     private fun jobSeedStartMm(stored: List<Undercut>): Float {
         val spans = stored.map { UndercutSpanMm(it.id, it.startFromAftMm, it.startFromAftMm + it.lengthMm) }
-        return requireNotNull(undercutAddSeedSpan(spans, spans, jobSpec.overallLengthMm)).startMm
+        // The app's rule: a strip measured from FWD datums seeds on its AFT side first.
+        val aftFirst = stored.isNotEmpty() && stored.all { isFwdUndercutReference(it.authoredReference) }
+        return requireNotNull(
+            undercutAddSeedSpan(spans, spans, jobSpec.overallLengthMm, aftFirst = aftFirst),
+        ).startMm
     }
 
     /** Card 1 is the recorded E, an edit to it is clear, and nothing names cut 1 or prompts. */
@@ -815,15 +820,15 @@ class UndercutDetailOverlayTest {
     @Test
     fun `swiping off a new cut with a value still in its field records it and leaves no ghost`() {
         draftCutEWithDiaInFlight("9.5")
-        // E's seed butts on the FWD end of the strip's FWD-most cut, so the pending card is the
-        // last page: swiping right leaves it.
+        // The strip is measured from FWD datums, so E's seed butts on the AFT end of its AFT-most
+        // cut and the pending card is the first page: swiping left leaves it.
         val stored = jobCuts.filterNot { it.id == cutE.id }
         assertEquals(
-            stored.size,
+            0,
             buildUndercutPageIds(stored.sortedBy { it.startFromAftMm }, jobSeedStartMm(stored))
                 .indexOf(PENDING_UNDERCUT_ID),
         )
-        swipe(left = false)
+        swipe(left = true)
         assertNoLeavePrompt()
 
         val e = recordedCutE()
