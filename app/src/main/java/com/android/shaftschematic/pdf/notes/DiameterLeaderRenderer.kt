@@ -22,13 +22,13 @@ import com.android.shaftschematic.util.measureDualLabel
  * 3 decimals; single-unit output when a callout's `dual` is false) so an on-shaft callout
  * reads like the footer's L.E.T. / S.E.T. values.
  *
- * BELOW-side callouts that would collide horizontally are stacked onto a second row via
- * [DiameterCalloutLayout] — the same two-tier posture the runout bubbles use. ABOVE-side
+ * BELOW-side callouts that would collide are moved to a second row, or hung on the other side of
+ * their leader, by [DiameterCalloutLayout.place]. ABOVE-side
  * callouts (none produced today) use plain single-row geometry — no tiering.
  *
- * An Angle-mode blend's angle and corner radius ([CalloutKind.ANGLE]/[CalloutKind.RADIUS]) ride
- * the SAME pass — same tiers, same occupancy, same leader construction — so they share the one
- * below-shaft collision space with the Ø values and the component names. Their leaders leave
+ * An Angle-mode blend's angle and corner radius ([CalloutKind.ANGLE], ONE callout for the pair)
+ * ride the SAME pass — same rows, same occupancy, same leader construction — so they share the
+ * one below-shaft collision space with the Ø values and the component names. Their leader leaves
  * from the feature itself ([DiaCallout.anchorXPt]/[DiaCallout.anchorYPt]).
  */
 class DiameterLeaderRenderer(
@@ -57,9 +57,19 @@ class DiameterLeaderRenderer(
     /** Where a BELOW leader leaves from: its feature's outline when it has one, else the shaft's bottom edge. */
     private fun belowStartYFor(call: DiaCallout): Float = call.anchorYPt ?: shaftBottomY
 
-    /** Where [call]'s label starts, left of or right of its leader — ONE answer for tiers, occupancy and ink. */
-    private fun textLeftFor(call: DiaCallout, anchorX: Float): Float =
-        DiameterCalloutLayout.labelLeft(anchorX, labelWidth(call), leaderDogleg, contentLeft, contentRight)
+    /**
+     * Row and label side of every BELOW callout — ONE answer for occupancy and ink, placed
+     * together so no leader drops through another callout's value ([DiameterCalloutLayout.place]).
+     */
+    private fun belowPlacements(below: List<DiaCallout>): List<DiameterCalloutLayout.Placement> =
+        DiameterCalloutLayout.place(
+            items = below.map { call ->
+                DiameterCalloutLayout.Item(anchorXFor(call), labelWidth(call), feature = call.anchorXPt != null)
+            },
+            dogleg = leaderDogleg,
+            contentLeft = contentLeft,
+            contentRight = contentRight,
+        )
 
     /**
      * Vertical distance between stacked BELOW-side rows.
@@ -82,21 +92,11 @@ class DiameterLeaderRenderer(
 
     fun draw(canvas: Canvas, calls: List<DiaCallout>) {
         val below = calls.filter { it.side == LeaderSide.BELOW }
-        val tiers = belowTiers(below)
-        below.forEachIndexed { i, call -> drawOne(canvas, call, tier = tiers[i]) }
+        val placements = belowPlacements(below)
+        below.forEachIndexed { i, call -> drawOne(canvas, call, placements[i].tier, placements[i].labelLeft) }
 
-        calls.filter { it.side == LeaderSide.ABOVE }.forEach { drawOne(canvas, it, tier = 0) }
-    }
-
-    /** BELOW callouts share a tiering pass so body and liner labels never overlap. */
-    private fun belowTiers(below: List<DiaCallout>): List<Int> {
-        val footprints = below.map { call ->
-            val anchorX = anchorXFor(call)
-            val labelLeft = textLeftFor(call, anchorX)
-            val labelRight = labelLeft + labelWidth(call)
-            DiameterCalloutLayout.Footprint(left = minOf(anchorX, labelLeft), right = maxOf(anchorX, labelRight))
-        }
-        return DiameterCalloutLayout.assignTiers(footprints)
+        calls.filter { it.side == LeaderSide.ABOVE }
+            .forEach { drawOne(canvas, it, tier = 0, textX = anchorXFor(it) + leaderDogleg) }
     }
 
     /**
@@ -116,7 +116,7 @@ class DiameterLeaderRenderer(
     fun occupancy(calls: List<DiaCallout>): List<BelowShaftLabelLayout.Box> {
         val below = calls.filter { it.side == LeaderSide.BELOW }
         if (below.isEmpty()) return emptyList()
-        val tiers = belowTiers(below)
+        val placements = belowPlacements(below)
         val fm = textPaint.fontMetrics
         val textH = if (dualStacked) textPaint.dualStackMetrics().height else fm.descent - fm.ascent
         // A stack's box hangs BELOW its first baseline; a single line's box is ascent-to-descent
@@ -126,9 +126,9 @@ class DiameterLeaderRenderer(
         return buildList {
             below.forEachIndexed { i, call ->
                 val x = anchorXFor(call)
-                val kinkY = shaftBottomY + leaderRise + tiers[i] * tierStep
+                val kinkY = shaftBottomY + leaderRise + placements[i].tier * tierStep
                 val textY = kinkY + textDrop
-                val textLeft = textLeftFor(call, x)
+                val textLeft = placements[i].labelLeft
                 val textRight = textLeft + labelWidth(call)
                 add(
                     BelowShaftLabelLayout.Box(
@@ -161,16 +161,18 @@ class DiameterLeaderRenderer(
             else formatDiaWithUnitDualLabel(call.valueMm, call.unit, call.dual).let { it.copy(primary = "Ø " + it.primary) }
         }
         // A blank draft keeps the identifier and leaves the number to be written in, as for Ø.
-        CalloutKind.ANGLE -> DualLabel.single(if (blankValues) "°" else blendAngleCalloutText(call.angleDeg))
-        CalloutKind.RADIUS ->
-            if (blankValues) DualLabel.single("R") else blendRadiusCalloutLabel(call.valueMm, call.unit, call.dual)
+        CalloutKind.ANGLE -> when {
+            blankValues -> DualLabel.single(if (call.valueMm > 0.0) "° R" else "°")
+            call.valueMm > 0.0 -> blendAngleRadiusCalloutLabel(call.angleDeg, call.valueMm, call.unit, call.dual)
+            else -> DualLabel.single(blendAngleCalloutText(call.angleDeg))
+        }
     }
 
     private fun labelWidth(call: DiaCallout): Float =
         textPaint.measureDualLabel(label(call), dualStacked) +
             if (blankValues) 4f + blankRuleWidth else 0f
 
-    private fun drawOne(canvas: Canvas, call: DiaCallout, tier: Int) {
+    private fun drawOne(canvas: Canvas, call: DiaCallout, tier: Int, textX: Float) {
         val x = anchorXFor(call)
         val (startY, kinkY, textY) = when (call.side) {
             LeaderSide.ABOVE -> {
@@ -185,7 +187,6 @@ class DiameterLeaderRenderer(
                 Triple(belowStartYFor(call), shaftBottomY + depth, shaftBottomY + depth + textDrop)
             }
         }
-        val textX = if (call.side == LeaderSide.BELOW) textLeftFor(call, x) else x + leaderDogleg
         // The dogleg runs to the label's NEAR edge — its left edge normally, its right edge when
         // the label hangs left of the leader.
         val doglegEnd = if (textX >= x) textX else textX + labelWidth(call)
@@ -217,6 +218,17 @@ fun blendAngleCalloutText(angleDeg: Float): String = formatBlendAngleDeg(angleDe
  */
 fun blendRadiusCalloutLabel(radiusMm: Double, unit: UnitSystem, dual: Boolean): DualLabel =
     formatLenWithUnitDualLabel(radiusMm, unit, dual).let { it.copy(primary = it.primary + " R") }
+
+/**
+ * An Angle-mode blend's ONE callout when it has a corner radius: the angle, then the radius —
+ * `45°, 3/8" R`. One leader for the pair: the chamfer and its round are a point or two apart on
+ * paper, so a leader each drew as a doubled line with the two values printed on top of each other
+ * (on-device report).
+ */
+fun blendAngleRadiusCalloutLabel(angleDeg: Float, radiusMm: Double, unit: UnitSystem, dual: Boolean): DualLabel =
+    blendRadiusCalloutLabel(radiusMm, unit, dual).let {
+        it.copy(primary = blendAngleCalloutText(angleDeg) + ", " + it.primary)
+    }
 
 /** Half-width reserved around a leader line, so a neighbouring label clears the stroke itself. */
 private const val LEADER_HALF_W = 1f

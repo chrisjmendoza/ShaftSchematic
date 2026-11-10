@@ -6,6 +6,7 @@ import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.pdf.notes.CalloutKind
 import com.android.shaftschematic.pdf.notes.LeaderSide
 import com.android.shaftschematic.pdf.notes.blendAngleCalloutText
+import com.android.shaftschematic.pdf.notes.blendAngleRadiusCalloutLabel
 import com.android.shaftschematic.pdf.notes.blendRadiusCalloutLabel
 import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.bodyBlends
@@ -51,26 +52,22 @@ class BlendAngleCalloutTest {
         }
 
     @Test
-    fun `an angle-mode face prints its angle and radius below the shaft`() {
-        val calls = callouts(spec(angleDeg = 45f, radiusMm = 0.375f * inch))
-        assertEquals(listOf(CalloutKind.ANGLE, CalloutKind.RADIUS), calls.map { it.kind })
-        assertTrue(calls.all { it.side == LeaderSide.BELOW })
-        val angle = calls[0]
+    fun `an angle-mode face prints its angle and radius as one callout below the shaft`() {
+        val angle = callouts(spec(angleDeg = 45f, radiusMm = 0.375f * inch)).single()
+        assertEquals(CalloutKind.ANGLE, angle.kind)
+        assertEquals(LeaderSide.BELOW, angle.side)
         assertEquals(45f, angle.angleDeg, 0f)
-        val radius = calls[1]
-        assertEquals((0.375f * inch).toDouble(), radius.valueMm, 1e-4)
-        // Leaders leave from the chamfer's bottom outline: below the centreline, above the
-        // liner's bottom edge, and the round further inboard than the cone's midpoint.
-        val faceX = xAt(300f)
-        assertTrue(angle.anchorXPt!! > faceX)
-        assertTrue(radius.anchorXPt!! > angle.anchorXPt!!)
+        assertEquals((0.375f * inch).toDouble(), angle.valueMm, 1e-4)
+        // The leader leaves from the chamfer's bottom outline: below the centreline, above the
+        // liner's bottom edge.
+        assertTrue(angle.anchorXPt!! > xAt(300f))
         assertTrue(angle.anchorYPt!! > cy && angle.anchorYPt!! < cy + rPx(9.750f * inch))
     }
 
     @Test
     fun `a sharp corner prints the angle alone`() {
-        val calls = callouts(spec(angleDeg = 30f, radiusMm = 0f))
-        assertEquals(listOf(CalloutKind.ANGLE), calls.map { it.kind })
+        val call = callouts(spec(angleDeg = 30f, radiusMm = 0f)).single()
+        assertEquals(0.0, call.valueMm, 0.0)
     }
 
     @Test
@@ -89,7 +86,7 @@ class BlendAngleCalloutTest {
     @Test
     fun `the radius takes the body's display unit and the dual setting`() {
         val units = DisplayUnits(UnitSystem.INCHES, overrides = mapOf("body" to UnitSystem.MILLIMETERS), dual = true)
-        val radius = callouts(spec(angleDeg = 45f, radiusMm = 10f), units).single { it.kind == CalloutKind.RADIUS }
+        val radius = callouts(spec(angleDeg = 45f, radiusMm = 10f), units).single()
         assertEquals(UnitSystem.MILLIMETERS, radius.unit)
         assertTrue(radius.dual)
     }
@@ -103,5 +100,9 @@ class BlendAngleCalloutTest {
         val dual = blendRadiusCalloutLabel(0.375 * 25.4, UnitSystem.INCHES, dual = true)
         assertEquals("3/8\" R", dual.primary)
         assertEquals("9.5 mm", dual.secondary)
+        // One callout for the pair: the angle, then the radius.
+        val pair = blendAngleRadiusCalloutLabel(45f, 0.375 * 25.4, UnitSystem.INCHES, dual = true)
+        assertEquals("45°, 3/8\" R", pair.primary)
+        assertEquals("9.5 mm", pair.secondary)
     }
 }

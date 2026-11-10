@@ -104,4 +104,61 @@ class DiameterCalloutLayoutTest {
         assertTrue(left >= 36f)
         assertTrue(left + 60f <= 100f + 1e-4f)
     }
+
+    // ── place: rows and label sides together ─────────────────────────────────────────────────
+
+    private fun item(anchor: Float, width: Float, feature: Boolean = false) =
+        DiameterCalloutLayout.Item(anchor, width, feature)
+
+    private fun place(vararg items: DiameterCalloutLayout.Item) =
+        DiameterCalloutLayout.place(items.toList(), dogleg = 14f)
+
+    @Test
+    fun `callouts that never conflict keep row 0 on their usual side`() {
+        val p = place(item(0f, 40f), item(200f, 40f))
+        assertEquals(listOf(0, 0), p.map { it.tier })
+        assertEquals(listOf(14f, 214f), p.map { it.labelLeft })
+    }
+
+    @Test
+    fun `two diameters that overlap stack as before`() {
+        // The second leader stands under the first value and no row or side avoids that, so it
+        // takes the second row as it always did rather than being dropped.
+        val p = place(item(0f, 60f), item(40f, 60f))
+        assertEquals(listOf(0, 1), p.map { it.tier })
+        assertEquals(54f, p[1].labelLeft, 1e-4f)
+    }
+
+    @Test
+    fun `a feature leader is never dropped through a diameter's value`() {
+        // On-device report: a liner Ø at 100 hangs right to 114..174; a blend's leader stands at
+        // 150, under that value. The blend keeps row 0 at its spot and the Ø moves down a row,
+        // where neither leader crosses the other's label.
+        val p = place(item(100f, 60f), item(150f, 50f, feature = true))
+        val dia = p[0]
+        val blend = p[1]
+        assertEquals(0, blend.tier)
+        assertEquals(164f, blend.labelLeft, 1e-4f)
+        assertEquals(1, dia.tier)
+        // The Ø's leader (x = 100) is clear of the blend's row-0 footprint (150..214).
+        assertTrue(100f < 150f - DiameterCalloutLayout.MIN_GAP)
+    }
+
+    @Test
+    fun `a label flips to the other side of its leader when no row is clear`() {
+        // The one row is taken right of the leader at 100; left of it is free.
+        val p = DiameterCalloutLayout.place(
+            listOf(item(104f, 60f, feature = true), item(100f, 40f)),
+            dogleg = 14f, maxTiers = 1,
+        )
+        assertEquals(46f, p[1].labelLeft, 1e-4f)
+        assertEquals(0, p[1].tier)
+    }
+
+    @Test
+    fun `place is parallel to its input`() {
+        val items = listOf(item(300f, 40f), item(0f, 40f, feature = true), item(150f, 40f))
+        val p = DiameterCalloutLayout.place(items, dogleg = 14f)
+        assertEquals(listOf(314f, 14f, 164f), p.map { it.labelLeft })
+    }
 }

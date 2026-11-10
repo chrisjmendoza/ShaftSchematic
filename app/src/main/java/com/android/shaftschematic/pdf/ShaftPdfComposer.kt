@@ -1642,11 +1642,11 @@ internal fun buildBodyOdCallouts(
         }
 
 /**
- * The callouts an Angle-mode blend prints below the shaft, as on the shop's hand sketch: the
- * STORED angle (`45°`) with a leader to the midpoint of the chamfer's cone, and — when the face
- * carries one — the STORED corner radius (`3/8" R`) with a leader to the midpoint of its round.
- * Both leaders land on the BOTTOM outline the sheet inks, read off the same [bodyDrawEdges] the
- * body pass draws from ([BlendAngleMark]), under the composer's own [xAt]/[rPx].
+ * The callout an Angle-mode blend prints below the shaft: the STORED angle, followed by the
+ * STORED corner radius when the face carries one (`45°, 3/8" R`), on ONE leader to the midpoint
+ * of the chamfer's cone. The leader lands on the BOTTOM outline the sheet inks, read off the same
+ * [bodyDrawEdges] the body pass draws from ([BlendAngleMark]), under the composer's own
+ * [xAt]/[rPx].
  *
  * Nothing here is measured from the drawing: the drawn slope is not the true angle (the axial map
  * is compressed and the drawn width floored, on a different scale from the diameters) and a drawn
@@ -1678,21 +1678,15 @@ internal fun buildBlendAngleCallouts(
                 minWidthPx = MIN_BLEND_WIDTH_PT,
             )
             val unit = displayUnits.unitFor(resolvedBodyBaseId(b.id))
-            edges.angleMarks.flatMap { mark ->
-                listOfNotNull(
-                    DiaCallout(
-                        xMm = b.startFromAftMm.toDouble(), valueMm = 0.0, side = LeaderSide.BELOW,
-                        unit = unit, kind = CalloutKind.ANGLE, angleDeg = mark.angleDeg,
-                        anchorXPt = mark.coneMid.xPx, anchorYPt = cy + mark.coneMid.rPx,
-                    ),
-                    mark.cornerMid?.takeIf { mark.radiusMm > 0f }?.let { corner ->
-                        DiaCallout(
-                            xMm = b.startFromAftMm.toDouble(), valueMm = mark.radiusMm.toDouble(),
-                            side = LeaderSide.BELOW, unit = unit, dual = displayUnits.dual,
-                            kind = CalloutKind.RADIUS,
-                            anchorXPt = corner.xPx, anchorYPt = cy + corner.rPx,
-                        )
-                    },
+            // ONE callout per face: the angle, with the corner radius after it. The chamfer and
+            // its round sit a point or two apart on paper, so a leader each drew as a doubled line.
+            edges.angleMarks.map { mark ->
+                DiaCallout(
+                    xMm = b.startFromAftMm.toDouble(),
+                    valueMm = mark.radiusMm.coerceAtLeast(0f).toDouble(),
+                    side = LeaderSide.BELOW, unit = unit, dual = displayUnits.dual,
+                    kind = CalloutKind.ANGLE, angleDeg = mark.angleDeg,
+                    anchorXPt = mark.coneMid.xPx, anchorYPt = cy + mark.coneMid.rPx,
                 )
             }
         }

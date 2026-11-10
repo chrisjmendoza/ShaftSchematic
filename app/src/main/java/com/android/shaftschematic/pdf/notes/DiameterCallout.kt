@@ -19,9 +19,9 @@ data class DiaCallout(
     val dual: Boolean = false,
     /**
      * What the value is. [CalloutKind.DIAMETER] (the default — every callout built before the
-     * others existed) prints `Ø` + [valueMm]; [CalloutKind.ANGLE] prints [angleDeg] as `45°`;
-     * [CalloutKind.RADIUS] prints [valueMm] as a length with an `R` (`3/8" R`). The last two are an
-     * Angle-mode blend's chamfer and corner radius — STORED values, never measured off the drawing.
+     * others existed) prints `Ø` + [valueMm]; [CalloutKind.ANGLE] is an Angle-mode blend's ONE
+     * callout: [angleDeg] as `45°`, followed by its corner radius when [valueMm] > 0
+     * (`45°, 3/8" R`) — STORED values, never measured off the drawing.
      */
     val kind: CalloutKind = CalloutKind.DIAMETER,
     /** The angle an [CalloutKind.ANGLE] callout prints, degrees; unused otherwise. */
@@ -39,4 +39,4 @@ data class DiaCallout(
 enum class LeaderSide { ABOVE, BELOW }
 
 /** What a below-shaft leader callout reports — see [DiaCallout.kind]. */
-enum class CalloutKind { DIAMETER, ANGLE, RADIUS }
+enum class CalloutKind { DIAMETER, ANGLE }

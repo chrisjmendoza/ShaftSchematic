@@ -8,6 +8,16 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-09
 
+### fix(pdf): a blend's angle and radius print as one callout, clear of the Ø values
+
+On a real job the blend callouts printed on top of each other: `45°` and `3/8" R` in the same spot,
+on two leaders a hair apart, both running through the liner's `Ø 9.750"` (on-device report).
+
+- A blended face now prints ONE callout on one leader: `45°, 3/8" R` (just `45°` with no radius).
+- Callouts below the shaft are placed together: a leader never drops through another callout's
+  value. A value that is in the way moves down a row, or hangs on the other side of its leader.
+  Sheets whose callouts never clashed are unchanged.
+
 ### feat(blend): a blended body face can be given as an angle, with an optional corner radius
 
 "Some blends have expressions in degrees. I'd like to be able to add that" (on-device request, with

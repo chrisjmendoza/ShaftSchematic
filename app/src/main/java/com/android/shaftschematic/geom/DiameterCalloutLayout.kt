@@ -93,4 +93,96 @@ object DiameterCalloutLayout {
         if (left >= contentLeft) return left
         return (contentRight - labelWidth).coerceAtLeast(contentLeft)
     }
+
+    /**
+     * One callout as [place] sees it: where its leader stands, how wide its label is, and whether
+     * the leader points at a FEATURE (a blend's chamfer) rather than a component's diameter.
+     */
+    data class Item(val anchorX: Float, val labelWidth: Float, val feature: Boolean = false)
+
+    /** Where [place] put a callout: its row and its label's left edge. */
+    data class Placement(val tier: Int, val labelLeft: Float)
+
+    private class Placed(val tier: Int, val anchorX: Float, val left: Float, val right: Float)
+
+    /**
+     * Tier AND label side for every below-shaft callout, placed together.
+     *
+     * Three things a callout may not do: overlap another callout's label-and-dogleg on its own
+     * row, drop its leader through a label on a row above it, or set its label across the leader
+     * of a callout on a row below it. [assignTiers] checks only the first, row by row, so a
+     * tier-1 callout standing under a tier-0 value printed its leader through that value — a
+     * blend's angle beside a liner's Ø (on-device report).
+     *
+     * Each callout takes the first clear spot in this order: row 0 on its usual side
+     * ([labelLeft]), row 1 on its usual side, then the same rows with the label hung on the
+     * OTHER side of its leader. Rows before sides, so a sheet whose callouts never conflicted, or
+     * only needed a second row, is placed exactly as [assignTiers] placed it. Feature callouts are
+     * placed first: their leaders point at one spot on the outline and cannot stand anywhere else,
+     * while a diameter's value reads as its component's from any row. With no clear spot a callout
+     * takes the least-crowded row on its usual side — never dropped.
+     *
+     * @return one [Placement] per item, parallel to [items].
+     */
+    fun place(
+        items: List<Item>,
+        dogleg: Float,
+        contentLeft: Float = Float.NEGATIVE_INFINITY,
+        contentRight: Float = Float.POSITIVE_INFINITY,
+        maxTiers: Int = MAX_TIERS,
+        gap: Float = MIN_GAP,
+    ): List<Placement> {
+        if (items.isEmpty()) return emptyList()
+        val tiers = maxTiers.coerceAtLeast(1)
+        val order = items.indices.sortedWith(
+            compareBy({ !items[it].feature }, { items[it].anchorX }, { items[it].labelWidth }, { it })
+        )
+        val placed = ArrayList<Placed>(items.size)
+        val result = arrayOfNulls<Placement>(items.size)
+
+        fun clear(tier: Int, anchorX: Float, left: Float, right: Float): Boolean = placed.none { p ->
+            when {
+                p.tier == tier -> left < p.right + gap && p.left < right + gap
+                // This leader drops through p's row.
+                p.tier < tier -> anchorX > p.left - gap && anchorX < p.right + gap
+                // p's leader drops through this row.
+                else -> p.anchorX > left - gap && p.anchorX < right + gap
+            }
+        }
+
+        for (idx in order) {
+            val item = items[idx]
+            val usual = labelLeft(item.anchorX, item.labelWidth, dogleg, contentLeft, contentRight)
+            // The other side of the leader, when the label fits inside the content there.
+            val flipped =
+                if (usual >= item.anchorX) item.anchorX - dogleg - item.labelWidth else item.anchorX + dogleg
+            val sides = buildList {
+                add(usual)
+                if (flipped >= contentLeft && flipped + item.labelWidth <= contentRight) add(flipped)
+            }
+            var chosen: Placement? = null
+            search@ for (labelL in sides) {
+                for (t in 0 until tiers) {
+                    val left = minOf(item.anchorX, labelL)
+                    val right = maxOf(item.anchorX, labelL + item.labelWidth)
+                    if (clear(t, item.anchorX, left, right)) {
+                        chosen = Placement(t, labelL)
+                        break@search
+                    }
+                }
+            }
+            val pick = chosen ?: Placement(
+                tier = (0 until tiers).minBy { t ->
+                    placed.filter { p -> p.tier == t }.maxOfOrNull { p -> p.right } ?: Float.NEGATIVE_INFINITY
+                },
+                labelLeft = usual,
+            )
+            placed += Placed(
+                pick.tier, item.anchorX,
+                minOf(item.anchorX, pick.labelLeft), maxOf(item.anchorX, pick.labelLeft + item.labelWidth),
+            )
+            result[idx] = pick
+        }
+        return result.map { it!! }
+    }
 }
