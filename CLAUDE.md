@@ -227,12 +227,14 @@ take no `dual` parameter, and rails and footer keep dual. On the **consolidated 
 readings instead draw INSIDE the profile at their station — one rotated haloed column via
 `drawDiaReadingsInProfile` (`RunoutPdfComposer`), liners included, `Ø`-prefixed — replacing
 below-shaft callouts there; the wear document itself (the authoring surface) keeps its
-callout engine unchanged. Valued **liner** readings inside a wear band additionally drive the
-drawn **worn-profile trace** — the liner's surface line dips through the measured diameters in
+callout engine unchanged. Valued **liner** readings additionally drive the drawn **worn-profile
+trace** WHEREVER they sit — a wear band is a highlight, never a gate (on-device report: a 9.973"
+reading on a 10" liner drew nothing until a wear area was added): the liner is split into its
+bands and the gaps between them, each traced from the surface at its ends through its own
+readings, by the ONE builder `buildLinerWearTrace` — the liner's surface line dips through the measured diameters in
 the liner detail strip and the detail overlay, AND on the two whole-shaft drawings — the wear
 sheet's main profile (`drawSimpleShaftProfile(linerTraces)`) and the Wear tab's shaft canvas
-(`RenderOptions.wearLinerTraces`, empty everywhere else) — through the ONE builder
-`wearLinerTraces` (on-device report: the "Trace depth exaggeration" slider changed nothing on
+(`RenderOptions.wearLinerTraces`, empty everywhere else) — through `wearLinerTraces` (on-device report: the "Trace depth exaggeration" slider changed nothing on
 the shaft while only the detail sites traced); all drawn identically from the pure
 `geom/WearTraceMath.kt` and display-exaggerated like the undercut notch (normalized to the
 record's deepest liner reading, never shallower than true scale). That exaggeration cap is
