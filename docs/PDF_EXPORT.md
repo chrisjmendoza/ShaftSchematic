@@ -819,7 +819,15 @@ Rules (shared helpers in `pdf/BlankFormText.kt`):
   has no spare line. The three columns also split the band into **equal thirds** on a blank
   draft (last column padded like the others, so every rule is the same length) instead of the
   printed 40 / 36 / 24 weighting, which exists for printed free text — customer and vessel
-  names — and on a value-less sheet only makes the FWD rules short. Both blank footers — schematic and
+  names — and on a value-less sheet only makes the FWD rules short. On a PRINTED footer that
+  weighting is only the default: a column whose longest line would wrap takes room its
+  neighbour is not using (`footerColumnStarts`, `FooterColumnStartsTest` — on-device request: a
+  FWD `KW: 2" × 5/8" × 9 3/16"` wrapped beside an empty middle column). The FWD column starts
+  left of 76% as far as its widest line needs, the middle column right of 40% as far as the AFT
+  column's widest line needs; neither crosses the neighbour's own text (the middle column's
+  need, Side badge included, is capped at its default room, so it never wraps more), and a moved
+  boundary keeps a 1.5-text-height gutter (`FOOTER_COLUMN_GUTTER_EM`). Text too long even then
+  still wraps. Both blank footers — schematic and
   consolidated — share this one implementation. `buildFooterEndColumns(blankValues =
   true)` returns label-only lines — same count and order as standard, no digits
   (JVM-tested in `BlankDraftFooterTest`).
