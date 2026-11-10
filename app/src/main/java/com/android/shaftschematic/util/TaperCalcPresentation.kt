@@ -29,14 +29,24 @@ enum class TaperCalcField(val shortName: String) {
     RATE("Taper rate"),
 }
 
-/** The raw text of the four fields plus the entry unit — what the user has typed, verbatim. */
+/**
+ * The raw text of the four fields plus the entry unit — what the user has typed, verbatim — and
+ * the "Rate as" chips' notation ([rateEntry]), which says how a bare number in the rate field reads.
+ */
 data class TaperCalcEntries(
     val largeDia: String = "",
     val smallDia: String = "",
     val length: String = "",
     val rate: String = "",
     val unit: UnitSystem = UnitSystem.INCHES,
+    val rateEntry: TaperRateEntry = TaperRateEntry.RATIO,
 ) {
+    /** The notation the rate field reads in: per foot only on an inch entry. */
+    val effectiveRateEntry: TaperRateEntry get() = effectiveTaperRateEntry(rateEntry, unit)
+
+    /** The rate as it is READ (and applied): a bare number under in/ft spelled out as `n"/ft`. */
+    val rateRead: String get() = normalizeTaperRateEntry(rate, effectiveRateEntry)
+
     fun text(field: TaperCalcField): String = when (field) {
         TaperCalcField.LARGE_DIA -> largeDia
         TaperCalcField.SMALL_DIA -> smallDia
@@ -95,18 +105,21 @@ private fun entryToMm(raw: String, unit: UnitSystem): Double? {
 }
 
 /** Typed something, and it does not read as a number (or, for the rate, as a ratio). */
-private fun isUnreadable(field: TaperCalcField, raw: String): Boolean {
+private fun isUnreadable(field: TaperCalcField, entries: TaperCalcEntries): Boolean {
+    val raw = entries.text(field)
     if (raw.isBlank()) return false
     return when (field) {
-        // Bare "1" stays blocked as ambiguous, the same rule the taper card applies.
-        TaperCalcField.RATE -> parseTaperRateText(raw, allowAmbiguousBareOne = false) == null
+        // Bare "1" stays blocked as ambiguous, the same rule the taper card applies — under 1:N;
+        // under in/ft it reads as 1"/ft.
+        TaperCalcField.RATE -> parseTaperRateText(entries.rateRead, allowAmbiguousBareOne = false) == null
         else -> !isLengthText(raw)
     }
 }
 
 fun presentTaperCalc(entries: TaperCalcEntries, calculated: Boolean): TaperCalcPresentation {
     val unit = entries.unit
-    val unreadable = TaperCalcField.entries.filter { isUnreadable(it, entries.text(it)) }.toSet()
+    val unreadable = TaperCalcField.entries.filter { isUnreadable(it, entries) }.toSet()
+    val perFoot = entries.effectiveRateEntry == TaperRateEntry.PER_FOOT
     val blank = TaperCalcField.entries.filter { entries.text(it).isBlank() }.toSet()
 
     // Parse errors are live: they are about the keystrokes, not about the solve.
@@ -119,7 +132,7 @@ fun presentTaperCalc(entries: TaperCalcEntries, calculated: Boolean): TaperCalcP
     val let = entryToMm(entries.largeDia, unit)
     val set = entryToMm(entries.smallDia, unit)
     val len = entryToMm(entries.length, unit)
-    val slope = parseTaperRateText(entries.rate, allowAmbiguousBareOne = false)?.toDouble()
+    val slope = parseTaperRateText(entries.rateRead, allowAmbiguousBareOne = false)?.toDouble()
 
     return when (val result = solveTaperCalc(let, set, len, slope)) {
         TaperCalcResult.Incomplete -> {
@@ -154,7 +167,7 @@ fun presentTaperCalc(entries: TaperCalcEntries, calculated: Boolean): TaperCalcP
                     TaperCalcField.LARGE_DIA -> taperCalcNumberText(result.largeDiaMm, unit)
                     TaperCalcField.SMALL_DIA -> taperCalcNumberText(result.smallDiaMm, unit)
                     TaperCalcField.LENGTH -> taperCalcNumberText(result.lengthMm, unit)
-                    TaperCalcField.RATE -> result.rate.exactText
+                    TaperCalcField.RATE -> result.rate.textIn(perFoot)
                 }
                 states[derivedField] = states.getValue(derivedField).copy(derivedText = text)
             }
@@ -162,14 +175,14 @@ fun presentTaperCalc(entries: TaperCalcEntries, calculated: Boolean): TaperCalcP
             // the per-foot line is inch-drawing shop notation, and the common rate is the name a
             // drawing would carry — said only when it differs from the exact ratio.
             states[TaperCalcField.RATE] = states.getValue(TaperCalcField.RATE)
-                .copy(supportingText = rateSupportingText(result.rate, unit))
+                .copy(supportingText = rateSupportingText(result.rate, unit, perFoot))
 
             // All four typed: a mismatch is information about what was entered, not a rejection.
             // Nothing is rewritten to reconcile the two.
             val message = when (result.typedSlopeAgrees) {
                 false -> {
                     states[TaperCalcField.RATE] = states.getValue(TaperCalcField.RATE).copy(isError = true)
-                    "The typed rate does not match these three values — they give ${result.rate.exactText}."
+                    "The typed rate does not match these three values — they give ${result.rate.textIn(perFoot)}."
                 }
                 true -> "All four values agree."
                 null -> null
@@ -205,10 +218,19 @@ private fun issueMessage(issue: TaperCalcIssue): String = when (issue) {
         "That rate over that length removes the whole large end; the small end would be 0 or less."
 }
 
-/** `3/4"/ft · ≈ 1:16` on an inch entry; `≈ 1:16` alone on a metric one; `null` with nothing to add. */
-internal fun rateSupportingText(rate: TaperCalcRate, unit: UnitSystem): String? {
+/** The rate in the field's notation: the exact `1:N`, or the exact inches per foot under in/ft. */
+private fun TaperCalcRate.textIn(perFoot: Boolean): String =
+    if (perFoot) "$inchesPerFootText\"/ft" else exactText
+
+/**
+ * `3/4"/ft · ≈ 1:16` on an inch entry; `≈ 1:16` alone on a metric one; `null` with nothing to add.
+ * Under in/ft ([perFoot]) the field itself shows the per-foot figure, so the line names the ratio
+ * instead: `1:16`, or `1:15.875 · ≈ 1:16 (within 3%)`.
+ */
+internal fun rateSupportingText(rate: TaperCalcRate, unit: UnitSystem, perFoot: Boolean = false): String? {
     val parts = mutableListOf<String>()
-    if (unit == UnitSystem.INCHES) parts += "${rate.inchesPerFootText}\"/ft"
+    if (perFoot) parts += rate.exactText
+    else if (unit == UnitSystem.INCHES) parts += "${rate.inchesPerFootText}\"/ft"
     val common = rate.commonText
     if (common != null && common != rate.exactText) parts += "≈ $common (within 3%)"
     return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ")

@@ -75,6 +75,16 @@ Specifically:
   ruling ("we always type them in anyway"), its ANSI/DIN tables with it. W and D are typed. Do
   not reintroduce it without asking.
 - **Taper AFT/FWD reference**: `AddTaperDialog` must show AFT/FWD direction chips.
+- **Taper "Rate as: 1:N | in/ft"**: the taper card, `AddTaperDialog` and the taper calculator all
+  carry the ONE `TaperRateEntryChips` row (`ui/screen/TaperRateEntryChips.kt`), inch drawings
+  only — it decides how a BARE number in the rate field reads (`3 3/4` under in/ft is
+  `3 3/4"/ft` = 1:3.2), stored spelled out by `normalizeTaperRateEntry`
+  (`util/TaperRateNotation.kt`, digits kept). It opens on a typed rate's own notation, else on
+  `PdfPrefs.taperRatePerFoot` (`LocalTaperRatePerFoot`). That pref (Settings → Drawing "Taper rate
+  per foot" + the PDF options panels' Footer lines section, default ON — on-device request)
+  prints an inch taper's footer "Rate:" per foot through `footerTaperRate`: an Auto rate at its
+  common ratio's value, else the nearest 1/8"/ft within 1%, else the decimal; a TYPED rate
+  converted exactly, never snapped; OFF prints byte-identically to before; metric keeps the ratio.
 - **Body AFT/FWD reference**: `AddBodyDialog` and the explicit-body card both show "Measure
   From: AFT | FWD" (`Body.authoredReference`; a switch never moves the body, a FWD body keeps its
   FWD distance through an OAL change); the auto-body card omits it (its span is derived).

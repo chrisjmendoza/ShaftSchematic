@@ -354,6 +354,13 @@ fun ShaftViewModel.setPdfFooterBoltHoleDia(v: Boolean, persist: Boolean = true) 
     if (persist) viewModelScope.launch { SettingsStore.setPdfFooterBoltHoleDia(getApplication(), v) }
 }
 
+/** Settings → Drawing → "Taper rate on sheets": per foot (true) or ratio. */
+fun ShaftViewModel.setPdfTaperRatePerFoot(v: Boolean, persist: Boolean = true) {
+    _pdfTaperRatePerFoot.value = v
+    SettingsStore.updatePdfPrefs { it.copy(taperRatePerFoot = v) }
+    if (persist) viewModelScope.launch { SettingsStore.setPdfTaperRatePerFoot(getApplication(), v) }
+}
+
 /**
  * "Wear areas on the shaft drawing" — how the consolidated sheet draws each wear area (none,
  * lines, grey, both). One pref, set from Settings → Drawing and the Output tab's sheet.
@@ -508,6 +515,7 @@ fun ShaftViewModel.applyDrawingProfile(profile: DrawingProfile) {
     setPdfShowUnitsNote(prefs.showUnitsNote)
     setPdfFooterCapturedKwInset(prefs.footerCapturedKwInset)
     setPdfFooterBoltHoleDia(prefs.footerBoltHoleDia)
+    setPdfTaperRatePerFoot(prefs.taperRatePerFoot)
     setPdfWearAreaStyle(prefs.wearAreaStyle)
     setPdfWearTraceDepthFrac(prefs.wearTraceDepthFrac)
     setPdfWearBandShadeFrac(prefs.wearBandShadeFrac)

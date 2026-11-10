@@ -24,7 +24,10 @@ import com.android.shaftschematic.settings.PDF_TEXT_SCALES
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.util.autoTaperRatePerFootText
 import com.android.shaftschematic.util.autoTaperRateText
+import com.android.shaftschematic.util.taperRateModeIsAuto
+import com.android.shaftschematic.util.typedTaperRatePerFootText
 import com.android.shaftschematic.util.buildBodyTitleById
 import com.android.shaftschematic.util.buildLinerTitleById
 import com.android.shaftschematic.util.drawRichText
@@ -573,7 +576,7 @@ internal fun buildFooterEndColumns(
         // Rate notation follows the taper's OWN unit like the L.E.T./S.E.T./Length lines
         // beside it — a metric-overridden taper keeps the ratio form ("/ft would clash with
         // mm dimensions"), instead of borrowing the document unit's convention.
-        add(line("Rate:") { printedTaperRate(tp.taperRateText.trim().ifEmpty { rate1toN(tp) }, tpUnit) })
+        add(line("Rate:") { footerTaperRate(tp, tpUnit, cfg.taperRatePerFoot) })
         // No face suffix on L.E.T./S.E.T. — the footer column already says which end of the
         // shaft this taper is, and "(FWD)" beside an AFT taper's L.E.T. read as if it were
         // asking about the FWD taper (on-device report).
@@ -755,6 +758,29 @@ internal fun printedTaperRate(rateText: String, unit: UnitSystem): String = when
     rateText == "1:12" -> "1\"/ft"
     rateText == "1:16" -> "3/4\"/ft"
     else -> rateText
+}
+
+/**
+ * The footer's "Rate:" value. With `PdfPrefs.taperRatePerFoot` OFF it is [printedTaperRate] of the
+ * stored text, byte-identical to the sheets before the pref existed. With it ON an inch taper
+ * prints inches per foot: an Auto rate from its geometry ([autoTaperRatePerFootText] — the
+ * common ratio's value, else the nearest eighth within 1%, else the decimal), a typed rate
+ * converted exactly ([typedTaperRatePerFootText] — a typed `/ft` keeps its own number). A metric
+ * taper keeps the ratio either way, and text that reads as no rate prints verbatim.
+ */
+internal fun footerTaperRate(tp: Taper, unit: UnitSystem, perFoot: Boolean): String {
+    val text = tp.taperRateText.trim()
+    if (!perFoot || unit != UnitSystem.INCHES) return printedTaperRate(text.ifEmpty { rate1toN(tp) }, unit)
+    val computed = autoTaperRateText(
+        lengthMm = tp.lengthMm, setDiaMm = tp.startDiaMm, letDiaMm = tp.endDiaMm, exactDecimals = 3,
+    )
+    val auto = taperRateModeIsAuto(tp.taperRateManual, text, computed)
+    val perFootText = if (auto) {
+        autoTaperRatePerFootText(tp.lengthMm, tp.startDiaMm, tp.endDiaMm) ?: typedTaperRatePerFootText(text)
+    } else {
+        typedTaperRatePerFootText(text)
+    }
+    return perFootText ?: printedTaperRate(text.ifEmpty { rate1toN(tp) }, unit)
 }
 
 // Delegate to the shared auto-rate formatter so a blank-rate taper prints the
@@ -943,6 +969,12 @@ data class FooterConfig(
      */
     val boltHoleDia: Boolean = true,
     /**
+     * `PdfPrefs.taperRatePerFoot`: an inch taper's "Rate:" prints inches per foot
+     * ([footerTaperRate]). OFF here so a direct builder keeps the ratio lines it always printed;
+     * [sheetFooterConfig] always passes the pref.
+     */
+    val taperRatePerFoot: Boolean = false,
+    /**
      * `PdfPrefs.footerTextScale`: the multiplier the composer applied to the footer's text paint.
      * The paint carries the size; this tells the layout how much of that size is the scale, so the
      * first line drops by the extra ascent and the block never reaches higher above its band than it
@@ -993,6 +1025,7 @@ internal fun sheetFooterConfig(spec: ShaftSpec, prefs: PdfPrefs = PdfPrefs()): F
         showFwdTaper = tapers.fwd != null,
         capturedKwInset = prefs.footerCapturedKwInset,
         boltHoleDia = prefs.footerBoltHoleDia,
+        taperRatePerFoot = prefs.taperRatePerFoot,
         textScale = prefs.footerTextScale,
     )
 }

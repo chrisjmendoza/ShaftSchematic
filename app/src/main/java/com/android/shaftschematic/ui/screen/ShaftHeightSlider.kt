@@ -1148,7 +1148,8 @@ internal fun UnitsNoteSwitchRow(checked: Boolean, onCheckedChange: (Boolean) -> 
 }
 
 /**
- * The optional footer lines (`PdfPrefs.footerCapturedKwInset`, `footerBoltHoleDia`) — the
+ * The optional footer lines (`PdfPrefs.footerCapturedKwInset`, `footerBoltHoleDia`) and the taper
+ * rate's notation (`taperRatePerFoot`) — the
  * "Footer lines" section, on the two sheets that print the shaft footer (`sheetFooterConfig`:
  * the schematic and the consolidated sheet).
  */
@@ -1158,6 +1159,8 @@ internal fun FooterLineSwitchRows(
     boltHoleDia: Boolean,
     onSetCapturedKwInset: (Boolean) -> Unit,
     onSetBoltHoleDia: (Boolean) -> Unit,
+    taperRatePerFoot: Boolean,
+    onSetTaperRatePerFoot: (Boolean) -> Unit,
 ) {
     OptionsSwitchRow(
         title = FOOTER_CAPTURED_KW_SETTING_TITLE,
@@ -1173,11 +1176,18 @@ internal fun FooterLineSwitchRows(
         onCheckedChange = onSetBoltHoleDia,
         testTag = "options_footer_bolt_hole_dia",
     )
+    OptionsSwitchRow(
+        title = TAPER_RATE_PER_FOOT_SETTING_TITLE,
+        caption = TAPER_RATE_PER_FOOT_SETTING_CAPTION,
+        checked = taperRatePerFoot,
+        onCheckedChange = onSetTaperRatePerFoot,
+        testTag = "options_taper_rate_per_foot",
+    )
 }
 
 /** The Footer lines section's header summary: how many of its optional lines are on. */
-internal fun footerSectionSummary(capturedKwInset: Boolean, boltHoleDia: Boolean): String =
-    when (val on = listOf(capturedKwInset, boltHoleDia).count { it }) {
+internal fun footerSectionSummary(capturedKwInset: Boolean, boltHoleDia: Boolean, taperRatePerFoot: Boolean): String =
+    when (val on = listOf(capturedKwInset, boltHoleDia, taperRatePerFoot).count { it }) {
         0 -> "None"
         else -> "$on on"
     }

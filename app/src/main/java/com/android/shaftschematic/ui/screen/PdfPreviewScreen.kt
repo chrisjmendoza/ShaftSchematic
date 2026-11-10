@@ -194,6 +194,7 @@ fun PdfPreviewScreen(
     val pdfShowUnitsNote by vm.pdfShowUnitsNote.collectAsState()
     val pdfFooterCapturedKwInset by vm.pdfFooterCapturedKwInset.collectAsState()
     val pdfFooterBoltHoleDia by vm.pdfFooterBoltHoleDia.collectAsState()
+    val pdfTaperRatePerFoot by vm.pdfTaperRatePerFoot.collectAsState()
     val pdfDualUnitLayout by vm.pdfDualUnitLayout.collectAsState()
     // Sizing-curve anchors: the composer sizes the drawn shaft off them, so a Settings
     // change to "Default drawing size" has to re-render an open preview. Collected here,
@@ -280,6 +281,7 @@ fun PdfPreviewScreen(
                 showUnitsNote = pdfShowUnitsNote,
                 footerCapturedKwInset = pdfFooterCapturedKwInset,
                 footerBoltHoleDia = pdfFooterBoltHoleDia,
+                taperRatePerFoot = pdfTaperRatePerFoot,
                 threadSlant = pdfThreadSlant,
                 threadDensity = pdfThreadDensity,
                 dualUnitLayout = pdfDualUnitLayout,
@@ -746,10 +748,11 @@ private data class SchematicRenderInputs(
      * `OutputTypography.active`. Key only.
      */
     val outputFont: OutputFont,
-    /** `PdfPrefs.showUnitsNote` / `footerCapturedKwInset` / `footerBoltHoleDia` — keys only, inside the `PdfPrefs` snapshot. */
+    /** `PdfPrefs.showUnitsNote` / `footerCapturedKwInset` / `footerBoltHoleDia` / `taperRatePerFoot` — keys only, inside the `PdfPrefs` snapshot. */
     val showUnitsNote: Boolean,
     val footerCapturedKwInset: Boolean,
     val footerBoltHoleDia: Boolean,
+    val taperRatePerFoot: Boolean,
     /**
      * The thread-hatch slant. Not a composer argument — it reaches the ink via
      * `ThreadHatchStyle.slant`. Key only.
@@ -875,6 +878,7 @@ internal fun PdfOptionsSheet(
         val showUnitsNote by vm.pdfShowUnitsNote.collectAsState()
         val footerCapturedKwInset by vm.pdfFooterCapturedKwInset.collectAsState()
         val footerBoltHoleDia by vm.pdfFooterBoltHoleDia.collectAsState()
+        val taperRatePerFoot by vm.pdfTaperRatePerFoot.collectAsState()
         val bubbledFinal = showFinalRunoutBubbles && finalRunoutBubbles
 
         // This sheet carries the per-job Shaft height and Liner compression alongside the
@@ -1054,13 +1058,15 @@ internal fun PdfOptionsSheet(
 
         // ── Footer lines ─────────────────────────────────────────────────────
         sections[OptionsSection.FOOTER] = OptionsSectionBody(
-            summary = footerSectionSummary(footerCapturedKwInset, footerBoltHoleDia),
+            summary = footerSectionSummary(footerCapturedKwInset, footerBoltHoleDia, taperRatePerFoot),
         ) {
             FooterLineSwitchRows(
                 capturedKwInset = footerCapturedKwInset,
                 boltHoleDia = footerBoltHoleDia,
+                taperRatePerFoot = taperRatePerFoot,
                 onSetCapturedKwInset = { vm.setPdfFooterCapturedKwInset(it) },
                 onSetBoltHoleDia = { vm.setPdfFooterBoltHoleDia(it) },
+                onSetTaperRatePerFoot = { vm.setPdfTaperRatePerFoot(it) },
             )
         }
 

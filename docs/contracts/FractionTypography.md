@@ -31,7 +31,7 @@ a Unicode vulgar glyph. A font only carries `¼ ½ ¾ ⅛ ⅜ ⅝ ⅞` — which
 could print a proper `⅝` beside a typed-out `11/16`, two different constructions at two
 different weights and heights. One spelling in, one look out. Pinned by `LengthFormatTest`.
 
-`printedTaperRate` (the footer's `1:16 → 3/4"/ft` shop shorthand in `ShaftPdfComposer.kt`) spells
+`printedTaperRate` (the footer's `1:16 → 3/4"/ft` shop shorthand in `SheetFooter.kt`) spells
 its fraction plain for the same reason; pinned by `TaperRatePrintNotationTest`.
 
 The parser still recognises vulgar glyphs and the Unicode fraction slash `⁄` on the way in, so

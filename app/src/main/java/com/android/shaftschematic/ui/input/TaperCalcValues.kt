@@ -6,13 +6,15 @@ import com.android.shaftschematic.model.maxDiaMm
 import com.android.shaftschematic.util.TaperCalcEntries
 import com.android.shaftschematic.util.TaperCalcResult
 import com.android.shaftschematic.util.autoTaperRateText
+import com.android.shaftschematic.util.taperRateModeIsAuto
 
 /**
  * A solved taper calculator's values in canonical mm, as Apply writes them. A derived value is the
  * EXACT solve, not the text on screen: the field shows inches rounded to three places, and storing
  * that rounding would give the taper a geometry that no longer matches its own rate.
  *
- * @param typedRateText The Taper rate field as typed, or `null` when the rate was derived.
+ * @param typedRateText The Taper rate field as typed (a bare number under "Rate as: in/ft" spelled
+ *   out as `n"/ft`, the digits kept), or `null` when the rate was derived.
  */
 internal data class TaperCalcValues(
     val largeDiaMm: Float,
@@ -26,7 +28,7 @@ internal fun TaperCalcResult.Solved.toApplyValues(entries: TaperCalcEntries): Ta
         largeDiaMm = largeDiaMm.toFloat(),
         smallDiaMm = smallDiaMm.toFloat(),
         lengthMm = lengthMm.toFloat(),
-        typedRateText = entries.rate.trim().takeIf { it.isNotEmpty() },
+        typedRateText = entries.rateRead.takeIf { it.isNotEmpty() },
     )
 
 /**
@@ -34,8 +36,7 @@ internal fun TaperCalcResult.Solved.toApplyValues(entries: TaperCalcEntries): Ta
  * one reads it from whether its text matches the computed rate.
  */
 internal fun taperRateIsAuto(taper: Taper, computedRateText: String?): Boolean =
-    taper.taperRateManual?.not()
-        ?: (taper.taperRateText.isBlank() || taper.taperRateText == computedRateText)
+    taperRateModeIsAuto(taper.taperRateManual, taper.taperRateText, computedRateText)
 
 /** The Auto rate text for a geometry — the card's call, in one place for Apply's two paths. */
 internal fun taperCalcAutoRateText(lengthMm: Float, smallDiaMm: Float, largeDiaMm: Float): String? =

@@ -6,7 +6,8 @@ File: `util/TaperRateAuto.kt`
 Purpose: Compute an auto-derived taper rate display string from Length + SET + LET
 geometry, and parse/validate user-entered manual taper rate text.
 
-Version: v1.3 (2026-10-28; the Auto/Manual mode is stored on the taper, `Taper.taperRateManual`)  
+Version: v1.4 (2026-11-09; per-foot notation — entry chips and print, `util/TaperRateNotation.kt`)
+v1.3 (2026-10-28; the Auto/Manual mode is stored on the taper, `Taper.taperRateManual`)  
 v1.2 (2026-10-28; a bare decimal steeper than 0.25 is ambiguous)  
 v1.1 (2026-09-01)  
 Supersedes: `TaperParser.md`, `TaperParserContract.md` — those documented
@@ -72,7 +73,7 @@ Responsibilities
   - `AutoTaperRateResult(text, matchedCommonOneToN, exactOneToN)`.
 - `autoTaperRateText(...): String?` — convenience wrapper returning just `.text`.
 - `parseTaperRateText(text, allowAmbiguousBareOne = true): Float?` — parses `"a:b"`,
-  `"a/b"`, or a bare number (interpreted as `1:N` when `≥ 1`, or as a direct slope when
+  an inches-per-foot spelling (`3/4"/ft`), or a bare number (a bare `"a/b"` is refused, above) (interpreted as `1:N` when `≥ 1`, or as a direct slope when
   `≤ 0.25`; between 0.25 and 1 it is null — ambiguous, see above). Bare `"1"` is rejected only when `allowAmbiguousBareOne = false`.
 - `manualTaperRateBlockingMessage(rateText, lengthMm, setDiaMm, letDiaMm): String?` —
   blocking (non-null) when: the rate is blank but required to derive a missing end
@@ -83,6 +84,28 @@ Responsibilities
   non-blocking warning shown when Length + SET + LET are all present, the rate parses
   and isn't blocked, but its relative error against the geometry-derived exact slope
   exceeds `maxRelativeSlopeError`.
+
+Per-foot notation (v1.4, `util/TaperRateNotation.kt`)
+- **Entry: "Rate as: 1:N | in/ft"** (`TaperRateEntry`) on the taper card, `AddTaperDialog` and the
+  taper calculator — ONE chip row, `TaperRateEntryChips`, shown on inch drawings only
+  (`effectiveTaperRateEntry` reads RATIO on a metric one). Under in/ft a BARE number or fraction
+  is per foot: `normalizeTaperRateEntry` spells `3 3/4` (or `3 3/4"`) out as `3 3/4"/ft` before
+  it is validated or stored, keeping the typed digits — so every reader of a stored rate, the
+  lenient derivation path included, sees an unambiguous spelling. A colon or `/ft` already names
+  its notation and reads the same under either chip; switching chips never rewrites the field.
+  The chips open on a stored Manual rate's own notation, else on `PdfPrefs.taperRatePerFoot`
+  (`initialTaperRateEntry`). Auto shows its computed rate in the chosen notation; the STORED auto
+  text stays the `1:N` ratio.
+- **Print: `PdfPrefs.taperRatePerFoot`** (default ON, on-device request: a 3 3/4"/ft taper printed
+  as 1:3.210). `footerTaperRate` (`pdf/SheetFooter.kt`) prints an inch taper's "Rate:" per foot —
+  an **Auto** rate from geometry (`autoTaperRatePerFootText`): a geometry that snaps to a common
+  ratio prints that ratio's value (1:12 → 1"/ft), otherwise the exact `12 / N` prints as the
+  nearest 1/8"/ft when within 1% (`PER_FOOT_AUTO_SNAP_TOLERANCE` — tighter than 3% because eighths
+  are close together; 3.738 → 3 3/4"/ft), else its 3-decimal value. A **Manual** rate is converted
+  EXACTLY (`typedTaperRatePerFootText` — fraction on the 1/32 grid, else 3 decimals; a typed
+  `/ft` keeps its own number): rounding a typed value would be a rewrite. OFF is
+  `printedTaperRate` of the stored text, byte-identical to before the pref. A metric taper keeps
+  the ratio either way. The Auto/Manual decision is the ONE `taperRateModeIsAuto`.
 
 Do Nots
 - Do not fabricate a rate from sentinel or zero diameters.
@@ -116,6 +139,9 @@ Notes
 
 Change Log
 ----------
+**v1.4 (2026-11-09)**
+- Per-foot notation: "Rate as: 1:N | in/ft" entry chips and the `taperRatePerFoot` print pref
+  (section above). `taperRateModeIsAuto` is the shared Auto/Manual rule (`taperRateIsAuto` delegates).
 **v1.1 (2026-09-01)**
 - `DEFAULT_SLOPE_ERROR_TOLERANCE` and `formatOneToN` promoted to `internal` for the standalone
   taper calculator. No behavior change.
