@@ -8,6 +8,15 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-09
 
+### fix(undercut): a "Next cut" keeps its edge on the cut before it when its length is typed
+
+"Next cut" opens a new 1" cut on the FWD end of the last one. Measured from the FWD S.E.T., typing
+the real length then held the far end still and grew the new cut backwards, into the cut it was
+meant to follow (on-device report: cut 1 ended 14 3/8" from the FWD S.E.T.; the next cut's 2"
+landed inside it). A new cut that still sits where it was opened against its neighbour now keeps
+that shared edge when its length changes, and the Distance follows (13 3/8" at 1", 12 3/8" at
+2"). A Distance you typed yourself is never moved.
+
 ### fix(pdf): a blend's angle and radius print as one callout, clear of the Ø values
 
 On a real job the blend callouts printed on top of each other: `45°` and `3/8" R` in the same spot,

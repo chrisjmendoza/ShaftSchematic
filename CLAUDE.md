@@ -602,7 +602,12 @@ section; below the shaft on a white halo when too narrow, clear of the rail (pla
 no pref (on-device ruling: "the cut counts are for input purposes only, no output on any sheet"). Liner strip titles carry the
 liner's OD in its display unit. "Next cut" (a full-width button at the card's foot) confirms the card through the ONE confirm path and seeds a
 PENDING cut butted to its FWD end (same datum, Ø empty; disabled while unconfirmable or with no stock
-FWD); an add on a strip with cuts seeds butted to the FWD-most cut (`undercutAddSeedSpan`); the tab's
+FWD); an add on a strip with cuts seeds butted to the FWD-most cut (`undercutAddSeedSpan`). **A
+butted seed's Length edit holds the shared edge, not the seeded Distance**
+(`undercutButtedSeedStartForLength`): the seed's Distance was never typed, and under a FWD datum
+the ordinary length rule pins the FWD end, so typing the real length grew the new cut INTO the cut
+it was butted against (on-device report). It applies only while the pending cut still sits on the
+seed's own butted edge — a Distance the user typed is authored and keeps the ordinary rule; the tab's
 list delete offers the same `restoreUndercut` snackbar Undo as the detail page; a cut with no Ø is
 flagged on its row, counted above the list, and the tab's Print/Export confirm first
 (`undercutsMissingDia`; blank drafts exempt). The notch (void fill erasing surface stroke and fill — the mouth stays **OPEN**,

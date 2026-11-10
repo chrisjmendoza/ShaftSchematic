@@ -738,6 +738,43 @@ fun undercutNextCutSeed(
     )
 }
 
+/**
+ * The canonical start a BUTTED seed takes at [newLengthMm] so the edge it shares with its
+ * neighbour stays put, or `null` when the span `[startMm, startMm + lengthMm]` touches no cut in
+ * [others] (it is then not a butted seed and the ordinary length rule applies).
+ *
+ * A "Next cut" seed starts on the last cut's FWD end at a placeholder length. Under a FWD datum
+ * the ordinary length rule ([undercutCanonicalForNewLength]) pins the cut's FWD end — the end the
+ * Distance reads to — so typing the real length grew the new cut AFT-ward, INTO the cut it was
+ * butted against (on-device report). The seeded Distance was never typed, so nothing authored is
+ * protected by holding it; what the user set up is the butt. So while a seed still sits on that
+ * shared edge, a length edit holds the edge and the Distance follows.
+ *
+ * A seed touching on its AFT end keeps its start; one touching only on its FWD end (the add
+ * flow's AFT-side seed) keeps its end. Touching is [UNDERCUT_TOUCH_EPS_MM]. The shared edge must
+ * still be the SEED's ([seedStartMm], [seedLengthMm]): once a typed Distance has moved the cut,
+ * that Distance is authored and the ordinary rule protects it, even if it butts a neighbour.
+ */
+fun undercutButtedSeedStartForLength(
+    startMm: Float,
+    lengthMm: Float,
+    newLengthMm: Float,
+    seedStartMm: Float,
+    seedLengthMm: Float,
+    others: List<UndercutSpanMm>,
+): Float? {
+    val eps = UNDERCUT_TOUCH_EPS_MM
+    val endMm = startMm + lengthMm
+    val seedEndMm = seedStartMm + seedLengthMm
+    if (kotlin.math.abs(startMm - seedStartMm) <= eps &&
+        others.any { kotlin.math.abs(it.endMm - startMm) <= eps }
+    ) return startMm
+    if (kotlin.math.abs(endMm - seedEndMm) <= eps &&
+        others.any { kotlin.math.abs(it.startMm - endMm) <= eps }
+    ) return endMm - newLengthMm
+    return null
+}
+
 // ── Missing diameters ──
 
 /**
