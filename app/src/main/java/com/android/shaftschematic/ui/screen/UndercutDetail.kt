@@ -135,6 +135,7 @@ import com.android.shaftschematic.geom.resolveUndercutFloors
 import com.android.shaftschematic.geom.undercutAddSeedSpan
 import com.android.shaftschematic.geom.undercutCalloutAnchorsMm
 import com.android.shaftschematic.geom.undercutNextCutSeed
+import com.android.shaftschematic.geom.undercutButtedSeedStartForLength
 import com.android.shaftschematic.geom.undercutCanonicalForNewLength
 import com.android.shaftschematic.geom.undercutIsWholeLiner
 import com.android.shaftschematic.geom.undercutLinerEdgeBuried
@@ -1946,6 +1947,7 @@ fun UndercutWindowDetailOverlay(
                                 linerSpans = linerSpans,
                                 stripLiner = stripLiner,
                                 sheetUndercuts = undercutRecord.undercuts,
+                                pendingSeed = if (draft.isPending) pendingSeed else null,
                                 buttTargets = pageButtTargets.filter { (_, s) -> s.id != id },
                                 pagePositionById = pagePositionById,
                                 nextCut = undercutNextCutState(
@@ -2708,6 +2710,8 @@ private fun UndercutDraftCard(
     linerSpans: List<UndercutLinerSpan>,
     stripLiner: UndercutLinerSpan?,
     sheetUndercuts: List<Undercut>,
+    /** A PENDING card's draft exactly as it was seeded; `null` on a stored cut's card. */
+    pendingSeed: UndercutDraft?,
     /**
      * The OTHER stored cuts on this page as (1-based position aft → fwd, clamped span) — the
      * "On the AFT side of" / "On the FWD side of" chips, numbered as the card titles are. Empty
@@ -3065,10 +3069,23 @@ private fun UndercutDraftCard(
             // the displayed Distance by the length delta — golden-rule violation (on-device
             // report). No validator, as for Distance: a length that leaves the shaft (or is zero)
             // lands in the draft verbatim and Confirm blocks it with the reason.
-            fun canonicalAtLength(newLenMm: Float): Float = undercutCanonicalForNewLength(
-                shownReference, draft.startFromAftMm, draft.lengthMm, newLenMm,
-                aftSetXMm, fwdSetXMm, refLinerStartMm, refLinerEndMm, refParentStartMm, refParentEndMm,
-            )
+            //
+            // The one exception is a new cut still sitting where it was seeded against a
+            // neighbour ("Next cut", a butted add): its Distance was never typed, so the length
+            // holds the shared edge instead and the Distance follows — the FWD-datum rule above
+            // would grow it into the cut it is butted against (on-device report).
+            fun canonicalAtLength(newLenMm: Float): Float {
+                if (draft.isPending && pendingSeed != null) {
+                    undercutButtedSeedStartForLength(
+                        draft.startFromAftMm, draft.lengthMm, newLenMm,
+                        pendingSeed.startFromAftMm, pendingSeed.lengthMm, otherSpans,
+                    )?.let { return it }
+                }
+                return undercutCanonicalForNewLength(
+                    shownReference, draft.startFromAftMm, draft.lengthMm, newLenMm,
+                    aftSetXMm, fwdSetXMm, refLinerStartMm, refLinerEndMm, refParentStartMm, refParentEndMm,
+                )
+            }
             UndercutNum(
                 label = "Length (${abbr(unit)})",
                 initialDisplay = disp(draft.lengthMm, unit),
