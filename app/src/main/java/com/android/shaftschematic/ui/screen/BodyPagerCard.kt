@@ -27,6 +27,8 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.android.shaftschematic.geom.formatBlendAngleDeg
+import com.android.shaftschematic.geom.isValidBlendAngle
 import com.android.shaftschematic.model.BlendProfile
 import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.ShaftSpec
@@ -40,6 +42,10 @@ import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
 import com.android.shaftschematic.ui.resolved.bodyAtShaftEnd
 import com.android.shaftschematic.ui.resolved.effectiveBodyDimensionRail
+import com.android.shaftschematic.ui.resolved.angleBlendConeLengthMm
+import com.android.shaftschematic.ui.resolved.explicitBodyFaceRun
+import com.android.shaftschematic.ui.resolved.resolveComponents
+import com.android.shaftschematic.util.isLengthText
 import com.android.shaftschematic.ui.util.bodyWarningMessages
 import com.android.shaftschematic.ui.util.positiveDiaErrorMm
 import com.android.shaftschematic.ui.util.positiveLengthErrorMm
@@ -96,6 +102,8 @@ internal fun BodyPagerCard(
     /** How many AUTO body sections the shaft resolves to — decides whether the Ø asks for a scope. */
     autoSectionCount: Int,
     onSetAutoBlend: (spanStartMm: Float, spanEndMm: Float, end: LinerAuthoredReference, lengthMm: Float, profile: BlendProfile, seal: Boolean, sealLenMm: Float, toLinerOd: Boolean) -> Unit,
+    /** An auto span's face entry: angle (null = Length mode) and corner radius, stored verbatim. */
+    onSetAutoBlendAngle: (spanStartMm: Float, spanEndMm: Float, end: LinerAuthoredReference, angleDeg: Float?, radiusMm: Float) -> Unit = { _, _, _, _, _ -> },
     onSetShowAutoBodyDia: (Boolean) -> Unit,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     /** Sets an explicit body's "Measure From" reference — never moves its stored start. */
@@ -106,6 +114,8 @@ internal fun BodyPagerCard(
     onUpdateBodyCompressOnDrawing: (Int, Boolean) -> Unit,
     onUpdateBodyShowDimensionRail: (Int, Boolean) -> Unit = { _, _ -> },
     onUpdateBodyBlend: (index: Int, blendAftMm: Float, blendFwdMm: Float, profile: BlendProfile, sealAft: Boolean, sealFwd: Boolean, sealAftLenMm: Float, sealFwdLenMm: Float, toLinerOdAft: Boolean, toLinerOdFwd: Boolean) -> Unit,
+    /** An explicit body's face entry: angle (null = Length mode) and corner radius, stored verbatim. */
+    onUpdateBodyBlendAngle: (index: Int, end: LinerAuthoredReference, angleDeg: Float?, radiusMm: Float) -> Unit = { _, _, _, _ -> },
     onUpdateBodyLabel: (Int, String?) -> Unit,
     onUpdateBodyKeyway: (index: Int, widthMm: Float, depthMm: Float, lengthMm: Float, offsetFromEndMm: Float, end: LinerAuthoredReference, spooned: Boolean) -> Unit,
     onSetKeyways180Apart: (Boolean) -> Unit,
@@ -118,6 +128,16 @@ internal fun BodyPagerCard(
     onSetComponentUnit: (String, UnitSystem?) -> Unit,
     onSetKeywayUnit: (String, UnitSystem?) -> Unit,
 ) {
+    // The shaft resolved once per spec, for the Angle-mode faces' derived-length readout — the
+    // same neighbour lookup the drawing climbs. Lazy: a card with no Angle-mode face never pays.
+    val resolvedForBlend = remember(spec) { lazy { resolveComponents(spec) } }
+    // The last angle a face held before it was switched back to Length — restored if it is
+    // switched to Angle again in this card session; the stored value is null in Length mode.
+    var rememberedAftAngle by remember(component.id) { mutableStateOf<Float?>(null) }
+    var rememberedFwdAngle by remember(component.id) { mutableStateOf<Float?>(null) }
+    fun angleForEntry(entry: BlendEntry, current: Float?, remembered: Float?): Float? =
+        if (entry == BlendEntry.LENGTH) null else current ?: remembered ?: DEFAULT_BLEND_ANGLE_DEG
+
     if (component.source == ResolvedComponentSource.AUTO) {
         // Auto-body Start/Length are derived from the resolve layer and shown
         // read-only (greyed); making the body explicit via the checkbox is the only
@@ -365,6 +385,72 @@ internal fun BodyPagerCard(
                         }
                     }
                 },
+                // Angle mode — shown only while the face is Blend, so its anchor exists; the
+                // anchor's length, seal pair, liner target and profile ride through untouched.
+                aftEntry = blendEntry(aftBlend?.angleDeg),
+                fwdEntry = blendEntry(fwdBlend?.angleDeg),
+                onSetAftEntry = { e ->
+                    aftBlend?.let {
+                        if (e == BlendEntry.LENGTH && it.angleDeg != null) rememberedAftAngle = it.angleDeg
+                        onSetAutoBlendAngle(component.startMmPhysical, component.endMmPhysical,
+                            LinerAuthoredReference.AFT, angleForEntry(e, it.angleDeg, rememberedAftAngle), it.radiusMm)
+                    }
+                },
+                onSetFwdEntry = { e ->
+                    fwdBlend?.let {
+                        if (e == BlendEntry.LENGTH && it.angleDeg != null) rememberedFwdAngle = it.angleDeg
+                        onSetAutoBlendAngle(component.startMmPhysical, component.endMmPhysical,
+                            LinerAuthoredReference.FWD, angleForEntry(e, it.angleDeg, rememberedFwdAngle), it.radiusMm)
+                    }
+                },
+                aftAngleField = {
+                    BlendAngleField("Angle AFT (°)", aftBlend?.angleDeg) { deg ->
+                        aftBlend?.let {
+                            onSetAutoBlendAngle(component.startMmPhysical, component.endMmPhysical,
+                                LinerAuthoredReference.AFT, deg, it.radiusMm)
+                        }
+                    }
+                },
+                fwdAngleField = {
+                    BlendAngleField("Angle FWD (°)", fwdBlend?.angleDeg) { deg ->
+                        fwdBlend?.let {
+                            onSetAutoBlendAngle(component.startMmPhysical, component.endMmPhysical,
+                                LinerAuthoredReference.FWD, deg, it.radiusMm)
+                        }
+                    }
+                },
+                aftRadiusField = {
+                    BlendCornerRadiusField("Corner radius AFT (${abbr(unit)})", aftBlend?.radiusMm ?: 0f, unit) { mm ->
+                        aftBlend?.let {
+                            onSetAutoBlendAngle(component.startMmPhysical, component.endMmPhysical,
+                                LinerAuthoredReference.AFT, it.angleDeg, mm)
+                        }
+                    }
+                },
+                fwdRadiusField = {
+                    BlendCornerRadiusField("Corner radius FWD (${abbr(unit)})", fwdBlend?.radiusMm ?: 0f, unit) { mm ->
+                        fwdBlend?.let {
+                            onSetAutoBlendAngle(component.startMmPhysical, component.endMmPhysical,
+                                LinerAuthoredReference.FWD, it.angleDeg, mm)
+                        }
+                    }
+                },
+                aftAngleNote = aftBlend?.let { blend ->
+                    blend.angleDeg?.let { deg ->
+                        angleBlendNote(
+                            angleBlendConeLengthMm(resolvedForBlend.value, component, LinerAuthoredReference.AFT, deg, blend.toLinerOd),
+                            unit, ::disp,
+                        )
+                    }
+                }.orEmpty(),
+                fwdAngleNote = fwdBlend?.let { blend ->
+                    blend.angleDeg?.let { deg ->
+                        angleBlendNote(
+                            angleBlendConeLengthMm(resolvedForBlend.value, component, LinerAuthoredReference.FWD, deg, blend.toLinerOd),
+                            unit, ::disp,
+                        )
+                    }
+                }.orEmpty(),
             )
         }
         return
@@ -651,6 +737,56 @@ internal fun BodyPagerCard(
                     }
                 }
             },
+            // Angle mode: the stored blend length is never touched by a switch, so Length brings
+            // it back as typed.
+            aftEntry = blendEntry(b.blendAftAngleDeg),
+            fwdEntry = blendEntry(b.blendFwdAngleDeg),
+            onSetAftEntry = { e ->
+                if (e == BlendEntry.LENGTH && b.blendAftAngleDeg != null) rememberedAftAngle = b.blendAftAngleDeg
+                onUpdateBodyBlendAngle(idx, LinerAuthoredReference.AFT,
+                    angleForEntry(e, b.blendAftAngleDeg, rememberedAftAngle), b.blendAftRadiusMm)
+            },
+            onSetFwdEntry = { e ->
+                if (e == BlendEntry.LENGTH && b.blendFwdAngleDeg != null) rememberedFwdAngle = b.blendFwdAngleDeg
+                onUpdateBodyBlendAngle(idx, LinerAuthoredReference.FWD,
+                    angleForEntry(e, b.blendFwdAngleDeg, rememberedFwdAngle), b.blendFwdRadiusMm)
+            },
+            aftAngleField = {
+                BlendAngleField("Angle AFT (°)", b.blendAftAngleDeg) { deg ->
+                    onUpdateBodyBlendAngle(idx, LinerAuthoredReference.AFT, deg, b.blendAftRadiusMm)
+                }
+            },
+            fwdAngleField = {
+                BlendAngleField("Angle FWD (°)", b.blendFwdAngleDeg) { deg ->
+                    onUpdateBodyBlendAngle(idx, LinerAuthoredReference.FWD, deg, b.blendFwdRadiusMm)
+                }
+            },
+            aftRadiusField = {
+                BlendCornerRadiusField("Corner radius AFT (${abbr(unit)})", b.blendAftRadiusMm, unit) { mm ->
+                    onUpdateBodyBlendAngle(idx, LinerAuthoredReference.AFT, b.blendAftAngleDeg, mm)
+                }
+            },
+            fwdRadiusField = {
+                BlendCornerRadiusField("Corner radius FWD (${abbr(unit)})", b.blendFwdRadiusMm, unit) { mm ->
+                    onUpdateBodyBlendAngle(idx, LinerAuthoredReference.FWD, b.blendFwdAngleDeg, mm)
+                }
+            },
+            aftAngleNote = b.blendAftAngleDeg?.let { deg ->
+                angleBlendNote(
+                    explicitBodyFaceRun(resolvedForBlend.value, b.id, LinerAuthoredReference.AFT)?.let { run ->
+                        angleBlendConeLengthMm(resolvedForBlend.value, run, LinerAuthoredReference.AFT, deg, b.blendAftToLinerOd)
+                    },
+                    unit, ::disp,
+                )
+            }.orEmpty(),
+            fwdAngleNote = b.blendFwdAngleDeg?.let { deg ->
+                angleBlendNote(
+                    explicitBodyFaceRun(resolvedForBlend.value, b.id, LinerAuthoredReference.FWD)?.let { run ->
+                        angleBlendConeLengthMm(resolvedForBlend.value, run, LinerAuthoredReference.FWD, deg, b.blendFwdToLinerOd)
+                    },
+                    unit, ::disp,
+                )
+            }.orEmpty(),
         )
 
         // Keyway — the whole section is gated behind the shared "Keyway" checkbox, so the
@@ -819,6 +955,38 @@ internal fun BodyPagerCard(
         if (perComponentUnitsEnabled) {
             ComponentUnitChip(b.id, unit, unitOverrides, onSetComponentUnit)
         }
+    }
+}
+
+/**
+ * A card's Angle-mode angle field: degrees from the shaft axis, unitless (no "/" key). A value
+ * outside 0°–90° is refused with its reason (`blendAngleError`) and never clamped; a usable one
+ * commits verbatim.
+ */
+@Composable
+private fun BlendAngleField(label: String, angleDeg: Float?, onCommit: (Float) -> Unit) {
+    CommitNum(
+        label,
+        angleDeg?.let(::formatBlendAngleDeg).orEmpty(),
+        parseValid = { parseBlendAngleDeg(it) != null },
+        fractionKey = false,
+        validator = ::blendAngleError,
+    ) { s ->
+        parseBlendAngleDeg(s)?.takeIf(::isValidBlendAngle)?.let(onCommit)
+    }
+}
+
+/** A card's Angle-mode corner-radius field, in the document unit; blank commits 0 (a sharp corner). */
+@Composable
+private fun BlendCornerRadiusField(label: String, radiusMm: Float, unit: UnitSystem, onCommit: (Float) -> Unit) {
+    CommitNum(
+        label,
+        disp(radiusMm, unit),
+        parseValid = { it.isBlank() || isLengthText(it) },
+        validator = { raw -> if (raw.isBlank()) null else blendCornerRadiusError(toMmOrNull(raw, unit)) },
+    ) { s ->
+        val mm = if (s.isBlank()) 0f else toMmOrNull(s, unit) ?: return@CommitNum
+        if (mm >= 0f) onCommit(mm)
     }
 }
 

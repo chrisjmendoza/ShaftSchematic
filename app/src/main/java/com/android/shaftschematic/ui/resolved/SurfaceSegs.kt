@@ -107,7 +107,7 @@ private fun blendedBodySegs(b: ResolvedBody, blends: List<BodyBlend>): List<Surf
     val out = mutableListOf<SurfaceSeg>()
 
     fun addCurve(x0: Float, x1: Float, dia0: Float, dia1: Float, blend: BodyBlend) {
-        val pts = blendPolyline(x0, x1, dia0 / 2f, dia1 / 2f, blend.profile)
+        val pts = blendPolyline(x0, x1, dia0 / 2f, dia1 / 2f, blend.profile, chamfer = blend.chamfer())
         for (i in 1 until pts.size) {
             out += SurfaceSeg(pts[i - 1].xMm, pts[i].xMm, pts[i - 1].diaMm, pts[i].diaMm)
         }

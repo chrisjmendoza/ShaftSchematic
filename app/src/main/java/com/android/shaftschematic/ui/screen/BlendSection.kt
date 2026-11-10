@@ -24,7 +24,10 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.android.shaftschematic.geom.isValidBlendAngle
 import com.android.shaftschematic.model.BlendProfile
+import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.util.parseFractionOrDecimal
 
 /**
  * How one body face meets its neighbour — the "Component blend" chips: [SQUARE], or [BLEND] — a
@@ -62,6 +65,60 @@ private fun BlendLinerTarget.chipLabel(): String = when (this) {
 }
 
 /**
+ * How a blended face is ENTERED — the "Blend by: Length | Angle" chips (on-device request: "some
+ * blends have expressions in degrees"). [LENGTH] types the curve's axial length; [ANGLE] types the
+ * angle from the shaft axis and an optional corner radius, and the length is DERIVED from the
+ * diameter step. UI-edge vocabulary over the stored nullable angle (null = Length), the
+ * [BlendFaceMode]-over-length posture.
+ */
+enum class BlendEntry { LENGTH, ANGLE }
+
+/** The chip a stored angle selects: none is Length mode. */
+fun blendEntry(angleDeg: Float?): BlendEntry = if (angleDeg == null) BlendEntry.LENGTH else BlendEntry.ANGLE
+
+private fun BlendEntry.chipLabel(): String = when (this) {
+    BlendEntry.LENGTH -> "Length"
+    BlendEntry.ANGLE -> "Angle"
+}
+
+/**
+ * Starting angle when a face is first switched to Angle — the common 45° chamfer. A starting value
+ * only, like [defaultBlendMm]: the user types over it, and nothing re-derives it afterwards.
+ */
+const val DEFAULT_BLEND_ANGLE_DEG = 45f
+
+/** The angle a field's text reads as (degrees; a trailing `°` is allowed), or null when unreadable. */
+internal fun parseBlendAngleDeg(raw: String): Float? =
+    parseFractionOrDecimal(raw.trim().removeSuffix("°").trim())?.toFloat()
+
+/** The refusal an angle field shows for [raw], or null when it is a usable angle. */
+internal fun blendAngleError(raw: String): String? {
+    val deg = parseBlendAngleDeg(raw) ?: return "Enter an angle in degrees"
+    return if (isValidBlendAngle(deg)) null else BLEND_ANGLE_RANGE_MSG
+}
+
+internal const val BLEND_ANGLE_RANGE_MSG = "Angle must be between 0° and 90° from the axis"
+
+/** The refusal a corner-radius field shows for a parsed value, or null when it is usable. Blank is 0. */
+internal fun blendCornerRadiusError(mm: Float?): String? = when {
+    mm == null -> "Enter a number"
+    mm < 0f -> "Radius can't be negative"
+    else -> null
+}
+
+/**
+ * The read-only line under an Angle-mode face's angle field: the cone length the angle derives from
+ * the face's diameter step ([coneLenMm], from `angleBlendConeLengthMm`), or a hint that there is no
+ * step to chamfer yet. [display] formats a length in the field unit (the cards' `disp`).
+ */
+internal fun angleBlendNote(coneLenMm: Float?, unit: UnitSystem, display: (Float, UnitSystem) -> String): String =
+    if (coneLenMm == null) ANGLE_BLEND_NO_STEP_NOTE
+    else "Length ${display(coneLenMm, unit)} ${abbr(unit)} from the step"
+
+internal const val ANGLE_BLEND_NO_STEP_NOTE =
+    "No diameter step at this face — the length follows the step once there is one"
+
+/**
  * The component-blend and seal-area controls for a body — ONE structure shared by the carousel
  * cards (explicit and auto) and `AddBodyDialog`.
  *
@@ -90,8 +147,14 @@ private fun BlendLinerTarget.chipLabel(): String = when (this) {
  * nested under a blend control (a nested layout hid the seal behind a control nobody would think
  * to tick first — on-device report) and never folded into the Square | Blend chips as a third
  * mode (a seal area is a section property, not part of the blend — on-device report). The profile
- * row appears only once some face is blended; with both square there is nothing for a profile to
- * describe.
+ * row appears only once some face is blended BY LENGTH; with both square there is nothing for a
+ * profile to describe, and an Angle-mode face is a straight cone (its stored profile is kept).
+ *
+ * A blended face is entered one of two ways — "Blend by: Length | Angle" ([BlendEntry]). Length
+ * shows the length field; Angle shows the angle field, the derived length read-only under it
+ * ([aftAngleNote]/[fwdAngleNote], computed by the host because only it knows the shaft), and the
+ * optional "Corner radius" field. The "At a liner" chips show in both: they decide the step an
+ * angle climbs as surely as where a length's curve leaves from.
  */
 @Composable
 fun BlendSection(
@@ -113,6 +176,16 @@ fun BlendSection(
     fwdLengthField: @Composable () -> Unit,
     aftSealLengthField: @Composable () -> Unit,
     fwdSealLengthField: @Composable () -> Unit,
+    aftEntry: BlendEntry,
+    fwdEntry: BlendEntry,
+    onSetAftEntry: (BlendEntry) -> Unit,
+    onSetFwdEntry: (BlendEntry) -> Unit,
+    aftAngleField: @Composable () -> Unit,
+    fwdAngleField: @Composable () -> Unit,
+    aftRadiusField: @Composable () -> Unit,
+    fwdRadiusField: @Composable () -> Unit,
+    aftAngleNote: String,
+    fwdAngleNote: String,
 ) {
     Column(Modifier.fillMaxWidth()) {
         Text(
@@ -123,16 +196,26 @@ fun BlendSection(
 
         BlendFaceRow("AFT", aftMode, "body_blend_aft", onSetAftMode)
         if (aftMode == BlendFaceMode.BLEND) {
-            aftLengthField()
+            BlendFaceEntry(
+                entry = aftEntry, tagPrefix = "body_blend_aft", onSetEntry = onSetAftEntry,
+                lengthField = aftLengthField, angleField = aftAngleField,
+                angleNote = aftAngleNote, radiusField = aftRadiusField,
+            )
             BlendLinerTargetRow(aftLinerTarget, "body_blend_aft_liner_target", onSetAftLinerTarget)
         }
         BlendFaceRow("FWD", fwdMode, "body_blend_fwd", onSetFwdMode)
         if (fwdMode == BlendFaceMode.BLEND) {
-            fwdLengthField()
+            BlendFaceEntry(
+                entry = fwdEntry, tagPrefix = "body_blend_fwd", onSetEntry = onSetFwdEntry,
+                lengthField = fwdLengthField, angleField = fwdAngleField,
+                angleNote = fwdAngleNote, radiusField = fwdRadiusField,
+            )
             BlendLinerTargetRow(fwdLinerTarget, "body_blend_fwd_liner_target", onSetFwdLinerTarget)
         }
 
-        if (aftMode == BlendFaceMode.BLEND || fwdMode == BlendFaceMode.BLEND) {
+        if ((aftMode == BlendFaceMode.BLEND && aftEntry == BlendEntry.LENGTH) ||
+            (fwdMode == BlendFaceMode.BLEND && fwdEntry == BlendEntry.LENGTH)
+        ) {
             Spacer(Modifier.height(8.dp))
             ChipRow(
                 label = "Shape",
@@ -200,6 +283,43 @@ private fun BlendProfile.chipLabel(): String = when (this) {
     BlendProfile.OGEE -> "S-curve"
     BlendProfile.FILLET -> "Fillet"
     BlendProfile.EASED_CONE -> "Eased cone"
+}
+
+/**
+ * One blended face's entry: the "Blend by: Length | Angle" chips, then either the length field or
+ * the angle field, its derived-length line and the corner-radius field.
+ */
+@Composable
+private fun BlendFaceEntry(
+    entry: BlendEntry,
+    tagPrefix: String,
+    onSetEntry: (BlendEntry) -> Unit,
+    lengthField: @Composable () -> Unit,
+    angleField: @Composable () -> Unit,
+    angleNote: String,
+    radiusField: @Composable () -> Unit,
+) {
+    ChipRow(
+        label = "Blend by",
+        options = BlendEntry.values().toList(),
+        selected = entry,
+        labelOf = { it.chipLabel() },
+        tagOf = { "${tagPrefix}_entry_${it.name}" },
+        onSelect = onSetEntry,
+    )
+    when (entry) {
+        BlendEntry.LENGTH -> lengthField()
+        BlendEntry.ANGLE -> {
+            angleField()
+            Text(
+                angleNote,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 4.dp, bottom = 4.dp).testTag("${tagPrefix}_angle_note"),
+            )
+            radiusField()
+        }
+    }
 }
 
 /** One blended face's "At a liner" chips: Seat (the default) | Liner OD. */

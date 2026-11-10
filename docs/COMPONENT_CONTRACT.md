@@ -222,7 +222,36 @@ material.
   "Component blend" chips — never a third blend mode and never nested under a blend control. A
   Square | Blend change leaves the seal flags alone, and unticking a seal keeps its typed length. A fixed
   count, since the drawing is a cue rather than something to machine from.
+- A blended face is ENTERED one of two ways — **"Blend by: Length | Angle"** (on-device request:
+  "some blends have expressions in degrees"). **Length** (`Body.blendAftAngleDeg`/`blendFwdAngleDeg`
+  null — the default and every saved document) types the curve's axial length as above. **Angle**
+  stores the angle from the shaft AXIS (0 < θ < 90, exclusive; 45° climbs one for one) verbatim,
+  and the axial length is **DERIVED** from the step the face already climbs — `length = rise /
+  tan θ`, `rise = |neighbour drawn Ø − body Ø| / 2`, the SAME neighbour the ONE `blendAt` finds for
+  a Length face (liner rules included: the seat midpoint by default, the liner OD under "At a
+  liner: Liner OD"). A later step change re-derives the length from the stored angle; no step
+  across the face → no curve (the Length rule). The typed length (`blendAftMm`) is **never
+  rewritten** by a mode switch — Length brings it back — and it still decides whether the face is
+  blended at all (Square | Blend). An Angle face is a **straight cone** (the Shape chips hide;
+  `blendProfile` is kept) with an optional **corner radius** (`blendAftRadiusMm`/`blendFwdRadiusMm`,
+  `AutoBlend.angleDeg`/`radiusMm`, canonical mm, verbatim, 0 = sharp): a true circular round at the
+  cone's SMALL-diameter end, tangent to the cone and to the smaller surface, tangent setback
+  `R·tan(θ/2)` along each line from the sharp corner (the shop sketch: a 45° chamfer from a
+  9.750" liner down to a 9.030" body, then 3/8" R into the body). The curve's axial span is the
+  cone plus that setback (`ChamferShape.spanMm`); where the smaller diameter is ACROSS the face the
+  round starts at the face and the cone follows it, since a blend never reaches across its face. A
+  radius too large for the cone is clamped where DRAWN (`chamferShape`), never in storage. Pure
+  shape in `geom/BlendProfileMath.kt` (`ChamferShape`, `blendFracPoints` — ONE normalized vertex
+  list behind both the mm surface envelope and the drawn silhouette, so `surfaceSegsFrom` sees the
+  true derived span and every draw site the same shape).
 - Silhouette only — no dimension rail, no footer row, no effect on OAL, coverage, or collision.
+  The one print: an **Angle-mode** face's stored angle (`45°`) and corner radius (`3/8" R`) hang
+  below the schematic as leader callouts (`buildBlendAngleCallouts`, `docs/PDF_EXPORT.md` §5.3),
+  leaders landing on the drawn chamfer and round (`BodyDrawEdges.angleMarks`). They print the
+  STORED values, never anything measured off the drawing — the axial map is compressed and the
+  drawn width floored, on a different scale from the diameters, so the drawn slope is not the true
+  angle — which is why the drawn-width floor still never reaches a printed number. A Length-mode
+  blend prints nothing.
 - Draw sites: the schematic canvas (`ShaftRenderer`), the schematic PDF (`ShaftPdfComposer`),
   and the runout/consolidated sheet (`RunoutPdfComposer.drawBodiesForRunout`) all decompose the
   same `bodyDrawEdges`, so all three print the same curve. On the compressed sheets the S-break
@@ -244,8 +273,9 @@ material.
   face, covered by an `AutoBlend` anchor.
 - A split body blends on the run holding the **stored** face, never an interior fragment edge.
 - A split **stores** each face on the fragment that holds it (`carryBodyBlendFace`): the AFT
-  fragment keeps the AFT blend/seal/liner target, the FWD fragment the FWD ones, the cut faces
-  are square, and the profile rides on both; a merge takes AFT from A and FWD from B.
+  fragment keeps the AFT blend/angle/radius/seal/liner target, the FWD fragment the FWD ones, the
+  cut faces are square (and in Length mode), and the profile rides on both; a merge takes AFT from
+  A and FWD from B.
 
 Geometry: `ui/resolved/BodyBlends.kt`; curve math `geom/BlendProfileMath.kt` (a general
 join-two-radii primitive, shared with the queued liner-shoulder fillet and undercut end radius).

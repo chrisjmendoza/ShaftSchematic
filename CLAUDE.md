@@ -85,6 +85,12 @@ Specifically:
   prints an inch taper's footer "Rate:" per foot through `footerTaperRate`: an Auto rate at its
   common ratio's value, else the nearest 1/8"/ft within 1%, else the decimal; a TYPED rate
   converted exactly, never snapped; OFF prints byte-identically to before; metric keeps the ratio.
+- **Blend entry (Length | Angle)**: `AddBodyDialog`, the explicit-body card and the auto-body
+  card all carry, under every face set to Blend, the "Blend by: Length | Angle" chips
+  (`body_blend_<aft|fwd>_entry_<LENGTH|ANGLE>`) from the ONE `BlendSection` — Length shows the
+  length field; Angle shows "Angle AFT/FWD (°)", the read-only "Length … from the step" line
+  under it (or the no-step hint) and the "Corner radius" field; the Shape chips show only while
+  some face is blended by Length. Same conditions on all three surfaces.
 - **Body AFT/FWD reference**: `AddBodyDialog` and the explicit-body card both show "Measure
   From: AFT | FWD" (`Body.authoredReference`; a switch never moves the body, a FWD body keeps its
   FWD distance through an OAL change); the auto-body card omits it (its span is derived).
@@ -901,14 +907,37 @@ joins the keyway windows and bolt-row windows as `breakGapCenter` avoid ranges (
 body still breaks (on-device report: a run with two seal areas and a ramp at each end lost its break
 and read as a short body — the seal spans had shrunk its flat span until no gap placement fit). The
 length control appears only while that face's seal is on, and both draw sites build the lines from
-the same `bodyDrawEdges`. Blends print **no dimension rail and no footer row** — the
-rails keep dimensioning the STORED span (dimension to the theoretical sharp corner), which is why
-nothing in `DimensionRailLayout` or either composer's rail pass changed. That silence is what
-licenses the one exaggeration: a 2" blend on a 25' shaft is sub-pixel at true scale, so the
-**drawn** width takes a floor (`MIN_BLEND_WIDTH_PT`/`_PX`) capped at `MAX_BLEND_FRAC_OF_HOST` of
-its run — the undercut-depth/wear-trace posture, safe ONLY because no exaggerated number can reach
-a machinist. The stored length is never rewritten; a length longer than the body is clamped where
-it is DRAWN. All three draw sites decompose the SAME `bodyDrawEdges` (`ui/resolved/BodyBlends.kt`) —
+the same `bodyDrawEdges`. **A blended face is entered by Length or by Angle** (on-device request:
+"some blends have expressions in degrees"). Length (`Body.blendAftAngleDeg`/`blendFwdAngleDeg`,
+`AutoBlend.angleDeg` null — every saved document) is everything above. Angle stores the angle from
+the shaft AXIS verbatim (0 < θ < 90 exclusive, refused with its reason outside, never clamped) and
+DERIVES the axial length from the step the face already climbs — `rise / tan θ`, rise = half the
+difference between the SAME neighbour Ø `blendAt` finds for a Length face (seat midpoint or, under
+"At a liner: Liner OD", the liner OD) and the body Ø — so a later step change re-derives it, and no
+step draws no curve. The typed length is never rewritten by a mode switch (Length restores it) and
+still decides whether the face is blended at all. An Angle face is a STRAIGHT CONE (Shape chips
+hidden, `blendProfile` kept) with an optional corner radius (`blendAftRadiusMm`/`blendFwdRadiusMm`,
+`AutoBlend.radiusMm`, mm, verbatim): a true circular round at the cone's SMALL-diameter end,
+tangent to the cone and to the smaller surface, setback `R·tan(θ/2)` along each line, the curve's
+span the cone plus that setback (`ChamferShape.spanMm`; the round starts at the face when the
+smaller Ø is across it, since a blend never crosses its face), a radius too big for the cone
+clamped where DRAWN. The shape is the pure `ChamferShape` in `geom/BlendProfileMath.kt`, and ONE
+normalized vertex list (`blendFracPoints`) feeds the mm surface envelope and every drawn
+silhouette, so no site carries shape code of its own. Length-mode blends print **no dimension rail,
+no footer row and no callout** — the rails keep dimensioning the STORED span (dimension to the
+theoretical sharp corner), which is why nothing in `DimensionRailLayout` or either composer's rail
+pass changed. An **Angle-mode** face prints its STORED angle (`45°`) and corner radius (`3/8" R`)
+as below-shaft leader callouts on the schematic (`buildBlendAngleCallouts`, leaders landing on the
+drawn chamfer and round via `BodyDrawEdges.angleMarks`), appended to the Ø callout list so they
+share its tiers and the ONE below-shaft collision space with the Ø values and the component names;
+schematic composer only (the Final schematic and its Original + Final sheet included), no other
+sheet. Those are typed values, never measured off the drawing — the axial map is compressed and
+the drawn width floored, on a different scale from the diameters, so the drawn slope is NOT the
+true angle — and that is what keeps licensing the one exaggeration: a 2" blend on a 25' shaft is
+sub-pixel at true scale, so the **drawn** width takes a floor (`MIN_BLEND_WIDTH_PT`/`_PX`) capped
+at `MAX_BLEND_FRAC_OF_HOST` of its run — the undercut-depth/wear-trace posture, safe ONLY because
+no exaggerated number can reach a machinist. The stored length is never rewritten; a length longer
+than the body is clamped where it is DRAWN. All three draw sites decompose the SAME `bodyDrawEdges` (`ui/resolved/BodyBlends.kt`) —
 `ShaftRenderer` builds one silhouette path; `ShaftPdfComposer` and the runout/consolidated sheet's
 the runout sheet keep their flat span separate (ONE shared body pass, `drawBodyRunsWithBreaks`
 in `pdf/BodyRunDraw.kt`) because that span still hosts the S-break pair
@@ -922,7 +951,8 @@ undercut or wear reading in a transition sees the real diameter — sampled at t
 mm span, never the drawn floor. The controls are under the **add-dialog-parity rule**, not the
 card-only carve-out (they change geometry): one shared `ui/screen/BlendSection.kt` renders them on
 both carousel cards and in `AddBodyDialog`. The **"Component blend"** heading carries one chip row
-per face — **Square | Blend** — deciding only whether the body END has a shoulder; **seal areas** are a
+per face — **Square | Blend** — deciding only whether the body END has a shoulder (and, under
+Blend, "Blend by: Length | Angle" deciding how it is entered); **seal areas** are a
 separate "Seal areas" section (AFT / FWD checkboxes, a length field under each ticked face), on
 BOTH surfaces. A seal area is a SECTION property, independent of the blend (on-device report,
 photo of a shaft on the lathe): nothing couples the two — the seal area is measured from the face

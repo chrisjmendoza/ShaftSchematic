@@ -37,6 +37,7 @@ import com.android.shaftschematic.pdf.notes.*
 import com.android.shaftschematic.pdf.render.PdfDimensionRenderer
 import com.android.shaftschematic.settings.PDF_SBREAK_THRESHOLD_DEFAULT
 import com.android.shaftschematic.settings.PdfPrefs
+import com.android.shaftschematic.geom.MIN_BLEND_WIDTH_PT
 import com.android.shaftschematic.geom.SEAL_DASH_OFF_PT
 import com.android.shaftschematic.geom.SEAL_DASH_ON_PT
 import com.android.shaftschematic.ui.resolved.BodyBlend
@@ -375,9 +376,13 @@ internal fun composeShaftPdfOnCanvas(
     // Built HERE, drawn further down: the component-name labels hang in the same band and share
     // ONE collision space with these callouts, so their planner needs the leaders' occupancy
     // before it places anything.
+    // An Angle-mode blend's angle and corner radius join the same list — the same tiers, the same
+    // occupancy the name labels plan around — so the below-shaft band stays ONE collision space.
+    // Length-mode blends contribute nothing, so a sheet without an Angle-mode face is unchanged.
     val diaCalls =
         if (effectiveOptions.showDiaCallouts) {
-            buildBodyOdCallouts(bodiesForPdf, displayUnits) + buildLinerOdCallouts(spec.liners, displayUnits)
+            buildBodyOdCallouts(bodiesForPdf, displayUnits) + buildLinerOdCallouts(spec.liners, displayUnits) +
+                buildBlendAngleCallouts(bodiesForPdf, blendsForPdf, ::xAt, ::rPx, cy, displayUnits)
         } else {
             emptyList()
         }
@@ -1635,6 +1640,63 @@ internal fun buildBodyOdCallouts(
                 unit = displayUnits.unitFor(resolvedBodyBaseId(anchor.id)), dual = displayUnits.dual,
             )
         }
+
+/**
+ * The callouts an Angle-mode blend prints below the shaft, as on the shop's hand sketch: the
+ * STORED angle (`45°`) with a leader to the midpoint of the chamfer's cone, and — when the face
+ * carries one — the STORED corner radius (`3/8" R`) with a leader to the midpoint of its round.
+ * Both leaders land on the BOTTOM outline the sheet inks, read off the same [bodyDrawEdges] the
+ * body pass draws from ([BlendAngleMark]), under the composer's own [xAt]/[rPx].
+ *
+ * Nothing here is measured from the drawing: the drawn slope is not the true angle (the axial map
+ * is compressed and the drawn width floored, on a different scale from the diameters) and a drawn
+ * round may be clamped, so each callout prints the value the user typed. A Length-mode face, or an
+ * Angle-mode face with no step to climb, prints nothing. The radius takes the body's display unit
+ * ([DisplayUnits.unitFor], fragment ids stripped) and the document's dual setting, like a Ø value.
+ */
+internal fun buildBlendAngleCallouts(
+    bodies: List<Body>,
+    blends: List<BodyBlend>,
+    xAt: (Float) -> Float,
+    rPx: (Float) -> Float,
+    cy: Float,
+    displayUnits: DisplayUnits = DisplayUnits.single(UnitSystem.INCHES),
+): List<DiaCallout> {
+    val angled = blends.filter { it.angleDeg != null }.map { it.bodyId }.toSet()
+    if (angled.isEmpty()) return emptyList()
+    return bodies
+        .filter { it.id in angled && it.lengthMm > 0f && it.diaMm > 0f }
+        .flatMap { b ->
+            val edges = bodyDrawEdges(
+                runId = b.id,
+                runStartMm = b.startFromAftMm,
+                runEndMm = b.startFromAftMm + b.lengthMm,
+                runDiaMm = b.diaMm,
+                blends = blends,
+                xAt = xAt,
+                rAt = rPx,
+                minWidthPx = MIN_BLEND_WIDTH_PT,
+            )
+            val unit = displayUnits.unitFor(resolvedBodyBaseId(b.id))
+            edges.angleMarks.flatMap { mark ->
+                listOfNotNull(
+                    DiaCallout(
+                        xMm = b.startFromAftMm.toDouble(), valueMm = 0.0, side = LeaderSide.BELOW,
+                        unit = unit, kind = CalloutKind.ANGLE, angleDeg = mark.angleDeg,
+                        anchorXPt = mark.coneMid.xPx, anchorYPt = cy + mark.coneMid.rPx,
+                    ),
+                    mark.cornerMid?.takeIf { mark.radiusMm > 0f }?.let { corner ->
+                        DiaCallout(
+                            xMm = b.startFromAftMm.toDouble(), valueMm = mark.radiusMm.toDouble(),
+                            side = LeaderSide.BELOW, unit = unit, dual = displayUnits.dual,
+                            kind = CalloutKind.RADIUS,
+                            anchorXPt = corner.xPx, anchorYPt = cy + corner.rPx,
+                        )
+                    },
+                )
+            }
+        }
+}
 
 /**
  * Liner mirror of [buildBodyOdCallouts]: one [DiaCallout] per unique liner OD, anchored at

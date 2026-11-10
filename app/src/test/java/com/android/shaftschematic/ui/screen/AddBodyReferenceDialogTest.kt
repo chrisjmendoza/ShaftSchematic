@@ -44,7 +44,7 @@ class AddBodyReferenceDialogTest {
                     spec = ShaftSpec(overallLengthMm = 1000f),
                     initialStartMm = 0f,
                     initialLengthMm = 300f,
-                    onSubmit = { start, _, _, ref, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _ ->
+                    onSubmit = { start, _, _, ref, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _ ->
                         submitted = start to ref
                     },
                     onCancel = {},

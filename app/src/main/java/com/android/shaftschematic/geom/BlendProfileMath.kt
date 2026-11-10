@@ -2,13 +2,20 @@
 package com.android.shaftschematic.geom
 
 import com.android.shaftschematic.model.BlendProfile
+import java.util.Locale
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.math.tan
 
 /**
  * BlendProfileMath — the drawn curve joining two radii across an axial span.
  *
  * A **blend** is a machined smooth transition between two diameters: no square shoulder,
- * no dimensioned taper rate. It is a silhouette feature only — it carries no dimension
- * rail and no footer row — so nothing here may feed a printed number.
+ * no dimensioned taper rate. It carries no dimension rail and no footer row, and nothing
+ * here may feed a printed number: an Angle-mode face's callouts print the STORED angle and
+ * corner radius, never anything measured off this geometry (a sheet's axial and diameter
+ * scales differ and the drawn width is floored, so a drawn slope is not the true angle).
  *
  * The primitive is deliberately general: "join radius A to radius B over `[x0, x1]`",
  * expressed in `(x, radius)` points like [KeywaySilhouettePoint] and [SurfacePoint]. The
@@ -28,9 +35,9 @@ import com.android.shaftschematic.model.BlendProfile
  *
  * The drawn curve is a C1 parabolic biarc, not a dimensioned circular arc — it fits the
  * authored length and diameter step exactly at every combination, with no degenerate cases
- * to guard. That is the right trade while a blend prints no radius value. A true-arc profile
- * belongs here as a fourth [BlendProfile] the day a radius becomes a printed machining
- * call-out.
+ * to guard — the right trade for a Length-mode blend, which prints no value. A face that
+ * prints a machining call-out is an Angle-mode face: a straight cone and a TRUE circular
+ * corner radius ([ChamferShape]), not one of these presets.
  */
 fun BlendProfile.easeAftFrac(largerAtAft: Boolean): Float = when (this) {
     BlendProfile.OGEE -> 0.5f
@@ -85,9 +92,10 @@ fun blendRadiusFrac(t: Float, easeStart: Float, easeEnd: Float): Float {
 /**
  * The blend's surface polyline over `[x0Mm, x1Mm]`, running [radius0Mm] → [radius1Mm].
  *
- * Points are aft → fwd, both endpoints included, `[steps] + 1` of them. A degenerate span
- * or an equal-radius pair yields the two endpoints only — there is no step to blend, so
- * callers draw nothing.
+ * Points are aft → fwd, both endpoints included. An eased [profile] samples `[steps] + 1` of
+ * them; a [chamfer] (an Angle-mode face) yields its own vertices instead — the cone's ends and
+ * the corner radius's arc samples ([blendFracPoints]). A degenerate span or an equal-radius pair
+ * yields the two endpoints only — there is no step to blend, so callers draw nothing.
  */
 fun blendPolyline(
     x0Mm: Float,
@@ -96,20 +104,184 @@ fun blendPolyline(
     radius1Mm: Float,
     profile: BlendProfile,
     steps: Int = BLEND_CURVE_STEPS,
+    chamfer: ChamferShape? = null,
 ): List<SurfacePoint> {
     val span = x1Mm - x0Mm
     val drop = radius1Mm - radius0Mm
     if (span <= 0f || drop == 0f || steps < 1) {
         return listOf(SurfacePoint(x0Mm, radius0Mm * 2f), SurfacePoint(x1Mm, radius1Mm * 2f))
     }
-    val largerAtAft = radius0Mm > radius1Mm
+    return blendFracPoints(profile, chamfer, largerAtAft = radius0Mm > radius1Mm, steps).map { p ->
+        SurfacePoint(x0Mm + span * p.t, (radius0Mm + drop * p.frac) * 2f)
+    }
+}
+
+/**
+ * One vertex of a blend's normalized shape: [t] the axial fraction of the span from its AFT end,
+ * [frac] the fraction of the way from the aft radius to the fwd radius. Both draw paths (the mm
+ * surface envelope and the drawn silhouette) map these same points through their own scales, so
+ * the two can never describe different shapes.
+ */
+data class BlendFracPoint(val t: Float, val frac: Float)
+
+/**
+ * The normalized vertices of a blend, aft → fwd, `(0, 0)` to `(1, 1)`.
+ *
+ * Length mode ([chamfer] null): [steps] + 1 samples of the eased [profile]. Angle mode: the
+ * [chamfer]'s own vertices ([ChamferShape.fracPoints], large end first) oriented by
+ * [largerAtAft] — read as they are when the aft end carries the larger radius, mirrored end for
+ * end otherwise. The profile is ignored in Angle mode (a chamfer is a straight cone).
+ */
+fun blendFracPoints(
+    profile: BlendProfile,
+    chamfer: ChamferShape?,
+    largerAtAft: Boolean,
+    steps: Int = BLEND_CURVE_STEPS,
+): List<BlendFracPoint> {
+    if (chamfer != null) {
+        val fromLarge = chamfer.fracPoints()
+        return if (largerAtAft) fromLarge
+        else fromLarge.asReversed().map { BlendFracPoint(1f - it.t, 1f - it.frac) }
+    }
     val a = profile.easeAftFrac(largerAtAft)
     val b = profile.easeFwdFrac(largerAtAft)
-    return (0..steps).map { i ->
-        val t = i.toFloat() / steps
-        val r = radius0Mm + drop * blendRadiusFrac(t, a, b)
-        SurfacePoint(x0Mm + span * t, r * 2f)
+    val n = steps.coerceAtLeast(1)
+    return (0..n).map { i ->
+        val t = i.toFloat() / n
+        BlendFracPoint(t, blendRadiusFrac(t, a, b))
     }
+}
+
+/** [BlendFracPoint] of a point given large-end-first ([ChamferShape.fracPoints] form), oriented aft → fwd. */
+fun BlendFracPoint.orientedForAft(largerAtAft: Boolean): BlendFracPoint =
+    if (largerAtAft) this else BlendFracPoint(1f - t, 1f - frac)
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Angle-mode faces: a straight cone at a stored angle, with an optional corner radius
+// ──────────────────────────────────────────────────────────────────────────────
+
+/** An Angle-mode blend angle must lie strictly inside this open range (degrees from the axis). */
+const val BLEND_ANGLE_MIN_DEG = 0f
+const val BLEND_ANGLE_MAX_DEG = 90f
+
+/** Arc samples across a chamfer's corner radius — enough that the round reads at print scale. */
+const val CHAMFER_ARC_STEPS = 12
+
+/** An angle as its field and its callout show it: the stored value, trailing zeros trimmed (`45`, `30.5`). */
+fun formatBlendAngleDeg(deg: Float): String =
+    String.format(Locale.US, "%.3f", deg).trimEnd('0').trimEnd('.')
+
+/** True when [angleDeg] is a usable Angle-mode angle: finite and strictly between 0° and 90°. */
+fun isValidBlendAngle(angleDeg: Float?): Boolean =
+    angleDeg != null && angleDeg.isFinite() && angleDeg > BLEND_ANGLE_MIN_DEG && angleDeg < BLEND_ANGLE_MAX_DEG
+
+/**
+ * Axial length of a straight cone climbing [riseMm] (a RADIUS difference — half the diameter
+ * step) at [angleDeg] measured from the shaft axis: `rise / tan(angle)`. Null when there is no
+ * rise or the angle is not usable. 45° climbs one for one.
+ */
+fun chamferConeLengthMm(riseMm: Float, angleDeg: Float): Float? {
+    if (riseMm <= 0f || !isValidBlendAngle(angleDeg)) return null
+    return (riseMm / tan(Math.toRadians(angleDeg.toDouble()))).toFloat()
+}
+
+/**
+ * The true geometry of an Angle-mode face: a straight cone at [angleDeg] from the axis climbing
+ * [riseMm], with a corner radius [radiusMm] rounding the corner at the cone's SMALL-diameter end
+ * — tangent to the cone and to the smaller-diameter surface (the shop sketch: a 45° chamfer from a
+ * liner down to the body, then a 3/8" R into the body).
+ *
+ * The tangent setback is `R·tan(θ/2)`, measured along each line from the sharp corner, so the
+ * round meets the cone [setbackMm]·cosθ axially before the corner and the flat surface
+ * [setbackMm] past it. The curve's axial extent is therefore [coneLenMm] + [setbackMm] —
+ * [spanMm]. A blend never reaches across its own face, so when the smaller diameter is ACROSS the
+ * face (a body stepping down to a smaller neighbour) the round starts at the face and the cone
+ * follows it; the shape is the same construction mirrored end for end ([blendFracPoints]).
+ *
+ * [radiusMm] here is the DRAWN radius: a stored radius too large to fit the cone is clamped to
+ * the largest that does (the round then consumes the whole cone) — never the stored value, which
+ * prints verbatim. Units: mm.
+ */
+data class ChamferShape(
+    val angleDeg: Float,
+    val riseMm: Float,
+    /** Axial run of the cone between its two sharp corners: `rise / tan(angle)`. */
+    val coneLenMm: Float,
+    /** Drawn corner radius, already clamped to what fits (0 = a sharp corner). */
+    val radiusMm: Float,
+) {
+    private val theta: Double get() = Math.toRadians(angleDeg.toDouble())
+
+    /** The round's tangent setback from the sharp corner along each line, `R·tan(θ/2)`. */
+    val setbackMm: Float get() = (radiusMm * tan(theta / 2.0)).toFloat()
+
+    /** Axial extent of the whole curve: the cone plus the round's run-out past the corner. */
+    val spanMm: Float get() = coneLenMm + setbackMm
+
+    /**
+     * The shape's vertices from the LARGE end `(0, 0)` to the small end `(1, 1)`: t = axial
+     * fraction of [spanMm], frac = fraction of [riseMm] dropped. A sharp corner is the cone's two
+     * ends; a rounded one is the cone's large end, its tangent point, then [arcSteps] samples of
+     * the round down to the small surface.
+     */
+    fun fracPoints(arcSteps: Int = CHAMFER_ARC_STEPS): List<BlendFracPoint> {
+        if (radiusMm <= 0f) return listOf(BlendFracPoint(0f, 0f), BlendFracPoint(1f, 1f))
+        val n = arcSteps.coerceAtLeast(1)
+        return buildList {
+            add(BlendFracPoint(0f, 0f))
+            for (k in 0..n) {
+                val p = arcFrac(theta * k / n)
+                // A round clamped to the whole cone starts AT the large end; a repeated vertex
+                // would be a zero-length surface segment.
+                if (p.t - last().t > 1e-6f) add(p)
+            }
+            // The shape always lands exactly on the small surface.
+            if (last().t >= 1f - 1e-6f) set(lastIndex, BlendFracPoint(1f, 1f)) else add(BlendFracPoint(1f, 1f))
+        }
+    }
+
+    /** The straight cone's midpoint — where an angle callout's leader lands. */
+    fun coneMidFrac(): BlendFracPoint {
+        val tangent = arcFrac(0.0).takeIf { radiusMm > 0f } ?: BlendFracPoint(1f, 1f)
+        return BlendFracPoint(tangent.t / 2f, tangent.frac / 2f)
+    }
+
+    /** The round's midpoint — where a radius callout's leader lands; null for a sharp corner. */
+    fun cornerMidFrac(): BlendFracPoint? = if (radiusMm <= 0f) null else arcFrac(theta / 2.0)
+
+    /**
+     * A point on the round, [sweep] radians past its tangent with the cone (0 = on the cone,
+     * θ = on the small surface). The round's centre sits [radiusMm] above the small surface at the
+     * flat tangent point, so a point at angle φ = −π/2 − θ + sweep lies `R·(1 + sin φ)` above it.
+     */
+    private fun arcFrac(sweep: Double): BlendFracPoint {
+        val span = spanMm.toDouble()
+        if (span <= 0.0 || riseMm <= 0f) return BlendFracPoint(1f, 1f)
+        val phi = -PI / 2.0 - theta + sweep
+        val s = span + radiusMm * cos(phi)
+        val heightAboveSmall = radiusMm * (1.0 + sin(phi))
+        val drop = riseMm - heightAboveSmall
+        return BlendFracPoint(
+            (s / span).toFloat().coerceIn(0f, 1f),
+            (drop / riseMm).toFloat().coerceIn(0f, 1f),
+        )
+    }
+}
+
+/**
+ * The [ChamferShape] for a face climbing [riseMm] at [angleDeg] with a stored corner radius
+ * [radiusMm], or null when there is no rise or the angle is not usable.
+ *
+ * The drawn radius is clamped to the largest round the cone can host — its tangent point may
+ * reach the cone's large end but never pass it, `R ≤ L / (cosθ·tan(θ/2))`. Clamping the DRAWN
+ * round is not rewriting what was typed: the stored radius is what prints.
+ */
+fun chamferShape(riseMm: Float, angleDeg: Float, radiusMm: Float): ChamferShape? {
+    val cone = chamferConeLengthMm(riseMm, angleDeg) ?: return null
+    val theta = Math.toRadians(angleDeg.toDouble())
+    val maxR = (cone / (cos(theta) * tan(theta / 2.0))).toFloat()
+    val r = radiusMm.takeIf { it.isFinite() && it > 0f }?.coerceAtMost(maxR) ?: 0f
+    return ChamferShape(angleDeg = angleDeg, riseMm = riseMm, coneLenMm = cone, radiusMm = r)
 }
 
 /**
@@ -120,8 +292,9 @@ fun blendPolyline(
  * scale on a compressed sheet it collapses to sub-pixel and the feature is invisible on
  * exactly the drawings that need it. The drawn width therefore takes a floor of
  * [minWidthPx] — display exaggeration in the same posture as the undercut notch depth and
- * the wear trace, and safe here because a blend prints no dimension and no footer row, so
- * no exaggerated number can reach a machinist. The stored length is never touched.
+ * the wear trace, and safe here because a blend prints no dimension and no footer row, and
+ * an Angle-mode face's callouts print its STORED angle and radius, so no exaggerated number
+ * can reach a machinist. The stored length is never touched.
  *
  * The floor yields to the host: a blend never draws wider than [MAX_BLEND_FRAC_OF_HOST] of
  * the run it is cut into, so a short body can't be swallowed by its own blend.

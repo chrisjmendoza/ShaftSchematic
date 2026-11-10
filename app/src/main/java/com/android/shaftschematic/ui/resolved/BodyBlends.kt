@@ -2,12 +2,15 @@
 package com.android.shaftschematic.ui.resolved
 
 import com.android.shaftschematic.geom.BLEND_CURVE_STEPS
+import com.android.shaftschematic.geom.BlendFracPoint
+import com.android.shaftschematic.geom.ChamferShape
 import com.android.shaftschematic.geom.MAX_SEAL_FACES_TOTAL_FRAC_OF_HOST
 import com.android.shaftschematic.geom.SurfaceSeg
-import com.android.shaftschematic.geom.blendRadiusFrac
+import com.android.shaftschematic.geom.blendFracPoints
+import com.android.shaftschematic.geom.chamferConeLengthMm
+import com.android.shaftschematic.geom.chamferShape
+import com.android.shaftschematic.geom.orientedForAft
 import com.android.shaftschematic.geom.sealGrooveFracs
-import com.android.shaftschematic.geom.easeAftFrac
-import com.android.shaftschematic.geom.easeFwdFrac
 import com.android.shaftschematic.geom.drawnBlendWidthPx
 import com.android.shaftschematic.geom.drawnSealWidthPx
 import com.android.shaftschematic.geom.outerDiaAt
@@ -16,7 +19,9 @@ import com.android.shaftschematic.model.BlendProfile
 import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.autoBlendFor
+import com.android.shaftschematic.model.blendAngleDegOn
 import com.android.shaftschematic.model.blendMmOn
+import com.android.shaftschematic.model.blendRadiusMmOn
 import com.android.shaftschematic.model.blendSealLenMmOn
 import com.android.shaftschematic.model.blendSealOn
 import com.android.shaftschematic.model.blendToLinerOdOn
@@ -63,7 +68,26 @@ data class BodyBlend(
      * the face carries no seal, or none fits.
      */
     val sealLenMm: Float = 0f,
+    /**
+     * Angle mode: the face's STORED angle (degrees from the axis), set only when a chamfer is
+     * actually drawn — a face with no step to climb, or a Length-mode face, carries null. When set,
+     * [lengthMm] is the DERIVED span ([ChamferShape.spanMm], clamped to the run) and the shape is a
+     * straight cone ([chamfer]); [profile] plays no part.
+     */
+    val angleDeg: Float? = null,
+    /** Angle mode's STORED corner radius (mm), verbatim — what prints; the drawn round may be clamped. */
+    val cornerRadiusMm: Float = 0f,
 )
+
+/**
+ * This blend's true chamfer geometry, or null for a Length-mode face (or a seal-only one). The rise
+ * is half the diameter step the face climbs; the radius is clamped to what the cone can host.
+ */
+fun BodyBlend.chamfer(): ChamferShape? {
+    val angle = angleDeg ?: return null
+    if (lengthMm <= 0f) return null
+    return chamferShape(abs(neighbourDiaMm - bodyDiaMm) / 2f, angle, cornerRadiusMm)
+}
 
 /** A blend's drawn span, already floored and clamped, ready to hand to `blendPolyline`. */
 data class BlendDrawSpan(
@@ -128,6 +152,8 @@ fun bodyBlends(spec: ShaftSpec, components: List<ResolvedComponent>): List<BodyB
                 blendAt(
                     components, segs, run, end, auto.lengthMm, auto.profile, auto.seal, auto.sealLenMm,
                     toLinerOd = auto.toLinerOd,
+                    angleDeg = auto.angleDeg,
+                    cornerRadiusMm = auto.radiusMm,
                 )
                     ?.let(::add)
             }
@@ -156,6 +182,8 @@ fun bodyBlends(spec: ShaftSpec, components: List<ResolvedComponent>): List<BodyB
                     components, segs, run, end, stored, b.blendProfile,
                     b.blendSealOn(end), b.blendSealLenMmOn(end),
                     toLinerOd = b.blendToLinerOdOn(end),
+                    angleDeg = b.blendAngleDegOn(end),
+                    cornerRadiusMm = b.blendRadiusMmOn(end),
                 )?.let(::add)
             }
         }
@@ -177,6 +205,13 @@ fun bodyBlends(spec: ShaftSpec, components: List<ResolvedComponent>): List<BodyB
  * [toLinerOd] matters only where a liner butts the face and so supplies the neighbour Ø: the
  * curve then leaves from the liner's OD rather than the derived half-way seat. A body or taper
  * across the face wins the lookup first and is followed whatever the flag says.
+ *
+ * A non-null [angleDeg] is Angle mode: the curve's length is not [storedLengthMm] but the span a
+ * straight cone at that angle needs to climb the step — `rise / tan θ` plus a corner radius's
+ * run-out ([ChamferShape.spanMm]) — so it follows the neighbour Ø the lookup finds, liner rules
+ * included. [storedLengthMm] still decides whether the face is blended at all (the Square | Blend
+ * choice), and is otherwise left as typed. An angle that is not usable (only a hand-edited
+ * document carries one) draws no curve, never an error.
  */
 private fun blendAt(
     components: List<ResolvedComponent>,
@@ -188,6 +223,8 @@ private fun blendAt(
     seal: Boolean,
     storedSealLenMm: Float = 0f,
     toLinerOd: Boolean = false,
+    angleDeg: Float? = null,
+    cornerRadiusMm: Float = 0f,
 ): BodyBlend? {
     if (storedLengthMm <= 0f && !seal) return null
     val runLen = run.endMmPhysical - run.startMmPhysical
@@ -198,15 +235,19 @@ private fun blendAt(
     // just OUTSIDE the face — that is the diameter the curve leaves from. Shaft surface first
     // (liners excluded); a liner butting the face supplies a derived seat instead, or its own
     // OD when the face asks to run to the liner.
-    val neighbourDia: Float? = if (storedLengthMm <= 0f) null else {
-        val probeMm = if (end == LinerAuthoredReference.AFT) faceMm - BLEND_EPS_MM * 10f
-                      else faceMm + BLEND_EPS_MM * 10f
-        (outerDiaAt(segs, probeMm).takeIf { it > 0f }
-            ?: seatDiaUnderLiner(components, probeMm, run.diaMm, toLinerOd))
-            ?.takeIf { abs(it - run.diaMm) > BLEND_EPS_MM }
+    val neighbourDia: Float? =
+        if (storedLengthMm <= 0f) null else faceNeighbourDiaMm(components, segs, run, end, toLinerOd)
+    // Angle mode derives the curve's length from the step it climbs; Length mode takes the typed
+    // value. Clamping the DRAWN curve is not rewriting what was typed.
+    val chamfer = if (neighbourDia == null || angleDeg == null) null
+                  else chamferShape(abs(neighbourDia - run.diaMm) / 2f, angleDeg, cornerRadiusMm)
+    val trueCurveLen = when {
+        neighbourDia == null -> 0f
+        angleDeg != null -> chamfer?.spanMm ?: 0f
+        else -> storedLengthMm
     }
-    // Clamping the DRAWN curve is not rewriting what was typed.
-    val curveLen = if (neighbourDia == null) 0f else storedLengthMm.coerceAtMost(runLen)
+    val curveLen = trueCurveLen.coerceAtMost(runLen)
+    val angleDrawn = chamfer != null && curveLen > 0f
 
     // The seal area is measured FROM THE FACE whether or not a ramp sits there, so the ramp takes
     // nothing from it; a stored 0 (every document from before the seal length had its own field)
@@ -228,7 +269,68 @@ private fun blendAt(
         profile = profile,
         seal = sealDrawn,
         sealLenMm = if (sealDrawn) sealLen else 0f,
+        angleDeg = if (angleDrawn) angleDeg else null,
+        cornerRadiusMm = if (angleDrawn) cornerRadiusMm.coerceAtLeast(0f) else 0f,
     )
+}
+
+/**
+ * The diameter face [end] of [run] steps to — sampled just OUTSIDE the face, the diameter its
+ * curve leaves from — or null when there is no step (nothing across the face, or a neighbour at
+ * the run's own Ø). Shaft surface first, liners excluded from [segs]; a liner butting the face
+ * supplies the derived seat ([seatDiaUnderLiner]), or its own OD under [toLinerOd].
+ *
+ * The ONE lookup behind both the drawn blend and the Angle-mode length a card shows, so the
+ * readout can never describe a different step than the drawing climbs.
+ */
+private fun faceNeighbourDiaMm(
+    components: List<ResolvedComponent>,
+    segs: List<SurfaceSeg>,
+    run: ResolvedBody,
+    end: LinerAuthoredReference,
+    toLinerOd: Boolean,
+): Float? {
+    val faceMm = if (end == LinerAuthoredReference.AFT) run.startMmPhysical else run.endMmPhysical
+    val probeMm = if (end == LinerAuthoredReference.AFT) faceMm - BLEND_EPS_MM * 10f
+                  else faceMm + BLEND_EPS_MM * 10f
+    return (outerDiaAt(segs, probeMm).takeIf { it > 0f }
+        ?: seatDiaUnderLiner(components, probeMm, run.diaMm, toLinerOd))
+        ?.takeIf { abs(it - run.diaMm) > BLEND_EPS_MM }
+}
+
+/**
+ * The drawn run that carries face [end] of the explicit body [bodyId] — its aft-most run for the
+ * AFT face, its fwd-most for the FWD face (a split body draws as several runs) — or null when the
+ * body does not resolve.
+ */
+fun explicitBodyFaceRun(
+    components: List<ResolvedComponent>,
+    bodyId: String,
+    end: LinerAuthoredReference,
+): ResolvedBody? {
+    val runs = components
+        .filterIsInstance<ResolvedBody>()
+        .filter { it.source == ResolvedComponentSource.EXPLICIT && resolvedBodyBaseId(it.id) == bodyId }
+    return if (end == LinerAuthoredReference.AFT) runs.minByOrNull { it.startMmPhysical }
+           else runs.maxByOrNull { it.endMmPhysical }
+}
+
+/**
+ * The cone length an Angle-mode face at [angleDeg] derives from its step — `rise / tan θ`, the
+ * corner radius's run-out excluded (that is the readout a card shows beside the angle) — or null
+ * when face [end] of [run] has no step to climb or the angle is not usable. Same neighbour lookup
+ * as the drawing ([faceNeighbourDiaMm]), liner rules included.
+ */
+fun angleBlendConeLengthMm(
+    components: List<ResolvedComponent>,
+    run: ResolvedBody,
+    end: LinerAuthoredReference,
+    angleDeg: Float,
+    toLinerOd: Boolean,
+): Float? {
+    val segs = surfaceSegsFrom(components.filterNot { it is ResolvedLiner })
+    val neighbour = faceNeighbourDiaMm(components, segs, run, end, toLinerOd) ?: return null
+    return chamferConeLengthMm(abs(neighbour - run.diaMm) / 2f, angleDeg)
 }
 
 /**
@@ -370,9 +472,31 @@ data class BodyDrawEdges(
      * paper gap. Fed to `breakGapCenter` as avoid ranges beside the keyway windows.
      */
     val sealSpansX: List<ClosedFloatingPointRange<Float>> = emptyList(),
+    /**
+     * Where an Angle-mode face's callouts point, in drawn units, aft face first — one per drawn
+     * chamfer. Built from the same span and the same normalized shape as [aftCurve]/[fwdCurve], so
+     * a leader always lands on the line the sheet inked. Empty for Length-mode faces.
+     */
+    val angleMarks: List<BlendAngleMark> = emptyList(),
 ) {
     val hasBlend: Boolean get() = aftCurve.isNotEmpty() || fwdCurve.isNotEmpty()
 }
+
+/**
+ * One drawn chamfer's callout anchors: [coneMid] — the midpoint of the straight cone, where the
+ * angle's leader lands — and [cornerMid], the midpoint of the corner radius's arc (null for a sharp
+ * corner). Each carries the silhouette radius there, so a site anchors on the BOTTOM outline at
+ * `cy + rPx`. [angleDeg] and [radiusMm] are the STORED values the callouts print: the drawn slope
+ * is not the true angle (the axial map is compressed and the drawn width floored, and the two
+ * scales differ), and the drawn round may be clamped.
+ */
+data class BlendAngleMark(
+    val end: LinerAuthoredReference,
+    val angleDeg: Float,
+    val radiusMm: Float,
+    val coneMid: BodyEdgePoint,
+    val cornerMid: BodyEdgePoint?,
+)
 
 /**
  * Decompose a body run into its drawn edges under an arbitrary x mapping.
@@ -429,11 +553,15 @@ fun bodyDrawEdges(
     // A zero-width span (a seal-only face) contributes no curve points — sampling it would emit
     // `steps + 1` coincident vertices.
     val aftCurve =
-        if (aftSpan != null && aftSpan.xFwdPx - aftSpan.xAftPx > 0f) curvePoints(aftSpan, aft.profile, rAt, steps)
+        if (aftSpan != null && aftSpan.xFwdPx - aftSpan.xAftPx > 0f) curvePoints(aftSpan, aft, rAt, steps)
         else emptyList()
     val fwdCurve =
-        if (fwdSpan != null && fwdSpan.xFwdPx - fwdSpan.xAftPx > 0f) curvePoints(fwdSpan, fwd.profile, rAt, steps)
+        if (fwdSpan != null && fwdSpan.xFwdPx - fwdSpan.xAftPx > 0f) curvePoints(fwdSpan, fwd, rAt, steps)
         else emptyList()
+    val angleMarks = listOfNotNull(
+        if (aft != null && aftSpan != null && aftCurve.isNotEmpty()) angleMark(aftSpan, aft, rAt) else null,
+        if (fwd != null && fwdSpan != null && fwdCurve.isNotEmpty()) angleMark(fwdSpan, fwd, rAt) else null,
+    )
 
     val radiusAt = { x: Float -> silhouetteRadiusAt(x, aftCurve, fwdCurve, r, flatX0, flatX1) }
 
@@ -448,6 +576,7 @@ fun bodyDrawEdges(
         aftSeal = sealGrooveLines(aftSealSpan, radiusAt),
         fwdSeal = sealGrooveLines(fwdSealSpan, radiusAt),
         sealSpansX = listOfNotNull(aftSealSpan, fwdSealSpan).map { it.xAftPx..it.xFwdPx },
+        angleMarks = angleMarks,
     )
 }
 
@@ -456,25 +585,43 @@ fun bodyDrawEdges(
  *
  * The mm-space [com.android.shaftschematic.geom.blendPolyline] serves the surface envelope;
  * this one serves the draw sites, where the span has already taken its visibility floor and
- * no longer corresponds to a true mm span. Both read the same [blendRadiusFrac], so the two
- * describe the same curve.
+ * no longer corresponds to a true mm span. Both read the same [blendFracPoints] — the eased
+ * profile in Length mode, the chamfer in Angle mode — so the two describe the same shape.
+ *
+ * The drawn shape is the true one stretched onto the drawn span: x and r map independently (the
+ * axial map is compressed and floored, the radius rides the diameter scale), so tangency survives
+ * but the drawn slope is not the stored angle — which is why a callout prints the stored value.
  */
 private fun curvePoints(
     span: BlendDrawSpan,
-    profile: BlendProfile,
+    blend: BodyBlend,
     rAt: (Float) -> Float,
     steps: Int,
 ): List<BodyEdgePoint> {
     val r0 = rAt(span.diaAtAftMm)
     val r1 = rAt(span.diaAtFwdMm)
-    val largerAtAft = r0 > r1
-    val a = profile.easeAftFrac(largerAtAft)
-    val b = profile.easeFwdFrac(largerAtAft)
-    val w = span.xFwdPx - span.xAftPx
-    return (0..steps).map { i ->
-        val t = i.toFloat() / steps
-        BodyEdgePoint(span.xAftPx + w * t, r0 + (r1 - r0) * blendRadiusFrac(t, a, b))
+    return blendFracPoints(blend.profile, blend.chamfer(), largerAtAft = r0 > r1, steps).map {
+        span.pointAt(it, r0, r1)
     }
+}
+
+private fun BlendDrawSpan.pointAt(p: BlendFracPoint, r0: Float, r1: Float): BodyEdgePoint =
+    BodyEdgePoint(xAftPx + (xFwdPx - xAftPx) * p.t, r0 + (r1 - r0) * p.frac)
+
+/** [BlendAngleMark] for a drawn Angle-mode face, or null for a Length-mode one. */
+private fun angleMark(span: BlendDrawSpan, blend: BodyBlend, rAt: (Float) -> Float): BlendAngleMark? {
+    val angle = blend.angleDeg ?: return null
+    val shape = blend.chamfer() ?: return null
+    val r0 = rAt(span.diaAtAftMm)
+    val r1 = rAt(span.diaAtFwdMm)
+    val largerAtAft = r0 > r1
+    return BlendAngleMark(
+        end = blend.end,
+        angleDeg = angle,
+        radiusMm = blend.cornerRadiusMm,
+        coneMid = span.pointAt(shape.coneMidFrac().orientedForAft(largerAtAft), r0, r1),
+        cornerMid = shape.cornerMidFrac()?.let { span.pointAt(it.orientedForAft(largerAtAft), r0, r1) },
+    )
 }
 
 /**
