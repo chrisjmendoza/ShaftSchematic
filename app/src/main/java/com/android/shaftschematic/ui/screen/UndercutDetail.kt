@@ -132,6 +132,7 @@ import com.android.shaftschematic.geom.outerDiaAt
 import com.android.shaftschematic.geom.pickUndercutAt
 import com.android.shaftschematic.geom.planDiaCallouts
 import com.android.shaftschematic.geom.resolveUndercutFloors
+import com.android.shaftschematic.geom.isFwdUndercutReference
 import com.android.shaftschematic.geom.undercutAddSeedSpan
 import com.android.shaftschematic.geom.undercutCalloutAnchorsMm
 import com.android.shaftschematic.geom.undercutNextCutSeed
@@ -1007,11 +1008,11 @@ fun UndercutWindowDetailOverlay(
     // page is fresh state — the card keys on the seed — and an untouched seed is discarded on
     // leave like any other add.
     fun plantNextCutSeed(current: UndercutDraft) {
-        val next = undercutNextCutSeed(current.toUndercut(), oalMm, DEFAULT_UNDERCUT_LENGTH_MM) ?: return
         val pool = applyUndercutDraft(undercutRecord.undercuts, current).map { u ->
             val c = clampUndercutSpan(u.startFromAftMm, u.lengthMm, oalMm)
             UndercutSpanMm(u.id, c.startMm, c.endMm)
         }
+        val next = undercutNextCutSeed(current.toUndercut(), oalMm, DEFAULT_UNDERCUT_LENGTH_MM, pool) ?: return
         val seed = undercutSeedInheriting(
             startMm = next.startFromAftMm,
             lengthMm = next.lengthMm,
@@ -1041,7 +1042,11 @@ fun UndercutWindowDetailOverlay(
         flushFocusedField { it == id }
         val draft = drafts[id]?.takeIf { it != baselines[id] }
         val current = draft ?: baselines[id] ?: return
-        if (undercutNextCutSeed(current.toUndercut(), oalMm, DEFAULT_UNDERCUT_LENGTH_MM) == null) return
+        if (undercutNextCutSeed(
+                current.toUndercut(), oalMm, DEFAULT_UNDERCUT_LENGTH_MM,
+                undercutOtherSpans(undercutRecord.undercuts, id, oalMm),
+            ) == null
+        ) return
         if (draft != null) {
             if (confirmIssueOf(id, draft) != null) return
             overhangAskFor(id, before, draft, UndercutAfterOverhang.NextCut)?.let {
@@ -1103,6 +1108,8 @@ fun UndercutWindowDetailOverlay(
             occupied = occupied,
             oalMm = oalMm,
             lengthMm = DEFAULT_UNDERCUT_LENGTH_MM,
+            // A strip measured from a FWD datum is recorded FWD → AFT: its next cut goes AFT.
+            aftFirst = undercuts.isNotEmpty() && undercuts.all { isFwdUndercutReference(it.authoredReference) },
         )
         val neighbour = butted?.let { b -> baselines[b.neighbourId] }
         val span = defaultUndercutSpan(addRange.first, addRange.second, occupied, oalMm)
@@ -1956,6 +1963,7 @@ fun UndercutWindowDetailOverlay(
                                     otherPendingOpen = !draft.isPending &&
                                         (pendingSeed != null || PENDING_UNDERCUT_ID in drafts),
                                     oalMm = oalMm,
+                                    others = undercutOtherSpans(undercutRecord.undercuts, id, oalMm),
                                 ),
                                 onNextCut = { nextCutFrom(id) },
                                 onDraftChange = { updated -> writeDraft(id, updated) },
@@ -2325,6 +2333,9 @@ internal data class UndercutNextCutState(val enabled: Boolean, val caption: Stri
 /** The "Next cut" caption when the shaft ends before a default-length cut fits FWD of this one. */
 internal const val UNDERCUT_NO_STOCK_FWD_MSG = "No stock FWD of this cut"
 
+/** The same, for a cut measured from a FWD datum, whose next cut goes AFT. */
+internal const val UNDERCUT_NO_STOCK_AFT_MSG = "No stock AFT of this cut"
+
 /**
  * A card's "Next cut" state for [draft] as it stands: disabled while the draft is [blocked] (the
  * pill already says why — no second validator here), while ANOTHER card holds the one pending add
@@ -2336,11 +2347,13 @@ internal fun undercutNextCutState(
     blocked: Boolean,
     otherPendingOpen: Boolean,
     oalMm: Float,
+    others: List<UndercutSpanMm> = emptyList(),
 ): UndercutNextCutState {
-    val noStock = undercutNextCutSeed(draft.toUndercut(), oalMm, DEFAULT_UNDERCUT_LENGTH_MM) == null
+    val noStock = undercutNextCutSeed(draft.toUndercut(), oalMm, DEFAULT_UNDERCUT_LENGTH_MM, others) == null
+    val message = if (isFwdUndercutReference(draft.reference)) UNDERCUT_NO_STOCK_AFT_MSG else UNDERCUT_NO_STOCK_FWD_MSG
     return UndercutNextCutState(
         enabled = !blocked && !noStock && !otherPendingOpen,
-        caption = if (noStock && !blocked) UNDERCUT_NO_STOCK_FWD_MSG else null,
+        caption = if (noStock && !blocked) message else null,
     )
 }
 

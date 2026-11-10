@@ -677,7 +677,8 @@ data class UndercutButtedSeed(val startMm: Float, val lengthMm: Float, val neigh
  * ([stripCuts], render-clamped): butted on the FWD end of the FWD-most cut while
  * [lengthMm] of shaft remains FWD of it, else butted on the AFT end of the AFT-most cut while
  * [lengthMm] of shaft remains AFT of it — the shop records a run of cuts one after the next, so
- * the next one usually starts where the last one ends (on-device request). `null` when the strip
+ * the next one usually starts where the last one ends (on-device request). [aftFirst] tries the
+ * AFT side first: a run measured from a FWD datum is recorded FWD → AFT. `null` when the strip
  * has no cuts or neither side fits; the caller then seeds the strip's default span.
  *
  * A side is taken only when the seed lands in CLEAR stock — no cut in [occupied] (every cut on
@@ -692,6 +693,7 @@ fun undercutAddSeedSpan(
     occupied: List<UndercutSpanMm>,
     oalMm: Float,
     lengthMm: Float = UNDERCUT_DEFAULT_LENGTH_MM,
+    aftFirst: Boolean = false,
 ): UndercutButtedSeed? {
     val cuts = stripCuts.filter { it.endMm > it.startMm }
     if (cuts.isEmpty() || lengthMm <= 0f) return null
@@ -700,24 +702,47 @@ fun undercutAddSeedSpan(
         o.startMm < startMm + lengthMm - eps && o.endMm > startMm + eps
     }
 
-    val fwdMost = cuts.sortedWith(compareByDescending<UndercutSpanMm> { it.endMm }.thenBy { it.startMm }).first()
-    val fwdStart = undercutStartAtEndOf(fwdMost.endMm)
-    if (fwdStart + lengthMm <= oalMm + UNDERCUT_SPAN_EPS_MM && clear(fwdStart)) {
-        return UndercutButtedSeed(fwdStart, lengthMm, fwdMost.id)
+    fun fwdSeed(): UndercutButtedSeed? {
+        val fwdMost = cuts.sortedWith(compareByDescending<UndercutSpanMm> { it.endMm }.thenBy { it.startMm }).first()
+        val fwdStart = undercutStartAtEndOf(fwdMost.endMm)
+        return if (fwdStart + lengthMm <= oalMm + UNDERCUT_SPAN_EPS_MM && clear(fwdStart)) {
+            UndercutButtedSeed(fwdStart, lengthMm, fwdMost.id)
+        } else null
     }
-    val aftMost = cuts.sortedWith(compareBy<UndercutSpanMm> { it.startMm }.thenByDescending { it.endMm }).first()
-    val aftStart = undercutEndAtStartOf(aftMost.startMm, lengthMm)
-    if (aftStart >= -UNDERCUT_SPAN_EPS_MM && clear(aftStart)) {
-        return UndercutButtedSeed(aftStart, lengthMm, aftMost.id)
+    fun aftSeed(): UndercutButtedSeed? {
+        val aftMost = cuts.sortedWith(compareBy<UndercutSpanMm> { it.startMm }.thenByDescending { it.endMm }).first()
+        val aftStart = undercutEndAtStartOf(aftMost.startMm, lengthMm)
+        return if (aftStart >= -UNDERCUT_SPAN_EPS_MM && clear(aftStart)) {
+            UndercutButtedSeed(aftStart, lengthMm, aftMost.id)
+        } else null
     }
-    return null
+    return if (aftFirst) aftSeed() ?: fwdSeed() else fwdSeed() ?: aftSeed()
 }
 
 /**
- * The card's "Next cut" seed after [current]: a cut of [lengthMm] starting on [current]'s FWD end,
+ * True for a datum on the FWD side of its cut — the FWD S.E.T., a liner's FWD edge, a parent cut's
+ * FWD shoulder. A run measured from one is recorded FWD → AFT, away from the datum.
+ */
+fun isFwdUndercutReference(reference: UndercutReference): Boolean =
+    reference == UndercutReference.FWD_SET ||
+        reference == UndercutReference.LINER_FWD ||
+        reference == UndercutReference.PARENT_FWD
+
+/**
+ * The card's "Next cut" seed after [current]: a cut of [lengthMm] butted on the end of [current]
+ * AWAY from its datum — its FWD end under an AFT datum, its AFT end under a FWD one
+ * ([isFwdUndercutReference]). A run is recorded outward from what it is measured from, so the next
+ * cut starts where the last length ended; seeding FWD under a FWD S.E.T. put it back toward the
+ * datum and its Distance had to be retyped every time (on-device report).
+ *
+ * The seed lands in CLEAR stock: where a cut in [others] (every other cut on the sheet,
+ * render-clamped) already holds that spot, the seed steps to that cut's far end and tries again,
+ * so "Next cut" from the middle of a run opens at the run's open end. A cut that CONTAINS
+ * [current] is not in the way — the next cut of a nested run stays inside its parent.
+ *
  * Ø unentered (0), no note, with [current]'s authored reference, reference liner and reference cut
  * carried over verbatim — the next cut of a run reads from the same datum. `null` when the shaft
- * has less than [lengthMm] of stock FWD of [current] (the button is then disabled; a seed is never
+ * ends before [lengthMm] of clear stock on that side (the button is then disabled; a seed is never
  * placed past the shaft end). The returned id is fresh and meaningless: the caller keys the seed
  * as its pending draft. Pure: nothing is recorded.
  */
@@ -725,9 +750,25 @@ fun undercutNextCutSeed(
     current: Undercut,
     oalMm: Float,
     lengthMm: Float = UNDERCUT_DEFAULT_LENGTH_MM,
+    others: List<UndercutSpanMm> = emptyList(),
 ): Undercut? {
-    val startMm = undercutStartAtEndOf(current.startFromAftMm + current.lengthMm)
-    if (lengthMm <= 0f || startMm + lengthMm > oalMm + UNDERCUT_SPAN_EPS_MM) return null
+    if (lengthMm <= 0f) return null
+    val eps = UNDERCUT_TOUCH_EPS_MM
+    val curStart = current.startFromAftMm
+    val curEnd = current.startFromAftMm + current.lengthMm
+    val blockers = others.filter { o ->
+        o.id != current.id && o.endMm > o.startMm &&
+            !(o.startMm <= curStart + eps && o.endMm >= curEnd - eps)
+    }
+    val aftward = isFwdUndercutReference(current.authoredReference)
+    var startMm = if (aftward) undercutEndAtStartOf(curStart, lengthMm) else undercutStartAtEndOf(curEnd)
+    // Each step clears at least one blocker, so the walk ends within their count.
+    repeat(blockers.size + 1) {
+        val hit = blockers.filter { o -> o.startMm < startMm + lengthMm - eps && o.endMm > startMm + eps }
+        if (hit.isEmpty()) return@repeat
+        startMm = if (aftward) hit.minOf { it.startMm } - lengthMm else hit.maxOf { it.endMm }
+    }
+    if (startMm < -UNDERCUT_SPAN_EPS_MM || startMm + lengthMm > oalMm + UNDERCUT_SPAN_EPS_MM) return null
     return Undercut(
         startFromAftMm = startMm,
         lengthMm = lengthMm,

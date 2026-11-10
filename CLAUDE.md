@@ -601,8 +601,13 @@ section; below the shaft on a white halo when too narrow, clear of the rail (pla
 `geom/UndercutCutNumberMath.kt`). It prints on NO sheet and draws on no whole-shaft overview, and has
 no pref (on-device ruling: "the cut counts are for input purposes only, no output on any sheet"). Liner strip titles carry the
 liner's OD in its display unit. "Next cut" (a full-width button at the card's foot) confirms the card through the ONE confirm path and seeds a
-PENDING cut butted to its FWD end (same datum, Ø empty; disabled while unconfirmable or with no stock
-FWD); an add on a strip with cuts seeds butted to the FWD-most cut (`undercutAddSeedSpan`). **A
+PENDING cut butted to the end AWAY from its datum — FWD end under an AFT datum, AFT end under a FWD
+one (`isFwdUndercutReference`; a run is recorded outward from what it is measured from — on-device
+report: right to left from the FWD S.E.T., every next cut opened back toward the datum), stepping
+past cuts already there to the run's open end (`undercutNextCutSeed`; same datum, Ø empty; disabled
+while unconfirmable or with no stock that side); an add on a strip with cuts seeds butted to the
+FWD-most cut, or AFT of the AFT-most first when the strip's cuts all read from FWD datums
+(`undercutAddSeedSpan(aftFirst)`). **A
 butted seed's Length edit holds the shared edge, not the seeded Distance**
 (`undercutButtedSeedStartForLength`): the seed's Distance was never typed, and under a FWD datum
 the ordinary length rule pins the FWD end, so typing the real length grew the new cut INTO the cut

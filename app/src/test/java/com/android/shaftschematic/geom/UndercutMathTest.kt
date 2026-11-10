@@ -1980,7 +1980,7 @@ class UndercutMathTest {
     fun `the next cut seed starts on the current cut's FWD end and carries its datum`() {
         val current = Undercut(
             id = "cur", startFromAftMm = 600f, lengthMm = 100f, diaMm = 180f, note = "weld",
-            authoredReference = UndercutReference.LINER_FWD, referenceLinerId = "L1",
+            authoredReference = UndercutReference.LINER_AFT, referenceLinerId = "L1",
             referenceCutId = "",
         )
         val seed = undercutNextCutSeed(current, oalMm = 2000f)
@@ -1989,7 +1989,7 @@ class UndercutMathTest {
         assertEquals(UNDERCUT_DEFAULT_LENGTH_MM, seed.lengthMm, 1e-4f)
         assertEquals(0f, seed.diaMm, 0f)
         assertEquals("", seed.note)
-        assertEquals(UndercutReference.LINER_FWD, seed.authoredReference)
+        assertEquals(UndercutReference.LINER_AFT, seed.authoredReference)
         assertEquals("L1", seed.referenceLinerId)
         assertTrue(seed.id != current.id)
         // The current cut is untouched — the seed is a new value.
