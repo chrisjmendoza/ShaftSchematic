@@ -31,6 +31,7 @@ import com.android.shaftschematic.util.typedTaperRatePerFootText
 import com.android.shaftschematic.util.buildBodyTitleById
 import com.android.shaftschematic.util.buildLinerTitleById
 import com.android.shaftschematic.util.drawRichText
+import com.android.shaftschematic.util.measureRichText
 import com.android.shaftschematic.util.wrapRichLines
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -264,19 +265,35 @@ internal fun planFooter(
     val midFrac   = if (blankValues) 1f / 3f else 0.40f
     val rightFrac = if (blankValues) 2f / 3f else 0.76f
     val leftX  = rectLeft
-    val midX   = rectLeft + width * midFrac
-    val rightX = rectLeft + width * rightFrac
+    val colPad = 6f
+    val midLines = buildFooterMidColumn(spec, project, cfg, date, blankValues)
+
+    val (midX, rightX) = if (blankValues) {
+        (rectLeft + width * midFrac) to (rectLeft + width * rightFrac)
+    } else {
+        footerColumnStarts(
+            rectLeft = rectLeft,
+            rectRight = rectRight,
+            defaultMidX = rectLeft + width * midFrac,
+            defaultRightX = rectLeft + width * rightFrac,
+            colPad = colPad,
+            gutter = max(colPad, text.textSize * FOOTER_COLUMN_GUTTER_EM),
+            aftW = cols.aftLines.maxOfOrNull { text.measureRichText(it) } ?: 0f,
+            midW = maxOf(
+                midLines.maxOfOrNull { text.measureRichText(it) } ?: 0f,
+                footerSideBadgeWidth(project, text),
+            ),
+            fwdW = cols.fwdLines.maxOfOrNull { text.measureRichText(it) } ?: 0f,
+        )
+    }
 
     // Column budgets: long free text (customer/vessel names) must never overrun the
     // neighbouring column.
-    val colPad = 6f
     val leftMaxW  = midX - leftX - colPad
     val midMaxW   = rightX - midX - colPad
     // The last column has no neighbour to clear, so printed text may run to the band edge; a
     // blank draft pads it like the others so all three rules come out the same length.
     val rightMaxW = rectRight - rightX - (if (blankValues) colPad else 0f)
-
-    val midLines = buildFooterMidColumn(spec, project, cfg, date, blankValues)
 
     // WRAPPING, not ellipsizing. A dual-unit spec line is roughly twice as wide as a single-unit
     // one, and the old `…` truncation dropped the very figure the sheet exists to carry
@@ -299,6 +316,70 @@ internal fun planFooter(
         neededHeightPt = wrappedMaxLines * printedPitch + FOOTER_BAND_PAD_PT + footerFirstLineExtraDrop(text, cfg),
     )
 }
+
+/**
+ * Where the middle and FWD columns of a PRINTED footer start. The default split (40% / 76%) is
+ * where they start when nothing needs more; a column whose longest line would wrap takes room its
+ * neighbour is not using, so a `KW: 2" × 5/8" × 9 3/16"` line prints on one row instead of two
+ * (on-device request: "when there is space and they need it").
+ *
+ * - The FWD column starts left of its default as far as its widest line needs ([fwdW]), but never
+ *   into the middle column's own text.
+ * - The middle column starts right of its default as far as the AFT column's widest line needs
+ *   ([aftW]), but never so far that the middle column loses room it had.
+ *
+ * The middle column's need is its widest line ([midW], Side badge included) capped at the room it
+ * has by default, so it never wraps more than it did before, and no column ever starts right of
+ * its default FWD edge or left of its default middle edge. A moved boundary keeps [gutter] of
+ * paper between one column's text and the next — the default split's few points read two
+ * columns as one line once a column slid up to its neighbour (render review at 175% text). Text that is too long even then still
+ * wraps. Pure, so the boundary rules are tested without a canvas.
+ */
+internal fun footerColumnStarts(
+    rectLeft: Float,
+    rectRight: Float,
+    defaultMidX: Float,
+    defaultRightX: Float,
+    colPad: Float,
+    gutter: Float,
+    aftW: Float,
+    midW: Float,
+    fwdW: Float,
+): Pair<Float, Float> {
+    val midNeed = min(midW, defaultRightX - defaultMidX - colPad)
+    val midLimit = max(defaultMidX, defaultRightX - gutter - midNeed)
+    val midX = (rectLeft + aftW + gutter + FOOTER_FIT_SLACK_PT).coerceIn(defaultMidX, midLimit)
+    val rightLimit = min(defaultRightX, midX + midNeed + gutter)
+    val rightX = (rectRight - fwdW - FOOTER_FIT_SLACK_PT).coerceIn(rightLimit, defaultRightX)
+    return midX to rightX
+}
+
+/** Paper a moved column boundary keeps between two columns' text, in footer text heights. */
+private const val FOOTER_COLUMN_GUTTER_EM = 1.5f
+
+/** Room left beside a measured line so the wrapper's own measurement never tips it onto two rows. */
+private const val FOOTER_FIT_SLACK_PT = 1f
+
+/** The Side badge row's text — `PORT`, `PORT  FINAL`, `FINAL` — or null when it prints nothing. */
+private fun footerSideBadgeText(project: ProjectInfo): String? {
+    val sidePos = project.side.printableLabelOrNull()
+    val label = project.drawingLabel.takeIf { it.isNotBlank() }?.uppercase()
+    return when {
+        sidePos != null && label != null -> "$sidePos  $label"
+        sidePos != null -> sidePos
+        else -> label
+    }
+}
+
+/** The Side badge's paint: the footer text, 20% larger, bold. */
+private fun footerSideBadgePaint(text: Paint): Paint = Paint(text).apply {
+    textSize = text.textSize * 1.20f
+    isFakeBoldText = true
+}
+
+/** Printed width of the Side badge row, which belongs to the middle column. */
+private fun footerSideBadgeWidth(project: ProjectInfo, text: Paint): Float =
+    footerSideBadgeText(project)?.let { footerSideBadgePaint(text).measureText(it) } ?: 0f
 
 /**
  * The footer band a composer must RESERVE for this sheet: never less than its mode's default
@@ -433,20 +514,9 @@ internal fun drawFooter(
         // Side-badge reservation must still count for exactly one line): to the right of the
         // Side badge separated by two spaces, or alone at midX when there is no Side badge.
         if (!blankValues) {
-            val sidePos = project.side.printableLabelOrNull()
-            val label = project.drawingLabel.takeIf { it.isNotBlank() }?.uppercase()
-            if (sidePos != null || label != null) {
+            footerSideBadgeText(project)?.let { badgeText ->
                 y += lh * 0.35f
-                val posPaint = Paint(text).apply {
-                    textSize = text.textSize * 1.20f
-                    isFakeBoldText = true
-                }
-                val badgeText = when {
-                    sidePos != null && label != null -> "$sidePos  $label"
-                    sidePos != null -> sidePos
-                    else -> label!!
-                }
-                c.drawText(badgeText, midX, y, posPaint)
+                c.drawText(badgeText, midX, y, footerSideBadgePaint(text))
             }
         }
     }

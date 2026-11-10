@@ -8,6 +8,14 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-09
 
+### fix(pdf): a footer column that needs room takes it from its neighbour
+
+A FWD footer line like `KW: 2" × 5/8" × 9 3/16"` wrapped onto two rows while the middle column
+beside it was half empty (on-device request). The footer's 40 / 36 / 24 split is now only the
+default for printed sheets: the FWD column moves left as far as its longest line needs, and the
+middle column moves right for a long AFT line, never into the neighbour's text and always with a
+clear gap. A line too long even then still wraps. Blank drafts keep equal thirds.
+
 ### feat(taper): type and print taper rates per foot
 
 A taper can now be typed as "3 3/4" and print as 3 3/4"/ft instead of 1:3.2 (on-device request: a
