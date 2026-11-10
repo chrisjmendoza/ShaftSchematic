@@ -6,6 +6,18 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-11-09
+
+### fix(wear): a measured liner Ø shows its wear without a wear area
+
+A liner reading below nominal now dips the drawn surface wherever it was taken. Before, only a
+reading inside a red wear area traced, so a 9.973" reading on a 10" liner changed nothing until an
+area was drawn around it (on-device report). The liner is split into its wear areas and the bare
+stretches between them; each stretch dips from the surface through its own readings and back.
+Wear areas still shade and dimension exactly as before. One builder, `buildLinerWearTrace`, feeds
+the wear sheet's liner strips and main profile, the Wear tab's shaft canvas and the liner detail
+page.
+
 ## 2026-11-07
 
 ### feat(pdf): every output font ships inside the app; Hyperlegible Bold, Hyperlegible Mono and B612 added

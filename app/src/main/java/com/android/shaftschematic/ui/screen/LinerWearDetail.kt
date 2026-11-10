@@ -94,7 +94,7 @@ import com.android.shaftschematic.geom.PitHitTarget
 import com.android.shaftschematic.geom.WearTraceReading
 import com.android.shaftschematic.geom.acrossFracFromTapY
 import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
-import com.android.shaftschematic.geom.buildWearTrace
+import com.android.shaftschematic.geom.buildLinerWearTrace
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
 import com.android.shaftschematic.geom.deepestWearDepthMm
@@ -110,8 +110,6 @@ import com.android.shaftschematic.geom.pitSmallHalfOnSegment
 import com.android.shaftschematic.geom.snappedPitSizeFactor
 import com.android.shaftschematic.geom.pickPitAt
 import com.android.shaftschematic.geom.planDiaCallouts
-import com.android.shaftschematic.geom.sequenceWearTraces
-import com.android.shaftschematic.geom.smoothWearTrace
 import com.android.shaftschematic.geom.THREAD_DENSITY_DEFAULT
 import com.android.shaftschematic.geom.THREAD_SLANT_DEFAULT
 import com.android.shaftschematic.geom.threadHatchLean
@@ -615,8 +613,8 @@ fun ComponentWearDetailOverlay(
                         fun rPx(diaMm: Float) = diaMm * 0.5f * lay.pxPerMm
 
                         // ── Focus component body (trapezoid — a rect when start Ø == end Ø) ──
-                        // Inside a liner's wear bands the top and bottom edges dip through the
-                        // measured diameters (the worn-profile trace, geom/WearTraceMath.kt),
+                        // Along a liner the top and bottom edges dip through the measured
+                        // diameters, inside a wear band or not (the worn-profile trace, geom/WearTraceMath.kt),
                         // smoothed per band so the surface flows the way real wear does:
                         // fill and stroke share this path, so the silhouette and its tint bite
                         // together. Built from the SAME trace the wear PDF's liner strip walks —
@@ -624,21 +622,17 @@ fun ComponentWearDetailOverlay(
                         // sites read identically.
                         val rStart = rPx(startDiaMm)
                         val rEnd = rPx(endDiaMm)
-                        val traceVerts = if (liner == null) emptyList() else sequenceWearTraces(
-                            spots.map { spot ->
+                        val traceVerts = if (liner == null) emptyList() else buildLinerWearTrace(
+                            linerLengthMm = lenMm,
+                            bands = spots.map { spot ->
                                 val band = clampWearBandToLiner(spot.startMm, spot.lengthMm, lenMm)
-                                smoothWearTrace(
-                                    buildWearTrace(
-                                        bandStartMm = band.startMm,
-                                        bandLengthMm = band.lengthMm,
-                                        readings = traceReadings,
-                                        nominalOdMm = liner.odMm,
-                                        deepestDepthMm = deepestWearDepth,
-                                        maxDepthFrac = traceDepthFrac,
-                                    )
-                                )
-                            }
-                        )
+                                band.startMm to band.lengthMm
+                            },
+                            readings = traceReadings,
+                            nominalOdMm = liner.odMm,
+                            deepestDepthMm = deepestWearDepth,
+                            maxDepthFrac = traceDepthFrac,
+                        ).run
                         fun traceXPx(localMm: Float) = startPx + localMm * lay.pxPerMm
                         val bodyPath = Path().apply {
                             moveTo(startPx, cy - rStart)

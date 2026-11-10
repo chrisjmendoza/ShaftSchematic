@@ -9,12 +9,10 @@ import com.android.shaftschematic.geom.SetPositions
 import com.android.shaftschematic.geom.WearTraceReading
 import com.android.shaftschematic.geom.WearTraceVertex
 import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
-import com.android.shaftschematic.geom.buildWearTrace
+import com.android.shaftschematic.geom.buildLinerWearTrace
 import com.android.shaftschematic.geom.pitCenterY
 import com.android.shaftschematic.geom.pitHalfArm
 import com.android.shaftschematic.geom.planDiaCallouts
-import com.android.shaftschematic.geom.sequenceWearTraces
-import com.android.shaftschematic.geom.smoothWearTrace
 import com.android.shaftschematic.geom.threadHatchLean
 import com.android.shaftschematic.geom.threadHatchReferenceLean
 import com.android.shaftschematic.geom.threadHatchReferenceSpacing
@@ -224,30 +222,24 @@ internal fun drawWearStripWindow(
     val clampedBands = if (linerComp == null) emptyList() else
         sortedSpots.map { spot -> clampWearBandToLiner(spot.startMm, spot.lengthMm, linerComp.lengthMm) }
 
-    // Worn-profile traces, one per band (geom/WearTraceMath.kt). Pure mm→depth-fraction math,
-    // so it is computed before any px geometry and mapped through the strip's scale below —
-    // the same output the detail overlay's canvas walks. Only a liner traces: body/taper
-    // readings never drive a worn profile.
-    //
-    // Each band is smoothed HERE, before sequencing, so the surface edges and that band's own
-    // grey fill (which takes its band trace directly) walk exactly the same vertices — and so
-    // the overlay canvas, which smooths per band too, curves identically.
+    // Worn-profile trace (geom/WearTraceMath.kt). Pure mm→depth-fraction math, so it is computed
+    // before any px geometry and mapped through the strip's scale below — the same output the
+    // detail overlay's canvas walks. A reading traces whether or not a band covers it; each band's
+    // own grey fill walks its own trace ([LinerWearTrace.bandTraces]) and the surface edges walk
+    // the whole run. Only a liner traces: body/taper readings never drive a worn profile.
     val traceReadings = if (linerComp == null) emptyList() else valuedReadings
         .filter { it.componentId == linerComp.id }
         .map { WearTraceReading(it.axialMm.coerceIn(0f, linerComp.lengthMm), it.diaMm) }
-    val bandTraces = clampedBands.map { clamp ->
-        smoothWearTrace(
-            buildWearTrace(
-                bandStartMm = clamp.startMm,
-                bandLengthMm = clamp.lengthMm,
-                readings = traceReadings,
-                nominalOdMm = linerComp?.aftDiaMm ?: 0f,
-                deepestDepthMm = deepestWearDepthMm,
-                maxDepthFrac = traceDepthFrac,
-            )
-        )
-    }
-    val traceVerts = sequenceWearTraces(bandTraces)
+    val linerTrace = buildLinerWearTrace(
+        linerLengthMm = linerComp?.lengthMm ?: 0f,
+        bands = clampedBands.map { it.startMm to it.lengthMm },
+        readings = traceReadings,
+        nominalOdMm = linerComp?.aftDiaMm ?: 0f,
+        deepestDepthMm = deepestWearDepthMm,
+        maxDepthFrac = traceDepthFrac,
+    )
+    val bandTraces = linerTrace.bandTraces
+    val traceVerts = linerTrace.run
 
     // ONE rail row height for this strip: the budget below and `drawWearStripRail`'s own stepping
     // both read it. They used to be separate numbers (13 pt budgeted, `textSize + 3` drawn) that

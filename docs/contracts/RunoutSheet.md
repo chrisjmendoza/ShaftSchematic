@@ -695,9 +695,9 @@ via an elbow above the row-0 band so drops provably clear every label; uniform c
 
 ### Worn-profile trace
 
-Inside a **wear band**, the valued readings additionally pull the drawn surface in: the liner's
-top and bottom edges dip through the measured diameters instead of running straight, and the
-band's fill follows them, so the material measured away shows as white slivers above and below
+Valued liner readings additionally pull the drawn surface in, **inside a wear band or not**: the
+liner's top and bottom edges dip through the measured diameters instead of running straight, and
+a band's fill follows them, so the material measured away shows as white slivers above and below
 (on-device report: a liner measured almost half an inch down still printed as a perfect
 cylinder). Pure construction in **`geom/WearTraceMath.kt`** (`buildWearTrace` /
 `smoothWearTrace` / `sequenceWearTraces`, `WearTraceMathTest`); the two detail draw sites — the
@@ -712,11 +712,20 @@ The **whole-shaft drawings trace too** — the wear sheet's **main profile**
 (`RenderOptions.wearLinerTraces` → `ShaftRenderer`'s liner pass; empty on every other canvas, so
 the schematic preview is byte-identical). Both take their per-liner vertex runs from the ONE
 builder `wearLinerTraces` (`geom/WearTraceMath.kt`, `WearLinerTracesTest`), which clamps each
-band, traces it with `buildWearTrace` against the record's deepest liner reading, smooths per
-band and sequences — the strips' construction. On-device report: moving "Trace depth
+band and hands it to `buildLinerWearTrace` against the record's deepest liner reading — the
+strips' construction. On-device report: moving "Trace depth
 exaggeration" changed nothing on the shaft, because only the detail strip and the tapped-liner
-overlay drew the trace; the drawing the slider sits under must answer it. A liner with no band,
-or no valued reading inside a band, draws a plain cylinder on every site.
+overlay drew the trace; the drawing the slider sits under must answer it.
+
+A wear band is a **highlight, never a gate** (on-device report: a 9.973" reading on a 10" liner
+changed nothing because no wear area had been drawn). `buildLinerWearTrace` — the ONE
+construction all four sites read — splits the liner into its bands and the uncovered gaps
+between them (the liner's edges and the band union's edges bound each gap), traces every piece
+with `buildWearTrace` (surface at both ends, through the readings inside it), smooths each, and
+sequences them into one run. A gap takes only readings strictly clear of every band, so a reading
+on a band edge is the band's and never traces twice; each band's own trace is still returned
+index-aligned for its grey fill. A liner with no band is one gap, the whole liner. A liner with
+no valued reading below nominal draws a plain cylinder on every site.
 
 The trace is **smoothed**: real wear flows rather than bevelling (on-device request), so
 `smoothWearTrace` fits a **monotone cubic Hermite (Fritsch–Carlson)** curve through the vertices
