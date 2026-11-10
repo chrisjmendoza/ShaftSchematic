@@ -42,6 +42,7 @@ import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.ui.input.TaperCalcValues
 import com.android.shaftschematic.ui.input.toApplyValues
 import com.android.shaftschematic.util.TaperCalcEntries
+import com.android.shaftschematic.util.TaperRateEntry
 import com.android.shaftschematic.util.TaperCalcField
 import com.android.shaftschematic.util.TaperCalcFieldState
 import com.android.shaftschematic.util.UnitSystem
@@ -91,8 +92,10 @@ internal fun TaperCalcDialog(
     onApply: (TaperCalcChoice, TaperCalcValues) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    // "Rate as" opens on the print setting (`PdfPrefs.taperRatePerFoot`), like the taper card.
+    val initialRateEntry = if (LocalTaperRatePerFoot.current) TaperRateEntry.PER_FOOT else TaperRateEntry.RATIO
     var entries by rememberSaveable(stateSaver = TaperCalcEntriesNonNullSaver) {
-        mutableStateOf(TaperCalcEntries(unit = defaultUnit))
+        mutableStateOf(TaperCalcEntries(unit = defaultUnit, rateEntry = initialRateEntry))
     }
     // The entries Calculate was last tapped on. Equality with the live entries is what "has
     // been calculated" means, so an edit invalidates the result without any clearing code.
@@ -123,6 +126,13 @@ internal fun TaperCalcDialog(
                 )
 
                 UnitChipRow(unit = entries.unit, onSelect = { entries = entries.copy(unit = it) })
+                if (entries.unit == UnitSystem.INCHES) {
+                    TaperRateEntryChips(
+                        entry = entries.effectiveRateEntry,
+                        onSelect = { entries = entries.copy(rateEntry = it) },
+                        tagPrefix = "taper_calc",
+                    )
+                }
 
                 TaperEntryField(
                     field = TaperCalcField.LARGE_DIA,
@@ -157,7 +167,7 @@ internal fun TaperCalcDialog(
                     Column(Modifier.weight(1f)) {
                         TaperEntryField(
                             field = TaperCalcField.RATE,
-                            label = "Taper rate",
+                            label = if (entries.effectiveRateEntry == TaperRateEntry.PER_FOOT) "Taper rate (in/ft)" else "Taper rate",
                             entries = entries,
                             state = shown.field(TaperCalcField.RATE),
                             onChange = { entries = entries.with(TaperCalcField.RATE, it) },
@@ -182,7 +192,10 @@ internal fun TaperCalcDialog(
         },
         dismissButton = {
             TextButton(
-                onClick = { entries = TaperCalcEntries(unit = entries.unit); calculatedFor = null },
+                onClick = {
+                    entries = TaperCalcEntries(unit = entries.unit, rateEntry = entries.rateEntry)
+                    calculatedFor = null
+                },
                 modifier = Modifier.testTag("taper_calc_clear"),
             ) { Text("Clear") }
         },
@@ -274,7 +287,7 @@ private fun TaperEntryField(
             { Text(if (entries.unit == UnitSystem.INCHES) "in" else "mm") }
         },
         placeholder = if (isRate) {
-            { Text("e.g. 1:12") }
+            { Text(if (entries.effectiveRateEntry == TaperRateEntry.PER_FOOT) "e.g. 3 3/4" else "e.g. 1:12") }
         } else null,
         trailingIcon = if (derived == null) null else {
             {
@@ -334,13 +347,14 @@ private fun entriesFromSaved(l: List<String?>): TaperCalcEntries? {
     return TaperCalcEntries(
         largeDia = l[0] ?: "", smallDia = l[1] ?: "", length = l[2] ?: "", rate = l[3] ?: "",
         unit = runCatching { UnitSystem.valueOf(l[4] ?: "") }.getOrDefault(UnitSystem.INCHES),
+        rateEntry = runCatching { TaperRateEntry.valueOf(l.getOrNull(5) ?: "") }.getOrDefault(TaperRateEntry.RATIO),
     )
 }
 
 private fun entriesToSaved(e: TaperCalcEntries?): List<String?> =
-    if (e == null) listOf(null) else listOf(e.largeDia, e.smallDia, e.length, e.rate, e.unit.name)
+    if (e == null) listOf(null) else listOf(e.largeDia, e.smallDia, e.length, e.rate, e.unit.name, e.rateEntry.name)
 
-/** Survives rotation: five strings, the unit by name; the snapshot may be absent. */
+/** Survives rotation: six strings, the unit and the rate notation by name; the snapshot may be absent. */
 private val TaperCalcEntriesSaver = listSaver<TaperCalcEntries?, String?>(
     save = { entriesToSaved(it) },
     restore = { entriesFromSaved(it) },

@@ -79,6 +79,7 @@ data class DrawingProfile(
     val showUnitsNote: Boolean = SHIPPED_PDF_PREFS.showUnitsNote,
     val footerCapturedKwInset: Boolean = SHIPPED_PDF_PREFS.footerCapturedKwInset,
     val footerBoltHoleDia: Boolean = SHIPPED_PDF_PREFS.footerBoltHoleDia,
+    val taperRatePerFoot: Boolean = SHIPPED_PDF_PREFS.taperRatePerFoot,
     /**
      * Null in a profile saved before the style existed, so its [wearAreasShaded] is what decides —
      * a non-null default here would read every old "off" profile as the grey. Null with neither
@@ -124,6 +125,7 @@ data class DrawingProfile(
         showUnitsNote = showUnitsNote,
         footerCapturedKwInset = footerCapturedKwInset,
         footerBoltHoleDia = footerBoltHoleDia,
+        taperRatePerFoot = taperRatePerFoot,
         wearAreaStyle = wearAreaStyle?.let { WearAreaStyle.fromName(it) }
             ?: wearAreasShaded?.let { WearAreaStyle.fromLegacyShaded(it) }
             ?: WearAreaStyle.Default,
@@ -165,6 +167,7 @@ data class DrawingProfile(
             showUnitsNote = prefs.showUnitsNote,
             footerCapturedKwInset = prefs.footerCapturedKwInset,
             footerBoltHoleDia = prefs.footerBoltHoleDia,
+            taperRatePerFoot = prefs.taperRatePerFoot,
             wearAreaStyle = prefs.wearAreaStyle.name,
             wearTraceDepthFrac = prefs.wearTraceDepthFrac,
             wearBandShadeFrac = prefs.wearBandShadeFrac,

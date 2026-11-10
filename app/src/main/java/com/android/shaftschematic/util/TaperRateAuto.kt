@@ -128,6 +128,17 @@ internal fun parseInchesPerFoot(text: String): Float? {
     return (inches / 12.0).toFloat()
 }
 
+/** True for any `/ft` spelling, readable or not (`0/ft` is a per-foot spelling that fails to parse). */
+internal fun isPerFootSpelling(text: String): Boolean = PER_FOOT_FORM.matchEntire(text.trim()) != null
+
+/** The number of a readable `/ft` spelling exactly as typed (`3 3/4` from `3 3/4 in/ft`), or null. */
+internal fun perFootNumberText(text: String): String? {
+    val m = PER_FOOT_FORM.matchEntire(text.trim()) ?: return null
+    val number = m.groupValues[1].trim()
+    val inches = parseFractionOrDecimal(number) ?: return null
+    return number.takeIf { inches > 0.0 }
+}
+
 /** True for a bare `n/d` spelling — no colon, no `/ft` — which is ambiguous as a taper rate. */
 internal fun isBareFractionRateText(text: String): Boolean {
     val t = text.trim()

@@ -1,6 +1,7 @@
 // file: app/src/main/java/com/android/shaftschematic/MainActivity.kt
 package com.android.shaftschematic
 
+import com.android.shaftschematic.ui.screen.LocalTaperRatePerFoot
 import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -92,8 +93,11 @@ class MainActivity : ComponentActivity() {
                         SideEffect { InchFieldDisplay.update(inchFieldStyle) }
                         // Fractions are inch entry: a millimetre document's fields show no "/" key.
                         val unit by vm.unit.collectAsState()
+                        // Where the taper rate fields' "Rate as" chips open (`PdfPrefs.taperRatePerFoot`).
+                        val taperRatePerFoot by vm.pdfTaperRatePerFoot.collectAsState()
                         CompositionLocalProvider(
                             LocalFractionKeyEnabled provides (unit == UnitSystem.INCHES),
+                            LocalTaperRatePerFoot provides taperRatePerFoot,
                         ) {
                             AppNav(vm = vm)
                         }

@@ -40,7 +40,12 @@ import com.android.shaftschematic.ui.util.startOverlapErrorMm
 import com.android.shaftschematic.ui.util.taperWarningMessages
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.util.TaperRateEntry
+import com.android.shaftschematic.util.autoTaperRatePerFootText
 import com.android.shaftschematic.util.autoTaperRateText
+import com.android.shaftschematic.util.effectiveTaperRateEntry
+import com.android.shaftschematic.util.initialTaperRateEntry
+import com.android.shaftschematic.util.normalizeTaperRateEntry
 import com.android.shaftschematic.util.filterTaperRateInput
 import com.android.shaftschematic.util.manualTaperRateBlockingMessage
 import com.android.shaftschematic.util.manualTaperRateWarning
@@ -148,6 +153,19 @@ internal fun TaperPagerCard(
         var autoRate by rememberSaveable(t.id, t.taperRateManual) {
             mutableStateOf(taperRateIsAuto(t, computedRateText))
         }
+        // "Rate as": how a bare number in the rate field is read. Opens on the notation a typed
+        // rate already carries, else on the print setting; per foot exists only on an inch drawing.
+        val printPerFoot = LocalTaperRatePerFoot.current
+        var rateEntryChoice by rememberSaveable(t.id) {
+            mutableStateOf(initialTaperRateEntry(t.taperRateText, !autoRate, printPerFoot))
+        }
+        val rateEntry = effectiveTaperRateEntry(rateEntryChoice, unit)
+        // Auto shows the computed rate in the chosen notation; the STORED auto text stays the ratio.
+        val autoRateDisplay = if (rateEntry == TaperRateEntry.PER_FOOT) {
+            remember(t.lengthMm, t.startDiaMm, t.endDiaMm) {
+                autoTaperRatePerFootText(t.lengthMm, t.startDiaMm, t.endDiaMm)
+            }
+        } else computedRateText
         val hasExactlyOneEnd = (t.startDiaMm > 0f).xor(t.endDiaMm > 0f)
         val autoRateIssue = if (autoRate && hasExactlyOneEnd) {
             "Auto needs Length + SET + LET. Switch to Manual to derive the missing end"
@@ -269,9 +287,12 @@ internal fun TaperPagerCard(
                 label = { Text("Manual") }, colors = selectedColors,
                 border = if (!autoRate) BorderStroke(1.dp, Color.Black) else null)
         }
+        if (unit == UnitSystem.INCHES) {
+            TaperRateEntryChips(entry = rateEntry, onSelect = { rateEntryChoice = it }, tagPrefix = "taper_card")
+        }
         CommitNum(
-            label = "Rate (1:12, 3/4\"/ft, or decimal)",
-            initialDisplay = if (autoRate) computedRateText.orEmpty() else t.taperRateText.ifBlank { "" },
+            label = taperRateFieldLabel(rateEntry),
+            initialDisplay = if (autoRate) autoRateDisplay.orEmpty() else t.taperRateText.ifBlank { "" },
             keyboardType = KeyboardType.Ascii,
             // The rate filter, not the numeric one: the label's own `3/4"/ft` needs inch marks,
             // letters and a second slash. AddTaperDialog's rate field takes the same filter.
@@ -282,13 +303,19 @@ internal fun TaperPagerCard(
             // explain the ambiguity;
             // blank must NOT pass — updateTaper keeps the old rate on blank, so
             // committing "" would leave the field empty while the model retains it.
+            // Read under the "Rate as" chips: a bare number in/ft is stored spelled out (`3 3/4"/ft`).
             parseValid = {
-                parseTaperRateText(it, allowAmbiguousBareOne = false) != null ||
-                    it.trim() == "1" || isAmbiguousTaperRateText(it)
+                val n = normalizeTaperRateEntry(it, rateEntry)
+                parseTaperRateText(n, allowAmbiguousBareOne = false) != null ||
+                    n == "1" || isAmbiguousTaperRateText(n)
             },
-            validator = { raw -> manualTaperRateBlockingMessage(raw, t.lengthMm, t.startDiaMm, t.endDiaMm) }
+            validator = { raw ->
+                manualTaperRateBlockingMessage(
+                    normalizeTaperRateEntry(raw, rateEntry), t.lengthMm, t.startDiaMm, t.endDiaMm,
+                )
+            }
         ) { s ->
-            onUpdateTaper(idx, t.startFromAftMm, t.lengthMm, t.startDiaMm, t.endDiaMm, s.trim())
+            onUpdateTaper(idx, t.startFromAftMm, t.lengthMm, t.startDiaMm, t.endDiaMm, normalizeTaperRateEntry(s, rateEntry))
         }
 
         // Keyway — the whole section is gated behind the shared "Keyway" checkbox, the same gate

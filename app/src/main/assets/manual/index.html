@@ -509,14 +509,14 @@
     <li  class="keep"><span class="ui">Large end Ø (L.E.T.)</span></li>
     <li  class="keep"><span class="ui">Small end Ø (S.E.T.)</span></li>
     <li  class="keep"><span class="ui">Length</span></li>
-    <li  class="keep"><span class="ui">Taper rate</span>, for example 1:12</li>
+    <li  class="keep"><span class="ui">Taper rate</span>, for example 1:12 — or, with <span class="ui">Rate as:</span> <span class="ui">in/ft</span> (inch entry), inches per foot such as 3 3/4</li>
   </ul>
   <ol class="steps">
     <li  class="keep">Enter three of the four values.</li>
     <li  class="keep">Tap <span class="ui">Calculate</span>, the filled button beside <span class="ui">Clear</span> and <span class="ui">Close</span> at the foot of the calculator, where the keyboard never covers it. The missing value appears in its own field, highlighted, so you can see it was worked out rather than typed.</li>
     <li  class="keep">To use the answer as a starting point for the next question, tap the ✓ beside it (<span class="ui">Keep calculated value as an input</span>).</li>
   </ol>
-  <p  class="keep">Enter all four values and <span class="ui">Calculate</span> checks them against each other. Change any entry and the old answer clears, so a number that no longer follows from the fields is never left on screen. <span class="ui">Clear</span> empties the fields; <span class="ui">Close</span> leaves. In inches, the rate is also shown in inches per foot.</p>
+  <p  class="keep">Enter all four values and <span class="ui">Calculate</span> checks them against each other. Change any entry and the old answer clears, so a number that no longer follows from the fields is never left on screen. <span class="ui">Clear</span> empties the fields; <span class="ui">Close</span> leaves. In inches, the rate is also shown in inches per foot; under <span class="ui">Rate as:</span> <span class="ui">in/ft</span> the field shows inches per foot and the line under it gives the ratio.</p>
   <p  class="keep">Once a taper is solved, <span class="ui">Apply…</span> takes the place of <span class="ui">Calculate</span> and asks where the values go:</p>
   <ul>
     <li  class="keep">Pick a taper on the drawing, or a new taper at an end that has none. A shaft with no taper is asked only which end.</li>
@@ -588,7 +588,8 @@
       <tr><td><span class="ui">Length</span></td><td>Axial length of the taper. On a FWD-measured taper, a length change keeps the FWD end where it was and the taper grows toward AFT.</td></tr>
       <tr><td><span class="ui">S.E.T. Ø</span>, <span class="ui">L.E.T. Ø</span></td><td>Small-end and large-end diameters. On the card the two fields are listed in shaft order, AFT end first, so an aft-half taper shows S.E.T. then L.E.T., and a forward-half taper shows L.E.T. then S.E.T.</td></tr>
       <tr><td><span class="ui">Rate mode:</span> <span class="ui">Auto</span> | <span class="ui">Manual</span></td><td>Auto works the rate out from Length, S.E.T. and L.E.T. Manual lets you type it, and keeps what you typed through a Length edit and when the drawing is reopened. The choice is saved with the taper. Default Auto.</td></tr>
-      <tr><td><span class="ui">Rate (1:12, 3/4"/ft, or decimal)</span></td><td>The taper rate: a ratio (1:12), inches per foot (3/4″/ft — the shop's 1:16; “3/4 in/ft” and “3/4/ft” are read the same way) or a decimal; a bare fraction like 3/4, or a bare decimal steeper than 0.25 such as .75, is refused as ambiguous and the message names the forms to write. Greyed out in Auto, where it shows the computed rate. Editable in Manual.</td></tr>
+      <tr><td><span class="ui">Rate as:</span> <span class="ui">1:N</span> | <span class="ui">in/ft</span></td><td>How a plain number in the rate field is read. Under <span class="ui">in/ft</span>, “3 3/4” means 3 3/4″ per foot and is saved as “3 3/4"/ft”; under <span class="ui">1:N</span> it means a ratio. A rate typed with a colon (“1:12”) or with “/ft” reads the same under either. Starts on the notation of a rate you already typed, otherwise on <span class="path">Settings → Drawing → Taper rate per foot</span>. Inch drawings only. In Auto it also chooses how the computed rate is shown.</td></tr>
+      <tr><td><span class="ui">Rate (1:12, 3/4"/ft, or decimal)</span> / <span class="ui">Rate, inches per foot (3 3/4)</span></td><td>The taper rate: a ratio (1:12), inches per foot (3/4″/ft — the shop's 1:16; “3/4 in/ft” and “3/4/ft” are read the same way) or a decimal; a bare fraction like 3/4, or a bare decimal steeper than 0.25 such as .75, is refused as ambiguous and the message names the forms to write. Greyed out in Auto, where it shows the computed rate. Editable in Manual.</td></tr>
       <tr><td><span class="ui">Keyway</span> checkbox and section</td><td>See <a href="#components-keyways">Keyways</a>.</td></tr>
     </tbody>
   </table>
@@ -619,6 +620,7 @@
     <li  class="keep">A block in the footer column for its half of the shaft: “Rate:”, “L.E.T.:”, “S.E.T.:”, “Length:”, then the keyway lines if it has one. The block is headed with the taper's name if you renamed it; otherwise “AFT Taper” or “FWD Taper” for the taper at that end of the shaft, and plain “Taper” for one part-way along (a step-down taper is never called the FWD taper).</li>
     <li  class="keep">Its name below the shaft, unless names are off (see <a href="#components-names">Component names</a>).</li>
   </ul>
+  <p>On an inch drawing the “Rate:” prints in inches per foot while <span class="path">Settings → Drawing → Taper rate per foot</span> is on (the default). An Auto rate prints as the per-foot value of the common rate it matches (1:12 is 1″/ft, 1:16 is 3/4″/ft), otherwise as the nearest 1/8″ per foot when it is within 1% (a worked-out 3.738″/ft prints 3 3/4″/ft), otherwise as the decimal. A rate you typed is converted exactly and never rounded: 1:3.2 prints 3 3/4″/ft, 1:3.21 prints 3.738″/ft. With the setting off the ratio prints. Metric drawings always print the ratio.</p>
   <aside class="shop"><p  class="keep">On inch sheets a 1:12 rate prints as “1″/ft” and 1:16 as “3/4″/ft”. Other rates print as typed. The footer L.E.T. and S.E.T. carry no AFT/FWD suffix; the column heading says which end of the shaft you are looking at.</p></aside>
 
   <h2 id="components-threads">Threads</h2>
@@ -1109,7 +1111,7 @@
     <li  class="keep"><span class="ui">Runout bubbles</span>: <span class="ui">Bubble size</span>, <span class="ui">Bubble height</span>.</li>
     <li  class="keep"><span class="ui">Thread</span> (only when the shaft has a thread): <span class="ui">Thread slant</span>, <span class="ui">Thread density</span>.</li>
     <li  class="keep"><span class="ui">Lines &amp; text</span>: <span class="ui">Line thickness</span>, <span class="ui">Dimension arrows</span>, <span class="ui">Footer text size</span> and <span class="ui">Dimension text size</span> (schematic and consolidated sheets), <span class="ui">Output font</span>, <span class="ui">Fractions</span>.</li>
-    <li  class="keep"><span class="ui">Footer lines</span> (schematic and consolidated sheets): <span class="ui">Captured keyway inset on footer</span>, <span class="ui">Bolt hole Ø on footer</span>.</li>
+    <li  class="keep"><span class="ui">Footer lines</span> (schematic and consolidated sheets): <span class="ui">Captured keyway inset on footer</span>, <span class="ui">Bolt hole Ø on footer</span>, <span class="ui">Taper rate per foot</span>.</li>
     <li  class="keep"><span class="ui">Shade in Components</span>: <span class="ui">Bodies</span> (with <span class="ui">Explicit bodies only</span>), <span class="ui">Tapers</span>, <span class="ui">Liners</span>, on the undercut sheet <span class="ui">Undercut drawing: line art (no shading)</span>, and on the consolidated sheet <span class="ui">Wear areas on the shaft drawing</span>.</li>
     <li  class="keep"><span class="ui">Measurement reference</span>: <span class="ui">Auto (closest end)</span>, <span class="ui">AFT</span>, <span class="ui">FWD</span>.</li>
     <li  class="keep"><span class="ui">Units</span>: the <span class="ui">Dual units</span> switch, <span class="ui">Dual-unit layout</span> and <span class="ui">Units note on sheets</span>.</li>
@@ -1188,11 +1190,12 @@
   <p  class="keep">Each of these is described in full in <a href="#settings-drawing-lines">Lines, threads and text</a>.</p>
 
   <h3>Footer lines section</h3>
-  <table class="ref whole">
+  <table class="ref">
     <thead><tr><th>Control</th><th>Default</th><th>Scope</th><th>What it does</th></tr></thead>
     <tbody>
       <tr class="short"><td><span class="ui">Captured keyway inset on footer</span></td><td>On</td><td>App-wide</td><td>The <span class="ui">Captured KW: inset …</span> line under a captured keyway's KW line.</td></tr>
       <tr><td><span class="ui">Bolt hole Ø on footer</span></td><td>Off</td><td>App-wide</td><td>The <span class="ui">Bolt hole: Ø …</span> line of a cross-drilled bolt hole.</td></tr>
+      <tr><td><span class="ui">Taper rate per foot</span></td><td>On</td><td>App-wide</td><td>An inch taper's <span class="ui">Rate:</span> in inches per foot (3 3/4″/ft) instead of the ratio (1:3.2).</td></tr>
     </tbody>
   </table>
   <p  class="keep">Schematic and consolidated sheets, the two that print the shaft footer. The same switches are in <span class="path">Settings → Drawing</span>.</p>
@@ -2427,6 +2430,7 @@
       <tr><td><span class="ui">Units note on sheets</span></td><td>Off</td><td>Prints a small <span class="ui">Units in inches</span> or <span class="ui">Units in mm</span> — the drawing's own unit — in the lower-right corner of every sheet, below the drawing and the footer, so nothing else moves. Also on the PDF options panel (Units section).</td></tr>
       <tr><td><span class="ui">Captured keyway inset on footer</span></td><td>On</td><td>Prints the <span class="ui">Captured KW: inset …</span> line under a captured keyway's KW line. Off, the footer gives the keyway size only; the drawing still shows the inset. Also on the PDF options panel (Footer lines section, schematic and consolidated sheets).</td></tr>
       <tr><td><span class="ui">Bolt hole Ø on footer</span></td><td>Off</td><td>Prints the <span class="ui">Bolt hole: Ø …</span> line of a cross-drilled bolt hole (with the count when there is more than one). Off, the hole center distance and the clocking note still print. Also on the PDF options panel (Footer lines section).</td></tr>
+      <tr><td><span class="ui">Taper rate per foot</span></td><td>On</td><td>Prints an inch taper's footer <span class="ui">Rate:</span> in inches per foot (3 3/4″/ft) instead of the ratio (1:3.2). A typed rate converts exactly; a worked-out (Auto) rate prints to the nearest 1/8″ per foot when it is within 1%. Metric drawings keep the ratio. It is also where the taper rate fields' <span class="ui">Rate as:</span> chips start. Also on the PDF options panel (Footer lines section).</td></tr>
     </tbody>
   </table>
   <aside class="note"><p  class="keep">Changing the font, fraction style, dual-unit layout or text sizes never makes text collide. Every rail break and label is measured from the text as it will actually print.</p></aside>

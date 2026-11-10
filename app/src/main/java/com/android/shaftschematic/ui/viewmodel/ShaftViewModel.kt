@@ -510,6 +510,11 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     internal val _pdfFooterBoltHoleDia = MutableStateFlow(PdfPrefs().footerBoltHoleDia)
     val pdfFooterBoltHoleDia: StateFlow<Boolean> = _pdfFooterBoltHoleDia.asStateFlow()
 
+    // Settings → Drawing → "Taper rate on sheets" (`PdfPrefs.taperRatePerFoot`); also seeds the
+    // taper rate fields' "Rate as" chips.
+    internal val _pdfTaperRatePerFoot = MutableStateFlow(PdfPrefs().taperRatePerFoot)
+    val pdfTaperRatePerFoot: StateFlow<Boolean> = _pdfTaperRatePerFoot.asStateFlow()
+
     // Settings → Drawing / Output tab options: "Wear areas on the shaft drawing".
     internal val _pdfWearAreaStyle = MutableStateFlow(PdfPrefs().wearAreaStyle)
     val pdfWearAreaStyle: StateFlow<WearAreaStyle> = _pdfWearAreaStyle.asStateFlow()
@@ -1290,6 +1295,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             SettingsStore.pdfFooterBoltHoleDiaFlow(getApplication()).collectLatest { persisted ->
                 _pdfFooterBoltHoleDia.value = persisted
                 SettingsStore.updatePdfPrefs { it.copy(footerBoltHoleDia = persisted) }
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.pdfTaperRatePerFootFlow(getApplication()).collectLatest { persisted ->
+                _pdfTaperRatePerFoot.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(taperRatePerFoot = persisted) }
             }
         }
         viewModelScope.launch {

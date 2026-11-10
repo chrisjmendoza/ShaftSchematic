@@ -8,6 +8,21 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-09
 
+### feat(taper): type and print taper rates per foot
+
+A taper can now be typed as "3 3/4" and print as 3 3/4"/ft instead of 1:3.2 (on-device request: a
+first 3 3/4"/ft taper read as 1:3.210 on the sheet, a ratio the shop does not use).
+
+- **Rate as: 1:N | in/ft** — chips on the taper card, the Add Taper dialog and the taper calculator
+  (inch drawings). Under in/ft a bare number is inches per foot and is saved spelled out
+  (`3 3/4"/ft`); a ratio or a `/ft` spelling reads the same under either chip. The chips open on a
+  typed rate's own notation, otherwise on the print setting.
+- **Settings → Drawing → Taper rate per foot** (also in the PDF options panel's Footer lines),
+  default ON: an inch taper's footer "Rate:" prints per foot. An Auto rate prints its common
+  ratio's value (1:12 → 1"/ft), else the nearest 1/8"/ft when within 1% (3.738 → 3 3/4"/ft),
+  else the decimal; a typed rate converts exactly, never rounded. Off prints the ratio exactly as
+  before. Metric drawings keep the ratio. Saved in Drawing profiles.
+
 ### fix(wear): a measured liner Ø shows its wear without a wear area
 
 A liner reading below nominal now dips the drawn surface wherever it was taken. Before, only a

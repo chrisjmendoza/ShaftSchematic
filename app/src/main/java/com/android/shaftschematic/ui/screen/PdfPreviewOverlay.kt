@@ -97,6 +97,7 @@ import com.android.shaftschematic.ui.viewmodel.setPdfArrowSizePt
 import com.android.shaftschematic.ui.viewmodel.setPdfDimTextScale
 import com.android.shaftschematic.ui.viewmodel.setPdfFooterTextScale
 import com.android.shaftschematic.ui.viewmodel.setPdfFooterBoltHoleDia
+import com.android.shaftschematic.ui.viewmodel.setPdfTaperRatePerFoot
 import com.android.shaftschematic.ui.viewmodel.setPdfFooterCapturedKwInset
 import com.android.shaftschematic.ui.viewmodel.setPdfOutputFont
 import com.android.shaftschematic.ui.viewmodel.setPdfShowUnitsNote
@@ -691,6 +692,7 @@ internal fun RunoutWearOptionsSheet(
     val showUnitsNote by vm.pdfShowUnitsNote.collectAsState()
     val footerCapturedKwInset by vm.pdfFooterCapturedKwInset.collectAsState()
     val footerBoltHoleDia by vm.pdfFooterBoltHoleDia.collectAsState()
+    val taperRatePerFoot by vm.pdfTaperRatePerFoot.collectAsState()
 
     // Scrollable: without its own scroll a short screen clips the bottom rows mid-checkbox
     // (same posture as PdfOptionsSheet). The title and the height cap belong to the hosting
@@ -930,13 +932,15 @@ internal fun RunoutWearOptionsSheet(
         // consolidated sheet prints among the documents this sheet serves.
         if (showSheetTextSizes) {
             sections[OptionsSection.FOOTER] = OptionsSectionBody(
-                summary = footerSectionSummary(footerCapturedKwInset, footerBoltHoleDia),
+                summary = footerSectionSummary(footerCapturedKwInset, footerBoltHoleDia, taperRatePerFoot),
             ) {
                 FooterLineSwitchRows(
                     capturedKwInset = footerCapturedKwInset,
                     boltHoleDia = footerBoltHoleDia,
+                    taperRatePerFoot = taperRatePerFoot,
                     onSetCapturedKwInset = { vm.setPdfFooterCapturedKwInset(it) },
                     onSetBoltHoleDia = { vm.setPdfFooterBoltHoleDia(it) },
+                    onSetTaperRatePerFoot = { vm.setPdfTaperRatePerFoot(it) },
                 )
             }
         }

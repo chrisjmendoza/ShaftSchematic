@@ -1104,9 +1104,14 @@ internal val helpSections: List<HelpSection> = listOf(
                     "\"Bolt hole: Ø …\" line of " +
                     "a cross-drilled bolt hole (the diameter, and the count when there is more " +
                     "than one). Off, the \"Hole center from …\" line and the clocking note " +
-                    "still print.\n\n" +
+                    "still print.\n" +
+                    "• \"$TAPER_RATE_PER_FOOT_SETTING_TITLE\" (on by default) — an inch taper's " +
+                    "\"Rate:\" prints in inches per foot (3 3/4\"/ft) instead of the ratio " +
+                    "(1:3.2). A typed rate converts exactly; a worked-out rate prints to the " +
+                    "nearest 1/8\" per foot when within 1%. Metric drawings keep the ratio. The " +
+                    "taper rate fields' \"Rate as\" chips start on the same notation.\n\n" +
                     "Every sheet with a footer follows them. App-wide and captured by Drawing " +
-                    "profiles; \"Restore Drawing defaults\" puts both back. Also on the " +
+                    "profiles; \"Restore Drawing defaults\" puts them back. Also on the " +
                     "schematic and consolidated PDF options panels, as the \"Footer lines\" " +
                     "section.",
                 manualAnchor = "settings-drawing-lines",

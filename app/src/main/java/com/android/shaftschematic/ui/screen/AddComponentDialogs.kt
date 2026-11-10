@@ -64,7 +64,11 @@ import com.android.shaftschematic.ui.util.MUST_BE_POSITIVE_MSG
 import com.android.shaftschematic.ui.util.collectAddWarnings
 import com.android.shaftschematic.ui.util.proposedSpanOverlapMessage
 import com.android.shaftschematic.ui.util.startOverlapErrorMm
+import com.android.shaftschematic.util.TaperRateEntry
+import com.android.shaftschematic.util.autoTaperRatePerFootText
 import com.android.shaftschematic.util.autoTaperRateText
+import com.android.shaftschematic.util.effectiveTaperRateEntry
+import com.android.shaftschematic.util.normalizeTaperRateEntry
 import com.android.shaftschematic.util.filterTaperRateInput
 import com.android.shaftschematic.util.manualTaperRateBlockingMessage
 import com.android.shaftschematic.util.manualTaperRateWarning
@@ -1209,6 +1213,14 @@ fun AddTaperDialog(
     var letText by remember(unit) { mutableStateOf("") }  // allow deriving via rate
     var rateText by remember { mutableStateOf("1:12") }   // manual-mode text; shop default
     var autoRate by remember { mutableStateOf(true) }
+    // "Rate as" chips — the taper card's rule: open on the print setting, per foot only in inches.
+    val printPerFoot = LocalTaperRatePerFoot.current
+    var rateEntryChoice by remember {
+        mutableStateOf(if (printPerFoot) TaperRateEntry.PER_FOOT else TaperRateEntry.RATIO)
+    }
+    val rateEntry = effectiveTaperRateEntry(rateEntryChoice, unit)
+    // The manual rate as it will be stored: a bare number under in/ft spelled out as `n"/ft`.
+    val rateTextRead = normalizeTaperRateEntry(rateText, rateEntry)
 
     // Keyway — gated behind the shared Keyway checkbox (fields hidden until turned on), the
     // same gate the taper card carries. While it is off the keyway submits zeros; typed text in
@@ -1248,13 +1260,13 @@ fun AddTaperDialog(
         )
     }
     val manualRateBlock = if (!autoRate) {
-        remember(rateText, lengthMm, setMm, letMm) {
-            manualTaperRateBlockingMessage(rateText, lengthMm, setMm, letMm)
+        remember(rateTextRead, lengthMm, setMm, letMm) {
+            manualTaperRateBlockingMessage(rateTextRead, lengthMm, setMm, letMm)
         }
     } else null
     val manualRateWarn = if (!autoRate) {
-        remember(rateText, lengthMm, setMm, letMm) {
-            manualTaperRateWarning(rateText, lengthMm, setMm, letMm)
+        remember(rateTextRead, lengthMm, setMm, letMm) {
+            manualTaperRateWarning(rateTextRead, lengthMm, setMm, letMm)
         }
     } else null
     val autoRateIssue = if (autoRate && hasExactlyOneEnd) {
@@ -1265,7 +1277,10 @@ fun AddTaperDialog(
     // The rate field's display is derived (computed in Auto, typed text in Manual);
     // rateText itself is never overwritten by Auto, so a typed manual rate survives
     // toggling Auto and back.
-    val rateDisplayText = if (autoRate) computedRateText.orEmpty() else rateText
+    val autoRateDisplay = if (rateEntry == TaperRateEntry.PER_FOOT) {
+        remember(lengthMm, setMm, letMm) { autoTaperRatePerFootText(lengthMm, setMm, letMm) }
+    } else computedRateText
+    val rateDisplayText = if (autoRate) autoRateDisplay.orEmpty() else rateText
 
     // Resolve physical AFT-origin start from the entered value — a FWD entry past the AFT face
     // is refused, not clamped (addDialogPhysStartMm).
@@ -1374,8 +1389,11 @@ fun AddTaperDialog(
                     DirectionChip("Auto", selected = autoRate) { autoRate = true }
                     DirectionChip("Manual", selected = !autoRate) { autoRate = false }
                 }
+                if (unit == UnitSystem.INCHES) {
+                    TaperRateEntryChips(entry = rateEntry, onSelect = { rateEntryChoice = it }, tagPrefix = "add_taper")
+                }
                 CommitNumField(
-                    "Rate (1:12, 3/4\"/ft, or decimal)",
+                    taperRateFieldLabel(rateEntry),
                     rateDisplayText,
                     keyboardType = KeyboardType.Ascii,
                     enabled = !autoRate,
@@ -1483,7 +1501,7 @@ fun AddTaperDialog(
                 hasBothEnds = hasBothEnds,
                 hasExactlyOneEnd = hasExactlyOneEnd,
                 manualRateParses =
-                    parseTaperRateText(rateText, allowAmbiguousBareOne = false) != null
+                    parseTaperRateText(rateTextRead, allowAmbiguousBareOne = false) != null
             ) && optionalEntriesReadable(
                 listOf(setDia.text, letText) +
                     keywayEntryTexts(kwEnabled, kwCaptured, kwWidth, kwDepth, kwLength, kwOffset)
@@ -1515,7 +1533,7 @@ fun AddTaperDialog(
                     val kwD = if (kwEnabled) toMmOrNull(kwDepth,  kwUnit) ?: 0f else 0f
                     val kwL = if (kwEnabled) toMmOrNull(kwLength, kwUnit) ?: 0f else 0f
                     val kwO = keywayOffsetMm
-                    val submitRateText = if (autoRate) computedRateText.orEmpty() else rateText
+                    val submitRateText = if (autoRate) computedRateText.orEmpty() else rateTextRead
                     val action = {
                         onSubmit(physStartMm, lengthMm, startDia, endDia, submitRateText,
                                  reference,

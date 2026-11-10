@@ -179,6 +179,7 @@ fun SettingsRoute(
     val pdfShowUnitsNote by vm.pdfShowUnitsNote.collectAsState()
     val pdfFooterCapturedKwInset by vm.pdfFooterCapturedKwInset.collectAsState()
     val pdfFooterBoltHoleDia by vm.pdfFooterBoltHoleDia.collectAsState()
+    val pdfTaperRatePerFoot by vm.pdfTaperRatePerFoot.collectAsState()
     val pdfWearAreaStyle by vm.pdfWearAreaStyle.collectAsState()
 
     // App-wide defaults for mixed per-component units + inline dual-unit display. Not
@@ -489,6 +490,20 @@ fun SettingsRoute(
                             Text(FOOTER_BOLT_HOLE_DIA_SETTING_TITLE)
                             Text(
                                 FOOTER_BOLT_HOLE_DIA_SETTING_CAPTION,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    SettingSwitchRow(
+                        checked = pdfTaperRatePerFoot,
+                        onCheckedChange = { vm.setPdfTaperRatePerFoot(it) },
+                        modifier = Modifier.testTag("settings_taper_rate_per_foot"),
+                    ) {
+                        Column {
+                            Text(TAPER_RATE_PER_FOOT_SETTING_TITLE)
+                            Text(
+                                TAPER_RATE_PER_FOOT_SETTING_CAPTION,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -1572,6 +1587,11 @@ internal const val FOOTER_CAPTURED_KW_SETTING_CAPTION =
 internal const val FOOTER_BOLT_HOLE_DIA_SETTING_TITLE = "Bolt hole Ø on footer"
 internal const val FOOTER_BOLT_HOLE_DIA_SETTING_CAPTION =
     "The \"Bolt hole: Ø …\" line of a cross-drilled bolt hole"
+
+internal const val TAPER_RATE_PER_FOOT_SETTING_TITLE = "Taper rate per foot"
+internal const val TAPER_RATE_PER_FOOT_SETTING_CAPTION =
+    "An inch taper's \"Rate:\" prints as inches per foot (3 3/4\"/ft); off prints the ratio " +
+        "(1:3.2). Taper rate fields start in the same notation"
 
 internal const val UNITS_NOTE_SETTING_TITLE = "Units note on sheets"
 internal const val UNITS_NOTE_SETTING_CAPTION =
