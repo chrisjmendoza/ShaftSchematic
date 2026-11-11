@@ -1211,7 +1211,9 @@ The **editor preview's sheet layout** (Schematic and Final tabs, `UI_CONTRACT.md
 longer a linear picture: it calls the schematic's own `schematicProfileFit` — same sizing curve,
 same multiplier, same paper band, same per-kind floors, pins and liner & taper compression — in
 sheet points over the preview box at one point per dp, with the box's own budget cap
-(`PREVIEW_SHEET_SHAFT_MAX_FRAC`, 40% of its content height), and draws its body runs through the
+(`PREVIEW_SHEET_SHAFT_MAX_FRAC`, 40% of its content height) applied to the largest Ø the box draws
+(`drawnMaxDiaMm`, bare shaft included — every sheet passes 0 and keeps the stored components'
+maximum, byte-identical), and draws its body runs through the
 one `drawBodyRunsWithBreaks`, so its S-breaks are the sheet's decision at the box's width. The
 editor's "Preview options…" sheet carries the same `ShaftHeightSlider` and Body S-break slider.
 

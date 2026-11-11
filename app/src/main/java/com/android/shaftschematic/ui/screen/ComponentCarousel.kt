@@ -58,6 +58,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -1140,8 +1141,19 @@ internal fun ComponentCard(
         shape = MaterialTheme.shapes.extraLarge
     ) {
         Box(Modifier.fillMaxWidth()) {
+            val scroll = rememberScrollState()
+            // The keyboard shrinks this viewport and scrolls the focused field into view; closing
+            // it gives that scroll back, or the title stays cut off (`CardKeyboardScrollUndo`).
+            val keyboardUndo = remember { CardKeyboardScrollUndo() }
             Column(
-                modifier = Modifier.align(Alignment.TopStart).padding(16.dp).verticalScroll(rememberScrollState()),
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(16.dp)
+                    .onSizeChanged { size ->
+                        val delta = keyboardUndo.onViewport(size.height, scroll.value)
+                        if (delta != 0) scroll.dispatchRawDelta(delta.toFloat())
+                    }
+                    .verticalScroll(scroll),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 // The Remove button lives IN the title row so it scrolls with the card —

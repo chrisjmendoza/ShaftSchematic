@@ -928,10 +928,15 @@ fun ShaftScreen(
         // typed text and scroll, an add dialog's fields and a dismissed warning keep their saved
         // state across the move instead of resetting, and no stale copy is saved again to come
         // back on a later rotation.
+        // Rooting the path at the movable content also takes it OUT of the editor's
+        // `key(resetNonce)`, so each block re-enters that key inside itself: without it a value
+        // saved while the editor was off screen (the Open screen) came back into the next
+        // document — the start card opened scrolled to wherever the last document's card had
+        // been, its title cut off (on-device QA).
         val latestCarouselContent by rememberUpdatedState(carouselContent)
         val carouselBlock: @Composable (peekPageWidth: Dp?, fillHeight: Boolean) -> Unit = remember {
             movableContentOf { peekPageWidth: Dp?, fillHeight: Boolean ->
-                latestCarouselContent(peekPageWidth, fillHeight)
+                key(resetNonce) { latestCarouselContent(peekPageWidth, fillHeight) }
             }
         }
         val latestSpec by rememberUpdatedState(spec)
@@ -939,12 +944,14 @@ fun ShaftScreen(
         val latestSelectComponent by rememberUpdatedState(selectFromDrawing)
         val warningBanner: @Composable () -> Unit = remember {
             movableContentOf {
-                // A line's tap takes the preview's selection path, so the carousel follows it.
-                SpecWarningBanner(
-                    spec = latestSpec,
-                    unit = latestUnit,
-                    onSelectComponent = { id -> latestSelectComponent(id) },
-                )
+                key(resetNonce) {
+                    // A line's tap takes the preview's selection path, so the carousel follows it.
+                    SpecWarningBanner(
+                        spec = latestSpec,
+                        unit = latestUnit,
+                        onSelectComponent = { id -> latestSelectComponent(id) },
+                    )
+                }
             }
         }
 

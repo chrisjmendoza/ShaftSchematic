@@ -289,7 +289,14 @@ branch per width class would read none of the other branch's saved values — a 
 text and scroll, an open add dialog's fields, a dismissed warning would reset on a rotation —
 and the unread values, saved again, would come back a rotation later. Movable content roots
 the path at itself rather than at the branch hosting it. Pinned by `EditorRotationStateTest`
-(in place and across a recreation). The tab itself has the same problem one level up, solved
+(in place and across a recreation). Rooting the path there also takes it outside the editor's
+`key(resetNonce)`, so each block re-enters `key(resetNonce)` INSIDE itself — without that, state
+saved while the editor was off screen (the Open screen) was restored into the next document: the
+start card opened scrolled to the previous card's offset, title cut off, and a dismissed warning
+stayed dismissed (pinned by `EditorDocumentChangeStateTest`). Separately, every card
+(`ComponentCard`) gives back the scroll the keyboard took when its viewport grows again
+(`CardKeyboardScrollUndo`: up by the height regained, never above the pre-keyboard offset, never
+down). The tab itself has the same problem one level up, solved
 in `ShaftEditorRoute` (`Adaptive.md`).
 
 The toolbar's hamburger (`testTag("toolbar_menu")`) is **hidden** when

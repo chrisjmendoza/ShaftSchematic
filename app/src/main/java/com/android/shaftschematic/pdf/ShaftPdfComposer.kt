@@ -818,6 +818,12 @@ internal class SchematicProfileFit(val diaPtPerMm: Float, val xMap: CompressedPr
  * budget — ONE pipeline behind the composer, the band layout's rail estimate and the editor
  * preview's sheet layout (`ui/drawing/render/PreviewSheetLayout.kt`, which solves it in sheet
  * points at one point per dp over the preview box).
+ *
+ * [drawnMaxDiaMm] is the largest diameter the caller actually DRAWS, when it has the resolved runs
+ * in hand: the stored components never carry the bare shaft's Ø, so a shaft that is only bare
+ * shaft (or whose bare shaft is wider than every component) would otherwise size its height off a
+ * smaller diameter — or off the 1 mm floor — and draw far past the budget. 0 keeps the stored
+ * components' maximum, which is what every sheet passes.
  */
 internal fun schematicProfileFit(
     spec: ShaftSpec,
@@ -827,13 +833,14 @@ internal fun schematicProfileFit(
     contentLeft: Float,
     contentRight: Float,
     budgetCapPt: Float,
+    drawnMaxDiaMm: Float = 0f,
 ): SchematicProfileFit {
     // Total content span: shaft body (0..OAL) plus any excluded end threads that sit outside the
     // OAL range — the ONE drawn-extent rule (`geom/DrawnExtent.kt`).
     val drawnExtent = spec.drawnExtentMm()
     val contentMinMm = drawnExtent.startMm
     val contentMaxMm = drawnExtent.endMm
-    val maxDiaMm = spec.maxOuterDiaMm().coerceAtLeast(1f)
+    val maxDiaMm = max(spec.maxOuterDiaMm(), drawnMaxDiaMm).coerceAtLeast(1f)
     // ONE shared structure (`geom/ProfileFeatureSpans.kt`): the schematic differs from the
     // runout/consolidated sheet and the UI estimator only by its LEAN floors — its values
     // live on rails and callouts, so proportion wins over write-in room here.

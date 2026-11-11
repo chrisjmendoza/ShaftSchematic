@@ -174,7 +174,9 @@ renderer's keyway slots take their width off the diameter scale and their offset
 the slot's own mapped span (`geom/KeywaySlotMath.kt`, the PDF slot's construction); a 90° notch's
 depth rides the diameter scale. The shaft's height follows the sheet rule (sizing curve × Shaft
 height, the paper band) capped at `PREVIEW_SHEET_SHAFT_MAX_FRAC` (40%) of the box's content
-height, solved from the full box so it never shrinks for the rails; the rails' room rule above is
+height, solved from the full box so it never shrinks for the rails, and sized off the largest Ø
+the box DRAWS (`schematicProfileFit(drawnMaxDiaMm)` — the resolved runs, bare shaft included; the
+stored components alone left a bare-shaft-only drawing sized off the 1 mm floor); the rails' room rule above is
 unchanged. Falls back to the linear map while the OAL is 0 (the `renderSpanSpec` fallback) and
 while the problem marks widen the window past the drawn extent (a part hanging past an end — such
 a shaft cannot print anyway). The grid stands down while the sheet layout is in effect (a
