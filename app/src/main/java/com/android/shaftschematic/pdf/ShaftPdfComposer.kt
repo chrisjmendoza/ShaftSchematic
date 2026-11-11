@@ -423,7 +423,6 @@ internal fun composeShaftPdfOnCanvas(
         // The lane pitch grows with the value size (`PdfPrefs.dimTextScale`), so a larger value
         // seated in its line keeps the same air to the rails beside it.
         val dimScale = pdfPrefs.dimTextScale
-        val startRailGap = (LANE_GAP_PT + 6f) * dimScale
         val railMinGap = RAIL_MIN_GAP_PT * dimScale
         val startDimTextSize = schematicDimTextPt(pdfPrefs)
         val minDimTextSize = 7f
@@ -485,11 +484,14 @@ internal fun composeShaftPdfOnCanvas(
         fun fitRails(stacked: Boolean): RailFit {
             dimText.textSize = startDimTextSize
             val r = railRenderer(stacked)
-            var gap = startRailGap
-            var textSize = startDimTextSize
             fun minGap(): Float =
                 if (!stacked) railMinGap
                 else max(railMinGap, r.labelHeight() + 2f * DimensionRailLayout.LINE_HALF_CLEAR + 2f)
+            // The starting pitch is the value's own height plus [RAIL_LANE_AIR_PT]: two values
+            // seated in their breaks on neighbouring rails keep that air between them, and a
+            // stacked dual value's taller box opens the pitch by exactly its extra line.
+            var gap = max(minGap(), r.labelHeight() + RAIL_LANE_AIR_PT * dimScale)
+            var textSize = startDimTextSize
             fun topYFor(g: Float): Float = computeTopY(g) - r.topLift(rows(r, g, 0f))
             var topY = topYFor(gap)
             repeat(12) {
@@ -941,7 +943,7 @@ private const val BAND_BADGE_ROW_PT = 16f
 private const val BAND_SHAFT_BUDGET_FRAC = 0.30f
 /**
  * The rail lane pitch a [SheetBand] budgets for when it sizes its shaft — tighter than the full
- * page's starting pitch ([LANE_GAP_PT] + 6), which has a whole page of air to spend; the rail fit
+ * page's starting pitch (the value height + [RAIL_LANE_AIR_PT]), which has a whole page of air to spend; the rail fit
  * still opens the pitch up to whatever the band's room allows.
  */
 private const val BAND_RAIL_GAP_PT = 14f
@@ -979,8 +981,14 @@ private class RailFit(
     val fits: Boolean,
 )
 
-private const val BASE_DIM_OFFSET_PT = 24f   // distance from shaft top to first component dim
-private const val LANE_GAP_PT = 24f          // spacing between dimension lanes
+private const val BASE_DIM_OFFSET_PT = 18f   // distance from shaft top to first component dim
+/**
+ * Air between two values seated in their breaks on neighbouring rails — the lane pitch is the
+ * value's height plus this, scaled with `PdfPrefs.dimTextScale`. A fixed pitch of about two and a
+ * half value heights left more white between the tiers than the values themselves took
+ * (on-device report); this is the consolidated sheet's lane air.
+ */
+private const val RAIL_LANE_AIR_PT = 8f
 
 // Component title labels (PDF only)
 private const val COMPONENT_LABEL_OFFSET_PT = 32f

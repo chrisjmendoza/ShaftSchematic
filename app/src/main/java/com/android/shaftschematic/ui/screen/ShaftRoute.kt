@@ -29,6 +29,8 @@ import com.android.shaftschematic.ui.viewmodel.setPdfDualUnitLayout
 import com.android.shaftschematic.ui.viewmodel.setPdfFractionStyle
 import com.android.shaftschematic.ui.viewmodel.setPdfSBreakThresholdFrac
 import com.android.shaftschematic.ui.viewmodel.setPreviewSheetLayout
+import com.android.shaftschematic.ui.viewmodel.setLinerCompression
+import com.android.shaftschematic.ui.viewmodel.setLinersProportional
 import com.android.shaftschematic.ui.viewmodel.setRunoutHeightScale
 import com.android.shaftschematic.ui.viewmodel.setShowHighlightSelection
 import com.android.shaftschematic.ui.viewmodel.setShowPreviewDimensions
@@ -322,12 +324,13 @@ fun ShaftRoute(
     val runoutConfig by vm.runoutConfig.collectAsState()
     var previewSBreakDrag by remember { mutableStateOf<Float?>(null) }
     var previewHeightDrag by remember { mutableStateOf<Float?>(null) }
+    var previewLinerCompressionDrag by remember { mutableStateOf<Float?>(null) }
     val previewSheetLayout = if (!previewSheetLayoutOn) null else PreviewSheetSettings(
         curveLoHeightIn = pdfCurveLoHeightIn,
         curveHiHeightIn = pdfCurveHiHeightIn,
         sBreakThresholdFrac = previewSBreakDrag ?: pdfSBreakThresholdFrac,
         heightScale = previewHeightDrag ?: runoutConfig.heightScale,
-        linerMinFracOfTrue = runoutConfig.linerMinFracOfTrue,
+        linerMinFracOfTrue = tunedRunoutConfig(runoutConfig, null, previewLinerCompressionDrag).linerMinFracOfTrue,
     )
     var showPreviewOptions by rememberSaveable { mutableStateOf(false) }
 
@@ -526,6 +529,7 @@ fun ShaftRoute(
 
     if (showPreviewOptions) {
         val sliderDiaMm = heightSliderMaxDiaFor(spec)
+        val sliderBase = schematicHeightSliderBase(sliderDiaMm, pdfCurveLoHeightIn, pdfCurveHiHeightIn)
         EditorPreviewOptionsSheet(
             state = EditorPreviewOptionsState(
                 showDimensions = showPreviewDimensions,
@@ -538,8 +542,15 @@ fun ShaftRoute(
                 dualUnitLayout = pdfDualUnitLayout,
                 sBreakThresholdFrac = pdfSBreakThresholdFrac,
                 heightScale = runoutConfig.heightScale,
-                heightSliderBase = schematicHeightSliderBase(sliderDiaMm, pdfCurveLoHeightIn, pdfCurveHiHeightIn),
+                heightSliderBase = sliderBase,
                 heightSliderMaxDiaMm = sliderDiaMm,
+                linersProportional = runoutConfig.linersProportional,
+                linerCompression = runoutConfig.linerCompression,
+                estimateLinerKeptFrac = { frac ->
+                    estimatedLinerKeptFracOfTrue(
+                        spec, sliderBase, previewHeightDrag ?: runoutConfig.heightScale, frac,
+                    )
+                },
             ),
             actions = EditorPreviewOptionsActions(
                 onShowDimensions = { vm.setShowPreviewDimensions(it) },
@@ -553,10 +564,14 @@ fun ShaftRoute(
                 onHeightScale = { vm.setRunoutHeightScale(it) },
                 onSBreakDrag = { previewSBreakDrag = it },
                 onHeightDrag = { previewHeightDrag = it },
+                onLinersProportional = { vm.setLinersProportional(it) },
+                onLinerCompression = { vm.setLinerCompression(it) },
+                onLinerCompressionDrag = { previewLinerCompressionDrag = it },
             ),
             onDismiss = {
                 previewSBreakDrag = null
                 previewHeightDrag = null
+                previewLinerCompressionDrag = null
                 showPreviewOptions = false
             },
         )

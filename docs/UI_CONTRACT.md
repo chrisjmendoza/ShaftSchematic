@@ -196,9 +196,11 @@ switches — Dimension lines, Draw like the sheet, Grid (greyed while the sheet 
 Highlight selected component — and, under the shared app-wide `OptionsScopeNote`, the look
 settings the preview reads, each the exact control the PDF options panels and Settings → Drawing
 use, wired to the same setters: Fractions, Dimension arrows, Dual-unit layout (a dual-unit
-document only), Body S-break and the per-job Shaft height ("Saved with this job"). Remote controls
-for the one stored value — the sheet owns no storage. The two sliders redraw the box under the
-finger (local state, no write) and commit on release, the `PreviewTuning` posture. Settings →
+document only), Body S-break, the per-job Shaft height and the per-job Liner & taper compression
+(its "Keep liners and tapers proportional lengthwise" checkbox, `LinerCompressionControl` —
+both "Saved with this job"). Remote controls for the one stored value — the sheet owns no
+storage. The three sliders redraw the box under the finger (local state, no write) and commit on
+release, the `PreviewTuning` posture. Settings →
 Editor Screen carries the new switch beside "Show Dimension Lines in Preview" and one line saying
 fractions, arrows and S-breaks in the preview follow Settings → Drawing.
 
