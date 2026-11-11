@@ -784,10 +784,10 @@ fun undercutNextCutSeed(
  * neighbour stays put, or `null` when the span `[startMm, startMm + lengthMm]` touches no cut in
  * [others] (it is then not a butted seed and the ordinary length rule applies).
  *
- * A "Next cut" seed starts on the last cut's FWD end at a placeholder length. Under a FWD datum
- * the ordinary length rule ([undercutCanonicalForNewLength]) pins the cut's FWD end — the end the
- * Distance reads to — so typing the real length grew the new cut AFT-ward, INTO the cut it was
- * butted against (on-device report). The seeded Distance was never typed, so nothing authored is
+ * A butted seed ("Next cut", or an add on a strip that holds cuts) starts against its neighbour
+ * at a placeholder length. The ordinary length rule ([undercutCanonicalForNewLength]) pins the
+ * end the Distance reads to, so under a FWD datum a seed butted on its AFT end would grow
+ * AFT-ward, INTO the cut it was butted against (on-device report). The seeded Distance was never typed, so nothing authored is
  * protected by holding it; what the user set up is the butt. So while a seed still sits on that
  * shared edge, a length edit holds the edge and the Distance follows.
  *

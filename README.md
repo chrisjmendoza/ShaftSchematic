@@ -8,10 +8,10 @@ This tool is built for machinists, shipyards, repair techs, and engineering team
 
 Real-Time Shaft Modeling
 
-- Bodies (with keyways), tapers (with keyways and auto taper-rate calculation), threads (with OAL include/exclude), liners, and coupler bolt slots (reference-only cutouts). Keyways can be clocked 180° apart (far-side one renders as hidden dashed lines) or 90° apart with a CW/CCW direction (renders as an edge notch); the two are mutually exclusive
+- Bodies (with keyways), tapers (with keyways and auto taper-rate calculation; rates typed and printed as 1:N or inches per foot), threads (with OAL include/exclude), liners, and coupler bolt slots (reference-only cutouts). Keyways can be clocked 180° apart (far-side one renders as hidden dashed lines) or 90° apart with a CW/CCW direction (renders as an edge notch); the two are mutually exclusive
 - Bodies are the fluid base material: plain bodies split around tapers/threads/liners, keyed bodies stay whole; derived auto-bodies fill unoccupied spans. Bodies never participate in collision detection
 - Resolved-component pipeline: auto-bodies fill unoccupied spans in the preview without being persisted; each auto span can carry its own bare-shaft Ø
-- Live preview with grid, centerline, and component labels; tap-to-add at position
+- Live preview with grid, centerline, component labels and the schematic's own dimension lines (Settings → Editor Screen → Show Dimension Lines in Preview); a tap selects a component
 - Preview colors configurable via Settings (presets + Custom theme palette), Black/White Only drafting mode
 - Line thickness control (50%–200%, persisted, affects preview + PDF)
 
@@ -28,7 +28,7 @@ Documents
 
 - Shaft drawing: one-page landscape technical PDF with dimension tiers, Ø callouts, and title block. Dimension values seat in a break in the line, and fractions are set as real stacked or diagonal fractions (Settings → Drawing → Fractions)
 - Runout sheet: inline shaft preview with collision-free runout bubbles — one station per 20" of component length, overridable per component — straight leaders that aim at their own station, tap-to-record TIR value + high-spot clock marker, and an optional coupling end view with its pilot reading
-- Wear document: shaft profile + detail strips for liners and elected tapers/bodies, tap-to-record wear bands, pit "X" markers, measured-Ø readings (value callouts with leaders) and a worn-profile trace that dips through them; PASS/FAIL dye-pen checkboxes and field notes; blank write-in variants
+- Wear document: shaft profile + detail strips for liners and elected tapers/bodies, wear bands on liners and bodies (typed, or sized by dragging their start / end bars), pit "X" markers, measured-Ø readings (value callouts with leaders) and a worn-profile trace that dips through them; PASS/FAIL dye-pen checkboxes and field notes; blank write-in variants
 - Undercut drawing: machined-below-surface cuts as open silhouette steps with liner-anchored detail strips, a per-sheet cut-depth exaggeration slider, and user-selectable shading / line-art styles
 - Final schematic: a second drawing for the shaft that ships — start it as a copy of the original, move/extend/shorten liners after the wear and undercut work in the same editor, and print its own schematic PDF plus a blank final runout sheet, every page marked Final; the original stays untouched as the before to its after
 - Consolidated output: one sheet carrying the schematic's rails and footer plus the elected runout and wear information (All three / Schematic + Runout / Schematic + Wear), worn-section values printed inside the profile, a per-job "Shaft height" + liner-compression control, and "Export all" to batch-write the checked documents into one picked folder

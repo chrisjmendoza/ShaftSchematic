@@ -1164,7 +1164,8 @@ On-device request following the worn-sections review:
   halos. A store or profile from the old on/off switch (`wearAreasShaded`) reads on = Grey,
   off = Lines. Grey: each wear area is ONE black fill at `CONSOLIDATED_WEAR_SHADE_ALPHA` (26/255
   ≈ 10% — fixed; the wear document's own `wearBandShadeFrac`, default ≈16%, is a different mark
-  under its own slider) over the clamped liner span at the full drawn liner height, from the ONE
+  under its own slider) over the clamped liner span at the full drawn liner height (a body's area:
+  its body run's clamped span at the body's height, clear of the run's S-break gap), from the ONE
   `consolidatedWearBandRects`, drawn first in the marks pass, no vertical strokes. Every in-profile
   value keeps its knockout, but where the knockout overlaps a band it is re-shaded with the band's
   grey (`drawInProfileValues(shadeUnder)`) — so the value reads straight on the highlight with no
@@ -1402,8 +1403,9 @@ import/export, and `newDocument` exactly like `runoutConfig`/`wearRecord`.
   equal to its shifted span within `BODY_SPAN_MATCH_EPS_MM`, one-to-one both ways, and the
   overlap pass runs over the runs neither side claimed. Every id-keyed
   collection is renamed in the same undo step — readings, dragged-station placements, the count
-  override, wear pits, wear Ø readings, `WearRecord.stripComponentIds`; component-local `axialMm`
-  values shift by `oldStart − newStart` so each stays at the same shaft position — except on a
+  override, wear areas (`WearSpot.linerId`), wear pits, wear Ø readings,
+  `WearRecord.stripComponentIds`; component-local `axialMm` values — and a wear area's `startMm`,
+  never its `lengthMm` — shift by `oldStart − newStart` so each stays at the same shaft position — except on a
   rigid-shift pair (`movedWhole`), where the gap moved with the parts bounding it and each mark
   keeps its place in the gap (shift 0; holding the shaft position would put every mark outside a
   gap moved further than its own length). Values are stored as-is
@@ -2025,9 +2027,10 @@ layouts (see "Wear PDF Rendering Modes" above for how each positions the strips)
 `WearStripLayoutTest`):
 - `collectWearLinerGroups` builds one group per **elected drawable liner** (positive length +
   OD), attaching whatever spots `wearRecord` holds against it — including none (2026-07-27:
-  every liner gets a strip regardless of recorded wear), sorted aft → fwd. Orphaned spots (stale
-  `linerId`) are dropped defensively (the authoritative drop is at decode time,
-  `ShaftDocCodec`).
+  every liner gets a strip regardless of recorded wear), sorted aft → fwd. Spots whose `linerId`
+  names no liner — an area on a body, or one whose liner was deleted — produce no group here;
+  the record is never pruned (`ShaftDocCodec` passes it through whole), and a body's areas reach
+  the sheet through `resolveWearAreaSpans` instead.
 - The election is `WearRecord.stripComponentIds` (2026-08-14, additive/defaulted — no envelope
   version bump): `null` means the default election, every drawable liner (`defaultWearStripComponentIds`),
   which is exactly the historical sheet; a non-null list is the machinist's authored set of

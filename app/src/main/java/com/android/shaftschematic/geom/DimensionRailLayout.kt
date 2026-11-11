@@ -203,6 +203,9 @@ object DimensionRailLayout {
      * @param safeTopY vertical bumps never carry a label above this y.
      * @param contentLeft no value's box extends left of this x.
      * @param contentRight no value's box extends right of this x.
+     * @param sideClear the least horizontal space kept between two values sharing a height — half
+     *   the label gap on every sheet (the default); the editor preview, whose values are small and
+     *   read zoomed, asks for about a text height so two neighbours never read as one string.
      * @return placements parallel to [spans].
      */
     fun plan(
@@ -213,6 +216,7 @@ object DimensionRailLayout {
         safeTopY: Float = Float.NEGATIVE_INFINITY,
         contentLeft: Float = Float.NEGATIVE_INFINITY,
         contentRight: Float = Float.POSITIVE_INFINITY,
+        sideClear: Float = metrics.labelGap * 0.5f,
     ): Plan {
         if (spans.isEmpty()) return Plan(emptyList(), emptyMap())
         val liftByRail = lifts(spans, metrics, arrowSize, textPad)
@@ -318,15 +322,15 @@ object DimensionRailLayout {
             // An outside spot whose leader could not reach the span without crossing a value is
             // no spot at all — the value would read as the value it crosses.
             fun spotAt(top: Float, bottom: Float): Float? {
-                clearCenter(r.lo, r.hi, r.mid.coerceIn(r.lo, r.hi), r.half, top, bottom, insideObstacles, pad)
+                clearCenter(r.lo, r.hi, r.mid.coerceIn(r.lo, r.hi), r.half, top, bottom, insideObstacles, pad, sideClear)
                     ?.let { return it }
                 if (r.inline) return null
                 if (rightLo <= rightHi) {
-                    clearCenter(rightLo, rightHi, rightLo, r.half, top, bottom, outsideObstacles, pad)
+                    clearCenter(rightLo, rightHi, rightLo, r.half, top, bottom, outsideObstacles, pad, sideClear)
                         ?.let { if (leaderAt(it, top).second) return it }
                 }
                 if (leftLo <= leftHi) {
-                    clearCenter(leftLo, leftHi, leftHi, r.half, top, bottom, outsideObstacles, pad)
+                    clearCenter(leftLo, leftHi, leftHi, r.half, top, bottom, outsideObstacles, pad, sideClear)
                         ?.let { if (leaderAt(it, top).second) return it }
                 }
                 return null
@@ -552,12 +556,13 @@ object DimensionRailLayout {
         bottom: Float,
         obstacles: List<Box>,
         pad: Float,
+        sideClear: Float,
     ): Float? {
         // An obstacle that shares no vertical band with the candidate can never block it.
-        // The rest forbid an open interval of centers.
+        // The rest forbid an open interval of centers, [sideClear] wide each side.
         val forbidden = obstacles
             .filter { it.top < bottom + pad && top - pad < it.bottom }
-            .map { it.left - half - pad to it.right + half + pad }
+            .map { it.left - half - sideClear to it.right + half + sideClear }
             .sortedBy { it.first }
 
         if (forbidden.isEmpty()) return wanted

@@ -127,6 +127,19 @@ block by one blank row (`FOOTER_GAP_LINE`, once per column, before its first bod
 line measures and draws as one row and is never a blank draft's write-in rule), so it cannot read as
 the taper's keyway (on-device request); a column without a taper keeps `Body KW:` and no gap.
 
+The block's `Rate:` line is `footerTaperRate` (`pdf/SheetFooter.kt`): on an inch taper with
+`PdfPrefs.taperRatePerFoot` ON (the default; Settings → Drawing "Taper rate per foot" and the PDF
+options panels' Footer lines section) it prints inches per foot — an Auto rate at its common
+ratio's value, else the nearest 1/8"/ft within 1%, else the decimal; a typed rate converted
+exactly. OFF prints the stored ratio as before (1:12 → 1"/ft, 1:16 → 3/4"/ft); a metric taper
+always prints the ratio. See `docs/contracts/TaperRate.md` "Per-foot notation".
+
+### Footer columns
+
+Three columns: AFT end, job block, FWD end. A printed footer's default split is 40% / 36% / 24%;
+a column whose widest line would wrap takes room its neighbour is not using (`footerColumnStarts`,
+§5.5's blank-draft note has the detail), and a blank draft splits into equal thirds.
+
 ### Where the footer block sits
 
 **On the bottom margin, growing upward** (`footerBandTop`, pure + unit-tested). Its bottom edge
@@ -254,7 +267,8 @@ Top of page, full width.
   `OutputTypography.active`, the process-wide mirror `SettingsStore.updatePdfPrefs` writes; every
   other text paint on a sheet is a copy-constructor of one of those and inherits the face
   (`SheetTextPaintSourceTest` guards the rule). App-wide and captured by Drawing profiles, never
-  per-document, and deliberately absent from the PDF options sheets. See
+  per-document; the PDF options panels carry the same chips (`OutputFontChips`, "Lines & text")
+  as a remote control for the one pref. See
   `docs/contracts/FractionTypography.md` §6.
 - 10–14 pt depending on field importance
 - Black text only
@@ -513,9 +527,10 @@ they are now all-BELOW, same as liners.
 - **Two-tier stacking:** horizontally-close labels stack onto a second row instead of
   overlapping, the same posture as the runout bubbles' two-row layout (see
   `RunoutSheet.md`). Tier assignment is pure, JVM-tested math in
-  `geom/DiameterCalloutLayout.kt` (`assignTiers` — greedy left-to-right interval
-  coloring, capped at `MAX_TIERS = 2`, `MIN_GAP = 4f` pt clearance); the renderer only
-  measures label widths and reads back the tier.
+  `geom/DiameterCalloutLayout.kt` — `place` (below: rows AND label sides together, capped at
+  `MAX_TIERS = 2`, `MIN_GAP = 4f` pt clearance), which reproduces the older row-only
+  `assignTiers` greedy colouring wherever no leader crosses a value; the renderer only measures
+  label widths and reads back each row and side.
 - **Labels stay inside the content area:** a label hangs right of its leader past the dogleg,
   unless that would run past the content's right edge — then it hangs LEFT of the leader, the
   dogleg running into its right edge; one that fits neither side is pushed back inside
@@ -800,12 +815,20 @@ hand-drafting convention `|←—— 237 1/2" ——→|` — instead of floatin
   exactly one label, `span.label`; the never-populated second-line field `labelBottom` was
   deleted as dead in the 2026-07-26 Wave 2 pass. Component names print from their own
   below-shaft pass, not from a rail.)
-- **Scope: PDF-only, no canvas twin.** `PdfDimensionRenderer` backs both the exported
-  PDF and the on-screen PDF preview — `PdfPreviewScreen` rasterizes the real PDF via
-  `composeShaftPdf` → `ShaftPdfComposer` → this same renderer, so there is no separate
-  preview draw path to keep in sync. The on-screen schematic canvas (`ShaftRenderer`) has
-  no horizontal dimension rails at all, so the repo's "draw identically in both sites"
-  rule (spooned keyways, wear pits, runout markers) does not apply here.
+- **Scope: one draw path, a second caller.** `PdfDimensionRenderer` backs the exported PDF
+  and the on-screen PDF preview — `PdfPreviewScreen` rasterizes the real PDF via
+  `composeShaftPdf` → `ShaftPdfComposer` → this same renderer. The editor preview canvas
+  (`ShaftDrawing`, Schematic and Final tabs) also draws the schematic's rails, as a second
+  CALLER of the same pieces, not a copy: the spans come from `schematicRailSpans` (now
+  `internal`, the one builder behind the composer's rail pass), the placements from
+  `DimensionRailLayout.plan`, the ink from `drawPlan` (`ui/drawing/render/PreviewDimensionRails.kt`).
+  The canvas lays the rails out in sheet points over its own LINEAR x map and draws them through
+  one canvas scale (one point per dp), so the planner and renderer need no preview parameters
+  beyond the halo fill (`haloColor`, default `Color.WHITE`) and the side clearance between two
+  values at one height (`labelSideClear` → `DimensionRailLayout.plan(sideClear)`, default half the
+  label gap; the preview asks for a text height) — every sheet byte-identical; its
+  lane pitch, clearance, text size and the room-for-rails rule (`geom/PreviewRailFit.kt`) are the
+  preview's own. A change to span building, placement or drawing therefore reaches both.
 
 ---
 

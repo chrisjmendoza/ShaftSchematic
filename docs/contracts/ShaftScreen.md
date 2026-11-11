@@ -135,6 +135,11 @@ Responsibilities
   code move, no behavior change)
   - Fixed preview area rendering the shaft via `ShaftDrawing(...)`  
   - Optional grid overlay (user setting)  
+  - Dimension lines above the shaft (user setting, default ON): the schematic sheet's own
+    rails and values over the preview's linear map — see `UI_CONTRACT.md` §3.1.1 "Dimension
+    lines in the preview". While they draw, the developer OAL badge is hidden.
+  - Reset-view button (top-right) shown only while the preview is zoomed or panned off its
+    default view (`isPreviewViewMoved`); double-tap still resets.
   - Transparent or theme-color background (user selectable)  
   - Style (`PreviewCard`): `RectangleShape`, transparent container and inner Box —
     the preview draws on the screen background; colors come from preview color
@@ -147,6 +152,7 @@ Responsibilities
 - **Settings (Preferences):**
   - Units (mm/in) affect labels and input formatting only (model remains mm)
   - Grid visibility in Preview
+  - Dimension lines in Preview (`showPreviewDimensionsFlow`, device-only, default ON)
   - Preview Colors: presets (Stainless/Steel/Bronze/Transparent) + Custom palette
   - Black/White Only mode (forces black outlines and disables fills in Preview)
 

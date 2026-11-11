@@ -138,6 +138,7 @@ fun SettingsRoute(
     val showComponentArrows by vm.showComponentArrows.collectAsState()
     val componentArrowWidthDp by vm.componentArrowWidthDp.collectAsState()
     val showHighlightSelection by vm.showHighlightSelection.collectAsState()
+    val showPreviewDimensions by vm.showPreviewDimensions.collectAsState()
     val achievementsEnabled by vm.achievementsEnabled.collectAsState()
     val devOptionsEnabled by vm.devOptionsEnabled.collectAsState()
 
@@ -622,6 +623,15 @@ fun SettingsRoute(
 
                     SettingSwitchRow(checked = showGrid, onCheckedChange = { vm.setShowGrid(it) }) {
                         Text("Show Grid in Preview")
+                    }
+                    // The sheet's dimension rails drawn over the editor preview (on-device
+                    // request). On-screen only — the printed sheets are untouched either way.
+                    SettingSwitchRow(
+                        checked = showPreviewDimensions,
+                        onCheckedChange = { vm.setShowPreviewDimensions(it) },
+                        modifier = Modifier.testTag("settings_preview_dimensions"),
+                    ) {
+                        Text("Show Dimension Lines in Preview")
                     }
                     SettingSwitchRow(
                         checked = showHighlightSelection,

@@ -21,7 +21,7 @@ work ships they move to `docs/archive/`; each is listed under the contract it be
 ## Screen & editing
 
 - **ShaftScreen.md** — editor screen contract: header, preview card (incl. preview-box
-  styling), carousel, add button, IME rules, OAL keystroke-commit exception
+  styling and its dimension lines), carousel, add button, IME rules, OAL commit-on-accept
 - **AddComponentDialogs.md** — dialog/card parity rule (critical invariant), per-dialog
   field contracts, the InlineAddChooser entry point, auto/manual taper-rate UI rules
 - **NumberField.md** — `NumericInputField` commit-on-blur contract (tap-and-leave
@@ -38,14 +38,16 @@ work ships they move to `docs/archive/`; each is listed under the contract it be
 - **OverallLength.md** — OAL semantics: always user-typed (no auto mode), 0 = not set yet,
   coverage, excluded threads
 - **TaperRate.md** — auto/manual taper-rate engine (`util/TaperRateAuto.kt`), 3% snap
-  tolerance (confirmed product decision), sentinel guards
+  tolerance (confirmed product decision), sentinel guards, per-foot notation ("Rate as: 1:N |
+  in/ft" entry, `PdfPrefs.taperRatePerFoot` footer printing)
 - **CouplerBoltSlot.md** — reference-only cutouts: never affect OAL, never collide,
   never split bodies (critical invariant)
 
 ## Rendering & documents
 
 - **Rendering.md** — preview pipeline: ShaftDrawing host, ShaftLayout math,
-  ShaftRenderer geometry, RenderOptions styling. PDF is a separate drawing path.
+  ShaftRenderer geometry, RenderOptions styling. PDF is a separate drawing path (the preview's
+  dimension lines call the schematic's rail code — `PDF_EXPORT.md` §5.4).
 - **RunoutSheet.md** — runout + wear tabs **and the Consolidated Output tab** (consolidated
   sheet variants, worn sections, shaft-height slider, Export all), bubble collision engine
   (`geom/RunoutBubbleLayout.kt`), draggable stations (authored positions, the neighbour

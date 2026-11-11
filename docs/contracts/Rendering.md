@@ -42,6 +42,13 @@ multiplies `outlineWidthPx`). Text measurement uses `rememberTextMeasurer`.
 If `spec.overallLengthMm == 0`, the preview extends to the last occupied component
 end so something always renders.
 
+With `RenderOptions.showDimensionRails` on (the editor preview only, from Settings → Editor
+Screen → "Show Dimension Lines in Preview"), `ShaftDrawing` draws the schematic sheet's dimension rails above the shaft through
+`ui/drawing/render/PreviewDimensionRails.kt` — the sheet's span builder, rail planner and rail
+renderer over this canvas's linear map, never a canvas copy; how the box makes room for them is
+the preview's own rule. No rails while the OAL is 0. See
+`docs/UI_CONTRACT.md` §3.1.1 and `docs/PDF_EXPORT.md` §5.4.
+
 ShaftLayout (mm→px math)
 ------------------------
 Pure math, no UI or Compose dependencies. `compute(spec, leftPx, topPx, rightPx,

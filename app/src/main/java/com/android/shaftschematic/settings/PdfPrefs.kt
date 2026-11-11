@@ -348,8 +348,8 @@ data class PdfPrefs(
     val footerBoltHoleDia: Boolean = false,
     /**
      * Print an inch taper's footer "Rate:" in inches per foot (`3 3/4"/ft`) instead of the ratio
-     * (`1:3.2`) — `footerTaperRate`, `pdf/SheetFooter.kt`. Settings → Drawing → "Taper rate on
-     * sheets" and both PDF options panels. Default ON (on-device request: the shop names a taper
+     * (`1:3.2`) — `footerTaperRate`, `pdf/SheetFooter.kt`. Settings → Drawing → "Taper rate per
+     * foot" and both PDF options panels. Default ON (on-device request: the shop names a taper
      * per foot). OFF prints the stored ratio, with 1:12 → 1"/ft and 1:16 → 3/4"/ft, exactly as
      * before the pref existed. Metric tapers keep the ratio either way. It also seeds the
      * "Rate as: 1:N | in/ft" entry chips.

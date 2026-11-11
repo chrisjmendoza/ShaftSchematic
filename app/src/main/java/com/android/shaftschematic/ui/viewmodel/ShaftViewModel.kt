@@ -510,7 +510,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     internal val _pdfFooterBoltHoleDia = MutableStateFlow(PdfPrefs().footerBoltHoleDia)
     val pdfFooterBoltHoleDia: StateFlow<Boolean> = _pdfFooterBoltHoleDia.asStateFlow()
 
-    // Settings → Drawing → "Taper rate on sheets" (`PdfPrefs.taperRatePerFoot`); also seeds the
+    // Settings → Drawing → "Taper rate per foot" (`PdfPrefs.taperRatePerFoot`); also seeds the
     // taper rate fields' "Rate as" chips.
     internal val _pdfTaperRatePerFoot = MutableStateFlow(PdfPrefs().taperRatePerFoot)
     val pdfTaperRatePerFoot: StateFlow<Boolean> = _pdfTaperRatePerFoot.asStateFlow()
@@ -590,6 +590,10 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     internal val _showHighlightSelection = MutableStateFlow(true)
     val showHighlightSelection: StateFlow<Boolean> = _showHighlightSelection.asStateFlow()
+
+    /** Dimension lines in the editor preview — a device preference, default ON. */
+    internal val _showPreviewDimensions = MutableStateFlow(true)
+    val showPreviewDimensions: StateFlow<Boolean> = _showPreviewDimensions.asStateFlow()
 
     internal val _componentArrowWidthDp = MutableStateFlow(40)
     val componentArrowWidthDp: StateFlow<Int> = _componentArrowWidthDp.asStateFlow()
@@ -1395,6 +1399,11 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             SettingsStore.showHighlightSelectionFlow(getApplication()).collectLatest { persisted ->
                 setShowHighlightSelection(persisted, persist = false)
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.showPreviewDimensionsFlow(getApplication()).collectLatest { persisted ->
+                setShowPreviewDimensions(persisted, persist = false)
             }
         }
         viewModelScope.launch {

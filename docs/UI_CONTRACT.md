@@ -126,6 +126,33 @@ whole snap pipeline with it (`ui/viewmodel/SnapUtils.kt`, `ShaftViewModel.snapRa
 reintroduce a bare-canvas tap action without asking — the complaint was about the gesture
 existing at all, not about how it behaved.
 
+**Dimension lines in the preview.** The editor preview (Schematic and Final tabs, `ShaftDrawing`)
+draws the schematic sheet's dimension rails above the shaft (on-device request: "it still just
+feels weird to have the shaft and nothing else"). One source and one draw path, never a canvas
+copy: the spans are the sheet's (`schematicRailSpans`, `pdf/ShaftPdfComposer.kt` — the same
+liner / taper / bolt-row / body-length spans, tiers, OAL span, `DisplayUnits` resolution and
+formatting), labels are placed by `geom/DimensionRailLayout.kt` and inked by
+`PdfDimensionRenderer.drawPlan`, fractions through the shared fraction renderer. What is the
+preview's own (`ui/drawing/render/PreviewDimensionRails.kt`): the x map (the preview's LINEAR
+`ShaftLayout`, so a span's ends land on the edges the box draws — not the sheet's compressed
+map); the scale (the rails lay out in sheet points drawn at one point per dp through a single
+canvas scale, inside the pan/zoom transform so they zoom with the shaft); the colour (the
+preview's outline colour, halos in the app background — app chrome, not `SheetInk`); and the
+room (`geom/PreviewRailFit.kt`: reserve the least strip at the box top that fits every rail, out
+of everything the box has above the shaft's width-fitted height and padding, so the shaft sits
+low; past that the rails run off the top of the box, reached by panning — every rail the sheet
+prints is always drawn and the shaft is never shrunk for them, on-device ruling). Two values at one height keep a text height of air
+(`PdfDimensionRenderer(labelSideClear)`, `DimensionRailLayout.plan(sideClear)` — sheet default
+unchanged). No rails draw while the OAL is 0. The rails are not tap targets — selection is
+unchanged. While the rails draw, the developer OAL badge stands down (it repeats the OAL rail).
+The reset-view button (top-right) shows only while the view is zoomed or panned off its default
+(`isPreviewViewMoved`), with or without rails: at the default view there is nothing to reset, and
+an always-on disc covered the FWD-end values or parts (emulator QA). Gated by
+`RenderOptions.showDimensionRails` (default `false` — thumbnails and the Runout / Wear /
+Undercut canvases are unchanged) from the device preference Settings → Editor Screen → "Show
+Dimension Lines in Preview" (`SettingsStore.showPreviewDimensionsFlow`, default ON) — never in a
+document, never captured by a Drawing profile, no effect on any PDF.
+
 **Implicit (auto) bodies** — shipped, not planned. Derived, read-only gap-fillers; never
 persisted in `ShaftSpec`:
 - Computed by `ui/resolved/ResolvedComponent.kt`: `resolveComponents()` calls
@@ -179,10 +206,12 @@ resolved to a single run at the aft-most Ø with **one card instead of two**. Se
 **Component blend section** (`ui/screen/BlendSection.kt`, shared by both body cards and
 `AddBodyDialog`). Below "Show Ø on drawing", one chip row per face — **AFT / FWD: Square | Blend** —
 headed "Component blend" (it read "Face finish", which made no sense on a component card —
-on-device report). Under a face that is Blend: its axial length field, then an **"At a liner:
+on-device report). Under a face that is Blend: the **"Blend by: Length | Angle"** chips, then its
+axial length field (Length) or the "Angle AFT/FWD (°)" field, the read-only "Length … from the
+step" line and the optional "Corner radius" field (Angle), then an **"At a liner:
 Seat | Liner OD"** chip row — where the curve leaves from when a liner butts that face, the derived
 half-way seat (default) or the liner's full OD (on-device request). Shape chips (S-curve | Fillet |
-Eased cone) appear once some face is blended. Seal areas are their own sibling section ("Seal
+Eased cone) appear once some face is blended by Length (an Angle face is a straight cone). Seal areas are their own sibling section ("Seal
 areas": AFT / FWD checkboxes, a length field under each ticked face) — a section property, never a
 third chip in the Square | Blend row and never nested under a blend control (both earlier layouts
 hid or misdescribed it, on-device reports). `blendFaceMode`/`blendLenForMode`/`sealLenForSeal`
@@ -403,8 +432,10 @@ rather than duplicated here. Summary of the boundaries, which follow the same ru
   `ComponentWearDetailOverlay`: a **Pits** section (tool chips **Add X** / **Remove X**)
   and a separate **Diameter measurements** section (**Add Ø** / **Remove Ø**; add/edit via
   a Save/Cancel/Delete value dialog — readings are created only on Save). One canvas tool
-  is active at a time across both sections. Liner cards keep the wear-spot editor
-  (`NumberField.md` commit rules apply).
+  is active at a time across both sections. Liner and body pages carry the wear-spot editor
+  ("Wear spots", `NumberField.md` commit rules apply) and, on the canvas, each band's start /
+  end bars — a drag moves one edge, snapped to 1/8" / 1 mm, ONE `updateWearSpot` on release
+  (`RunoutSheet.md` "Wear areas on bodies; start / end bars").
 - Both tabs preview by **rasterizing the real composed PDF** (`PdfPreviewOverlay`) — the
   UI never re-draws document geometry itself, and all hit-testing/placement math lives in
   `geom/` (`WearPitMath`, `WearDiaMath`, `WearDiaCalloutLayout`, `RunoutReadingMath`).

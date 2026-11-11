@@ -334,7 +334,8 @@ switch is the one control that clears. The "Relief at" chips are `thread_relief_
 | Length | Always |
 | SET Ø / LET Ø | Always (labels swap for FWD) |
 | Rate mode: Auto \| Manual | Always |
-| Rate | Always (read-only in Auto, editable in Manual) |
+| Rate as: 1:N \| in/ft chips | Inch drawings only — the ONE `TaperRateEntryChips` row the taper card and the taper calculator carry; decides how a BARE number in Rate reads (in/ft → stored spelled out, `3 3/4"/ft`); opens on a typed rate's own notation, else on `PdfPrefs.taperRatePerFoot` (`TaperRate.md` "Per-foot notation") |
+| Rate | Always (read-only in Auto, editable in Manual; label follows the Rate as chip) |
 | Keyway checkbox | Always. The gate for the whole keyway section (shared `KeywayGateRow`, `KeywaySection.kt`); default OFF in the dialog. On the card it seeds from `hasAnyKeywayValue` so a half-typed keyway keeps its section open, and unticking a card with any value opens "Remove keyway?" (`kw_remove_confirm`) before clearing W/D/L/inset/spooned |
 | KW W / KW D / KW L | Only while the Keyway checkbox is ON (blank = 0 = no keyway; while OFF the dialog submits 0 whatever the hidden fields hold) |
 | Captured keyway toggle | Only while the Keyway checkbox is ON — same rules as `AddBodyDialog` (captured ⇔ `keywayOffsetFromSetMm` > 0, 0.5 in seed, OFF commits inset 0) |
@@ -360,7 +361,11 @@ Submit ordering (SET/LET → the stored pair):
 - Pinned by `TaperAddOrientationTest` (all four half × measure-from combinations) and
   `TaperAuthoredReferencePersistenceTest`.
 
-Manual taper-rate rules (both surfaces carry the one label `Rate (1:12, 3/4"/ft, or decimal)`):
+Manual taper-rate rules (both surfaces carry the one label `Rate (1:12, 3/4"/ft, or decimal)`
+under "Rate as: 1:N", and `Rate, inches per foot (3 3/4)` under "Rate as: in/ft" —
+`taperRateFieldLabel`; under in/ft a BARE number or fraction is spelled out as `…"/ft` before it
+is validated or stored, `normalizeTaperRateEntry`, so the ambiguity rules below bite only under
+1:N — `TaperRate.md` "Per-foot notation"):
 - Accepted: a ratio (`1:12`), inches per foot (`3/4"/ft` and its spellings — `TaperRate.md`),
   or a decimal.
 - Both rate fields filter keystrokes through the ONE `filterTaperRateInput`

@@ -689,8 +689,12 @@ private fun schematicFooterTextPaint(pdfPrefs: PdfPrefs): Paint =
  */
 private fun schematicDimTextPt(pdfPrefs: PdfPrefs): Float = (TEXT_PT - 2f) * pdfPrefs.dimTextScale
 
-/** The schematic's dimension spans and their rail assignment — pure mm, no page geometry. */
-private class SchematicRailSpans(
+/**
+ * The schematic's dimension spans and their rail assignment — pure mm, no page geometry. The
+ * editor preview's rails (`ui/drawing/render/PreviewDimensionRails.kt`) draw this same object,
+ * so the box and the sheet carry the same spans, tiers and values.
+ */
+internal class SchematicRailSpans(
     val win: OalWindow,
     val assignments: List<RailSpan>,
     val oalDimSpan: DimSpan,
@@ -700,10 +704,11 @@ private class SchematicRailSpans(
 
 /**
  * Builds the schematic's dimension spans — liner, taper, coupler-slot and body-length spans on
- * their planned rails, plus the top OAL span. ONE builder behind the composer's rail pass and the
- * band layout's rail estimate, so the estimate counts exactly the rails that print.
+ * their planned rails, plus the top OAL span. ONE builder behind the composer's rail pass, the
+ * band layout's rail estimate (so the estimate counts exactly the rails that print) and the
+ * editor preview's dimension lines (so the box shows exactly the values the sheet prints).
  */
-private fun schematicRailSpans(
+internal fun schematicRailSpans(
     spec: ShaftSpec,
     unit: UnitSystem,
     displayUnits: DisplayUnits,

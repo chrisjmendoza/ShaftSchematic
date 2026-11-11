@@ -1003,8 +1003,9 @@ fun UndercutWindowDetailOverlay(
         if (ask != null) overlayOverhang = ask else confirmDraft(draft)
     }
 
-    // "Next cut"'s seed: a PENDING card butted on the FWD end of [current] (the cut just
-    // confirmed, as confirmed), reading from its datum, opened as the selected card. The pending
+    // "Next cut"'s seed: a PENDING card butted on the end of [current] (the cut just confirmed,
+    // as confirmed) away from its datum (`undercutNextCutSeed`), reading from that datum, opened
+    // as the selected card. The pending
     // page is fresh state — the card keys on the seed — and an untouched seed is discarded on
     // leave like any other add.
     fun plantNextCutSeed(current: UndercutDraft) {
@@ -2330,7 +2331,7 @@ internal fun undercutGapFieldLabel(position: Int, unitAbbr: String): String =
 /** Whether a card's "Next cut" can act, and the caption under it when stock is what stops it. */
 internal data class UndercutNextCutState(val enabled: Boolean, val caption: String?)
 
-/** The "Next cut" caption when the shaft ends before a default-length cut fits FWD of this one. */
+/** The "Next cut" caption when the shaft ends before a default-length cut fits FWD of this one (an AFT datum). */
 internal const val UNDERCUT_NO_STOCK_FWD_MSG = "No stock FWD of this cut"
 
 /** The same, for a cut measured from a FWD datum, whose next cut goes AFT. */
@@ -2339,8 +2340,9 @@ internal const val UNDERCUT_NO_STOCK_AFT_MSG = "No stock AFT of this cut"
 /**
  * A card's "Next cut" state for [draft] as it stands: disabled while the draft is [blocked] (the
  * pill already says why — no second validator here), while ANOTHER card holds the one pending add
- * ([otherPendingOpen]), and when no default-length cut fits FWD of the draft on the shaft
- * ([undercutNextCutSeed]) — the one case it explains itself, [UNDERCUT_NO_STOCK_FWD_MSG].
+ * ([otherPendingOpen]), and when no default-length cut fits on the draft's side away from its
+ * datum ([undercutNextCutSeed]) — the one case it explains itself, [UNDERCUT_NO_STOCK_FWD_MSG]
+ * or, under a FWD datum, [UNDERCUT_NO_STOCK_AFT_MSG].
  */
 internal fun undercutNextCutState(
     draft: UndercutDraft,

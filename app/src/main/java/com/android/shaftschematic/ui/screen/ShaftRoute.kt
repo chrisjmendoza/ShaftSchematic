@@ -78,6 +78,8 @@ import com.android.shaftschematic.ui.viewmodel.updateTaperShowLabel
 import com.android.shaftschematic.ui.viewmodel.updateThread
 import com.android.shaftschematic.ui.viewmodel.updateThreadLabel
 import com.android.shaftschematic.ui.viewmodel.updateThreadShowLabel
+import com.android.shaftschematic.ui.drawing.render.PreviewRailSettings
+import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.FeedbackIntentFactory
 import kotlinx.coroutines.launch
 
@@ -280,6 +282,24 @@ fun ShaftRoute(
     // dialogs. The sidebar Tools entry is unconditional and reads nothing from this flag.
     val dialogUnitConverterEnabled by SettingsStore.dialogUnitConverterEnabledFlow(ctx).collectAsState(initial = false)
 
+    // The preview's dimension rails read exactly what the schematic sheet's rails read: the
+    // document's units (overrides + dual, shared by both drawings), the measurement reference,
+    // the arrow size and dual layout; the fraction style and output font are re-render keys.
+    val showPreviewDimensions by vm.showPreviewDimensions.collectAsState()
+    val dualUnits by vm.dualUnits.collectAsState()
+    val pdfArrowSizePt by vm.pdfArrowSizePt.collectAsState()
+    val pdfDualUnitLayout by vm.pdfDualUnitLayout.collectAsState()
+    val pdfFractionStyle by vm.pdfFractionStyle.collectAsState()
+    val pdfOutputFont by vm.pdfOutputFont.collectAsState()
+    val previewDimensionRails = if (!showPreviewDimensions) null else PreviewRailSettings(
+        displayUnits = DisplayUnits(unit, unitOverrides, dualUnits),
+        tieringMode = pdfTieringMode,
+        arrowSizePt = pdfArrowSizePt,
+        dualUnitLayout = pdfDualUnitLayout,
+        fractionStyle = pdfFractionStyle,
+        outputFont = pdfOutputFont,
+    )
+
     // New-shaft Ø prompt (on-device request): the first OAL commit on a brand-new ORIGINAL
     // shaft asks for the bare-shaft Ø, since components added onto the default-sized bare
     // shaft look wrong until it is set. Armed from the spec as it stood BEFORE the commit is
@@ -330,6 +350,7 @@ fun ShaftRoute(
         pdfTieringMode = pdfTieringMode,
         componentTitlesDefault = pdfShowComponentTitles,
         shadedComponentIds = previewShadedIds,
+        previewDimensionRails = previewDimensionRails,
         componentShadeDefaults = ComponentShadeDefaults(
             bodies = pdfShadedBodies, tapers = pdfShadedTapers, liners = pdfShadedLiners,
         ),

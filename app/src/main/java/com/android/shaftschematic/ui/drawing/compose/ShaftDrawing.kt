@@ -21,6 +21,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,6 +38,7 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.THREAD_DENSITY_DEFAULT
@@ -50,6 +52,10 @@ import com.android.shaftschematic.ui.drawing.dimDebugLines
 import com.android.shaftschematic.ui.drawing.renderSpanSpec
 import com.android.shaftschematic.ui.drawing.render.GridRenderer.drawAdaptiveShaftGrid
 import com.android.shaftschematic.ui.drawing.render.PreviewIssueMark
+import com.android.shaftschematic.ui.drawing.render.PreviewRailCache
+import com.android.shaftschematic.ui.drawing.render.PreviewRailSettings
+import com.android.shaftschematic.ui.drawing.render.planPreviewRails
+import com.android.shaftschematic.ui.drawing.render.previewRailSpans
 import com.android.shaftschematic.ui.drawing.render.RenderOptions
 import com.android.shaftschematic.ui.drawing.render.axialExtentMm
 import com.android.shaftschematic.ui.drawing.render.ShaftLayout
@@ -84,6 +90,13 @@ private fun logTapSelect(message: String) {
  * preview's pinch zoom along with everything else, so it keeps the same proportion at any zoom.
  */
 private const val SELECTION_GLOW_EXTRA_PX = 4f
+
+/**
+ * True while the preview's pan/zoom is away from its default view (scale 1, no offset) — the
+ * only time the reset-view button shows. The tolerances absorb the reset animation's last frame.
+ */
+internal fun isPreviewViewMoved(scale: Float, offsetX: Float, offsetY: Float): Boolean =
+    abs(scale - 1f) > 0.001f || abs(offsetX) > 0.5f || abs(offsetY) > 0.5f
 
 /**
  * ShaftDrawing
@@ -149,6 +162,13 @@ fun ShaftDrawing(
      * in view; empty draws as before.
      */
     issueMarks: List<PreviewIssueMark> = emptyList(),
+    /**
+     * The schematic sheet's dimension rails over the shaft (`PreviewDimensionRails.kt`) — the
+     * sheet's spans, units and look prefs. `null` (the default) draws no rails and lays the box
+     * out exactly as before; only the editor preview passes any, and only while Settings →
+     * Editor Screen → "Show Dimension Lines in Preview" is on.
+     */
+    dimensionRails: PreviewRailSettings? = null,
     // Highlight bridge (safe defaults)
     highlightEnabled: Boolean = false,
     highlightId: Any? = null,
@@ -184,7 +204,7 @@ fun ShaftDrawing(
         bodyFill, previewBodyFill, linerFill, previewLinerFill,
         taperFill, previewTaperFill, threadFill, previewThreadFill, threadHatch,
         highlightEnabled, highlightId, themeGlow,
-        shadedComponentIds, threadSlant, threadDensity, issueMarks,
+        shadedComponentIds, threadSlant, threadDensity, issueMarks, dimensionRails,
     ) { RenderOptions(
         // Visual tuning
         paddingPx = 16,
@@ -206,6 +226,8 @@ fun ShaftDrawing(
 
         issueMarks = issueMarks,
 
+        showDimensionRails = dimensionRails != null,
+
         // Highlight preset (obvious: colored glow)
         highlightEnabled = highlightEnabled,
         highlightId = highlightId,
@@ -217,6 +239,21 @@ fun ShaftDrawing(
     // Preview-safe spec: if OAL is zero but parts exist, extend to last occupied end.
     val safeSpec = remember(spec) { spec.renderSpanSpec() }
     val issueExtentMm = remember(issueMarks) { issueMarks.axialExtentMm() }
+
+    // Dimension rails: the sheet's spans for the AUTHORED spec (a 0 OAL draws none — see
+    // `previewRailSpans`), planned once per input change and canvas size, never per frame.
+    val railSpans = remember(spec, dimensionRails, options.showDimensionRails) {
+        dimensionRails?.takeIf { options.showDimensionRails }?.let { previewRailSpans(spec, it) }
+    }
+    val railPxPerPt = LocalDensity.current.density
+    // App chrome, not paper: the rails take the preview's own outline colour and knock their
+    // values out of the app background, so they read in every theme.
+    val railColor = outlineColor.toArgb()
+    val railHaloColor = MaterialTheme.colorScheme.background.toArgb()
+    val railCache = remember(
+        railSpans, dimensionRails, safeSpec, resolvedComponents, issueExtentMm,
+        railPxPerPt, railColor, railHaloColor,
+    ) { PreviewRailCache() }
 
     // ──────────────────────────────
     // Pan / Zoom (UI only)
@@ -312,15 +349,32 @@ fun ShaftDrawing(
             val padX = options.paddingPx.toFloat()
             val padY = 8f
 
-            val layout = ShaftLayout.compute(
+            // [reservePx] is the strip the dimension rails take off the box top; 0 without rails,
+            // which is the layout every rails-off box has always had.
+            fun layoutFor(reservePx: Float) = ShaftLayout.compute(
                 spec = safeSpec,
                 leftPx = padX,
-                topPx = padY,
+                topPx = padY + reservePx,
                 rightPx = size.width - padX,
                 bottomPx = size.height - padY,
                 resolvedComponents = resolvedComponents.takeIf { it.isNotEmpty() },
                 extentMm = issueExtentMm,
             )
+            val railPlan = if (dimensionRails != null && railSpans != null) {
+                railCache.get(size.width, size.height) {
+                    planPreviewRails(
+                        rails = railSpans,
+                        settings = dimensionRails,
+                        boxTopPx = 0f,
+                        boxHeightPx = size.height,
+                        pxPerPt = railPxPerPt,
+                        railColor = railColor,
+                        haloColor = railHaloColor,
+                        layoutFor = ::layoutFor,
+                    )
+                }
+            } else null
+            val layout = railPlan?.layout ?: layoutFor(0f)
             latestLayoutRef.set(layout)
 
             // Computed once per frame, only when the overlay is on — feeds both the
@@ -371,6 +425,10 @@ fun ShaftDrawing(
                         components = resolvedComponents.takeIf { it.isNotEmpty() }
                     )
                 }
+
+                // Dimension rails: inside the pan/zoom transform, so they zoom with the shaft.
+                // Not tap targets — the tap handler above reads only the layout's x map.
+                railPlan?.draw(drawContext.canvas.nativeCanvas)
 
                 val wantOal = showOalMarkers || VerboseLog.isEnabled(VerboseLog.Category.OAL)
                 if (wantOal) {
@@ -445,25 +503,32 @@ fun ShaftDrawing(
             }
         }
 
-        // Compact reset control (top-right)
-        IconButton(
-            onClick = {
-                scope.launch {
-                    scale.animateTo(1f, tween(140))
-                    offset.animateTo(Offset.Zero, tween(140))
-                }
-            },
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(6.dp)
-                .size(40.dp)
-                .background(Color.White.copy(alpha = 0.6f), CircleShape)
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Refresh,
-                contentDescription = "Reset view",
-                tint = Color.Black.copy(alpha = 0.8f)
-            )
+        // Compact reset control (top-right), shown only while the view is zoomed or panned off
+        // its default: at the default view there is nothing to reset, and an always-on disc sat
+        // over the drawing — the FWD-end rail values or the FWD taper and thread (emulator QA).
+        val viewMoved by remember {
+            derivedStateOf { isPreviewViewMoved(scale.value, offset.value.x, offset.value.y) }
+        }
+        if (viewMoved) {
+            IconButton(
+                onClick = {
+                    scope.launch {
+                        scale.animateTo(1f, tween(140))
+                        offset.animateTo(Offset.Zero, tween(140))
+                    }
+                },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(6.dp)
+                    .size(40.dp)
+                    .background(Color.White.copy(alpha = 0.6f), CircleShape)
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Refresh,
+                    contentDescription = "Reset view",
+                    tint = Color.Black.copy(alpha = 0.8f)
+                )
+            }
         }
     }
 }

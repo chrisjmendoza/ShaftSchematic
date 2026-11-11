@@ -711,7 +711,8 @@ internal val helpSections: List<HelpSection> = listOf(
                     "same pair under its drawing). Deleting a cut offers Undo — from the open cut's card and " +
                     "from the tab's list alike.\n\n" +
                     "\"Next cut\" at the foot of the card confirms the cut and " +
-                    "opens a new one butted to its far end; \"More ways to place this cut\" " +
+                    "opens a new one butted to its end away from the datum (FWD from an AFT " +
+                    "datum, AFT from a FWD one); \"More ways to place this cut\" " +
                     "below it holds the whole-liner shortcut (offered only while the liner " +
                     "has no other cut) and the \"On the AFT side of\" / \"On the FWD side " +
                     "of\" butt-against chips. How far a cut runs past its liner shows as " +
@@ -954,7 +955,7 @@ internal val helpSections: List<HelpSection> = listOf(
             HelpTopic(
                 "Trace depth exaggeration",
                 "Wear measured on a liner dips the drawn surface line through the measured " +
-                    "diameters. Real wear is far too shallow to see at drawing scale, so the dip " +
+                    "diameters, wherever they were taken — no wear area is needed. Real wear is far too shallow to see at drawing scale, so the dip " +
                     "is drawn deeper than true (never shallower) — set the amount per job on the " +
                     "Wear sheet, or its default in Settings → Drawing. The printed Ø values are " +
                     "always the measured numbers you typed.",
@@ -1141,6 +1142,14 @@ internal val helpSections: List<HelpSection> = listOf(
                     "• \"Preview Colors\" — opens the preview color page (see below).\n" +
                     "• \"Show Grid in Preview\" — default off. Draws a background grid behind " +
                     "the shaft in the editor preview. Preview only; never printed.\n" +
+                    "• \"Show Dimension Lines in Preview\" — default on. Draws the schematic " +
+                    "sheet's dimension lines and lengths above the shaft in the Schematic and " +
+                    "Final tabs' preview — the same spans and values the sheet prints, drawn " +
+                    "small (pinch to zoom in and read them). The preview is to true scale along " +
+                    "its length, not the sheet's compressed layout, and the shaft sits lower to " +
+                    "make room. Every line the sheet prints is drawn; in a short box the top " +
+                    "ones can run off the box — drag the preview to see them. Nothing shows until the overall " +
+                    "length is typed. On-screen only; never printed.\n" +
                     "• \"Highlight Selected Component in Preview\" — default on. Emphasizes the " +
                     "component whose card you are editing.\n" +
                     "• \"Show Left/Right Arrows on Component Cards\" — default off. Adds arrow " +

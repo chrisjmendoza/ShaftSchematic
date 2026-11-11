@@ -26,6 +26,9 @@ import kotlin.math.min
 fun List<ResolvedComponent>.componentAxialExtentMm(): Pair<Float, Float>? =
     if (isEmpty()) null else minOf { it.startMmPhysical } to maxOf { it.endMmPhysical }
 
+/** The smallest diameter (mm) the layout fits vertically, so a very thin shaft keeps some height. */
+internal const val LAYOUT_MIN_FIT_DIA_MM = 10f
+
 object ShaftLayout {
 
     data class Result(
@@ -40,8 +43,13 @@ object ShaftLayout {
         val minXMm: Float,
         val maxXMm: Float,
         // guides
-        val centerlineYPx: Float
+        val centerlineYPx: Float,
+        /** The largest diameter the shaft draws (mm) — the drawn shaft top is `centerline − rPx(this)`. */
+        val maxDiaMm: Float = 0f,
     ) {
+        /** Canvas y of the drawn shaft's top silhouette. */
+        val shaftTopPx: Float get() = centerlineYPx - rPx(maxDiaMm)
+
         /** Maps axial position in millimeters to canvas X in pixels. */
         fun xPx(mm: Float): Float = contentLeftPx + (mm - minXMm) * pxPerMm
         /** Maps canvas X in pixels to axial position in millimeters. */
@@ -128,8 +136,7 @@ object ShaftLayout {
         }
 
         // Minimum radial span so a very thin shaft still gets some vertical presence
-        val minDiaForFitMm = 10f
-        val fitDiaMm = max(maxDiaMm, minDiaForFitMm)
+        val fitDiaMm = max(maxDiaMm, LAYOUT_MIN_FIT_DIA_MM)
         val radialSpanMm = fitDiaMm // we render around centerline, so top/bottom split evenly
 
         // Scale: choose the tighter of width/height constraints
@@ -149,7 +156,8 @@ object ShaftLayout {
             pxPerMm = pxPerMm,
             minXMm = minXMm,
             maxXMm = maxXMm,
-            centerlineYPx = centerlineY
+            centerlineYPx = centerlineY,
+            maxDiaMm = maxDiaMm,
         )
     }
 }

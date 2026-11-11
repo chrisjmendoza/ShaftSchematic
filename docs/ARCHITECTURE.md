@@ -222,8 +222,11 @@ shared engine — never re-implemented per renderer):
 - `ProfileCompression.kt` — the PDF profile's compressed x-map: true-diameter visual height
   at the default sizing curve, spans foreshortened above per-kind width floors, and the
   height/scale solve behind the "Shaft height" slider.
-- `DiameterCalloutLayout.kt` / `DeterministicTierAssigner.kt` — schematic Ø-callout tiering
-  and dimension-rail tier assignment (PDF-only consumers, kept here for JVM testability).
+- `DiameterCalloutLayout.kt` / `DeterministicTierAssigner.kt` — schematic below-shaft callout
+  rows and label sides (`place`) and dimension-rail tier assignment (PDF-only consumers, kept
+  here for JVM testability).
+- `DimensionRailLayout.kt` — the rail label planner, shared by the schematic and consolidated sheets' rails AND
+  the editor preview's dimension lines.
 
 Rule: this layer never imports Android/Compose classes and never depends on `pdf/` or `ui/`.
 
@@ -276,6 +279,10 @@ They share model and layout-math *concepts* but not code: `ShaftPdfComposer` nev
 `ShaftLayout.compute()` and instead has its own fit function — `computeDetailPtPerMm` — plus
 the shared compressed x-map (`geom/ProfileCompression.kt`) and its own drawing functions
 (`drawBodyRunsWithBreaks`, `drawTapers`, `drawThreads`, `drawLiners`).
+The one deliberate crossing is the editor preview's dimension lines
+(`ui/drawing/render/PreviewDimensionRails.kt`): the canvas CALLS the schematic composer's span
+builder (`schematicRailSpans`), `DimensionRailLayout` and `PdfDimensionRenderer.drawPlan` over its
+own linear map, so the rails are one code path, not a copy (`docs/PDF_EXPORT.md` §5.4).
 
 Rules:
 - Computes its own `ptPerMm` from page content width/height and overallLengthMm

@@ -17,6 +17,29 @@ Last updated: 2026-10-27.
 
 ---
 
+## Shipped 2026-11-09 / 11-10 — not yet seen on hardware
+
+- [ ] **Liner Ø trace without a wear area** (`325841d`): a 9.973" reading on a 10" liner with no
+  wear area dips the surface on the liner strip, the wear sheet's shaft, the Wear tab's shaft and
+  the liner detail page; a liner with areas still shades and dimensions them as before.
+- [ ] **Taper "Rate as: 1:N | in/ft"** (`a72b08a`): on the card, in Add Taper and the taper
+  calculator, typing `3 3/4` under in/ft saves `3 3/4"/ft` and the footer prints `3 3/4"/ft`;
+  Settings → Drawing → "Taper rate per foot" off prints the ratio; a metric drawing shows no chips.
+- [ ] **Footer columns borrow room** (`d8d1c84`): a FWD `KW: 2" × 5/8" × 9 3/16"` prints on one
+  row beside a short middle column, with a clear gap; a blank draft keeps equal thirds.
+- [ ] **Blend by Angle** (`e24b38a`, `10bf09e`): "Blend by: Length | Angle" on both body cards and
+  Add Body; a 45° face with 3/8" R draws a chamfer and round and prints ONE `45°, 3/8" R` callout
+  whose leader crosses no Ø value (Final schematic too).
+- [ ] **Undercut "Next cut"** (`9d1ad89`, `1bdbbca`): from a FWD datum each next cut opens on the
+  AFT side and keeps going AFT; from the middle of a run it opens at the run's open end; typing the
+  real length keeps the new cut edge to edge with the one before it.
+- [ ] **Wear bars and body wear areas** (`ed8d756`): drag a wear area's start or end bar on a
+  liner and on a body page — the other edge stays put, the result lands on 1/8" (1 mm), one Undo
+  restores it; a body's area prints on its strip and the shaft drawing; delete a liner with areas,
+  Undo, and the areas come back.
+- [ ] **Preview dimension lines** (`feat/preview-dimension-lines`): the Schematic and Final
+  previews draw the sheet's rails and values above the shaft and zoom with it; Settings → Editor Screen → "Show Dimension Lines in Preview" off removes them.
+
 ## Fixed 2026-10-29 — tablet pass, re-check on hardware
 
 A Pixel_Tablet AVD pass (editor + outputs at EXPANDED/MEDIUM, real jobs) found and fixed these;
