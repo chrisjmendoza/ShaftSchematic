@@ -811,13 +811,15 @@ internal fun schematicBandLayout(
 }
 
 /** The schematic's diameter scale and compressed x map — what [schematicProfileFit] solves. */
-private class SchematicProfileFit(val diaPtPerMm: Float, val xMap: CompressedProfileXMap)
+internal class SchematicProfileFit(val diaPtPerMm: Float, val xMap: CompressedProfileXMap)
 
 /**
  * The schematic's drawn diameter scale and its compressed x map for a content width and a height
- * budget — ONE pipeline behind the composer and the band layout's rail estimate.
+ * budget — ONE pipeline behind the composer, the band layout's rail estimate and the editor
+ * preview's sheet layout (`ui/drawing/render/PreviewSheetLayout.kt`, which solves it in sheet
+ * points at one point per dp over the preview box).
  */
-private fun schematicProfileFit(
+internal fun schematicProfileFit(
     spec: ShaftSpec,
     pdfPrefs: PdfPrefs,
     heightScale: Float,

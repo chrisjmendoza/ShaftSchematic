@@ -25,8 +25,9 @@ import com.android.shaftschematic.util.OutputFont
  * sheet's own (`schematicRailSpans`, the ONE builder behind the composer's rail pass), the labels
  * are placed by the ONE planner (`DimensionRailLayout`) and inked by the ONE rail renderer
  * (`PdfDimensionRenderer`). What is the preview's own:
- *  - the x map: the preview is a LINEAR picture of the shaft, so each span maps through the
- *    preview's `ShaftLayout` and its ends land on the component edges the box draws;
+ *  - the x map: each span maps through the preview's own `ShaftLayout` — the sheet's compressed
+ *    map under the sheet layout (`PreviewSheetLayout.kt`), the linear one otherwise — so its ends
+ *    land on the component edges the box draws;
  *  - the scale: the rails lay out in sheet POINTS and draw through one canvas scale, one point to
  *    [pxPerPt] pixels, so the planner's point constants and the renderer's arrow, pad and halo all
  *    shrink together; the shared path takes only two preview parameters, the halo fill and the
@@ -185,14 +186,20 @@ internal fun planPreviewRails(
 
     // What the shaft itself needs: its height at the width-fitted scale (the scale a long shaft
     // draws at whatever the box height) plus the layout's padding and margins, which also hold
-    // the selection ring. Everything above that is the rails' to take.
+    // the selection ring. Everything above that is the rails' to take. Under the sheet layout the
+    // shaft's height is the sheet's own (its diameter scale does not depend on the reservation).
     val base = layoutFor(0f)
     val widthFitPxPerMm = (base.contentRightPx - base.contentLeftPx) /
         (base.maxXMm - base.minXMm).coerceAtLeast(1e-3f)
+    val shaftPx = if (base.sheet != null) {
+        2f * base.rPx(base.maxDiaMm)
+    } else {
+        maxOf(base.maxDiaMm, LAYOUT_MIN_FIT_DIA_MM) * widthFitPxPerMm
+    }
     val maxReserve = PreviewRailFit.maxReservePx(
         boxHeightPx = boxHeightPx,
         layoutChromePx = boxHeightPx - (base.contentBottomPx - base.contentTopPx),
-        widthFitShaftPx = maxOf(base.maxDiaMm, LAYOUT_MIN_FIT_DIA_MM) * widthFitPxPerMm,
+        widthFitShaftPx = shaftPx,
     )
     val fit = PreviewRailFit.fit(maxReserve, ::deficitPx)
     val layout = layoutFor(fit.reservePx)

@@ -46,15 +46,26 @@ object ShaftLayout {
         val centerlineYPx: Float,
         /** The largest diameter the shaft draws (mm) — the drawn shaft top is `centerline − rPx(this)`. */
         val maxDiaMm: Float = 0f,
+        /**
+         * The schematic sheet's profile when the editor preview draws like the sheet
+         * ([PreviewSheetProfile]): x runs through its compressed map and [pxPerMm] is its
+         * DIAMETER scale, so length and diameter no longer share one scale. Null (every other
+         * canvas, and the preview's fallbacks) is the linear map, exactly as before.
+         */
+        val sheet: PreviewSheetProfile? = null,
     ) {
         /** Canvas y of the drawn shaft's top silhouette. */
         val shaftTopPx: Float get() = centerlineYPx - rPx(maxDiaMm)
 
         /** Maps axial position in millimeters to canvas X in pixels. */
-        fun xPx(mm: Float): Float = contentLeftPx + (mm - minXMm) * pxPerMm
-        /** Maps canvas X in pixels to axial position in millimeters. */
-        fun xMmFromPx(xPx: Float): Float = minXMm + (xPx - contentLeftPx) / pxPerMm
-        /** Maps diameter (mm) to radius (px) using current scale. */
+        fun xPx(mm: Float): Float =
+            sheet?.let { contentLeftPx + it.xMap.xAt(mm) * it.pxPerPt }
+                ?: (contentLeftPx + (mm - minXMm) * pxPerMm)
+        /** Maps canvas X in pixels to axial position in millimeters (the map's inverse under [sheet]). */
+        fun xMmFromPx(xPx: Float): Float =
+            sheet?.let { it.xMap.mmAt((xPx - contentLeftPx) / it.pxPerPt) }
+                ?: (minXMm + (xPx - contentLeftPx) / pxPerMm)
+        /** Maps diameter (mm) to radius (px) using current scale — the diameter scale under [sheet]. */
         fun rPx(diaMm: Float): Float = (diaMm * 0.5f) * pxPerMm
 
         /** Debug snapshot string for overlays/logcat. */
@@ -91,6 +102,12 @@ object ShaftLayout {
         marginPx: Float = 12f,
         resolvedComponents: List<ResolvedComponent>? = null,
         extentMm: Pair<Float, Float>? = null,
+        /**
+         * The sheet profile to draw on ([previewSheetProfile]), solved for this rect's content
+         * width; its diameter scale replaces the fitted one and the content rect only places the
+         * centreline. Null = the linear layout, unchanged.
+         */
+        sheet: PreviewSheetProfile? = null,
     ): Result {
         // Normalize rect
         val L = min(leftPx, rightPx)
@@ -146,6 +163,22 @@ object ShaftLayout {
 
         // Vertical centerline
         val centerlineY = cT + cH * 0.5f
+
+        if (sheet != null) {
+            return Result(
+                spec = spec,
+                contentLeftPx = cL,
+                contentTopPx = cT,
+                contentRightPx = cR,
+                contentBottomPx = cB,
+                pxPerMm = sheet.diaPtPerMm * sheet.pxPerPt,
+                minXMm = sheet.xMap.startMm,
+                maxXMm = sheet.xMap.endMm,
+                centerlineYPx = centerlineY,
+                maxDiaMm = maxDiaMm,
+                sheet = sheet,
+            )
+        }
 
         return Result(
             spec = spec,

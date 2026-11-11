@@ -139,6 +139,7 @@ fun SettingsRoute(
     val componentArrowWidthDp by vm.componentArrowWidthDp.collectAsState()
     val showHighlightSelection by vm.showHighlightSelection.collectAsState()
     val showPreviewDimensions by vm.showPreviewDimensions.collectAsState()
+    val previewSheetLayout by vm.previewSheetLayout.collectAsState()
     val achievementsEnabled by vm.achievementsEnabled.collectAsState()
     val devOptionsEnabled by vm.devOptionsEnabled.collectAsState()
 
@@ -621,8 +622,24 @@ fun SettingsRoute(
                             .clickable { page = SettingsPage.PREVIEW_COLORS }
                     )
 
-                    SettingSwitchRow(checked = showGrid, onCheckedChange = { vm.setShowGrid(it) }) {
-                        Text("Show Grid in Preview")
+                    // A millimetre grid means nothing on the sheet layout's shortened drawing, so
+                    // the grid stands down there; the switch keeps its stored value, greyed.
+                    SettingSwitchRow(
+                        checked = showGrid,
+                        onCheckedChange = { vm.setShowGrid(it) },
+                        enabled = !previewSheetLayout,
+                        modifier = Modifier.testTag("settings_preview_grid"),
+                    ) {
+                        Column {
+                            Text("Show Grid in Preview")
+                            if (previewSheetLayout) {
+                                Text(
+                                    PREVIEW_GRID_OFF_REASON,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
                     }
                     // The sheet's dimension rails drawn over the editor preview (on-device
                     // request). On-screen only — the printed sheets are untouched either way.
@@ -633,6 +650,28 @@ fun SettingsRoute(
                     ) {
                         Text("Show Dimension Lines in Preview")
                     }
+                    // The editor preview drawn on the schematic's compressed map with its
+                    // S-breaks (on-device request). On-screen only, like the switch above.
+                    SettingSwitchRow(
+                        checked = previewSheetLayout,
+                        onCheckedChange = { vm.setPreviewSheetLayout(it) },
+                        modifier = Modifier.testTag("settings_preview_sheet_layout"),
+                    ) {
+                        Column {
+                            Text(PREVIEW_SHEET_LAYOUT_TITLE)
+                            Text(
+                                PREVIEW_SHEET_LAYOUT_BLURB,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    Text(
+                        PREVIEW_LOOK_FOLLOWS_DRAWING_NOTE,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.testTag("settings_preview_look_note"),
+                    )
                     SettingSwitchRow(
                         checked = showHighlightSelection,
                         onCheckedChange = { vm.setShowHighlightSelection(it) },
@@ -1558,11 +1597,14 @@ internal fun SettingSwitchRow(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
+    /** False greys the row and its switch out and drops the toggle; the stored value is untouched. */
+    enabled: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     Row(
         modifier = modifier.toggleable(
             value = checked,
+            enabled = enabled,
             role = Role.Switch,
             onValueChange = onCheckedChange,
         ),
@@ -1571,12 +1613,26 @@ internal fun SettingSwitchRow(
         Switch(
             checked = checked,
             onCheckedChange = null,
+            enabled = enabled,
             modifier = Modifier.minimumInteractiveComponentSize(),
         )
         Spacer(Modifier.width(8.dp))
         content()
     }
 }
+
+/** Settings → Editor Screen / Preview options row for the editor preview's sheet layout; one wording everywhere. */
+internal const val PREVIEW_SHEET_LAYOUT_TITLE = "Draw Preview Like the Sheet"
+internal const val PREVIEW_SHEET_LAYOUT_BLURB =
+    "Long sections are shortened and broken with S-breaks, and the shaft is drawn at the sheet's " +
+        "height, as on the printed schematic. The grid is off while this is on."
+
+/** Why the grid switch is greyed while the preview draws like the sheet. */
+internal const val PREVIEW_GRID_OFF_REASON = "Off while the preview draws like the sheet."
+
+/** The Editor Screen section's pointer to where the preview's shared look settings live. */
+internal const val PREVIEW_LOOK_FOLLOWS_DRAWING_NOTE =
+    "Fractions, dimension arrows and S-breaks in the preview follow Settings → Drawing."
 
 /** Settings → Drawing switch for `PdfPrefs.showUnitsNote`; one wording for the row and Help. */
 internal const val INCH_FIELD_STYLE_SETTING_TITLE = "Inch fields show"

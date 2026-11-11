@@ -51,6 +51,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.automirrored.filled.Assignment
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenuItem
@@ -119,6 +120,7 @@ import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.util.exportPdfGate
 import com.android.shaftschematic.ui.util.specIssues
 import com.android.shaftschematic.ui.drawing.render.PreviewRailSettings
+import com.android.shaftschematic.ui.drawing.render.PreviewSheetSettings
 import com.android.shaftschematic.ui.drawing.render.previewIssueMarks
 import com.android.shaftschematic.ui.viewmodel.SessionAddDefaults
 import com.android.shaftschematic.util.UnitSystem
@@ -219,6 +221,10 @@ fun ShaftScreen(
     shadedComponentIds: Set<String> = emptySet(),
     /** The sheet's dimension rails over the preview shaft, `null` = off (`PreviewDimensionRails.kt`). */
     previewDimensionRails: PreviewRailSettings? = null,
+    /** The preview drawn like the schematic sheet, `null` = the linear picture (`PreviewSheetLayout.kt`). */
+    previewSheetLayout: PreviewSheetSettings? = null,
+    /** Opens the editor's Preview options sheet (overflow → "Preview options…"). */
+    onOpenPreviewOptions: () -> Unit = {},
 
     sessionAddDefaults: SessionAddDefaults,
 
@@ -554,6 +560,7 @@ fun ShaftScreen(
                         onSendFeedback = onSendFeedback,
                         onOpenDeveloperOptions = onOpenDeveloperOptions,
                         showDeveloperOptions = devOptionsEnabled,
+                        onOpenPreviewOptions = onOpenPreviewOptions,
                     )
                 }
             )
@@ -605,6 +612,7 @@ fun ShaftScreen(
                 shadedComponentIds = shadedComponentIds,
                 issueMarks = issueMarks,
                 dimensionRails = previewDimensionRails,
+                sheetLayout = previewSheetLayout,
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 120.dp, max = previewMaxHeight)
@@ -1290,6 +1298,7 @@ private fun OverflowMenu(
     onSendFeedback: () -> Unit,
     onOpenDeveloperOptions: () -> Unit,
     showDeveloperOptions: Boolean,
+    onOpenPreviewOptions: () -> Unit = {},
 ) {
     var expanded by remember { mutableStateOf(false) }
 
@@ -1330,6 +1339,17 @@ private fun OverflowMenu(
                 onClick = {
                     expanded = false
                     onCloseDocument()
+                }
+            )
+            // The preview box's own switches and the shared look settings it reads, one tap from
+            // the drawing they change (on-device request). On the Schematic and Final tabs alike.
+            DropdownMenuItem(
+                text = { Text("Preview options…") },
+                leadingIcon = { Icon(Icons.Default.Tune, contentDescription = null) },
+                modifier = Modifier.testTag("overflow_preview_options"),
+                onClick = {
+                    expanded = false
+                    onOpenPreviewOptions()
                 }
             )
             DropdownMenuItem(

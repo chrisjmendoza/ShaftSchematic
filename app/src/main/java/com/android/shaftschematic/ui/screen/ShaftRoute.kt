@@ -12,14 +12,26 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import com.android.shaftschematic.data.SettingsStore
 import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.resolved.shadedComponentIds
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.ui.drawing.render.PreviewSheetSettings
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
+import com.android.shaftschematic.ui.viewmodel.setPdfArrowSizePt
+import com.android.shaftschematic.ui.viewmodel.setPdfDualUnitLayout
+import com.android.shaftschematic.ui.viewmodel.setPdfFractionStyle
+import com.android.shaftschematic.ui.viewmodel.setPdfSBreakThresholdFrac
+import com.android.shaftschematic.ui.viewmodel.setPreviewSheetLayout
+import com.android.shaftschematic.ui.viewmodel.setRunoutHeightScale
+import com.android.shaftschematic.ui.viewmodel.setShowHighlightSelection
+import com.android.shaftschematic.ui.viewmodel.setShowPreviewDimensions
 import com.android.shaftschematic.ui.viewmodel.SpecTarget
 import com.android.shaftschematic.ui.viewmodel.UiEvent
 import com.android.shaftschematic.ui.viewmodel.addBodyAt
@@ -297,6 +309,28 @@ fun ShaftRoute(
         outputFont = pdfOutputFont,
     )
 
+    // The preview drawn like the schematic sheet reads what `composeShaftPdf` reads: the sizing
+    // curve anchors and the S-break threshold (app-wide), and the per-job Shaft height and liner &
+    // taper compression. Every one is a recomposition input, so a change in Settings, on a PDF
+    // options panel or on the Preview options sheet redraws the box. The two drags are the
+    // Preview options sheet's visual-only channel — the box redraws under the finger, nothing is
+    // written until release.
+    val previewSheetLayoutOn by vm.previewSheetLayout.collectAsState()
+    val pdfCurveLoHeightIn by vm.pdfCurveLoHeightIn.collectAsState()
+    val pdfCurveHiHeightIn by vm.pdfCurveHiHeightIn.collectAsState()
+    val pdfSBreakThresholdFrac by vm.pdfSBreakThresholdFrac.collectAsState()
+    val runoutConfig by vm.runoutConfig.collectAsState()
+    var previewSBreakDrag by remember { mutableStateOf<Float?>(null) }
+    var previewHeightDrag by remember { mutableStateOf<Float?>(null) }
+    val previewSheetLayout = if (!previewSheetLayoutOn) null else PreviewSheetSettings(
+        curveLoHeightIn = pdfCurveLoHeightIn,
+        curveHiHeightIn = pdfCurveHiHeightIn,
+        sBreakThresholdFrac = previewSBreakDrag ?: pdfSBreakThresholdFrac,
+        heightScale = previewHeightDrag ?: runoutConfig.heightScale,
+        linerMinFracOfTrue = runoutConfig.linerMinFracOfTrue,
+    )
+    var showPreviewOptions by rememberSaveable { mutableStateOf(false) }
+
     val onSendFeedback: () -> Unit = {
         val intent = FeedbackIntentFactory.create(
             context = ctx,
@@ -339,6 +373,8 @@ fun ShaftRoute(
         componentTitlesDefault = pdfShowComponentTitles,
         shadedComponentIds = previewShadedIds,
         previewDimensionRails = previewDimensionRails,
+        previewSheetLayout = previewSheetLayout,
+        onOpenPreviewOptions = { showPreviewOptions = true },
         componentShadeDefaults = ComponentShadeDefaults(
             bodies = pdfShadedBodies, tapers = pdfShadedTapers, liners = pdfShadedLiners,
         ),
@@ -487,4 +523,42 @@ fun ShaftRoute(
         onSetComponentUnit = vm::setComponentUnit,
         onSetKeywayUnit = vm::setKeywayUnit,
     )
+
+    if (showPreviewOptions) {
+        val sliderDiaMm = heightSliderMaxDiaFor(spec)
+        EditorPreviewOptionsSheet(
+            state = EditorPreviewOptionsState(
+                showDimensions = showPreviewDimensions,
+                sheetLayout = previewSheetLayoutOn,
+                showGrid = showGrid,
+                highlightSelection = showHighlightSelection,
+                fractionStyle = pdfFractionStyle,
+                arrowSizePt = pdfArrowSizePt,
+                dualUnits = dualUnits,
+                dualUnitLayout = pdfDualUnitLayout,
+                sBreakThresholdFrac = pdfSBreakThresholdFrac,
+                heightScale = runoutConfig.heightScale,
+                heightSliderBase = schematicHeightSliderBase(sliderDiaMm, pdfCurveLoHeightIn, pdfCurveHiHeightIn),
+                heightSliderMaxDiaMm = sliderDiaMm,
+            ),
+            actions = EditorPreviewOptionsActions(
+                onShowDimensions = { vm.setShowPreviewDimensions(it) },
+                onSheetLayout = { vm.setPreviewSheetLayout(it) },
+                onShowGrid = { vm.setShowGrid(it) },
+                onHighlightSelection = { vm.setShowHighlightSelection(it) },
+                onFractionStyle = { vm.setPdfFractionStyle(it) },
+                onArrowSizePt = { vm.setPdfArrowSizePt(it) },
+                onDualUnitLayout = { vm.setPdfDualUnitLayout(it) },
+                onSBreakThresholdFrac = { vm.setPdfSBreakThresholdFrac(it) },
+                onHeightScale = { vm.setRunoutHeightScale(it) },
+                onSBreakDrag = { previewSBreakDrag = it },
+                onHeightDrag = { previewHeightDrag = it },
+            ),
+            onDismiss = {
+                previewSBreakDrag = null
+                previewHeightDrag = null
+                showPreviewOptions = false
+            },
+        )
+    }
 }

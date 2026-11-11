@@ -31,6 +31,32 @@ The separate Project information sheet is gone (its fields are on the card), and
 length now. The Save / Cancel bar above the cards appears only while a card holds a value you have
 not saved, and it slides in and out instead of making the cards jump.
 
+### feat(preview): the editor preview draws like the sheet; Preview options
+
+The Schematic and Final tabs' preview box now draws the shaft the way the printed schematic does
+(on-device request: "add the S breaks as an option as well so the shaft renders more closely to the
+output"). Long sections are shortened and broken with the same S-breaks the sheet prints, tapers,
+liners and keyed sections keep their room, and the shaft is drawn at the sheet's height — a long
+shaft is no longer a hairline under its dimension lines. Everything comes from the sheet's own
+layout: the default drawing size, the "Shaft height" slider, "Liner & taper compression", the Body
+S-break setting and each body's "Compress on drawing" choice all show in the box as they print.
+In a phone's short box the shaft takes at most 40% of the box's height so the dimension lines keep
+room above it. Tapping a component still selects it — a tap in a break's gap selects that body —
+and pan, zoom and the reset button work as before. The box stays a plain true-length picture until
+the overall length is typed, and while a part hangs past the shaft end (so the red mark can show
+where). The grid stands down while the preview draws like the sheet: a millimetre grid has no
+meaning on a shortened drawing. Settings → Editor Screen → "Draw Preview Like the Sheet" turns it
+off (on by default); it is a setting on this device, never saved in a document, and the printed
+sheets are untouched either way.
+
+The editor's ⋮ menu gains **Preview options…**: the preview's own switches (dimension lines, draw
+like the sheet, grid, highlight the selected component) and the sheet look settings the preview
+uses — fractions, dimension arrows, the dual-unit layout on a dual-unit drawing, Body S-break and
+this job's Shaft height. These are the same settings as Settings → Drawing and the PDF options, so a
+change here changes every sheet too, and the sheet says so. Dragging the two sliders redraws the
+box under your finger; the value is saved when you let go. Settings → Editor Screen now notes that
+fractions, arrows and S-breaks in the preview follow Settings → Drawing.
+
 ### docs: sweep for the last two days' changes
 
 Docs only, no behaviour change. Brought the contracts, the user manual (in-app copy rebuilt) and
