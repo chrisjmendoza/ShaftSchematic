@@ -223,7 +223,14 @@ Top of page, full width.
   **Every vertical budget a stack touches derives from `Paint.dualStackMetrics()`** — the rail
   planner (as an inflated ascent, §5.4), the wear/undercut strip rail rows and the below-shaft Ø
   tier step. A sheet whose budget cannot absorb it reverts to INLINE for the whole sheet and logs
-  why — per sheet, never per label. See `docs/archive/DualUnitStacking_PLAN.md`.
+  why — per sheet, never per label. The consolidated sheet's give-back order is ONE function
+  (`fittedSheetFallback`, `pdf/SheetDualMode.kt`): STACKED -> INLINE -> INLINE with the footer's
+  line pitch tightened (down to `FOOTER_LINE_FACTOR_MIN`, 1.12x text; `footerBlockMinHeightPt`
+  now has a minimum for printed footers, `drawFooter(growUpward = false)` keeps the band exactly
+  the rect it was given) -> primary unit only. A step fits when the shaft budget, bubble rows
+  included, reaches the 1/2" floor (or the shaft's own standard height when smaller); a sheet that
+  already does prints as before. Each step is whole-sheet and logged; the `RunoutSheetLayout`
+  probe reports `dualMode` and `footerTightenedPt`. See `docs/archive/DualUnitStacking_PLAN.md`.
 
   **Exception — wear Ø values print the primary unit only, never dual** (on-device ruling: the
   mm term stood taller than the shaft). The consolidated sheet's in-profile reading and

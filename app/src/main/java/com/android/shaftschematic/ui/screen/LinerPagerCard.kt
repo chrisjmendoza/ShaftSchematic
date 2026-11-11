@@ -2,8 +2,6 @@ package com.android.shaftschematic.ui.screen
 
 import android.util.Log
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -14,7 +12,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
@@ -109,21 +106,17 @@ internal fun LinerPagerCard(
         }
     ) {
         // AFT / FWD reference toggle
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        ChipFlowRow(Modifier.fillMaxWidth()) {
             Text("Measure From:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             val selectedColors = FilterChipDefaults.filterChipColors(
                 selectedContainerColor = Color.Black, selectedLabelColor = Color.White,
                 containerColor = Color.Transparent, labelColor = MaterialTheme.colorScheme.onSurface
             )
             FilterChip(selected = !isFwdRef, onClick = { onUpdateLinerReference(idx, LinerAuthoredReference.AFT) },
-                label = { Text("AFT") }, colors = selectedColors,
+                label = { ChipLabel("AFT") }, colors = selectedColors,
                 border = if (!isFwdRef) BorderStroke(1.dp, Color.Black) else null)
             FilterChip(selected = isFwdRef, onClick = { onUpdateLinerReference(idx, LinerAuthoredReference.FWD) },
-                label = { Text("FWD") }, colors = selectedColors,
+                label = { ChipLabel("FWD") }, colors = selectedColors,
                 border = if (isFwdRef) BorderStroke(1.dp, Color.Black) else null)
         }
 

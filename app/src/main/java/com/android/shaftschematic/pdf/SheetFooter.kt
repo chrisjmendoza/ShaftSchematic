@@ -404,11 +404,12 @@ internal fun footerBlockHeightPt(
 }
 
 /**
- * The tightest a BLANK draft's footer band may be squeezed: every wrapped row at
- * [FOOTER_LINE_FACTOR_BLANK_MIN] — still a hand's width between the rules. A composer whose page
- * cannot afford its drawing at the height floor reserves less than [footerBlockHeightPt], down to
- * this, and [drawFooter] fit-clamps its pitch to the band it is handed. A printed footer has no
- * give: this returns its full reservation.
+ * The tightest a footer band may be squeezed: a BLANK draft's every wrapped row at
+ * [FOOTER_LINE_FACTOR_BLANK_MIN] — still a hand's width between the rules — and a printed
+ * footer's at [FOOTER_LINE_FACTOR_MIN], the tightest pitch at which its lines still read apart.
+ * A composer whose page cannot afford its drawing at the height floor reserves less than
+ * [footerBlockHeightPt], down to this, and [drawFooter] (handed `growUpward = false`) fit-clamps
+ * its pitch to the band it is handed. Never more than the full reservation.
  */
 internal fun footerBlockMinHeightPt(
     rectLeft: Float,
@@ -422,8 +423,12 @@ internal fun footerBlockMinHeightPt(
     displayUnits: DisplayUnits = DisplayUnits.single(unit),
 ): Float {
     val full = footerBlockHeightPt(rectLeft, rectRight, spec, unit, project, text, cfg, blankValues, displayUnits)
-    if (!blankValues) return full
     val plan = planFooter(rectLeft, rectRight, spec, unit, project, text, cfg, blankValues, displayUnits)
+    if (!blankValues) {
+        val tight = plan.wrappedMaxLines * text.textSize * FOOTER_LINE_FACTOR_MIN + FOOTER_BAND_PAD_PT +
+            footerFirstLineExtraDrop(text, cfg)
+        return min(full, tight)
+    }
     val tight = plan.wrappedMaxLines * text.textSize * FOOTER_LINE_FACTOR_BLANK_MIN + FOOTER_BAND_PAD_PT +
         footerFirstLineExtraDrop(text, cfg)
     return min(full, max(tight, plan.neededHeightPt))
@@ -443,6 +448,12 @@ internal fun drawFooter(
     cfg: FooterConfig,
     blankValues: Boolean = false,
     displayUnits: DisplayUnits = DisplayUnits.single(unit),
+    /**
+     * `false` keeps the band exactly [rect]: a composer that reserved the footer's measured height,
+     * or deliberately less of it ([footerBlockMinHeightPt]), has content stacked directly above the
+     * band, so the rows tighten to fit instead of climbing into it.
+     */
+    growUpward: Boolean = true,
 ) {
     val plan = planFooter(rect.left, rect.right, spec, unit, project, text, cfg, blankValues, displayUnits)
     val cols = plan.cols
@@ -461,7 +472,8 @@ internal fun drawFooter(
     // the footer can never climb into the drawing. A composer that reserved
     // [footerBlockHeightPt] hands a rect the plan already fits, and no growth happens.
     val neededH = plan.neededHeightPt
-    val bandH = maxOf(rect.height(), minOf(neededH, rect.height() + FOOTER_GROWTH_MAX_PT))
+    val bandH = if (!growUpward) rect.height()
+        else maxOf(rect.height(), minOf(neededH, rect.height() + FOOTER_GROWTH_MAX_PT))
     val extraDrop = footerFirstLineExtraDrop(text, cfg)
     val top = rect.bottom - bandH + 6f + extraDrop
 

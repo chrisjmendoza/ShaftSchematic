@@ -16,6 +16,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.doubleClick
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -191,6 +192,40 @@ class PreviewOptionsPanelTest {
         rule.onNodeWithTag("preview_options_close").performClick()
         rule.waitForIdle()
         assertEquals(fitWidth, previewWidthPx(), 0.5f)
+    }
+
+    @Test
+    fun `a double-tap puts a zoom back to the fitted page, panel open or closed`() {
+        setUpOverlay()
+        val fitWidth = previewWidthPx()
+
+        fun pinchOut() {
+            rule.onNodeWithContentDescription(PREVIEW).performTouchInput {
+                pinch(
+                    start0 = center - Offset(150f, 0f),
+                    end0 = center - Offset(20f, 0f),
+                    start1 = center + Offset(150f, 0f),
+                    end1 = center + Offset(20f, 0f),
+                )
+            }
+            rule.waitForIdle()
+        }
+
+        pinchOut()
+        assertTrue("pinch should zoom the page out", previewWidthPx() < fitWidth * 0.9f)
+        rule.onNodeWithContentDescription(PREVIEW).performTouchInput { doubleClick(center) }
+        rule.waitForIdle()
+        assertEquals(fitWidth, previewWidthPx(), 0.5f)
+
+        // Same on the page strip under the open panel, where pinch and pan keep working.
+        openOptions()
+        val stripWidth = previewWidthPx()
+        pinchOut()
+        assertTrue("pinch still zooms the strip", previewWidthPx() < stripWidth * 0.9f)
+        rule.onNodeWithContentDescription(PREVIEW).performTouchInput { doubleClick(center) }
+        rule.waitForIdle()
+        assertEquals(stripWidth, previewWidthPx(), 0.5f)
+        rule.onNodeWithTag("probe").assertIsDisplayed()
     }
 
     @Test

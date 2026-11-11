@@ -617,7 +617,10 @@ Pinned by `WearAreaDragMathTest`, `WearAreaBarDragTest`, `WearAreaMathTest`,
   `layoutWearStripRail`: a value that fits seats in a break in its own segment, otherwise it is
   centred on its span, and two that would touch take separate rows (above the line, then below).
   Values use the strip's `formatLenDim` — fractions and `"` in inches (emulator QA: a short spot
-  printed "5.25in3.5in").
+  printed "5.25in3.5in"). On the canvas every tick and line draws first, then every value over a
+  `SheetInk.Paper` knockout (the measured text box plus `RAIL_VALUE_HALO_PAD_PT`, planned by the
+  pure `wearSpotRailValues`), so a value centred over a span narrower than itself has no witness
+  tick through its digits; the printed strip needs none (its fallback values clear their own ticks).
 - The canvas's accessibility description names the component kind ("Taper wear detail. …").
 
 ## Wear Pits (interactive "X" markers, 2026-07-21)

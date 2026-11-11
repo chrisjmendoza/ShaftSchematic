@@ -20,6 +20,9 @@ object SheetInk {
     /** Profile outlines, dimension rails, and sheet text. */
     val Outline = Color.Black
 
+    /** The sheet itself — the knockout behind a value so no line strikes through it. */
+    val Paper = Color.White
+
     /** Liner tint on wear/runout sheets — the historical light-theme tertiary (bronze-mauve). */
     val LinerTint = Color(0xFF7D5260)
 

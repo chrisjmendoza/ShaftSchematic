@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.RectF
+import com.android.shaftschematic.geom.PROFILE_MIN_SHAFT_HEIGHT_PT
 import com.android.shaftschematic.model.Body
 import com.android.shaftschematic.model.BoltHoleStyle
 import com.android.shaftschematic.model.COUPLING_PILOT_COMPONENT_ID
@@ -29,6 +30,7 @@ import com.android.shaftschematic.settings.RunoutConfig
 import com.android.shaftschematic.settings.TirDirection
 import com.android.shaftschematic.ui.resolved.resolveComponents
 import com.android.shaftschematic.util.DisplayUnits
+import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.FractionStyle
 import com.android.shaftschematic.util.FractionTypography
 import com.android.shaftschematic.util.PDF_PAGE_HEIGHT_PT
@@ -130,7 +132,8 @@ class SheetTextOverlapTest {
         tapers = listOf(
             Taper(
                 id = "T1", startFromAftMm = 0f, lengthMm = 25.25f * inch,
-                startDiaMm = 10.368f * inch, endDiaMm = 8.266f * inch,
+                // Small end at the thread, large end into the shaft — the way every real AFT taper runs.
+                startDiaMm = 8.266f * inch, endDiaMm = 10.368f * inch,
                 keywayWidthMm = 1.75f * inch, keywayDepthMm = 0.625f * inch,
                 keywayLengthMm = 21.25f * inch, keywaySpooned = true,
             ),
@@ -144,15 +147,13 @@ class SheetTextOverlapTest {
             Threads(
                 id = "THA", startFromAftMm = -6f * inch, lengthMm = 6f * inch,
                 majorDiaMm = 5.828f * inch, tpi = 4f, excludeFromOAL = true, isAftEnd = true,
-                // A relief prints its own footer line under the thread's. On the AFT thread it
-                // rides every variant below without outgrowing the FWD column; the FWD thread's
-                // relief, which does grow the footer, has its own case
-                // (`relievedThreadsSpec`).
+                // Both threads relieved, on every variant below: a relief is drawn, never footer text.
                 reliefLenMm = 0.375f * inch, reliefDiaMm = 5.5f * inch, reliefAtAft = false,
             ),
             Threads(
                 id = "THF", startFromAftMm = 300f * inch, lengthMm = 5f * inch,
                 majorDiaMm = 4.5f * inch, tpi = 6f, excludeFromOAL = true, isAftEnd = false,
+                reliefLenMm = 0.25f * inch, reliefDiaMm = 4.25f * inch, reliefAtAft = true,
             ),
         ),
         liners = listOf(
@@ -264,7 +265,6 @@ class SheetTextOverlapTest {
         includeWearInfo: Boolean,
         blank: Boolean,
         face: Boolean,
-        dual: Boolean = false,
         sheetSpec: ShaftSpec = spec,
         prefs: PdfPrefs = PdfPrefs(),
         dyePen: Boolean = false,
@@ -275,7 +275,7 @@ class SheetTextOverlapTest {
             config = RunoutConfig(tirDirection = TirDirection.AFT, showCouplingFace = face, showDyePenTest = dyePen),
             project = project, unit = UnitSystem.INCHES,
             pdfPrefs = prefs,
-            displayUnits = DisplayUnits(UnitSystem.INCHES, dual = dual),
+            displayUnits = DisplayUnits(UnitSystem.INCHES),
             resolvedComponents = if (sheetSpec === spec) resolved else resolveComponents(sheetSpec),
             runoutReadings = readings, wearRecord = wear,
             blankValues = blank, consolidated = true,
@@ -311,44 +311,159 @@ class SheetTextOverlapTest {
         }
     }
 
-    /** The fixture with the FWD thread relieved too: its relief line grows the tallest column. */
-    private val relievedThreadsSpec: ShaftSpec = spec.copy(
-        threads = spec.threads.map {
-            if (it.id == "THF") it.copy(reliefLenMm = 0.25f * inch, reliefDiaMm = 4.25f * inch, reliefAtAft = true)
-            else it
-        },
-    )
+    // ── Dual units: the sheet keeps the shaft at its height floor ─────────────
+    // A dual sheet's rails and footer cost more height than a single-unit sheet's — a stacked lane
+    // is two lines tall, an inline dual footer line wraps — and the consolidated sheet gives room
+    // back WHOLE (stacking, then the footer's line pitch, then the secondary unit) before the
+    // drawn shaft falls under the paper band's floor. Under it, the compressed spans lost their breaks
+    // and printed their values through the S.E.T. extension lines, and the in-profile Ø columns
+    // stood taller than the shaft.
 
-    @Test
-    fun `a relief line that grows the footer still prints with no overlapping text`() {
-        // The footer is reserved at its MEASURED height, so a relief row on the tallest column
-        // takes its room from the info gap instead of climbing into the drawing.
-        for (bubbles in listOf(true, false)) for (wearInfo in listOf(true, false)) {
-            if (!bubbles && !wearInfo) continue
-            for (face in listOf(false, true)) {
-                val name = "relieved threads, consolidated bubbles=$bubbles wear=$wearInfo face=$face"
-                assertNoOverlap(name, consolidated(bubbles, wearInfo, blank = false, face = face, sheetSpec = relievedThreadsSpec))
-            }
-        }
-        for (dual in listOf(false, true)) {
-            val c = canvas()
-            composeShaftPdfOnCanvas(
-                c, pageW, pageH, relievedThreadsSpec, UnitSystem.INCHES, project,
-                appVersion = "test", filename = "935037_Titan_PORT.pdf",
-                options = PdfExportOptions(),
-                resolvedComponents = resolveComponents(relievedThreadsSpec),
-                displayUnits = DisplayUnits(UnitSystem.INCHES, dual = dual),
-            )
-            assertNoOverlap("relieved threads, schematic dual=$dual", c)
-        }
+    /** The job with a captured FWD keyway and the bolt-hole Ø line on: two more FWD footer lines, each wrapping in dual. */
+    private val fullFooterSpec: ShaftSpec = spec.copy(
+        tapers = spec.tapers.map { if (it.id == "T2") it.copy(keywayOffsetFromSetMm = 0.5f * inch) else it },
+    )
+    private val fullFooterPrefs = PdfPrefs(footerBoltHoleDia = true)
+
+    /** The consolidated sheet in [layout] dual units (`null` = single-unit), with its solved layout. */
+    private fun probed(
+        layout: DualUnitLayout?,
+        sheetSpec: ShaftSpec = spec,
+        prefs: PdfPrefs = PdfPrefs(),
+        bubbles: Boolean = true,
+        wearInfo: Boolean = true,
+        blank: Boolean = false,
+        face: Boolean = true,
+        sheetH: Float = pageH,
+    ): Pair<RecordingCanvas, RunoutSheetLayout> {
+        val c = RecordingCanvas(Bitmap.createBitmap(pageW.toInt(), sheetH.toInt(), Bitmap.Config.ARGB_8888))
+        var probe: RunoutSheetLayout? = null
+        composeRunoutPdfOnCanvas(
+            c, pageW, sheetH, sheetSpec,
+            config = RunoutConfig(tirDirection = TirDirection.AFT, showCouplingFace = face),
+            project = project, unit = UnitSystem.INCHES,
+            pdfPrefs = if (layout == null) prefs else prefs.copy(dualUnitLayout = layout),
+            displayUnits = DisplayUnits(UnitSystem.INCHES, dual = layout != null),
+            resolvedComponents = if (sheetSpec === spec) resolved else resolveComponents(sheetSpec),
+            runoutReadings = readings, wearRecord = wear,
+            blankValues = blank, consolidated = true,
+            includeBubbles = bubbles, includeWearInfo = wearInfo,
+            layoutProbe = { probe = it },
+        )
+        return c to requireNotNull(probe)
+    }
+
+    private fun assertAtFloor(name: String, layout: RunoutSheetLayout) {
+        assertTrue(
+            "$name: shaft drawn ${layout.shaftHeightPt} pt, under the $PROFILE_MIN_SHAFT_HEIGHT_PT pt floor",
+            layout.shaftHeightPt >= PROFILE_MIN_SHAFT_HEIGHT_PT - 0.01f,
+        )
     }
 
     @Test
     fun `dual units on the consolidated sheet print with no overlapping text`() {
-        assertNoOverlap(
-            "consolidated all-three, dual units",
-            consolidated(includeBubbles = true, includeWearInfo = true, blank = false, face = true, dual = true),
+        for (layout in DualUnitLayout.entries) {
+            for (bubbles in listOf(true, false)) for (wearInfo in listOf(true, false)) {
+                if (!bubbles && !wearInfo) continue
+                for (blank in listOf(false, true)) for (face in listOf(false, true)) {
+                    val name = "dual $layout bubbles=$bubbles wear=$wearInfo blank=$blank face=$face"
+                    val (c, out) = probed(layout, bubbles = bubbles, wearInfo = wearInfo, blank = blank, face = face)
+                    assertNoOverlap(name, c)
+                    assertAtFloor(name, out)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `a sheet that affords the floor prints exactly as asked`() {
+        val (_, inline) = probed(DualUnitLayout.INLINE)
+        assertEquals(SheetDualMode.INLINE, inline.dualMode)
+        assertEquals(0f, inline.footerTightenedPt, 0f)
+        val (_, single) = probed(null)
+        assertEquals(SheetDualMode.SINGLE, single.dualMode)
+        assertEquals(0f, single.footerTightenedPt, 0f)
+    }
+
+    @Test
+    fun `stacking that would squeeze the shaft under the floor falls back to inline for the whole sheet`() {
+        // The stacked rail block leaves the readable area the old gate asked for, but not once the
+        // bubble rows under the shaft are paid for: the gate counts them now.
+        val (c, out) = probed(DualUnitLayout.STACKED)
+        assertEquals(SheetDualMode.INLINE, out.dualMode)
+        assertAtFloor("stacked fallback", out)
+        assertTrue(
+            "an inline sheet prints the OAL and its mm on one line: ${c.boxes.map { it.text }}",
+            c.boxes.any { it.text.startsWith("OAL") && "mm" in it.text },
         )
+    }
+
+    /** The TIR line sits above the footer, and the footer's last row stays on the page. */
+    private fun assertFooterClear(name: String, c: RecordingCanvas, sheetH: Float) {
+        val tir = c.boxes.first { it.text.startsWith("TIR's taken") }
+        val heading = c.boxes.first { it.text == FOOTER_AFT_TAPER_HEADER }
+        assertTrue(
+            "$name: TIR line (bottom ${tir.rect.bottom}) must sit above the footer heading (top ${heading.rect.top})",
+            tir.rect.bottom <= heading.rect.top,
+        )
+        val lowest = c.boxes.maxOf { it.rect.bottom }
+        assertTrue("$name: lowest text ${lowest} runs past the page bottom $sheetH", lowest <= sheetH)
+    }
+
+    @Test
+    fun `a dual footer that would squeeze the shaft under the floor tightens its pitch and keeps both units`() {
+        // The tighter pitch alone affords the floor here, so the sheet stays dual INLINE — a dual
+        // document printing one unit departs further from what was asked than a tighter footer.
+        for (layout in DualUnitLayout.entries) {
+            val name = "full footer, $layout"
+            val (c, out) = probed(layout, sheetSpec = fullFooterSpec, prefs = fullFooterPrefs)
+            assertEquals(name, SheetDualMode.INLINE, out.dualMode)
+            assertTrue("$name: footer should tighten: ${out.footerTightenedPt}", out.footerTightenedPt > 0f)
+            assertAtFloor(name, out)
+            assertNoOverlap(name, c)
+            assertFooterClear(name, c, pageH)
+            assertTrue(
+                "$name: a dual sheet prints its mm values: ${c.boxes.map { it.text }}",
+                c.boxes.any { it.text.startsWith("OAL") && "mm" in it.text },
+            )
+        }
+    }
+
+    /** A page this short leaves the full-footer job no room for dual even at the tightest pitch. */
+    private val noDualPageH = 580f
+
+    @Test
+    fun `past the tightest dual footer the sheet prints the primary unit only`() {
+        for (layout in DualUnitLayout.entries) {
+            val name = "short page, $layout"
+            val (c, out) = probed(layout, sheetSpec = fullFooterSpec, prefs = fullFooterPrefs, sheetH = noDualPageH)
+            assertEquals(name, SheetDualMode.SINGLE, out.dualMode)
+            assertAtFloor(name, out)
+            assertNoOverlap(name, c)
+            assertFooterClear(name, c, noDualPageH)
+            assertTrue(
+                "$name: a primary-only sheet prints no mm anywhere: ${c.boxes.filter { "mm" in it.text }.map { it.text }}",
+                c.boxes.none { "mm" in it.text },
+            )
+        }
+        // The sheet it falls back to is the one the job prints single-unit as asked.
+        val (_, asked) = probed(null, sheetSpec = fullFooterSpec, prefs = fullFooterPrefs, sheetH = noDualPageH)
+        val (_, fellBack) = probed(DualUnitLayout.INLINE, sheetSpec = fullFooterSpec, prefs = fullFooterPrefs, sheetH = noDualPageH)
+        assertEquals(asked.shaftHeightPt, fellBack.shaftHeightPt, 0f)
+        assertEquals(asked.footerBlockPt, fellBack.footerBlockPt, 0f)
+    }
+
+    @Test
+    fun `a primary-only sheet still tightens its footer when it must`() {
+        // Shorter still: even the single-unit footer at its printed pitch leaves the shaft under
+        // the floor, so after the units fall back the footer tightens too.
+        val sheetH = 550f
+        val (c, out) = probed(DualUnitLayout.INLINE, sheetSpec = fullFooterSpec, prefs = fullFooterPrefs, sheetH = sheetH)
+        assertEquals(SheetDualMode.SINGLE, out.dualMode)
+        assertTrue("footer should tighten: ${out.footerTightenedPt}", out.footerTightenedPt > 0f)
+        assertAtFloor("shorter page", out)
+        assertNoOverlap("shorter page", c)
+        assertFooterClear("shorter page", c, sheetH)
     }
 
     // ── The classic runout sheet ──────────────────────────────────────────────

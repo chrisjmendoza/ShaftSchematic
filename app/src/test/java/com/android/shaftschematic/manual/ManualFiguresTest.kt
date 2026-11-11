@@ -163,6 +163,10 @@ class ManualFiguresTest {
         return RunoutReadings(out + RunoutReading(COUPLING_PILOT_COMPONENT_ID, 0, inch(0.001f), 6))
     }
 
+    /** The bare-shaft run between the two liners: the host of the wear figure's body area. */
+    private val wearBodyRun = mainResolved.filterIsInstance<com.android.shaftschematic.ui.resolved.ResolvedBody>()
+        .maxBy { it.endMmPhysical - it.startMmPhysical }
+
     private val mainWear = WearRecord(
         wornSections = listOf(
             WornSection(startFromAftMm = inch(30f), lengthMm = inch(12f), diaMm = listOf(inch(5.738f), inch(5.734f), inch(5.741f))),
@@ -355,7 +359,10 @@ class ManualFiguresTest {
                     pageOn(c), mainSpec, mainProject, UnitSystem.INCHES,
                     resolvedComponents = mainResolved,
                     wearRecord = WearRecord(
-                        spots = listOf(WearSpot(id = "W1", linerId = "L1", startMm = inch(18f), lengthMm = inch(8f))),
+                        spots = listOf(
+                            WearSpot(id = "W1", linerId = "L1", startMm = inch(18f), lengthMm = inch(8f)),
+                            WearSpot(id = "W2", linerId = wearBodyRun.id, startMm = inch(20f), lengthMm = inch(10f)),
+                        ),
                         pits = listOf(
                             WearPit(componentId = "L1", axialMm = inch(20f), acrossFrac = 0.35f, size = PitSize.LARGE),
                             WearPit(componentId = "L1", axialMm = inch(23f), acrossFrac = 0.6f, size = PitSize.SMALL),
@@ -369,6 +376,7 @@ class ManualFiguresTest {
                             WearDiaReading(componentId = "L2", axialMm = inch(8f), diaMm = inch(5.496f)),
                         ),
                         dyePenResult = DyePenResult.FAIL,
+                        stripComponentIds = listOf("L1", "L2", wearBodyRun.id),
                     ),
                 )
             },

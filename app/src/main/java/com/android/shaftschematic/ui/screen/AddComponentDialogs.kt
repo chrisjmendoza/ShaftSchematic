@@ -212,11 +212,7 @@ internal fun KeywayUnitEntryChips(
     documentUnit: UnitSystem,
     onChoose: (UnitSystem?) -> Unit,
 ) {
-    Row(
-        Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
+    ChipFlowRow(Modifier.fillMaxWidth()) {
         Text("Keyway in:", style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         DirectionChip("in", selected = selected == UnitSystem.INCHES) {
@@ -383,11 +379,7 @@ fun AddBodyDialog(
         },
         text = {
             Column(Modifier.padding(top = 4.dp).verticalScroll(scroll)) {
-                Row(
-                    Modifier.fillMaxWidth().padding(bottom = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                ChipFlowRow(Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
                     Text("Measure From:", style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     DirectionChip("AFT", selected = !isFwd, modifier = Modifier.testTag("add_body_ref_aft")) { isFwd = false }
@@ -499,11 +491,7 @@ fun AddBodyDialog(
                 KeywayGateRow(checked = kwEnabled, testTag = "add_body_kw_gate") { kwEnabled = it }
                 if (kwEnabled) {
                     Spacer(Modifier.height(4.dp))
-                    Row(
-                        Modifier.fillMaxWidth().padding(bottom = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    ChipFlowRow(Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
                         Text("KW from:", style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                         DirectionChip("AFT", selected = !kwFwd) { kwFwd = false }
@@ -578,11 +566,7 @@ fun AddBodyDialog(
                         })
                     }
                     if (clock90) {
-                        Row(
-                            Modifier.fillMaxWidth().padding(bottom = 4.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
+                        ChipFlowRow(Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
                             Text("From AFT keyway, viewed from aft:", style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                             DirectionChip("CW", selected = cw90) { cw90 = true }
@@ -792,11 +776,7 @@ fun AddLinerDialog(
         },
         text = {
             Column(Modifier.padding(top = 4.dp).verticalScroll(rememberScrollState())) {
-                Row(
-                    Modifier.fillMaxWidth().padding(bottom = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                ChipFlowRow(Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
                     Text("Measure From:", style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     DirectionChip("AFT", selected = !isFwd) { isFwd = false }
@@ -956,11 +936,7 @@ fun AddCouplerBoltSlotDialog(
         },
         text = {
             Column(Modifier.padding(top = 4.dp).verticalScroll(rememberScrollState())) {
-                Row(
-                    Modifier.fillMaxWidth().padding(bottom = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                ChipFlowRow(Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
                     Text("Hole:", style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     DirectionChip("Seam", selected = !isCross) { holeStyle = BoltHoleStyle.SEAM }
@@ -968,22 +944,14 @@ fun AddCouplerBoltSlotDialog(
                 }
                 if (isCross) {
                     val is90 = clocking == BoltHoleClocking.DEG_90
-                    Row(
-                        Modifier.fillMaxWidth().padding(bottom = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    ChipFlowRow(Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
                         Text("From keyway:", style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                         DirectionChip("90°", selected = is90) { clocking = BoltHoleClocking.DEG_90 }
                         DirectionChip("In line", selected = !is90) { clocking = BoltHoleClocking.IN_LINE }
                     }
                 }
-                Row(
-                    Modifier.fillMaxWidth().padding(bottom = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                ChipFlowRow(Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
                     Text("Measure From:", style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     DirectionChip("AFT", selected = !isFwd) { isFwd = false }
@@ -1477,11 +1445,7 @@ fun AddTaperDialog(
             Column(Modifier.padding(top = 4.dp).verticalScroll(scroll)) {
                 // Measure-from selector — the card's wording, so the same control reads the
                 // same on both surfaces.
-                Row(
-                    Modifier.fillMaxWidth().padding(bottom = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                ChipFlowRow(Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
                     Text("Measure From:", style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     DirectionChip("AFT", selected = !isFwd) { isFwd = false }
@@ -1505,11 +1469,7 @@ fun AddTaperDialog(
                 Spacer(Modifier.height(8.dp))
                 CommitNumField("L.E.T. Ø (${abbr(unit)})", letText) { letText = it }
                 Spacer(Modifier.height(8.dp))
-                Row(
-                    Modifier.fillMaxWidth().padding(bottom = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                ChipFlowRow(Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
                     Text("Rate mode:", style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     DirectionChip("Auto", selected = autoRate) { autoRate = true }
@@ -1602,11 +1562,7 @@ fun AddTaperDialog(
                             })
                         }
                         if (clock90) {
-                            Row(
-                                Modifier.fillMaxWidth().padding(bottom = 4.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
+                            ChipFlowRow(Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
                                 Text("From AFT keyway, viewed from aft:", style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 DirectionChip("CW", selected = cw90) { cw90 = true }

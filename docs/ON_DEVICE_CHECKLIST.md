@@ -17,6 +17,22 @@ Last updated: 2026-10-27.
 
 ---
 
+## Shipped 2026-11-11 — not yet seen on hardware
+
+- [ ] **Chip rows at 200% font**: with the system font at its largest, every card's and Add dialog's
+  "Measure From" / "KW from" / "Hole" chip row keeps its label on one line and drops a chip to the
+  next line whole; no letter stacks under another.
+- [ ] **Line Thickness % box**: typing `1`, `5`, `0` leaves the slider and preview alone until Done
+  (or leaving the field), then they move to 150%; an emptied box restores the stored value.
+- [ ] **Double-tap reset on the PDF previews** (Runout, Wear, Undercut, Consolidated): pinch in,
+  double-tap, the page fits again; with the options panel open the page strip resets and the panel
+  stays open.
+- [ ] **Wear detail rail**: a wear area starting 1/8" from the liner's AFT edge prints its short
+  value on a white box, no tick through the digits.
+- [ ] **Consolidated sheet in dual units** with a long footer: the shaft keeps its height (1/2" or
+  its standard) and the footer reads cleanly when its lines tighten; a very short page drops to the
+  primary unit alone.
+
 ## Shipped 2026-11-09 / 11-10 — not yet seen on hardware
 
 - [ ] **Liner Ø trace without a wear area** (`325841d`): a 9.973" reading on a 10" liner with no

@@ -1,6 +1,8 @@
 
 package com.android.shaftschematic.ui.screen
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.material3.RadioButton
+import com.android.shaftschematic.ui.input.shouldCommitOnBlur
 import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.pdf.PdfExportMode
 // file: app/src/main/java/com/android/shaftschematic/ui/screen/SettingsRoute.kt
@@ -64,6 +66,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
@@ -1385,12 +1388,13 @@ private fun fmtCurveInches(v: Float): String =
     String.format(java.util.Locale.US, "%.4f", v).trimEnd('0').trimEnd('.') + "″"
 
 @Composable
-private fun LineThicknessControl(
+internal fun LineThicknessControl(
     scale: Float,
     onScaleChange: (Float) -> Unit,
 ) {
     // Local text field state — synced from scale when it changes externally
     var fieldText by remember(scale) { mutableStateOf((scale * 100).roundToInt().toString()) }
+    val focusManager = LocalFocusManager.current
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1432,36 +1436,59 @@ private fun LineThicknessControl(
                 modifier = Modifier.weight(1f),
             )
             Text("200%", style = MaterialTheme.typography.bodySmall)
+            // Commit-on-accept, the OAL field's posture: IME Done, or a blur after the text
+            // changed (`shouldCommitOnBlur`). A per-keystroke commit applied every prefix on
+            // the way — "1" on the way to "150" briefly drew everything at 50%.
+            var textWhenFocused by remember { mutableStateOf<String?>(null) }
+            fun commitField() {
+                val percent = lineThicknessFieldPercent(fieldText)
+                if (percent == null) {
+                    // Empty or unreadable: nothing commits, the stored value comes back.
+                    fieldText = (scale * 100).roundToInt().toString()
+                } else {
+                    onScaleChange(percent / 100f)
+                    fieldText = percent.toString()
+                }
+            }
             OutlinedTextField(
                 value = fieldText,
-                onValueChange = { raw ->
-                    fieldText = raw
-                    val parsed = raw.trim().trimEnd('%').toIntOrNull()
-                    if (parsed != null) onScaleChange(parsed.coerceIn(50, 200) / 100f)
-                },
+                onValueChange = { raw -> fieldText = raw },
                 modifier = Modifier
                     .width(LINE_THICKNESS_FIELD_WIDTH)
+                    .testTag(LINE_THICKNESS_FIELD_TAG)
                     .onFocusChanged { focus ->
-                        if (!focus.isFocused) {
-                            val parsed = fieldText.trim().trimEnd('%').toIntOrNull()
-                            val clamped = parsed?.coerceIn(50, 200) ?: (scale * 100).roundToInt()
-                            onScaleChange(clamped / 100f)
-                            fieldText = clamped.toString()
+                        if (focus.isFocused) {
+                            textWhenFocused = fieldText
+                        } else {
+                            val captured = textWhenFocused
+                            textWhenFocused = null
+                            if (shouldCommitOnBlur(captured, fieldText)) commitField()
                         }
                     },
                 suffix = { Text("%") },
                 singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = {
-                    val parsed = fieldText.trim().trimEnd('%').toIntOrNull()
-                    val clamped = parsed?.coerceIn(50, 200) ?: (scale * 100).roundToInt()
-                    onScaleChange(clamped / 100f)
-                    fieldText = clamped.toString()
+                    commitField()
+                    // Done landed the value; a later blur compares against it, not the old text.
+                    if (textWhenFocused != null) textWhenFocused = fieldText
+                    // Done leaves the box, so the keyboard closes with it.
+                    focusManager.clearFocus()
                 }),
             )
         }
     }
 }
+
+/** The Line Thickness percent field. */
+internal const val LINE_THICKNESS_FIELD_TAG = "settings_line_thickness_field"
+
+/**
+ * The percent a Line Thickness field entry commits, clamped to the slider's 50–200 range; `null`
+ * for an empty or unreadable entry, which commits nothing. A trailing "%" is accepted.
+ */
+internal fun lineThicknessFieldPercent(raw: String): Int? =
+    raw.trim().trimEnd('%').trim().toIntOrNull()?.coerceIn(50, 200)
 
 /**
  * Width of the Line Thickness percent field: the widest value, "200", plus its "%" suffix and the

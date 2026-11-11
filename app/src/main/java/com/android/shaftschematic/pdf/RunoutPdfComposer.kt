@@ -50,7 +50,9 @@ import com.android.shaftschematic.geom.fittedValueTextSize
 import com.android.shaftschematic.geom.layoutWornSectionValues
 import com.android.shaftschematic.geom.planRunoutBubbles
 import com.android.shaftschematic.geom.wornValueBandHeightNeeded
+import com.android.shaftschematic.pdf.dim.DimSpan
 import com.android.shaftschematic.pdf.dim.RailPlanner
+import com.android.shaftschematic.pdf.dim.RailSpan
 import com.android.shaftschematic.pdf.dim.buildLinerSpans
 import com.android.shaftschematic.pdf.dim.oalSpan
 import com.android.shaftschematic.pdf.render.PdfDimensionRenderer
@@ -394,194 +396,10 @@ internal fun composeRunoutPdfOnCanvas(
     //
     //   margin → OAL rail → dim tiers → [shaft] → bubbles → TIR line → footer → margin
 
-    // Dimension spans are mm-space and independent of the x mapping, so the rail count is
-    // known before any scale is chosen. Rails exist only on the consolidated sheet; the
-    // classic sheet reserves its one-line header + the raised OAL lane instead.
-    val measureFromMode = pdfPrefs.tieringMode
-    val railAssignments = if (consolidated) {
-        val componentDimSpans = buildLinerSpans(
-            liners = mapToLinerDimsForPdf(spec, measureFromMode),
-            sets = setPositions,
-            unit = unit,
-            measureFrom = measureFromMode,
-            displayUnits = displayUnits,
-        ) + buildTaperLengthSpans(spec, oalWindow, unit, displayUnits, measureFromMode) +
-            buildCouplerSlotSpans(spec, oalWindow, unit, displayUnits)
-        val dimSpans = componentDimSpans + buildBodyLengthSpans(spec, oalWindow, unit, displayUnits, componentDimSpans)
-        RailPlanner().assignAll(dimSpans, tierOriginMmFor(measureFromMode, oalWindow.oalMm))
-    } else emptyList()
-    val maxRail = railAssignments.maxOfOrNull { it.rail } ?: -1
-    // Rail values and their lane pitch scale together (`PdfPrefs.dimTextScale`), so a larger value
-    // seated in its line keeps the same air to the rails beside it.
-    val dimScale = pdfPrefs.dimTextScale
-    val dimText = Paint(text).apply { textSize = RUNOUT_DIM_TEXT_PT * dimScale }
-    // OAL brackets the SET-to-SET span; the label is ALWAYS the typed OAL (the number is
-    // sacred; see docs/contracts/OverallLength.md).
-    val oalDimSpan = oalSpan(
-        setPositions.aftSETxMm, setPositions.fwdSETxMm, displayUnits.documentUnit,
-        labelMm = spec.overallLengthMm.toDouble(), dual = displayUnits.dual,
-    )
-
-    // Stacked dual values are two lines tall, so the lane pitch has to clear the whole value box —
-    // a tighter lane prints the neighbouring rail's line through the stack, which no amount of
-    // horizontal sliding fixes. Single-line sheets keep the shipped flat pitch exactly.
-    val wantDualStacked = consolidated && displayUnits.dual &&
-        pdfPrefs.dualUnitLayout == DualUnitLayout.STACKED
-    fun railGapFor(stacked: Boolean): Float =
-        if (!stacked) RUNOUT_RAIL_GAP_PT * dimScale
-        else maxOf(
-            RUNOUT_RAIL_GAP_PT * dimScale,
-            dimText.dualStackMetrics().height + 2f * DimensionRailLayout.LINE_HALF_CLEAR + 2f,
-        )
-
-    /** Planner rows for the rail block under a given mm→page mapping; OAL topmost. */
-    fun dimRows(renderer: PdfDimensionRenderer, railY: (Int) -> Float) =
-        railAssignments.map { renderer.spanInput(it.rail, railY(it.rail), it.span) } +
-            renderer.spanInput(DimensionRailLayout.TOP_RAIL, railY(DimensionRailLayout.TOP_RAIL), oalDimSpan)
-
-    // A span too short to seat its value in the line prints it ABOVE the line — inside the next
-    // rail's band — so every rail above lifts by one label band and the reserved block has to
-    // grow by the same amount. Inline-vs-above depends only on a span's drawn WIDTH, so the
-    // prelim linear map answers it before the shaft scale is solved (the same prelim-then-
-    // resolve posture the bubble budget uses); the drawn plan below re-solves on the real map.
-    fun prelimRailLiftFor(stacked: Boolean): Float = if (!consolidated) 0f else {
-        val prelim = PdfDimensionRenderer(
-            pageX = { dimMm -> xAtLinear((dimMm + oalWindow.measureStartMm).toFloat()) },
-            linePaint = dim,
-            textPaint = dimText,
-            objectTopY = 0f,   // lift query only — nothing is drawn through this renderer
-            arrowSize = pdfPrefs.arrowSizePt,
-            blankLabels = blankValues,
-            blankLabelWidthPx = BLANK_DIM_GAP_PT,
-            blankLabelMinWidthPx = BLANK_DIM_GAP_MIN_PT,
-            dualStacked = stacked,
-        )
-        prelim.topLift(dimRows(prelim) { 0f })
-    }
-
-    // Height reserved above the shaft: first-rail offset + tier rows + above-line label lifts
-    // + the OAL lane (consolidated), or header strip + gap + raised OAL span line (classic).
-    fun railsBlockHFor(stacked: Boolean, lift: Float = prelimRailLiftFor(stacked)): Float =
-        if (consolidated)
-            RUNOUT_BASE_DIM_OFFSET_PT + railGapFor(stacked) * (maxRail + 1) + 8f + lift
-        else HEADER_HEIGHT_PT + OAL_GAP_PT + OAL_LINE_SPACE_PT
-
-    // Footer block pinned to the page bottom (consolidated only); the TIR line sits
-    // directly above it — or directly above the margin on the classic sheet. The block is
-    // reserved at the height the footer will actually PRINT (`footerBlockHeightPt` — the
-    // mode's default, or taller when a column wraps or runs to eight lines: taper header,
-    // Rate, L.E.T., S.E.T., Length, KW, spoon note, Thread). Reserving the fixed default
-    // and letting `drawFooter` grow upward put the "TIR's taken looking:" line through the
-    // "AFT Taper" heading on a Schematic + Runout sheet (on-device report); on the schematic
-    // sheet that growth has a 1-inch info gap to climb into, here it has none.
-    //
-    // A blank draft's footer is the tall write-in block, and it is the one reservation on the
-    // page with give in it: when the shaft would otherwise be squeezed under the height floor,
-    // its handwriting pitch tightens toward `footerBlockMinHeightPt` first (see the vertical
-    // solve below). The printed footer has no such give.
-    // The dye pen row shares the TIR line's lane (consolidated only, per-job election); the
-    // boxes mark from the ONE WearRecord.dyePenResult the wear sheet prints, blank on a draft.
-    val drawDyePen = consolidated && config.showDyePenTest
-
-    // Prelim bubble rows on the linear map — the BUDGET's term only (see the vertical solve).
-    val prelimPlan     = planRunoutBubbles(
-        collectRunoutStations(
-            stationSpans, config.componentOverrides, ::xAtLinear,
-            mmAtX = { x -> drawStartMm + (x - contentLeft) / widthFitPtPerMm },
-            placements = runoutStationPlacements,
-        ),
-        bubbleGeom,
-    )
-    val prelimBubbleSectionH = prelimPlan.sectionHeight(BUBBLE_GAP_PT)
-
-    // ── Bottom lane ───────────────────────────────────────────────────────────
-    // The TIR line (left) and the coupling end view (right) share the band above the
-    // footer. They never collide in x, so everything above reserves the TALLER of the two
-    // lanes and the TIR line keeps its own y. Reserving off `tirY` alone would let the
-    // shaft and its bubbles run down through the face.
-    val couplingCx = contentRight - COUPLING_FACE_PAD_PT - COUPLING_FACE_OUTER_R_PT
-    // The TIR row's lane at a footer size: its baseline sits `TIR_LINE_HEIGHT_PT × s` above the
-    // footer, and the lane grows by the ascent the scale added, so the row's text rises no
-    // further above its lane — toward the bubble rows — than it does at 100%.
-    fun tirLaneHAt(footerScale: Float): Float {
-        val extraRise = if (footerScale <= 1f) 0f
-            else -sheetTextPaint(TEXT_PT * footerScale).fontMetrics.ascent * (1f - 1f / footerScale)
-        return TIR_LINE_HEIGHT_PT * footerScale + extraRise
-    }
-    fun bottomLaneHAt(footerScale: Float): Float = maxOf(
-        if (drawBubbles || drawDyePen) tirLaneHAt(footerScale) else 0f,
-        if (drawFace) COUPLING_FACE_BLOCK_PT else 0f,
-    )
-    fun footerCfgAt(footerScale: Float): FooterConfig =
-        sheetFooterConfig(spec, pdfPrefs.copy(footerTextScale = footerScale))
-
-    // The footer size this sheet can afford, decided ONCE for the whole sheet (the dual-stacking
-    // posture): the requested `PdfPrefs.footerTextScale`, or the largest step under it at which
-    // the footer, its TIR / dye pen lane, the rails and the bubble rows still leave the shaft its
-    // height floor. A full job at a large step otherwise ran its bubbles into the TIR line. A
-    // blank draft is measured at its footer's tightest pitch, the give the vertical solve takes.
-    fun footerFitsAt(s: Float): Boolean {
-        val paint = sheetTextPaint(TEXT_PT * s)
-        val cfg = footerCfgAt(s)
-        val footerH = if (blankValues) {
-            footerBlockMinHeightPt(contentLeft, contentRight, spec, unit, project, paint, cfg, blankValues = true, displayUnits = displayUnits)
-        } else {
-            footerBlockHeightPt(contentLeft, contentRight, spec, unit, project, paint, cfg, displayUnits = displayUnits)
-        }
-        val budget = (pageH - margin - footerH - bottomLaneHAt(s)) - (margin + railsBlockHFor(false)) - prelimBubbleSectionH
-        return budget >= PROFILE_MIN_SHAFT_HEIGHT_PT + SHAFT_BUDGET_CLEAR_PT
-    }
-    val footerScale = if (!consolidated) 1f else fittedTextScale(pdfPrefs.footerTextScale, ::footerFitsAt)
-    if (footerScale < pdfPrefs.footerTextScale && consolidated) {
-        VerboseLog.i(VerboseLog.Category.PDF, "RunoutPdf") {
-            "footer text: printed at ${(footerScale * 100).toInt()}% — the requested " +
-                "${(pdfPrefs.footerTextScale * 100).toInt()}% leaves the shaft under its height floor"
-        }
-    }
-    val footerText = sheetTextPaint(TEXT_PT * footerScale)
-    val tirLineH = TIR_LINE_HEIGHT_PT * footerScale
-    val bottomLaneH = bottomLaneHAt(footerScale)
-
-    val footerCfg = if (consolidated) footerCfgAt(footerScale) else null
-    val footerBlockFullH = footerCfg?.let {
-        footerBlockHeightPt(
-            contentLeft, contentRight, spec, unit, project, footerText, it,
-            blankValues = blankValues, displayUnits = displayUnits,
-        )
-    } ?: 0f
-    val footerBlockMinH = footerCfg?.let {
-        footerBlockMinHeightPt(
-            contentLeft, contentRight, spec, unit, project, footerText, it,
-            blankValues = blankValues, displayUnits = displayUnits,
-        )
-    } ?: 0f
-
-    // ── Vertical budget ───────────────────────────────────────────────────────
-    // The diameter scale needs the shaft's height budget, the budget needs the bubble row
-    // count, and the final bubble x positions need the (scale-dependent) compressed
-    // mapping — a cycle. Break it with a prelim linear-map plan for the BUDGET only; the
-    // plan used for drawing is re-solved on the real mapping below.
-    // §7 degradation, consolidated sheet: the taller rail block is paid for out of the shaft's own
-    // height budget, so give the stacking up for the WHOLE sheet when it would squeeze the drawn
-    // shaft (plus its bubble rows) below what is readable. Decided here, once the bottom lane is
-    // known, so the choice is made on the real remaining height rather than a guess.
-    val dualStacked = wantDualStacked &&
-        (pageH - margin - footerBlockFullH - bottomLaneH - (margin + railsBlockHFor(true)) >=
-            RUNOUT_MIN_SHAFT_AREA_PT)
-    if (wantDualStacked && !dualStacked) {
-        VerboseLog.i(VerboseLog.Category.PDF, "RunoutPdf") {
-            "dual stacking: consolidated rails fell back to INLINE — the stacked block would " +
-                "leave under ${RUNOUT_MIN_SHAFT_AREA_PT.toInt()} pt for the shaft"
-        }
-    }
-    val railGap = railGapFor(dualStacked)
-
+    // ── Outer envelope, in-profile value demand, height floor ─────────────────
+    // Settled before anything that depends on how the sheet prints its units: the floor is what
+    // the dual-unit fallback below protects, and none of these terms reads the dual flag.
     val maxOuterDiaMm  = docSpec.maxOuterDiaMm().coerceAtLeast(10f)
-
-    /** Height left for the shaft once the footer, bottom lane, rails and bubble rows are paid for. */
-    fun shaftBudgetFor(footerH: Float, railLift: Float): Float =
-        (pageH - margin - footerH - bottomLaneH) - (margin + railsBlockHFor(dualStacked, railLift)) -
-            prelimBubbleSectionH
 
     // ── Outer envelope diameter (mm) at a station — scale solve + drawing share it ─
     fun outerDiaMmAt(mm: Float): Float {
@@ -603,19 +421,6 @@ internal fun composeRunoutPdfOnCanvas(
         }
         return maxDia.coerceAtLeast(maxOuterDiaMm * 0.1f)
     }
-
-    // ── Diameter scale + compressed x mapping ─────────────────────────────────
-    // The hand-sheet convention (on-device request, with the shop's reference sketch):
-    // the shaft's drawn height follows its true diameter on the default sizing curve,
-    // never diluted by length. Details (tapers, liners,
-    // threads) keep TRUE proportions at the diameter scale; the plain body runs between
-    // them absorb the horizontal overflow — foreshortened with S-break glyphs
-    // ("compressed to give the impression of a thicker shaft"). Short shafts whose
-    // width-fit already meets the target keep the classic linear map unchanged.
-    //
-    // The scale solve also folds in the in-profile wear values: a value's rotated length
-    // sets a minimum band height at its station, so readings print at full text size
-    // whenever the page allows (auto-fit in the draw functions stays as the backstop).
 
     // Feature spans with per-kind width floors: everything may foreshorten (the hand-sheet
     // x axis is schematic) but each kind keeps a writable minimum, and a keyway-bearing
@@ -670,6 +475,280 @@ internal fun composeRunoutPdfOnCanvas(
         need
     }
 
+    val targetScale  = defaultVisualScale(maxOuterDiaMm, pdfPrefs.curveLoHeightPt, pdfPrefs.curveHiHeightPt)
+    val baseScale = maxOf(widthFitPtPerMm, targetScale, valueNeedScale)
+    // The paper band's floor, never above the shaft's own unslid height: the height the page
+    // budget must still afford the drawn shaft once the rails, bubbles and footer are paid for.
+    val floorHeightPt = minOf(PROFILE_MIN_SHAFT_HEIGHT_PT / maxOuterDiaMm, baseScale) * maxOuterDiaMm
+
+    // Dimension spans are mm-space and independent of the x mapping, so the rail count is
+    // known before any scale is chosen. Rails exist only on the consolidated sheet; the
+    // classic sheet reserves its one-line header + the raised OAL lane instead. Their LABELS
+    // follow how the sheet prints its units, decided below, so the spans build per units.
+    val measureFromMode = pdfPrefs.tieringMode
+    fun railAssignmentsFor(du: DisplayUnits): List<RailSpan> = if (consolidated) {
+        val componentDimSpans = buildLinerSpans(
+            liners = mapToLinerDimsForPdf(spec, measureFromMode),
+            sets = setPositions,
+            unit = unit,
+            measureFrom = measureFromMode,
+            displayUnits = du,
+        ) + buildTaperLengthSpans(spec, oalWindow, unit, du, measureFromMode) +
+            buildCouplerSlotSpans(spec, oalWindow, unit, du)
+        val dimSpans = componentDimSpans + buildBodyLengthSpans(spec, oalWindow, unit, du, componentDimSpans)
+        RailPlanner().assignAll(dimSpans, tierOriginMmFor(measureFromMode, oalWindow.oalMm))
+    } else emptyList()
+    // Rail values and their lane pitch scale together (`PdfPrefs.dimTextScale`), so a larger value
+    // seated in its line keeps the same air to the rails beside it.
+    val dimScale = pdfPrefs.dimTextScale
+    val dimText = Paint(text).apply { textSize = RUNOUT_DIM_TEXT_PT * dimScale }
+    // OAL brackets the SET-to-SET span; the label is ALWAYS the typed OAL (the number is
+    // sacred; see docs/contracts/OverallLength.md).
+    fun oalDimSpanFor(du: DisplayUnits): DimSpan = oalSpan(
+        setPositions.aftSETxMm, setPositions.fwdSETxMm, du.documentUnit,
+        labelMm = spec.overallLengthMm.toDouble(), dual = du.dual,
+    )
+
+    // Stacked dual values are two lines tall, so the lane pitch has to clear the whole value box —
+    // a tighter lane prints the neighbouring rail's line through the stack, which no amount of
+    // horizontal sliding fixes. Single-line sheets keep the shipped flat pitch exactly.
+    fun railGapFor(stacked: Boolean): Float =
+        if (!stacked) RUNOUT_RAIL_GAP_PT * dimScale
+        else maxOf(
+            RUNOUT_RAIL_GAP_PT * dimScale,
+            dimText.dualStackMetrics().height + 2f * DimensionRailLayout.LINE_HALF_CLEAR + 2f,
+        )
+
+    /** Planner rows for the rail block under a given mm→page mapping; OAL topmost. */
+    fun dimRows(
+        renderer: PdfDimensionRenderer,
+        assignments: List<RailSpan>,
+        oal: DimSpan,
+        railY: (Int) -> Float,
+    ) = assignments.map { renderer.spanInput(it.rail, railY(it.rail), it.span) } +
+        renderer.spanInput(DimensionRailLayout.TOP_RAIL, railY(DimensionRailLayout.TOP_RAIL), oal)
+
+    // A span too short to seat its value in the line prints it ABOVE the line — inside the next
+    // rail's band — so every rail above lifts by one label band and the reserved block has to
+    // grow by the same amount. Inline-vs-above depends only on a span's drawn WIDTH, so the
+    // prelim linear map answers it before the shaft scale is solved (the same prelim-then-
+    // resolve posture the bubble budget uses); the drawn plan below re-solves on the real map.
+    fun prelimRailLiftOf(assignments: List<RailSpan>, oal: DimSpan, stacked: Boolean): Float =
+        if (!consolidated) 0f else {
+            val prelim = PdfDimensionRenderer(
+                pageX = { dimMm -> xAtLinear((dimMm + oalWindow.measureStartMm).toFloat()) },
+                linePaint = dim,
+                textPaint = dimText,
+                objectTopY = 0f,   // lift query only — nothing is drawn through this renderer
+                arrowSize = pdfPrefs.arrowSizePt,
+                blankLabels = blankValues,
+                blankLabelWidthPx = BLANK_DIM_GAP_PT,
+                blankLabelMinWidthPx = BLANK_DIM_GAP_MIN_PT,
+                dualStacked = stacked,
+            )
+            prelim.topLift(dimRows(prelim, assignments, oal) { 0f })
+        }
+
+    // Height reserved above the shaft: first-rail offset + tier rows + above-line label lifts
+    // + the OAL lane (consolidated), or header strip + gap + raised OAL span line (classic).
+    fun railsBlockHOf(maxRail: Int, stacked: Boolean, lift: Float): Float =
+        if (consolidated)
+            RUNOUT_BASE_DIM_OFFSET_PT + railGapFor(stacked) * (maxRail + 1) + 8f + lift
+        else HEADER_HEIGHT_PT + OAL_GAP_PT + OAL_LINE_SPACE_PT
+
+    /** The rail block a sheet printing in [du] reserves, at the prelim (linear-map) lift. */
+    fun prelimRailsBlockH(du: DisplayUnits, stacked: Boolean): Float {
+        val assignments = railAssignmentsFor(du)
+        return railsBlockHOf(
+            assignments.maxOfOrNull { it.rail } ?: -1, stacked,
+            prelimRailLiftOf(assignments, oalDimSpanFor(du), stacked),
+        )
+    }
+
+    // Footer block pinned to the page bottom (consolidated only); the TIR line sits
+    // directly above it — or directly above the margin on the classic sheet. The block is
+    // reserved at the height the footer will actually PRINT (`footerBlockHeightPt` — the
+    // mode's default, or taller when a column wraps or runs to eight lines: taper header,
+    // Rate, L.E.T., S.E.T., Length, KW, spoon note, Thread). Reserving the fixed default
+    // and letting `drawFooter` grow upward put the "TIR's taken looking:" line through the
+    // "AFT Taper" heading on a Schematic + Runout sheet (on-device report); on the schematic
+    // sheet that growth has a 1-inch info gap to climb into, here it has none.
+    //
+    // The footer's line pitch has give: when the shaft would otherwise be squeezed under the
+    // height floor, the block tightens toward `footerBlockMinHeightPt` — a blank draft's
+    // handwriting pitch, a printed footer's line pitch — in the order the fallback below sets
+    // (after stacking, before the secondary unit; the vertical solve takes it).
+    // The dye pen row shares the TIR line's lane (consolidated only, per-job election); the
+    // boxes mark from the ONE WearRecord.dyePenResult the wear sheet prints, blank on a draft.
+    val drawDyePen = consolidated && config.showDyePenTest
+
+    // Prelim bubble rows on the linear map — the BUDGET's term only (see the vertical solve).
+    val prelimPlan     = planRunoutBubbles(
+        collectRunoutStations(
+            stationSpans, config.componentOverrides, ::xAtLinear,
+            mmAtX = { x -> drawStartMm + (x - contentLeft) / widthFitPtPerMm },
+            placements = runoutStationPlacements,
+        ),
+        bubbleGeom,
+    )
+    val prelimBubbleSectionH = prelimPlan.sectionHeight(BUBBLE_GAP_PT)
+
+    // ── Bottom lane ───────────────────────────────────────────────────────────
+    // The TIR line (left) and the coupling end view (right) share the band above the
+    // footer. They never collide in x, so everything above reserves the TALLER of the two
+    // lanes and the TIR line keeps its own y. Reserving off `tirY` alone would let the
+    // shaft and its bubbles run down through the face.
+    val couplingCx = contentRight - COUPLING_FACE_PAD_PT - COUPLING_FACE_OUTER_R_PT
+    // The TIR row's lane at a footer size: its baseline sits `TIR_LINE_HEIGHT_PT × s` above the
+    // footer, and the lane grows by the ascent the scale added, so the row's text rises no
+    // further above its lane — toward the bubble rows — than it does at 100%.
+    fun tirLaneHAt(footerScale: Float): Float {
+        val extraRise = if (footerScale <= 1f) 0f
+            else -sheetTextPaint(TEXT_PT * footerScale).fontMetrics.ascent * (1f - 1f / footerScale)
+        return TIR_LINE_HEIGHT_PT * footerScale + extraRise
+    }
+    fun bottomLaneHAt(footerScale: Float): Float = maxOf(
+        if (drawBubbles || drawDyePen) tirLaneHAt(footerScale) else 0f,
+        if (drawFace) COUPLING_FACE_BLOCK_PT else 0f,
+    )
+    fun footerCfgAt(footerScale: Float): FooterConfig =
+        sheetFooterConfig(spec, pdfPrefs.copy(footerTextScale = footerScale))
+
+    /**
+     * The footer band at text size [s] printing in [du], as a budget measures it: the full
+     * reservation, or its tightest pitch ([footerBlockMinHeightPt]) when [tight]. A blank draft
+     * always counts its handwriting pitch's give — the give it has always taken first.
+     */
+    fun footerBudgetHAt(s: Float, du: DisplayUnits, tight: Boolean = false): Float {
+        val paint = sheetTextPaint(TEXT_PT * s)
+        val cfg = footerCfgAt(s)
+        return if (blankValues || tight) {
+            footerBlockMinHeightPt(contentLeft, contentRight, spec, unit, project, paint, cfg, blankValues = blankValues, displayUnits = du)
+        } else {
+            footerBlockHeightPt(contentLeft, contentRight, spec, unit, project, paint, cfg, displayUnits = du)
+        }
+    }
+
+    // The footer size this sheet can afford, decided ONCE for the whole sheet (the dual-stacking
+    // posture): the requested `PdfPrefs.footerTextScale`, or the largest step under it at which
+    // the footer, its TIR / dye pen lane, the rails and the bubble rows still leave the shaft its
+    // height floor. A full job at a large step otherwise ran its bubbles into the TIR line. A
+    // blank draft is measured at its footer's tightest pitch, the give the vertical solve takes.
+    fun footerScaleFor(du: DisplayUnits): Float {
+        if (!consolidated) return 1f
+        val inlineRailsH by lazy { prelimRailsBlockH(du, stacked = false) }
+        return fittedTextScale(pdfPrefs.footerTextScale) { s ->
+            val budget = (pageH - margin - footerBudgetHAt(s, du) - bottomLaneHAt(s)) -
+                (margin + inlineRailsH) - prelimBubbleSectionH
+            budget >= PROFILE_MIN_SHAFT_HEIGHT_PT + SHAFT_BUDGET_CLEAR_PT
+        }
+    }
+
+    // ── How this sheet prints its units — decided ONCE, before anything is drawn ──
+    // §7 degradation, consolidated sheet (`docs/DualUnitStacking_PLAN.md`): the rail block and the
+    // footer are paid for out of the shaft's own height budget, and a dual sheet's cost the most —
+    // a stacked rail lane is two lines tall, an inline dual footer line wraps. When that budget,
+    // the bubble rows included, cannot afford the drawn shaft its height floor, the sheet gives
+    // room back WHOLE, never per label, in [SheetFallback] order: the stacking first, then the
+    // footer's line pitch (the vertical solve tightens it just as far as the floor needs), and
+    // only past both the secondary unit — the sheet prints the primary unit only, its footer still
+    // tightening if it must. A shaft squeezed under the floor cost the compressed spans their
+    // breaks — values printed through the S.E.T. extension lines — and stood the in-profile Ø
+    // columns taller than the shaft. A sheet that affords the floor as asked prints exactly as asked.
+    fun unitsFor(mode: SheetDualMode): DisplayUnits =
+        if (mode.dual) displayUnits else displayUnits.copy(dual = false)
+    val wantedDualMode = SheetDualMode.wanted(
+        dual = displayUnits.dual,
+        stacked = consolidated && pdfPrefs.dualUnitLayout == DualUnitLayout.STACKED,
+    )
+    val sheetDualMode = if (!consolidated) wantedDualMode else fittedSheetFallback(wantedDualMode) { step ->
+        val mode = step.mode
+        val du = unitsFor(mode)
+        val s = footerScaleFor(du)
+        val lane = bottomLaneHAt(s)
+        val railsH = prelimRailsBlockH(du, mode.stacked)
+        val shaftBudget = (pageH - margin - footerBudgetHAt(s, du, tight = step.tightFooter) - lane) -
+            (margin + railsH) - prelimBubbleSectionH
+        val keepsFloor = shaftBudget >= floorHeightPt + SHAFT_BUDGET_CLEAR_PT
+        // Stacking must also leave a readable shaft area (drawn shaft + bubble rows) under the
+        // taller rail block, measured at the footer's full height.
+        keepsFloor && (!mode.stacked || pageH - margin -
+            footerBlockHeightPt(
+                contentLeft, contentRight, spec, unit, project, sheetTextPaint(TEXT_PT * s), footerCfgAt(s),
+                blankValues = blankValues, displayUnits = du,
+            ) - lane - (margin + railsH) >= RUNOUT_MIN_SHAFT_AREA_PT)
+    }.mode
+    val dualStacked = sheetDualMode.stacked
+    if (wantedDualMode.stacked && !dualStacked) {
+        VerboseLog.i(VerboseLog.Category.PDF, "RunoutPdf") {
+            "dual stacking: consolidated rails fell back to INLINE — the stacked block would " +
+                "leave the shaft under its height floor"
+        }
+    }
+    if (wantedDualMode.dual && !sheetDualMode.dual) {
+        VerboseLog.i(VerboseLog.Category.PDF, "RunoutPdf") {
+            "dual units: the consolidated sheet prints the primary unit only — the dual rails and " +
+                "footer would leave the shaft under its height floor even at the tightest footer pitch"
+        }
+    }
+    /** The units every rail, OAL and footer value on this sheet prints in. */
+    val sheetUnits = unitsFor(sheetDualMode)
+    val railAssignments = railAssignmentsFor(sheetUnits)
+    val maxRail = railAssignments.maxOfOrNull { it.rail } ?: -1
+    val oalDimSpan = oalDimSpanFor(sheetUnits)
+
+    val footerScale = footerScaleFor(sheetUnits)
+    if (footerScale < pdfPrefs.footerTextScale && consolidated) {
+        VerboseLog.i(VerboseLog.Category.PDF, "RunoutPdf") {
+            "footer text: printed at ${(footerScale * 100).toInt()}% — the requested " +
+                "${(pdfPrefs.footerTextScale * 100).toInt()}% leaves the shaft under its height floor"
+        }
+    }
+    val footerText = sheetTextPaint(TEXT_PT * footerScale)
+    val tirLineH = TIR_LINE_HEIGHT_PT * footerScale
+    val bottomLaneH = bottomLaneHAt(footerScale)
+
+    val footerCfg = if (consolidated) footerCfgAt(footerScale) else null
+    val footerBlockFullH = footerCfg?.let {
+        footerBlockHeightPt(
+            contentLeft, contentRight, spec, unit, project, footerText, it,
+            blankValues = blankValues, displayUnits = sheetUnits,
+        )
+    } ?: 0f
+    val footerBlockMinH = footerCfg?.let {
+        footerBlockMinHeightPt(
+            contentLeft, contentRight, spec, unit, project, footerText, it,
+            blankValues = blankValues, displayUnits = sheetUnits,
+        )
+    } ?: 0f
+
+    // ── Vertical budget ───────────────────────────────────────────────────────
+    // The diameter scale needs the shaft's height budget, the budget needs the bubble row
+    // count, and the final bubble x positions need the (scale-dependent) compressed
+    // mapping — a cycle. Break it with a prelim linear-map plan for the BUDGET only; the
+    // plan used for drawing is re-solved on the real mapping below.
+    val railGap = railGapFor(dualStacked)
+    fun prelimRailLiftFor(stacked: Boolean): Float = prelimRailLiftOf(railAssignments, oalDimSpan, stacked)
+    fun railsBlockHFor(stacked: Boolean, lift: Float): Float = railsBlockHOf(maxRail, stacked, lift)
+
+    /** Height left for the shaft once the footer, bottom lane, rails and bubble rows are paid for. */
+    fun shaftBudgetFor(footerH: Float, railLift: Float): Float =
+        (pageH - margin - footerH - bottomLaneH) - (margin + railsBlockHFor(dualStacked, railLift)) -
+            prelimBubbleSectionH
+
+    // ── Diameter scale + compressed x mapping ─────────────────────────────────
+    // The hand-sheet convention (on-device request, with the shop's reference sketch):
+    // the shaft's drawn height follows its true diameter on the default sizing curve,
+    // never diluted by length. Details (tapers, liners,
+    // threads) keep TRUE proportions at the diameter scale; the plain body runs between
+    // them absorb the horizontal overflow — foreshortened with S-break glyphs
+    // ("compressed to give the impression of a thicker shaft"). Short shafts whose
+    // width-fit already meets the target keep the classic linear map unchanged.
+    //
+    // The scale solve also folds in the in-profile wear values: a value's rotated length
+    // sets a minimum band height at its station, so readings print at full text size
+    // whenever the page allows (auto-fit in the draw functions stays as the backstop).
+
     // Sizing rule (shared with the schematic): height follows TRUE diameter on the
     // default curve (standard: 8" → 1.25", 4" → 0.75", linear between; anchor heights
     // user-adjustable via Settings → Drawing). Keyway-bearing bodies stay
@@ -681,8 +760,7 @@ internal fun composeRunoutPdfOnCanvas(
     // scale — exaggerate or shrink the whole drawn shaft. The PROFILE_MAX_SHAFT_HEIGHT_PT ceiling is ABSOLUTE:
     // even a short shaft's width-fit is capped, keeping proportion without spanning the
     // page; the page budget caps everything (exaggeratedProfileScale, pure, unit-tested).
-    val targetScale  = defaultVisualScale(maxOuterDiaMm, pdfPrefs.curveLoHeightPt, pdfPrefs.curveHiHeightPt)
-    val baseScale = maxOf(widthFitPtPerMm, targetScale, valueNeedScale)
+    // (`targetScale` / `baseScale` are settled above, beside the height floor.)
     fun desiredScaleFor(budgetH: Float): Float = exaggeratedProfileScale(
         baseScale = baseScale,
         heightFrac = config.heightScale,
@@ -719,7 +797,7 @@ internal fun composeRunoutPdfOnCanvas(
             blankLabelMinWidthPx = BLANK_DIM_GAP_MIN_PT,
             dualStacked = dualStacked,
         )
-        r.topLift(dimRows(r) { 0f })
+        r.topLift(dimRows(r, railAssignments, oalDimSpan) { 0f })
     }
 
     // ── Vertical solve ────────────────────────────────────────────────────────
@@ -729,11 +807,11 @@ internal fun composeRunoutPdfOnCanvas(
     // and an under-reserved block crushed the OAL rail onto the tier below it. A reservation the
     // real map does not use stays put, so a sheet that already fitted lays out exactly as before.
     //
-    // The height floor outranks the blank draft's handwriting pitch: when the budget cannot
-    // afford the floored shaft, the write-in footer gives up the difference first, down to its
-    // minimum pitch. Only past that does the page budget cut the shaft (it must still fit the
-    // paper).
-    val floorHeightPt = minOf(PROFILE_MIN_SHAFT_HEIGHT_PT / maxOuterDiaMm, baseScale) * maxOuterDiaMm
+    // The height floor outranks the footer's line pitch: when the budget cannot afford the
+    // floored shaft in the units the fallback above settled on, the footer gives up the
+    // difference — a blank draft's handwriting pitch, a printed footer's line pitch — down to its
+    // minimum ([footerBlockMinHeightPt]). Only past that does the page budget cut the shaft (it
+    // must still fit the paper).
     var railLiftReserve = prelimRailLiftFor(dualStacked)
     var footerBlockH = footerBlockFullH
     var diaPtPerMm = 0f
@@ -751,7 +829,7 @@ internal fun composeRunoutPdfOnCanvas(
     }
     if (footerBlockH < footerBlockFullH) {
         VerboseLog.i(VerboseLog.Category.PDF, "RunoutPdf") {
-            "blank footer pitch tightened by ${(footerBlockFullH - footerBlockH).toInt()} pt to keep the shaft at the height floor"
+            "footer pitch tightened by ${(footerBlockFullH - footerBlockH).toInt()} pt to keep the shaft at the height floor"
         }
     }
 
@@ -767,6 +845,8 @@ internal fun composeRunoutPdfOnCanvas(
             footerBlockPt = footerBlockH,
             railLiftReservedPt = railLiftReserve,
             railLiftDrawnPt = railLiftOn(xMap),
+            dualMode = sheetDualMode,
+            footerTightenedPt = footerBlockFullH - footerBlockH,
         ),
     )
     // No TIR line when bubbles are elected out — its lane returns to the shaft area, unless
@@ -835,7 +915,7 @@ internal fun composeRunoutPdfOnCanvas(
             c, dim, text, xAt(oalAftMm), xAt(oalFwdMm), oalLineY,
             aftShaftTopY = shaftCy - shaftOuterRPxAt(oalAftMm),
             fwdShaftTopY = shaftCy - shaftOuterRPxAt(oalFwdMm),
-            unit = displayUnits.documentUnit, dual = displayUnits.dual, oalMm = spec.overallLengthMm,
+            unit = sheetUnits.documentUnit, dual = sheetUnits.dual, oalMm = spec.overallLengthMm,
             blankValues = blankValues,
         )
     }
@@ -862,13 +942,13 @@ internal fun composeRunoutPdfOnCanvas(
         )
         // Lift on the REAL mapping — it can differ from the prelim by a band when a span
         // foreshortens across the inline threshold; the clamp below absorbs the difference.
-        val railLift = renderer.topLift(dimRows(renderer) { 0f })
+        val railLift = renderer.topLift(dimRows(renderer, railAssignments, oalDimSpan) { 0f })
         // The OAL lane rides exactly ONE tier pitch above the highest component tier —
         // same rule as the schematic; the planner lift is the only thing that widens it.
         val unliftedTopRailY = (railBaseY - railGap * (maxRail + 1))
             .coerceAtLeast(margin + 8f + railLift)
         val plan = renderer.plan(
-            dimRows(renderer) { rail ->
+            dimRows(renderer, railAssignments, oalDimSpan) { rail ->
                 if (rail == DimensionRailLayout.TOP_RAIL) unliftedTopRailY else railBaseY - railGap * rail
             },
             safeTopY = margin + 6f,
@@ -904,7 +984,7 @@ internal fun composeRunoutPdfOnCanvas(
             wearRecord.wornSections,
             oalMm = spec.overallLengthMm,
             windowStartMm = aftSetMm, windowEndMm = fwdSetMm,
-            unit = displayUnits.documentUnit,
+            unit = sheetUnits.documentUnit,
             xAt = ::xAt, surfaceRAt = ::shaftOuterRPxAt, cy = shaftCy,
             text = valueText,
             minTextSize = WORN_VALUE_MIN_TEXT_PT,
@@ -914,7 +994,7 @@ internal fun composeRunoutPdfOnCanvas(
         planDiaReadingsInProfile(
             wearRecord.diaReadings, resolvedComponents,
             cy = shaftCy, xAt = ::xAt, surfaceRAt = ::shaftOuterRPxAt,
-            displayUnits = displayUnits, text = valueText,
+            displayUnits = sheetUnits, text = valueText,
             minTextSize = WORN_VALUE_MIN_TEXT_PT,
         )
     } else emptyList()
@@ -1043,20 +1123,24 @@ internal fun composeRunoutPdfOnCanvas(
             filename = "", appVersion = "",
             text = footerText, cfg = footerCfg, blankValues = blankValues,
             // The same resolver the reservation above measured with — reserve and draw must
-            // agree — and the same one the schematic's footer prints with.
-            displayUnits = displayUnits,
+            // agree: the document's units, less the secondary when the sheet gave it up.
+            displayUnits = sheetUnits,
+            // The band above is the TIR line / coupling face lane: a footer tightened to keep
+            // the shaft at its floor fits its rows to the band rather than growing into it.
+            growUpward = false,
         )
     }
 
     // Last, in the bottom margin strip: the opt-in "Units in …" note (classic and consolidated).
-    if (pdfPrefs.showUnitsNote) drawUnitsNote(c, pageW, pageH, margin, displayUnits.documentUnit)
+    if (pdfPrefs.showUnitsNote) drawUnitsNote(c, pageW, pageH, margin, sheetUnits.documentUnit)
 }
 
 /**
  * The consolidated/runout sheet's solved layout, reported through `composeRunoutPdfOnCanvas`'s
  * test seam: the diameter scale and drawn shaft height, the profile's drawn x extent and the two
  * S.E.T. faces' x, the footer
- * band reserved, and the rail lift reserved against the lift the drawn rails need.
+ * band reserved, the rail lift reserved against the lift the drawn rails need, and the sheet's
+ * whole-sheet fallbacks (dual-unit mode, footer pitch).
  */
 internal data class RunoutSheetLayout(
     val diaPtPerMm: Float,
@@ -1068,6 +1152,10 @@ internal data class RunoutSheetLayout(
     val footerBlockPt: Float,
     val railLiftReservedPt: Float,
     val railLiftDrawnPt: Float,
+    /** How the sheet printed its units — the asked-for mode, or the fallback the floor forced. */
+    val dualMode: SheetDualMode,
+    /** How far the footer's line pitch gave way to keep the shaft at the height floor (0 = none). */
+    val footerTightenedPt: Float,
 )
 
 /**
@@ -2184,9 +2272,10 @@ private const val RUNOUT_RAIL_GAP_PT = 18f
 /**
  * Least shaft area (drawn shaft + its bubble rows, pt) worth keeping on a consolidated sheet.
  *
- * Only the stacked-dual decision consults it: the taller rail block is paid for out of this budget,
- * so a sheet with enough rails to eat the drawing gives the stacking up instead of printing a
- * hairline shaft under a tall rail stack (`docs/DualUnitStacking_PLAN.md` §7).
+ * Only the stacked-dual decision consults it, beside the height floor (which counts the bubble rows
+ * on their own): the taller rail block is paid for out of this budget, so a sheet with enough rails
+ * to eat the drawing gives the stacking up instead of printing a hairline shaft under a tall rail
+ * stack (`docs/DualUnitStacking_PLAN.md` §7).
  */
 private const val RUNOUT_MIN_SHAFT_AREA_PT = 120f
 /** Air kept between the drawn shaft and the edges of its height budget. */

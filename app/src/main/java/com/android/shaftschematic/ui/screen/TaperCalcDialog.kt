@@ -37,6 +37,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.ui.input.TaperCalcValues
@@ -131,6 +132,7 @@ internal fun TaperCalcDialog(
                         entry = entries.effectiveRateEntry,
                         onSelect = { entries = entries.copy(rateEntry = it) },
                         tagPrefix = "taper_calc",
+                        labelAbove = true,
                     )
                 }
 
@@ -167,7 +169,7 @@ internal fun TaperCalcDialog(
                     Column(Modifier.weight(1f)) {
                         TaperEntryField(
                             field = TaperCalcField.RATE,
-                            label = if (entries.effectiveRateEntry == TaperRateEntry.PER_FOOT) "Taper rate (in/ft)" else "Taper rate",
+                            label = taperCalcRateFieldLabel(entries.effectiveRateEntry),
                             entries = entries,
                             state = shown.field(TaperCalcField.RATE),
                             onChange = { entries = entries.with(TaperCalcField.RATE, it) },
@@ -280,7 +282,8 @@ private fun TaperEntryField(
     OutlinedTextField(
         value = text,
         onValueChange = onChange,
-        label = { Text(label) },
+        // One line: a label wrapping inside the half-width boxes overlaps the outline.
+        label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
         isError = state.isError,
         // The rate is dimensionless: a ratio is the same number on either drawing.
         suffix = if (isRate) null else {

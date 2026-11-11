@@ -61,6 +61,7 @@ only the figure's frame and caption are theme-colored chrome. Their **ink** come
 - `SheetInk.Outline` (black) — profile outlines, rails, sheet text, hatches.
 - `SheetInk.LinerTint` — liner tint on wear/runout sheets (pinned historical light tertiary).
 - `SheetInk.WearRed` — wear tints/hatches/pit X's (pinned historical light error red).
+- `SheetInk.Paper` (white) — value knockouts on the sheet canvases (the wear detail rail's values print on it, drawn after every tick and line).
 
 Reason: in dark theme `onSurface` is near-white — theme-driven ink would print invisible
 lines on the white sheet. The pins hold the exact colors the sheets always had in light

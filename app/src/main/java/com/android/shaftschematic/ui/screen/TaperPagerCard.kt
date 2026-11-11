@@ -200,17 +200,13 @@ internal fun TaperPagerCard(
         )
 
         // AFT / FWD reference toggle
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        ChipFlowRow(Modifier.fillMaxWidth()) {
             Text("Measure From:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             FilterChip(selected = !isFwdRef, onClick = { onUpdateTaperReference(idx, LinerAuthoredReference.AFT) },
-                label = { Text("AFT") }, colors = selectedColors,
+                label = { ChipLabel("AFT") }, colors = selectedColors,
                 border = if (!isFwdRef) BorderStroke(1.dp, Color.Black) else null)
             FilterChip(selected = isFwdRef, onClick = { onUpdateTaperReference(idx, LinerAuthoredReference.FWD) },
-                label = { Text("FWD") }, colors = selectedColors,
+                label = { ChipLabel("FWD") }, colors = selectedColors,
                 border = if (isFwdRef) BorderStroke(1.dp, Color.Black) else null)
         }
 
@@ -265,11 +261,7 @@ internal fun TaperPagerCard(
                 }
             },
         )
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        ChipFlowRow(Modifier.fillMaxWidth()) {
             Text("Rate mode:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             FilterChip(selected = autoRate, onClick = {
                 autoRate = true
@@ -277,14 +269,14 @@ internal fun TaperPagerCard(
                 // rate so model/PDF match what the card now shows — one edit.
                 onUpdateTaperRateMode(idx, false, computedRateText)
             },
-                label = { Text("Auto") }, colors = selectedColors,
+                label = { ChipLabel("Auto") }, colors = selectedColors,
                 border = if (autoRate) BorderStroke(1.dp, Color.Black) else null)
             FilterChip(selected = !autoRate, onClick = {
                 autoRate = false
                 // Stored, so a typed rate survives a reopen and the next Length edit.
                 onUpdateTaperRateMode(idx, true, null)
             },
-                label = { Text("Manual") }, colors = selectedColors,
+                label = { ChipLabel("Manual") }, colors = selectedColors,
                 border = if (!autoRate) BorderStroke(1.dp, Color.Black) else null)
         }
         if (unit == UnitSystem.INCHES) {

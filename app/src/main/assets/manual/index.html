@@ -1062,7 +1062,7 @@
   <h3>Looking around the page</h3>
   <ul>
     <li  class="keep"><strong>Pinch</strong> to zoom (from half size up to 8×). <strong>Drag</strong> to pan.</li>
-    <li  class="keep">On the schematic and Final previews, <strong>double-tap</strong> the page or tap the <span class="ui">Reset zoom</span> icon to return to the whole page.</li>
+    <li  class="keep"><strong>Double-tap</strong> the page to return to the whole page; on the schematic and Final previews the <span class="ui">Reset zoom</span> icon does the same.</li>
     <li  class="keep"><strong>Turn the device sideways.</strong> Previews unlock rotation even on a phone that is normally held upright, so you can view the landscape sheet full width. Leaving the preview restores the normal orientation.</li>
     <li  class="keep">On the schematic preview, the floating <span class="ui">Blank draft (write-in)</span> chip at the top of the page switches the page between printed values and a write-in draft. The page redraws immediately.</li>
   </ul>
@@ -1535,10 +1535,10 @@
   <figure class="wide">
     <div class="annotated">
       <img src="figures/schematic.webp" alt="Schematic of a 168 inch tailshaft: threaded and tapered ends with keyways, a stern tube liner and a seal liner, dimension rails above, diameter callouts and names below, and a three-column title block.">
-      <span class="mark" style="left:45.2%;top:35.9%">1</span>
-      <span class="mark" style="left:12.2%;top:40.9%">2</span>
-      <span class="mark" style="left:26.7%;top:45.8%">3</span>
-      <span class="mark" style="left:83.2%;top:45.8%">4</span>
+      <span class="mark" style="left:45.2%;top:39.8%">1</span>
+      <span class="mark" style="left:12.2%;top:43.3%">2</span>
+      <span class="mark" style="left:26.7%;top:46.8%">3</span>
+      <span class="mark" style="left:83.2%;top:46.8%">4</span>
       <span class="mark" style="left:6%;top:51.5%">5</span>
       <span class="mark" style="left:13.25%;top:61.2%">6</span>
       <span class="mark" style="left:52.75%;top:49.2%">7</span>
@@ -1827,18 +1827,18 @@
   <p  class="keep">The wear document — titled “WEAR / INSPECTION RECORD” — is the inspection form for the shaft's wearing surfaces: where the wear is, how deep it is, where the pits are, and the dye pen result.</p>
   <figure class="wide">
     <div class="annotated">
-      <img src="figures/wear.webp" alt="Wear record: job header and title, OAL 168 inches over a simplified shaft profile with a marked wear band and pits on the stern tube liner, a zoomed stern tube liner strip with a grey wear band, three pit marks and four measured diameters, a seal liner strip with one measured diameter, and the dye pen inspection line.">
+      <img src="figures/wear.webp" alt="Wear record: job header and title, OAL 168 inches over a simplified shaft profile with a marked wear band and pits on the stern tube liner, a zoomed stern tube liner strip with a grey wear band, three pit marks and four measured diameters, a bare-shaft strip with a grey wear band, a seal liner strip with one measured diameter, and the dye pen inspection line.">
       <span class="mark" style="left:60%;top:9.26%">1</span>
       <span class="mark" style="left:44.9%;top:17.3%">2</span>
       <span class="mark" style="left:28.25%;top:22.65%">3</span>
       <span class="mark" style="left:10%;top:31.6%">4</span>
-      <span class="mark" style="left:67.2%;top:40.9%">5</span>
-      <span class="mark" style="left:60.75%;top:51.8%">6</span>
-      <span class="mark" style="left:67%;top:46.9%">7</span>
-      <span class="mark" style="left:70%;top:60.2%">8</span>
-      <span class="mark" style="left:25.5%;top:59.2%">9</span>
+      <span class="mark" style="left:45%;top:38.4%">5</span>
+      <span class="mark" style="left:54.3%;top:52.9%">6</span>
+      <span class="mark" style="left:51.2%;top:46.6%">7</span>
+      <span class="mark" style="left:56%;top:60.2%">8</span>
+      <span class="mark" style="left:32.5%;top:59.2%">9</span>
       <span class="mark" style="left:23.7%;top:85.0%">10</span>
-      <span class="mark" style="left:77.25%;top:84.8%">11</span>
+      <span class="mark" style="left:77.4%;top:84.8%">11</span>
     </div>
     <figcaption>The wear document.</figcaption>
   <ol class="legend">
@@ -2125,8 +2125,8 @@
   <h2 id="recording-wear">Wear</h2>
 
   <figure class="wide">
-    <img src="figures/wear.webp" alt="A printed wear and inspection record: the whole shaft at the top with pit X marks on the stern tube liner, then broken-out detail strips of the stern tube liner and seal liner with a shaded wear band, X marks, a worn-profile dip and measured diameters on leader lines, and the dye pen PASS/FAIL boxes at the bottom.">
-    <figcaption>The wear document: the whole shaft, a detail strip per liner with wear bands, pit X marks and measured diameters, and the dye pen result.</figcaption>
+    <img src="figures/wear.webp" alt="A printed wear and inspection record: the whole shaft at the top with pit X marks on the stern tube liner, then broken-out detail strips of the stern tube liner, a bare-shaft section and the seal liner with shaded wear bands, X marks, a worn-profile dip and measured diameters on leader lines, and the dye pen PASS/FAIL boxes at the bottom.">
+    <figcaption>The wear document: the whole shaft, a detail strip per liner or elected body with wear bands, pit X marks and measured diameters, and the dye pen result.</figcaption>
   </figure>
 
   <h3>The Wear Document tab</h3>
@@ -2471,7 +2471,7 @@
   <table class="ref">
     <thead><tr><th>Setting</th><th>Default</th><th>What it does</th></tr></thead>
     <tbody>
-      <tr><td><span class="ui">Line Thickness</span></td><td>100%</td><td>Line weight on the preview and on every printed sheet. Slider 50% to 200%, with a typed % box beside it and a <span class="ui">Default (100%)</span> button. 100% is the standard thin weight; 200% the heavier original weight. Letting go of the slider near 100% snaps exactly to it; a number you type is used exactly as typed (limited to 50–200). Also on the PDF options panel (Lines &amp; text section).</td></tr>
+      <tr><td><span class="ui">Line Thickness</span></td><td>100%</td><td>Line weight on the preview and on every printed sheet. Slider 50% to 200%, with a typed % box beside it and a <span class="ui">Default (100%)</span> button. 100% is the standard thin weight; 200% the heavier original weight. Letting go of the slider near 100% snaps exactly to it; a number you type is used exactly as typed (limited to 50–200) and applies when you press Done or leave the box; clearing it brings the old value back. Also on the PDF options panel (Lines &amp; text section).</td></tr>
       <tr><td><span class="ui">Preview Colors</span></td><td>—</td><td>Opens the Preview Colors page (<a href="#settings-preview-colors">below</a>).</td></tr>
       <tr><td><span class="ui">Show Grid in Preview</span></td><td>Off</td><td>Draws a background grid behind the shaft in the editor preview. Never printed. Greyed out while <span class="ui">Draw Preview Like the Sheet</span> is on: a millimetre grid has no meaning on a shortened drawing.</td></tr>
       <tr><td><span class="ui">Show Dimension Lines in Preview</span></td><td>On</td><td>Draws the schematic's dimension lines and lengths above the shaft in the Schematic and Final tabs' preview: the same lines and values the schematic prints, drawn small (see <a href="#editor-preview">The preview</a>). Screen only; it changes nothing on any sheet, and Drawing profiles do not include it.</td></tr>

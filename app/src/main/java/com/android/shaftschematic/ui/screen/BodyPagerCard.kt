@@ -530,22 +530,18 @@ internal fun BodyPagerCard(
         }
         // AFT / FWD reference toggle — the liner card's row. A switch changes what the Start
         // field shows and what an OAL change keeps; the stored start never moves.
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        ChipFlowRow(Modifier.fillMaxWidth()) {
             Text("Measure From:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             val selectedColors = FilterChipDefaults.filterChipColors(
                 selectedContainerColor = Color.Black, selectedLabelColor = Color.White,
                 containerColor = Color.Transparent, labelColor = MaterialTheme.colorScheme.onSurface
             )
             FilterChip(selected = !isFwdRef, onClick = { onUpdateBodyReference(idx, LinerAuthoredReference.AFT) },
-                label = { Text("AFT") }, colors = selectedColors,
+                label = { ChipLabel("AFT") }, colors = selectedColors,
                 border = if (!isFwdRef) BorderStroke(1.dp, Color.Black) else null,
                 modifier = Modifier.testTag("body_ref_aft"))
             FilterChip(selected = isFwdRef, onClick = { onUpdateBodyReference(idx, LinerAuthoredReference.FWD) },
-                label = { Text("FWD") }, colors = selectedColors,
+                label = { ChipLabel("FWD") }, colors = selectedColors,
                 border = if (isFwdRef) BorderStroke(1.dp, Color.Black) else null,
                 modifier = Modifier.testTag("body_ref_fwd"))
         }
@@ -846,19 +842,15 @@ internal fun BodyPagerCard(
                     onUpdateBodyKeyway(idx, b.keywayWidthMm, b.keywayDepthMm, b.keywayLengthMm, b.keywayOffsetFromEndMm, end, b.keywaySpooned)
                 }
             }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            ChipFlowRow(Modifier.fillMaxWidth()) {
                 Text("KW from:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 FilterChip(selected = !isKwFwd,
                     onClick = { setKwEnd(LinerAuthoredReference.AFT) },
-                    label = { Text("AFT") }, colors = kwSelectedColors,
+                    label = { ChipLabel("AFT") }, colors = kwSelectedColors,
                     border = if (!isKwFwd) BorderStroke(1.dp, Color.Black) else null)
                 FilterChip(selected = isKwFwd,
                     onClick = { setKwEnd(LinerAuthoredReference.FWD) },
-                    label = { Text("FWD") }, colors = kwSelectedColors,
+                    label = { ChipLabel("FWD") }, colors = kwSelectedColors,
                     border = if (isKwFwd) BorderStroke(1.dp, Color.Black) else null)
             }
             // The keyway's own unit: European stock is metric on an otherwise imperial

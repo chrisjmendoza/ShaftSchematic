@@ -161,7 +161,9 @@ with this job", so the reader never has to guess which kind a row is.
 ## PdfPreviewScreen
 
 Full-resolution preview through the shared `util/PdfRaster.renderPdfPageBitmap`
-(`PdfDocument` + `PdfRenderer`, 2× raster), pinch-to-zoom 0.5×–8×, double-tap reset.
+(`PdfDocument` + `PdfRenderer`, 2× raster), pinch-to-zoom 0.5×–8×, double-tap reset. The shared overlay (`PdfPreviewOverlay` — Runout, Wear,
+Undercut, Consolidated) resets on double-tap too, through the same `rememberPreviewDoubleTapReset`
+(`ui/screen/PreviewDoubleTapReset.kt`); there the reset is instant, a single tap does nothing.
 
 - **Options panel (Tune icon, a toggle):** the options open in `PreviewOptionsPanel`
   (`ui/screen/PreviewOptionsPanel.kt`) — a NON-modal, in-layout `Surface` at the bottom of

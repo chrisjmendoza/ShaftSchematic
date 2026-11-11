@@ -2,6 +2,7 @@ package com.android.shaftschematic.ui.screen
 
 import android.app.Application
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
@@ -16,6 +17,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.test.core.app.ApplicationProvider
 import com.android.shaftschematic.geom.undercutSetPositions
 import com.android.shaftschematic.model.UndercutPageOrientation
@@ -315,5 +317,21 @@ class UndercutRouteTest {
     @Test
     fun `a deleted cut's snackbar names its section, since every section counts from 1`() {
         assertEquals("Cut 3 deleted — FWD Liner Ø10\"", undercutListDeletedMessage(3, "FWD Liner Ø10\""))
+    }
+
+    @Test
+    @Config(qualifiers = "w360dp-h800dp")
+    fun `the toolbar title reads whole beside its actions on a phone`() {
+        host(vm())
+
+        val results = mutableListOf<TextLayoutResult>()
+        rule.onNodeWithTag(UNDERCUT_TAB_TITLE_TAG).fetchSemanticsNode()
+            .config[SemanticsActions.GetTextLayoutResult].action!!.invoke(results)
+        val title = results.single()
+        // Two lines, the preview bar's rule: one line beside Undo / Redo / Save / Help cut the
+        // title to "Undercut Dr…". (Robolectric's text measure is nominal, so the setting is what
+        // is pinned, not a measured wrap.)
+        assertEquals(2, title.layoutInput.maxLines)
+        assertTrue("\"Undercut Drawing\" is not cut short", !title.hasVisualOverflow)
     }
 }

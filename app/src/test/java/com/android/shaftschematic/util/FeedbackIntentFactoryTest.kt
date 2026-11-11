@@ -4,12 +4,15 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
+import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.io.File
 
 /**
  * The share intents, and in particular the one behind Settings → Data → "Share diagnostic logs".
@@ -105,5 +108,66 @@ class FeedbackIntentFactoryTest {
 
         assertEquals(Intent.ACTION_SENDTO, intent.action)
         assertEquals(null, intent.clipData)
+    }
+
+    @After
+    fun detachLog() {
+        AppLog.resetForTest()
+    }
+
+    /** What Settings → Data → "Share diagnostic logs" does, minus the chooser and snackbars. */
+    private fun shareIntentFromRing(ctx: Context): Intent {
+        val logs = AppLog.logFiles()
+        // Stand-in for FileProvider URIs: its path-root check does not resolve a Robolectric
+        // data dir on a Windows host, and what is under test is which files reach the intent.
+        val uris = logs.map { Uri.parse("content://${ctx.packageName}.fileprovider/internal/logs/${it.name}") }
+        return FeedbackIntentFactory.createDiagnostics(ctx, logs.map { it.name }, uris)
+    }
+
+    /**
+     * The rotated ring: both files exist under the expected names, the newest lines sit in the
+     * current file, and the share attaches the pair as stream URIs and clip items.
+     */
+    @Test
+    fun `a rotated ring shares both files, newest first`() {
+        val ctx = ApplicationProvider.getApplicationContext<Context>()
+        val dir = File(ctx.filesDir, "logs").apply { deleteRecursively() }
+        AppLog.init(dir, maxFileBytes = 300L)
+
+        repeat(40) { AppLog.i("Ring", "breadcrumb $it") }
+        AppLog.flushBlocking()
+
+        assertTrue(File(dir, AppLog.CURRENT_NAME).isFile)
+        assertTrue(File(dir, AppLog.PREVIOUS_NAME).isFile)
+        assertTrue(File(dir, AppLog.CURRENT_NAME).readText().contains("breadcrumb 39"))
+        assertFalse(File(dir, AppLog.PREVIOUS_NAME).readText().contains("breadcrumb 39"))
+        assertEquals(listOf(AppLog.CURRENT_NAME, AppLog.PREVIOUS_NAME), AppLog.logFiles().map { it.name })
+
+        val intent = shareIntentFromRing(ctx)
+
+        assertEquals(Intent.ACTION_SEND_MULTIPLE, intent.action)
+        val streams = intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)!!
+        assertEquals(2, streams.size)
+        assertTrue(streams[0].lastPathSegment == AppLog.CURRENT_NAME)
+        assertTrue(streams[1].lastPathSegment == AppLog.PREVIOUS_NAME)
+        assertEquals(2, intent.clipData!!.itemCount)
+        assertTrue(intent.getStringExtra(Intent.EXTRA_TEXT)!!.contains("Attached: log.0.txt, log.1.txt"))
+    }
+
+    @Test
+    fun `an unrotated ring shares only the current file`() {
+        val ctx = ApplicationProvider.getApplicationContext<Context>()
+        val dir = File(ctx.filesDir, "logs").apply { deleteRecursively() }
+        AppLog.init(dir)
+
+        AppLog.i("Ring", "one line")
+        AppLog.flushBlocking()
+
+        val intent = shareIntentFromRing(ctx)
+
+        assertEquals(Intent.ACTION_SEND_MULTIPLE, intent.action)
+        val streams = intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)!!
+        assertEquals(1, streams.size)
+        assertEquals(AppLog.CURRENT_NAME, streams[0].lastPathSegment)
     }
 }
