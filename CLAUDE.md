@@ -1273,14 +1273,15 @@ spans from `schematicRailSpans` (`pdf/ShaftPdfComposer.kt`, the builder behind t
 rail pass — same spans, tiers, `DisplayUnits` resolution and formatting), placement by
 `DimensionRailLayout.plan`, ink by `PdfDimensionRenderer.drawPlan`; do not rebuild a span, a
 collision rule or a draw routine for the canvas. The preview owns only
-`ui/drawing/render/PreviewDimensionRails.kt`: its LINEAR x map (the preview's `ShaftLayout`, so a
-span's ends land on the edges the box draws — never the sheet's compressed map), sheet points
+`ui/drawing/render/PreviewDimensionRails.kt`: its x map (the preview's own `ShaftLayout` — the
+sheet layout's compressed map below, else linear — so a span's ends land on the edges the box
+draws), sheet points
 drawn at one point per dp through ONE canvas scale (so the shared path takes no preview
 parameters but `haloColor` and `labelSideClear`, both defaulting to the sheet's — every PDF
 byte-identical; the preview keeps a text height of air between two values at one height), the
 preview's outline colour with halos in the app background (app chrome, not `SheetInk`), and the
 room rule `geom/PreviewRailFit.kt` (the least top reservation that fits, out of everything the box
-has above the shaft's width-fitted height and padding — the shaft sits low; past that the rails
+has above the shaft's drawn height and padding — the shaft sits low; past that the rails
 run off the top of the box, where a pan reaches them. EVERY rail the sheet prints is always drawn
 and the shaft is never shrunk for them — on-device ruling: "the rails don't need to fit within the
 preview constantly", it is a picture of the output, not a fitted layout). No rails
@@ -1290,6 +1291,32 @@ default (`isPreviewViewMoved`), rails or not — an always-on disc covered the F
 Runout / Wear / Undercut canvases never set it. The switch is the device preference Settings →
 Editor Screen → "Show Dimension Lines in Preview" (`SettingsStore.showPreviewDimensionsFlow`,
 default ON): never in a document, never captured by a Drawing profile, read by no composer.
+
+**The same preview draws the shaft like the sheet — ONE fit pipeline, ONE body pass** (on-device
+request: "add the S breaks … so the shaft renders more closely to the output"). Its map and
+diameter scale come from the schematic's own `schematicProfileFit` (`pdf/ShaftPdfComposer.kt`,
+`internal`) solved in sheet points over the box at one point per dp, from the inputs
+`composeShaftPdf` takes (sizing-curve anchors, S-break threshold, per-job Shaft height and liner &
+taper compression — all re-render inputs); its body runs, S-breaks included, are drawn by the one
+`drawBodyRunsWithBreaks` on the canvas's native canvas under a point → pixel scale, with the
+preview's outline, fill-follows-shade as unfilled ids, and the selection ring through the pass's
+optional `underStroke` (null on every sheet — byte-identical) so a broken body rings on both stubs.
+Do not write a second solver, a second break rule or a canvas S-break. `ShaftLayout.Result.sheet`
+(`ui/drawing/render/PreviewSheetLayout.kt`) routes `xPx`/`xMmFromPx`/`rPx` through it (a tap
+selects through the map's inverse; a tap in a break gap selects that body); the renderer's keyway
+width and 90° notch depth ride the diameter scale, offset and length the slot's own mapped span —
+the sheet's construction. The shaft is capped at `PREVIEW_SHEET_SHAFT_MAX_FRAC` (40%) of the box's
+content height, solved from the FULL box so it never shrinks for the rails. Falls back to the
+linear map while the OAL is 0 and while the problem marks widen the window past the drawn extent
+(a part hanging past an end cannot print anyway); the grid stands down while the sheet layout is
+in effect. A `null` sheet — every other canvas — is the linear layout, byte-identical. The switch
+is the device preference Settings → Editor Screen → "Draw Preview Like the Sheet"
+(`SettingsStore.previewSheetLayoutFlow`, default ON): never in a document, never captured by a
+Drawing profile, read by no composer. The editor overflow's "Preview options…" sheet
+(`EditorPreviewOptionsSheet`) carries the preview's device switches and, under the app-wide
+`OptionsScopeNote`, the EXISTING shared look controls the preview reads (fractions, arrows,
+dual-unit layout on a dual document, Body S-break, per-job Shaft height) wired to the same setters
+— remote controls, no new storage.
 
 ### Fractions are SET, never spelled
 Every drawn fraction goes through ONE construction — `util/FractionText.kt` (pure parser:

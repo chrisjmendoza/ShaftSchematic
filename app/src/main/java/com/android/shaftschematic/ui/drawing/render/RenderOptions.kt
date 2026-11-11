@@ -38,7 +38,8 @@ data class RenderOptions(
     /**
      * Draw the schematic sheet's dimension rails above the shaft (`PreviewDimensionRails.kt`) —
      * the sheet's own spans, planned by the one rail planner and inked by the one rail renderer,
-     * over this canvas's linear x map. Only the editor preview (Schematic and Final tabs) turns
+     * over this canvas's own x map (the sheet's compressed one under the preview's sheet layout,
+     * `PreviewSheetLayout.kt`, else linear). Only the editor preview (Schematic and Final tabs) turns
      * it on, from the "Show Dimension Lines in Preview" device preference; `false` (thumbnails,
      * Runout / Wear / Undercut canvases) reserves no room and draws nothing new.
      */

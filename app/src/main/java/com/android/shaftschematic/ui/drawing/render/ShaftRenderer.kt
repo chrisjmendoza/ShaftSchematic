@@ -9,8 +9,16 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import com.android.shaftschematic.geom.KeywaySilhouetteNotch
+import com.android.shaftschematic.geom.bodyKeywayProtectedSpansMm
+import com.android.shaftschematic.geom.boltRowProtectedSpansMm
+import com.android.shaftschematic.model.keywayAbsSpanMm
+import com.android.shaftschematic.pdf.bodyForPdf
+import com.android.shaftschematic.pdf.drawBodyRunsWithBreaks
 import com.android.shaftschematic.geom.KeywaySilhouettePoint
 import com.android.shaftschematic.geom.floorMm
 import com.android.shaftschematic.geom.fillPolygonMm
@@ -106,9 +114,17 @@ object ShaftRenderer {
         val contentRightPx: Float,
         val contentTopPx: Float,
         val contentBottomPx: Float,
+        /**
+         * The schematic sheet's profile under the editor preview's sheet layout — x through its
+         * compressed map, [pxPerMm] then its DIAMETER scale. Null = the linear map (every canvas
+         * but that preview), exactly as before.
+         */
+        val sheet: PreviewSheetProfile? = null,
     ) {
         /** Map axial millimeters → canvas X in pixels. */
-        fun xPx(mm: Float): Float = contentLeftPx + (mm - minXMm) * pxPerMm
+        fun xPx(mm: Float): Float =
+            sheet?.let { contentLeftPx + it.xMap.xAt(mm) * it.pxPerPt }
+                ?: (contentLeftPx + (mm - minXMm) * pxPerMm)
         /** Map an outer diameter (mm) → radius (px). */
         fun rPx(diaMm: Float): Float = (diaMm * 0.5f) * pxPerMm
     }
@@ -122,6 +138,7 @@ object ShaftRenderer {
         contentRightPx = layout.contentRightPx,
         contentTopPx = layout.contentTopPx,
         contentBottomPx = layout.contentBottomPx,
+        sheet = layout.sheet,
     )
 
     // ─────────────────────────────────────────────────────────────────────────────
@@ -182,7 +199,29 @@ object ShaftRenderer {
         // Blended faces need the resolved neighbours to know what diameter each face steps
         // to, so they ride the resolved branch only; without one, faces stay square.
         val blends = if (components != null) bodyBlends(spec, components) else emptyList()
-        if (resolvedBodies != null) {
+        val sheet = L.sheet
+        if (sheet != null && resolvedBodies != null) {
+            // Sheet layout: the schematic's ONE body pass draws the runs, S-breaks and all —
+            // the break decision, gap placement and glyph are the sheet's, never re-derived here.
+            drawSheetBodyRuns(
+                spec = spec,
+                runs = resolvedBodies,
+                blends = blends,
+                L = L,
+                sheet = sheet,
+                outline = outline,
+                outlineW = outlineW,
+                fill = bodyFill,
+                unfilledIds = if (fillGate) {
+                    resolvedBodies.map { it.id }.filterNot { it in shadedIds }.toSet()
+                } else {
+                    emptySet()
+                },
+                highlightId = (hiId as? String)?.takeIf { hiEnabled },
+                glowColor = hiGlowCol.copy(alpha = hiGlowA),
+                glowWidthPx = outlineW + hiGlowDx,
+            )
+        } else if (resolvedBodies != null) {
             for (b in resolvedBodies) {
                 val edges = bodyDrawEdges(
                     runId = b.id,
@@ -596,8 +635,9 @@ object ShaftRenderer {
                 val holeR = L.rPx(slot.holeDiaMm)
                 if (holeR <= 0f || slot.count < 1) continue
                 val highlighted = isHighlighted(hiEnabled, hiId, slot.id)
-                // Centers off the shared boltHoleCentersX — the preview's map is linear, so this
-                // is xPx(center) exactly, and the sheet (compressed map) places them the same way.
+                // Centers off the shared boltHoleCentersX — on the linear map this is xPx(center)
+                // exactly; on the sheet layout's compressed map it places them as the sheet does,
+                // off the row's own pinned window, the circles on the diameter scale.
                 val centersX = boltHoleCentersX(slot) { L.xPx(it) }
                 for (i in 0 until slot.count) {
                     val cxMm = slot.centerMmAt(i)
@@ -834,6 +874,8 @@ private fun DrawScope.drawKeywayNotch(
         // The keyway sits at the SET (small) end, so the smaller drawn radius is the host
         // the slot must stay inside.
         hostRadiusPx = min(L.centerlineYPx - top0, L.centerlineYPx - top1),
+        // The taper's own drawn span: the sheet's map is linear across one taper.
+        axialPxPerMm = if (L.sheet == null || t.lengthMm <= 0f) L.pxPerMm else abs(x1 - x0) / t.lengthMm,
         L = L, outline = outline, outlineW = outlineW, hidden = hidden,
         spooned = t.keywaySpooned,
     )
@@ -860,12 +902,29 @@ private fun DrawScope.drawKeywayNotchBody(
     val farX = if (aftRef) x1 else x0
     val dir  = if (farX > refX) 1f else -1f
 
+    // On the sheet's map the slot's AXIAL scale comes from its own mapped span — the keyway
+    // window is pinned at true scale while the rest of the body compresses — and its anchor is
+    // reconstructed one offset back from that span, the PDF slot's construction
+    // (`drawKeywayNotchBodyPdf`). The linear map keeps the face and the one scale it always had.
+    val span = if (L.sheet != null) b.keywayAbsSpanMm() else null
+    val axialPxPerMm: Float
+    val anchorX: Float
+    if (span != null && span.hiMm > span.loMm) {
+        val sLo = L.xPx(span.loMm); val sHi = L.xPx(span.hiMm)
+        axialPxPerMm = abs(sHi - sLo) / (span.hiMm - span.loMm)
+        anchorX = (if (aftRef) sLo else sHi) - dir * b.keywayOffsetFromEndMm * axialPxPerMm
+    } else {
+        axialPxPerMm = if (L.sheet == null || b.lengthMm <= 0f) L.pxPerMm else abs(x1 - x0) / b.lengthMm
+        anchorX = refX
+    }
+
     drawKeywaySlot(
-        refX = refX, dir = dir,
+        refX = anchorX, dir = dir,
         widthMm = b.keywayWidthMm,
         offsetMm = b.keywayOffsetFromEndMm,
         lengthMm = b.keywayLengthMm,
         hostRadiusPx = L.rPx(b.diaMm),
+        axialPxPerMm = axialPxPerMm,
         L = L, outline = outline, outlineW = outlineW, hidden = hidden,
         spooned = b.keywaySpooned,
     )
@@ -888,6 +947,8 @@ private fun DrawScope.drawKeywaySlot(
     offsetMm: Float,
     lengthMm: Float,
     hostRadiusPx: Float,
+    /** The slot's local AXIAL scale — [ShaftRenderer.Layout.pxPerMm] itself on the linear map. */
+    axialPxPerMm: Float,
     L: ShaftRenderer.Layout,
     outline: Color,
     outlineW: Float,
@@ -898,19 +959,19 @@ private fun DrawScope.drawKeywaySlot(
 
     // Two half-widths, one per axis — the PDF slot's construction (`geom/KeywaySlotMath.kt`).
     // [halfW] is the AXIAL term driving every x; [halfH] is the TRANSVERSE term off the diameter
-    // scale, floored for visibility and capped against the host. This canvas has ONE uniform
-    // scale, so the two coincide here and every ellipse comes out round; the shared construction
-    // is what keeps the sheet — where they genuinely differ — from drifting away from it.
-    val halfW    = (widthMm * L.pxPerMm) / 2f
+    // scale ([ShaftRenderer.Layout.pxPerMm]), floored for visibility and capped against the host.
+    // On the linear map the two scales coincide and every ellipse comes out round; under the
+    // sheet layout they differ exactly as they do on the sheet.
+    val halfW    = (widthMm * axialPxPerMm) / 2f
     val halfH    = drawnKeywayHalfWidthPx(
         trueHalfWidthPx = (widthMm * L.pxPerMm) / 2f,
         hostRadiusPx = hostRadiusPx,
         minWidthPx = MIN_KEYWAY_WIDTH_PX,
         strokeWidthPx = outlineW,
     )
-    val offsetPx = offsetMm * L.pxPerMm
+    val offsetPx = offsetMm * axialPxPerMm
     val isOpen   = offsetMm < 0.01f
-    val kwLenPx  = maxOf(lengthMm * L.pxPerMm, minKeywaySlotLenPx(halfW, isOpen))
+    val kwLenPx  = maxOf(lengthMm * axialPxPerMm, minKeywaySlotLenPx(halfW, isOpen))
     val kwSetX   = refX + dir * offsetPx
     val kwLetX   = kwSetX + dir * kwLenPx
 
@@ -1044,6 +1105,81 @@ private fun DrawScope.drawKeywaySilhouetteNotch(
     stroke(notch.wallStartMm())
     stroke(notch.floorMm())
     stroke(notch.wallEndMm())
+}
+
+/**
+ * The body runs under the editor preview's sheet layout, drawn by the schematic sheet's ONE body
+ * pass ([drawBodyRunsWithBreaks]) so the S-break decision, the gap placement off keyway windows,
+ * seal areas and bolt rows, the glyph and the `compressOnDrawing` opt-out are the sheet's own.
+ *
+ * The pass works in sheet POINTS on an `android.graphics.Canvas`, so it runs on this canvas's
+ * native canvas under one point → pixel scale ([PreviewSheetProfile.pxPerPt]) — the way the
+ * preview's dimension rails call the sheet's rail renderer. Everything it is handed is the
+ * PREVIEW's: the outline weight and colour, the kind's fill with the fill-follows-shade decision
+ * as unfilled ids, and the selection ring as the pass's under-stroke, so a broken body rings on
+ * both stubs.
+ */
+private fun DrawScope.drawSheetBodyRuns(
+    spec: ShaftSpec,
+    runs: List<ResolvedBody>,
+    blends: List<com.android.shaftschematic.ui.resolved.BodyBlend>,
+    L: ShaftRenderer.Layout,
+    sheet: PreviewSheetProfile,
+    outline: Color,
+    outlineW: Float,
+    fill: Color,
+    unfilledIds: Set<String>,
+    highlightId: String?,
+    glowColor: Color,
+    glowWidthPx: Float,
+) {
+    val p = sheet.pxPerPt
+    val outlinePaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        style = android.graphics.Paint.Style.STROKE
+        strokeWidth = outlineW / p
+        color = outline.toArgb()
+    }
+    val fillPaint = if (fill.alpha > 0f) {
+        android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            style = android.graphics.Paint.Style.FILL
+            color = fill.toArgb()
+        }
+    } else null
+    val glowPaint = if (highlightId != null) {
+        android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            style = android.graphics.Paint.Style.STROKE
+            strokeWidth = glowWidthPx / p
+            strokeJoin = android.graphics.Paint.Join.ROUND
+            color = glowColor.toArgb()
+        }
+    } else null
+    val contentPt = android.graphics.RectF(
+        L.contentLeftPx / p, L.contentTopPx / p, L.contentRightPx / p, L.contentBottomPx / p,
+    )
+    drawIntoCanvas { canvas ->
+        val nc = canvas.nativeCanvas
+        nc.save()
+        nc.scale(p, p)
+        drawBodyRunsWithBreaks(
+            c = nc,
+            bodies = runs.map { spec.bodyForPdf(it) },
+            cy = L.centerlineYPx / p,
+            xAt = { mm -> L.xPx(mm) / p },
+            rPx = { dia -> L.rPx(dia) / p },
+            outline = outlinePaint,
+            geomRect = contentPt,
+            fill = fillPaint,
+            truePtPerMm = sheet.diaPtPerMm,
+            breakMinFracOfTrue = sheet.sBreakThresholdFrac,
+            blends = blends,
+            keywayAvoidSpansMm = bodyKeywayProtectedSpansMm(spec),
+            boltRowAvoidSpansMm = boltRowProtectedSpansMm(spec),
+            unfilledBodyIds = unfilledIds,
+            underStroke = glowPaint,
+            underStrokeIds = setOfNotNull(highlightId),
+        )
+        nc.restore()
+    }
 }
 
 /**

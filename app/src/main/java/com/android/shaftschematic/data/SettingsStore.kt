@@ -135,6 +135,7 @@ object SettingsStore {
     private val KEY_COMPONENT_ARROW_WIDTH_DP = intPreferencesKey("component_arrow_width_dp")
     private val KEY_SHOW_HIGHLIGHT_SELECTION = booleanPreferencesKey("show_highlight_selection")
     private val KEY_SHOW_PREVIEW_DIMENSIONS = booleanPreferencesKey("show_preview_dimensions")
+    private val KEY_PREVIEW_SHEET_LAYOUT = booleanPreferencesKey("preview_sheet_layout")
 
     // Developer options (hidden behind About taps)
     private val KEY_DEV_OPTIONS_ENABLED = booleanPreferencesKey("dev_options_enabled")
@@ -701,6 +702,15 @@ object SettingsStore {
     fun showPreviewDimensionsFlow(ctx: Context): Flow<Boolean> =
         ctx.settingsPrefs.map { p -> p[KEY_SHOW_PREVIEW_DIMENSIONS] ?: true }
 
+    /**
+     * "Draw Preview Like the Sheet" (Settings → Editor Screen), default ON: the editor preview
+     * draws the shaft on the schematic sheet's compressed x map, diameter scale and S-breaks.
+     * A device preference for the on-screen preview only: no document carries it, a Drawing
+     * profile does not capture it, and no PDF reads it.
+     */
+    fun previewSheetLayoutFlow(ctx: Context): Flow<Boolean> =
+        ctx.settingsPrefs.map { p -> p[KEY_PREVIEW_SHEET_LAYOUT] ?: true }
+
     fun componentArrowWidthDpFlow(ctx: Context): Flow<Int> =
         ctx.settingsPrefs.map { p -> p[KEY_COMPONENT_ARROW_WIDTH_DP] ?: 40 }
     fun devOptionsEnabledFlow(ctx: Context): Flow<Boolean> =
@@ -1005,6 +1015,10 @@ object SettingsStore {
 
     suspend fun setShowPreviewDimensions(ctx: Context, show: Boolean) {
         ctx.editSettings { it[KEY_SHOW_PREVIEW_DIMENSIONS] = show }
+    }
+
+    suspend fun setPreviewSheetLayout(ctx: Context, enabled: Boolean) {
+        ctx.editSettings { it[KEY_PREVIEW_SHEET_LAYOUT] = enabled }
     }
 
     suspend fun setOpenPdfAfterExport(ctx: Context, enabled: Boolean) {

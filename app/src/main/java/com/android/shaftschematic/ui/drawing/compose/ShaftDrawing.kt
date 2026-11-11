@@ -54,6 +54,9 @@ import com.android.shaftschematic.ui.drawing.render.GridRenderer.drawAdaptiveSha
 import com.android.shaftschematic.ui.drawing.render.PreviewIssueMark
 import com.android.shaftschematic.ui.drawing.render.PreviewRailCache
 import com.android.shaftschematic.ui.drawing.render.PreviewRailSettings
+import com.android.shaftschematic.ui.drawing.render.PreviewSheetCache
+import com.android.shaftschematic.ui.drawing.render.PreviewSheetSettings
+import com.android.shaftschematic.ui.drawing.render.previewSheetProfileForBox
 import com.android.shaftschematic.ui.drawing.render.planPreviewRails
 import com.android.shaftschematic.ui.drawing.render.previewRailSpans
 import com.android.shaftschematic.ui.drawing.render.RenderOptions
@@ -90,6 +93,25 @@ private fun logTapSelect(message: String) {
  * preview's pinch zoom along with everything else, so it keeps the same proportion at any zoom.
  */
 private const val SELECTION_GLOW_EXTRA_PX = 4f
+
+/**
+ * The component a preview tap at axial position [tappedMm] selects: bodies, then tapers, threads
+ * and liners, the last kind covering the position winning — a liner over a body run selects the
+ * liner. The position comes from the layout's own inverse map (`ShaftLayout.Result.xMmFromPx`), so
+ * under the sheet layout a tap lands through the compressed map, and a tap in a body's S-break gap
+ * selects that body: the gap is drawn inside the run's own mapped span.
+ */
+internal fun previewTapHitId(components: List<ResolvedComponent>, tappedMm: Float): String? {
+    var hitId: String? = null
+    fun scan(list: List<ResolvedComponent>) = list.forEach { comp ->
+        if (tappedMm >= comp.startMmPhysical && tappedMm < comp.endMmPhysical) hitId = comp.id
+    }
+    scan(components.filterIsInstance<ResolvedBody>())
+    scan(components.filterIsInstance<ResolvedTaper>())
+    scan(components.filterIsInstance<ResolvedThread>())
+    scan(components.filterIsInstance<ResolvedLiner>())
+    return hitId
+}
 
 /**
  * True while the preview's pan/zoom is away from its default view (scale 1, no offset) — the
@@ -169,6 +191,14 @@ fun ShaftDrawing(
      * Editor Screen → "Show Dimension Lines in Preview" is on.
      */
     dimensionRails: PreviewRailSettings? = null,
+    /**
+     * Draw the shaft like the schematic sheet (`PreviewSheetLayout.kt`): the sheet's compressed
+     * x map, diameter scale and S-breaks. `null` (the default) is the linear picture, exactly as
+     * before; only the editor preview passes one, and only while Settings → Editor Screen →
+     * "Draw Preview Like the Sheet" is on. The grid stands down while it is in effect — a
+     * millimetre grid means nothing on a compressed map.
+     */
+    sheetLayout: PreviewSheetSettings? = null,
     // Highlight bridge (safe defaults)
     highlightEnabled: Boolean = false,
     highlightId: Any? = null,
@@ -252,8 +282,10 @@ fun ShaftDrawing(
     val railHaloColor = MaterialTheme.colorScheme.background.toArgb()
     val railCache = remember(
         railSpans, dimensionRails, safeSpec, resolvedComponents, issueExtentMm,
-        railPxPerPt, railColor, railHaloColor,
+        railPxPerPt, railColor, railHaloColor, sheetLayout,
     ) { PreviewRailCache() }
+    // The sheet profile, solved once per input change and canvas size, never per pan/zoom frame.
+    val sheetCache = remember(spec, safeSpec, sheetLayout, issueExtentMm, railPxPerPt) { PreviewSheetCache() }
 
     // ──────────────────────────────
     // Pan / Zoom (UI only)
@@ -308,19 +340,7 @@ fun ShaftDrawing(
                     val tappedMm = layout.xMmFromPx(localX)
                     val components = latestComponentsState.value
                     val onTap = latestOnTapState.value
-                    var hitId: String? = null
-                    components.filterIsInstance<ResolvedBody>().forEach { comp ->
-                        if (tappedMm >= comp.startMmPhysical && tappedMm < comp.endMmPhysical) hitId = comp.id
-                    }
-                    components.filterIsInstance<ResolvedTaper>().forEach { comp ->
-                        if (tappedMm >= comp.startMmPhysical && tappedMm < comp.endMmPhysical) hitId = comp.id
-                    }
-                    components.filterIsInstance<ResolvedThread>().forEach { comp ->
-                        if (tappedMm >= comp.startMmPhysical && tappedMm < comp.endMmPhysical) hitId = comp.id
-                    }
-                    components.filterIsInstance<ResolvedLiner>().forEach { comp ->
-                        if (tappedMm >= comp.startMmPhysical && tappedMm < comp.endMmPhysical) hitId = comp.id
-                    }
+                    val hitId = previewTapHitId(components, tappedMm)
                     logTapSelect(
                         "tapPx=${pos.x}, tapMm=$tappedMm, scale=${scale.value}, offsetX=${offset.value.x}, selected=$hitId"
                     )
@@ -349,6 +369,24 @@ fun ShaftDrawing(
             val padX = options.paddingPx.toFloat()
             val padY = 8f
 
+            // Sheet layout: the schematic's profile solved for this box's content rect — the
+            // rails-off rect, so the shaft's height never depends on the rails' reservation.
+            // Null (setting off, no OAL yet, or a part hanging past an end) keeps the linear map.
+            val sheetProfile = if (sheetLayout == null) null else sheetCache.get(size.width, size.height) {
+                previewSheetProfileForBox(
+                    spec = spec,
+                    layoutSpec = safeSpec,
+                    settings = sheetLayout,
+                    leftPx = padX,
+                    topPx = padY,
+                    rightPx = size.width - padX,
+                    bottomPx = size.height - padY,
+                    pxPerPt = railPxPerPt,
+                    resolvedComponents = resolvedComponents.takeIf { it.isNotEmpty() },
+                    extentMm = issueExtentMm,
+                )
+            }
+
             // [reservePx] is the strip the dimension rails take off the box top; 0 without rails,
             // which is the layout every rails-off box has always had.
             fun layoutFor(reservePx: Float) = ShaftLayout.compute(
@@ -359,6 +397,7 @@ fun ShaftDrawing(
                 bottomPx = size.height - padY,
                 resolvedComponents = resolvedComponents.takeIf { it.isNotEmpty() },
                 extentMm = issueExtentMm,
+                sheet = sheetProfile,
             )
             val railPlan = if (dimensionRails != null && railSpans != null) {
                 railCache.get(size.width, size.height) {
@@ -401,8 +440,9 @@ fun ShaftDrawing(
                 translate(offset.value.x, offset.value.y)
                 scale(scale.value, scale.value, pivot = Offset.Zero)
             }) {
-                // Grid: beneath geometry; renderer receives showGrid=false
-                if (showGrid) {
+                // Grid: beneath geometry; renderer receives showGrid=false. A millimetre grid
+                // means nothing on the sheet's compressed map, so it stands down there.
+                if (showGrid && layout.sheet == null) {
                     val extraW = size.width
                     val extraH = size.height
                     drawAdaptiveShaftGrid(

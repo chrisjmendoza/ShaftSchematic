@@ -595,6 +595,10 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     internal val _showPreviewDimensions = MutableStateFlow(true)
     val showPreviewDimensions: StateFlow<Boolean> = _showPreviewDimensions.asStateFlow()
 
+    /** The editor preview drawn like the schematic sheet — a device preference, default ON. */
+    internal val _previewSheetLayout = MutableStateFlow(true)
+    val previewSheetLayout: StateFlow<Boolean> = _previewSheetLayout.asStateFlow()
+
     internal val _componentArrowWidthDp = MutableStateFlow(40)
     val componentArrowWidthDp: StateFlow<Int> = _componentArrowWidthDp.asStateFlow()
 
@@ -1404,6 +1408,11 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             SettingsStore.showPreviewDimensionsFlow(getApplication()).collectLatest { persisted ->
                 setShowPreviewDimensions(persisted, persist = false)
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.previewSheetLayoutFlow(getApplication()).collectLatest { persisted ->
+                setPreviewSheetLayout(persisted, persist = false)
             }
         }
         viewModelScope.launch {

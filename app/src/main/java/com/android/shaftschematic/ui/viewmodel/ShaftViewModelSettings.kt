@@ -603,6 +603,18 @@ fun ShaftViewModel.setShowPreviewDimensions(show: Boolean, persist: Boolean = tr
     }
 }
 
+/**
+ * The editor preview (Schematic and Final tabs) drawn like the schematic sheet — compressed x
+ * map, sheet diameter scale, S-breaks. On-screen only: never in a document, never captured by a
+ * Drawing profile, never read by a PDF composer.
+ */
+fun ShaftViewModel.setPreviewSheetLayout(enabled: Boolean, persist: Boolean = true) {
+    _previewSheetLayout.value = enabled
+    if (persist) {
+        viewModelScope.launch { SettingsStore.setPreviewSheetLayout(getApplication(), enabled) }
+    }
+}
+
 fun ShaftViewModel.setComponentArrowWidthDp(widthDp: Int, persist: Boolean = true) {
     val clamped = widthDp.coerceIn(24, 72)
     _componentArrowWidthDp.value = clamped

@@ -9,8 +9,9 @@ import com.android.shaftschematic.model.CouplerBoltSlot
  * at true scale ([boltRowPinnedSpans]), so the local pt/mm equals the diameter scale the hole
  * circles are sized on and the drawn pitch is the true pitch at that scale; the holes stay
  * round and correctly spaced inside a body that compresses around them. ONE source for both
- * draw sites (`ShaftRenderer` overlay, `drawCouplerBoltSlots`); on the canvas's linear map it
- * reduces to `xAt(center)` exactly.
+ * draw sites (`ShaftRenderer` overlay, `drawCouplerBoltSlots`); on a canvas's linear map it
+ * reduces to `xAt(center)` exactly, and the editor preview's sheet layout runs it over the
+ * sheet's compressed map like the sheet does.
  */
 fun boltHoleCentersX(slot: CouplerBoltSlot, xAt: (Float) -> Float): List<Float> {
     if (slot.count < 1) return emptyList()
