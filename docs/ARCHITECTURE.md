@@ -56,8 +56,9 @@ bodies. Its list defaults empty, so older documents decode unchanged (no migrati
 never touches geometry resolution, so it lives beside the spec in the document envelope
 (`doc/ShaftDocCodec.ShaftDocV1`), not inside it:
 
-- `WearRecord` (`wear_record`): liner **wear spots** (bands, keyed by `linerId` — orphans
-  pruned at decode), **wear pits** ("X" markers), **measured-Ø readings**
+- `WearRecord` (`wear_record`): **wear spots** (bands on liners and bodies; the host's
+  resolved component id is stored as `linerId` — never pruned at decode, orphans skipped at
+  render), **wear pits** ("X" markers), **measured-Ø readings**
   (`WearDiaReading` — value callouts with leaders on the wear document), and **worn
   sections** (`WornSection` — designated measured areas printed on the consolidated sheet;
   shaft-space like undercuts, so no orphans). Pits and readings

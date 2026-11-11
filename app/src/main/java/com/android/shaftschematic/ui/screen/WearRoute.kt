@@ -97,6 +97,7 @@ import com.android.shaftschematic.ui.viewmodel.setWearPitBrushSizeFactor
 import com.android.shaftschematic.ui.viewmodel.removeWearPits
 import com.android.shaftschematic.ui.viewmodel.restoreWearPits
 import com.android.shaftschematic.ui.viewmodel.restoreWearSpot
+import com.android.shaftschematic.ui.resolved.wearAreaHosts
 import com.android.shaftschematic.ui.viewmodel.addWearSpot
 import com.android.shaftschematic.ui.viewmodel.removeWearDiaReading
 import com.android.shaftschematic.ui.viewmodel.removeWearPit
@@ -130,7 +131,7 @@ import kotlinx.coroutines.withContext
  * Screen for the Shaft Wear / Inspection Document tab.
  *
  * ## Purpose
- * The authoring surface for wear data — wear spots, pits, and measured-Ø readings are
+ * The authoring surface for wear data — wear spots (liners and bodies), pits, and measured-Ø readings are
  * placed in-app here and print at their true position on the document. Blank draft mode
  * prints the same drawing as a write-in form, for marking damage, pitting, and
  * dye-penetrant results by hand on the page.
@@ -397,6 +398,10 @@ fun WearRoute(
     val previewShape   = MaterialTheme.shapes.medium
 
     val transparentArgb = Color.Transparent.toArgb()
+    // The components a wear area can sit on, for the drawing's spoken count.
+    val hostIds = remember(resolvedComponents) {
+        wearAreaHosts(resolvedComponents).mapTo(HashSet()) { it.id }
+    }
     // Every liner's worn-profile trace for the shaft canvas above the slider — the wear sheet's
     // main-profile builder, so this drawing answers "Trace depth exaggeration" the way the
     // sheet does (on-device report: the slider changed nothing on the shaft).
@@ -454,7 +459,8 @@ fun WearRoute(
                     .background(Color.White)
                     .semantics {
                         contentDescription = SheetSemantics.wearOverview(
-                            wearAreaCount = wearRecord.spots.size,
+                            // Areas whose liner or body no longer resolves are not on the drawing.
+                            wearAreaCount = wearRecord.spots.count { s -> hostIds.contains(s.linerId) },
                             pitCount = wearRecord.pits.size,
                             diaReadingCount = wearRecord.diaReadings.size,
                         )
@@ -980,7 +986,8 @@ private fun openWearPdf(context: Context, uri: Uri) {
  * Draw a faint tint + border over every pit-eligible component (body, taper, liner — the tap
  * affordance) and a small count badge above any that already has recorded wear (spots + pits).
  * Purely a rendering overlay — reads [wearRecord] but never mutates it. Generalized
- * from the liner-only version so bodies/tapers are tappable for pits too.
+ * from the liner-only version so bodies/tapers are tappable too (a body carries wear areas as
+ * well as pits; a taper, pits and Ø readings).
  */
 private fun DrawScope.drawWearAffordances(
     layout: ShaftLayout.Result,
@@ -1018,8 +1025,8 @@ private fun DrawScope.drawWearAffordances(
             style = Stroke(width = 1.5.dp.toPx()),
         )
 
-        // Spots are liner-only; pits attach to any pit-eligible component. Badge shows the total.
-        val spotCount = if (rc is ResolvedLiner) wearRecord.spots.count { it.linerId == rc.id } else 0
+        // Wear areas sit on liners and bodies; pits on any pit-eligible component. Badge shows the total.
+        val spotCount = if (rc is ResolvedTaper) 0 else wearRecord.spots.count { it.linerId == rc.id }
         val pitCount = wearRecord.pits.count { it.componentId == rc.id }
         val total = spotCount + pitCount
         if (total > 0) {

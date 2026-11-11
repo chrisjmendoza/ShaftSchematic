@@ -467,10 +467,13 @@ template or a mate duplicate; the inspection records below stay keyed to the ORI
 can never affect geometry resolution:
 
 - `WearRecord(spots, pits, diaReadings, wornSections, traceDepthFrac, dyePenResult,
-  stripComponentIds, showShaftProfile, compactStrips, stripSizeFrac)` — liner wear bands
-  (`WearSpot`, keyed by `linerId`), pit "X" markers (`WearPit`), measured-diameter readings
-  (`WearDiaReading`) — the middle two keyed by *resolved* component id with
-  component-local `axialMm` — and worn sections (`WornSection`). The last six are per-job
+  stripComponentIds, showShaftProfile, compactStrips, stripSizeFrac)` — wear bands on liners
+  and bodies (`WearSpot`; its host's *resolved* component id is stored under the original key
+  `linerId`, host-local `startMm` from the host's AFT edge; typed, or sized by dragging the
+  band's start / end bars — a drag lands on a 1/8" / 1 mm grid), pit "X" markers (`WearPit`),
+  measured-diameter readings (`WearDiaReading`) — the middle two keyed by *resolved* component
+  id with component-local `axialMm` — and worn sections (`WornSection`). Nothing in the record
+  is pruned at decode; a mark whose component no longer resolves is skipped where it would draw. The last six are per-job
   wear-sheet fits and results, all additive + defaulted and none of them geometry:
   `traceDepthFrac` (`Float?`, `null` = follow `PdfPrefs.wearTraceDepthFrac`, resolved by
   `effectiveWearTraceDepthFrac`), `dyePenResult` (`DyePenResult?`, `null` = both boxes blank),

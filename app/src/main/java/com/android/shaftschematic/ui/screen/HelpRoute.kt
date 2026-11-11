@@ -641,10 +641,16 @@ internal val helpSections: List<HelpSection> = listOf(
             ),
             HelpTopic(
                 "Record wear readings",
-                "The Wear document records liner wear areas, pit/dye-failure X marks, and " +
-                    "measured diameters. Tap a liner strip to zoom in, then place marks and " +
-                    "type measured Ø values. These are reference marks only — they never " +
-                    "change the shaft's geometry.\n\n" +
+                "The Wear document records wear areas on liners and bodies, pit/dye-failure " +
+                    "X marks, and measured diameters. Tap a liner, taper or body to zoom in, " +
+                    "then place marks and type measured Ø values. These are reference marks " +
+                    "only — they never change the shaft's geometry.\n\n" +
+                    "A wear area (\"Add spot\" on a liner or body) has a start bar and an end " +
+                    "bar on the drawing: drag one to where the wear begins or ends instead of " +
+                    "typing its length. A dragged edge lands on the nearest 1/8\" (1 mm in a " +
+                    "millimetre drawing); the Start and Length fields still take typed values " +
+                    "exactly as entered. Wear on a liner stays in place on that liner when the " +
+                    "liner or the overall length changes.\n\n" +
                     "Set an X's size on the Size slider before you tap (0.5× to 3× the " +
                     "original small X; the box beside it previews the X on that component). " +
                     "Each X keeps the size it was placed at until you remove it, on screen " +

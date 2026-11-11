@@ -21,7 +21,8 @@ import org.junit.Test
 /**
  * Persistence tests for the liner wear-inspection record (Phase 1 of
  * `docs/archive/LinerWearAreas_Proposal.md`): envelope round-trip, legacy-file default,
- * and the orphan-filtering policy (§3, §7 rule 6).
+ * and the orphan policy — nothing in the record is pruned at decode; an area, pit or reading
+ * whose component no longer resolves is skipped where it would draw.
  */
 class WearRecordPersistenceTest {
 
@@ -170,7 +171,7 @@ class WearRecordPersistenceTest {
     }
 
     @Test
-    fun `orphan spots for a deleted liner are dropped on decode, surviving spots kept`() {
+    fun `a spot whose liner is gone survives decode, verbatim, beside the ones that resolve`() {
         val keptSpot = WearSpot(id = "kept", linerId = "ln1", startMm = 10f, lengthMm = 20f)
         val orphanSpot = WearSpot(id = "orphan", linerId = "ln-deleted", startMm = 5f, lengthMm = 15f)
 
@@ -182,21 +183,47 @@ class WearRecordPersistenceTest {
 
         val decoded = ShaftDocCodec.decode(ShaftDocCodec.encodeV1(doc))
 
-        assertEquals(1, decoded.wearRecord.spots.size)
-        assertEquals("kept", decoded.wearRecord.spots.single().id)
+        // Never pruned at decode: the orphan is skipped where it would draw.
+        assertEquals(listOf(keptSpot, orphanSpot), decoded.wearRecord.spots)
     }
 
     @Test
-    fun `orphan filtering with no liners at all drops every spot`() {
-        val spot = WearSpot(id = "s1", linerId = "ln1", startMm = 0f, lengthMm = 10f)
+    fun `a wear area on a body or a bare-shaft run survives decode`() {
+        // The codec cannot know a bare-shaft run's id, so it cannot judge the area's host.
+        val onAuto = WearSpot(id = "a", linerId = "auto_body_200.000_500.000", startMm = 30f, lengthMm = 44.45f)
+        val onBody = WearSpot(
+            id = "b", linerId = "body-1", startMm = 12.7f, lengthMm = 25.4f,
+            authoredReference = WearSpotReference.LINER_FWD,
+        )
         val doc = ShaftDocCodec.ShaftDocV1(
-            spec = ShaftSpec(overallLengthMm = 500f), // no liners
-            wearRecord = WearRecord(spots = listOf(spot)),
+            spec = linerSpec("ln1"),
+            wearRecord = WearRecord(spots = listOf(onAuto, onBody)),
         )
 
         val decoded = ShaftDocCodec.decode(ShaftDocCodec.encodeV1(doc))
 
-        assertTrue(decoded.wearRecord.spots.isEmpty())
+        assertEquals(listOf(onAuto, onBody), decoded.wearRecord.spots)
+    }
+
+    @Test
+    fun `a file saved before body wear areas decodes its liner spots unchanged`() {
+        // The stored key is still "linerId": a file from an older build needs no migration.
+        val raw = ShaftDocCodec.encodeV1(
+            ShaftDocCodec.ShaftDocV1(
+                spec = linerSpec("ln1"),
+                wearRecord = WearRecord(
+                    spots = listOf(WearSpot(id = "s1", linerId = "ln1", startMm = 25f, lengthMm = 40f, note = "scored")),
+                ),
+            )
+        )
+        assertTrue("the stored key keeps its name", raw.contains("\"linerId\""))
+
+        val spot = ShaftDocCodec.decode(raw).wearRecord.spots.single()
+        assertEquals("ln1", spot.linerId)
+        assertEquals(25f, spot.startMm, 0f)
+        assertEquals(40f, spot.lengthMm, 0f)
+        assertEquals("scored", spot.note)
+        assertEquals(WearSpotReference.LINER_AFT, spot.authoredReference)
     }
 
     // ── Pits (the "X" markers) ────────────────────────────────────────────────
@@ -259,11 +286,11 @@ class WearRecordPersistenceTest {
     }
 
     @Test
-    fun `pits on non-liner or missing components survive decode (unlike orphan spots)`() {
-        // Pits attach to bodies/tapers/auto-bodies whose ids the codec can't know, so — unlike
-        // wear spots — they are NOT pruned at decode. Orphan handling is at the render layer
-        // (same posture as runout readings). Here the pit's componentId matches no liner, yet
-        // it must be preserved while the orphan spot beside it is dropped.
+    fun `pits on non-liner or missing components survive decode, like orphan spots`() {
+        // Pits attach to bodies/tapers/auto-bodies whose ids the codec can't know, so they
+        // are NOT pruned at decode. Orphan handling is at the render layer (same posture as
+        // runout readings). Here the pit's componentId matches no liner, yet it must be
+        // preserved — and so is the orphan spot beside it.
         val keptPit = WearPit(id = "p1", componentId = "auto_body_0.000_100.000", axialMm = 10f)
         val orphanSpot = WearSpot(id = "orphan", linerId = "ln-deleted", startMm = 5f, lengthMm = 15f)
         val doc = ShaftDocCodec.ShaftDocV1(
@@ -273,7 +300,7 @@ class WearRecordPersistenceTest {
 
         val decoded = ShaftDocCodec.decode(ShaftDocCodec.encodeV1(doc))
 
-        assertTrue("orphan spot should be dropped", decoded.wearRecord.spots.isEmpty())
+        assertEquals("orphan spot should survive", listOf(orphanSpot), decoded.wearRecord.spots)
         assertEquals("pit should survive", 1, decoded.wearRecord.pits.size)
         assertEquals("auto_body_0.000_100.000", decoded.wearRecord.pits.single().componentId)
     }
@@ -326,7 +353,7 @@ class WearRecordPersistenceTest {
 
     @Test
     fun `dia readings on non-liner or missing components survive decode`() {
-        // Like pits (and unlike orphan spots), readings key on resolved component ids the
+        // Like pits and wear areas, readings key on resolved component ids the
         // codec can't know — orphan handling is at the render layer, never decode.
         val kept = WearDiaReading(id = "d1", componentId = "auto_body_0.000_100.000", axialMm = 10f, diaMm = 99f)
         val doc = ShaftDocCodec.ShaftDocV1(

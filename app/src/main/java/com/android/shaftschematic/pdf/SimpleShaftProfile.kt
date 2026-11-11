@@ -184,6 +184,25 @@ internal fun drawSimpleShaftProfile(
     drawCouplerBoltSlots(c, spec.couplerBoltSlots, spec, cy, xAt, rPx, outline, slotFill)
 }
 
+/**
+ * The drawn S-break gaps of [spec]'s body runs on a simple profile — exactly the gaps
+ * [drawSimpleShaftProfile] cuts when handed the same arguments ([simpleBodyBreak], the one
+ * decision). The wear sheet stops a body's wear band at each side of them: the gap is bare paper.
+ */
+internal fun simpleProfileBodyBreakGapsX(
+    spec: ShaftSpec,
+    xAt: (Float) -> Float,
+    rPx: (Float) -> Float,
+    strokeWidthPt: Float,
+    geomRect: RectF,
+): List<ClosedFloatingPointRange<Float>> = spec.bodies.mapNotNull { b ->
+    if (b.lengthMm <= 0f || b.diaMm <= 0f) return@mapNotNull null
+    val brk = simpleBodyBreak(
+        xAt(b.startFromAftMm), xAt(b.startFromAftMm + b.lengthMm), rPx(b.diaMm), strokeWidthPt, geomRect,
+    ) ?: return@mapNotNull null
+    brk.leftEnd..brk.rightBeg
+}
+
 /** Where a simple-profile body run's break pair lands; null when the run prints plain. */
 private data class SimpleBodyBreak(val leftEnd: Float, val rightBeg: Float, val amplitudePt: Float)
 

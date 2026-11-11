@@ -6,6 +6,32 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-11-10
+
+### feat(wear): drag a wear area's start and end bars; wear areas on bodies
+
+A wear area no longer needs its length measured and typed (on-device request). Every wear area
+on a component's wear page now has a start bar and an end bar on the drawing: press one and drag,
+and that edge follows the finger while the other stays put. The band, the bars and the values
+under the drawing update as you drag; the Start and Length fields on the card show the result
+when you let go, and the whole drag is one Undo. A dragged edge is an estimate read off the
+drawing, so it lands on the nearest 1/8" (1 mm in a millimetre drawing) and cannot leave the
+component or cross the other bar. Typing the values still works exactly as before, and a typed
+value is still kept exactly as typed — only a drag snaps.
+
+Wear areas can now be recorded on **bodies and bare shaft** as well as liners ("Wear spots" on a
+body's wear page; the "Measure From" chips read Body AFT / Body FWD there). A body's wear area
+prints like a liner's: a grey band on its detail strip when the body is elected onto one, the
+line band on the wear sheet's shaft, and the "Wear areas on the shaft drawing" style on the
+consolidated sheet. Only liners draw a worn-profile trace.
+
+When the shaft changes: wear on a liner stays where it is on that liner — through a liner move,
+an overall-length change, or any other edit. Wear on a body follows the body, and on bare shaft
+it follows the section when a neighbouring part's edit moves its end, the way pits and measured
+diameters already do. Deleting a liner or body no longer discards its wear areas: they stop
+drawing and come back with Undo (previously a deleted liner's wear areas were dropped the next
+time the job was opened).
+
 ## 2026-11-09
 
 ### fix(undercut): "Next cut" goes away from the datum

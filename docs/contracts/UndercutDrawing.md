@@ -2087,7 +2087,8 @@ cuts, above the chain (`buildUndercutTotalSpan`) — clarifies some jobs and con
   tab / its detail overlay, deliberately outside the "Add dialogs mirror carousel cards"
   invariant (`CLAUDE.md`).
 - **Not component-keyed** — canonical storage is shaft-space `startFromAftMm`; there is no
-  orphan concept and nothing is pruned at decode, unlike wear spots (which ARE pruned).
+  orphan concept and nothing is pruned at decode (a wear spot is component-keyed and is
+  skipped at render when its host is gone; it is not pruned either).
 - **Golden rule** — `startFromAftMm`, `lengthMm`, `diaMm`, `referenceLinerId` and
   `referenceCutId` round-trip verbatim; no field commit path snaps, rounds, or derives a stored value. The overlay's draft is
   a staging area, not a filter: confirming passes the drafted values through unchanged — the pill's

@@ -206,12 +206,13 @@ Wear pits (`WearRecord.pits` — a `WearPit` "X" marker per pit/dye-failure, sma
 **reference-only**, the same posture as wear spots / coupler bolt slots / runout readings. They
 **never** affect `coverageEndMm`/OAL, body resolution, or collision, and
 they live outside `ShaftSpec` (inside `WearRecord`, so they ride the existing `wear_record`
-envelope field — no new field, no autosave/snapshot/import plumbing). Unlike wear spots (liner-only,
-keyed by `linerId`), a pit sits on **any** pit-eligible component — a liner, taper, or body
+envelope field — no new field, no autosave/snapshot/import plumbing). A pit sits on **any**
+pit-eligible component (a wear area sits on a liner or a body — next section) — a liner, taper, or body
 (explicit or auto) — keyed by the **resolved component id** (`WearPit.componentId`), component-local
 `axialMm` from the AFT edge + a visual `acrossFrac`. Orphan pits (component no longer resolves) are
 skipped at the **render layer**, not pruned at decode (auto-body/taper ids aren't known to the
-codec) — same rule as runout readings; wear spots, by contrast, ARE pruned at decode. The "X" must
+codec) — same rule as runout readings, and as wear areas: nothing in a `WearRecord` is pruned at
+decode. The "X" must
 be drawn **identically** (same crossed-line construction, same per-pit size — `WearPit.sizeFactor`,
 chosen on the inspection page's size slider when the pit is placed and never changed after, `null`
 on older pits which draw from Small 1× / Large 2×, resolved by the ONE `pitSizeFactor` /
@@ -220,6 +221,52 @@ on older pits which draw from Small 1× / Large 2×, resolved by the ONE `pitSiz
 strip pits (PDF), and the consolidated runout sheet (canvas + PDF), which reuses
 `drawWearPitsOnProfile` itself (per-surface `smallHalf`). Pure sizing/hit-test/clamp math lives in `geom/WearPitMath.kt` (shared, no
 `pdf → ui` dep). See `docs/contracts/RunoutSheet.md` (Wear Pits).
+
+### Wear areas sit on liners and bodies; a bar drag is the one estimated edit
+A wear area (`WearRecord.spots` — a `WearSpot` band) is **reference-only**, the pit posture: it
+never affects `coverageEndMm`/OAL, body resolution or collision, and rides the `wear_record`
+envelope field. Its host is ONE component — a liner, or a drawn body run (explicit or bare shaft;
+never a taper) — named by the **resolved component id**, the identity `WearPit.componentId` uses.
+The stored key is still `linerId` whatever the host is (a rename would orphan every saved
+area — do not rename the serialized key). `startMm` is host-local from
+the host's AFT edge, so **a liner's wear stays in place on the liner** through a liner move, an
+OAL change (a FWD-referenced liner's re-anchor included) and any neighbour's edit: nothing
+rewrites `startMm`/`lengthMm` there (on-device request). A body's areas follow the body exactly
+as its pits do — an explicit body carries them; a bare-shaft run's are re-keyed at the ORIGINAL
+`updateSpec` seam by the ONE machinery in `geom/AutoBodyRekeyMath.kt` (`AutoKeyedData.rekeyedFor`
+shifts `startMm` like a pit's `axialMm`, never `lengthMm`; promotion/demotion through
+`bodyIdentitySwaps`; a split or merge stays orphaned) — do not write a second re-keying path.
+**Never pruned at decode** (`ShaftDocCodec` passes the wear record through whole — a bare-shaft
+id is not known to the codec); an area whose host no longer resolves is skipped at the **render
+layer** by the ONE resolution `resolveWearAreaSpans` (`geom/WearAreaMath.kt`, hosts from
+`ui/resolved/WearAreaHosts.kt`), and Undo of the delete brings it back. Every draw site clamps a
+band to its host for DISPLAY only: the detail canvas, the wear sheet's main profile
+(`drawWearBandsOnProfile`) and detail strips (a body's band is a plain grey rect with edge ticks;
+the chained rail belongs to the window's liner, else its first body carrying areas), and the
+consolidated sheet (`consolidatedWearBandRects`, following `PdfPrefs.wearAreaStyle` like a
+liner's). A resolved body run is already trimmed around liners and tapers, so a body's band never
+crosses one, and on a whole-shaft profile it stops at each side of the run's S-break gap
+(`spanPiecesClearOf` over the body pass's own gaps — bare paper). Only a LINER traces a worn
+profile; Ø readings on a body never start one. `LINER_AFT`/`LINER_FWD` mean the host's own edges
+and read "Body AFT"/"Body FWD" on a body's page through the ONE helper `wearReferenceChipLabel`;
+the stored enum is unchanged. A sheet with no body areas prints exactly as before.
+
+**The start / end bars are the ONE place a stored wear-area value changes without being typed**
+(on-device request: size an area on the drawing instead of measuring its length). Every drawn
+band on the detail canvas carries a bar on each edge (`wearBarTargets` — one list behind the
+drawn bars and the hit test; fixed `SheetInk`, canvas-only, printed on NO sheet). A press that
+starts on a bar and moves past touch slop drags that edge; the other edge keeps its STORED
+position. It is still a direct user action, and its result is an estimate read off the drawing,
+so it lands on a readable grid — 1/8" in an inch document, 1 mm in a millimetre one
+(`wearDragGridMm`): the edge the card's Start field locates snaps the displayed START, the other
+edge snaps the LENGTH (`dragWearAreaEdge`, `ui/screen/WearAreaDragMath.kt`, pure), and the moved
+edge is held inside the host and `wearDragMinLengthMm` from its partner. A TYPED Start or Length
+is still stored verbatim — only a drag snaps. The `PreviewTuning` doctrine holds: the band, bars
+and rail values follow the finger from local state, NO ViewModel write on a drag frame, ONE
+`updateWearSpot` on release (one undo step in the document's one history). The gesture watches
+the Initial pass and consumes only once the drag has begun, so it wins over pinch/pan and fires
+no tap tool, while a press released in place stays an ordinary tap. See
+`docs/contracts/RunoutSheet.md` (Wear areas on bodies; start / end bars).
 
 ### Wear diameter readings are reference features
 Measured-Ø readings (`WearRecord.diaReadings` — a `WearDiaReading` per measured station,
@@ -841,12 +888,12 @@ spots. They **never** affect `coverageEndMm`/OAL, body resolution, or
 collision, and live outside `ShaftSpec`. Both fields are optional; a sheet exports
 fine with neither. Keyed by `(componentId, stationIndex)` with render-layer orphan handling
 (a reading whose station no longer exists is simply not drawn). A bare-shaft (auto) body's keys
-— readings, dragged stations, its count override, wear pits, Ø readings, strip election — FOLLOW it
+— readings, dragged stations, its count override, wear areas, wear pits, Ø readings, strip election — FOLLOW it
 when a neighbour's edit re-identifies its span (its id IS the span): the ORIGINAL `updateSpec` seam
 re-keys them in the same undo step, unambiguous successors only, a split or merge staying orphaned
 (`geom/AutoBodyRekeyMath.kt`; a gap an OAL change moves RIGIDLY is paired by that shift first, since
 a move longer than the gap leaves no overlap to pair on). The keys move and, when ONE end of the gap
-moved, the component-local `axialMm` of a dragged station, pit or Ø reading is shifted by
+moved, the component-local `axialMm` of a dragged station, pit or Ø reading (and a wear area's `startMm`) is shifted by
 `oldStart − newStart` so the mark keeps its SHAFT position — the one re-derivation the
 authored-position rule allows, because the value it protects is where the mark sits on the shaft, not
 its offset from an edge that just moved; a gap that moved WHOLE keeps each mark's offset inside it

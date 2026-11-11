@@ -12,7 +12,9 @@ import java.util.UUID
  * canonical storage ([WearSpot.startMm]), only how the "Start" field is entered and
  * re-displayed.
  * - [LINER_AFT] / [AFT_SET]: the entered value locates the band's **AFT edge**,
- *   measured FWD from the reference point.
+ *   measured FWD from the reference point. [LINER_AFT] / [LINER_FWD] are the edges of the
+ *   component the spot sits on — a body's own edges when the host is a body (the UI labels
+ *   them "Body AFT" / "Body FWD" there); the stored names are unchanged.
  * - [LINER_FWD] / [FWD_SET]: the entered value locates the band's **FWD edge**,
  *   measured AFT from the reference point.
  */
@@ -20,7 +22,7 @@ import java.util.UUID
 enum class WearSpotReference { LINER_AFT, LINER_FWD, AFT_SET, FWD_SET }
 
 /**
- * A recorded wear band on a liner.
+ * A recorded wear band (wear area) on a liner or a body.
  *
  * This is a **pure reference feature** — same contract class as [CouplerBoltSlot]
  * (see `CLAUDE.md` and `docs/archive/LinerWearAreas_Proposal.md` §7):
@@ -30,12 +32,28 @@ enum class WearSpotReference { LINER_AFT, LINER_FWD, AFT_SET, FWD_SET }
  *   `RunoutConfig` in the document envelope) so geometry resolution never has to know
  *   about it.
  *
+ * ## Host
+ * The area sits on ONE component, named by [linerId] — the **resolved component id** of a
+ * liner or of a drawn body run (explicit or bare shaft), exactly the identity
+ * [WearPit.componentId] uses. The stored key keeps the name `linerId` whatever the host is:
+ * renaming the serialized key would orphan every saved area. An area whose
+ * host no longer resolves is simply not drawn — orphan handling at the render layer, never at
+ * decode (a bare-shaft run's id is not known to the codec); a bare-shaft host's areas follow it
+ * through the ORIGINAL spec seam's re-keying (`geom/AutoBodyRekeyMath.kt`) like its pits do.
+ *
  * ## Coordinate rule
- * [startMm] is measured from the **liner's AFT edge**, in liner-local space — NOT
+ * [startMm] is measured from the **host's AFT edge**, in host-local space — NOT
  * shaft space. This is the canonical storage convention: wear history survives the
- * liner being repositioned on the shaft. Converting to shaft space is
- * `liner.startFromAftMm + spot.startMm`, and that conversion happens at render time
+ * liner (or body) being repositioned on the shaft, and an OAL change. Converting to shaft
+ * space is `host start + spot.startMm`, and that conversion happens at render time
  * only (never stored).
+ *
+ * ## How the values are authored
+ * Typed into the card's Start / Length fields (stored verbatim), or dragged with the area's
+ * start and end bars on the wear detail canvas. A drag is the one sanctioned place a stored
+ * value here changes without being typed: it is still a direct user action, its result is an
+ * estimate read off the drawing, and it lands on a readable grid
+ * (`ui/screen/WearAreaDragMath.kt`). Nothing else rewrites [startMm] or [lengthMm].
  *
  * [authoredReference] records which of four reference points ([WearSpotReference]) the
  * machinist entered [startMm] against, purely so the "Start" field can re-display the
@@ -46,11 +64,11 @@ enum class WearSpotReference { LINER_AFT, LINER_FWD, AFT_SET, FWD_SET }
  * Units: mm.
  *
  * @property id Stable identifier.
- * @property linerId The [Liner.id] this wear spot belongs to. Spots whose `linerId`
- *   no longer matches any liner in the current spec are orphans — dropped on load
- *   (see `ShaftDocCodec.decode`).
- * @property startMm Offset from the liner's AFT edge, liner-local (not shaft space).
- *   Canonical storage — always liner-local AFT-edge mm regardless of [authoredReference].
+ * @property linerId The resolved id of the host component — a [Liner.id], or a drawn body
+ *   run's id (see Host above). An area whose host no longer resolves is an orphan: kept in
+ *   the record, skipped wherever it would draw.
+ * @property startMm Offset from the host's AFT edge, host-local (not shaft space).
+ *   Canonical storage — always host-local AFT-edge mm regardless of [authoredReference].
  * @property lengthMm Axial length of the worn band.
  * @property minDiaMm Minimum measured diameter within the band. `0` = no reading recorded.
  *   **Never entered or printed** — [WearDiaReading] owns the diameter story (readings at
@@ -99,8 +117,8 @@ enum class DyePenResult { PASS, FAIL }
  * body resolution, or collision/overlap validation,
  * and it lives outside [ShaftSpec] entirely (in [WearRecord], the document envelope).
  *
- * Unlike [WearSpot] (which is liner-only), a pit may sit on **any** pit-eligible component —
- * a liner, a taper, or a body (explicit or auto). It is therefore keyed by the *resolved*
+ * A pit may sit on **any** pit-eligible component — a liner, a taper, or a body (explicit or
+ * auto; a [WearSpot] sits on a liner or a body). It is therefore keyed by the *resolved*
  * component id ([componentId]), the same identity a runout reading uses. A pit whose
  * component no longer resolves (geometry edited away) is simply not drawn — orphan handling
  * happens at the render layer, not at decode (bodies/tapers/auto-body ids aren't known to the
@@ -180,7 +198,8 @@ data class WearDiaReading(
  * touches geometry resolution, collision, or coverage math. See [WearSpot] for the
  * reference-only contract and coordinate rule.
  *
- * @property spots Liner wear bands (see [WearSpot]).
+ * @property spots Wear bands on liners and bodies (see [WearSpot]). Never pruned at decode;
+ *   an area whose host no longer resolves is skipped at the render layer.
  * @property pits Pit / dye-failure "X" markers on liners, tapers, and bodies (see [WearPit]).
  *   Additive + defaulted, so older files (no `pits`) round-trip to an empty list with no
  *   envelope version bump.

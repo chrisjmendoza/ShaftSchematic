@@ -8,6 +8,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.size
 import kotlin.math.roundToInt
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
@@ -78,6 +80,7 @@ import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -87,6 +90,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.DiaCalloutStation
 import com.android.shaftschematic.geom.DiaHitTarget
@@ -136,6 +140,7 @@ import com.android.shaftschematic.ui.resolved.ResolvedCouplerBoltSlot
 import com.android.shaftschematic.ui.resolved.ResolvedLiner
 import com.android.shaftschematic.ui.resolved.ResolvedTaper
 import com.android.shaftschematic.ui.resolved.ResolvedThread
+import com.android.shaftschematic.ui.resolved.asWearAreaHost
 import com.android.shaftschematic.ui.resolved.maxDiaMm
 import com.android.shaftschematic.ui.util.buildBodyTitleById
 import com.android.shaftschematic.ui.util.buildLinerTitleById
@@ -160,9 +165,19 @@ import kotlinx.coroutines.launch
  * Originally liner-only (`docs/archive/LinerWearAreas_Proposal.md` Phase 3); generalized so a
  * **body** or **taper** can be opened the same way (the proposal's §10.5 "wear on bodies/tapers"
  * open question). What the overlay offers depends on the component:
- * - **Liners** get the full liner-wear-band editor (tinted bands + per-spot dimension rail +
- *   `WearSpotCard`s with the "Measure From" references) **and** pit markers.
- * - **Bodies / tapers** get pit markers only (wear bands are a liner-only concept).
+ * - **Liners and bodies** (explicit or bare shaft) get the wear-area editor (tinted bands, each
+ *   with a draggable start and end bar, + per-spot dimension rail + `WearSpotCard`s with the
+ *   "Measure From" references) **and** pit markers. Only a liner traces a worn profile.
+ * - **Tapers** get pit markers and Ø readings only.
+ *
+ * **Start / end bars**: every drawn wear band carries a bar on each edge. Press a bar and drag —
+ * that edge follows the finger, the other stays put, and the band, bars and rail values update
+ * from local state; ONE write on release (the `PreviewTuning` doctrine: no ViewModel write on a
+ * drag frame), so a drag is one undo step. The dragged value is an estimate read off the
+ * drawing and lands on a readable grid (`WearAreaDragMath.kt`) — the one place a stored
+ * wear-area value changes without being typed (on-device request). The bars are canvas-only and
+ * print on no sheet. A press that starts on a bar and moves wins over pan and fires no tap tool;
+ * a press released without moving is an ordinary tap.
  *
  * **Pit markers** (all component types): the machinist's hand-drawn "X" for a pit / dye-penetrant
  * failure. Tap bare metal on the broken-out segment to drop an X (at the current brush size); tap
@@ -186,7 +201,7 @@ import kotlinx.coroutines.launch
  * from the resolved component list (never raw `spec.bodies/tapers/...`).
  *
  * Coordinate rule: [WearSpot.startMm] and [WearPit.axialMm] are component-local (from the AFT
- * edge). Everything drawn here is already in component-local space; shaft-space conversion only
+ * edge of the liner or drawn body run they sit on). Everything drawn here is already in component-local space; shaft-space conversion only
  * matters to callers that place features on the *whole-shaft* profile (the PDF).
  */
 @Composable
@@ -196,7 +211,7 @@ fun ComponentWearDetailOverlay(
     resolvedComponents: List<ResolvedComponent>,
     unit: UnitSystem,
     wearRecord: WearRecord,
-    onAddSpot: (linerId: String) -> Unit,
+    onAddSpot: (hostId: String) -> Unit,
     onUpdateSpot: (id: String, startMm: Float, lengthMm: Float, minDiaMm: Float, note: String) -> Unit,
     onUpdateSpotReference: (id: String, reference: WearSpotReference) -> Unit,
     onRemoveSpot: (id: String) -> Unit,
@@ -264,11 +279,25 @@ fun ComponentWearDetailOverlay(
         return
     }
     val liner = component as? ResolvedLiner
+    // Liners and bodies carry wear areas; a taper's page has pits and Ø readings only.
+    val hostsWearAreas = component.asWearAreaHost() != null
 
     val title = remember(spec, componentId) { componentWearTitle(spec, component) }
-    val spots = remember(wearRecord, componentId) {
-        wearRecord.spots.filter { it.linerId == componentId }.sortedBy { it.startMm }
+    val storedSpots = remember(wearRecord, componentId, hostsWearAreas) {
+        if (!hostsWearAreas) emptyList()
+        else wearRecord.spots.filter { it.linerId == componentId }.sortedBy { it.startMm }
     }
+    // A bar drag in progress: the dragged area's span, held here and nowhere else until release.
+    var barDrag by remember(componentId) { mutableStateOf<WearBarDrag?>(null) }
+    // The area whose bar was dragged last — it wins a tie between two bars at one spot.
+    var lastDraggedSpotId by remember(componentId) { mutableStateOf<String?>(null) }
+    // What the canvas draws: the stored areas, with the one being dragged at its live span. The
+    // order is the stored one, so a rail row never jumps under the finger.
+    val spots = barDrag?.let { d ->
+        storedSpots.map { if (it.id == d.spotId) it.copy(startMm = d.startMm, lengthMm = d.lengthMm) else it }
+    } ?: storedSpots
+    // The written record has arrived: the stored areas now carry the dragged span themselves.
+    LaunchedEffect(wearRecord.spots) { if (barDrag?.settled == true) barDrag = null }
     val pits = remember(wearRecord, componentId) {
         wearRecord.pits.filter { it.componentId == componentId }
     }
@@ -345,6 +374,7 @@ fun ComponentWearDetailOverlay(
     val wearTintColor = SheetInk.WearRed.copy(alpha = 0.20f)
     val wearBorderColor = SheetInk.WearRed.copy(alpha = 0.80f)
     val pitColor = SheetInk.WearRed
+    val wearBarColor = SheetInk.WearRed
     val textColorArgb = SheetInk.Outline.toArgb()
     val textPaint = remember(textColorArgb) {
         android.graphics.Paint().apply {
@@ -485,6 +515,13 @@ fun ComponentWearDetailOverlay(
                 // Read live inside the tap pointerInput without re-keying it on every pinch.
                 val scaleForTap = rememberUpdatedState(zoomScale)
                 val offsetForTap = rememberUpdatedState(zoomOffset)
+                // Read live inside the bar-drag pointerInput, which must not restart mid-gesture.
+                val spotsForBars = rememberUpdatedState(storedSpots)
+                val recordSpotsForBars = rememberUpdatedState(wearRecord.spots)
+                val hostStartForBars = rememberUpdatedState(component.startMmPhysical)
+                val aftSetForBars = rememberUpdatedState(aftSetXMm)
+                val fwdSetForBars = rememberUpdatedState(fwdSetXMm)
+                val commitSpotForBars = rememberUpdatedState(onUpdateSpot)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -502,6 +539,102 @@ fun ComponentWearDetailOverlay(
                         .transformable(zoomTransformState)
                         .testTag("wear_detail_canvas")
                         .onSizeChanged { canvasWidthPx = it.width }
+                        // Start / end bars. Watched on the Initial pass and consumed only once
+                        // the press has moved past touch slop, so a drag that starts on a bar
+                        // reaches neither the pinch/pan nor the tap tools below, while a press
+                        // released in place stays the ordinary tap it always was.
+                        .pointerInput(componentId, lenMm, maxOdMm, startDiaMm, unit) {
+                            awaitEachGesture {
+                                val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                                val lay = computeSegDetailLayout(
+                                    widthPx = size.width.toFloat(),
+                                    stubRowHeightPx = stubRowHeightDp.toPx(),
+                                    stubWidthPx = stubWidthDp.toPx(),
+                                    lenMm = lenMm,
+                                    maxOdMm = maxOdMm,
+                                    edgePadPx = SEG_EDGE_PAD_DP.dp.toPx(),
+                                )
+                                val sc = scaleForTap.value
+                                val press = canvasPoint(down.position, size, sc, offsetForTap.value)
+                                val recordOrder = recordSpotsForBars.value
+                                val hit = pickWearAreaBar(
+                                    press.x, press.y,
+                                    wearBarTargets(
+                                        spotsForBars.value, lay, lenMm, startDiaMm,
+                                        priorityOf = { id ->
+                                            if (id == lastDraggedSpotId) Int.MAX_VALUE
+                                            else recordOrder.indexOfFirst { it.id == id }
+                                        },
+                                    ),
+                                    // The reach is a finger-sized zone on screen, whatever the zoom.
+                                    reachPx = WEAR_BAR_REACH_DP.dp.toPx() / sc,
+                                    yPadPx = WEAR_BAR_Y_PAD_DP.dp.toPx() / sc,
+                                ) ?: return@awaitEachGesture
+                                val spot = spotsForBars.value.firstOrNull { it.id == hit.spotId }
+                                    ?: return@awaitEachGesture
+                                // Where the finger took hold of the bar, so the edge does not
+                                // jump to the finger when the drag begins.
+                                val grabbedEdgeMm = when (hit.edge) {
+                                    WearAreaEdge.START -> spot.startMm
+                                    WearAreaEdge.END -> spot.startMm + spot.lengthMm
+                                }.coerceIn(0f, lenMm)
+                                val grabOffsetPx = press.x - (lay.startPx + grabbedEdgeMm * lay.pxPerMm)
+                                var dragging = false
+                                var result: WearAreaDragResult? = null
+                                var written = false
+                                try {
+                                    while (true) {
+                                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                                        // A second finger before the drag began is a pinch.
+                                        if (!dragging && event.changes.size > 1) break
+                                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                        if (!change.pressed) {
+                                            if (dragging) change.consume()
+                                            break
+                                        }
+                                        if (!dragging &&
+                                            (change.position - down.position).getDistance() > viewConfiguration.touchSlop
+                                        ) {
+                                            dragging = true
+                                            // Commits a card field still holding focus through
+                                            // its own blur path before the drag takes over.
+                                            focusManager.clearFocus()
+                                        }
+                                        if (dragging) {
+                                            val at = canvasPoint(change.position, size, sc, offsetForTap.value)
+                                            val edgeMm = (at.x - grabOffsetPx - lay.startPx) / lay.pxPerMm
+                                            val r = dragWearAreaEdge(
+                                                edge = hit.edge,
+                                                edgeLocalMm = edgeMm,
+                                                startMm = spot.startMm,
+                                                lengthMm = spot.lengthMm,
+                                                hostLengthMm = lenMm,
+                                                reference = spot.authoredReference,
+                                                hostStartFromAftMm = hostStartForBars.value,
+                                                aftSetXMm = aftSetForBars.value,
+                                                fwdSetXMm = fwdSetForBars.value,
+                                                gridMm = wearDragGridMm(unit),
+                                                minLengthMm = wearDragMinLengthMm(unit),
+                                            )
+                                            result = r
+                                            barDrag = WearBarDrag(spot.id, r.startMm, r.lengthMm)
+                                            event.changes.forEach { it.consume() }
+                                        }
+                                    }
+                                    // Released: the ONE write of the whole drag.
+                                    val r = result
+                                    if (dragging && r != null) {
+                                        lastDraggedSpotId = spot.id
+                                        if (r.startMm != spot.startMm || r.lengthMm != spot.lengthMm) {
+                                            commitSpotForBars.value(spot.id, r.startMm, r.lengthMm, spot.minDiaMm, spot.note)
+                                            written = true
+                                        }
+                                    }
+                                } finally {
+                                    barDrag = if (written) barDrag?.copy(settled = true) else null
+                                }
+                            }
+                        }
                         .pointerInput(componentId, pits, diaReadings, pitSizeFactor, tool, lenMm, startDiaMm, endDiaMm) {
                             detectTapGestures { rawTap ->
                                 // Focus must leave the wear-spot cards before any canvas tool
@@ -515,11 +648,7 @@ fun ComponentWearDetailOverlay(
                                 // Invert the Canvas graphicsLayer transform (scale about the
                                 // centre pivot, then translate) so hit-testing/placement math
                                 // stays in untransformed canvas space at any zoom.
-                                val sc = scaleForTap.value
-                                val tap = Offset(
-                                    (rawTap.x - offsetForTap.value.x - size.width / 2f) / sc + size.width / 2f,
-                                    (rawTap.y - offsetForTap.value.y - size.height / 2f) / sc + size.height / 2f,
-                                )
+                                val tap = canvasPoint(rawTap, size, scaleForTap.value, offsetForTap.value)
                                 val lay = computeSegDetailLayout(
                                     widthPx = size.width.toFloat(),
                                     stubRowHeightPx = stubRowHeightDp.toPx(),
@@ -697,8 +826,8 @@ fun ComponentWearDetailOverlay(
                             }
                         }
 
-                        // ── Liner wear bands + per-spot dimension rail row (liners only) ──
-                        if (liner != null) {
+                        // ── Wear bands + per-spot dimension rail row (liners and bodies) ──
+                        if (hostsWearAreas) {
                             spots.forEachIndexed { i, spot ->
                                 val band = clampWearBandToLiner(spot.startMm, spot.lengthMm, lenMm)
                                 val (bx0, bx1) = wearBandToPx(band, startPx, lay.pxPerMm)
@@ -715,6 +844,13 @@ fun ComponentWearDetailOverlay(
                                     startLabel = dimLabel(spot.startMm, unit),
                                     lengthLabel = dimLabel(spot.lengthMm, unit),
                                     paint = textPaint,
+                                )
+                            }
+                            // Start / end bars, over the bands — canvas-only grab handles.
+                            wearBarTargets(spots, lay, lenMm, startDiaMm).forEach { bar ->
+                                drawWearAreaBar(
+                                    bar, wearBarColor,
+                                    active = barDrag?.let { it.spotId == bar.spotId && !it.settled } == true,
                                 )
                             }
                         }
@@ -929,8 +1065,8 @@ fun ComponentWearDetailOverlay(
                     traceDepthControl()
                 }
 
-                // ── Liner wear spots (bands) — liners only ───────────────────
-                if (liner != null) {
+                // ── Wear spots (bands) — liners and bodies ───────────────────
+                if (hostsWearAreas) {
                     HorizontalDivider()
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -948,20 +1084,23 @@ fun ComponentWearDetailOverlay(
                         }
                     }
 
-                    if (spots.isEmpty()) {
-                        Text(
-                            text = "No wear spots recorded yet.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                    Text(
+                        text = if (storedSpots.isEmpty()) "No wear spots recorded yet."
+                        else "Drag a spot's start or end bar on the drawing to size it — a dragged " +
+                            "edge lands on the nearest ${wearDragGridLabel(unit)} — or type its values below.",
+                        style = if (storedSpots.isEmpty()) MaterialTheme.typography.bodyMedium
+                        else MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.testTag("wear_spot_hint"),
+                    )
 
-                    spots.forEachIndexed { i, spot ->
+                    storedSpots.forEachIndexed { i, spot ->
                         WearSpotCard(
                             index = i,
                             spot = spot,
                             unit = unit,
-                            linerStartFromAftMm = liner.startMmPhysical,
+                            hostIsLiner = liner != null,
+                            linerStartFromAftMm = component.startMmPhysical,
                             linerLengthMm = lenMm,
                             aftSetXMm = aftSetXMm,
                             fwdSetXMm = fwdSetXMm,
@@ -1068,7 +1207,7 @@ private enum class WearCanvasTool { ADD_PIT, REMOVE_PIT, ADD_DIA, REMOVE_DIA }
 private val ResolvedComponent.isPitEligible: Boolean
     get() = this is ResolvedBody || this is ResolvedTaper || this is ResolvedLiner
 
-private data class SegDetailLayout(
+internal data class SegDetailLayout(
     val pxPerMm: Float,
     val startPx: Float,
     val endPx: Float,
@@ -1087,7 +1226,7 @@ private data class SegDetailLayout(
  * (`computeLinerDetailPxPerMm`'s 72% fill of the stub row), so [SEG_EDGE_PAD_DP] covers the
  * worst case.
  */
-private fun computeSegDetailLayout(
+internal fun computeSegDetailLayout(
     widthPx: Float,
     stubRowHeightPx: Float,
     stubWidthPx: Float,
@@ -1179,7 +1318,7 @@ private const val PIT_SMALL_HALF_MIN_DP = 1f
  * budget at `(stub row height × 0.72) / 2` — 140dp rows cap the bulge at ≈30dp, so 32dp
  * guarantees the break edges always render complete inside the canvas at 1× zoom.
  */
-private const val SEG_EDGE_PAD_DP = 32f
+internal const val SEG_EDGE_PAD_DP = 32f
 
 /** The component kind a wear detail page is on, as its canvas description names it. */
 internal fun wearDetailKind(rc: ResolvedComponent): String = when (rc) {
@@ -1205,6 +1344,8 @@ private fun WearSpotCard(
     index: Int,
     spot: WearSpot,
     unit: UnitSystem,
+    /** False on a body's page: the host-edge references and messages name the body. */
+    hostIsLiner: Boolean,
     linerStartFromAftMm: Float,
     linerLengthMm: Float,
     aftSetXMm: Float,
@@ -1249,7 +1390,7 @@ private fun WearSpotCard(
                                 modifier = Modifier.padding(end = 4.dp),
                             )
                             Text(
-                                spanProblem.shortNote,
+                                spanProblem.shortNoteOn(hostIsLiner),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.error,
                             )
@@ -1271,20 +1412,24 @@ private fun WearSpotCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    WearChip("AFT SET", reference == WearSpotReference.AFT_SET) {
-                        onUpdateReference(WearSpotReference.AFT_SET)
-                    }
-                    WearChip("FWD SET", reference == WearSpotReference.FWD_SET) {
-                        onUpdateReference(WearSpotReference.FWD_SET)
-                    }
+                    WearChip(
+                        wearReferenceChipLabel(WearSpotReference.AFT_SET, hostIsLiner),
+                        reference == WearSpotReference.AFT_SET,
+                    ) { onUpdateReference(WearSpotReference.AFT_SET) }
+                    WearChip(
+                        wearReferenceChipLabel(WearSpotReference.FWD_SET, hostIsLiner),
+                        reference == WearSpotReference.FWD_SET,
+                    ) { onUpdateReference(WearSpotReference.FWD_SET) }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    WearChip("Liner AFT", reference == WearSpotReference.LINER_AFT) {
-                        onUpdateReference(WearSpotReference.LINER_AFT)
-                    }
-                    WearChip("Liner FWD", reference == WearSpotReference.LINER_FWD) {
-                        onUpdateReference(WearSpotReference.LINER_FWD)
-                    }
+                    WearChip(
+                        wearReferenceChipLabel(WearSpotReference.LINER_AFT, hostIsLiner),
+                        reference == WearSpotReference.LINER_AFT,
+                    ) { onUpdateReference(WearSpotReference.LINER_AFT) }
+                    WearChip(
+                        wearReferenceChipLabel(WearSpotReference.LINER_FWD, hostIsLiner),
+                        reference == WearSpotReference.LINER_FWD,
+                    ) { onUpdateReference(WearSpotReference.LINER_FWD) }
                 }
             }
 
@@ -1298,7 +1443,7 @@ private fun WearSpotCard(
                 fwdSetXMm = fwdSetXMm,
             )
             WearNum(
-                label = "Start from ${wearReferenceLabel(reference)} (${abbr(unit)})",
+                label = "Start from ${wearReferenceFieldLabel(reference, hostIsLiner)} (${abbr(unit)})",
                 initialDisplay = disp(displayedStartMm, unit),
             ) { s ->
                 val enteredMm = toMmOrNull(s, unit) ?: return@WearNum
@@ -1324,7 +1469,7 @@ private fun WearSpotCard(
 
             if (spanProblem != null) {
                 Text(
-                    spanProblem.message,
+                    spanProblem.messageOn(hostIsLiner),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.testTag("wear_spot_issue_${spot.id}"),
@@ -1364,12 +1509,75 @@ private fun WearSpotCard(
     }
 }
 
-/** Chip labels for [WearSpot.authoredReference], used in the Start field's dynamic label. */
-private fun wearReferenceLabel(reference: WearSpotReference): String = when (reference) {
-    WearSpotReference.LINER_AFT -> "liner AFT edge"
-    WearSpotReference.LINER_FWD -> "liner FWD edge"
-    WearSpotReference.AFT_SET -> "AFT SET"
-    WearSpotReference.FWD_SET -> "FWD SET"
+/**
+ * A bar drag: the dragged area's live canonical span. Screen state only. [settled] marks a drag
+ * that was released and written — the span is held one more beat, until the record it was
+ * written to arrives, so the band never flashes back to its old span in between.
+ */
+private data class WearBarDrag(
+    val spotId: String,
+    val startMm: Float,
+    val lengthMm: Float,
+    val settled: Boolean = false,
+)
+
+/** Half-width (dp, on screen) of the zone around a bar that a press reaches. */
+internal const val WEAR_BAR_REACH_DP = 24f
+
+/** How far (dp, on screen) a bar's reach extends above and below the drawn band. */
+internal const val WEAR_BAR_Y_PAD_DP = 16f
+
+/**
+ * A raw pointer position mapped into untransformed canvas space — the inverse of the Canvas
+ * `graphicsLayer` (scale about the centre pivot, then translate), so every hit-test and
+ * placement runs in the coordinates the drawing was laid out in, at any zoom.
+ */
+private fun canvasPoint(raw: Offset, size: IntSize, scale: Float, offset: Offset): Offset = Offset(
+    (raw.x - offset.x - size.width / 2f) / scale + size.width / 2f,
+    (raw.y - offset.y - size.height / 2f) / scale + size.height / 2f,
+)
+
+/**
+ * The start and end bar of every drawn wear band of [spots], in canvas px — ONE list behind the
+ * bars the canvas draws and the bars a press is tested against, so a press reaches exactly the
+ * bar that is drawn. An area the host's span leaves empty draws no band and has no bars.
+ */
+internal fun wearBarTargets(
+    spots: List<WearSpot>,
+    lay: SegDetailLayout,
+    hostLengthMm: Float,
+    hostDiaMm: Float,
+    priorityOf: (spotId: String) -> Int = { 0 },
+): List<WearBarTarget> {
+    val r = hostDiaMm * 0.5f * lay.pxPerMm
+    return spots.flatMap { spot ->
+        val band = clampWearBandToLiner(spot.startMm, spot.lengthMm, hostLengthMm)
+        if (band.isEmpty) return@flatMap emptyList()
+        val (x0, x1) = wearBandToPx(band, lay.startPx, lay.pxPerMm)
+        val priority = priorityOf(spot.id)
+        listOf(
+            WearBarTarget(spot.id, WearAreaEdge.START, x0, lay.cy - r, lay.cy + r, priority),
+            WearBarTarget(spot.id, WearAreaEdge.END, x1, lay.cy - r, lay.cy + r, priority),
+        )
+    }
+}
+
+/**
+ * One start / end bar: a stroke across the band's height, run a little past the surface at each
+ * end, with a round grip above it. Fixed sheet ink; the bar being dragged draws heavier.
+ */
+private fun DrawScope.drawWearAreaBar(bar: WearBarTarget, color: Color, active: Boolean) {
+    val overshoot = 5.dp.toPx()
+    val width = (if (active) 4.dp else 2.5.dp).toPx()
+    val top = bar.topPx - overshoot
+    drawLine(color, Offset(bar.xPx, top), Offset(bar.xPx, bar.bottomPx + overshoot), width, cap = StrokeCap.Round)
+    drawCircle(color, radius = (if (active) 5.dp else 4.dp).toPx(), center = Offset(bar.xPx, top))
+}
+
+/** The drag grid as the page's hint names it. */
+private fun wearDragGridLabel(unit: UnitSystem): String = when (unit) {
+    UnitSystem.INCHES -> "1/8 in"
+    UnitSystem.MILLIMETERS -> "1 mm"
 }
 
 /**

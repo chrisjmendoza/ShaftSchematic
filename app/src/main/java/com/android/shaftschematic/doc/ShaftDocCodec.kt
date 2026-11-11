@@ -266,8 +266,8 @@ object ShaftDocCodec {
      * file?", in the one shape [encodeV1] takes back.
      *
      * Built on [decode], so a duplicate inherits the same normalization and orphan policy an
-     * open does (thread normalization, legacy station-count freeze, wear spots pruned against
-     * the spec's liners), and a legacy spec-only file arrives as an envelope carrying just
+     * open does (thread normalization, legacy station-count freeze; the wear record passes
+     * through whole), and a legacy spec-only file arrives as an envelope carrying just
      * its spec. [stationIntervalVersion] is stamped by [encodeV1] on the way out.
      */
     fun decodeEnvelope(raw: String): ShaftDocV1 {
@@ -324,16 +324,11 @@ object ShaftDocCodec {
                         readings = doc.runoutReadings,
                         stationIntervalVersion = doc.stationIntervalVersion,
                     ),
-                    // Orphan policy: spots whose linerId no longer matches a liner in this
-                    // spec are dropped here, at decode time — the same layer that already
-                    // normalizes the spec above. Every decode() caller (VM import/open,
-                    // bundled-sample seeding, backup restore validation) gets clean data
-                    // without having to remember to filter it themselves.
-                    wearRecord = doc.wearRecord.copy(
-                        spots = doc.wearRecord.spots.filter { spot ->
-                            normalizedSpec.liners.any { it.id == spot.linerId }
-                        }
-                    ),
+                    // The wear record passes through untouched. A wear area is keyed by the
+                    // resolved id of the liner or body run it sits on, and a bare-shaft run's
+                    // id is not known here, so an area whose host is gone is skipped at the
+                    // render layer and never pruned at decode — the pit / Ø-reading rule.
+                    wearRecord = doc.wearRecord,
                     // Runout readings pass through untouched: orphan pruning happens at the
                     // render layer (station identity needs resolved components + count overrides,
                     // which we don't have here). Stale entries are harmless — the bubble lookup

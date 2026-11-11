@@ -28,20 +28,25 @@ import kotlin.math.min
  * backing fields declared in the primary class file.
  */
 
-// ── Wear spots (liner wear areas) ────────────────────────────────────────────
+// ── Wear spots (wear areas on liners and bodies) ─────────────────────────────
 
 /**
- * Add a new wear spot on [linerId] with sensible defaults (start 0, no reading). The
- * default length is 1in (25.4mm), clamped to the liner's own length for tiny liners so
- * a new card never opens with an out-of-span warning (`wearSpotSpanProblem`).
+ * Add a new wear spot on [hostId] — a liner, or a drawn body run (explicit or bare shaft), by
+ * its resolved component id — with sensible defaults (start 0, no reading). The default length
+ * is 1in (25.4mm), clamped to the host's own length for tiny hosts so a new card never opens
+ * with an out-of-span warning (`wearSpotSpanProblem`). From there the area is sized by typing
+ * its Start / Length or by dragging its start and end bars on the detail canvas.
  */
-fun ShaftViewModel.addWearSpot(linerId: String) {
-    val linerLengthMm = _spec.value.liners.firstOrNull { it.id == linerId }?.lengthMm ?: 25.4f
-    val defaultLengthMm = min(25.4f, linerLengthMm.coerceAtLeast(0f))
+fun ShaftViewModel.addWearSpot(hostId: String) {
+    val hostLengthMm = _spec.value.liners.firstOrNull { it.id == hostId }?.lengthMm
+        ?: _resolvedComponents.value.firstOrNull { it.id == hostId }
+            ?.let { it.endMmPhysical - it.startMmPhysical }
+        ?: 25.4f
+    val defaultLengthMm = min(25.4f, hostLengthMm.coerceAtLeast(0f))
     _wearRecord.update { rec ->
         rec.copy(
             spots = rec.spots + WearSpot(
-                linerId = linerId,
+                linerId = hostId,
                 startMm = 0f,
                 lengthMm = defaultLengthMm,
                 minDiaMm = 0f,
@@ -54,9 +59,11 @@ fun ShaftViewModel.addWearSpot(linerId: String) {
 /**
  * Update an existing wear spot's fields by [id]. No-op if the id is not found.
  *
- * [startMm]/[lengthMm] are always canonical (liner-local AFT-edge mm) — reference
+ * [startMm]/[lengthMm] are always canonical (host-local AFT-edge mm) — reference
  * conversion happens in the UI (`LinerWearMath.kt`'s `wearStartToCanonicalMm`) before
- * this is called. [startMm] is stored VERBATIM, out-of-span or negative included (a Start
+ * this is called. A bar drag on the detail canvas writes through here too, once, on release —
+ * its values already snapped to the drag grid (`WearAreaDragMath.kt`); nothing here snaps.
+ * [startMm] is stored VERBATIM, out-of-span or negative included (a Start
  * typed against a SET or the liner's FWD edge can land AFT of the liner): no wear-spot field
  * reverts a typed value (on-device ruling) — the card states the problem
  * (`wearSpotSpanProblem`, display-only) and the drawing clamps the band to the liner. The
@@ -132,8 +139,8 @@ internal fun <T> List<T>.withRestored(removed: List<IndexedValue<T>>, idOf: (T) 
 
 // ── Wear pits (the "X" markers) ───────────────────────────────────────────────
 // Stored in the same reference-only [WearRecord] as wear spots (so they ride the same
-// autosave/snapshot/import paths), but keyed by *resolved component id* — a pit can sit on
-// a liner, taper, or body (explicit or auto), unlike a spot (liner-only). No geometry side
+// autosave/snapshot/import paths) and keyed the same way, by *resolved component id* — a pit
+// can sit on a liner, taper, or body (explicit or auto); a spot on a liner or body. No geometry side
 // effects; orphan pits (component no longer resolves) are skipped at the render layer, same
 // posture as runout readings. See model/WearSpot.kt (WearPit) and geom/WearPitMath.kt.
 
