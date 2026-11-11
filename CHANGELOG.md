@@ -6,6 +6,25 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-11-11
+
+### fix(dimensions): a floating value lifts the rails above only where it can meet them
+
+A dimension value too wide for its span floats above its line, and every rail above was pushed
+up one label band to make room — even a rail whose spans were nowhere near that value. The rail
+above now lifts only when one of its spans shares some x with a spot the value could take (over
+its span, or just outside either end); a rail that stands clear keeps its height, and so does
+everything above it. The rail under the OAL rail still always lifts it. One rule in the one
+planner (`DimensionRailLayout.pushingRails`), so the schematic and consolidated sheets and the
+editor preview all tighten the same way (on-device report: the preview's "136 1/16"" rail sat a
+full band higher than it needed because of a short value at the other end of the shaft).
+
+### fix(preview): lighter grid
+
+The editor preview's grid lines are drawn at less than half their former darkness (major lines
+15% black, minor lines 6%), so the grid sits behind the shaft instead of competing with its
+outline (on-device report: "the grid is a little strong").
+
 ## 2026-11-10
 
 ### fix(editor): "+ Add Component" asks before leaving an unsaved value
