@@ -133,13 +133,13 @@ copy: the spans are the sheet's (`schematicRailSpans`, `pdf/ShaftPdfComposer.kt`
 liner / taper / bolt-row / body-length spans, tiers, OAL span, `DisplayUnits` resolution and
 formatting), labels are placed by `geom/DimensionRailLayout.kt` and inked by
 `PdfDimensionRenderer.drawPlan`, fractions through the shared fraction renderer. What is the
-preview's own (`ui/drawing/render/PreviewDimensionRails.kt`): the x map (the preview's LINEAR
-`ShaftLayout`, so a span's ends land on the edges the box draws — not the sheet's compressed
-map); the scale (the rails lay out in sheet points drawn at one point per dp through a single
+preview's own (`ui/drawing/render/PreviewDimensionRails.kt`): the x map (the preview's own
+`ShaftLayout` — the sheet's compressed map under the sheet layout below, the linear one
+otherwise — so a span's ends land on the edges the box draws); the scale (the rails lay out in sheet points drawn at one point per dp through a single
 canvas scale, inside the pan/zoom transform so they zoom with the shaft); the colour (the
 preview's outline colour, halos in the app background — app chrome, not `SheetInk`); and the
 room (`geom/PreviewRailFit.kt`: reserve the least strip at the box top that fits every rail, out
-of everything the box has above the shaft's width-fitted height and padding, so the shaft sits
+of everything the box has above the shaft's drawn height and padding, so the shaft sits
 low; past that the rails run off the top of the box, reached by panning — every rail the sheet
 prints is always drawn and the shaft is never shrunk for them, on-device ruling). Two values at one height keep a text height of air
 (`PdfDimensionRenderer(labelSideClear)`, `DimensionRailLayout.plan(sideClear)` — sheet default
@@ -152,6 +152,50 @@ an always-on disc covered the FWD-end values or parts (emulator QA). Gated by
 Undercut canvases are unchanged) from the device preference Settings → Editor Screen → "Show
 Dimension Lines in Preview" (`SettingsStore.showPreviewDimensionsFlow`, default ON) — never in a
 document, never captured by a Drawing profile, no effect on any PDF.
+
+**Sheet layout in the preview.** The same preview draws the shaft the way the schematic sheet
+does (on-device request: "add the S breaks as an option as well so the shaft renders more closely
+to the output") — the sheet's compressed x map, its separate diameter scale and the S-break pairs
+on foreshortened body runs — through ONE fit pipeline and ONE body pass, never a canvas copy:
+`schematicProfileFit` (`pdf/ShaftPdfComposer.kt`, now `internal`) solves the map and the scale in
+sheet points over the box's content width at one point per dp, from the same inputs
+`composeShaftPdf` takes (the app-wide sizing-curve anchors and S-break threshold, the per-job
+Shaft height and liner & taper compression), and `drawBodyRunsWithBreaks` (`pdf/BodyRunDraw.kt`)
+draws the body runs on the canvas's native canvas under a point → pixel scale, with the preview's
+own outline, kind fill, fill-follows-shade decision (`RenderOptions.shadedComponentIds`, handed in
+as unfilled ids) and selection ring (the pass's optional `underStroke`, null on every sheet, so a
+broken body rings on both stubs). `ShaftLayout.Result.sheet` carries the profile
+(`ui/drawing/render/PreviewSheetLayout.kt`): `xPx`, `xMmFromPx` (the map's inverse — a tap selects
+through it, and a tap in an S-break gap selects that body) and `rPx` route through it, and the
+renderer's keyway slots take their width off the diameter scale and their offset and length off
+the slot's own mapped span (`geom/KeywaySlotMath.kt`, the PDF slot's construction); a 90° notch's
+depth rides the diameter scale. The shaft's height follows the sheet rule (sizing curve × Shaft
+height, the paper band) capped at `PREVIEW_SHEET_SHAFT_MAX_FRAC` (40%) of the box's content
+height, solved from the full box so it never shrinks for the rails; the rails' room rule above is
+unchanged. Falls back to the linear map while the OAL is 0 (the `renderSpanSpec` fallback) and
+while the problem marks widen the window past the drawn extent (a part hanging past an end — such
+a shaft cannot print anyway). The grid stands down while the sheet layout is in effect (a
+millimetre grid means nothing on a compressed map), and its switch greys with that reason. Pan,
+zoom and the reset-view button are unchanged. The switch is the device preference Settings →
+Editor Screen → "Draw Preview Like the Sheet" (`SettingsStore.previewSheetLayoutFlow`, default
+ON) — never in a document, never captured by a Drawing profile, read by no composer. A `null`
+sheet (every other canvas: thumbnails, Runout / Wear / Undercut) is the linear layout,
+byte-identical.
+
+**Preview options.** The editor's overflow menu (Schematic and Final tabs — the Final tab hosts the
+same editor bar) carries "Preview options…" (`overflow_preview_options`), a bottom sheet
+(`EditorPreviewOptionsSheet`, `preview_options_sheet`) capped at 55% of the window and scrolling
+inside that over a light scrim, so the preview box at the top of the editor stays in view while
+its options change (a full-height sheet covered it — emulator QA), in two groups: the preview's own device
+switches — Dimension lines, Draw like the sheet, Grid (greyed while the sheet layout is on),
+Highlight selected component — and, under the shared app-wide `OptionsScopeNote`, the look
+settings the preview reads, each the exact control the PDF options panels and Settings → Drawing
+use, wired to the same setters: Fractions, Dimension arrows, Dual-unit layout (a dual-unit
+document only), Body S-break and the per-job Shaft height ("Saved with this job"). Remote controls
+for the one stored value — the sheet owns no storage. The two sliders redraw the box under the
+finger (local state, no write) and commit on release, the `PreviewTuning` posture. Settings →
+Editor Screen carries the new switch beside "Show Dimension Lines in Preview" and one line saying
+fractions, arrows and S-breaks in the preview follow Settings → Drawing.
 
 **Implicit (auto) bodies** — shipped, not planned. Derived, read-only gap-fillers; never
 persisted in `ShaftSpec`:

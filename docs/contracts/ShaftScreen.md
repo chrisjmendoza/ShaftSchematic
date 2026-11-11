@@ -128,15 +128,23 @@ Responsibilities
     while disabled shows the gate's message as a snackbar.
   - Overflow menu (⋮) → Save As…, **Close Document** (testTag
     `overflow_close_document`; clean → closes to Start, dirty → shared unsaved-changes
-    guard — see `Navigation.md`), Settings, Clear All, etc.
+    guard — see `Navigation.md`), **Preview options…** (`overflow_preview_options` — the preview's
+    device switches and the shared look settings it reads, `UI_CONTRACT.md` §3.1.1 "Preview
+    options"), Settings, Clear All, etc.
 
 - **Preview Card:** (`PreviewCard`, `PreviewOalBadge` — both in
   `ui/screen/ShaftPreviewPanel.kt`, extracted from `ShaftScreen.kt` 2026-07-24, pure
   code move, no behavior change)
   - Fixed preview area rendering the shaft via `ShaftDrawing(...)`  
   - Optional grid overlay (user setting)  
+  - Grid stands down while the sheet layout is in effect (a millimetre grid means nothing on a
+    compressed map).
+  - Sheet layout (user setting, default ON): the shaft drawn like the schematic sheet — the
+    sheet's compressed x map, diameter scale and S-breaks, through the sheet's own fit pipeline
+    and body pass; linear while the OAL is 0 or a part hangs past an end — see `UI_CONTRACT.md`
+    §3.1.1 "Sheet layout in the preview".
   - Dimension lines above the shaft (user setting, default ON): the schematic sheet's own
-    rails and values over the preview's linear map — see `UI_CONTRACT.md` §3.1.1 "Dimension
+    rails and values over the preview's own x map — see `UI_CONTRACT.md` §3.1.1 "Dimension
     lines in the preview". While they draw, the developer OAL badge is hidden.
   - Reset-view button (top-right) shown only while the preview is zoomed or panned off its
     default view (`isPreviewViewMoved`); double-tap still resets.
@@ -153,6 +161,8 @@ Responsibilities
   - Units (mm/in) affect labels and input formatting only (model remains mm)
   - Grid visibility in Preview
   - Dimension lines in Preview (`showPreviewDimensionsFlow`, device-only, default ON)
+  - Draw Preview Like the Sheet (`previewSheetLayoutFlow`, device-only, default ON), with one
+    line saying fractions, arrows and S-breaks in the preview follow Settings → Drawing
   - Preview Colors: presets (Stainless/Steel/Bronze/Transparent) + Custom palette
   - Black/White Only mode (forces black outlines and disables fills in Preview)
 

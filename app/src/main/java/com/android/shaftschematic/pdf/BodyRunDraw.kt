@@ -73,6 +73,14 @@ internal fun drawBodyRunsWithBreaks(
      * lists would reorder fills against neighbouring outlines for nothing.
      */
     unfilledBodyIds: Set<String> = emptySet(),
+    /**
+     * A selection ring for the runs in [underStrokeIds], stroked UNDER the run along the same
+     * outline the pass draws — both stubs, both S curves, the blend curves and the end caps — so a
+     * broken body reads as selected on either side of its gap. Only the editor preview's sheet
+     * layout passes one (`ShaftRenderer`); every sheet leaves it null and prints exactly as before.
+     */
+    underStroke: Paint? = null,
+    underStrokeIds: Set<String> = emptySet(),
 ) {
     val capPaint = Paint(outline).apply { style = Paint.Style.STROKE }
     val avoidX = breakAvoidRangesX(xAt, keywayAvoidSpansMm, boltRowAvoidSpansMm)
@@ -90,6 +98,10 @@ internal fun drawBodyRunsWithBreaks(
         val fx1 = edges.flatX1
         val pair = plan.pair
         val gapCenter = plan.gapCenterX
+
+        if (underStroke != null && b.id in underStrokeIds) {
+            strokeRunOutline(c, plan, x0, x1, cy, top, bot, geomRect, underStroke)
+        }
 
         drawBlendCurvePdf(c, edges.aftCurve, cy, outline, runFill)
         drawBlendCurvePdf(c, edges.fwdCurve, cy, outline, runFill)
@@ -150,6 +162,47 @@ internal fun drawBodyRunsWithBreaks(
             }
         }
     }
+}
+
+/**
+ * Strokes one run's outline with [paint] — the geometry [drawBodyRunsWithBreaks] draws for that
+ * run (blend curves, the flat top and bottom lines or the two stubs, each stub's S edge, the end
+ * caps) from the SAME [plan], so the stroke can never land beside the run it rings. The eye wash
+ * and return sweep are left out: a ring traces the silhouette, not the glyph's shading.
+ */
+private fun strokeRunOutline(
+    c: Canvas,
+    plan: BodyRunBreak,
+    x0: Float,
+    x1: Float,
+    cy: Float,
+    top: Float,
+    bot: Float,
+    geomRect: RectF,
+    paint: Paint,
+) {
+    val stroke = Paint(paint).apply { style = Paint.Style.STROKE }
+    val edges = plan.edges
+    drawBlendCurvePdf(c, edges.aftCurve, cy, stroke, null)
+    drawBlendCurvePdf(c, edges.fwdCurve, cy, stroke, null)
+    val pair = plan.pair
+    val gapCenter = plan.gapCenterX
+    if (pair == null || gapCenter == null) {
+        c.drawLine(edges.flatX0, top, edges.flatX1, top, stroke)
+        c.drawLine(edges.flatX0, bot, edges.flatX1, bot, stroke)
+    } else {
+        val half = 0.5f * pair.gapPt
+        val leftEnd = (gapCenter - half).coerceIn(geomRect.left, geomRect.right)
+        val rightBeg = (gapCenter + half).coerceIn(geomRect.left, geomRect.right)
+        c.drawLine(edges.flatX0, top, leftEnd, top, stroke)
+        c.drawLine(edges.flatX0, bot, leftEnd, bot, stroke)
+        c.drawPath(breakEdgeSPath(leftEnd, top, bot, pair.amplitudePt), stroke)
+        c.drawPath(breakEdgeSPath(rightBeg, top, bot, pair.amplitudePt), stroke)
+        c.drawLine(rightBeg, top, edges.flatX1, top, stroke)
+        c.drawLine(rightBeg, bot, edges.flatX1, bot, stroke)
+    }
+    c.drawLine(x0, cy - edges.capAftR, x0, cy + edges.capAftR, stroke)
+    c.drawLine(x1, cy - edges.capFwdR, x1, cy + edges.capFwdR, stroke)
 }
 
 /**

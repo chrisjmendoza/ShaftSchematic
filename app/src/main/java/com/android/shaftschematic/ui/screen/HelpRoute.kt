@@ -1141,15 +1141,31 @@ internal val helpSections: List<HelpSection> = listOf(
                     "places to reach it.\n" +
                     "• \"Preview Colors\" — opens the preview color page (see below).\n" +
                     "• \"Show Grid in Preview\" — default off. Draws a background grid behind " +
-                    "the shaft in the editor preview. Preview only; never printed.\n" +
+                    "the shaft in the editor preview. Preview only; never printed. Off (greyed) " +
+                    "while the preview draws like the sheet — a millimetre grid has no meaning " +
+                    "on a shortened drawing.\n" +
                     "• \"Show Dimension Lines in Preview\" — default on. Draws the schematic " +
                     "sheet's dimension lines and lengths above the shaft in the Schematic and " +
                     "Final tabs' preview — the same spans and values the sheet prints, drawn " +
-                    "small (pinch to zoom in and read them). The preview is to true scale along " +
-                    "its length, not the sheet's compressed layout, and the shaft sits lower to " +
-                    "make room. Every line the sheet prints is drawn; in a short box the top " +
-                    "ones can run off the box — drag the preview to see them. Nothing shows until the overall " +
-                    "length is typed. On-screen only; never printed.\n" +
+                    "small (pinch to zoom in and read them). Each line lands on the edges the " +
+                    "box draws, and the shaft sits lower to make room. Every line the sheet " +
+                    "prints is drawn; in a short box the top ones can run off the box — drag " +
+                    "the preview to see them. Nothing shows until the overall length is typed. " +
+                    "On-screen only; never printed.\n" +
+                    "• \"$PREVIEW_SHEET_LAYOUT_TITLE\" — default on. The Schematic and Final " +
+                    "tabs' preview draws the shaft the way the schematic sheet does: long " +
+                    "sections shortened and broken with the sheet's S-breaks, the shaft at the " +
+                    "sheet's height (at most 40% of the preview box, so the dimension lines keep " +
+                    "room), following the default drawing size, this job's Shaft height and " +
+                    "Liner & taper compression, the Body S-break setting and each body's " +
+                    "\"Compress on drawing\". Tapping still selects — a tap in a break's gap " +
+                    "selects that body. Off, the preview is a true-length picture along its " +
+                    "whole length. The preview stays true-length anyway until the overall " +
+                    "length is typed, and while a part hangs past the shaft end. On-screen " +
+                    "only; never printed.\n" +
+                    "• \"$PREVIEW_LOOK_FOLLOWS_DRAWING_NOTE\" The editor's ⋮ menu → \"Preview " +
+                    "options…\" gathers the preview's switches and those shared settings in " +
+                    "one sheet beside the drawing.\n" +
                     "• \"Highlight Selected Component in Preview\" — default on. Emphasizes the " +
                     "component whose card you are editing.\n" +
                     "• \"Show Left/Right Arrows on Component Cards\" — default off. Adds arrow " +

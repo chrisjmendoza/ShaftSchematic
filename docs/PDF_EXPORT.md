@@ -822,7 +822,9 @@ hand-drafting convention `|←—— 237 1/2" ——→|` — instead of floatin
   CALLER of the same pieces, not a copy: the spans come from `schematicRailSpans` (now
   `internal`, the one builder behind the composer's rail pass), the placements from
   `DimensionRailLayout.plan`, the ink from `drawPlan` (`ui/drawing/render/PreviewDimensionRails.kt`).
-  The canvas lays the rails out in sheet points over its own LINEAR x map and draws them through
+  The canvas lays the rails out in sheet points over its own x map (the sheet's compressed map
+  under the preview's sheet layout — `schematicProfileFit` solved for the box, §5.7 — linear
+  otherwise) and draws them through
   one canvas scale (one point per dp), so the planner and renderer need no preview parameters
   beyond the halo fill (`haloColor`, default `Color.WHITE`) and the side clearance between two
   values at one height (`labelSideClear` → `DimensionRailLayout.plan(sideClear)`, default half the
@@ -1204,6 +1206,14 @@ wear, undercut, and consolidated surfaces alike.
 100%) multiplies the solved profile scale on the **runout/consolidated sheets AND the
 schematic** — one value behind every drawing output (slider on the Consolidated Output
 tab and in the schematic preview's Tune sheet, both `ShaftHeightSlider`).
+
+The **editor preview's sheet layout** (Schematic and Final tabs, `UI_CONTRACT.md` §3.1.1) is no
+longer a linear picture: it calls the schematic's own `schematicProfileFit` — same sizing curve,
+same multiplier, same paper band, same per-kind floors, pins and liner & taper compression — in
+sheet points over the preview box at one point per dp, with the box's own budget cap
+(`PREVIEW_SHEET_SHAFT_MAX_FRAC`, 40% of its content height), and draws its body runs through the
+one `drawBodyRunsWithBreaks`, so its S-breaks are the sheet's decision at the box's width. The
+editor's "Preview options…" sheet carries the same `ShaftHeightSlider` and Body S-break slider.
 
 The **wear document's MAIN profile band** honors the same multiplier too
 (`composeWearPdf(heightScale)`), through a separate, simpler path than the compression solve
