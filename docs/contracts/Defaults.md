@@ -35,7 +35,9 @@ what the UI passes positionally.
 addBodyAt(startMm, lengthMm, diaMm, reference,
           keywayWidthMm, keywayDepthMm, keywayLengthMm, keywayOffsetFromEndMm,
           keywayEnd, keywaySpooned, keywayUnit,
-          blendAftMm, blendFwdMm, blendProfile, blendAftSeal, blendFwdSeal, target)
+          blendAftMm, blendFwdMm, blendProfile, blendAftSeal, blendFwdSeal,
+          blendAftSealLenMm, blendFwdSealLenMm, blendAftToLinerOd, blendFwdToLinerOd,
+          blendAftAngleDeg, blendFwdAngleDeg, blendAftRadiusMm, blendFwdRadiusMm, target)
 addLinerAt(startMm, lengthMm, odMm, reference,
            shoulderAftLenMm, shoulderAftOdMm, shoulderAftRadiusMm,
            shoulderFwdLenMm, shoulderFwdOdMm, shoulderFwdRadiusMm, target)

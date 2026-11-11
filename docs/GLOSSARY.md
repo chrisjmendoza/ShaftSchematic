@@ -57,7 +57,9 @@ Larger diameter.
 ### Taper Rate
 Slope ratio (length per unit diameter change). Typed as a ratio (`1:16`), as inches per foot
 (`3/4"/ft` — the hand-sheet spelling, 1:16), or as a decimal; a bare fraction is ambiguous and
-is refused at entry.
+is refused at entry — except under the "Rate as: in/ft" chip (inch drawings), where a bare `3 3/4`
+means inches per foot and is stored spelled out (`3 3/4"/ft`). An inch taper's footer "Rate:"
+prints per foot by default (Settings → Drawing → "Taper rate per foot", `PdfPrefs.taperRatePerFoot`).
 
 ### Threads
 External thread region defined by major diameter and pitch.
@@ -85,9 +87,13 @@ default), **Fillet** (tangent at the large end only), or **Eased cone**. The ble
 INWARD out of the body carrying it, so no other component's span moves; its diameters are
 DERIVED from whatever sits across the face — and at a **seal area**, where a liner butts the
 face, from the midpoint of the liner OD and the body Ø, since the machined seat is hidden
-under the liner. **Silhouette only** — no dimension rail and no
-footer row; rails keep dimensioning the stored span (dimension to the theoretical sharp
-corner). Not to be confused with a *fillet radius* on a liner shoulder.
+under the liner. A face may instead be blended **by angle** ("Blend by: Length | Angle"): a
+straight chamfer at a typed angle from the shaft axis, its length derived from the step, with an
+optional corner radius at the small end (`blendAftAngleDeg` / `blendAftRadiusMm`, the same pair on
+`AutoBlend`). **Silhouette only** — no dimension rail and no footer row; rails keep dimensioning
+the stored span (dimension to the theoretical sharp corner). The one exception is an angle face,
+whose typed angle and radius print on the schematic as ONE below-shaft callout (`45°, 3/8" R`).
+Not to be confused with a *fillet radius* on a liner shoulder.
 
 ### Seal area
 The radius cuts a body end carries for the **fiberglass to seat into** — the shop cuts 3–4
@@ -280,9 +286,12 @@ never touched — the pair is the before and the after. NOT a reference-only fea
 own schematic PDF and a blank final runout sheet, both marked `Drawing: Final`.
 
 ### Wear Spot
-A recorded liner wear band (`WearSpot` in `WearRecord.spots`): liner-local start/length from
-the liner's AFT edge, plus a note. Drawn as a hatched band on the wear document; clamped for
-rendering only, stored data never mutated. (Its old per-band min-Ø field is retired from
+A recorded wear band, the UI's "wear area" (`WearSpot` in `WearRecord.spots`) on a liner or a
+body (explicit or bare shaft — never a taper): its host's resolved component id (stored under the
+key `linerId`), host-local start/length from the host's AFT edge, plus a note. Typed, or sized by
+dragging its start / end bars on the wear detail page (a drag lands on 1/8" / 1 mm). Drawn as a
+band on the wear document; clamped for rendering only, stored data never mutated; a band whose
+host no longer resolves is skipped where it would draw, never pruned. (Its old per-band min-Ø field is retired from
 entry and print — superseded by measured-Ø readings; the model field survives for old files.)
 
 ### Wear Pit

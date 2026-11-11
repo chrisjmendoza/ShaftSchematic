@@ -192,6 +192,10 @@ data class Body(
     val blendFwdSealLenMm: Float = 0f,
     val blendAftToLinerOd: Boolean = false,  // at a butting liner: false = half-way seat, true = the liner's full OD
     val blendFwdToLinerOd: Boolean = false,
+    val blendAftAngleDeg: Float? = null,  // blend entry: null = Length mode (blendAftMm is the length); a value = Angle mode, degrees from the shaft axis
+    val blendFwdAngleDeg: Float? = null,
+    val blendAftRadiusMm: Float = 0f,  // Angle mode's corner radius at the cone's small-Ø end; 0 = sharp
+    val blendFwdRadiusMm: Float = 0f,
     val blendProfile: BlendProfile = BlendProfile.OGEE,
     val authoredReference: LinerAuthoredReference = LinerAuthoredReference.AFT,  // "Measure From" (explicit bodies): display/entry + OAL anchor — withNewOal keeps a FWD body's distance from the FWD face; never moves startFromAftMm on a switch
 ) : Segment
@@ -213,7 +217,7 @@ data class Taper(
     // > 0 = captured keyway (inset from SET, mill arcs at both ends); derived, no stored flag.
     val keywayOffsetFromSetMm: Float = 0f,
     val keywaySpooned: Boolean = false,  // no "keywayHasSpoon" alias exists
-    val taperRateText: String = "",  // user-authored rate text (e.g. "1:12"); derived/validated in the ViewModel
+    val taperRateText: String = "",  // user-authored rate text (e.g. "1:12", or per foot spelled out: "3 3/4\"/ft"); derived/validated in the ViewModel. How the footer PRINTS it (ratio or per foot) is the device pref PdfPrefs.taperRatePerFoot, never a document field
     val authoredReference: LinerAuthoredReference = LinerAuthoredReference.AFT,
     val label: String? = null,  // optional user-defined display label; not used for geometry
     // Rate mode as the user chose it: true = Manual (taperRateText kept through geometry edits),
@@ -247,10 +251,24 @@ Blend fields on Body (drawing-only, additive, default 0/OGEE):
   `blendAt`; a body or taper across the face is followed whatever it says. Drawing-only; kept while
   the face is square. UI: the "At a liner: Seat | Liner OD" chips. Derived:
   `Body.blendToLinerOdOn(end)`.
+- `blendAftAngleDeg` / `blendFwdAngleDeg`: the face's blend ENTRY ("Blend by: Length | Angle").
+  `null` (default — every document saved before the field) is Length mode, `blend*Mm` the curve's
+  axial length. A value is Angle mode: a straight cone at that many degrees from the shaft AXIS
+  (0 < θ < 90, typed and stored verbatim, refused outside the range — never clamped) whose axial
+  length is DERIVED, `rise / tan θ`, rise = half the step to the same neighbour Ø a Length blend
+  uses (seat midpoint or, under `blend*ToLinerOd`, the liner OD) — so a later step change
+  re-derives it. `blend*Mm` stays as typed for a switch back and still decides whether the face
+  is blended at all. Derived: `Body.blendAngleDegOn(end)`.
+- `blendAftRadiusMm` / `blendFwdRadiusMm`: Angle mode's optional corner radius, canonical mm,
+  stored verbatim (`0` = sharp): a round at the cone's small-Ø end, tangent to the cone and the
+  smaller surface; too big for the cone it is clamped only where DRAWN. Ignored in Length mode and
+  kept through a mode switch. Derived: `Body.blendRadiusMmOn(end)`.
 - `blendProfile`: `OGEE` (tangent both ends, default) | `FILLET` (tangent at the large end only)
-  | `EASED_CONE` (straight cone, both corners eased).
+  | `EASED_CONE` (straight cone, both corners eased). An Angle face ignores it (straight cone)
+  but keeps it.
 - Silhouette only: no dimension rail, no footer row, no effect on OAL, coverage, resolve spans,
-  or collision. Rails keep dimensioning the STORED span (dimension to the theoretical sharp
+  or collision — except that an **Angle-mode** face prints its stored angle and radius as ONE
+  below-shaft callout on the schematic (`45°, 3/8" R`, `buildBlendAngleCallouts`). Rails keep dimensioning the STORED span (dimension to the theoretical sharp
   corner). A stored length longer than the body is clamped where it is DRAWN, never rewritten.
 - Derived: `Body.hasBlendOn(end)`, `Body.blendMmOn(end)`; geometry in
   `ui/resolved/BodyBlends.kt`, curve math in `geom/BlendProfileMath.kt`.
@@ -258,9 +276,12 @@ Blend fields on Body (drawing-only, additive, default 0/OGEE):
 `ShaftSpec.autoBlends: List<AutoBlend>` (additive, defaults empty) — blended faces on auto-body
 spans, keyed in **shaft space** by anchor rather than by a component id, since auto ids are
 position-derived and regenerate on every edit:
-- `AutoBlend(anchorMm, end, lengthMm, profile, seal, sealLenMm, toLinerOd)`. The span whose half-open extent
+- `AutoBlend(anchorMm, end, lengthMm, profile, seal, sealLenMm, toLinerOd, angleDeg, radiusMm)`. The span whose half-open extent
   `[startMm, endMm)` contains the anchor blends the named face; the anchor is system-placed at
   the span midpoint and carries no authored meaning. `lengthMm` is typed and stored verbatim.
+  `angleDeg` (`null` = Length) / `radiusMm` are the auto span's `Body.blendAftAngleDeg` /
+  `blendAftRadiusMm`, set through `ShaftSpec.withAutoBlendAngle(...)` (verbatim; every other field
+  of the anchor kept) and carried by a `withAutoBlend` upsert.
 - Aft-most anchor wins **per face**, so one span may carry both an aft and a fwd blend.
 - Dormant under a component or inside an absorbed gap; **never pruned**, resurrects unchanged.
 - Helpers: `List<AutoBlend>.autoBlendFor(startMm, endMm, end)`,
@@ -530,10 +551,10 @@ can never affect geometry resolution:
   `excludedLinerIds` / `excludedFreeCutIds` are the "Sections to print" EXCLUSION lists — a liner
   or cut added later prints by default; orphan ids are skipped at render, never pruned.
 
-**Orphan policy** differs by key type: wear *spots* (liner-id-keyed, ids the codec knows)
-are pruned at **decode**; pits, measured-Ø readings, runout readings, and runout station
+**Orphan policy**: wear spots, pits, measured-Ø readings, runout readings, and runout station
 placements key on resolved ids (incl. auto-bodies) the codec cannot know, so their orphans
-are skipped at the **render layer** and survive decode untouched. Worn sections and
+are skipped at the **render layer** and survive decode untouched — nothing is pruned at decode,
+and Undo of a deleted host brings its marks back. Worn sections and
 undercuts are shaft-space, so the question does not arise — they are never pruned.
 
 **Mixed units + dual display** (`unit_overrides`, `dual_units`) are a **display axis only** —

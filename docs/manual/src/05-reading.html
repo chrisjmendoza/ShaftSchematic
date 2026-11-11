@@ -107,15 +107,16 @@
   <aside class="warn"><p>On a baseline sheet the second number of a liner is not its length. If the numbers on the rails keep growing from one end to the other, you are reading a baseline sheet: subtract to get a liner's length, or lay everything out from the one S.E.T.</p></aside>
 
   <h3 id="reading-dia">Diameter callouts</h3>
-  <p>Diameters that matter on the floor hang <strong>below</strong> the shaft, each on an L-shaped leader that touches the component it belongs to: “Ø 5.750″” for the Stern tube liner, “Ø 5.500″” for the Seal liner. When two callouts would crowd each other, one drops to a second row.</p>
+  <p>Diameters that matter on the floor hang <strong>below</strong> the shaft, each on an L-shaped leader that touches the component it belongs to: “Ø 5.750″” for the Stern tube liner, “Ø 5.500″” for the Seal liner. When two callouts would crowd each other, one drops to a second row or hangs on the other side of its leader; a leader never runs through another callout's value.</p>
   <ul>
     <li><strong>Liner ODs</strong> (outside diameters) print by default.</li>
     <li><strong>Body and bare-shaft diameters</strong> print only where the office has switched them on for that body (<span class="ui">Show Ø on drawing</span>). A clean schematic with no body callouts is normal.</li>
-    <li>Whatever the callouts show, the footer's “Body:” line lists the diameter of every named body on the shaft (see <a href="#reading-footer">The footer</a>).</li>
+    <li>The callout is the only place a body's Ø prints; the footer has no body Ø line.</li>
+    <li>A body end blended by angle prints its angle below the shaft with a leader to the chamfer, followed by its corner radius when it has one, for example “45°, 3/8″ R”. These are the values the office typed, not measured off the drawing.</li>
   </ul>
 
   <h3>Component names</h3>
-  <p>Names such as “AFT Taper”, “Stern tube liner” and “Seal liner” print below the shaft, under their own component. A name slides along its component, or drops to a lower row, to stay clear of a Ø callout — so on the tailshaft “Stern tube liner” sits a row below “AFT Thread  AFT Taper”, and “Seal liner” sits beside its callout. A name always lies somewhere over its own component. Which components print a name is the office's choice.</p>
+  <p>Names such as “AFT Taper”, “Stern tube liner” and “Seal liner” print below the shaft, under their own component. A name slides along its component, or drops to a lower row, to stay clear of a Ø callout — so on the tailshaft “Stern tube liner” and “Seal liner” each sit a row below their Ø callouts. A name always lies somewhere over its own component. Which components print a name is the office's choice.</p>
 
   <h3 id="reading-footer">The footer (title block)</h3>
   <figure class="strip">
@@ -127,14 +128,13 @@
     <thead><tr><th>Line</th><th>What it means</th></tr></thead>
     <tbody>
       <tr><td>“AFT Taper” / “FWD Taper”</td><td>Column heading for the taper at that end of the shaft. A taper you renamed is headed with its name instead, and a taper part-way along the shaft is headed “Taper”. A body keyway listed under a taper block names its body (“Body #1 KW:”) and sits one blank line below the taper's lines, so it is not read as part of the taper. A column without a taper has no heading.</td></tr>
-      <tr><td>“Rate:”</td><td>The taper. On inch sheets a 1:12 taper prints as “1″/ft” and a 1:16 taper as “3/4″/ft”; any other rate prints as it was typed (a taper left in Auto prints its computed ratio).</td></tr>
+      <tr><td>“Rate:”</td><td>The taper. On inch sheets it prints in inches per foot by default (“1″/ft” for 1:12, “3/4″/ft” for 1:16, “3 3/4″/ft”); with <span class="path">Settings → Drawing → Taper rate per foot</span> off, 1:12 and 1:16 still print per foot and any other rate prints as it was typed (a taper left in Auto prints its computed ratio). Metric sheets print the ratio.</td></tr>
       <tr><td>“L.E.T.:”</td><td>Diameter at the L.E.T. (large end of taper).</td></tr>
       <tr><td>“S.E.T.:”</td><td>Diameter at the small end of the taper.</td></tr>
       <tr><td>“Length:”</td><td>Taper length.</td></tr>
       <tr><td>“KW:”</td><td>Taper keyway, width × depth × length.</td></tr>
       <tr><td>“Thread:”</td><td>Major Ø × threads per inch × length (a metric thread prints its designation × length).</td></tr>
       <tr><td>“Customer:” “Vessel:” “Job #:” “Item:” “Date:”</td><td>The job. Item prints only when the office filled it in. The date is the day the sheet was printed.</td></tr>
-      <tr><td>“Body:”</td><td>The diameters of the bodies the office drew as their own components (not bare shaft), smallest first.</td></tr>
       <tr><td>Side badge</td><td>“PORT”, “STBD” (starboard) or “CENTER”, in bold under the job block.</td></tr>
     </tbody>
   </table>
@@ -367,21 +367,21 @@
   </ol>
 
   <h3>The profile</h3>
-  <p>At the top is the whole shaft as a simple outline, with the OAL line and the liner names. It is simplified on purpose: faces are square, and keyways, thread reliefs and blends are left off, because this sheet is about surfaces, not machining. Wear bands show on the profile as a set of fine vertical lines across the liner, and pits as X marks.</p>
+  <p>At the top is the whole shaft as a simple outline, with the OAL line and the liner names. It is simplified on purpose: faces are square, and keyways, thread reliefs and blends are left off, because this sheet is about surfaces, not machining. Wear bands show on the profile as a set of fine vertical lines across the liner or body they were recorded on, and pits as X marks.</p>
 
   <h3>Detail strips</h3>
   <p>Below the profile, each liner gets a zoomed <strong>detail strip</strong> — every liner, as standard, whether or not it has wear. The office can add strips for tapers and bodies too. Each strip shows the whole liner with a sliver of the shaft beyond each end.</p>
   <ul>
     <li><strong>The title</strong> under the strip names the liner and locates it: “Stern tube liner — 22″ FROM AFT S.E.T.” is the distance from the AFT S.E.T. to the liner's near edge. A liner measured from the AFT S.E.T. has its title on the left; one measured from the FWD S.E.T. has it on the right, as the Seal liner does.</li>
     <li><strong>The rail</strong> above the strip chains across the liner from edge to edge: on the Stern tube liner above, 18″ from the liner's AFT edge to the wear band, 8″ of band, and 4″ from the band to the FWD edge. The three add up to the liner's length.</li>
-    <li><strong>The wear band</strong> is shaded grey.</li>
+    <li><strong>The wear band</strong> is shaded grey. A body on a strip shows its wear bands the same way; only a liner's surface dips with the worn-profile trace.</li>
   </ul>
 
   <h3>Measured diameters</h3>
   <p>Each measured diameter prints below the strip on a leader to a tick at its station: “5.748″”, “5.738″”, “5.731″”, “5.736″”. Values print with their unit and no Ø sign; crowded values step onto a second row with a dog-leg leader. A diameter on a component with no strip prints under the profile instead.</p>
 
   <h3>The worn-profile trace</h3>
-  <p>Inside a wear band, the liner's surface line dips through the measured diameters, so the shape of the wear can be seen at a glance. Real wear is a few thousandths and would be invisible at true scale, so the trace is <strong>drawn deeper than true</strong>: the deepest reading on the sheet draws at a set fraction of the liner's drawn radius (25% by default). A trace is never drawn shallower than true. The drawn depth is for the eye; the printed numbers are the measurements.</p>
+  <p>Where a liner's measured diameters fall below its OD, the liner's surface line dips through them — inside a wear band or not — so the shape of the wear can be seen at a glance. A body's readings never start a trace. Real wear is a few thousandths and would be invisible at true scale, so the trace is <strong>drawn deeper than true</strong>: the deepest reading on the sheet draws at a set fraction of the liner's drawn radius (25% by default). A trace is never drawn shallower than true. The drawn depth is for the eye; the printed numbers are the measurements.</p>
 
   <h3>Pits and dye failures</h3>
   <p>Each pit or dye-pen failure prints as an X where it was found. There are two sizes: a <strong>large X</strong> for a bigger cavity and a <strong>small x</strong> for a small pit or hole. The size is a symbol, not the pit's real size. An X's height across the liner only shows roughly where it was seen; it is not a clock position.</p>

@@ -1,7 +1,7 @@
 ﻿# ShaftSchematic TODO
 
 **Version: v0.5.x Development Queue**
-**Last updated: 2026-10-29**
+**Last updated: 2026-11-10**
 
 ## What belongs here
 
@@ -32,16 +32,16 @@ at most a pointer from here.
 | Snapping engine | ❌ Removed with tap-to-add — nothing snaps a position (golden rule) |
 | Tap-to-add pipeline | ❌ Removed — canvas tap is selection-only; add via the "+ Add Component" button's chooser |
 | OAL window / excluded threads | ✅ Implemented & unit-tested |
-| Taper rate input, derivation, colon entry | ✅ Auto-by-default with manual override |
+| Taper rate input, derivation, colon entry | ✅ Auto-by-default with manual override; "Rate as: 1:N \| in/ft" entry and per-foot footer printing |
 | Keyways — taper, body, spooned, captured, 180°/90° clocking | ✅ Shipped — one shared "Keyway" gate on cards + Add dialogs; the standard-size picker was removed 2026-10-23 (W × D are typed) |
 | Threads — metric designations, relief groove, pitch-driven hatch (slant + density) | ✅ Shipped |
 | Coupler bolt rows — seam slots + cross-drilled holes | ✅ Shipped |
 | Liner shoulders | ✅ Shipped, capability-gated (default OFF) — schematic + runout/consolidated sheets, envelope-aware |
 | Diagnostics — breadcrumb log + Share logs, guarded Crashlytics | ✅ Shipped — activation steps open, see §2 |
-| Body blends + seal areas | ✅ Shipped on schematic and runout/consolidated sheets — face finish Square \| Blend, seal areas their own section |
+| Body blends + seal areas | ✅ Shipped on schematic and runout/consolidated sheets — face finish Square \| Blend, Blend by Length \| Angle (+ corner radius), seal areas their own section |
 | Final Schematic (`final_spec`) | ✅ Shipped — second geometry, Final tab, marked sheets |
 | Undercut drawing (tab + PDF) | ✅ Shipped |
-| Wear document | ✅ Shipped — strips, pits, dia readings, blank template |
+| Wear document | ✅ Shipped — strips, pits, dia readings, wear areas on liners and bodies (draggable bars), blank template |
 | Runout drawing + bubble editor | ✅ Shipped — draggable stations, coupling face |
 | Consolidated Output tab | ✅ Shipped — variant election, worn sections, Export all |
 | Profile sizing (PDF) | ✅ Shipped — 1/2"–1 1/2" paper band, sizing curve, liner compression, S-break threshold |
@@ -110,7 +110,8 @@ at most a pointer from here.
   - **No Imperial/Metric switch on the thread card** — changing a thread between TPI and a metric
     designation means delete + re-add.
   - **Blend length, seal-area length, liner-shoulder length and reduced Ø never print** — only
-    the shoulder radius reaches the footer (deliberate per CLAUDE.md, but a machinist cannot make
+    the shoulder radius reaches the footer, and an Angle-mode blend's angle and radius their
+    below-shaft callout (deliberate per CLAUDE.md, but a machinist cannot make
     these from the paper alone). Decide whether a footer line per feature is wanted.
   - **Wear detail opens with the Add X tool selected**, so the first tap places a pit.
   - **Home leaves no way back into the open job** except Unsaved drafts / Recent.
@@ -141,6 +142,13 @@ at most a pointer from here.
   neighbour's notch unlabelled — no Ø, no rail span, no number. **Recommendation: (2), through the
   ONE notch builder (`buildUndercutNotches`)**, so the silhouette is true and the two draw sites
   cannot differ. A pinned test asserts today's plain stock; change it with the ruling.
+- **Blend by Angle — rulings owed** (shipped `e24b38a` / `10bf09e`): (1) the angle is measured
+  from the shaft AXIS (45° climbs one for one) — confirm that is the shop's convention rather than
+  from the face; (2) the callout leader is vertical with a jog to the value — confirm the shape;
+  (3) the combined `45°, 3/8" R` wording on one leader; (4) a blank draft prints `°` and `R` with
+  a write-in rule — confirm wanted.
+- **Wear-area drag snap grid** (shipped `ed8d756`): a dragged edge lands on 1/8" (1 mm in a
+  millimetre drawing). Confirm the grid, or make it finer / user-set.
 
 ---
 
@@ -221,6 +229,21 @@ Found on the 2026-10-27 AVD pass and not fixed on its branch:
   restored the cut). The list's snackbar is already `SnackbarDuration.Long` (10 s); the detail
   page's delete snackbar is `Short`. Decide whether a delete snackbar should stay until dismissed
   (`Indefinite` with a dismiss action) on both, or whether 10 s is enough by hand.
+- [ ] **Wear detail rail: a short span's value sits on its extension ticks** with no halo, on the
+  wear detail page's rail under the drawing.
+- [ ] **Wear detail: a tap on a wear-area bar with the pit tool places a pit** — a press that does
+  not move past touch slop stays a tap, so a near-miss on a bar becomes an X. Decide whether a tap
+  on a bar should do nothing.
+- [ ] **Wear detail: the two bars of a 1/8" wear area are indistinguishable** — they overlap at
+  any normal zoom, so which edge a drag picks up is a guess. Zoom works around it.
+- [ ] **Wear sheet strip: a body's areas get no dimensions when a liner in the same window has
+  areas** — the chained rail belongs to the window's liner, so the body's bands print as grey
+  rects with edge ticks only.
+- [ ] **Taper calculator: chip styles differ** between its Units chips and the "Rate as" chips,
+  and the "Taper rate (in/ft)" label wraps on a phone.
+- [ ] **Undercut tab title truncates on a phone.**
+- [ ] **Manual figure `wear.png` shows a liner-only sheet** — the manual now describes wear areas
+  on bodies; the figure's fixture (`manual/ManualFiguresTest.kt`) has none.
 - [ ] **Share diagnostic logs — two-file case unverified.** The share sheet attaches `log.0.txt`
   once; the ring had never rotated, so attaching both files (`log.1.txt` too) has not been seen.
   Push the log past 256 KB, or check on a device that has rotated it.
@@ -258,6 +281,8 @@ androidTest) or the Add dialogs; their logic is pure and covered.
 - [ ] Inline "Add here" buttons between components in the list.
 - [ ] Preset library (common tapers, common shoulder patterns).
 - [ ] Final Schematic: "Create a new job from the final" — deliberately left out of the first pass.
+- [ ] Wear areas: slide a whole area by dragging its middle (today only its start and end bars
+  drag).
 - [ ] Coupler bolt rows: authoring which side a blind 90° cross-drilled hole enters from (it is
   always drawn from the top silhouette).
 - [ ] Undercut sheet past four sections: a second page, plus an offer to spread the drawings out.

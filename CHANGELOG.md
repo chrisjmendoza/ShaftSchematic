@@ -8,6 +8,50 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-10
 
+### docs: sweep for the last two days' changes
+
+Docs only, no behaviour change. Brought the contracts, the user manual (in-app copy rebuilt) and
+Help in line with the code: wear spots are no longer described as pruned at decode or liner-only;
+the worn-profile trace no longer needs a wear area; Body/AutoBlend angle and corner-radius fields,
+`updateBodyBlendAngle`/`setAutoBlendAngle` and the full `addBodyAt` list are documented; the
+callout layout is `DiameterCalloutLayout.place` (rows and label sides); "Next cut" seeds away
+from its datum and the add flow's `aftFirst`; "Rate as: 1:N | in/ft" and `taperRatePerFoot`
+reach the dialog table, the prefs table, the glossaries and the footer section; the manual no
+longer promises a footer "Body:" Ø line. A handful of Kotlin comments naming a stale setting
+title or seed side were corrected. TODO and the on-device checklist carry the open items.
+
+### feat(preview): dimension lines in the editor preview
+
+The Schematic tab's preview box no longer shows the shaft and nothing else (on-device request).
+Above the shaft it now draws the schematic's dimension lines with their lengths: the OAL on top,
+then the liner, taper, bolt-row and body-length rails — the same spans, tiers and values the
+schematic prints, in the same units (per-component overrides and dual units included) and with the
+same fraction style. They draw small; pinch to zoom in and read them, and they zoom and pan with
+the shaft. The Final tab's preview draws its own drawing's lines the same way.
+
+The preview is drawn to true scale along its length, not the sheet's compressed layout, so each
+line lands on the edges the box draws. To make room the shaft sits lower in the box, using
+everything above its own height. Every line the sheet prints is always drawn: in a box too short
+for all of them the top ones run off the box, and a pan brings them into view (on-device ruling —
+the preview shows what the output will carry; it does not have to fit). Two values at the same height keep about a text height of
+space between them so they never read as one number. Nothing draws until the overall length is
+typed. The lines are not tap targets; tapping a component still just selects it. While they draw,
+the developer "OAL in preview box" badge is hidden (it repeated the OAL line).
+
+The preview's reset-view button (top-right) now shows only while the drawing is zoomed or panned
+away from its normal view — at the normal view there is nothing to reset, and the button sat over
+the FWD end of the drawing (emulator QA). Double-tap still resets.
+
+Settings → Editor Screen → **Show Dimension Lines in Preview** (default on) turns them off. It is a
+device setting for the screen only: no document stores it, Drawing profiles do not capture it, and
+no PDF changes. Thumbnails and the Runout, Wear and Undercut canvases are unchanged.
+
+Under the hood the preview calls the schematic composer's own span builder, rail planner and rail
+renderer (`schematicRailSpans`, `DimensionRailLayout`, `PdfDimensionRenderer`), laid out in sheet
+points drawn at one point per dp; the renderer gains a halo-colour and a side-clearance parameter
+(the planner a matching `sideClear`), both defaulting to the sheet's values, so every PDF is
+byte-identical.
+
 ### feat(wear): drag a wear area's start and end bars; wear areas on bodies
 
 A wear area no longer needs its length measured and typed (on-device request). Every wear area

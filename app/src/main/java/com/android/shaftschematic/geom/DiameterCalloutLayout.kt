@@ -1,12 +1,13 @@
 package com.android.shaftschematic.geom
 
 /**
- * DiameterCalloutLayout — pure tier assignment for on-shaft diameter callouts.
+ * DiameterCalloutLayout — pure row and side placement for below-shaft callouts.
  *
- * The schematic PDF hangs body/liner Ø labels BELOW the shaft. When two labels sit close
- * together horizontally their text would overlap, so a colliding label is bumped down to a
- * second row (tier 1) — the same two-row posture the runout bubbles use
- * ([RunoutBubbleLayout]). This engine decides the tier; the renderer owns the pixels.
+ * The schematic PDF hangs body/liner Ø labels — and an Angle-mode blend's angle callout —
+ * BELOW the shaft. When two labels sit close together horizontally their text would overlap,
+ * so a colliding label is bumped down to a second row (tier 1) — the same two-row posture the
+ * runout bubbles use ([RunoutBubbleLayout]) — or hung on the other side of its leader. [place]
+ * decides both; the renderer owns the pixels.
  *
  * Purely geometric: inputs are plain output-unit floats already measured by the caller
  * (which owns the text [android.graphics.Paint]). Follows the `geom/` convention — no

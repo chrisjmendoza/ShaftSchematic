@@ -133,6 +133,7 @@ import com.android.shaftschematic.ui.input.rejectedValueNotice
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.util.exportPdfGate
 import com.android.shaftschematic.ui.util.specIssues
+import com.android.shaftschematic.ui.drawing.render.PreviewRailSettings
 import com.android.shaftschematic.ui.drawing.render.previewIssueMarks
 import com.android.shaftschematic.ui.viewmodel.SessionAddDefaults
 import com.android.shaftschematic.util.UnitSystem
@@ -232,6 +233,8 @@ fun ShaftScreen(
     threadDensity: Float = THREAD_DENSITY_DEFAULT,
     /** PDF-shade mirror for the preview box — components the PDF will print shaded. */
     shadedComponentIds: Set<String> = emptySet(),
+    /** The sheet's dimension rails over the preview shaft, `null` = off (`PreviewDimensionRails.kt`). */
+    previewDimensionRails: PreviewRailSettings? = null,
 
     sessionAddDefaults: SessionAddDefaults,
 
@@ -615,6 +618,7 @@ fun ShaftScreen(
                 threadDensity = threadDensity,
                 shadedComponentIds = shadedComponentIds,
                 issueMarks = issueMarks,
+                dimensionRails = previewDimensionRails,
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 120.dp, max = previewMaxHeight)

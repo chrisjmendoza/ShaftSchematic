@@ -334,8 +334,8 @@ value stands above the pits) — the values are planned before the marks pass an
 handed to it (`pitXTouchesHalo`); wear-area bands are never hidden. **Wear-area style**
 (`PdfPrefs.wearAreaStyle`, app-wide look: None | Lines | Grey | Both, default Grey — on-device
 ruling; Both because the grey alone read on-device as a shaded liner): the grey is ONE light
-fill (`CONSOLIDATED_WEAR_SHADE_ALPHA` ≈ 10%) over the clamped liner span at the full drawn liner
-height, the lines are the vertical strokes, both from the ONE `consolidatedWearBandRects`, drawn
+fill (`CONSOLIDATED_WEAR_SHADE_ALPHA` ≈ 10%) over the clamped host span at the full drawn liner
+(or body run) height, the lines are the vertical strokes, both from the ONE `consolidatedWearBandRects`, drawn
 first in the marks pass (fill, then strokes); wherever the grey is drawn a value's knockout is then re-shaded with the band grey wherever it overlaps a band
 (the knockout and its re-shade drawn without anti-aliasing so no seam outlines them), so no white
 box shows on the highlight yet a liner face or S-break under the digits is still knocked out — text
@@ -1152,9 +1152,11 @@ in `ShaftPdfComposer.kt`) all hang **BELOW** the shaft; do not reintroduce above
 alternation. Labels use `formatDiaWithUnit` (inches: a whole number bare, any other value at 3 decimals — `10.990"`, never `10.99"`, on-device report — or 4 when it is exactly an odd sixteenth, `10.9375"`, `LengthFormat.formatInchesDecimal`, on-device ruling; mm compact 1-decimal; the ONE exception is the footer `Thread:` line's major Ø, `formatThreadDiaWithUnit`, which drops trailing zeros — `4.5"` — on-device ruling) to match the
 footer's "Ø" text — never the raw 4-decimal format. Bodies and liners are **separate OD
 groups** — a liner OD is never deduped against a body OD. Horizontally-close labels stack onto
-a second row via `geom/DiameterCalloutLayout.kt` (pure, unit-tested), the same two-tier
-posture as runout bubbles. PDF-only — no on-screen canvas equivalent, so no draw-both-sites
-rule applies.
+a second row, the same two-tier posture as runout bubbles, and rows AND label sides are placed
+together by the ONE `DiameterCalloutLayout.place` (pure, unit-tested) so no leader drops through
+another callout's value — the Angle-mode blend callouts (Body blends, above) ride this same list.
+PDF-only — no on-screen canvas equivalent (the editor preview draws rails, never callouts), so no
+draw-both-sites rule applies.
 
 **Callouts and component-NAME labels share ONE collision space.** Both hang below the shaft
 and both anchor on a component's CENTER, so a component printing a name and a Ø aimed two
@@ -1261,8 +1263,33 @@ for the full `BLANK_DIM_GAP_PT` **shrinks its gap** toward `BLANK_DIM_GAP_MIN_PT
 (`blankGapWidth`) instead of losing it, and only a span too tight for even that falls back to
 a gapless continuous line. ONE `labelWidth(span)` feeds both the planner's reserved box and
 the cut gap — they can never disagree.
-PDF-only — the on-screen preview rasterizes the real PDF, so there is no separate
-draw path and no canvas equivalent to keep in sync. See `docs/PDF_EXPORT.md` §5.4.
+The PDF preview rasterizes the real PDF, so it has no draw path of its own. The editor preview
+canvas is a second CALLER, never a copy — see the next invariant. See `docs/PDF_EXPORT.md` §5.4.
+
+### The editor preview's dimension lines are the sheet's rails
+The Schematic and Final tabs' editor preview (`ShaftDrawing`) draws the schematic sheet's
+dimension rails above the shaft (on-device request) through ONE source and ONE draw path:
+spans from `schematicRailSpans` (`pdf/ShaftPdfComposer.kt`, the builder behind the composer's
+rail pass — same spans, tiers, `DisplayUnits` resolution and formatting), placement by
+`DimensionRailLayout.plan`, ink by `PdfDimensionRenderer.drawPlan`; do not rebuild a span, a
+collision rule or a draw routine for the canvas. The preview owns only
+`ui/drawing/render/PreviewDimensionRails.kt`: its LINEAR x map (the preview's `ShaftLayout`, so a
+span's ends land on the edges the box draws — never the sheet's compressed map), sheet points
+drawn at one point per dp through ONE canvas scale (so the shared path takes no preview
+parameters but `haloColor` and `labelSideClear`, both defaulting to the sheet's — every PDF
+byte-identical; the preview keeps a text height of air between two values at one height), the
+preview's outline colour with halos in the app background (app chrome, not `SheetInk`), and the
+room rule `geom/PreviewRailFit.kt` (the least top reservation that fits, out of everything the box
+has above the shaft's width-fitted height and padding — the shaft sits low; past that the rails
+run off the top of the box, where a pan reaches them. EVERY rail the sheet prints is always drawn
+and the shaft is never shrunk for them — on-device ruling: "the rails don't need to fit within the
+preview constantly", it is a picture of the output, not a fitted layout). No rails
+while the OAL is 0. Rails are not tap targets. While they draw, the developer OAL badge stands
+down. The reset-view button (top-right) shows only while the view is zoomed or panned off its
+default (`isPreviewViewMoved`), rails or not — an always-on disc covered the FWD end. Gated by `RenderOptions.showDimensionRails`, default OFF — thumbnails and the
+Runout / Wear / Undercut canvases never set it. The switch is the device preference Settings →
+Editor Screen → "Show Dimension Lines in Preview" (`SettingsStore.showPreviewDimensionsFlow`,
+default ON): never in a document, never captured by a Drawing profile, read by no composer.
 
 ### Fractions are SET, never spelled
 Every drawn fraction goes through ONE construction — `util/FractionText.kt` (pure parser:

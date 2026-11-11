@@ -134,6 +134,7 @@ object SettingsStore {
     private val KEY_SHOW_COMPONENT_ARROWS = booleanPreferencesKey("show_component_arrows")
     private val KEY_COMPONENT_ARROW_WIDTH_DP = intPreferencesKey("component_arrow_width_dp")
     private val KEY_SHOW_HIGHLIGHT_SELECTION = booleanPreferencesKey("show_highlight_selection")
+    private val KEY_SHOW_PREVIEW_DIMENSIONS = booleanPreferencesKey("show_preview_dimensions")
 
     // Developer options (hidden behind About taps)
     private val KEY_DEV_OPTIONS_ENABLED = booleanPreferencesKey("dev_options_enabled")
@@ -692,6 +693,14 @@ object SettingsStore {
     fun showHighlightSelectionFlow(ctx: Context): Flow<Boolean> =
         ctx.settingsPrefs.map { p -> p[KEY_SHOW_HIGHLIGHT_SELECTION] ?: true }
 
+    /**
+     * Dimension lines in the editor preview (Settings → Editor Screen), default ON. A device
+     * preference for the on-screen preview only: no document carries it, a Drawing profile does
+     * not capture it, and no PDF reads it.
+     */
+    fun showPreviewDimensionsFlow(ctx: Context): Flow<Boolean> =
+        ctx.settingsPrefs.map { p -> p[KEY_SHOW_PREVIEW_DIMENSIONS] ?: true }
+
     fun componentArrowWidthDpFlow(ctx: Context): Flow<Int> =
         ctx.settingsPrefs.map { p -> p[KEY_COMPONENT_ARROW_WIDTH_DP] ?: 40 }
     fun devOptionsEnabledFlow(ctx: Context): Flow<Boolean> =
@@ -992,6 +1001,10 @@ object SettingsStore {
 
     suspend fun setShowHighlightSelection(ctx: Context, show: Boolean) {
         ctx.editSettings { it[KEY_SHOW_HIGHLIGHT_SELECTION] = show }
+    }
+
+    suspend fun setShowPreviewDimensions(ctx: Context, show: Boolean) {
+        ctx.editSettings { it[KEY_SHOW_PREVIEW_DIMENSIONS] = show }
     }
 
     suspend fun setOpenPdfAfterExport(ctx: Context, enabled: Boolean) {

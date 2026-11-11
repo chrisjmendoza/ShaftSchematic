@@ -354,7 +354,7 @@ fun ShaftViewModel.setPdfFooterBoltHoleDia(v: Boolean, persist: Boolean = true) 
     if (persist) viewModelScope.launch { SettingsStore.setPdfFooterBoltHoleDia(getApplication(), v) }
 }
 
-/** Settings → Drawing → "Taper rate on sheets": per foot (true) or ratio. */
+/** Settings → Drawing → "Taper rate per foot": per foot (true) or ratio. */
 fun ShaftViewModel.setPdfTaperRatePerFoot(v: Boolean, persist: Boolean = true) {
     _pdfTaperRatePerFoot.value = v
     SettingsStore.updatePdfPrefs { it.copy(taperRatePerFoot = v) }
@@ -589,6 +589,17 @@ fun ShaftViewModel.setShowHighlightSelection(show: Boolean, persist: Boolean = t
     _showHighlightSelection.value = show
     if (persist) {
         viewModelScope.launch { SettingsStore.setShowHighlightSelection(getApplication(), show) }
+    }
+}
+
+/**
+ * Dimension lines in the editor preview (Schematic and Final tabs). On-screen only: never in a
+ * document, never captured by a Drawing profile, never read by a PDF composer.
+ */
+fun ShaftViewModel.setShowPreviewDimensions(show: Boolean, persist: Boolean = true) {
+    _showPreviewDimensions.value = show
+    if (persist) {
+        viewModelScope.launch { SettingsStore.setShowPreviewDimensions(getApplication(), show) }
     }
 }
 

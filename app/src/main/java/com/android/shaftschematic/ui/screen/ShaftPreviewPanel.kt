@@ -34,6 +34,7 @@ import com.android.shaftschematic.model.lastOccupiedEndMm
 import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.ui.drawing.compose.ShaftDrawing
 import com.android.shaftschematic.ui.drawing.render.PreviewIssueMark
+import com.android.shaftschematic.ui.drawing.render.PreviewRailSettings
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.util.PreviewColorSetting
 import com.android.shaftschematic.util.UnitSystem
@@ -72,8 +73,14 @@ internal fun PreviewCard(
     shadedComponentIds: Set<String> = emptySet(),
     /** The warning banner's problems as red marks on the drawing — see [ShaftDrawing]. */
     issueMarks: List<PreviewIssueMark> = emptyList(),
+    /** The sheet's dimension rails over the shaft, `null` = off — see [ShaftDrawing]. */
+    dimensionRails: PreviewRailSettings? = null,
     modifier: Modifier = Modifier
 ) {
+    // The developer OAL badge repeats the OAL rail's value and sits where the rail block
+    // starts, so it stands down while the rails draw one (a 0 OAL draws no rails; the badge
+    // still shows the drawn extent then).
+    val railsShowOal = dimensionRails != null && spec.overallLengthMm > 0f
     Card(
         modifier = modifier,
         shape = RectangleShape,
@@ -98,6 +105,7 @@ internal fun PreviewCard(
                 threadDensity = threadDensity,
                 shadedComponentIds = shadedComponentIds,
                 issueMarks = issueMarks,
+                dimensionRails = dimensionRails,
                 highlightEnabled = highlightEnabled && (highlightId != null),
                 highlightId = highlightId,
                 onTapComponentId = onTapComponentId,
@@ -111,7 +119,7 @@ internal fun PreviewCard(
                 modifier = Modifier.align(Alignment.TopStart).padding(8.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                if (showOalInPreviewBox) {
+                if (showOalInPreviewBox && !railsShowOal) {
                     PreviewOalBadge(
                         spec = spec,
                         unit = unit,

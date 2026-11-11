@@ -179,7 +179,8 @@ by a bold badge at its top-left (`BEFORE_AFTER_ORIGINAL_BADGE` / `BEFORE_AFTER_F
     confirm; Reset's message says the final drawing's edits are replaced and that Undo brings
     them back — it is undoable, so it never claims they are lost) and the final runout sheet's
     Print / Export actions. Carousel, add dialogs,
-    preview box, collision badges and warnings work unchanged because they are presentational
+    preview box (its dimension lines included — the final's own rails, from the spec it is
+    handed), collision badges and warnings work unchanged because they are presentational
     over whatever spec they are handed.
   - The final preview's options sheet carries the **"Original + Final"** `ContentChip`
     (`final_before_after_toggle`) right after "Runout bubbles", selected by default; it is greyed

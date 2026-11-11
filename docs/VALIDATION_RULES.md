@@ -272,7 +272,9 @@ Superseded by the Auto/Manual rate-mode system — authoritative contract in the
   shows a **warning**, it is not silently ignored.
 - Missing both SET and LET with no usable rate → **blocking**.
 - Bare `1` and any bare slash fraction (`3/4` — slope or inches per foot?) are blocked as
-  ambiguous; the explicit forms are a ratio (`1:16`) or inches per foot (`3/4"/ft`).
+  ambiguous; the explicit forms are a ratio (`1:16`) or inches per foot (`3/4"/ft`). Under the
+  "Rate as: in/ft" chip (inch drawings) a bare number or fraction is spelled out as per foot
+  (`3 3/4` → `3 3/4"/ft`) before validation, so it is not ambiguous there.
   Common-rate snapping uses a 3% tolerance (confirmed product decision).
 - Slope validation/derivation (`autoTaperRate`, `manualTaperRateWarning`, and
   `manualTaperRateBlockingMessage`'s derive-prompt) is inert at `lengthMm <= 0` — no

@@ -25,7 +25,16 @@ Responsibilities
   other component's span). Lengths are stored **verbatim**; a length longer than the body is
   clamped where it is DRAWN, never here. Returns the spec unchanged when nothing moves, so a
   no-op set never marks the document dirty. `addBodyAt` takes the same three values so the Add
-  dialog can set them at creation (add-dialog parity — a blend changes geometry).
+  dialog can set them at creation (add-dialog parity — a blend changes geometry). The full call
+  also carries the seal pair, seal lengths and liner target (`sealAft`, `sealFwd`,
+  `sealAftLenMm`, `sealFwdLenMm`, `toLinerOdAft`, `toLinerOdFwd`) and `target`.
+- `updateBodyBlendAngle(index, end, angleDeg, radiusMm, target)` /
+  `setAutoBlendAngle(spanStartMm, spanEndMm, end, angleDeg, radiusMm, target)` — one face's
+  "Blend by: Length | Angle" entry: `angleDeg` (`null` = Length mode, degrees from the shaft axis)
+  and corner radius, stored verbatim (a negative radius coerced to 0), every other blend field
+  kept; the auto variant acts on the face's live `AutoBlend` anchor (`withAutoBlendAngle`). A
+  no-op returns the spec unchanged. `addBodyAt` takes `blendAft/FwdAngleDeg` and
+  `blendAft/FwdRadiusMm` too.
 - `setAutoSectionDiaMm(spanStartMm, spanEndMm, valueMm, target)` — "This section": one auto
   span's Ø as a shaft-space `AutoDiaOverride` (`ShaftSpec.withAutoSectionDia`, verbatim; ≤ 0
   clears that section). `setAutoBodyDiaMm(valueMm, target)` — "All auto sections" and the
@@ -198,7 +207,7 @@ Two specs, one editor
   wrote nothing must select nothing.
 - An `ORIGINAL` write through the seam also runs `followAutoBodyKeys(before, after)`: data keyed
   to a bare-shaft body whose span the edit re-identified (readings, placements, the count
-  override, wear pits/Ø readings, strip election) is renamed to the run's unambiguous successor
+  override, wear areas, wear pits/Ø readings, strip election) is renamed to the run's unambiguous successor
   in the SAME synchronous call, so the recorder (which reads `currentEditState()` at collection
   time) takes the edit and the re-key as one undo step. A no-op when no stored key names an auto
   body. See `RunoutSheet.md` (Runout Bubble Editor, "Auto-body keys follow their body").

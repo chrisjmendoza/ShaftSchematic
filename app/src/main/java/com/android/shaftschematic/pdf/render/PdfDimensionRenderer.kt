@@ -88,6 +88,19 @@ class PdfDimensionRenderer(
      * taller band ([metrics]). See `docs/DualUnitStacking_PLAN.md`.
      */
     private val dualStacked: Boolean = false,
+    /**
+     * Fill of the value halos — sheet white on every printed sheet (the default). The editor
+     * preview draws the same rails over the app's own background (`PreviewDimensionRails`), so
+     * it passes that colour: a white box on a dark-theme preview would read as a pasted label.
+     */
+    private val haloColor: Int = Color.WHITE,
+    /**
+     * Least horizontal space between two values at one height ([DimensionRailLayout.plan]'s
+     * `sideClear`); `null` (every sheet) keeps the planner's default, half the label gap. The
+     * editor preview passes about a text height: its values are small and read zoomed, and the
+     * sheet's few points of air let two neighbours read as one string there.
+     */
+    private val labelSideClear: Float? = null,
 ) {
     /**
      * The width this renderer occupies for a value — blank drafts reserve the write-in gap,
@@ -175,13 +188,18 @@ class PdfDimensionRenderer(
         safeTopY: Float = Float.NEGATIVE_INFINITY,
         contentLeft: Float = Float.NEGATIVE_INFINITY,
         contentRight: Float = Float.POSITIVE_INFINITY,
-    ): DimensionRailLayout.Plan =
-        DimensionRailLayout.plan(inputs, metrics(), arrowSize, textPad, safeTopY, contentLeft, contentRight)
+    ): DimensionRailLayout.Plan {
+        val m = metrics()
+        return DimensionRailLayout.plan(
+            inputs, m, arrowSize, textPad, safeTopY, contentLeft, contentRight,
+            sideClear = labelSideClear ?: (m.labelGap * 0.5f),
+        )
+    }
 
-    /** Sheet-white fill for the value halos — paper, never a theme color. */
+    /** Fill for the value halos — paper white on a sheet ([haloColor]). */
     private val haloPaint = Paint().apply {
         style = Paint.Style.FILL
-        color = Color.WHITE
+        color = haloColor
     }
 
     /**

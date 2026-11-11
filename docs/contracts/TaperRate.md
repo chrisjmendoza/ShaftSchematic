@@ -37,7 +37,9 @@ Invariants
   reads as 1:12, a value under 1 as the slope itself up to `MAX_BARE_DECIMAL_SLOPE` = 0.25 —
   `.0625` reads as 3/4"/ft). The footer's `1"/ft` / `3/4"/ft`
   notation therefore round-trips through the field, and every auto-rate text (`1:N`) parses.
-- **A bare slash fraction is blocked as ambiguous** (`3/4`, `1/16`, `1/1`): a machinist
+- **A bare slash fraction is blocked as ambiguous** (`3/4`, `1/16`, `1/1`) — as stored text and
+  under the "Rate as: 1:N" chip; under "in/ft" a bare entry is spelled out per foot before it is
+  parsed (`normalizeTaperRateEntry`, below), so the parser never sees it bare: a machinist
   writing `3/4` means 3/4" per foot (1:16), while a slope reader would make it 0.75 — an absurd
   taper. `manualTaperRateBlockingMessage` answers `Write 3/4"/ft or a ratio like 1:16; a bare
   fraction is ambiguous`, and `parseTaperRateText` returns null for it in BOTH modes (the

@@ -94,7 +94,7 @@
 
   <h3>My body's Ø isn't printed on the schematic</h3>
   <p>Body Ø callouts are off until you ask for them, so the schematic stays clean. Turn on <span class="ui">Show Ø on drawing</span> on the body's card, or <span class="ui">Show bare-shaft Ø on drawing</span> on a <span class="ui">Body (auto)</span> card (one switch for all bare shaft). Liner Ø callouts are on by default.</p>
-  <p>When several bodies share a diameter, the value prints once, on the longest one that is switched on; the footer's “Body:” list always shows every body Ø. See <a href="#components-drawing-toggles">Per-component drawing switches</a>.</p>
+  <p>When several bodies share a diameter, the value prints once, on the longest one that is switched on; the footer has no body Ø line, so a body Ø switched off prints nowhere. See <a href="#components-drawing-toggles">Per-component drawing switches</a>.</p>
 
   <h3>A component's name is missing from the sheet</h3>
   <p>Check the card's <span class="ui">Show name on drawing</span> switch. Until you set it, it follows <span class="path">Settings → Drawing → Component names on drawing</span> (the <span class="ui">Component names</span> chip on the schematic's PDF options is the same setting), and the line under the switch says so; set on the card, your choice wins either way. Bare shaft never prints a name, and Template mode prints none. See <a href="#components-show-name">Show name on drawing</a>.</p>
@@ -313,7 +313,7 @@
     <dd>A second drawing of the same job showing the shaft as it leaves, after liners were moved, lengthened or shortened. Started from the original and edited separately on the <span class="ui">Final Schematic</span> tab; its sheets are marked Final.</dd>
 
     <dt>Footer (title block)</dt>
-    <dd>The block along the bottom of each sheet with the job information (customer, vessel, job number, date) and the component spec lines: each taper's rate, L.E.T. (large end of taper), S.E.T. and length, then keyways, threads and body diameters.</dd>
+    <dd>The block along the bottom of each sheet with the job information (customer, vessel, job number, date) and the component spec lines: each taper's rate, L.E.T. (large end of taper), S.E.T. and length, then keyways and threads. Body diameters are not in the footer; they print only as Ø callouts.</dd>
 
     <dt>FWD</dt>
     <dd>The forward end of the shaft, toward the engine. FWD is always the right end of every drawing.</dd>
@@ -367,7 +367,7 @@
     <dd>The diameter symbol. On the sheets and in the app it stands before, or in place of, the word diameter: <span class="ui">Measured Ø</span>, “Ø 5.750″”.</dd>
 
     <dt>Ø callout</dt>
-    <dd>A diameter value printed below the shaft with a leader to the surface it describes. Body callouts are off until switched on per body; liner callouts are on by default.</dd>
+    <dd>A diameter value printed below the shaft with a leader to the surface it describes. Body callouts are off until switched on per body; liner callouts are on by default. A body end blended by angle prints its angle and corner radius the same way.</dd>
 
     <dt>PDF</dt>
     <dd>Portable Document Format, the file every sheet is exported as. A printed sheet and the exported PDF of the same document are identical.</dd>
@@ -403,7 +403,7 @@
     <dd>Starboard: the right-hand shaft of a twin-screw vessel, facing forward; PORT is the left-hand one. Set under <span class="ui">Shaft Position</span>, printed as the side badge, and flipped by <span class="ui">Duplicate for mate…</span>.</dd>
 
     <dt>Taper rate</dt>
-    <dd>How fast a taper's diameter changes along its length, written as a ratio such as 1:12 (one unit of diameter per twelve of length). In <span class="ui">Auto</span> rate mode the app works it out from the L.E.T., S.E.T. and length; in <span class="ui">Manual</span> mode you type it.</dd>
+    <dd>How fast a taper's diameter changes along its length, written as a ratio such as 1:12 (one unit of diameter per twelve of length) or, on inch drawings, in inches per foot such as 3 3/4″/ft (<span class="ui">Rate as:</span> <span class="ui">in/ft</span>; the footer prints per foot by default). In <span class="ui">Auto</span> rate mode the app works it out from the L.E.T., S.E.T. and length; in <span class="ui">Manual</span> mode you type it.</dd>
 
     <dt>Template</dt>
     <dd>A saved shaft shape without job details or measurements, made with <span class="ui">Save as template…</span> and started from with <span class="ui">Start from Template</span>. Useful for shafts a shop makes again and again.</dd>
@@ -433,6 +433,6 @@
     <dd>A designated measured area added on the Consolidated Output tab under <span class="ui">Worn sections</span>. Its boundary lines are drawn on the shaft and its Ø values print inside the profile, turned on their side.</dd>
 
     <dt>Worn-profile trace</dt>
-    <dd>The liner surface line drawn dipping through the measured Ø readings inside a wear area, so the shape of the wear shows on the sheet.</dd>
+    <dd>The liner surface line drawn dipping through the liner's measured Ø readings, inside a wear area or not, so the shape of the wear shows on the sheet.</dd>
   </dl>
 </section>

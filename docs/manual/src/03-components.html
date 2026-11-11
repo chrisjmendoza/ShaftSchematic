@@ -75,7 +75,7 @@
     <li>Its name below the shaft, unless names are off (see <a href="#components-names">Component names</a>).</li>
   </ul>
   <p>On an inch drawing the “Rate:” prints in inches per foot while <span class="path">Settings → Drawing → Taper rate per foot</span> is on (the default). An Auto rate prints as the per-foot value of the common rate it matches (1:12 is 1″/ft, 1:16 is 3/4″/ft), otherwise as the nearest 1/8″ per foot when it is within 1% (a worked-out 3.738″/ft prints 3 3/4″/ft), otherwise as the decimal. A rate you typed is converted exactly and never rounded: 1:3.2 prints 3 3/4″/ft, 1:3.21 prints 3.738″/ft. With the setting off the ratio prints. Metric drawings always print the ratio.</p>
-  <aside class="shop"><p>On inch sheets a 1:12 rate prints as “1″/ft” and 1:16 as “3/4″/ft”. Other rates print as typed. The footer L.E.T. and S.E.T. carry no AFT/FWD suffix; the column heading says which end of the shaft you are looking at.</p></aside>
+  <aside class="shop"><p>With <span class="path">Taper rate per foot</span> off, an inch sheet still prints a 1:12 rate as “1″/ft” and 1:16 as “3/4″/ft”; other rates print as typed. The footer L.E.T. and S.E.T. carry no AFT/FWD suffix; the column heading says which end of the shaft you are looking at.</p></aside>
 
   <h2 id="components-threads">Threads</h2>
   <p>A thread is an external threaded section: the propeller-nut thread beyond the S.E.T., or a coupling-nut thread. It draws as a hatched section whose hatch leans with the pitch.</p>
@@ -250,8 +250,7 @@
   <ul>
     <li>The body outline, at its own diameter, with any blends curved in.</li>
     <li>Seal areas as three evenly spaced <strong>dashed</strong> lines across the body, outline to outline. The silhouette stays flat through the seal area.</li>
-    <li>Every explicit body's Ø in the footer “Body:” line, whatever its Ø callout switch says.</li>
-    <li>A Ø callout below the shaft only if <span class="ui">Show Ø on drawing</span> is on (off by default).</li>
+    <li>A Ø callout below the shaft only if <span class="ui">Show Ø on drawing</span> is on (off by default). That callout is the only place a body's Ø prints; the footer carries no body Ø line.</li>
     <li>No dimension rail for a body, a blend or a seal area. The rails always dimension the stored body ends as if they were square.</li>
     <li>For a face blended by Angle, the angle below the shaft with a leader to the chamfer, followed by the corner radius when there is one (for example <span class="ui">45°, 3/8″ R</span>), on the schematic and the Final schematic. A face blended by Length prints no number.</li>
   </ul>
@@ -388,7 +387,7 @@
 
   <h3>Show Ø on drawing</h3>
   <p>Controls the diameter callout that hangs below the shaft for this component. The sheet prints one callout per distinct diameter, placed on the longest shown component with that diameter, so hiding one body moves the callout to another body of the same Ø rather than removing it. Body and liner callouts are separate; a liner OD is never merged with a body Ø.</p>
-  <p>Reach for it when a callout lands somewhere the diameter could not have been measured, such as a body running under fiberglass. Model the covered run and the bare window as separate bodies and show the Ø only on the window. The footer “Body:” line still lists every body diameter.</p>
+  <p>Reach for it when a callout lands somewhere the diameter could not have been measured, such as a body running under fiberglass. Model the covered run and the bare window as separate bodies and show the Ø only on the window. A body's Ø prints nowhere else: the footer has no body Ø line.</p>
   <p>On a bare-shaft card, <span class="ui">Show bare-shaft Ø on drawing</span> is one switch for all bare shaft at once.</p>
 
   <h3 id="components-shade">Shade on drawing</h3>

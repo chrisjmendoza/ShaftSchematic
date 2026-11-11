@@ -1227,9 +1227,15 @@ Each card:
   focused field, re-check `undercutConfirmIssue`, ask "Past the liner edge" for an overhang the
   flush landed (`UndercutAfterOverhang.NextCut` resumes on the answer), then `confirmDraft(draft,
   follow = false)`; a clean card has nothing to confirm — and then seeds a new **PENDING** card
-  butted on the FWD end of the cut as confirmed: `undercutNextCutSeed(current, oalMm)` (pure,
-  `geom/UndercutMath.kt`) — start = the cut's FWD end, length `DEFAULT_UNDERCUT_LENGTH_MM`, Ø 0,
-  no note, the cut's reference / reference liner / reference cut carried over — passed through
+  butted on the end of the cut as confirmed **away from its datum** — the FWD end under an AFT
+  datum, the AFT end under a FWD one (`isFwdUndercutReference`: FWD S.E.T., liner FWD edge,
+  parent FWD shoulder; on-device report: a run recorded right to left from the FWD S.E.T. opened
+  every next cut back toward the datum, its Distance retyped each time):
+  `undercutNextCutSeed(current, oalMm, lengthMm, others)` (pure, `geom/UndercutMath.kt`) — length
+  `DEFAULT_UNDERCUT_LENGTH_MM`, Ø 0, no note, the cut's reference / reference liner / reference cut
+  carried over. The seed lands in CLEAR stock: where another cut on the sheet already holds that
+  spot it steps past it to the run's open end (a cut CONTAINING the current one is not in the
+  way, so a nested run stays inside its parent). The seed is passed through
   `undercutSeedInheriting` so a datum that cannot display at the new span (a buried liner edge,
   a parent that does not contain it) seeds as the nearer S.E.T. The seed goes through the
   pending-seed path exactly as an "Add undercut…" does (`drafts` + `pendingSeed` +
@@ -1238,10 +1244,18 @@ Each card:
   The pending card is keyed on its seed, so a Next cut from one pending card to the next starts
   the new card's own state fresh. **Disabled** (`undercutNextCutState`) while the card's draft is
   blocked (the pill already says why — no second validator), while ANOTHER card holds the one
-  pending add, and when less than the default length of shaft remains FWD of the cut — then with
-  the caption **"No stock FWD of this cut"** (`UNDERCUT_NO_STOCK_FWD_MSG`, `testTag
+  pending add, and when no default-length cut of clear stock fits on that side before the shaft
+  end — then with the caption **"No stock FWD of this cut"** (`UNDERCUT_NO_STOCK_FWD_MSG`) or,
+  under a FWD datum, **"No stock AFT of this cut"** (`UNDERCUT_NO_STOCK_AFT_MSG`; `testTag
   "undercut_next_cut_caption"`); a seed is never placed past the shaft end. The side-named
   edge-to-edge chips are unchanged.
+- **A butted seed's Length edit holds the shared edge** (`undercutButtedSeedStartForLength`,
+  both butted seeds — "Next cut" and the add flow's below): the seed's Distance was never typed,
+  and the ordinary length rule (`undercutCanonicalForNewLength`) pins the end the Distance reads
+  to, so under a FWD datum typing the real length grew the new cut INTO the cut it was butted
+  against (on-device report). While the pending cut still sits on the SEED's own butted edge, a
+  Length edit keeps that edge and the Distance follows; once a typed Distance has moved it, the
+  Distance is authored and the ordinary rule protects it.
 
 - **Card field order** (usability review: the rarely-used placement tools sat between Distance and
   Length and the Measured Ø a shop user came to type): title + delete, warnings, Measure From chips,
@@ -1337,11 +1351,13 @@ discards the page outright, so does "Discard" on a blocked leave, and so does le
 untouched, so a discarded add leaves **no ghost cut** in the record.
 
 **A strip that already holds cuts seeds the new one butted against them** (on-device request: a
-run of cuts is recorded one after the next) — `undercutAddSeedSpan(stripCuts, occupied, oalMm)`
-(pure, `geom/UndercutMath.kt`), over the strip's member cuts and every cut on the sheet, all
-render-clamped: start on the FWD end of the FWD-most cut (largest end, ties to the outermost —
-never a nested child) while `DEFAULT_UNDERCUT_LENGTH_MM` of shaft remains FWD of it, else end on
-the AFT end of the AFT-most cut while that much remains AFT of it — each side taken only when the
+run of cuts is recorded one after the next) — `undercutAddSeedSpan(stripCuts, occupied, oalMm,
+lengthMm, aftFirst)` (pure, `geom/UndercutMath.kt`), over the strip's member cuts and every cut on
+the sheet, all render-clamped: start on the FWD end of the FWD-most cut (largest end, ties to the
+outermost — never a nested child) while `DEFAULT_UNDERCUT_LENGTH_MM` of shaft remains FWD of it,
+else end on the AFT end of the AFT-most cut while that much remains AFT of it — the AFT side
+tried FIRST (`aftFirst`) when every cut on the strip reads from a FWD datum
+(`isFwdUndercutReference`), since such a run is recorded FWD → AFT — each side taken only when the
 seed lands in **clear stock** (no cut on the sheet reaches into it by more than
 `UNDERCUT_TOUCH_EPS_MM`; touching is clear), so the seed opens confirmable. The seed reads from
 that neighbour's datum (`undercutSeedInheriting` over the neighbour's baseline: its reference,
