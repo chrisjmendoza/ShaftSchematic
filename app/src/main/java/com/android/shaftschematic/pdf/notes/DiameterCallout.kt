@@ -34,6 +34,14 @@ data class DiaCallout(
      */
     val anchorXPt: Float? = null,
     val anchorYPt: Float? = null,
+    /**
+     * The axial span (mm) of the component a [CalloutKind.DIAMETER] value belongs to. Its leader
+     * stands at [xMm] unless that collides, and may then slide anywhere inside this span — the
+     * value reads as its component's from any point along it. Null (the default) = the leader
+     * stays at [xMm]. Both or neither are set.
+     */
+    val spanStartMm: Double? = null,
+    val spanEndMm: Double? = null,
 )
 
 enum class LeaderSide { ABOVE, BELOW }

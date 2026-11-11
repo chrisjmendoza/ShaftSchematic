@@ -169,11 +169,36 @@ class DiameterCalloutLayoutTest {
         )
         val dia = p[0]
         val blend = p[1]
-        assertEquals(DiameterCalloutLayout.Placement(tier = 1, labelLeft = 226f), blend)
-        assertEquals(DiameterCalloutLayout.Placement(tier = 0, labelLeft = 196f), dia)
+        assertEquals(DiameterCalloutLayout.Placement(tier = 1, labelLeft = 226f, anchorX = 300f), blend)
+        assertEquals(DiameterCalloutLayout.Placement(tier = 0, labelLeft = 196f, anchorX = 260f), dia)
         // The Ø's leader stops at row 0, above the blend's row; the blend's leader (300) is clear
         // of the Ø's row-0 footprint (196..260).
         assertTrue(300f > 260f + DiameterCalloutLayout.MIN_GAP)
+    }
+
+    @Test
+    fun `a diameter's leader slides along its component to clear a feature's value`() {
+        // Same crowding, but the Ø may stand anywhere over 200..290 of its liner. Its own anchor
+        // (260) has no clear spot; the nearest one that does is 215, clear of the blend's row-0
+        // footprint (226..300), with the value on the second row.
+        val p = DiameterCalloutLayout.place(
+            listOf(
+                DiameterCalloutLayout.Item(260f, 50f, anchorMin = 200f, anchorMax = 290f),
+                item(300f, 60f, feature = true),
+            ),
+            dogleg = 14f, contentRight = 360f,
+        )
+        assertEquals(DiameterCalloutLayout.Placement(tier = 0, labelLeft = 226f, anchorX = 300f), p[1])
+        assertEquals(DiameterCalloutLayout.Placement(tier = 1, labelLeft = 229f, anchorX = 215f), p[0])
+    }
+
+    @Test
+    fun `a leader that has room where it stands does not slide`() {
+        val p = DiameterCalloutLayout.place(
+            listOf(DiameterCalloutLayout.Item(100f, 40f, anchorMin = 0f, anchorMax = 200f)),
+            dogleg = 14f,
+        )
+        assertEquals(DiameterCalloutLayout.Placement(tier = 0, labelLeft = 114f, anchorX = 100f), p[0])
     }
 
     @Test

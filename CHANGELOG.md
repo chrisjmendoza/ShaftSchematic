@@ -8,6 +8,23 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-11
 
+### fix(pdf): body Ø callouts join the callout collision check; a Ø leader may slide along its component
+
+With the bare-shaft Ø callouts switched on, the stretch between a liner and a taper can carry four
+callouts — the liner's Ø, two body Ø values and a blend's angle — and they overprinted (on-device
+report: a repaired section's `Ø 9"` beside the FWD taper). Two things changed in the one placement
+(`DiameterCalloutLayout.place`):
+
+- A Ø value reads as its component's from anywhere along it, so its leader may now slide along
+  its own body or liner (6 pt in from each end) when the spot at the component's centre is taken.
+  A leader with room where it stands does not move; a blend's leader never moves.
+- When a callout still has no clear spot, the callouts that can reach it are arranged together,
+  the least free first, instead of one at a time. Callouts elsewhere on the shaft keep their
+  places.
+
+A crowd with no clear arrangement at all (very large text against the page edge) still prints
+every callout, as before.
+
 ### fix(pdf): a Ø leader no longer drops through a blend's angle value
 
 On a sheet where an Angle-mode blend's value (`45°, 3/8" R`) could not hang right of its leader —

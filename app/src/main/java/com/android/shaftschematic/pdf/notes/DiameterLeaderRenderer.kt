@@ -54,6 +54,22 @@ class DiameterLeaderRenderer(
     /** The page x [call]'s leader stands at: its feature's anchor when it has one, else its station. */
     private fun anchorXFor(call: DiaCallout): Float = call.anchorXPt ?: pageX(call.xMm)
 
+    /**
+     * The page-x range [call]'s leader may slide over to clear a neighbour: its component's span,
+     * held [ANCHOR_END_INSET_PT] in from each end so the leader never stands on a face line or a
+     * blend. A feature's leader, and a diameter with no span, stays on its anchor.
+     */
+    private fun anchorRangeFor(call: DiaCallout, anchor: Float): Pair<Float, Float> {
+        val start = call.spanStartMm
+        val end = call.spanEndMm
+        if (call.anchorXPt != null || start == null || end == null) return anchor to anchor
+        val a = pageX(start)
+        val b = pageX(end)
+        val lo = minOf(a, b) + ANCHOR_END_INSET_PT
+        val hi = maxOf(a, b) - ANCHOR_END_INSET_PT
+        return if (lo >= hi) anchor to anchor else minOf(lo, anchor) to maxOf(hi, anchor)
+    }
+
     /** Where a BELOW leader leaves from: its feature's outline when it has one, else the shaft's bottom edge. */
     private fun belowStartYFor(call: DiaCallout): Float = call.anchorYPt ?: shaftBottomY
 
@@ -64,7 +80,12 @@ class DiameterLeaderRenderer(
     private fun belowPlacements(below: List<DiaCallout>): List<DiameterCalloutLayout.Placement> =
         DiameterCalloutLayout.place(
             items = below.map { call ->
-                DiameterCalloutLayout.Item(anchorXFor(call), labelWidth(call), feature = call.anchorXPt != null)
+                val anchor = anchorXFor(call)
+                val (lo, hi) = anchorRangeFor(call, anchor)
+                DiameterCalloutLayout.Item(
+                    anchor, labelWidth(call), feature = call.anchorXPt != null,
+                    anchorMin = lo, anchorMax = hi,
+                )
             },
             dogleg = leaderDogleg,
             contentLeft = contentLeft,
@@ -93,10 +114,12 @@ class DiameterLeaderRenderer(
     fun draw(canvas: Canvas, calls: List<DiaCallout>) {
         val below = calls.filter { it.side == LeaderSide.BELOW }
         val placements = belowPlacements(below)
-        below.forEachIndexed { i, call -> drawOne(canvas, call, placements[i].tier, placements[i].labelLeft) }
+        below.forEachIndexed { i, call ->
+            drawOne(canvas, call, placements[i].tier, placements[i].labelLeft, placements[i].anchorX)
+        }
 
         calls.filter { it.side == LeaderSide.ABOVE }
-            .forEach { drawOne(canvas, it, tier = 0, textX = anchorXFor(it) + leaderDogleg) }
+            .forEach { drawOne(canvas, it, tier = 0, textX = anchorXFor(it) + leaderDogleg, x = anchorXFor(it)) }
     }
 
     /**
@@ -125,7 +148,7 @@ class DiameterLeaderRenderer(
 
         return buildList {
             below.forEachIndexed { i, call ->
-                val x = anchorXFor(call)
+                val x = placements[i].anchorX
                 val kinkY = shaftBottomY + leaderRise + placements[i].tier * tierStep
                 val textY = kinkY + textDrop
                 val textLeft = placements[i].labelLeft
@@ -172,8 +195,7 @@ class DiameterLeaderRenderer(
         textPaint.measureDualLabel(label(call), dualStacked) +
             if (blankValues) 4f + blankRuleWidth else 0f
 
-    private fun drawOne(canvas: Canvas, call: DiaCallout, tier: Int, textX: Float) {
-        val x = anchorXFor(call)
+    private fun drawOne(canvas: Canvas, call: DiaCallout, tier: Int, textX: Float, x: Float) {
         val (startY, kinkY, textY) = when (call.side) {
             LeaderSide.ABOVE -> {
                 val s = shaftTopY
@@ -229,6 +251,9 @@ fun blendAngleRadiusCalloutLabel(angleDeg: Float, radiusMm: Double, unit: UnitSy
     blendRadiusCalloutLabel(radiusMm, unit, dual).let {
         it.copy(primary = blendAngleCalloutText(angleDeg) + ", " + it.primary)
     }
+
+/** How far inside its component's ends a slid Ø leader stays. */
+private const val ANCHOR_END_INSET_PT = 6f
 
 /** Half-width reserved around a leader line, so a neighbouring label clears the stroke itself. */
 private const val LEADER_HALF_W = 1f

@@ -143,6 +143,23 @@ class SchematicRenderReviewTest {
                     PdfPrefs(dimTextScale = 1.75f, showComponentTitles = false),
                     linerMinFracOfTrue = 1f,
                 )
+                // The bare-shaft Ø callouts switched on as well, the section beside the FWD
+                // taper machined to 9": four callouts share the stretch between the FWD liner and
+                // the FWD taper (on-device report).
+                val repaired = doc.spec.copy(
+                    showAutoBodyDia = true,
+                    autoDiaOverrides = doc.spec.autoDiaOverrides.map {
+                        if (it.anchorMm > 7000f) it.copy(diaMm = 228.6f) else it
+                    },
+                )
+                for (pct in listOf(125, 175)) {
+                    renderSchematic(
+                        "blend_angle_kelley_c_${font.name.lowercase()}_body_dia_${pct}_schematic.png",
+                        doc.copy(spec = repaired),
+                        PdfPrefs(dimTextScale = pct / 100f, showComponentTitles = false),
+                        linerMinFracOfTrue = 1f,
+                    )
+                }
             }
         } finally {
             com.android.shaftschematic.data.SettingsStore.updatePdfPrefs { it.copy(outputFont = before) }

@@ -566,6 +566,14 @@ they are now all-BELOW, same as liners.
   the right) sat under its liner, where the liner's Ø leader drops, and the Ø printed through it;
   the joint search gives the Ø the first row on its left and the blend the second (on-device
   report). Only with no clear arrangement does a callout take the least-crowded row.
+  **A Ø leader may slide along its component.** A diameter reads as its body's or liner's from
+  anywhere along it, so `DiaCallout.spanStartMm`/`spanEndMm` (set by both OD builders) give the
+  leader a range — `ANCHOR_END_INSET_PT` (6 pt) in from each end — and the placement tries the
+  component's centre first, then steps toward each end, nearest first, every row and side at each.
+  A leader with room where it stands never moves, and a blend's leader (no span) never moves. With
+  the bare-shaft Ø callouts on, a repaired section beside a taper put four callouts in one short
+  stretch and they overprinted (on-device report). The joint search covers only the callouts whose
+  reach chains to the stuck one, fewest spots first, so callouts elsewhere keep their places.
   `DiameterLeaderRenderer` takes row and side from that ONE answer for both `occupancy` and ink.
 - **Angle-mode blends join the same pass** (on-device request: "some blends have expressions in
   degrees"). A body face entered by angle prints ONE callout on ONE leader to the midpoint of
