@@ -123,7 +123,7 @@ class DimensionRailLayoutTest {
     fun `two fallback rails lift the tiers above them cumulatively`() {
         val spans = listOf(
             span(rail = 0, railY = 400f, xa = 100f, xb = 140f, w = 30f),   // short
-            span(rail = 1, railY = 382f, xa = 300f, xb = 340f, w = 30f),   // short
+            span(rail = 1, railY = 382f, xa = 150f, xb = 190f, w = 30f),   // short, beside rail 0's
             span(rail = 2, railY = 364f, xa = 100f, xb = 400f, w = 30f),   // wide
             span(rail = DimensionRailLayout.TOP_RAIL, railY = 320f, xa = 90f, xb = 500f, w = 40f),
         )
@@ -135,6 +135,37 @@ class DimensionRailLayoutTest {
         assertEquals(2f * band, p.liftFor(DimensionRailLayout.TOP_RAIL), 1e-3f)
         assertEquals(2f * band, DimensionRailLayout.topLift(spans, metrics, arrow, pad), 1e-3f)
         assertLabelsClear(spans, p)
+    }
+
+    @Test
+    fun `a floating value lifts nothing when the next rail stands clear of it`() {
+        val spans = listOf(
+            span(rail = 0, railY = 400f, xa = 100f, xb = 140f, w = 30f),   // short → floats, AFT end
+            span(rail = 1, railY = 382f, xa = 350f, xb = 500f, w = 30f),   // inline, FWD end
+            span(rail = 2, railY = 364f, xa = 100f, xb = 500f, w = 30f),   // wide
+            span(rail = DimensionRailLayout.TOP_RAIL, railY = 340f, xa = 90f, xb = 500f, w = 40f),
+        )
+        val p = plan(spans)
+
+        assertFalse(p.placements[0].inline)
+        assertTrue("no rail moves for a value nothing above can meet", p.liftByRail.values.all { it == 0f })
+        assertEquals(0f, DimensionRailLayout.topLift(spans, metrics, arrow, pad), 1e-3f)
+        assertLabelsClear(spans, p)
+    }
+
+    @Test
+    fun `the highest numbered rail's floating value always lifts the top rail`() {
+        val spans = listOf(
+            span(rail = 0, railY = 400f, xa = 100f, xb = 500f, w = 30f),   // wide
+            span(rail = 1, railY = 382f, xa = 100f, xb = 140f, w = 30f),   // short → floats
+            span(rail = DimensionRailLayout.TOP_RAIL, railY = 340f, xa = 90f, xb = 500f, w = 40f),
+        )
+        val p = plan(spans)
+
+        assertEquals(0f, p.liftFor(1), 1e-3f)
+        assertEquals(band, p.liftFor(DimensionRailLayout.TOP_RAIL), 1e-3f)
+        assertEquals(band, DimensionRailLayout.topLift(spans, metrics, arrow, pad), 1e-3f)
+        assertEquals(band, DimensionRailLayout.topLift(spans.dropLast(1), metrics, arrow, pad), 1e-3f)
     }
 
     @Test

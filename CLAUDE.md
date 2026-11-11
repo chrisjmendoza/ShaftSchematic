@@ -1254,7 +1254,12 @@ read as the wrong rail's, Emulator QA), so no value ever sits on another rail's 
 line. An inline value slides only inside `[xa+textPad+half+arrowSize, xb−textPad−half−arrowSize]`
 so its break keeps inward arrows. A rail carrying a floating value **lifts every rail
 above it** — the OAL rail included — by one label band (glyph height + gap), cumulative per
-intervening fallback rail, exactly as before the halo. Inline-vs-fallback is decided from **x-geometry alone**, so the
+pushing rail — but ONLY when the next rail up shares some x with a spot that value could take
+(over its span, or just outside either end; `pushingRails`): a floating value lives in the band
+above its own line, so the next rail is the only one it can meet, and a rail that stands clear
+of it keeps its height (on-device report: a short AFT-end value opened a full band under a rail
+whose only span sat at the FWD end). The rail under the OAL rail always pushes it.
+Inline-vs-fallback and the push are decided from **x-geometry alone**, so the
 lifts are known before the vertical budget: both composers fold them in
 (`ShaftPdfComposer`'s `computeTopY` fit loop; `RunoutPdfComposer`'s `railsBlockH`, off a
 prelim linear-map plan since the real x map needs the budget). Blank drafts plan on the

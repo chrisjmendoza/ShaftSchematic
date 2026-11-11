@@ -146,9 +146,17 @@ object DimensionRailLayout {
     }
 
     /**
-     * The lift each rail takes: one label band per rail BELOW it that carries an above-line
-     * label. Depends only on x-geometry and rail assignment — `railY` is ignored — so a caller
+     * The lift each rail takes: one label band per rail BELOW it whose above-line value needs the
+     * room. Depends only on x-geometry and rail assignment — `railY` is ignored — so a caller
      * can size its vertical budget before it knows where the rails will sit.
+     *
+     * A floating value sits in the band directly above its own line, so the only rail it can
+     * meet is the NEXT one up. It pushes that rail (and with it every rail above) only when the
+     * two share some x: when everything on the next rail stands clear of every spot the value
+     * could take — over its span, or just outside either end — the rails above keep their own
+     * heights (on-device report: a short value at the AFT end opened a full band under a rail
+     * whose only span sat at the FWD end). The top rail runs the whole shaft, so the rail under
+     * it always pushes it.
      */
     fun lifts(
         spans: List<SpanInput>,
@@ -157,17 +165,15 @@ object DimensionRailLayout {
         textPad: Float,
     ): Map<Int, Float> {
         if (spans.isEmpty()) return emptyMap()
-        val fallbackRails = spans.filterNot { fitsInline(it, arrowSize, textPad) }
-            .map { it.railIndex }
-            .toSet()
+        val pushing = pushingRails(spans, metrics, arrowSize, textPad)
         return spans.map { it.railIndex }.toSet().associateWith { rail ->
-            metrics.band * fallbackRails.count { order(it) < order(rail) }
+            metrics.band * pushing.count { order(it) < order(rail) }
         }
     }
 
     /**
-     * The lift of the topmost rail — one band per fallback-carrying numbered rail. This is the
-     * total extra height a rail block needs, whether or not a top-rail span was passed in.
+     * The lift of the topmost rail — one band per pushing numbered rail. This is the total extra
+     * height a rail block needs, whether or not a top-rail span was passed in.
      */
     fun topLift(
         spans: List<SpanInput>,
@@ -176,11 +182,34 @@ object DimensionRailLayout {
         textPad: Float,
     ): Float {
         if (spans.isEmpty()) return 0f
-        val fallbackRails = spans.filterNot { fitsInline(it, arrowSize, textPad) }
-            .map { it.railIndex }
-            .filter { it != TOP_RAIL }
-            .toSet()
-        return metrics.band * fallbackRails.size
+        return metrics.band * pushingRails(spans, metrics, arrowSize, textPad).size
+    }
+
+    /**
+     * The numbered rails whose floating values push the rails above them up one band — see
+     * [lifts]. A rail with no numbered rail above it pushes the top rail, passed in or not.
+     */
+    private fun pushingRails(
+        spans: List<SpanInput>,
+        metrics: TextMetrics,
+        arrowSize: Float,
+        textPad: Float,
+    ): Set<Int> {
+        val byRail = spans.filter { it.railIndex != TOP_RAIL }.groupBy { it.railIndex }
+        val rails = byRail.keys.sorted()
+        return rails.filterIndexed { idx, rail ->
+            val floating = byRail.getValue(rail).filterNot { fitsInline(it, arrowSize, textPad) }
+            if (floating.isEmpty()) return@filterIndexed false
+            val above = rails.getOrNull(idx + 1)?.let(byRail::getValue) ?: return@filterIndexed true
+            // Everywhere the value may land: centred over its span, slid along it, or stepped
+            // just outside an end — plus the air two values keep between them.
+            floating.any { f ->
+                val reach = f.labelWidth + textPad + arrowSize + OUTSIDE_REACH + metrics.labelGap
+                val lo = f.xa - reach
+                val hi = f.xb + reach
+                above.any { n -> n.xa - arrowSize < hi && lo < n.xb + arrowSize }
+            }
+        }.toSet()
     }
 
     /**

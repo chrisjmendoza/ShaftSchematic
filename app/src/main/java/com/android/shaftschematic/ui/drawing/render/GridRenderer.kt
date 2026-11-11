@@ -37,8 +37,10 @@ object GridRenderer {
         drawTopPx: Float = layout.contentTopPx,
         drawRightPx: Float = layout.contentRightPx,
         drawBottomPx: Float = layout.contentBottomPx,
-        colorMajor: Color = Color(0x55000000),
-        colorMinor: Color = Color(0x22000000)
+        // Faint on purpose: the grid is a backdrop, and at a stronger weight it competed with
+        // the shaft's own outline (on-device report).
+        colorMajor: Color = Color(0x26000000),
+        colorMinor: Color = Color(0x0F000000)
     ) {
         val left = drawLeftPx
         val right = drawRightPx

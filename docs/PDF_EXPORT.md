@@ -787,11 +787,16 @@ hand-drafting convention `|←—— 237 1/2" ——→|` — instead of floatin
     the line paint in its lines pass; blank drafts, which print no value, print no leader. Emulator QA: on the
     QA_Titan rebuild the AFT taper's "25 3/16"" sat beside its span over the start of the next
     one with nothing tying it to its own.
-  - **Tiers lift.** A rail carrying at least one floating value pushes every rail
-    **above** it — the OAL rail included — up by one label band (glyph height + gap),
-    cumulatively per intervening fallback rail, so no other rail's line runs through a
-    floating value's band. The halo does not change this: a floating value still costs the
-    rails above it exactly one band.
+  - **Tiers lift — where the value can be met.** A rail carrying a floating value pushes
+    every rail **above** it — the OAL rail included — up by one label band (glyph height +
+    gap), cumulatively per pushing rail, so no other rail's line runs through a floating
+    value's band. A floating value lives in the band directly above its own line, so the only
+    rail it can meet is the NEXT one up: it pushes only when some span on that rail shares x
+    with a spot the value could take — over its span, slid along it, or just outside either
+    end (`DimensionRailLayout.pushingRails`). A next rail that stands clear keeps its height,
+    and so does everything above it (on-device report: a short value at the AFT end opened a
+    full band under a rail whose only span sat at the FWD end). The rail under the OAL rail
+    always pushes it — the OAL rail runs the whole shaft.
   - **Budgets include the lifts.** `ShaftPdfComposer` folds `topLift` into its
     `computeTopY` fit loop (shrink rail gap, then text size, until the lifted block still
     clears `geomRect.top`); `RunoutPdfComposer` adds it to `railsBlockH` before the shaft
