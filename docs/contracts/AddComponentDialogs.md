@@ -127,7 +127,9 @@ Mechanism: every Add dialog hosts through ONE `DiscardGuardedDialog`
 (`ui/screen/DialogDiscardGuard.kt`), which wraps `ImeResizingAlertDialog` and guards only its
 `onDismissRequest` (the IME padding and window sizing are untouched). The dirty flag
 (`DialogEdits`) is **raised by the controls themselves**, through the `LocalDialogEdits`
-composition local the guard provides: the dialogs' number field (`CommitNumField`), their chip
+composition local the guard provides (every chip row, on the cards and in the dialogs, is a
+`ChipFlowRow` of `ChipLabel`s, so at a large font a chip drops to the next line whole instead of
+stacking its letters): the dialogs' number field (`CommitNumField`), their chip
 (`DirectionChip`, so `KeywayUnitEntryChips` and the relief end chips too), `DialogSwitch`, the
 captured-keyway row, and the shared sections' leaf controls (`KeywayGateRow`,
 `ThreadReliefSwitchRow`, `ChipRow` and the seal-area checkboxes in `BlendSection`, the shoulder

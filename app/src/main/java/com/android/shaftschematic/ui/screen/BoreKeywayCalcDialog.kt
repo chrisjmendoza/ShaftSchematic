@@ -1,6 +1,7 @@
 // file: app/src/main/java/com/android/shaftschematic/ui/screen/BoreKeywayCalcDialog.kt
 package com.android.shaftschematic.ui.screen
 
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -391,6 +392,7 @@ internal fun UnitChipRow(unit: UnitSystem, onSelect: (UnitSystem) -> Unit) {
                             style = MaterialTheme.typography.labelMedium,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
+                            textAlign = TextAlign.Center,
                             modifier = Modifier.fillMaxWidth(),
                         )
                     },

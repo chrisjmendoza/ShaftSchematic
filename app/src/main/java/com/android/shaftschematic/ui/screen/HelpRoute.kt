@@ -1137,7 +1137,7 @@ internal val helpSections: List<HelpSection> = listOf(
                 "Editor Screen",
                 "Presentation of the editor and its preview.\n\n" +
                     "• \"Line Thickness\" — default 100%. Slider from 50% to 200%, a typed % " +
-                    "box beside it, and a \"Default (100%)\" button. This one applies to both " +
+                    "box beside it (applied on Done or when you leave it), and a \"Default (100%)\" button. This one applies to both " +
                     "the on-screen preview and every printed PDF: 100% is the standard thin " +
                     "weight, 200% the heavier original weight. Releasing the slider near 100% " +
                     "snaps exactly to it; a number you type is used exactly as typed. The same " +

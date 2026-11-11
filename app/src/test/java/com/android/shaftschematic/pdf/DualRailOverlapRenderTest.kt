@@ -51,12 +51,14 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * Review renders for the TODO "dual-units consolidated sheet: rail labels can overlap" bug —
- * the real consolidated composer onto a bitmap, dual units off / INLINE / STACKED, with and
- * without a grown footer. Gated: a no-op unless `DUAL_RAIL_RENDER_DIR` names the output
- * directory. `DUAL_RAIL_FIXTURES` (optional, `;`-separated `.shaft` files) adds real jobs.
- * Writes `report.txt` (overlapping string pairs, strings crossed by a horizontal rail line, and
- * the probe's reserved vs drawn rail lift) beside the PNGs.
+ * Review renders for the dual-units consolidated sheet — the real consolidated composer onto a
+ * bitmap, dual units off / INLINE / STACKED, with and without a grown footer (`synth_full`, whose
+ * dual footer would squeeze the shaft under its height floor, so the sheet falls back). Gated: a
+ * no-op unless `DUAL_RAIL_RENDER_DIR` names the output directory. `DUAL_RAIL_FIXTURES` (optional,
+ * `;`-separated `.shaft` files or directories) adds real jobs, each also with every thread relieved.
+ * Writes `report.txt` (overlapping string pairs, strings crossed by a horizontal rail line, the
+ * probe's reserved vs drawn rail lift, shaft height, footer band, the dual mode the sheet printed in
+ * and how far the footer pitch gave) beside the PNGs.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -139,7 +141,8 @@ class DualRailOverlapRenderTest {
         tapers = listOf(
             Taper(
                 id = "T1", startFromAftMm = 0f, lengthMm = 25.25f * inch,
-                startDiaMm = 10.368f * inch, endDiaMm = 8.266f * inch,
+                // Small end at the thread, large end into the shaft — the way every real AFT taper runs.
+                startDiaMm = 8.266f * inch, endDiaMm = 10.368f * inch,
                 keywayWidthMm = 1.75f * inch, keywayDepthMm = 0.625f * inch,
                 keywayLengthMm = 21.25f * inch, keywaySpooned = true,
             ),
@@ -158,6 +161,7 @@ class DualRailOverlapRenderTest {
             Threads(
                 id = "THF", startFromAftMm = 300f * inch, lengthMm = 5f * inch,
                 majorDiaMm = 4.5f * inch, tpi = 6f, excludeFromOAL = true, isAftEnd = false,
+                reliefLenMm = 0.25f * inch, reliefDiaMm = 4.25f * inch, reliefAtAft = true,
             ),
         ),
         liners = listOf(
@@ -218,12 +222,13 @@ class DualRailOverlapRenderTest {
         ),
     )
 
-    /** The FWD thread relieved too — the SheetTextOverlapTest "grows the footer" case. */
-    private val synthRelieved: ShaftSpec = synthSpec.copy(
-        threads = synthSpec.threads.map {
-            if (it.id == "THF") it.copy(reliefLenMm = 0.25f * inch, reliefDiaMm = 4.25f * inch, reliefAtAft = true)
-            else it
-        },
+    /**
+     * `synth_full`: the same job with a captured FWD keyway and the bolt-hole Ø footer line on — two
+     * more lines in the FWD column, each wrapping in dual units: the footer the sheet must find
+     * room for without squeezing the shaft under its height floor.
+     */
+    private val fullFooterSpec: ShaftSpec = synthSpec.copy(
+        tapers = synthSpec.tapers.map { if (it.id == "T2") it.copy(keywayOffsetFromSetMm = 0.5f * inch) else it },
     )
 
     private class Job(
@@ -236,12 +241,13 @@ class DualRailOverlapRenderTest {
         val readings: RunoutReadings,
         val placements: RunoutStationPlacements,
         val wear: WearRecord,
+        val prefs: PdfPrefs = PdfPrefs(),
     )
 
-    private fun synthJob(name: String, spec: ShaftSpec) = Job(
+    private fun synthJob(name: String, spec: ShaftSpec, prefs: PdfPrefs = PdfPrefs()) = Job(
         name, spec, synthProject, UnitSystem.INCHES, emptyMap(),
         RunoutConfig(tirDirection = TirDirection.AFT, showCouplingFace = true),
-        synthReadings, RunoutStationPlacements(), synthWear,
+        synthReadings, RunoutStationPlacements(), synthWear, prefs,
     )
 
     /** Every thread without a relief gets one (3/8" long, major Ø − 1/4"). */
@@ -260,8 +266,8 @@ class DualRailOverlapRenderTest {
 
     private fun compose(c: Canvas, job: Job, dual: Dual, probe: ((RunoutSheetLayout) -> Unit)? = null) {
         val prefs = when (dual) {
-            Dual.STACKED -> PdfPrefs(dualUnitLayout = DualUnitLayout.STACKED)
-            else -> PdfPrefs(dualUnitLayout = DualUnitLayout.INLINE)
+            Dual.STACKED -> job.prefs.copy(dualUnitLayout = DualUnitLayout.STACKED)
+            else -> job.prefs.copy(dualUnitLayout = DualUnitLayout.INLINE)
         }
         composeRunoutPdfOnCanvas(
             c, pageW, pageH, job.spec,
@@ -308,7 +314,7 @@ class DualRailOverlapRenderTest {
         val bad = overlaps(det.boxes, 1f)
         val hits = lineHits(det, 1f)
         report.appendLine("== $variant")
-        report.appendLine("   probe: railLiftReserved=${layout?.railLiftReservedPt} railLiftDrawn=${layout?.railLiftDrawnPt} shaftH=${layout?.shaftHeightPt} footer=${layout?.footerBlockPt}")
+        report.appendLine("   probe: railLiftReserved=${layout?.railLiftReservedPt} railLiftDrawn=${layout?.railLiftDrawnPt} shaftH=${layout?.shaftHeightPt} footer=${layout?.footerBlockPt} mode=${layout?.dualMode} footerTightened=${layout?.footerTightenedPt}")
         report.appendLine("   text-text overlaps: ${bad.size}")
         bad.forEach { (a, b) -> report.appendLine("     \"${a.text}\" ${a.rect.toShortString()}  x  \"${b.text}\" ${b.rect.toShortString()}") }
         report.appendLine("   text crossed by a horizontal line: ${hits.size}")
@@ -377,7 +383,10 @@ class DualRailOverlapRenderTest {
     @Test
     fun `dual rail variants`() {
         report.appendLine("# DualRailOverlapRenderTest")
-        val jobs = listOf(synthJob("synth", synthSpec), synthJob("synth_relief", synthRelieved)) + jobsFromEnv()
+        val jobs = listOf(
+            synthJob("synth", synthSpec),
+            synthJob("synth_full", fullFooterSpec, PdfPrefs(footerBoltHoleDia = true)),
+        ) + jobsFromEnv()
         for (job in jobs) for (dual in Dual.values()) renderVariant(job, dual)
     }
 

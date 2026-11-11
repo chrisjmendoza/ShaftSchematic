@@ -131,6 +131,8 @@ import com.android.shaftschematic.pdf.WearRailSpan
 import com.android.shaftschematic.pdf.formatDiaWithUnit
 import com.android.shaftschematic.pdf.formatLenDim
 import com.android.shaftschematic.pdf.layoutWearStripRail
+import com.android.shaftschematic.pdf.WearRailSpanLayout
+import com.android.shaftschematic.pdf.render.RAIL_VALUE_HALO_PAD_PT
 import com.android.shaftschematic.util.measureRichText
 import com.android.shaftschematic.ui.input.NumericInputField
 import com.android.shaftschematic.ui.resolved.ResolvedBody
@@ -1764,6 +1766,11 @@ private fun DrawScope.drawWearBand(x0: Float, x1: Float, top: Float, bottom: Flo
  * break in its own segment; one that does not is centred on its span, and two values that would
  * touch take separate rows — the first above the line, the next below it — so a short spot's
  * Start and Length never run together into one number (emulator QA: "5.25in3.5in").
+ *
+ * Drawn in two passes, the sheet rails' rule (`PdfDimensionRenderer.drawPlan`): every tick and
+ * line first, then every value over a [SheetInk.Paper] knockout ([wearSpotRailValues]). A value
+ * centred over a span narrower than itself sits across its own witness ticks, and drawn without
+ * the knockout the ticks struck through its digits (on-device report).
  */
 private fun DrawScope.drawWearSpotRail(
     startPx: Float,
@@ -1791,22 +1798,81 @@ private fun DrawScope.drawWearSpotRail(
     val tickH = 3.dp.toPx()
     val lineColor = Color.Black.copy(alpha = 0.55f)
     val fm = paint.fontMetrics
-    layout.forEach { s ->
+    val values = wearSpotRailValues(
+        layout, y,
+        labelWidth = { paint.measureRichText(it) },
+        ascent = fm.ascent, descent = fm.descent,
+        haloPad = RAIL_VALUE_HALO_PAD_PT.dp.toPx(),
+    )
+    // Pass 1: ticks and lines.
+    layout.forEachIndexed { i, s ->
         val lo = s.x0Pt
         val hi = s.x1Pt
         drawLine(lineColor, Offset(lo, y - tickH), Offset(lo, y + tickH), strokeWidth = 1f)
         drawLine(lineColor, Offset(hi, y - tickH), Offset(hi, y + tickH), strokeWidth = 1f)
-        val half = paint.measureRichText(s.label.primary) * 0.5f
-        val baseline = if (s.seatsInBreak) {
+        if (s.seatsInBreak) {
+            val half = values[i].width * 0.5f
             drawLine(lineColor, Offset(lo, y), Offset(s.labelCxPt - half - pad, y), strokeWidth = 1f)
             drawLine(lineColor, Offset(s.labelCxPt + half + pad, y), Offset(hi, y), strokeWidth = 1f)
-            y - (fm.ascent + fm.descent) * 0.5f
         } else {
             drawLine(lineColor, Offset(lo, y), Offset(hi, y), strokeWidth = 1f)
-            if (s.labelRow == 0) y - 6f else y + 6f - fm.ascent
         }
-        drawContext.canvas.nativeCanvas.drawRichText(s.label.primary, s.labelCxPt, baseline, paint)
     }
+    // Pass 2: each value over its knockout, so no tick or line of either span crosses it.
+    values.forEach { v ->
+        drawRect(
+            SheetInk.Paper,
+            topLeft = Offset(v.haloLeft, v.haloTop),
+            size = Size(v.haloRight - v.haloLeft, v.haloBottom - v.haloTop),
+        )
+        drawContext.canvas.nativeCanvas.drawRichText(v.text, v.centerX, v.baseline, paint)
+    }
+}
+
+/** One planned value of a wear-detail rail: where its text sits and the knockout under it. */
+internal data class WearSpotRailValue(
+    val text: String,
+    val centerX: Float,
+    val baseline: Float,
+    val width: Float,
+    val haloLeft: Float,
+    val haloTop: Float,
+    val haloRight: Float,
+    val haloBottom: Float,
+)
+
+/**
+ * Where each value of a wear-detail rail at [railY] prints, and its knockout box: the text's
+ * measured box ([labelWidth] wide, [ascent]..[descent] about the baseline) grown by [haloPad] on
+ * every side. A value seated in its break centres on the line; a fallback value sits above the
+ * line on row 0 and below it on row 1 ([layoutWearStripRail]'s rows). One entry per [layout]
+ * span, in order. Pure, so the knockout is pinned without a canvas.
+ */
+internal fun wearSpotRailValues(
+    layout: List<WearRailSpanLayout>,
+    railY: Float,
+    labelWidth: (String) -> Float,
+    ascent: Float,
+    descent: Float,
+    haloPad: Float,
+): List<WearSpotRailValue> = layout.map { s ->
+    val text = s.label.primary
+    val w = labelWidth(text)
+    val baseline = when {
+        s.seatsInBreak -> railY - (ascent + descent) * 0.5f
+        s.labelRow == 0 -> railY - 6f
+        else -> railY + 6f - ascent
+    }
+    WearSpotRailValue(
+        text = text,
+        centerX = s.labelCxPt,
+        baseline = baseline,
+        width = w,
+        haloLeft = s.labelCxPt - w * 0.5f - haloPad,
+        haloTop = baseline + ascent - haloPad,
+        haloRight = s.labelCxPt + w * 0.5f + haloPad,
+        haloBottom = baseline + descent + haloPad,
+    )
 }
 
 /**

@@ -247,6 +247,11 @@ internal fun PdfPreviewOverlay(
         scaleState.floatValue = 1f
         offsetState.value = Offset.Zero
     }
+    // Double-tap fits the page again — the schematic preview's gesture, one implementation.
+    val doubleTapReset = rememberPreviewDoubleTapReset {
+        scaleState.floatValue = 1f
+        offsetState.value = Offset.Zero
+    }
 
     // Unlock device rotation while the preview is open so the landscape sheet can be viewed in
     // landscape (phones are otherwise locked to portrait); restore the device's BASE
@@ -401,6 +406,7 @@ internal fun PdfPreviewOverlay(
                                         .fillMaxWidth()
                                         .height(stripHeight)
                                         .transformable(state = transformState)
+                                        .then(doubleTapReset)
                                         .graphicsLayer(
                                             scaleX = scale,
                                             scaleY = scale,
@@ -422,6 +428,7 @@ internal fun PdfPreviewOverlay(
                                     modifier = Modifier
                                         .fillMaxSize()
                                         .transformable(state = transformState)
+                                        .then(doubleTapReset)
                                         .graphicsLayer(
                                             scaleX = scale,
                                             scaleY = scale,

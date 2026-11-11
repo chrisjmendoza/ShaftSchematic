@@ -607,21 +607,17 @@ internal fun KeywayClockingSection(
             containerColor = Color.Transparent,
             labelColor = MaterialTheme.colorScheme.onSurface
         )
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        ChipFlowRow(Modifier.fillMaxWidth()) {
             Text(
                 "From AFT keyway, viewed from aft:",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             FilterChip(selected = spec.keyways90Cw, onClick = { onSetKeyways90Cw(true) },
-                label = { Text("CW") }, colors = clockingChipColors,
+                label = { ChipLabel("CW") }, colors = clockingChipColors,
                 border = if (spec.keyways90Cw) BorderStroke(1.dp, Color.Black) else null)
             FilterChip(selected = !spec.keyways90Cw, onClick = { onSetKeyways90Cw(false) },
-                label = { Text("CCW") }, colors = clockingChipColors,
+                label = { ChipLabel("CCW") }, colors = clockingChipColors,
                 border = if (!spec.keyways90Cw) BorderStroke(1.dp, Color.Black) else null)
         }
     }
@@ -657,20 +653,16 @@ private fun UnitChoiceChips(
         containerColor = Color.Transparent, labelColor = MaterialTheme.colorScheme.onSurface
     )
     fun choose(u: UnitSystem) = onChoose(if (u == inheritedUnit) null else u)
-    Row(
-        modifier = modifier.fillMaxWidth().padding(top = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+    ChipFlowRow(modifier.fillMaxWidth().padding(top = 4.dp)) {
         Text(label, style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         FilterChip(selected = effective == UnitSystem.INCHES,
             onClick = { choose(UnitSystem.INCHES) },
-            label = { Text("in") }, colors = chipColors,
+            label = { ChipLabel("in") }, colors = chipColors,
             border = if (effective == UnitSystem.INCHES) BorderStroke(1.dp, Color.Black) else null)
         FilterChip(selected = effective == UnitSystem.MILLIMETERS,
             onClick = { choose(UnitSystem.MILLIMETERS) },
-            label = { Text("mm") }, colors = chipColors,
+            label = { ChipLabel("mm") }, colors = chipColors,
             border = if (effective == UnitSystem.MILLIMETERS) BorderStroke(1.dp, Color.Black) else null)
     }
 }

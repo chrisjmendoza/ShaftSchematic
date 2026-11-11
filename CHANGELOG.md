@@ -8,6 +8,69 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-11
 
+### fix(ui): three small things from the emulator pass
+
+- The "Consolidated Output" tab title takes a second line on a phone instead of reading
+  "Consolidated …", as the Undercut tab's now does.
+- The calculators' Units chips centre their text, matching the "Rate as" chips beside them in the
+  taper calculator.
+- Done in the Settings Line Thickness % box leaves the box, so the keyboard closes with it.
+
+### chore(todo): list cleaned up
+
+Shipped items removed; the two standing build-tooling rules moved to Guardrails; the compileSdk 37
+chain is marked unblocked (Robolectric 4.17 is stable) but not started — it stays its own branch.
+
+### fix(pdf): a dual-unit consolidated sheet keeps its shaft height
+
+A consolidated sheet in dual units with a long footer could squeeze the drawn shaft to a hairline
+under the 1/2" floor. The sheet now gives room back in one fixed order — stacked values to inline,
+then the footer's line pitch tightened (down to 1.12x text), then the primary unit alone — until
+the shaft holds min(1/2", its own standard height), each step whole-sheet and logged
+(`fittedSheetFallback`, `pdf/SheetDualMode.kt`). The stacking check now counts the bubble rows.
+Sheets that already fit print exactly as before; primary-only is the last resort and the sheet
+does not say so on its face.
+
+### fix(editor): chip rows no longer stack letters at a large font
+
+The "Measure From", "KW from", "Hole", "From keyway", "Rate mode", clocking and unit chip rows on
+the Body, Taper, Liner and Coupler slot cards, and the matching rows in the Add dialogs, now wrap
+whole chips to the next line (`ChipFlowRow`/`ChipLabel`) instead of squeezing "AFT" into a column
+of letters at 200% font (on-device report). Unchanged at the default font.
+
+### fix(calculator): "Rate as" matches the Units row
+
+In the taper calculator the "Rate as: 1:N | in/ft" chips now sit under their label like the Units
+row (`TaperRateEntryChips(labelAbove = true)`), and the per-foot box reads "Rate (in/ft)" on one
+line. The card and Add Taper keep the inline row.
+
+### fix(undercut): the tab title may take two lines
+
+On a phone the toolbar title wraps to two lines instead of reading "Undercut Dr...".
+
+### fix(settings): the Line Thickness % box applies on Done
+
+Typing "150" no longer applied 50% on the way through: the box commits on Done or when you leave it
+after a change, an empty entry restores the stored value, and an out-of-range one still clamps to
+50-200.
+
+### fix(preview): double-tap resets zoom on every PDF preview
+
+The Runout, Wear, Undercut and Consolidated previews return to the fitted page on a double-tap,
+through the one `rememberPreviewDoubleTapReset` the schematic preview now shares (instant on the
+overlay, animated on the schematic). A single tap still does nothing.
+
+### fix(wear): values on the detail rail print on a white box
+
+A value centred over a span narrower than itself had the witness ticks cut through its digits.
+The detail canvas rail now draws every tick and line first and every value over a `SheetInk.Paper`
+knockout (`wearSpotRailValues`).
+
+### docs/test: manual wear figure, diagnostic-log share
+
+The manual's wear figure shows a body wear-area strip (figures and the in-app copy regenerated).
+`FeedbackIntentFactoryTest` now covers the two-file diagnostic share; no code change.
+
 ### feat(editor): Liner & taper compression on the Preview options sheet
 
 The editor's "Preview options…" sheet now carries the same "Keep liners and tapers proportional

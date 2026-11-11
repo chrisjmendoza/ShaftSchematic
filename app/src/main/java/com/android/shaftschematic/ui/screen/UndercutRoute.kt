@@ -176,6 +176,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
+/** The Undercut tab's toolbar title. */
+internal const val UNDERCUT_TAB_TITLE_TAG = "undercut_tab_title"
+
 /**
  * UndercutRoute
  *
@@ -1196,10 +1199,13 @@ fun UndercutRoute(
                     text = "Undercut Drawing",
                     style = MaterialTheme.typography.titleLarge,
                     // Weighted so the actions are measured first: on a phone the title yields
-                    // (ellipsized) rather than squeezing the trailing Save / Help icons to nothing.
-                    maxLines = 1,
+                    // rather than squeezing the trailing Save / Help icons to nothing. Two lines,
+                    // the preview bar's rule: beside Undo / Redo / Save / Help on a phone one line
+                    // cut "Undercut Drawing" to "Undercut Dr…" (on-device report); past two it
+                    // ellipsizes.
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(start = 4.dp).weight(1f),
+                    modifier = Modifier.padding(start = 4.dp).weight(1f).testTag(UNDERCUT_TAB_TITLE_TAG),
                 )
                 UndoRedoButtons(canUndo, canRedo, vm::undoEdit, vm::redoEdit, tagPrefix = "undercut")
                 IconButton(

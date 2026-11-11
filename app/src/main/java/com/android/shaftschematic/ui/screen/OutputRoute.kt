@@ -695,8 +695,9 @@ fun OutputRoute(
                 text = "Consolidated Output",
                 style = MaterialTheme.typography.titleLarge,
                 // Weighted so the actions are measured first: on a phone the title yields
-                // (ellipsized) rather than squeezing the trailing icons to nothing.
-                maxLines = 1,
+                // (a second line, then ellipsized) rather than squeezing the trailing icons to
+                // nothing.
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(start = 4.dp).weight(1f),
             )

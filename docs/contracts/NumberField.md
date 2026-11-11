@@ -309,6 +309,12 @@ The OAL field
   or unreadable entry reverts with its notice. It never commits per keystroke: an intermediate
   value reached the drawing that way (on-device report). See `OverallLength.md`.
 
+The Settings Line Thickness % box (`LineThicknessControl`) follows the same rule without being a
+`NumericInputField` (it has no label or supporting line and carries a `%` suffix): it commits on
+IME Done or a blur after the text changed (`shouldCommitOnBlur`), never per keystroke; an empty or
+unreadable entry commits nothing and restores the stored value; a readable value clamps to 50–200
+(`lineThicknessFieldPercent`).
+
 ---
 
 Input pipeline (filters + parsing)

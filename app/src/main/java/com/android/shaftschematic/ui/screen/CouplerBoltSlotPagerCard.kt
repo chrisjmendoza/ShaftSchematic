@@ -95,49 +95,37 @@ internal fun CouplerBoltSlotPagerCard(
         onRemove = { onRemoveCouplerBoltSlot(cs.id) }
     ) {
         // Hole style toggle — seam cutout (muff coupler) vs cross-drilled through the shaft.
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        ChipFlowRow(Modifier.fillMaxWidth()) {
             Text("Hole:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             FilterChip(selected = !isCross, onClick = { onUpdateCouplerBoltSlotStyle(idx, BoltHoleStyle.SEAM) },
-                label = { Text("Seam") }, colors = selectedColors,
+                label = { ChipLabel("Seam") }, colors = selectedColors,
                 border = if (!isCross) BorderStroke(1.dp, Color.Black) else null)
             FilterChip(selected = isCross, onClick = { onUpdateCouplerBoltSlotStyle(idx, BoltHoleStyle.CROSS) },
-                label = { Text("Cross-drilled") }, colors = selectedColors,
+                label = { ChipLabel("Cross-drilled") }, colors = selectedColors,
                 border = if (isCross) BorderStroke(1.dp, Color.Black) else null)
         }
         if (isCross) {
             // Clocking relative to the keyway — 90° draws the bore hidden, in line draws the circle.
             val is90 = cs.clocking == BoltHoleClocking.DEG_90
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            ChipFlowRow(Modifier.fillMaxWidth()) {
                 Text("From keyway:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 FilterChip(selected = is90, onClick = { onUpdateCouplerBoltSlotClocking(idx, BoltHoleClocking.DEG_90) },
-                    label = { Text("90°") }, colors = selectedColors,
+                    label = { ChipLabel("90°") }, colors = selectedColors,
                     border = if (is90) BorderStroke(1.dp, Color.Black) else null)
                 FilterChip(selected = !is90, onClick = { onUpdateCouplerBoltSlotClocking(idx, BoltHoleClocking.IN_LINE) },
-                    label = { Text("In line") }, colors = selectedColors,
+                    label = { ChipLabel("In line") }, colors = selectedColors,
                     border = if (!is90) BorderStroke(1.dp, Color.Black) else null)
             }
         }
 
         // AFT / FWD reference toggle
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        ChipFlowRow(Modifier.fillMaxWidth()) {
             Text("Measure From:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             FilterChip(selected = !isFwdRef, onClick = { onUpdateCouplerBoltSlotReference(idx, SlotAuthoredReference.AFT) },
-                label = { Text("AFT") }, colors = selectedColors,
+                label = { ChipLabel("AFT") }, colors = selectedColors,
                 border = if (!isFwdRef) BorderStroke(1.dp, Color.Black) else null)
             FilterChip(selected = isFwdRef, onClick = { onUpdateCouplerBoltSlotReference(idx, SlotAuthoredReference.FWD) },
-                label = { Text("FWD") }, colors = selectedColors,
+                label = { ChipLabel("FWD") }, colors = selectedColors,
                 border = if (isFwdRef) BorderStroke(1.dp, Color.Black) else null)
         }
 

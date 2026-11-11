@@ -46,7 +46,9 @@ the screen is open), builds an email through the existing `FeedbackIntentFactory
 (`createDiagnostics` — `createRaw` + `uriForFile`, FileProvider `files-path` root already in
 `file_paths.xml`), with snackbar fallbacks for "no logs yet" and no email app. Robolectric
 cannot resolve FileProvider roots, so the test pins that log files live under `filesDir`;
-the actual share is a one-tap on-device check.
+the actual share is a one-tap on-device check. `FeedbackIntentFactoryTest` covers the two-file case
+(a rotated ring attaches `log.0.txt` and `log.1.txt`, `ACTION_SEND_MULTIPLE` with two streams and two
+clip items in that order; unrotated attaches one) over stand-in `content://` URIs.
 
 **The attachment clip is built from the INTENT's mime type, never from a resolver lookup.**
 `ClipData.newUri(resolver, …)` dereferences its `ContentResolver` for any `content://` URI —

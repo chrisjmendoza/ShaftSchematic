@@ -1,7 +1,7 @@
 ﻿# ShaftSchematic TODO
 
 **Version: v0.5.x Development Queue**
-**Last updated: 2026-11-10**
+**Last updated: 2026-11-11**
 
 ## What belongs here
 
@@ -45,7 +45,7 @@ at most a pointer from here.
 | Runout drawing + bubble editor | ✅ Shipped — draggable stations, coupling face |
 | Consolidated Output tab | ✅ Shipped — variant election, worn sections, Export all |
 | Profile sizing (PDF) | ✅ Shipped — 1/2"–1 1/2" paper band, sizing curve, liner compression, S-break threshold |
-| Mixed units + dual display | ✅ Shipped, off by default — one open composer bug, see §2 |
+| Mixed units + dual display | ✅ Shipped, off by default |
 | PDF options | ✅ Non-modal panel (page stays zoomable), collapsible sections most-used first |
 | Fraction typography | ✅ Shipped — Stacked / Diagonal (default) / Plain |
 | Drawing preset profiles | ✅ Shipped, app-wide |
@@ -117,17 +117,21 @@ at most a pointer from here.
   - **Home leaves no way back into the open job** except Unsaved drafts / Recent.
   - **A bare metric designation ("M20") is accepted with zero pitch** and then warns "Zero pitch
     — thread renders flat"; reject it at entry, or fill the ISO coarse pitch.
-  - **The Line Thickness % box saves on every keystroke** (clamped 50–200, so "1" on the way to
-    "150" briefly applies 50%) — the per-keystroke pattern removed from the OAL field.
   - **Template mode has no on-preview indicator**; it persists, sits only in Settings, and is not
     captured by Drawing profiles or reset by "Restore Drawing defaults".
-  - **Double-tap zoom reset exists only on the schematic preview**; the shared PDF preview overlay
-    (Runout / Wear / Undercut / Consolidated) has neither it nor a Reset-zoom icon. (The Undercut
-    tab's zoomed detail page has its own double-tap and "Reset view" — a canvas, not the overlay.)
   - **Project Notes never print** (the wear/undercut "Notes:" areas are blank write-in lines).
   - **Measurement reference wording differs** — Settings "AFT (force AFT SET)" vs the panels'
     "AFT"; the Keyway calculator opens a dialog titled "Keyway rough-cutter depth".
   - **mm documents print rail dimensions at 3 decimals but footer/callout values at 1.**
+- **Dual-unit consolidated sheet that drops to one unit says nothing on its face.** A very full
+  dual sheet gives back, whole-sheet and in order, stacking → the footer's line pitch → the
+  secondary unit (`pdf/SheetDualMode.kt`), so the shaft keeps its 1/2" floor. The last step prints
+  the primary unit only and only a log line records it. Decide whether the PDF options panel
+  should say so (`docs/DualUnitStacking_PLAN.md` §7.4), or the sheet itself.
+- **Line Thickness % box: an out-of-range entry clamps silently** ("300" becomes 200). Decide
+  whether it should say so, as `NumericInputField` does.
+- **PDF preview overlay has no Reset-zoom icon** — double-tap resets it (as on the schematic
+  preview); decide whether a visible button is wanted too.
 - **Liner vs taper compression on the consolidated sheet.** With "Liner & taper compression"
   turned down, tapers reach ~40% of true length while liners stop at ~69%: the liners' flat
   `PROFILE_MIN_LINER_PT` floor is λ-immune on that sheet (the schematic's lean floor lands both
@@ -194,26 +198,6 @@ than re-inventing one.
 
 ### Bugs
 
-- [ ] **Dual-units consolidated sheet: rail values printed through lines on a very full sheet.**
-  Reproduced 2026-10-29 (gated render `pdf/DualRailOverlapRenderTest.kt`, `DUAL_RAIL_RENDER_DIR`;
-  PNGs in the maintainer's notes): the `SheetTextOverlapTest` spec with a relief on BOTH threads,
-  dual INLINE — "16"", "25 1/4"" and "30"" print with the S.E.T. extension lines or the in-profile
-  Ø values through them. The real fixtures stay clean. Cause, read from the code: the rail-lift
-  estimate is NOT it (the vertical solve re-plans the lift on the real map, reserved == drawn). In
-  dual mode the second relief footer line wraps, the footer grows ~27 pt, the footer has no give,
-  and the shaft drops to ~14 pt — far under the 1/2" floor — so the compressed taper spans can no
-  longer seat their values in a break and `DimensionRailLayout`'s last resort prints them centred
-  through the line; the in-profile Ø columns (minimum text size) then stand taller than the shaft
-  and spill into the rail band. STACKED is worse: the `dualStacked` gate checks
-  `RUNOUT_MIN_SHAFT_AREA_PT` without `prelimBubbleSectionH`, so stacking is kept and the bubble
-  rows squeeze the shaft to nothing. Fix direction: give the footer/rail budget a floor that keeps
-  the shaft at the band floor (drop stacking, then drop dual, then wrap less) before the rails lose
-  their breaks, and fold `prelimBubbleSectionH` into the stacking gate. The thread-relief test
-  fixture is arranged around this — un-arrange it when fixing. Also correct the synthetic spec
-  while there (`SheetTextOverlapTest`, copied by the render test): its AFT taper has the large end
-  at the thread and tapers DOWN into the shaft, which no real shaft does (on-device report) —
-  the small end belongs at the thread.
-
 Found on the 2026-10-27 AVD pass and not fixed on its branch:
 
 - [ ] **Inverted taper accepted silently; three rules disagree.** A taper typed with S.E.T. Ø >
@@ -221,16 +205,11 @@ Found on the 2026-10-27 AVD pass and not fixed on its branch:
   goes by diameter trend ("AFT Taper"), the footer column by midpoint ("FWD Taper"), and the
   footer values by magnitude (L.E.T. / S.E.T. printed swapped against what was typed). Needs a
   ruling: warn on an inverted taper, or key the title and `letSet` on position.
-- [ ] **Card AFT | FWD chips stack letters at 200% font** — the Body / Taper / Liner / Coupler
-  cards' inline `FilterChip` rows are not on the shared `ChipLabel` / `ChipFlowRow`, so "FWD"
-  still breaks one letter per line there.
 - [ ] **Undercut tab list delete: the Undo snackbar was missed on the AVD** — it was gone before
   the scripted tap reached it and the tap fell through to "Drawing settings" (top-bar Undo still
   restored the cut). The list's snackbar is already `SnackbarDuration.Long` (10 s); the detail
   page's delete snackbar is `Short`. Decide whether a delete snackbar should stay until dismissed
   (`Indefinite` with a dismiss action) on both, or whether 10 s is enough by hand.
-- [ ] **Wear detail rail: a short span's value sits on its extension ticks** with no halo, on the
-  wear detail page's rail under the drawing.
 - [ ] **Wear detail: a tap on a wear-area bar with the pit tool places a pit** — a press that does
   not move past touch slop stays a tap, so a near-miss on a bar becomes an X. Decide whether a tap
   on a bar should do nothing.
@@ -239,14 +218,22 @@ Found on the 2026-10-27 AVD pass and not fixed on its branch:
 - [ ] **Wear sheet strip: a body's areas get no dimensions when a liner in the same window has
   areas** — the chained rail belongs to the window's liner, so the body's bands print as grey
   rects with edge ticks only.
-- [ ] **Taper calculator: chip styles differ** between its Units chips and the "Rate as" chips,
-  and the "Taper rate (in/ft)" label wraps on a phone.
-- [ ] **Undercut tab title truncates on a phone.**
-- [ ] **Manual figure `wear.png` shows a liner-only sheet** — the manual now describes wear areas
-  on bodies; the figure's fixture (`manual/ManualFiguresTest.kt`) has none.
-- [ ] **Share diagnostic logs — two-file case unverified.** The share sheet attaches `log.0.txt`
-  once; the ring had never rotated, so attaching both files (`log.1.txt` too) has not been seen.
-  Push the log past 256 KB, or check on a device that has rotated it.
+- [ ] **In-app manual: the numbered marks cover values on a phone.** The marks are a fixed 20 px
+  (`docs/manual/web.css`) on a figure only ~380 px wide, so on the wear and schematic figures they
+  sit on rail values, Ø readings and footer text they are meant to point at (emulator pass
+  2026-11-11; the PDF, at print size, is fine). Options: smaller marks at phone width, marks
+  outside the figure with leaders, or tap-to-enlarge figures.
+- [ ] **Chip rows on one card still differ in look** — "Measure From" / "Rate mode" chips have no
+  outline unselected and fill dark when selected, while "Rate as" beside them is outlined; in Add
+  Taper, "Rate mode" is pills and "Rate as" rectangles (emulator pass 2026-11-11). One chip look
+  across the cards and dialogs — the standing rule is outlines on ALL chips.
+- [ ] **Wear detail rail: a short span's white value box hides most of its dimension line** — the
+  value no longer has ticks through it, but on a 1" span the box is nearly the span's width.
+  Decide whether a short span's value should step outside with a leader, as the sheet rails do.
+- [ ] **Share diagnostic logs — real FileProvider mapping unseen with two files.** The two-file
+  share (ring rotated, `log.0.txt` + `log.1.txt`, `ACTION_SEND_MULTIPLE`) is pinned by
+  `FeedbackIntentFactoryTest` with stand-in URIs; the real `FileProvider` URIs for both files have
+  not been seen on a device whose log has rotated.
 
 ### Tech debt
 
@@ -254,14 +241,14 @@ Found on the 2026-10-27 AVD pass and not fixed on its branch:
 
 ### Build tooling
 
-- [ ] Keep Gradle wrapper, AGP, and `libs.versions.toml` in sync.
-- [ ] Isolate tooling updates into `chore(build)` commits.
-- [ ] **Deferred, with reasons — do NOT bump blind:**
-  - **compileSdk-37 chain**: core/core-ktx 1.19.0, lifecycle 2.11.0, and Compose BOM 2026.08.00
-    all require compileSdk 37, but stable Robolectric (4.16.x) certifies only through API 36 —
-    and the whole Compose test suite runs on Robolectric. Waits for Robolectric 4.17 stable,
-    then moves as ONE coordinated bump.
-  - **Kotlin 2.4.0** (K1 drop, annotation-target and warning-promotion changes) — its own branch.
+- [ ] **compileSdk-37 chain — unblocked 2026-11-11, not started.** core/core-ktx 1.19.0,
+  lifecycle 2.11.0 and Compose BOM 2026.08.00 all require compileSdk 37, and the whole Compose
+  test suite runs on Robolectric, which certified only through API 36 until **4.17 (now stable on
+  Maven Central)**. Moves as ONE coordinated bump on its own branch: compileSdk 37 + Robolectric
+  4.17 first (suite green), then the three libraries, then an emulator look at every screen — a
+  BOM bump restyles Material components (the last one needed a visual pass of sliders, chips,
+  dialogs and Switch/Checkbox density). Do NOT bump blind or piecemeal.
+- [ ] **Kotlin 2.4.0** (K1 drop, annotation-target and warning-promotion changes) — its own branch.
 
 ### Testing
 
@@ -333,3 +320,5 @@ androidTest) or the Add dialogs; their logic is pure and covered.
 - `ShaftRenderer` and `ShaftPdfComposer` are separate drawing paths — a fix in one does not
   propagate to the other automatically.
 - `blockingExportError()` is the single gate for PDF export; do not add secondary gates elsewhere.
+- Gradle wrapper, AGP and `libs.versions.toml` move together, and a tooling update is its own
+  `chore(build)` commit — never folded into a feature.

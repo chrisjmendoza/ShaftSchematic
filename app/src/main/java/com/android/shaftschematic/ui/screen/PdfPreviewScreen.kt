@@ -11,7 +11,6 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -374,6 +373,12 @@ fun PdfPreviewScreen(
         offset.snapTo(Offset.Zero)
     }
 
+    val doubleTapReset = rememberPreviewDoubleTapReset {
+        scope.launch {
+            scale.animateTo(1f, tween(140))
+            offset.animateTo(Offset.Zero, tween(140))
+        }
+    }
     val gestures = Modifier
         .pointerInput(Unit) {
             detectTransformGestures(panZoomLock = true) { centroid, pan, zoom, _ ->
@@ -387,16 +392,7 @@ fun PdfPreviewScreen(
                 }
             }
         }
-        .pointerInput(Unit) {
-            detectTapGestures(
-                onDoubleTap = {
-                    scope.launch {
-                        scale.animateTo(1f, tween(140))
-                        offset.animateTo(Offset.Zero, tween(140))
-                    }
-                }
-            )
-        }
+        .then(doubleTapReset)
 
     // ── UI ───────────────────────────────────────────────────────────────────
     Scaffold(

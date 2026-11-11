@@ -479,7 +479,9 @@ NON-modal panel, and the page stays zoomable under it**: both preview surfaces
 in-layout at the bottom of the preview Box, composed after the page, closed by its close
 button, the Tune icon (a toggle), or Back (its `BackHandler` wins over the host's while open).
 No scrim and no tap-outside dismissal exist: the page above the panel keeps its pinch, pan and
-double-tap while the panel is up, and a zoom SURVIVES a re-render (pan/zoom state is never
+double-tap while the panel is up (double-tap returns the page to its fit on BOTH hosts through the
+ONE `rememberPreviewDoubleTapReset`, `ui/screen/PreviewDoubleTapReset.kt` — animated on the screen,
+instant on the overlay, a single tap does nothing), and a zoom SURVIVES a re-render (pan/zoom state is never
 keyed by the bitmap — every pass fits into the same box) and the page itself survives it too:
 the full spinner stands in only until a FIRST page exists, after which a sharp pass keeps the
 current page on screen under a small corner `PreviewRerenderIndicator` (blanking the page at the
@@ -764,7 +766,8 @@ The app theme (Settings → Appearance: System/Light/Dark + high contrast; defau
 the historical look) styles Compose chrome only. The five white-sheet canvases (undercut
 overview/detail, wear overview/detail, runout preview) draw with fixed ink from
 `ui/theme/SheetInk.kt` — never `MaterialTheme.colorScheme` — because dark theme's
-near-white onSurface would print invisible ink on the white sheet. The undercut sheets'
+near-white onSurface would print invisible ink on the white sheet. A value knockout on those
+canvases is `SheetInk.Paper` too (the wear detail rail's values, drawn after every tick and line). The undercut sheets'
 fills are additionally user-styled via `util/UndercutStyle.kt` (shade color/intensity +
 line-art mode; the Standard/Grey default reproduces the historical fixed shades, and the
 section core stays half the liner alpha at every intensity — `UndercutStyleTest`) — still
@@ -1413,7 +1416,15 @@ at every site (`measureDualLabel`/`drawDualLabel`), the fraction pair's rule.
 
 **A sheet that cannot afford the stack gives it up WHOLE** — per sheet, never per label, because a
 page with some two-line and some one-line values reads as a mistake. Each composer decides once,
-before drawing, and logs the fallback. A **keyway** carries its own unit the same way, under a derived key
+before drawing, and logs the fallback. The **consolidated sheet** gives back in ONE fixed order,
+decided by ONE pure function (`fittedSheetFallback`, `pdf/SheetDualMode.kt` — `SheetDualMode`
+STACKED | INLINE | SINGLE, `SheetFallback` adding INLINE with the footer's line pitch tightened to
+`FOOTER_LINE_FACTOR_MIN` (1.12x text)): STACKED -> INLINE -> INLINE with the tighter footer ->
+**primary unit only** (SINGLE), never richer than the layout asked for, each step whole-sheet and
+logged through `VerboseLog`. A step fits when the shaft budget — bubble rows included, the stacking
+gate counts them — keeps the drawn shaft at min(the 1/2" floor, its own standard height); a sheet
+that already does prints byte-identically, and the classic runout sheet is untouched. Primary-only
+is the last resort and is not announced on the sheet's face. A **keyway** carries its own unit the same way, under a derived key
 (`keywayUnitKey(id)` = `"<id>#kw"`, resolved by `DisplayUnits.keywayUnitFor` with the chain
 keyway → component → document): a European shaft arrives with its keyway and thread metric and
 nothing else, and flipping the parent taper to print one metric keyway would drag its L.E.T. /

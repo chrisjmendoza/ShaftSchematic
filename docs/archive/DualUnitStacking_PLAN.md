@@ -287,6 +287,11 @@ A sheet with some two-line and some one-line values reads as a mistake. So:
    the way `estimatedLinerKeptFracOfTrue` surfaces liner compression. A silent fallback reads
    as "stacking doesn't work".
 
+   *Status:* the consolidated sheet logs each step through `VerboseLog` and the layout probe;
+   the tuning-sheet readout is not built. Its order is STACKED -> INLINE -> INLINE with the footer
+   pitch tightened to 1.12x text -> primary unit only (`fittedSheetFallback`,
+   `pdf/SheetDualMode.kt`); the stacking gate counts the bubble rows.
+
 ---
 
 ## 8. Out of scope
