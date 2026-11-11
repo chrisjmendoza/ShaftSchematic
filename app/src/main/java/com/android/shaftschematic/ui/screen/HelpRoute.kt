@@ -516,8 +516,8 @@ internal val helpSections: List<HelpSection> = listOf(
                     "saves the value, the red ✗ puts the old one back, and the bar slides away " +
                     "once the card is saved. A chip or " +
                     "checkbox tap does not save a typed value, so the bar stays until you " +
-                    "answer it. Swiping to another card, or tapping another component on the " +
-                    "drawing, with such a value waiting asks Save changes? first: Save keeps " +
+                    "answer it. Swiping to another card, tapping another component on the " +
+                    "drawing, or tapping + Add Component with such a value waiting asks Save changes? first: Save keeps " +
                     "it, Discard puts the old value back, Keep editing stays on the card.\n\n" +
                     "The Add dialog for each component shows the same controls as its " +
                     "carousel card, so anything you can set at add time you can also edit later.",

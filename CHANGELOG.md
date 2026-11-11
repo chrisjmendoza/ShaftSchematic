@@ -8,6 +8,13 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-10
 
+### fix(editor): "+ Add Component" asks before leaving an unsaved value
+
+Tapping "+ Add Component" while a card field held a value you had not saved went straight to the
+new card and left the Save bar naming a field on a card you could no longer see. It now asks
+"Save changes?" first, like a swipe does — Save or Discard then opens the add chooser, Keep editing
+stays on the card (on-device ruling: the field may have been changed by accident).
+
 ### feat(editor): the start card — overall length, shaft diameter and project information
 
 The overall length no longer stands above the cards all the time (on-device request: it is a

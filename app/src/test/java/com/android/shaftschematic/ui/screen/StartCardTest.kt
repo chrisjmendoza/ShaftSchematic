@@ -12,6 +12,7 @@ import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -374,5 +375,60 @@ class StartCardTest {
         assertEquals(mm("1200", vm), vm.finalSpec.value!!.overallLengthMm)
         assertEquals(mm("6", vm), vm.finalSpec.value!!.autoBodyDiaMm)
         assertEquals("the original is untouched", original, vm.spec.value)
+    }
+
+    /* ── "+ Add Component" asks before leaving an unsaved value ──────────────── */
+
+    private fun tapAdd() {
+        rule.onNodeWithText("+ Add Component").performScrollTo()
+        rule.onNodeWithText("+ Add Component").performClick()
+        rule.waitForIdle()
+    }
+
+    private fun chooserCount() = rule.onAllNodesWithText("Add Component").fetchSemanticsNodes().size
+
+    @Test
+    fun `add component with nothing unsaved opens the chooser at once`() {
+        host(freshVm().also { it.onSetOverallLengthMm(1000f) })
+
+        tapAdd()
+
+        rule.onAllNodesWithTag(UNSAVED_EDIT_SAVE_TAG).assertCountEquals(0)
+        assertEquals(1, chooserCount())
+    }
+
+    @Test
+    fun `add component with an unsaved value asks, and save commits before the chooser`() {
+        val vm = freshVm().also { it.onSetOverallLengthMm(1000f) }
+        host(vm)
+        type(OAL_FIELD_TAG, "120")
+
+        tapAdd()
+
+        assertEquals("the chooser waits for the answer", 0, chooserCount())
+        rule.onNodeWithTag(UNSAVED_EDIT_SAVE_TAG).performClick()
+        rule.waitForIdle()
+
+        assertEquals(mm("120", vm), vm.spec.value.overallLengthMm)
+        assertEquals(1, chooserCount())
+    }
+
+    @Test
+    fun `discard drops the value and opens the chooser, keep editing does neither`() {
+        val vm = freshVm().also { it.onSetOverallLengthMm(1000f) }
+        host(vm)
+        type(OAL_FIELD_TAG, "120")
+
+        tapAdd()
+        rule.onNodeWithTag(UNSAVED_EDIT_KEEP_TAG).performClick()
+        rule.waitForIdle()
+        assertEquals(0, chooserCount())
+        rule.onNodeWithTag(CARD_SAVE_BAR_TAG).assertIsDisplayed()
+
+        tapAdd()
+        rule.onNodeWithTag(UNSAVED_EDIT_DISCARD_TAG).performClick()
+        rule.waitForIdle()
+        assertEquals(1000f, vm.spec.value.overallLengthMm)
+        assertEquals(1, chooserCount())
     }
 }
