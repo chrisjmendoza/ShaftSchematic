@@ -6,6 +6,29 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-11-11
+
+### fix(editor): the phone's card fills the screen below it and lines up with "+ Add Component"
+
+On a phone the component carousel was a fixed 360 dp tall, which left a strip of empty screen
+under a card that was scrolling its own fields. It now takes whatever height the screen has left
+under the controls above it — the rule a portrait tablet already used (`mediumCarouselHeight`),
+never under the old 360 dp. With no edge arrows and no peeking neighbours the card also runs the
+full width of the column, so its edges line up with the "+ Add Component" button (on-device
+request).
+
+### fix(editor): tighter spacing inside the component cards
+
+The component cards wasted a lot of height between their rows (on-device report): every number
+field kept an empty line under it for a message it almost never showed, and the card added its own
+gap on top of that, so on a phone only one or two fields fit below a card's title. Card fields now
+take that line only while they have a message to show (a refused value, the oversize-length notice),
+the gap between rows is 8 dp instead of 10, the card's inner padding is 12 dp instead of 16, the
+corners are less rounded, and the phone card sits closer to the screen edges. The AFT Thread card on
+a phone now shows Major Ø, TPI and the top of Length under its switch and chips, where before it
+showed Major Ø and the top of TPI. Switches, checkboxes and chips keep their full 48 dp touch height;
+nothing on the cards moved, changed text size or changed behaviour. The Add dialogs are unchanged.
+
 ## 2026-11-10
 
 ### fix(editor): "+ Add Component" asks before leaving an unsaved value

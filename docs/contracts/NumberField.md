@@ -290,6 +290,14 @@ Responsibilities
   precedence is rejection notice > `externalIssueText` > `hint`, because an error outranks a tip.
   The undercut card uses both (Distance hint, Measured Ø placeholder) through its private
   `UndercutNum` wrapper; `WearNum` is unchanged.
+- Optional `reserveSupportingLine: Boolean` (default `true` — the empty supporting line is kept
+  under the box, so a notice never moves what sits below). The editor's component cards pass
+  `false` through `CommitNum`: the line then exists only while a rejection notice,
+  `externalIssueText` or `hint` shows, and the card's row gap (`CARD_ROW_GAP`, 8 dp — card inner
+  padding `CARD_CONTENT_PADDING`, 12 dp) is what separates its fields (on-device report: the
+  reserved line plus the old 10 dp gap left only two fields visible on a phone card). Sections the
+  cards share with an Add dialog (`BlendSection`, `LinerShoulderSection`) space their card fields
+  through `LocalCardRowGap`, which is 0 dp outside a card, so the dialogs are unchanged.
 
 Do Nots
 - Do not mutate ViewModel directly.

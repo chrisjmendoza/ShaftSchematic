@@ -60,6 +60,12 @@ import com.android.shaftschematic.util.filterNumericInput
  * [externalIssueText] always takes the line instead, since an error outranks a tip. Both
  * default null, which leaves the field exactly as it was without them.
  *
+ * [reserveSupportingLine] keeps the supporting-text line under the box while it has nothing to
+ * say (the default), so a notice appearing never moves what sits below. False drops the empty
+ * line — the editor's component cards pass it, since a reserved line under every field stacked
+ * with the card's own row gap into most of a field's height of blank space (on-device report);
+ * the card grows by the line only while a notice shows.
+ *
  * [inputFilter], when given, replaces the numeric keystroke filter for a field whose accepted
  * spellings are not plain numbers (the taper rate's `3/4"/ft`); null keeps [filterNumericInput]
  * with the allow-flags above.
@@ -100,6 +106,7 @@ fun NumericInputField(
     placeholder: String? = null,
     hint: String? = null,
     landRestoredEdit: Boolean = false,
+    reserveSupportingLine: Boolean = true,
     parseValid: (String) -> Boolean,
     onCommit: (String) -> Unit
 ) {
@@ -236,16 +243,20 @@ fun NumericInputField(
         placeholder = placeholder?.let { p -> { Text(p) } },
         enabled = enabled,
         isError = rejectedNotice != null || externalIssueText != null,
-        supportingText = {
-            val notice = rejectedNotice
-            if (notice != null) {
-                Text(notice)
-            } else if (externalIssueText != null) {
-                Text(externalIssueText)
-            } else if (hint != null) {
-                Text(hint)
+        supportingText = if (
+            reserveSupportingLine || rejectedNotice != null || externalIssueText != null || hint != null
+        ) {
+            {
+                val notice = rejectedNotice
+                if (notice != null) {
+                    Text(notice)
+                } else if (externalIssueText != null) {
+                    Text(externalIssueText)
+                } else if (hint != null) {
+                    Text(hint)
+                }
             }
-        },
+        } else null,
         singleLine = singleLine,
         maxLines = maxLines,
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType, imeAction = ImeAction.Done),
