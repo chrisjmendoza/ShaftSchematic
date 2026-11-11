@@ -1660,6 +1660,8 @@ internal fun buildBodyOdCallouts(
             DiaCallout(
                 xMm = centerMm, valueMm = diaMm.toDouble(), side = LeaderSide.BELOW,
                 unit = displayUnits.unitFor(resolvedBodyBaseId(anchor.id)), dual = displayUnits.dual,
+                spanStartMm = anchor.startFromAftMm.toDouble(),
+                spanEndMm = (anchor.startFromAftMm + anchor.lengthMm).toDouble(),
             )
         }
 
@@ -1737,6 +1739,8 @@ internal fun buildLinerOdCallouts(
             DiaCallout(
                 xMm = centerMm, valueMm = odMm.toDouble(), side = LeaderSide.BELOW,
                 unit = displayUnits.unitFor(anchor.id), dual = displayUnits.dual,
+                spanStartMm = anchor.startFromAftMm.toDouble(),
+                spanEndMm = (anchor.startFromAftMm + anchor.lengthMm).toDouble(),
             )
         }
 
