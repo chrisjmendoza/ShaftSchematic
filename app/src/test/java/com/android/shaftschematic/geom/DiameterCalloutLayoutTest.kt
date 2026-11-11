@@ -121,11 +121,13 @@ class DiameterCalloutLayoutTest {
     }
 
     @Test
-    fun `two diameters that overlap stack as before`() {
-        // The second leader stands under the first value and no row or side avoids that, so it
-        // takes the second row as it always did rather than being dropped.
+    fun `two diameters that overlap stack with neither leader through a value`() {
+        // The second leader (40) stands under the first value's usual spot (14..74). Placed one at
+        // a time it had no clear spot; together the first takes the second row and the second the
+        // first row, so the first's leader (0) drops clear of the second's value (54..114).
         val p = place(item(0f, 60f), item(40f, 60f))
-        assertEquals(listOf(0, 1), p.map { it.tier })
+        assertEquals(listOf(1, 0), p.map { it.tier })
+        assertEquals(14f, p[0].labelLeft, 1e-4f)
         assertEquals(54f, p[1].labelLeft, 1e-4f)
     }
 
@@ -153,6 +155,34 @@ class DiameterCalloutLayoutTest {
         )
         assertEquals(46f, p[1].labelLeft, 1e-4f)
         assertEquals(0, p[1].tier)
+    }
+
+    @Test
+    fun `a feature value hung left gives way so a diameter's leader stays off it`() {
+        // The blend's leader stands at 300 and its value cannot hang right (content ends at 360),
+        // so it hangs left over 226..286 — across the liner's centre at 260, where the Ø leader
+        // drops. Placed one at a time the Ø has no clear spot. Together: the blend takes row 1 and
+        // the Ø row 0 on its left, each leader clear of the other's value.
+        val p = DiameterCalloutLayout.place(
+            listOf(item(260f, 50f), item(300f, 60f, feature = true)),
+            dogleg = 14f, contentRight = 360f,
+        )
+        val dia = p[0]
+        val blend = p[1]
+        assertEquals(DiameterCalloutLayout.Placement(tier = 1, labelLeft = 226f), blend)
+        assertEquals(DiameterCalloutLayout.Placement(tier = 0, labelLeft = 196f), dia)
+        // The Ø's leader stops at row 0, above the blend's row; the blend's leader (300) is clear
+        // of the Ø's row-0 footprint (196..260).
+        assertTrue(300f > 260f + DiameterCalloutLayout.MIN_GAP)
+    }
+
+    @Test
+    fun `callouts with no clear arrangement are still all placed`() {
+        // Three wide values on one leader x, one row: nothing clears, nothing is dropped.
+        val items = listOf(item(100f, 80f), item(100f, 80f), item(100f, 80f))
+        val p = DiameterCalloutLayout.place(items, dogleg = 14f, maxTiers = 1)
+        assertEquals(3, p.size)
+        assertTrue(p.all { it.tier == 0 })
     }
 
     @Test

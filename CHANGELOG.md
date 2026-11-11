@@ -8,6 +8,17 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-11
 
+### fix(pdf): a Ø leader no longer drops through a blend's angle value
+
+On a sheet where an Angle-mode blend's value (`45°, 3/8" R`) could not hang right of its leader —
+large text or a wide face ran it past the page edge — it hung left, under the liner beside it,
+and the liner's Ø leader then printed straight through it (on-device report). Callouts were
+placed one at a time, each taking its first clear spot, and the Ø was left with none. When that
+happens `DiameterCalloutLayout.place` now searches the callouts' rows and sides TOGETHER for an
+arrangement in which every leader is clear of every value: here the Ø takes the first row on its
+left and the blend the second row. Two close Ø values gain the same way. A sheet whose callouts
+never conflicted is placed exactly as before.
+
 ### fix(ui): three small things from the emulator pass
 
 - The "Consolidated Output" tab title takes a second line on a phone instead of reading
