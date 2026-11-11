@@ -30,6 +30,7 @@ internal const val PREVIEW_OPT_SHEET_LAYOUT_TAG = "preview_opt_sheet_layout"
 internal const val PREVIEW_OPT_GRID_TAG = "preview_opt_grid"
 internal const val PREVIEW_OPT_HIGHLIGHT_TAG = "preview_opt_highlight"
 internal const val PREVIEW_OPT_SHARED_TAG = "preview_opt_shared"
+internal const val PREVIEW_OPT_LINER_COMPRESSION_TAG = "preview_opt_liner_compression"
 
 /** Scrim behind the Preview options sheet — light, so the preview it restyles still reads. */
 private const val PREVIEW_OPTIONS_SCRIM_ALPHA = 0.12f
@@ -44,8 +45,9 @@ private const val PREVIEW_OPTIONS_MAX_HEIGHT_FRAC = 0.55f
 /**
  * What the editor's Preview options sheet shows and edits — every value is one the app already
  * stores: the preview's device preferences (Settings → Editor Screen), the app-wide sheet look
- * (`PdfPrefs`, Settings → Drawing) and the per-job "Shaft height" (`RunoutConfig.heightScale`).
- * The sheet owns no storage of its own.
+ * (`PdfPrefs`, Settings → Drawing) and the per-job "Shaft height" (`RunoutConfig.heightScale`) and
+ * "Liner & taper compression" pair (`RunoutConfig.linersProportional` / `linerCompression`). The
+ * sheet owns no storage of its own.
  */
 internal data class EditorPreviewOptionsState(
     val showDimensions: Boolean,
@@ -62,6 +64,10 @@ internal data class EditorPreviewOptionsState(
     /** [ShaftHeightSlider]'s base and sizing diameter — the schematic's, as its PDF options sheet passes. */
     val heightSliderBase: Float,
     val heightSliderMaxDiaMm: Float,
+    val linersProportional: Boolean = false,
+    val linerCompression: Float = 1f,
+    /** [LinerCompressionControl]'s live readout — the fraction of true length liners keep at this height. */
+    val estimateLinerKeptFrac: (requestedFracOfTrue: Float) -> Float = { it },
 )
 
 /** The sheet's setters — each the same ViewModel setter Settings and the PDF options panels call. */
@@ -75,9 +81,12 @@ internal class EditorPreviewOptionsActions(
     val onDualUnitLayout: (DualUnitLayout) -> Unit,
     val onSBreakThresholdFrac: (Float) -> Unit,
     val onHeightScale: (Float) -> Unit,
+    val onLinersProportional: (Boolean) -> Unit = {},
+    val onLinerCompression: (Float) -> Unit = {},
     /** Visual-only drag channels (the [PreviewTuning] posture): the preview redraws under the finger, nothing is written. */
     val onSBreakDrag: (Float?) -> Unit = {},
     val onHeightDrag: (Float?) -> Unit = {},
+    val onLinerCompressionDrag: (Float?) -> Unit = {},
 )
 
 /**
@@ -92,8 +101,10 @@ internal class EditorPreviewOptionsActions(
  *  2. **Shared with the printed sheets** — the look settings the preview actually reads, each the
  *     exact control the PDF options panels and Settings → Drawing use, wired to the same setters,
  *     under the shared app-wide [OptionsScopeNote]: fractions, dimension arrows, the dual-unit
- *     layout (a dual-unit document only), Body S-break and the per-job Shaft height (its caption
- *     ends "Saved with this job"). Remote controls for the one stored value — no new storage.
+ *     layout (a dual-unit document only), Body S-break, the per-job Shaft height and the per-job
+ *     Liner & taper compression (its "Keep liners and tapers proportional lengthwise" checkbox —
+ *     both captions end "Saved with this job"). Remote controls for the one stored value — no new
+ *     storage.
  *
  * The sheet is capped at [PREVIEW_OPTIONS_MAX_HEIGHT_FRAC] of the window and scrolls inside that,
  * over a light scrim, so the preview box at the top of the editor stays in view while its options
@@ -206,7 +217,8 @@ internal fun EditorPreviewOptionsContent(
             }
             if (!state.sheetLayout) {
                 Text(
-                    "Body S-break and Shaft height show in the preview while it draws like the sheet.",
+                    "Body S-break, Shaft height and Liner & taper compression show in the preview " +
+                        "while it draws like the sheet.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -223,6 +235,16 @@ internal fun EditorPreviewOptionsContent(
                 onCommit = actions.onHeightScale,
                 onDrag = actions.onHeightDrag,
             )
+            Box(Modifier.testTag(PREVIEW_OPT_LINER_COMPRESSION_TAG)) {
+                LinerCompressionControl(
+                    linersProportional = state.linersProportional,
+                    linerCompression = state.linerCompression,
+                    estimateKeptFrac = state.estimateLinerKeptFrac,
+                    onSetProportional = actions.onLinersProportional,
+                    onSetCompression = actions.onLinerCompression,
+                    onDrag = actions.onLinerCompressionDrag,
+                )
+            }
         }
     }
 }

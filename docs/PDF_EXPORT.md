@@ -732,9 +732,11 @@ hand-drafting convention `|←—— 237 1/2" ——→|` — instead of floatin
 - **Value size.** `PdfPrefs.dimTextScale` ("Dimension text size", **100% (default) / 125% /
   150% / 175%**, Settings → Drawing and the schematic / consolidated PDF options; on-device request:
   readers with poor eyesight) multiplies the rail values' starting size AND the lane pitch with
-  them (schematic `startRailGap` / `railMinGap` and the band layout's pitches, consolidated
-  `RUNOUT_RAIL_GAP_PT`), so a larger value seated in its line keeps the same air to the next
-  rail. Everything else follows from the paint: the planner measures every box and every lift
+  them (schematic starting pitch = value height + `RAIL_LANE_AIR_PT` (8 pt) × scale, `railMinGap`
+  and the band layout's pitches, consolidated `RUNOUT_RAIL_GAP_PT`), so a larger value seated in
+  its line keeps the same air to the next rail. The schematic's pitch was a flat 30 pt × scale —
+  about two and a half value heights, more white than values between the tiers (on-device
+  report). Everything else follows from the paint: the planner measures every box and every lift
   off it, so a value too wide for its break at the larger size floats like any other. Its sibling
   `footerTextScale` sizes the footer block — see `docs/contracts/PdfExport.md`.
 - **Every value on a white box (the halo).** On-device ruling: "put a white box behind every
@@ -1220,7 +1222,8 @@ sheet points over the preview box at one point per dp, with the box's own budget
 (`drawnMaxDiaMm`, bare shaft included — every sheet passes 0 and keeps the stored components'
 maximum, byte-identical), and draws its body runs through the
 one `drawBodyRunsWithBreaks`, so its S-breaks are the sheet's decision at the box's width. The
-editor's "Preview options…" sheet carries the same `ShaftHeightSlider` and Body S-break slider.
+editor's "Preview options…" sheet carries the same `ShaftHeightSlider`, Body S-break slider and
+`LinerCompressionControl`.
 
 The **wear document's MAIN profile band** honors the same multiplier too
 (`composeWearPdf(heightScale)`), through a separate, simpler path than the compression solve

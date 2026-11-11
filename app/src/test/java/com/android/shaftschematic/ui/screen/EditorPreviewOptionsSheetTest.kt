@@ -10,6 +10,9 @@ import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ApplicationProvider
@@ -64,6 +67,8 @@ class EditorPreviewOptionsSheetTest {
         onDualUnitLayout = { calls += "dual=$it" },
         onSBreakThresholdFrac = { calls += "sbreak=$it" },
         onHeightScale = { calls += "height=$it" },
+        onLinersProportional = { calls += "proportional=$it" },
+        onLinerCompression = { calls += "compression=$it" },
     )
 
     private fun show(state: EditorPreviewOptionsState) {
@@ -96,6 +101,16 @@ class EditorPreviewOptionsSheetTest {
         assertEquals(listOf("fraction=${FractionStyle.STACKED}"), calls)
         // A single-unit document has no dual-unit layout to set.
         rule.onAllNodesWithTag("dual_unit_layout_stacked").assertCountEquals(0)
+    }
+
+    @Test
+    fun `the liner and taper compression control is the panels' own and commits through its setter`() {
+        show(state())
+        rule.onNodeWithTag(PREVIEW_OPT_LINER_COMPRESSION_TAG).performScrollTo()
+        rule.onNode(isToggleable() and hasAnyAncestor(hasTestTag(PREVIEW_OPT_LINER_COMPRESSION_TAG)))
+            .assertIsOff()
+            .performClick()
+        assertEquals(listOf("proportional=true"), calls)
     }
 
     @Test

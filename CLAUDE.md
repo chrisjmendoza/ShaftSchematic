@@ -1322,8 +1322,8 @@ is the device preference Settings → Editor Screen → "Draw Preview Like the S
 Drawing profile, read by no composer. The editor overflow's "Preview options…" sheet
 (`EditorPreviewOptionsSheet`) carries the preview's device switches and, under the app-wide
 `OptionsScopeNote`, the EXISTING shared look controls the preview reads (fractions, arrows,
-dual-unit layout on a dual document, Body S-break, per-job Shaft height) wired to the same setters
-— remote controls, no new storage.
+dual-unit layout on a dual document, Body S-break, per-job Shaft height and Liner & taper
+compression) wired to the same setters — remote controls, no new storage.
 
 ### Fractions are SET, never spelled
 Every drawn fraction goes through ONE construction — `util/FractionText.kt` (pure parser:

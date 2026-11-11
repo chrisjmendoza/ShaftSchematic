@@ -8,6 +8,26 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-11
 
+### feat(editor): Liner & taper compression on the Preview options sheet
+
+The editor's "Preview options…" sheet now carries the same "Keep liners and tapers proportional
+lengthwise" checkbox and "Liner & taper compression" slider the PDF options panels carry
+(`LinerCompressionControl`, on-device request), under Shaft height. It is a remote control for the
+one per-job `RunoutConfig` pair — no new storage, "Saved with this job" — so the preview, the
+schematic and the consolidated sheet all follow it. While the preview draws like the sheet, a drag
+redraws the box under the finger and commits on release (the `PreviewTuning` posture), and the
+kept-% readout follows the height slider's in-progress value.
+
+### fix(dimensions): tighter schematic rail tiers
+
+The schematic's dimension rails sat a fixed 30 pt apart (scaled with the value size) — about two
+and a half value heights, so the tiers carried more white than values (on-device report). The lane
+pitch is now the value's own height plus 8 pt of air (`RAIL_LANE_AIR_PT`, the consolidated sheet's
+lane air), about 20 pt at the default size and still scaled with "Dimension text size"; a stacked
+dual value's taller box opens the pitch by its extra line. The first rail also sits 6 pt closer to
+the shaft (`BASE_DIM_OFFSET_PT` 18). The shaft does not move; the rail block is shorter (24 pt on
+a three-tier job). The rail fit's floors, the lift rule and the consolidated sheet are unchanged.
+
 ### fix(editor): the phone's card fills the screen below it and lines up with "+ Add Component"
 
 On a phone the component carousel was a fixed 360 dp tall, which left a strip of empty screen
