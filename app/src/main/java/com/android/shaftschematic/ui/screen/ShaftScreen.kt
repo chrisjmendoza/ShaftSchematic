@@ -424,6 +424,30 @@ fun ShaftScreen(
         )
     }
 
+    // "+ Add Component" also leaves the card, so it asks the same question first (on-device
+    // ruling: a field may have been changed by accident). Save or Discard then opens the chooser;
+    // a refused value stays on its card and the chooser does not open.
+    var unsavedBeforeAdd by remember { mutableStateOf<PendingCardEdit?>(null) }
+    val openAddChooser: () -> Unit = {
+        val pending = pendingCardEdits.current
+        if (pending == null) chooserOpen = true else unsavedBeforeAdd = pending
+    }
+    unsavedBeforeAdd?.let { edit ->
+        UnsavedCardEditDialog(
+            edit = edit,
+            onSave = {
+                unsavedBeforeAdd = null
+                if (edit.accept()) chooserOpen = true
+            },
+            onDiscard = {
+                unsavedBeforeAdd = null
+                edit.cancel()
+                chooserOpen = true
+            },
+            onKeepEditing = { unsavedBeforeAdd = null },
+        )
+    }
+
     CompositionLocalProvider(LocalPendingCardEdits provides pendingCardEdits) {
     Scaffold(
         // The content insets below are horizontal only (each branch pads its own bottom), so
@@ -676,7 +700,7 @@ fun ShaftScreen(
                 shape = MaterialTheme.shapes.large
             ) {
                 Button(
-                    onClick = { chooserOpen = true },
+                    onClick = openAddChooser,
                     modifier = Modifier.fillMaxWidth(),
                     shape = MaterialTheme.shapes.large
                 ) {

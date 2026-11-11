@@ -1562,7 +1562,7 @@ no scope dialog. There is no always-on OAL row: above the carousel sits only the
 slot (`CardSaveSlot` → `CardSaveBar`; on-device ruling: a Save at the end of a long card was hidden),
 which takes no room while every card is clean and grows in / shrinks out with a short height + fade
 animation so the cards below slide rather than jump (on-device request); a card change under a
-pending edit — the start card's included — asks Save | Discard | Keep editing
+pending edit — the start card's included, and "+ Add Component" too (on-device ruling) — asks Save | Discard | Keep editing
 (`UnsavedCardEditDialog`). `ShaftSpec.withNewOal` (the ONE OAL-change helper) re-anchors
 FWD-referenced explicit bodies, tapers, liners and bolt rows in `Double` and snaps a recovered FWD
 distance under `OAL_REANCHOR_SNAP_MM` (0.01 mm) to the zero it was authored as — `Float` noise at

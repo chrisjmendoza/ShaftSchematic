@@ -345,7 +345,7 @@ Notes
   (`ui/screen/PendingCardEdit.kt`), provided once around the editor; the Add dialogs commit through
   their own Add button and register nothing. Commit-on-blur is otherwise **completely unchanged**.
   **A card change under a pending edit asks first** — a carousel swipe, an edge arrow, a tap on a
-  peeking card, a tap on a component in the drawing (or a warning line), or the toolbar's Project
+  peeking card, a tap on a component in the drawing (or a warning line), "+ Add Component" (Save or Discard then opens the chooser), or the toolbar's Project
   information button opens "Save changes?" (`UnsavedCardEditDialog`: Save | Discard | Keep
   editing); Keep editing after a swipe scrolls the pager back to the card holding the edit, since
   the selection never moved. The hidden field would otherwise keep focus and the keyboard, and
