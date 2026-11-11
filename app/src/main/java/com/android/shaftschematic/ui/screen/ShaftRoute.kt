@@ -12,11 +12,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import com.android.shaftschematic.data.SettingsStore
 import com.android.shaftschematic.ui.order.ComponentKind
@@ -300,15 +297,6 @@ fun ShaftRoute(
         outputFont = pdfOutputFont,
     )
 
-    // New-shaft Ø prompt (on-device request): the first OAL commit on a brand-new ORIGINAL
-    // shaft asks for the bare-shaft Ø, since components added onto the default-sized bare
-    // shaft look wrong until it is set. Armed from the spec as it stood BEFORE the commit is
-    // forwarded; the accept path fires the mm and raw callbacks back to back, and the second
-    // finds the OAL already set, so the prompt shows once.
-    var showShaftDiaPrompt by rememberSaveable { mutableStateOf(false) }
-    fun shaftDiaPromptArmed(): Boolean =
-        target == SpecTarget.ORIGINAL && shouldPromptShaftDia(vm.spec.value)
-
     val onSendFeedback: () -> Unit = {
         val intent = FeedbackIntentFactory.create(
             context = ctx,
@@ -380,16 +368,10 @@ fun ShaftRoute(
         // Every mutation below names its [target] explicitly. A callable reference
         // (`vm::removeBody`) would take the ORIGINAL default and silently edit the wrong
         // drawing on the Final tab, so each one is a lambda that threads it through.
-        onSetOverallLengthRaw = { raw ->
-            val armed = shaftDiaPromptArmed()
-            vm.setOverallLength(raw, target)
-            if (armed && vm.spec.value.overallLengthMm > 0f) showShaftDiaPrompt = true
-        },
-        onSetOverallLengthMm = { mm ->
-            val armed = shaftDiaPromptArmed()
-            vm.onSetOverallLengthMm(mm, target)
-            if (armed && vm.spec.value.overallLengthMm > 0f) showShaftDiaPrompt = true
-        },
+        onSetOverallLengthMm = { mm -> vm.onSetOverallLengthMm(mm, target) },
+        // The start card's shaft-wide Ø: keeps every section override (the auto-body card's
+        // "All auto sections" below is the one that clears them).
+        onSetShaftDiaMm = { d -> vm.setShaftWideAutoBodyDiaMm(d, target) },
         onSelectComponentById = vm::selectComponentById,
 
         onAddBody   = { s, l, d, ref, kwW, kwD, kwL, kwO, kwEnd, kwSp, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd, bSAftLen, bSFwdLen, bOdAft, bOdFwd, bAngles ->
@@ -505,15 +487,4 @@ fun ShaftRoute(
         onSetComponentUnit = vm::setComponentUnit,
         onSetKeywayUnit = vm::setKeywayUnit,
     )
-
-    if (showShaftDiaPrompt) {
-        ShaftDiaPromptDialog(
-            unit = unit,
-            onSet = { mm ->
-                showShaftDiaPrompt = false
-                vm.setAutoBodyDiaMm(mm)
-            },
-            onSkip = { showShaftDiaPrompt = false },
-        )
-    }
 }

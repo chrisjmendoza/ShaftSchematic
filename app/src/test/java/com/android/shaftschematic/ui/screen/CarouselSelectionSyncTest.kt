@@ -2,12 +2,16 @@ package com.android.shaftschematic.ui.screen
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
  * Pins the selection ↔ pager-page sync used by `ComponentCarouselPager`, including the
  * "tap a component in the preview → carousel scrolls to its card" path.
+ *
+ * The pager's first page is the start card, never a component: the row at index `i` is page
+ * `i + 1`, and a null selection IS the start card.
  *
  * The two directions must not fight each other; several cases below exist specifically to
  * pin the guards that keep the follow-selection effect from re-triggering the swipe effect.
@@ -16,29 +20,59 @@ class CarouselSelectionSyncTest {
 
     private val rows = listOf("body-1", "taper-1", "liner-1", "body-2")
 
-    // ── carouselTargetIndex ──────────────────────────────────────────────────────
+    // ── The start card is page 0, whatever the shaft holds ───────────────────────
 
     @Test
-    fun `resolves the index of the selected id`() {
-        assertEquals(0, carouselTargetIndex(rows, "body-1"))
-        assertEquals(2, carouselTargetIndex(rows, "liner-1"))
-        assertEquals(3, carouselTargetIndex(rows, "body-2"))
+    fun `the start card is the only page of an empty shaft`() {
+        assertEquals(1, carouselPageCount(0))
+        assertEquals(START_CARD_PAGE, carouselSelectedPage(emptyList(), null))
+        assertNull(componentIdForPage(emptyList(), START_CARD_PAGE))
     }
 
     @Test
-    fun `null selection has no target`() {
-        assertEquals(NO_CAROUSEL_TARGET, carouselTargetIndex(rows, null))
+    fun `the start card stays page 0 as components come and go`() {
+        assertEquals(5, carouselPageCount(rows.size))
+        assertEquals(START_CARD_PAGE, carouselSelectedPage(rows, null))
+        assertNull(componentIdForPage(rows, START_CARD_PAGE))
+
+        // A component added ahead of every other one goes to page 1, never page 0.
+        val withNewFirst = listOf("thread-aft") + rows
+        assertEquals(1, carouselSelectedPage(withNewFirst, "thread-aft"))
+        assertEquals("thread-aft", componentIdForPage(withNewFirst, 1))
+        assertNull(componentIdForPage(withNewFirst, START_CARD_PAGE))
+
+        // Removing them all leaves the start card alone.
+        assertEquals(1, carouselPageCount(0))
+    }
+
+    // ── carouselSelectedPage / componentIdForPage ───────────────────────────────
+
+    @Test
+    fun `a selected component is on its row's page, one past the start card`() {
+        assertEquals(1, carouselSelectedPage(rows, "body-1"))
+        assertEquals(3, carouselSelectedPage(rows, "liner-1"))
+        assertEquals(4, carouselSelectedPage(rows, "body-2"))
+    }
+
+    @Test
+    fun `every page maps back to the component it shows`() {
+        rows.forEachIndexed { i, id ->
+            val page = carouselSelectedPage(rows, id)
+            assertEquals(id, componentIdForPage(rows, page))
+            assertEquals(i + 1, page)
+        }
+    }
+
+    @Test
+    fun `a page past the rows shows no component`() {
+        assertNull(componentIdForPage(rows, rows.size + 1))
     }
 
     @Test
     fun `selection that no longer resolves has no target`() {
         // Normal after a delete, or when an auto-body id disappears on re-resolve.
-        assertEquals(NO_CAROUSEL_TARGET, carouselTargetIndex(rows, "deleted-body"))
-    }
-
-    @Test
-    fun `empty carousel has no target`() {
-        assertEquals(NO_CAROUSEL_TARGET, carouselTargetIndex(emptyList(), "body-1"))
+        assertEquals(NO_CAROUSEL_TARGET, carouselSelectedPage(rows, "deleted-body"))
+        assertEquals(NO_CAROUSEL_TARGET, carouselSelectedPage(emptyList(), "body-1"))
     }
 
     // ── shouldAnimateToSelection ─────────────────────────────────────────────────
@@ -46,20 +80,20 @@ class CarouselSelectionSyncTest {
     @Test
     fun `scrolls when the selected card is on another page`() {
         // The preview-tap case: user taps liner-1 while the carousel sits on body-1.
-        assertTrue(shouldAnimateToSelection(targetIndex = 2, currentPage = 0, currentPageOffsetFraction = 0f))
+        assertTrue(shouldAnimateToSelection(targetPage = 3, currentPage = 1, currentPageOffsetFraction = 0f))
     }
 
     @Test
     fun `does not scroll when already settled on the selected card`() {
-        assertFalse(shouldAnimateToSelection(targetIndex = 2, currentPage = 2, currentPageOffsetFraction = 0f))
+        assertFalse(shouldAnimateToSelection(targetPage = 3, currentPage = 3, currentPageOffsetFraction = 0f))
     }
 
     @Test
     fun `scrolls when on the right page but not settled on it`() {
         // A pager parked mid-swipe reports the nearest page as currentPage while still
         // visually between two cards. Being on the right page is not enough.
-        assertTrue(shouldAnimateToSelection(targetIndex = 2, currentPage = 2, currentPageOffsetFraction = 0.35f))
-        assertTrue(shouldAnimateToSelection(targetIndex = 2, currentPage = 2, currentPageOffsetFraction = -0.2f))
+        assertTrue(shouldAnimateToSelection(targetPage = 3, currentPage = 3, currentPageOffsetFraction = 0.35f))
+        assertTrue(shouldAnimateToSelection(targetPage = 3, currentPage = 3, currentPageOffsetFraction = -0.2f))
     }
 
     @Test
@@ -73,65 +107,64 @@ class CarouselSelectionSyncTest {
         )
     }
 
+    @Test
+    fun `a cleared selection brings the start card back`() {
+        // A new or opened document clears the selection: the carousel lands on the start card.
+        val target = carouselSelectedPage(rows, null)
+        assertTrue(shouldAnimateToSelection(target, currentPage = 3, currentPageOffsetFraction = 0f))
+        assertFalse(shouldAnimateToSelection(target, currentPage = START_CARD_PAGE, currentPageOffsetFraction = 0f))
+    }
+
     // ── isUserInitiatedScroll ────────────────────────────────────────────────────
 
     @Test
     fun `a scroll starting from the selected page is the user swiping`() {
-        assertTrue(isUserInitiatedScroll(selectedId = "liner-1", selectedIndex = 2, currentPage = 2))
+        assertTrue(isUserInitiatedScroll(selectedPage = 3, currentPage = 3))
     }
 
     @Test
     fun `a scroll starting away from the selected page is our own catch-up`() {
         // This is the guard that stops the loop: the follow-selection effect is animating
-        // toward page 2, and if we adopted its landing page as a new selection we would be
+        // toward page 3, and if we adopted its landing page as a new selection we would be
         // overwriting the selection we were chasing.
-        assertFalse(isUserInitiatedScroll(selectedId = "liner-1", selectedIndex = 2, currentPage = 0))
+        assertFalse(isUserInitiatedScroll(selectedPage = 3, currentPage = 1))
     }
 
     @Test
-    fun `with nothing selected any scroll is the user`() {
-        assertTrue(isUserInitiatedScroll(selectedId = null, selectedIndex = NO_CAROUSEL_TARGET, currentPage = 0))
-    }
-
-    // ── seedSelectionAction ─────────────────────────────────────────────────────
-
-    @Test
-    fun `no rows - nothing to seed or heal`() {
-        assertEquals(SeedAction.NONE, seedSelectionAction(rowCount = 0, selectedId = null, selectedIndex = NO_CAROUSEL_TARGET))
-        assertEquals(SeedAction.NONE, seedSelectionAction(rowCount = 0, selectedId = "stale", selectedIndex = NO_CAROUSEL_TARGET))
+    fun `with nothing selected a swipe off the start card is the user`() {
+        assertTrue(isUserInitiatedScroll(selectedPage = START_CARD_PAGE, currentPage = START_CARD_PAGE))
     }
 
     @Test
-    fun `nothing selected with rows present seeds the first card`() {
-        // Document open/new: highlight must appear immediately, not only after a swipe.
-        // First card = AFT-most component in physical order (product decision).
-        assertEquals(SeedAction.SEED_FIRST, seedSelectionAction(rowCount = 3, selectedId = null, selectedIndex = NO_CAROUSEL_TARGET))
-    }
-
-    @Test
-    fun `orphaned selection adopts the current page`() {
-        // Auto-body ids regenerate on every edit; the highlight must come back without
-        // yanking the user off the card they are editing.
-        assertEquals(
-            SeedAction.ADOPT_CURRENT,
-            seedSelectionAction(rowCount = 3, selectedId = "auto_body_0.000_100.000", selectedIndex = NO_CAROUSEL_TARGET)
-        )
-    }
-
-    @Test
-    fun `live selection is left alone`() {
-        assertEquals(SeedAction.NONE, seedSelectionAction(rowCount = 3, selectedId = "taper-1", selectedIndex = 1))
+    fun `the scroll back to the start card after a clear is our own catch-up`() {
+        // Selection cleared while on page 3: the follow effect animates to page 0. That is not a
+        // swipe, so it must not be adopted as one (or ask about an unsaved edit).
+        assertFalse(isUserInitiatedScroll(selectedPage = START_CARD_PAGE, currentPage = 3))
     }
 
     @Test
     fun `with an orphaned selection any scroll is the user`() {
         // The selected id no longer resolves to any row (auto-body ids regenerate on every
-        // edit; opens carry stale ids). The follow effect never animates toward a missing
-        // row, so this scroll cannot be catch-up — treating it as ours would brick swipe
-        // adoption (and the preview highlight) until a preview tap set a valid id.
-        assertTrue(
-            isUserInitiatedScroll(selectedId = "auto_body_0.000_100.000", selectedIndex = NO_CAROUSEL_TARGET, currentPage = 1)
-        )
+        // edit). The follow effect never animates toward a missing row, so this scroll cannot
+        // be catch-up — treating it as ours would brick swipe adoption (and the preview
+        // highlight) until a preview tap set a valid id.
+        assertTrue(isUserInitiatedScroll(selectedPage = NO_CAROUSEL_TARGET, currentPage = 1))
+    }
+
+    // ── shouldAdoptCurrentPage ──────────────────────────────────────────────────
+
+    @Test
+    fun `an orphaned selection adopts the current page`() {
+        // Auto-body ids regenerate on every edit; the highlight must come back without
+        // yanking the user off the card they are editing.
+        assertTrue(shouldAdoptCurrentPage(carouselSelectedPage(rows, "auto_body_0.000_100.000")))
+    }
+
+    @Test
+    fun `a live selection and the start card are left alone`() {
+        assertFalse(shouldAdoptCurrentPage(carouselSelectedPage(rows, "taper-1")))
+        // No selection is the start card, not an orphan: nothing is seeded onto a component.
+        assertFalse(shouldAdoptCurrentPage(carouselSelectedPage(rows, null)))
     }
 
     // ── shouldAdoptSwipeSelection ────────────────────────────────────────────────
@@ -158,15 +191,20 @@ class CarouselSelectionSyncTest {
 
     @Test
     fun `preview tap on an offscreen component scrolls the carousel to it`() {
-        // Carousel settled on body-1 (page 0); user taps body-2 in the preview.
-        val target = carouselTargetIndex(rows, "body-2")
-        assertEquals(3, target)
-        assertTrue(shouldAnimateToSelection(target, currentPage = 0, currentPageOffsetFraction = 0f))
+        // Carousel on the start card; user taps body-2 in the preview.
+        val target = carouselSelectedPage(rows, "body-2")
+        assertEquals(4, target)
+        assertTrue(shouldAnimateToSelection(target, currentPage = START_CARD_PAGE, currentPageOffsetFraction = 0f))
     }
 
     @Test
     fun `preview tap on the already-shown component is a no-op`() {
-        val target = carouselTargetIndex(rows, "body-1")
-        assertFalse(shouldAnimateToSelection(target, currentPage = 0, currentPageOffsetFraction = 0f))
+        val target = carouselSelectedPage(rows, "body-1")
+        assertFalse(shouldAnimateToSelection(target, currentPage = 1, currentPageOffsetFraction = 0f))
+    }
+
+    @Test
+    fun `swiping onto the start card selects nothing`() {
+        assertNull(componentIdForPage(rows, START_CARD_PAGE))
     }
 }

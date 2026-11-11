@@ -636,7 +636,7 @@ private fun ShaftViewModel.applyMetricThreadUnit(threadId: String, metricDesigna
  * Flips thread [id] in or out of the OAL on [target]'s drawing ([withThreadOalInclusion]); with
  * [adjustOal] the OAL grows or shrinks by the thread's length, exactly as typing it would. ONE
  * [updateSpec] — the flag, the OAL change and the relief follow are one undo step — and an OAL
- * change that re-anchored a FWD-measured part announces it through the OAL field's own snackbar,
+ * change that re-anchored a FWD-measured part announces it through the Overall Length field's own snackbar,
  * whose Undo takes the whole step back.
  */
 fun ShaftViewModel.setThreadExcludeFromOal(

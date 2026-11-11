@@ -1500,7 +1500,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun restoreSnapshot(snapshot: AutosaveManager.SessionSnapshot) {
         // Session boundary: a selection carried over from the previous content would be an
-        // orphaned id — no highlight. Clearing lets the carousel's seed effect reselect.
+        // orphaned id — no highlight. Clearing lands the carousel on the start card.
         _selectedComponentId.value = null
         _spec.value = snapshot.shaftSpec
         _finalSpec.value = snapshot.finalSpec
@@ -1601,7 +1601,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
      * [before] moved on [target]'s drawing, so an OAL correction that carries a liner into another
      * part is not a mystery (on-device report). Nothing moved → no snackbar. The snackbar names
      * the resulting edit state, so its Undo takes back the whole step that changed the OAL. Shared
-     * by the OAL field and the thread card's OAL inclusion prompt.
+     * by the start card's Overall Length field and the thread card's OAL inclusion prompt.
      */
     internal fun announceOalMove(before: ShaftSpec, target: SpecTarget) {
         oalMoveSummary(before, specValue(target), _unit.value)?.let { message ->
@@ -1633,11 +1633,21 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     /**
      * Set the bare-shaft Ø of EVERY auto-body section together (mm, verbatim) — the auto-body
-     * card's "All auto sections" choice and the new-shaft diameter prompt. Clears every
-     * section override; values ≤ 0 are ignored. See [withAutoBodyDia].
+     * card's "All auto sections" choice. Clears every section override; values ≤ 0 are
+     * ignored. See [withAutoBodyDia].
      */
     fun setAutoBodyDiaMm(valueMm: Float, target: SpecTarget = SpecTarget.ORIGINAL) {
         updateSpec(target) { it.withAutoBodyDia(valueMm) }
+    }
+
+    /**
+     * Set the SHAFT-WIDE bare-shaft Ø on [target]'s drawing (mm, verbatim) — the start card's
+     * "Shaft diameter" field. Every per-section override is KEPT, so a section typed on its own
+     * card stays as typed; values ≤ 0 return the shaft to the derived Ø. See
+     * [withShaftWideAutoBodyDia].
+     */
+    fun setShaftWideAutoBodyDiaMm(valueMm: Float, target: SpecTarget = SpecTarget.ORIGINAL) {
+        updateSpec(target) { it.withShaftWideAutoBodyDia(valueMm) }
     }
 
     // ────────────────────────────────────────────────────────────────────────────

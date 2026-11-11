@@ -5,7 +5,9 @@ Files: `ui/adaptive/WindowSize.kt`, `ui/adaptive/ReadableWidth.kt`, `ui/adaptive
 `AndroidManifest.xml`; consumers: `ShaftEditorRoute`, `ShaftScreen`, the sheet tabs, every list
 screen, both PDF preview screens
 Layer: UI (layout policy)
-Version: v1.2 (2026-10-29 — the EXPANDED editor's drawing band is as tall as the taller of the
+Version: v1.3 (2026-11-10 — the EXPANDED side column holds the card Save / Cancel slot (empty while
+every card is clean), the add button and the warnings; the OAL moved onto the start card, the
+carousel's first page at every width. v1.2 2026-10-29 — the EXPANDED editor's drawing band is as tall as the taller of the
 drawing and its side column, under the cap, and yields height to the keyboard; an open PDF
 preview options panel docks beside the page. v1.1 2026-10-27 —
 saved state survives a rotation across the EXPANDED boundary; MEDIUM editor carousel fills the
@@ -44,7 +46,7 @@ app's shape-by-window decisions are stated; every screen keys on the same axis.
 
 | Surface | COMPACT (phone) | MEDIUM (portrait tablet, landscape phone) | EXPANDED (landscape tablet) |
 |---|---|---|---|
-| Schematic / Final editor (`ShaftScreen`) | today's column; the action bar prints NO title (the icons left it ".."; the document title strip names the screen) | preview cap 280 dp, bar title shown, carousel fills the column's leftover height (floor 360 dp) | drawing band across the top (4:1 preview + OAL / add / warnings side column) over a full-width carousel, current card centred, neighbours peeking; the band is as tall as the taller of the drawing and the side column (under the cap) and yields height to the keyboard |
+| Schematic / Final editor (`ShaftScreen`) | today's column; the action bar prints NO title (the icons left it ".."; the document title strip names the screen) | preview cap 280 dp, bar title shown, carousel fills the column's leftover height (floor 360 dp) | drawing band across the top (4:1 preview + Save slot / add / warnings side column) over a full-width carousel, current card centred, neighbours peeking; the band is as tall as the taller of the drawing and the side column (under the cap) and yields height to the keyboard |
 | Runout / Wear / Undercut tabs | today's column, 200 dp canvas | 280 dp canvas | two panes: canvas + print group \| controls |
 | Consolidated Output tab | today's column | readable width | readable width (see `RunoutSheet.md`) |
 | Editor sidebar | slide-in overlay (200 dp) | overlay | **permanent** 240 dp panel beside the tabs; hamburgers hidden |
@@ -56,7 +58,8 @@ app's shape-by-window decisions are stated; every screen keys on the same axis.
 
 - **Height = max(drawing, side column), under the cap.** The band is the larger of the height the
   4:1 drawing wants over the width beside the side column (`expandedDrawingBandHeightDp`) and the
-  side column's own content height (the OAL box, the add button, the warnings — measured past
+  side column's own content height (the card Save bar while a card holds an unsaved value, the
+  add button, the warnings — measured past
   the scroll's minimum height), capped at the preview's 320 dp ceiling (`expandedBandHeightDp`).
   A band sized from the drawing alone clipped the second of two warnings mid-line beside empty
   paper (on-device report). Past the cap the side column scrolls inside the band and a fade at

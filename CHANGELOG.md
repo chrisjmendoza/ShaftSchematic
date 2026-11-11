@@ -8,6 +8,29 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-10
 
+### feat(editor): the start card — overall length, shaft diameter and project information
+
+The overall length no longer stands above the cards all the time (on-device request: it is a
+one-and-done measurement like the rest). The first card in the editor is now **Shaft & job**, and
+it stays the first card whatever you add or remove: Overall Length, then Shaft diameter, then the
+project information (Job Number, Customer, Vessel, Item, Shaft Position, Notes). A job starts there
+— type the length, the bare-shaft diameter and who it is for — and then you build the shaft with
+"+ Add Component". New and opened drawings open on this card; tapping a part in the drawing, adding
+a component or tapping a warning still takes you to that part's card, and the Project information
+button in the toolbar brings you back to this one.
+
+Overall Length now saves like every other card field: Done, moving to another field, or the Save
+(✓) above the cards; Cancel (✗) puts the old length back. An empty entry still never zeroes the
+shaft. Shaft diameter sets the diameter of the bare shaft between your components; a section you
+gave its own diameter on its Body card keeps it (a note under the field says so). Clear the field
+to go back to the diameter the drawing works out for itself. On the Final Schematic tab the same
+card edits the final drawing's length and diameter; the project information is shared by both.
+
+The separate Project information sheet is gone (its fields are on the card), and so is the
+"Shaft diameter" question that popped up after the first length — the field is right under the
+length now. The Save / Cancel bar above the cards appears only while a card holds a value you have
+not saved, and it slides in and out instead of making the cards jump.
+
 ### docs: sweep for the last two days' changes
 
 Docs only, no behaviour change. Brought the contracts, the user manual (in-app copy rebuilt) and

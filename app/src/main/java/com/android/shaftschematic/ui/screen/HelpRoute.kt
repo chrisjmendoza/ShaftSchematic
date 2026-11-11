@@ -443,13 +443,15 @@ internal val helpSections: List<HelpSection> = listOf(
         listOf(
             HelpTopic(
                 "Create your first shaft",
-                "From the home screen tap New Drawing. Type the overall length (OAL) and accept it " +
-                    "with the green ✓ or the keyboard's Done key — the drawing takes the new " +
-                    "length once it is accepted, and the red ✗ puts the old value back. On a new " +
-                    "drawing the first length you accept then asks for the bare-shaft diameter, " +
-                    "so the components you add sit on a shaft of the right size; Skip leaves it " +
-                    "to the Body (auto) card.\n\n" +
-                    "Add " +
+                "From the home screen tap New Drawing. The editor opens on its first card, " +
+                    "Shaft & job, which always stays the first card. Type the overall length " +
+                    "(OAL) and the shaft diameter — the bare shaft between your components — and " +
+                    "save each with the keyboard's Done key, by moving to the next field, or " +
+                    "with the green ✓ above the cards (the red ✗ puts the old value back). Under " +
+                    "them, fill in the job number, customer, vessel, item, shaft position and " +
+                    "notes. The toolbar's Project information button brings you back to this " +
+                    "card from anywhere.\n\n" +
+                    "Then add " +
                     "tapers, threads, liners, and bodies with the + Add Component button; each " +
                     "component becomes a card in " +
                     "the carousel where you edit its dimensions. Any span you don't cover is " +
@@ -510,9 +512,9 @@ internal val helpSections: List<HelpSection> = listOf(
                     "keystroke. Tapping into a field and leaving without editing changes " +
                     "nothing.\n\n" +
                     "While a field holds a value you have typed but not saved, a Save bar " +
-                    "takes the place of Overall Length at the top of the editor. It names the " +
-                    "field and its card: the green ✓ saves the value, the red ✗ puts the old " +
-                    "one back, and Overall Length returns once the card is saved. A chip or " +
+                    "slides in above the cards. It names the field and its card: the green ✓ " +
+                    "saves the value, the red ✗ puts the old one back, and the bar slides away " +
+                    "once the card is saved. A chip or " +
                     "checkbox tap does not save a typed value, so the bar stays until you " +
                     "answer it. Swiping to another card, or tapping another component on the " +
                     "drawing, with such a value waiting asks Save changes? first: Save keeps " +
@@ -527,7 +529,9 @@ internal val helpSections: List<HelpSection> = listOf(
                     "auto-bodies — derived, greyed Start/Length, and a Ø you can set on any " +
                     "auto-body card. With more than one auto section the card asks whether the " +
                     "new Ø is for \"This section\" alone or \"All auto sections\"; one section's " +
-                    "Ø never changes another's. A section's own Ø goes with it when the " +
+                    "Ø never changes another's. The Shaft diameter on the Shaft & job card sets " +
+                    "every section that has no Ø of its own and leaves the others as they are. " +
+                    "A section's own Ø goes with it when the " +
                     "component that separated it is deleted (Undo brings it back).\n\n" +
                     "Tick \"Explicit body\" on an auto-body " +
                     "card to promote it to a real, editable body; untick it on an explicit body " +
@@ -911,7 +915,7 @@ internal val helpSections: List<HelpSection> = listOf(
             HelpTopic(
                 "OAL (overall length)",
                 "The shaft's overall length, end to end, and the span every drawing is laid out " +
-                    "against. Any part of it you don't cover with a component is filled with " +
+                    "against; it is the first field on the editor's Shaft & job card. Any part of it you don't cover with a component is filled with " +
                     "bare shaft (an auto-body), so the drawing is always continuous. Parts " +
                     "measured from FWD — tapers, liners, explicit bodies and bolt rows — move " +
                     "with the FWD end when it changes; a message then " +

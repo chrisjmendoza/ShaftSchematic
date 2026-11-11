@@ -12,6 +12,11 @@ The carousel displays the **resolved** component list (`resolveComponents()` in
 key. Auto-bodies interleave at their physical positions. There is no user-facing sort
 toggle, and no stored order anywhere — row order is a pure function of the spec.
 
+The pager's FIRST page is always the start card ("Shaft & job" — Overall Length, Shaft diameter,
+project information; `ui/screen/StartCard.kt`), which is not a component and never takes part in
+this ordering: component row `i` is page `i + 1` (`carouselSelectedPage` / `componentIdForPage`,
+`ui/screen/CarouselSelectionSync.kt`). See `ShaftScreen.md`.
+
 Newest-on-top cannot coexist with interleaved auto-bodies: an auto-body has no creation
 time, it is derived from the gaps between the components around it.
 

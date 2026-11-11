@@ -4,7 +4,7 @@ ShaftViewModel Contract
 Layer: UI → ViewModel  
 Purpose: Owns editable ShaftSpec state, unit selection, grid toggle, and routes all commits from the UI to the model/persistence.
 
-Version: v1.6 (2026-10-29)
+Version: v1.7 (2026-11-10)
 
 Invariants
 - All stored geometry is **canonical millimeters (mm)**.  
@@ -18,7 +18,7 @@ Responsibilities
   later change of the setting never flips an open or saved drawing; `_dualUnits` seeds from
   `_dualUnitsDefault` the same way (`applyTemplate` seeds only the dual flag — the unit
   travels with the template). Detail in `Persistence.md`.  
-- Commit APIs accept raw text (e.g., `onSetOverallLengthRaw`), parse, convert, clamp, and update.  
+- Commit APIs accept raw text (e.g., `setOverallLength(raw)`), parse, convert, clamp, and update.  
 - Expose derived values (e.g., `coverageEndMm`) from the model.  
 - `updateBodyBlend(index, blendAftMm, blendFwdMm, profile)` — sets a body's blended faces.
   Drawing-only: it changes the silhouette and nothing else (not OAL, resolve, collision, or any
@@ -37,10 +37,12 @@ Responsibilities
   `blendAft/FwdRadiusMm` too.
 - `setAutoSectionDiaMm(spanStartMm, spanEndMm, valueMm, target)` — "This section": one auto
   span's Ø as a shaft-space `AutoDiaOverride` (`ShaftSpec.withAutoSectionDia`, verbatim; ≤ 0
-  clears that section). `setAutoBodyDiaMm(valueMm, target)` — "All auto sections" and the
-  new-shaft Ø prompt: writes `autoBodyDiaMm` verbatim and clears EVERY override
-  (`ShaftSpec.withAutoBodyDia`; ≤ 0 ignored; a no-op returns the same spec, so nothing goes
-  dirty).
+  clears that section). `setAutoBodyDiaMm(valueMm, target)` — "All auto sections": writes
+  `autoBodyDiaMm` verbatim and clears EVERY override (`ShaftSpec.withAutoBodyDia`; ≤ 0 ignored;
+  a no-op returns the same spec, so nothing goes dirty). `setShaftWideAutoBodyDiaMm(valueMm,
+  target)` — the start card's "Shaft diameter": writes `autoBodyDiaMm` verbatim and KEEPS every
+  override, so a section typed on its own card stays as typed (`ShaftSpec.withShaftWideAutoBodyDia`;
+  ≤ 0 clears to 0 = derived; a no-op returns the same spec).
 - **Override prune seam.** Exactly eight mutators — `addBodyAt`, `addTaperAt`, `addThreadAt`,
   `addLinerAt`, `removeBody`, `removeTaper`, `removeThread`, `removeLiner` — end their
   `updateSpec` lambda with `result.withAutoDiaOverridesSurviving(before = s)`
@@ -271,6 +273,11 @@ Future Enhancements
 
 Change Log
 ----------
+**v1.7 (2026-11-10)**
+- `setShaftWideAutoBodyDiaMm(valueMm, target)` is new — the editor start card's "Shaft diameter"
+  (keeps section overrides). The new-shaft Ø prompt that called `setAutoBodyDiaMm` is removed.
+  Session-boundary selection clears now land the carousel on the start card.
+
 **v1.6 (2026-10-29)**
 - `addBodyAt` gains `reference: LinerAuthoredReference = AFT` (after `diaMm`), and
   `updateBodyAuthoredReference(index, reference, target)` is new — explicit bodies carry "Measure

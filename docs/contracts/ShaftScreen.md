@@ -4,7 +4,9 @@ ShaftScreen Contract
 Layer: UI → Screens  
 Purpose: Present the shaft editor surface and bind ViewModel state to user controls.
 
-Version: v0.26 (2026-10-29 — the explicit-body card and Add Body carry "Measure From: AFT | FWD".
+Version: v0.27 (2026-11-10 — the start card: Overall Length, Shaft diameter and the project
+information are the carousel's first card; the OAL row and the Project information sheet are gone.
+v0.26 2026-10-29 — the explicit-body card and Add Body carry "Measure From: AFT | FWD".
 v0.25 2026-10-29 — the thread card's "Include thread in OAL" switch asks whether the
 OAL follows. v0.24 2026-10-29 — the EXPANDED drawing band grows to its side column under the cap
 and yields height to the keyboard; the editor snackbar clears the navigation bar; the delete
@@ -53,13 +55,30 @@ Invariants
   stays in the box. The field's focus is cleared as the dialog opens, so the blur that IME Done
   leaves pending cannot re-commit after a choice or from the field the re-key disposes; that
 clear parks focus on the window root (`FocusParkingRoot`, `NumberField.md` §"Focus release"), so
-closing the dialog never drops the cursor and keyboard into the OAL field. With
+closing the dialog never drops the cursor and keyboard into another field. With
   one auto section the value is the shaft's Ø and goes straight to `onSetAllAutoSectionsDia`.
   Covered by `AutoBodyDiaScopeDialogTest`.
-- **New-shaft diameter prompt.** On the ORIGINAL drawing the first OAL commit on a brand-new
-  shaft opens `ShaftDiaPromptDialog` (`shaft_dia_prompt`, field `shaft_dia_prompt_field`,
-  `shaft_dia_prompt_set` / `shaft_dia_prompt_skip`), wired in `ShaftRoute`. See
-  `OverallLength.md`.
+- **The start card is always the carousel's first page** (`ShaftStartCard`,
+  `ui/screen/StartCard.kt`, title "Shaft & job", `testTag("start_card")`) — on the Schematic and
+  Final tabs, at every width class (on-device request: the always-on OAL row nagged; a job starts
+  with its OAL, its shaft size and its project information, and then the shaft is built). Top to
+  bottom: **Overall Length** (`overall_length_field`), **Shaft diameter**
+  (`start_card_shaft_dia`) with the note that a section of bare shaft takes its own Ø on its card
+  (`start_card_dia_note`), then **Project information** — Job Number, Customer, Vessel, Item
+  (optional), Shaft Position, Notes (`project_info_{job_number,customer,vessel,item,position,notes}`).
+  It is NOT a component: no resolved id, no remove button, rename editor or unit chip; nothing
+  deletes, reorders or pushes it out of first place. The pager's page 0 is the start card and
+  component row `i` is page `i + 1`; `carouselSelectedPage` / `componentIdForPage`
+  (`CarouselSelectionSync.kt`) are the ONE conversion, and a **null selection is the start card**.
+  So a new or opened document (the ViewModel clears the selection at every session boundary) lands
+  on it — replacing the "first component highlighted on open" seed (v0.13); a swipe onto it selects
+  nothing; a preview tap, an add (the VM selects the new id), a warning line and a delete's Undo
+  select a component and the carousel goes to its card; an orphaned selection adopts the page the
+  carousel is on. The toolbar's Project information button selects null through the drawing tap's
+  ask-first path, so it goes to the start card (and a pending card edit asks first). The geometry
+  fields are bound to the editor's target (`ShaftRoute(target)` → `onSetOverallLengthMm`,
+  `onSetShaftDiaMm`); project information is the document's. Field rules: `OverallLength.md`.
+  Pinned by `StartCardTest`, `CarouselSelectionSyncTest`.
 - **Thread card: "Include thread in OAL" asks.** Tapping the row (`thread_include_in_oal`) with
   an OAL typed and a thread length > 0 opens a prompt instead of flipping — "Exclude thread from
   OAL" offers **Shorten OAL**, "Include thread in OAL" offers **Lengthen OAL**, each beside
@@ -71,21 +90,16 @@ closing the dialog never drops the cursor and keyboard into the OAL field. With
   the move snackbar: `OverallLength.md` §"Thread inclusion prompt"). Covered by
   `ThreadOalPromptCardTest`. A confirmation, not a control, so `AddThreadDialog` carries nothing.
 - Text fields **commit on blur** or IME “Done”; no live ViewModel writes while typing.
-  The OAL field follows the same rule — it no longer commits per keystroke (deleting one
-  digit on the way from 368.5 to 367.75 committed a transient 36″ shaft and left a
-  re-anchored taper's residue behind, on-device report). It commits on **accept**: the green
-  ✓ beside the field, IME Done, or a blur after the text changed since focus (the
-  `BlurCommitPolicy` baseline rule), each exactly once. The red ✗ restores the stored value
-  and commits nothing. The ✓/✗ pair shows only while the value is being modified (focused
-  AND the text differs from the on-focus baseline); the slot is reserved so the row does not
-  jump, and the field is a narrowed value box (160–240 dp), not a full-width banner.
-  Unparseable text commits nothing: ✓/Done leave it as typed, a blur restores the stored
-  value — both under a `"<typed> not applied — not a number"` line (`OverallLength.md`). The OAL field's **display never rewrites the
-  user's own text**: a typed `150 3/4` stays a fraction rather than echoing back as
-  `150.75` (on-device report). The text re-derives from the model only when the field is
-  unfocused AND no longer parses to the model value (undo, an edit from elsewhere, a
-  reverted empty commit). An **empty** field on Done/blur commits nothing and reverts to
-  the stored value — it never zeroes the shaft. See `OverallLength.md`.  
+  The start card's Overall Length is an ordinary card field (`CommitNum`) under the same rule —
+  never per keystroke (deleting one digit on the way from 368.5 to 367.75 committed a transient
+  36″ shaft and left a re-anchored taper's residue behind, on-device report): IME Done, a blur
+  after the text changed since focus (the `BlurCommitPolicy` baseline rule), or the card Save
+  bar's ✓, each exactly once; the bar's ✗ restores the stored value and commits nothing. An
+  **empty** or unparseable entry commits nothing, restores the stored value under the shared
+  `"<typed> not applied — not a number"` line, and never zeroes the shaft. Inch values read back
+  through `inchFieldText` (fractions on the 1/32 grid). The project information fields
+  (`CommitTextField`) commit on blur too and register with the Save bar like the numeric fields.
+  See `OverallLength.md`.  
 - IME padding is applied **only to the scrollable region**, not the entire screen, and is
   chained **before** `verticalScroll` so it shrinks the scroll viewport (not just the
   content) — this lets Compose's focused-child-in-view behavior auto-scroll a focused
@@ -121,7 +135,8 @@ Responsibilities
     (`ShaftViewModel.undoEdit`/`redoEdit`, `canUndo`/`canRedo`), not delete-only;
     covers every drawing edit (spec, wear, runout readings, component order). See
     `ShaftViewModel.md`.
-  - Project-Info icon
+  - Project-Info icon (`toolbar_project_info`) → goes to the start card, where the project
+    information is edited (selects null through the drawing tap's ask-first path)
   - New / Open / Save / Export-PDF action icons. Export-PDF is gated by
     `ui/util/ExportPdfGate.kt` (pure, JVM-tested in `ExportPdfGateTest`): enabled only
     with ≥ 1 real component (coupler bolt slots don't count) and no collisions; a tap
@@ -156,16 +171,12 @@ Responsibilities
   - Preview Colors: presets (Stainless/Steel/Bronze/Transparent) + Custom palette
   - Black/White Only mode (forces black outlines and disables fills in Preview)
 
-- **Scrollable Form Area:**  
-  - Overall length field (`OverallLengthField`, unit-aware, narrowed value box; commits on
-    accept — ✓ / Done / blur-with-change — with the ✓/✗ accept/cancel pair beside it while
-    the value is being modified; never per keystroke)  
-  - Project information sheet (Job Number, Customer, Vessel, Item, Shaft Position, Notes) —
-    opened from the toolbar, **Save/Cancel**, not commit-on-blur (see Notes). **Item** is an
-    optional shaft designation ("Tail shaft", "Line shaft"); blank is the default and prints
-    nothing anywhere.  
-  - Component carousel for **Body**, **Taper**, **Thread**, **Liner**, and
-    **Coupler Bolt Slot** (see `ComponentCarousel.kt`)
+- **Scrollable Form Area:**
+  - The card Save / Cancel slot (`CardSaveSlot`) — empty while every card field is settled
+  - Component carousel: the **start card** first (Overall Length, Shaft diameter, Project
+    information — see the invariant above; **Item** is an optional shaft designation ("Tail
+    shaft", "Line shaft"); blank is the default and prints nothing anywhere), then **Body**,
+    **Taper**, **Thread**, **Liner**, and **Coupler Bolt Slot** (see `ComponentCarousel.kt`)
 
 - **Component Card:**  
   - Displays a component title such as “Body #1”  
@@ -186,9 +197,8 @@ is never a class here. The Final Schematic tab hosts this same screen through
 `ShaftRoute(target = FINAL)`, so it inherits every branch below.
 
 - **COMPACT** (< 600 dp) — the phone layout, unchanged: one column with the preview card pinned
-  under the app bar (`heightIn(min 120, max 200.dp)`, `aspectRatio(3f)`) above a single
-  scrolling column holding the OAL field, the dimensioned-OAL / debug labels, the Components
-  heading, the "+ Add Component" button, `SpecWarningBanner`, and the carousel.
+  under the app bar (`heightIn(min 120, max 200.dp)`, `aspectRatio(3f)`), the card Save / Cancel
+  slot, and a single scrolling column holding the Components heading, the "+ Add Component" button, `SpecWarningBanner`, and the carousel.
 - **MEDIUM** (600–839 dp: a portrait tablet, a phone in landscape) — the same single column,
   with the preview card's height ceiling raised to **280 dp** (the 3:1 ratio and the 120 dp
   floor stand, so a wide window stops drawing the shaft as a flat strip) and the **carousel
@@ -207,13 +217,11 @@ is never a class here. The Final Schematic tab hosts this same screen through
   flat strip while the cards on the right were clipped at the phone's fixed height (on-device
   report from the first tablet pass).
   - **The band** (`testTag("editor_pane_preview")` on the drawing box): a `Row` of the preview
-    card, `weight(1f)`, and a **side column** holding the OAL field and its labels, the
-    "+ Add Component" button, and `SpecWarningBanner`. The column is the controls' width
-    (`EXPANDED_SIDE_COLUMN_WIDTH_DP`, 260 dp) plus the OAL field's 96 dp ✓/✗ action slot: the
-    OAL box takes the controls' width (`OverallLengthField(fieldMaxWidth = Dp.Unspecified)`
-    lifts its 240 dp cap — the phone keeps `OAL_FIELD_MAX_WIDTH`) with the slot to its right,
-    and the button and the warnings are padded by the slot so all three share one width and
-    one right edge (on-device report: a 240 dp box over a wider button looked unrelated to it).
+    card, `weight(1f)`, and a **side column** holding the card Save / Cancel slot (empty while
+    every card is clean), the "+ Add Component" button, and `SpecWarningBanner`. The column is the
+    controls' width (`EXPANDED_SIDE_COLUMN_WIDTH_DP`, 260 dp) plus the Save bar's 96 dp ✓/✗ action
+    slot; the bar's text takes the rest of the row, and the button and the warnings fill the
+    column.
     The drawing's height is the pure `expandedDrawingBandHeightDp` (`ui/screen/EditorTabletLayout.kt`):
     the preview's shape over the width left beside the side column, clamped to the 120 dp
     floor and the **320 dp** ceiling. The BAND is the larger of that and the side column's
@@ -252,8 +260,9 @@ is never a class here. The Final Schematic tab hosts this same screen through
   - The band and the region keep the editor's 16 dp horizontal padding.
 
 **Both branches emit the SAME content blocks.** `ShaftScreen` declares them once
-(`previewBlock(maxHeight, aspect)`, `oalBlock`, `componentsHeader(hint)`,
-`addComponentButton`, `carouselBlock(peekPageWidth, fillHeight)`) and each branch only decides
+(`previewBlock(maxHeight, aspect)`, `startCard(padding)` — handed to the carousel as its first
+page — `componentsHeader(hint)`, `addComponentButton`, `carouselBlock(peekPageWidth,
+fillHeight)`; the Save slot is the shared `CardSaveSlot`) and each branch only decides
 where they go — composable lambdas rather than private composables because a private one would
 have to restate the screen's parameter list (the carousel alone takes fifty callbacks), and a
 signature copied twice is exactly the drift this prevents. The single column stacks the last
@@ -296,31 +305,35 @@ Notes
 - `formatDisplay(mm, unit)` converts and formats a value once for display; it always expects
   mm input.  
 - `ComponentCard` handles its own remove button; callers simply supply `onRemove = { … }`.  
-- On the phone and MEDIUM single-column layouts the Overall Length row stands ABOVE the
-  scrolling editor column, not inside it, so it — and the card Save / Cancel bar that takes its
-  place — stays on screen with the keyboard up (on-device report: inside the column the bar
-  scrolled above the keyboard with the focused field). EXPANDED already keeps it beside the
-  drawing.
-- While a field on a `ComponentCard` holds an edit that has not landed, the **Overall Length row
-  shows the card Save / Cancel bar in the OAL field's place** (`OverallLengthRow` →
+- On the phone and MEDIUM single-column layouts the card Save / Cancel slot stands ABOVE the
+  scrolling editor column, not inside it, so the bar stays on screen with the keyboard up
+  (on-device report: inside the column the bar scrolled above the keyboard with the focused
+  field). EXPANDED keeps it in the side column beside the drawing.
+- While a field on a `ComponentCard` (the start card's included) holds an edit that has not
+  landed, the **slot above the carousel shows the card Save / Cancel bar** (`CardSaveSlot` →
   `CardSaveBar`; tags `card_save_bar` / `card_save` / `card_cancel`): "Unsaved change" over the
-  waiting field and its card, and the OAL's own **green ✓ / red ✗** (`ui/input/AcceptCancelButtons.kt`,
-  the ONE construction both use) in the OAL's own action slot. ✓ commits through the field's own
-  handle and drops the keyboard, ✗ puts the stored value back and commits nothing; the OAL field
-  returns once the card is clean. Why there: the OAL row is always on screen above the carousel,
-  where a Save at the end of a long card was hidden (on-device ruling), and a pair inside each
-  field hid the value in a half-width field (on-device report). Fields still commit on blur and
-  IME Done; the bar is there for the case those miss — chips/toggles/checkboxes never TAKE focus,
-  so a typed value followed by a chip tap sits uncommitted (on-device report), and the bar stays
-  until it is answered. Fields register through `PendingCardEdits` (`ui/screen/PendingCardEdit.kt`),
-  provided once around the editor; the Add dialogs commit through their own Add button and
-  register nothing. Commit-on-blur is otherwise **completely unchanged**.
+  waiting field and its card, and the **green ✓ / red ✗** (`ui/input/AcceptCancelButtons.kt`) at
+  its end. ✓ commits through the field's own handle and drops the keyboard, ✗ puts the stored
+  value back and commits nothing. With every field settled the slot takes **no room at all**; the
+  bar grows in and shrinks out (`AnimatedVisibility`, height + fade, 180 ms) so the cards and the
+  drawing band below slide instead of jumping the moment a field turns dirty (on-device request) —
+  reserving its height would hold a row open over every clean card (the standing OAL row the start
+  card replaced), and overlaying it would cover the top of the scrolled card where the focused
+  field often sits. While it shrinks out its buttons do nothing (the edit was answered). Why
+  above the carousel: a Save at the end of a long card was hidden (on-device ruling), and a pair
+  inside each field hid the value in a half-width field (on-device report). Fields still commit
+  on blur and IME Done; the bar is there for the case those miss — chips/toggles/checkboxes never
+  TAKE focus, so a typed value followed by a chip tap sits uncommitted (on-device report), and the
+  bar stays until it is answered. Fields register through `PendingCardEdits`
+  (`ui/screen/PendingCardEdit.kt`), provided once around the editor; the Add dialogs commit through
+  their own Add button and register nothing. Commit-on-blur is otherwise **completely unchanged**.
   **A card change under a pending edit asks first** — a carousel swipe, an edge arrow, a tap on a
-  peeking card, or a tap on a component in the drawing (or a warning line) opens "Save changes?"
-  (`UnsavedCardEditDialog`: Save | Discard | Keep editing); Keep editing after a swipe scrolls the
-  pager back to the card holding the edit, since the selection never moved. The hidden field
-  would otherwise keep focus and the keyboard, and typing would land on a card the user cannot see
-  (on-device ruling). See `NumberField.md` and `OverallLength.md`.  
+  peeking card, a tap on a component in the drawing (or a warning line), or the toolbar's Project
+  information button opens "Save changes?" (`UnsavedCardEditDialog`: Save | Discard | Keep
+  editing); Keep editing after a swipe scrolls the pager back to the card holding the edit, since
+  the selection never moved. The hidden field would otherwise keep focus and the keyboard, and
+  typing would land on a card the user cannot see (on-device ruling). See `NumberField.md` and
+  `OverallLength.md`.
 - **Card fields carry two card-level validations, and neither rewrites a stored value.**
   A card whose component runs past `spec.overallLengthMm` shows the amber advisory chip
   "Extends past shaft length (OAL *n*")" (the OAL in the document's display unit, inch or
@@ -397,29 +410,15 @@ Notes
 - `computeAddDefaults()` lives in `ui/screen/ShaftScreenController.kt`. Shared format
   helpers (`abbr`, `disp`, `formatDisplay`, `toMmOrNull`, `parseFractionOrDecimal`,
   `tpiToPitchMm`) and the dialogs/menus remain in `ShaftScreen.kt`.
-- **The Project Information sheet is a DRAFT editor, not commit-on-blur.**
-  `ProjectInfoBottomSheet` holds every field in local `rememberSaveable` draft state
-  (`DraftTextField` — a plain field with no blur commit; the Shaft Position dropdown too)
-  and reaches the ViewModel only from **Save**, which pushes just the fields that differ
-  from the document (so open-and-save with no edit never marks it dirty). **Cancel** drops
-  the draft — a field that was blank goes back to blank. The old `CommitTextField`
-  committed on blur, so text typed into the last field was lost whenever the sheet closed
-  straight from the keyboard, and there was nothing to revert to. Unlike the numeric
-  component fields, these are free text with no derived geometry behind them, so the whole
-  card commits as one unit.
-- **Only the IMPLICIT exits are guarded.** Swipe-down, scrim tap, and back raise a
-  "Save changes?" dialog (**Save · Discard · Keep editing**) when the draft differs from
-  the document, and close silently when it doesn't. Three choices, not the Material two,
-  because an accidental swipe has two plausible intents — meant to close (so save) or
-  fat-fingered (so return). The **Cancel button is deliberately NOT guarded**: confirming
-  a deliberate discard is a second prompt for the same decision. The gate hangs on the
-  sheet state's `confirmValueChange` (reading the live dirty flag through
-  `rememberUpdatedState`, since the state object is created once) as well as on
-  `onDismissRequest` — blocking the settle keeps the sheet in place under the dialog, so
-  "Keep editing" costs no second animation and the draft is never rebuilt. `testTag`s:
-  `project_info_{sheet,job_number,customer,vessel,notes,save,cancel,keep_editing,
-  discard_confirm,discard_save}`; behavior pinned by `ProjectInfoSheetTest` (Robolectric,
-  real swipe gesture).
+- **Project information is edited on the start card** (the Project Information bottom sheet, its
+  draft/Save/Cancel and its "Save changes?" swipe guard are gone with it). Each free-text field is
+  a `CommitTextField`: typing changes only the box; the text reaches its ViewModel setter on a
+  blur after it changed since focus (single-line fields' IME action is Next, which moves on and so
+  commits) or from the card Save bar, and while it holds an unsaved value it registers with
+  `PendingCardEdits` like the numeric fields — the bar shows, and a card change asks Save |
+  Discard | Keep editing, so text typed into the last field is never lost to a swipe (the failure
+  the sheet's draft existed to prevent). The Shaft Position dropdown commits on selection. Pinned by
+  `StartCardTest`.
 - **Typed field commits are never snapped.** Carousel update callbacks
   (`onUpdateBody/Taper/Thread/Liner`) receive the committed values verbatim. The old
   `applySnapped{…}Update` wrappers (removed 2026-07-26) snapped the recomputed start/end
@@ -451,6 +450,16 @@ Future Enhancements
 
 Change Log
 -----------
+**v0.27 (2026-11-10)**
+- **The start card** (on-device request: "Having OAL hanging out constantly has been nagging at
+  me"): Overall Length, a Shaft diameter field (shaft-wide, keeps section overrides) and the project
+  information are the carousel's first page on the Schematic and Final tabs. The OAL row
+  (`OverallLengthRow` / `OverallLengthField`, its own ✓ / ✗), the Project Information bottom sheet
+  (`ProjectInfoBottomSheet`, `ProjectInfoSheetTest`) and the first-OAL "Shaft diameter" prompt
+  (`ShaftDiaPrompt.kt`) are removed. The slot above the carousel shows only the card Save / Cancel
+  bar, animated in and out; the toolbar's Project information button goes to the start card. A new
+  or opened document lands on the start card (supersedes v0.13's first-component seed).
+
 **v0.26 (2026-10-29)**
 - **Explicit bodies carry "Measure From: AFT | FWD"** (on-device request: an explicit body exists
   to sit at an exact point). The chips (`body_ref_aft` / `body_ref_fwd`) sit under the "Explicit

@@ -314,7 +314,7 @@ fun ShaftViewModel.importJson(raw: String) {
     currentDraftId = UUID.randomUUID().toString()
     draftPersisted = false
     // Session boundary: drop the previous document's selection (stale id = orphaned
-    // highlight); the carousel's seed effect reselects the last row of this document.
+    // highlight). No selection is the start card, so the opened document lands there.
     _selectedComponentId.value = null
     _spec.value = decoded.spec
     _finalSpec.value = decoded.finalSpec
@@ -360,7 +360,7 @@ fun ShaftViewModel.newDocument() {
     resetSessionAddDefaults()
 
     // Session boundary: no selection carries into a blank document (stale id would be
-    // an orphaned highlight).
+    // an orphaned highlight); no selection is the start card, where a new document starts.
     _selectedComponentId.value = null
 
     val blankSpec = ShaftSpec()

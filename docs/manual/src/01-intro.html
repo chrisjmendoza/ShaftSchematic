@@ -56,7 +56,7 @@
   <p>AFT is the propeller end; FWD is the engine end. <strong>AFT is always the left end of every drawing</strong>, on every sheet and on screen, so a shaft never appears reversed between two pieces of paper. Many components let you choose which end a position is measured from — the <span class="ui">Measure From</span> chips — because a print may dimension a liner from either end. The component is the same; only the quoted distance differs.</p>
 
   <h3 id="intro-oal">OAL — overall length</h3>
-  <p>The OAL (overall length) is the shaft's length end to end, and every drawing is laid out against it. You always type it yourself; the app never fills it in or changes it. The field takes your value when you tap the green ✓, press Done on the keyboard, or leave the field after changing it; the red ✗ puts the old value back. The drawing does not chase each keystroke, because a half-typed length (36″ on the way to 367 3/4″) would briefly collapse the drawing. See <a href="#editor-oal">The overall length</a>.</p>
+  <p>The OAL (overall length) is the shaft's length end to end, and every drawing is laid out against it. You always type it yourself; the app never fills it in or changes it. It is the first field on the editor's first card, <span class="ui">Shaft &amp; job</span>. The field takes your value when you press Done on the keyboard, leave the field after changing it, or tap the green ✓ on the Save bar above the cards; the red ✗ puts the old value back. The drawing does not chase each keystroke, because a half-typed length (36″ on the way to 367 3/4″) would briefly collapse the drawing. See <a href="#editor-oal">The overall length</a>.</p>
   <p>When you change the OAL, components measured from FWD keep their FWD distance and move with the end; components measured from AFT stay put.</p>
 
   <h3 id="intro-set-let">S.E.T. and L.E.T.</h3>
@@ -112,7 +112,7 @@
       <tr><th>Tab</th><th>What you do there</th></tr>
     </thead>
     <tbody>
-      <tr><td><span class="ui">Schematic</span></td><td>Build and edit the shaft: OAL, components, project information. Its toolbar is titled <span class="ui">Shaft Editor</span>.</td></tr>
+      <tr><td><span class="ui">Schematic</span></td><td>Build and edit the shaft: OAL, shaft diameter and project information on the first card (<span class="ui">Shaft &amp; job</span>), then the components. Its toolbar is titled <span class="ui">Shaft Editor</span>.</td></tr>
       <tr><td><span class="ui">Runout Sheet</span></td><td>Set runout stations and type TIR readings and high spots; print the runout sheet.</td></tr>
       <tr><td><span class="ui">Wear Document</span></td><td>Mark worn areas, pits and measured diameters; print the wear document.</td></tr>
       <tr><td><span class="ui">Undercut Drawing</span></td><td>Record undercut sections; print the undercut drawing.</td></tr>
@@ -132,7 +132,7 @@
     <dt>History</dt>
     <dd>A menu holding <span class="ui">Undo</span> and <span class="ui">Redo</span>. History covers both drawings and every reading and mark on the job, for as long as the job is open; see <a href="#editor-history">Undo and redo</a>.</dd>
     <dt>Project information</dt>
-    <dd><span class="ui">Job Number</span>, <span class="ui">Customer</span>, <span class="ui">Vessel</span>, <span class="ui">Item (optional)</span>, <span class="ui">Shaft Position</span> and <span class="ui">Notes</span>, which print in the sheet footers.</dd>
+    <dd>Goes to the <span class="ui">Shaft &amp; job</span> card, where <span class="ui">Job Number</span>, <span class="ui">Customer</span>, <span class="ui">Vessel</span>, <span class="ui">Item (optional)</span>, <span class="ui">Shaft Position</span> and <span class="ui">Notes</span> are typed; they print in the sheet footers (see <a href="#editor-project-info">Project information</a>).</dd>
     <dt>New, Open, Save</dt>
     <dd>Start a blank shaft, open a saved one, or save this one. New and Open ask about unsaved changes first.</dd>
     <dt>PDF preview</dt>
@@ -155,7 +155,7 @@
     <tbody>
       <tr><td>Phone</td><td>Stays in portrait. The preview sits at the top with the controls scrolling beneath it; the navigation menu slides in over the screen.</td></tr>
       <tr><td>Tablet, portrait</td><td>The same single column, with a taller preview, and the component card runs to the foot of the screen.</td></tr>
-      <tr><td>Tablet, landscape (wide screen)</td><td>Two panes side by side. On the Schematic: preview, OAL and warnings on the left, components on the right. On the Runout, Wear and Undercut tabs: the sheet on the left, its controls on the right. The navigation menu stays open beside the content, so there is no menu button.</td></tr>
+      <tr><td>Tablet, landscape (wide screen)</td><td>Two panes side by side. On the Schematic: the preview across the top, with the add button, the warnings and the Save bar beside it, and the cards (the <span class="ui">Shaft &amp; job</span> card first) under it. On the Runout, Wear and Undercut tabs: the sheet on the left, its controls on the right. The navigation menu stays open beside the content, so there is no menu button.</td></tr>
     </tbody>
   </table>
   <p>Tablets rotate freely. Layout never changes a drawing or a printed sheet — a job looks the same on paper whichever device built it.</p>

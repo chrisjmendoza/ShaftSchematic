@@ -1,5 +1,11 @@
 package com.android.shaftschematic.ui.screen
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,8 +33,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.material.icons.Icons
@@ -48,7 +52,6 @@ import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.automirrored.filled.Assignment
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.PictureAsPdf
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.DropdownMenu
@@ -58,22 +61,16 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SheetValue
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
@@ -89,19 +86,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.android.shaftschematic.geom.THREAD_DENSITY_DEFAULT
 import com.android.shaftschematic.geom.THREAD_SLANT_DEFAULT
-import com.android.shaftschematic.geom.computeOalWindow
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
@@ -123,13 +114,7 @@ import com.android.shaftschematic.ui.adaptive.WindowWidthClass
 import com.android.shaftschematic.ui.adaptive.currentWindowWidthClass
 import com.android.shaftschematic.ui.adaptive.twoPane
 import com.android.shaftschematic.ui.dialog.InlineAddChooserDialog
-import com.android.shaftschematic.ui.input.shouldCommitOnBlur
 import com.android.shaftschematic.ui.input.AcceptCancelButtons
-import com.android.shaftschematic.ui.input.FractionKey
-import com.android.shaftschematic.ui.input.LocalFractionKeyEnabled
-import com.android.shaftschematic.ui.input.rememberFieldCursor
-import com.android.shaftschematic.ui.input.NOT_A_NUMBER_REASON
-import com.android.shaftschematic.ui.input.rejectedValueNotice
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.util.exportPdfGate
 import com.android.shaftschematic.ui.util.specIssues
@@ -139,7 +124,6 @@ import com.android.shaftschematic.ui.viewmodel.SessionAddDefaults
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.inchFieldText
 import com.android.shaftschematic.util.PreviewColorSetting
-import com.android.shaftschematic.util.toMmOrNull
 import kotlinx.coroutines.launch
 import java.util.Locale
 
@@ -150,11 +134,11 @@ import java.util.Locale
  * • Top app bar (title, undo/redo, the More menu) — the document's unit is set in Settings →
  *   Units, not here; there is no header unit selector.
  * • Preview drawing (white square; optional grid; fixed-height band)
- * • Overall length input (always user-typed; commits on ACCEPT only — the ✓ beside the
- *   field, IME Done, or a blur after the text changed; ✗ reverts and commits nothing; never
- *   per keystroke — see `docs/contracts/OverallLength.md`)
- * • Project fields (commit-on-blur / IME Done)
- * • Component carousel (edit & remove) — rows in physical order along the shaft
+ * • Component carousel (edit & remove) — the start card FIRST (overall length, shaft diameter,
+ *   project information — `StartCard.kt`, `docs/contracts/OverallLength.md`), then the
+ *   components in physical order along the shaft
+ * • The card Save / Cancel bar above the carousel, shown only while a card field holds an
+ *   unsaved value
  * • Full-width "+ Add Component" button in the scroll column — the single add entry point
  *
  * Contract / Invariants
@@ -254,8 +238,9 @@ fun ShaftScreen(
     onSetItem: (String) -> Unit,
     onSetShaftPosition: (ShaftPosition) -> Unit,
     onSetNotes: (String) -> Unit,
-    onSetOverallLengthRaw: (String) -> Unit,
     onSetOverallLengthMm: (Float) -> Unit,
+    /** The start card's shaft-wide bare-shaft Ø (mm, verbatim; ≤ 0 clears) — keeps section overrides. */
+    onSetShaftDiaMm: (Float) -> Unit,
     onSelectComponentById: (String?) -> Unit,
 
     // Adds (all mm)
@@ -385,7 +370,6 @@ fun ShaftScreen(
     var addLengthMm by rememberSaveable { mutableFloatStateOf(50f) }
 
     var chooserOpen by rememberSaveable { mutableStateOf(false) }
-    var projectInfoOpen by rememberSaveable { mutableStateOf(false) }
     val scroll = rememberScrollState()
     val topBarScope = rememberCoroutineScope()
 
@@ -504,8 +488,10 @@ fun ShaftScreen(
                         onRedo = onRedo
                     )
 
+                    // The project information lives on the start card: this goes there, through
+                    // the selection path, so a card holding an unsaved value asks first.
                     IconButton(
-                        onClick = { projectInfoOpen = true },
+                        onClick = { selectFromDrawing(null) },
                         modifier = Modifier.testTag("toolbar_project_info")
                     ) {
                         Icon(Icons.AutoMirrored.Filled.Assignment, contentDescription = "Project information")
@@ -627,44 +613,29 @@ fun ShaftScreen(
             // NOTE: Highlight state is threaded into ShaftDrawing via PreviewCard.
         }
 
-        // Overall length entry and its two read-only companion labels. [fieldMaxWidth] is the
-        // text box's width cap — the phone's 240 dp, or none where the field should fill a
-        // column the width of the control under it.
-        val oalBlock: @Composable (fieldMaxWidth: Dp) -> Unit = { fieldMaxWidth ->
-            OverallLengthRow(
+        // The start card — the carousel's first page in every branch: overall length, shaft
+        // diameter and project information, bound to this editor's drawing.
+        val startCard: @Composable (outerPaddingHorizontal: Dp) -> Unit = { outerPaddingHorizontal ->
+            ShaftStartCard(
                 spec = spec,
                 unit = unit,
+                customer = customer,
+                vessel = vessel,
+                jobNumber = jobNumber,
+                item = item,
+                shaftPosition = shaftPosition,
+                notes = notes,
                 onSetOverallLengthMm = onSetOverallLengthMm,
-                onSetOverallLengthRaw = onSetOverallLengthRaw,
-                fieldMaxWidth = fieldMaxWidth,
+                onSetShaftDiaMm = onSetShaftDiaMm,
+                onSetCustomer = onSetCustomer,
+                onSetVessel = onSetVessel,
+                onSetJobNumber = onSetJobNumber,
+                onSetItem = onSetItem,
+                onSetShaftPosition = onSetShaftPosition,
+                onSetNotes = onSetNotes,
+                showOalDebugLabel = showOalDebugLabel,
+                outerPaddingHorizontal = outerPaddingHorizontal,
             )
-
-            // Read-only: computed OAL in measurement space (less excluded end threads)
-            val win = remember(spec.overallLengthMm, spec.threads, spec.tapers) { computeOalWindow(spec) }
-            val physicalOalMm = spec.overallLengthMm.toDouble()
-            val effectiveOalWindowMm = win.oalMm
-            val excluded = kotlin.math.abs(effectiveOalWindowMm - physicalOalMm) > OAL_EPS_MM
-
-            // Only meaningful when an excluded end thread makes the dimensioned span
-            // differ from the physical length.
-            if (excluded) {
-                Text(
-                    text = "Dimensioned OAL: ${formatDisplay(effectiveOalWindowMm.toFloat(), unit)} ${abbr(unit)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
-            }
-
-            if (showOalDebugLabel) {
-                val coveredEndMm = lastOccupiedEndMm(spec)
-                Text(
-                    text = "OAL debug • physical=${formatDisplay(spec.overallLengthMm, unit)} ${abbr(unit)} • effective=${formatDisplay(effectiveOalWindowMm.toFloat(), unit)} ${abbr(unit)} • covered=${formatDisplay(coveredEndMm, unit)} ${abbr(unit)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
-            }
         }
 
         // The components side comes in three blocks — the heading, the single add entry point,
@@ -718,6 +689,7 @@ fun ShaftScreen(
                 edgeArrowWidthDp = componentArrowWidthDp,
                 peekPageWidth = peekPageWidth,
                 fillHeight = fillHeight,
+                startCard = startCard,
                 showComponentDebugLabels = showComponentDebugLabels,
                 componentTitlesDefault = componentTitlesDefault,
                 componentShadeDefaults = componentShadeDefaults,
@@ -991,29 +963,11 @@ fun ShaftScreen(
             }
         }
 
-        if (projectInfoOpen) {
-            // Raised from the toolbar, so it belongs to the screen rather than to either pane.
-            ProjectInfoBottomSheet(
-                customer = customer,
-                vessel = vessel,
-                jobNumber = jobNumber,
-                item = item,
-                shaftPosition = shaftPosition,
-                notes = notes,
-                onSetCustomer = onSetCustomer,
-                onSetVessel = onSetVessel,
-                onSetJobNumber = onSetJobNumber,
-                onSetItem = onSetItem,
-                onSetShaftPosition = onSetShaftPosition,
-                onSetNotes = onSetNotes,
-                onDismiss = { projectInfoOpen = false }
-            )
-        }
-
         if (widthClass.twoPane) {
             // A landscape tablet: the shaft is long and thin, so the drawing takes the WIDTH —
-            // a band across the top, with the overall length, the add button and the warnings
-            // in a column beside it — and the carousel takes the rest of the height, the
+            // a band across the top, with the card Save bar (while a field holds an unsaved
+            // value), the add button and the warnings in a column beside it — and the carousel
+            // takes the rest of the height, the
             // current card centred with its neighbours peeking at the sides. The band is as
             // tall as the taller of the drawing and the side column, up to the preview's cap;
             // past the cap the side column scrolls inside the band (a fade at its foot says
@@ -1025,10 +979,9 @@ fun ShaftScreen(
                     .fillMaxSize()
                     .padding(inner)
             ) {
-                // The side column is the controls' width plus the OAL field's ✓/✗ slot, which
-                // stands to the right of the box so the box, the button and the warnings
-                // under it share one width and one right edge.
-                val sideColumnWidth = EXPANDED_SIDE_COLUMN_WIDTH_DP.dp + OAL_ACTION_SLOT_WIDTH
+                // The side column is the controls' width plus the Save bar's ✓/✗ slot, which
+                // stands to the right of the bar's text.
+                val sideColumnWidth = EXPANDED_SIDE_COLUMN_WIDTH_DP.dp + SAVE_BAR_ACTION_SLOT_WIDTH
                 val density = LocalDensity.current
                 val drawingBand = expandedDrawingBandHeightDp(
                     contentWidthDp = maxWidth.value - 2 * EXPANDED_CONTENT_PADDING.value,
@@ -1110,17 +1063,11 @@ fun ShaftScreen(
                                 .onSizeChanged { expandedSideColumnContentPx = it.height },
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            // The box fills the controls' width (its ✓/✗ slot takes the rest
-                            // of the row) and the button and warnings stop at the same edge, so
-                            // the three read as one block (on-device report: a 240 dp box over
-                            // a wider button looked unrelated to it).
-                            oalBlock(Dp.Unspecified)
-                            Box(Modifier.fillMaxWidth().padding(end = OAL_ACTION_SLOT_WIDTH)) {
-                                addComponentButton()
-                            }
-                            Box(Modifier.fillMaxWidth().padding(end = OAL_ACTION_SLOT_WIDTH)) {
-                                warningBanner()
-                            }
+                            // Nothing while every card field is settled; the bar while one
+                            // holds an unsaved value, beside the drawing and above the cards.
+                            CardSaveSlot()
+                            addComponentButton()
+                            warningBanner()
                         }
                     }
                     HorizontalDivider()
@@ -1194,13 +1141,12 @@ fun ShaftScreen(
                     CAROUSEL_HEIGHT
                 }
 
-                // The Overall Length row stands ABOVE the scrolling content, so it is on screen
-                // whatever the column has scrolled to — and so is the card Save / Cancel bar that
-                // takes its place while a field holds an unsaved value (on-device report: inside
-                // the column the bar scrolled above the keyboard together with the focused field,
-                // leaving Save no more visible than the button it replaced).
-                oalBlock(OAL_FIELD_MAX_WIDTH)
-                Spacer(Modifier.height(12.dp))
+                // The card Save / Cancel bar stands ABOVE the scrolling content, so it is on screen
+                // whatever the column has scrolled to while a field holds an unsaved value
+                // (on-device report: inside the column the bar scrolled above the keyboard together
+                // with the focused field, leaving Save no more visible than the button it
+                // replaced). With every field settled the slot takes no room at all.
+                CardSaveSlot(Modifier.padding(bottom = 12.dp))
 
                 // Scrollable editor content
                 Column(
@@ -1465,224 +1411,6 @@ internal fun ShaftPositionDropdown(
     }
 }
 
-/* ───────────────── Shared composables & helpers ───────────────── */
-
-
-@Composable
-@OptIn(ExperimentalMaterial3Api::class)
-internal fun ProjectInfoBottomSheet(
-    customer: String,
-    vessel: String,
-    jobNumber: String,
-    item: String,
-    shaftPosition: ShaftPosition,
-    notes: String,
-    onSetCustomer: (String) -> Unit,
-    onSetVessel: (String) -> Unit,
-    onSetJobNumber: (String) -> Unit,
-    onSetItem: (String) -> Unit,
-    onSetShaftPosition: (ShaftPosition) -> Unit,
-    onSetNotes: (String) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    // The sheet edits a DRAFT copy; nothing reaches the ViewModel until Save. Blur-commit
-    // fields would lose the last field's text when the sheet closed straight from the
-    // keyboard, and gave Cancel nothing to revert to.
-    var draftJobNumber by rememberSaveable { mutableStateOf(jobNumber) }
-    var draftCustomer by rememberSaveable { mutableStateOf(customer) }
-    var draftVessel by rememberSaveable { mutableStateOf(vessel) }
-    var draftItem by rememberSaveable { mutableStateOf(item) }
-    var draftPosition by rememberSaveable { mutableStateOf(shaftPosition) }
-    var draftNotes by rememberSaveable { mutableStateOf(notes) }
-
-    var confirmDiscardOpen by rememberSaveable { mutableStateOf(false) }
-
-    val dirty = draftJobNumber != jobNumber ||
-        draftCustomer != customer ||
-        draftVessel != vessel ||
-        draftItem != item ||
-        draftPosition != shaftPosition ||
-        draftNotes != notes
-    // The sheet state is created once, so its gate must read the LIVE dirty flag rather
-    // than the value captured at creation.
-    val dirtyNow = rememberUpdatedState(dirty)
-
-    // Implicit exits (swipe down, scrim tap, back) are guarded when the draft differs;
-    // blocking the settle keeps the sheet in place under the dialog, so "Keep editing"
-    // costs no second animation. An explicit Cancel is NOT guarded — confirming a
-    // deliberate discard is just a second prompt for the same decision.
-    val gateHide = remember {
-        { target: SheetValue ->
-            if (target == SheetValue.Hidden && dirtyNow.value) {
-                confirmDiscardOpen = true
-                false
-            } else true
-        }
-    }
-    val sheetState = rememberModalBottomSheetState(
-        skipPartiallyExpanded = true,
-        confirmValueChange = gateHide
-    )
-
-    // Pushes only the changed fields, so opening and saving without an edit never marks
-    // the document dirty.
-    val commitDraft = {
-        if (draftJobNumber != jobNumber) onSetJobNumber(draftJobNumber)
-        if (draftCustomer != customer) onSetCustomer(draftCustomer)
-        if (draftVessel != vessel) onSetVessel(draftVessel)
-        if (draftItem != item) onSetItem(draftItem)
-        if (draftPosition != shaftPosition) onSetShaftPosition(draftPosition)
-        if (draftNotes != notes) onSetNotes(draftNotes)
-        onDismiss()
-    }
-
-    ModalBottomSheet(
-        // A clean draft dismisses straight away; a dirty one asks first. Discarding drops
-        // the draft entirely — the document keeps whatever it already held, so a field
-        // that started blank goes back to blank.
-        onDismissRequest = { if (dirty) confirmDiscardOpen = true else onDismiss() },
-        sheetState = sheetState,
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag("project_info_sheet")
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp)
-                .imePadding()
-                .padding(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Text(
-                "Project Information",
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(bottom = 4.dp)
-            )
-            DraftTextField(
-                label = "Job Number",
-                value = draftJobNumber,
-                onValueChange = { draftJobNumber = it },
-                modifier = Modifier.fillMaxWidth().testTag("project_info_job_number")
-            )
-            DraftTextField(
-                label = "Customer",
-                value = draftCustomer,
-                onValueChange = { draftCustomer = it },
-                modifier = Modifier.fillMaxWidth().testTag("project_info_customer")
-            )
-            DraftTextField(
-                label = "Vessel",
-                value = draftVessel,
-                onValueChange = { draftVessel = it },
-                modifier = Modifier.fillMaxWidth().testTag("project_info_vessel")
-            )
-            // Optional shaft designation ("Tail shaft", "Line shaft"); blank prints nothing.
-            DraftTextField(
-                label = "Item (optional)",
-                value = draftItem,
-                onValueChange = { draftItem = it },
-                modifier = Modifier.fillMaxWidth().testTag("project_info_item")
-            )
-            ShaftPositionDropdown(
-                selected = draftPosition,
-                onSelected = { draftPosition = it },
-                modifier = Modifier.fillMaxWidth()
-            )
-            DraftTextField(
-                label = "Notes",
-                value = draftNotes,
-                onValueChange = { draftNotes = it },
-                modifier = Modifier.fillMaxWidth().testTag("project_info_notes"),
-                singleLine = false,
-                minHeight = 88.dp
-            )
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 4.dp),
-                horizontalArrangement = Arrangement.End
-            ) {
-                TextButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.testTag("project_info_cancel")
-                ) { Text("Cancel") }
-                Spacer(Modifier.width(8.dp))
-                Button(
-                    onClick = commitDraft,
-                    modifier = Modifier.testTag("project_info_save")
-                ) { Text("Save") }
-            }
-        }
-
-        if (confirmDiscardOpen) {
-            AlertDialog(
-                // Dismissing the dialog itself means neither — put the user back in the
-                // sheet, which never went anywhere.
-                onDismissRequest = { confirmDiscardOpen = false },
-                title = { Text("Save changes?") },
-                text = { Text("The project information was edited but not saved.") },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            confirmDiscardOpen = false
-                            commitDraft()
-                        },
-                        modifier = Modifier.testTag("project_info_discard_save")
-                    ) { Text("Save") }
-                },
-                dismissButton = {
-                    // Two choices share the dismiss slot so "Keep editing" is a visible
-                    // button, not only a tap-outside gesture: an accidental swipe is the
-                    // whole reason this dialog exists.
-                    Row {
-                        TextButton(
-                            onClick = { confirmDiscardOpen = false },
-                            modifier = Modifier.testTag("project_info_keep_editing")
-                        ) { Text("Keep editing") }
-                        TextButton(
-                            onClick = {
-                                confirmDiscardOpen = false
-                                onDismiss()
-                            },
-                            modifier = Modifier.testTag("project_info_discard_confirm")
-                        ) { Text("Discard") }
-                    }
-                }
-            )
-        }
-    }
-}
-
-/**
- * Plain draft field: text lives in the caller's state and is never pushed anywhere on
- * blur — the owning sheet decides when (and whether) it is committed.
- */
-@Composable
-private fun DraftTextField(
-    label: String,
-    value: String,
-    onValueChange: (String) -> Unit,
-    modifier: Modifier = Modifier,
-    singleLine: Boolean = true,
-    maxLines: Int = if (singleLine) 1 else 5,
-    minHeight: Dp = Dp.Unspecified
-) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        label = { Text(label) },
-        singleLine = singleLine,
-        maxLines = maxLines,
-        keyboardOptions = KeyboardOptions(
-            imeAction = if (singleLine) ImeAction.Next else ImeAction.Default
-        ),
-        modifier = modifier
-            .let { if (minHeight != Dp.Unspecified) it.heightIn(min = minHeight) else it }
-    )
-}
-
-
 /* ───────────────── Helpers: units, parsing, badge math, defaults ───────────────── */
 
 internal fun abbr(unit: UnitSystem) = if (unit == UnitSystem.MILLIMETERS) "mm" else "in"
@@ -1723,63 +1451,54 @@ internal fun oalFieldLabel(unit: UnitSystem, fontScale: Float): String =
     else "Overall Length (${abbr(unit)})"
 
 /**
- * The Overall Length row: the OAL field while every card field is settled, and the card
- * Save / Cancel bar while one holds an unsaved value (on-device ruling: a Save button at the end
- * of a long card was hidden; this row is always on screen above the carousel). The bar names the
- * waiting field and puts the ✓ / ✗ exactly where the OAL's own pair sits, so it reads as the one
- * control. With the field hidden, nothing can focus the OAL under a pending edit.
+ * The card Save / Cancel bar's slot above the carousel: NOTHING while every card field is
+ * settled, and the bar while one holds an unsaved value (on-device ruling: a Save button at the
+ * end of a long card was hidden; this slot is always on screen above the cards). [modifier]
+ * applies to the bar only, so spacing passed here goes with it.
+ *
+ * The bar grows in and shrinks out ([SAVE_BAR_ANIM_MS], height and fade together), so the cards
+ * and the drawing band below it slide rather than jump the moment a field turns dirty (on-device
+ * request). Reserving the height instead would hold room open over every settled card — the
+ * standing row the start card replaced — and an overlay would cover the top of the scrolled card,
+ * where the focused field often sits. While it shrinks out the bar still shows the edit it held,
+ * and its buttons do nothing: that edit has already been answered.
  */
 @Composable
-internal fun OverallLengthRow(
-    spec: ShaftSpec,
-    unit: UnitSystem,
-    onSetOverallLengthMm: (Float) -> Unit,
-    onSetOverallLengthRaw: (String) -> Unit,
-    modifier: Modifier = Modifier,
-    /** The text box's width cap; [Dp.Unspecified] lets it take the row's width beside the ✓/✗ slot. */
-    fieldMaxWidth: Dp = OAL_FIELD_MAX_WIDTH,
-) {
+internal fun CardSaveSlot(modifier: Modifier = Modifier) {
     val pending = LocalPendingCardEdits.current?.current
-    if (pending != null) {
-        CardSaveBar(pending, modifier, fieldMaxWidth)
-    } else {
-        OverallLengthField(
-            spec = spec,
-            unit = unit,
-            onSetOverallLengthMm = onSetOverallLengthMm,
-            onSetOverallLengthRaw = onSetOverallLengthRaw,
-            modifier = modifier,
-            fieldMaxWidth = fieldMaxWidth,
-        )
+    // The edit the bar last showed — what it keeps showing while it animates out. A plain holder,
+    // not state: it is only ever read in the composition that wrote it.
+    val lastShown = remember { arrayOfNulls<PendingCardEdit>(1) }
+    if (pending != null) lastShown[0] = pending
+    val shown = pending ?: lastShown[0]
+    AnimatedVisibility(
+        visible = pending != null,
+        enter = expandVertically(tween(SAVE_BAR_ANIM_MS), expandFrom = Alignment.Top) +
+            fadeIn(tween(SAVE_BAR_ANIM_MS)),
+        exit = shrinkVertically(tween(SAVE_BAR_ANIM_MS), shrinkTowards = Alignment.Top) +
+            fadeOut(tween(SAVE_BAR_ANIM_MS)),
+    ) {
+        if (shown != null) CardSaveBar(shown, live = pending != null, modifier = modifier)
     }
 }
 
 /**
- * The card Save / Cancel bar, standing in the Overall Length row while a card field holds an
- * unsaved value. That row is always on screen above the carousel, where a Save at the foot of a
- * long card scrolled out of sight. The text block takes the OAL text box's width and height, and
- * the ✓ / ✗ sit in the OAL's own fixed action slot, so the swap moves nothing else on screen.
- * ✓ and ✗ are the field's own answers ([PendingCardEdit.accept] / [PendingCardEdit.cancel] — the
- * IME Done commit and the revert to the stored value), never a second commit pipeline.
+ * The card Save / Cancel bar: "Unsaved change" over the waiting field and its card, and the green
+ * ✓ / red ✗ in a fixed action slot at its end. ✓ and ✗ are the field's own answers
+ * ([PendingCardEdit.accept] / [PendingCardEdit.cancel] — the IME Done commit and the revert to the
+ * stored value), never a second commit pipeline.
  */
 @Composable
-private fun CardSaveBar(edit: PendingCardEdit, modifier: Modifier, fieldMaxWidth: Dp) {
+private fun CardSaveBar(edit: PendingCardEdit, live: Boolean, modifier: Modifier) {
     val field = fieldLabelWithoutUnit(edit.fieldLabel)
     Row(
-        modifier = modifier.testTag(CARD_SAVE_BAR_TAG),
+        modifier = modifier.fillMaxWidth().testTag(CARD_SAVE_BAR_TAG),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Exactly the OAL text box's footprint — its capped width (the box always fills its cap)
-        // and its height — so the ✓ / ✗ land where the OAL's own pair sits and nothing else on
-        // screen moves when the row swaps (on-device report: a shorter bar shifted the carousel up
-        // and left the returning OAL label clipped).
         Column(
             modifier = Modifier
-                .then(
-                    if (fieldMaxWidth == Dp.Unspecified) Modifier.weight(1f)
-                    else Modifier.width(fieldMaxWidth)
-                )
-                .heightIn(min = OAL_FIELD_ROW_HEIGHT),
+                .weight(1f)
+                .heightIn(min = SAVE_BAR_TEXT_MIN_HEIGHT),
             verticalArrangement = Arrangement.Center,
         ) {
             Text(
@@ -1796,13 +1515,13 @@ private fun CardSaveBar(edit: PendingCardEdit, modifier: Modifier, fieldMaxWidth
         }
         Box(
             modifier = Modifier
-                .width(OAL_ACTION_SLOT_WIDTH)
-                .height(OAL_ACTION_SLOT_HEIGHT),
+                .width(SAVE_BAR_ACTION_SLOT_WIDTH)
+                .height(SAVE_BAR_ACTION_SLOT_HEIGHT),
             contentAlignment = Alignment.CenterStart,
         ) {
             AcceptCancelButtons(
-                onAccept = { edit.accept() },
-                onCancel = edit.cancel,
+                onAccept = { if (live) edit.accept() },
+                onCancel = { if (live) edit.cancel() },
                 acceptDescription = "Save $field",
                 cancelDescription = "Cancel $field change",
                 acceptTag = CARD_SAVE_TAG,
@@ -1812,206 +1531,8 @@ private fun CardSaveBar(edit: PendingCardEdit, modifier: Modifier, fieldMaxWidth
     }
 }
 
-/**
- * The shaft's Overall Length entry field.
- *
- * Three behaviours it owns, each deliberate:
- *  • **Commit on ACCEPT, never per keystroke.** Typing only changes the local text; nothing
- *    reaches [onSetOverallLengthMm] until the value is accepted — the ✓ button, IME Done, or a
- *    blur after the text changed since focus (`shouldCommitOnBlur`, the component cards' rule).
- *    ✓ and ✗ are the explicit accept/cancel pair, shown beside the field only while the value is
- *    being modified; ✗ restores the stored length and commits nothing. A per-keystroke commit
- *    publishes every intermediate value: deleting one digit of 368.5 on the way to 367.75
- *    committed a 36″ shaft, the drawing collapsed, and re-anchoring a FWD-referenced taper
- *    through that transient length left a residue and a "past the shaft end" warning
- *    (on-device report). See `docs/contracts/ShaftScreen.md`.
- *  • **An empty field commits nothing.** Every accept path on empty text restores the stored
- *    length instead of zeroing the shaft, so clearing the field to retype cannot wipe the OAL.
- *    Unparseable text also commits nothing, and SAYS so: ✓/Done leave it as typed (the user
- *    is mid-edit) and a blur restores the stored length, both under a
- *    "<typed> not applied — not a number" line that stays until the text is edited (the
- *    numeric fields' notice) — a ✓ that did nothing read as a broken button (emulator QA).
- *  • **Oversize is an error STYLE, not a rejection.** A component past the authored length is a
- *    legal, advisory state; the field is only tinted. A not-yet-typed length (0) is not
- *    oversize — the renderer draws to the coverage end until a length is authored.
- *
- * Every accept or cancel moves the focus baseline to the text it leaves behind before clearing
- * focus, so the blur that follows sees no change and cannot commit a second time.
- *
- * The text echoes what the user typed ("150 3/4" stays a fraction) and only re-derives from the
- * model while unfocused and no longer explaining the stored value — an undo, an edit from
- * elsewhere, or a reverted empty commit.
- */
-@Composable
-internal fun OverallLengthField(
-    spec: ShaftSpec,
-    unit: UnitSystem,
-    onSetOverallLengthMm: (Float) -> Unit,
-    onSetOverallLengthRaw: (String) -> Unit,
-    modifier: Modifier = Modifier,
-    /** The text box's width cap; [Dp.Unspecified] lets it take the row's width beside the ✓/✗ slot. */
-    fieldMaxWidth: Dp = OAL_FIELD_MAX_WIDTH,
-) {
-    var hasLenFocus by remember { mutableStateOf(false) }
-    var lenTextOnFocus by remember { mutableStateOf<String?>(null) }
-
-    val displayMm = spec.overallLengthMm
-    val oalCursor = rememberFieldCursor()
-    var lengthText by remember(unit) {
-        mutableStateOf(formatDisplay(displayMm, unit))
-    }
-    LaunchedEffect(displayMm, unit, hasLenFocus) {
-        if (!hasLenFocus) {
-            val parsed = toMmOrNull(lengthText, unit)
-            if (parsed == null || kotlin.math.abs(parsed - displayMm) > 0.01f) {
-                lengthText = formatDisplay(displayMm, unit)
-            }
-        }
-    }
-
-    val isOversized = spec.overallLengthMm > 0f &&
-        spec.overallLengthMm < lastOccupiedEndMm(spec)
-
-    // Why the last accept was refused, naming the refused text; cleared by an edit or a cancel.
-    var rejectedNotice by remember { mutableStateOf<String?>(null) }
-
-    val focusManager = LocalFocusManager.current
-
-    // Being modified = focused AND the text differs from the on-focus baseline. The cleared
-    // "0" ghost and an empty field are the same untouched state.
-    val isModified = hasLenFocus &&
-        oalGhostNormalized(lengthText) != oalGhostNormalized(lenTextOnFocus)
-
-    // Restores the stored length and ends the edit. The baseline moves to the restored text
-    // first, so the blur that clearFocus() triggers sees no change and commits nothing.
-    fun cancelEdit() {
-        rejectedNotice = null
-        val stored = formatDisplay(spec.overallLengthMm, unit)
-        lengthText = stored
-        lenTextOnFocus = stored
-        focusManager.clearFocus()
-    }
-
-    // The ✓ / IME Done accept. Empty text restores the stored length; unparseable text stays
-    // as typed with focus kept, since the user is mid-edit. A commit moves the baseline to the
-    // committed text before clearing focus so the blur cannot commit it a second time.
-    fun acceptEdit() {
-        val t = lengthText.trim()
-        if (t.isEmpty()) {
-            cancelEdit()
-            return
-        }
-        val mm = toMmOrNull(t, unit)
-        if (mm == null) {
-            rejectedNotice = rejectedValueNotice(t, NOT_A_NUMBER_REASON)
-            return
-        }
-        onSetOverallLengthMm(mm)
-        onSetOverallLengthRaw(t) // keeps the user's display text, fractions included
-        lenTextOnFocus = lengthText
-        focusManager.clearFocus()
-    }
-
-    // At a large system font the full label wrapped inside the outline and its first line was
-    // clipped by the field's top edge (on-device report, 200%): it shortens past
-    // OAL_SHORT_LABEL_FONT_SCALE and never takes a second line at any scale.
-    val oalLabel = oalFieldLabel(unit, LocalDensity.current.fontScale)
-
-    Row(
-        modifier = modifier,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        fun applyLengthEdit(input: TextFieldValue) {
-            if (input.text != lengthText) rejectedNotice = null
-            oalCursor.track(input)
-            lengthText = input.text
-        }
-        OutlinedTextField(
-            value = oalCursor.valueFor(lengthText),
-            onValueChange = { input -> applyLengthEdit(input) },
-            trailingIcon = if (hasLenFocus && LocalFractionKeyEnabled.current) {
-                { FractionKey(onClick = { applyLengthEdit(oalCursor.insertBar(lengthText)) }) }
-            } else null,
-            label = { Text(oalLabel, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-            singleLine = true,
-            enabled = true,
-            isError = isOversized || rejectedNotice != null,
-            supportingText = rejectedNotice?.let { n -> { Text(n) } },
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Decimal,
-                imeAction = ImeAction.Done
-            ),
-            keyboardActions = KeyboardActions(onDone = { acceptEdit() }),
-            modifier = Modifier
-                .weight(1f, fill = fieldMaxWidth == Dp.Unspecified)
-                .widthIn(min = 160.dp, max = fieldMaxWidth)
-                .testTag(OAL_FIELD_TAG)
-                .onFocusChanged { f ->
-                    val wasFocused = hasLenFocus
-                    hasLenFocus = f.isFocused
-
-                    if (!wasFocused && f.isFocused) {
-                        // Baseline for the commit-on-change rule.
-                        lenTextOnFocus = lengthText
-                        // A not-yet-set length reads "0"; clear it so the user can
-                        // type without a leading zero. Leaving without typing reverts.
-                        if (lengthText.trim() == "0") lengthText = ""
-                    }
-
-                    if (wasFocused && !f.isFocused) {
-                        val baseline = lenTextOnFocus
-                        lenTextOnFocus = null
-
-                        // Commit only what changed since focus (BlurCommitPolicy).
-                        if (!shouldCommitOnBlur(baseline, lengthText)) return@onFocusChanged
-
-                        val t = lengthText.trim()
-                        val mm = if (t.isEmpty()) null else toMmOrNull(t, unit)
-                        if (mm == null) {
-                            // Empty or unparseable: nothing commits, the stored length returns —
-                            // and an unparseable entry is named, so the swap is not silent.
-                            if (t.isNotEmpty()) rejectedNotice = rejectedValueNotice(t, NOT_A_NUMBER_REASON)
-                            lengthText = formatDisplay(spec.overallLengthMm, unit)
-                        } else {
-                            onSetOverallLengthMm(mm)
-                            onSetOverallLengthRaw(t)
-                        }
-                    }
-                }
-        )
-
-        // Fixed-size slot so the row does not jump when the pair appears. The buttons cannot
-        // take focus: a click that pulled focus off the field would blur-commit before the
-        // button's own handler ran.
-        Box(
-            modifier = Modifier
-                .width(OAL_ACTION_SLOT_WIDTH)
-                .height(OAL_ACTION_SLOT_HEIGHT),
-            contentAlignment = Alignment.CenterStart,
-        ) {
-            if (isModified) {
-                AcceptCancelButtons(
-                    onAccept = { acceptEdit() },
-                    onCancel = { cancelEdit() },
-                    acceptDescription = "Accept length",
-                    cancelDescription = "Cancel length change",
-                    acceptTag = OAL_ACCEPT_TAG,
-                    cancelTag = OAL_CANCEL_TAG,
-                )
-            }
-        }
-    }
-}
-
-/** The cleared "0" ghost and an empty field both read as the untouched state. */
-private fun oalGhostNormalized(text: String?): String? {
-    val t = text?.trim() ?: return null
-    return if (t == "0") "" else text
-}
-
+/** The start card's Overall Length field — the tag the OAL row's field carried, kept for tests. */
 internal const val OAL_FIELD_TAG = "overall_length_field"
-internal const val OAL_ACCEPT_TAG = "oal_accept"
-internal const val OAL_CANCEL_TAG = "oal_cancel"
 internal const val CARD_SAVE_BAR_TAG = "card_save_bar"
 internal const val CARD_SAVE_TAG = "card_save"
 internal const val CARD_CANCEL_TAG = "card_cancel"
@@ -2019,16 +1540,14 @@ internal const val CARD_CANCEL_TAG = "card_cancel"
 /** A tap on the drawing waiting on the "Save changes?" answer: the held edit and the tapped component. */
 private data class UnsavedTap(val edit: PendingCardEdit, val targetId: String?)
 
-/** Two 48 dp icon buttons side by side. */
-/** The OAL text box's width cap in a column — the phone's historical 240 dp. */
-private val OAL_FIELD_MAX_WIDTH = 240.dp
+/** How long the Save bar takes to grow in or shrink out, ms — a slide, not a jump. */
+private const val SAVE_BAR_ANIM_MS = 180
 
-/** The OAL text box's height as laid out: the 56 dp outlined box plus the 8 dp its floating label stands above it. */
-private val OAL_FIELD_ROW_HEIGHT = 64.dp
+/** The Save bar's text block height: the 56 dp of a text field plus the 8 dp its floating label stands above it. */
+private val SAVE_BAR_TEXT_MIN_HEIGHT = 64.dp
 
-private val OAL_ACTION_SLOT_WIDTH = 96.dp
-private val OAL_ACTION_SLOT_HEIGHT = 48.dp
-
-private const val OAL_EPS_MM: Double = 1e-3
+/** The Save bar's ✓ / ✗ slot — two 48 dp icon buttons side by side. */
+private val SAVE_BAR_ACTION_SLOT_WIDTH = 96.dp
+private val SAVE_BAR_ACTION_SLOT_HEIGHT = 48.dp
 
 internal fun tpiToPitchMm(tpi: Float): Float = if (tpi > 0f) (MM_PER_IN / tpi.toDouble()).toFloat() else 0f

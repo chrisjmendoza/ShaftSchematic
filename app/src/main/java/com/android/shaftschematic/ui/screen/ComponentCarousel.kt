@@ -109,6 +109,9 @@ internal val CAROUSEL_HEIGHT = 360.dp
 /** A peeking neighbour's tap target — `carousel_peek_<page>`; a tap brings that card to the centre. */
 internal fun carouselPeekTag(page: Int): String = "carousel_peek_$page"
 
+/** The start card's fixed pager key — never a component id. */
+private const val START_CARD_PAGE_KEY = "start_card"
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Internal data model
 // ─────────────────────────────────────────────────────────────────────────────
@@ -183,6 +186,13 @@ internal fun ComponentCarouselPager(
     peekPageWidth: Dp? = null,
     /** Fill the height the parent gives (a tablet column or pane) instead of the fixed [CAROUSEL_HEIGHT]. */
     fillHeight: Boolean = false,
+    /**
+     * The start card (Overall Length, shaft diameter, project information) — ALWAYS the first
+     * page, ahead of every component, given the card chrome's horizontal padding. It is not a
+     * component: no id, no selection of its own (a null selection shows it), nothing removes or
+     * reorders it. See `CarouselSelectionSync.kt` for the page ↔ selection mapping.
+     */
+    startCard: @Composable (outerPaddingHorizontal: Dp) -> Unit,
     showComponentDebugLabels: Boolean,
     /** The Settings "Component names on drawing" switch — what an UNSET per-component name toggle follows. */
     componentTitlesDefault: Boolean = true,
@@ -266,8 +276,9 @@ internal fun ComponentCarouselPager(
         buildCarouselRows(spec, resolvedComponents)
     }
 
-    val pageCount  = rowsSorted.size.coerceAtLeast(1)
-    val pagerState = rememberPagerState(initialPage = 0, pageCount = { pageCount })
+    // The start card is page 0; the component rows follow it.
+    val pageCount  = carouselPageCount(rowsSorted.size)
+    val pagerState = rememberPagerState(initialPage = START_CARD_PAGE, pageCount = { pageCount })
     val scope      = rememberCoroutineScope()
 
     val arrowWidth             = if (showEdgeArrows) edgeArrowWidthDp.coerceIn(24, 72).dp else 0.dp
@@ -303,51 +314,43 @@ internal fun ComponentCarouselPager(
         if (pendingEdits?.current == null) {
             scope.launch { pagerState.animateScrollToPage(page) }
         } else if (page != pagerState.currentPage) {
-            selectOrAsk(rowsSorted.getOrNull(page)?.component?.id, moved = false, startPage = null)
+            selectOrAsk(componentIdForPage(rowIds, page), moved = false, startPage = null)
         }
     }
 
-    // Seed selection on open (nothing selected → FIRST card, the AFT-most component) and
-    // self-heal an orphaned selection (id no longer resolves — auto-body ids are
+    // Self-heal an orphaned selection (id no longer resolves — auto-body ids are
     // position-derived and regenerate on every edit) by adopting the current page WITHOUT
-    // scrolling. Keyed on rows + selection, not rows.size: a document open that lands on
-    // the same row count must still seed, and a stale seed from the open-time race (rows
-    // update a frame after the selection clears) heals itself on the next emission.
-    // When components are added we still don't auto-jump — the VM selects the new id, which
-    // resolves, so the action is NONE and the selection-following effect repositions.
+    // scrolling; on the start card that adopts no selection. A null selection is not healed:
+    // it IS the start card, which the follow effect below brings into view — so a new or
+    // opened document (the ViewModel clears the selection at every session boundary) lands on
+    // the start card. When components are added we still don't auto-jump — the VM selects the
+    // new id, which resolves, and the follow effect repositions.
     LaunchedEffect(rowsSorted, selectedComponentId) {
-        when (seedSelectionAction(rowsSorted.size, selectedComponentId, carouselTargetIndex(rowIds, selectedComponentId))) {
-            SeedAction.SEED_FIRST -> {
-                pagerState.scrollToPage(0)
-                onSelectComponentById(rowsSorted.firstOrNull()?.component?.id)
-            }
-            SeedAction.ADOPT_CURRENT -> {
-                val page = pagerState.currentPage.coerceIn(0, rowsSorted.lastIndex)
-                onSelectComponentById(rowsSorted.getOrNull(page)?.component?.id)
-            }
-            SeedAction.NONE -> Unit
+        if (shouldAdoptCurrentPage(carouselSelectedPage(rowIds, selectedComponentId))) {
+            val page = pagerState.currentPage.coerceIn(START_CARD_PAGE, pageCount - 1)
+            onSelectComponentById(componentIdForPage(rowIds, page))
         }
     }
 
-    // Follow programmatic selection changes.
+    // Follow programmatic selection changes — the start card's page for no selection.
     LaunchedEffect(selectedComponentId, rowsSorted) {
-        val targetIndex = carouselTargetIndex(rowIds, selectedComponentId)
+        val targetPage = carouselSelectedPage(rowIds, selectedComponentId)
         if (shouldAnimateToSelection(
-                targetIndex,
+                targetPage,
                 pagerState.currentPage,
                 pagerState.currentPageOffsetFraction
             )
         ) {
-            pagerState.animateScrollToPage(targetIndex)
+            pagerState.animateScrollToPage(targetPage)
         }
     }
 
     // Detect user swipes and update selection accordingly.
     LaunchedEffect(pagerState.isScrollInProgress, selectedComponentId, rowsSorted) {
         if (pagerState.isScrollInProgress) {
-            val selectedIndex = carouselTargetIndex(rowIds, selectedComponentId)
+            val selectedPage = carouselSelectedPage(rowIds, selectedComponentId)
             if (!returningToEdit &&
-                isUserInitiatedScroll(selectedComponentId, selectedIndex, pagerState.currentPage)
+                isUserInitiatedScroll(selectedPage, pagerState.currentPage)
             ) {
                 pagerScrollStartedByUser = true
                 pagerStartPage = pagerState.currentPage
@@ -358,7 +361,7 @@ internal fun ComponentCarouselPager(
             pagerScrollStartedByUser = false
             pagerStartPage = null
             if (shouldAdoptSwipeSelection(startPage, endPage)) {
-                selectOrAsk(rowsSorted.getOrNull(endPage)?.component?.id, moved = true, startPage = startPage)
+                selectOrAsk(componentIdForPage(rowIds, endPage), moved = true, startPage = startPage)
             }
         }
     }
@@ -421,8 +424,12 @@ internal fun ComponentCarouselPager(
                 contentPadding = PaddingValues(horizontal = sidePad),
                 pageSpacing = if (peeks) CAROUSEL_PEEK_SPACING_DP.dp else 0.dp,
                 // Key pages by component id so per-page state (scroll, focus) follows the
-                // component when one is inserted/removed, instead of staying positional.
-                key = { page -> rowsSorted.getOrNull(page)?.component?.id ?: page }
+                // component when one is inserted/removed, instead of staying positional. The
+                // start card keeps its own fixed key in first place.
+                key = { page ->
+                    if (page == START_CARD_PAGE) START_CARD_PAGE_KEY
+                    else componentIdForPage(rowIds, page) ?: page
+                }
             ) { page ->
             // A peeking neighbour fades and shrinks with its distance from the centre, read
             // in the draw phase so a swipe animates it without recomposing the card.
@@ -438,9 +445,12 @@ internal fun ComponentCarouselPager(
                     .padding(horizontal = if (peeks) 0.dp else pageGutter)
                     .then(peekLayer)
             ) {
-                val row = rowsSorted.getOrNull(page) ?: return@HorizontalPager
+                if (page == START_CARD_PAGE) {
+                    startCard(componentCardPadding)
+                } else {
+                val row = rowsSorted.getOrNull(page - 1) ?: return@HorizontalPager
                 ComponentPagerCard(
-                    spec = spec, unit = unit, row = row, physicalIndex = page,
+                    spec = spec, unit = unit, row = row, physicalIndex = page - 1,
                     outerPaddingHorizontal = componentCardPadding,
                     showComponentDebugLabels = showComponentDebugLabels,
                     componentTitlesDefault = componentTitlesDefault,
@@ -503,6 +513,7 @@ internal fun ComponentCarouselPager(
                     onSetComponentUnit = onSetComponentUnit,
                     onSetKeywayUnit = onSetKeywayUnit,
                 )
+                }
                 // A neighbour is for looking at and picking, not editing: a transparent
                 // target over the whole card takes the tap and brings the card to the
                 // centre (the pager's swipe still passes through it), so a field on a
@@ -515,7 +526,7 @@ internal fun ComponentCarouselPager(
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null,
-                                onClickLabel = "Show this component",
+                                onClickLabel = if (page == START_CARD_PAGE) "Show $START_CARD_TITLE" else "Show this component",
                             ) { goToPage(page) }
                     )
                 }
@@ -1171,8 +1182,8 @@ internal fun ComponentCard(
                     }
                 }
                 // The card's fields register a held edit with the editor's PendingCardEdits, which
-                // swaps the Overall Length field for the card Save / Cancel bar; the title names
-                // the card there. Only `content` is wrapped: the title row's rename editor is a
+                // brings up the card Save / Cancel bar above the carousel; the title names the
+                // card there. Only `content` is wrapped: the title row's rename editor is a
                 // bespoke field with its own commit.
                 CompositionLocalProvider(LocalCardTitle provides title) {
                     content()
@@ -1227,7 +1238,7 @@ internal fun FieldPair(first: @Composable () -> Unit, second: @Composable () -> 
  * Numeric input field with commit-on-blur, fraction support, and optional inline validator.
  *
  * Inside the editor it registers an uncommitted edit with [LocalPendingCardEdits], so the card
- * Save / Cancel bar in the Overall Length row can land or drop it — no per-call-site wiring, so a
+ * Save / Cancel bar above the carousel can land or drop it — no per-call-site wiring, so a
  * newly added field cannot miss it.
  */
 @Composable

@@ -26,10 +26,10 @@ internal class PendingCardEdit(
 
 /**
  * The editor's record of which card field holds an unsaved edit. The editor screen provides it;
- * the Overall Length row swaps itself for the card Save / Cancel bar off [current], and the
+ * the card Save / Cancel bar above the carousel shows off [current], and the
  * carousel and the preview tap ask before changing cards while it is non-null.
  *
- * Fields register themselves ([CommitNum], [CommitDesignationField]) through
+ * Fields register themselves ([CommitNum], [CommitDesignationField], [CommitTextField]) through
  * [LocalPendingCardEdits], keyed by an identity token each field instance owns, and drop the
  * entry when they settle or leave composition. View state only: never written to the document,
  * `EditState`, or undo history.

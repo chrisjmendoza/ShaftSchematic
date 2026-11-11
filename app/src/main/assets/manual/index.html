@@ -86,7 +86,7 @@
   <p  class="keep">AFT is the propeller end; FWD is the engine end. <strong>AFT is always the left end of every drawing</strong>, on every sheet and on screen, so a shaft never appears reversed between two pieces of paper. Many components let you choose which end a position is measured from — the <span class="ui">Measure From</span> chips — because a print may dimension a liner from either end. The component is the same; only the quoted distance differs.</p>
 
   <h3 id="intro-oal">OAL — overall length</h3>
-  <p  class="keep">The OAL (overall length) is the shaft's length end to end, and every drawing is laid out against it. You always type it yourself; the app never fills it in or changes it. The field takes your value when you tap the green ✓, press Done on the keyboard, or leave the field after changing it; the red ✗ puts the old value back. The drawing does not chase each keystroke, because a half-typed length (36″ on the way to 367 3/4″) would briefly collapse the drawing. See <a href="#editor-oal">The overall length</a>.</p>
+  <p>The OAL (overall length) is the shaft's length end to end, and every drawing is laid out against it. You always type it yourself; the app never fills it in or changes it. It is the first field on the editor's first card, <span class="ui">Shaft &amp; job</span>. The field takes your value when you press Done on the keyboard, leave the field after changing it, or tap the green ✓ on the Save bar above the cards; the red ✗ puts the old value back. The drawing does not chase each keystroke, because a half-typed length (36″ on the way to 367 3/4″) would briefly collapse the drawing. See <a href="#editor-oal">The overall length</a>.</p>
   <p  class="keep">When you change the OAL, components measured from FWD keep their FWD distance and move with the end; components measured from AFT stay put.</p>
 
   <h3 id="intro-set-let">S.E.T. and L.E.T.</h3>
@@ -142,7 +142,7 @@
       <tr><th>Tab</th><th>What you do there</th></tr>
     </thead>
     <tbody>
-      <tr class="short"><td><span class="ui">Schematic</span></td><td>Build and edit the shaft: OAL, components, project information. Its toolbar is titled <span class="ui">Shaft Editor</span>.</td></tr>
+      <tr class="short"><td><span class="ui">Schematic</span></td><td>Build and edit the shaft: OAL, shaft diameter and project information on the first card (<span class="ui">Shaft &amp; job</span>), then the components. Its toolbar is titled <span class="ui">Shaft Editor</span>.</td></tr>
       <tr><td><span class="ui">Runout Sheet</span></td><td>Set runout stations and type TIR readings and high spots; print the runout sheet.</td></tr>
       <tr><td><span class="ui">Wear Document</span></td><td>Mark worn areas, pits and measured diameters; print the wear document.</td></tr>
       <tr><td><span class="ui">Undercut Drawing</span></td><td>Record undercut sections; print the undercut drawing.</td></tr>
@@ -162,7 +162,7 @@
     <dt>History</dt>
     <dd  class="keep">A menu holding <span class="ui">Undo</span> and <span class="ui">Redo</span>. History covers both drawings and every reading and mark on the job, for as long as the job is open; see <a href="#editor-history">Undo and redo</a>.</dd>
     <dt>Project information</dt>
-    <dd  class="keep"><span class="ui">Job Number</span>, <span class="ui">Customer</span>, <span class="ui">Vessel</span>, <span class="ui">Item (optional)</span>, <span class="ui">Shaft Position</span> and <span class="ui">Notes</span>, which print in the sheet footers.</dd>
+    <dd  class="keep">Goes to the <span class="ui">Shaft &amp; job</span> card, where <span class="ui">Job Number</span>, <span class="ui">Customer</span>, <span class="ui">Vessel</span>, <span class="ui">Item (optional)</span>, <span class="ui">Shaft Position</span> and <span class="ui">Notes</span> are typed; they print in the sheet footers (see <a href="#editor-project-info">Project information</a>).</dd>
     <dt>New, Open, Save</dt>
     <dd  class="keep">Start a blank shaft, open a saved one, or save this one. New and Open ask about unsaved changes first.</dd>
     <dt>PDF preview</dt>
@@ -185,7 +185,7 @@
     <tbody>
       <tr class="short"><td>Phone</td><td>Stays in portrait. The preview sits at the top with the controls scrolling beneath it; the navigation menu slides in over the screen.</td></tr>
       <tr><td>Tablet, portrait</td><td>The same single column, with a taller preview, and the component card runs to the foot of the screen.</td></tr>
-      <tr><td>Tablet, landscape (wide screen)</td><td>Two panes side by side. On the Schematic: preview, OAL and warnings on the left, components on the right. On the Runout, Wear and Undercut tabs: the sheet on the left, its controls on the right. The navigation menu stays open beside the content, so there is no menu button.</td></tr>
+      <tr><td>Tablet, landscape (wide screen)</td><td>Two panes side by side. On the Schematic: the preview across the top, with the add button, the warnings and the Save bar beside it, and the cards (the <span class="ui">Shaft &amp; job</span> card first) under it. On the Runout, Wear and Undercut tabs: the sheet on the left, its controls on the right. The navigation menu stays open beside the content, so there is no menu button.</td></tr>
     </tbody>
   </table>
   <p  class="keep">Tablets rotate freely. Layout never changes a drawing or a printed sheet — a job looks the same on paper whichever device built it.</p>
@@ -210,10 +210,10 @@
     <dd  class="keep"><span class="ui">Shaft Editor</span>, with the navigation menu button, <span class="ui">History</span>, <span class="ui">Project information</span>, <span class="ui">New</span>, <span class="ui">Open</span>, <span class="ui">Save</span>, <span class="ui">PDF preview</span> and <span class="ui">More options</span> (see <a href="#intro-toolbar">The title strip and toolbar</a>).</dd>
     <dt>Preview</dt>
     <dd  class="keep">A live drawing of the shaft, AFT on the left and FWD on the right.</dd>
-    <dt>Overall length</dt>
-    <dd  class="keep">The <span class="ui">Overall Length</span> field.</dd>
+    <dt>Save bar</dt>
+    <dd  class="keep">Only while a card holds a value you have typed but not saved: the field's name with a green ✓ and a red ✗ (see <a href="#editor-commit">How values are saved</a>). It slides in and out; the rest of the time it takes no room.</dd>
     <dt>Components</dt>
-    <dd  class="keep">The <span class="ui">+ Add Component</span> button, any shaft-wide warnings, and the carousel of component cards, one card per component, in order along the shaft.</dd>
+    <dd  class="keep">The <span class="ui">+ Add Component</span> button, any shaft-wide warnings, and the carousel of cards. The first card is always <span class="ui">Shaft &amp; job</span> — the overall length, the shaft diameter and the project information (see <a href="#editor-start-card">The Shaft &amp; job card</a>); after it come the component cards, one per component, in order along the shaft.</dd>
   </dl>
   <p  class="keep">The other document tabs, the calculators, Help and Settings are in the navigation menu (see <a href="#intro-sidebar">The navigation menu</a>). On a tablet held wide, the editor splits into two panes; everything works the same way in either layout.</p>
 
@@ -221,17 +221,21 @@
   <p  class="keep">Start from the home screen with <span class="ui">New Drawing</span>, <span class="ui">Start from Template</span> (see <a href="#editor-templates">Templates</a>) or <span class="ui">Open…</span>, or continue one of the <span class="ui">Unsaved drafts</span> listed above them (see <a href="#intro-home">The home screen</a>). Inside the editor, the toolbar <span class="ui">New</span> and <span class="ui">Open</span> buttons do the same. If the current job has unsaved changes, the app asks first: <span class="ui">Save</span>, <span class="ui">Don't save</span> (the autosave draft still keeps the work), or <span class="ui">Cancel</span>.</p>
 
   <ol class="steps">
-    <li  class="keep">Tap <span class="ui">New Drawing</span>.</li>
-    <li  class="keep">Tap <span class="ui">Project information</span> on the toolbar and fill in the job details.</li>
+    <li  class="keep">Tap <span class="ui">New Drawing</span>. The editor opens on the <span class="ui">Shaft &amp; job</span> card.</li>
     <li  class="keep">Check the unit (a new drawing takes the one set under <span class="path">Settings → Units</span>; see <a href="#editor-units">Units for the job</a>).</li>
-    <li  class="keep">Type the <span class="ui">Overall Length</span> and tap the green ✓.</li>
-    <li  class="keep">When the app asks for the <span class="ui">Shaft diameter</span>, type the bare-shaft diameter and tap <span class="ui">Set</span> (see <a href="#editor-oal">The overall length</a>).</li>
+    <li  class="keep">Type the <span class="ui">Overall Length</span> and press Done (see <a href="#editor-oal">The overall length</a>).</li>
+    <li  class="keep">Type the <span class="ui">Shaft diameter</span>, the bare-shaft diameter (see <a href="#editor-oal-dia">The shaft diameter</a>).</li>
+    <li  class="keep">Fill in the project information under them.</li>
     <li  class="keep">Add the components with <span class="ui">+ Add Component</span>, AFT end first is easiest.</li>
     <li  class="keep">Tap <span class="ui">Save</span> and confirm the suggested name.</li>
   </ol>
 
+  <h3 id="editor-start-card">The Shaft &amp; job card</h3>
+  <p>The first card in the carousel is always <span class="ui">Shaft &amp; job</span>, whatever the shaft holds; nothing you add or remove moves it from first place, and it has no Remove button. It holds what starts a job: <span class="ui">Overall Length</span> and <span class="ui">Shaft diameter</span> at the top, then the project information. A new drawing and a job you open both land on this card. Swipe left from it to the components; the toolbar's <span class="ui">Project information</span> button brings you back to it from any card (if a value on the card you are on is not saved yet, it asks first, as a swipe does). Its fields save like any card's (see <a href="#editor-commit">How values are saved</a>).</p>
+  <p  class="keep">On the <span class="ui">Final Schematic</span> tab the same card edits the final drawing's overall length and shaft diameter; the project information is the job's, shared by both drawings.</p>
+
   <h3 id="editor-project-info">Project information</h3>
-  <p  class="keep">The <span class="ui">Project information</span> button opens the <span class="ui">Project Information</span> sheet:</p>
+  <p  class="keep">Under the shaft fields, the <span class="ui">Shaft &amp; job</span> card holds the project information:</p>
   <table class="ref">
     <thead><tr><th>Field</th><th>Prints on the sheets</th></tr></thead>
     <tbody>
@@ -243,7 +247,7 @@
       <tr><td><span class="ui">Notes</span></td><td>Not printed. Notes stay with the job file for the office.</td></tr>
     </tbody>
   </table>
-  <p  class="keep">The sheet date is not typed: every sheet prints the date it was made. Nothing on the sheet takes effect until you tap <span class="ui">Save</span>; <span class="ui">Cancel</span> throws the edits away. If you swipe the sheet closed with edits pending, the app asks <span class="ui">Save changes?</span> and offers <span class="ui">Save</span>, <span class="ui">Keep editing</span> or <span class="ui">Discard</span>.</p>
+  <p  class="keep">The sheet date is not typed: every sheet prints the date it was made. A field is saved when you move on from it (the keyboard's Next key does that) or tap the green ✓ on the Save bar; the red ✗ puts back what it held. Swiping away with a field unsaved asks <span class="ui">Save changes?</span> first, so nothing you typed is lost. <span class="ui">Shaft Position</span> is saved the moment you pick it.</p>
   <aside class="tip"><p  class="keep">Fill in the project information before the first save. The suggested file name is built from it, and the mate duplicate copies it across.</p></aside>
 
   <h3 id="editor-naming">Naming the job</h3>
@@ -256,22 +260,22 @@
   <p  class="keep">Switching units never changes a dimension (see <a href="#intro-units">Millimeters and inches</a>). To print one component in the other unit (a metric thread on an inch shaft), see <a href="#components-prints-in">Prints in: in | mm</a>.</p>
 
   <h2 id="editor-oal">The overall length</h2>
-  <p  class="keep">The <span class="ui">Overall Length</span> field holds the shaft's OAL (overall length), end to end. It is always the number you type; nothing in the app sets, grows or shrinks it for you.</p>
+  <p  class="keep">The <span class="ui">Overall Length</span> field, the first field on the <span class="ui">Shaft &amp; job</span> card, holds the shaft's OAL (overall length), end to end. It is always the number you type; nothing in the app sets, grows or shrinks it for you.</p>
   <h3>Entering and changing it</h3>
   <ol class="steps">
-    <li  class="keep">Tap the <span class="ui">Overall Length</span> field. A shaft with no length yet shows 0; the 0 clears when you tap in.</li>
+    <li  class="keep">Swipe to the <span class="ui">Shaft &amp; job</span> card (or tap <span class="ui">Project information</span> on the toolbar) and tap the <span class="ui">Overall Length</span> field. A shaft with no length yet shows 0; what you type replaces it.</li>
     <li  class="keep">Type the length.</li>
-    <li  class="keep">Tap the green ✓, or the keyboard's Done key. Tapping away from the field after changing it also accepts the new length.</li>
+    <li  class="keep">Press the keyboard's Done key, move to another field, or tap the green ✓ on the Save bar above the cards.</li>
   </ol>
-  <p  class="keep">The green ✓ and red ✗ appear beside the field only while you are changing the value. The ✗ puts back the stored length and changes nothing. The drawing does not follow your typing digit by digit; it changes once, when you accept the new length, so an edit from 368 1/2″ to 367 3/4″ never passes through a 36″ shaft on the way.</p>
+  <p  class="keep">The Save bar's red ✗ puts back the stored length and changes nothing. The drawing does not follow your typing digit by digit; it changes once, when the new length is saved, so an edit from 368 1/2″ to 367 3/4″ never passes through a 36″ shaft on the way.</p>
   <ul>
-    <li  class="keep"><strong>An empty field changes nothing.</strong> Clear the field to retype it, change your mind, and the stored length comes back. You cannot zero a shaft by accident.</li>
+    <li  class="keep"><strong>An empty field changes nothing.</strong> Clear the field to retype it, change your mind, and the stored length comes back with a note under the field. You cannot zero a shaft by accident.</li>
     <li  class="keep"><strong>No length yet is not an error.</strong> Until an OAL is typed, the preview draws the shaft out to its last component and no “past the end” warnings appear. The other document tabs wait for a length.</li>
-    <li  class="keep"><strong>Components past the end are allowed.</strong> If a component runs past the OAL, the field turns red as a warning. Nothing is rejected or trimmed; fix whichever number is wrong.</li>
+    <li  class="keep"><strong>Components past the end are allowed.</strong> If a component runs past the OAL, the field turns red with <span class="ui">Parts run past this length</span> under it as a warning. Nothing is rejected or trimmed; fix whichever number is wrong.</li>
   </ul>
   <p  class="keep">When a thread is excluded from the OAL, a read-only line under the field, <span class="ui">Dimensioned OAL</span>, shows the span the sheet's OAL dimension actually covers.</p>
-  <h3 id="editor-oal-dia">The shaft diameter prompt</h3>
-  <p>On a new drawing, the first time you accept an overall length the app asks for the <span class="ui">Shaft diameter</span>: “What is the bare-shaft diameter? Components you add will sit on a shaft of this size.” Type it in the drawing's unit (fractions are fine) and tap <span class="ui">Set</span>; every stretch of bare shaft takes that diameter. Tap <span class="ui">Skip</span> to leave it for later. The question comes once per drawing: it is not asked again after a Skip, and never when you open a saved job or start from a template. You can change the diameter at any time on a <span class="ui">Body (auto)</span> card (see <a href="#editor-bodies">Bodies and bare shaft</a>).</p>
+  <h3 id="editor-oal-dia">The shaft diameter</h3>
+  <p>Under (or, on a tablet, beside) the overall length, <span class="ui">Shaft diameter</span> is the diameter of the bare shaft — every stretch you do not cover with a component. Type it in the drawing's unit (fractions are fine), so the components you add sit on a shaft of the right size. It saves like any card field. A note under it says that sections of bare shaft can each be given their own diameter on their <span class="ui">Body (auto)</span> cards: a section given one there keeps it when you change this field. Clear the field (or enter 0) to let the bare shaft take its diameter from the components beside it again. See <a href="#editor-bodies">Bodies and bare shaft</a>.</p>
 
   <h3 id="editor-oal-change">What moves when the OAL changes</h3>
   <p  class="keep">Each explicit body, taper, liner and coupler bolt slot is measured from the end you chose for it with its AFT | FWD chips. When the OAL changes:</p>
@@ -285,7 +289,7 @@
   <aside class="shop"><p  class="keep">This is the way the print reads at the lathe: a FWD taper dimensioned from the FWD face is still dimensioned from the FWD face after the shaft is shortened. Only the overall length on the sheet changes.</p></aside>
 
   <h2 id="editor-add">Adding components</h2>
-  <p  class="keep">Every component is added from the one full-width <span class="ui">+ Add Component</span> button under the overall length. It opens the <span class="ui">Add Component</span> chooser:</p>
+  <p  class="keep">Every component is added from the one full-width <span class="ui">+ Add Component</span> button above the carousel. It opens the <span class="ui">Add Component</span> chooser:</p>
   <table class="ref">
     <thead><tr><th>Choice</th><th>The Add dialog asks for</th></tr></thead>
     <tbody>
@@ -333,16 +337,16 @@
   <p  class="keep">The preview's colors are set under <span class="path">Settings → Editor Screen → Preview Colors</span>. They change the screen only; printed sheets are always black ink on white.</p>
 
   <h2 id="editor-carousel">Editing in the carousel</h2>
-  <p  class="keep">Under the <span class="ui">Components</span> heading (<span class="ui">Swipe to select</span>), the carousel holds one card per component, in physical order from AFT to FWD, with bare-shaft cards in their places between them. Swipe left or right to move along the shaft; the card you land on is selected and highlights in the preview. When a document opens, the AFT-most card is selected.</p>
+  <p  class="keep">Under the <span class="ui">Components</span> heading (<span class="ui">Swipe to select</span>), the carousel holds one card per component, in physical order from AFT to FWD, with bare-shaft cards in their places between them. Swipe left or right to move along the shaft; the card you land on is selected and highlights in the preview. Before them all stands the <span class="ui">Shaft &amp; job</span> card, where a document opens; nothing is highlighted while it shows.</p>
 
   <h3>Card names</h3>
   <p  class="keep">Each card is titled with a name worked out from its place on the shaft: <span class="ui">Body #1</span>, <span class="ui">AFT Taper</span>, <span class="ui">FWD Thread</span>, <span class="ui">AFT Liner</span>, <span class="ui">MID Liner #2</span>, and so on (see <a href="#components-names">Component names</a>). Bare shaft shows as <span class="ui">Body (auto)</span>. To give a component your own name, tap its title or the pencil beside it (<span class="ui">Rename</span>), type, and tap Done. Clear the name to go back to the automatic one.</p>
 
   <h3 id="editor-commit">How values are saved</h3>
   <p  class="keep">A value on a card is saved when you leave the field, either by tapping elsewhere or tapping Done. It is not saved on every keystroke. Tapping into a field and leaving without changing it does nothing at all.</p>
-  <p  class="keep">While a field on a card holds a value you have typed but not yet saved, a Save bar takes the place of <span class="ui">Overall Length</span> at the top of the editor. It names the field and its card, with the same green <span class="ui">✓</span> and red <span class="ui">✗</span> that sit beside <span class="ui">Overall Length</span>: tap <span class="ui">✓</span> to save the value or <span class="ui">✗</span> to put the old value back. <span class="ui">Overall Length</span> comes back as soon as the card is saved. Tapping <span class="ui">Done</span> on the keyboard or moving to another field also saves it.</p>
+  <p  class="keep">While a field on a card holds a value you have typed but not yet saved, a Save bar slides in above the cards (on a tablet held wide, beside the drawing). It names the field and its card, with a green <span class="ui">✓</span> and a red <span class="ui">✗</span>: tap <span class="ui">✓</span> to save the value or <span class="ui">✗</span> to put the old value back. The bar slides away as soon as the card is saved. Tapping <span class="ui">Done</span> on the keyboard or moving to another field also saves it.</p>
   <p  class="keep">Swiping to another card, or tapping another component on the drawing, while a value is unsaved asks <span class="ui">Save changes?</span> first: <span class="ui">Save</span> keeps the value, <span class="ui">Discard</span> puts the old value back, and <span class="ui">Keep editing</span> stays on the card.</p>
-  <aside class="tip"><p  class="keep">Chips, checkboxes and switches do not take the keyboard's focus, so typing a value and then tapping a chip can leave the typed value unsaved in its field. The Save bar stays at the top until you answer it.</p></aside>
+  <aside class="tip"><p  class="keep">Chips, checkboxes and switches do not take the keyboard's focus, so typing a value and then tapping a chip can leave the typed value unsaved in its field. The Save bar stays above the cards until you answer it.</p></aside>
   <p  class="keep">A value the field cannot accept, such as a length of zero (<span class="ui">Must be &gt; 0</span>), a negative start (<span class="ui">Must be ≥ 0</span>), or text that is not a number, shows a message under the field and is not saved; the field goes back to the stored value.</p>
   <aside class="note"><p  class="keep">A typed value is never rounded, snapped or adjusted; bare shaft fills the gaps around it. See <a href="#intro-sacred">What you type is what prints</a>.</p></aside>
 
@@ -376,7 +380,7 @@
     <li  class="keep"><span class="ui">All auto sections</span> sets the bare-shaft diameter for every section together, and clears any section that had a diameter of its own.</li>
     <li  class="keep"><span class="ui">Cancel</span> changes nothing, and the field shows the stored diameter again.</li>
   </ul>
-  <p  class="keep">With only one section of bare shaft there is nothing to choose: the diameter you type is the shaft's. Clear the field, or enter 0, to let a section take its diameter from its neighbors again.</p>
+  <p  class="keep">With only one section of bare shaft there is nothing to choose: the diameter you type is the shaft's. The <span class="ui">Shaft diameter</span> on the <span class="ui">Shaft &amp; job</span> card sets every section that has no diameter of its own and leaves the others as they are. Clear the field, or enter 0, to let a section take its diameter from its neighbors again.</p>
   <p  class="keep">A section's own diameter goes with it. If you delete the component that separated it from the section before it, the two join and the joined run keeps the earlier section's diameter; add a component later that splits it again and the new section takes the shaft's diameter, not the old value. <span class="ui">Undo</span> brings the old value back. Moving or resizing a component, or changing the overall length, never loses one: a section squeezed out by a resize gets its diameter back when the room returns.</p>
   <p  class="keep">If two sections with different diameters are joined (because the component between them was deleted), the joined section takes the AFT section's diameter. The FWD section's diameter is kept in reserve and comes back if the two are split again.</p>
   <p  class="keep">The auto card also carries <span class="ui">Show bare-shaft Ø on drawing</span> (one switch for all bare shaft) and the component blend and seal area controls; see <a href="#components-bodies">Bodies</a>.</p>
@@ -474,7 +478,7 @@
   <ol class="steps">
     <li  class="keep">Tap the template card, or its ⋮ menu (<span class="ui">Template options</span>) → <span class="ui">Use this template</span>.</li>
     <li  class="keep">If the current job has unsaved changes, choose <span class="ui">Save</span>, <span class="ui">Don't save</span> or <span class="ui">Cancel</span>.</li>
-    <li  class="keep">Fill in <span class="ui">Project information</span> for the new job.</li>
+    <li  class="keep">Fill in the project information on the <span class="ui">Shaft &amp; job</span> card for the new job.</li>
     <li  class="keep">Adjust the dimensions to this shaft and tap <span class="ui">Save</span>.</li>
   </ol>
   <p  class="keep">The job opens as an unsaved, unnamed drawing, so the first save always asks for a name; the template itself can never be overwritten by a job made from it. The same ⋮ menu offers <span class="ui">Rename</span> and <span class="ui">Delete</span>. Deleting a template does not affect drawings already made from it.</p>
@@ -1410,7 +1414,7 @@
     <li  class="keep">Read the short explanation, then tap <span class="ui">Start from original schematic</span>.</li>
     <li  class="keep">The tab becomes the familiar shaft editor, under the banner <span class="ui">Final drawing — the original schematic is untouched</span>.</li>
   </ol>
-  <p  class="keep">The Final drawing starts as an exact copy of the original. From then on the two are independent: edit the Final with the same cards, Add dialogs and OAL field as the Schematic tab, and nothing you change on one ever reaches the other. Moving a liner on the original later does not move it on the Final. Per-component print units apply to both drawings.</p>
+  <p  class="keep">The Final drawing starts as an exact copy of the original. From then on the two are independent: edit the Final with the same cards (its <span class="ui">Shaft &amp; job</span> card included) and Add dialogs as the Schematic tab, and nothing you change on one ever reaches the other. Moving a liner on the original later does not move it on the Final. Per-component print units apply to both drawings.</p>
   <ul>
     <li  class="keep">Runout readings, wear and undercut records stay with the original drawing. The Runout, Wear, Undercut and Consolidated Output tabs always print the original.</li>
     <li  class="keep">A job has one Final drawing. It is not carried into templates or mate duplicates.</li>
@@ -2567,7 +2571,7 @@
   <p  class="keep">To add a part, tap the full-width <span class="ui">+ Add Component</span> button under the preview. The <span class="ui">Add Component</span> chooser offers <span class="ui">Body</span>, <span class="ui">Liner</span>, <span class="ui">Taper</span>, <span class="ui">Thread</span> and <span class="ui">Coupler Bolt Slot / Hole</span>.</p>
 
   <h3>I typed a new overall length and the drawing didn't change</h3>
-  <p  class="keep">The <span class="ui">Overall Length</span> field does not apply what you type key by key, because a half-typed value (36″ on the way to 367 3/4″) would collapse the drawing and move every FWD-referenced part. Tap the green ✓, press the keyboard's Done key, or leave the field after changing it. The red ✗ puts the stored length back, and an empty field changes nothing. See <a href="#editor-oal">The overall length</a>.</p>
+  <p  class="keep">The <span class="ui">Overall Length</span> field does not apply what you type key by key, because a half-typed value (36″ on the way to 367 3/4″) would collapse the drawing and move every FWD-referenced part. Press the keyboard's Done key, leave the field after changing it, or tap the green ✓ on the Save bar above the cards. The red ✗ puts the stored length back, and an empty field changes nothing. See <a href="#editor-oal">The overall length</a>.</p>
 
   <h3>The Overall Length field is outlined in red</h3>
   <p>The overall length is shorter than the far end of your last component, so something runs off the FWD end of the shaft. The card that runs past shows an amber advisory strip, <span class="ui">Extends past shaft length</span>, the banner above the carousel names the part and how far it runs (for example <span class="ui">Body #1 runs 4 13/16" past the FWD end</span>; tap the line to go to its card), and the drawing tints the overhang red with the shaft's real end dashed. If you just shortened the OAL, the message at the bottom of the screen says which FWD-measured parts moved with the end.</p>
@@ -2602,7 +2606,7 @@
   <p  class="keep">Adding a taper, thread or liner over a body divides the body around it, because the shaft is no longer one run. Delete the part and the pieces join back into one body. The exception is a body that carries a keyway: it is never split, so the keyway stays whole on one card.</p>
 
   <h3>I set the bare-shaft Ø and only one section changed</h3>
-  <p  class="keep">The Ø on a <span class="ui">Body (auto)</span> card applies to that bare section only, so a shaft can step from one bare diameter to another between liners. Set each section on its own card; clear the field to let that section follow its neighbors again. See <a href="#editor-bodies">Bodies and bare shaft</a>.</p>
+  <p  class="keep">The Ø on a <span class="ui">Body (auto)</span> card can apply to that bare section only (<span class="ui">This section</span>), so a shaft can step from one bare diameter to another between liners. Set each section on its own card; clear the field to let that section follow its neighbors again. To set the whole bare shaft, use <span class="ui">Shaft diameter</span> on the <span class="ui">Shaft &amp; job</span> card: it changes every section without a diameter of its own and leaves the ones you set alone. See <a href="#editor-bodies">Bodies and bare shaft</a>.</p>
 
   <h3>I can't add a keyway to a bare-shaft section</h3>
   <p  class="keep">Bare-shaft sections move and disappear as their neighbors change, which would silently move or delete a keyway. Tick <span class="ui">Explicit body</span> on the <span class="ui">Body (auto)</span> card to make it a real body, then open the <span class="ui">Keyway</span> section. The reverse also applies: unticking <span class="ui">Explicit body</span> asks <span class="ui">Make body automatic?</span>, warns <span class="ui">Its keyway will be removed too.</span>, and on confirming hands the span back to bare shaft.</p>
@@ -2912,7 +2916,7 @@
     <dd  class="keep">A smaller, deeper undercut that sits fully inside a wider one, such as a corroded patch cut deeper within an earlier relief. It is drawn as a step below the outer cut's floor.</dd>
 
     <dt>OAL</dt>
-    <dd  class="keep">Overall length: the shaft's length end to end, typed in the <span class="ui">Overall Length</span> field. Every drawing is laid out against it. A thread can be left out of it with <span class="ui">Include thread in OAL</span>.</dd>
+    <dd  class="keep">Overall length: the shaft's length end to end, typed in the <span class="ui">Overall Length</span> field on the editor's <span class="ui">Shaft &amp; job</span> card. Every drawing is laid out against it. A thread can be left out of it with <span class="ui">Include thread in OAL</span>.</dd>
 
     <dt>OD</dt>
     <dd  class="keep">Outside diameter: the diameter measured over the outside of a liner or the coupling, as opposed to a bore. A liner's <span class="ui">Outer Ø</span> is its OD.</dd>

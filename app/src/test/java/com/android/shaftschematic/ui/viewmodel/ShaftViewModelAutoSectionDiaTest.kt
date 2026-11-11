@@ -6,6 +6,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.android.shaftschematic.model.AutoDiaOverride
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.withAutoSectionDia
+import com.android.shaftschematic.model.withShaftWideAutoBodyDia
 import com.android.shaftschematic.ui.screen.ADD_DIALOG_DIA_FALLBACK_MM
 import com.android.shaftschematic.ui.screen.addDialogBodyDiaMm
 import com.android.shaftschematic.ui.screen.addDialogLastDiaMm
@@ -163,15 +164,65 @@ class ShaftViewModelAutoSectionDiaTest {
         assertEquals(before.autoDiaOverrides, vm.spec.value.autoDiaOverrides)
     }
 
+    // ── The start card's shaft-wide Ø keeps every section override ───────────────
+
+    @Test
+    fun `the shaft diameter keeps a section's own diameter, and undoes`() {
+        val vm = twoSectionVm()
+        vm.setAutoSectionDiaMm(600f, 1000f, 150f)
+        nextStep()
+        val before = vm.spec.value
+
+        vm.setShaftWideAutoBodyDiaMm(120.0001f)
+        idle()
+
+        assertEquals("stored verbatim", 120.0001f, vm.spec.value.autoBodyDiaMm)
+        assertEquals("the section typed on its card stays as typed", before.autoDiaOverrides, vm.spec.value.autoDiaOverrides)
+
+        vm.undoEdit()
+        idle()
+        assertEquals(before.autoBodyDiaMm, vm.spec.value.autoBodyDiaMm)
+        assertEquals(before.autoDiaOverrides, vm.spec.value.autoDiaOverrides)
+    }
+
+    @Test
+    fun `clearing the shaft diameter returns the shaft to the derived Ø and keeps the sections`() {
+        val start = ShaftSpec(
+            autoBodyDiaMm = 120f,
+            autoDiaOverrides = listOf(AutoDiaOverride(anchorMm = 800f, diaMm = 160f)),
+        )
+
+        val cleared = start.withShaftWideAutoBodyDia(0f)
+
+        assertEquals(0f, cleared.autoBodyDiaMm)
+        assertEquals(start.autoDiaOverrides, cleared.autoDiaOverrides)
+        assertEquals(cleared, start.withShaftWideAutoBodyDia(-5f))
+        assertSame("an unchanged value is a no-op", start, start.withShaftWideAutoBodyDia(120f))
+    }
+
+    @Test
+    fun `the shaft diameter writes only the drawing it names`() {
+        val vm = twoSectionVm()
+        vm.startFinalSpec()
+        idle()
+        val original = vm.spec.value
+
+        vm.setShaftWideAutoBodyDiaMm(130f, SpecTarget.FINAL)
+        idle()
+
+        assertEquals(130f, vm.finalSpec.value!!.autoBodyDiaMm)
+        assertEquals("the original is untouched", original, vm.spec.value)
+    }
+
     /** The Add Body dialog's Ø when nothing else names one — its own 25 mm placeholder. */
     private val placeholderDiaMm = 25f
 
     @Test
-    fun `the add body dialog opens at the bare-shaft diameter the prompt set`() {
+    fun `the add body dialog opens at the bare-shaft diameter the start card set`() {
         val vm = ShaftViewModel(ApplicationProvider.getApplicationContext<Application>())
         idle()
         vm.onSetOverallLengthMm(9000f)
-        vm.setAutoBodyDiaMm(203.2f)
+        vm.setShaftWideAutoBodyDiaMm(203.2f)
         idle()
 
         assertEquals(203.2f, addDialogBodyDiaMm(vm.spec.value, placeholderDiaMm), 0f)

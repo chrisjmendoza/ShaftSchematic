@@ -19,10 +19,9 @@ import androidx.compose.ui.platform.testTag
  * Layer: UI → Input
  *
  * The green ✓ / red ✗ pair an edited value shows while it holds an edit that has not landed:
- * ✓ accepts it, ✗ puts the stored value back. ONE construction behind the Overall Length field
- * and the card Save / Cancel bar that takes its place while a card field holds an unsaved value,
- * so the two read as the same control (on-device ruling: a Save button at the foot of a long card
- * was hidden; the Overall Length row is always on screen).
+ * ✓ accepts it, ✗ puts the stored value back. ONE construction behind the card Save / Cancel
+ * bar above the carousel, shown while a card field holds an unsaved value (on-device ruling: a
+ * Save button at the foot of a long card was hidden), and every other accept/cancel pair.
  *
  * Neither button can take focus: a click that pulled focus off the field would blur-commit the
  * field before the button's own handler ran, and ✗ would then cancel an edit that had already

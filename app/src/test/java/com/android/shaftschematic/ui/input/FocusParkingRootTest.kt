@@ -25,10 +25,10 @@ import org.robolectric.annotation.Config
 
 /**
  * [FocusParkingRoot]: out of touch mode, `View.clearFocus()` makes the window refocus, and the
- * Compose view hands that focus to the top-left focusable — on the editor, the Overall Length
- * field. The root target catches it instead, so releasing focus leaves no field focused
- * (emulator QA: cancelling the auto-body "Apply diameter to…" dialog dropped the cursor and the
- * keyboard into the OAL field). The control test pins the mechanism itself, so a platform or
+ * Compose view hands that focus to the top-left focusable — on the editor, a text field. The
+ * root target catches it instead, so releasing focus leaves no field focused (emulator QA:
+ * cancelling the auto-body "Apply diameter to…" dialog dropped the cursor and the keyboard into
+ * a field). The control test pins the mechanism itself, so a platform or
  * Compose change that stops refocusing shows up here rather than as a silently idle wrapper.
  */
 @RunWith(RobolectricTestRunner::class)
