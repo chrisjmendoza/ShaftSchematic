@@ -13,7 +13,7 @@
   <p>To add a part, tap the full-width <span class="ui">+ Add Component</span> button under the preview. The <span class="ui">Add Component</span> chooser offers <span class="ui">Body</span>, <span class="ui">Liner</span>, <span class="ui">Taper</span>, <span class="ui">Thread</span> and <span class="ui">Coupler Bolt Slot / Hole</span>.</p>
 
   <h3>I typed a new overall length and the drawing didn't change</h3>
-  <p>The <span class="ui">Overall Length</span> field does not apply what you type key by key, because a half-typed value (36″ on the way to 367 3/4″) would collapse the drawing and move every FWD-referenced part. Tap the green ✓, press the keyboard's Done key, or leave the field after changing it. The red ✗ puts the stored length back, and an empty field changes nothing. See <a href="#editor-oal">The overall length</a>.</p>
+  <p>The <span class="ui">Overall Length</span> field does not apply what you type key by key, because a half-typed value (36″ on the way to 367 3/4″) would collapse the drawing and move every FWD-referenced part. Press the keyboard's Done key, leave the field after changing it, or tap the green ✓ on the Save bar above the cards. The red ✗ puts the stored length back, and an empty field changes nothing. See <a href="#editor-oal">The overall length</a>.</p>
 
   <h3>The Overall Length field is outlined in red</h3>
   <p>The overall length is shorter than the far end of your last component, so something runs off the FWD end of the shaft. The card that runs past shows an amber advisory strip, <span class="ui">Extends past shaft length</span>, the banner above the carousel names the part and how far it runs (for example <span class="ui">Body #1 runs 4 13/16" past the FWD end</span>; tap the line to go to its card), and the drawing tints the overhang red with the shaft's real end dashed. If you just shortened the OAL, the message at the bottom of the screen says which FWD-measured parts moved with the end.</p>
@@ -48,7 +48,7 @@
   <p>Adding a taper, thread or liner over a body divides the body around it, because the shaft is no longer one run. Delete the part and the pieces join back into one body. The exception is a body that carries a keyway: it is never split, so the keyway stays whole on one card.</p>
 
   <h3>I set the bare-shaft Ø and only one section changed</h3>
-  <p>The Ø on a <span class="ui">Body (auto)</span> card applies to that bare section only, so a shaft can step from one bare diameter to another between liners. Set each section on its own card; clear the field to let that section follow its neighbors again. See <a href="#editor-bodies">Bodies and bare shaft</a>.</p>
+  <p>The Ø on a <span class="ui">Body (auto)</span> card can apply to that bare section only (<span class="ui">This section</span>), so a shaft can step from one bare diameter to another between liners. Set each section on its own card; clear the field to let that section follow its neighbors again. To set the whole bare shaft, use <span class="ui">Shaft diameter</span> on the <span class="ui">Shaft &amp; job</span> card: it changes every section without a diameter of its own and leaves the ones you set alone. See <a href="#editor-bodies">Bodies and bare shaft</a>.</p>
 
   <h3>I can't add a keyway to a bare-shaft section</h3>
   <p>Bare-shaft sections move and disappear as their neighbors change, which would silently move or delete a keyway. Tick <span class="ui">Explicit body</span> on the <span class="ui">Body (auto)</span> card to make it a real body, then open the <span class="ui">Keyway</span> section. The reverse also applies: unticking <span class="ui">Explicit body</span> asks <span class="ui">Make body automatic?</span>, warns <span class="ui">Its keyway will be removed too.</span>, and on confirming hands the span back to bare shaft.</p>
@@ -358,7 +358,7 @@
     <dd>A smaller, deeper undercut that sits fully inside a wider one, such as a corroded patch cut deeper within an earlier relief. It is drawn as a step below the outer cut's floor.</dd>
 
     <dt>OAL</dt>
-    <dd>Overall length: the shaft's length end to end, typed in the <span class="ui">Overall Length</span> field. Every drawing is laid out against it. A thread can be left out of it with <span class="ui">Include thread in OAL</span>.</dd>
+    <dd>Overall length: the shaft's length end to end, typed in the <span class="ui">Overall Length</span> field on the editor's <span class="ui">Shaft &amp; job</span> card. Every drawing is laid out against it. A thread can be left out of it with <span class="ui">Include thread in OAL</span>.</dd>
 
     <dt>OD</dt>
     <dd>Outside diameter: the diameter measured over the outside of a liner or the coupling, as opposed to a bore. A liner's <span class="ui">Outer Ø</span> is its OD.</dd>

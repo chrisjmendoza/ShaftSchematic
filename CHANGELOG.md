@@ -8,6 +8,36 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-10
 
+### feat(editor): the start card — overall length, shaft diameter and project information
+
+The overall length no longer stands above the cards all the time (on-device request: it is a
+one-and-done measurement like the rest). The first card in the editor is now **Shaft & job**, and
+it stays the first card whatever you add or remove: Overall Length, then Shaft diameter, then the
+project information (Job Number, Customer, Vessel, Item, Shaft Position, Notes). A job starts there
+— type the length, the bare-shaft diameter and who it is for — and then you build the shaft with
+"+ Add Component". New and opened drawings open on this card; tapping a part in the drawing, adding
+a component or tapping a warning still takes you to that part's card, and the Project information
+button in the toolbar brings you back to this one.
+
+Overall Length now saves like every other card field: Done, moving to another field, or the Save
+(✓) above the cards; Cancel (✗) puts the old length back. An empty entry still never zeroes the
+shaft. Shaft diameter sets the diameter of the bare shaft between your components; a section you
+gave its own diameter on its Body card keeps it (a note under the field says so). Clear the field
+to go back to the diameter the drawing works out for itself. On the Final Schematic tab the same
+card edits the final drawing's length and diameter; the project information is shared by both.
+
+The separate Project information sheet is gone (its fields are on the card), and so is the
+"Shaft diameter" question that popped up after the first length — the field is right under the
+length now. The Save / Cancel bar above the cards appears only while a card holds a value you have
+not saved, and it slides in and out instead of making the cards jump.
+
+A drawing you open (or start) always shows this card from its top. Two things used to leave its
+"Shaft & job" title cut off (on-device QA): the cards kept the previous document's scroll position
+when the drawing was opened from the Open screen (a warning you had dismissed on the last drawing
+also stayed dismissed on the next), and a card the keyboard had scrolled to show the field you were
+typing in stayed scrolled after the keyboard closed. Both are fixed — when the keyboard closes the
+card scrolls back to where it was, keeping the field you were on in view.
+
 ### feat(preview): the editor preview draws like the sheet; Preview options
 
 The Schematic and Final tabs' preview box now draws the shaft the way the printed schematic does
@@ -18,7 +48,9 @@ shaft is no longer a hairline under its dimension lines. Everything comes from t
 layout: the default drawing size, the "Shaft height" slider, "Liner & taper compression", the Body
 S-break setting and each body's "Compress on drawing" choice all show in the box as they print.
 In a phone's short box the shaft takes at most 40% of the box's height so the dimension lines keep
-room above it. Tapping a component still selects it — a tap in a break's gap selects that body —
+room above it — the bare shaft's diameter included, so a new drawing with only a length and a shaft
+diameter, or a shaft wider than every part on it, stays inside the box (on-device QA: it drew as
+one giant S-break filling the box). Tapping a component still selects it — a tap in a break's gap selects that body —
 and pan, zoom and the reset button work as before. The box stays a plain true-length picture until
 the overall length is typed, and while a part hangs past the shaft end (so the red mark can show
 where). The grid stands down while the preview draws like the sheet: a millimetre grid has no

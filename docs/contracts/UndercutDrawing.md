@@ -94,7 +94,7 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
 - **"Drawn depth" slider** (the fifth row of Drawing settings; label formerly "Cut depth
   exaggeration", caption "Makes shallow cuts easier to see — 0% is true scale. Printed Ø values
   never change. Saved with this job."): 0 – `UNDERCUT_EXAGGERATION_MAX_FRAC` with a live "%" readout,
-  committing continuously through `ShaftViewModel.setUndercutExaggeration` — the OAL field's
+  committing continuously through `ShaftViewModel.setUndercutExaggeration` — a slider's
   live-update posture, not commit-on-blur (it is a `Slider`, not a `NumericInputField`). It
   drives `UndercutRecord.exaggerationFrac`; see "Drawn depth exaggeration" below.
 - **"Draw to the shaft end" switch** (directly under the Drawn depth slider, same visibility;

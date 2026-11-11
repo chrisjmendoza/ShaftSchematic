@@ -21,9 +21,9 @@ import androidx.compose.ui.focus.focusTarget
  * Out of touch mode (a hardware or Bluetooth keyboard, or any key event the IME sends as a raw
  * key), Android's `View.clearFocus()` immediately asks the window's root to take focus again;
  * the Compose view answers with an "enter" focus search that hands focus to the top-left
- * focusable composable. On the editor that is the Overall Length field, so cancelling the
- * auto-body "Apply diameter to…" dialog left the OAL focused with the keyboard up, the next
- * digits typed landed in the shaft length, and a blur would have committed them (emulator QA).
+ * focusable composable. On the editor that is a text field, so cancelling the auto-body "Apply
+ * diameter to…" dialog left that field focused with the keyboard up, the next digits typed
+ * landed in it, and a blur would have committed them (emulator QA).
  * A focusable box around everything is the enter search's first candidate, so the refocus
  * lands here instead: focused, but no field, no cursor and no keyboard. In touch mode the
  * platform does not refocus at all and this box is never focused.

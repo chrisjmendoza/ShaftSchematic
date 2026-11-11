@@ -1,8 +1,9 @@
-# Overall Length (v2.7, 2026-10-30)
+# Overall Length (v2.8, 2026-11-10)
 
 ## Scope
 Defines how the **Overall Length** field behaves, how it interacts with components, and how the
-UI signals errors. Applies to `ShaftViewModel`, `ShaftRoute`, and `ShaftScreen`.
+UI signals errors. Applies to `ShaftViewModel`, `ShaftRoute`, `ShaftScreen`, and the start card
+(`StartCard.kt`).
 
 ---
 
@@ -11,56 +12,42 @@ UI signals errors. Applies to `ShaftViewModel`, `ShaftRoute`, and `ShaftScreen`.
   shrinks `ShaftSpec.overallLengthMm` on the user's behalf. It is a component value under the
   golden rule (`CLAUDE.md`) — a typed length stands exactly as typed.
 - **Default**: Overall starts at **0** — "not set yet", not "a zero-length shaft". The field
-  shows `0`, and focusing it clears that ghost so the user can type without a leading zero.
-- **Commit on accept, never per keystroke.** The field follows the component cards' discipline:
-  `onSetOverallLengthMm` fires when the value is accepted — the green ✓ beside the field, IME
-  Done, or a blur after the text changed — and never while typing. The red ✗ reverts the text to
-  the stored value and commits nothing. Both buttons appear only while the value is being
-  modified (focused, text differs from what it was on focus), so an edit in progress is visible
-  as one; the field itself is a value box (`widthIn` cap), not a full-width banner. The
-  per-keystroke commit was the documented live-preview exception until an on-device edit from
-  368.5″ to 367.75″ committed 36″ on the way through: the drawing collapsed, then sprang back
-  with the FWD taper re-anchored through the transient value (see Re-anchoring below).
-- **Empty field**: an IME-Done or a blur on an empty field commits **nothing**. The field text
-  re-derives from the stored value (a revert). It never zeroes the shaft.
-- **Unreadable text says so**: ✓ / IME Done on text that does not parse commits nothing and
-  keeps the text (the user is mid-edit); a blur restores the stored value. Both show the numeric
-  fields' `"<typed> not applied — not a number"` line under the field until the text is edited
-  or the edit is cancelled — a ✓ that did nothing read as a broken button (emulator QA). The
-  field reads the shared grammar (`NumberField.md`): `368-1/2` and `368 1/2` commit, and a unit
-  suffix converts (`9360mm` in an inch drawing is 9360 mm).
-- **Blur discipline**: a commit on blur also requires the text to have changed since focus
-  (`ui/input/BlurCommitPolicy.kt`) — a tap-and-leave is a no-op. A ✓ or ✗ resets that baseline
-  before it clears focus, so the blur that follows cannot commit a second time or undo a cancel.
-- **The OAL row yields to the card Save / Cancel bar** (on-device ruling: a Save at the end of a
-  long card was hidden; this row is always on screen above the carousel). While a carousel card
-  field holds a typed value that has not landed, `OverallLengthRow` shows `CardSaveBar` in the
-  OAL field's place: "Unsaved change" over the waiting field and its card
-  (`pendingEditName` — "“Length” on AFT Taper"), and the SAME green ✓ / red ✗
-  (`AcceptCancelButtons`) in the OAL's own fixed action slot, so it reads as one control. ✓ saves
-  the card value, ✗ puts its stored value back — the field's own handle
-  (`NumericInputField.onPendingEdit`), never a second commit pipeline. The OAL field returns the
-  moment the card is clean. With the field hidden, nothing can focus the OAL under a pending
-  edit, so no prompt guards it. The card fields register through `PendingCardEdits` /
-  `LocalPendingCardEdits` (`ui/screen/PendingCardEdit.kt`), provided once around the editor. A
-  card change under a pending edit (swipe, edge arrow, peek tap, drawing tap) asks Save | Discard
-  | Keep editing (`UnsavedCardEditDialog`). Pinned by `CardSaveBarTest` and
-  `UnsavedCardEditDialogTest`.
-- **Oversize**: if components extend past a **set** Overall (`> 0`), the input shows an
-  **error**. A not-yet-set Overall (`0`) is never an error.
-- **New-shaft diameter prompt** (on-device request: components added onto the default-sized
-  bare shaft look wrong until its Ø is set). On the ORIGINAL drawing only, `ShaftRoute` reads
-  `shouldPromptShaftDia(spec)` (`ui/screen/ShaftDiaPrompt.kt`: OAL ≤ 0, `autoBodyDiaMm` ≤ 0, no
-  body/taper/thread/liner/bolt slot) BEFORE forwarding an OAL commit; if it was armed and the
-  committed OAL is > 0, `ShaftDiaPromptDialog` opens — one diameter field in the document unit
-  (fractions accepted, converted to mm at the edge), focused with the keyboard up; "Set"
-  (enabled while the entry parses > 0) writes `ShaftViewModel.setAutoBodyDiaMm`, "Skip"
-  dismisses. The accept path fires the mm and raw callbacks back to back: the second finds the
-  OAL already set and is not armed, so the prompt shows once; the blur-with-change path arms
-  the same way. A Skip is final (the OAL is no longer 0). Loading a document or template never
-  prompts (they carry an OAL or components); `newDocument()` resets to a blank `ShaftSpec()`,
-  so the next new drawing prompts again. The Ø is its own undo step after the OAL's. The
-  prompt never writes the OAL — nothing backfills it (below).
+  shows `0`; focusing it selects the text, so the first keystroke replaces it.
+- **The field lives on the start card.** The carousel's first page — "Shaft & job"
+  (`ui/screen/StartCard.kt`), on the Schematic and Final tabs at every width — opens with Overall
+  Length, then Shaft diameter, then the project information (on-device request: the OAL row standing
+  above the carousel all the time nagged; the OAL is one-and-done like the other measurements). A
+  new or opened document lands on that card. The always-on OAL row is gone (see `ShaftScreen.md`).
+- **Commit like every card field, never per keystroke.** The field is an ordinary `CommitNum`
+  (`OAL_FIELD_TAG`): `onSetOverallLengthMm` fires on IME Done, on a blur after the text changed
+  since focus (`ui/input/BlurCommitPolicy.kt` — a tap-and-leave is a no-op), or from the card Save
+  bar's ✓ while the field holds an unsaved value; the bar's ✗ restores the stored value and commits
+  nothing. Typing only changes the box. The per-keystroke commit was the documented live-preview
+  exception until an on-device edit from 368.5″ to 367.75″ committed 36″ on the way through: the
+  drawing collapsed, then sprang back with the FWD taper re-anchored through the transient value
+  (see Re-anchoring below).
+- **Empty or unreadable text commits nothing, and says so.** Done, a blur or the ✓ on an empty
+  field, or on text that does not parse, commits nothing: the stored length comes back and the
+  shared `"<typed> not applied — not a number"` line (`"Blank entry not applied …"` for an empty
+  box) stays under the field until it is edited (`NumberField.md`). It never zeroes the shaft. The
+  field reads the shared grammar: `368-1/2` and `368 1/2` commit, and a unit suffix converts
+  (`9360mm` in an inch drawing is 9360 mm).
+- **Inch readback** is the card fields' `formatDisplay` → `inchFieldText`: a value on the 1/32
+  grid reads back as its fraction (or its exact decimal under Settings → Units "Inch fields show:
+  Decimals").
+- **Oversize**: if components extend past a **set** Overall (`> 0`), the field shows an error
+  state with the advisory line "Parts run past this length" — it still commits; the warning banner
+  names the parts. A not-yet-set Overall (`0`) is never an error.
+- **Shaft diameter** sits beside it (two to a row on a tablet, under it on a phone): the shaft-wide
+  bare-shaft Ø (`ShaftSpec.autoBodyDiaMm`), typed in the document unit and stored verbatim through
+  `ShaftViewModel.setShaftWideAutoBodyDiaMm` → `withShaftWideAutoBodyDia`. It writes ONLY the
+  shaft-wide value: every per-section override (`autoDiaOverrides`) is KEPT, so a section typed on
+  its own card stays as typed (the auto-body card's "All auto sections" is the one that clears
+  them). No scope dialog. A blank or zero entry returns the shaft to the derived Ø (0); an unset Ø
+  shows an empty box. A note under the pair says sections of bare shaft take their own Ø on their
+  cards. This field replaces the old first-OAL "Shaft diameter" prompt, which is gone.
+- **Final tab**: the same card on `ShaftRoute(target = FINAL)` writes both geometry fields to the
+  FINAL drawing through the explicit target; the project information is the document's, shared.
 
 ---
 
@@ -145,9 +132,7 @@ warning on a legitimately flush taper.
 The re-anchor is silent in the model, so the editor SAYS what an OAL commit moved: on the editor's
 snackbar host, `OAL 234 3/16": moved FWD Liner 4 13/16" aft (measured from FWD)` — up to two card
 titles, then "+N more"; "aft" / "fwd" by direction; distances in the document unit
-(`formatLenWithUnit`). It carries **Undo**: the commit is ONE history step (the field's mm and
-raw-text callbacks land inside one coalescing window, and the second moves nothing), so Undo takes
-back the length and the move together. The event carries the `EditState` the commit produced
+(`formatLenWithUnit`). It carries **Undo**: the commit is ONE history step (one `updateSpec`), so Undo takes back the length and the move together. The event carries the `EditState` the commit produced
 (`ShowOalMovedSnack.expected`) and the action calls `undoEditIfStillAt(expected)`, which undoes only
 while the editor is still in that state: the snackbar stays up while the user keeps editing (the
 route's event collector waits on it, so a delete's snackbar queues behind it), and a blind
@@ -159,7 +144,7 @@ changed since. Use History → Undo."). The delete snackbar carries the same tok
 liners and coupler bolt rows whose stored start moved by more than `OAL_REANCHOR_SNAP_MM`, ordered AFT → FWD;
 excluded threads are left out (they follow the end by definition). `ShaftViewModel.onSetOverallLengthMm`
 emits `UiEvent.ShowOalMovedSnack` when it returns a line; nothing moved, no snackbar. Both
-targets: the Final tab's OAL field takes the same path (`ShaftRoute(target = FINAL)`). On-device
+targets: the Final tab's start card takes the same path (`ShaftRoute(target = FINAL)`). On-device
 report: an OAL correction from 239" to 234 3/16" carried a FWD-measured liner into a mid-shaft
 taper and nothing said why the two now overlapped.
 
@@ -218,6 +203,14 @@ template card's preview can never disagree with the drawing it becomes.
 ---
 
 ## Change Log
+**v2.8 (2026-11-10)** — **The OAL moves onto the start card** (on-device request: the always-on OAL
+row nagged). Overall Length, a new Shaft diameter field and the project information are the
+carousel's first card; the field commits like every card field (Save bar, IME Done,
+blur-with-change), and its private ✓ / ✗ pair, `OverallLengthRow` / `OverallLengthField` and the
+raw-text second commit are gone. The Shaft diameter field writes only `autoBodyDiaMm` and keeps
+section overrides (`withShaftWideAutoBodyDia`). The first-OAL "Shaft diameter" prompt
+(`shouldPromptShaftDia` / `ShaftDiaPromptDialog`) is removed.
+
 **v2.7 (2026-10-30)** — OAL row yields to the card Save / Cancel bar while a card field holds an
 unsaved value; the field is hidden, so nothing can focus it under a pending edit. The ✓ / ✗ pair is
 the ONE `AcceptCancelButtons`, shared with the bar.

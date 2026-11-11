@@ -27,8 +27,7 @@ marked in error with **"Not a number"** under the field (`unreadableEntryError`)
 error line the dialogs already use for "Overlaps another component"; a caller's own `errorText`
 takes the line first. Blank is "not entered yet" and is left to the Add gate. So a disabled Add
 button always has a visible reason — a hyphenated `25-3/16` used to leave Add disabled with
-nothing marked (emulator QA). The new-shaft "Shaft diameter" prompt (`ShaftDiaPrompt.kt`,
-`shaftDiaPromptError`) carries the same line plus "Must be > 0".
+nothing marked (emulator QA).
 
 Because the dialog fields and the card fields gate on the SAME predicates, the card and the Add
 dialog for a quantity accept exactly the same spellings (parity applies to input grammar too).

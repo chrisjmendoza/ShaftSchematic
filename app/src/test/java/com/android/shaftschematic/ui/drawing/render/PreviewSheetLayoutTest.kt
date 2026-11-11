@@ -12,6 +12,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import com.android.shaftschematic.geom.bodyKeywayProtectedSpansMm
 import com.android.shaftschematic.geom.boltRowProtectedSpansMm
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.Threads
 import com.android.shaftschematic.pdf.bodyForPdf
 import com.android.shaftschematic.pdf.bodyRunBreakGapsX
 import com.android.shaftschematic.ui.drawing.compose.previewTapHitId
@@ -138,6 +139,32 @@ class PreviewSheetLayoutTest {
         val l = layout(spec, resolved, profile(spec, resolved))
         val contentH = l.contentBottomPx - l.contentTopPx
         assertTrue(2f * l.rPx(l.maxDiaMm) <= contentH * PREVIEW_SHEET_SHAFT_MAX_FRAC + 0.5f)
+    }
+
+    @Test
+    fun `a shaft wider than its components stays inside the cap`() {
+        // A new drawing with only an overall length and a shaft diameter: no stored component
+        // carries the bare shaft's Ø, which sized the height off the 1 mm floor and drew the
+        // shaft many times taller than the box (on-device QA). A thread narrower than the bare
+        // shaft is the same case with a component present.
+        val bare = ShaftSpec(overallLengthMm = 304f, autoBodyDiaMm = 200f)
+        val threaded = bare.copy(
+            threads = listOf(
+                Threads(id = "T1", startFromAftMm = 0f, majorDiaMm = 127f, pitchMm = 6.35f, lengthMm = 152.4f),
+            ),
+        )
+        listOf(bare, threaded).forEach { spec ->
+            val resolved = resolveComponents(spec)
+            val l = layout(spec, resolved, profile(spec, resolved))
+            assertNotNull(l.sheet)
+            assertEquals(200f, l.maxDiaMm, 0.01f)
+            val contentH = l.contentBottomPx - l.contentTopPx
+            val drawnPx = 2f * l.rPx(l.maxDiaMm)
+            assertTrue(
+                "drawn $drawnPx px vs cap ${contentH * PREVIEW_SHEET_SHAFT_MAX_FRAC}",
+                drawnPx <= contentH * PREVIEW_SHEET_SHAFT_MAX_FRAC + 0.5f,
+            )
+        }
     }
 
     @Test

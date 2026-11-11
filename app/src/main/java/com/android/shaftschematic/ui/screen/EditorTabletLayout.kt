@@ -26,9 +26,9 @@ const val CAROUSEL_PEEK_NEIGHBOUR_ALPHA = 0.45f
 const val CAROUSEL_PEEK_NEIGHBOUR_SCALE = 0.94f
 
 /**
- * Width of the CONTROLS in the column beside the drawing — the overall-length box, the add
- * button and the warnings share this one width so they read as a block, dp. The column itself
- * is this plus the OAL field's ✓/✗ action slot, which sits to the right of the box.
+ * Width of the CONTROLS in the column beside the drawing, dp. The column itself is this plus the
+ * card Save bar's ✓/✗ action slot, which sits to the right of the bar's text; the add button and
+ * the warnings fill the whole column.
  */
 const val EXPANDED_SIDE_COLUMN_WIDTH_DP = 260f
 

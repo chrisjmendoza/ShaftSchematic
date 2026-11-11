@@ -101,7 +101,7 @@ fun ShaftSpec.withAutoSectionDia(
 
 /**
  * Returns a copy carrying [valueMm] as the bare-shaft Ø of EVERY auto section together — the
- * auto-body card's "All auto sections" choice, and the new-shaft diameter prompt.
+ * auto-body card's "All auto sections" choice.
  *
  * [valueMm] is stored **verbatim** in [ShaftSpec.autoBodyDiaMm] (golden rule) and every
  * [ShaftSpec.autoDiaOverrides] entry is cleared, dormant ones included: "every section
@@ -113,4 +113,19 @@ fun ShaftSpec.withAutoBodyDia(valueMm: Float): ShaftSpec {
     if (valueMm <= 0f) return this
     if (autoBodyDiaMm == valueMm && autoDiaOverrides.isEmpty()) return this
     return copy(autoBodyDiaMm = valueMm, autoDiaOverrides = emptyList())
+}
+
+/**
+ * Returns a copy carrying [valueMm] as the SHAFT-WIDE bare-shaft Ø and nothing else — the
+ * "Shaft diameter" field on the editor's start card.
+ *
+ * Unlike [withAutoBodyDia] this keeps every [ShaftSpec.autoDiaOverrides] entry: a section the
+ * user gave its own diameter on its card stays as typed, and only the sections without one
+ * follow the new value. [valueMm] > 0 is stored **verbatim** (golden rule); [valueMm] ≤ 0 is a
+ * clear, returning the shaft to the derived Ø (0). Returns `this` when nothing changes, so a
+ * no-op set never emits new state or marks the document dirty.
+ */
+fun ShaftSpec.withShaftWideAutoBodyDia(valueMm: Float): ShaftSpec {
+    val next = if (valueMm > 0f) valueMm else 0f
+    return if (autoBodyDiaMm == next) this else copy(autoBodyDiaMm = next)
 }

@@ -1534,32 +1534,46 @@ Reverted 2026-07-21.) Adding a taper/thread/liner over a body **splits** it as b
 rejoins flanking fragments but **never merges across a component still occupying the gap**
 (that would manufacture a long phantom body).
 
-### OAL field
-The OAL is **always user-typed** — there is no auto mode. It commits on **accept**, like the
-component cards — the green ✓ beside the field, IME-Done, or a blur after the text changed
-(`BlurCommitPolicy`) — and the red ✗ reverts the text and commits nothing; the pair shows only
-while the value is being modified, and the field is a value box, not a full-width banner.
-While a carousel card field holds an unsaved value the OAL row shows the card's Save / Cancel bar
-in the field's place (`OverallLengthRow`, `CardSaveBar` — same ✓ / ✗, same slot; on-device ruling:
-a Save at the end of a long card was hidden), and the field returns when the card is clean; a card
-change under a pending edit asks Save | Discard | Keep editing (`UnsavedCardEditDialog`). It
-does NOT commit per keystroke: that was the documented exception for a live preview, and on
-device an edit from 368.5″ to 367.75″ committed 36″ on the way through, collapsed the drawing,
-and re-anchored the FWD taper through that transient (on-device report). Do not reintroduce the
-per-keystroke commit. An **empty** field on IME-Done or blur commits nothing and reverts the text
-to the stored value; it never zeroes the shaft. `ShaftSpec.withNewOal` (the ONE OAL-change
-helper) re-anchors FWD-referenced explicit bodies, tapers, liners and bolt rows in `Double` and snaps a recovered FWD distance
-under `OAL_REANCHOR_SNAP_MM` (0.01 mm) to the zero it was authored as — `Float` noise at 9 m
-is ~0.001 mm, and one unit of it put a flush taper "past the shaft end"; the bounds slop
+### The start card; the OAL field
+The carousel's FIRST page is the **start card** ("Shaft & job", `ui/screen/StartCard.kt`), on the
+Schematic and Final tabs at every width — Overall Length, Shaft diameter (with a note that a section
+of bare shaft takes its own Ø on its card), then the project information fields (on-device request:
+the OAL row standing above the carousel all the time nagged; the OAL is one-and-done like the other
+measurements). It is not a component: no resolved id, no remove/rename/unit chip, never pushed out
+of first place. A null selection IS the start card: `START_CARD_PAGE`, `carouselSelectedPage` and
+`componentIdForPage` (`ui/screen/CarouselSelectionSync.kt`) are the ONE page ↔ selection mapping —
+component row `i` is page `i + 1`; do not add or subtract the start page anywhere else. A new or
+opened document clears the selection and so lands on the start card; a preview tap, an add, a
+warning line or a delete's Undo selects a component and the carousel goes to its card past it; the
+toolbar's Project information button selects null through the ask-first path. There is no separate
+Project information sheet. On the Final tab the two geometry fields write the FINAL drawing through
+the explicit target; project information is the document's, shared by both tabs.
+The OAL is **always user-typed** — there is no auto mode. Its field (`OAL_FIELD_TAG`) is an ordinary
+card field (`CommitNum`): it commits on IME-Done, a blur after the text changed (`BlurCommitPolicy`)
+or the card Save bar, through `onSetOverallLengthMm` → `ShaftViewModel.onSetOverallLengthMm`. It
+does NOT commit per keystroke: that was the documented exception for a live preview, and on device
+an edit from 368.5″ to 367.75″ committed 36″ on the way through, collapsed the drawing, and
+re-anchored the FWD taper through that transient (on-device report). Do not reintroduce the
+per-keystroke commit. An **empty** or unreadable entry commits nothing, restores the stored value and
+names what it dropped; it never zeroes the shaft. The **Shaft diameter** field writes ONLY
+`autoBodyDiaMm` (`withShaftWideAutoBodyDia` — every `autoDiaOverrides` entry is KEPT, unlike the
+auto-body card's "All auto sections"; blank or 0 returns the shaft to the derived Ø), verbatim, with
+no scope dialog. There is no always-on OAL row: above the carousel sits only the card Save / Cancel
+slot (`CardSaveSlot` → `CardSaveBar`; on-device ruling: a Save at the end of a long card was hidden),
+which takes no room while every card is clean and grows in / shrinks out with a short height + fade
+animation so the cards below slide rather than jump (on-device request); a card change under a
+pending edit — the start card's included — asks Save | Discard | Keep editing
+(`UnsavedCardEditDialog`). `ShaftSpec.withNewOal` (the ONE OAL-change helper) re-anchors
+FWD-referenced explicit bodies, tapers, liners and bolt rows in `Double` and snaps a recovered FWD
+distance under `OAL_REANCHOR_SNAP_MM` (0.01 mm) to the zero it was authored as — `Float` noise at
+9 m is ~0.001 mm, and one unit of it put a flush taper "past the shaft end"; the bounds slop
 `BOUNDS_EPS_MM` is 0.01 mm for the same reason.
 `overallLengthMm == 0` means "not typed yet", not an error: the field draws no red state and
 the renderer's 0-OAL fallback (`ShaftSpec.renderSpanSpec()`, `ui/drawing/RenderSpanSpec.kt` —
 ONE implementation behind both canvases and the preview OAL badge) draws such a shaft to its
-coverage end.
-Nothing backfills it — not a load, not the first component added. On a brand-new ORIGINAL
-shaft (OAL 0, `autoBodyDiaMm` 0, no components — `shouldPromptShaftDia`) the first OAL commit
-opens the "Shaft diameter" prompt (`ShaftDiaPromptDialog`, on-device request); Set writes
-`autoBodyDiaMm`, Skip is final because the OAL is no longer 0. Loads never prompt.
+coverage end. Nothing backfills it — not a load, not the first component added. There is no
+first-OAL "Shaft diameter" prompt: the diameter field sits under the OAL on the start card, which is
+what the prompt existed to provide.
 See `docs/contracts/OverallLength.md`.
 
 ## Commit policy

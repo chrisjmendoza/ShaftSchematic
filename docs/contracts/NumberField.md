@@ -6,7 +6,10 @@ File: `ui/input/NumericInputField.kt` (composable `NumericInputField`; wrapped b
 `CommitNum` in `ComponentCarousel.kt` and `CommitNumField` in `AddComponentDialogs.kt`)  
 Purpose: Single-line numeric field that holds local text; commits on blur/IME Done via callback.
 
-Version: v0.13 (2026-10-30; the per-field ✓ / ✗ pair is gone — `acceptCancel`,
+Version: v0.14 (2026-11-10; the Overall Length is an ordinary `CommitNum` on the editor's start
+card — the OAL row and its own field are gone, and the card Save / Cancel bar stands alone in a slot
+above the carousel that takes no room while every card is clean).
+v0.13 (2026-10-30; the per-field ✓ / ✗ pair is gone — `acceptCancel`,
 `LocalFieldAcceptCancel` removed: with the "/" key it filled a half-width field and hid the value,
 on-device report. The Overall Length row swaps to the card Save / Cancel bar off
 `PendingCardEdits`, `onPendingEdit` is the handle it acts on, and a carousel or preview card change
@@ -161,10 +164,10 @@ Test coverage
   divergent edits still reports exactly once (edge-triggered, not per keystroke), and an
   external model refresh arriving while the field holds focus settles it clean **without**
   writing anything back. Runs on the JVM under Robolectric.
-- `ui/screen/CardSaveBarTest` — the card Save / Cancel bar in the Overall Length row: the OAL
-  field at rest and on focus alone, the bar (naming the field and card) once a card field is
-  edited; ✓ lands a still-focused value (the chip-tap case) with no second commit on a later
-  blur and brings the OAL back, ✗ restores without committing, a refused ✓ names the value, two
+- `ui/screen/CardSaveBarTest` — the card Save / Cancel slot above the carousel: empty at rest
+  and on focus alone, the bar (naming the field and card) once a card field is edited, growing in
+  over several frames rather than in one; ✓ lands a still-focused value (the chip-tap case) with
+  no second commit on a later blur and the bar goes, ✗ restores without committing, a refused ✓ names the value, two
   fields share one bar, a departing field still lands its edit, a checkbox tap brings up no bar;
   plus `fieldLabelWithoutUnit` and `pendingEditName`.
 - `ui/screen/UnsavedCardEditDialogTest` — the card-change prompt: Save, Discard and Keep editing
@@ -179,14 +182,14 @@ Test coverage
   it; a tapped field still takes focus (Robolectric).
 
 Focus release
-- **Releasing focus never hands it to another field.** `FocusManager.clearFocus()` — the OAL
-  field's ✓/Done/✗, the auto-body Ø scope dialog opening, the undercut and wear editors' own
+- **Releasing focus never hands it to another field.** `FocusManager.clearFocus()` — the
+  auto-body Ø scope dialog opening, the undercut and wear editors' own
   clears, the card Save / Cancel bar's ✓ / ✗ — ends with no text field focused. Out of touch mode (a hardware or
   Bluetooth keyboard, or a key the IME sends as a raw key event) Android's `View.clearFocus()`
   immediately refocuses the window, and the Compose view answers with an "enter" search that
-  picks the top-left focusable composable — on the editor, the Overall Length field. Cancelling
-  "Apply diameter to…" therefore left the OAL focused with the keyboard up, the next digits went
-  into the shaft length, and a blur would have committed them (emulator QA). The ONE rule that
+  picks the top-left focusable composable — on the editor, a text field. Cancelling "Apply
+  diameter to…" therefore left that field focused with the keyboard up, the next digits went into
+  it, and a blur would have committed them (emulator QA). The ONE rule that
   prevents it is app-wide: `MainActivity` wraps its content in `FocusParkingRoot`
   (`ui/input/FocusParking.kt`), a focusable box around everything that the enter search finds
   first, so the refocus parks there — no field, no cursor, no keyboard. In touch mode the
@@ -215,10 +218,10 @@ Keyboard
   provides `LocalFractionKeyEnabled` from the document unit. A whole-number field opts out
   (`fractionKey = false` — the bolt-slot Count, on the card and in the Add dialog alike). A tap
   never takes focus from the field (the button is `focusProperties { canFocus = false }`, like
-  the OAL ✓/✗), so the keyboard stays up. Text-keyboard fields carry no key: their keyboard
+  the Save bar's ✓/✗), so the keyboard stays up. Text-keyboard fields carry no key: their keyboard
   already has `/` (the taper rate on the card used to show one, emulator QA).
-- Hosts: `NumericInputField` (every card field, the undercut and wear editors), the Overall
-  Length field, the Add dialogs' number fields and the new-shaft diameter prompt. A field whose
+- Hosts: `NumericInputField` (every card field — the start card's Overall Length and Shaft
+  diameter included — the undercut and wear editors) and the Add dialogs' number fields. A field whose
   state is a plain `String` cannot insert at its cursor (replacing its text from outside leaves
   the cursor before the bar), so those hosts bridge through `FieldCursor`
   (`rememberFieldCursor()`), which keeps the last edit's cursor and IME composition.
@@ -232,17 +235,17 @@ Responsibilities
   moves the blur baseline to the settled text, so a later blur judges "changed" against what Done
   landed, never against the pre-Done text (on-device report: Done, retype the old value, move on
   — the box showed the old value while the model kept the new one).
-- **A card field's held edit is saved or cancelled from the Overall Length row** — the third
+- **A card field's held edit is saved or cancelled from the card Save / Cancel bar** — the third
   path to the SAME commit. Chips, toggles and checkboxes never take focus, so a typed value
   followed by a chip tap sits uncommitted in a still-focused field (on-device report: a body
-  keyway length that never landed). While a card field holds such an edit, the editor's Overall
-  Length row shows the card Save / Cancel bar in the OAL field's place (`OverallLengthRow` →
-  `CardSaveBar`, `ShaftScreen.kt`; tags `card_save_bar` / `card_save` / `card_cancel`): it names
-  the waiting field and its card and puts the OAL's own green ✓ / red ✗ in the OAL's own action
-  slot, and the OAL field returns once the card is clean (on-device ruling: a Save at the end of a
-  long card was hidden; the OAL row is always on screen above the carousel). ONE construction,
-  `AcceptCancelButtons` (`ui/input/AcceptCancelButtons.kt` — the green ✓ `ACCEPT_GREEN`, the red ✗
-  in the theme's error colour, neither button focusable), behind the OAL field and the bar. The
+  keyway length that never landed). While a card field holds such an edit, the slot above the
+  carousel shows the bar (`CardSaveSlot` → `CardSaveBar`, `ShaftScreen.kt`; tags `card_save_bar` /
+  `card_save` / `card_cancel`): it names the waiting field and its card and puts a green ✓ / red ✗
+  at its end; once the card is clean the slot takes no room, and the bar grows in and shrinks out
+  (height + fade) so the cards below slide rather than jump (on-device ruling: a Save at the end of
+  a long card was hidden; on-device request: no jump). ONE construction, `AcceptCancelButtons`
+  (`ui/input/AcceptCancelButtons.kt` — the green ✓ `ACCEPT_GREEN`, the red ✗ in the theme's error
+  colour, neither button focusable), behind the bar. The
   field itself shows no pair: in the trailing slot beside the "/" key it made three 48 dp targets
   that hid the value in a half-width field (on-device report). Pinned by `CardSaveBarTest`.
 - **`onPendingEdit` hands the save and cancel answers to the host** — a
@@ -293,10 +296,10 @@ Do Nots
 - Do not parse or convert (VM handles it).
 
 The OAL field
-- `OverallLengthField` is not a `NumericInputField`, but it follows the same commit-on-blur
-  discipline (commit only when the text changed since focus, `shouldCommitOnBlur`) plus an
-  explicit ✓/✗ accept/cancel pair and IME Done. It never commits per keystroke: an
-  intermediate value reached the drawing that way (on-device report). See `ShaftScreen.md`.
+- The Overall Length is an ordinary `CommitNum` on the editor's start card (`StartCard.kt`), so
+  everything above applies to it: commit on blur-with-change, IME Done or the Save bar, an empty
+  or unreadable entry reverts with its notice. It never commits per keystroke: an intermediate
+  value reached the drawing that way (on-device report). See `OverallLength.md`.
 
 ---
 
@@ -362,7 +365,7 @@ read by every parser here; there is no second copy elsewhere:
   — a `null` result means the handler skips the commit entirely rather than writing a zero
   the user never typed. Used across `ui/screen` (`ShaftScreen.kt`, `AddComponentDialogs.kt`,
   the per-kind `*PagerCard.kt` files, `ComponentCarousel.kt`, `LinerWearDetail.kt`,
-  `UndercutDetail.kt`, `WornSectionEditor.kt`, `ShaftDiaPrompt.kt`).
+  `UndercutDetail.kt`, `WornSectionEditor.kt`, `StartCard.kt`).
 - `parseToMm(raw, unit): Double` — the same, returning **`0.0`** (not null) on invalid input,
   for callers that always need a number and treat "couldn't parse" the same as "zero".
 - `parseLengthInUnit(raw, unit): Double?` — a length expressed IN `unit` (a suffix in the

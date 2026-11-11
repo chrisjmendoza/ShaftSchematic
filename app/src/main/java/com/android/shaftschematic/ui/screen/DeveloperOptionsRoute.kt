@@ -118,7 +118,7 @@ fun DeveloperOptionsRoute(
 
             DevSwitchRow(
                 label = "OAL debug label",
-                supporting = "Physical / effective / covered length under the OAL field.",
+                supporting = "Physical / effective / covered length under the start card's Overall Length.",
                 checked = showOalDebugLabel,
                 onCheckedChange = { vm.setShowOalDebugLabel(it) },
             )

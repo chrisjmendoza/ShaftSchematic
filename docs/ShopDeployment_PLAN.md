@@ -198,13 +198,13 @@ New optional fields on `ShaftDocV1`, all defaulted so every existing file still 
 | **[rev]** `released` / `releasedBy` / `releasedAtEpochMs` | `released` / `released_by` / `released_at` | §2.4a. |
 
 Golden rule unchanged: stamps are metadata the *system* writes; no user-typed value is touched.
-A legacy/unstamped file gets stamped on its next save, never on open. The Project Info sheet
-shows the stamps read-only ("Created by … · Last saved by … on … · Rev 7 · Released by … on …").
+A legacy/unstamped file gets stamped on its next save, never on open. The editor start card's
+project information shows the stamps read-only ("Created by … · Last saved by … on … · Rev 7 · Released by … on …").
 
 #### 2.4a Released **[rev]**
 
-A manager marks a drawing **Released** when it goes to the floor (Project Info sheet, or the
-Open-screen row menu). Semantics:
+A manager marks a drawing **Released** when it goes to the floor (the start card's project
+information, or the Open-screen row menu). Semantics:
 
 - Editing a released drawing asks `Guard` (`workersMayEditReleased`, default off): a worker
   sees the `LockedActionDialog` with a third choice — **Save as new revision**, which duplicates

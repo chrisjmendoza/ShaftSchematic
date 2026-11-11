@@ -32,8 +32,9 @@ import kotlinx.serialization.Serializable
  * @property autoBodyDiaMm Shaft-wide bare-shaft diameter applied to auto-body spans that
  *           carry no [autoDiaOverrides] entry (mm), stored verbatim. Written by the auto-body
  *           card's "All auto sections" Ø choice (which also clears every section override —
- *           see [withAutoBodyDia]) and by the new-shaft diameter prompt after the first OAL;
- *           sits between a section override and neighbor derivation. 0 = unset → derive from
+ *           see [withAutoBodyDia]) and by the editor start card's "Shaft diameter" field
+ *           (which keeps them — see [withShaftWideAutoBodyDia]); sits between a section
+ *           override and neighbor derivation. 0 = unset → derive from
  *           neighbors. Affects drawn diameter only — auto-span positioning stays derived.
  *           Defaults 0 for back-compat.
  * @property autoBlends Blended faces on individual auto-body spans, keyed in shaft space by

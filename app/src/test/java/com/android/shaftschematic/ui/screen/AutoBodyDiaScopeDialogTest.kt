@@ -32,10 +32,6 @@ import org.robolectric.annotation.Config
  * pinned: with two auto sections a typed Ø asks "This section | All auto sections" (on-device
  * report: one section's edit changed the others), each choice writes its own scope, and a Cancel
  * applies nothing and puts the STORED value back in the box.
- *
- * The new-shaft Ø prompt is pinned by `ShaftDiaPromptTest` (its predicate) only: an
- * `AlertDialog` holding a text field never idles under Robolectric (the calculator dialogs'
- * known limitation), so it cannot be hosted here.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], qualifiers = "w400dp-h800dp")

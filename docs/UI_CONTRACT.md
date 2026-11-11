@@ -1,6 +1,8 @@
 # UI Contract
 Version: v0.5.x
-Last updated: 2026-09-16 — §1 gains "Readable width on list screens" (`Modifier.readableWidth()`,
+Last updated: 2026-11-10 — §2.1 and §3.1.3: the Overall Length field is an ordinary card field on
+the carousel's first page, the start card (`docs/contracts/OverallLength.md`).
+2026-09-16 — §1 gains "Readable width on list screens" (`Modifier.readableWidth()`,
 720 dp, one column per page, never per row).
 2026-09-15 — the editor now has **six** tabs: §7.8 (Final Schematic) added.
 2026-08-05 — §7.6 (Undercut Drawing) and
@@ -72,11 +74,12 @@ This is mandatory because the user may tap the "Add" / "Submit" button while a f
 - Avoids recomposition jitter during typing.
 - User can type partial numbers freely.
 
-**Overall Length field (`OverallLengthField`)** — commits on **accept** only: the ✓ beside the
-field, IME Done, or a blur after a change; ✗ restores the stored value. Never per keystroke. See
-`docs/contracts/ShaftScreen.md`.
+**Overall Length** — a carousel edit field like the rest, on the **start card** (the carousel's
+first page, `ui/screen/StartCard.kt`): blur after a change / Done / the card Save bar's ✓; the
+bar's ✗ restores the stored value; an empty entry commits nothing. Never per keystroke. See
+`docs/contracts/OverallLength.md` and `docs/contracts/ShaftScreen.md`.
 
-In every case `parse text → float?` and `VM.update*(parsed)` are called only with valid values; invalid input reverts to the last committed text on blur (the OAL field's ✓ / Done leave unparseable text in place, since the user is mid-edit; its blur reverts like the cards).
+In every case `parse text → float?` and `VM.update*(parsed)` are called only with valid values; invalid input reverts to the last committed text and names what it dropped.
 
 ### 2.2 Tap-to-Clear(0)
 When the committed value is exactly `0f`, tapping the field clears it.
@@ -171,7 +174,9 @@ renderer's keyway slots take their width off the diameter scale and their offset
 the slot's own mapped span (`geom/KeywaySlotMath.kt`, the PDF slot's construction); a 90° notch's
 depth rides the diameter scale. The shaft's height follows the sheet rule (sizing curve × Shaft
 height, the paper band) capped at `PREVIEW_SHEET_SHAFT_MAX_FRAC` (40%) of the box's content
-height, solved from the full box so it never shrinks for the rails; the rails' room rule above is
+height, solved from the full box so it never shrinks for the rails, and sized off the largest Ø
+the box DRAWS (`schematicProfileFit(drawnMaxDiaMm)` — the resolved runs, bare shaft included; the
+stored components alone left a bare-shaft-only drawing sized off the 1 mm floor); the rails' room rule above is
 unchanged. Falls back to the linear map while the OAL is 0 (the `renderSpanSpec` fallback) and
 while the problem marks widen the window past the drawn extent (a part hanging past an end — such
 a shaft cannot print anyway). The grid stands down while the sheet layout is in effect (a
@@ -221,7 +226,7 @@ Bodies are **excluded** from this calculation (the default targets the FWD-most 
 
 ### 3.1.3 Auto-Selection After Add
 
-When any `add*At` function completes in the ViewModel, `selectedComponentId` is set to the newly added component's ID. The carousel auto-scrolls to and highlights the new component.
+When any `add*At` function completes in the ViewModel, `selectedComponentId` is set to the newly added component's ID. The carousel auto-scrolls to and highlights the new component — one page past the start card, which is always page 0 (a null selection is the start card; `CarouselSelectionSync.kt`). A new or opened document clears the selection and so opens on the start card.
 
 ### 3.1.4 Explicit vs auto bodies in the Carousel
 

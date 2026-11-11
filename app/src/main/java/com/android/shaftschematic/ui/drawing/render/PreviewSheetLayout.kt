@@ -81,7 +81,9 @@ class PreviewSheetProfile internal constructor(
  * [extentMm] — the problem marks' window — reaching past the drawn extent.
  *
  * The budget is the box's FULL content height, never the strip left after the rails' reservation:
- * the shaft is never drawn smaller for the rails.
+ * the shaft is never drawn smaller for the rails. [drawnMaxDiaMm] is the largest diameter the box
+ * draws, bare shaft included, so the height budget holds a shaft that is wider than (or has none
+ * of) its stored components — a new drawing with only an overall length and a shaft diameter.
  */
 internal fun previewSheetProfile(
     spec: ShaftSpec,
@@ -90,6 +92,7 @@ internal fun previewSheetProfile(
     contentHeightPx: Float,
     pxPerPt: Float,
     extentMm: Pair<Float, Float>? = null,
+    drawnMaxDiaMm: Float = 0f,
 ): PreviewSheetProfile? {
     if (spec.overallLengthMm <= 0f) return null
     if (contentWidthPx <= 1f || contentHeightPx <= 1f || pxPerPt <= 0f) return null
@@ -107,6 +110,7 @@ internal fun previewSheetProfile(
         contentLeft = 0f,
         contentRight = contentWidthPx / pxPerPt,
         budgetCapPt = contentHeightPx / pxPerPt * PREVIEW_SHEET_SHAFT_MAX_FRAC,
+        drawnMaxDiaMm = drawnMaxDiaMm,
     )
     return PreviewSheetProfile(fit.xMap, fit.diaPtPerMm, pxPerPt, settings.sBreakThresholdFrac)
 }
@@ -146,6 +150,8 @@ internal fun previewSheetProfileForBox(
         contentHeightPx = base.contentBottomPx - base.contentTopPx,
         pxPerPt = pxPerPt,
         extentMm = extentMm,
+        // The linear layout's own radial span: the resolved runs' largest Ø, bare shaft included.
+        drawnMaxDiaMm = base.maxDiaMm,
     )
 }
 

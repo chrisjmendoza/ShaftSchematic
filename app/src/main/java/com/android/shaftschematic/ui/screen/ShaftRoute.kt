@@ -331,15 +331,6 @@ fun ShaftRoute(
     )
     var showPreviewOptions by rememberSaveable { mutableStateOf(false) }
 
-    // New-shaft Ø prompt (on-device request): the first OAL commit on a brand-new ORIGINAL
-    // shaft asks for the bare-shaft Ø, since components added onto the default-sized bare
-    // shaft look wrong until it is set. Armed from the spec as it stood BEFORE the commit is
-    // forwarded; the accept path fires the mm and raw callbacks back to back, and the second
-    // finds the OAL already set, so the prompt shows once.
-    var showShaftDiaPrompt by rememberSaveable { mutableStateOf(false) }
-    fun shaftDiaPromptArmed(): Boolean =
-        target == SpecTarget.ORIGINAL && shouldPromptShaftDia(vm.spec.value)
-
     val onSendFeedback: () -> Unit = {
         val intent = FeedbackIntentFactory.create(
             context = ctx,
@@ -413,16 +404,10 @@ fun ShaftRoute(
         // Every mutation below names its [target] explicitly. A callable reference
         // (`vm::removeBody`) would take the ORIGINAL default and silently edit the wrong
         // drawing on the Final tab, so each one is a lambda that threads it through.
-        onSetOverallLengthRaw = { raw ->
-            val armed = shaftDiaPromptArmed()
-            vm.setOverallLength(raw, target)
-            if (armed && vm.spec.value.overallLengthMm > 0f) showShaftDiaPrompt = true
-        },
-        onSetOverallLengthMm = { mm ->
-            val armed = shaftDiaPromptArmed()
-            vm.onSetOverallLengthMm(mm, target)
-            if (armed && vm.spec.value.overallLengthMm > 0f) showShaftDiaPrompt = true
-        },
+        onSetOverallLengthMm = { mm -> vm.onSetOverallLengthMm(mm, target) },
+        // The start card's shaft-wide Ø: keeps every section override (the auto-body card's
+        // "All auto sections" below is the one that clears them).
+        onSetShaftDiaMm = { d -> vm.setShaftWideAutoBodyDiaMm(d, target) },
         onSelectComponentById = vm::selectComponentById,
 
         onAddBody   = { s, l, d, ref, kwW, kwD, kwL, kwO, kwEnd, kwSp, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd, bSAftLen, bSFwdLen, bOdAft, bOdFwd, bAngles ->
@@ -574,17 +559,6 @@ fun ShaftRoute(
                 previewHeightDrag = null
                 showPreviewOptions = false
             },
-        )
-    }
-
-    if (showShaftDiaPrompt) {
-        ShaftDiaPromptDialog(
-            unit = unit,
-            onSet = { mm ->
-                showShaftDiaPrompt = false
-                vm.setAutoBodyDiaMm(mm)
-            },
-            onSkip = { showShaftDiaPrompt = false },
         )
     }
 }

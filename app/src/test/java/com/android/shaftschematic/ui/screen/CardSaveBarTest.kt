@@ -3,6 +3,7 @@ package com.android.shaftschematic.ui.screen
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -13,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertTextEquals
+import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
@@ -22,8 +24,6 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.requestFocus
-import com.android.shaftschematic.model.ShaftSpec
-import com.android.shaftschematic.util.UnitSystem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -34,10 +34,9 @@ import org.robolectric.annotation.Config
 
 /**
  * The card Save / Cancel bar: while a carousel card field holds a typed value that has not
- * landed, the Overall Length row shows the bar — the OAL's own ✓ / ✗ in the OAL's own slot,
- * naming the waiting field — in the field's place, and the OAL field returns once the card is
- * clean (on-device ruling: a Save button at the end of a long card was hidden; the OAL row is
- * always on screen).
+ * landed, the slot above the carousel shows the bar — ✓ / ✗ naming the waiting field — and the
+ * slot takes no room at all once the card is clean (on-device ruling: a Save button at the end of
+ * a long card was hidden; the slot is always on screen above the cards).
  *
  * Fields commit on blur and IME Done, but chips, toggles and checkboxes never take focus, so a
  * typed value followed by a chip tap sits uncommitted in a still-focused field (on-device report:
@@ -60,12 +59,9 @@ class CardSaveBarTest {
         MaterialTheme {
             CompositionLocalProvider(LocalPendingCardEdits provides remember { PendingCardEdits() }) {
                 Column {
-                    OverallLengthRow(
-                        spec = ShaftSpec(overallLengthMm = 2540f),
-                        unit = UnitSystem.MILLIMETERS,
-                        onSetOverallLengthMm = {},
-                        onSetOverallLengthRaw = {},
-                    )
+                    CardSaveSlot()
+                    // Somewhere else to put the focus — the field a user moves on to.
+                    OutlinedTextField(value = "", onValueChange = {}, modifier = Modifier.testTag(ELSEWHERE))
                     card()
                 }
             }
@@ -92,23 +88,21 @@ class CardSaveBarTest {
         rule.waitForIdle()
     }
 
-    private fun assertOalShowing() {
-        rule.onAllNodesWithTag(OAL_FIELD_TAG).assertCountEquals(1)
+    private fun assertBarHidden() {
         rule.onAllNodesWithTag(CARD_SAVE_BAR_TAG).assertCountEquals(0)
     }
 
     private fun assertBarShowing() {
-        rule.onAllNodesWithTag(OAL_FIELD_TAG).assertCountEquals(0)
         rule.onAllNodesWithTag(CARD_SAVE_BAR_TAG).assertCountEquals(1)
     }
 
     /* ── The swap ────────────────────────────────────────────────────────────── */
 
     @Test
-    fun `at rest the row is the OAL field`() {
+    fun `at rest the slot is empty`() {
         rule.setContent { Host() }
         rule.waitForIdle()
-        assertOalShowing()
+        assertBarHidden()
     }
 
     /** Tapping into a field and leaving it alone is not a pending edit. */
@@ -117,11 +111,11 @@ class CardSaveBarTest {
         rule.setContent { Host() }
         rule.onNodeWithTag(FIELD).requestFocus()
         rule.waitForIdle()
-        assertOalShowing()
+        assertBarHidden()
     }
 
     @Test
-    fun `an edit swaps the OAL field for the bar, naming the field and its card`() {
+    fun `an edit brings up the bar, naming the field and its card`() {
         rule.setContent { Host() }
         typeInField("6.5")
         assertBarShowing()
@@ -132,32 +126,32 @@ class CardSaveBarTest {
     }
 
     @Test
-    fun `save commits the still-focused value once and brings the OAL back`() {
+    fun `save commits the still-focused value once and the bar goes`() {
         rule.setContent { Host() }
         typeInField("6.5")
         // No blur, no IME Done — the chip-tap scenario. ✓ must land the value.
         rule.onNodeWithTag(CARD_SAVE_TAG).performClick()
         rule.waitForIdle()
         assertEquals(listOf("6.5"), commits)
-        assertOalShowing()
+        assertBarHidden()
         // Out of touch mode a cleared focus can come straight back to the field; going in and out
         // again must find nothing new to commit.
         rule.onNodeWithTag(FIELD).requestFocus()
         rule.waitForIdle()
-        rule.onNodeWithTag(OAL_FIELD_TAG).requestFocus()
+        rule.onNodeWithTag(ELSEWHERE).requestFocus()
         rule.waitForIdle()
         assertEquals(listOf("6.5"), commits)
     }
 
     @Test
-    fun `cancel puts the stored value back, commits nothing, and brings the OAL back`() {
+    fun `cancel puts the stored value back, commits nothing, and the bar goes`() {
         rule.setContent { Host() }
         typeInField("6.5")
         rule.onNodeWithTag(CARD_CANCEL_TAG).performClick()
         rule.waitForIdle()
         assertTrue("✗ must not commit", commits.isEmpty())
         rule.onNodeWithTag(FIELD).assertTextEquals("KW L", "0")
-        assertOalShowing()
+        assertBarHidden()
     }
 
     @Test
@@ -167,8 +161,29 @@ class CardSaveBarTest {
         rule.onNodeWithTag(CARD_SAVE_TAG).performClick()
         rule.waitForIdle()
         assertTrue(commits.isEmpty())
-        assertOalShowing()
+        assertBarHidden()
         rule.onNodeWithTag(FIELD).assertTextEquals("KW L", "0", "9 not applied — too long")
+    }
+
+    /* ── The bar slides in; nothing below it jumps ───────────────────────────── */
+
+    @Test
+    fun `the bar grows in over several frames, so the card below slides rather than jumps`() {
+        rule.setContent { Host() }
+        rule.waitForIdle()
+        val restTop = rule.onNodeWithTag(FIELD).getBoundsInRoot().top
+
+        rule.mainClock.autoAdvance = false
+        rule.onNodeWithTag(FIELD).requestFocus()
+        rule.onNodeWithTag(FIELD).performTextReplacement("6.5")
+        rule.mainClock.advanceTimeBy(90)
+        val midTop = rule.onNodeWithTag(FIELD).getBoundsInRoot().top
+        rule.mainClock.advanceTimeBy(1_000)
+        val endTop = rule.onNodeWithTag(FIELD).getBoundsInRoot().top
+        rule.mainClock.autoAdvance = true
+
+        assertTrue("the bar pushes the card down once it is in ($restTop → $endTop)", endTop > restTop)
+        assertTrue("half way through it is part of the way ($restTop < $midTop < $endTop)", midTop > restTop && midTop < endTop)
     }
 
     /* ── One bar for the field being edited ──────────────────────────────────── */
@@ -201,7 +216,7 @@ class CardSaveBarTest {
         rule.onNodeWithTag(CARD_SAVE_TAG).performClick()
         rule.waitForIdle()
         assertEquals(listOf("A=6.5", "B=3.25"), commits)
-        assertOalShowing()
+        assertBarHidden()
     }
 
     /* ── A field leaving composition still lands its edit ────────────────────── */
@@ -233,7 +248,7 @@ class CardSaveBarTest {
         rule.waitForIdle()
 
         assertEquals("the departing field's edit still lands", listOf("B=3.25"), commits)
-        assertOalShowing()
+        assertBarHidden()
     }
 
     /* ── Instant-commit controls ─────────────────────────────────────────────── */
@@ -262,7 +277,7 @@ class CardSaveBarTest {
         rule.setContent { CheckboxHost() }
         rule.onNodeWithTag(CHECK).performClick()
         rule.waitForIdle()
-        assertOalShowing()
+        assertBarHidden()
     }
 
     @Test
@@ -276,7 +291,7 @@ class CardSaveBarTest {
         rule.onNodeWithTag(CARD_SAVE_TAG).performClick()
         rule.waitForIdle()
         assertEquals(listOf("6.5"), commits)
-        assertOalShowing()
+        assertBarHidden()
     }
 
     /* ── Naming ──────────────────────────────────────────────────────────────── */
@@ -301,5 +316,6 @@ class CardSaveBarTest {
         const val FIELD = "kw_l_field"
         const val FIELD_B = "kw_d_field"
         const val CHECK = "card_checkbox"
+        const val ELSEWHERE = "elsewhere_field"
     }
 }
