@@ -1159,7 +1159,10 @@ footer's "Ø" text — never the raw 4-decimal format. Bodies and liners are **s
 groups** — a liner OD is never deduped against a body OD. Horizontally-close labels stack onto
 a second row, the same two-tier posture as runout bubbles, and rows AND label sides are placed
 together by the ONE `DiameterCalloutLayout.place` (pure, unit-tested) so no leader drops through
-another callout's value — the Angle-mode blend callouts (Body blends, above) ride this same list.
+another callout's value — each callout takes its first clear spot in turn, and when that leaves one
+with none the spots are searched TOGETHER for an arrangement that clears them all (on-device
+report: a blend's value hung left under its liner took the liner's Ø leader through it) — the
+Angle-mode blend callouts (Body blends, above) ride this same list.
 PDF-only — no on-screen canvas equivalent (the editor preview draws rails, never callouts), so no
 draw-both-sites rule applies.
 

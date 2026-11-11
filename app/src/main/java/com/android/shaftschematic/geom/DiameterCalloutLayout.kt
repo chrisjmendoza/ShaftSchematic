@@ -18,6 +18,9 @@ object DiameterCalloutLayout {
     /** Two rows below the shaft, matching the runout-bubble convention. */
     const val MAX_TIERS: Int = 2
 
+    /** Spots the joint search in [place] may try before it gives up. */
+    private const val JOINT_SEARCH_BUDGET: Int = 20_000
+
     /** Horizontal clearance (output units, pt) kept between a placed label's right edge
      *  and the next label's left edge on the same tier. */
     const val MIN_GAP: Float = 4f
@@ -120,8 +123,12 @@ object DiameterCalloutLayout {
      * OTHER side of its leader. Rows before sides, so a sheet whose callouts never conflicted, or
      * only needed a second row, is placed exactly as [assignTiers] placed it. Feature callouts are
      * placed first: their leaders point at one spot on the outline and cannot stand anywhere else,
-     * while a diameter's value reads as its component's from any row. With no clear spot a callout
-     * takes the least-crowded row on its usual side — never dropped.
+     * while a diameter's value reads as its component's from any row. When that leaves a callout
+     * with no clear spot, the spots are searched TOGETHER for an arrangement that clears them all
+     * — an earlier callout moving to its second row or other side — so a blend's angle whose
+     * value had to hang left, under the liner, no longer takes the liner's Ø leader through it
+     * (on-device report). Only when no arrangement is clear does a callout take the least-crowded
+     * row on its usual side — never dropped.
      *
      * @return one [Placement] per item, parallel to [items].
      */
@@ -151,8 +158,8 @@ object DiameterCalloutLayout {
             }
         }
 
-        for (idx in order) {
-            val item = items[idx]
+        // Every spot a callout may take, in preference order: rows before sides.
+        fun spots(item: Item): List<Placement> {
             val usual = labelLeft(item.anchorX, item.labelWidth, dogleg, contentLeft, contentRight)
             // The other side of the leader, when the label fits inside the content there.
             val flipped =
@@ -161,29 +168,58 @@ object DiameterCalloutLayout {
                 add(usual)
                 if (flipped >= contentLeft && flipped + item.labelWidth <= contentRight) add(flipped)
             }
-            var chosen: Placement? = null
-            search@ for (labelL in sides) {
-                for (t in 0 until tiers) {
-                    val left = minOf(item.anchorX, labelL)
-                    val right = maxOf(item.anchorX, labelL + item.labelWidth)
-                    if (clear(t, item.anchorX, left, right)) {
-                        chosen = Placement(t, labelL)
-                        break@search
-                    }
-                }
+            return sides.flatMap { labelL -> (0 until tiers).map { t -> Placement(t, labelL) } }
+        }
+        fun placedAt(item: Item, at: Placement) = Placed(
+            at.tier, item.anchorX,
+            minOf(item.anchorX, at.labelLeft), maxOf(item.anchorX, at.labelLeft + item.labelWidth),
+        )
+        fun isClear(item: Item, at: Placement): Boolean {
+            val box = placedAt(item, at)
+            return clear(at.tier, item.anchorX, box.left, box.right)
+        }
+
+        var forced = false
+        for (idx in order) {
+            val item = items[idx]
+            val options = spots(item)
+            val pick = options.firstOrNull { isClear(item, it) } ?: run {
+                forced = true
+                Placement(
+                    tier = (0 until tiers).minBy { t ->
+                        placed.filter { p -> p.tier == t }.maxOfOrNull { p -> p.right } ?: Float.NEGATIVE_INFINITY
+                    },
+                    labelLeft = options.first().labelLeft,
+                )
             }
-            val pick = chosen ?: Placement(
-                tier = (0 until tiers).minBy { t ->
-                    placed.filter { p -> p.tier == t }.maxOfOrNull { p -> p.right } ?: Float.NEGATIVE_INFINITY
-                },
-                labelLeft = usual,
-            )
-            placed += Placed(
-                pick.tier, item.anchorX,
-                minOf(item.anchorX, pick.labelLeft), maxOf(item.anchorX, pick.labelLeft + item.labelWidth),
-            )
+            placed += placedAt(item, pick)
             result[idx] = pick
         }
+        if (!forced) return result.map { it!! }
+
+        // Taking each callout's first clear spot in turn left one with none, so it stands on
+        // another's value. An earlier callout giving up its first choice can free the spot: search
+        // the callouts' spots TOGETHER, same order and same preference, for an arrangement in
+        // which every one is clear. The search is bounded; without a clear arrangement the
+        // one-at-a-time placement above stands.
+        placed.clear()
+        val joint = arrayOfNulls<Placement>(items.size)
+        var budget = JOINT_SEARCH_BUDGET
+        fun search(k: Int): Boolean {
+            if (k == order.size) return true
+            val idx = order[k]
+            val item = items[idx]
+            for (at in spots(item)) {
+                if (budget-- <= 0) return false
+                if (!isClear(item, at)) continue
+                placed += placedAt(item, at)
+                joint[idx] = at
+                if (search(k + 1)) return true
+                placed.removeAt(placed.lastIndex)
+            }
+            return false
+        }
+        if (search(0)) return joint.map { it!! }
         return result.map { it!! }
     }
 }

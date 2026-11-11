@@ -123,6 +123,33 @@ class SchematicRenderReviewTest {
     }
 
     @Test
+    fun `blend angle callout beside a liner diameter`() {
+        val doc = ShaftDocCodec.decode(
+            requireNotNull(javaClass.classLoader?.getResource("fixtures/blend_angle_kelley_c.shaft")).readText(),
+        )
+        renderSchematic("blend_angle_kelley_c_schematic.png", doc)
+        // A wide face at a large size pushes the blend's value past the content edge, so it hangs
+        // LEFT of its leader — under the liner, where the liner's Ø leader drops (on-device
+        // report: the Ø leader printed through the blend's value).
+        com.android.shaftschematic.util.BundledFonts.init(
+            androidx.test.core.app.ApplicationProvider.getApplicationContext(),
+        )
+        val before = com.android.shaftschematic.data.SettingsStore.pdfPrefs.outputFont
+        try {
+            for (font in com.android.shaftschematic.util.OutputFont.entries) {
+                com.android.shaftschematic.data.SettingsStore.updatePdfPrefs { it.copy(outputFont = font) }
+                renderSchematic(
+                    "blend_angle_kelley_c_${font.name.lowercase()}_schematic.png", doc,
+                    PdfPrefs(dimTextScale = 1.75f, showComponentTitles = false),
+                    linerMinFracOfTrue = 1f,
+                )
+            }
+        } finally {
+            com.android.shaftschematic.data.SettingsStore.updatePdfPrefs { it.copy(outputFont = before) }
+        }
+    }
+
+    @Test
     fun `mid-shaft taper job`() {
         renderSchematic("mid_taper_schematic.png", midTaper)
         renderConsolidated("mid_taper_consolidated.png", midTaper)
@@ -249,7 +276,12 @@ class SchematicRenderReviewTest {
         FileOutputStream(File(outDir, name)).use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 
-    private fun renderSchematic(name: String, doc: ShaftDocCodec.Decoded, pdfPrefs: PdfPrefs = PdfPrefs()) {
+    private fun renderSchematic(
+        name: String,
+        doc: ShaftDocCodec.Decoded,
+        pdfPrefs: PdfPrefs = PdfPrefs(),
+        linerMinFracOfTrue: Float = 0f,
+    ) {
         val (bmp, c) = bitmapPage()
         composeShaftPdfOnCanvas(
             c, PDF_PAGE_WIDTH_PT.toFloat(), PDF_PAGE_HEIGHT_PT.toFloat(),
@@ -260,6 +292,7 @@ class SchematicRenderReviewTest {
             filename = name,
             pdfPrefs = pdfPrefs,
             resolvedComponents = resolveComponents(doc.spec),
+            linerMinFracOfTrue = linerMinFracOfTrue,
         )
         save(name, bmp)
     }

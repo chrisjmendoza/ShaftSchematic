@@ -560,6 +560,12 @@ they are now all-BELOW, same as liners.
   the value hung on the OTHER side of its leader — rows before sides, so a sheet that never
   conflicted or only needed a second row is placed as before. Feature callouts (a blend's) are
   placed first, since their leaders point at one spot; a diameter's value reads from either row.
+  When taking spots one at a time leaves a callout with none, the spots are searched TOGETHER
+  (same order, same preference, bounded) for an arrangement that clears every leader of every
+  value — a blend's value that had to hang LEFT of its leader (it would run past the page edge on
+  the right) sat under its liner, where the liner's Ø leader drops, and the Ø printed through it;
+  the joint search gives the Ø the first row on its left and the blend the second (on-device
+  report). Only with no clear arrangement does a callout take the least-crowded row.
   `DiameterLeaderRenderer` takes row and side from that ONE answer for both `occupancy` and ink.
 - **Angle-mode blends join the same pass** (on-device request: "some blends have expressions in
   degrees"). A body face entered by angle prints ONE callout on ONE leader to the midpoint of
