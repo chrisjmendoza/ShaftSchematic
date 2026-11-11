@@ -22,6 +22,9 @@ import com.android.shaftschematic.geom.wearLinerTraces
 import com.android.shaftschematic.geom.pitCenterY
 import com.android.shaftschematic.geom.pitHalfArm
 import com.android.shaftschematic.geom.pitXTouchesHalo
+import com.android.shaftschematic.geom.WearAreaSpan
+import com.android.shaftschematic.geom.resolveWearAreaSpans
+import com.android.shaftschematic.geom.spanPiecesClearOf
 import com.android.shaftschematic.geom.WornValueColumn
 import com.android.shaftschematic.geom.planDiaCallouts
 import com.android.shaftschematic.geom.sequenceWearTraces
@@ -35,6 +38,7 @@ import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.ResolvedLiner
 import com.android.shaftschematic.ui.resolved.ResolvedTaper
+import com.android.shaftschematic.ui.resolved.wearAreaHosts
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.PDF_PAGE_WIDTH_PT
 import com.android.shaftschematic.util.VerboseLog
@@ -532,9 +536,19 @@ fun composeWearPdf(
             linerTraces = profileLinerTraces,
         )
 
-        // Vertical-stroke wear bands (liner spots) + pit "X"s at true position on the profile. Bands
-        // clamp to the liner span for rendering only; the stored data is never touched.
-        drawWearBandsOnProfile(c, wearGroups, shaftCy, ::xAt, ::rPxProfile, outline)
+        // Vertical-stroke wear bands + pit "X"s at true position on the profile. Bands clamp to
+        // their host's span for rendering only; the stored data is never touched. A body's
+        // areas come off the resolved runs (an area whose body no longer resolves is skipped)
+        // and stop at each side of an S-break gap, which is bare paper.
+        val bodyWearSpans = if (resolvedComponents == null) emptyList() else resolveWearAreaSpans(
+            effectiveRecord.spots, wearAreaHosts(resolvedComponents).filter { !it.isLiner },
+        )
+        drawWearBandsOnProfile(
+            c, wearGroups, shaftCy, ::xAt, ::rPxProfile, outline,
+            bodySpans = bodyWearSpans,
+            bodyGapsX = if (bodyWearSpans.isEmpty()) emptyList() else
+                simpleProfileBodyBreakGapsX(docSpec, ::xAt, ::rPxProfile, outline.strokeWidth, geomRect),
+        )
         if (resolvedComponents != null) {
             drawWearPitsOnProfile(c, effectiveRecord.pits, resolvedComponents, shaftCy, ::xAt, ::rPxProfile, pitPaint)
         }
@@ -576,7 +590,6 @@ fun composeWearPdf(
         innerWidthsPt = stripCells.map { it.right - it.left - 2f * WEAR_STRIP_STUB_WIDTH_PT },
         maxPtPerMm = stripMaxPtPerMm,
     )
-    val spotsByLinerId = effectiveRecord.spots.groupBy { it.linerId }
     onPage.forEachIndexed { i, window ->
         val cell = stripCells[i]
         val ids = window.components.map { it.id }.toSet()
@@ -589,7 +602,7 @@ fun composeWearPdf(
             breakRoomRightPt = stripBreakRooms[i].second,
             heightFrac = wearStripHeightFrac(window.refDiaMm, pageMaxRefDiaMm),
             titles = stripTitles,
-            spots = window.liner?.let { spotsByLinerId[it.id] }.orEmpty(),
+            spots = effectiveRecord.spots.filter { it.linerId in ids },
             pits = effectiveRecord.pits.filter { it.componentId in ids },
             diaReadings = effectiveRecord.diaReadings.filter { it.componentId in ids },
             deepestWearDepthMm = deepestLinerWearMm,
@@ -747,7 +760,9 @@ private fun drawWearLinerNamesOnProfile(
 
 /**
  * Thin vertical-line bands on the MAIN shaft profile for every liner with recorded wear
- * spots, at their true axial position — "visible but not dominant" (proposal §6.2). The band
+ * spots — and every body wear area in [bodySpans], the same strokes at the body's own height,
+ * cut clear of [bodyGapsX] (the profile's S-break gaps) — at their true axial position —
+ * "visible but not dominant" (proposal §6.2). The band
  * is filled with **vertical** strokes (matching how the shop marks wear areas by
  * hand — see the reference sketch); the broken-out detail strips, which are what pits get
  * hand-marked into, fill theirs a user-set light grey instead ([wearBandShadeAlpha]).
@@ -761,9 +776,17 @@ private fun drawWearBandsOnProfile(
     xAt: (Float) -> Float,
     rPx: (Float) -> Float,
     outline: Paint,
+    bodySpans: List<WearAreaSpan> = emptyList(),
+    bodyGapsX: List<ClosedFloatingPointRange<Float>> = emptyList(),
 ) {
-    if (groups.isEmpty()) return
+    if (groups.isEmpty() && bodySpans.isEmpty()) return
     val bandLines = Paint(outline).apply { strokeWidth = outline.strokeWidth * (WEAR_DIM_PT * 0.5f / WEAR_OUTLINE_PT); alpha = 120 }
+    bodySpans.forEach { span ->
+        val r = rPx(span.host.diaMm)
+        spanPiecesClearOf(xAt(span.startMm), xAt(span.endMm), bodyGapsX).forEach { piece ->
+            drawVerticalBand(c, piece.start, piece.endInclusive, cy - r, cy + r, bandLines, pitchPt = 6f)
+        }
+    }
     groups.forEach { g ->
         val ln = g.liner
         if (ln.lengthMm <= 0f || ln.odMm <= 0f) return@forEach

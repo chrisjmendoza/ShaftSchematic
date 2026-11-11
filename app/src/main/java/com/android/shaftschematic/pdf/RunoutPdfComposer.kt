@@ -68,6 +68,9 @@ import com.android.shaftschematic.ui.resolved.resolvedBodyBaseId
 import com.android.shaftschematic.ui.resolved.unshadedBodyRunIds
 import com.android.shaftschematic.ui.resolved.unshadedLinerIds
 import com.android.shaftschematic.ui.resolved.unshadedTaperIds
+import com.android.shaftschematic.ui.resolved.wearAreaHosts
+import com.android.shaftschematic.geom.resolveWearAreaSpans
+import com.android.shaftschematic.geom.spanPiecesClearOf
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.VerboseLog
 import com.android.shaftschematic.util.DualUnitLayout
@@ -919,12 +922,28 @@ internal fun composeRunoutPdfOnCanvas(
     // light grey fill is drawn, a value's knockout takes the shade under it ([shadeUnder]) so it
     // reads as no box at all while still breaking any line under the digits.
     val wearAreaStyle = pdfPrefs.wearAreaStyle
+    // A body's wear area stops at each side of an S-break gap (bare paper): the gaps the body
+    // pass cuts, from the same per-run decision. Only a sheet that has a body-hosted area asks.
+    val linerIdsForWear = docSpec.liners.mapTo(HashSet()) { it.id }
+    val wearBodyGapsX = if (!printValues || wearRecord.spots.all { it.linerId in linerIdsForWear }) {
+        emptyList()
+    } else bodyRunBreakGapsX(
+        docSpec.bodies, ::xAt, ::rPx, outline,
+        truePtPerMm = diaPtPerMm,
+        breakMinFracOfTrue = pdfPrefs.sBreakThresholdFrac,
+        blends = bodyBlendsForSheet,
+        keywayAvoidSpansMm = bodyKeywayProtectedSpansMm(spec),
+        boltRowAvoidSpansMm = boltRowProtectedSpansMm(spec),
+    )
     val wearBandRects = if (printValues && wearAreaStyle.fills) {
-        consolidatedWearBandRects(wearRecord, docSpec.liners, shaftCy, ::xAt, ::rPx)
+        consolidatedWearBandRects(
+            wearRecord, docSpec.liners, shaftCy, ::xAt, ::rPx, resolvedComponents, wearBodyGapsX,
+        )
     } else emptyList()
     if (printValues) {
         drawWearMarksOnRunoutProfile(
             c, wearRecord, docSpec.liners, resolvedComponents,
+            bodyGapsX = wearBodyGapsX,
             cy = shaftCy, xAt = ::xAt, rPx = ::rPx, outline = outline,
             pitSmallHalf = WEAR_PIT_SMALL_HALF_PROFILE_PT,
             valueHalos = (wornValues + readingValues).map { it.column },
@@ -1392,9 +1411,13 @@ private fun consolidatedWearShadePaint(): Paint = Paint(Paint.ANTI_ALIAS_FLAG).a
 
 /**
  * Each wear area's rectangle on the consolidated profile: its liner's clamped span
- * ([clampWearBandToLiner]) at the full drawn liner height. ONE construction behind the shaded band
- * fill and the knockouts that re-shade over it, so the two can never disagree. Orphan spots
- * (liner gone) and empty spans are skipped.
+ * ([clampWearBandToLiner]) at the full drawn liner height — and, for an area on a body, the
+ * clamped span of the drawn body run it sits on ([components], through the ONE resolution
+ * `resolveWearAreaSpans`) at the body's height, cut clear of [bodyGapsX] (the body pass's
+ * S-break gaps, bare paper), so one area may yield two rectangles. ONE construction behind the
+ * shaded band fill and the knockouts that re-shade over it, so the two can never disagree.
+ * Orphan spots (liner or body gone) and empty spans are skipped; with no [components] only the
+ * liner areas draw.
  */
 internal fun consolidatedWearBandRects(
     record: WearRecord,
@@ -1402,21 +1425,33 @@ internal fun consolidatedWearBandRects(
     cy: Float,
     xAt: (Float) -> Float,
     rPx: (Float) -> Float,
-): List<RectF> = record.spots.mapNotNull { spot ->
-    val ln = liners.firstOrNull { it.id == spot.linerId } ?: return@mapNotNull null
-    if (ln.lengthMm <= 0f || ln.odMm <= 0f) return@mapNotNull null
-    val clamp = clampWearBandToLiner(spot.startMm, spot.lengthMm, ln.lengthMm)
-    if (clamp.lengthMm <= 0f) return@mapNotNull null
-    val r = rPx(ln.odMm)
-    RectF(
-        xAt(ln.startFromAftMm + clamp.startMm), cy - r,
-        xAt(ln.startFromAftMm + clamp.startMm + clamp.lengthMm), cy + r,
-    )
+    components: List<ResolvedComponent>? = null,
+    bodyGapsX: List<ClosedFloatingPointRange<Float>> = emptyList(),
+): List<RectF> {
+    val linerRects = record.spots.mapNotNull { spot ->
+        val ln = liners.firstOrNull { it.id == spot.linerId } ?: return@mapNotNull null
+        if (ln.lengthMm <= 0f || ln.odMm <= 0f) return@mapNotNull null
+        val clamp = clampWearBandToLiner(spot.startMm, spot.lengthMm, ln.lengthMm)
+        if (clamp.lengthMm <= 0f) return@mapNotNull null
+        val r = rPx(ln.odMm)
+        RectF(
+            xAt(ln.startFromAftMm + clamp.startMm), cy - r,
+            xAt(ln.startFromAftMm + clamp.startMm + clamp.lengthMm), cy + r,
+        )
+    }
+    if (components == null) return linerRects
+    val bodyRects = resolveWearAreaSpans(record.spots, wearAreaHosts(components).filter { !it.isLiner })
+        .flatMap { span ->
+            val r = rPx(span.host.diaMm)
+            spanPiecesClearOf(xAt(span.startMm), xAt(span.endMm), bodyGapsX)
+                .map { RectF(it.start, cy - r, it.endInclusive, cy + r) }
+        }
+    return linerRects + bodyRects
 }
 
 /**
  * Wear marks migrated from the retired wear document onto the consolidated runout sheet:
- * the wear-area bands (each `WearSpot`, clamped to its liner's span) and the pit "X" markers
+ * the wear-area bands (each `WearSpot`, clamped to its liner's or body run's span) and the pit "X" markers
  * (reuses [drawWearPitsOnProfile], so the X stays identical across every draw site per
  * `geom/WearPitMath.kt`). Marks only — value text is drawn later by [drawWornSections] /
  * [drawDiaReadingsInProfile] (text always on top).
@@ -1429,7 +1464,7 @@ internal fun consolidatedWearBandRects(
  * grey alone read on-device as a shaded liner — or nothing. Drawn first in this pass, so pits,
  * boundaries and text sit on top.
  *
- * Orphan spots (liner no longer in the spec) and orphan pits are simply skipped —
+ * Orphan spots (liner or body no longer resolves) and orphan pits are simply skipped —
  * render-layer orphan handling, stored record never mutated.
  *
  * A pit whose X would touch one of [valueHalos] is not drawn (on-device ruling: the value
@@ -1450,11 +1485,13 @@ internal fun drawWearMarksOnRunoutProfile(
     valueHalos: List<WornValueColumn> = emptyList(),
     /** How each wear area draws — grey, lines, both or nothing. */
     style: WearAreaStyle = WearAreaStyle.LINES,
+    /** The body pass's S-break gaps: a body's wear area stops at each side of them. */
+    bodyGapsX: List<ClosedFloatingPointRange<Float>> = emptyList(),
 ) {
     if (record.spots.isNotEmpty() && style != WearAreaStyle.NONE) {
         val bandLines = Paint(outline).apply { strokeWidth = outline.strokeWidth * 0.5f; alpha = 120 }
         val bandFill = consolidatedWearShadePaint()
-        consolidatedWearBandRects(record, liners, cy, xAt, rPx).forEach { band ->
+        consolidatedWearBandRects(record, liners, cy, xAt, rPx, components, bodyGapsX).forEach { band ->
             if (style.fills) c.drawRect(band, bandFill)
             if (style.strokes) {
                 drawVerticalBand(c, band.left, band.right, band.top, band.bottom, bandLines, pitchPt = 6f)

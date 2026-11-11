@@ -183,6 +183,34 @@ class SchematicRenderReviewTest {
         renderWear("wear_trace_25.png", midTaper, record, traceDepthFrac = 0.25f)
     }
 
+    /**
+     * The same job with a wear area on its longest bare-shaft run (elected onto a detail strip
+     * beside the liners) and one on the FWD liner: the wear sheet, and the consolidated sheet in
+     * the Grey and Both wear-area styles.
+     */
+    @Test
+    fun `wear areas on a body`() {
+        val resolved = resolveComponents(midTaper.spec)
+        val run = resolved.filterIsInstance<com.android.shaftschematic.ui.resolved.ResolvedBody>()
+            .maxBy { it.endMmPhysical - it.startMmPhysical }
+        val runLen = run.endMmPhysical - run.startMmPhysical
+        val fwdLiner = midTaper.spec.liners.maxBy { it.startFromAftMm }
+        val record = WearRecord(
+            spots = listOf(
+                WearSpot(linerId = run.id, startMm = runLen * 0.15f, lengthMm = runLen * 0.12f),
+                WearSpot(linerId = run.id, startMm = runLen * 0.70f, lengthMm = runLen * 0.10f),
+                WearSpot(linerId = fwdLiner.id, startMm = 200f, lengthMm = 400f),
+            ),
+            stripComponentIds = midTaper.spec.liners.map { it.id } + run.id,
+        )
+        renderWear("wear_body_area.png", midTaper, record, traceDepthFrac = 0.25f)
+        renderConsolidated("consolidated_body_area_grey.png", midTaper, wearRecord = record)
+        renderConsolidated(
+            "consolidated_body_area_both.png", midTaper,
+            pdfPrefs = PdfPrefs(wearAreaStyle = WearAreaStyle.BOTH), wearRecord = record,
+        )
+    }
+
     private fun renderWear(name: String, doc: ShaftDocCodec.Decoded, record: WearRecord, traceDepthFrac: Float) {
         val (bmp, c) = bitmapPage()
         composeWearPdf(

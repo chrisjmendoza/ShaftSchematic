@@ -56,11 +56,10 @@ data class WearLinerGroup(val liner: Liner, val spots: List<WearSpot>)
  * here (those components have no strip yet); ids that resolve to nothing are skipped the
  * same way — orphan handling at the render layer, never at decode.
  *
- * Spots whose `linerId` doesn't match any liner in [liners] are silently dropped
- * here. The authoritative orphan-drop already happens at decode time
- * (`ShaftDocCodec`); this is a defensive second filter so a stale in-memory
- * [WearRecord] (e.g. liner deleted after load, before next save) can never crash
- * PDF layout.
+ * Spots whose `linerId` doesn't match any liner in [liners] — an area on a body, or one
+ * whose liner was deleted — produce no group here. The record itself is never pruned
+ * (`ShaftDocCodec` passes it through whole): this is the render-layer orphan rule, and a
+ * body's areas reach the sheet through `resolveWearAreaSpans` instead.
  */
 fun collectWearLinerGroups(
     liners: List<Liner>,

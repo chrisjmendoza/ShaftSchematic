@@ -11,7 +11,7 @@ import com.android.shaftschematic.model.WearRecord
  *
  * An auto body's id IS its span (`auto_body_<start>_<end>`), so lengthening the liner AFT of
  * a gap by 7/16" gives the gap a new id, and every reading, dragged station, count override,
- * pit and Ø reading keyed to the old id stops drawing (the render-layer orphan rule) — the
+ * wear area, pit and Ø reading keyed to the old id stops drawing (the render-layer orphan rule) — the
  * typed TIRs silently leave the printed sheet (emulator QA). The id scheme itself is stored in
  * every saved document, so instead of changing it the editor's ONE original-spec seam renames
  * the keys whenever an edit gives an auto run a new id ([autoBodySuccessors] +
@@ -216,6 +216,7 @@ data class AutoKeyedData(
         readings.readings.forEach { add(it.componentId) }
         placements.placements.forEach { add(it.componentId) }
         addAll(stationCountOverrides.keys)
+        wearRecord.spots.forEach { add(it.linerId) }
         wearRecord.pits.forEach { add(it.componentId) }
         wearRecord.diaReadings.forEach { add(it.componentId) }
         wearRecord.stripComponentIds?.let { addAll(it) }
@@ -224,7 +225,7 @@ data class AutoKeyedData(
     /**
      * This data with each successor's keys renamed old → new.
      *
-     * - Component-local axial values (dragged stations, pits, Ø readings) shift by
+     * - Component-local axial values (dragged stations, wear-area starts, pits, Ø readings) shift by
      *   [AutoBodySuccessor.axialShiftMm] so each stays at the same shaft position. A value the
      *   shift leaves outside the new span is stored as-is: the render layer already pulls a
      *   stranded station onto its run and skips what does not fit; storage is never clamped.
@@ -275,6 +276,13 @@ data class AutoKeyedData(
             ),
             stationCountOverrides = overrides,
             wearRecord = wearRecord.copy(
+                // A wear area's host-local start shifts like a pit's position; its length is
+                // the user's and never changes. Liner-hosted areas name no body and pass through.
+                spots = wearRecord.spots.map { s ->
+                    byOld[s.linerId]?.let {
+                        s.copy(linerId = it.newRun.id, startMm = s.startMm + it.axialShiftMm)
+                    } ?: s
+                },
                 pits = wearRecord.pits.map { p ->
                     byOld[p.componentId]?.let {
                         p.copy(componentId = it.newRun.id, axialMm = p.axialMm + it.axialShiftMm)

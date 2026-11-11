@@ -197,6 +197,35 @@ fun wearSpotSpanProblem(
     }
 }
 
+/** [WearSpotSpanProblem.message] naming the component the spot sits on — a body's page says "body". */
+fun WearSpotSpanProblem.messageOn(hostIsLiner: Boolean): String =
+    if (hostIsLiner) message else message.replace("liner", "body")
+
+/** [WearSpotSpanProblem.shortNote] naming the component the spot sits on. */
+fun WearSpotSpanProblem.shortNoteOn(hostIsLiner: Boolean): String =
+    if (hostIsLiner) shortNote else shortNote.replace("liner", "body")
+
+/**
+ * The "Measure From" chip label for [reference] — the ONE place its wording is decided. The
+ * stored `LINER_AFT` / `LINER_FWD` values mean the edges of whatever component the spot sits on,
+ * so on a body's page they read "Body AFT" / "Body FWD"; the stored enum is the same either way.
+ */
+fun wearReferenceChipLabel(reference: WearSpotReference, hostIsLiner: Boolean): String = when (reference) {
+    WearSpotReference.LINER_AFT -> if (hostIsLiner) "Liner AFT" else "Body AFT"
+    WearSpotReference.LINER_FWD -> if (hostIsLiner) "Liner FWD" else "Body FWD"
+    WearSpotReference.AFT_SET -> "AFT SET"
+    WearSpotReference.FWD_SET -> "FWD SET"
+}
+
+/** [reference] as the Start field's label names it ("Start from …") — same source as the chips. */
+fun wearReferenceFieldLabel(reference: WearSpotReference, hostIsLiner: Boolean): String = when (reference) {
+    WearSpotReference.LINER_AFT, WearSpotReference.LINER_FWD -> {
+        val chip = wearReferenceChipLabel(reference, hostIsLiner)
+        chip.substringBefore(' ').lowercase() + " " + chip.substringAfter(' ') + " edge"
+    }
+    WearSpotReference.AFT_SET, WearSpotReference.FWD_SET -> wearReferenceChipLabel(reference, hostIsLiner)
+}
+
 /** [wearSpotSpanProblem]'s full message, or `null` when the band fits. */
 fun wearSpotSpanIssue(
     canonicalStartMm: Float,

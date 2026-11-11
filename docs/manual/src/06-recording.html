@@ -10,7 +10,7 @@
     <thead><tr><th>Tab</th><th>What you record there</th></tr></thead>
     <tbody>
       <tr><td><span class="ui">Runout Sheet</span></td><td>TIR (total indicated runout) readings and high-spot clock positions, one per bubble; the coupling pilot runout; station counts and bubble positions.</td></tr>
-      <tr><td><span class="ui">Wear Document</span></td><td>Wear spots on liners, pit and dye-failure X marks, measured diameters, the dye pen PASS/FAIL result.</td></tr>
+      <tr><td><span class="ui">Wear Document</span></td><td>Wear spots on liners and bodies, pit and dye-failure X marks, measured diameters, the dye pen PASS/FAIL result.</td></tr>
       <tr><td><span class="ui">Undercut Drawing</span></td><td>Undercut sections: distance, length and measured Ø of each machined-below-surface span.</td></tr>
       <tr><td><span class="ui">Consolidated Output</span></td><td>Worn sections: measured areas whose Ø values print inside the shaft on the consolidated sheet.</td></tr>
     </tbody>
@@ -25,8 +25,8 @@
   <p>Readings live inside the job file, next to the shaft. While you have unsaved work the job name at the top of the tab shows an asterisk (<span class="ui">*</span>). Tap the <span class="ui">Save</span> icon in the tab's toolbar to save; a job that has never been saved asks for a name first.</p>
 
   <h3>Readings stay where you took them</h3>
-  <p>A runout reading belongs to its bubble — this component, this station number — not to a spot on the paper. If the office later edits the shaft, the reading follows its bubble. If an edit removes the station altogether (the component is deleted, or its station count is lowered), the reading is simply not drawn; it is not thrown away, and it reappears if the station comes back. Pits and measured diameters behave the same way with their component.</p>
-  <aside class="note"><p>Wear spots are the one exception: they belong to their liner, and if that liner is deleted from the shaft its wear spots are dropped the next time the job is opened.</p></aside>
+  <p>A runout reading belongs to its bubble — this component, this station number — not to a spot on the paper. If the office later edits the shaft, the reading follows its bubble. If an edit removes the station altogether (the component is deleted, or its station count is lowered), the reading is simply not drawn; it is not thrown away, and it reappears if the station comes back. Pits, measured diameters and wear spots behave the same way with their component.</p>
+  <aside class="note"><p>A wear spot is measured from the edge of the liner or body it sits on, so it stays in the same place on that component when the component is moved or the overall length changes. On bare shaft it stays at the same place on the shaft when a neighbouring part's edit moves the section's end.</p></aside>
 
   <h3>Undo</h3>
   <p>Typed readings, bubble moves, station count changes, wear marks, undercuts and worn sections all go into the job's single undo history. To undo, use the <span class="ui">Undo</span> and <span class="ui">Redo</span> arrows in the bar at the top of the Runout Sheet, Wear Document, Undercut Drawing or Consolidated Output tab — and of a component's wear page or an undercut detail page — or the <span class="ui">History</span> icon on the <span class="ui">Schematic</span> tab's toolbar; see <a href="#editor-history">Undo and redo</a>. Deleting a cut, a wear spot or a worn section, or tapping <span class="ui">Clear all pits</span>, also offers <span class="ui">Undo</span> in a message at the bottom of the page, which puts back exactly what was removed. Re-opening a reading to change only its high spot (or re-saving any measurement dialog without touching its value) keeps the value exactly as you typed it, even where the field shows it rounded. The Runout Sheet tab also has its own one-tap <span class="ui">Undo move</span> for the last bubble you dragged — see <a href="#recording-move">Moving bubbles</a>.</p>
@@ -179,7 +179,7 @@
     <tbody>
       <tr><td>Liner</td><td>Yes</td><td>Yes (also drives the worn-profile trace)</td><td>Yes</td></tr>
       <tr><td>Taper</td><td>Yes</td><td>Yes</td><td>No</td></tr>
-      <tr><td>Body or bare shaft</td><td>Yes</td><td>Yes</td><td>No</td></tr>
+      <tr><td>Body or bare shaft</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
     </tbody>
   </table>
   <aside class="warn"><p>The view opens with the <span class="ui">Add X</span> tool selected, so the first tap on the drawing places a pit mark. To record a diameter instead, pick <span class="ui">Add Ø</span> first. A stray X is removed with <span class="ui">Remove X</span>.</p></aside>
@@ -209,17 +209,19 @@
   <p>Only one tool is active at a time across the Pits and Diameter measurements sections, so a tap can't place an X and a reading at once. The heading counts the readings, for example <span class="ui">4 recorded</span>.</p>
   <aside class="note"><p>Measured diameters print as the values you typed, with no Ø symbol, to three decimals in inches (5.738″; a whole number prints bare). On the consolidated sheet the same readings print inside the shaft profile at their station instead.</p></aside>
 
-  <h3>Wear spots on liners</h3>
-  <p>A wear spot is a band along a liner where it is worn. It prints as a shaded band on the liner's detail strip, dimensioned from the liner's edge, and it is where the worn-profile trace dips.</p>
+  <h3>Wear spots on liners and bodies</h3>
+  <p>A wear spot is a band along a liner or a body where it is worn. It prints as a shaded band on the component's detail strip, dimensioned from the component's edge. On a liner it is also where the worn-profile trace dips; a body shows the band only.</p>
   <ol class="steps">
-    <li>Open the liner and scroll to <span class="ui">Wear spots</span>.</li>
-    <li>Tap <span class="ui">Add spot</span>. A card titled <span class="ui">Spot 1</span> appears and the page scrolls to it; the new band starts at the liner's AFT edge and is 1″ long (or the liner's length, if shorter).</li>
-    <li>Under <span class="ui">Measure From:</span>, tap the datum you measured from: <span class="ui">AFT SET</span>, <span class="ui">FWD SET</span>, <span class="ui">Liner AFT</span> or <span class="ui">Liner FWD</span>.</li>
+    <li>Open the liner or body and scroll to <span class="ui">Wear spots</span>.</li>
+    <li>Tap <span class="ui">Add spot</span>. A card titled <span class="ui">Spot 1</span> appears and the page scrolls to it; the new band starts at the component's AFT edge and is 1″ long (or the component's length, if shorter).</li>
+    <li>Size the band on the drawing, or type it (the next steps). On the drawing the band has a bar on each edge: press the start bar or the end bar and drag it to where the wear begins or ends. Only that edge moves.</li>
+    <li>Under <span class="ui">Measure From:</span>, tap the datum you measured from: <span class="ui">AFT SET</span>, <span class="ui">FWD SET</span>, <span class="ui">Liner AFT</span> or <span class="ui">Liner FWD</span> (<span class="ui">Body AFT</span> and <span class="ui">Body FWD</span> on a body).</li>
     <li>Type the distance into the start field. Its label names the datum — <span class="ui">Start from liner AFT edge (in)</span>, <span class="ui">Start from FWD SET (in)</span> and so on.</li>
     <li>Type the band's <span class="ui">Length (in)</span>.</li>
     <li>Optionally add <span class="ui">Notes</span> (“scored”, “pitted at 6 o'clock”).</li>
   </ol>
   <p>With an AFT datum (<span class="ui">AFT SET</span>, <span class="ui">Liner AFT</span>) the distance locates the band's AFT edge, measured forward. With a FWD datum (<span class="ui">FWD SET</span>, <span class="ui">Liner FWD</span>) it locates the band's FWD edge, measured aft. Switching the chip only changes how the distance is shown — the band itself does not move — so you can enter it from one datum and check it from another.</p>
+  <p><strong>Dragging the bars.</strong> The start and end bars let you place a wear spot by eye instead of measuring its length. The band and the values under the drawing follow your finger, and the card's start and length fields show the result when you let go. A dragged edge is an estimate, so it lands on the nearest 1/8″ (1 mm in a millimetre drawing); it cannot leave the component or cross the other bar. One drag is one step for <span class="ui">Undo</span>. The bars are on screen only — no sheet prints them. Pinch to zoom in first for a finer drag; a tap on or near a bar, without dragging, still uses the selected tool.</p>
   <p>Values commit when you leave the field, exactly as typed. A band should fit inside the liner; a value that pushes it past either end stays in the field and the card says so under it (<span class="ui">Wear spot extends past the liner's FWD edge</span>), the card's header carries a short note, and the drawing shows the band clipped to the liner until you correct it. If the liner is later shortened so that an existing band runs past its end, the card shows <span class="ui">Extends past liner end — re-measure</span>. Delete a band with the bin icon on its card; <span class="ui">Wear spot deleted</span> follows with <span class="ui">Undo</span>. On the drawing, the band's start and length print under the liner in the same form as the printed strip (fractions in inches), each value in a break in its own line or, on a short band, on its own row.</p>
 
   <h3 id="recording-trace">The worn-profile trace</h3>

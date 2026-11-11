@@ -92,7 +92,7 @@ private const val WEAR_PIT_SMALL_HALF_STRIP_PT = 2.5f
  * same lines-in/values-out rule; a cluster that prints no anchor leaves no write-in blank either,
  * since its location needs no measurement.
  *
- * [spots], [pits], and [diaReadings] must already be filtered to this window's components; the
+ * [spots] (liner- and body-hosted alike), [pits], and [diaReadings] must already be filtered to this window's components; the
  * shared strip scale [stripPtPerMm] comes from the page's packer (or
  * `sharedWearStripWindowPtPerMm` on the single-column paths), so relative lengths read true across
  * the whole page. [stubWidthPt] is the page's uniform neighbor-stub width — every end style here
@@ -217,10 +217,17 @@ internal fun drawWearStripWindow(
         it.labelsHeightPt(diaRowHeightPt, WEAR_DIA_ROW_GAP_PT) + 2f + WEAR_DIA_TITLE_AIR_PT
     } ?: 0f
 
-    val sortedSpots = spots.sortedBy { it.startMm }
-    // Bands clamp to the liner's own span for rendering; the stored spots are never touched.
-    val clampedBands = if (linerComp == null) emptyList() else
-        sortedSpots.map { spot -> clampWearBandToLiner(spot.startMm, spot.lengthMm, linerComp.lengthMm) }
+    // The chained rail measures ONE host's wear: the window's liner, else — a window with no
+    // liner — its first body that carries wear areas. A window whose bodies carry none has no
+    // rail host and prints as it always did.
+    val railComp = linerComp ?: comps.firstOrNull { comp ->
+        comp.kind == WearStripComponentKind.BODY && spots.any { it.linerId == comp.id }
+    }
+    // Bands clamp to the host's own span for rendering; the stored spots are never touched.
+    fun clampedBandsOf(comp: WearStripComponent): List<WearBandClamp> =
+        spots.filter { it.linerId == comp.id }.sortedBy { it.startMm }
+            .map { spot -> clampWearBandToLiner(spot.startMm, spot.lengthMm, comp.lengthMm) }
+    val clampedBands = railComp?.let { clampedBandsOf(it) }.orEmpty()
 
     // Worn-profile trace (geom/WearTraceMath.kt). Pure mm→depth-fraction math, so it is computed
     // before any px geometry and mapped through the strip's scale below — the same output the
@@ -232,7 +239,7 @@ internal fun drawWearStripWindow(
         .map { WearTraceReading(it.axialMm.coerceIn(0f, linerComp.lengthMm), it.diaMm) }
     val linerTrace = buildLinerWearTrace(
         linerLengthMm = linerComp?.lengthMm ?: 0f,
-        bands = clampedBands.map { it.startMm to it.lengthMm },
+        bands = if (linerComp == null) emptyList() else clampedBands.map { it.startMm to it.lengthMm },
         readings = traceReadings,
         nominalOdMm = linerComp?.aftDiaMm ?: 0f,
         deepestDepthMm = deepestWearDepthMm,
@@ -426,12 +433,24 @@ internal fun drawWearStripWindow(
     // [WearSpot.minDiaMm] is model-only, for older files.
     // A traced band fills between its traced edges instead of the full rect, so the material
     // measured away stays white above and below the grey.
+    val bandFill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL; color = Color.argb(bandShadeAlpha, 0, 0, 0)
+    }
+    // A body's wear areas: the same grey band and edge ticks at the body's own height, always a
+    // plain rectangle — a body never traces. A window may hold a liner and bodies together.
+    comps.filter { it.kind == WearStripComponentKind.BODY }.forEach { body ->
+        val r = rOf(body.aftDiaMm)
+        clampedBandsOf(body).forEach { clamp ->
+            if (clamp.lengthMm <= 0f) return@forEach
+            val x0 = xAtStrip(body.startMm + clamp.startMm)
+            val x1 = xAtStrip(body.startMm + clamp.startMm + clamp.lengthMm)
+            c.drawRect(x0, cy - r, x1, cy + r, bandFill)
+            c.drawLine(x0, cy - r, x0, cy + r, dimPaint); c.drawLine(x1, cy - r, x1, cy + r, dimPaint)
+        }
+    }
     if (linerComp != null) {
         val linerR = rOf(linerComp.aftDiaMm)
         val top = cy - linerR; val bot = cy + linerR
-        val bandFill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.FILL; color = Color.argb(bandShadeAlpha, 0, 0, 0)
-        }
         clampedBands.forEachIndexed { i, clamp ->
             if (clamp.lengthMm <= 0f) return@forEachIndexed
             val x0 = xAtStrip(linerComp.startMm + clamp.startMm)
@@ -493,14 +512,15 @@ internal fun drawWearStripWindow(
     // see "Wear Detail Strips" in docs/contracts/RunoutSheet.md): liner AFT edge → first
     // band start, each band's own length, inter-band gaps, and the trailing remainder to the liner
     // FWD edge — standard witness-line/arrowed-span/centered-label rail convention. The rail
-    // measures WEAR, so it belongs to the window's liner; a taper/body-only window has none.
-    if (linerComp != null) {
+    // measures WEAR, so it belongs to the window's rail host ([railComp]): its liner, else its
+    // first body carrying wear areas. A taper window, or a body with no wear areas, has none.
+    if (railComp != null) {
         val railSpans = buildWearStripRailSpans(
-            linerComp.lengthMm, clampedBands, displayUnits.unitFor(linerComp.id), displayUnits.dual,
+            railComp.lengthMm, clampedBands, displayUnits.unitFor(railComp.id), displayUnits.dual,
         )
         val railLayout = layoutWearStripRail(
             railSpans,
-            xAtStripMm = { mm -> xAtStrip(linerComp.startMm + mm) },
+            xAtStripMm = { mm -> xAtStrip(railComp.startMm + mm) },
             labelWidthPt = { s -> dimText.measureDualLabel(s, dualStacked) },
         )
         // Blank draft: the rail's dimension lines still draw, the value labels do not — the
@@ -511,7 +531,7 @@ internal fun drawWearStripWindow(
         // Witness lines run down to the liner's ACTUAL drawn top — a height-scaled strip's
         // surface sits below the band top, and bars stopping in the air above it would read
         // as measuring nothing.
-        drawWearStripRail(c, dim, dimText, railLayout, cy - rOf(linerComp.aftDiaMm), inner.railY,
+        drawWearStripRail(c, dim, dimText, railLayout, cy - rOf(railComp.aftDiaMm), inner.railY,
             inner.railLabelRows, drawLabels = !blankValues, drawSpanLines = hasWearBands,
             rowHeightPt = railRowHeightPt, dualStacked = dualStacked)
     }

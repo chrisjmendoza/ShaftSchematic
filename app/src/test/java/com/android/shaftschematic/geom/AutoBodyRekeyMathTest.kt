@@ -12,6 +12,7 @@ import com.android.shaftschematic.model.Taper
 import com.android.shaftschematic.model.WearDiaReading
 import com.android.shaftschematic.model.WearPit
 import com.android.shaftschematic.model.WearRecord
+import com.android.shaftschematic.model.WearSpot
 import com.android.shaftschematic.model.withNewOal
 import com.android.shaftschematic.ui.resolved.autoBodyRuns
 import com.android.shaftschematic.ui.resolved.isAutoBodyId
@@ -76,6 +77,10 @@ class AutoBodyRekeyMathTest {
             listOf(RunoutStationPlacement(componentId = id, stationIndex = 0, axialMm = 100f))
         ),
         wearRecord = WearRecord(
+            spots = listOf(
+                WearSpot(id = "s", linerId = id, startMm = 150f, lengthMm = 44.45f, note = "scored"),
+                WearSpot(id = "sl", linerId = "l1", startMm = 60f, lengthMm = 25.4f),
+            ),
             pits = listOf(WearPit(id = "p", componentId = id, axialMm = 300f)),
             diaReadings = listOf(WearDiaReading(id = "d", componentId = id, axialMm = 200f, diaMm = 242.5f)),
             stripComponentIds = listOf("l1", id),
@@ -93,6 +98,17 @@ class AutoBodyRekeyMathTest {
         assertEquals(100f + shift, out.placements.placements.single().axialMm, 1e-3f)
         assertEquals(newRun.id, out.placements.placements.single().componentId)
         assertEquals(300f + shift, out.wearRecord.pits.single().axialMm, 1e-3f)
+        // The wear area follows the gap: key moved, start shifted like the pit, length and
+        // note untouched. The liner's own area is not a body's and never moves.
+        val area = out.wearRecord.spots.single { it.id == "s" }
+        assertEquals(newRun.id, area.linerId)
+        assertEquals(150f + shift, area.startMm, 1e-3f)
+        assertEquals(44.45f, area.lengthMm, 0f)
+        assertEquals("scored", area.note)
+        assertEquals(
+            WearSpot(id = "sl", linerId = "l1", startMm = 60f, lengthMm = 25.4f),
+            out.wearRecord.spots.single { it.id == "sl" },
+        )
         assertEquals(200f + shift, out.wearRecord.diaReadings.single().axialMm, 1e-3f)
         assertEquals(242.5f, out.wearRecord.diaReadings.single().diaMm, 0f)
         assertEquals(listOf("l1", newRun.id), out.wearRecord.stripComponentIds)
