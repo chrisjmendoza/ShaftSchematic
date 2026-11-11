@@ -981,8 +981,9 @@ fun ShaftScreen(
 
         // [warningSlot] is emitted between the add button and the carousel — where the spec
         // warnings sit in one column. With two panes they move up beside the drawing and the
-        // overall length they are about, and this slot stays empty. [carouselHeight] null is the
-        // phone's fixed-height carousel; a height fills a box that tall (a MEDIUM window).
+        // overall length they are about, and this slot stays empty. [carouselHeight] fills a box that
+        // tall (the single column, phone or MEDIUM — `CAROUSEL_HEIGHT` until the column has been
+        // measured); null draws the plain fixed-height `CAROUSEL_HEIGHT` row.
         val componentsBlock: @Composable (warningSlot: @Composable () -> Unit, carouselHeight: Dp?) -> Unit = { warningSlot, carouselHeight ->
             componentsHeader("Swipe to select")
             addComponentButton()
@@ -1158,13 +1159,13 @@ fun ShaftScreen(
                 HorizontalDivider()
                 Spacer(Modifier.height(12.dp))
 
-                // A MEDIUM window is a taller column, and the phone's fixed carousel height left
-                // the card clipped above an empty quarter of the screen (on-device report): there
-                // the carousel takes whatever height the scrolling column has left under the
-                // controls above it, measured off this column (`mediumCarouselHeight`). The
-                // viewport is read OUTSIDE the IME padding, so the keyboard scrolls the column
-                // rather than shrinking the card under the focused field.
-                val medium = widthClass == WindowWidthClass.MEDIUM
+                // A fixed carousel height left the card clipped above empty screen, a quarter of a
+                // portrait tablet and a strip under a phone's card (on-device reports): the
+                // carousel takes whatever height the scrolling column has left under the controls
+                // above it, measured off this column (`mediumCarouselHeight`), on a phone as in a
+                // MEDIUM window. The viewport is read OUTSIDE the IME padding, so the keyboard
+                // scrolls the column rather than shrinking the card under the focused field.
+                val medium = widthClass != WindowWidthClass.EXPANDED
                 val mediumCarouselDp = if (
                     medium && mediumViewportPx > 0 && mediumContentPx > 0 && mediumCarouselPx > 0
                 ) {

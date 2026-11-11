@@ -149,7 +149,7 @@ internal fun ThreadPagerCard(
         }
         if (!includeInOal) {
             // AFT / FWD end selector — replaces the start input for excluded threads
-            ChipFlowRow(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+            ChipFlowRow(Modifier.fillMaxWidth()) {
                 Text("Thread end:", style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 val chipColors = FilterChipDefaults.filterChipColors(

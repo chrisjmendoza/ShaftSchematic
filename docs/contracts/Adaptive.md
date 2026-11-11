@@ -46,7 +46,7 @@ app's shape-by-window decisions are stated; every screen keys on the same axis.
 
 | Surface | COMPACT (phone) | MEDIUM (portrait tablet, landscape phone) | EXPANDED (landscape tablet) |
 |---|---|---|---|
-| Schematic / Final editor (`ShaftScreen`) | today's column; the action bar prints NO title (the icons left it ".."; the document title strip names the screen) | preview cap 280 dp, bar title shown, carousel fills the column's leftover height (floor 360 dp) | drawing band across the top (4:1 preview + Save slot / add / warnings side column) over a full-width carousel, current card centred, neighbours peeking; the band is as tall as the taller of the drawing and the side column (under the cap) and yields height to the keyboard |
+| Schematic / Final editor (`ShaftScreen`) | today's column, carousel fills the column's leftover height (floor 360 dp); the action bar prints NO title (the icons left it ".."; the document title strip names the screen) | preview cap 280 dp, bar title shown, carousel fills the column's leftover height (floor 360 dp) | drawing band across the top (4:1 preview + Save slot / add / warnings side column) over a full-width carousel, current card centred, neighbours peeking; the band is as tall as the taller of the drawing and the side column (under the cap) and yields height to the keyboard |
 | Runout / Wear / Undercut tabs | today's column, 200 dp canvas | 280 dp canvas | two panes: canvas + print group \| controls |
 | Consolidated Output tab | today's column | readable width | readable width (see `RunoutSheet.md`) |
 | Editor sidebar | slide-in overlay (200 dp) | overlay | **permanent** 240 dp panel beside the tabs; hamburgers hidden |
@@ -117,8 +117,11 @@ Per-surface details live in the owning contracts (`ShaftScreen.md`, `RunoutSheet
   The sheet tabs need neither: their saved state (`showPreview`, `blankDraft`, the undercut
   detail anchor, the selected wear component) is declared above their own width branch, and
   the blocks the branch moves hold only scroll positions.
-- **COMPACT is byte-identical to the pre-tablet layout.** Nothing in this contract changes a
-  phone. Every existing `testTag` survives in every branch.
+- **COMPACT is the phone's single column.** Every existing `testTag` survives in every branch.
+  The editor's carousel fills the height the screen has left under the controls above it, on a
+  phone as in a MEDIUM window (`mediumCarouselHeight`, never under `CAROUSEL_HEIGHT`), and with
+  no edge arrows and no peeking neighbours its card runs the column's full width, in line with
+  the "+ Add Component" button.
 - **Pinned things stay pinned.** The preview card and the sheet canvases sit above their
   scrolling controls on a phone; in a pane they stay at the top of that pane and the pane's
   remaining content scrolls under them. A canvas that scrolls away is the failing state.

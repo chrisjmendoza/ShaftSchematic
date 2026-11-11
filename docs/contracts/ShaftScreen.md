@@ -206,9 +206,9 @@ Window width is the editor's **one** adaptive axis (`ui/adaptive/WindowSize.kt`,
 is never a class here. The Final Schematic tab hosts this same screen through
 `ShaftRoute(target = FINAL)`, so it inherits every branch below.
 
-- **COMPACT** (< 600 dp) — the phone layout, unchanged: one column with the preview card pinned
+- **COMPACT** (< 600 dp) — the phone layout: one column with the preview card pinned
   under the app bar (`heightIn(min 120, max 200.dp)`, `aspectRatio(3f)`), the card Save / Cancel
-  slot, and a single scrolling column holding the Components heading, the "+ Add Component" button, `SpecWarningBanner`, and the carousel.
+  slot, and a single scrolling column holding the Components heading, the "+ Add Component" button, `SpecWarningBanner`, and the carousel. The carousel fills the column's leftover height exactly as on MEDIUM below (on-device report: the fixed 360 dp left a strip of empty screen under a card scrolling its own fields), and with no edge arrows its card runs the column's full width, in line with the "+ Add Component" button.
 - **MEDIUM** (600–839 dp: a portrait tablet, a phone in landscape) — the same single column,
   with the preview card's height ceiling raised to **280 dp** (the 3:1 ratio and the 120 dp
   floor stand, so a wide window stops drawing the shaft as a flat strip) and the **carousel
@@ -278,8 +278,8 @@ have to restate the screen's parameter list (the carousel alone takes fifty call
 signature copied twice is exactly the drift this prevents. The single column stacks the last
 three through `componentsBlock(warningSlot, carouselHeight)` — header ("Swipe to select"),
 button, the `SpecWarningBanner` in the slot, the carousel with one card filling the pager (at
-`CAROUSEL_HEIGHT` on COMPACT, in the filled box on MEDIUM) — so **COMPACT is byte-identical to
-before the tablet layout existed**; the EXPANDED branch places the same blocks separately.
+the filled box on COMPACT and MEDIUM alike); the EXPANDED branch places the same blocks
+separately.
 Every `testTag` survives in both branches.
 
 **The carousel and the warning banner are movable content** (`movableContentOf`), because they

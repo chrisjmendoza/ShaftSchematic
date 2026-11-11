@@ -437,9 +437,9 @@ fun AddBodyDialog(
                             defaultSealLenMm(lengthMm).let { blendFwdSealLen.reseed(it, toDisplayString(it, unit)) }
                         }
                     },
-                    // The length fields keep the card field's empty supporting line, so the
-                    // "At a liner" chips and the next face sit the same distance under them here
-                    // as on the card.
+                    // The length fields keep an empty supporting line, so the "At a liner" chips
+                    // and the next face sit clear of them; the section's own field gap
+                    // (`CardFieldGap`) is a card-only spacing.
                     aftLengthField = {
                         CommitNumField("Blend AFT (${abbr(unit)})", blendAft.text, reserveSupportingLine = true) { blendAft.onText(it) }
                     },
@@ -1772,9 +1772,9 @@ private fun CommitNumField(
     /** The in-field "/" key (inch documents, while focused); off for whole-number fields. */
     fractionKey: Boolean = keyboardType == KeyboardType.Decimal,
     /**
-     * Keep the supporting-text line under the field even while it is empty, the way every card
-     * field (`NumericInputField`) does — for a field inside a section the cards share
-     * (`BlendSection`), so the gap under it is the same on both surfaces.
+     * Keep the supporting-text line under the field even while it is empty — for a field inside
+     * a section the cards share (`BlendSection`), whose rows carry no spacing of their own in a
+     * dialog, so what follows the field sits clear of it.
      */
     reserveSupportingLine: Boolean = false,
     onCommit: (String) -> Unit

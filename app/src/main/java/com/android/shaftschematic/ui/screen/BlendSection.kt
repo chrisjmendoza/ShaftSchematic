@@ -241,6 +241,7 @@ fun BlendSection(
             SealFaceCheckbox("FWD", fwdSeal, "body_seal_fwd", onSetFwdSeal, Modifier.weight(1f))
         }
         if (aftSeal) aftSealLengthField()
+        if (aftSeal && fwdSeal) CardFieldGap()
         if (fwdSeal) fwdSealLengthField()
     }
 }
@@ -307,17 +308,26 @@ private fun BlendFaceEntry(
         tagOf = { "${tagPrefix}_entry_${it.name}" },
         onSelect = onSetEntry,
     )
+    // On a card the fields carry no empty supporting line, so the card's row gap goes under each
+    // one ([CardFieldGap]); the angle note sits under its field where that line would, the
+    // supporting line's own 4 dp below the box on a card.
     when (entry) {
-        BlendEntry.LENGTH -> lengthField()
+        BlendEntry.LENGTH -> {
+            lengthField()
+            CardFieldGap()
+        }
         BlendEntry.ANGLE -> {
             angleField()
             Text(
                 angleNote,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 4.dp, bottom = 4.dp).testTag("${tagPrefix}_angle_note"),
+                modifier = Modifier
+                    .padding(start = 4.dp, top = LocalCardRowGap.current / 2, bottom = 4.dp)
+                    .testTag("${tagPrefix}_angle_note"),
             )
             radiusField()
+            CardFieldGap()
         }
     }
 }

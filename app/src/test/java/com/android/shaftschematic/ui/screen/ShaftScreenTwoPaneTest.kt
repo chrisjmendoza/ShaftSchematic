@@ -114,10 +114,18 @@ class ShaftScreenTwoPaneTest {
         assertTrue("carousel $height should be well past the phone's $CAROUSEL_HEIGHT", height > CAROUSEL_HEIGHT + 100.dp)
     }
 
+    /**
+     * A phone fills the same way: a fixed 360 dp carousel left a strip of empty screen under a
+     * card that was scrolling its own fields.
+     */
     @Test
-    fun `a compact window keeps the phone's fixed carousel`() {
+    @Config(sdk = [34], qualifiers = "w400dp-h900dp")
+    fun `a compact window's carousel takes the column's remaining height`() {
         host()
+        rule.waitForIdle()
 
-        rule.onAllNodesWithTag(EDITOR_MEDIUM_CAROUSEL_TAG).assertCountEquals(0)
+        val carousel = rule.onNodeWithTag(EDITOR_MEDIUM_CAROUSEL_TAG).getBoundsInRoot()
+        val height = carousel.bottom - carousel.top
+        assertTrue("carousel $height should be taller than the old fixed $CAROUSEL_HEIGHT", height > CAROUSEL_HEIGHT)
     }
 }

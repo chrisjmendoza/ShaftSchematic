@@ -1,6 +1,7 @@
 // file: app/src/main/java/com/android/shaftschematic/ui/screen/LinerShoulderSection.kt
 package com.android.shaftschematic.ui.screen
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -50,7 +51,9 @@ fun LinerShoulderSection(
     aftFields: @Composable () -> Unit,
     fwdFields: @Composable () -> Unit,
 ) {
-    Column(Modifier.fillMaxWidth()) {
+    // On a card the rows sit the card's row gap apart — the card fields carry no empty
+    // supporting line to space them; in the dialog the gap is 0 and its fields space themselves.
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(LocalCardRowGap.current)) {
         Text(
             "Shoulders",
             style = MaterialTheme.typography.labelLarge,

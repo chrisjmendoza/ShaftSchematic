@@ -781,7 +781,9 @@ canvas's selection — are fixed `SheetInk.Selection` ink as well, never `colorS
 ### Layout adapts on ONE axis, the window width class
 Phones and tablets run the same screens; what changes is decided by `WindowWidthClass`
 (`ui/adaptive/WindowSize.kt` — COMPACT < 600 dp, MEDIUM < 840 dp, EXPANDED) and nothing else.
-COMPACT is the pre-tablet phone layout, byte-identical; MEDIUM is a taller single column;
+COMPACT is the phone's single column and MEDIUM a taller one — in both the editor's carousel
+takes the height the screen has left under the controls above it (`mediumCarouselHeight`, never
+under `CAROUSEL_HEIGHT`; on-device report: a fixed height left empty screen under a scrolling card);
 **only EXPANDED lays out two panes** (editor preview | components; sheet canvas | controls;
 the permanent 240 dp sidebar, `LocalSidebarPermanent` hiding the hamburgers). A screen that
 lays out two ways extracts its blocks into composables **called from both branches** — a

@@ -102,10 +102,13 @@ import java.util.Locale
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * The carousel's height in a phone's scrolling column, and its floor in a MEDIUM column; a MEDIUM
- * column and the EXPANDED pane hand it a height to fill instead (`fillHeight`).
+ * The carousel's floor in the single column (phone or MEDIUM), which hands it the column's leftover
+ * height to fill (`fillHeight`), as the EXPANDED pane does.
  */
 internal val CAROUSEL_HEIGHT = 360.dp
+
+/** The gap between two flush cards (no edge arrows, no peek) while the pager slides between them. */
+private val FLUSH_PAGE_SPACING = 16.dp
 
 /** A peeking neighbour's tap target — `carousel_peek_<page>`; a tap brings that card to the centre. */
 internal fun carouselPeekTag(page: Int): String = "carousel_peek_$page"
@@ -284,8 +287,11 @@ internal fun ComponentCarouselPager(
 
     val arrowWidth             = if (showEdgeArrows) edgeArrowWidthDp.coerceIn(24, 72).dp else 0.dp
     val edgeGap                = if (showEdgeArrows) 1.dp else 0.dp
-    val pageGutter             = if (showEdgeArrows) 2.dp else 16.dp
-    val componentCardPadding   = if (showEdgeArrows) 4.dp else 8.dp
+    // Without arrows or peeking neighbours the card runs the column's full width, so its edges
+    // line up with the "+ Add Component" button above it.
+    val flush                  = !showEdgeArrows && peekPageWidth == null
+    val pageGutter             = if (showEdgeArrows) 2.dp else if (flush) 0.dp else 8.dp
+    val componentCardPadding   = if (showEdgeArrows) 4.dp else if (flush) 0.dp else 8.dp
 
     var pagerScrollStartedByUser by remember { mutableStateOf(false) }
     var pagerStartPage           by remember { mutableStateOf<Int?>(null) }
@@ -423,7 +429,9 @@ internal fun ComponentCarouselPager(
                 modifier = Modifier.fillMaxSize(),
                 pageSize = if (peeks) PageSize.Fixed(pageWidth) else PageSize.Fill,
                 contentPadding = PaddingValues(horizontal = sidePad),
-                pageSpacing = if (peeks) CAROUSEL_PEEK_SPACING_DP.dp else 0.dp,
+                // A flush card has no gutter of its own, so the pager keeps two cards apart while
+                // one slides in; at rest the spacing sits off screen.
+                pageSpacing = if (peeks) CAROUSEL_PEEK_SPACING_DP.dp else if (flush) FLUSH_PAGE_SPACING else 0.dp,
                 // Key pages by component id so per-page state (scroll, focus) follows the
                 // component when one is inserted/removed, instead of staying positional. The
                 // start card keeps its own fixed key in first place.
@@ -1122,6 +1130,35 @@ internal fun EditableCardTitle(
 // ComponentCard — shared card chrome for all component editors
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * The vertical gap between a component card's rows — the ONE spacing value behind every card.
+ * Fields carry no empty supporting line on a card ([CommitNum]), so this gap plus an outlined
+ * field's own label notch is all that separates two fields; switch, checkbox and chip rows keep
+ * their 48 dp touch height inside it.
+ */
+internal val CARD_ROW_GAP = 8.dp
+
+/** The inset between a component card's edge and its content. */
+internal val CARD_CONTENT_PADDING = 12.dp
+
+/**
+ * The row gap of the card the content sits in — [CARD_ROW_GAP] inside a [ComponentCard], 0 dp
+ * anywhere else. A section shared with an Add dialog (`BlendSection`, `LinerShoulderSection`)
+ * lays its own fields out with it, so on a card they sit the card's distance apart while the
+ * dialog, which spaces its fields its own way, is unchanged.
+ */
+internal val LocalCardRowGap = compositionLocalOf { 0.dp }
+
+/**
+ * A [LocalCardRowGap]-high gap under a field inside a section shared with an Add dialog; nothing
+ * outside a card.
+ */
+@Composable
+internal fun CardFieldGap() {
+    val gap = LocalCardRowGap.current
+    if (gap > 0.dp) androidx.compose.foundation.layout.Spacer(Modifier.height(gap))
+}
+
 @Composable
 internal fun ComponentCard(
     title: String,
@@ -1138,7 +1175,7 @@ internal fun ComponentCard(
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = outerPaddingHorizontal),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        shape = MaterialTheme.shapes.extraLarge
+        shape = MaterialTheme.shapes.large
     ) {
         Box(Modifier.fillMaxWidth()) {
             val scroll = rememberScrollState()
@@ -1148,13 +1185,13 @@ internal fun ComponentCard(
             Column(
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .padding(16.dp)
+                    .padding(CARD_CONTENT_PADDING)
                     .onSizeChanged { size ->
                         val delta = keyboardUndo.onViewport(size.height, scroll.value)
                         if (delta != 0) scroll.dispatchRawDelta(delta.toFloat())
                     }
                     .verticalScroll(scroll),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(CARD_ROW_GAP)
             ) {
                 // The Remove button lives IN the title row so it scrolls with the card —
                 // floated over the Box it would sit transparently on top of whatever the
@@ -1197,7 +1234,10 @@ internal fun ComponentCard(
                 // brings up the card Save / Cancel bar above the carousel; the title names the
                 // card there. Only `content` is wrapped: the title row's rename editor is a
                 // bespoke field with its own commit.
-                CompositionLocalProvider(LocalCardTitle provides title) {
+                CompositionLocalProvider(
+                    LocalCardTitle provides title,
+                    LocalCardRowGap provides CARD_ROW_GAP,
+                ) {
                     content()
                 }
             }
@@ -1288,6 +1328,9 @@ internal fun CommitNum(
         keyboardType = keyboardType,
         fractionKey = fractionKey,
         validator = validator,
+        // The card's row gap separates its fields; a reserved empty line under each one doubled
+        // it (on-device report). A notice still takes its line while it shows.
+        reserveSupportingLine = false,
         onPendingEdit = { handle ->
             pendingEdits?.set(
                 fieldToken,
