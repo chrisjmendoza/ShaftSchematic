@@ -16,6 +16,7 @@ import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.FractionStyle
 import com.android.shaftschematic.util.OutputFont
+import com.android.shaftschematic.util.PreviewDimTextSize
 
 /*
  * The editor preview's dimension rails (on-device request: "it still just feels weird to have the
@@ -29,19 +30,26 @@ import com.android.shaftschematic.util.OutputFont
  *    map under the sheet layout (`PreviewSheetLayout.kt`), the linear one otherwise — so its ends
  *    land on the component edges the box draws;
  *  - the scale: the rails lay out in sheet POINTS and draw through one canvas scale, one point to
- *    [pxPerPt] pixels, so the planner's point constants and the renderer's arrow, pad and halo all
- *    shrink together; the shared path takes only two preview parameters, the halo fill and the
- *    side clearance between values at one height, both defaulting to the sheet's;
+ *    [pxPerPt] pixels — the canvas density, never the sheet layout's miniature scale, so the
+ *    values keep their on-screen size whatever the shaft is drawn at — and the planner's point
+ *    constants and the renderer's arrow, pad and halo all scale together; the shared path takes
+ *    only two preview parameters, the halo fill and the side clearance between values at one
+ *    height, both defaulting to the sheet's;
+ *  - the value size: [PREVIEW_RAIL_TEXT_PT] times the device preference
+ *    [PreviewRailSettings.textSize] (Small | Medium | Large), with the lane pitch scaled alongside;
  *  - the room: the box reserves the strip the rails need ([PreviewRailFit]).
  */
 
-/** Rail value size (pt) — a little under the sheet's 10 pt; the user zooms the box to read. */
+/** Rail value size (pt) at Medium — a little under the sheet's 10 pt; the user zooms the box to read. */
 internal const val PREVIEW_RAIL_TEXT_PT = 9f
+
+/** The rail value size (pt) for [size] — the preview's own "Dimension text size", never the sheet's. */
+internal fun previewRailTextPt(size: PreviewDimTextSize): Float = PREVIEW_RAIL_TEXT_PT * size.factor
 
 /** Shaft top → the first rail line (pt). The sheet keeps 36 pt; the box cannot afford it. */
 internal const val PREVIEW_RAIL_CLEAR_PT = 10f
 
-/** Lane pitch between rails (pt), opened to the value height on a stacked-dual drawing. */
+/** Lane pitch between rails (pt) at Medium, opened to the value height on a stacked-dual drawing. */
 internal const val PREVIEW_RAIL_LANE_PT = 14f
 
 /** Air kept between the rail block and the box top (pt). */
@@ -58,7 +66,8 @@ private const val UNBOUNDED_TOP_PT = -1.0e6f
 
 /**
  * Everything the preview's rails read besides the spec: the sheet's units and the look prefs the
- * sheet's rails read. [fractionStyle] and [outputFont] are re-render KEYS only — the paints reach
+ * sheet's rails read, plus the preview's own value size [textSize] (a device preference — no
+ * composer reads it). [fractionStyle] and [outputFont] are re-render KEYS only — the paints reach
  * them through the process-wide `FractionTypography`/`OutputTypography` mirrors, which are not
  * snapshot state, so a change has to arrive here to replan.
  */
@@ -69,6 +78,7 @@ data class PreviewRailSettings(
     val dualUnitLayout: DualUnitLayout = DualUnitLayout.INLINE,
     val fractionStyle: FractionStyle = FractionStyle.Default,
     val outputFont: OutputFont = OutputFont.Default,
+    val textSize: PreviewDimTextSize = PreviewDimTextSize.Default,
 )
 
 /**
@@ -123,7 +133,8 @@ internal fun planPreviewRails(
     haloColor: Int,
     layoutFor: (reservePx: Float) -> ShaftLayout.Result,
 ): PreviewRailPlan {
-    val textPaint = sheetTextPaint(PREVIEW_RAIL_TEXT_PT, color = railColor)
+    val textScale = settings.textSize.factor
+    val textPaint = sheetTextPaint(previewRailTextPt(settings.textSize), color = railColor)
     val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeWidth = PREVIEW_RAIL_STROKE_PT
@@ -162,7 +173,7 @@ internal fun planPreviewRails(
         val kept = componentRails
         val r = rendererFor(layout)
         val lane = maxOf(
-            PREVIEW_RAIL_LANE_PT,
+            PREVIEW_RAIL_LANE_PT * textScale,
             r.labelHeight() + 2f * DimensionRailLayout.LINE_HALF_CLEAR + 2f,
         )
         val baseY = layout.shaftTopPx / pxPerPt - PREVIEW_RAIL_CLEAR_PT

@@ -1156,11 +1156,16 @@ internal val helpSections: List<HelpSection> = listOf(
                     "prints is drawn; in a short box the top ones can run off the box — drag " +
                     "the preview to see them. Nothing shows until the overall length is typed. " +
                     "On-screen only; never printed.\n" +
+                    "• \"Dimension text size\" — Small, Medium (default) or Large: the size of " +
+                    "the values on the preview's dimension lines. Greyed while the dimension " +
+                    "lines are off. On-screen only; the printed sheets keep their own " +
+                    "\"Dimension text size\" (Settings → Drawing).\n" +
                     "• \"$PREVIEW_SHEET_LAYOUT_TITLE\" — default on. The Schematic and Final " +
                     "tabs' preview draws the shaft the way the schematic sheet does: long " +
                     "sections shortened and broken with the sheet's S-breaks, the shaft at the " +
                     "sheet's height (at most 40% of the preview box, so the dimension lines keep " +
-                    "room), following the default drawing size, this job's Shaft height and " +
+                    "room) — in a box narrower than the page, a scaled-down copy of the sheet's " +
+                    "shaft, so liners and tapers keep the proportions they print at — following the default drawing size, this job's Shaft height and " +
                     "Liner & taper compression, the Body S-break setting and each body's " +
                     "\"Compress on drawing\". Tapping still selects — a tap in a break's gap " +
                     "selects that body. Off, the preview is a true-length picture along its " +

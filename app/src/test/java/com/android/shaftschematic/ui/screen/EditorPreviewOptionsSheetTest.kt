@@ -7,6 +7,7 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
@@ -20,6 +21,7 @@ import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.addBodyAt
 import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.FractionStyle
+import com.android.shaftschematic.util.PreviewDimTextSize
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -40,8 +42,12 @@ class EditorPreviewOptionsSheetTest {
     @get:Rule
     val rule = createComposeRule()
 
-    private fun state(sheetLayout: Boolean = true, dualUnits: Boolean = false) = EditorPreviewOptionsState(
-        showDimensions = true,
+    private fun state(
+        sheetLayout: Boolean = true,
+        dualUnits: Boolean = false,
+        showDimensions: Boolean = true,
+    ) = EditorPreviewOptionsState(
+        showDimensions = showDimensions,
         sheetLayout = sheetLayout,
         showGrid = false,
         highlightSelection = true,
@@ -69,6 +75,7 @@ class EditorPreviewOptionsSheetTest {
         onHeightScale = { calls += "height=$it" },
         onLinersProportional = { calls += "proportional=$it" },
         onLinerCompression = { calls += "compression=$it" },
+        onDimTextSize = { calls += "dimText=$it" },
     )
 
     private fun show(state: EditorPreviewOptionsState) {
@@ -84,6 +91,23 @@ class EditorPreviewOptionsSheetTest {
         rule.onNodeWithTag(PREVIEW_OPT_GRID_TAG).assertIsEnabled().performClick()
         rule.onNodeWithTag(PREVIEW_OPT_HIGHLIGHT_TAG).assertIsOn().performClick()
         assertEquals(listOf("dimensions=false", "sheet=true", "grid=true", "highlight=false"), calls)
+    }
+
+    @Test
+    fun `the dimension text size chips drive their setter`() {
+        show(state())
+        PreviewDimTextSize.entries.forEach { rule.onNodeWithTag(previewDimTextChipTag(it)).assertExists() }
+        rule.onNodeWithTag("preview_dim_text_MEDIUM").assertIsSelected()
+        rule.onNodeWithTag("preview_dim_text_LARGE").performScrollTo().assertIsEnabled().performClick()
+        rule.onNodeWithTag("preview_dim_text_SMALL").performScrollTo().performClick()
+        assertEquals(listOf("dimText=${PreviewDimTextSize.LARGE}", "dimText=${PreviewDimTextSize.SMALL}"), calls)
+    }
+
+    @Test
+    fun `the dimension text size chips grey while the dimension lines are off`() {
+        show(state(showDimensions = false))
+        rule.onNodeWithTag("preview_dim_text_LARGE").performScrollTo().assertIsNotEnabled().performClick()
+        assertTrue(calls.isEmpty())
     }
 
     @Test

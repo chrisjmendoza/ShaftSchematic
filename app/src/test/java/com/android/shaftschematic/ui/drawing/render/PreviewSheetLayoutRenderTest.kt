@@ -82,7 +82,7 @@ class PreviewSheetLayoutRenderTest {
         val profile = if (!sheet) null else previewSheetProfileForBox(
             spec = spec, layoutSpec = safeSpec, settings = PreviewSheetSettings(),
             leftPx = padX, topPx = padY, rightPx = w - padX, bottomPx = h - padY,
-            pxPerPt = density, resolvedComponents = resolved,
+            densityPxPerPt = density, resolvedComponents = resolved,
         )
         val rails = PreviewRailSettings(displayUnits = DisplayUnits(UnitSystem.INCHES))
         val plan = planPreviewRails(

@@ -1260,11 +1260,16 @@ tab and in the schematic preview's Tune sheet, both `ShaftHeightSlider`).
 The **editor preview's sheet layout** (Schematic and Final tabs, `UI_CONTRACT.md` §3.1.1) is no
 longer a linear picture: it calls the schematic's own `schematicProfileFit` — same sizing curve,
 same multiplier, same paper band, same per-kind floors, pins and liner & taper compression — in
-sheet points over the preview box at one point per dp, with the box's own budget cap
-(`PREVIEW_SHEET_SHAFT_MAX_FRAC`, 40% of its content height) applied to the largest Ø the box draws
-(`drawnMaxDiaMm`, bare shaft included — every sheet passes 0 and keeps the stored components'
-maximum, byte-identical), and draws its body runs through the
-one `drawBodyRunsWithBreaks`, so its S-breaks are the sheet's decision at the box's width. The
+sheet points over the sheet's own content width (`SCHEMATIC_SHEET_CONTENT_WIDTH_PT`, the
+landscape page inside its margins; a box at least as wide solves over its own width), and draws
+the result into the box under ONE uniform scale — a miniature of the sheet's shaft. The per-kind
+floors are paper measures: solved over a phone box (~330 pt) they took the whole width and every
+liner drew at its floor (on-device report: 45", 31" and 16 1/2" liners at one width). The box's
+own budget cap (`PREVIEW_SHEET_SHAFT_MAX_FRAC`, 40% of its content height, handed over in the
+same virtual points) applies to the largest Ø the box draws (`drawnMaxDiaMm`, bare shaft
+included — every sheet passes 0 and keeps the stored components' maximum, byte-identical), and
+the body runs go through the one `drawBodyRunsWithBreaks`, so its S-breaks are the sheet's
+decisions at the sheet's proportion. The
 editor's "Preview options…" sheet carries the same `ShaftHeightSlider`, Body S-break slider and
 `LinerCompressionControl`.
 

@@ -381,7 +381,7 @@ fun ShaftDrawing(
                     topPx = padY,
                     rightPx = size.width - padX,
                     bottomPx = size.height - padY,
-                    pxPerPt = railPxPerPt,
+                    densityPxPerPt = railPxPerPt,
                     resolvedComponents = resolvedComponents.takeIf { it.isNotEmpty() },
                     extentMm = issueExtentMm,
                 )

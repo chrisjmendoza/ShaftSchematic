@@ -55,6 +55,7 @@ import com.android.shaftschematic.util.ThreadHatchStyle
 import com.android.shaftschematic.util.PreviewColorPreset
 import com.android.shaftschematic.util.PreviewColorRole
 import com.android.shaftschematic.util.PreviewColorSetting
+import com.android.shaftschematic.util.PreviewDimTextSize
 import com.android.shaftschematic.util.UndercutShadeColor
 import com.android.shaftschematic.util.UndercutShadeIntensity
 import kotlinx.coroutines.CancellationException
@@ -136,6 +137,7 @@ object SettingsStore {
     private val KEY_SHOW_HIGHLIGHT_SELECTION = booleanPreferencesKey("show_highlight_selection")
     private val KEY_SHOW_PREVIEW_DIMENSIONS = booleanPreferencesKey("show_preview_dimensions")
     private val KEY_PREVIEW_SHEET_LAYOUT = booleanPreferencesKey("preview_sheet_layout")
+    private val KEY_PREVIEW_DIM_TEXT_SIZE = stringPreferencesKey("preview_dim_text_size")
 
     // Developer options (hidden behind About taps)
     private val KEY_DEV_OPTIONS_ENABLED = booleanPreferencesKey("dev_options_enabled")
@@ -711,6 +713,15 @@ object SettingsStore {
     fun previewSheetLayoutFlow(ctx: Context): Flow<Boolean> =
         ctx.settingsPrefs.map { p -> p[KEY_PREVIEW_SHEET_LAYOUT] ?: true }
 
+    /**
+     * "Dimension text size" of the editor preview's rails (Settings → Editor Screen and the
+     * Preview options sheet), default Medium, stored by NAME ([PreviewDimTextSize.fromName]). A
+     * device preference for the on-screen preview only: no document carries it, a Drawing profile
+     * does not capture it, and no PDF reads it.
+     */
+    fun previewDimTextSizeFlow(ctx: Context): Flow<PreviewDimTextSize> =
+        ctx.settingsPrefs.map { p -> PreviewDimTextSize.fromName(p[KEY_PREVIEW_DIM_TEXT_SIZE]) }
+
     fun componentArrowWidthDpFlow(ctx: Context): Flow<Int> =
         ctx.settingsPrefs.map { p -> p[KEY_COMPONENT_ARROW_WIDTH_DP] ?: 40 }
     fun devOptionsEnabledFlow(ctx: Context): Flow<Boolean> =
@@ -1019,6 +1030,10 @@ object SettingsStore {
 
     suspend fun setPreviewSheetLayout(ctx: Context, enabled: Boolean) {
         ctx.editSettings { it[KEY_PREVIEW_SHEET_LAYOUT] = enabled }
+    }
+
+    suspend fun setPreviewDimTextSize(ctx: Context, size: PreviewDimTextSize) {
+        ctx.editSettings { it[KEY_PREVIEW_DIM_TEXT_SIZE] = size.name }
     }
 
     suspend fun setOpenPdfAfterExport(ctx: Context, enabled: Boolean) {

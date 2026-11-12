@@ -1331,10 +1331,16 @@ default ON): never in a document, never captured by a Drawing profile, read by n
 **The same preview draws the shaft like the sheet — ONE fit pipeline, ONE body pass** (on-device
 request: "add the S breaks … so the shaft renders more closely to the output"). Its map and
 diameter scale come from the schematic's own `schematicProfileFit` (`pdf/ShaftPdfComposer.kt`,
-`internal`) solved in sheet points over the box at one point per dp, from the inputs
+`internal`) solved in sheet points over the SHEET's content width
+(`SCHEMATIC_SHEET_CONTENT_WIDTH_PT`) and drawn into the box under ONE uniform scale
+(`PreviewSheetProfile.pxPerPt` = density × box width / sheet width; a box at least as wide as the
+page solves over its own width, unscaled) — the preview is a MINIATURE of the sheet's shaft,
+because the per-kind width floors are paper measures and a box narrower than the page spent itself
+on them (on-device report: liners of 45", 31" and 16 1/2" drew the same width); the rails and
+stroke widths stay at the canvas density, never the miniature scale — from the inputs
 `composeShaftPdf` takes (sizing-curve anchors, S-break threshold, per-job Shaft height and liner &
 taper compression — all re-render inputs); its body runs, S-breaks included, are drawn by the one
-`drawBodyRunsWithBreaks` on the canvas's native canvas under a point → pixel scale, with the
+`drawBodyRunsWithBreaks` on the canvas's native canvas under that point → pixel scale, with the
 preview's outline, fill-follows-shade as unfilled ids, and the selection ring through the pass's
 optional `underStroke` (null on every sheet — byte-identical) so a broken body rings on both stubs.
 Do not write a second solver, a second break rule or a canvas S-break. `ShaftLayout.Result.sheet`
@@ -1350,7 +1356,7 @@ is the device preference Settings → Editor Screen → "Draw Preview Like the S
 (`SettingsStore.previewSheetLayoutFlow`, default ON): never in a document, never captured by a
 Drawing profile, read by no composer. The "Preview options" sheet
 (`EditorPreviewOptionsSheet`, opened by the settings button at the left end of the "Components" heading row under the preview — never inside the box, where it covered rail values,
-`preview_options_button` — on-device request: not from the overflow menu, where it was not found) carries the preview's device switches and, under the app-wide
+`preview_options_button` — on-device request: not from the overflow menu, where it was not found) carries the preview's device switches — among them "Dimension text size: Small | Medium | Large" (`SettingsStore.previewDimTextSizeFlow`, `PreviewDimTextSize` by name, default Medium = the historical size, 0.8× / 1.25× on the preview rails' value size and lane pitch, greyed while the dimension lines are off; also in Settings → Editor Screen; never in a document or a Drawing profile, read by no composer — on-device request) — and, under the app-wide
 `OptionsScopeNote`, the EXISTING shared look controls the preview reads (fractions, arrows,
 dual-unit layout on a dual document, Body S-break, per-job Shaft height and Liner & taper
 compression) wired to the same setters — remote controls, no new storage.

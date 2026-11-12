@@ -14,12 +14,15 @@ import com.android.shaftschematic.geom.boltRowProtectedSpansMm
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Threads
 import com.android.shaftschematic.pdf.bodyForPdf
+import com.android.shaftschematic.pdf.SCHEMATIC_SHEET_CONTENT_WIDTH_PT
 import com.android.shaftschematic.pdf.bodyRunBreakGapsX
+import com.android.shaftschematic.pdf.schematicProfileFit
 import com.android.shaftschematic.ui.drawing.compose.previewTapHitId
 import com.android.shaftschematic.ui.resolved.ResolvedBody
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.bodyBlends
 import com.android.shaftschematic.ui.resolved.resolveComponents
+import com.android.shaftschematic.util.PDF_PAGE_HEIGHT_PT
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
@@ -34,9 +37,10 @@ import kotlin.math.abs
 
 /**
  * The editor preview's sheet layout (`PreviewSheetLayout.kt`): the sheet's compressed x map and
- * diameter scale behind `ShaftLayout`, the fallbacks to the linear map, the S-break drawn by the
- * sheet's own body pass (and not on a body that opted out of compression), a keyway's width on the
- * diameter scale, and a tap selecting through the map's inverse — an S-break gap included.
+ * diameter scale behind `ShaftLayout`, the fallbacks to the linear map, the S-breaks drawn by the
+ * sheet's own body pass — the runs the sheet breaks, and not a body that opted out of compression —
+ * a keyway's width on the diameter scale, and a tap selecting through the map's inverse — an
+ * S-break gap included.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -52,6 +56,9 @@ class PreviewSheetLayoutTest {
     private val padX = 16f
     private val padY = 8f
 
+    /** The schematic sheet's outline weight at 100% line thickness (`OUTLINE_PT_BASE`). */
+    private val sheetOutlinePt = 1.25f
+
     private val bg = 0xFFEEEEEE.toInt()
     private val ink = 0xFF202020.toInt()
     private val fill = Color(0xFF2060C0).copy(alpha = 0.5f).toArgb()
@@ -60,7 +67,7 @@ class PreviewSheetLayoutTest {
         previewSheetProfileForBox(
             spec = spec, layoutSpec = spec, settings = PreviewSheetSettings(),
             leftPx = padX, topPx = padY, rightPx = w - padX, bottomPx = h - padY,
-            pxPerPt = density, resolvedComponents = resolved, extentMm = extentMm,
+            densityPxPerPt = density, resolvedComponents = resolved, extentMm = extentMm,
         )
 
     private fun layout(spec: ShaftSpec, resolved: List<ResolvedComponent>, sheet: PreviewSheetProfile?) =
@@ -99,6 +106,40 @@ class PreviewSheetLayoutTest {
             keywayAvoidSpansMm = bodyKeywayProtectedSpansMm(spec),
             boltRowAvoidSpansMm = boltRowProtectedSpansMm(spec),
         ).map { (it.start * p)..(it.endInclusive * p) }
+    }
+
+    /** The gap a tap at its centre selects as [id]'s — the run the break was cut into. */
+    private fun gapIn(
+        id: String,
+        gaps: List<ClosedFloatingPointRange<Float>>,
+        resolved: List<ResolvedComponent>,
+        l: ShaftLayout.Result,
+    ): List<ClosedFloatingPointRange<Float>> =
+        gaps.filter { previewTapHitId(resolved, l.xMmFromPx((it.start + it.endInclusive) / 2f)) == id }
+
+    /**
+     * How many S-breaks the printed schematic cuts into these runs: the same profile solve over the
+     * sheet's own content width, at the sheet's outline weight.
+     */
+    private fun sheetBreakCount(spec: ShaftSpec, resolved: List<ResolvedComponent>): Int {
+        val settings = PreviewSheetSettings()
+        val fit = schematicProfileFit(
+            spec, settings.pdfPrefs(), settings.heightScale, settings.linerMinFracOfTrue,
+            contentLeft = 0f, contentRight = SCHEMATIC_SHEET_CONTENT_WIDTH_PT,
+            budgetCapPt = PDF_PAGE_HEIGHT_PT.toFloat(),
+            drawnMaxDiaMm = layout(spec, resolved, sheet = null).maxDiaMm,
+        )
+        return bodyRunBreakGapsX(
+            bodies = resolved.filterIsInstance<ResolvedBody>().map { spec.bodyForPdf(it) },
+            xAt = fit.xMap::xAt,
+            rPx = { dia -> dia * 0.5f * fit.diaPtPerMm },
+            outline = Paint().apply { strokeWidth = sheetOutlinePt },
+            truePtPerMm = fit.diaPtPerMm,
+            breakMinFracOfTrue = settings.sBreakThresholdFrac,
+            blends = bodyBlends(spec, resolved),
+            keywayAvoidSpansMm = bodyKeywayProtectedSpansMm(spec),
+            boltRowAvoidSpansMm = boltRowProtectedSpansMm(spec),
+        ).size
     }
 
     @Test
@@ -184,8 +225,11 @@ class PreviewSheetLayoutTest {
         val resolved = resolveComponents(spec)
         val l = layout(spec, resolved, profile(spec, resolved))
         val gaps = breakGapsPx(spec, resolved, l)
-        assertEquals(1, gaps.size)
-        val gap = gaps.single()
+        // The preview is a miniature of the sheet: it breaks exactly the runs the sheet breaks —
+        // the long body and, at the sheet's proportion, the short bare-shaft run between the AFT
+        // taper and the liner.
+        assertEquals(sheetBreakCount(spec, resolved), gaps.size)
+        val gap = gapIn("B1", gaps, resolved, l).single()
         val cy = l.centerlineYPx.toInt()
         val bmp = render(spec, resolved, l)
         // The gap's centre on the centreline is bare paper; the body either side of it is filled.
@@ -195,7 +239,9 @@ class PreviewSheetLayoutTest {
         val optOut = spec.copy(bodies = spec.bodies.map { it.copy(compressOnDrawing = false) })
         val optResolved = resolveComponents(optOut)
         val ol = layout(optOut, optResolved, profile(optOut, optResolved))
-        assertTrue(breakGapsPx(optOut, optResolved, ol).isEmpty())
+        val optGaps = breakGapsPx(optOut, optResolved, ol)
+        assertTrue(gapIn("B1", optGaps, optResolved, ol).isEmpty())
+        assertEquals(sheetBreakCount(optOut, optResolved), optGaps.size)
     }
 
     @Test
@@ -225,8 +271,8 @@ class PreviewSheetLayoutTest {
         val spec = PreviewSheetFixtures.longKeyedShaft()
         val resolved = resolveComponents(spec)
         val l = layout(spec, resolved, profile(spec, resolved))
-        val gap = breakGapsPx(spec, resolved, l).single()
-        assertEquals("B1", previewTapHitId(resolved, l.xMmFromPx((gap.start + gap.endInclusive) / 2f)))
+        val gap = gapIn("B1", breakGapsPx(spec, resolved, l), resolved, l).single()
+        assertTrue("the gap sits inside the body's drawn span", gap.start > l.xPx(60f * inch) && gap.endInclusive < l.xPx(284f * inch))
         val taperMid = (l.xPx(0f) + l.xPx(20f * inch)) / 2f
         assertEquals("TA", previewTapHitId(resolved, l.xMmFromPx(taperMid)))
         val linerMid = (l.xPx(30f * inch) + l.xPx(60f * inch)) / 2f

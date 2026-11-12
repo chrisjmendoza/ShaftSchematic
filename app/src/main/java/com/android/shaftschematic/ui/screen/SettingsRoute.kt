@@ -143,6 +143,7 @@ fun SettingsRoute(
     val showHighlightSelection by vm.showHighlightSelection.collectAsState()
     val showPreviewDimensions by vm.showPreviewDimensions.collectAsState()
     val previewSheetLayout by vm.previewSheetLayout.collectAsState()
+    val previewDimTextSize by vm.previewDimTextSize.collectAsState()
     val achievementsEnabled by vm.achievementsEnabled.collectAsState()
     val devOptionsEnabled by vm.devOptionsEnabled.collectAsState()
 
@@ -653,6 +654,12 @@ fun SettingsRoute(
                     ) {
                         Text("Show Dimension Lines in Preview")
                     }
+                    // The preview rails' value size — the Preview options sheet's same chips.
+                    PreviewDimTextSizeChips(
+                        size = previewDimTextSize,
+                        onCommit = { vm.setPreviewDimTextSize(it) },
+                        enabled = showPreviewDimensions,
+                    )
                     // The editor preview drawn on the schematic's compressed map with its
                     // S-breaks (on-device request). On-screen only, like the switch above.
                     SettingSwitchRow(

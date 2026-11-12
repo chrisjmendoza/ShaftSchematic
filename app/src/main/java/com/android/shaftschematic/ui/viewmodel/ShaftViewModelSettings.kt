@@ -31,6 +31,7 @@ import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.FractionStyle
 import com.android.shaftschematic.util.OutputFont
 import com.android.shaftschematic.util.PreviewColorSetting
+import com.android.shaftschematic.util.PreviewDimTextSize
 import com.android.shaftschematic.util.UndercutShadeColor
 import com.android.shaftschematic.util.UndercutShadeIntensity
 import com.android.shaftschematic.util.VerboseLog
@@ -612,6 +613,17 @@ fun ShaftViewModel.setPreviewSheetLayout(enabled: Boolean, persist: Boolean = tr
     _previewSheetLayout.value = enabled
     if (persist) {
         viewModelScope.launch { SettingsStore.setPreviewSheetLayout(getApplication(), enabled) }
+    }
+}
+
+/**
+ * The editor preview's dimension-rail value size (Small | Medium | Large). On-screen only: never
+ * in a document, never captured by a Drawing profile, never read by a PDF composer.
+ */
+fun ShaftViewModel.setPreviewDimTextSize(size: PreviewDimTextSize, persist: Boolean = true) {
+    _previewDimTextSize.value = size
+    if (persist) {
+        viewModelScope.launch { SettingsStore.setPreviewDimTextSize(getApplication(), size) }
     }
 }
 

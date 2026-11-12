@@ -1113,11 +1113,12 @@ private fun DrawScope.drawKeywaySilhouetteNotch(
  * seal areas and bolt rows, the glyph and the `compressOnDrawing` opt-out are the sheet's own.
  *
  * The pass works in sheet POINTS on an `android.graphics.Canvas`, so it runs on this canvas's
- * native canvas under one point → pixel scale ([PreviewSheetProfile.pxPerPt]) — the way the
- * preview's dimension rails call the sheet's rail renderer. Everything it is handed is the
- * PREVIEW's: the outline weight and colour, the kind's fill with the fill-follows-shade decision
- * as unfilled ids, and the selection ring as the pass's under-stroke, so a broken body rings on
- * both stubs.
+ * native canvas under the profile's one point → pixel scale ([PreviewSheetProfile.pxPerPt], the
+ * miniature of the sheet) — so the break decision, gap and glyph scale with the shaft. Everything
+ * it is handed is the PREVIEW's: the outline weight and colour, the kind's fill with the
+ * fill-follows-shade decision as unfilled ids, and the selection ring as the pass's under-stroke,
+ * so a broken body rings on both stubs. Stroke widths go in as screen px divided by that scale,
+ * so a body's outline lands at the same on-screen weight as every other part the renderer draws.
  */
 private fun DrawScope.drawSheetBodyRuns(
     spec: ShaftSpec,

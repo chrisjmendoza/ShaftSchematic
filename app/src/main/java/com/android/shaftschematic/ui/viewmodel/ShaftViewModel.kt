@@ -36,6 +36,7 @@ import com.android.shaftschematic.util.OutputFont
 import com.android.shaftschematic.util.PreviewColorSetting
 import com.android.shaftschematic.util.PreviewColorRole
 import com.android.shaftschematic.util.PreviewColorPreset
+import com.android.shaftschematic.util.PreviewDimTextSize
 import com.android.shaftschematic.util.UndercutStyle
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.DualUnitLayout
@@ -598,6 +599,10 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     /** The editor preview drawn like the schematic sheet — a device preference, default ON. */
     internal val _previewSheetLayout = MutableStateFlow(true)
     val previewSheetLayout: StateFlow<Boolean> = _previewSheetLayout.asStateFlow()
+
+    /** The editor preview's dimension-rail value size — a device preference, default Medium. */
+    internal val _previewDimTextSize = MutableStateFlow(PreviewDimTextSize.Default)
+    val previewDimTextSize: StateFlow<PreviewDimTextSize> = _previewDimTextSize.asStateFlow()
 
     internal val _componentArrowWidthDp = MutableStateFlow(40)
     val componentArrowWidthDp: StateFlow<Int> = _componentArrowWidthDp.asStateFlow()
@@ -1413,6 +1418,11 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             SettingsStore.previewSheetLayoutFlow(getApplication()).collectLatest { persisted ->
                 setPreviewSheetLayout(persisted, persist = false)
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.previewDimTextSizeFlow(getApplication()).collectLatest { persisted ->
+                setPreviewDimTextSize(persisted, persist = false)
             }
         }
         viewModelScope.launch {
