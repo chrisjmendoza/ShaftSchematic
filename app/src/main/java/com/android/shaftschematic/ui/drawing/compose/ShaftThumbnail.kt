@@ -17,6 +17,7 @@ import com.android.shaftschematic.ui.drawing.render.ShaftRenderer
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.util.PreviewColorPreset
 import com.android.shaftschematic.util.PreviewColorSetting
+import com.android.shaftschematic.util.isDarkPreviewGround
 
 /**
  * ShaftThumbnail — a small, static rendering of a shaft.
@@ -43,13 +44,9 @@ fun ShaftThumbnail(
 ) {
     val scheme = MaterialTheme.colorScheme
 
-    fun fillAlpha(preset: PreviewColorPreset, fallback: Float): Float = when (preset) {
-        PreviewColorPreset.TRANSPARENT -> 0f
-        PreviewColorPreset.STEEL -> 0.18f
-        PreviewColorPreset.STAINLESS -> 0.14f
-        PreviewColorPreset.BRONZE -> 0.16f
-        PreviewColorPreset.CUSTOM -> fallback
-    }
+    // The editor preview's fill table, dark-ground rule included (`PreviewColorPreset.fillAlpha`).
+    val darkGround = scheme.isDarkPreviewGround()
+    fun fillAlpha(preset: PreviewColorPreset, fallback: Float): Float = preset.fillAlpha(darkGround, fallback)
 
     // No unit key: a thumbnail draws geometry only — no dimensions, no callouts, nothing the
     // display unit could change — so the render options do not depend on it.

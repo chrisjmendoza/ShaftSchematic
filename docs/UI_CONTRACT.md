@@ -278,8 +278,7 @@ on-device report). Under a face that is Blend: the **"Blend by: Length | Angle"*
 axial length field (Length) or the "Angle AFT/FWD (°)" field, the read-only "Length … from the
 step" line and the optional "Corner radius" field (Angle), then an **"At a liner:
 Seat | Liner OD"** chip row — where the curve leaves from when a liner butts that face, the derived
-half-way seat (default) or the liner's full OD (on-device request). Shape chips (S-curve | Fillet |
-Eased cone) appear once some face is blended by Length (an Angle face is a straight cone). Seal areas are their own sibling section ("Seal
+half-way seat (default) or the liner's full OD (on-device request). There is no Shape picker — a Length face draws the S-curve (an Angle face is a straight cone). Seal areas are their own sibling section ("Seal
 areas": AFT / FWD checkboxes, a length field under each ticked face) — a section property, never a
 third chip in the Square | Blend row and never nested under a blend control (both earlier layouts
 hid or misdescribed it, on-device reports). `blendFaceMode`/`blendLenForMode`/`sealLenForSeal`

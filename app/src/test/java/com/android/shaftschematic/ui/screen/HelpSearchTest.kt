@@ -183,7 +183,7 @@ class HelpSearchTest {
 
     @Test
     fun `blend and seal searches find the blend topic, which leads to the manual's section`() {
-        listOf("blend", "seal", "ramp", "cone", "fillet", "liner OD").forEach { query ->
+        listOf("blend", "seal", "ramp", "chamfer", "corner radius", "liner OD").forEach { query ->
             val topics = filterHelpSections(helpSections, query).flatMap { it.topics }
             val topic = topics.firstOrNull { it.title == "Component blends and seal areas" }
             assertNotNull("‘$query’ must find the blend topic", topic)

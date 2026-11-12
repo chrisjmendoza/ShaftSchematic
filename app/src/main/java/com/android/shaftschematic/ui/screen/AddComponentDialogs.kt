@@ -284,7 +284,6 @@ fun AddBodyDialog(
     var sealFwd by remember { mutableStateOf(false) }
     val blendAftSealLen = remember { SeededMmField.empty() }
     val blendFwdSealLen = remember { SeededMmField.empty() }
-    var blendProfile by remember { mutableStateOf(BlendProfile.OGEE) }
     // "At a liner": Seat (the derived half-way shoulder) unless the user picks Liner OD.
     var blendAftLinerTarget by remember { mutableStateOf(BlendLinerTarget.SEAT) }
     var blendFwdLinerTarget by remember { mutableStateOf(BlendLinerTarget.SEAT) }
@@ -397,7 +396,6 @@ fun AddBodyDialog(
                 BlendSection(
                     aftMode = blendAftMode,
                     fwdMode = blendFwdMode,
-                    profile = blendProfile,
                     aftSeal = sealAft,
                     fwdSeal = sealFwd,
                     aftLinerTarget = blendAftLinerTarget,
@@ -416,7 +414,6 @@ fun AddBodyDialog(
                             defaultBlendMm(lengthMm).let { blendFwd.reseed(it, toDisplayString(it, unit)) }
                         }
                     },
-                    onProfile = { blendProfile = it },
                     onSetAftSeal = { on ->
                         sealAft = on
                         if (on && blendAftSealLen.text.isBlank()) {
@@ -605,7 +602,7 @@ fun AddBodyDialog(
                     if (kwEnabled) kwUnitOverride else null,
                     if (blendAftMode == BlendFaceMode.BLEND) blendAft.mm(unit) ?: 0f else 0f,
                     if (blendFwdMode == BlendFaceMode.BLEND) blendFwd.mm(unit) ?: 0f else 0f,
-                    blendProfile,
+                    BlendProfile.OGEE,
                     sealAft,
                     sealFwd,
                     if (sealAft) blendAftSealLen.mm(unit) ?: 0f else 0f,

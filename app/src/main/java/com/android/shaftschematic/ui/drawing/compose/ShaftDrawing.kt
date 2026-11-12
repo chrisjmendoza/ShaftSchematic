@@ -71,6 +71,7 @@ import com.android.shaftschematic.ui.resolved.ResolvedThread
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.PreviewColorSetting
 import com.android.shaftschematic.util.PreviewColorPreset
+import com.android.shaftschematic.util.isDarkPreviewGround
 import com.android.shaftschematic.util.VerboseLog
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -218,19 +219,15 @@ fun ShaftDrawing(
     val threadFill = if (blackWhiteOnly) Color.Transparent else previewThreadFill.resolve(previewScheme)
     val threadHatch = if (blackWhiteOnly) Color.Black else previewThreadHatch.resolve(previewScheme)
 
-    fun fillAlpha(preset: PreviewColorPreset, fallback: Float): Float = when (preset) {
-        PreviewColorPreset.TRANSPARENT -> 0f
-        PreviewColorPreset.STEEL -> 0.18f
-        PreviewColorPreset.STAINLESS -> 0.14f
-        PreviewColorPreset.BRONZE -> 0.16f
-        PreviewColorPreset.CUSTOM -> fallback
-    }
+    // A dark ground takes the denser fills (`PreviewColorPreset.fillAlpha`).
+    val darkGround = previewScheme.isDarkPreviewGround()
+    fun fillAlpha(preset: PreviewColorPreset, fallback: Float): Float = preset.fillAlpha(darkGround, fallback)
 
     // RenderOptions (keep most defaults; set only what we actively control here)
     // NOTE: legacy color fields in RenderOptions are ARGB Ints → use toArgb().
     //       highlight colors are Color → pass Color directly.
     val options = remember(
-        unit, lineThicknessScale, outlineColor,
+        unit, lineThicknessScale, outlineColor, darkGround,
         bodyFill, previewBodyFill, linerFill, previewLinerFill,
         taperFill, previewTaperFill, threadFill, previewThreadFill, threadHatch,
         highlightEnabled, highlightId, themeGlow,

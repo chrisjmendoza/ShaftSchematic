@@ -277,7 +277,9 @@ Blend fields on Body (drawing-only, additive, default 0/OGEE):
   kept through a mode switch. Derived: `Body.blendRadiusMmOn(end)`.
 - `blendProfile`: `OGEE` (tangent both ends, default) | `FILLET` (tangent at the large end only)
   | `EASED_CONE` (straight cone, both corners eased). An Angle face ignores it (straight cone)
-  but keeps it.
+  but keeps it. No control writes it: the Shape chips were removed (on-device report — the three
+  curves differ by less than a line width at the size a blend prints), so a new blend is `OGEE`
+  and a document that stored another shape keeps drawing it.
 - Silhouette only: no dimension rail, no footer row, no effect on OAL, coverage, resolve spans,
   or collision — except that an **Angle-mode** face prints its stored angle and radius as ONE
   below-shaft callout on the schematic (`45°, 3/8" R`, `buildBlendAngleCallouts`). Rails keep dimensioning the STORED span (dimension to the theoretical sharp

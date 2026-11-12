@@ -43,7 +43,44 @@ badge, and made an advisory banner read as an error (on-device report).
 
 `tertiary` itself is **not** part of this ladder and must not be recoloured to match: it is the
 preview-color **Bronze** preset (`PreviewColorPreset.BRONZE` → `scheme.tertiary`), and its
-historical light value is pinned as `SheetInk.LinerTint`.
+historical light value is pinned as `SheetInk.LinerTint`. In the dark scheme it is a warm bronze
+(`DarkBronze`, `#E2B36B`) so the preset reads as bronze on the grey ground. Its only other reader
+is the Custom "Tertiary" preview role and the developer dimension-debug overlay.
+
+### The dark scheme is a neutral grey
+
+`DarkColorScheme` assigns every ground role itself (`Color.kt` → `DarkGrey*`) instead of
+inheriting M3's baseline purple-black: background/surface `#1F2023`, onSurface/onBackground
+`#E8E8EA`, surfaceDim `#1A1B1D`, surfaceBright `#3A3B40`, containers Lowest → Highest `#18191B`,
+`#232427`, `#27282C`, `#303136`, `#3A3B41`, surfaceVariant `#3A3B41`, onSurfaceVariant `#C6C7CE`,
+outline `#9A9BA4`, outlineVariant `#4C4D54`, inverse surface `#E3E3E6` / `#2F3033`. The surface
+tint is the neutral `#C6C7CE`, so a tonally elevated `Surface` lightens rather than turning
+purple. Primary (`Purple80`) and secondary (`PurpleGrey80`) stay as the brand accent, and the
+amber caution tier is unchanged. On the purple-black, the editor preview's liner and taper fills
+sank into the ground (on-device report).
+
+### The preview on a dark ground
+
+The editor preview and the template thumbnails resolve their preset colours through ONE rule,
+keyed on the scheme's own ground — `ColorScheme.isDarkPreviewGround()` (`surface` luminance
+< 0.5), never a theme flag — in `util/PreviewColorPreset.kt`:
+
+| | light ground | dark ground |
+|---|---|---|
+| Stainless (lerp surface → onSurface) | 0.50 | 0.68 |
+| Steel (lerp surface → onSurface) | 0.75 | 0.90 |
+| Steel fill alpha | 0.18 | 0.34 |
+| Stainless fill alpha | 0.14 | 0.28 |
+| Bronze fill alpha | 0.16 | 0.38 |
+| Custom fill alpha | per-kind fallback | fallback × 2, capped at 0.45 |
+
+The fill alphas live in `PreviewColorPreset.fillAlpha(darkGround, fallback)`, the one table both
+`ShaftDrawing` and `ShaftThumbnail` read. A light ground resolves exactly as it always has.
+`PreviewColorDarkGroundTest` measures the composited result on the dark scheme: every filled
+preset ≥ 1.6:1 off the ground (Steel 2.47, Stainless 1.67, Bronze 2.38), the Steel outline — also
+the rails', hatches' and seal dashes' ink — 10.77:1, and the liner and taper fills apart in hue
+(Oklab distance 0.049, bronze warm, steel neutral). High-contrast dark's black ground takes the
+same rule (Steel 2.45, Bronze 2.34, outline 15.6:1; Stainless, not a default, 1.46).
 - **No dynamic (Material You) color.** Schemes are fixed so the preview-color presets
   (Stainless/Steel/Bronze — theme-lerped) resolve predictably. Revisit deliberately, never
   as a side effect.

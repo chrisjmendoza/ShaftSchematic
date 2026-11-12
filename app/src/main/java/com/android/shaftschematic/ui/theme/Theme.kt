@@ -9,8 +9,8 @@ import androidx.compose.ui.graphics.Color
 import com.android.shaftschematic.settings.AppThemeMode
 
 // `tertiaryContainer` is the app's CAUTION tier (see Color.kt) — assigned here in every scheme
-// rather than left to M3's baseline pink. `tertiary` stays as it was: it is the preview-color
-// "Bronze" preset, not part of the severity ladder.
+// rather than left to M3's baseline pink. `tertiary` is the preview-color "Bronze" preset, not
+// part of the severity ladder.
 internal val LightColorScheme = lightColorScheme(
     primary = Purple40,
     secondary = PurpleGrey40,
@@ -19,12 +19,34 @@ internal val LightColorScheme = lightColorScheme(
     onTertiaryContainer = OnWarnAmberLight,
 )
 
+// Neutral dark-grey ground (Color.kt → `DarkGrey*`): every ground, container, outline and tint
+// role is assigned so nothing falls back to M3's purple-black baseline. `tertiary` is a warm
+// bronze here — the "Bronze" preview preset has to read as bronze on the grey.
 internal val DarkColorScheme = darkColorScheme(
     primary = Purple80,
     secondary = PurpleGrey80,
-    tertiary = Pink80,
+    tertiary = DarkBronze,
+    onTertiary = OnDarkBronze,
     tertiaryContainer = WarnAmberDark,
     onTertiaryContainer = OnWarnAmberDark,
+    background = DarkGreyBackground,
+    onBackground = DarkGreyOnBackground,
+    surface = DarkGreyBackground,
+    onSurface = DarkGreyOnBackground,
+    surfaceVariant = DarkGreySurfaceVariant,
+    onSurfaceVariant = DarkGreyOnSurfaceVariant,
+    surfaceTint = DarkGreyOnSurfaceVariant,
+    inverseSurface = DarkGreyInverseSurface,
+    inverseOnSurface = DarkGreyInverseOnSurface,
+    outline = DarkGreyOutline,
+    outlineVariant = DarkGreyOutlineVariant,
+    surfaceBright = DarkGreySurfaceBright,
+    surfaceDim = DarkGreySurfaceDim,
+    surfaceContainerLowest = DarkGreySurfaceContainerLowest,
+    surfaceContainerLow = DarkGreySurfaceContainerLow,
+    surfaceContainer = DarkGreySurfaceContainer,
+    surfaceContainerHigh = DarkGreySurfaceContainerHigh,
+    surfaceContainerHighest = DarkGreySurfaceContainerHighest,
 )
 
 // High-contrast schemes: pure black/white grounds, near-zero mid-grey usage, and bold
