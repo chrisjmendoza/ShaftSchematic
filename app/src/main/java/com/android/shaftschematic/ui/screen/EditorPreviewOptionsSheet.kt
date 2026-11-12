@@ -25,6 +25,8 @@ import com.android.shaftschematic.util.FractionStyle
 
 /** Test tags on the editor's Preview options sheet. */
 internal const val PREVIEW_OPTIONS_SHEET_TAG = "preview_options_sheet"
+/** The preview box's corner button that opens the sheet. */
+internal const val PREVIEW_OPTIONS_BUTTON_TAG = "preview_options_button"
 internal const val PREVIEW_OPT_DIMENSIONS_TAG = "preview_opt_dimensions"
 internal const val PREVIEW_OPT_SHEET_LAYOUT_TAG = "preview_opt_sheet_layout"
 internal const val PREVIEW_OPT_GRID_TAG = "preview_opt_grid"
@@ -91,11 +93,11 @@ internal class EditorPreviewOptionsActions(
 
 /**
  * The editor's "Preview options…" sheet (on-device request: "Is there a place to adjust the render
- * preview options like how fractions are drawn?"), opened from the Schematic and Final tabs'
- * overflow menu.
+ * preview options like how fractions are drawn?"), opened from the corner button on the Schematic and Final tabs'
+ * preview box.
  *
  * Two groups, in the scope order the PDF options panels use:
- *  1. **This device** — the preview's own switches, the same device preferences Settings →
+ *  1. **The preview's own switches** (no heading under the sheet title), the same device preferences Settings →
  *     Editor Screen keeps (dimension lines, draw like the sheet, grid, selection highlight). The
  *     grid stands down while the preview draws like the sheet, so its switch greys with the reason.
  *  2. **Shared with the printed sheets** — the look settings the preview actually reads, each the
@@ -148,9 +150,10 @@ internal fun EditorPreviewOptionsContent(
             .padding(bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        // The title heads the preview's own switches; the "Shared with the printed sheets"
+        // heading below is what marks the change of scope, so this group needs no heading.
         Text("Preview options", style = MaterialTheme.typography.titleLarge)
 
-        Text("Preview (this device)", style = MaterialTheme.typography.titleMedium)
         SettingSwitchRow(
             checked = state.showDimensions,
             onCheckedChange = actions.onShowDimensions,

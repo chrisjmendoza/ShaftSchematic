@@ -13,9 +13,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -25,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.THREAD_DENSITY_DEFAULT
 import com.android.shaftschematic.geom.THREAD_SLANT_DEFAULT
@@ -78,6 +85,8 @@ internal fun PreviewCard(
     dimensionRails: PreviewRailSettings? = null,
     /** The preview drawn like the schematic sheet, `null` = linear — see [ShaftDrawing]. */
     sheetLayout: PreviewSheetSettings? = null,
+    /** Opens the preview's options sheet from the box's own corner button; `null` = no button. */
+    onOpenOptions: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     // The developer OAL badge repeats the OAL rail's value and sits where the rail block
@@ -123,6 +132,24 @@ internal fun PreviewCard(
                 modifier = Modifier.align(Alignment.TopStart).padding(8.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
+                // The preview's options open from the preview itself (on-device request: the
+                // overflow menu was not where anyone looked for them). The disc matches the
+                // reset-view control in the opposite corner.
+                if (onOpenOptions != null) {
+                    IconButton(
+                        onClick = onOpenOptions,
+                        modifier = Modifier
+                            .size(40.dp)
+                            .background(Color.White.copy(alpha = 0.6f), CircleShape)
+                            .testTag(PREVIEW_OPTIONS_BUTTON_TAG),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Tune,
+                            contentDescription = "Preview options",
+                            tint = Color.Black.copy(alpha = 0.8f),
+                        )
+                    }
+                }
                 if (showOalInPreviewBox && !railsShowOal) {
                     PreviewOalBadge(
                         spec = spec,

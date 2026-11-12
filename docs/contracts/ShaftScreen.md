@@ -143,9 +143,9 @@ Responsibilities
     while disabled shows the gate's message as a snackbar.
   - Overflow menu (⋮) → Save As…, **Close Document** (testTag
     `overflow_close_document`; clean → closes to Start, dirty → shared unsaved-changes
-    guard — see `Navigation.md`), **Preview options…** (`overflow_preview_options` — the preview's
-    device switches and the shared look settings it reads, `UI_CONTRACT.md` §3.1.1 "Preview
-    options"), Settings, Clear All, etc.
+    guard — see `Navigation.md`), Settings, Clear All, etc. Preview options are NOT here: they
+    open from the preview box's own corner button (`preview_options_button`, `UI_CONTRACT.md`
+    §3.1.1 "Preview options").
 
 - **Preview Card:** (`PreviewCard`, `PreviewOalBadge` — both in
   `ui/screen/ShaftPreviewPanel.kt`, extracted from `ShaftScreen.kt` 2026-07-24, pure
