@@ -20,11 +20,16 @@ class ThreadDiaFooterFormatTest {
     private fun storedInches(v: Double) = formatThreadDiaWithUnit((v * 25.4).toFloat().toDouble(), inch)
 
     @Test
-    fun `inch thread diameters drop trailing zeros`() {
-        assertEquals("4.5\"", storedInches(4.5))
-        assertEquals("3.75\"", storedInches(3.75))
-        assertEquals("5.125\"", storedInches(5.125))
+    fun `inch thread diameters on the fraction grid print as fractions`() {
+        assertEquals("5 1/2\"", storedInches(5.5))
+        assertEquals("3 3/4\"", storedInches(3.75))
+        assertEquals("5 1/8\"", storedInches(5.125))
         assertEquals("4\"", storedInches(4.0))
+    }
+
+    @Test
+    fun `an off-grid inch thread diameter drops trailing zeros`() {
+        assertEquals("4.12\"", storedInches(4.12))
     }
 
     @Test
@@ -33,8 +38,8 @@ class ThreadDiaFooterFormatTest {
     }
 
     @Test
-    fun `an exact odd sixteenth keeps its fourth place`() {
-        assertEquals("4.1875\"", storedInches(4.1875))
+    fun `a sixteenth prints as its fraction`() {
+        assertEquals("4 3/16\"", storedInches(4.1875))
     }
 
     @Test
@@ -45,7 +50,7 @@ class ThreadDiaFooterFormatTest {
 
     @Test
     fun `dual keeps both terms with their units`() {
-        assertEquals("4.5\" [114.3 mm]", formatThreadDiaWithUnitDual(114.3, inch, true))
+        assertEquals("4 1/2\" [114.3 mm]", formatThreadDiaWithUnitDual(114.3, inch, true))
     }
 
     @Test
@@ -60,7 +65,7 @@ class ThreadDiaFooterFormatTest {
             ShaftSpec(overallLengthMm = 2000f, threads = listOf(th)), inch, cfg,
         )
         val line = cols.aftLines.first { it.startsWith("Thread:") }
-        assertTrue(line, line.startsWith("Thread: 4.5\" × "))
+        assertTrue(line, line.startsWith("Thread: 4 1/2\" × "))
         assertEquals("4.500\"", formatDiaWithUnit(114.3, inch))
     }
 }

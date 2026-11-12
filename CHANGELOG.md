@@ -8,6 +8,14 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-12
 
+### fix(pdf): the footer's thread major Ø prints as a fraction
+
+On-device report: a thread entered as 5 1/2 printed `5.5"` on the footer's `Thread:` line beside a
+fractional length, mixing decimals and fractions within one thread callout. An inch major Ø on
+the 1/32 grid now prints as its fraction (`5 1/2"`, `3 3/4"`), the form the length on the same
+line takes; a size off the grid keeps the trimmed decimal (`4.12"`). Millimetres, metric
+designations, the thread relief's Ø and every other diameter are unchanged.
+
 ### feat(editor): each bare-shaft section shows or hides its own Ø callout
 
 On-device report: turning the Ø callout on or off on one `Body (auto)` card turned it on or off

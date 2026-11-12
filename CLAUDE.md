@@ -1154,7 +1154,7 @@ half-height plus the poke-past clearance (see the keyway-scale invariant above).
 ### Diameter callouts are BELOW-only, tiered, and footer-formatted
 On-shaft diameter callouts (body OD, liner OD — `buildBodyOdCallouts`/`buildLinerOdCallouts`
 in `ShaftPdfComposer.kt`) all hang **BELOW** the shaft; do not reintroduce above/below
-alternation. Labels use `formatDiaWithUnit` (inches: a whole number bare, any other value at 3 decimals — `10.990"`, never `10.99"`, on-device report — or 4 when it is exactly an odd sixteenth, `10.9375"`, `LengthFormat.formatInchesDecimal`, on-device ruling; mm compact 1-decimal; the ONE exception is the footer `Thread:` line's major Ø, `formatThreadDiaWithUnit`, which drops trailing zeros — `4.5"` — on-device ruling) to match the
+alternation. Labels use `formatDiaWithUnit` (inches: a whole number bare, any other value at 3 decimals — `10.990"`, never `10.99"`, on-device report — or 4 when it is exactly an odd sixteenth, `10.9375"`, `LengthFormat.formatInchesDecimal`, on-device ruling; mm compact 1-decimal; the ONE exception is the footer `Thread:` line's major Ø, `formatThreadDiaWithUnit`, which prints a size on the 1/32 grid as its fraction, like the length beside it — `5 1/2"` — and drops trailing zeros off the grid — on-device ruling) to match the
 footer's "Ø" text — never the raw 4-decimal format. Bodies and liners are **separate OD
 groups**, never silently deduped, EXCEPT that a liner and a shown body TOUCHING it at the same Ø
 (same display unit) print ONE value with a leader to each (on-device request) — decided by the ONE
