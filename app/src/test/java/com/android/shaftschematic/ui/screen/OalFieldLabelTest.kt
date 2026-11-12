@@ -22,4 +22,18 @@ class OalFieldLabelTest {
         assertEquals("OAL (in)", oalFieldLabel(UnitSystem.INCHES, 2.0f))
         assertEquals("OAL (mm)", oalFieldLabel(UnitSystem.MILLIMETERS, 1.5f))
     }
+
+    @Test
+    fun `the start card pairs its two fields on a row except on a narrow card at a large font`() {
+        assertEquals(true, startCardFieldsShareRow(cardFieldsTwoUp = false, fontScale = 1.0f))
+        assertEquals(true, startCardFieldsShareRow(cardFieldsTwoUp = false, fontScale = OAL_SHORT_LABEL_FONT_SCALE))
+        assertEquals(false, startCardFieldsShareRow(cardFieldsTwoUp = false, fontScale = 2.0f))
+        assertEquals(true, startCardFieldsShareRow(cardFieldsTwoUp = true, fontScale = 2.0f))
+    }
+
+    @Test
+    fun `the shaft diameter label shortens for the half card`() {
+        assertEquals("Shaft Ø (in)", shaftDiaFieldLabel(UnitSystem.INCHES, short = true))
+        assertEquals("Shaft diameter (mm)", shaftDiaFieldLabel(UnitSystem.MILLIMETERS, short = false))
+    }
 }

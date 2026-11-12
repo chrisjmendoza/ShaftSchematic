@@ -187,10 +187,12 @@ ON) — never in a document, never captured by a Drawing profile, read by no com
 sheet (every other canvas: thumbnails, Runout / Wear / Undercut) is the linear layout,
 byte-identical.
 
-**Preview options.** The preview box carries a settings button in its top-left corner
-(`preview_options_button`, Schematic and Final tabs — the Final tab hosts the same editor; the
-mirror of the reset-view disc top-right; on-device request: the overflow menu, where the entry
-first lived, was not where anyone looked for it, and the overflow carries no entry now). It opens
+**Preview options.** A settings button sits at the left end of the "Components" heading row,
+directly under the preview (`preview_options_button`, Schematic and Final tabs — the Final tab
+hosts the same editor; at every width, since the heading is one block called from both layouts).
+It is NOT inside the preview box: rail values stack in the box's top corners and the shaft's ends
+sit in its bottom ones, so a corner button covered a dimension (on-device report). The overflow
+menu, where the entry first lived, was not where anyone looked for it and carries no entry. It opens
 "Preview options", a bottom sheet
 (`EditorPreviewOptionsSheet`, `preview_options_sheet`) capped at 55% of the window and scrolling
 inside that over a light scrim, so the preview box at the top of the editor stays in view while

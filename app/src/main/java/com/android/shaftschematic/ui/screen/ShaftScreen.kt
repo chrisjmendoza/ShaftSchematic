@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
@@ -51,6 +52,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.automirrored.filled.Assignment
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenuItem
@@ -635,7 +637,6 @@ fun ShaftScreen(
                 issueMarks = issueMarks,
                 dimensionRails = previewDimensionRails,
                 sheetLayout = previewSheetLayout,
-                onOpenOptions = onOpenPreviewOptions,
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 120.dp, max = previewMaxHeight)
@@ -675,21 +676,38 @@ fun ShaftScreen(
         // them through [componentsBlock]; the two-pane branch places them separately, the add
         // button beside the drawing and the carousel across the full width under it.
         val componentsHeader: @Composable (hint: String) -> Unit = { hint ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    "Components",
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    hint,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            Box(Modifier.fillMaxWidth()) {
+                // The preview's options open from the left end of this row, directly under the
+                // preview: every corner of the preview box itself holds drawing — rail values
+                // stack in the top corners and the shaft's ends sit in the bottom ones — so a
+                // button inside the box covered a dimension (on-device report).
+                IconButton(
+                    onClick = onOpenPreviewOptions,
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .size(40.dp)
+                        .testTag(PREVIEW_OPTIONS_BUTTON_TAG),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Tune,
+                        contentDescription = "Preview options",
+                    )
+                }
+                Row(
+                    modifier = Modifier.align(Alignment.Center),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Components",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        hint,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
 

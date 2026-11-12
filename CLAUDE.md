@@ -1344,7 +1344,7 @@ in effect. A `null` sheet — every other canvas — is the linear layout, byte-
 is the device preference Settings → Editor Screen → "Draw Preview Like the Sheet"
 (`SettingsStore.previewSheetLayoutFlow`, default ON): never in a document, never captured by a
 Drawing profile, read by no composer. The "Preview options" sheet
-(`EditorPreviewOptionsSheet`, opened by the settings button in the preview box's top-left corner,
+(`EditorPreviewOptionsSheet`, opened by the settings button at the left end of the "Components" heading row under the preview — never inside the box, where it covered rail values,
 `preview_options_button` — on-device request: not from the overflow menu, where it was not found) carries the preview's device switches and, under the app-wide
 `OptionsScopeNote`, the EXISTING shared look controls the preview reads (fractions, arrows,
 dual-unit layout on a dual document, Body S-break, per-job Shaft height and Liner & taper
