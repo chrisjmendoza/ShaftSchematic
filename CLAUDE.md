@@ -89,8 +89,11 @@ Specifically:
   card all carry, under every face set to Blend, the "Blend by: Length | Angle" chips
   (`body_blend_<aft|fwd>_entry_<LENGTH|ANGLE>`) from the ONE `BlendSection` — Length shows the
   length field; Angle shows "Angle AFT/FWD (°)", the read-only "Length … from the step" line
-  under it (or the no-step hint) and the "Corner radius" field; the Shape chips show only while
-  some face is blended by Length. Same conditions on all three surfaces.
+  under it (or the no-step hint) and the "Corner radius" field. Same conditions on all three surfaces. There is
+  NO Shape picker: the S-curve | Fillet | Eased cone chips were REMOVED (on-device report — the
+  three curves differ by less than a line width at the size a blend prints). A Length face draws
+  the S-curve; a stored `blendProfile` of another shape still draws. Do not reintroduce the
+  chips without asking.
 - **Body AFT/FWD reference**: `AddBodyDialog` and the explicit-body card both show "Measure
   From: AFT | FWD" (`Body.authoredReference`; a switch never moves the body, a FWD body keeps its
   FWD distance through an OAL change); the auto-body card omits it (its span is derived).
@@ -781,6 +784,17 @@ canvas's selection — are fixed `SheetInk.Selection` ink as well, never `colorS
 (on-device report: High contrast's amber read weakly on the white paper). See
 `docs/contracts/Appearance.md`.
 
+The editor preview is NOT paper — it is theme-styled — and on a DARK ground its preset colours
+take ONE denser rule: `PreviewColorPreset` keys it on the scheme's own ground
+(`ColorScheme.isDarkPreviewGround()`, `surface` luminance < 0.5 — never a theme flag, so
+high-contrast dark takes it too), lerping Stainless/Steel nearer the foreground (0.68/0.90) and
+roughly doubling the fill alphas through the ONE table `PreviewColorPreset.fillAlpha` that the
+preview and the template thumbnails share; a light ground resolves exactly as it always has. The
+dark scheme itself is a neutral grey (`DarkGrey*`, warm-bronze `tertiary`) rather than M3's
+purple-black, on which the liner and taper fills sank into the ground (on-device report).
+`PreviewColorDarkGroundTest` holds every filled preset ≥ 1.6:1 off the dark ground and the
+outline ≥ 7:1.
+
 ### Layout adapts on ONE axis, the window width class
 Phones and tablets run the same screens; what changes is decided by `WindowWidthClass`
 (`ui/adaptive/WindowSize.kt` — COMPACT < 600 dp, MEDIUM < 840 dp, EXPANDED) and nothing else.
@@ -977,8 +991,8 @@ DERIVES the axial length from the step the face already climbs — `rise / tan �
 difference between the SAME neighbour Ø `blendAt` finds for a Length face (seat midpoint or, under
 "At a liner: Liner OD", the liner OD) and the body Ø — so a later step change re-derives it, and no
 step draws no curve. The typed length is never rewritten by a mode switch (Length restores it) and
-still decides whether the face is blended at all. An Angle face is a STRAIGHT CONE (Shape chips
-hidden, `blendProfile` kept) with an optional corner radius (`blendAftRadiusMm`/`blendFwdRadiusMm`,
+still decides whether the face is blended at all. An Angle face is a STRAIGHT CONE
+(`blendProfile` kept) with an optional corner radius (`blendAftRadiusMm`/`blendFwdRadiusMm`,
 `AutoBlend.radiusMm`, mm, verbatim): a true circular round at the cone's SMALL-diameter end,
 tangent to the cone and to the smaller surface, setback `R·tan(θ/2)` along each line, the curve's
 span the cone plus that setback (`ChamferShape.spanMm`; the round starts at the face when the

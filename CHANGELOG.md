@@ -8,6 +8,37 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-12
 
+### fix(theme): the dark theme is a neutral grey and the shaft preview reads on it
+
+On-device report: in the Dark theme the editor preview was hard to read. The ground was M3's
+baseline purple-black, the Bronze liner fill (pink at 16%) was a murky brown a hair off it, the
+Steel taper fill at 18% all but vanished, and the outline, seal dashes and dimension values were
+dim.
+
+- The dark scheme sets its own neutral dark-grey ground (`DarkGrey*` in `Color.kt`: background
+  and surface `#1F2023`, onSurface `#E8E8EA`, a stepped container ladder, grey outlines and a
+  grey surface tint so elevation lightens instead of tinting purple). The purple primary and
+  secondary stay; the amber caution tier is unchanged.
+- Dark `tertiary` — the Bronze preview preset — is a real warm bronze, `#E2B36B`.
+- On a dark ground (the scheme's `surface` luminance under 0.5, so high-contrast dark takes it
+  too) the Stainless and Steel presets sit nearer the foreground (lerp 0.68 / 0.90) and the
+  preview fills roughly double (Steel 0.34, Stainless 0.28, Bronze 0.38, a Custom fill ×2 capped at
+  0.45). ONE table, `PreviewColorPreset.fillAlpha`, feeds the editor preview and the template
+  thumbnails. Every default fill now stands ≥ 1.6:1 off the dark ground and the outline 10.8:1.
+- The light and both high-contrast schemes keep their colours, and a light ground resolves its
+  preview exactly as before; high-contrast dark's preview takes the denser fills on its black
+  ground. The white sheet canvases and every PDF are untouched.
+
+### change(editor): the blend "Shape" chips are removed
+
+On-device report: the S-curve, Fillet and Eased cone blend shapes could not be told apart. The
+three curves differ by at most 22% of the diameter step, and a body-to-liner step prints a few
+points tall, so the difference is under one line width. The "Shape" row is gone from the body
+card, the bare-shaft card and Add Body; Square | Blend, Blend by Length | Angle, "At a liner" and
+the seal areas are unchanged. A Length blend draws the S-curve. `Body.blendProfile` and
+`AutoBlend.profile` stay in the model, so a document that stored Fillet or Eased cone opens and
+prints exactly as before.
+
 ### fix(pdf): the footer's thread major Ø prints as a fraction
 
 On-device report: a thread entered as 5 1/2 printed `5.5"` on the footer's `Thread:` line beside a
