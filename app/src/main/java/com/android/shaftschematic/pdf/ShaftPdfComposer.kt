@@ -187,8 +187,6 @@ internal fun composeShaftPdfOnCanvas(
     // grows and its lines space out because handwriting is larger than printed text.
     val blank = effectiveOptions.blankValues
 
-    val text = sheetTextPaint(TEXT_PT)
-
     // The band's label, in its own row above the drawing — the footer Side badge's construction.
     band?.badge?.let { badge ->
         c.drawText(badge, PAGE_MARGIN_PT, bandTop + TEXT_PT, sheetTextPaint(TEXT_PT).apply { isFakeBoldText = true })
@@ -280,12 +278,90 @@ internal fun composeShaftPdfOnCanvas(
     }
 
     val halfHeightPx = (maxDiaMm * 0.5f) * diaPtPerMm
+
+    fun xAt(mm: Float) = xMap.xAt(mm)
+    fun rPx(d: Float)  = (d * 0.5f) * diaPtPerMm
+
+    // The Ø callouts and the component names hang in ONE band under the shaft; both are built
+    // for a shaft centre [atCy], because the band's height is measured (below) before the shaft
+    // has a place on the page.
+    val calloutTextPt = schematicDimTextPt(pdfPrefs)
+    // A band of a stacked sheet keeps the shipped name size: its below-shaft room is budgeted for
+    // two rows of it ([BAND_INFO_GAP_PT]), and larger names ran its second row into the footer.
+    val nameTextPt = if (band == null) schematicNameTextPt(pdfPrefs) else TEXT_PT - 2f
+    fun diaCallsAt(atCy: Float): List<DiaCallout> =
+        if (effectiveOptions.showDiaCallouts) {
+            buildBodyOdCallouts(bodiesForPdf, displayUnits) + buildLinerOdCallouts(spec.liners, displayUnits) +
+                buildBlendAngleCallouts(bodiesForPdf, blendsForPdf, ::xAt, ::rPx, atCy, displayUnits)
+        } else {
+            emptyList()
+        }
+    fun diaLeaderAt(atCy: Float, calls: List<DiaCallout>, tiers: Int): DiameterLeaderRenderer? =
+        if (calls.isEmpty()) null else DiameterLeaderRenderer(
+            pageX = { mm -> xAt(mm.toFloat()) },
+            shaftTopY = atCy - halfHeightPx,
+            shaftBottomY = atCy + halfHeightPx,
+            linePaint = dim,
+            textPaint = sheetTextPaint(calloutTextPt),
+            blankValues = blank,
+            dualStacked = displayUnits.dual && pdfPrefs.dualUnitLayout == DualUnitLayout.STACKED,
+            contentLeft = geomRect.left,
+            contentRight = geomRect.right,
+            fallbackTiers = tiers,
+            marginOverhang = CALLOUT_MARGIN_OVERHANG_PT,
+        )
+
+    // The band under the shaft takes the room its callouts and names need at the sizes the
+    // reader asked for, never less than the 1-inch [INFO_GAP_PT]. A fixed inch held two rows of
+    // default-size values; at large print it held neither, and the names shrank to the 7 pt
+    // floor while the callouts ran into them (large-print pass). The shaft rises into the white
+    // above to make the room, but only as far as the rail block at its tightest pitch still fits
+    // over it — past that, the names shrink as before. A band of a stacked sheet keeps its own
+    // budget ([schematicBandLayout]).
+    //
+    // The callouts may take as many rows as there are callouts — a crowd nearly always has a
+    // clear arrangement short of one row each — but only while the band those rows need still
+    // fits under the shaft; past that the row allowance steps back down, never under
+    // [SCHEMATIC_CALLOUT_FALLBACK_TIERS].
+    val calloutTiers: Int
+    val infoGapPt: Float
+    if (bandLayout != null) {
+        calloutTiers = SCHEMATIC_CALLOUT_FALLBACK_TIERS
+        infoGapPt = bandLayout.infoGapPt
+    } else {
+        val calls0 = diaCallsAt(0f)
+        fun needAt(tiers: Int) = belowShaftBandNeedPt(
+            spec = spec,
+            titlesDefault = pdfPrefs.showComponentTitles,
+            showLabels = effectiveOptions.showLabels,
+            geomRect = geomRect,
+            halfHeightPx = halfHeightPx,
+            xAt = ::xAt,
+            nameTextPt = nameTextPt,
+            calls = calls0,
+            leader = { calls -> diaLeaderAt(0f, calls, tiers) },
+        )
+        val railsTight = if (!effectiveOptions.showDimensions) 0f else schematicRailBlockPt(
+            spec, unit, displayUnits, pdfPrefs, effectiveOptions.blankValues,
+            xAt = xMap::xAt,
+            gap = RAIL_MIN_GAP_PT * pdfPrefs.dimTextScale,
+        )
+        val roomBelow = geomRect.bottom - geomRect.top - 2f * halfHeightPx - railsTight
+        var tiers = max(SCHEMATIC_CALLOUT_FALLBACK_TIERS, calls0.size)
+        var need = needAt(tiers)
+        while (need > roomBelow && tiers > SCHEMATIC_CALLOUT_FALLBACK_TIERS) {
+            tiers--
+            need = needAt(tiers)
+        }
+        calloutTiers = tiers
+        infoGapPt = max(INFO_GAP_PT, min(need, roomBelow))
+    }
     // Place the shaft centered on the paper when possible.
     // Clamp so the shaft stays inside geomRect and the footer block can still fit below.
     val minCy = geomRect.top + halfHeightPx
     val maxCy = min(
         geomRect.bottom - halfHeightPx,
-        bandBottom - footerBlockPt - (bandLayout?.infoGapPt ?: INFO_GAP_PT) - halfHeightPx
+        bandBottom - footerBlockPt - infoGapPt - halfHeightPx
     )
     // A band centres on its own span with the same downward bias — the page's middle is
     // `(margin + (pageH - margin)) / 2`, so a band covering the whole page asks for exactly the
@@ -306,9 +382,6 @@ internal fun composeShaftPdfOnCanvas(
     } else {
         0f
     }
-
-    fun xAt(mm: Float) = xMap.xAt(mm)
-    fun rPx(d: Float)  = (d * 0.5f) * diaPtPerMm
 
     c.save()
     if (shaftTranslateY != 0f) {
@@ -379,24 +452,8 @@ internal fun composeShaftPdfOnCanvas(
     // An Angle-mode blend's angle and corner radius join the same list — the same tiers, the same
     // occupancy the name labels plan around — so the below-shaft band stays ONE collision space.
     // Length-mode blends contribute nothing, so a sheet without an Angle-mode face is unchanged.
-    val diaCalls =
-        if (effectiveOptions.showDiaCallouts) {
-            buildBodyOdCallouts(bodiesForPdf, displayUnits) + buildLinerOdCallouts(spec.liners, displayUnits) +
-                buildBlendAngleCallouts(bodiesForPdf, blendsForPdf, ::xAt, ::rPx, cy, displayUnits)
-        } else {
-            emptyList()
-        }
-    val diaLeader = if (diaCalls.isEmpty()) null else DiameterLeaderRenderer(
-        pageX = { mm -> xAt(mm.toFloat()) },
-        shaftTopY = yTopOfShaft,
-        shaftBottomY = cy + halfHeightPx,
-        linePaint = dim,
-        textPaint = sheetTextPaint(schematicDimTextPt(pdfPrefs)),
-        blankValues = blank,
-        dualStacked = displayUnits.dual && pdfPrefs.dualUnitLayout == DualUnitLayout.STACKED,
-        contentLeft = geomRect.left,
-        contentRight = geomRect.right,
-    )
+    val diaCalls = diaCallsAt(cy)
+    val diaLeader = diaLeaderAt(cy, diaCalls, calloutTiers)
 
     // The global titles switch is the per-component flags' DEFAULT, not a master gate — an
     // explicitly-shown component prints under a global off (see componentLabelSpans). Only the
@@ -410,7 +467,7 @@ internal fun composeShaftPdfOnCanvas(
             cy = cy,
             halfHeightPx = halfHeightPx,
             xAt = ::xAt,
-            textPaint = text,
+            labelTextPt = nameTextPt,
             reserved = diaLeader?.occupancy(diaCalls).orEmpty(),
         )
     }
@@ -692,6 +749,46 @@ private fun schematicFooterTextPaint(pdfPrefs: PdfPrefs): Paint =
 private fun schematicDimTextPt(pdfPrefs: PdfPrefs): Float = (TEXT_PT - 2f) * pdfPrefs.dimTextScale
 
 /**
+ * The component names' starting size: the drawing's own text, so they follow "Dimension text
+ * size" with the rails and the Ø callouts — a large-print reader asked for the drawing's labels
+ * large, and a name left at 10 pt beside 17.5 pt values read as an afterthought. The name planner
+ * may still shrink it on a crowded sheet ([drawComponentLabelsPdf]).
+ */
+private fun schematicNameTextPt(pdfPrefs: PdfPrefs): Float = (TEXT_PT - 2f) * pdfPrefs.dimTextScale
+
+/**
+ * How far below the shaft's bottom edge the Ø callouts and the component names reach at their
+ * requested sizes, plus [BELOW_BAND_FOOTER_AIR_PT] — measured with the shaft centred at y = 0,
+ * the planners run with no floor under them (the names on as many rows as they want, the callouts
+ * on as many as [SCHEMATIC_CALLOUT_FALLBACK_TIERS] allows). The composer reserves this much under
+ * the shaft, never less than [INFO_GAP_PT].
+ */
+private fun belowShaftBandNeedPt(
+    spec: ShaftSpec,
+    titlesDefault: Boolean,
+    showLabels: Boolean,
+    geomRect: RectF,
+    halfHeightPx: Float,
+    xAt: (Float) -> Float,
+    nameTextPt: Float,
+    calls: List<DiaCallout>,
+    leader: (List<DiaCallout>) -> DiameterLeaderRenderer?,
+): Float {
+    val reserved = leader(calls)?.occupancy(calls).orEmpty()
+    var bottom = reserved.maxOfOrNull { it.bottom } ?: halfHeightPx
+    val spans = if (showLabels) componentLabelSpans(spec, titlesDefault) else emptyList()
+    if (spans.isNotEmpty()) {
+        val paint = sheetTextPaint(nameTextPt.coerceAtLeast(COMPONENT_LABEL_MIN_TEXT_PT))
+        val baseY = halfHeightPx + COMPONENT_LABEL_OFFSET_PT
+        val open = RectF(geomRect.left, geomRect.top, geomRect.right, Float.MAX_VALUE)
+        val plan = planComponentLabels(spans, paint, open, baseY, xAt, reserved)
+        val lastRow = plan.placements.maxOfOrNull { it.row } ?: 0
+        bottom = max(bottom, baseY + lastRow * plan.rowStep + paint.fontMetrics.descent)
+    }
+    return bottom - halfHeightPx + BELOW_BAND_FOOTER_AIR_PT
+}
+
+/**
  * The schematic's dimension spans and their rail assignment — pure mm, no page geometry. The
  * editor preview's rails (`ui/drawing/render/PreviewDimensionRails.kt`) draw this same object,
  * so the box and the sheet carry the same spans, tiers and values.
@@ -964,6 +1061,21 @@ private const val BAND_INFO_GAP_MIN_PT = 46f
 private const val BAND_MIN_SHAFT_HEIGHT_PT = 18f
 /** The rail fit's tightest lane pitch for single-line values. */
 private const val RAIL_MIN_GAP_PT = 10f
+/**
+ * Rows the schematic's Ø callouts may spread to when two rows hold no clear arrangement — at
+ * large print a short stretch carrying three or four values. The below-shaft band is sized to
+ * the rows the placement uses ([belowShaftBandNeedPt]), so the extra row costs room only on the
+ * sheets that use it.
+ */
+private const val SCHEMATIC_CALLOUT_FALLBACK_TIERS = 3
+/**
+ * How far a Ø or blend callout's value may run past the content edge into the page margin when
+ * no spot inside the content is clear (on-device direction). Half the [PAGE_MARGIN_PT], so a
+ * quarter inch of paper always stays between the value and the sheet's edge.
+ */
+private const val CALLOUT_MARGIN_OVERHANG_PT = 18f
+/** Air kept between the lowest callout or name and the footer's first line. */
+private const val BELOW_BAND_FOOTER_AIR_PT = 12f
 /** Air the rail block keeps under the content top. */
 private const val RAIL_TOP_SAFE_PAD_PT = 6f
 /**
@@ -1077,15 +1189,13 @@ private fun drawComponentLabelsPdf(
     cy: Float,
     halfHeightPx: Float,
     xAt: (Float) -> Float,
-    textPaint: Paint,
+    labelTextPt: Float,
     reserved: List<BelowShaftLabelLayout.Box> = emptyList(),
 ) {
     val spans = componentLabelSpans(spec, titlesDefault)
     if (spans.isEmpty()) return
 
-    val labelPaint = Paint(textPaint).apply {
-        textSize = (textSize - 2f).coerceAtLeast(COMPONENT_LABEL_MIN_TEXT_PT)
-    }
+    val labelPaint = sheetTextPaint(labelTextPt.coerceAtLeast(COMPONENT_LABEL_MIN_TEXT_PT))
 
     val yBottomOfShaft = cy + halfHeightPx
     val baseY = (yBottomOfShaft + COMPONENT_LABEL_OFFSET_PT).coerceAtMost(geomRect.bottom - 6f)

@@ -50,6 +50,18 @@ class DiameterLeaderRenderer(
      */
     private val contentLeft: Float = Float.NEGATIVE_INFINITY,
     private val contentRight: Float = Float.POSITIVE_INFINITY,
+    /**
+     * Rows a crowd of callouts may spread to when [DiameterCalloutLayout.MAX_TIERS] rows have no
+     * clear arrangement ([DiameterCalloutLayout.place]'s `fallbackTiers`). The default keeps the
+     * two rows; a caller that sizes its below-shaft band off [occupancy] may allow more.
+     */
+    private val fallbackTiers: Int = DiameterCalloutLayout.MAX_TIERS,
+    /**
+     * How far past [contentLeft]/[contentRight] a label may run into the page margin when no spot
+     * inside the content is clear ([DiameterCalloutLayout.place]'s `overhang`). 0 keeps every
+     * label inside the content.
+     */
+    private val marginOverhang: Float = 0f,
 ) {
     /** The page x [call]'s leader stands at: its feature's anchor when it has one, else its station. */
     private fun anchorXFor(call: DiaCallout): Float = call.anchorXPt ?: pageX(call.xMm)
@@ -90,6 +102,8 @@ class DiameterLeaderRenderer(
             dogleg = leaderDogleg,
             contentLeft = contentLeft,
             contentRight = contentRight,
+            fallbackTiers = fallbackTiers,
+            overhang = marginOverhang,
         )
 
     /**

@@ -146,15 +146,17 @@ class SchematicRenderReviewTest {
                 // The bare-shaft Ø callouts switched on as well, the section beside the FWD
                 // taper machined to 9": four callouts share the stretch between the FWD liner and
                 // the FWD taper (on-device report).
-                val repaired = doc.spec.copy(
-                    showAutoBodyDia = true,
-                    autoDiaOverrides = doc.spec.autoDiaOverrides.map {
-                        if (it.anchorMm > 7000f) it.copy(diaMm = 228.6f) else it
-                    },
-                )
+                // … and to 9.030", whose wider value no longer fits beside the taper.
+                for ((tag, diaMm) in listOf("body_dia" to 228.6f, "body_dia_9030" to 229.362f))
                 for (pct in listOf(125, 175)) {
+                    val repaired = doc.spec.copy(
+                        showAutoBodyDia = true,
+                        autoDiaOverrides = doc.spec.autoDiaOverrides.map {
+                            if (it.anchorMm > 7000f) it.copy(diaMm = diaMm) else it
+                        },
+                    )
                     renderSchematic(
-                        "blend_angle_kelley_c_${font.name.lowercase()}_body_dia_${pct}_schematic.png",
+                        "blend_angle_kelley_c_${font.name.lowercase()}_${tag}_${pct}_schematic.png",
                         doc.copy(spec = repaired),
                         PdfPrefs(dimTextScale = pct / 100f, showComponentTitles = false),
                         linerMinFracOfTrue = 1f,
@@ -163,6 +165,36 @@ class SchematicRenderReviewTest {
             }
         } finally {
             com.android.shaftschematic.data.SettingsStore.updatePdfPrefs { it.copy(outputFont = before) }
+        }
+    }
+
+    /**
+     * Large print: every fixture job with BOTH sheet text sizes at their largest, the names and
+     * the bare-shaft Ø callouts on — the most a reader can ask of the below-shaft band.
+     */
+    @Test
+    fun `large print`() {
+        val prefs = PdfPrefs(
+            footerTextScale = com.android.shaftschematic.settings.PDF_TEXT_SCALE_MAX,
+            dimTextScale = com.android.shaftschematic.settings.PDF_TEXT_SCALE_MAX,
+            showComponentTitles = true,
+        )
+        for (name in listOf(
+            "mid_taper_pac_fish", "runout_auto_body_polar_ranger", "undercut_polar_ranger_stbd",
+            "blend_angle_kelley_c",
+        )) {
+            val doc = ShaftDocCodec.decode(
+                requireNotNull(javaClass.classLoader?.getResource("fixtures/$name.shaft")).readText(),
+            )
+            val withBodyDia = doc.copy(spec = doc.spec.copy(showAutoBodyDia = true))
+            renderSchematic("large_${name}_schematic.png", withBodyDia, prefs)
+            if (name == "mid_taper_pac_fish") {
+                renderBeforeAfter(
+                    "large_${name}_before_after.png", doc,
+                    BeforeAfterPdfComposerTest.movedFwdLinerFinal(doc.spec), pdfPrefs = prefs,
+                )
+            }
+            renderConsolidated("large_${name}_consolidated.png", withBodyDia, pdfPrefs = prefs)
         }
     }
 
@@ -193,6 +225,7 @@ class SchematicRenderReviewTest {
         finalSpec: com.android.shaftschematic.model.ShaftSpec,
         heightScale: Float = 1f,
         options: PdfExportOptions = PdfExportOptions(),
+        pdfPrefs: PdfPrefs = PdfPrefs(),
     ) {
         val (bmp, c) = bitmapPage()
         composeBeforeAfterPdfOnCanvas(
@@ -207,6 +240,7 @@ class SchematicRenderReviewTest {
             originalResolved = resolveComponents(doc.spec),
             finalResolved = resolveComponents(finalSpec),
             heightScale = heightScale,
+            pdfPrefs = pdfPrefs,
         )
         save(name, bmp)
     }

@@ -8,6 +8,40 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-11
 
+### fix(pdf): large print fills the schematic instead of crowding under the shaft
+
+At the largest sheet text sizes the schematic kept a fixed one-inch band under the shaft for the
+Ø callouts and the component names. Two rows of large values filled it, so the names shrank to
+the 7 pt floor and the callouts printed over them and over each other, while the page above the
+drawing stood empty (large-print pass). Now:
+
+- The band under the shaft takes the height its callouts and names need at the sizes asked for
+  (`belowShaftBandNeedPt`), never less than the inch, and the shaft rises into the white above to
+  make the room — as far as the dimension rails at their tightest pitch still fit over it. Past
+  that, the names shrink as before.
+- The component names follow "Dimension text size" with the rails and the Ø values
+  (`schematicNameTextPt`); at 100% they print at the same 10 pt as before. The Original + Final
+  sheet keeps the 10 pt names: each of its bands is budgeted for them.
+- Ø callouts that two rows cannot hold clear take more rows, one at a time — up to a row each,
+  for as long as the band those rows need still fits under the shaft
+  (`DiameterCalloutLayout.place` `fallbackTiers`); a sheet that fits in two rows is placed
+  exactly as before.
+- A callout's value may run up to 1/4" past the content edge into the page margin, when no spot
+  inside the content is clear (`overhang`, `CALLOUT_MARGIN_OVERHANG_PT`; on-device direction —
+  the paper beyond the shaft's end is room too). A quarter inch of paper always stays outside it.
+- When no arrangement is clear at all, a callout takes the spot that overlaps its neighbours
+  least, never squarely on another value while any other spot exists.
+- Crowds of callouts are arranged one crowd at a time. A sheet with a crowd at each end of the
+  shaft searched them as one and ran out of search budget, so neither was arranged (a liner's Ø
+  leader printed through the value beside it at both ends of a large-print sheet).
+
+On-device report behind the last three: a bare-shaft section changed from 9" to 9.030" at 175%
+text — the wider value no longer fit beside the FWD taper, flipped under the liner and printed on
+top of the blend's `45°, 3/8" R`. It now hangs beside its section, a little into the margin.
+
+A default-size sheet prints as before, except one whose names already needed a third row: its
+shaft now moves up to make the room instead of the names shrinking.
+
 ### fix(pdf): body Ø callouts join the callout collision check; a Ø leader may slide along its component
 
 With the bare-shaft Ø callouts switched on, the stretch between a liner and a taper can carry four
