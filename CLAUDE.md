@@ -1156,7 +1156,10 @@ On-shaft diameter callouts (body OD, liner OD — `buildBodyOdCallouts`/`buildLi
 in `ShaftPdfComposer.kt`) all hang **BELOW** the shaft; do not reintroduce above/below
 alternation. Labels use `formatDiaWithUnit` (inches: a whole number bare, any other value at 3 decimals — `10.990"`, never `10.99"`, on-device report — or 4 when it is exactly an odd sixteenth, `10.9375"`, `LengthFormat.formatInchesDecimal`, on-device ruling; mm compact 1-decimal; the ONE exception is the footer `Thread:` line's major Ø, `formatThreadDiaWithUnit`, which drops trailing zeros — `4.5"` — on-device ruling) to match the
 footer's "Ø" text — never the raw 4-decimal format. Bodies and liners are **separate OD
-groups** — a liner OD is never deduped against a body OD. Horizontally-close labels stack onto
+groups**, never silently deduped, EXCEPT that a liner and a shown body TOUCHING it at the same Ø
+(same display unit) print ONE value with a leader to each (on-device request) — decided by the ONE
+`joinSharedOdCallouts`; both leaders drop to one row joined by a line, the value past the outer
+one, and `DiameterCalloutLayout.place` checks both leaders. Horizontally-close labels stack onto
 a second row, the same two-tier posture as runout bubbles, and rows AND label sides are placed
 together by the ONE `DiameterCalloutLayout.place` (pure, unit-tested) so no leader drops through
 another callout's value — each callout takes its first clear spot in turn (a Ø leader may slide

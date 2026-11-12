@@ -90,10 +90,24 @@ object DiameterCalloutLayout {
         dogleg: Float,
         contentLeft: Float = Float.NEGATIVE_INFINITY,
         contentRight: Float = Float.POSITIVE_INFINITY,
+    ): Float = labelLeftOf(anchorX, anchorX, labelWidth, dogleg, contentLeft, contentRight)
+
+    /**
+     * [labelLeft] for a callout whose leaders stand over `[lo, hi]`: the label hangs right of the
+     * rightmost leader, else left of the leftmost, else is pushed back inside the content. One
+     * leader is `lo == hi`.
+     */
+    private fun labelLeftOf(
+        lo: Float,
+        hi: Float,
+        labelWidth: Float,
+        dogleg: Float,
+        contentLeft: Float,
+        contentRight: Float,
     ): Float {
-        val right = anchorX + dogleg
+        val right = hi + dogleg
         if (right + labelWidth <= contentRight) return right
-        val left = anchorX - dogleg - labelWidth
+        val left = lo - dogleg - labelWidth
         if (left >= contentLeft) return left
         return (contentRight - labelWidth).coerceAtLeast(contentLeft)
     }
@@ -113,10 +127,27 @@ object DiameterCalloutLayout {
          */
         val anchorMin: Float = anchorX,
         val anchorMax: Float = anchorX,
+        /**
+         * A second leader, for one value shared by two touching components (a liner and the body
+         * beside it at the same Ø). Both leaders drop to the same row, a line on that row joins
+         * them, and the label hangs past the OUTER leader. [secondAnchorX] is the second leader's
+         * PREFERRED stand; [secondAlternatives] are the stands it falls back to, in order, when no
+         * spot is clear there. Null (the default) = one leader.
+         */
+        val secondAnchorX: Float? = null,
+        val secondAlternatives: List<Float> = emptyList(),
     )
 
-    /** Where [place] put a callout: its row, its label's left edge and where its leader stands. */
-    data class Placement(val tier: Int, val labelLeft: Float, val anchorX: Float)
+    /**
+     * Where [place] put a callout: its row, its label's left edge and where its leader stands —
+     * and, for a two-leader [Item], where its second leader stands ([secondAnchorX], else null).
+     */
+    data class Placement(
+        val tier: Int,
+        val labelLeft: Float,
+        val anchorX: Float,
+        val secondAnchorX: Float? = null,
+    )
 
     /** Cost of one point of a value's width set over another value on its row (no clear spot left). */
     private const val OVERLAP_COST_PER_PT: Float = 2f
@@ -127,7 +158,22 @@ object DiameterCalloutLayout {
     /** Alternative leader positions [place] tries on each side of a callout's own anchor. */
     private const val ANCHOR_STEPS: Int = 4
 
-    private class Placed(val tier: Int, val anchorX: Float, val left: Float, val right: Float)
+    /**
+     * A placed callout: its row, its leaders, and the box it occupies on its row — label, dogleg
+     * and, for two leaders, the line joining them.
+     */
+    private class Placed(
+        val tier: Int,
+        val anchorX: Float,
+        val secondX: Float?,
+        val left: Float,
+        val right: Float,
+    ) {
+        /** Whether a leader of this callout stands inside `[l, r]` widened by [gap]. */
+        fun leaderIn(l: Float, r: Float, gap: Float): Boolean =
+            (anchorX > l - gap && anchorX < r + gap) ||
+                (secondX != null && secondX > l - gap && secondX < r + gap)
+    }
 
     /**
      * Tier AND label side for every below-shaft callout, placed together.
@@ -159,6 +205,13 @@ object DiameterCalloutLayout {
      * [overhang] is how far a label may run past the content edge into the page margin when no
      * spot inside the content is clear (on-device direction: the margin beyond the shaft's end is
      * paper too). Spots inside the content are always tried first.
+     *
+     * A two-leader item ([Item.secondAnchorX]) is placed by the same rules with both leaders in
+     * every check: its box on its row runs from its leftmost leader or label edge to its rightmost,
+     * so the line joining the leaders is an obstacle like a value, and neither of its leaders may
+     * drop through a value on a row above. Its first leader slides as a single one does; at each
+     * first-leader stand its second tries its preferred stand first, then its alternatives in order
+     * ([Item.secondAlternatives]).
      *
      * @return one [Placement] per item, parallel to [items].
      */
@@ -202,13 +255,15 @@ object DiameterCalloutLayout {
         val placed = ArrayList<Placed>(items.size)
         val result = arrayOfNulls<Placement>(items.size)
 
-        fun clear(tier: Int, anchorX: Float, left: Float, right: Float): Boolean = placed.none { p ->
+        // Every leader counts — a two-leader callout's second drop crosses a value as surely as its
+        // first, and its joining line sits inside its box.
+        fun clear(box: Placed): Boolean = placed.none { p ->
             when {
-                p.tier == tier -> left < p.right + gap && p.left < right + gap
-                // This leader drops through p's row.
-                p.tier < tier -> anchorX > p.left - gap && anchorX < p.right + gap
-                // p's leader drops through this row.
-                else -> p.anchorX > left - gap && p.anchorX < right + gap
+                p.tier == box.tier -> box.left < p.right + gap && p.left < box.right + gap
+                // A leader of this callout drops through p's row.
+                p.tier < box.tier -> box.leaderIn(p.left, p.right, gap)
+                // A leader of p drops through this row.
+                else -> p.leaderIn(box.left, box.right, gap)
             }
         }
 
@@ -224,39 +279,53 @@ object DiameterCalloutLayout {
             }
         }
 
+        // Where a two-leader callout's second leader may stand: its preferred stand first, then
+        // its alternatives in the caller's order. One leader: no second.
+        fun seconds(item: Item): List<Float?> {
+            val preferred = item.secondAnchorX ?: return listOf(null)
+            return (listOf(preferred) + item.secondAlternatives).distinct()
+        }
+
         // Every spot a callout may take, in preference order: its own anchor before a slid one,
-        // rows before sides.
+        // rows before sides. A two-leader callout's label hangs past its OUTER leader.
         fun spots(item: Item): List<Placement> {
-            fun rows(labelL: Float, anchor: Float) = (0 until tiers).map { t -> Placement(t, labelL, anchor) }
+            val w = item.labelWidth
             val inside = ArrayList<Placement>()
             val margin = ArrayList<Placement>()
-            for (anchor in anchors(item)) {
-                val usual = labelLeft(anchor, item.labelWidth, dogleg, contentLeft, contentRight)
-                inside += rows(usual, anchor)
-                // The other side of the leader, when the label fits inside the content there.
-                val flipped = if (usual >= anchor) anchor - dogleg - item.labelWidth else anchor + dogleg
-                if (flipped >= contentLeft && flipped + item.labelWidth <= contentRight) inside += rows(flipped, anchor)
+            for (anchor in anchors(item)) for (second in seconds(item)) {
+                fun rows(labelL: Float) = (0 until tiers).map { t -> Placement(t, labelL, anchor, second) }
+                val lo = minOf(anchor, second ?: anchor)
+                val hi = maxOf(anchor, second ?: anchor)
+                val usual = labelLeftOf(lo, hi, w, dogleg, contentLeft, contentRight)
+                inside += rows(usual)
+                // The other side of the leaders, when the label fits inside the content there.
+                val flipped = if (usual >= hi) lo - dogleg - w else hi + dogleg
+                if (flipped >= contentLeft && flipped + w <= contentRight) inside += rows(flipped)
                 // Either side with the label run a little into the page margin — tried only after
                 // every spot inside the content, slid leaders included.
                 if (overhang > 0f) {
-                    val right = anchor + dogleg
-                    val left = anchor - dogleg - item.labelWidth
-                    if (right + item.labelWidth > contentRight && right + item.labelWidth <= contentRight + overhang) {
-                        margin += rows(right, anchor)
+                    val right = hi + dogleg
+                    val left = lo - dogleg - w
+                    if (right + w > contentRight && right + w <= contentRight + overhang) {
+                        margin += rows(right)
                     }
-                    if (left < contentLeft && left >= contentLeft - overhang) margin += rows(left, anchor)
+                    if (left < contentLeft && left >= contentLeft - overhang) margin += rows(left)
                 }
             }
             return inside + margin
         }
-        fun placedAt(item: Item, at: Placement) = Placed(
-            at.tier, at.anchorX,
-            minOf(at.anchorX, at.labelLeft), maxOf(at.anchorX, at.labelLeft + item.labelWidth),
-        )
-        fun isClear(item: Item, at: Placement): Boolean {
-            val box = placedAt(item, at)
-            return clear(at.tier, at.anchorX, box.left, box.right)
+        // The box a spot occupies on its row: the label, its dogleg, and every leader — so a
+        // two-leader callout's joining line is an obstacle like a label.
+        fun placedAt(item: Item, at: Placement): Placed {
+            val second = at.secondAnchorX
+            val lo = if (second == null) at.anchorX else minOf(at.anchorX, second)
+            val hi = if (second == null) at.anchorX else maxOf(at.anchorX, second)
+            return Placed(
+                at.tier, at.anchorX, second,
+                minOf(lo, at.labelLeft), maxOf(hi, at.labelLeft + item.labelWidth),
+            )
         }
+        fun isClear(item: Item, at: Placement): Boolean = clear(placedAt(item, at))
 
         // What a spot costs when none is clear: every point of a value set over another, and a
         // flat price for each leader through a value.
@@ -268,9 +337,9 @@ object DiameterCalloutLayout {
                     p.tier == box.tier ->
                         (minOf(box.right, p.right) + gap - maxOf(box.left, p.left)).coerceAtLeast(0f) * OVERLAP_COST_PER_PT
                     p.tier < box.tier ->
-                        if (box.anchorX > p.left - gap && box.anchorX < p.right + gap) LEADER_CROSS_COST else 0f
+                        if (box.leaderIn(p.left, p.right, gap)) LEADER_CROSS_COST else 0f
                     else ->
-                        if (p.anchorX > box.left - gap && p.anchorX < box.right + gap) LEADER_CROSS_COST else 0f
+                        if (p.leaderIn(box.left, box.right, gap)) LEADER_CROSS_COST else 0f
                 }
             }
             return sum
@@ -300,7 +369,13 @@ object DiameterCalloutLayout {
         // one-at-a-time placement above stands.
         fun reach(item: Item): ClosedFloatingPointRange<Float> {
             val pad = dogleg + item.labelWidth + gap
-            return (minOf(item.anchorMin, item.anchorX) - pad)..(maxOf(item.anchorMax, item.anchorX) + pad)
+            var lo = minOf(item.anchorMin, item.anchorX)
+            var hi = maxOf(item.anchorMax, item.anchorX)
+            for (s in seconds(item)) if (s != null) {
+                lo = minOf(lo, s)
+                hi = maxOf(hi, s)
+            }
+            return (lo - pad)..(hi + pad)
         }
         val group = forced.toMutableSet()
         var grew = true

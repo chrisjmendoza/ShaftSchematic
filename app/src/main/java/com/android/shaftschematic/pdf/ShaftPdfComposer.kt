@@ -291,7 +291,7 @@ internal fun composeShaftPdfOnCanvas(
     val nameTextPt = if (band == null) schematicNameTextPt(pdfPrefs) else TEXT_PT - 2f
     fun diaCallsAt(atCy: Float): List<DiaCallout> =
         if (effectiveOptions.showDiaCallouts) {
-            buildBodyOdCallouts(bodiesForPdf, displayUnits) + buildLinerOdCallouts(spec.liners, displayUnits) +
+            joinSharedOdCallouts(bodiesForPdf, spec.liners, displayUnits) +
                 buildBlendAngleCallouts(bodiesForPdf, blendsForPdf, ::xAt, ::rPx, atCy, displayUnits)
         } else {
             emptyList()
@@ -1829,7 +1829,8 @@ internal fun buildBlendAngleCallouts(
 /**
  * Liner mirror of [buildBodyOdCallouts]: one [DiaCallout] per unique liner OD, anchored at
  * the center of the longest liner with that OD, all BELOW the shaft. Bodies and liners are
- * separate groups — a liner OD is never deduped against a body OD.
+ * separate groups — a liner OD is never silently deduped against a body OD; the one exception, a
+ * liner and a touching shown body of the same Ø sharing one value, is [joinSharedOdCallouts].
  *
  * [Liner.showDiaOnDrawing] is applied before the grouping, same rule as the body builder.
  * Liners are never fragmented, so the anchor's id resolves directly (no base-id stripping).
@@ -1853,6 +1854,82 @@ internal fun buildLinerOdCallouts(
                 spanEndMm = (anchor.startFromAftMm + anchor.lengthMm).toDouble(),
             )
         }
+
+/**
+ * Every body and liner Ø callout for one sheet: [buildBodyOdCallouts] then [buildLinerOdCallouts],
+ * with ONE exception decided here — a liner and a shown body TOUCHING it at the same Ø print the
+ * value once, with a leader to each (on-device request: a 9.750" liner beside 9.750" bare shaft
+ * printed `Ø 9.750"` twice in the most crowded stretch of the sheet).
+ *
+ * A liner OD group and a body Ø group join when their values agree within [SHARED_OD_EPS_MM],
+ * both callouts resolve to the same display unit, and some shown body of that Ø ends where some
+ * shown liner of that OD starts, or starts where it ends (within [SHARED_OD_TOUCH_EPS_MM]). Of
+ * several touching pairs the one with the longest liner wins, then the longest body; the pair must
+ * also resolve to that one unit. The joined callout takes the liner group's place in the list and
+ * the body group's callout is dropped: its first leader is the pair's liner (centre + span), its
+ * second the pair's body. Only a body joins a liner — never two liners, never two bodies — and
+ * everything that does not qualify is built exactly as the two builders build it.
+ *
+ * [bodies] are the drawable runs (`bodiesForPdf` — already trimmed around liners, fragment ids
+ * intact), so a body that runs under a liner touches it at the run's trimmed end.
+ */
+internal fun joinSharedOdCallouts(
+    bodies: List<Body>,
+    liners: List<Liner>,
+    displayUnits: DisplayUnits = DisplayUnits.single(UnitSystem.INCHES),
+): List<DiaCallout> {
+    val bodyCalls = buildBodyOdCallouts(bodies, displayUnits)
+    val linerCalls = buildLinerOdCallouts(liners, displayUnits)
+    if (bodyCalls.isEmpty() || linerCalls.isEmpty()) return bodyCalls + linerCalls
+
+    val shownBodies = bodies.filter { it.diaMm > 0f && it.showDiaOnDrawing }
+    val shownLiners = liners.filter { it.odMm > 0f && it.showDiaOnDrawing }
+    fun touches(b: Body, l: Liner): Boolean {
+        val bEnd = b.startFromAftMm + b.lengthMm
+        val lEnd = l.startFromAftMm + l.lengthMm
+        return abs(bEnd - l.startFromAftMm) <= SHARED_OD_TOUCH_EPS_MM ||
+            abs(b.startFromAftMm - lEnd) <= SHARED_OD_TOUCH_EPS_MM
+    }
+
+    val droppedBodyCalls = HashSet<Int>()
+    val linerOut = linerCalls.map { lc ->
+        val bi = bodyCalls.indices.firstOrNull { i ->
+            i !in droppedBodyCalls &&
+                abs(bodyCalls[i].valueMm - lc.valueMm) <= SHARED_OD_EPS_MM &&
+                bodyCalls[i].unit == lc.unit
+        } ?: return@map lc
+        val pair = shownLiners
+            .filter { abs(it.odMm - lc.valueMm) <= SHARED_OD_EPS_MM && displayUnits.unitFor(it.id) == lc.unit }
+            .flatMap { l ->
+                shownBodies
+                    .filter {
+                        abs(it.diaMm - lc.valueMm) <= SHARED_OD_EPS_MM &&
+                            displayUnits.unitFor(resolvedBodyBaseId(it.id)) == lc.unit &&
+                            touches(it, l)
+                    }
+                    .map { b -> l to b }
+            }
+            .maxWithOrNull(compareBy({ it.first.lengthMm }, { it.second.lengthMm }))
+            ?: return@map lc
+        droppedBodyCalls += bi
+        val (l, b) = pair
+        lc.copy(
+            xMm = (l.startFromAftMm + l.lengthMm * 0.5).toDouble(),
+            spanStartMm = l.startFromAftMm.toDouble(),
+            spanEndMm = (l.startFromAftMm + l.lengthMm).toDouble(),
+            secondXMm = (b.startFromAftMm + b.lengthMm * 0.5).toDouble(),
+            secondSpanStartMm = b.startFromAftMm.toDouble(),
+            secondSpanEndMm = (b.startFromAftMm + b.lengthMm).toDouble(),
+        )
+    }
+    return bodyCalls.filterIndexed { i, _ -> i !in droppedBodyCalls } + linerOut
+}
+
+/** Two Ø values within this many mm are one value for [joinSharedOdCallouts]. */
+private const val SHARED_OD_EPS_MM = 0.001
+
+/** A body end within this many mm of a liner end touches it, for [joinSharedOdCallouts]. */
+private const val SHARED_OD_TOUCH_EPS_MM = 0.01f
 
 /**
  * Returns a copy of this spec whose `bodies` are the resolved body segments — subtracted

@@ -120,7 +120,7 @@ class ComponentLabelCalloutClearanceTest {
         reservedOverride: List<BelowShaftLabelLayout.Box>? = null,
     ): List<String> {
         val xAt = xMap(spec, widthPt)
-        val calls = buildBodyOdCallouts(spec.bodies) + buildLinerOdCallouts(spec.liners)
+        val calls = joinSharedOdCallouts(spec.bodies, spec.liners)
         assertTrue("the fixture must actually print callouts", calls.size >= 2)
 
         val leader = DiameterLeaderRenderer(
@@ -216,7 +216,7 @@ class ComponentLabelCalloutClearanceTest {
             linePaint = Paint(),
             textPaint = leaderPaint(),
         )
-        val reserved = leader.occupancy(buildBodyOdCallouts(spec.bodies) + buildLinerOdCallouts(spec.liners))
+        val reserved = leader.occupancy(joinSharedOdCallouts(spec.bodies, spec.liners))
 
         val plan = planComponentLabels(
             spans = componentLabelSpans(spec, titlesDefault = true),

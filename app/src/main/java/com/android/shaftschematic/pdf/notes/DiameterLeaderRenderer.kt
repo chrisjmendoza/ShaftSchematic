@@ -30,6 +30,11 @@ import com.android.shaftschematic.util.measureDualLabel
  * ride the SAME pass — same rows, same occupancy, same leader construction — so they share the
  * one below-shaft collision space with the Ø values and the component names. Their leader leaves
  * from the feature itself ([DiaCallout.anchorXPt]/[DiaCallout.anchorYPt]).
+ *
+ * A callout with a second leader ([DiaCallout.secondXMm] — a liner and the body touching it at the
+ * same Ø) prints its value once: both leaders drop from the shaft's bottom edge to the same row, one
+ * line joins them, and the value hangs past the outer leader. Placement, occupancy and ink all read
+ * the same [DiameterCalloutLayout.Placement.secondAnchorX].
  */
 class DiameterLeaderRenderer(
     private val pageX: (Double) -> Float,   // mm → page X
@@ -82,6 +87,33 @@ class DiameterLeaderRenderer(
         return if (lo >= hi) anchor to anchor else minOf(lo, anchor) to maxOf(hi, anchor)
     }
 
+    /**
+     * Where a two-leader callout's second (body) leader may stand, preferred first: a point on the
+     * body [JOINED_LEADER_FACE_INSET_PT] in from the face it shares with the liner, so the bracket is
+     * short and the leader lands on drawn body — the run's centre is where its S-break gap sits.
+     * That point never passes the body's centre and keeps [ANCHOR_END_INSET_PT] off both ends. Then
+     * halfway between it and the centre, then the centre, so the bracket lengthens only to clear a
+     * collision.
+     */
+    private fun secondStandsFor(call: DiaCallout, centre: Float): List<Float> {
+        val start = call.secondSpanStartMm
+        val end = call.secondSpanEndMm
+        if (start == null || end == null) return listOf(centre)
+        val a = pageX(start)
+        val b = pageX(end)
+        val lo = minOf(a, b) + ANCHOR_END_INSET_PT
+        val hi = maxOf(a, b) - ANCHOR_END_INSET_PT
+        if (lo >= hi) return listOf(centre)
+        // The shared face is the body end on the liner's side.
+        val faceX = pageX(if (call.xMm >= (call.secondXMm ?: call.xMm)) end else start)
+        val preferred = if (centre >= faceX) {
+            minOf(faceX + JOINED_LEADER_FACE_INSET_PT, centre)
+        } else {
+            maxOf(faceX - JOINED_LEADER_FACE_INSET_PT, centre)
+        }.coerceIn(lo, hi)
+        return listOf(preferred, (preferred + centre) * 0.5f, centre).distinct()
+    }
+
     /** Where a BELOW leader leaves from: its feature's outline when it has one, else the shaft's bottom edge. */
     private fun belowStartYFor(call: DiaCallout): Float = call.anchorYPt ?: shaftBottomY
 
@@ -94,9 +126,12 @@ class DiameterLeaderRenderer(
             items = below.map { call ->
                 val anchor = anchorXFor(call)
                 val (lo, hi) = anchorRangeFor(call, anchor)
+                val seconds = call.secondXMm?.let { secondStandsFor(call, pageX(it)) }.orEmpty()
                 DiameterCalloutLayout.Item(
                     anchor, labelWidth(call), feature = call.anchorXPt != null,
                     anchorMin = lo, anchorMax = hi,
+                    secondAnchorX = seconds.firstOrNull(),
+                    secondAlternatives = seconds.drop(1),
                 )
             },
             dogleg = leaderDogleg,
@@ -129,7 +164,8 @@ class DiameterLeaderRenderer(
         val below = calls.filter { it.side == LeaderSide.BELOW }
         val placements = belowPlacements(below)
         below.forEachIndexed { i, call ->
-            drawOne(canvas, call, placements[i].tier, placements[i].labelLeft, placements[i].anchorX)
+            val p = placements[i]
+            drawOne(canvas, call, p.tier, p.labelLeft, p.anchorX, p.secondAnchorX)
         }
 
         calls.filter { it.side == LeaderSide.ABOVE }
@@ -162,7 +198,11 @@ class DiameterLeaderRenderer(
 
         return buildList {
             below.forEachIndexed { i, call ->
+                // A two-leader callout's leaders stand over [lo, hi]; one leader is lo == hi.
                 val x = placements[i].anchorX
+                val second = placements[i].secondAnchorX
+                val lo = if (second == null) x else minOf(x, second)
+                val hi = if (second == null) x else maxOf(x, second)
                 val kinkY = shaftBottomY + leaderRise + placements[i].tier * tierStep
                 val textY = kinkY + textDrop
                 val textLeft = placements[i].labelLeft
@@ -175,11 +215,12 @@ class DiameterLeaderRenderer(
                         bottom = textY - above + textH,
                     )
                 )
-                // Leader: the vertical drop from the shaft plus the horizontal dogleg into the text.
+                // Leader: the vertical drop(s) from the shaft plus the horizontal dogleg into the
+                // text — for two leaders the line joining them too, and the room between them.
                 add(
                     BelowShaftLabelLayout.Box(
-                        left = minOf(x - LEADER_HALF_W, textRight),
-                        right = maxOf(textLeft, x + LEADER_HALF_W),
+                        left = minOf(lo - LEADER_HALF_W, textRight),
+                        right = maxOf(textLeft, hi + LEADER_HALF_W),
                         top = belowStartYFor(call),
                         bottom = kinkY + LEADER_HALF_W,
                     )
@@ -209,7 +250,7 @@ class DiameterLeaderRenderer(
         textPaint.measureDualLabel(label(call), dualStacked) +
             if (blankValues) 4f + blankRuleWidth else 0f
 
-    private fun drawOne(canvas: Canvas, call: DiaCallout, tier: Int, textX: Float, x: Float) {
+    private fun drawOne(canvas: Canvas, call: DiaCallout, tier: Int, textX: Float, x: Float, second: Float? = null) {
         val (startY, kinkY, textY) = when (call.side) {
             LeaderSide.ABOVE -> {
                 val s = shaftTopY
@@ -225,10 +266,20 @@ class DiameterLeaderRenderer(
         }
         // The dogleg runs to the label's NEAR edge — its left edge normally, its right edge when
         // the label hangs left of the leader.
-        val doglegEnd = if (textX >= x) textX else textX + labelWidth(call)
-
-        canvas.drawLine(x, startY, x, kinkY, linePaint)
-        canvas.drawLine(x, kinkY, doglegEnd, kinkY, linePaint)
+        if (second == null) {
+            val doglegEnd = if (textX >= x) textX else textX + labelWidth(call)
+            canvas.drawLine(x, startY, x, kinkY, linePaint)
+            canvas.drawLine(x, kinkY, doglegEnd, kinkY, linePaint)
+        } else {
+            // Two leaders drop to the same row; one line runs from the FAR leader through the near
+            // one to the label's near edge, joining them.
+            val lo = minOf(x, second)
+            val hi = maxOf(x, second)
+            val nearEdge = if (textX >= hi) textX else textX + labelWidth(call)
+            canvas.drawLine(x, startY, x, kinkY, linePaint)
+            canvas.drawLine(second, shaftBottomY, second, kinkY, linePaint)
+            canvas.drawLine(minOf(lo, nearEdge), kinkY, maxOf(hi, nearEdge), kinkY, linePaint)
+        }
 
         val lbl = label(call)
         canvas.drawDualLabel(lbl, textX, textY, textPaint, dualStacked)
@@ -268,6 +319,9 @@ fun blendAngleRadiusCalloutLabel(angleDeg: Float, radiusMm: Double, unit: UnitSy
 
 /** How far inside its component's ends a slid Ø leader stays. */
 private const val ANCHOR_END_INSET_PT = 6f
+
+/** How far in from the face it shares with its liner a joined callout's body leader prefers to stand. */
+private const val JOINED_LEADER_FACE_INSET_PT = 14f
 
 /** Half-width reserved around a leader line, so a neighbouring label clears the stroke itself. */
 private const val LEADER_HALF_W = 1f
