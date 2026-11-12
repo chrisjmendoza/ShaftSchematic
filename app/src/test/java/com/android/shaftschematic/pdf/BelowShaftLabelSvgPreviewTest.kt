@@ -77,7 +77,7 @@ class BelowShaftLabelSvgPreviewTest {
         val ptPerMm = widthPt / spec.overallLengthMm
         val xAt = { mm: Float -> rect.left + mm * ptPerMm }
 
-        val calls: List<DiaCallout> = buildBodyOdCallouts(spec.bodies) + buildLinerOdCallouts(spec.liners)
+        val calls: List<DiaCallout> = joinSharedOdCallouts(spec.bodies, spec.liners)
         val leaderText = leaderPaint()
         val leader = DiameterLeaderRenderer(
             pageX = { mm -> xAt(mm.toFloat()) },

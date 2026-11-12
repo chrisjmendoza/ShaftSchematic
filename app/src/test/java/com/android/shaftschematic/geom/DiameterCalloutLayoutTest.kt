@@ -301,6 +301,95 @@ class DiameterCalloutLayoutTest {
         assertClear(items, p)
     }
 
+    // ── Two leaders: a liner and the body touching it share one value ───────────────────────────
+
+    private fun joined(anchor: Float, second: Float, width: Float, alternatives: List<Float> = emptyList()) =
+        DiameterCalloutLayout.Item(anchor, width, secondAnchorX = second, secondAlternatives = alternatives)
+
+    @Test
+    fun `a two-leader value hangs past its outer leader`() {
+        val p = place(joined(anchor = 200f, second = 100f, width = 40f)).single()
+        assertEquals(DiameterCalloutLayout.Placement(0, 214f, 200f, secondAnchorX = 100f), p)
+        // Pushed left by the content edge, it hangs past the LEFTMOST leader instead.
+        val left = DiameterCalloutLayout.place(
+            listOf(joined(anchor = 200f, second = 100f, width = 40f)), dogleg = 14f, contentRight = 240f,
+        ).single()
+        assertEquals(100f - 14f - 40f, left.labelLeft, 1e-4f)
+    }
+
+    @Test
+    fun `a two-leader callout's box spans both leaders`() {
+        // A value at 154..174 sits between the leaders at 100 and 200. One leader at 200 would
+        // clear it on row 0; the joining line from 100 cannot, so the shared value takes row 1,
+        // where neither of its leaders crosses that value.
+        val items = listOf(item(140f, 20f, feature = true), joined(anchor = 200f, second = 100f, width = 40f))
+        val p = place(*items.toTypedArray())
+        assertEquals(0, p[0].tier)
+        assertEquals(1, p[1].tier)
+        assertClearBoth(items, p)
+    }
+
+    @Test
+    fun `no other leader drops between the two leaders on a deeper row`() {
+        // The shared value's leaders stand at 0 and 100; a leader at 50 would cross its joining
+        // line from any row below. The shared value is placed first (row 0), which leaves the single
+        // one no clear spot; arranged together, the single value takes row 0 and the shared one
+        // drops beneath it, both leaders clear of the single value's 50..84.
+        val items = listOf(joined(anchor = 0f, second = 100f, width = 40f), item(50f, 20f))
+        val p = place(*items.toTypedArray())
+        assertEquals(1, p[0].tier)
+        assertEquals(0, p[1].tier)
+        assertClearBoth(items, p)
+    }
+
+    @Test
+    fun `a deeper two-leader value never drops its second leader through a shallower value`() {
+        // The single value hangs at 64..104 on row 0; the shared value's second leader is pinned at
+        // 80, under it. The shared value takes row 0 instead and the single one drops beneath,
+        // its leader (50) clear of the shared box 80..254.
+        val items = listOf(item(50f, 40f), joined(anchor = 200f, second = 80f, width = 40f))
+        val p = place(*items.toTypedArray())
+        assertEquals(1, p[0].tier)
+        assertEquals(0, p[1].tier)
+        assertClearBoth(items, p)
+    }
+
+    @Test
+    fun `a second leader falls back to its alternatives in order to clear a value`() {
+        // Same crowd, but the second leader may fall back to 120, then 160. Its preferred stand (80)
+        // is blocked; the first alternative that clears (120) is taken, and both values keep row 0.
+        val items = listOf(item(50f, 40f), joined(anchor = 200f, second = 80f, width = 40f, alternatives = listOf(120f, 160f)))
+        val p = place(*items.toTypedArray())
+        assertEquals(listOf(0, 0), p.map { it.tier })
+        assertEquals(120f, p[1].secondAnchorX!!, 1e-4f)
+        assertClearBoth(items, p)
+    }
+
+    @Test
+    fun `a second leader with room at its preferred stand does not move`() {
+        val p = place(joined(anchor = 200f, second = 170f, width = 40f, alternatives = listOf(120f, 80f))).single()
+        assertEquals(DiameterCalloutLayout.Placement(0, 214f, 200f, secondAnchorX = 170f), p)
+    }
+
+    /** [assertClear] with every leader counted, and a two-leader box spanning both leaders. */
+    private fun assertClearBoth(items: List<DiameterCalloutLayout.Item>, p: List<DiameterCalloutLayout.Placement>) {
+        val gap = DiameterCalloutLayout.MIN_GAP
+        fun leaders(i: Int) = listOfNotNull(p[i].anchorX, p[i].secondAnchorX)
+        fun left(i: Int) = minOf(leaders(i).min(), p[i].labelLeft)
+        fun right(i: Int) = maxOf(leaders(i).max(), p[i].labelLeft + items[i].labelWidth)
+        for (i in items.indices) for (j in items.indices) {
+            if (i == j) continue
+            if (p[i].tier == p[j].tier && i < j) {
+                assertTrue("values $i and $j overlap: $p", right(i) + gap <= left(j) || right(j) + gap <= left(i))
+            }
+            if (p[i].tier > p[j].tier) {
+                for (x in leaders(i)) {
+                    assertTrue("leader $i through value $j: $p", x <= left(j) - gap || x >= right(j) + gap)
+                }
+            }
+        }
+    }
+
     /** No value on another on its row, and no leader through a value on a row above it. */
     private fun assertClear(items: List<DiameterCalloutLayout.Item>, p: List<DiameterCalloutLayout.Placement>) {
         val gap = DiameterCalloutLayout.MIN_GAP

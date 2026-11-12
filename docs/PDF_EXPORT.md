@@ -1,6 +1,8 @@
 # PDF Export Specification
 Version: v0.5.x
-Last updated: 2026-11-09 — §5.3: an Angle-mode body blend prints its STORED angle (`45°`) and
+Last updated: 2026-11-11 — §5.3: a liner and a shown body touching it at the same Ø print the
+value once with a leader to each (`joinSharedOdCallouts`, on-device request).
+2026-11-09 — §5.3: an Angle-mode body blend prints its STORED angle (`45°`) and
 corner radius (`3/8" R`) as below-shaft leader callouts on the schematic, in the same pass and
 collision space as the Ø values (on-device request: "some blends have expressions in degrees").
 2026-10-03 — §5.5/§5.6: both PDF options sheets group their controls into
@@ -523,8 +525,26 @@ they are now all-BELOW, same as liners.
 
 - **Grouping:** one callout per unique OD, anchored at the horizontal center of the
   *longest* segment carrying that OD. Bodies group by `Body.diaMm`; liners group by
-  `Liner.odMm`. Bodies and liners are **separate groups** — a liner OD is never merged
-  with a body OD even when the values match numerically.
+  `Liner.odMm`. Bodies and liners are **separate groups** — a liner OD is never silently
+  merged with a body OD even when the values match numerically.
+- **One value, two leaders, where a liner meets its own Ø:** a liner and a shown body TOUCHING
+  it at the same Ø (within 0.001 mm, body end = liner start or body start = liner end within
+  0.01 mm, both resolving to the same display unit) print the value ONCE, with a leader to each
+  (on-device request: a 9.750" liner beside 9.750" bare shaft printed `Ø 9.750"` twice in the most
+  crowded stretch of the sheet). ONE function decides it, `joinSharedOdCallouts`
+  (`ShaftPdfComposer.kt`, called by the composer in place of the two builders): of several
+  touching pairs the longest liner wins, then the longest body; the joined callout takes the liner
+  group's place and the body group's callout is dropped. Its first leader is the liner (centre +
+  span), its second the body (`DiaCallout.secondXMm` + `secondSpanStartMm`/`secondSpanEndMm`).
+  Both leaders drop to the same row, one line joins them, and the value hangs past the OUTER
+  leader. `DiameterCalloutLayout.place` treats the pair as one box on its row (leftmost leader or
+  label edge to rightmost), so the joining line is an obstacle like a value, and checks BOTH
+  leaders against every value above. The body's leader prefers to stand 14 pt in from the face it
+  shares with the liner (never past the body's centre, never within 6 pt of either end), so the
+  bracket is short and the leader lands on drawn body rather than in the run's S-break gap; it
+  falls back to halfway toward the centre, then the centre, only to clear a collision. Only a
+  body joins a liner — never two
+  liners or two bodies — and a sheet with no touching equal pair prints exactly as before.
 - **Formatting:** labels use `formatDiaWithUnit` (inches: whole numbers print bare, any other value prints 3 decimals — `11"`, `10.990"` — or 4 when it is exactly an odd sixteenth, `10.9375"`, through `LengthFormat.formatInchesDecimal`, on-device ruling: a fraction whose decimal ends in the fourth place prints exactly; mm stays compact 1-decimal),
   the same convention as the footer's "Ø" text — not the old raw 4-decimal formatting.
   **One exception:** the footer's `Thread:` line prints the thread's major Ø through

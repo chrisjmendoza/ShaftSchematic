@@ -42,6 +42,17 @@ data class DiaCallout(
      */
     val spanStartMm: Double? = null,
     val spanEndMm: Double? = null,
+    /**
+     * A SECOND leader, for one value that belongs to two components: a liner and the shown body
+     * touching it at the same Ø print the value once with a leader to each (on-device request —
+     * `joinSharedOdCallouts`). Both leaders drop to the same row, a line on that row joins them,
+     * and the value hangs past the outer one. [secondXMm] is the second component's centre and
+     * [secondSpanStartMm]/[secondSpanEndMm] its axial span; the renderer stands that leader near the
+     * face it shares with the first component. Null (the default) = one leader.
+     */
+    val secondXMm: Double? = null,
+    val secondSpanStartMm: Double? = null,
+    val secondSpanEndMm: Double? = null,
 )
 
 enum class LeaderSide { ABOVE, BELOW }

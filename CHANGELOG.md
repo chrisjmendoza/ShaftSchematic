@@ -8,6 +8,21 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-11
 
+### feat(pdf): a liner and the body beside it share one Ø callout
+
+When a liner and a shown body touching it have the same diameter — a 9.750" liner beside 9.750"
+bare shaft — the schematic printed `Ø 9.750"` twice in the most crowded stretch of the sheet. It
+now prints the value once with a leader to each: both leaders drop to the same row, a line joins
+them, and the value hangs past the outer leader (on-device request). The body's leader stands just
+inside the face it shares with the liner, so the bracket is short and never drops from an S-break
+gap; it moves toward the body's centre only to clear another callout. ONE function decides the
+join, `joinSharedOdCallouts` (`ShaftPdfComposer.kt`): equal Ø within 0.001 mm, the same display
+unit, and a body end on a liner end; of several touching pairs the longest liner wins, then the
+longest body. `DiameterCalloutLayout.place` treats the pair as one box on its row and checks both
+leaders against every value, so no leader drops through a value and nothing sets a value between
+the two leaders. Only a body joins a liner; a sheet with no touching equal pair prints exactly as
+before, blank drafts included (one `Ø ____` with two leaders).
+
 ### feat(editor): Preview options open from the preview itself
 
 The preview box now carries a settings button in its top-left corner (the mirror of the reset-view

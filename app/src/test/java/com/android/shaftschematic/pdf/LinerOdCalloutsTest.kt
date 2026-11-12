@@ -3,7 +3,10 @@ package com.android.shaftschematic.pdf
 import com.android.shaftschematic.model.Body
 import com.android.shaftschematic.model.Liner
 import com.android.shaftschematic.pdf.notes.LeaderSide
+import com.android.shaftschematic.util.DisplayUnits
+import com.android.shaftschematic.util.UnitSystem
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -109,5 +112,101 @@ class LinerOdCalloutsTest {
     @Test
     fun `liners are visible by default`() {
         assertTrue(Liner().showDiaOnDrawing)
+    }
+
+    // ── joinSharedOdCallouts: a liner and a touching body of its Ø share ONE value ──────────
+
+    private fun body(id: String, start: Float, len: Float, dia: Float, shown: Boolean = true) =
+        Body(id = id, startFromAftMm = start, lengthMm = len, diaMm = dia, showDiaOnDrawing = shown)
+
+    private fun liner(id: String, start: Float, len: Float, od: Float) =
+        Liner(id = id, startFromAftMm = start, lengthMm = len, odMm = od)
+
+    @Test
+    fun `a liner and a touching body of the same diameter print one value with two leaders`() {
+        val bodies = listOf(body("b", 0f, 400f, 247.65f), body("c", 600f, 300f, 200f))
+        val liners = listOf(liner("l", 400f, 200f, 247.65f))
+
+        val calls = joinSharedOdCallouts(bodies, liners)
+
+        assertEquals("the 200 body keeps its own callout; the shared Ø prints once", 2, calls.size)
+        val joined = calls.single { it.valueMm == 247.65f.toDouble() }
+        // First leader: the liner (centre + span), as the liner builder sets it.
+        assertEquals(500.0, joined.xMm, 0.001)
+        assertEquals(400.0, joined.spanStartMm!!, 0.001)
+        assertEquals(600.0, joined.spanEndMm!!, 0.001)
+        // Second leader: the touching body.
+        assertEquals(200.0, joined.secondXMm!!, 0.001)
+        assertEquals(0.0, joined.secondSpanStartMm!!, 0.001)
+        assertEquals(400.0, joined.secondSpanEndMm!!, 0.001)
+        assertEquals(LeaderSide.BELOW, joined.side)
+        assertNull(calls.single { it.valueMm == 200.0 }.secondXMm)
+    }
+
+    @Test
+    fun `a body touching the liner's FWD end joins too, and the longest pair wins`() {
+        val bodies = listOf(body("short", 600f, 50f, 247.65f), body("long", 900f, 500f, 247.65f))
+        val liners = listOf(liner("l1", 400f, 200f, 247.65f), liner("l2", 1400f, 300f, 247.65f))
+
+        val joined = joinSharedOdCallouts(bodies, liners).single()
+
+        // l2 (300 long) touches "long" at 1400; l1 (200) only touches "short". The longest liner wins.
+        assertEquals(1550.0, joined.xMm, 0.001)
+        assertEquals(1150.0, joined.secondXMm!!, 0.001)
+    }
+
+    @Test
+    fun `equal diameters that do not touch keep two callouts as before`() {
+        val bodies = listOf(body("b", 0f, 300f, 127f))
+        val liners = listOf(liner("l", 400f, 200f, 127f))
+
+        assertEquals(
+            buildBodyOdCallouts(bodies) + buildLinerOdCallouts(liners),
+            joinSharedOdCallouts(bodies, liners),
+        )
+    }
+
+    @Test
+    fun `different display units keep two callouts`() {
+        val bodies = listOf(body("b", 0f, 400f, 127f))
+        val liners = listOf(liner("l", 400f, 200f, 127f))
+        val units = DisplayUnits(UnitSystem.INCHES, overrides = mapOf("l" to UnitSystem.MILLIMETERS))
+
+        val calls = joinSharedOdCallouts(bodies, liners, units)
+
+        assertEquals(2, calls.size)
+        assertTrue(calls.all { it.secondXMm == null })
+    }
+
+    @Test
+    fun `a hidden body leaves the liner's callout alone with one leader`() {
+        val bodies = listOf(body("b", 0f, 400f, 127f, shown = false))
+        val liners = listOf(liner("l", 400f, 200f, 127f))
+
+        val calls = joinSharedOdCallouts(bodies, liners)
+
+        assertEquals(1, calls.size)
+        assertEquals(500.0, calls[0].xMm, 0.001)
+        assertNull(calls[0].secondXMm)
+    }
+
+    @Test
+    fun `with no equal pair the list is the two builders' list unchanged`() {
+        val bodies = listOf(body("b1", 0f, 400f, 190f), body("b2", 600f, 300f, 180f))
+        val liners = listOf(liner("l1", 400f, 200f, 201.6f), liner("l2", 900f, 100f, 203.2f))
+
+        assertEquals(
+            buildBodyOdCallouts(bodies) + buildLinerOdCallouts(liners),
+            joinSharedOdCallouts(bodies, liners),
+        )
+    }
+
+    @Test
+    fun `two liners or two bodies of one diameter never join each other`() {
+        val liners = listOf(liner("l1", 0f, 200f, 127f), liner("l2", 200f, 200f, 127f))
+        val bodies = listOf(body("b1", 0f, 200f, 127f), body("b2", 200f, 200f, 127f))
+
+        assertTrue(joinSharedOdCallouts(emptyList(), liners).all { it.secondXMm == null })
+        assertTrue(joinSharedOdCallouts(bodies, emptyList()).all { it.secondXMm == null })
     }
 }
