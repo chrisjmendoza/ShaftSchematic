@@ -85,14 +85,12 @@ fun buildLinerSpans(
  * are unaffected.
  */
 fun oalSpan(x1Mm: Double, x2Mm: Double, unit: UnitSystem, labelMm: Double = x2Mm - x1Mm, dual: Boolean = false): DimSpan {
-    // Printed spans keep the small "OAL" prefix as a visual identifier (product decision);
-    // blank drafts never see it — the renderer cuts an empty break and drops label text.
-    val value = formatLenDimDualLabel(labelMm, unit, dual)
+    // The value prints bare, like every other dimension: the top end-to-end rail is the overall
+    // length by its position, the way a hand drawing shows it (on-device ruling). Do not add an
+    // "OAL" prefix.
     return DimSpan(
         x1Mm, x2Mm,
-        // The "OAL" identifier rides the PRIMARY term, so a stacked label reads
-        // `OAL 133"` over `3378.2 mm` rather than repeating the prefix.
-        label = value.copy(primary = "OAL ${value.primary}"),
+        label = formatLenDimDualLabel(labelMm, unit, dual),
         kind = SpanKind.OAL,
     )
 }

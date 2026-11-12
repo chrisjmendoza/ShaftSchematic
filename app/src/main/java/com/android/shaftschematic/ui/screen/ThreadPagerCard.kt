@@ -40,6 +40,8 @@ import com.android.shaftschematic.util.parseFractionOrDecimal
 import com.android.shaftschematic.util.ThreadDesignation
 import com.android.shaftschematic.util.toMmOrNull
 import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.ui.theme.strongChipContainer
+import com.android.shaftschematic.ui.theme.strongChipLabel
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ThreadPagerCard — the `ResolvedThread` arm of [ComponentPagerCard]
@@ -153,17 +155,17 @@ internal fun ThreadPagerCard(
                 Text("Thread end:", style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 val chipColors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = Color.Black, selectedLabelColor = Color.White,
+                    selectedContainerColor = strongChipContainer(), selectedLabelColor = strongChipLabel(),
                     containerColor = Color.Transparent, labelColor = MaterialTheme.colorScheme.onSurface
                 )
                 FilterChip(selected = th.isAftEnd,
                     onClick = { onSetThreadEndPosition(th.id, true) },
                     label = { ChipLabel("AFT") }, colors = chipColors,
-                    border = if (th.isAftEnd) BorderStroke(1.dp, Color.Black) else null)
+                    border = if (th.isAftEnd) BorderStroke(1.dp, strongChipContainer()) else null)
                 FilterChip(selected = !th.isAftEnd,
                     onClick = { onSetThreadEndPosition(th.id, false) },
                     label = { ChipLabel("FWD") }, colors = chipColors,
-                    border = if (!th.isAftEnd) BorderStroke(1.dp, Color.Black) else null)
+                    border = if (!th.isAftEnd) BorderStroke(1.dp, strongChipContainer()) else null)
             }
         } else {
             CommitNum("Start (${abbr(unit)})", disp(th.startFromAftMm, unit), validator = startValidator(th.id, ComponentKind.THREAD, th.lengthMm)) { s ->

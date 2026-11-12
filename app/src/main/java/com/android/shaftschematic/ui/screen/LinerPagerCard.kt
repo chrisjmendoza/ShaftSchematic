@@ -30,6 +30,8 @@ import com.android.shaftschematic.ui.util.spanOverlapErrorMm
 import com.android.shaftschematic.ui.util.startOverlapErrorMm
 import com.android.shaftschematic.util.toMmOrNull
 import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.ui.theme.strongChipContainer
+import com.android.shaftschematic.ui.theme.strongChipLabel
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LinerPagerCard — the `ResolvedLiner` arm of [ComponentPagerCard]
@@ -109,15 +111,15 @@ internal fun LinerPagerCard(
         ChipFlowRow(Modifier.fillMaxWidth()) {
             Text("Measure From:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             val selectedColors = FilterChipDefaults.filterChipColors(
-                selectedContainerColor = Color.Black, selectedLabelColor = Color.White,
+                selectedContainerColor = strongChipContainer(), selectedLabelColor = strongChipLabel(),
                 containerColor = Color.Transparent, labelColor = MaterialTheme.colorScheme.onSurface
             )
             FilterChip(selected = !isFwdRef, onClick = { onUpdateLinerReference(idx, LinerAuthoredReference.AFT) },
                 label = { ChipLabel("AFT") }, colors = selectedColors,
-                border = if (!isFwdRef) BorderStroke(1.dp, Color.Black) else null)
+                border = if (!isFwdRef) BorderStroke(1.dp, strongChipContainer()) else null)
             FilterChip(selected = isFwdRef, onClick = { onUpdateLinerReference(idx, LinerAuthoredReference.FWD) },
                 label = { ChipLabel("FWD") }, colors = selectedColors,
-                border = if (isFwdRef) BorderStroke(1.dp, Color.Black) else null)
+                border = if (isFwdRef) BorderStroke(1.dp, strongChipContainer()) else null)
         }
 
         FieldPair(

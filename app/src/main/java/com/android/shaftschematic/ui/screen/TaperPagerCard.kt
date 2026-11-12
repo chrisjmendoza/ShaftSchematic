@@ -52,6 +52,8 @@ import com.android.shaftschematic.util.manualTaperRateWarning
 import com.android.shaftschematic.util.isAmbiguousTaperRateText
 import com.android.shaftschematic.util.parseTaperRateText
 import com.android.shaftschematic.util.toMmOrNull
+import com.android.shaftschematic.ui.theme.strongChipContainer
+import com.android.shaftschematic.ui.theme.strongChipLabel
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TaperPagerCard — the `ResolvedTaper` arm of [ComponentPagerCard]
@@ -193,8 +195,8 @@ internal fun TaperPagerCard(
         }
 
         val selectedColors = FilterChipDefaults.filterChipColors(
-            selectedContainerColor = Color.Black,
-            selectedLabelColor = Color.White,
+            selectedContainerColor = strongChipContainer(),
+            selectedLabelColor = strongChipLabel(),
             containerColor = Color.Transparent,
             labelColor = MaterialTheme.colorScheme.onSurface
         )
@@ -204,10 +206,10 @@ internal fun TaperPagerCard(
             Text("Measure From:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             FilterChip(selected = !isFwdRef, onClick = { onUpdateTaperReference(idx, LinerAuthoredReference.AFT) },
                 label = { ChipLabel("AFT") }, colors = selectedColors,
-                border = if (!isFwdRef) BorderStroke(1.dp, Color.Black) else null)
+                border = if (!isFwdRef) BorderStroke(1.dp, strongChipContainer()) else null)
             FilterChip(selected = isFwdRef, onClick = { onUpdateTaperReference(idx, LinerAuthoredReference.FWD) },
                 label = { ChipLabel("FWD") }, colors = selectedColors,
-                border = if (isFwdRef) BorderStroke(1.dp, Color.Black) else null)
+                border = if (isFwdRef) BorderStroke(1.dp, strongChipContainer()) else null)
         }
 
         FieldPair(
@@ -270,14 +272,14 @@ internal fun TaperPagerCard(
                 onUpdateTaperRateMode(idx, false, computedRateText)
             },
                 label = { ChipLabel("Auto") }, colors = selectedColors,
-                border = if (autoRate) BorderStroke(1.dp, Color.Black) else null)
+                border = if (autoRate) BorderStroke(1.dp, strongChipContainer()) else null)
             FilterChip(selected = !autoRate, onClick = {
                 autoRate = false
                 // Stored, so a typed rate survives a reopen and the next Length edit.
                 onUpdateTaperRateMode(idx, true, null)
             },
                 label = { ChipLabel("Manual") }, colors = selectedColors,
-                border = if (!autoRate) BorderStroke(1.dp, Color.Black) else null)
+                border = if (!autoRate) BorderStroke(1.dp, strongChipContainer()) else null)
         }
         if (unit == UnitSystem.INCHES) {
             TaperRateEntryChips(entry = rateEntry, onSelect = { rateEntryChoice = it }, tagPrefix = "taper_card")

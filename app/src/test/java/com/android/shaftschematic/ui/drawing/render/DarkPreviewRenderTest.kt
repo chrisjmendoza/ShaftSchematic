@@ -30,6 +30,7 @@ import com.android.shaftschematic.util.PreviewColorPreset
 import com.android.shaftschematic.util.PreviewColorRole
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.isDarkPreviewGround
+import com.android.shaftschematic.util.previewShaftGrey
 import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -51,7 +52,7 @@ import java.io.FileOutputStream
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class DarkPreviewRenderTest {
 
-    private class Ink(val bg: Color, val outline: Color, val taper: Color, val liner: Color)
+    private class Ink(val bg: Color, val outline: Color, val taper: Color, val liner: Color, val base: Color = Color.Transparent)
 
     private fun current(scheme: ColorScheme): Ink {
         val dark = scheme.isDarkPreviewGround()
@@ -61,6 +62,7 @@ class DarkPreviewRenderTest {
             outline = res(PreviewColorPreset.STEEL),
             taper = res(PreviewColorPreset.STEEL).copy(alpha = PreviewColorPreset.STEEL.fillAlpha(dark, 0.14f)),
             liner = res(PreviewColorPreset.BRONZE).copy(alpha = PreviewColorPreset.BRONZE.fillAlpha(dark, 0.16f)),
+            base = scheme.previewShaftGrey() ?: Color.Transparent,
         )
     }
 
@@ -128,6 +130,7 @@ class DarkPreviewRenderTest {
             threadHatchColor = ink.outline.toArgb(),
             shadedComponentIds = shaded,
             fillFollowsShade = true,
+            baseFillColor = ink.base.toArgb(),
             showDimensionRails = true,
             highlightEnabled = false,
         )

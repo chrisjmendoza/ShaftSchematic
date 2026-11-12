@@ -54,6 +54,8 @@ import com.android.shaftschematic.ui.util.startOverlapErrorMm
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.toMmOrNull
 import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.ui.theme.strongChipContainer
+import com.android.shaftschematic.ui.theme.strongChipLabel
 
 // ─────────────────────────────────────────────────────────────────────────────
 // BodyPagerCard — the `ResolvedBody` arm of [ComponentPagerCard]
@@ -525,16 +527,16 @@ internal fun BodyPagerCard(
         ChipFlowRow(Modifier.fillMaxWidth()) {
             Text("Measure From:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             val selectedColors = FilterChipDefaults.filterChipColors(
-                selectedContainerColor = Color.Black, selectedLabelColor = Color.White,
+                selectedContainerColor = strongChipContainer(), selectedLabelColor = strongChipLabel(),
                 containerColor = Color.Transparent, labelColor = MaterialTheme.colorScheme.onSurface
             )
             FilterChip(selected = !isFwdRef, onClick = { onUpdateBodyReference(idx, LinerAuthoredReference.AFT) },
                 label = { ChipLabel("AFT") }, colors = selectedColors,
-                border = if (!isFwdRef) BorderStroke(1.dp, Color.Black) else null,
+                border = if (!isFwdRef) BorderStroke(1.dp, strongChipContainer()) else null,
                 modifier = Modifier.testTag("body_ref_aft"))
             FilterChip(selected = isFwdRef, onClick = { onUpdateBodyReference(idx, LinerAuthoredReference.FWD) },
                 label = { ChipLabel("FWD") }, colors = selectedColors,
-                border = if (isFwdRef) BorderStroke(1.dp, Color.Black) else null,
+                border = if (isFwdRef) BorderStroke(1.dp, strongChipContainer()) else null,
                 modifier = Modifier.testTag("body_ref_fwd"))
         }
         FieldPair(
@@ -804,8 +806,8 @@ internal fun BodyPagerCard(
 
         if (kwOpen) {
             val kwSelectedColors = FilterChipDefaults.filterChipColors(
-                selectedContainerColor = Color.Black,
-                selectedLabelColor = Color.White,
+                selectedContainerColor = strongChipContainer(),
+                selectedLabelColor = strongChipLabel(),
                 containerColor = Color.Transparent,
                 labelColor = MaterialTheme.colorScheme.onSurface
             )
@@ -831,11 +833,11 @@ internal fun BodyPagerCard(
                 FilterChip(selected = !isKwFwd,
                     onClick = { setKwEnd(LinerAuthoredReference.AFT) },
                     label = { ChipLabel("AFT") }, colors = kwSelectedColors,
-                    border = if (!isKwFwd) BorderStroke(1.dp, Color.Black) else null)
+                    border = if (!isKwFwd) BorderStroke(1.dp, strongChipContainer()) else null)
                 FilterChip(selected = isKwFwd,
                     onClick = { setKwEnd(LinerAuthoredReference.FWD) },
                     label = { ChipLabel("FWD") }, colors = kwSelectedColors,
-                    border = if (isKwFwd) BorderStroke(1.dp, Color.Black) else null)
+                    border = if (isKwFwd) BorderStroke(1.dp, strongChipContainer()) else null)
             }
             // The keyway's own unit: European stock is metric on an otherwise imperial
             // shaft, so these four fields are entered AND printed in `kwUnit`, which falls

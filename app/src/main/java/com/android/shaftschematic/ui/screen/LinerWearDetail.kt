@@ -154,6 +154,8 @@ import com.android.shaftschematic.util.isLengthText
 import com.android.shaftschematic.util.toMmOrNull
 import com.android.shaftschematic.util.valueForSave
 import kotlinx.coroutines.launch
+import com.android.shaftschematic.ui.theme.strongChipContainer
+import com.android.shaftschematic.ui.theme.strongChipLabel
 
 /**
  * ComponentWearDetail
@@ -1602,10 +1604,10 @@ internal fun WearChip(
         modifier = modifier,
         label = { ChipLabel(label) },
         colors = FilterChipDefaults.filterChipColors(
-            selectedContainerColor = Color.Black, selectedLabelColor = Color.White,
+            selectedContainerColor = strongChipContainer(), selectedLabelColor = strongChipLabel(),
             containerColor = Color.Transparent, labelColor = MaterialTheme.colorScheme.onSurface,
         ),
-        border = if (selected) BorderStroke(1.dp, Color.Black) else null,
+        border = if (selected) BorderStroke(1.dp, strongChipContainer()) else null,
     )
 }
 

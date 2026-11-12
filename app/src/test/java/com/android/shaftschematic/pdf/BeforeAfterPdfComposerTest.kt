@@ -248,7 +248,9 @@ class BeforeAfterPdfComposerTest {
         val divider = dividerY()
         val texts = beforeAfter().texts
 
-        val oal = texts.filter { it.text.startsWith("OAL") }
+        // The rail prints the bare value; both drawings share the document's OAL.
+        val oalText = formatLenDim(original.overallLengthMm.toDouble(), unit)
+        val oal = texts.filter { it.text == oalText }
         assertEquals("two OAL rails, one per drawing", 2, oal.size)
         assertEquals(1, oal.count { it.baselineY < divider })
         assertEquals(1, oal.count { it.baselineY > divider })

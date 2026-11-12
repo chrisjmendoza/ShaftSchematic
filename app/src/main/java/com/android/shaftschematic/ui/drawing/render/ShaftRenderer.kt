@@ -4,6 +4,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -169,10 +170,16 @@ object ShaftRenderer {
         val outline      = Color(opts.outlineColor)
         val outlineW     = opts.outlineWidthPx
         val dimW         = opts.dimLineWidthPx
+        // A base fill (dark-ground preview) sits under every kind: each kind fill is flattened
+        // over it once, here, so a component is still ONE fill draw.
+        val baseFill     = Color(opts.baseFillColor)
+        val hasBase      = baseFill.alpha > 0f
+        val voidC        = Color(opts.voidColor)
+        fun overBase(c: Color): Color = if (hasBase) c.compositeOver(baseFill) else c
         val bodyFill     = Color(opts.bodyFillColor)
         val taperFill    = Color(opts.taperFillColor)
         val linerFill    = Color(opts.linerFillColor)
-        val threadFill   = Color(opts.threadFillColor)
+        val threadFill   = overBase(Color(opts.threadFillColor))
         val flankColor   = Color(opts.threadHatchColor)
         val threadSlant  = opts.threadSlant
         val threadDensity = opts.threadDensity
@@ -182,7 +189,7 @@ object ShaftRenderer {
         val shadedIds    = opts.shadedComponentIds
         val fillGate     = opts.fillFollowsShade
         fun fillFor(id: String, kindFill: Color): Color =
-            if (!fillGate || id in shadedIds) kindFill else Color.Transparent
+            overBase(if (!fillGate || id in shadedIds) kindFill else Color.Transparent)
 
         // ───────── Highlight (resolved; no-ops if disabled) ─────────
         val hiEnabled  = opts.highlightEnabled
@@ -211,7 +218,8 @@ object ShaftRenderer {
                 sheet = sheet,
                 outline = outline,
                 outlineW = outlineW,
-                fill = bodyFill,
+                fill = overBase(bodyFill),
+                unfilledFill = baseFill,
                 unfilledIds = if (fillGate) {
                     resolvedBodies.map { it.id }.filterNot { it in shadedIds }.toSet()
                 } else {
@@ -306,9 +314,9 @@ object ShaftRenderer {
         for (b in spec.bodies) {
             if (!b.hasKeyway) continue
             if (silhouetteKeyways && b.id in secondaryKeywayIds) {
-                b.keywaySilhouetteNotch(clocking)?.let { drawKeywaySilhouetteNotch(it, L, outline, outlineW) }
+                b.keywaySilhouetteNotch(clocking)?.let { drawKeywaySilhouetteNotch(it, L, outline, outlineW, voidC) }
             } else {
-                drawKeywayNotchBody(b, L, outline, outlineW, hidden = b.id in hiddenKeywayIds)
+                drawKeywayNotchBody(b, L, outline, outlineW, hidden = b.id in hiddenKeywayIds, voidColor = voidC)
             }
         }
 
@@ -349,9 +357,9 @@ object ShaftRenderer {
                 if (modelTaper != null && modelTaper.hasKeyway) {
                     if (silhouetteKeyways && t.id in secondaryKeywayIds) {
                         modelTaper.keywaySilhouetteNotch(clocking)
-                            ?.let { drawKeywaySilhouetteNotch(it, L, outline, outlineW) }
+                            ?.let { drawKeywaySilhouetteNotch(it, L, outline, outlineW, voidC) }
                     } else {
-                        drawKeywayNotch(modelTaper, L, x0, x1, top0, top1, outline, outlineW, taperFill, hidden = t.id in hiddenKeywayIds)
+                        drawKeywayNotch(modelTaper, L, x0, x1, top0, top1, outline, outlineW, taperFill, hidden = t.id in hiddenKeywayIds, voidColor = voidC)
                     }
                 }
             }
@@ -386,9 +394,9 @@ object ShaftRenderer {
 
                 if (t.hasKeyway) {
                     if (silhouetteKeyways && t.id in secondaryKeywayIds) {
-                        t.keywaySilhouetteNotch(clocking)?.let { drawKeywaySilhouetteNotch(it, L, outline, outlineW) }
+                        t.keywaySilhouetteNotch(clocking)?.let { drawKeywaySilhouetteNotch(it, L, outline, outlineW, voidC) }
                     } else {
-                        drawKeywayNotch(t, L, x0, x1, top0, top1, outline, outlineW, taperFill, hidden = t.id in hiddenKeywayIds)
+                        drawKeywayNotch(t, L, x0, x1, top0, top1, outline, outlineW, taperFill, hidden = t.id in hiddenKeywayIds, voidColor = voidC)
                     }
                 }
             }
@@ -858,6 +866,7 @@ private fun DrawScope.drawKeywayNotch(
     outlineW: Float,
     @Suppress("UNUSED_PARAMETER") taperFill: Color,
     hidden: Boolean = false,
+    voidColor: Color = Color.White,
 ) {
     if (x1 == x0 || t.keywayWidthMm <= 0f) return
 
@@ -877,7 +886,7 @@ private fun DrawScope.drawKeywayNotch(
         // The taper's own drawn span: the sheet's map is linear across one taper.
         axialPxPerMm = if (L.sheet == null || t.lengthMm <= 0f) L.pxPerMm else abs(x1 - x0) / t.lengthMm,
         L = L, outline = outline, outlineW = outlineW, hidden = hidden,
-        spooned = t.keywaySpooned,
+        spooned = t.keywaySpooned, voidColor = voidColor,
     )
 }
 
@@ -892,6 +901,7 @@ private fun DrawScope.drawKeywayNotchBody(
     outline: Color,
     outlineW: Float,
     hidden: Boolean = false,
+    voidColor: Color = Color.White,
 ) {
     val x0 = L.xPx(b.startFromAftMm)
     val x1 = L.xPx(b.startFromAftMm + b.lengthMm)
@@ -926,7 +936,7 @@ private fun DrawScope.drawKeywayNotchBody(
         hostRadiusPx = L.rPx(b.diaMm),
         axialPxPerMm = axialPxPerMm,
         L = L, outline = outline, outlineW = outlineW, hidden = hidden,
-        spooned = b.keywaySpooned,
+        spooned = b.keywaySpooned, voidColor = voidColor,
     )
 }
 
@@ -954,6 +964,8 @@ private fun DrawScope.drawKeywaySlot(
     outlineW: Float,
     hidden: Boolean = false,
     spooned: Boolean = false,
+    /** What the cut-out shows through — white paper, or the preview's dark ground. */
+    voidColor: Color = Color.White,
 ) {
     val cy   = L.centerlineYPx
 
@@ -996,7 +1008,7 @@ private fun DrawScope.drawKeywaySlot(
     val lineLeft  = min(lineNear, lineFar)
     val lineRight = max(lineNear, lineFar)
 
-    // ── White fill (keyway is a void — always white regardless of taper colour) ──
+    // ── Void fill (keyway is a void — the ground shows through, whatever the taper colour) ──
     // Far-side (hidden) keyways are not cut into the near surface, so they get no fill.
     // For open keyways, inset the fill from the SET face by one line-width so the
     // taper's end-face line retains its full thickness under the fill.
@@ -1005,18 +1017,18 @@ private fun DrawScope.drawKeywaySlot(
         val fillLeft  = min(fillNear, letArcCx)
         val fillRight = max(fillNear, letArcCx)
         drawRect(
-            color = Color.White,
+            color = voidColor,
             topLeft = Offset(fillLeft, cy - halfH),
             size = androidx.compose.ui.geometry.Size(fillRight - fillLeft, halfH * 2f)
         )
         drawArc(
-            color = Color.White,
+            color = voidColor,
             startAngle = letArcStart, sweepAngle = 180f, useCenter = false,
             topLeft = Offset(letArcCx - halfW, cy - halfH), size = letArcBox
         )
         if (!isOpen) {
             drawArc(
-                color = Color.White,
+                color = voidColor,
                 startAngle = setArcStart, sweepAngle = 180f, useCenter = false,
                 topLeft = Offset(setArcCx - halfW, cy - halfH), size = letArcBox
             )
@@ -1024,7 +1036,7 @@ private fun DrawScope.drawKeywaySlot(
         // Spoon bowl void: the enlarged disc around the LET end (its SET-side overlaps the slot).
         if (bowl != null) {
             drawOval(
-                color = Color.White,
+                color = voidColor,
                 topLeft = Offset(bowl.cx - bowl.radius, cy - bowlRy),
                 size = androidx.compose.ui.geometry.Size(bowl.radius * 2f, bowlRy * 2f),
             )
@@ -1083,6 +1095,7 @@ private fun DrawScope.drawKeywaySilhouetteNotch(
     L: ShaftRenderer.Layout,
     outline: Color,
     outlineW: Float,
+    voidColor: Color = Color.White,
 ) {
     val cy = L.centerlineYPx
     fun y(radiusMm: Float) = notch.side.yFor(cy, radiusMm, L.pxPerMm)
@@ -1095,8 +1108,8 @@ private fun DrawScope.drawKeywaySilhouetteNotch(
         }
         close()
     }
-    // The keyway is a void — always white, regardless of the host's fill colour.
-    drawPath(path, color = Color.White)
+    // The keyway is a void — the ground shows through, regardless of the host's fill colour.
+    drawPath(path, color = voidColor)
 
     fun stroke(seg: Pair<KeywaySilhouettePoint, KeywaySilhouettePoint>) {
         val (a, b) = seg
@@ -1129,6 +1142,7 @@ private fun DrawScope.drawSheetBodyRuns(
     outline: Color,
     outlineW: Float,
     fill: Color,
+    unfilledFill: Color,
     unfilledIds: Set<String>,
     highlightId: String?,
     glowColor: Color,
@@ -1144,6 +1158,12 @@ private fun DrawScope.drawSheetBodyRuns(
         android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
             style = android.graphics.Paint.Style.FILL
             color = fill.toArgb()
+        }
+    } else null
+    val unfilledPaint = if (unfilledFill.alpha > 0f) {
+        android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            style = android.graphics.Paint.Style.FILL
+            color = unfilledFill.toArgb()
         }
     } else null
     val glowPaint = if (highlightId != null) {
@@ -1176,6 +1196,7 @@ private fun DrawScope.drawSheetBodyRuns(
             keywayAvoidSpansMm = bodyKeywayProtectedSpansMm(spec),
             boltRowAvoidSpansMm = boltRowProtectedSpansMm(spec),
             unfilledBodyIds = unfilledIds,
+            unfilledFill = unfilledPaint,
             underStroke = glowPaint,
             underStrokeIds = setOfNotNull(highlightId),
         )

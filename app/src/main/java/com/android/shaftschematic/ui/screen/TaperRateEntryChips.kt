@@ -14,6 +14,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.util.TaperRateEntry
+import com.android.shaftschematic.ui.theme.strongChipContainer
+import com.android.shaftschematic.ui.theme.strongChipLabel
 
 /**
  * `PdfPrefs.taperRatePerFoot` as the rate fields see it — where their "Rate as" chips open when a
@@ -69,8 +71,8 @@ internal fun TaperRateEntryChips(
         return
     }
     val colors = FilterChipDefaults.filterChipColors(
-        selectedContainerColor = Color.Black,
-        selectedLabelColor = Color.White,
+        selectedContainerColor = strongChipContainer(),
+        selectedLabelColor = strongChipLabel(),
         containerColor = Color.Transparent,
         labelColor = MaterialTheme.colorScheme.onSurface,
     )
@@ -87,7 +89,7 @@ internal fun TaperRateEntryChips(
                 onClick = { onSelect(value) },
                 label = { ChipLabel(label) },
                 colors = colors,
-                border = BorderStroke(1.dp, if (selected) Color.Black else MaterialTheme.colorScheme.outline),
+                border = BorderStroke(1.dp, if (selected) strongChipContainer() else MaterialTheme.colorScheme.outline),
                 modifier = Modifier.testTag(tagOf(value)),
             )
         }

@@ -18,6 +18,7 @@ import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.util.PreviewColorPreset
 import com.android.shaftschematic.util.PreviewColorSetting
 import com.android.shaftschematic.util.isDarkPreviewGround
+import com.android.shaftschematic.util.previewShaftGrey
 
 /**
  * ShaftThumbnail — a small, static rendering of a shaft.
@@ -66,6 +67,9 @@ fun ShaftThumbnail(
             threadFillColor = threadFill.resolve(scheme)
                 .copy(alpha = fillAlpha(threadFill.preset, 0.10f)).toArgb(),
             threadHatchColor = threadHatch.resolve(scheme).toArgb(),
+            baseFillColor = scheme.previewShaftGrey()?.toArgb() ?: 0,
+            // A keyway cut shows the card the thumbnail sits on (`surfaceVariant`) on a dark ground.
+            voidColor = (if (darkGround) scheme.surfaceVariant else Color.White).toArgb(),
             highlightEnabled = false,
         )
     }

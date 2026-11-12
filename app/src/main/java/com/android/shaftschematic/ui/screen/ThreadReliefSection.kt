@@ -30,6 +30,8 @@ import com.android.shaftschematic.ui.util.positiveDiaErrorMm
 import com.android.shaftschematic.ui.util.positiveLengthErrorMm
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.toMmOrNull
+import com.android.shaftschematic.ui.theme.strongChipContainer
+import com.android.shaftschematic.ui.theme.strongChipLabel
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Thread relief — the controls the thread card and `AddThreadDialog` share (add-dialog parity):
@@ -161,18 +163,18 @@ internal fun ThreadReliefEndChips(
             chip("FWD", !atAft, fwdModifier) { onSelect(false) }
         } else {
             val chipColors = FilterChipDefaults.filterChipColors(
-                selectedContainerColor = Color.Black, selectedLabelColor = Color.White,
+                selectedContainerColor = strongChipContainer(), selectedLabelColor = strongChipLabel(),
                 containerColor = Color.Transparent, labelColor = MaterialTheme.colorScheme.onSurface
             )
             FilterChip(selected = atAft,
                 onClick = { onSelect(true) },
                 label = { ChipLabel("AFT") }, colors = chipColors,
-                border = if (atAft) BorderStroke(1.dp, Color.Black) else null,
+                border = if (atAft) BorderStroke(1.dp, strongChipContainer()) else null,
                 modifier = aftModifier)
             FilterChip(selected = !atAft,
                 onClick = { onSelect(false) },
                 label = { ChipLabel("FWD") }, colors = chipColors,
-                border = if (!atAft) BorderStroke(1.dp, Color.Black) else null,
+                border = if (!atAft) BorderStroke(1.dp, strongChipContainer()) else null,
                 modifier = fwdModifier)
         }
     }

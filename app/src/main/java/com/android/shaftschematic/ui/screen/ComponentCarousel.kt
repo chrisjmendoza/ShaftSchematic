@@ -96,6 +96,8 @@ import com.android.shaftschematic.util.toMmOrNull
 import com.android.shaftschematic.util.UnitSystem
 import kotlinx.coroutines.launch
 import java.util.Locale
+import com.android.shaftschematic.ui.theme.strongChipContainer
+import com.android.shaftschematic.ui.theme.strongChipLabel
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Carousel height constant
@@ -602,8 +604,8 @@ internal fun KeywayClockingSection(
     }
     if (spec.keyways90Apart) {
         val clockingChipColors = FilterChipDefaults.filterChipColors(
-            selectedContainerColor = Color.Black,
-            selectedLabelColor = Color.White,
+            selectedContainerColor = strongChipContainer(),
+            selectedLabelColor = strongChipLabel(),
             containerColor = Color.Transparent,
             labelColor = MaterialTheme.colorScheme.onSurface
         )
@@ -615,10 +617,10 @@ internal fun KeywayClockingSection(
             )
             FilterChip(selected = spec.keyways90Cw, onClick = { onSetKeyways90Cw(true) },
                 label = { ChipLabel("CW") }, colors = clockingChipColors,
-                border = if (spec.keyways90Cw) BorderStroke(1.dp, Color.Black) else null)
+                border = if (spec.keyways90Cw) BorderStroke(1.dp, strongChipContainer()) else null)
             FilterChip(selected = !spec.keyways90Cw, onClick = { onSetKeyways90Cw(false) },
                 label = { ChipLabel("CCW") }, colors = clockingChipColors,
-                border = if (!spec.keyways90Cw) BorderStroke(1.dp, Color.Black) else null)
+                border = if (!spec.keyways90Cw) BorderStroke(1.dp, strongChipContainer()) else null)
         }
     }
 }
@@ -649,7 +651,7 @@ private fun UnitChoiceChips(
     modifier: Modifier = Modifier,
 ) {
     val chipColors = FilterChipDefaults.filterChipColors(
-        selectedContainerColor = Color.Black, selectedLabelColor = Color.White,
+        selectedContainerColor = strongChipContainer(), selectedLabelColor = strongChipLabel(),
         containerColor = Color.Transparent, labelColor = MaterialTheme.colorScheme.onSurface
     )
     fun choose(u: UnitSystem) = onChoose(if (u == inheritedUnit) null else u)
@@ -659,11 +661,11 @@ private fun UnitChoiceChips(
         FilterChip(selected = effective == UnitSystem.INCHES,
             onClick = { choose(UnitSystem.INCHES) },
             label = { ChipLabel("in") }, colors = chipColors,
-            border = if (effective == UnitSystem.INCHES) BorderStroke(1.dp, Color.Black) else null)
+            border = if (effective == UnitSystem.INCHES) BorderStroke(1.dp, strongChipContainer()) else null)
         FilterChip(selected = effective == UnitSystem.MILLIMETERS,
             onClick = { choose(UnitSystem.MILLIMETERS) },
             label = { ChipLabel("mm") }, colors = chipColors,
-            border = if (effective == UnitSystem.MILLIMETERS) BorderStroke(1.dp, Color.Black) else null)
+            border = if (effective == UnitSystem.MILLIMETERS) BorderStroke(1.dp, strongChipContainer()) else null)
     }
 }
 

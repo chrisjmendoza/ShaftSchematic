@@ -74,6 +74,12 @@ internal fun drawBodyRunsWithBreaks(
      */
     unfilledBodyIds: Set<String> = emptySet(),
     /**
+     * The fill a run in [unfilledBodyIds] takes instead of none. Only the editor preview on a
+     * dark ground passes one (its shaft-grey base); every sheet leaves it null and an unshaded
+     * run stays bare paper.
+     */
+    unfilledFill: Paint? = null,
+    /**
      * A selection ring for the runs in [underStrokeIds], stroked UNDER the run along the same
      * outline the pass draws — both stubs, both S curves, the blend curves and the end caps — so a
      * broken body reads as selected on either side of its gap. Only the editor preview's sheet
@@ -86,7 +92,7 @@ internal fun drawBodyRunsWithBreaks(
     val avoidX = breakAvoidRangesX(xAt, keywayAvoidSpansMm, boltRowAvoidSpansMm)
     bodies.forEach { b ->
         if (b.lengthMm <= 0f || b.diaMm <= 0f) return@forEach
-        val runFill = if (b.id in unfilledBodyIds) null else fill
+        val runFill = if (b.id in unfilledBodyIds) unfilledFill else fill
         val x0 = xAt(b.startFromAftMm); val x1 = xAt(b.startFromAftMm + b.lengthMm)
         val r = rPx(b.diaMm); val top = cy - r; val bot = cy + r
 

@@ -207,6 +207,7 @@ import com.android.shaftschematic.ui.resolved.ResolvedThread
 import com.android.shaftschematic.ui.resolved.bodyBlends
 import com.android.shaftschematic.ui.resolved.surfaceSegsFrom
 import com.android.shaftschematic.ui.theme.SheetInk
+import com.android.shaftschematic.ui.theme.acceptGreen
 import com.android.shaftschematic.util.AppLog
 import com.android.shaftschematic.util.FractionTypography
 import com.android.shaftschematic.util.UndercutStyle
@@ -3497,7 +3498,7 @@ private fun UndercutStatusPill(
                         Icon(
                             Icons.Filled.Check,
                             contentDescription = null,
-                            tint = UNDERCUT_SAVED_TINT,
+                            tint = acceptGreen(),
                             modifier = Modifier.padding(end = 6.dp),
                         )
                         // "Recorded": the cut is in this job's record. Saving the job file is the
@@ -3566,9 +3567,6 @@ private fun UndercutStatusPill(
         }
     }
 }
-
-/** Green check on the "Recorded" pill — a settled state reads at a glance, outside the theme ramp. */
-private val UNDERCUT_SAVED_TINT = Color(0xFF2E7D32)
 
 /** The Distance field's hint: fractions are typed as the tape reads them. */
 internal const val UNDERCUT_FRACTION_HINT = "Decimals or fractions — 5.748, 3 1/2, 7/8"
