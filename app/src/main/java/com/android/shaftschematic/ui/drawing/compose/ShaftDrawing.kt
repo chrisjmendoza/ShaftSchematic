@@ -72,6 +72,7 @@ import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.PreviewColorSetting
 import com.android.shaftschematic.util.PreviewColorPreset
 import com.android.shaftschematic.util.isDarkPreviewGround
+import com.android.shaftschematic.util.previewShaftGrey
 import com.android.shaftschematic.util.VerboseLog
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -94,6 +95,9 @@ private fun logTapSelect(message: String) {
  * preview's pinch zoom along with everything else, so it keeps the same proportion at any zoom.
  */
 private const val SELECTION_GLOW_EXTRA_PX = 4f
+
+/** The selection ring's extra width on a dark ground — a 5 px accent band outside the outline. */
+private const val SELECTION_GLOW_EXTRA_PX_DARK = 10f
 
 /**
  * The component a preview tap at axial position [tappedMm] selects: bodies, then tapers, threads
@@ -212,22 +216,31 @@ fun ShaftDrawing(
     val dimDebugColor: Color = MaterialTheme.colorScheme.tertiary
 
     val previewScheme = MaterialTheme.colorScheme
-    val outlineColor = if (blackWhiteOnly) Color.Black else previewOutline.resolve(previewScheme)
+    // A dark ground takes the denser fills (`PreviewColorPreset.fillAlpha`), and its plain ink —
+    // the Black/White Only mode's — is the foreground: black lines vanish on it.
+    val darkGround = previewScheme.isDarkPreviewGround()
+    val plainInk = if (darkGround) previewScheme.onSurface else Color.Black
+    val outlineColor = if (blackWhiteOnly) plainInk else previewOutline.resolve(previewScheme)
     val bodyFill = if (blackWhiteOnly) Color.Transparent else previewBodyFill.resolve(previewScheme)
     val taperFill = if (blackWhiteOnly) Color.Transparent else previewTaperFill.resolve(previewScheme)
     val linerFill = if (blackWhiteOnly) Color.Transparent else previewLinerFill.resolve(previewScheme)
     val threadFill = if (blackWhiteOnly) Color.Transparent else previewThreadFill.resolve(previewScheme)
-    val threadHatch = if (blackWhiteOnly) Color.Black else previewThreadHatch.resolve(previewScheme)
+    val threadHatch = if (blackWhiteOnly) plainInk else previewThreadHatch.resolve(previewScheme)
 
-    // A dark ground takes the denser fills (`PreviewColorPreset.fillAlpha`).
-    val darkGround = previewScheme.isDarkPreviewGround()
+    val shaftGrey = if (blackWhiteOnly) null else previewScheme.previewShaftGrey()
     fun fillAlpha(preset: PreviewColorPreset, fallback: Float): Float = preset.fillAlpha(darkGround, fallback)
+    // Black/White Only on a dark ground draws no fill at all. Its fills are `Transparent` at the
+    // preset's alpha — black at that alpha — which a light ground shows as a faint grey but a dark
+    // one as a black block over the ground.
+    val noFills = blackWhiteOnly && darkGround
+    fun fillArgb(c: Color, preset: PreviewColorPreset, fallback: Float): Int =
+        if (noFills) 0 else c.copy(alpha = fillAlpha(preset, fallback)).toArgb()
 
     // RenderOptions (keep most defaults; set only what we actively control here)
     // NOTE: legacy color fields in RenderOptions are ARGB Ints → use toArgb().
     //       highlight colors are Color → pass Color directly.
     val options = remember(
-        unit, lineThicknessScale, outlineColor, darkGround,
+        unit, lineThicknessScale, outlineColor, darkGround, noFills, shaftGrey, previewScheme.background,
         bodyFill, previewBodyFill, linerFill, previewLinerFill,
         taperFill, previewTaperFill, threadFill, previewThreadFill, threadHatch,
         highlightEnabled, highlightId, themeGlow,
@@ -237,12 +250,12 @@ fun ShaftDrawing(
         paddingPx = 16,
         outlineColor = outlineColor.toArgb(),
         outlineWidthPx = 2f * lineThicknessScale.coerceIn(0.5f, 2.0f),
-        bodyFillColor = bodyFill.copy(alpha = fillAlpha(previewBodyFill.preset, fallback = 0.10f)).toArgb(),
-        linerFillColor = linerFill.copy(alpha = fillAlpha(previewLinerFill.preset, fallback = 0.16f)).toArgb(),
-        taperFillColor = taperFill.copy(alpha = fillAlpha(previewTaperFill.preset, fallback = 0.14f)).toArgb(),
+        bodyFillColor = fillArgb(bodyFill, previewBodyFill.preset, fallback = 0.10f),
+        linerFillColor = fillArgb(linerFill, previewLinerFill.preset, fallback = 0.16f),
+        taperFillColor = fillArgb(taperFill, previewTaperFill.preset, fallback = 0.14f),
 
         // Threads (legacy hatch look)
-        threadFillColor = threadFill.copy(alpha = fillAlpha(previewThreadFill.preset, fallback = 0.10f)).toArgb(),
+        threadFillColor = fillArgb(threadFill, previewThreadFill.preset, fallback = 0.10f),
         threadHatchColor = threadHatch.toArgb(),
         threadSlant = threadSlant,
         threadDensity = threadDensity,
@@ -250,6 +263,9 @@ fun ShaftDrawing(
         // PDF-shade mirror: the preview fills exactly the components the sheet shades.
         shadedComponentIds = shadedComponentIds,
         fillFollowsShade = true,
+        baseFillColor = shaftGrey?.toArgb() ?: 0,
+        // A keyway cut shows the box's own ground: white paper on a light ground, dark on a dark.
+        voidColor = if (darkGround) previewScheme.background.toArgb() else Color.White.toArgb(),
 
         issueMarks = issueMarks,
 
@@ -259,8 +275,10 @@ fun ShaftDrawing(
         highlightEnabled = highlightEnabled,
         highlightId = highlightId,
         highlightGlowColor = themeGlow,
-        highlightGlowAlpha = 0.75f,
-        highlightGlowExtraPx = SELECTION_GLOW_EXTRA_PX,
+        // On a dark ground the ring is opaque and wider: a translucent 2 px accent band beside a
+        // light outline on a grey shaft all but disappeared (on-device report).
+        highlightGlowAlpha = if (darkGround) 1f else 0.75f,
+        highlightGlowExtraPx = if (darkGround) SELECTION_GLOW_EXTRA_PX_DARK else SELECTION_GLOW_EXTRA_PX,
     ) }
 
     // Preview-safe spec: if OAL is zero but parts exist, extend to last occupied end.
@@ -558,12 +576,15 @@ fun ShaftDrawing(
                     .align(Alignment.TopEnd)
                     .padding(6.dp)
                     .size(40.dp)
-                    .background(Color.White.copy(alpha = 0.6f), CircleShape)
+                    .background(
+                        if (darkGround) previewScheme.surfaceContainerHighest else Color.White.copy(alpha = 0.6f),
+                        CircleShape,
+                    )
             ) {
                 Icon(
                     imageVector = Icons.Filled.Refresh,
                     contentDescription = "Reset view",
-                    tint = Color.Black.copy(alpha = 0.8f)
+                    tint = if (darkGround) previewScheme.onSurface else Color.Black.copy(alpha = 0.8f)
                 )
             }
         }

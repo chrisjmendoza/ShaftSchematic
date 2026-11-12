@@ -19,12 +19,23 @@ internal val LightColorScheme = lightColorScheme(
     onTertiaryContainer = OnWarnAmberLight,
 )
 
-// Neutral dark-grey ground (Color.kt → `DarkGrey*`): every ground, container, outline and tint
-// role is assigned so nothing falls back to M3's purple-black baseline. `tertiary` is a warm
-// bronze here — the "Bronze" preview preset has to read as bronze on the grey.
+// Neutral dark-grey ground (Color.kt → `DarkGrey*`): every ground, container, outline, tint and
+// accent role is assigned so nothing falls back to M3's purple baseline. The accent is a steel
+// blue (`DarkSteelBlue`, `DarkSlate`); `tertiary` is a warm bronze — the "Bronze" preview preset
+// has to read as bronze on the grey. The severity ladder steps in lightness: caution below the
+// card, error above it.
 internal val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
+    primary = DarkSteelBlue,
+    onPrimary = OnDarkSteelBlue,
+    primaryContainer = DarkSteelBlueContainer,
+    onPrimaryContainer = OnDarkSteelBlueContainer,
+    inversePrimary = DarkInverseSteelBlue,
+    secondary = DarkSlate,
+    onSecondary = OnDarkSlate,
+    secondaryContainer = DarkSlateContainer,
+    onSecondaryContainer = OnDarkSlateContainer,
+    errorContainer = DarkErrorContainer,
+    onErrorContainer = OnDarkErrorContainer,
     tertiary = DarkBronze,
     onTertiary = OnDarkBronze,
     tertiaryContainer = WarnAmberDark,
@@ -35,7 +46,7 @@ internal val DarkColorScheme = darkColorScheme(
     onSurface = DarkGreyOnBackground,
     surfaceVariant = DarkGreySurfaceVariant,
     onSurfaceVariant = DarkGreyOnSurfaceVariant,
-    surfaceTint = DarkGreyOnSurfaceVariant,
+    surfaceTint = DarkGreySurfaceTint,
     inverseSurface = DarkGreyInverseSurface,
     inverseOnSurface = DarkGreyInverseOnSurface,
     outline = DarkGreyOutline,

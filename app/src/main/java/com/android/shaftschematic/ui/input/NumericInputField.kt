@@ -2,7 +2,10 @@ package com.android.shaftschematic.ui.input
 
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.TextFieldColors
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -20,6 +23,7 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
+import com.android.shaftschematic.ui.theme.isDarkChrome
 import com.android.shaftschematic.util.filterNumericInput
 
 /**
@@ -242,6 +246,7 @@ fun NumericInputField(
         label = { Text(label) },
         placeholder = placeholder?.let { p -> { Text(p) } },
         enabled = enabled,
+        colors = numericFieldColors(),
         isError = rejectedNotice != null || externalIssueText != null,
         supportingText = if (
             reserveSupportingLine || rejectedNotice != null || externalIssueText != null || hint != null
@@ -307,3 +312,27 @@ internal fun rejectedValueNotice(typed: String, reason: String): String {
     val shown = typed.trim().ifEmpty { "Blank entry" }
     return "$shown not applied — $reason"
 }
+
+/**
+ * The field's colours: Material's own on a light ground. On a dark one a disabled field — a
+ * derived value such as an auto-body's Start/Length or an Auto taper rate, which the shop still
+ * reads — keeps its value at 5.6:1 and its label at 4.5:1 on the card instead of Material's
+ * 38% (2.7:1); the dimmed border still marks it as not editable.
+ */
+@Composable
+internal fun numericFieldColors(): TextFieldColors {
+    if (!isDarkChrome()) return OutlinedTextFieldDefaults.colors()
+    val scheme = MaterialTheme.colorScheme
+    return OutlinedTextFieldDefaults.colors(
+        disabledTextColor = scheme.onSurface.copy(alpha = DARK_DISABLED_VALUE_ALPHA),
+        disabledLabelColor = scheme.onSurfaceVariant.copy(alpha = DARK_DISABLED_LABEL_ALPHA),
+        disabledSupportingTextColor = scheme.onSurfaceVariant.copy(alpha = DARK_DISABLED_LABEL_ALPHA),
+        disabledPlaceholderColor = scheme.onSurfaceVariant.copy(alpha = DARK_DISABLED_LABEL_ALPHA),
+    )
+}
+
+/** A disabled field's value on a dark ground: 5.6:1 on the carousel card. */
+internal const val DARK_DISABLED_VALUE_ALPHA = 0.72f
+
+/** A disabled field's label on a dark ground: 4.5:1 on the carousel card. */
+internal const val DARK_DISABLED_LABEL_ALPHA = 0.72f

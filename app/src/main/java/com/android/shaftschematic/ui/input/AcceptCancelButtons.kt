@@ -11,8 +11,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusProperties
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import com.android.shaftschematic.ui.theme.acceptGreen
 
 /**
  * File: AcceptCancelButtons.kt
@@ -28,8 +28,6 @@ import androidx.compose.ui.platform.testTag
  * landed.
  */
 
-/** Semantic "accept" status colour for the ✓; legible on both themes. */
-val ACCEPT_GREEN = Color(0xFF2E7D32)
 
 @Composable
 fun AcceptCancelButtons(
@@ -48,7 +46,7 @@ fun AcceptCancelButtons(
                 .focusProperties { canFocus = false }
                 .testTag(acceptTag),
         ) {
-            Icon(Icons.Filled.Check, contentDescription = acceptDescription, tint = ACCEPT_GREEN)
+            Icon(Icons.Filled.Check, contentDescription = acceptDescription, tint = acceptGreen())
         }
         IconButton(
             onClick = onCancel,

@@ -26,6 +26,8 @@ import com.android.shaftschematic.ui.util.positiveLengthErrorMm
 import com.android.shaftschematic.util.isUnitlessNumberText
 import com.android.shaftschematic.util.toMmOrNull
 import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.ui.theme.strongChipContainer
+import com.android.shaftschematic.ui.theme.strongChipLabel
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CouplerBoltSlotPagerCard — the `ResolvedCouplerBoltSlot` arm of [ComponentPagerCard]
@@ -83,7 +85,7 @@ internal fun CouplerBoltSlotPagerCard(
             BOLT_ROW_PAST_AFT_MSG else null
 
     val selectedColors = FilterChipDefaults.filterChipColors(
-        selectedContainerColor = Color.Black, selectedLabelColor = Color.White,
+        selectedContainerColor = strongChipContainer(), selectedLabelColor = strongChipLabel(),
         containerColor = Color.Transparent, labelColor = MaterialTheme.colorScheme.onSurface
     )
 
@@ -99,10 +101,10 @@ internal fun CouplerBoltSlotPagerCard(
             Text("Hole:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             FilterChip(selected = !isCross, onClick = { onUpdateCouplerBoltSlotStyle(idx, BoltHoleStyle.SEAM) },
                 label = { ChipLabel("Seam") }, colors = selectedColors,
-                border = if (!isCross) BorderStroke(1.dp, Color.Black) else null)
+                border = if (!isCross) BorderStroke(1.dp, strongChipContainer()) else null)
             FilterChip(selected = isCross, onClick = { onUpdateCouplerBoltSlotStyle(idx, BoltHoleStyle.CROSS) },
                 label = { ChipLabel("Cross-drilled") }, colors = selectedColors,
-                border = if (isCross) BorderStroke(1.dp, Color.Black) else null)
+                border = if (isCross) BorderStroke(1.dp, strongChipContainer()) else null)
         }
         if (isCross) {
             // Clocking relative to the keyway — 90° draws the bore hidden, in line draws the circle.
@@ -111,10 +113,10 @@ internal fun CouplerBoltSlotPagerCard(
                 Text("From keyway:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 FilterChip(selected = is90, onClick = { onUpdateCouplerBoltSlotClocking(idx, BoltHoleClocking.DEG_90) },
                     label = { ChipLabel("90°") }, colors = selectedColors,
-                    border = if (is90) BorderStroke(1.dp, Color.Black) else null)
+                    border = if (is90) BorderStroke(1.dp, strongChipContainer()) else null)
                 FilterChip(selected = !is90, onClick = { onUpdateCouplerBoltSlotClocking(idx, BoltHoleClocking.IN_LINE) },
                     label = { ChipLabel("In line") }, colors = selectedColors,
-                    border = if (!is90) BorderStroke(1.dp, Color.Black) else null)
+                    border = if (!is90) BorderStroke(1.dp, strongChipContainer()) else null)
             }
         }
 
@@ -123,10 +125,10 @@ internal fun CouplerBoltSlotPagerCard(
             Text("Measure From:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             FilterChip(selected = !isFwdRef, onClick = { onUpdateCouplerBoltSlotReference(idx, SlotAuthoredReference.AFT) },
                 label = { ChipLabel("AFT") }, colors = selectedColors,
-                border = if (!isFwdRef) BorderStroke(1.dp, Color.Black) else null)
+                border = if (!isFwdRef) BorderStroke(1.dp, strongChipContainer()) else null)
             FilterChip(selected = isFwdRef, onClick = { onUpdateCouplerBoltSlotReference(idx, SlotAuthoredReference.FWD) },
                 label = { ChipLabel("FWD") }, colors = selectedColors,
-                border = if (isFwdRef) BorderStroke(1.dp, Color.Black) else null)
+                border = if (isFwdRef) BorderStroke(1.dp, strongChipContainer()) else null)
         }
 
         FieldPair(

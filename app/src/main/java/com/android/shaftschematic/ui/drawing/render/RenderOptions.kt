@@ -110,6 +110,21 @@ data class RenderOptions(
      * thumbnail) fills every component with its kind colour as a plain picture of the shaft.
      */
     val fillFollowsShade: Boolean = false,
+    /**
+     * An opaque base every body, taper, liner and thread stands on, with its kind fill laid over
+     * it; 0 (the default — every sheet canvas, and the preview on a light ground) draws none, so
+     * an unfilled component is an empty outline. The editor preview and the thumbnails set it on
+     * a dark ground, where an empty outline would read as a hole in the background.
+     */
+    val baseFillColor: Int = 0,
+    /**
+     * What a keyway cut-out shows through — the plan-view slot, its spoon bowl and the 90°
+     * silhouette notch. White (the default — every sheet canvas, and the preview on a light
+     * ground) is the paper. The editor preview and the thumbnails pass their own ground on a dark
+     * one, where a white slot was the brightest thing in the box and read as a highlight, not a
+     * cut.
+     */
+    val voidColor: Int = 0xFFFFFFFF.toInt(),
 
     // ──────────────────────────────
     // Highlighting

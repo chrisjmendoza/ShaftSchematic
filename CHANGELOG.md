@@ -8,6 +8,36 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-12
 
+### change(pdf): the overall-length rail prints its value without "OAL"
+
+On-device ruling: the top end-to-end dimension read `OAL 234 3/16"`; the layout already says what
+it is, and a hand drawing shows the bare value. `oalSpan()` now labels the rail with the value
+alone, so the schematic, the Final and Original + Final sheets, the consolidated sheet and the
+editor preview's rails all print `234 3/16"`. The value is narrower, so it seats in its break on
+shorter shafts. The `OAL:` text lines on the wear and runout sheets are unchanged.
+
+### fix(theme): a finished dark theme — grey shaft, steel-blue accent, chrome that reads
+
+On-device report: after the dark-grey rework the shaft itself still blended into the background —
+an unshaded body is an empty outline, so the dark ground showed through it. On a dark ground the
+preview and the template thumbnails now stand every body, taper, liner and thread on an opaque
+shaft grey (`ColorScheme.previewShaftGrey()` → `RenderOptions.baseFillColor`), 2.8:1 off the
+ground; a shaded component lays its kind fill over the grey, so shaded tapers are a lighter grey
+and liners a true bronze (dark Bronze alpha 0.56 — at 0.38 over the grey it read khaki). S-break
+gaps stay background. A keyway cut shows the ground instead of a white slot
+(`RenderOptions.voidColor`), the selection ring is opaque and 5 px wide, and Black/White Only
+draws white line art with no fills (its black outlines vanished, its liners drew as black blocks).
+
+The rest of the dark chrome, checked on an emulator screen by screen: the lavender accent is now a
+low-chroma steel blue (`DarkSteelBlue` `#8AAED8`, 7.1:1 on the ground) with matching containers,
+so filled buttons are calm blocks and the accent sits apart from bronze, amber and red; field
+labels reach 7:1 on the cards; derived (disabled) fields keep their value at 5.6:1; the cards'
+selected chips are the bright foreground pill instead of a black hole; colour swatches carry a
+ring; the ✓ that accepts an edit is a lighter green. The error / caution ladder now steps in
+lightness — error red above the card, caution amber below it — because under protanopia the two
+were the same olive. Light and high-contrast schemes, the sheet canvases and every PDF are
+unchanged; `DarkChromeContrastTest` measures it all and pins the light scheme.
+
 ### fix(theme): the dark theme is a neutral grey and the shaft preview reads on it
 
 On-device report: in the Dark theme the editor preview was hard to read. The ground was M3's

@@ -102,6 +102,8 @@ import com.android.shaftschematic.util.UndercutShadeColor
 import com.android.shaftschematic.util.UndercutShadeIntensity
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.ui.adaptive.readableWidth
+import com.android.shaftschematic.ui.theme.isDarkChrome
+import com.android.shaftschematic.ui.theme.swatchRing
 
 /**
  * SettingsRoute
@@ -883,7 +885,9 @@ fun SettingsRoute(
 
                     if (previewBlackWhiteOnly) {
                         Text(
-                            "Color fills disabled; outlines forced to black.",
+                            // A dark ground draws the plain ink white — black would vanish on it.
+                            if (isDarkChrome()) "Color fills disabled; outlines forced to white."
+                            else "Color fills disabled; outlines forced to black.",
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
@@ -964,6 +968,7 @@ fun SettingsRoute(
                                             modifier = Modifier
                                                 .size(12.dp)
                                                 .background(color = color.base, shape = CircleShape)
+                                                .swatchRing()
                                         )
                                         Text(color.uiLabel())
                                     }
@@ -1529,6 +1534,7 @@ private fun PreviewColorRow(
                         color = if (swatch == Color.Transparent) scheme.surfaceVariant else swatch,
                         shape = CircleShape
                     )
+                    .swatchRing()
             )
             Text(title)
         }
@@ -1564,6 +1570,7 @@ private fun PreviewColorRow(
                                             color = if (presetSwatch == Color.Transparent) scheme.surfaceVariant else presetSwatch,
                                             shape = CircleShape
                                         )
+                                        .swatchRing()
                                 )
                                 Text(preset.uiLabel())
                             }
@@ -1590,6 +1597,7 @@ private fun PreviewColorRow(
                                             color = if (roleSwatch == Color.Transparent) scheme.surfaceVariant else roleSwatch,
                                             shape = CircleShape
                                         )
+                                        .swatchRing()
                                 )
                                 Text(role.uiLabel())
                             }

@@ -9,6 +9,8 @@ import androidx.compose.ui.graphics.lerp
 import com.android.shaftschematic.util.PreviewColorPreset
 import com.android.shaftschematic.util.PreviewColorRole
 import com.android.shaftschematic.util.isDarkPreviewGround
+import com.android.shaftschematic.util.previewShaftGrey
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -168,11 +170,32 @@ class PreviewColorDarkGroundTest {
     }
 
     @Test
+    fun `the shaft is a grey that stands off a dark ground, and a light ground has none`() {
+        assertNull(LightColorScheme.previewShaftGrey())
+        assertNull(HighContrastLightColorScheme.previewShaftGrey())
+        listOf(DarkColorScheme, HighContrastDarkColorScheme).forEach { scheme ->
+            val grey = scheme.previewShaftGrey()!!
+            assertEquals("the shaft grey is opaque", 1f, grey.alpha, 0f)
+            val off = contrast(grey, scheme.background)
+            assertTrue("shaft grey is ${"%.2f".format(off)}:1 off the ground, needs 2:1", off >= 2.0)
+            val outline = PreviewColorPreset.STEEL.resolve(scheme, PreviewColorRole.PRIMARY)
+            val oc = contrast(outline, grey)
+            assertTrue("outline is ${"%.2f".format(oc)}:1 on the shaft grey, needs 3:1", oc >= 3.0)
+            // A shaded component is its kind fill laid over the grey, and still reads as shaded.
+            listOf(PreviewColorPreset.STEEL, PreviewColorPreset.BRONZE).forEach { preset ->
+                val shaded = painted(preset, scheme, grey)
+                val sc = contrast(shaded, grey)
+                assertTrue("$preset over the shaft grey is ${"%.2f".format(sc)}:1, needs 1.3:1", sc >= 1.3)
+            }
+        }
+    }
+
+    @Test
     fun `dark ground alpha table`() {
         assertEquals(0f, PreviewColorPreset.TRANSPARENT.fillAlpha(true, 0.10f))
         assertEquals(0.34f, PreviewColorPreset.STEEL.fillAlpha(true, 0.10f))
         assertEquals(0.28f, PreviewColorPreset.STAINLESS.fillAlpha(true, 0.10f))
-        assertEquals(0.38f, PreviewColorPreset.BRONZE.fillAlpha(true, 0.10f))
+        assertEquals(0.56f, PreviewColorPreset.BRONZE.fillAlpha(true, 0.10f))
         assertEquals(0.20f, PreviewColorPreset.CUSTOM.fillAlpha(true, 0.10f), 1e-6f)
         assertEquals(0.32f, PreviewColorPreset.CUSTOM.fillAlpha(true, 0.16f), 1e-6f)
         assertEquals(0.45f, PreviewColorPreset.CUSTOM.fillAlpha(true, 0.30f), 1e-6f)

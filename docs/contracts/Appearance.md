@@ -47,17 +47,58 @@ historical light value is pinned as `SheetInk.LinerTint`. In the dark scheme it 
 (`DarkBronze`, `#E2B36B`) so the preset reads as bronze on the grey ground. Its only other reader
 is the Custom "Tertiary" preview role and the developer dimension-debug overlay.
 
-### The dark scheme is a neutral grey
+### The dark scheme is a neutral grey with a steel-blue accent
 
-`DarkColorScheme` assigns every ground role itself (`Color.kt` → `DarkGrey*`) instead of
-inheriting M3's baseline purple-black: background/surface `#1F2023`, onSurface/onBackground
-`#E8E8EA`, surfaceDim `#1A1B1D`, surfaceBright `#3A3B40`, containers Lowest → Highest `#18191B`,
-`#232427`, `#27282C`, `#303136`, `#3A3B41`, surfaceVariant `#3A3B41`, onSurfaceVariant `#C6C7CE`,
-outline `#9A9BA4`, outlineVariant `#4C4D54`, inverse surface `#E3E3E6` / `#2F3033`. The surface
-tint is the neutral `#C6C7CE`, so a tonally elevated `Surface` lightens rather than turning
-purple. Primary (`Purple80`) and secondary (`PurpleGrey80`) stay as the brand accent, and the
-amber caution tier is unchanged. On the purple-black, the editor preview's liner and taper fills
-sank into the ground (on-device report).
+`DarkColorScheme` assigns every ground, accent and severity role itself (`Color.kt` →
+`DarkGrey*`, `DarkSteelBlue*`, `DarkSlate*`) instead of inheriting M3's purple baseline. On the
+purple-black, the editor preview's liner and taper fills sank into the ground (on-device report),
+and the lavender accent made every filled button a glaring slab. Verified screen by screen on an
+emulator; `DarkChromeContrastTest` measures every row below.
+
+| Role | Value | Where this app uses it | Measured |
+|---|---|---|---|
+| background / surface | `#1F2023` | screens, the preview box, keyway voids | — |
+| surfaceContainerLow | `#232427` | sidebar, bottom sheets | onSurface 12.7:1 |
+| surfaceContainer | `#27282C` | menus | onSurface 12.0:1 |
+| surfaceContainerHigh | `#303136` | dialogs | onSurface 10.6:1, primary 5.6:1 |
+| surfaceContainerHighest / surfaceVariant | `#3A3B41` | carousel cards, Help rows, thumbnail cards | onSurface 9.1:1, onSurfaceVariant 7.1:1 |
+| surfaceDim / surfaceBright / Lowest | `#1A1B1D` / `#3A3B40` / `#18191B` | M3 internals | — |
+| onSurface / onBackground | `#E8E8EA` | values, titles; the cards' selected chip | 13.3:1 on the ground |
+| onSurfaceVariant | `#CDCED5` | field labels, captions | ≥ 7.1:1 on every surface |
+| outline | `#9A9BA4` | text-field borders, chip borders | 10.8:1 ground, 4.0:1 card |
+| outlineVariant | `#5A5B62` | dividers, default chip borders | 2.4:1 ground |
+| surfaceTint | `#C6C7CE` | tonal elevation — neutral, never tints | — |
+| primary / onPrimary | `#8AAED8` / `#0B2848` | filled buttons, switches, checkboxes, sliders, focus, links, the preview's selection ring | 7.1:1 ground, 4.9:1 card; label 6.5:1 |
+| primaryContainer / on | `#2C4A6B` / `#D6E5FA` | Add-dialog chips, the undercut "Unsaved" pill | 7.2:1 |
+| secondary / secondaryContainer / on | `#B4C1D1` / `#34465B` / `#D9E5F3` | selected filter chips, the sidebar's current item, slider tracks | 7.6:1 |
+| inversePrimary | `#2F5F9A` | the snackbar's action | 5.1:1 on `#E3E3E6` |
+| inverse surface / on | `#E3E3E6` / `#2F3033` | snackbar | 10.3:1 |
+| tertiary | `#E2B36B` | the Bronze preview preset | — |
+| error / onError | M3 `#F2B8B5` / `#601410` | error text, field error state, the delete icon | 9.5:1 ground |
+| errorContainer / on | `#A52A22` / `#FFFFFF` | a card's error chip, the undercut "Blocked" pill | 7.1:1 |
+| tertiaryContainer / on (caution) | `#3E2F00` / `#FFDFA0` | the warnings banner, a card's caution chip | 10.1:1 |
+
+The accent is a low-chroma steel blue, tone ~70: a full-width filled button is a calm block rather
+than a lavender slab, and blue sits more than 90° of hue from every colour the app gives meaning —
+bronze liners, amber caution, red error — so a selection never reads as a problem, for normal and
+colour-deficient vision alike.
+
+**The severity ladder steps in lightness in the dark**: error red ABOVE the card's lightness,
+caution amber BELOW it. M3's dark error container and an amber of the same lightness read as one
+olive under protanopia (1.02:1); the two now hold ≥ 1.4:1 under protanopia and ≥ 2:1 under
+deuteranopia, and their text colours differ (white vs amber) besides. The light ladder is
+unchanged.
+
+**Chrome inks a light ground draws fixed** go through `ui/theme/ChromeInk.kt`; each returns
+exactly the historical colour on a light ground and the role that plays the part on a dark one
+(keyed on the scheme's own ground, so high-contrast dark takes it too): the cards' high-contrast
+chips (`strongChipContainer`/`strongChipLabel` — black and white in light, the foreground pill
+with ground-coloured text in dark: a black chip on a dark card read as a hole), the accept ✓
+(`acceptGreen` — `#2E7D32` is 3.2:1 on the dark ground) and colour swatches' ring (`swatchRing`,
+a 1 dp outline in dark only, so Transparent's placeholder and the undercut "Grey" black keep their
+edge). `NumericInputField` takes `numericFieldColors()` — Material's own in light; in dark a
+disabled (derived) field keeps its value at 5.6:1 and its label at 4.5:1 on the card instead of
+2.7:1.
 
 ### The preview on a dark ground
 
@@ -71,16 +112,48 @@ keyed on the scheme's own ground — `ColorScheme.isDarkPreviewGround()` (`surfa
 | Steel (lerp surface → onSurface) | 0.75 | 0.90 |
 | Steel fill alpha | 0.18 | 0.34 |
 | Stainless fill alpha | 0.14 | 0.28 |
-| Bronze fill alpha | 0.16 | 0.38 |
+| Bronze fill alpha | 0.16 | 0.56 |
 | Custom fill alpha | per-kind fallback | fallback × 2, capped at 0.45 |
 
 The fill alphas live in `PreviewColorPreset.fillAlpha(darkGround, fallback)`, the one table both
 `ShaftDrawing` and `ShaftThumbnail` read. A light ground resolves exactly as it always has.
 `PreviewColorDarkGroundTest` measures the composited result on the dark scheme: every filled
-preset ≥ 1.6:1 off the ground (Steel 2.47, Stainless 1.67, Bronze 2.38), the Steel outline — also
+preset ≥ 1.6:1 off the ground (Steel 2.47, Stainless 1.67, Bronze 3.59), the Steel outline — also
 the rails', hatches' and seal dashes' ink — 10.77:1, and the liner and taper fills apart in hue
-(Oklab distance 0.049, bronze warm, steel neutral). High-contrast dark's black ground takes the
-same rule (Steel 2.45, Bronze 2.34, outline 15.6:1; Stainless, not a default, 1.46).
+(Oklab distance 0.112, bronze warm, steel neutral). High-contrast dark's black ground takes the
+same rule (Steel 2.45, Bronze 3.99, outline 15.6:1; Stainless, not a default, 1.46).
+
+**The shaft is grey on a dark ground.** On a light ground an unshaded component is an empty
+outline and the ground reads as paper; on a dark ground that outline read as a hole in the
+background (on-device report). `ColorScheme.previewShaftGrey()` — `lerp(surface, onSurface,
+SHAFT_GREY_LERP_DARK = 0.38)`, opaque, `null` on a light ground — is handed to the renderer as
+`RenderOptions.baseFillColor` by `ShaftDrawing` and `ShaftThumbnail`. Every body, taper, liner and
+thread stands on it; a shaded component is its kind fill flattened over it (one fill draw per
+component), so "shaded vs not" still reads as grey vs tinted. The sheet-layout body pass takes the
+grey as `drawBodyRunsWithBreaks(unfilledFill)`, null on every sheet. S-break gaps stay ground. The
+Runout / Wear / Undercut canvases never set it. Measured (dark): bare grey 2.8:1 off the ground,
+the Steel outline 3.9:1 on it; a shaded taper 1.7:1 and a bronze liner 1.9:1 off the bare grey,
+the liner told from the neutral taper by chroma, which survives protanopia and deuteranopia.
+Bronze's dark alpha is 0.56 because over the grey a thinner bronze mixed down to khaki.
+
+The rest of the dark preview, all keyed on the dark ground and none of it reaching a sheet:
+
+- **Keyway cuts show the ground** — `RenderOptions.voidColor` (white by default: every sheet
+  canvas, and the preview on a light ground) is the box's background in the preview and the
+  card's `surfaceVariant` in a thumbnail. A white slot was the brightest thing in the box and read
+  as a highlight, not a cut; the plan slot, its spoon bowl and the 90° notch all take it.
+- **Selection ring** — the accent, opaque, 10 px extra width (5 px outside the outline) instead of
+  75% and 4 px, which all but vanished beside a light outline on the grey.
+- **Black/White Only** draws white line art: the outline and hatch take `onSurface` and nothing is
+  filled. The mode's fills are `Transparent` at the preset alpha — black at that alpha — which a
+  light ground shows as a faint grey (left as it always was) but a dark one as black blocks.
+- The reset-view disc is `surfaceContainerHighest` with an `onSurface` icon instead of a
+  translucent white disc.
+
+The white sheet canvases on the Runout / Wear / Undercut tabs are deliberately left unframed: a
+hairline frame does nothing for the glare of a white page, and dimming the page would change what
+the sheet shows.
+
 - **No dynamic (Material You) color.** Schemes are fixed so the preview-color presets
   (Stainless/Steel/Bronze — theme-lerped) resolve predictably. Revisit deliberately, never
   as a side effect.
@@ -190,10 +263,9 @@ colors) — nothing in this contract touches it.
 
 ## Known follow-ups (deliberate, not bugs)
 
-- Dark and high-contrast modes shipped **without an on-device visual pass** — the sheets
-  are guaranteed correct by the ink pinning, but ordinary Compose chrome (cards, chips,
-  dialogs across all screens) needs a walk-through before the modes are advertised. Tracked
-  in `TODO.md`.
+- The Dark theme's chrome has had an emulator walk-through (editor, cards, dialogs, menus,
+  sidebar, Settings, Help, templates, sheet tabs, PDF preview); the high-contrast schemes keep
+  their own values and were not re-walked in that pass.
 
 ## Do Nots
 

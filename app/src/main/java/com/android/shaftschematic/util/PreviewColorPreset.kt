@@ -54,7 +54,8 @@ enum class PreviewColorPreset {
         TRANSPARENT -> 0f
         STEEL -> if (darkGround) 0.34f else 0.18f
         STAINLESS -> if (darkGround) 0.28f else 0.14f
-        BRONZE -> if (darkGround) 0.38f else 0.16f
+        // Dark: laid over the shaft grey, a thinner bronze mixed down to khaki.
+        BRONZE -> if (darkGround) BRONZE_ALPHA_DARK else 0.16f
         CUSTOM -> if (darkGround) (fallback * 2f).coerceAtMost(CUSTOM_ALPHA_DARK_MAX) else fallback
     }
 
@@ -64,8 +65,22 @@ enum class PreviewColorPreset {
         const val STAINLESS_LERP_DARK = 0.68f
         const val STEEL_LERP_DARK = 0.90f
         const val CUSTOM_ALPHA_DARK_MAX = 0.45f
+        const val BRONZE_ALPHA_DARK = 0.56f
     }
 }
+
+/**
+ * The opaque grey the shaft itself takes in the preview on a dark ground, or `null` on a light
+ * one. On a light ground an unshaded component is an empty outline — the ground shows through and
+ * reads as paper. On a dark ground the same empty outline reads as a hole in the app background,
+ * so every component stands on this grey and a shaded one lays its kind fill over it
+ * (on-device report: the shaft blended into the dark background).
+ */
+fun ColorScheme.previewShaftGrey(): Color? =
+    if (isDarkPreviewGround()) lerp(surface, onSurface, SHAFT_GREY_LERP_DARK) else null
+
+/** How far from the dark ground toward the foreground the preview's shaft grey sits. */
+const val SHAFT_GREY_LERP_DARK = 0.38f
 
 /** Whether this scheme's preview ground is dark — the switch for the dark-ground preset rule. */
 fun ColorScheme.isDarkPreviewGround(): Boolean = surface.luminance() < 0.5f

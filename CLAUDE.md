@@ -145,7 +145,10 @@ wear/undercut documents' one-fill-per-kind `SimpleShaftProfile` boundary both st
 per-component flag. The EDITOR PREVIEW BOX mirrors the same effective decision — the positive
 complement `shadedComponentIds` rides `RenderOptions.shadedComponentIds` with
 `fillFollowsShade` on: a body/taper/liner the sheet will shade takes its kind's preview fill, an
-unshaded one draws as an EMPTY outline. The toggle either leaves a component empty or fills it in
+unshaded one draws as an EMPTY outline (on a DARK ground "empty" is the preview's opaque shaft
+grey — `ColorScheme.previewShaftGrey()` → `RenderOptions.baseFillColor` — and a shaded component is
+its kind fill flattened over that grey; on-device report: an empty outline blended into the dark
+background). The toggle either leaves a component empty or fills it in
 (on-device reports: first a checked Shade toggle that changed nothing in the box, then a taper
 filled grey with its toggle off and darker with it on — a tint-plus-overlay marker read as two
 shades of "on"; do not bring the overlay back), so the box and the composers can never disagree
@@ -790,10 +793,18 @@ take ONE denser rule: `PreviewColorPreset` keys it on the scheme's own ground
 high-contrast dark takes it too), lerping Stainless/Steel nearer the foreground (0.68/0.90) and
 roughly doubling the fill alphas through the ONE table `PreviewColorPreset.fillAlpha` that the
 preview and the template thumbnails share; a light ground resolves exactly as it always has. The
-dark scheme itself is a neutral grey (`DarkGrey*`, warm-bronze `tertiary`) rather than M3's
-purple-black, on which the liner and taper fills sank into the ground (on-device report).
-`PreviewColorDarkGroundTest` holds every filled preset ≥ 1.6:1 off the dark ground and the
-outline ≥ 7:1.
+dark scheme itself is a neutral grey (`DarkGrey*`, warm-bronze `tertiary`, steel-blue accent
+`DarkSteelBlue`) rather than M3's purple-black, on which the liner and taper fills sank into the
+ground (on-device report); its error/caution rungs step in LIGHTNESS (error above the card,
+caution below) so they part under protanopia. `PreviewColorDarkGroundTest` holds every filled
+preset ≥ 1.6:1 off the dark ground and the outline ≥ 7:1; `DarkChromeContrastTest` measures the
+chrome and pins the light scheme. The shaft itself is an opaque grey there (`previewShaftGrey`,
+`null` on a light ground): every body, taper, liner and thread stands on it through
+`RenderOptions.baseFillColor` (0 on every sheet canvas), the sheet-layout body pass taking it as
+`unfilledFill` (null on every sheet — byte-identical), so the shaft never reads as a hole in the
+dark background; a keyway cut shows the ground (`RenderOptions.voidColor`, white on every sheet
+canvas). Chrome inks a light ground draws fixed (the cards' black selected chips, the ✓ green)
+go through `ui/theme/ChromeInk.kt`, which returns the historical colour on a light ground.
 
 ### Layout adapts on ONE axis, the window width class
 Phones and tablets run the same screens; what changes is decided by `WindowWidthClass`
