@@ -192,7 +192,7 @@ class PreviewDimensionRailsTest {
         val pageValues = page.texts.map { it.first }.toSet()
         assertTrue("the box prints values", boxValues.size >= preview.assignments.size + 1)
         boxValues.forEach { v -> assertTrue("\"$v\" is not on the sheet", v in pageValues) }
-        assertTrue("the OAL value is in the box", boxValues.any { it.startsWith("OAL ") })
+        assertTrue("the OAL value is in the box", preview.oalDimSpan.label.inline() in boxValues)
         val l2Length = formatLenDimDualLabel((34f * inch).toDouble(), UnitSystem.MILLIMETERS, dual = true).primary
         assertTrue("L2's metric override reaches the box", boxValues.any { it.contains(l2Length) })
     }
@@ -248,7 +248,7 @@ class PreviewDimensionRailsTest {
         assertEquals(rails.assignments.map { it.span } + rails.oalDimSpan, p.spans)
         val box = RecordingCanvas(1200, 110)
         p.draw(box)
-        assertTrue("the OAL rail draws", box.texts.any { it.first.startsWith("OAL ") })
+        assertTrue("the OAL rail draws", box.texts.any { it.first == rails.oalDimSpan.label.inline() })
         assertTrue("the rails run above the box top", box.texts.any { it.second.top < 0f })
     }
 

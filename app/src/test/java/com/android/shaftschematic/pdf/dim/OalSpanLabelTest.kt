@@ -10,15 +10,15 @@ import org.junit.Test
 class OalSpanLabelTest {
 
     @Test
-    fun `OAL top dimension label keeps the OAL prefix and no qualifiers`() {
+    fun `OAL top dimension label is the bare value, no prefix and no qualifiers`() {
         val span = oalSpan(x1Mm = 0.0, x2Mm = 1234.0, unit = UnitSystem.MILLIMETERS)
 
         assertEquals(0.0, span.x1Mm, 0.0)
         assertEquals(1234.0, span.x2Mm, 0.0)
 
-        // The small printed "OAL" prefix is a deliberate visual identifier (product
-        // decision); blank drafts drop label text at the renderer, not here.
-        assertTrue(span.label.inline().startsWith("OAL "))
+        // The top rail's position says it is the overall length; the value prints bare.
+        assertEquals(formatLenDim(1234.0, UnitSystem.MILLIMETERS), span.label.inline())
+        assertFalse(span.label.inline().contains("OAL"))
         assertFalse(span.label.inline().contains("(less", ignoreCase = true))
         assertFalse(span.label.inline().contains("SET-SET", ignoreCase = true))
     }
@@ -33,7 +33,7 @@ class OalSpanLabelTest {
         // The label prints the SET-to-SET distance, not either endpoint.
         val dist = 1234.0 - 25.4
         assertEquals(
-            "OAL " + formatLenDim(dist, UnitSystem.MILLIMETERS),
+            formatLenDim(dist, UnitSystem.MILLIMETERS),
             span.label.inline(),
         )
     }

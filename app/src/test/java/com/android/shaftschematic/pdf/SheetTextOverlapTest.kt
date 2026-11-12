@@ -393,8 +393,8 @@ class SheetTextOverlapTest {
         assertEquals(SheetDualMode.INLINE, out.dualMode)
         assertAtFloor("stacked fallback", out)
         assertTrue(
-            "an inline sheet prints the OAL and its mm on one line: ${c.boxes.map { it.text }}",
-            c.boxes.any { it.text.startsWith("OAL") && "mm" in it.text },
+            "an inline sheet prints a value and its mm on one line: ${c.boxes.map { it.text }}",
+            c.boxes.any { "[" in it.text && "mm" in it.text },
         )
     }
 
@@ -424,7 +424,7 @@ class SheetTextOverlapTest {
             assertFooterClear(name, c, pageH)
             assertTrue(
                 "$name: a dual sheet prints its mm values: ${c.boxes.map { it.text }}",
-                c.boxes.any { it.text.startsWith("OAL") && "mm" in it.text },
+                c.boxes.any { "[" in it.text && "mm" in it.text },
             )
         }
     }
