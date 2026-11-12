@@ -176,7 +176,9 @@ Responsibilities
 - **Settings (Preferences):**
   - Units (mm/in) affect labels and input formatting only (model remains mm)
   - Grid visibility in Preview
-  - Dimension lines in Preview (`showPreviewDimensionsFlow`, device-only, default ON)
+  - Dimension lines in Preview (`showPreviewDimensionsFlow`, device-only, default ON), with the
+    preview's "Dimension text size: Small | Medium | Large" chips under it
+    (`previewDimTextSizeFlow`, device-only, default Medium, greyed while the lines are off)
   - Draw Preview Like the Sheet (`previewSheetLayoutFlow`, device-only, default ON), with one
     line saying fractions, arrows and S-breaks in the preview follow Settings → Drawing
   - Preview Colors: presets (Stainless/Steel/Bronze/Transparent) + Custom palette

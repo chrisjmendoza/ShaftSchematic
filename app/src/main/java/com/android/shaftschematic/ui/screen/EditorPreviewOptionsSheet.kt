@@ -3,13 +3,16 @@ package com.android.shaftschematic.ui.screen
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -22,12 +25,15 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.FractionStyle
+import com.android.shaftschematic.util.PreviewDimTextSize
 
 /** Test tags on the editor's Preview options sheet. */
 internal const val PREVIEW_OPTIONS_SHEET_TAG = "preview_options_sheet"
 /** The preview box's corner button that opens the sheet. */
 internal const val PREVIEW_OPTIONS_BUTTON_TAG = "preview_options_button"
 internal const val PREVIEW_OPT_DIMENSIONS_TAG = "preview_opt_dimensions"
+/** One chip per [PreviewDimTextSize]: `preview_dim_text_SMALL|MEDIUM|LARGE`. */
+internal fun previewDimTextChipTag(size: PreviewDimTextSize): String = "preview_dim_text_${size.name}"
 internal const val PREVIEW_OPT_SHEET_LAYOUT_TAG = "preview_opt_sheet_layout"
 internal const val PREVIEW_OPT_GRID_TAG = "preview_opt_grid"
 internal const val PREVIEW_OPT_HIGHLIGHT_TAG = "preview_opt_highlight"
@@ -70,6 +76,8 @@ internal data class EditorPreviewOptionsState(
     val linerCompression: Float = 1f,
     /** [LinerCompressionControl]'s live readout — the fraction of true length liners keep at this height. */
     val estimateLinerKeptFrac: (requestedFracOfTrue: Float) -> Float = { it },
+    /** The preview rails' value size — a device preference (Settings → Editor Screen). */
+    val dimTextSize: PreviewDimTextSize = PreviewDimTextSize.Default,
 )
 
 /** The sheet's setters — each the same ViewModel setter Settings and the PDF options panels call. */
@@ -89,6 +97,7 @@ internal class EditorPreviewOptionsActions(
     val onSBreakDrag: (Float?) -> Unit = {},
     val onHeightDrag: (Float?) -> Unit = {},
     val onLinerCompressionDrag: (Float?) -> Unit = {},
+    val onDimTextSize: (PreviewDimTextSize) -> Unit = {},
 )
 
 /**
@@ -98,8 +107,10 @@ internal class EditorPreviewOptionsActions(
  *
  * Two groups, in the scope order the PDF options panels use:
  *  1. **The preview's own switches** (no heading under the sheet title), the same device preferences Settings →
- *     Editor Screen keeps (dimension lines, draw like the sheet, grid, selection highlight). The
- *     grid stands down while the preview draws like the sheet, so its switch greys with the reason.
+ *     Editor Screen keeps (dimension lines and their "Dimension text size" chips, draw like the
+ *     sheet, grid, selection highlight). The text-size chips grey while dimension lines are off,
+ *     and the grid stands down while the preview draws like the sheet, so its switch greys with
+ *     the reason.
  *  2. **Shared with the printed sheets** — the look settings the preview actually reads, each the
  *     exact control the PDF options panels and Settings → Drawing use, wired to the same setters,
  *     under the shared app-wide [OptionsScopeNote]: fractions, dimension arrows, the dual-unit
@@ -159,6 +170,11 @@ internal fun EditorPreviewOptionsContent(
             onCheckedChange = actions.onShowDimensions,
             modifier = Modifier.testTag(PREVIEW_OPT_DIMENSIONS_TAG),
         ) { Text("Dimension lines") }
+        PreviewDimTextSizeChips(
+            size = state.dimTextSize,
+            onCommit = actions.onDimTextSize,
+            enabled = state.showDimensions,
+        )
         SettingSwitchRow(
             checked = state.sheetLayout,
             onCheckedChange = actions.onSheetLayout,
@@ -249,5 +265,42 @@ internal fun EditorPreviewOptionsContent(
                 )
             }
         }
+    }
+}
+
+/**
+ * The editor preview's "Dimension text size: Small | Medium | Large" chips — ONE composable behind
+ * the Preview options sheet and Settings → Editor Screen, both writing the one device preference
+ * ([PreviewDimTextSize]). The preview's rails only: the printed sheets keep their own size.
+ * [enabled] is false while the preview draws no dimension lines — the chips still show the stored
+ * size, but there is nothing for them to restyle.
+ */
+@Composable
+internal fun PreviewDimTextSizeChips(
+    size: PreviewDimTextSize,
+    onCommit: (PreviewDimTextSize) -> Unit,
+    enabled: Boolean = true,
+) {
+    Column {
+        Text("Dimension text size", style = MaterialTheme.typography.titleSmall)
+        Spacer(Modifier.height(4.dp))
+        ChipFlowRow(spacing = 0.dp) {
+            PreviewDimTextSize.entries.forEach { option ->
+                FilterChip(
+                    selected = size == option,
+                    enabled = enabled,
+                    onClick = { onCommit(option) },
+                    label = { ChipLabel(option.label) },
+                    modifier = Modifier
+                        .padding(end = 8.dp)
+                        .testTag(previewDimTextChipTag(option)),
+                )
+            }
+        }
+        Text(
+            "Size of the values on the preview's dimension lines. The printed sheets are not affected.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }

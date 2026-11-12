@@ -25,6 +25,7 @@ import com.android.shaftschematic.util.FractionStyle
 import com.android.shaftschematic.util.FractionTypography
 import com.android.shaftschematic.util.PDF_PAGE_HEIGHT_PT
 import com.android.shaftschematic.util.PDF_PAGE_WIDTH_PT
+import com.android.shaftschematic.util.PreviewDimTextSize
 import com.android.shaftschematic.util.UnitSystem
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -359,5 +360,42 @@ class PreviewDimensionRailsTest {
     @Test
     fun `render options keep the rails off by default`() {
         assertFalse(RenderOptions().showDimensionRails)
+    }
+
+    @Test
+    fun `the preview's dimension text size scales the values and the rail block`() {
+        // Medium is the preview's historical size, and the default.
+        assertEquals(PREVIEW_RAIL_TEXT_PT, previewRailTextPt(PreviewDimTextSize.MEDIUM), 0f)
+        assertEquals(PreviewDimTextSize.MEDIUM, settings.textSize)
+
+        val w = 1600f
+        val h = 400f
+        fun planAt(size: PreviewDimTextSize): PreviewRailPlan {
+            val s = settings.copy(textSize = size)
+            return planPreviewRails(
+                rails = previewRailSpans(spec, s)!!, settings = s,
+                boxTopPx = 0f, boxHeightPx = h, pxPerPt = pxPerPt,
+                railColor = Color.DKGRAY, haloColor = Color.LTGRAY,
+                layoutFor = layoutFor(w, h),
+            )
+        }
+        // Tallest value box and the block from the highest value down to the shaft top, in pt.
+        fun PreviewRailPlan.labelHeightPt() = placements.maxOf { it.label.bottom - it.label.top }
+        fun PreviewRailPlan.blockPt() = layout.shaftTopPx / pxPerPt - placements.minOf { it.label.top }
+
+        val small = planAt(PreviewDimTextSize.SMALL)
+        val medium = planAt(PreviewDimTextSize.MEDIUM)
+        val large = planAt(PreviewDimTextSize.LARGE)
+        assertTrue(previewRailTextPt(PreviewDimTextSize.SMALL) < PREVIEW_RAIL_TEXT_PT)
+        assertTrue(previewRailTextPt(PreviewDimTextSize.LARGE) > PREVIEW_RAIL_TEXT_PT)
+        assertTrue(small.labelHeightPt() < medium.labelHeightPt())
+        assertTrue(large.labelHeightPt() > medium.labelHeightPt())
+        assertTrue("small ${small.blockPt()} vs medium ${medium.blockPt()}", small.blockPt() < medium.blockPt())
+        assertTrue("large ${large.blockPt()} vs medium ${medium.blockPt()}", large.blockPt() > medium.blockPt())
+
+        // Medium plans exactly what the settings without a size plan.
+        val unsized = plan(w, h)
+        assertEquals(unsized.placements, medium.placements)
+        assertEquals(unsized.reservePx, medium.reservePx, 0f)
     }
 }

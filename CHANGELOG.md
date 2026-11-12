@@ -16,6 +16,35 @@ the 1/32 grid now prints as its fraction (`5 1/2"`, `3 3/4"`), the form the leng
 line takes; a size off the grid keeps the trimmed decimal (`4.12"`). Millimetres, metric
 designations, the thread relief's Ø and every other diameter are unchanged.
 
+### fix(editor): the sheet-layout preview keeps liner and taper proportion on a phone
+
+On-device report: with "Draw Preview Like the Sheet" on, liners of 45 3/8", 30 7/8" and 16 1/2"
+drew the same width in the editor preview, with or without "Keep liners and tapers proportional
+lengthwise"; the printed sheet was right. The preview solved the sheet's profile over the box
+width at one point per dp, and on a phone (~330 pt against the page's 720 pt) the sheet's
+per-kind width floors — paper measures — took the whole box, so every liner sat on its floor.
+
+- `previewSheetProfile` now solves `schematicProfileFit` over the schematic sheet's own content
+  width (`SCHEMATIC_SHEET_CONTENT_WIDTH_PT`, the landscape page inside its margins) and draws the
+  result into the box under ONE uniform scale: the preview is a miniature of the sheet's shaft,
+  so lengths, diameters and S-break decisions are the sheet's. With the proportional box ticked,
+  the reported shape now draws its liners at 81 / 55 / 30 dp in a 330 dp box (56 / 56 / 56
+  before).
+- A box at least as wide as the page is unchanged. The dimension rails keep their on-screen size
+  (they draw at the canvas density, never the miniature scale), and body outlines keep the weight
+  of every other part.
+- A short bare-shaft run may now show the S-break the sheet prints for it.
+
+### feat(editor): preview dimension text size — Small | Medium | Large
+
+On-device request: a size control for the values on the editor preview's dimension lines. New
+"Dimension text size" chips on the editor's Preview options sheet (under "Dimension lines", greyed
+while they are off) and in Settings → Editor Screen, one device preference
+(`SettingsStore.previewDimTextSizeFlow`, stored by name, default Medium = the preview's size
+before). Small 0.8×, Large 1.25× scale the rail values and the lane pitch with them. Never in a
+document, never captured by a Drawing profile, read by no PDF composer — the printed sheets keep
+their own "Dimension text size".
+
 ### feat(editor): each bare-shaft section shows or hides its own Ø callout
 
 On-device report: turning the Ø callout on or off on one `Body (auto)` card turned it on or off

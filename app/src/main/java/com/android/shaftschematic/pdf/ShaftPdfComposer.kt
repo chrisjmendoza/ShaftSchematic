@@ -57,6 +57,7 @@ import com.android.shaftschematic.ui.resolved.unshadedTaperIds
 import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.DualUnitLayout
+import com.android.shaftschematic.util.PDF_PAGE_WIDTH_PT
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.VerboseLog
 import com.android.shaftschematic.util.buildBodyTitleById
@@ -915,8 +916,8 @@ internal class SchematicProfileFit(val diaPtPerMm: Float, val xMap: CompressedPr
 /**
  * The schematic's drawn diameter scale and its compressed x map for a content width and a height
  * budget — ONE pipeline behind the composer, the band layout's rail estimate and the editor
- * preview's sheet layout (`ui/drawing/render/PreviewSheetLayout.kt`, which solves it in sheet
- * points at one point per dp over the preview box).
+ * preview's sheet layout (`ui/drawing/render/PreviewSheetLayout.kt`, which solves it over
+ * [SCHEMATIC_SHEET_CONTENT_WIDTH_PT] and draws it into the preview box under one uniform scale).
  *
  * [drawnMaxDiaMm] is the largest diameter the caller actually DRAWS, when it has the resolved runs
  * in hand: the stored components never carry the bare shaft's Ø, so a shaft that is only bare
@@ -1026,6 +1027,12 @@ private const val TEXT_PT = 12f
 private const val PAGE_MARGIN_PT = 36f       // 0.5 in
 /** The page margin every schematic band is inset by — the before/after sheet lays its bands out on it. */
 internal const val SCHEMATIC_PAGE_MARGIN_PT = PAGE_MARGIN_PT
+/**
+ * The full-page schematic's content width (pt): the landscape page ([PDF_PAGE_WIDTH_PT]) inside
+ * its side margins — the width `composeShaftPdf` lays the profile out over (`geomRect`). The
+ * editor preview solves its sheet layout over this width (`PreviewSheetLayout.kt`).
+ */
+internal const val SCHEMATIC_SHEET_CONTENT_WIDTH_PT: Float = PDF_PAGE_WIDTH_PT - 2f * PAGE_MARGIN_PT
 private const val TOP_TEXT_PAD_PT = 12f
 private const val SHAFT_DOWN_PT = 36f        // 0.5 in downward shift (moves footer down too)
 private const val BAND_CLEAR_PT = 12f        // breathing room above shaft before first dim line

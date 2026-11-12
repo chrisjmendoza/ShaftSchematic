@@ -28,6 +28,7 @@ import com.android.shaftschematic.ui.viewmodel.setPdfArrowSizePt
 import com.android.shaftschematic.ui.viewmodel.setPdfDualUnitLayout
 import com.android.shaftschematic.ui.viewmodel.setPdfFractionStyle
 import com.android.shaftschematic.ui.viewmodel.setPdfSBreakThresholdFrac
+import com.android.shaftschematic.ui.viewmodel.setPreviewDimTextSize
 import com.android.shaftschematic.ui.viewmodel.setPreviewSheetLayout
 import com.android.shaftschematic.ui.viewmodel.setLinerCompression
 import com.android.shaftschematic.ui.viewmodel.setLinersProportional
@@ -295,8 +296,10 @@ fun ShaftRoute(
 
     // The preview's dimension rails read exactly what the schematic sheet's rails read: the
     // document's units (overrides + dual, shared by both drawings), the measurement reference,
-    // the arrow size and dual layout; the fraction style and output font are re-render keys.
+    // the arrow size and dual layout; the fraction style and output font are re-render keys. The
+    // value size is the preview's own device preference, read by no composer.
     val showPreviewDimensions by vm.showPreviewDimensions.collectAsState()
+    val previewDimTextSize by vm.previewDimTextSize.collectAsState()
     val dualUnits by vm.dualUnits.collectAsState()
     val pdfArrowSizePt by vm.pdfArrowSizePt.collectAsState()
     val pdfDualUnitLayout by vm.pdfDualUnitLayout.collectAsState()
@@ -309,6 +312,7 @@ fun ShaftRoute(
         dualUnitLayout = pdfDualUnitLayout,
         fractionStyle = pdfFractionStyle,
         outputFont = pdfOutputFont,
+        textSize = previewDimTextSize,
     )
 
     // The preview drawn like the schematic sheet reads what `composeShaftPdf` reads: the sizing
@@ -533,6 +537,7 @@ fun ShaftRoute(
         EditorPreviewOptionsSheet(
             state = EditorPreviewOptionsState(
                 showDimensions = showPreviewDimensions,
+                dimTextSize = previewDimTextSize,
                 sheetLayout = previewSheetLayoutOn,
                 showGrid = showGrid,
                 highlightSelection = showHighlightSelection,
@@ -567,6 +572,7 @@ fun ShaftRoute(
                 onLinersProportional = { vm.setLinersProportional(it) },
                 onLinerCompression = { vm.setLinerCompression(it) },
                 onLinerCompressionDrag = { previewLinerCompressionDrag = it },
+                onDimTextSize = { vm.setPreviewDimTextSize(it) },
             ),
             onDismiss = {
                 previewSBreakDrag = null
