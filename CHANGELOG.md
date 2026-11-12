@@ -8,6 +8,20 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-12
 
+### fix(editor): Preview options button moves out of the preview box
+
+On-device report: the corner button sat on the AFT-end dimension values. No corner of the box is
+free (rail values top, the shaft's ends bottom), so the button now sits at the left end of the
+"Components" heading row directly under the preview, on phone and tablet alike. Same button, same
+sheet, same `preview_options_button` tag.
+
+### feat(editor): the start card's Overall Length and Shaft diameter share a row
+
+On-device request: neither value is ever long enough to want a whole line. On a phone the two sit
+side by side under the short labels `OAL (in)` / `Shaft Ø (in)`; a tablet's two-up card keeps the
+full labels. A phone at a system font past 130% keeps them stacked, where half a card cannot hold
+the labels. Layout only — commit behavior and test tags are unchanged.
+
 ### chore(repo): `scripts/git-cleanup.ps1` prunes merged branches and worktrees
 
 Dry run by default; `-Apply` removes worktree folders and local branches already merged into

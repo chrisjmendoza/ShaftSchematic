@@ -62,8 +62,9 @@ closing the dialog never drops the cursor and keyboard into another field. With
   `ui/screen/StartCard.kt`, title "Shaft & job", `testTag("start_card")`) — on the Schematic and
   Final tabs, at every width class (on-device request: the always-on OAL row nagged; a job starts
   with its OAL, its shaft size and its project information, and then the shaft is built). Top to
-  bottom: **Overall Length** (`overall_length_field`), **Shaft diameter**
-  (`start_card_shaft_dia`) with the note that a section of bare shaft takes its own Ø on its card
+  bottom: **Overall Length** (`overall_length_field`) and **Shaft diameter**
+  (`start_card_shaft_dia`) side by side on one row (stacked only on a phone at a large system
+  font), with the note that a section of bare shaft takes its own Ø on its card
   (`start_card_dia_note`), then **Project information** — Job Number, Customer, Vessel, Item
   (optional), Shaft Position, Notes (`project_info_{job_number,customer,vessel,item,position,notes}`).
   It is NOT a component: no resolved id, no remove button, rename editor or unit chip; nothing
@@ -144,7 +145,7 @@ Responsibilities
   - Overflow menu (⋮) → Save As…, **Close Document** (testTag
     `overflow_close_document`; clean → closes to Start, dirty → shared unsaved-changes
     guard — see `Navigation.md`), Settings, Clear All, etc. Preview options are NOT here: they
-    open from the preview box's own corner button (`preview_options_button`, `UI_CONTRACT.md`
+    open from the button at the left end of the "Components" heading row (`preview_options_button`, `UI_CONTRACT.md`
     §3.1.1 "Preview options").
 
 - **Preview Card:** (`PreviewCard`, `PreviewOalBadge` — both in

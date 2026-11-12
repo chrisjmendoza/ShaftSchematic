@@ -10,6 +10,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -89,32 +90,40 @@ internal fun ShaftStartCard(
             val isOversized = spec.overallLengthMm > 0f &&
                 spec.overallLengthMm < lastOccupiedEndMm(spec)
 
-            FieldPair(
-                first = {
-                    // At a large system font the full label wrapped inside the outline and its
-                    // first line was clipped (on-device report, 200%): it shortens past
-                    // OAL_SHORT_LABEL_FONT_SCALE and never takes a second line.
-                    CommitNum(
-                        label = oalFieldLabel(unit, LocalDensity.current.fontScale),
-                        initialDisplay = formatDisplay(spec.overallLengthMm, unit),
-                        modifier = Modifier.testTag(OAL_FIELD_TAG),
-                        externalIssueText = if (isOversized) OAL_OVERSIZE_NOTICE else null,
-                    ) { t -> toMmOrNull(t, unit)?.let(onSetOverallLengthMm) }
-                },
-                second = {
-                    CommitNum(
-                        label = "Shaft diameter (${abbr(unit)})",
-                        // Unset (0) shows an empty box: the derived Ø is not a typed value.
-                        initialDisplay = if (spec.autoBodyDiaMm > 0f) formatDisplay(spec.autoBodyDiaMm, unit) else "",
-                        modifier = Modifier.testTag(START_CARD_SHAFT_DIA_TAG),
-                        // A cleared box is a deliberate clear, not an unreadable entry.
-                        parseValid = { raw -> raw.isBlank() || isLengthText(raw) },
-                    ) { t ->
-                        val mm = if (t.isBlank()) 0f else toMmOrNull(t, unit) ?: return@CommitNum
-                        onSetShaftDiaMm(mm)
-                    }
-                },
-            )
+            // The two values are a few characters each, so they share a row at every width
+            // (on-device request) — except at a large system font on a narrow card, where even
+            // the short labels would not fit half a card and the fields stack as before.
+            val fontScale = LocalDensity.current.fontScale
+            val twoUp = LocalCardFieldsTwoUp.current
+            val shareRow = startCardFieldsShareRow(twoUp, fontScale)
+            // Half a phone card holds only the short labels; a tablet's two-up card has room
+            // for the full ones.
+            val shortLabels = shareRow && !twoUp
+            CompositionLocalProvider(LocalCardFieldsTwoUp provides shareRow) {
+                FieldPair(
+                    first = {
+                        CommitNum(
+                            label = if (shortLabels) "OAL (${abbr(unit)})" else oalFieldLabel(unit, fontScale),
+                            initialDisplay = formatDisplay(spec.overallLengthMm, unit),
+                            modifier = Modifier.testTag(OAL_FIELD_TAG),
+                            externalIssueText = if (isOversized) OAL_OVERSIZE_NOTICE else null,
+                        ) { t -> toMmOrNull(t, unit)?.let(onSetOverallLengthMm) }
+                    },
+                    second = {
+                        CommitNum(
+                            label = shaftDiaFieldLabel(unit, shortLabels),
+                            // Unset (0) shows an empty box: the derived Ø is not a typed value.
+                            initialDisplay = if (spec.autoBodyDiaMm > 0f) formatDisplay(spec.autoBodyDiaMm, unit) else "",
+                            modifier = Modifier.testTag(START_CARD_SHAFT_DIA_TAG),
+                            // A cleared box is a deliberate clear, not an unreadable entry.
+                            parseValid = { raw -> raw.isBlank() || isLengthText(raw) },
+                        ) { t ->
+                            val mm = if (t.isBlank()) 0f else toMmOrNull(t, unit) ?: return@CommitNum
+                            onSetShaftDiaMm(mm)
+                        }
+                    },
+                )
+            }
 
             // Read-only: the dimensioned span, only when an excluded end thread makes it differ
             // from the physical length.
@@ -265,6 +274,18 @@ internal fun CommitTextField(
             }
     )
 }
+
+/**
+ * Whether the start card's Overall Length and Shaft diameter share a row: always on a card that
+ * is already two-up, and on a narrow card unless the system font is past
+ * [OAL_SHORT_LABEL_FONT_SCALE], where half a card cannot hold even the short labels.
+ */
+internal fun startCardFieldsShareRow(cardFieldsTwoUp: Boolean, fontScale: Float): Boolean =
+    cardFieldsTwoUp || fontScale <= OAL_SHORT_LABEL_FONT_SCALE
+
+/** The shaft diameter field's label; [short] is the half-card form beside the OAL on a phone. */
+internal fun shaftDiaFieldLabel(unit: UnitSystem, short: Boolean): String =
+    if (short) "Shaft Ø (${abbr(unit)})" else "Shaft diameter (${abbr(unit)})"
 
 /** The start card's title — the card is the job's start: the shaft's size and whose job it is. */
 internal const val START_CARD_TITLE = "Shaft & job"

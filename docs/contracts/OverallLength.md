@@ -38,7 +38,10 @@ UI signals errors. Applies to `ShaftViewModel`, `ShaftRoute`, `ShaftScreen`, and
 - **Oversize**: if components extend past a **set** Overall (`> 0`), the field shows an error
   state with the advisory line "Parts run past this length" — it still commits; the warning banner
   names the parts. A not-yet-set Overall (`0`) is never an error.
-- **Shaft diameter** sits beside it (two to a row on a tablet, under it on a phone): the shaft-wide
+- **Shaft diameter** sits beside it at every width (on-device request: neither value is ever long
+  enough to want a whole line) — on a phone's half-card under the short labels `OAL (in)` /
+  `Shaft Ø (in)`, on a tablet's two-up card under the full ones; only a phone at a system font past
+  `OAL_SHORT_LABEL_FONT_SCALE` stacks them (`startCardFieldsShareRow`). It is the shaft-wide
   bare-shaft Ø (`ShaftSpec.autoBodyDiaMm`), typed in the document unit and stored verbatim through
   `ShaftViewModel.setShaftWideAutoBodyDiaMm` → `withShaftWideAutoBodyDia`. It writes ONLY the
   shaft-wide value: every per-section override (`autoDiaOverrides`) is KEPT, so a section typed on
