@@ -691,8 +691,8 @@ internal fun buildFooterEndColumns(
     // The length term still resolves the thread's own display unit (its id already carries
     // an mm override when metric — see DisplayUnits/ShaftViewModel). Non-metric threads keep
     // today's dia × TPI-or-mm-pitch × length line, unchanged apart from dual-awareness. The
-    // major Ø drops trailing zeros (`4.5"`, not `4.500"`) — the one exception to the
-    // three-decimal diameter rule, see [formatThreadDiaWithUnit]. A thread relief prints NO footer
+    // major Ø prints as a fraction like the length beside it (`5 1/2"`, not `5.500"`) — the one
+    // exception to the three-decimal diameter rule, see [formatThreadDiaWithUnit]. A thread relief prints NO footer
     // line — the groove is drawing detail only (on-device ruling).
     fun threadLines(th: Threads): List<String> = buildList {
         val thUnit = displayUnits.unitFor(th.id)

@@ -74,16 +74,21 @@ fun formatDiaWithUnit(mm: Double, unit: Any?): String {
  * Formats a THREAD's major diameter for the footer's "Thread:" line — the one exception to the
  * three-decimal diameter rule of [formatDiaWithUnit] (on-device ruling).
  *
- * - Inches: at most three decimals with trailing zeros dropped, so a typed `4.5` prints `4.5"`
- *   and `3.75` prints `3.75"`; a whole number prints bare; an exact odd sixteenth keeps its
- *   fourth place (`1.9375"`). A thread's major Ø is a nominal size,
- *   called out the way it is written, not a ground diameter read off a micrometer.
+ * - Inches: a size on the 1/32 grid prints as its fraction, exactly as the thread's length on
+ *   the same line does (`5 1/2"`, `3 3/4"`, a whole number bare) — a decimal major Ø beside a
+ *   fractional length mixed two notations within one thread callout (on-device report). A size
+ *   off that grid prints at most three decimals with trailing zeros dropped (`4.123"`). A
+ *   thread's major Ø is a nominal size, called out the way it is written, not a ground
+ *   diameter read off a micrometer.
  * - Millimeters: the same compact 1-decimal form as [formatDiaWithUnit].
  */
 fun formatThreadDiaWithUnit(mm: Double, unit: Any?): String {
     val name = unit?.toString()?.uppercase(Locale.US) ?: "MM"
     if (!name.contains("INCH")) return formatDiaWithUnit(mm, unit)
-    val s = LengthFormat.formatInchesDecimal(mm / 25.4).trimEnd('0').trimEnd('.')
+    val inches = mm / 25.4
+    val onGrid = LengthFormat.formatInchesSmart(inches, PRINT_LENGTH_INCH_FORMAT)
+    val s = if ('.' !in onGrid) onGrid
+    else LengthFormat.formatInchesDecimal(inches).trimEnd('0').trimEnd('.')
     return "$s\""
 }
 
