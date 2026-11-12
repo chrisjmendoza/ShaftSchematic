@@ -118,6 +118,12 @@ object DiameterCalloutLayout {
     /** Where [place] put a callout: its row, its label's left edge and where its leader stands. */
     data class Placement(val tier: Int, val labelLeft: Float, val anchorX: Float)
 
+    /** Cost of one point of a value's width set over another value on its row (no clear spot left). */
+    private const val OVERLAP_COST_PER_PT: Float = 2f
+
+    /** Cost of a leader dropped through a value — about as bad as 12 pt of two values overlapping. */
+    private const val LEADER_CROSS_COST: Float = 24f
+
     /** Alternative leader positions [place] tries on each side of a callout's own anchor. */
     private const val ANCHOR_STEPS: Int = 4
 
@@ -143,8 +149,16 @@ object DiameterCalloutLayout {
      * with no clear spot, the spots are searched TOGETHER for an arrangement that clears them all
      * — an earlier callout moving to its second row or other side — so a blend's angle whose
      * value had to hang left, under the liner, no longer takes the liner's Ø leader through it
-     * (on-device report). Only when no arrangement is clear does a callout take the least-crowded
-     * row on its usual side — never dropped.
+     * (on-device report). A caller with room for it passes [fallbackTiers]: a crowd with no clear
+     * arrangement in [maxTiers] rows then tries one more row at a time, up to that many (large
+     * print — the values are wide enough that two rows cannot hold them). Only when no
+     * arrangement is clear at all does a callout take the spot that overlaps its neighbours
+     * LEAST — a value set squarely on another is the one result worse than any other, so a
+     * leader through a value or two values touching is chosen before it. Never dropped.
+     *
+     * [overhang] is how far a label may run past the content edge into the page margin when no
+     * spot inside the content is clear (on-device direction: the margin beyond the shaft's end is
+     * paper too). Spots inside the content are always tried first.
      *
      * @return one [Placement] per item, parallel to [items].
      */
@@ -155,8 +169,32 @@ object DiameterCalloutLayout {
         contentRight: Float = Float.POSITIVE_INFINITY,
         maxTiers: Int = MAX_TIERS,
         gap: Float = MIN_GAP,
+        fallbackTiers: Int = maxTiers,
+        overhang: Float = 0f,
     ): List<Placement> {
-        if (items.isEmpty()) return emptyList()
+        val (placements, clear) = placeIn(items, dogleg, contentLeft, contentRight, maxTiers, gap, overhang)
+        if (clear || fallbackTiers <= maxTiers) return placements
+        // No clear arrangement in [maxTiers] rows — large values on a crowded stretch. One more
+        // row is cheaper than a value printed through a leader; the caller's band reserves
+        // whatever rows the placement uses ([occupancy] reads them off the same answer).
+        for (t in maxTiers + 1..fallbackTiers) {
+            val (more, moreClear) = placeIn(items, dogleg, contentLeft, contentRight, t, gap, overhang)
+            if (moreClear || t == fallbackTiers) return more
+        }
+        return placements
+    }
+
+    /** [place] at a fixed number of rows: the placements, and whether every callout is clear. */
+    private fun placeIn(
+        items: List<Item>,
+        dogleg: Float,
+        contentLeft: Float,
+        contentRight: Float,
+        maxTiers: Int,
+        gap: Float,
+        overhang: Float,
+    ): Pair<List<Placement>, Boolean> {
+        if (items.isEmpty()) return emptyList<Placement>() to true
         val tiers = maxTiers.coerceAtLeast(1)
         val order = items.indices.sortedWith(
             compareBy({ !items[it].feature }, { items[it].anchorX }, { items[it].labelWidth }, { it })
@@ -188,15 +226,28 @@ object DiameterCalloutLayout {
 
         // Every spot a callout may take, in preference order: its own anchor before a slid one,
         // rows before sides.
-        fun spots(item: Item): List<Placement> = anchors(item).flatMap { anchor ->
-            val usual = labelLeft(anchor, item.labelWidth, dogleg, contentLeft, contentRight)
-            // The other side of the leader, when the label fits inside the content there.
-            val flipped = if (usual >= anchor) anchor - dogleg - item.labelWidth else anchor + dogleg
-            val sides = buildList {
-                add(usual)
-                if (flipped >= contentLeft && flipped + item.labelWidth <= contentRight) add(flipped)
+        fun spots(item: Item): List<Placement> {
+            fun rows(labelL: Float, anchor: Float) = (0 until tiers).map { t -> Placement(t, labelL, anchor) }
+            val inside = ArrayList<Placement>()
+            val margin = ArrayList<Placement>()
+            for (anchor in anchors(item)) {
+                val usual = labelLeft(anchor, item.labelWidth, dogleg, contentLeft, contentRight)
+                inside += rows(usual, anchor)
+                // The other side of the leader, when the label fits inside the content there.
+                val flipped = if (usual >= anchor) anchor - dogleg - item.labelWidth else anchor + dogleg
+                if (flipped >= contentLeft && flipped + item.labelWidth <= contentRight) inside += rows(flipped, anchor)
+                // Either side with the label run a little into the page margin — tried only after
+                // every spot inside the content, slid leaders included.
+                if (overhang > 0f) {
+                    val right = anchor + dogleg
+                    val left = anchor - dogleg - item.labelWidth
+                    if (right + item.labelWidth > contentRight && right + item.labelWidth <= contentRight + overhang) {
+                        margin += rows(right, anchor)
+                    }
+                    if (left < contentLeft && left >= contentLeft - overhang) margin += rows(left, anchor)
+                }
             }
-            sides.flatMap { labelL -> (0 until tiers).map { t -> Placement(t, labelL, anchor) } }
+            return inside + margin
         }
         fun placedAt(item: Item, at: Placement) = Placed(
             at.tier, at.anchorX,
@@ -207,32 +258,45 @@ object DiameterCalloutLayout {
             return clear(at.tier, at.anchorX, box.left, box.right)
         }
 
+        // What a spot costs when none is clear: every point of a value set over another, and a
+        // flat price for each leader through a value.
+        fun cost(item: Item, at: Placement): Float {
+            val box = placedAt(item, at)
+            var sum = 0f
+            for (p in placed) {
+                sum += when {
+                    p.tier == box.tier ->
+                        (minOf(box.right, p.right) + gap - maxOf(box.left, p.left)).coerceAtLeast(0f) * OVERLAP_COST_PER_PT
+                    p.tier < box.tier ->
+                        if (box.anchorX > p.left - gap && box.anchorX < p.right + gap) LEADER_CROSS_COST else 0f
+                    else ->
+                        if (p.anchorX > box.left - gap && p.anchorX < box.right + gap) LEADER_CROSS_COST else 0f
+                }
+            }
+            return sum
+        }
+
         val forced = ArrayList<Int>()
         for (idx in order) {
             val item = items[idx]
             val options = spots(item)
             val pick = options.firstOrNull { isClear(item, it) } ?: run {
                 forced += idx
-                Placement(
-                    tier = (0 until tiers).minBy { t ->
-                        placed.filter { p -> p.tier == t }.maxOfOrNull { p -> p.right } ?: Float.NEGATIVE_INFINITY
-                    },
-                    labelLeft = options.first().labelLeft,
-                    anchorX = item.anchorX,
-                )
+                // The earliest of the least-bad spots, so preference order still breaks ties.
+                options.minBy { cost(item, it) }
             }
             placed += placedAt(item, pick)
             result[idx] = pick
         }
-        if (forced.isEmpty()) return result.map { it!! }
+        if (forced.isEmpty()) return result.map { it!! } to true
 
         // Taking each callout's first clear spot in turn left one with none, so it stands on
         // another's value. An earlier callout giving up its first choice can free the spot: search
         // the spots of the crowded callouts TOGETHER for an arrangement in which every one is
         // clear. Only the callouts that can reach the stuck one take part — everything a callout
         // could ever cover is its `reach`, and the group is the stuck callouts plus whatever
-        // their reaches chain to — so a callout at the other end of the shaft keeps its place
-        // and costs the search nothing. The search is bounded; without a clear arrangement the
+        // their reaches chain to — so a callout clear of every crowd keeps its place and costs the
+        // search nothing. The search is bounded; without a clear arrangement the
         // one-at-a-time placement above stands.
         fun reach(item: Item): ClosedFloatingPointRange<Float> {
             val pad = dogleg + item.labelWidth + gap
@@ -252,29 +316,52 @@ object DiameterCalloutLayout {
             }
         }
         // The callouts outside the group stand where they were put; the group is placed again
-        // around them, fewest spots first (the callout with least freedom claims its spot before
-        // one that can move around it), then in the usual order.
+        // around them — one CROWD at a time. Callouts whose reaches never chain cannot affect each
+        // other, so a crowd at each end of the shaft is two small searches, not one whose size is
+        // their product (a sheet with both ran the search out of budget and arranged neither).
+        // Within a crowd: fewest spots first (the callout with least freedom claims its spot
+        // before one that can move around it), then in the usual order.
         placed.clear()
         for (idx in order) if (idx !in group) placed += placedAt(items[idx], result[idx]!!)
-        val groupSpots = group.associateWith { spots(items[it]) }
-        val groupOrder = order.filter { it in group }.sortedBy { groupSpots.getValue(it).size }
-        val joint = HashMap<Int, Placement>()
-        var budget = JOINT_SEARCH_BUDGET
-        fun search(k: Int): Boolean {
-            if (k == groupOrder.size) return true
-            val idx = groupOrder[k]
-            val item = items[idx]
-            for (at in groupSpots.getValue(idx)) {
-                if (budget-- <= 0) return false
-                if (!isClear(item, at)) continue
-                placed += placedAt(item, at)
-                joint[idx] = at
-                if (search(k + 1)) return true
-                placed.removeAt(placed.lastIndex)
+        val crowds = ArrayList<MutableSet<Int>>()
+        for (idx in group) {
+            val r = reach(items[idx])
+            val touching = crowds.filter { c ->
+                c.any { g -> reach(items[g]).let { it.start <= r.endInclusive && r.start <= it.endInclusive } }
             }
-            return false
+            crowds.removeAll(touching)
+            crowds += touching.fold(mutableSetOf(idx)) { acc, c -> acc.apply { addAll(c) } }
         }
-        if (search(0)) for ((idx, at) in joint) result[idx] = at
-        return result.map { it!! }
+        var solved = true
+        for (crowd in crowds) {
+            val crowdSpots = crowd.associateWith { spots(items[it]) }
+            val crowdOrder = order.filter { it in crowd }.sortedBy { crowdSpots.getValue(it).size }
+            val joint = HashMap<Int, Placement>()
+            var budget = JOINT_SEARCH_BUDGET
+            val base = placed.size
+            fun search(k: Int): Boolean {
+                if (k == crowdOrder.size) return true
+                val idx = crowdOrder[k]
+                val item = items[idx]
+                for (at in crowdSpots.getValue(idx)) {
+                    if (budget-- <= 0) return false
+                    if (!isClear(item, at)) continue
+                    placed += placedAt(item, at)
+                    joint[idx] = at
+                    if (search(k + 1)) return true
+                    placed.removeAt(placed.lastIndex)
+                }
+                return false
+            }
+            if (search(0)) {
+                for ((idx, at) in joint) result[idx] = at
+            } else {
+                // No clear arrangement for this crowd: its one-at-a-time placement stands.
+                solved = false
+                while (placed.size > base) placed.removeAt(placed.lastIndex)
+                for (idx in crowdOrder) placed += placedAt(items[idx], result[idx]!!)
+            }
+        }
+        return result.map { it!! } to solved
     }
 }

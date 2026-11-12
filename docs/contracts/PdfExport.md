@@ -106,13 +106,27 @@ with this job", so the reader never has to guess which kind a row is.
     largest step that fits (`fittedTextScale`, decided once per sheet, logged — the dual-stacking
     posture; never mixed sizes). Consolidated (`footerFitsAt`): footer + TIR / coupling-face lane
     + rails + prelim bubble rows must leave the shaft `PROFILE_MIN_SHAFT_HEIGHT_PT` +
-    `SHAFT_BUDGET_CLEAR_PT`. Full-page schematic (`schematicFittedPrefs`): top pad + rail block at
+    `SHAFT_BUDGET_CLEAR_PT`.
+  - *The below-shaft band follows the text* (full-page schematic): the room under the shaft is what
+    the Ø callouts and the names need at their requested sizes (`belowShaftBandNeedPt` — both
+    planners run unbounded with the shaft at y = 0, plus `BELOW_BAND_FOOTER_AIR_PT`), never less
+    than `INFO_GAP_PT`, and never so much that the rail block at its tightest lane
+    (`RAIL_MIN_GAP_PT` × scale) no longer fits over the shaft. The shaft's centre clamps up by
+    that much, into the white the page keeps above the rails; past the cap the names shrink as
+    they always did. The Ø callouts take more rows, one at a time, when two hold no clear
+    arrangement — up to one row per callout while the band those rows need still fits (the
+    allowance steps down until it does, never under `SCHEMATIC_CALLOUT_FALLBACK_TIERS`); the band
+    reserves the rows the placement uses. A value may run `CALLOUT_MARGIN_OVERHANG_PT` (18 pt,
+    half the page margin) past the content edge when no in-content spot is clear, and a callout
+    with no clear spot at all takes the least-overlapping one (`DiameterCalloutLayout.place`). A fixed inch
+    left large-print names at the 7 pt floor with the callouts over them (large-print pass). Full-page schematic (`schematicFittedPrefs`): top pad + rail block at
     its tightest lane + drawn shaft + `INFO_GAP_PT` + footer must fit the page. The before/after
     sheet caps instead (`beforeAfterPrefs`): footer 125%, dimension 150% — two drawings share it.
   - *Dimension*: the rail values and their lane pitch (schematic `startRailGap`/`railMinGap`
     and the band layout's pitches; consolidated `RUNOUT_RAIL_GAP_PT`), the schematic's Ø
     callouts (their baseline drop under the kink grows with the size, `TEXT_DROP_MIN_PT` at
-    10 pt and below), and the consolidated sheet's in-profile Ø values' base size. The rail fit
+    10 pt and below), the full-page schematic's component names (`schematicNameTextPt`, 10 pt at
+    100%; the before/after bands keep 10 pt — their below-shaft room is budgeted for it), and the consolidated sheet's in-profile Ø values' base size. The rail fit
     may still shrink a crowded schematic's values toward 7 pt.
   - `SheetTextOverlapTest` runs every step on its fullest-footer fixture across the consolidated
     variants, the schematic and the before/after sheet with no colliding text. The ceiling is the

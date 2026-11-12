@@ -1168,6 +1168,19 @@ Angle-mode blend callouts (Body blends, above) ride this same list.
 PDF-only — no on-screen canvas equivalent (the editor preview draws rails, never callouts), so no
 draw-both-sites rule applies.
 
+**The band they share is as tall as they need** (full-page schematic): the room under the shaft is
+measured from both planners at the requested sizes (`belowShaftBandNeedPt`), never under the
+1-inch `INFO_GAP_PT`, and the shaft rises into the white above to make it — capped where the rail
+block at its tightest pitch still fits over the shaft. The names follow "Dimension text size"
+(`schematicNameTextPt`, 10 pt at 100%; before/after bands keep 10 pt), and the Ø callouts take more
+rows, one at a time, when two hold no clear arrangement (`fallbackTiers` — up to a row each while
+the band those rows need still fits under the shaft, never fewer than three allowed); a value may
+also run up to `CALLOUT_MARGIN_OVERHANG_PT` (1/4") into the page margin when no spot inside the
+content is clear (on-device direction; every in-content spot is tried first), and with no clear
+arrangement at all a callout takes the spot that overlaps LEAST — never squarely on another value
+(on-device report: `Ø 9.030"` printed over a blend's `45°, 3/8" R`). A fixed inch left large print's
+names at the 7 pt floor under overprinted callouts (large-print pass).
+
 **Callouts and component-NAME labels share ONE collision space.** Both hang below the shaft
 and both anchor on a component's CENTER, so a component printing a name and a Ø aimed two
 strings at the same x and set one through the other (on-device report); a per-pass collision

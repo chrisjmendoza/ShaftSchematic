@@ -1380,7 +1380,7 @@ internal val helpSections: List<HelpSection> = listOf(
                     "175%, on the schematic and consolidated sheets (and the Final tab's). " +
                     "Footer sizes the job and spec block at the foot of the sheet, plus the TIR " +
                     "and dye pen row above it on the consolidated sheet; Dimension sizes the " +
-                    "lengths on the rails and the Ø values. Larger text takes room from the " +
+                    "lengths on the rails, the Ø values and the schematic's component names. Larger text takes room from the " +
                     "drawing, so the shaft may draw a little shorter. A sheet without room for " +
                     "the footer size you picked prints it at the largest size that fits — a " +
                     "busy consolidated sheet with the coupling end view most often. The " +
