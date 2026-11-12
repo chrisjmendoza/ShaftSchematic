@@ -187,8 +187,11 @@ ON) — never in a document, never captured by a Drawing profile, read by no com
 sheet (every other canvas: thumbnails, Runout / Wear / Undercut) is the linear layout,
 byte-identical.
 
-**Preview options.** The editor's overflow menu (Schematic and Final tabs — the Final tab hosts the
-same editor bar) carries "Preview options…" (`overflow_preview_options`), a bottom sheet
+**Preview options.** The preview box carries a settings button in its top-left corner
+(`preview_options_button`, Schematic and Final tabs — the Final tab hosts the same editor; the
+mirror of the reset-view disc top-right; on-device request: the overflow menu, where the entry
+first lived, was not where anyone looked for it, and the overflow carries no entry now). It opens
+"Preview options", a bottom sheet
 (`EditorPreviewOptionsSheet`, `preview_options_sheet`) capped at 55% of the window and scrolling
 inside that over a light scrim, so the preview box at the top of the editor stays in view while
 its options change (a full-height sheet covered it — emulator QA), in two groups: the preview's own device

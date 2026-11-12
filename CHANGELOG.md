@@ -8,6 +8,14 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-11
 
+### feat(editor): Preview options open from the preview itself
+
+The preview box now carries a settings button in its top-left corner (the mirror of the reset-view
+button top-right) that opens the Preview options sheet, on the Schematic and Final tabs at every
+width. The ⋮ menu's "Preview options…" entry is gone — it was not where anyone looked for the
+preview's settings (on-device request). The sheet itself drops its "Preview (this device)"
+heading, which repeated the title above it.
+
 ### fix(pdf): body Ø callouts join the callout collision check; a Ø leader may slide along its component
 
 With the bare-shaft Ø callouts switched on, the stretch between a liner and a taper can carry four

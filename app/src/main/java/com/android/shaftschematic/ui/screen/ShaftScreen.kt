@@ -51,7 +51,6 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.automirrored.filled.Assignment
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenuItem
@@ -223,7 +222,7 @@ fun ShaftScreen(
     previewDimensionRails: PreviewRailSettings? = null,
     /** The preview drawn like the schematic sheet, `null` = the linear picture (`PreviewSheetLayout.kt`). */
     previewSheetLayout: PreviewSheetSettings? = null,
-    /** Opens the editor's Preview options sheet (overflow → "Preview options…"). */
+    /** Opens the editor's Preview options sheet (the preview box's corner button). */
     onOpenPreviewOptions: () -> Unit = {},
 
     sessionAddDefaults: SessionAddDefaults,
@@ -584,7 +583,6 @@ fun ShaftScreen(
                         onSendFeedback = onSendFeedback,
                         onOpenDeveloperOptions = onOpenDeveloperOptions,
                         showDeveloperOptions = devOptionsEnabled,
-                        onOpenPreviewOptions = onOpenPreviewOptions,
                     )
                 }
             )
@@ -637,6 +635,7 @@ fun ShaftScreen(
                 issueMarks = issueMarks,
                 dimensionRails = previewDimensionRails,
                 sheetLayout = previewSheetLayout,
+                onOpenOptions = onOpenPreviewOptions,
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 120.dp, max = previewMaxHeight)
@@ -1330,7 +1329,6 @@ private fun OverflowMenu(
     onSendFeedback: () -> Unit,
     onOpenDeveloperOptions: () -> Unit,
     showDeveloperOptions: Boolean,
-    onOpenPreviewOptions: () -> Unit = {},
 ) {
     var expanded by remember { mutableStateOf(false) }
 
@@ -1371,17 +1369,6 @@ private fun OverflowMenu(
                 onClick = {
                     expanded = false
                     onCloseDocument()
-                }
-            )
-            // The preview box's own switches and the shared look settings it reads, one tap from
-            // the drawing they change (on-device request). On the Schematic and Final tabs alike.
-            DropdownMenuItem(
-                text = { Text("Preview options…") },
-                leadingIcon = { Icon(Icons.Default.Tune, contentDescription = null) },
-                modifier = Modifier.testTag("overflow_preview_options"),
-                onClick = {
-                    expanded = false
-                    onOpenPreviewOptions()
                 }
             )
             DropdownMenuItem(

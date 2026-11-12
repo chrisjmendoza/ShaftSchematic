@@ -146,15 +146,17 @@ class SchematicRenderReviewTest {
                 // The bare-shaft Ø callouts switched on as well, the section beside the FWD
                 // taper machined to 9": four callouts share the stretch between the FWD liner and
                 // the FWD taper (on-device report).
-                val repaired = doc.spec.copy(
-                    showAutoBodyDia = true,
-                    autoDiaOverrides = doc.spec.autoDiaOverrides.map {
-                        if (it.anchorMm > 7000f) it.copy(diaMm = 228.6f) else it
-                    },
-                )
+                // … and to 9.030", whose wider value no longer fits beside the taper.
+                for ((tag, diaMm) in listOf("body_dia" to 228.6f, "body_dia_9030" to 229.362f))
                 for (pct in listOf(125, 175)) {
+                    val repaired = doc.spec.copy(
+                        showAutoBodyDia = true,
+                        autoDiaOverrides = doc.spec.autoDiaOverrides.map {
+                            if (it.anchorMm > 7000f) it.copy(diaMm = diaMm) else it
+                        },
+                    )
                     renderSchematic(
-                        "blend_angle_kelley_c_${font.name.lowercase()}_body_dia_${pct}_schematic.png",
+                        "blend_angle_kelley_c_${font.name.lowercase()}_${tag}_${pct}_schematic.png",
                         doc.copy(spec = repaired),
                         PdfPrefs(dimTextScale = pct / 100f, showComponentTitles = false),
                         linerMinFracOfTrue = 1f,

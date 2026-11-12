@@ -29,7 +29,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * The editor's "Preview options…" entry and its sheet: the overflow item opens the sheet on the
+ * The editor's Preview options entry and its sheet: the preview box's corner button opens the sheet on the
  * editor, every control drives the setter it names, the grid greys while the preview draws like
  * the sheet, and the dual-unit layout shows only on a dual-unit document.
  */
@@ -121,7 +121,7 @@ class EditorPreviewOptionsSheetTest {
     }
 
     @Test
-    fun `the editor overflow opens the sheet, and its switch is the Settings preference`() {
+    fun `the preview's corner button opens the sheet, and its switch is the Settings preference`() {
         val vm = ShaftViewModel(ApplicationProvider.getApplicationContext<Application>()).also {
             it.onSetOverallLengthMm(3000f)
             it.addBodyAt(startMm = 0f, lengthMm = 1000f, diaMm = 152.4f)
@@ -142,8 +142,7 @@ class EditorPreviewOptionsSheetTest {
         }
         rule.waitForIdle()
         val before = vm.previewSheetLayout.value
-        rule.onNodeWithTag("toolbar_overflow").performClick()
-        rule.onNodeWithTag("overflow_preview_options").performClick()
+        rule.onNodeWithTag(PREVIEW_OPTIONS_BUTTON_TAG).performClick()
         rule.waitForIdle()
         rule.onNodeWithTag(PREVIEW_OPTIONS_SHEET_TAG).assertExists()
         rule.onNodeWithTag(PREVIEW_OPT_SHEET_LAYOUT_TAG).performClick()
