@@ -6,6 +6,14 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-11-12
+
+### chore(repo): `scripts/git-cleanup.ps1` prunes merged branches and worktrees
+
+Dry run by default; `-Apply` removes worktree folders and local branches already merged into
+main, `-Remote` adds the merged branches on origin. Nothing is forced: a worktree with
+uncommitted files, the current branch and anything unmerged are left alone and listed.
+
 ## 2026-11-11
 
 ### feat(pdf): a liner and the body beside it share one Ø callout
