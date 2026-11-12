@@ -47,9 +47,10 @@ data class ShaftSpec(
     val keyways90Apart: Boolean = false,   // drawing note: keyways clocked 90° apart (mutually exclusive with keyways180Apart)
     val keyways90Cw: Boolean = true,       // 90°-apart direction from the AFT keyway, viewed from aft; meaningful only when keyways90Apart
     val autoBodyDiaMm: Float = 0f,         // LEGACY shaft-wide bare-shaft Ø; fallback for spans with no override, 0 = derive from neighbors
-    val showAutoBodyDia: Boolean = false,  // one Ø-callout visibility for ALL auto spans (draw-only)
+    val showAutoBodyDia: Boolean = false,  // shaft-wide DEFAULT Ø-callout visibility for auto spans with no autoDiaCallouts entry; no control writes it (draw-only)
     val autoDiaOverrides: List<AutoDiaOverride> = emptyList(),  // per-section bare-shaft Ø, keyed by shaft-space anchor
     val autoBlends: List<AutoBlend> = emptyList(),  // shaft-space blended faces on auto-body spans
+    val autoDiaCallouts: List<AutoDiaCallout> = emptyList(),  // per-section Ø-callout visibility, keyed by shaft-space anchor (draw-only)
 )
 Responsibilities:
 ```
@@ -136,6 +137,17 @@ interval `[startMm, endMm)` — draws at that `diaMm`.
   the one FWD of it → kept; a component added over the anchor → goes; one added upstream
   inside the span → kept; an override already dormant before the edit → goes. Undo restores
   it (the history holds the whole spec).
+- **The Ø callout is per section too:** `ShaftSpec.autoDiaCallouts`
+  (`AutoDiaCallout(anchorMm, show)`, `model/AutoDiaCallout.kt`) is keyed, merged (aft-most
+  wins), left dormant and pruned exactly as the overrides are — the same
+  `withAutoDiaOverridesSurviving` pass drops both. A span with no anchor follows
+  `ShaftSpec.showAutoBodyDia`, which no control writes any more (a document saved while it
+  was the one switch keeps every section shown until a card hides one); an entry is stored
+  only where a section differs from that default (`withAutoSectionShowDia`). Resolved by the
+  ONE `showsAutoSectionDia`, read by `bodyForPdf` and the auto-body card. "Explicit body"
+  carries the visibility both ways: a body created on exactly a section's span takes it
+  (`autoSectionShowsDiaOn` → `Body.showDiaOnDrawing`), and a removed body hands its own to
+  the auto run that then fills exactly its span (`withDemotedBodyDiaCallout`).
 - **Shaft-space keying, no orphans:** auto spans have no stored row and their ids are
   position-derived, so anchors are stored in shaft space (the `Undercut` / `WornSection`
   posture). An anchor a resize or OAL change strands inside a component is **dormant** — not
@@ -580,7 +592,7 @@ Backfill missing UUIDs
 Normalize thread pitch/tpi relationships
 
 `couplerBoltSlots`, `keyways180Apart`, `keyways90Apart`, `keyways90Cw`, `autoBodyDiaMm`,
-`showAutoBodyDia`, `autoDiaOverrides`, `autoBlends`, and
+`showAutoBodyDia`, `autoDiaOverrides`, `autoBlends`, `autoDiaCallouts`, and
 every envelope record above round-trip automatically through `ShaftDocCodec` with no
 schema/version bump: each defaults empty/zero/false and decode uses `ignoreUnknownKeys`, so
 documents written before a field existed decode unchanged.

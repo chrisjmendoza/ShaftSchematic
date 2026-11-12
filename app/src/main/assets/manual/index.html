@@ -385,7 +385,7 @@
   <p  class="keep">With only one section of bare shaft there is nothing to choose: the diameter you type is the shaft's. The <span class="ui">Shaft diameter</span> on the <span class="ui">Shaft &amp; job</span> card sets every section that has no diameter of its own and leaves the others as they are. Clear the field, or enter 0, to let a section take its diameter from its neighbors again.</p>
   <p  class="keep">A section's own diameter goes with it. If you delete the component that separated it from the section before it, the two join and the joined run keeps the earlier section's diameter; add a component later that splits it again and the new section takes the shaft's diameter, not the old value. <span class="ui">Undo</span> brings the old value back. Moving or resizing a component, or changing the overall length, never loses one: a section squeezed out by a resize gets its diameter back when the room returns.</p>
   <p  class="keep">If two sections with different diameters are joined (because the component between them was deleted), the joined section takes the AFT section's diameter. The FWD section's diameter is kept in reserve and comes back if the two are split again.</p>
-  <p  class="keep">The auto card also carries <span class="ui">Show bare-shaft Ø on drawing</span> (one switch for all bare shaft) and the component blend and seal area controls; see <a href="#components-bodies">Bodies</a>.</p>
+  <p  class="keep">The auto card also carries <span class="ui">Show Ø on drawing</span> (each bare section has its own switch) and the component blend and seal area controls; see <a href="#components-bodies">Bodies</a>.</p>
 
   <h3>Making a body explicit</h3>
   <p  class="keep">An explicit body is a body you control: fixed start and length, its own diameter, a keyway, a name of its own. To turn bare shaft into one:</p>
@@ -928,7 +928,7 @@
     <thead><tr><th>Switch</th><th>Found on</th><th>Default</th></tr></thead>
     <tbody>
       <tr class="short"><td><span class="ui">Show Ø on drawing</span></td><td>Explicit bodies, liners</td><td>Bodies off, liners on</td></tr>
-      <tr><td><span class="ui">Show bare-shaft Ø on drawing</span></td><td>Bare-shaft cards (one switch for all bare shaft)</td><td>Off</td></tr>
+      <tr><td><span class="ui">Show Ø on drawing</span></td><td>Bare-shaft cards (each section has its own)</td><td>Off</td></tr>
       <tr><td><span class="ui">Shade on drawing</span></td><td>Explicit bodies, tapers, liners</td><td>Follows the Settings checkbox for that kind</td></tr>
       <tr><td><span class="ui">Show name on drawing</span></td><td>Explicit bodies, tapers, threads, liners</td><td>Follows <span class="ui">Component names on drawing</span> (Settings → Drawing)</td></tr>
       <tr><td><span class="ui">Compress on drawing</span></td><td>Explicit bodies</td><td>Off for new bodies</td></tr>
@@ -941,7 +941,7 @@
   <h3>Show Ø on drawing</h3>
   <p  class="keep">Controls the diameter callout that hangs below the shaft for this component. The sheet prints one callout per distinct diameter, placed on the longest shown component with that diameter, so hiding one body moves the callout to another body of the same Ø rather than removing it. Body and liner callouts are separate; a liner OD is never merged with a body Ø.</p>
   <p  class="keep">Reach for it when a callout lands somewhere the diameter could not have been measured, such as a body running under fiberglass. Model the covered run and the bare window as separate bodies and show the Ø only on the window. A body's Ø prints nowhere else: the footer has no body Ø line.</p>
-  <p  class="keep">On a bare-shaft card, <span class="ui">Show bare-shaft Ø on drawing</span> is one switch for all bare shaft at once.</p>
+  <p  class="keep">A bare-shaft card has the same switch, and it belongs to that section alone: show the Ø on one stretch of bare shaft and the others stay as they are. The section stays automatic. Like a section's own diameter, the setting goes with the section: it follows the section as components around it move or resize, is kept by <span class="ui">Explicit body</span> in both directions, and a section created later by adding or deleting a component starts hidden.</p>
 
   <h3 id="components-shade">Shade on drawing</h3>
   <p  class="keep">Grey shading is set by kind at <span class="path">Settings → PDF Export Options → Shade in Components</span> (<span class="ui">Bodies</span>, <span class="ui">Tapers</span>, <span class="ui">Liners</span>; tapers and liners on, bodies off by default), and repeated on each document's PDF options. The card switch works in three ways:</p>
@@ -2655,7 +2655,7 @@
   <p  class="keep">The body is set to draw at full length. New bodies you add start with <span class="ui">Compress on drawing</span> off, so an authored section reads at true proportion. A body that long then leaves no room, and the shaft draws lower to fit. Tick <span class="ui">Compress on drawing</span> on that body's card: it can shorten and carry an S-break again, and the rest of the shaft gets its height back.</p>
 
   <h3>My body's Ø isn't printed on the schematic</h3>
-  <p  class="keep">Body Ø callouts are off until you ask for them, so the schematic stays clean. Turn on <span class="ui">Show Ø on drawing</span> on the body's card, or <span class="ui">Show bare-shaft Ø on drawing</span> on a <span class="ui">Body (auto)</span> card (one switch for all bare shaft). Liner Ø callouts are on by default.</p>
+  <p  class="keep">Body Ø callouts are off until you ask for them, so the schematic stays clean. Turn on <span class="ui">Show Ø on drawing</span> on the body's card, or the same switch on a <span class="ui">Body (auto)</span> card, which shows that one bare section only. Liner Ø callouts are on by default.</p>
   <p  class="keep">When several bodies share a diameter, the value prints once, on the longest one that is switched on; the footer has no body Ø line, so a body Ø switched off prints nowhere. See <a href="#components-drawing-toggles">Per-component drawing switches</a>.</p>
 
   <h3>A component's name is missing from the sheet</h3>

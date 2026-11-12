@@ -1955,8 +1955,9 @@ internal fun ShaftSpec.withResolvedBodies(resolved: List<ResolvedComponent>?): S
  *
  * Fragment ids must be stripped before the lookup: a body split by a liner or taper resolves
  * into several runs (`"<id>#2"`, …), and showing/hiding the body has to cover every one of
- * them. AUTO spans share the single bare-shaft flag ([ShaftSpec.showAutoBodyDia]), matching
- * the single Ø they already share. A resolved id with no stored match (never expected)
+ * them. An AUTO span answers for itself through [showsAutoSectionDia] — its own
+ * [com.android.shaftschematic.model.AutoDiaCallout] anchor, else the shaft-wide default — the
+ * way each section already carries its own Ø. A resolved id with no stored match (never expected)
  * follows the model default — hidden, the opt-in posture.
  *
  * [Body.compressOnDrawing] rides the same fragment-stripped lookup, so every run of a split
@@ -1976,7 +1977,7 @@ internal fun ShaftSpec.bodyForPdf(b: ResolvedBody): Body {
         lengthMm = b.endMmPhysical - b.startMmPhysical,
         diaMm = b.diaMm,
         showDiaOnDrawing = if (b.source == ResolvedComponentSource.AUTO) {
-            showAutoBodyDia
+            showsAutoSectionDia(b.startMmPhysical, b.endMmPhysical)
         } else {
             stored?.showDiaOnDrawing ?: false
         },

@@ -19,6 +19,7 @@ import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.splitBodiesAround
 import com.android.shaftschematic.model.syncExcludedThreadPositions
 import com.android.shaftschematic.model.withAutoBlend
+import com.android.shaftschematic.model.withAutoSectionShowDia
 import com.android.shaftschematic.model.withAutoBlendAngle
 import com.android.shaftschematic.model.withBodyAt
 import com.android.shaftschematic.model.withKeyways180Apart
@@ -28,7 +29,9 @@ import com.android.shaftschematic.model.withPhysical
 import com.android.shaftschematic.ui.input.TaperCalcValues
 import com.android.shaftschematic.ui.input.withTaperCalcValues
 import com.android.shaftschematic.ui.order.ComponentKind
+import com.android.shaftschematic.ui.resolved.autoSectionShowsDiaOn
 import com.android.shaftschematic.ui.resolved.withAutoDiaOverridesSurviving
+import com.android.shaftschematic.ui.resolved.withDemotedBodyDiaCallout
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel.Companion.deriveTaperDiameters
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel.Companion.taperSmallEndAtStart
 import com.android.shaftschematic.util.UnitSystem
@@ -129,6 +132,10 @@ fun ShaftViewModel.addBodyAt(
                     // takes this default — a stored document keeps its decoded value,
                     // which is `true` for everything saved before the flag existed.
                     compressOnDrawing = false,
+                    // A body made on exactly a bare-shaft section (the card's "Explicit
+                    // body") keeps that section's Ø callout: promoting a section is not a
+                    // reason for its value to leave the drawing.
+                    showDiaOnDrawing = s.autoSectionShowsDiaOn(startMm, startMm + max(0f, lengthMm)),
                     blendAftMm = max(0f, blendAftMm),
                     blendFwdMm = max(0f, blendFwdMm),
                     blendProfile = blendProfile,
@@ -238,6 +245,7 @@ fun ShaftViewModel.removeBody(id: String, target: SpecTarget = SpecTarget.ORIGIN
         s.copy(
             bodies = s.bodies.toMutableList().apply { removeAt(idx) }
         ).withAutoDiaOverridesSurviving(before = s)
+            .withDemotedBodyDiaCallout(s.bodies[idx])
     }
 
     if (removed) {
@@ -1216,14 +1224,15 @@ fun ShaftViewModel.updateLinerShoulder(
 }
 
 /**
- * Show/hide the bare-shaft Ø callout. One flag for every auto span — the shaft between
- * explicit components is one piece of stock, so it carries one visibility, matching the
- * single [ShaftSpec.autoBodyDiaMm].
+ * Show/hide the Ø callout of the ONE bare-shaft section spanning `[spanStartMm, spanEndMm)`;
+ * every other section keeps its own. See [withAutoSectionShowDia].
  */
-fun ShaftViewModel.setShowAutoBodyDia(show: Boolean, target: SpecTarget = SpecTarget.ORIGINAL) =
-    updateSpec(target) { s ->
-        if (s.showAutoBodyDia == show) s else s.copy(showAutoBodyDia = show)
-    }
+fun ShaftViewModel.setAutoSectionShowDia(
+    spanStartMm: Float,
+    spanEndMm: Float,
+    show: Boolean,
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) = updateSpec(target) { s -> s.withAutoSectionShowDia(spanStartMm, spanEndMm, show) }
 
 fun ShaftViewModel.updateTaperLabel(
     index: Int,

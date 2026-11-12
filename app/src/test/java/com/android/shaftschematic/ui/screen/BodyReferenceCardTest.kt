@@ -73,7 +73,7 @@ class BodyReferenceCardTest {
                     onSetAllAutoSectionsDia = {},
                     autoSectionCount = 1,
                     onSetAutoBlend = { _, _, _, _, _, _, _, _ -> },
-                    onSetShowAutoBodyDia = {},
+                    onSetAutoSectionShowDia = { _, _, _ -> },
                     onUpdateBody = { i, s, l, d -> vm.updateBody(i, s, l, d) },
                     onUpdateBodyReference = { i, r -> vm.updateBodyAuthoredReference(i, r) },
                     onUpdateBodyShowDia = { _, _ -> },

@@ -375,7 +375,7 @@
     <thead><tr><th>Switch</th><th>Found on</th><th>Default</th></tr></thead>
     <tbody>
       <tr><td><span class="ui">Show Ø on drawing</span></td><td>Explicit bodies, liners</td><td>Bodies off, liners on</td></tr>
-      <tr><td><span class="ui">Show bare-shaft Ø on drawing</span></td><td>Bare-shaft cards (one switch for all bare shaft)</td><td>Off</td></tr>
+      <tr><td><span class="ui">Show Ø on drawing</span></td><td>Bare-shaft cards (each section has its own)</td><td>Off</td></tr>
       <tr><td><span class="ui">Shade on drawing</span></td><td>Explicit bodies, tapers, liners</td><td>Follows the Settings checkbox for that kind</td></tr>
       <tr><td><span class="ui">Show name on drawing</span></td><td>Explicit bodies, tapers, threads, liners</td><td>Follows <span class="ui">Component names on drawing</span> (Settings → Drawing)</td></tr>
       <tr><td><span class="ui">Compress on drawing</span></td><td>Explicit bodies</td><td>Off for new bodies</td></tr>
@@ -388,7 +388,7 @@
   <h3>Show Ø on drawing</h3>
   <p>Controls the diameter callout that hangs below the shaft for this component. The sheet prints one callout per distinct diameter, placed on the longest shown component with that diameter, so hiding one body moves the callout to another body of the same Ø rather than removing it. Body and liner callouts are separate; a liner OD is never merged with a body Ø.</p>
   <p>Reach for it when a callout lands somewhere the diameter could not have been measured, such as a body running under fiberglass. Model the covered run and the bare window as separate bodies and show the Ø only on the window. A body's Ø prints nowhere else: the footer has no body Ø line.</p>
-  <p>On a bare-shaft card, <span class="ui">Show bare-shaft Ø on drawing</span> is one switch for all bare shaft at once.</p>
+  <p>A bare-shaft card has the same switch, and it belongs to that section alone: show the Ø on one stretch of bare shaft and the others stay as they are. The section stays automatic. Like a section's own diameter, the setting goes with the section: it follows the section as components around it move or resize, is kept by <span class="ui">Explicit body</span> in both directions, and a section created later by adding or deleting a component starts hidden.</p>
 
   <h3 id="components-shade">Shade on drawing</h3>
   <p>Grey shading is set by kind at <span class="path">Settings → PDF Export Options → Shade in Components</span> (<span class="ui">Bodies</span>, <span class="ui">Tapers</span>, <span class="ui">Liners</span>; tapers and liners on, bodies off by default), and repeated on each document's PDF options. The card switch works in three ways:</p>

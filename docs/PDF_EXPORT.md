@@ -627,9 +627,11 @@ they are now all-BELOW, same as liners.
 Two independent controls gate the pass; both must allow a callout for it to print.
 
 **Per component — "Show Ø on drawing"** (`Body.showDiaOnDrawing`, `Liner.showDiaOnDrawing`,
-and `ShaftSpec.showAutoBodyDia` for every auto span at once). A switch under the Ø field on
-the body / auto-body / liner cards. All three are additive envelope fields. **Body and
-bare-shaft callouts are opt-in — those two flags default `false`** (on-device preference:
+and, per bare-shaft section, `ShaftSpec.autoDiaCallouts` over the shaft-wide default
+`ShaftSpec.showAutoBodyDia` — `showsAutoSectionDia`; on-device report: one section's switch
+turned every section on or off). A switch under the Ø field on
+the body / auto-body / liner cards. All are additive envelope fields. **Body and
+bare-shaft callouts are opt-in — a body and a bare section both default hidden** (on-device preference:
 the schematic stays clean unless a body's Ø is deliberately shown, and a document with no
 flags prints no body Ø callouts). Liners
 default `true`.

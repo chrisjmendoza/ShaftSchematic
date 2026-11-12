@@ -8,6 +8,23 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-12
 
+### feat(editor): each bare-shaft section shows or hides its own Ø callout
+
+On-device report: turning the Ø callout on or off on one `Body (auto)` card turned it on or off
+on all of them. The card's switch — now `Show Ø on drawing`, the explicit body's label — belongs
+to that section alone, and the section stays automatic.
+
+- New `ShaftSpec.autoDiaCallouts` (`AutoDiaCallout(anchorMm, show)`), keyed in shaft space
+  exactly as the per-section Ø (`autoDiaOverrides`) is: it follows the section through moves,
+  resizes and OAL changes, the aft-most anchor wins when sections join, and a component add or
+  remove drops it with its section (same `withAutoDiaOverridesSurviving` pass; Undo restores).
+- `ShaftSpec.showAutoBodyDia` stays as the default for sections with no entry and is no longer
+  written by any control. A document saved with it on still shows every section, and hiding
+  one hides only that one.
+- "Explicit body" keeps the callout in both directions: a section promoted to a body keeps
+  showing, and a body demoted back hands its visibility to the section that replaces it.
+- Additive field, no schema bump; a document with no entries prints as before.
+
 ### fix(editor): Preview options button moves out of the preview box
 
 On-device report: the corner button sat on the AFT-end dimension values. No corner of the box is
