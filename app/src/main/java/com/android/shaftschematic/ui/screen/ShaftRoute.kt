@@ -52,7 +52,7 @@ import com.android.shaftschematic.ui.viewmodel.setKeywayUnit
 import com.android.shaftschematic.ui.viewmodel.setKeyways180Apart
 import com.android.shaftschematic.ui.viewmodel.setKeyways90Apart
 import com.android.shaftschematic.ui.viewmodel.setKeyways90Cw
-import com.android.shaftschematic.ui.viewmodel.setShowAutoBodyDia
+import com.android.shaftschematic.ui.viewmodel.setAutoSectionShowDia
 import com.android.shaftschematic.ui.viewmodel.setThreadEndPosition
 import com.android.shaftschematic.ui.viewmodel.setThreadExcludeFromOal
 import com.android.shaftschematic.ui.viewmodel.setThreadRelief
@@ -427,7 +427,7 @@ fun ShaftRoute(
         onSetAllAutoSectionsDia = { d -> vm.setAutoBodyDiaMm(d, target) },
         onSetAutoBlend = { s0, s1, end, len, prof, seal, sealLen, toOd -> vm.setAutoBlend(s0, s1, end, len, prof, seal, sealLen, toOd, target) },
         onSetAutoBlendAngle = { s0, s1, end, deg, r -> vm.setAutoBlendAngle(s0, s1, end, deg, r, target) },
-        onSetShowAutoBodyDia = { show -> vm.setShowAutoBodyDia(show, target) },
+        onSetAutoSectionShowDia = { s0, s1, show -> vm.setAutoSectionShowDia(s0, s1, show, target) },
         onAddTaper  = { s, l, sd, ed, rate, ref, kwW, kwD, kwL, kwO, kwS, kwUnit, rateManual ->
             vm.addTaperAt(s, l, sd, ed, rate, ref, kwW, kwD, kwL, kwO, kwS, kwUnit, target, rateManual)
         },

@@ -1200,11 +1200,16 @@ that fits nowhere takes the row it overlaps least (`Placement.fitted = false`, b
 and is never dropped.
 
 Two visibility controls gate the pass, and they compose as an AND:
-- **Per component** — `Body.showDiaOnDrawing` / `Liner.showDiaOnDrawing` (and
-  `ShaftSpec.showAutoBodyDia`, ONE flag for every auto span even though per-section Ø
-  overrides exist — visibility is all-or-nothing for bare shaft). Draw-only,
+- **Per component** — `Body.showDiaOnDrawing` / `Liner.showDiaOnDrawing`, and for bare shaft
+  **per SECTION** — `ShaftSpec.autoDiaCallouts` (`AutoDiaCallout(anchorMm, show)`, the
+  `AutoDiaOverride` keying in every respect: aft-most wins, dormant under a component, dropped
+  with its section by the same `withAutoDiaOverridesSurviving` pass) over the shaft-wide
+  default `ShaftSpec.showAutoBodyDia`, which no control writes any more — on-device report:
+  one section's switch turned every section on or off. ONE resolver, `showsAutoSectionDia`;
+  an entry is stored only where a section differs from the default. "Explicit body" carries
+  the visibility both ways (`autoSectionShowsDiaOn`, `withDemotedBodyDiaCallout`). Draw-only,
   additive/defaulted. **Body and bare-shaft callouts are
-  OPT-IN — both flags default `false`** (on-device preference: the schematic stays clean
+  OPT-IN — a body and a bare section both default hidden** (on-device preference: the schematic stays clean
   unless a body's Ø is deliberately shown; a document with no flags prints no body Ø
   callouts). Liners default `true`. The filter runs **BEFORE the group-by-Ø** — that is the
   whole point: hiding one

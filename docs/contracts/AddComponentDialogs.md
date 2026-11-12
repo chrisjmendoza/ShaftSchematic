@@ -238,7 +238,8 @@ still authored in inches on an inch document. That asymmetry is a known follow-u
 
 Matches `BodyPagerCard.kt`'s explicit-body branch. The **auto-body**
 card intentionally shows only Start/Length/Ø — no Measure From chips (its span is derived) — Start/Length disabled/greyed (derived),
-Ø editable (sets the shared bare-shaft `ShaftSpec.autoBodyDiaMm` without promoting) —
+Ø editable (sets the shared bare-shaft `ShaftSpec.autoBodyDiaMm` without promoting), plus
+its own per-section "Show Ø on drawing" switch (`ShaftSpec.autoDiaCallouts`, card-only) —
 auto-bodies are derived and cannot host a keyway until promoted; that reduced card is
 not a parity violation. The 180°/90°-apart toggles write spec-level
 `ShaftSpec.keyways180Apart`/`keyways90Apart` (+ `keyways90Cw` for the CW/CCW chips) — the

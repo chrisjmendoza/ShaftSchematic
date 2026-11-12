@@ -82,7 +82,7 @@ class BlendAngleUiTest {
                         vm.setAutoBlend(s0, s1, end, len, prof, seal, sealLen, toOd)
                     },
                     onSetAutoBlendAngle = { s0, s1, end, deg, r -> vm.setAutoBlendAngle(s0, s1, end, deg, r) },
-                    onSetShowAutoBodyDia = {},
+                    onSetAutoSectionShowDia = { _, _, _ -> },
                     onUpdateBody = { _, _, _, _ -> },
                     onUpdateBodyReference = { _, _ -> },
                     onUpdateBodyShowDia = { _, _ -> },

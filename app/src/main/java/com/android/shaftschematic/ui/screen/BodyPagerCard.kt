@@ -33,6 +33,7 @@ import com.android.shaftschematic.model.BlendProfile
 import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.autoBlendFor
+import com.android.shaftschematic.model.showsAutoSectionDia
 import com.android.shaftschematic.model.hasAnyKeywayValue
 import com.android.shaftschematic.model.hasKeyway
 import com.android.shaftschematic.model.suggestedBodyKeywayEnd
@@ -104,7 +105,7 @@ internal fun BodyPagerCard(
     onSetAutoBlend: (spanStartMm: Float, spanEndMm: Float, end: LinerAuthoredReference, lengthMm: Float, profile: BlendProfile, seal: Boolean, sealLenMm: Float, toLinerOd: Boolean) -> Unit,
     /** An auto span's face entry: angle (null = Length mode) and corner radius, stored verbatim. */
     onSetAutoBlendAngle: (spanStartMm: Float, spanEndMm: Float, end: LinerAuthoredReference, angleDeg: Float?, radiusMm: Float) -> Unit = { _, _, _, _, _ -> },
-    onSetShowAutoBodyDia: (Boolean) -> Unit,
+    onSetAutoSectionShowDia: (startMm: Float, endMm: Float, show: Boolean) -> Unit,
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     /** Sets an explicit body's "Measure From" reference — never moves its stored start. */
     onUpdateBodyReference: (Int, LinerAuthoredReference) -> Unit,
@@ -255,13 +256,15 @@ internal fun BodyPagerCard(
                     },
                 )
             }
-            // One flag for every auto span — the bare shaft is one piece of stock, so
-            // it carries one visibility even where sections differ in Ø.
+            // This section's own callout, the way it carries its own Ø: the switch is
+            // anchored in this span and leaves every other bare-shaft section as it is.
             ShowDiaToggleRow(
-                label = "Show bare-shaft Ø on drawing",
-                checked = spec.showAutoBodyDia,
+                label = "Show Ø on drawing",
+                checked = spec.showsAutoSectionDia(component.startMmPhysical, component.endMmPhysical),
                 testTag = "autobody_show_dia_toggle",
-                onCheckedChange = onSetShowAutoBodyDia,
+                onCheckedChange = { show ->
+                    onSetAutoSectionShowDia(component.startMmPhysical, component.endMmPhysical, show)
+                },
             )
 
             // Blend — available here as well as on explicit bodies. An auto span

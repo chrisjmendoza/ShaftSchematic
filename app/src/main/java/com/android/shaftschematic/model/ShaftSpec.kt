@@ -48,11 +48,16 @@ import kotlinx.serialization.Serializable
  *           dormant; a component add/remove that merges or covers a section drops its
  *           override. Draw-only and
  *           additive/defaulted — see [AutoDiaOverride].
- * @property showAutoBodyDia Whether bare-shaft Ø values print as below-shaft callouts on the
- *           schematic. ONE flag for ALL auto spans — the bare shaft is one piece of stock, so
- *           it carries one visibility even where sections differ; each shown section prints
- *           its own resolved Ø. Draw-only: never affects OAL, resolve, collision, or footer
- *           geometry. Defaults OFF, same opt-in posture as [Body.showDiaOnDrawing].
+ * @property showAutoBodyDia The shaft-wide DEFAULT for whether a bare-shaft section prints
+ *           its Ø as a below-shaft callout — what a section with no [autoDiaCallouts] entry
+ *           does. No control writes it; a document saved while it was the one switch for every
+ *           auto span keeps it, so its sections still show until a card hides one. Draw-only:
+ *           never affects OAL, resolve, collision, or footer geometry. Defaults OFF, same
+ *           opt-in posture as [Body.showDiaOnDrawing].
+ * @property autoDiaCallouts Per-section Ø-callout visibility for individual auto-body spans,
+ *           keyed in shaft space by anchor exactly as [autoDiaOverrides] is (aft-most wins,
+ *           dormant under a component, dropped with its section on a component add/remove).
+ *           Draw-only and additive/defaulted — see [AutoDiaCallout].
  */
 @Serializable
 data class ShaftSpec(
@@ -69,6 +74,7 @@ data class ShaftSpec(
     val showAutoBodyDia: Boolean = false,
     val autoDiaOverrides: List<AutoDiaOverride> = emptyList(),
     val autoBlends: List<AutoBlend> = emptyList(),
+    val autoDiaCallouts: List<AutoDiaCallout> = emptyList(),
 )
 
 /**

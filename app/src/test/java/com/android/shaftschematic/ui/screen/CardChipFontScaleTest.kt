@@ -79,7 +79,7 @@ class CardChipFontScaleTest {
                         onSetAllAutoSectionsDia = {},
                         autoSectionCount = 1,
                         onSetAutoBlend = { _, _, _, _, _, _, _, _ -> },
-                        onSetShowAutoBodyDia = {},
+                        onSetAutoSectionShowDia = { _, _, _ -> },
                         onUpdateBody = { _, _, _, _ -> },
                         onUpdateBodyReference = { _, _ -> },
                         onUpdateBodyShowDia = { _, _ -> },

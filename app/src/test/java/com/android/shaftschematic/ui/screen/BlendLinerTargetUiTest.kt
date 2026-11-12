@@ -79,7 +79,7 @@ class BlendLinerTargetUiTest {
                     onSetAutoBlend = { s0, s1, end, len, prof, seal, sealLen, toOd ->
                         vm.setAutoBlend(s0, s1, end, len, prof, seal, sealLen, toOd)
                     },
-                    onSetShowAutoBodyDia = {},
+                    onSetAutoSectionShowDia = { _, _, _ -> },
                     onUpdateBody = { _, _, _, _ -> },
                     onUpdateBodyReference = { _, _ -> },
                     onUpdateBodyShowDia = { _, _ -> },

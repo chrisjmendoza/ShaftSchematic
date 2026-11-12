@@ -186,7 +186,7 @@
   <p>With only one section of bare shaft there is nothing to choose: the diameter you type is the shaft's. The <span class="ui">Shaft diameter</span> on the <span class="ui">Shaft &amp; job</span> card sets every section that has no diameter of its own and leaves the others as they are. Clear the field, or enter 0, to let a section take its diameter from its neighbors again.</p>
   <p>A section's own diameter goes with it. If you delete the component that separated it from the section before it, the two join and the joined run keeps the earlier section's diameter; add a component later that splits it again and the new section takes the shaft's diameter, not the old value. <span class="ui">Undo</span> brings the old value back. Moving or resizing a component, or changing the overall length, never loses one: a section squeezed out by a resize gets its diameter back when the room returns.</p>
   <p>If two sections with different diameters are joined (because the component between them was deleted), the joined section takes the AFT section's diameter. The FWD section's diameter is kept in reserve and comes back if the two are split again.</p>
-  <p>The auto card also carries <span class="ui">Show bare-shaft Ø on drawing</span> (one switch for all bare shaft) and the component blend and seal area controls; see <a href="#components-bodies">Bodies</a>.</p>
+  <p>The auto card also carries <span class="ui">Show Ø on drawing</span> (each bare section has its own switch) and the component blend and seal area controls; see <a href="#components-bodies">Bodies</a>.</p>
 
   <h3>Making a body explicit</h3>
   <p>An explicit body is a body you control: fixed start and length, its own diameter, a keyway, a name of its own. To turn bare shaft into one:</p>
