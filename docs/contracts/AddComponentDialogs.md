@@ -477,8 +477,7 @@ submit, but every control and every visibility condition is decided in one place
 | Axial length field, per face ("Blend AFT/FWD") | that face is **Blend** by **Length** |
 | Angle field, per face ("Angle AFT/FWD (°)") + the derived-length line under it (`body_blend_aft_angle_note`) + "Corner radius AFT/FWD" field | that face is **Blend** by **Angle** |
 | "At a liner" chips, per face — **Seat \| Liner OD** (`body_blend_aft_liner_target_<SEAT\|LINER_OD>`, `body_blend_fwd_…`) | that face is **Blend** — shown whether or not a liner butts it today (the dialog cannot know the neighbour; one rule on both surfaces) |
-| Shape chips — S-curve \| Fillet \| Eased cone | either face is Blend by **Length** (an Angle face is a straight cone) |
-| Seal area checkbox, per face (AFT / FWD) — under its own "Seal areas" heading | always |
+||| Seal area checkbox, per face (AFT / FWD) — under its own "Seal areas" heading | always |
 | Seal area length field, per face ("Seal area AFT/FWD") | that face's seal is ON (both surfaces — parity) |
 
 **"At a liner"** chooses where a blended face's curve leaves from when a liner butts it: **Seat**

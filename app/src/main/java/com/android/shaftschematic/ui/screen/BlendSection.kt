@@ -25,7 +25,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.isValidBlendAngle
-import com.android.shaftschematic.model.BlendProfile
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.parseFractionOrDecimal
 
@@ -146,9 +145,10 @@ internal const val ANGLE_BLEND_NO_STEP_NOTE =
  * The seal-area checkboxes sit in their own section, a sibling of "Component blend" — never
  * nested under a blend control (a nested layout hid the seal behind a control nobody would think
  * to tick first — on-device report) and never folded into the Square | Blend chips as a third
- * mode (a seal area is a section property, not part of the blend — on-device report). The profile
- * row appears only once some face is blended BY LENGTH; with both square there is nothing for a
- * profile to describe, and an Angle-mode face is a straight cone (its stored profile is kept).
+ * mode (a seal area is a section property, not part of the blend — on-device report). No control
+ * chooses the curve's shape: a Length face draws the S-curve, and a shape picker would offer
+ * curves that differ by less than a line width at the size a blend prints (on-device report).
+ * A body whose stored `blendProfile` is another shape keeps drawing it.
  *
  * A blended face is entered one of two ways — "Blend by: Length | Angle" ([BlendEntry]). Length
  * shows the length field; Angle shows the angle field, the derived length read-only under it
@@ -160,12 +160,10 @@ internal const val ANGLE_BLEND_NO_STEP_NOTE =
 fun BlendSection(
     aftMode: BlendFaceMode,
     fwdMode: BlendFaceMode,
-    profile: BlendProfile,
     aftSeal: Boolean,
     fwdSeal: Boolean,
     onSetAftMode: (BlendFaceMode) -> Unit,
     onSetFwdMode: (BlendFaceMode) -> Unit,
-    onProfile: (BlendProfile) -> Unit,
     onSetAftSeal: (Boolean) -> Unit,
     onSetFwdSeal: (Boolean) -> Unit,
     aftLinerTarget: BlendLinerTarget,
@@ -211,20 +209,6 @@ fun BlendSection(
                 angleNote = fwdAngleNote, radiusField = fwdRadiusField,
             )
             BlendLinerTargetRow(fwdLinerTarget, "body_blend_fwd_liner_target", onSetFwdLinerTarget)
-        }
-
-        if ((aftMode == BlendFaceMode.BLEND && aftEntry == BlendEntry.LENGTH) ||
-            (fwdMode == BlendFaceMode.BLEND && fwdEntry == BlendEntry.LENGTH)
-        ) {
-            Spacer(Modifier.height(8.dp))
-            ChipRow(
-                label = "Shape",
-                options = BlendProfile.values().toList(),
-                selected = profile,
-                labelOf = { it.chipLabel() },
-                tagOf = { "body_blend_profile_${it.name}" },
-                onSelect = onProfile,
-            )
         }
 
         Spacer(Modifier.height(8.dp))
@@ -277,13 +261,6 @@ private fun SealFaceCheckbox(
         Checkbox(checked = checked, onCheckedChange = null)
         Text(label, color = MaterialTheme.colorScheme.onSurface)
     }
-}
-
-/** Shop-facing chip text for a curve shape. */
-private fun BlendProfile.chipLabel(): String = when (this) {
-    BlendProfile.OGEE -> "S-curve"
-    BlendProfile.FILLET -> "Fillet"
-    BlendProfile.EASED_CONE -> "Eased cone"
 }
 
 /**

@@ -232,8 +232,8 @@ material.
   liner: Liner OD"). A later step change re-derives the length from the stored angle; no step
   across the face → no curve (the Length rule). The typed length (`blendAftMm`) is **never
   rewritten** by a mode switch — Length brings it back — and it still decides whether the face is
-  blended at all (Square | Blend). An Angle face is a **straight cone** (the Shape chips hide;
-  `blendProfile` is kept) with an optional **corner radius** (`blendAftRadiusMm`/`blendFwdRadiusMm`,
+  blended at all (Square | Blend). An Angle face is a **straight cone** (`blendProfile`
+  is kept) with an optional **corner radius** (`blendAftRadiusMm`/`blendFwdRadiusMm`,
   `AutoBlend.angleDeg`/`radiusMm`, canonical mm, verbatim, 0 = sharp): a true circular round at the
   cone's SMALL-diameter end, tangent to the cone and to the smaller surface, tangent setback
   `R·tan(θ/2)` along each line from the sharp corner (the shop sketch: a 45° chamfer from a

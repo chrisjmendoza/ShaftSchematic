@@ -45,7 +45,7 @@ import org.robolectric.annotation.Config
  * "Blend by: Length | Angle" (on-device request: "some blends have expressions in degrees") —
  * under the add-dialog-parity rule, so the explicit card, the auto card and `AddBodyDialog` all
  * carry the chips, the angle field, its derived-length line and the corner-radius field under the
- * same conditions, and the Shape chips hide while a face is entered by angle.
+ * same conditions.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], qualifiers = "w400dp-h1600dp")
@@ -140,7 +140,6 @@ class BlendAngleUiTest {
         assertTrue(absent("body_blend_aft_entry_LENGTH"))
         tap("body_blend_aft_blend")
         rule.onNodeWithTag("body_blend_aft_entry_LENGTH").assertIsSelected()
-        rule.onNodeWithTag("body_blend_profile_OGEE").assertExists()
         val typedLength = vm.spec.value.bodies.single().blendAftMm
         assertTrue(typedLength > 0f)
 
@@ -149,7 +148,6 @@ class BlendAngleUiTest {
         assertEquals(DEFAULT_BLEND_ANGLE_DEG, b.blendAftAngleDeg!!, 0f)
         assertEquals(typedLength, b.blendAftMm, 0f)
         rule.onNodeWithTag("body_blend_aft_entry_ANGLE").assertIsSelected()
-        assertTrue("an angle-mode face has no Shape", absent("body_blend_profile_OGEE"))
         // Seat by default: (240 + 200) / 2 = 220 → rise 10 mm → 10 mm of cone at 45°.
         rule.onNodeWithText("Length 10 mm from the step", useUnmergedTree = true).assertExists()
 
@@ -164,7 +162,6 @@ class BlendAngleUiTest {
         b = vm.spec.value.bodies.single()
         assertNull(b.blendAftAngleDeg)
         assertEquals("the typed length comes back", typedLength, b.blendAftMm, 0f)
-        rule.onNodeWithTag("body_blend_profile_OGEE").assertExists()
 
         // Angle again restores the last angle of this card session.
         tap("body_blend_aft_entry_ANGLE")
@@ -239,9 +236,7 @@ class BlendAngleUiTest {
         assertTrue(absent("body_blend_aft_entry_LENGTH"))
         tap("body_blend_aft_blend")
         rule.onNodeWithTag("body_blend_aft_entry_LENGTH").assertIsSelected()
-        rule.onNodeWithTag("body_blend_profile_OGEE").assertExists()
         tap("body_blend_aft_entry_ANGLE")
-        assertTrue(absent("body_blend_profile_OGEE"))
         // A lone body on a bare shaft has no step at its AFT face.
         rule.onNodeWithText(ANGLE_BLEND_NO_STEP_NOTE, useUnmergedTree = true).assertExists()
         field("Corner radius AFT").performScrollTo()

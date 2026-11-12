@@ -282,7 +282,6 @@ internal fun BodyPagerCard(
             BlendSection(
                 aftMode = blendFaceMode(aftBlend?.lengthMm ?: 0f),
                 fwdMode = blendFaceMode(fwdBlend?.lengthMm ?: 0f),
-                profile = autoProfile,
                 aftSeal = aftBlend?.seal == true,
                 fwdSeal = fwdBlend?.seal == true,
                 aftLinerTarget = blendLinerTarget(aftBlend?.toLinerOd == true),
@@ -337,16 +336,6 @@ internal fun BodyPagerCard(
                         sealLenForSeal(on, fwdBlend?.sealLenMm ?: 0f, lengthMm),
                         fwdBlend?.toLinerOd ?: false,
                     )
-                },
-                onProfile = { p ->
-                    aftBlend?.let {
-                        onSetAutoBlend(component.startMmPhysical, component.endMmPhysical,
-                            LinerAuthoredReference.AFT, it.lengthMm, p, it.seal, it.sealLenMm, it.toLinerOd)
-                    }
-                    fwdBlend?.let {
-                        onSetAutoBlend(component.startMmPhysical, component.endMmPhysical,
-                            LinerAuthoredReference.FWD, it.lengthMm, p, it.seal, it.sealLenMm, it.toLinerOd)
-                    }
                 },
                 aftLengthField = {
                     CommitNum("Blend AFT (${abbr(unit)})", disp(aftBlend?.lengthMm ?: 0f, unit)) { str ->
@@ -638,7 +627,6 @@ internal fun BodyPagerCard(
         BlendSection(
             aftMode = blendFaceMode(b.blendAftMm),
             fwdMode = blendFaceMode(b.blendFwdMm),
-            profile = b.blendProfile,
             aftSeal = b.blendAftSeal,
             fwdSeal = b.blendFwdSeal,
             aftLinerTarget = blendLinerTarget(b.blendAftToLinerOd),
@@ -682,13 +670,6 @@ internal fun BodyPagerCard(
                 onUpdateBodyBlend(
                     idx, b.blendAftMm, b.blendFwdMm, b.blendProfile, b.blendAftSeal, on,
                     b.blendAftSealLenMm, sealLenForSeal(on, b.blendFwdSealLenMm, b.lengthMm),
-                    b.blendAftToLinerOd, b.blendFwdToLinerOd,
-                )
-            },
-            onProfile = { p ->
-                onUpdateBodyBlend(
-                    idx, b.blendAftMm, b.blendFwdMm, p, b.blendAftSeal, b.blendFwdSeal,
-                    b.blendAftSealLenMm, b.blendFwdSealLenMm,
                     b.blendAftToLinerOd, b.blendFwdToLinerOd,
                 )
             },

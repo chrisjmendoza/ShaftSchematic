@@ -552,8 +552,7 @@ internal val helpSections: List<HelpSection> = listOf(
                     "body's own face, from the neighbour's Ø into the body's Ø, instead of a " +
                     "square shoulder. Each face has its own Square | Blend chips under " +
                     "\"Component blend\" on the body card (explicit or auto) and in Add Body; " +
-                    "Blend by Length gives how far the curve runs in from the face, and one Shape — " +
-                    "S-curve, Fillet or Eased cone — serves both faces. Blend by Angle gives a " +
+                    "Blend by Length gives how far the curve runs in from the face. Blend by Angle gives a " +
                     "straight chamfer in degrees from the centerline (45° climbs one for one): " +
                     "its length comes from the diameter step, shown under the angle, and an " +
                     "optional Corner radius rounds it into the smaller diameter. Switching " +

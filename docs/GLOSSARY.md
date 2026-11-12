@@ -82,8 +82,9 @@ A smooth machined transition from a body face into the diameter it steps to — 
 shoulder and, crucially, **no taper rate**. On these sheets "taper" means a precision fit
 (rate, SET/LET, keyway); a hand-worked blend is none of those, which is why it is its own
 term rather than a short taper. Authored per face on an explicit `Body`
-(`blendAftMm` / `blendFwdMm`) with a profile: **S-curve** (tangent at both ends, the
-default), **Fillet** (tangent at the large end only), or **Eased cone**. The blend is cut
+(`blendAftMm` / `blendFwdMm`) drawn as an **S-curve** (tangent at both ends; a stored
+`blendProfile` of Fillet or Eased cone from an older document still draws, but no control
+chooses a shape). The blend is cut
 INWARD out of the body carrying it, so no other component's span moves; its diameters are
 DERIVED from whatever sits across the face — and at a **seal area**, where a liner butts the
 face, from the midpoint of the liner OD and the body Ø, since the machined seat is hidden
