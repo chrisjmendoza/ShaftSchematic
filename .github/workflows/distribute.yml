@@ -2,7 +2,8 @@ name: Build & Distribute APK
 
 # Triggers:
 #   - Every push to main (post-merge)
-#   - Every push to any feat/* branch (active development)
+#   - Every push to any feat/*, fix/* or chore/* branch (active development) — skipped when the
+#     pushed commit is already on main, so a merged branch never uploads after main's own build
 #   - Manual trigger from GitHub Actions tab (Actions → Build & Distribute APK → Run workflow)
 on:
   push:
@@ -26,7 +27,23 @@ jobs:
           # froze all distributed builds at the same versionCode (321).
           fetch-depth: 0
 
+      - name: Skip a branch build main already carries
+        # A commit-push-merge pushes the branch and then main seconds apart, so both builds run
+        # side by side; the branch's upload often lands LAST and Firebase then shows the branch
+        # build as "Latest" over the main build that contains it. A branch commit that is
+        # already an ancestor of origin/main has nothing main's own build does not, so its
+        # build is skipped. A branch pushed without a merge still builds and distributes.
+        id: merged
+        if: github.ref_name != 'main'
+        run: |
+          git fetch --quiet origin main
+          if git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "$GITHUB_SHA is already on main - main's build covers it; skipping."
+          fi
+
       - name: Set up JDK 17
+        if: steps.merged.outputs.skip != 'true'
         uses: actions/setup-java@v5
         with:
           java-version: '17'
@@ -34,11 +51,13 @@ jobs:
           cache: gradle
 
       - name: Run unit tests
+        if: steps.merged.outputs.skip != 'true'
         # Gate: a red suite blocks the build and nothing is distributed — only green
         # builds reach Firebase (on-device direction).
         run: ./gradlew testDebugUnitTest --no-daemon
 
       - name: Materialize google-services.json
+        if: steps.merged.outputs.skip != 'true'
         # Crashlytics is optional configuration: the two Google plugins apply only when this
         # file exists (app/build.gradle.kts). An unset secret must therefore still build — it
         # just distributes a build with no crash reporting rather than failing the workflow.
@@ -53,11 +72,25 @@ jobs:
           fi
 
       - name: Build debug APK
+        if: steps.merged.outputs.skip != 'true'
         # The shared debug.keystore is committed to the repo so the APK is
         # signed consistently — Android treats each CI build as an update, not a reinstall.
         run: ./gradlew assembleDebug --no-daemon
 
+      - name: Re-check main before uploading
+        # The merge can land while this branch build is still testing: look again, so a build
+        # that started before the merge still does not upload after it.
+        id: merged_late
+        if: github.ref_name != 'main' && steps.merged.outputs.skip != 'true'
+        run: |
+          git fetch --quiet origin main
+          if git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "$GITHUB_SHA reached main during this build - not uploading."
+          fi
+
       - name: Upload to Firebase App Distribution
+        if: steps.merged.outputs.skip != 'true' && steps.merged_late.outputs.skip != 'true'
         env:
           FIREBASE_SA_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}

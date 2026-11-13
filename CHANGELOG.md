@@ -8,6 +8,14 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-12
 
+### ci: a merged branch no longer uploads over main's build
+
+A commit-push-merge pushes the branch and main seconds apart, both builds ran, and the branch's
+upload often landed last — Firebase App Distribution then showed the branch build as "Latest"
+over the main build that contains it. `distribute.yml` now skips a branch build whose commit is
+already on `origin/main`, checked after checkout and again just before the upload (a merge can
+land mid-build). A branch pushed without a merge still builds and distributes.
+
 ### feat(undercut): the preview opened from a section's page shows that section alone
 
 On-device request. The Preview button on a section's own page (where its cuts are entered) now
