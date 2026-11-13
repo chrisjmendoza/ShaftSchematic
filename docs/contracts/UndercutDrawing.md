@@ -2104,6 +2104,13 @@ Section-level pick-and-print — no multi-page output.
 
 ### Total length of cuts
 
+> **REMOVED** (on-device ruling: no hand drawing carries it). `effectiveUndercutTotalRail`
+> returns false for every job, so neither the printed sheet nor the detail canvas draws a total,
+> and the "Total length of cuts" switches (tab, options panel, Settings → PDF Export) no longer
+> exist. `UndercutRecord.showTotalRail` and `PdfPrefs.undercutTotalRail` still decode and are
+> read by nothing. What follows describes the planner's `showTotal` path, which the app no
+> longer reaches; wherever this document says "the total", read "no total".
+
 On-device request (shop coworkers): the total rail — one dimension across a section's top-level
 cuts, above the chain (`buildUndercutTotalSpan`) — clarifies some jobs and confuses others.
 

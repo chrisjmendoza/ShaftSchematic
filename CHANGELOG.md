@@ -8,6 +8,18 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-12
 
+### feat(undercut): the total length of cuts is removed
+
+On-device ruling: no hand drawing carries a total across a section's cuts. The undercut sheet
+and the Undercut tab's detail canvas no longer draw it, and its three switches are gone — "Total
+length of cuts" on the tab's Drawing settings and the undercut PDF options, and the default under
+Settings → PDF Export. `effectiveUndercutTotalRail`, the ONE resolution both draw sites read, now
+returns false. `UndercutRecord.showTotalRail` and `PdfPrefs.undercutTotalRail` still decode, so
+older documents and Drawing profiles load; nothing reads them. A strip therefore lays out as a
+no-total strip always: short values go above the chain line, and the "Liner ends from S.E.T."
+rails stand directly over the chain. The planner's total-rail code path (`showTotal`) is still
+in place, unused by the app — left for a separate deletion pass.
+
 ### feat(undercut): "Draw to the shaft end" is on the PDF options panel too
 
 On-device request for the taper beside a liner near the shaft end to be drawn in and dimensioned
