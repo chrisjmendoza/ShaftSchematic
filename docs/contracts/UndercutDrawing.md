@@ -127,7 +127,9 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
   `UndercutLongCompressRow`, testTag `undercut_long_compress_slider` on the tab and
   `pdf_undercut_long_compress_slider` in the options panel): 0 ("To scale") to 90% in 5% steps,
   following the finger from local state and committing once on release through
-  `ShaftViewModel.setUndercutLongCompress` → `UndercutRecord.longCompressFrac`. See "Crowded
+  `ShaftViewModel.setUndercutLongCompress` → `UndercutRecord.longCompressFrac`. On the PDF
+  preview the drag also reports through `onDrag` → `PreviewTuning.undercutLongCompress`, and the
+  render loop draws a copy of the record carrying it, so the page reshapes under the finger. See "Crowded
   sections" under PDF layout below.
 - **"Recorded undercuts" list** below the canvas: a read-only summary + delete row per cut,
   grouped under each section's title and numbered from 1 within the section (`undercutSections`,

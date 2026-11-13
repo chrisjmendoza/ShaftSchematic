@@ -8,6 +8,13 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-12
 
+### fix(undercut): "Compress long sections" redraws the page while it is dragged
+
+On-device report: the new slider only redrew the undercut PDF preview on release, unlike the
+other sliders. Its in-progress value now rides `PreviewTuning.undercutLongCompress` into the
+preview's render loop (draft raster while dragging, sharp pass on release); the record is still
+written once, on release.
+
 ### feat(undercut): "Compress long sections" slider, and a "Not to scale" footnote
 
 On-device request: let the user choose how much the larger areas compress so the smaller cuts are

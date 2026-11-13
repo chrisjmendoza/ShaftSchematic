@@ -644,7 +644,10 @@ fun UndercutRoute(
                 undercutLinerOutline = pdfUndercutLinerOutline,
                 undercutSplitAtLinerEdge = pdfUndercutSplitAtLinerEdge,
                 undercutTotalRail = pdfUndercutTotalRail,
-                undercutRecord = undercutRecord,
+                // A live "Compress long sections" drag rides in on a copy; the stored record is
+                // written once, on release.
+                undercutRecord = tuning.undercutLongCompress
+                    ?.let { undercutRecord.copy(longCompressFrac = it) } ?: undercutRecord,
                 blankValues = blankDraft,
                 fractionStyle = pdfFractionStyle,
                 outputFont = pdfOutputFont,
@@ -1760,6 +1763,7 @@ internal fun UndercutOptionsSheet(
                 frac = undercutRecord.longCompressFrac,
                 onCommit = { vm.setUndercutLongCompress(it) },
                 testTag = "pdf_undercut_long_compress_slider",
+                onDrag = tuning?.let { t -> { v: Float? -> t.undercutLongCompress = v } },
             )
             Spacer(Modifier.height(12.dp))
             UndercutSetDatumRow(
