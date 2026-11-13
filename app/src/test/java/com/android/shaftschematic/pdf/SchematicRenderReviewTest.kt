@@ -490,6 +490,8 @@ class SchematicRenderReviewTest {
             // "Liner ends from S.E.T." on the chained sheet, from the job's S.E.T. and from the FWD one.
             "${job}_undercuts_liner_ends.png" to doc.undercutRecord.copy(linerEndsFromSet = true),
             "${job}_undercuts_compress50.png" to doc.undercutRecord.copy(longCompressFrac = 0.5f),
+            "${job}_undercuts_draw_to_set.png" to doc.undercutRecord.copy(drawToSet = true),
+            "${job}_undercuts_from_set_draw_to_set.png" to doc.undercutRecord.copy(drawToSet = true, railStyle = UndercutRailStyle.FROM_SET),
             "${job}_undercuts_compress90.png" to doc.undercutRecord.copy(longCompressFrac = 0.9f),
             "${job}_undercuts_liner_ends_fwd.png" to
                 doc.undercutRecord.copy(linerEndsFromSet = true, setDatum = UndercutSetDatum.FWD),

@@ -131,6 +131,9 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
   preview the drag also reports through `onDrag` → `PreviewTuning.undercutLongCompress`, and the
   render loop draws a copy of the record carrying it, so the page reshapes under the finger. See "Crowded
   sections" under PDF layout below.
+- **"Draw to the shaft end" switch** — ONE shared row `UndercutDrawToSetRow` (testTag
+  `undercut_draw_to_set_switch` on the tab, `pdf_undercut_draw_to_set_switch` on the options
+  panel, under "Compress long sections"), driving `UndercutRecord.drawToSet`.
 - **"Recorded undercuts" list** below the canvas: a read-only summary + delete row per cut,
   grouped under each section's title and numbered from 1 within the section (`undercutSections`,
   AFT → FWD) — not an edit card (see "UI contract").

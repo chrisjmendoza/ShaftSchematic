@@ -1136,28 +1136,13 @@ fun UndercutRoute(
                     // Per-job fit, not a look: a liner strip near a shaft end draws out to the S.E.T.
                     // and its chain dimensions the run to it. The reach in the caption is the constant
                     // itself, so the text cannot drift from what the strips do.
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text("Draw to the shaft end", style = MaterialTheme.typography.bodyLarge)
-                            Text(
-                                "A liner strip within " +
-                                    formatLenWithUnit(UNDERCUT_SET_REACH_MM.toDouble(), unit) +
-                                    " of its S.E.T. draws out to the shaft end and dimensions the run " +
-                                    "to it. Saved with this job.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        Spacer(Modifier.width(8.dp))
-                        Switch(
-                            checked = undercutRecord.drawToSet,
-                            onCheckedChange = { vm.setUndercutDrawToSet(it) },
-                            modifier = Modifier.testTag("undercut_draw_to_set_switch"),
-                        )
-                    }
+                    UndercutDrawToSetRow(
+                        checked = undercutRecord.drawToSet,
+                        onCheckedChange = { vm.setUndercutDrawToSet(it) },
+                        unit = unit,
+                        testTag = "undercut_draw_to_set_switch",
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
                     // App-wide look pref, offered here because the chain-rail rule is reached for from
                     // this tab (on-device request); the options-sheet and Settings rows are the same
                     // value.
@@ -1687,6 +1672,40 @@ private data class UndercutRenderInputs(
 )
 
 /**
+ * The per-job "Draw to the shaft end" switch (`UndercutRecord.drawToSet`) — ONE row on the
+ * Undercut tab's Drawing settings and the undercut options panel. A fit for this shaft, not a
+ * look. The reach in the caption is the constant itself, so the text cannot drift from the strips.
+ */
+@Composable
+private fun UndercutDrawToSetRow(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    unit: UnitSystem,
+    testTag: String,
+    modifier: Modifier = Modifier,
+) {
+    Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text("Draw to the shaft end", style = MaterialTheme.typography.bodyLarge)
+            Text(
+                "A liner section within " +
+                    formatLenWithUnit(UNDERCUT_SET_REACH_MM.toDouble(), unit) +
+                    " of its S.E.T. is drawn out to the shaft end, taper included, and its " +
+                    "dimensions run to the S.E.T. Saved with this job.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            modifier = Modifier.testTag(testTag),
+        )
+    }
+}
+
+/**
  * The undercut drawing's PDF options — ONE configuration of the shared [RunoutWearOptionsSheet]
  * behind every surface that opens it: the preview's Tune panel, the tab's "Options" button and the
  * detail page's Options icon. Every row is a remote control for the one app-wide `PdfPrefs` value
@@ -1728,6 +1747,7 @@ internal fun UndercutOptionsSheet(
     val pdfThreadDensity by vm.pdfThreadDensity.collectAsState()
     val pdfArrowSizePt by vm.pdfArrowSizePt.collectAsState()
     val pdfDimTextScale by vm.pdfDimTextScale.collectAsState()
+    val optionsUnit by vm.unit.collectAsState()
     val resolvedComponents by vm.resolvedComponents.collectAsState()
     val undercutRecord by vm.undercutRecord.collectAsState()
     val unitOverrides by vm.unitOverrides.collectAsState()
@@ -1793,6 +1813,15 @@ internal fun UndercutOptionsSheet(
                 onCommit = { vm.setUndercutLongCompress(it) },
                 testTag = "pdf_undercut_long_compress_slider",
                 onDrag = tuning?.let { t -> { v: Float? -> t.undercutLongCompress = v } },
+            )
+            Spacer(Modifier.height(12.dp))
+            // On the panel too (on-device request for the taper beside a liner near the shaft
+            // end): it was only under the tab's Drawing settings, where it was not found.
+            UndercutDrawToSetRow(
+                checked = undercutRecord.drawToSet,
+                onCheckedChange = { vm.setUndercutDrawToSet(it) },
+                unit = optionsUnit,
+                testTag = "pdf_undercut_draw_to_set_switch",
             )
             Spacer(Modifier.height(12.dp))
             UndercutSetDatumRow(
