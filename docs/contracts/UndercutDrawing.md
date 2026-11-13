@@ -2180,6 +2180,13 @@ ALTERNATIVE to the chain, never a replacement, with the lengths kept.
   banding reads (`overheadsPt`), so a crowded page gives every strip the same shaft instead of
   handing the tiers' slack to the busiest strips. The natural-height cells read the row-metric
   overheads (`liftedOverheadsPt`).
+- **One chain, no nested rows** — on-device report: a 1 1/8" cut holding a 9/16" cut printed the
+  1 1/8" on the chain over a nested row of the two 9/16" pieces it is made of, "we don't need
+  that 1 1/8". In From S.E.T. the level-0 chain is built with every nested cut's shoulders as
+  extra nodes (`buildUndercutRailSpans(splitAtMm = …)`), so a cut holding nested cuts is
+  dimensioned as its floor pieces on the one line, and `nestedSpans` / `nested` are empty. The
+  chain's spans still sum to the chain. Chain dimensions are untouched: parent length on the
+  chain, nested rows against the parent's edges.
 - **Crowded axial map** (detail canvas only) — `planUndercutStripXMap(fromSet)` plans the same
   rails; the floors still come from the chain and nested spans only (a baseline rail is its own
   line and never crowds).
