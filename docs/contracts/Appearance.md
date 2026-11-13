@@ -100,6 +100,17 @@ edge). `NumericInputField` takes `numericFieldColors()` — Material's own in li
 disabled (derived) field keeps its value at 5.6:1 and its label at 4.5:1 on the card instead of
 2.7:1.
 
+### The editor preview under a dark theme: a light card
+
+On-device report: in dark theme the Undercut screen — its drawing on a white canvas — read well,
+and the Schematic preview drawn on the dark ground did not. `ShaftPreviewPanel` (the Schematic and
+Final tabs) asks `ColorScheme.previewPaperScheme()` (`ui/theme/Theme.kt`): on a dark scheme it
+returns the light scheme (the high-contrast light one under high contrast) with white
+`background` / `surface`, and the panel draws a white rounded card and wraps its whole content in
+`MaterialTheme(colorScheme = …)`. So the shaft, fills, selection ring, dimension lines and their
+halos resolve exactly as under the light theme. Null on a light scheme — nothing changes there.
+The section below now describes what is drawn straight on a dark ground: the template thumbnails.
+
 ### The preview on a dark ground
 
 The editor preview and the template thumbnails resolve their preset colours through ONE rule,

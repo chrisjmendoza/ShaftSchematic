@@ -8,6 +8,15 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-12
 
+### fix(theme): in dark theme the editor preview stands on a light card
+
+On-device report: the Undercut screen read well in dark theme — its drawing is on white paper —
+and the Schematic preview, drawn grey-on-dark, did not. Under a dark theme the Schematic and
+Final tabs' preview box is now a white rounded card drawn with the light scheme
+(`ColorScheme.previewPaperScheme`, `ui/theme/Theme.kt`, applied in `ShaftPreviewPanel`): shaft,
+fills, selection and dimension lines are exactly the light theme's. A light theme is unchanged,
+and the dark-ground colour rules still serve the template thumbnails.
+
 ### ci: a merged branch no longer uploads over main's build
 
 A commit-push-merge pushes the branch and main seconds apart, both builds ran, and the branch's
