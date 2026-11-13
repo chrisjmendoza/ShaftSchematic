@@ -184,7 +184,10 @@ class UndercutRailLiftTest {
     private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 10f }
     private val diaText = Paint(text).apply { textSize = 8f }
 
-    private fun planOf(spec: ShaftSpec, record: UndercutRecord, left: Float, right: Float, pick: Int = 0): UndercutStripPlan {
+    private fun planOf(
+        spec: ShaftSpec, record: UndercutRecord, left: Float, right: Float, pick: Int = 0,
+        fitCrowded: Boolean = true,
+    ): UndercutStripPlan {
         val sh = undercutSheetStrips(spec, resolveComponents(spec), record, blankValues = false)
         val strip = sh.strips[pick]
         return requireNotNull(
@@ -194,6 +197,7 @@ class UndercutRailLiftTest {
                 startedStrip = false, dual = false, dualStacked = false, railSplitAtMm = emptyList(),
                 arrowSizePt = PDF_ARROW_SIZE_DEFAULT_PT,
                 leadSide = UndercutAnchorSide.FWD_SET, aftSetMm = sh.aftSetMm, fwdSetMm = sh.fwdSetMm,
+                fitCrowded = fitCrowded,
             ),
         )
     }
@@ -263,7 +267,8 @@ class UndercutRailLiftTest {
 
     @Test
     fun `lifting a chain-only strip costs one row less its below clear`() {
-        // One 18" liner, a 1" cut and a 7" cut: in a narrow cell the 1" values cannot seat.
+        // One 18" liner, a 1" cut and a 7" cut: in a narrow cell kept to scale the 1" values
+        // cannot seat.
         val inch = 25.4f
         val spec = ShaftSpec(
             overallLengthMm = 120f * inch,
@@ -274,7 +279,7 @@ class UndercutRailLiftTest {
             id = id, startFromAftMm = at * inch, lengthMm = len * inch, diaMm = 5.625f * inch,
             authoredReference = UndercutReference.LINER_AFT, referenceLinerId = "L",
         )
-        val plan = planOf(spec, UndercutRecord(undercuts = listOf(cut("a", 51f, 1f), cut("b", 53f, 7f))), 36f, 256f)
+        val plan = planOf(spec, UndercutRecord(undercuts = listOf(cut("a", 51f, 1f), cut("b", 53f, 7f))), 36f, 256f, fitCrowded = false)
         assertTrue(plan.rails.canLiftFallbacks)
         assertEquals(0, plan.rails.rows.nestedRows)
         assertEquals(

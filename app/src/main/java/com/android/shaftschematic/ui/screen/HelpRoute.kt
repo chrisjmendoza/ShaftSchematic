@@ -736,8 +736,13 @@ internal val helpSections: List<HelpSection> = listOf(
                     "first row of \"Drawing settings\" and in the sheet's PDF options) sets " +
                     "the printed page: Auto stacks two or more sections down a portrait page " +
                     "and prints a single section landscape.\n\n" +
+                    "\"Dimensions\" (Chain | From S.E.T., right after \"Page\") chooses how " +
+                    "each section locates its cuts: chained from the liner's edges, or each " +
+                    "cut's start measured from the S.E.T. on a stack of dimensions with the cut " +
+                    "lengths on the line under them (the total length of cuts is then not " +
+                    "printed).\n\n" +
                     "\"Distance to S.E.T.\" (Nearest | " +
-                    "AFT S.E.T. | FWD S.E.T., right after \"Page\") chooses the S.E.T. that each " +
+                    "AFT S.E.T. | FWD S.E.T., right after \"Dimensions\") chooses the S.E.T. that each " +
                     "strip's title and the short dimension at its edge measure to; \"Split " +
                     "cuts at liner edges\" sits directly under it.\n\n" +
                     "\"Sections " +
@@ -1339,7 +1344,10 @@ internal val helpSections: List<HelpSection> = listOf(
                     "• \"Page\" — on the Undercut Drawing, first under \"Drawing settings\" and " +
                     "in its PDF options. Auto, Landscape or Portrait; Auto prints portrait when " +
                     "the sheet has two or more sections to print. Saved with this job.\n" +
-                    "• \"Distance to S.E.T.\" — on the Undercut Drawing, right after \"Page\" and " +
+                    "• \"Dimensions\" — on the Undercut Drawing, right after \"Page\" and in its " +
+                    "PDF options. Chain, or From S.E.T.: each cut's start measured from the S.E.T., " +
+                    "with the cut lengths still printed under them. Saved with this job.\n" +
+                    "• \"Distance to S.E.T.\" — on the Undercut Drawing, right after \"Dimensions\" and " +
                     "in its PDF options. Nearest, AFT S.E.T. or FWD S.E.T.: the S.E.T. each " +
                     "strip's title and the dimension at its edge measure to. Saved with this job.\n" +
                     "• \"Sections to print\" — on the Undercut Drawing above the Print buttons, " +

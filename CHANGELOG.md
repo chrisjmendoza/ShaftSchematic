@@ -8,6 +8,54 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-12
 
+### feat(undercut): "Dimensions: From S.E.T." — every cut located from the S.E.T.
+
+On-device request: the shop's hand-drawn undercut sheets locate each cut by baseline dimensioning —
+a stack of rails all starting at the S.E.T., one ending at each cut's near shoulder, the longest on
+top, plus one to the far end of the run — and leave the cut lengths off. The sheet can now print
+that, as an alternative to the chain, with the cut lengths kept.
+
+A new per-job choice, **Dimensions: Chain | From S.E.T.** (`UndercutRecord.railStyle`,
+`UndercutRailStyle`, default CHAIN, stored by name and decoded tolerantly), sits directly above
+"Distance to S.E.T." in the Undercut tab's Drawing settings and in the undercut preview's options.
+From S.E.T., each strip stacks one baseline rail per station from the S.E.T. the strip already
+measures to (`undercutStripSetSide`): measuring from the AFT S.E.T., the start of every cut at every
+nesting level plus the end of the FWD-most cut; from the FWD S.E.T., the mirror. Stations that
+coincide are one rail; the nearest draws lowest. A rail runs from the S.E.T. when it is on the strip
+(one shared datum witness) and otherwise opens off the strip's edge like the S.E.T. lead, with one
+head at its cut. The chain and the nested rows stay underneath for the cut lengths; the total rail
+and the S.E.T. lead drop out (the nearest rail states the lead's value), so "Total length of cuts"
+is greyed while From S.E.T. is chosen — its stored choice untouched. The Royal Atlantic job prints
+15 1/2, 16 1/16, 18 13/16, 50 3/4, 51 5/16, 51 7/8, 53 3/8 and 54, the hand sketch's figures.
+
+ONE planner (`planUndercutStripRails(fromSet)`, `buildUndercutSetRailSpans`) and ONE draw routine
+(`drawUndercutStripRails`) behind the printed strip and the detail canvas. Every value seats in a
+break in its own line, on a white halo; a station's witness that crosses a chain or nested value is
+knocked out by that value's halo. A strip short of height closes its tiers up — never below the
+value's own height plus 3 pt — before its shaft drops under the 96 pt floor, and a crowded portrait
+page sizes its strips from the closed-up tiers. A chained sheet prints byte-identically.
+
+### fix(undercut): a section crowded with short cuts draws them wide enough to read
+
+On-device report: a job recorded as seven cuts on one liner — 9/16" to 1 1/2" slivers at each end
+of a 31 15/16" one — printed its values stacked on each other, two rows deep with leaders, and the
+Ø values fanned out under a cluster of faces. A strip is drawn to scale, so at the scale of a 38"
+section a 9/16" cut is a few points wide.
+
+An undercut strip now draws to scale only until its dimension values would stack
+(`undercutRailsCrowded`: a value that cannot seat in its own line and cannot take the first row
+beside it either). A crowded strip is drawn through a piecewise axial map
+(`pdf/UndercutStripXMap.kt`, ONE planner `planUndercutStripXMap`): every short dimensioned stretch
+— cut, gap between cuts, nested cut — gets the width its own value needs to seat in its line, the
+short ones all taking one width, and the long stretches give that room up in proportion to their
+length. The strip keeps its width, its ends and the stock outside its chain; the rail values are
+the stored lengths as before; each Ø leader drops straight from its own cut. The printed strip and
+the Undercut tab's detail canvas read the same map (drawing, rails, cut numbers and the canvas
+tap), so they cannot differ. A strip whose values do not stack — one short cut on a long liner —
+prints exactly as before. No setting, no stored field. The detail canvas's cut numbers are placed
+in drawn x (`undercutCutNumberPlacementsPx(mmAtPx)`), so a number sits inside a cut that is drawn
+wide enough for it and never hangs past its cut.
+
 ### change(pdf): the overall-length rail prints its value without "OAL"
 
 On-device ruling: the top end-to-end dimension read `OAL 234 3/16"`; the layout already says what

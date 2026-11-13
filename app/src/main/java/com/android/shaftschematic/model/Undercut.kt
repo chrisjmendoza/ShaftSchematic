@@ -147,6 +147,11 @@ data class Undercut(
  *   dimension at the strip's edge (see [UndercutSetDatum]). A FIT for this job, so per-document.
  *   Additive + defaulted, decoded tolerantly: older files and unknown names get
  *   [UndercutSetDatum.NEAREST], which is the side every strip printed before the choice existed.
+ * @property railStyle How each printed strip dimensions its cuts (see [UndercutRailStyle]): the
+ *   chain, or every cut's start measured from the S.E.T. with the cut lengths on the chain under
+ *   them. A FIT for this job's drawing, so per-document. Dimensioning only — no stored value moves.
+ *   Additive + defaulted, decoded tolerantly: older files and unknown names get
+ *   [UndercutRailStyle.CHAIN], which prints exactly as every sheet did before the choice existed.
  * @property excludedLinerIds Liner strips left off the printed sheet, by liner id ("Sections to
  *   print"). An EXCLUSION list, so a liner added later prints by default and a selection is never
  *   silently rewritten. Also governs that liner's started strip on a blank draft. An id that no
@@ -166,7 +171,45 @@ data class UndercutRecord(
     val setDatum: UndercutSetDatum = UndercutSetDatum.NEAREST,
     val excludedLinerIds: List<String> = emptyList(),
     val excludedFreeCutIds: List<String> = emptyList(),
+    val railStyle: UndercutRailStyle = UndercutRailStyle.CHAIN,
 )
+
+/**
+ * How the undercut sheet's strips dimension their cuts, chosen per job ([UndercutRecord.railStyle]).
+ * - [CHAIN]: the chained rail — each cut's length and the gaps between, located from the chain
+ *   datums, with the S.E.T. lead at its outboard end and the optional total above.
+ * - [FROM_SET]: baseline dimensioning, the shop's hand-sketch convention (on-device request) — a
+ *   stack of rails all starting at the strip's S.E.T., one ending at each cut's near shoulder and
+ *   one at the far end of the run, nearest lowest; the chain stays under them for the cut lengths,
+ *   while the total and the lead drop out (the first baseline rail states the lead's value).
+ *
+ * Serialized by NAME through [UndercutRailStyleSerializer], which decodes an unknown name to
+ * [CHAIN] instead of failing the document.
+ */
+@Serializable(with = UndercutRailStyleSerializer::class)
+enum class UndercutRailStyle {
+    CHAIN, FROM_SET;
+
+    companion object {
+        /** Tolerant decode for a persisted name; an unknown or blank value is [CHAIN]. */
+        fun fromName(raw: String?): UndercutRailStyle =
+            if (raw.isNullOrBlank()) CHAIN
+            else runCatching { valueOf(raw) }.getOrDefault(CHAIN)
+    }
+}
+
+/** Name-string serializer for [UndercutRailStyle] with [UndercutRailStyle.fromName]'s fallback. */
+object UndercutRailStyleSerializer : KSerializer<UndercutRailStyle> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("com.android.shaftschematic.model.UndercutRailStyle", PrimitiveKind.STRING)
+
+    override fun serialize(encoder: Encoder, value: UndercutRailStyle) {
+        encoder.encodeString(value.name)
+    }
+
+    override fun deserialize(decoder: Decoder): UndercutRailStyle =
+        UndercutRailStyle.fromName(decoder.decodeString())
+}
 
 /**
  * The S.E.T. the undercut sheet's strips measure to, chosen per job ([UndercutRecord.setDatum]):

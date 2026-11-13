@@ -121,6 +121,7 @@ import com.android.shaftschematic.geom.undercutMissingDiaMessage
 import com.android.shaftschematic.geom.undercutsMissingDia
 import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.UndercutRailStyle
 import com.android.shaftschematic.model.UndercutRecord
 import com.android.shaftschematic.model.Undercut
 import com.android.shaftschematic.model.UndercutReference
@@ -153,6 +154,7 @@ import com.android.shaftschematic.ui.viewmodel.setUndercutShowTotalRail
 import com.android.shaftschematic.ui.viewmodel.setUndercutPageOrientation
 import com.android.shaftschematic.ui.viewmodel.setUndercutSectionPrinted
 import com.android.shaftschematic.ui.viewmodel.setUndercutSetDatum
+import com.android.shaftschematic.ui.viewmodel.setUndercutRailStyle
 import com.android.shaftschematic.ui.viewmodel.setUndercutExaggeration
 import com.android.shaftschematic.ui.viewmodel.updateUndercut
 import com.android.shaftschematic.ui.viewmodel.updateUndercutReference
@@ -1027,6 +1029,12 @@ fun UndercutRoute(
                         onChoose = { vm.setUndercutPageOrientation(it) },
                         modifier = Modifier.padding(bottom = 8.dp),
                     )
+                    // Per-job: chained dimensions, or each cut's start from the S.E.T. chosen below.
+                    UndercutRailStyleRow(
+                        choice = undercutRecord.railStyle,
+                        onChoose = { vm.setUndercutRailStyle(it) },
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
                     // Per-job: which S.E.T. the strip titles and the lead at each strip's edge
                     // measure to.
                     UndercutSetDatumRow(
@@ -1051,6 +1059,7 @@ fun UndercutRoute(
                         onCheckedChange = { vm.setUndercutShowTotalRail(it) },
                         testTag = "undercut_total_rail_switch",
                         modifier = Modifier.padding(bottom = 8.dp),
+                        enabled = undercutRecord.railStyle == UndercutRailStyle.CHAIN,
                     )
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -1718,6 +1727,11 @@ internal fun UndercutOptionsSheet(
         undercutResolvedOrientation = resolveUndercutPageOrientation(undercutRecord.pageOrientation, stripCount),
         undercutContentRows = {
             Spacer(Modifier.height(12.dp))
+            UndercutRailStyleRow(
+                choice = undercutRecord.railStyle,
+                onChoose = { vm.setUndercutRailStyle(it) },
+            )
+            Spacer(Modifier.height(12.dp))
             UndercutSetDatumRow(
                 choice = undercutRecord.setDatum,
                 onChoose = { vm.setUndercutSetDatum(it) },
@@ -1736,6 +1750,7 @@ internal fun UndercutOptionsSheet(
                 followsDefault = undercutRecord.showTotalRail == null,
                 onCheckedChange = { vm.setUndercutShowTotalRail(it) },
                 testTag = "pdf_undercut_total_rail",
+                enabled = undercutRecord.railStyle == UndercutRailStyle.CHAIN,
             )
             if (printSections.size >= 2) {
                 Spacer(Modifier.height(12.dp))

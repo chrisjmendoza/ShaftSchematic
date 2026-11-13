@@ -96,14 +96,11 @@ class UndercutDetailSetLeadTest {
         assertEquals(rails.lead, rails.chainWithLead.last())
 
         // The printed strip's planner over the canvas's x map, verbatim.
-        val lay = computeUndercutWindowLayout(
-            widthPx = inputs.widthPx, profileTopPx = 0f, profileRowHeightPx = inputs.profileRowHeightPx,
-            windowLengthMm = inputs.windowLengthMm, maxOdMm = inputs.maxOdMm, edgePadPx = inputs.edgePadPx,
-        )
+        val xMap = requireNotNull(planUndercutDetailXMap(inputs, widthOf))
         val direct = planUndercutStripRails(
             strip.chainStartMm, strip.chainEndMm, spans, UnitSystem.INCHES, dual = false, splitAtMm = emptyList(),
             startedStrip = false,
-            xAt = { mm -> lay.startPx + (mm - inputs.drawStartMm) * lay.pxPerMm },
+            xAt = xMap::xAt,
             labelWidth = widthOf,
             scale = inputs.scale,
             setLead = lead,

@@ -51,12 +51,13 @@ import com.android.shaftschematic.util.PdfPageOrientation
 import com.android.shaftschematic.util.VerboseLog
 import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.drawDualLabelCentered
+import com.android.shaftschematic.util.dualStackMetrics
 import com.android.shaftschematic.util.measureDualLabel
+import com.android.shaftschematic.util.setsStacked
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.buildLinerTitleById
 import com.android.shaftschematic.util.drawRichText
 import com.android.shaftschematic.util.measureRichText
-import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -192,6 +193,8 @@ fun composeUndercutPdf(
     // the CALLER's record, not effectiveRecord — a blank draft drops the cuts, not the job's
     // dimensioning choice (a started strip plans no total either way).
     val showTotalRail = effectiveUndercutTotalRail(undercutRecord.showTotalRail, pdfPrefs.undercutTotalRail)
+    // "Dimensions": chained, or each cut's start from the S.E.T. — also the caller's record.
+    val railsFromSet = undercutRecord.railStyle == UndercutRailStyle.FROM_SET
     // Shared liner display titles — custom label wins, else positional AFT/MID/FWD defaults
     // (util/LinerTitles.kt). Same names the carousel cards, the wear sheet, and the runout
     // sheet show, so a liner-anchored strip is identifiable at a glance.
@@ -382,6 +385,7 @@ fun composeUndercutPdf(
                     titleAirPt = UC_PORTRAIT_TITLE_AIR_PT,
                     leadSide = stripSideOf(strip), aftSetMm = aftSetMm, fwdSetMm = fwdSetMm,
                     showTotal = showTotalRail,
+                    fromSet = railsFromSet,
                 )
             }
         } else {
@@ -390,7 +394,10 @@ fun composeUndercutPdf(
         stripCells = undercutStripCells(
             portrait, onPage.size, bandTop, midBotFull, contentLeft, contentRight,
             reservedBottomPt = overflowNoteH,
-            overheadsPt = portraitPlans?.map { it?.verticalOverheadPt(wantDualStacked) ?: 0f },
+            // The crowded paths read tiers closed up: a From-S.E.T. strip that has to give height
+            // closes its baseline tiers before its shaft (`resolveRails`), so a page sized off the
+            // row-metric tiers would hand the busiest strips a shaft the others do not get.
+            overheadsPt = portraitPlans?.map { it?.verticalOverheadPt(wantDualStacked, tightSetTiers = true) ?: 0f },
             liftedOverheadsPt = portraitPlans?.map { it?.verticalOverheadPt(wantDualStacked, lifted = true) ?: 0f },
         )
         overflowBandTop = stripCells.lastOrNull()?.bottom ?: bandTop
@@ -520,6 +527,7 @@ fun composeUndercutPdf(
             // The app-wide "Dimension arrows" head — the same pref the schematic's rails read.
             arrowSizePt = pdfPrefs.arrowSizePt,
             showTotal = showTotalRail,
+            fromSet = railsFromSet,
             // Portrait strips are sized to what they draw, so the title gets its own air under
             // the Ø callouts; landscape keeps today's banding exactly.
             titleAirPt = if (portrait) UC_PORTRAIT_TITLE_AIR_PT else 0f,
@@ -986,8 +994,13 @@ internal class UndercutStripPlan(
      * no spare height inside the strip the title would otherwise sit right on the last callout.
      */
     val titleAirPt: Float = 0f,
+    /**
+     * The strip's axial map ([planUndercutStripXMap]): to scale, or piecewise when its values
+     * would crowd. Everything the strip draws along its length goes through [xAt].
+     */
+    val xMap: UndercutStripXMap = UndercutStripXMap.linear(drawStartMm, drawEndMm, hLayout.linerLeftPt, hLayout.ptPerMm),
 ) {
-    fun xAt(mm: Float): Float = hLayout.linerLeftPt + (mm - drawStartMm) * hLayout.ptPerMm
+    fun xAt(mm: Float): Float = xMap.xAt(mm)
 
     /** [rails] with the chain's fallback values lifted above the line ([UndercutStripRails.withFallbacksLifted]). */
     private val liftedRails: UndercutStripRails by lazy { rails.withFallbacksLifted() }
@@ -1002,11 +1015,28 @@ internal class UndercutStripPlan(
         dualStacked: Boolean,
         cylMaxFloorPt: Float = UNDERCUT_CYL_MAX_FLOOR_PT,
         lifted: Boolean = false,
+        /** The From-S.E.T. tier pitch to reserve at; null = the row metric ([undercutRailRowHeightPt]). */
+        setTierPitchPt: Float? = null,
     ): UndercutStripInnerLayout {
         val r = if (lifted) liftedRails else rails
         // ONE row metric for the reserved band and the drawn rows (`drawUndercutStripRails` steps
         // by it): a stacked dual sheet's taller rows otherwise overrun the band into the shaft.
         val rowHeight = undercutRailRowHeightPt(dimText, dualStacked)
+        if (r.rows.setRows > 0) {
+            // The baseline tiers stand above the chain's own above-line rows, at ONE pitch the
+            // returned layout carries to the draw.
+            val pitch = setTierPitchPt ?: rowHeight
+            return computeUndercutStripInnerLayout(
+                stripTop, stripBottom,
+                titleHeightPt = titleText.textSize,
+                hasTotalRail = false,
+                rowHeightPt = rowHeight,
+                diaBandPt = if (diaPlan != null) diaBandPt + titleAirPt else diaBandPt,
+                maxLabelRows = r.rows.belowRows,
+                chainAboveBandPt = r.rows.aboveRows * rowHeight + r.rows.setRows * pitch,
+                cylMaxFloorPt = cylMaxFloorPt,
+            ).copy(setTierPitchPt = pitch)
+        }
         return computeUndercutStripInnerLayout(
             stripTop, stripBottom,
             titleHeightPt = titleText.textSize,
@@ -1041,7 +1071,33 @@ internal class UndercutStripPlan(
             val liftedInner = innerLayout(stripTop, stripBottom, dualStacked, lifted = true)
             if (undercutRailsLift(liftedInner.cylBottom - liftedInner.cylTop)) return liftedRails to liftedInner
         }
+        if (rails.rows.setRows > 0) return rails to setTierInnerLayout(stripTop, stripBottom, dualStacked)
         return rails to innerLayout(stripTop, stripBottom, dualStacked)
+    }
+
+    /**
+     * A From-S.E.T. strip's split: the baseline tiers at the row metric while the strip still draws
+     * a shaft at least [UNDERCUT_CYL_MAX_FLOOR_PT] tall (the floor the lift decision reads);
+     * otherwise the tiers close up first — down to [undercutSetTierMinPitch], the value's own height
+     * plus 3 pt — and only then does the shaft give more. Every tier is always drawn.
+     */
+    private fun setTierInnerLayout(stripTop: Float, stripBottom: Float, dualStacked: Boolean): UndercutStripInnerLayout {
+        val full = innerLayout(stripTop, stripBottom, dualStacked)
+        val shortfall = UNDERCUT_CYL_MAX_FLOOR_PT - (full.cylBottom - full.cylTop)
+        if (shortfall <= 0f) return full
+        val minPitch = setTierMinPitch(dualStacked)
+        val pitch = (full.setTierPitchPt - shortfall / rails.rows.setRows).coerceIn(minPitch, full.setTierPitchPt)
+        return innerLayout(stripTop, stripBottom, dualStacked, setTierPitchPt = pitch)
+    }
+
+    /** [undercutSetTierMinPitch] for this strip's values, never above the row metric. */
+    private fun setTierMinPitch(dualStacked: Boolean): Float {
+        val textHeight = if (dualStacked && rails.setRails.any { it.label.setsStacked(true) }) {
+            dimText.dualStackMetrics().height
+        } else {
+            dimText.fontMetrics.let { it.descent - it.ascent }
+        }
+        return undercutSetTierMinPitch(textHeight).coerceAtMost(undercutRailRowHeightPt(dimText, dualStacked))
     }
 
     /**
@@ -1049,10 +1105,16 @@ internal class UndercutStripPlan(
      * callouts, the title — measured on a band too tall for any row to drop out and with no
      * cylinder cap, so the strip's height less this is exactly the cylinder it draws. [lifted]
      * measures the rails with the chain's fallback values above the line — the layout a strip
-     * with room draws ([resolveRails]).
+     * with room draws ([resolveRails]). [tightSetTiers] measures a From-S.E.T. strip's baseline
+     * tiers closed up to their tightest pitch — the layout [resolveRails] draws in a cell too short
+     * for the row-metric tiers and the [UNDERCUT_CYL_MAX_FLOOR_PT] shaft together; a chained strip
+     * measures the same either way.
      */
-    fun verticalOverheadPt(dualStacked: Boolean, lifted: Boolean = false): Float {
-        val probe = innerLayout(0f, OVERHEAD_PROBE_PT, dualStacked, cylMaxFloorPt = Float.MAX_VALUE, lifted = lifted)
+    fun verticalOverheadPt(dualStacked: Boolean, lifted: Boolean = false, tightSetTiers: Boolean = false): Float {
+        val pitch = if (tightSetTiers && rails.rows.setRows > 0) setTierMinPitch(dualStacked) else null
+        val probe = innerLayout(
+            0f, OVERHEAD_PROBE_PT, dualStacked, cylMaxFloorPt = Float.MAX_VALUE, lifted = lifted, setTierPitchPt = pitch,
+        )
         return OVERHEAD_PROBE_PT - (probe.cylBottom - probe.cylTop)
     }
 
@@ -1095,6 +1157,14 @@ internal fun planUndercutDetailStrip(
     fwdSetMm: Float = 0f,
     /** The job's resolved "Total length of cuts" choice — [planUndercutStripRails]' `showTotal`. */
     showTotal: Boolean = true,
+    /**
+     * Whether a strip whose values would stack is drawn through the fitted axial map
+     * ([planUndercutStripXMap]) — what every sheet does. False keeps the strip to scale whatever
+     * its values do: the layout the fallback rows are planned for when the floors cannot all fit.
+     */
+    fitCrowded: Boolean = true,
+    /** The job's "Dimensions" are From S.E.T. — [planUndercutStripRails]' `fromSet`. */
+    fromSet: Boolean = false,
 ): UndercutStripPlan? {
     // The strip's own cuts only: another strip's cut in this window draws as plain stock here.
     val memberCutSpans = strip.undercutIds.mapNotNull { id ->
@@ -1112,7 +1182,15 @@ internal fun planUndercutDetailStrip(
             if (side == UndercutAnchorSide.AFT_SET) aftSetMm else fwdSetMm,
         )
     }
-    val leadRoomPt = leadValueMm?.let { v ->
+    // From S.E.T. there is no lead: the nearest baseline rail stands in its place, open off the same
+    // drawn edge, so the room is made for THAT rail's value.
+    val roomValueMm = if (!fromSet || leadValueMm == null) leadValueMm
+    else leadSide?.let { side ->
+        undercutSetRailNearestValueMm(
+            memberCutSpans, side, if (side == UndercutAnchorSide.AFT_SET) aftSetMm else fwdSetMm,
+        )
+    } ?: leadValueMm
+    val leadRoomPt = roomValueMm?.let { v ->
         undercutSetLeadRoomPt(
             dimText.measureDualLabel(formatLenDimDualLabel(v.toDouble(), unit, dual), dualStacked),
             arrowSizePt,
@@ -1131,9 +1209,6 @@ internal fun planUndercutDetailStrip(
     val hLayout = computeWearStripHorizontalLayout(
         stripLeft, stripRight, drawLengthMm, stubWidthPt = UNDERCUT_STRIP_EDGE_INSET_PT,
     )
-    val ptPerMmStrip = hLayout.ptPerMm
-    fun xAtStrip(mm: Float): Float = hLayout.linerLeftPt + (mm - drawStartMm) * ptPerMmStrip
-
     val titleText = Paint(text).apply { textSize = (text.textSize - 1f).coerceAtLeast(7f) }
 
     // Spans on this strip, aft → fwd, render-clamped.
@@ -1141,6 +1216,29 @@ internal fun planUndercutDetailStrip(
         val s = clampedById[u.id] ?: return@mapNotNull null
         if (s.isEmpty) null else UndercutSpanMm(u.id, s.startMm, s.endMm)
     }.sortedBy { it.startMm }
+
+    val setLead = leadSide?.let { side ->
+        UndercutSetLead(
+            side = side,
+            setMm = if (side == UndercutAnchorSide.AFT_SET) aftSetMm else fwdSetMm,
+            drawStartMm = drawStartMm,
+            drawEndMm = drawEndMm,
+        )
+    }
+    val labelWidth = { s: DualLabel -> dimText.measureDualLabel(s, dualStacked) }
+    // The strip's axial map: to scale, unless its dimension values would stack on each other —
+    // then every short stretch draws wide enough to hold its own value (`planUndercutStripXMap`).
+    val xMap = if (!fitCrowded) {
+        UndercutStripXMap.linear(drawStartMm, drawEndMm, hLayout.linerLeftPt, hLayout.ptPerMm)
+    } else {
+        planUndercutStripXMap(
+            drawStartMm, drawEndMm, hLayout.linerLeftPt, hLayout.ptPerMm,
+            strip.chainStartMm, strip.chainEndMm, spans, unit, dual, railSplitAtMm, startedStrip,
+            labelWidth = labelWidth, arrowSizePt = arrowSizePt, setLead = setLead, showTotal = showTotal,
+            fromSet = fromSet,
+        )
+    }
+    fun xAtStrip(mm: Float): Float = xMap.xAt(mm)
 
     // Measured-Ø plan first, so the strip reserves exactly the label rows its cuts need.
     val diaStations = buildUndercutDiaStations(
@@ -1160,21 +1258,15 @@ internal fun planUndercutDetailStrip(
     val rails = planUndercutStripRails(
         strip.chainStartMm, strip.chainEndMm, spans, unit, dual, railSplitAtMm, startedStrip,
         xAt = { mm -> xAtStrip(mm) },
-        labelWidth = { s: DualLabel -> dimText.measureDualLabel(s, dualStacked) },
+        labelWidth = labelWidth,
         arrowSizePt = arrowSizePt,
-        setLead = leadSide?.let { side ->
-            UndercutSetLead(
-                side = side,
-                setMm = if (side == UndercutAnchorSide.AFT_SET) aftSetMm else fwdSetMm,
-                drawStartMm = drawStartMm,
-                drawEndMm = drawEndMm,
-            )
-        },
+        setLead = setLead,
         showTotal = showTotal,
+        fromSet = fromSet,
     )
     return UndercutStripPlan(
         drawStartMm, drawEndMm, hLayout, titleText, dimText, spans, diaPlan, diaBandPt, rails,
-        titleAirPt,
+        titleAirPt, xMap,
     )
 }
 
@@ -1284,11 +1376,14 @@ private fun drawUndercutDetailStrip(
     leadSide: UndercutAnchorSide? = null,
     /** The job's resolved "Total length of cuts" choice — [planUndercutStripRails]' `showTotal`. */
     showTotal: Boolean = true,
+    /** The job's "Dimensions" are From S.E.T. — [planUndercutStripRails]' `fromSet`. */
+    fromSet: Boolean = false,
 ) {
     val plan = planUndercutDetailStrip(
         segs, strip, undercuts, clampedById, stripLeft, stripRight, unit, text, diaText,
         shaftExtentMm, startedStrip, dual, dualStacked, railSplitAtMm, arrowSizePt, titleAirPt,
         leadSide = leadSide, aftSetMm = aftSetMm, fwdSetMm = fwdSetMm, showTotal = showTotal,
+        fromSet = fromSet,
     ) ?: return
     val drawStartMm = plan.drawStartMm
     val drawEndMm = plan.drawEndMm
@@ -1322,7 +1417,9 @@ private fun drawUndercutDetailStrip(
     val fillClip = if (aftEdge != null && fwdEdge != null) {
         breakWindowClipPath(aftEdge, fwdEdge, cy - 2f * rCap - 1f, cy + 2f * rCap + 1f)
     } else null
-    val ptPerMmStrip = abs(xAtStrip(drawEndMm) - xAtStrip(drawStartMm)) / (drawEndMm - drawStartMm).coerceAtLeast(1e-3f)
+    // The to-scale x per mm — the scale of the stock at each window end (`UndercutStripXMap`).
+    val ptPerMmStrip = plan.xMap.linearScale
+    val taperKnots: (Float, Float) -> List<Float> = { a, b -> plan.xMap.knotsInside(a, b) }
     fun fillReachMm(edge: WindowEndEdge?): Float =
         if (edge == null || edge.amplitude <= 0f || ptPerMmStrip <= 0f) 0f else edge.amplitude / ptPerMmStrip
     val fillStartMm = drawStartMm - fillReachMm(aftEdge)
@@ -1336,11 +1433,13 @@ private fun drawUndercutDetailStrip(
             c, docSpec, drawStartMm, faceAftMm, cy, ::xAtStrip, ::rStrip,
             outline, bodyFill, taperFill, linerFill,
             fillW0Mm = fillStartMm, fillW1Mm = faceAftMm, fillClip = fillClip,
+            knotsInside = taperKnots,
         )
         drawUndercutWindowProfile(
             c, docSpec, faceFwdMm, drawEndMm, cy, ::xAtStrip, ::rStrip,
             outline, bodyFill, taperFill, linerFill,
             fillW0Mm = faceFwdMm, fillW1Mm = fillEndMm, fillClip = fillClip,
+            knotsInside = taperKnots,
         )
         // Full drawn height at the liner's own OD — the surface envelope over the liner's span
         // is the liner, so its maximum there IS that OD. Drawn at outline weight: with the
@@ -1354,6 +1453,7 @@ private fun drawUndercutDetailStrip(
             c, docSpec, drawStartMm, drawEndMm, cy, ::xAtStrip, ::rStrip,
             outline, bodyFill, taperFill, linerFill,
             fillW0Mm = fillStartMm, fillW1Mm = fillEndMm, fillClip = fillClip,
+            knotsInside = taperKnots,
         )
     }
     // Cut ends: an S-break where the strip slices through material (void beyond it, so the
@@ -1411,6 +1511,7 @@ private fun drawUndercutDetailStrip(
         drawLabels = !blankValues,
         dualStacked = dualStacked,
         arrowSizePt = arrowSizePt,
+        setTierPitch = inner.setTierPitchPt,
     )
 
     // ── Title at the bottom: "<liner name> — <dist> FROM … S.E.T." ──
@@ -1503,6 +1604,12 @@ private fun drawUndercutWindowProfile(
     fillW0Mm: Float = w0Mm,
     fillW1Mm: Float = w1Mm,
     fillClip: Path? = null,
+    /**
+     * The stations strictly inside a range where [xAt] changes scale
+     * (`UndercutStripXMap.knotsInside`): a taper is drawn as a polyline through them, so its
+     * surface meets a cut's face at the face's own height. Empty on a to-scale strip.
+     */
+    knotsInside: (Float, Float) -> List<Float> = { _, _ -> emptyList() },
 ) {
     val dimPaint = Paint(outline).apply { strokeWidth = outline.strokeWidth * (UC_DIM_PT / UC_OUTLINE_PT) }
     fun inside(mm: Float) = mm > w0Mm + UC_EDGE_EPS_MM && mm < w1Mm - UC_EDGE_EPS_MM
@@ -1540,12 +1647,16 @@ private fun drawUndercutWindowProfile(
         taperFill?.let { f ->
             val fa = max(s, fillW0Mm); val fb = min(e, fillW1Mm)
             if (fb - fa > UC_EDGE_EPS_MM) {
-                val fra = rAt(diaAt(fa)); val frb = rAt(diaAt(fb))
-                val fxa = xAt(fa); val fxb = xAt(fb)
+                val pts = listOf(fa) + knotsInside(fa, fb) + fb
                 clippedFill {
                     c.drawPath(
                         Path().apply {
-                            moveTo(fxa, cy - fra); lineTo(fxb, cy - frb); lineTo(fxb, cy + frb); lineTo(fxa, cy + fra); close()
+                            pts.forEachIndexed { i, mm ->
+                                val y = cy - rAt(diaAt(mm))
+                                if (i == 0) moveTo(xAt(mm), y) else lineTo(xAt(mm), y)
+                            }
+                            pts.asReversed().forEach { mm -> lineTo(xAt(mm), cy + rAt(diaAt(mm))) }
+                            close()
                         },
                         f,
                     )
@@ -1556,8 +1667,11 @@ private fun drawUndercutWindowProfile(
         if (b - a <= UC_EDGE_EPS_MM) return@forEach
         val ra = rAt(diaAt(a)); val rb = rAt(diaAt(b))
         val xa = xAt(a); val xb = xAt(b)
-        c.drawLine(xa, cy - ra, xb, cy - rb, outline)
-        c.drawLine(xa, cy + ra, xb, cy + rb, outline)
+        (listOf(a) + knotsInside(a, b) + b).zipWithNext { m0, m1 ->
+            val r0 = rAt(diaAt(m0)); val r1 = rAt(diaAt(m1))
+            c.drawLine(xAt(m0), cy - r0, xAt(m1), cy - r1, outline)
+            c.drawLine(xAt(m0), cy + r0, xAt(m1), cy + r1, outline)
+        }
         if (inside(s)) c.drawLine(xa, cy - ra, xa, cy + ra, outline)
         if (inside(e)) c.drawLine(xb, cy - rb, xb, cy + rb, outline)
     }

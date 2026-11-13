@@ -318,7 +318,8 @@ class UndercutNestedRailAirTest {
         val sh = undercutSheetStrips(spec, resolveComponents(spec), record, blankValues = false)
         val strip = sh.strips.single()
         listOf(false, true).forEach { stacked ->
-            // A narrow cell: the 1" spans cannot seat their values.
+            // A narrow cell, kept to scale: the 1" spans cannot seat their values — the layout a
+            // strip falls back to when its floors cannot all fit.
             val plan = requireNotNull(
                 planUndercutDetailStrip(
                     sh.surfaceSegs, strip, record.undercuts, sh.clampedById,
@@ -326,6 +327,7 @@ class UndercutNestedRailAirTest {
                     startedStrip = false, dual = stacked, dualStacked = stacked, railSplitAtMm = emptyList(),
                     arrowSizePt = PDF_ARROW_SIZE_DEFAULT_PT,
                     leadSide = UndercutAnchorSide.AFT_SET, aftSetMm = sh.aftSetMm, fwdSetMm = sh.fwdSetMm,
+                    fitCrowded = false,
                 ),
             )
             val what = if (stacked) "stacked dual" else "single unit"

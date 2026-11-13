@@ -54,8 +54,8 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
 - **"Drawing settings" section** (shown once at least one cut is recorded, BELOW the "Recorded
   undercuts" list, collapsed by default behind a header row with a chevron, `testTag
   "undercut_drawing_settings_toggle"` — usability review: nothing between Add and the list may
-  read as a required step). It holds the rows below, in this order: Page, Distance to S.E.T.,
-  Split cuts at liner edges, Total length of cuts, Drawn depth, Draw to the shaft end. Tab block order
+  read as a required step). It holds the rows below, in this order: Page, Dimensions, Distance to
+  S.E.T., Split cuts at liner edges, Total length of cuts, Drawn depth, Draw to the shaft end. Tab block order
   (COMPACT/MEDIUM): intro, overview canvas, Preview | Options, Add undercut, Recorded undercuts,
   Drawing settings, then the print group — "Sections to print" (two or more sections; never
   collapsed), the blank-draft switch and Print / Preview / Export.
@@ -109,7 +109,13 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
   panel as `pdf_undercut_total_rail`): drives `UndercutRecord.showTotalRail` through
   `ShaftViewModel.setUndercutShowTotalRail` (same record path, same undo history). Shows the
   RESOLVED value; while the job has not chosen, the caption says it follows the Settings default.
+  Greyed (`enabled = false`, caption "Not printed while Dimensions is From S.E.T. …") while the
+  job's Dimensions are From S.E.T. — its stored value untouched.
   See "Total length of cuts" under PDF layout below.
+- **"Dimensions" row** (directly above "Distance to S.E.T."; the shared `UndercutRailStyleRow`,
+  also in the undercut options panel): Chain | From S.E.T., driving `UndercutRecord.railStyle`
+  through `ShaftViewModel.setUndercutRailStyle` (same record path, same undo history). See
+  "Dimensions from the S.E.T." under PDF layout below.
 - **"Recorded undercuts" list** below the canvas: a read-only summary + delete row per cut,
   grouped under each section's title and numbered from 1 within the section (`undercutSections`,
   AFT → FWD) — not an edit card (see "UI contract").
@@ -206,6 +212,9 @@ data class UndercutRecord(
 - **`showTotalRail`** ("Total length of cuts", default `null`, additive + defaulted — older files
   decode `null`): `null` follows the app default `PdfPrefs.undercutTotalRail` (Settings → PDF Export,
   shipped ON); `true`/`false` pins this job. Dimensioning only: no stored cut moves.
+- **`railStyle`** ("Dimensions", `UndercutRailStyle` CHAIN | FROM_SET, default CHAIN, additive +
+  defaulted, serialized by name — older files and unknown names decode CHAIN): whether each strip
+  chains its cuts or locates every cut from the S.E.T. Dimensioning only: no stored cut moves.
 - **`pageOrientation`**, **`setDatum`**, **`excludedLinerIds`**, **`excludedFreeCutIds`** — the
   other per-job fits, all additive + defaulted (older files decode off), none of them geometry: the
   page shape ("Page orientation"), which S.E.T. the strips measure to ("S.E.T. lead"), and the
@@ -2088,6 +2097,118 @@ cuts, above the chain (`buildUndercutTotalSpan`) — clarifies some jobs and con
   lead are untouched.
 - **Blank drafts** — the composer resolves off the caller's record, not the blank draft's empty
   one; a started strip plans no total either way.
+- **From S.E.T.** — a job whose "Dimensions" are From S.E.T. prints no total whatever this says
+  (below); both switch sites grey out (`UndercutTotalRailRow(enabled = false)`) and the stored
+  value is left as it is.
+
+### Dimensions from the S.E.T.
+
+On-device request: the shop's hand sketches locate each cut from the S.E.T. — baseline
+dimensioning, a stack of rails all starting at the datum, one ending at each cut's near shoulder,
+the longest on top, plus one to the far end of the run — and lack the cut lengths. Offered as an
+ALTERNATIVE to the chain, never a replacement, with the lengths kept.
+
+- **Per-job choice** — `UndercutRecord.railStyle: UndercutRailStyle` (CHAIN | FROM_SET, default
+  CHAIN), serialized by NAME through `UndercutRailStyleSerializer` (unknown or missing → CHAIN, the
+  `UndercutSetDatum` pattern); a FIT for this job's drawing, so per-document, never a look pref.
+  Set by `ShaftViewModel.setUndercutRailStyle` (undoable, dirties the document). ONE row,
+  `UndercutRailStyleRow` ("Dimensions", chips `undercut_rail_style_CHAIN` /
+  `undercut_rail_style_FROM_SET`, caption ending "Saved with this job."), directly above
+  "Distance to S.E.T." in the tab's Drawing settings and in the undercut preview's options. The
+  composer reads it off the caller's record, like `showTotalRail`; the detail canvas carries it in
+  `UndercutDetailRailInputs.fromSet` (the rail plan's remember key) and in the lead-room range's
+  remember key; the preview's render inputs carry the whole record.
+- **ONE planner** — `planUndercutStripRails(fromSet = true)` with a `setLead` and cuts to
+  dimension: the level-0 chain and the nested rows are planned exactly as on a chained strip (the
+  cut lengths and gaps); `totalSpan` and `leadSpan` are null whatever `showTotal` says; and
+  `setRails` holds one baseline rail per station (`buildUndercutSetRailSpans`):
+  - **Stations** — from the AFT S.E.T., the START of every cut at every nesting level plus the END
+    of the FWD-most top-level cut; from the FWD S.E.T., every cut's END plus the START of the
+    AFT-most top-level cut. Stations within `UNDERCUT_TOUCH_EPS_MM` of one another are one rail (a
+    nested cut sharing its parent's shoulder); a station at or beyond its S.E.T. has no rail.
+  - **Tiers** — sorted by distance from the S.E.T., nearest = tier 0 (just above the chain).
+  - **Value** — |station − S.E.T.|, `formatLenDimDualLabel(…, unit, dual)` like every chain value.
+    The side is `undercutStripSetSide`'s, the strip title's and lead's — no second side rule.
+  - **Span** — from the S.E.T. when it lies on the drawn range (normal heads, and ONE shared datum
+    witness at the S.E.T. rising from the shaft to the top tier — `setDatumOnStrip`); otherwise
+    from the drawn edge on the S.E.T.'s side, OPEN there (no head, no witness — the lead's
+    half-dimension posture, `openStart`/`openEnd`), with one head at the station pointing in from
+    the open side unless the line cannot hold it.
+  - **Value placement** — each rail is laid out alone (`layoutWearStripRail` on one span): centred
+    on its drawn span and seated in a break whenever the span holds the value with the break pad
+    and an arrowhead each side. A rail too short for that (in practice tier 0 on a tight strip)
+    falls back above its own line, with its leader, and reserves one more tier pitch.
+- **Drawn range** — no lead, so the lead room (`undercutSetLeadRoomPt` → `undercutWidenForSetLead`)
+  is made for the tier-0 value instead (`undercutSetRailNearestValueMm`), in the composer
+  (`planUndercutDetailStrip`) and the canvas (`undercutDetailLeadDrawRange(fromSet)`) alike; it is
+  applied under the same condition as the lead's (the chain does not already reach the S.E.T.).
+- **Rows** — `UndercutRailRowPlan.setTiers` and `setRows` (= tiers + one per tier whose value falls
+  off its line, `undercutSetRailRows`). With no total the chain's fallbacks go above its line (the
+  existing rule) and `canLiftFallbacks` is false. The tiers stack over the chain's above-line rows
+  at ONE pitch (`undercutSetRailLineYs`): the reserved band (`chainAboveBandPt` += `setRows ×
+  pitch`), the drawn lines and the canvas band (`undercutDetailRailBand`) read the same number —
+  `UndercutStripInnerLayout.setTierPitchPt` on the sheet; on the canvas the tightest pitch
+  (`undercutSetTierMinPitch`, handed to both `undercutDetailRailBand` and the draw) — the canvas
+  shares the screen with the cut card, and every tier is height the card loses.
+- **Height fit** — decided once per strip in `UndercutStripPlan.resolveRails`: the tier pitch is
+  the row metric (`undercutRailRowHeightPt`) while the cylinder stays at or above
+  `UNDERCUT_CYL_MAX_FLOOR_PT`; below it the pitch closes up just enough to restore the floor, never
+  under the value's own height + 3 pt (`undercutSetTierMinPitch`), and only then does the cylinder
+  shrink further. Every rail is always drawn. `verticalOverheadPt` reports the row-metric tiers;
+  `verticalOverheadPt(tightSetTiers = true)` the closed-up ones, which the portrait page's crowded
+  banding reads (`overheadsPt`), so a crowded page gives every strip the same shaft instead of
+  handing the tiers' slack to the busiest strips. The natural-height cells read the row-metric
+  overheads (`liftedOverheadsPt`).
+- **Crowded axial map** — `planUndercutStripXMap(fromSet)` plans the same rails; the floors still
+  come from the chain and nested spans only (a baseline rail is its own line and never crowds).
+- **ONE draw routine** — `drawUndercutStripRails`: the baseline rails' LINES first (datum witness,
+  each station's witness from the chain's `witnessBottomY` up past its own tier, the line, heads,
+  leaders), then the chain and nested rows — whose values, seated ones included (`haloSeated`,
+  the halo kept inside the break), paint sheet-white halos widened over any station witness they
+  would cut (`haloClearXs`) — then the baseline VALUES on their halos. A blank draft keeps the
+  lines and drops the values, as the chain does. The canvas passes its scale, halo colour and row
+  step, so the canvas rail IS the printed rail.
+- **CHAIN** — byte-identical to the sheet before the choice existed; no FROM_SET code path runs.
+
+### Crowded sections: the axial map
+
+On-device report: a section recorded as many short cuts (9/16" to 1 1/2" at each end of a
+31 15/16" one) printed its values stacked on each other. A strip drawn to scale gives a 9/16" cut
+a few points of width on a 38" section.
+
+- **One map per strip** — `UndercutStripXMap` (`pdf/UndercutStripXMap.kt`), strip mm → drawing x
+  and back, built by the ONE planner `planUndercutStripXMap` for both draw sites: the printed
+  strip (`UndercutStripPlan.xMap`, behind `xAt`) and the detail canvas
+  (`planUndercutDetailXMap`, from the same `UndercutDetailRailInputs` record the rails are keyed
+  on). Profile, notches, liner outline, rails, Ø leaders, cut numbers and the canvas tap
+  (`mmAt`) all go through it. Radii never do.
+- **To scale until crowded** — the planner first plans the rails on the to-scale map with the
+  caller's own arguments. `undercutRailsCrowded` is true when, on the chain line (S.E.T. lead
+  included) or a nested row, a value that does not seat in its line also sits on a label row
+  above the first: its neighbour's value took the place beside it. Not crowded → the linear map,
+  whose `xAt` is the historical `start + (mm − drawStart) × scale` expression, so the strip
+  prints exactly as before. One short cut on a long liner is not crowded.
+- **Crowded → floors** (`fitUndercutStripXMap`). Every chain span and nested-row span gets a
+  floor: its value's width + 2 × (`DIM_BREAK_TEXT_PAD_PT` + arrowhead) + a little slack — the
+  width at which `layoutWearStripRail` seats the value with inward heads. Spans that fall short
+  to scale all take ONE width (the widest of their needs), so a longer short cut never draws
+  narrower than a shorter one over a digit count. Floors are applied innermost first, so a parent
+  is at least as wide as what it holds. The remaining stretches share the remaining width in
+  proportion to true length. Floors that cannot all fit are scaled down together, and values that
+  then do not seat fall back above their line as on a to-scale strip.
+- **What never moves** — the strip's drawn width and both ends; the stock outside the chain
+  datums, which stays to scale (`withUndercutBreakRoom`'s S-break room and the S.E.T. lead's room
+  are sized for it; `linearScale` is also the rate the map continues at past its ends, which the
+  fills' break reach uses); every stored value and every printed number.
+- **Tapers** — a sloped surface crossing a station where the map changes scale is drawn as a
+  polyline through those stations (`knotsInside`), on both sites, so it meets a cut's face at the
+  face's own height.
+- **Cut numbers** — the detail canvas places them in DRAWN x: `undercutCutNumberPlacementsPx`
+  maps each notch's span through the map, fits and spreads the numbers in px, and carries the
+  result back through `mmAtPx` (the map's inverse). Placing them in true mm put a number below
+  a cut that was drawn wide enough to hold it, and past the end of the cut it named.
+- No setting and no stored field: the map is a function of the strip's spans, its width and the
+  label measure.
 
 ---
 

@@ -7,6 +7,8 @@ import android.graphics.pdf.PdfDocument
 import com.android.shaftschematic.doc.ShaftDocCodec
 import com.android.shaftschematic.model.DyePenResult
 import com.android.shaftschematic.model.ProjectInfo
+import com.android.shaftschematic.model.UndercutRailStyle
+import com.android.shaftschematic.model.UndercutSetDatum
 import com.android.shaftschematic.model.WearDiaReading
 import com.android.shaftschematic.model.WearRecord
 import com.android.shaftschematic.model.WearSpot
@@ -478,8 +480,15 @@ class SchematicRenderReviewTest {
             )
             save("${job}_wear.png", bmp)
         }
-        run {
-            val o = undercutSheetOrientation(doc.spec, resolved, doc.undercutRecord, false)
+        // The chained sheet as stored, then the same job with its "Dimensions" From S.E.T. — measured
+        // from the S.E.T. the job chose, and from the FWD one.
+        listOf(
+            "${job}_undercuts.png" to doc.undercutRecord,
+            "${job}_undercuts_from_set.png" to doc.undercutRecord.copy(railStyle = UndercutRailStyle.FROM_SET),
+            "${job}_undercuts_from_set_fwd.png" to
+                doc.undercutRecord.copy(railStyle = UndercutRailStyle.FROM_SET, setDatum = UndercutSetDatum.FWD),
+        ).forEach { (name, record) ->
+            val o = undercutSheetOrientation(doc.spec, resolved, record, false)
             val bmp = Bitmap.createBitmap((o.widthPt * SCALE).toInt(), (o.heightPt * SCALE).toInt(), Bitmap.Config.ARGB_8888)
             bmp.eraseColor(Color.WHITE)
             val c = Canvas(bmp)
@@ -487,9 +496,9 @@ class SchematicRenderReviewTest {
             composeUndercutPdf(
                 pageOn(c, o.widthPt, o.heightPt), doc.spec, doc.project(), unit,
                 displayUnits = units, pdfPrefs = prefs, resolvedComponents = resolved,
-                undercutRecord = doc.undercutRecord,
+                undercutRecord = record,
             )
-            save("${job}_undercuts.png", bmp)
+            save(name, bmp)
         }
     }
 

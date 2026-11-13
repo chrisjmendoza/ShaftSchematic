@@ -1,6 +1,7 @@
 # ShaftSchematic Data Model
 Version: v0.5.x
-Last updated: 2026-10-27 — `AutoDiaOverride`: a section override no longer moves a
+Last updated: 2026-11-12 — `UndercutRecord.railStyle` ("Dimensions: Chain | From S.E.T.").
+2026-10-27 — `AutoDiaOverride`: a section override no longer moves a
 neighbouring section's Ø, and a component add/remove that merges or covers its section drops it
 (`withAutoDiaOverridesSurviving`); `autoBodyDiaMm` is written again — the auto card's "All auto
 sections" choice and the new-shaft Ø prompt (`withAutoBodyDia`).
@@ -540,7 +541,7 @@ can never affect geometry resolution:
   would change is frozen at its old value. A split or merge maps to nothing (orphaned at render
   as before). The id scheme itself is unchanged; nothing is re-keyed at decode.
 - `UndercutRecord(undercuts, exaggerationFrac, drawToSet, showTotalRail, pageOrientation,
-  setDatum, excludedLinerIds, excludedFreeCutIds)` — its own envelope field
+  setDatum, excludedLinerIds, excludedFreeCutIds, railStyle)` — its own envelope field
   (`@SerialName("undercut_record")`), sibling of `wear_record`. Each `Undercut` is a
   machined-below-surface span stored in **shaft space** (`startFromAftMm` + `lengthMm`) — a
   cut may sit inside a liner or straddle a component edge, so undercuts are deliberately
@@ -560,7 +561,9 @@ can never affect geometry resolution:
   `PdfPrefs.undercutTotalRail`, resolved by `effectiveUndercutTotalRail`; `true`/`false` pins the
   job — "Total length of cuts"); `pageOrientation` (`UndercutPageOrientation` AUTO | LANDSCAPE |
   PORTRAIT, default AUTO = portrait at 2+ printed sections); `setDatum` (`UndercutSetDatum`
-  NEAREST | AFT | FWD, default NEAREST — the S.E.T. every strip's title and lead measure to); both
+  NEAREST | AFT | FWD, default NEAREST — the S.E.T. every strip's title and lead measure to);
+  `railStyle` (`UndercutRailStyle` CHAIN | FROM_SET, default CHAIN — "Dimensions": the chained
+  rail, or every cut's start measured from that S.E.T. over the chain of cut lengths); all three
   enums serialize by name through tolerant serializers (an unknown name decodes to the default).
   `excludedLinerIds` / `excludedFreeCutIds` are the "Sections to print" EXCLUSION lists — a liner
   or cut added later prints by default; orphan ids are skipped at render, never pruned.

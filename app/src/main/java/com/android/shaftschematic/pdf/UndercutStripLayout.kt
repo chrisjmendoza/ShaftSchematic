@@ -533,6 +533,11 @@ data class UndercutStripInnerLayout(
     val cylBottom: Float,
     /** Stacked label rows that fit between [chainRailY] and [cylTop] — see [WEAR_RAIL_MAX_LABEL_ROWS]. */
     val railLabelRows: Int,
+    /**
+     * The pitch the From-S.E.T. baseline tiers were reserved at above the chain
+     * ([undercutSetRailLineYs]) — the number the draw steps by. 0 on a chained strip.
+     */
+    val setTierPitchPt: Float = 0f,
 )
 
 /**
@@ -565,7 +570,50 @@ data class UndercutRailRowPlan(
     /** How many of [belowRows] belong to the nested chain rows ([buildNestedUndercutRailRows]) —
      *  one for each level's rail line plus that line's own fallback label rows. */
     val nestedRows: Int = 0,
+    /** The From-S.E.T. baseline rails stacked over the chain ([buildUndercutSetRailSpans]), one
+     *  tier each; 0 on a chained strip. */
+    val setTiers: Int = 0,
+    /** Tier pitches the baseline rails reserve ABOVE the chain's own above-line rows: one per tier,
+     *  plus one more for each tier whose value falls off its line ([undercutSetRailRows]). */
+    val setRows: Int = 0,
 )
+
+/**
+ * Tier pitches a strip's From-S.E.T. baseline rails ([UndercutStripRails.setRails], tier order)
+ * reserve: one per tier for its line, and one more for each tier whose value cannot seat in a break
+ * and sits above its line instead. ONE count behind the reserved band and the drawn tier lines
+ * ([undercutSetRailLineYs]).
+ */
+fun undercutSetRailRows(setRails: List<WearRailSpanLayout>): Int =
+    setRails.size + setRails.count { !it.seatsInBreak }
+
+/**
+ * Y of each From-S.E.T. baseline tier's line, in [UndercutStripRails.setRails] order — the ONE
+ * stepping behind the drawn tiers and every test that checks them. The stack starts above the
+ * chain's own above-line fallback rows ([UndercutRailRowPlan.aboveRows] × [rowStep]) and climbs one
+ * [tierPitch] per tier, plus one more over a tier whose value sits above its line, so it fills
+ * exactly the [UndercutRailRowPlan.setRows] pitches the strip reserved.
+ */
+fun undercutSetRailLineYs(
+    rails: UndercutStripRails,
+    chainRailY: Float,
+    rowStep: Float,
+    tierPitch: Float,
+): List<Float> {
+    var y = chainRailY - rails.rows.aboveRows * rowStep
+    return rails.setRails.map { l ->
+        y -= tierPitch
+        val lineY = y
+        if (!l.seatsInBreak) y -= tierPitch
+        lineY
+    }
+}
+
+/**
+ * The tightest pitch a From-S.E.T. strip may stack its baseline tiers at: the value's own height
+ * ([textHeight] — a line of text, or a stacked dual's two) plus 3 pt of air, scaled.
+ */
+fun undercutSetTierMinPitch(textHeight: Float, scale: Float = 1f): Float = textHeight + 3f * scale
 
 /**
  * Fallback label rows one resolved rail uses — only spans whose value does NOT seat in the
@@ -614,9 +662,15 @@ fun planUndercutRailRows(
     hasTotalRail: Boolean,
     nestedLayouts: List<List<WearRailSpanLayout>> = emptyList(),
     lifted: Boolean = false,
+    /** The From-S.E.T. baseline rails in tier order — reserved above everything this plans. */
+    setLayouts: List<WearRailSpanLayout> = emptyList(),
 ): UndercutRailRowPlan {
     if (startedStrip) {
         return UndercutRailRowPlan(belowRows = WEAR_RAIL_MAX_LABEL_ROWS, aboveRows = 0, chainBelowRows = 0)
+    }
+    if (setLayouts.isNotEmpty()) {
+        return planUndercutRailRows(chainLayout, false, hasTotalRail, nestedLayouts, lifted)
+            .copy(setTiers = setLayouts.size, setRows = undercutSetRailRows(setLayouts))
     }
     val used = undercutRailFallbackRows(chainLayout)
     val nestedRows = nestedLayouts.sumOf { 1 + undercutRailFallbackRows(it) }
@@ -662,7 +716,30 @@ data class UndercutStripRails(
     val leadSpan: UndercutSetLeadSpan? = null,
     /** [leadSpan]'s layout, planned TOGETHER with [chain] (one row assignment); null when none. */
     val lead: WearRailSpanLayout? = null,
+    /**
+     * The From-S.E.T. baseline rails ([buildUndercutSetRailSpans]) in tier order, nearest the S.E.T.
+     * first (tier 0, just above the chain); empty on a chained strip.
+     */
+    val setRailSpans: List<UndercutSetRailSpan> = emptyList(),
+    /** [setRailSpans]' layouts, one single-span line each, in the same tier order. */
+    val setRails: List<WearRailSpanLayout> = emptyList(),
 ) {
+    /**
+     * Whether the baseline rails share ONE datum witness line at the S.E.T. — the S.E.T. lies on
+     * the drawn strip, so the rails start at it with a head rather than running open off the edge.
+     */
+    val setDatumOnStrip: Boolean
+        get() = setRailSpans.isNotEmpty() && setRailSpans.none { it.openAtSet }
+
+    /** The drawn x of the S.E.T. the baseline rails start at, when [setDatumOnStrip]; else null. */
+    val setDatumX: Float?
+        get() = if (!setDatumOnStrip) null
+        else setRails.firstOrNull()?.let { if (setRailSpans.first().side == UndercutAnchorSide.AFT_SET) it.x0Pt else it.x1Pt }
+
+    /** The drawn x of every baseline rail's station (its cut shoulder), in tier order. */
+    val setStationXs: List<Float>
+        get() = setRails.mapIndexed { i, l -> if (setRailSpans[i].side == UndercutAnchorSide.AFT_SET) l.x1Pt else l.x0Pt }
+
     /**
      * The level-0 rail line as drawn: [chain] with the [lead] at its outboard end, AFT → FWD —
      * the list the vertical plan reserved rows for and `drawUndercutStripRails` draws.
@@ -691,6 +768,7 @@ data class UndercutStripRails(
         else copy(
             rows = planUndercutRailRows(
                 chainWithLead, startedStrip = false, hasTotalRail = true, nestedLayouts = nested, lifted = true,
+                setLayouts = setRails,
             ),
         )
 }
@@ -757,13 +835,24 @@ fun planUndercutStripRails(
      * exactly as on a strip with a single cut.
      */
     showTotal: Boolean = true,
+    /**
+     * The job's "Dimensions" choice is From S.E.T. (`UndercutRailStyle.FROM_SET`): with a [setLead]
+     * and cuts to dimension, the strip stacks one baseline rail per station from [setLead]'s S.E.T.
+     * ([buildUndercutSetRailSpans]) over the chain and its nested rows, which stay as they are for
+     * the cut lengths, and drops the total and the S.E.T. lead — the nearest baseline rail states
+     * the lead's value. False (the default) plans exactly the chained strip.
+     */
+    fromSet: Boolean = false,
 ): UndercutStripRails {
     val sorted = spans.sortedBy { it.startMm }
     val nestingById = undercutNestingForest(sorted).associateBy { it.id }
     val topSpans = sorted.filter { (nestingById[it.id]?.level ?: 0) == 0 }
     val chainSpans = if (startedStrip) emptyList()
     else buildUndercutRailSpans(chainStartMm, chainEndMm, topSpans, unit, dual, splitAtMm = splitAtMm)
-    val totalSpan = if (startedStrip || !showTotal) null else buildUndercutTotalSpan(topSpans, unit, dual)
+    val setRailSpans = if (!fromSet || startedStrip || chainSpans.isEmpty() || setLead == null) emptyList()
+    else buildUndercutSetRailSpans(sorted, setLead, unit, dual)
+    val setMode = setRailSpans.isNotEmpty()
+    val totalSpan = if (startedStrip || !showTotal || setMode) null else buildUndercutTotalSpan(topSpans, unit, dual)
     val nestedSpans = if (startedStrip) emptyList() else buildNestedUndercutRailRows(sorted, unit, dual)
 
     fun layout(rail: List<WearRailSpan>) = layoutWearStripRail(
@@ -777,7 +866,7 @@ fun planUndercutStripRails(
     )
     // The lead rides the level-0 line, so it is laid out WITH the chain: one row assignment, one
     // collision space for every value on that line.
-    val leadSpan = if (startedStrip || chainSpans.isEmpty()) null
+    val leadSpan = if (startedStrip || chainSpans.isEmpty() || setMode) null
     else setLead?.let { buildUndercutSetLeadSpan(chainStartMm, chainEndMm, it, unit, dual) }
     val leadFirst = leadSpan?.side == UndercutAnchorSide.AFT_SET
     val line = when {
@@ -803,8 +892,107 @@ fun planUndercutStripRails(
     }
     val nested = nestedSpans.map { layout(it) }
     val total = totalSpan?.let { layout(listOf(it)) } ?: emptyList()
-    val rows = planUndercutRailRows(lineLayout, startedStrip, hasTotalRail = totalSpan != null, nestedLayouts = nested)
-    return UndercutStripRails(chainSpans, nestedSpans, totalSpan, chain, nested, total, rows, leadSpan, lead)
+    // Every baseline rail is its own line, so each is laid out alone: its value centres on the
+    // rail's drawn span and seats in a break there whenever the span holds it. A rail running open
+    // off the strip toward its S.E.T. keeps the lead's half-dimension posture — one head, at the
+    // station, pointing in from the open side unless the line cannot hold even that.
+    val setRails = setRailSpans.map { r ->
+        val l = layout(listOf(r.span)).single()
+        if (!r.openAtSet) l
+        else {
+            val openAft = r.side == UndercutAnchorSide.AFT_SET
+            val inward = (l.x1Pt - l.x0Pt) >= (arrowSizePt + DimensionRailLayout.ARROW_CLEAR) * scale
+            l.copy(arrowInward = inward, openStart = openAft, openEnd = !openAft)
+        }
+    }
+    val rows = planUndercutRailRows(
+        lineLayout, startedStrip, hasTotalRail = totalSpan != null, nestedLayouts = nested, setLayouts = setRails,
+    )
+    return UndercutStripRails(
+        chainSpans, nestedSpans, totalSpan, chain, nested, total, rows, leadSpan, lead, setRailSpans, setRails,
+    )
+}
+
+/**
+ * One From-S.E.T. baseline rail, in strip mm: [span] runs from the S.E.T. (or, [openAtSet], from
+ * the strip's drawn edge on the S.E.T.'s side — an open half dimension) to [stationMm], a cut
+ * shoulder, labelled with the full S.E.T. → station distance [valueMm]. [tier] 0 is nearest the
+ * S.E.T. and draws lowest, just above the chain.
+ */
+data class UndercutSetRailSpan(
+    val span: WearRailSpan,
+    val side: UndercutAnchorSide,
+    val stationMm: Float,
+    val valueMm: Float,
+    val openAtSet: Boolean,
+    val tier: Int,
+)
+
+/**
+ * The baseline rails a From-S.E.T. strip stacks over its chain — the shop's hand-sketch
+ * convention, where every cut is located from the S.E.T. rather than from its neighbour
+ * (on-device request). Measuring from the AFT S.E.T. the stations are the START (AFT shoulder) of
+ * every cut at every nesting level, plus the END of the FWD-most top-level cut, so the top rail
+ * reaches the far end of the run; from the FWD S.E.T. it is the mirror — every cut's FWD shoulder
+ * plus the AFT shoulder of the AFT-most top-level cut.
+ *
+ * Stations within [UNDERCUT_TOUCH_EPS_MM] of one another are ONE rail (a nested cut sharing its
+ * parent's shoulder), and a station at the S.E.T. or on its far side (a cut outboard of its S.E.T.)
+ * has no distance to dimension. Rails are returned nearest the S.E.T. first, each value formatted
+ * like every chain value. A rail runs from the S.E.T. when it lies on the drawn strip
+ * ([UndercutSetLead.drawStartMm]..[UndercutSetLead.drawEndMm]); otherwise from the drawn edge on
+ * its side, open there.
+ *
+ * [spans] are the strip's render-clamped spans, every nesting level, in any order.
+ */
+fun buildUndercutSetRailSpans(
+    spans: List<UndercutSpanMm>,
+    lead: UndercutSetLead,
+    unit: UnitSystem,
+    dual: Boolean = false,
+): List<UndercutSetRailSpan> {
+    val eps = UNDERCUT_TOUCH_EPS_MM
+    val live = spans.filter { it.endMm - it.startMm > UNDERCUT_RAIL_SPAN_EPS_MM }
+    if (live.isEmpty()) return emptyList()
+    val levelById = undercutNestingForest(live).associate { it.id to it.level }
+    val top = live.filter { (levelById[it.id] ?: 0) == 0 }.ifEmpty { live }
+    val aft = lead.side == UndercutAnchorSide.AFT_SET
+    val stations = if (aft) live.map { it.startMm } + top.maxOf { it.endMm }
+    else live.map { it.endMm } + top.minOf { it.startMm }
+    val distances = stations
+        .map { st -> st to (if (aft) st - lead.setMm else lead.setMm - st) }
+        .filter { (_, d) -> d > eps }
+        .sortedBy { (_, d) -> d }
+        .fold(mutableListOf<Pair<Float, Float>>()) { acc, p ->
+            if (acc.isEmpty() || p.second - acc.last().second > eps) acc += p
+            acc
+        }
+    val onStrip = if (aft) lead.setMm >= lead.drawStartMm - eps else lead.setMm <= lead.drawEndMm + eps
+    val from = when {
+        onStrip -> lead.setMm
+        aft -> lead.drawStartMm
+        else -> lead.drawEndMm
+    }
+    return distances.mapNotNull { (station, value) ->
+        val a = if (aft) from else station
+        val b = if (aft) station else from
+        if (b - a <= UNDERCUT_RAIL_SPAN_EPS_MM) null
+        else Triple(WearRailSpan(a, b, formatLenDimDualLabel(value.toDouble(), unit, dual)), station, value)
+    }.mapIndexed { tier, (span, station, value) ->
+        UndercutSetRailSpan(span, lead.side, station, value, openAtSet = !onStrip, tier = tier)
+    }
+}
+
+/**
+ * The value a From-S.E.T. strip's nearest baseline rail states — its tier 0, the rail that stands
+ * where the chained strip's S.E.T. lead would — or null when there is none
+ * ([buildUndercutSetRailSpans]'s stations). The drawn range makes room for this value on the
+ * S.E.T.'s side exactly as it does for the lead's ([undercutSetLeadRoomPt]).
+ */
+fun undercutSetRailNearestValueMm(spans: List<UndercutSpanMm>, side: UndercutAnchorSide, setMm: Float): Float? {
+    // A drawn range far wider than any shaft, so no station is dropped for want of drawn line.
+    val wide = UndercutSetLead(side, setMm, drawStartMm = -1e9f, drawEndMm = 1e9f)
+    return buildUndercutSetRailSpans(spans, wide, UnitSystem.MILLIMETERS).firstOrNull()?.valueMm
 }
 
 /**

@@ -4,6 +4,7 @@ import com.android.shaftschematic.geom.UNDERCUT_EXAGGERATION_MAX_FRAC
 import com.android.shaftschematic.geom.UndercutStrip
 import com.android.shaftschematic.model.Undercut
 import com.android.shaftschematic.model.UndercutPageOrientation
+import com.android.shaftschematic.model.UndercutRailStyle
 import com.android.shaftschematic.model.UndercutRecord
 import com.android.shaftschematic.model.UndercutReference
 import com.android.shaftschematic.model.UndercutSetDatum
@@ -191,6 +192,17 @@ fun ShaftViewModel.setUndercutPageOrientation(o: UndercutPageOrientation) {
 fun ShaftViewModel.setUndercutSetDatum(d: UndercutSetDatum) {
     _undercutRecord.update { rec ->
         if (rec.setDatum == d) rec else rec.copy(setDatum = d)
+    }
+}
+
+/**
+ * Set how this sheet's strips dimension their cuts ([UndercutRecord.railStyle]): the chain, or each
+ * cut's start from the S.E.T. with the cut lengths on the chain under them. Dimensioning only — no
+ * stored cut moves — and a fit for this job, so per-document. A no-op when unchanged.
+ */
+fun ShaftViewModel.setUndercutRailStyle(style: UndercutRailStyle) {
+    _undercutRecord.update { rec ->
+        if (rec.railStyle == style) rec else rec.copy(railStyle = style)
     }
 }
 

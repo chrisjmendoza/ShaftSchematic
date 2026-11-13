@@ -18,12 +18,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.UndercutSpanMm
 import com.android.shaftschematic.geom.UndercutStrip
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.UndercutRailStyle
 import com.android.shaftschematic.model.UndercutRecord
 import com.android.shaftschematic.model.UndercutSetDatum
 import com.android.shaftschematic.pdf.buildUndercutAnchorLabel
@@ -79,6 +81,55 @@ internal const val UNDERCUT_SET_DATUM_CAPTION =
     "The strip title and the dimension at the strip's edge measure to this S.E.T. Saved with this job."
 
 /**
+ * The undercut sheet's per-job "Dimensions" control — Chain | From S.E.T., writing
+ * [UndercutRecord.railStyle]. ONE composable behind the tab's Drawing settings and the undercut
+ * options panel, directly above "Distance to S.E.T." ([UndercutSetDatumRow]), whose S.E.T. the
+ * From S.E.T. rails start at. The caption says what the chosen style prints.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun UndercutRailStyleRow(
+    choice: UndercutRailStyle,
+    onChoose: (UndercutRailStyle) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text("Dimensions", style = MaterialTheme.typography.bodyLarge)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            UndercutRailStyle.entries.forEach { style ->
+                WearChip(
+                    label = undercutRailStyleLabel(style),
+                    selected = choice == style,
+                    modifier = Modifier.testTag(undercutRailStyleTestTag(style)),
+                ) { onChoose(style) }
+            }
+        }
+        Text(
+            undercutRailStyleCaption(choice),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** The chip label for [style]. */
+internal fun undercutRailStyleLabel(style: UndercutRailStyle): String = when (style) {
+    UndercutRailStyle.CHAIN -> "Chain"
+    UndercutRailStyle.FROM_SET -> "From S.E.T."
+}
+
+/** The chip's test tag for [style]: `undercut_rail_style_CHAIN` / `undercut_rail_style_FROM_SET`. */
+internal fun undercutRailStyleTestTag(style: UndercutRailStyle): String = "undercut_rail_style_" + style.name
+
+/** The caption under the "Dimensions" chips for the chosen [style]. */
+internal fun undercutRailStyleCaption(style: UndercutRailStyle): String = when (style) {
+    UndercutRailStyle.CHAIN ->
+        "Each cut's length and the gaps between are chained from the section's edges. Saved with this job."
+    UndercutRailStyle.FROM_SET ->
+        "Each cut's start is measured from the S.E.T.; cut lengths print on the line under them. Saved with this job."
+}
+
+/**
  * The app-wide "Split cuts at liner edges" switch (`PdfPrefs.undercutSplitAtLinerEdge`): a cut
  * machined past a liner edge dimensioned as two spans meeting at the edge. ONE row behind the
  * Undercut tab's Drawing settings and the undercut options panel, placed with "Distance to
@@ -130,12 +181,22 @@ internal fun UndercutTotalRailRow(
     onCheckedChange: (Boolean) -> Unit,
     testTag: String,
     modifier: Modifier = Modifier,
+    /**
+     * False while the job's "Dimensions" are From S.E.T. ([UndercutRailStyle.FROM_SET]), which prints
+     * no total: the switch greys out and the caption says why; the stored choice is left as it is.
+     */
+    enabled: Boolean = true,
 ) {
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            Text("Total length of cuts", style = MaterialTheme.typography.bodyLarge)
             Text(
-                "$UNDERCUT_TOTAL_RAIL_CAPTION " + if (followsDefault) {
+                "Total length of cuts",
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (enabled) Color.Unspecified else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                if (!enabled) UNDERCUT_TOTAL_RAIL_FROM_SET_CAPTION
+                else "$UNDERCUT_TOTAL_RAIL_CAPTION " + if (followsDefault) {
                     "Following the Settings → PDF Export default until changed here. Saved with this job."
                 } else {
                     "Saved with this job."
@@ -145,9 +206,18 @@ internal fun UndercutTotalRailRow(
             )
         }
         Spacer(Modifier.width(8.dp))
-        Switch(checked = checked, onCheckedChange = onCheckedChange, modifier = Modifier.testTag(testTag))
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            enabled = enabled,
+            modifier = Modifier.testTag(testTag),
+        )
     }
 }
+
+/** The "Total length of cuts" caption while the job's dimensions are From S.E.T. */
+internal const val UNDERCUT_TOTAL_RAIL_FROM_SET_CAPTION =
+    "Not printed while Dimensions is From S.E.T. — the longest rail already runs to the end of the cuts."
 
 /** The chip label for [d]. */
 internal fun undercutSetDatumLabel(d: UndercutSetDatum): String = when (d) {
