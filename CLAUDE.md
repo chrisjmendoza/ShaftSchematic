@@ -772,6 +772,13 @@ From S.E.T. alone); off is byte-identical. Each rail carries a caption at its st
 and drawn last on a halo by `drawUndercutStripRails`; the From-S.E.T. cut rails carry none. Do not
 build a second rail type for it. See `docs/contracts/UndercutDrawing.md` (Liner ends from the S.E.T.).
 
+**The undercut sheet's strips follow "Dimension text size"** (`PdfPrefs.dimTextScale`, on-device
+request; `DimTextSizeChips` on its options — the schematic's own knob, not a second pref): rail
+values, captions, Ø values and strip titles scale, the header / AFT-FWD row / notes do not, and the
+size is fitted down ONCE per sheet by `fittedUndercutTextScale` (largest step leaving the shortest
+shaft ≥ `UC_TEXT_FIT_MIN_SHAFT_PT`, read off dry passes of the ONE `drawUndercutSheet`) — never
+per strip. 100% is byte-identical.
+
 The undercut sheet is the one portrait-capable document: its page shape is per-job
 `UndercutRecord.pageOrientation` (AUTO = portrait at 2+ printed sections), resolved ONCE by
 `undercutSheetOrientation` over the same `undercutSheetStrips` the composer draws, and every

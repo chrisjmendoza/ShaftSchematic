@@ -1,5 +1,6 @@
 package com.android.shaftschematic.pdf
 
+import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.DashPathEffect
@@ -40,6 +41,9 @@ import com.android.shaftschematic.geom.shoulderEndMm
 import com.android.shaftschematic.geom.threadSurfaceSegs
 import com.android.shaftschematic.model.*
 import com.android.shaftschematic.settings.PDF_ARROW_SIZE_DEFAULT_PT
+import com.android.shaftschematic.settings.PDF_TEXT_SCALE_MAX
+import com.android.shaftschematic.settings.PDF_TEXT_SCALE_MIN
+import com.android.shaftschematic.settings.PDF_TEXT_SCALES
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.bodyBlends
@@ -184,7 +188,67 @@ fun composeUndercutPdf(
     lineThicknessScale: Float = 1.0f,
     blankValues: Boolean = false,
 ) {
-    val c = page.canvas
+    val pageW = page.info.pageWidth
+    val pageH = page.info.pageHeight
+    fun draw(c: Canvas, textScale: Float): Float = drawUndercutSheet(
+        c, pageW.toFloat(), pageH.toFloat(), spec, project, unit, displayUnits, pdfPrefs,
+        resolvedComponents, undercutRecord, lineThicknessScale, blankValues, textScale,
+    )
+    // "Dimension text size" is a request: the sheet prints the largest step that still leaves
+    // every section a readable shaft, decided ONCE for the whole sheet off dry passes (a page
+    // with one section's text larger than another's would read as a mistake).
+    val want = pdfPrefs.dimTextScale.coerceIn(PDF_TEXT_SCALE_MIN, PDF_TEXT_SCALE_MAX)
+    val scale = fittedUndercutTextScale(want) { s ->
+        draw(Canvas(Bitmap.createBitmap(pageW, pageH, Bitmap.Config.ALPHA_8)), s)
+    }
+    if (scale < want) {
+        VerboseLog.i(VerboseLog.Category.PDF, "UndercutPdf") {
+            "dimension text size: undercut sheet prints at ${scale}x, not ${want}x - a section would lose its shaft"
+        }
+    }
+    draw(page.canvas, scale)
+}
+
+/**
+ * The text scale an undercut sheet prints at: the largest of [PDF_TEXT_SCALES] not above [want]
+ * at which the sheet's shortest drawn shaft ([minShaftPtAt], a dry pass) stays at least
+ * [UC_TEXT_FIT_MIN_SHAFT_PT] tall — or as tall as it is at 100%, when that is already shorter, so
+ * a sheet that is crowded at the base size is never held to a height it cannot reach. 100% is
+ * always accepted. No dry pass runs when [want] is 100%.
+ */
+internal fun fittedUndercutTextScale(want: Float, minShaftPtAt: (Float) -> Float): Float {
+    if (want <= PDF_TEXT_SCALE_MIN) return PDF_TEXT_SCALE_MIN
+    val need = minOf(UC_TEXT_FIT_MIN_SHAFT_PT, minShaftPtAt(PDF_TEXT_SCALE_MIN))
+    return PDF_TEXT_SCALES.filter { it > PDF_TEXT_SCALE_MIN && it <= want + 1e-3f }
+        .sortedDescending()
+        .firstOrNull { minShaftPtAt(it) >= need - 0.01f }
+        ?: PDF_TEXT_SCALE_MIN
+}
+
+/** The shortest shaft a larger text size may leave a section (about 1/2"). */
+internal const val UC_TEXT_FIT_MIN_SHAFT_PT = 36f
+
+/**
+ * Draws the whole undercut sheet on [c] with its strips' text at [textScale], and returns the
+ * height of the shortest shaft any strip drew (`Float.POSITIVE_INFINITY` when the page has no
+ * detail strip) — what [fittedUndercutTextScale] reads off a dry pass.
+ */
+private fun drawUndercutSheet(
+    c: Canvas,
+    pageW: Float,
+    pageH: Float,
+    spec: ShaftSpec,
+    project: ProjectInfo,
+    unit: UnitSystem,
+    displayUnits: DisplayUnits,
+    pdfPrefs: PdfPrefs,
+    resolvedComponents: List<ResolvedComponent>?,
+    undercutRecord: UndercutRecord,
+    lineThicknessScale: Float,
+    blankValues: Boolean,
+    textScale: Float,
+): Float {
+    var minShaftPt = Float.POSITIVE_INFINITY
     c.drawColor(Color.WHITE)
 
     val docSpec = spec.withResolvedBodies(resolvedComponents)
@@ -203,9 +267,6 @@ fun composeUndercutPdf(
     // (util/LinerTitles.kt). Same names the carousel cards, the wear sheet, and the runout
     // sheet show, so a liner-anchored strip is identifiable at a glance.
     val linerTitles = buildLinerTitleById(docSpec)
-
-    val pageW = page.info.pageWidth.toFloat()
-    val pageH = page.info.pageHeight.toFloat()
 
     // ── Paints ──────────────────────────────────────────────────────────────
     val thicknessScale = lineThicknessScale.coerceIn(0.5f, 2.0f)
@@ -246,7 +307,12 @@ fun composeUndercutPdf(
     // surface stroke and any shading fill are erased inside the cut, then the shoulders and
     // floor are outlined on top.
     val voidFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL; color = Color.WHITE }
-    val diaText = Paint(text).apply { textSize = UC_DIA_TEXT_PT }
+    // "Dimension text size" (`PdfPrefs.dimTextScale`, on-device request: the From-S.E.T. values
+    // were a little small): every strip's own text — rail values, captions, Ø values, the strip
+    // title — is set at this multiple; every row and band on a strip is sized off these paints'
+    // metrics, so the layout follows. The header, the AFT/FWD row and the notes keep the base size.
+    val stripText = Paint(text).apply { textSize = UC_TEXT_PT * textScale }
+    val diaText = Paint(text).apply { textSize = UC_DIA_TEXT_PT * textScale }
 
     // ── Page geometry ─────────────────────────────────────────────────────
     val margin = UC_MARGIN_PT
@@ -353,7 +419,7 @@ fun composeUndercutPdf(
         )
         drawUndercutNotesRow(c, text, contentLeft, contentRight, notesY)
         if (pdfPrefs.showUnitsNote) drawUnitsNote(c, pageW, pageH, margin, displayUnits.documentUnit)
-        return
+        return minShaftPt
     }
 
     // ── Vertical banding ──────────────────────────────────────────────────────
@@ -385,7 +451,7 @@ fun composeUndercutPdf(
             onPage.map { strip ->
                 planUndercutDetailStrip(
                     surfaceSegs, strip, strip.undercutIds.mapNotNull { id -> undercutById[id] },
-                    clampedById, contentLeft, contentRight, stripUnitOf(strip), text, diaText,
+                    clampedById, contentLeft, contentRight, stripUnitOf(strip), stripText, diaText,
                     shaftExtentMm, startedPage, displayUnits.dual, wantDualStacked,
                     railSplitOf(strip), pdfPrefs.arrowSizePt,
                     titleAirPt = UC_PORTRAIT_TITLE_AIR_PT,
@@ -468,11 +534,11 @@ fun composeUndercutPdf(
     // The stacked decision for the whole sheet: the tightest strip must still afford the taller
     // rail rows. Undercut rows are the app's most generous already (17 pt), so this rarely bites.
     val dualStacked = wantDualStacked && run {
-        val probe = Paint(text).apply { textSize = (text.textSize - 2f).coerceAtLeast(7f) }
+        val probe = Paint(stripText).apply { textSize = (stripText.textSize - 2f).coerceAtLeast(7f) }
         val tightest = stripCells.minOfOrNull { it.bottom - it.top } ?: Float.MAX_VALUE
         wearStripAffordsStackedRail(
             stripHeightPt = tightest,
-            titleHeightPt = (text.textSize - 1f).coerceAtLeast(7f),
+            titleHeightPt = (stripText.textSize - 1f).coerceAtLeast(7f),
             rowHeightPt = undercutRailRowHeightPt(probe, dualStacked = true),
         )
     }
@@ -500,7 +566,7 @@ fun composeUndercutPdf(
             strip.undercutIds.mapNotNull { id -> undercutById[id] },
             clampedById,
             cell.top, cell.bottom, cell.left, cell.right,
-            stripUnit, aftSetMm, fwdSetMm, text, outline, dim, diaText,
+            stripUnit, aftSetMm, fwdSetMm, stripText, outline, dim, diaText,
             bodyFill = bodyFill, taperFill = taperFill, linerFill = stripLinerFill,
             shaftExtentMm = shaftExtentMm,
             voidFill = voidFill,
@@ -540,6 +606,7 @@ fun composeUndercutPdf(
             linerEnds = linerEndsOf(strip),
             longCompressFrac = undercutRecord.longCompressFrac,
             onNotToScale = { notToScale = true },
+            onShaftHeight = { h -> minShaftPt = minOf(minShaftPt, h) },
             // Portrait strips are sized to what they draw, so the title gets its own air under
             // the Ø callouts; landscape keeps today's banding exactly.
             titleAirPt = if (portrait) UC_PORTRAIT_TITLE_AIR_PT else 0f,
@@ -562,6 +629,7 @@ fun composeUndercutPdf(
     // Last, in the bottom margin strip: the opt-in "Units in …" note (landscape or portrait —
     // the helper reads the page's own size).
     if (pdfPrefs.showUnitsNote) drawUnitsNote(c, pageW, pageH, margin, displayUnits.documentUnit)
+    return minShaftPt
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -1433,6 +1501,8 @@ private fun drawUndercutDetailStrip(
     /** `UndercutRecord.longCompressFrac`; [onNotToScale] fires when it changed this strip's map. */
     longCompressFrac: Float = 0f,
     onNotToScale: () -> Unit = {},
+    /** The height of the shaft this strip draws — the text-size fit reads the sheet's shortest. */
+    onShaftHeight: (Float) -> Unit = {},
 ) {
     val plan = planUndercutDetailStrip(
         segs, strip, undercuts, clampedById, stripLeft, stripRight, unit, text, diaText,
@@ -1453,6 +1523,7 @@ private fun drawUndercutDetailStrip(
     // The rails as drawn: the chain's fallback values lifted above the line when this strip has
     // the room for it, else below it — decided once, read by the whole draw.
     val (rails, inner) = plan.resolveRails(stripTop, stripBottom, dualStacked)
+    onShaftHeight(inner.cylBottom - inner.cylTop)
     val cy = (inner.cylTop + inner.cylBottom) / 2f
     val rCap = ((inner.cylBottom - inner.cylTop) / 2f).coerceAtLeast(0f)
 

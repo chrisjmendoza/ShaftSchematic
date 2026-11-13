@@ -2252,6 +2252,22 @@ relative to the S.E.T.; once a cut runs over a liner edge the drawing no longer 
 - **Off** — byte-identical to the sheet before the switch existed; From S.E.T. with the switch on
   prints byte-identically to From S.E.T. alone.
 
+### Text size
+
+On-device request. The strips' text follows the app-wide `PdfPrefs.dimTextScale` ("Dimension
+text size", 100 / 125 / 150 / 175% — the schematic's setting, shown on the undercut options as
+`DimTextSizeChips`, tags `undercut_dim_text_scale_<pct>`): `stripText` (rail values through its
+derived `dimText`, captions, strip titles) and `diaText` are the base sizes times the scale; rows
+and bands are sized off those paints' metrics. The header, the AFT/FWD row, the notes and the
+footnote keep the base size.
+
+`composeUndercutPdf` is a thin shell over `drawUndercutSheet(c, …, textScale): Float`, which
+draws the sheet and returns its shortest drawn shaft. `fittedUndercutTextScale(want)` runs it on
+a throwaway canvas: the largest of `PDF_TEXT_SCALES` ≤ the request whose shortest shaft is at
+least `UC_TEXT_FIT_MIN_SHAFT_PT` (36 pt) — or the 100% sheet's shortest, when that is smaller —
+else 100%. One size for the whole sheet; a fall-back is logged through `VerboseLog`. No dry pass
+at 100%, which prints byte-identically.
+
 ### The section preview
 
 On-device request: the detail page's Preview button previews THAT section alone; the Undercut

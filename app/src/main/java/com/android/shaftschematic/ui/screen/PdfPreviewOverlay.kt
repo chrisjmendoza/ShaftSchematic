@@ -595,9 +595,15 @@ internal fun RunoutWearOptionsSheet(
     /**
      * Shows the "Footer text size" / "Dimension text size" pickers. On for the consolidated sheet
      * only — the one document here that prints the shared footer and the schematic's rails; the
-     * classic runout, wear and undercut sheets keep their own sizes, so the pickers would be inert.
+     * classic runout and wear sheets keep their own sizes, so the pickers would be inert, and the
+     * undercut sheet takes [showDimTextSize] instead.
      */
     showSheetTextSizes: Boolean = false,
+    /**
+     * Shows "Dimension text size" alone ([DimTextSizeChips]) — the undercut sheet, whose strips
+     * follow `PdfPrefs.dimTextScale` and which prints no shared footer. Reads [dimTextScale].
+     */
+    showDimTextSize: Boolean = false,
     /** The app-wide `PdfPrefs.footerTextScale`; read only when [showSheetTextSizes]. */
     footerTextScale: Float = PDF_TEXT_SCALE_DEFAULT,
     /** The app-wide `PdfPrefs.dimTextScale`; read only when [showSheetTextSizes]. */
@@ -914,6 +920,12 @@ internal fun RunoutWearOptionsSheet(
                 DimensionArrowSizeChips(
                     arrowSizePt = arrowSizePt,
                     onCommit = { vm.setPdfArrowSizePt(it) },
+                )
+            }
+            if (showDimTextSize) {
+                DimTextSizeChips(
+                    dimTextScale = dimTextScale,
+                    onCommit = { vm.setPdfDimTextScale(it) },
                 )
             }
             if (showSheetTextSizes) {

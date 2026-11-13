@@ -290,6 +290,7 @@ fun UndercutRoute(
     val canRedo            by vm.canRedo.collectAsState()
 
     val pdfArrowSizePt     by vm.pdfArrowSizePt.collectAsState()
+    val pdfDimTextScale    by vm.pdfDimTextScale.collectAsState()
 
     val ctx = LocalContext.current
     var showPreview by rememberSaveable { mutableStateOf(false) }
@@ -676,6 +677,7 @@ fun UndercutRoute(
                 threadDensity = pdfThreadDensity,
                 dualUnitLayout = pdfDualUnitLayout,
                 arrowSizePt = pdfArrowSizePt,
+                dimTextScale = pdfDimTextScale,
                 displayUnits = DisplayUnits(unit, unitOverrides, dualUnits),
                 draft = tuning.active,
             )
@@ -1677,6 +1679,8 @@ private data class UndercutRenderInputs(
     val threadDensity: Float,
     val dualUnitLayout: DualUnitLayout,
     val arrowSizePt: Float,
+    /** `PdfPrefs.dimTextScale` — a key only; the composer reads it off the `PdfPrefs` snapshot. */
+    val dimTextScale: Float,
     val displayUnits: DisplayUnits,
     /** A tuning slider is mid-drag: raster at draft resolution and hold the spinner back. */
     val draft: Boolean,
@@ -1723,6 +1727,7 @@ internal fun UndercutOptionsSheet(
     val pdfThreadSlant by vm.pdfThreadSlant.collectAsState()
     val pdfThreadDensity by vm.pdfThreadDensity.collectAsState()
     val pdfArrowSizePt by vm.pdfArrowSizePt.collectAsState()
+    val pdfDimTextScale by vm.pdfDimTextScale.collectAsState()
     val resolvedComponents by vm.resolvedComponents.collectAsState()
     val undercutRecord by vm.undercutRecord.collectAsState()
     val unitOverrides by vm.unitOverrides.collectAsState()
@@ -1757,6 +1762,8 @@ internal fun UndercutOptionsSheet(
         // printed strips and the detail canvas alike.
         showDimensionArrows = true,
         arrowSizePt = pdfArrowSizePt,
+        showDimTextSize = true,
+        dimTextScale = pdfDimTextScale,
         fractionStyle = pdfFractionStyle,
         hasThreads = showThreadControls,
         threadSlant = pdfThreadSlant,

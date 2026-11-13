@@ -280,6 +280,13 @@ class UndercutPortraitRenderTest {
         )
         // Four crowded sections: the tiers close up before the shafts give more.
         render("four_strips_portrait_from_set.png", fourSpec, fourProject, fourRecord.copy(railStyle = fromSet))
+        // "Dimension text size" on the undercut strips, at its steps, on the busiest pages.
+        for (pct in listOf(125, 150, 175)) {
+            val big = PdfPrefs(dimTextScale = pct / 100f)
+            render("polar_portrait_from_set_text$pct.png", polar.spec, polarProject, polarTwoSections.copy(railStyle = fromSet), pdfPrefs = big)
+            render("four_strips_portrait_from_set_text$pct.png", fourSpec, fourProject, fourRecord.copy(railStyle = fromSet), pdfPrefs = big)
+            render("polar_portrait_text$pct.png", polar.spec, polarProject, polarTwoSections, pdfPrefs = big)
+        }
         render(
             "four_strips_landscape_from_set.png", fourSpec, fourProject,
             fourRecord.copy(railStyle = fromSet, pageOrientation = UndercutPageOrientation.LANDSCAPE),

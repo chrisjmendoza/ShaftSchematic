@@ -424,8 +424,10 @@ data class PdfPrefs(
      * Multiplier on the DIMENSION values — the rail lengths, the schematic's Ø callouts and the
      * consolidated sheet's in-profile Ø values — one of [PDF_TEXT_SCALES]; the rail lane pitch grows
      * with it so a larger value never crowds the next rail. Settings → Drawing → "Dimension text
-     * size" and the same PDF options as [footerTextScale]. The wear and undercut sheets keep their
-     * own sizes.
+     * size" and the same PDF options as [footerTextScale]. The undercut sheet's strips follow it
+     * too (rail values, Ø values, captions and strip titles, fitted down per sheet by
+     * `fittedUndercutTextScale`), from its own options' "Dimension text size". The wear sheet
+     * keeps its own sizes.
      */
     val dimTextScale: Float = PDF_TEXT_SCALE_DEFAULT,
 ) {

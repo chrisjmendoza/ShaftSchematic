@@ -90,6 +90,20 @@ class UndercutSheetToScaleTest {
     }
 
     @Test
+    fun `the sheet's text size is the largest step that leaves every section a shaft`() {
+        // 100% asks for no dry pass at all.
+        assertEquals(1f, fittedUndercutTextScale(1f) { error("no pass at 100%") }, 0f)
+        // Room at every size: the request stands.
+        assertEquals(1.5f, fittedUndercutTextScale(1.5f) { 120f }, 0f)
+        // 175% leaves a sliver, 150% does not: 150%.
+        assertEquals(1.5f, fittedUndercutTextScale(1.75f) { s -> if (s > 1.5f) 10f else 60f }, 0f)
+        // Nothing larger fits: 100%.
+        assertEquals(1f, fittedUndercutTextScale(1.75f) { s -> if (s > 1f) 10f else 60f }, 0f)
+        // A sheet already short at 100% is held to that height, not to the floor.
+        assertEquals(1.25f, fittedUndercutTextScale(1.25f) { 20f }, 0f)
+    }
+
+    @Test
     fun `every strip of the crowded job prints to scale`() {
         val record = doc.undercutRecord
         val sh = undercutSheetStrips(doc.spec, resolveComponents(doc.spec), record, blankValues = false)

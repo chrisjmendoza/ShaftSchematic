@@ -8,6 +8,18 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-12
 
+### feat(undercut): the undercut sheet follows "Dimension text size"
+
+On-device request: the From S.E.T. sheet prints well but its text is a little small. The
+undercut sheet's strips now set their rail values, captions, Ø values and section titles at
+`PdfPrefs.dimTextScale` (100 / 125 / 150 / 175%) — the SAME app-wide setting as the schematic's
+"Dimension text size", now also on the undercut PDF options ("Lines & text",
+`DimTextSizeChips`). Every row and band on a strip is sized off the text's own metrics, so the
+layout follows. The size is a request: `fittedUndercutTextScale` prints the largest step at which
+the sheet's shortest shaft stays at least 1/2" tall (or as tall as at 100%), decided once for the
+whole sheet off dry passes — four busy sections on one portrait page do not have room for 175%.
+The header, the AFT/FWD row and the notes keep their size; 100% prints byte-identically.
+
 ### fix(theme): in dark theme the editor preview stands on a light card
 
 On-device report: the Undercut screen read well in dark theme — its drawing is on white paper —
