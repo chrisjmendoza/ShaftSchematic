@@ -197,8 +197,12 @@ private const val CUT_NUMBER_PAD_FRAC = 0.3f
  * The cut numbers' placements on the detail canvas, in that canvas's own maps — the ONE call
  * behind the draw pass ([drawUndercutCutNumbers]) and the canvas's vertical budget
  * ([undercutCutNumbersBottomPx]), so the number the canvas makes room for is the number it draws.
- * [xPx]/[rPx] are linear through the origin (every canvas site's); their unit steps turn the
- * paint's px metrics into the axial mm / Ø units [undercutCutNumberPlacements] works in.
+ * [rPx] is linear through the origin; its unit step turns the paint's px metrics into the Ø units
+ * [undercutCutNumberPlacements] works in. [xPx] need not be linear — a crowded strip draws through
+ * a piecewise axial map (`UndercutStripXMap`) — so the placement runs in DRAWN x: each notch's
+ * span is mapped to px first, a number fits or not by the width its cut is drawn at, and the
+ * outside row spreads in px; [mmAtPx] ([xPx]'s inverse) carries the result back to shaft mm. Null
+ * means [xPx] is linear, inverted from its own unit step.
  */
 internal fun undercutCutNumberPlacementsPx(
     notches: List<UndercutNotch>,
@@ -206,21 +210,24 @@ internal fun undercutCutNumberPlacementsPx(
     xPx: (Float) -> Float,
     rPx: (Float) -> Float,
     textSizePx: Float,
+    mmAtPx: ((Float) -> Float)? = null,
 ): List<UndercutCutNumberPlacement> {
     if (notches.isEmpty() || numbers.isEmpty()) return emptyList()
     val paint = cutNumberPaint(textSizePx, Color.Black)
     val pxPerMmX = (xPx(1000f) - xPx(0f)) / 1000f
     val pxPerDiaMm = (rPx(1000f) - rPx(0f)) / 1000f
     if (pxPerMmX <= 0f || pxPerDiaMm <= 0f) return emptyList()
+    val x0 = xPx(0f)
+    val inverse = mmAtPx ?: { px -> (px - x0) / pxPerMmX }
     val padPx = textSizePx * CUT_NUMBER_PAD_FRAC
     return undercutCutNumberPlacements(
-        notches = notches,
+        notches = notches.map { it.copy(startMm = xPx(it.startMm), endMm = xPx(it.endMm)) },
         numbers = numbers,
-        glyphWidthMm = { paint.measureText(it) / pxPerMmX },
+        glyphWidthMm = { paint.measureText(it) },
         glyphHeightMm = cutNumberCapHeightPx(paint) / pxPerDiaMm,
-        padMm = padPx / pxPerMmX,
+        padMm = padPx,
         padDiaMm = padPx / pxPerDiaMm,
-    )
+    ).map { it.copy(xMm = inverse(it.xMm)) }
 }
 
 /**
@@ -258,8 +265,10 @@ internal fun DrawScope.drawUndercutCutNumbers(
     textSizePx: Float,
     color: Color = SheetInk.Outline,
     haloColor: Color = Color.White,
+    /** [xPx]'s inverse when it is not linear — see [undercutCutNumberPlacementsPx]. */
+    mmAtPx: ((Float) -> Float)? = null,
 ) {
-    val placements = undercutCutNumberPlacementsPx(notches, numbers, xPx, rPx, textSizePx)
+    val placements = undercutCutNumberPlacementsPx(notches, numbers, xPx, rPx, textSizePx, mmAtPx)
     if (placements.isEmpty()) return
     val paint = cutNumberPaint(textSizePx, color)
     val capHeightPx = cutNumberCapHeightPx(paint)

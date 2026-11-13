@@ -167,6 +167,7 @@ import com.android.shaftschematic.geom.threadHatchSpan
 import com.android.shaftschematic.geom.threadReliefSpan
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Undercut
+import com.android.shaftschematic.model.UndercutRailStyle
 import com.android.shaftschematic.model.UndercutRecord
 import com.android.shaftschematic.model.UndercutReference
 import com.android.shaftschematic.pdf.formatDiaWithUnit
@@ -181,12 +182,16 @@ import com.android.shaftschematic.pdf.UNDERCUT_TOTAL_RAIL_BAND_PT
 import com.android.shaftschematic.pdf.UndercutStripRails
 import com.android.shaftschematic.pdf.drawUndercutStripRails
 import com.android.shaftschematic.pdf.planUndercutStripRails
+import com.android.shaftschematic.pdf.undercutSetTierMinPitch
+import com.android.shaftschematic.pdf.planUndercutStripXMap
+import com.android.shaftschematic.pdf.UndercutStripXMap
 import com.android.shaftschematic.pdf.UndercutAnchorSide
 import com.android.shaftschematic.pdf.UndercutSetLead
 import com.android.shaftschematic.pdf.formatLenDimDualLabel
 import com.android.shaftschematic.pdf.undercutWidenForSetLead
 import com.android.shaftschematic.pdf.undercutSetLeadRoomPt
 import com.android.shaftschematic.pdf.undercutSetLeadValueMm
+import com.android.shaftschematic.pdf.undercutSetRailNearestValueMm
 import com.android.shaftschematic.pdf.UndercutStripDrawRangeMm
 import com.android.shaftschematic.model.UndercutSetDatum
 import com.android.shaftschematic.pdf.undercutStripSetSide
@@ -1350,10 +1355,11 @@ fun UndercutWindowDetailOverlay(
                     // stock past the other end's datum, so the cuts sit centred between the breaks.
                     val profileRowPx = with(density) { profileRowDp.toPx() }
                     val edgePadPx = with(density) { UNDERCUT_EDGE_PAD_DP.dp.toPx() }
+                    val railsFromSet = undercutRecord.railStyle == UndercutRailStyle.FROM_SET
                     val (drawStartMm, drawEndMm) = remember(
                         railStrip, spec, undercutRecord.setDatum, spans, previewDrawStartMm, previewDrawEndMm,
                         oalMm, segs, canvasWidthPx, profileRowPx, edgePadPx, railTextPaint, railScale,
-                        arrowSizePt, unit,
+                        arrowSizePt, unit, railsFromSet,
                     ) {
                         undercutDetailLeadDrawRange(
                             railStrip, spec, undercutRecord.setDatum, spans,
@@ -1365,6 +1371,7 @@ fun UndercutWindowDetailOverlay(
                             scale = railScale,
                             arrowSizePt = arrowSizePt,
                             unit = unit,
+                            fromSet = railsFromSet,
                         ) { railTextPaint.measureDualLabel(it, false) }
                     }
                     val winLenMm = (drawEndMm - drawStartMm).coerceAtLeast(0.001f)
@@ -1400,13 +1407,28 @@ fun UndercutWindowDetailOverlay(
                             arrowSizePt = arrowSizePt,
                             setLead = setLead,
                             showTotal = effectiveUndercutTotalRail(undercutRecord.showTotalRail, totalRailDefault),
+                            fromSet = railsFromSet,
                         )
                     }
                     val rails = remember(railInputs) {
                         planUndercutDetailRails(railInputs) { railTextPaint.measureDualLabel(it, false) }
                     }
-                    val railBand = remember(rails, railScale, railTextPaint) {
-                        undercutDetailRailBand(rails, railScale, undercutRailRowHeightPt(railTextPaint, false, railScale))
+                    // The canvas's axial map, from the same inputs: the drawing, the cut numbers
+                    // and the tap read the map the rails were planned on.
+                    val xMap = remember(railInputs) {
+                        planUndercutDetailXMap(railInputs) { railTextPaint.measureDualLabel(it, false) }
+                    }
+                    val xMapForTap = rememberUpdatedState(xMap)
+                    // ONE row metric for the reserved band and the drawn rows — the From-S.E.T. tier
+                    // pitch included (the canvas grows to its rails, so the tiers never close up).
+                    val railRowStepPx = undercutRailRowHeightPt(railTextPaint, false, railScale)
+                    // A From-S.E.T. stack takes the tightest tier pitch: the canvas shares the
+                    // screen with the cut card, and every tier is canvas height the card loses.
+                    val setTierPitchPx = undercutSetTierMinPitch(
+                        railTextPaint.fontMetrics.let { it.descent - it.ascent }, railScale,
+                    ).coerceAtMost(railRowStepPx)
+                    val railBand = remember(rails, railScale, railRowStepPx, setTierPitchPx) {
+                        undercutDetailRailBand(rails, railScale, railRowStepPx, setTierPitchPx)
                     }
                     // The cylinder's top sits on the rail band's bottom, the printed strip's
                     // `cylTop = chainRailY + belowRows × row + headroom`: the profile row starts
@@ -1441,9 +1463,10 @@ fun UndercutWindowDetailOverlay(
                         val r0: (Float) -> Float = { diaMm -> diaMm * 0.5f * lay0.pxPerMm }
                         val placements = undercutCutNumberPlacementsPx(
                             notches, cutNumbers,
-                            xPx = { mm -> lay0.startPx + (mm - drawStartMm) * lay0.pxPerMm },
+                            xPx = { mm -> xMap?.xAt(mm) ?: (lay0.startPx + (mm - drawStartMm) * lay0.pxPerMm) },
                             rPx = r0,
                             textSizePx = textPaint.textSize,
+                            mmAtPx = xMap?.let { it::mmAt },
                         )
                         val bottom = undercutCutNumbersBottomPx(placements, lay0.cy, r0, textPaint.textSize)
                         if (bottom == null) 0f
@@ -1483,8 +1506,13 @@ fun UndercutWindowDetailOverlay(
                                         maxOdMm = maxOdMm,
                                         edgePadPx = UNDERCUT_EDGE_PAD_DP.dp.toPx(),
                                     )
-                                    val xMm = drawStartMm + (tap.x - lay.startPx) / lay.pxPerMm
-                                    val padMm = 12.dp.toPx() / lay.pxPerMm
+                                    // Through the drawn map, so a tapped cut is the one drawn
+                                    // there; the pad is 12 dp of drawing at the tap, in mm.
+                                    val map = xMapForTap.value
+                                    val padPx = 12.dp.toPx()
+                                    val xMm = map?.mmAt(tap.x) ?: (drawStartMm + (tap.x - lay.startPx) / lay.pxPerMm)
+                                    val padMm = map?.let { (it.mmAt(tap.x + padPx) - it.mmAt(tap.x - padPx)) / 2f }
+                                        ?: (padPx / lay.pxPerMm)
                                     // A miss keeps the current card: selection and the open page are
                                     // one thing now, so clearing it would leave the carousel showing
                                     // a card that nothing on the canvas points at.
@@ -1513,7 +1541,8 @@ fun UndercutWindowDetailOverlay(
                                 edgePadPx = UNDERCUT_EDGE_PAD_DP.dp.toPx(),
                             )
                             val cy = lay.cy
-                            val xPx: (Float) -> Float = { mm -> lay.startPx + (mm - drawStartMm) * lay.pxPerMm }
+                            val xPx: (Float) -> Float =
+                                { mm -> xMap?.xAt(mm) ?: (lay.startPx + (mm - drawStartMm) * lay.pxPerMm) }
                             val rPx: (Float) -> Float = { diaMm -> diaMm * 0.5f * lay.pxPerMm }
 
                             // ── Strip profile: every resolved component clipped to the draw range ──
@@ -1621,8 +1650,15 @@ fun UndercutWindowDetailOverlay(
                                     }
                                     clipPath(fillClip) { drawPath(fillPath, color = linerFillColor) }
                                 }
-                                drawLine(outlineColor, Offset(xa, cy - rA), Offset(xb, cy - rB), outlineWidthPx)
-                                drawLine(outlineColor, Offset(xa, cy + rA), Offset(xb, cy + rB), outlineWidthPx)
+                                // A sloped surface (a taper) is a polyline through the stations
+                                // where the axial map changes scale, so it meets a cut's face at
+                                // the face's own height; one segment on a to-scale strip.
+                                (listOf(a) + (xMap?.knotsInside(a, b) ?: emptyList()) + b).zipWithNext { m0, m1 ->
+                                    val r0 = rPx(componentDiaAt(rc, m0))
+                                    val r1 = rPx(componentDiaAt(rc, m1))
+                                    drawLine(outlineColor, Offset(xPx(m0), cy - r0), Offset(xPx(m1), cy - r1), outlineWidthPx)
+                                    drawLine(outlineColor, Offset(xPx(m0), cy + r0), Offset(xPx(m1), cy + r1), outlineWidthPx)
+                                }
                                 // Vertical faces only where the edge is the component's own — an edge
                                 // the draw range cut off is closed by the break edge / flat end below.
                                 if (rc.startMmPhysical > drawStartMm + eps) {
@@ -1759,6 +1795,7 @@ fun UndercutWindowDetailOverlay(
                                     drawLabels = true,
                                     scale = railScale,
                                     arrowSizePt = arrowSizePt,
+                                    setTierPitch = setTierPitchPx,
                                 )
                             }
 
@@ -1827,6 +1864,7 @@ fun UndercutWindowDetailOverlay(
                                 rPx = rPx,
                                 cy = cy,
                                 textSizePx = textPaint.textSize,
+                                mmAtPx = xMap?.let { it::mmAt },
                             )
                         }
                         // Shown only while zoomed: at the fitted view there is nothing to reset,
@@ -3767,6 +3805,8 @@ internal data class UndercutDetailRailInputs(
     val setLead: UndercutSetLead? = null,
     /** The job's resolved "Total length of cuts" choice — the printed strip's `showTotal`. */
     val showTotal: Boolean = true,
+    /** The job's "Dimensions" are From S.E.T. — the printed strip's `fromSet`. */
+    val fromSet: Boolean = false,
 )
 
 /**
@@ -3819,14 +3859,21 @@ internal fun undercutDetailLeadDrawRange(
     scale: Float,
     arrowSizePt: Float,
     unit: UnitSystem,
+    /**
+     * The job's "Dimensions" are From S.E.T.: the room is made for the nearest baseline rail's value,
+     * which stands where the lead would ([undercutSetRailNearestValueMm]) — the printed strip's rule.
+     */
+    fromSet: Boolean = false,
     labelWidthPx: (DualLabel) -> Float,
 ): UndercutStripDrawRangeMm {
     val unchanged = UndercutStripDrawRangeMm(previewStartMm, previewEndMm)
     val availPx = widthPx - 2f * edgePadPx
     if (widthPx <= 0f || availPx <= 0f || spans.isEmpty()) return unchanged
     val lead = undercutDetailSetLead(strip, spec, datum, spans, previewStartMm, previewEndMm)
-    val value = undercutSetLeadValueMm(strip.chainStartMm, strip.chainEndMm, lead.side, lead.setMm)
+    val leadValue = undercutSetLeadValueMm(strip.chainStartMm, strip.chainEndMm, lead.side, lead.setMm)
         ?: return unchanged
+    val value = if (!fromSet) leadValue
+    else undercutSetRailNearestValueMm(spans, lead.side, lead.setMm) ?: leadValue
     val room = undercutSetLeadRoomPt(
         labelWidthPx(formatLenDimDualLabel(value.toDouble(), unit, false)), arrowSizePt, scale,
     )
@@ -3850,10 +3897,16 @@ internal fun undercutDetailLeadDrawRange(
  * grows to what the plan reserves ([undercutDetailRailBand]) — so it is always the roomy case a
  * printed strip lifts in (`undercutRailsLift`).
  */
-internal fun planUndercutDetailRails(
+/**
+ * The detail canvas's axial map — the printed strip's ONE planner ([planUndercutStripXMap]) over
+ * the canvas's to-scale layout ([computeUndercutWindowLayout] at the Box width): to scale until
+ * the rail values would stack, then every short stretch wide enough to hold its own value. The
+ * rails, the drawing and the tap all read this one map. Null until the Box has a width.
+ */
+internal fun planUndercutDetailXMap(
     inputs: UndercutDetailRailInputs,
     labelWidthPx: (DualLabel) -> Float,
-): UndercutStripRails? {
+): UndercutStripXMap? {
     if (inputs.widthPx <= 0f) return null
     val lay = computeUndercutWindowLayout(
         widthPx = inputs.widthPx,
@@ -3863,17 +3916,38 @@ internal fun planUndercutDetailRails(
         maxOdMm = inputs.maxOdMm,
         edgePadPx = inputs.edgePadPx,
     )
-    return planUndercutStripRails(
+    return planUndercutStripXMap(
+        inputs.drawStartMm, inputs.drawStartMm + inputs.windowLengthMm, lay.startPx, lay.pxPerMm,
         inputs.chainStartMm, inputs.chainEndMm, inputs.spans, inputs.unit,
         dual = false,
         splitAtMm = inputs.splitAtMm,
         startedStrip = inputs.startedStrip,
-        xAt = { mm -> lay.startPx + (mm - inputs.drawStartMm) * lay.pxPerMm },
         labelWidth = labelWidthPx,
         scale = inputs.scale,
         arrowSizePt = inputs.arrowSizePt,
         setLead = inputs.setLead,
         showTotal = inputs.showTotal,
+        fromSet = inputs.fromSet,
+    )
+}
+
+internal fun planUndercutDetailRails(
+    inputs: UndercutDetailRailInputs,
+    labelWidthPx: (DualLabel) -> Float,
+): UndercutStripRails? {
+    val xMap = planUndercutDetailXMap(inputs, labelWidthPx) ?: return null
+    return planUndercutStripRails(
+        inputs.chainStartMm, inputs.chainEndMm, inputs.spans, inputs.unit,
+        dual = false,
+        splitAtMm = inputs.splitAtMm,
+        startedStrip = inputs.startedStrip,
+        xAt = xMap::xAt,
+        labelWidth = labelWidthPx,
+        scale = inputs.scale,
+        arrowSizePt = inputs.arrowSizePt,
+        setLead = inputs.setLead,
+        showTotal = inputs.showTotal,
+        fromSet = inputs.fromSet,
     ).withFallbacksLifted()
 }
 
@@ -3898,6 +3972,8 @@ internal fun undercutDetailRailBand(
     rails: UndercutStripRails?,
     scale: Float,
     rowStepPx: Float,
+    /** The pitch the From-S.E.T. tiers stack at — the draw's `setTierPitch`, the same number. */
+    setTierPitchPx: Float = rowStepPx,
 ): UndercutDetailRailBand {
     val topPad = UNDERCUT_DETAIL_RAIL_TOP_PAD_PT * scale
     if (rails == null || rails.chainSpans.isEmpty()) return UndercutDetailRailBand(topPad, topPad, topPad)
@@ -3908,7 +3984,9 @@ internal fun undercutDetailRailBand(
         chainY = totalY + (UNDERCUT_TOTAL_RAIL_BAND_PT - UNDERCUT_TOTAL_RAIL_ABOVE_PT) * scale +
             rails.rows.aboveRows * rowStepPx
     } else {
-        chainY = topPad + rails.rows.aboveRows * rowStepPx
+        // A From-S.E.T. strip's baseline tiers stand over the chain's above-line rows, one tier
+        // pitch each (`undercutSetRailLineYs`, at the same pitch).
+        chainY = topPad + rails.rows.setRows * setTierPitchPx + rails.rows.aboveRows * rowStepPx
         totalY = chainY
     }
     return UndercutDetailRailBand(

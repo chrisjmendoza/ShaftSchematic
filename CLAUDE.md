@@ -707,6 +707,38 @@ data), and each level ≥ 1 gets ONE extra chain row anchored at its **parent's 
 (`buildNestedUndercutRailRows`), reserved through the same `undercutRailRowHeightPt` metric. See
 `docs/archive/UndercutDrawing_PLAN.md`.
 
+**A strip crowded with short cuts is not drawn to scale** (on-device report: seven cuts on one
+liner, 9/16" slivers at each end of a 31 15/16" one, printed their values stacked two rows deep).
+ONE axial map per strip, `UndercutStripXMap` (`pdf/UndercutStripXMap.kt`), built by the ONE planner
+`planUndercutStripXMap` behind BOTH draw sites — the printed strip (`UndercutStripPlan.xMap`) and
+the detail canvas (`planUndercutDetailXMap`): profile, notches, liner outline, rails, Ø leaders, cut
+numbers and the canvas tap all read it; radii never do. It is the to-scale map — byte-identical —
+until the rails planned on it are crowded (`undercutRailsCrowded`: a value that neither seats in its
+line nor takes the first row beside it); then every chain and nested span is floored at the width
+its value seats at, the short ones sharing ONE width, and the long stretches give the room up in
+proportion to length (`fitUndercutStripXMap`). The strip's width, its ends and the stock outside
+the chain datums never move (break room and S.E.T. lead room are sized for it), and a taper
+crossing a scale change draws as a polyline through `knotsInside`. Do not map x anywhere on a strip
+with a private linear expression, and do not floor a strip that is not crowded — one short cut on
+a long liner stays to scale. See `docs/contracts/UndercutDrawing.md` (Crowded sections).
+
+**"Dimensions: From S.E.T." is the chain's alternative, planned and drawn by the SAME pair**
+(on-device request: the shop's hand sketches locate every cut from the S.E.T.). Per-job
+`UndercutRecord.railStyle` (`UndercutRailStyle` CHAIN | FROM_SET, by name, unknown → CHAIN; ONE row
+`UndercutRailStyleRow` above "Distance to S.E.T." on the tab and the options panel). FROM_SET goes
+through `planUndercutStripRails(fromSet = true)` and `drawUndercutStripRails` — the ONE planner and
+ONE draw routine both strip sites already share: it KEEPS the level-0 chain and the nested rows (the
+cut lengths), DROPS the total and the S.E.T. lead ("Total length of cuts" greys out, its stored value
+untouched), and ADDS one baseline rail per station from the strip's `undercutStripSetSide` S.E.T.
+(`buildUndercutSetRailSpans`: AFT — every cut's start at every level plus the FWD-most cut's end;
+FWD — the mirror; coinciding stations one rail; nearest lowest), each its own line with its value in
+a break, open off the strip edge when the S.E.T. is off it, one shared datum witness when it is on
+it. The tier pitch is ONE number (`UndercutStripInnerLayout.setTierPitchPt`; the canvas's tightest pitch, `undercutSetTierMinPitch`)
+behind the reserved band and the drawn tiers, closed up toward the value's height + 3 pt only to
+keep the shaft at `UNDERCUT_CYL_MAX_FLOOR_PT`; no rail is ever dropped. CHAIN is byte-identical to
+the sheet before the choice existed. Do not write a canvas-only or sheet-only version of either
+style. See `docs/contracts/UndercutDrawing.md` (Dimensions from the S.E.T.).
+
 The undercut sheet is the one portrait-capable document: its page shape is per-job
 `UndercutRecord.pageOrientation` (AUTO = portrait at 2+ printed sections), resolved ONCE by
 `undercutSheetOrientation` over the same `undercutSheetStrips` the composer draws, and every

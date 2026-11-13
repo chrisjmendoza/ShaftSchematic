@@ -687,8 +687,8 @@ internal fun RunoutWearOptionsSheet(
     /** The page that count resolves to (`undercutSheetOrientation`); read only with [undercutPageOrientation]. */
     undercutResolvedOrientation: PdfPageOrientation = PdfPageOrientation.LANDSCAPE,
     /**
-     * The undercut sheet's other per-job content rows — "Distance to S.E.T." and "Sections to
-     * print" — composed under the "Page" row; read only with [undercutPageOrientation].
+     * The undercut sheet's other per-job content rows — "Dimensions", "Distance to S.E.T." and
+     * "Sections to print" — composed under the "Page" row; read only with [undercutPageOrientation].
      */
     undercutContentRows: (@Composable () -> Unit)? = null,
 ) {

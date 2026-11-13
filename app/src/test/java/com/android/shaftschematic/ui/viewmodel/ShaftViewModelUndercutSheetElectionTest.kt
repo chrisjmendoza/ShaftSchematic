@@ -5,6 +5,7 @@ import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
 import com.android.shaftschematic.geom.UndercutStrip
 import com.android.shaftschematic.geom.UndercutWindow
+import com.android.shaftschematic.model.UndercutRailStyle
 import com.android.shaftschematic.model.UndercutSetDatum
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
@@ -16,7 +17,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
 /**
- * `setUndercutSetDatum` and `setUndercutSectionPrinted` on the REAL [ShaftViewModel]: each writes
+ * `setUndercutSetDatum`, `setUndercutRailStyle` and `setUndercutSectionPrinted` on the REAL [ShaftViewModel]: each writes
  * the record, marks the document dirty, undoes like every other record edit, and is a no-op when
  * unchanged. A bare-shaft section is keyed by its member cuts — leaving it off lists them all,
  * printing it again unlists them all — and an entry the strip does not name stays put.
@@ -62,6 +63,36 @@ class ShaftViewModelUndercutSheetElectionTest {
         val before = vm.undercutRecord.value
         vm.setUndercutSetDatum(UndercutSetDatum.NEAREST)
         assertSame(before, vm.undercutRecord.value)
+    }
+
+    @Test
+    fun `the rail style setter updates the record, marks the document dirty, and no-ops when unchanged`() {
+        val vm = savedVm()
+        vm.setUndercutRailStyle(UndercutRailStyle.FROM_SET)
+        idle()
+        assertEquals(UndercutRailStyle.FROM_SET, vm.undercutRecord.value.railStyle)
+        assertTrue(vm.hasUnsavedChanges.value)
+        val after = vm.undercutRecord.value
+        vm.setUndercutRailStyle(UndercutRailStyle.FROM_SET)
+        assertSame(after, vm.undercutRecord.value)
+    }
+
+    @Test
+    fun `undo restores the previous rail style`() {
+        val vm = ShaftViewModel(ApplicationProvider.getApplicationContext<Application>())
+        idle()
+        vm.addUndercut(200f, 25.4f)
+        idle()
+        val before = vm.undercutRecord.value
+        Thread.sleep(SessionHistory.COALESCE_WINDOW_MS + 200L)
+
+        vm.setUndercutRailStyle(UndercutRailStyle.FROM_SET)
+        idle()
+        assertTrue(vm.canUndo.value)
+        vm.undoEdit()
+        idle()
+        assertEquals(before, vm.undercutRecord.value)
+        assertEquals(UndercutRailStyle.CHAIN, vm.undercutRecord.value.railStyle)
     }
 
     @Test

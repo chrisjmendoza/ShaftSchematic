@@ -83,6 +83,19 @@ internal fun drawUndercutRail(
     haloColor: Int = Color.WHITE,
     arrowSizePt: Float = PDF_ARROW_SIZE_DEFAULT_PT,
     haloClearXs: List<Float> = emptyList(),
+    /**
+     * Which of the two passes to run — both (the default), or one alone so a caller can draw
+     * several rails' lines before any of their values ([drawUndercutStripRails]'s From-S.E.T. stack).
+     */
+    phase: UndercutRailPhase = UndercutRailPhase.ALL,
+    /**
+     * Paint a halo behind break-seated values too, kept inside the value's break: another rail's
+     * witness line crosses this one's values (a From-S.E.T. station rising through the chain).
+     */
+    haloSeated: Boolean = false,
+    /** False skips the witness line at every span's start / end (a datum witness drawn once by the caller). */
+    witnessStart: Boolean = true,
+    witnessEnd: Boolean = true,
 ) {
     if (layout.isEmpty()) return
     val arrow = arrowSizePt * scale
@@ -120,11 +133,11 @@ internal fun drawUndercutRail(
     // witness lines — the label pass paints a small page-colour halo behind each such
     // label, and running it after ALL lines means no later span can strike back through
     // (on-device report: the gap value between two cuts had lines running through it).
-    layout.forEachIndexed { i, s ->
+    if (phase != UndercutRailPhase.LABELS) layout.forEachIndexed { i, s ->
         // An OPEN end (the S.E.T. lead's half dimension) has no witness line and no head: the
         // line simply runs on toward an S.E.T. drawn off the strip.
-        if (!s.openStart) c.drawLine(s.x0Pt, witnessBottomY, s.x0Pt, railY - witnessExt, dim)
-        if (!s.openEnd) c.drawLine(s.x1Pt, witnessBottomY, s.x1Pt, railY - witnessExt, dim)
+        if (!s.openStart && witnessStart) c.drawLine(s.x0Pt, witnessBottomY, s.x0Pt, railY - witnessExt, dim)
+        if (!s.openEnd && witnessEnd) c.drawLine(s.x1Pt, witnessBottomY, s.x1Pt, railY - witnessExt, dim)
 
         val lw = dimText.measureDualLabel(s.label, dualStacked)
         val seatsInBreak = drawLabels && s.seatsInBreak
@@ -154,17 +167,35 @@ internal fun drawUndercutRail(
             )?.let { l -> c.drawLine(l.fromX, l.fromY, l.x, l.toY, dim) }
         }
     }
-    if (!drawLabels) return
+    if (!drawLabels || phase == UndercutRailPhase.LINES) return
     val halo = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL; color = haloColor }
     layout.forEachIndexed { i, s ->
         val lw = dimText.measureDualLabel(s.label, dualStacked)
         if (s.seatsInBreak) {
-            // Break-seated: the gap already isolates the value from every line. A stack straddles
-            // the rail — primary above it, secondary below — so the stubs point into the seam.
+            // Break-seated: the gap already isolates the value from this rail's own lines. A stack
+            // straddles the rail — primary above it, secondary below — so the stubs point into the
+            // seam.
+            val stacked = s.label.setsStacked(dualStacked)
             val seatBaseline =
-                if (s.label.setsStacked(dualStacked))
-                    railY - dimText.dualStackMetrics().height * 0.5f - fm.ascent
+                if (stacked) railY - dimText.dualStackMetrics().height * 0.5f - fm.ascent
                 else railY - (fm.ascent + fm.descent) * 0.5f
+            if (haloSeated) {
+                // Another rail's witness may cross the value: knock it out, but only inside the
+                // break, so this rail's own stubs are never touched.
+                val gapHalf = lw * 0.5f + breakPad
+                val (l, r) = undercutRailHaloSpan(
+                    s.labelCxPt - lw * 0.5f - haloPadX,
+                    s.labelCxPt + lw * 0.5f + haloPadX,
+                    haloClearXs,
+                    lineReach = dim.strokeWidth * 0.5f + UNDERCUT_RAIL_HALO_AA_PT * scale,
+                )
+                val stackH = if (stacked) dimText.dualStackMetrics().advance else 0f
+                c.drawRect(
+                    maxOf(l, s.labelCxPt - gapHalf), seatBaseline + fm.ascent - haloPadY,
+                    minOf(r, s.labelCxPt + gapHalf), seatBaseline + fm.descent + stackH + haloPadY,
+                    halo,
+                )
+            }
             c.drawDualLabelCentered(s.label, s.labelCxPt, seatBaseline, dimText, dualStacked)
             return@forEachIndexed
         }
@@ -179,6 +210,9 @@ internal fun drawUndercutRail(
         c.drawDualLabelCentered(s.label, s.labelCxPt, f.baselineY, dimText, dualStacked)
     }
 }
+
+/** Which of [drawUndercutRail]'s two passes a call runs. */
+internal enum class UndercutRailPhase { ALL, LINES, LABELS }
 
 /** Antialiasing fringe a halo edge must clear past a covered line's stroke, points. */
 private const val UNDERCUT_RAIL_HALO_AA_PT = 0.5f
@@ -283,6 +317,11 @@ internal fun undercutNestedRailLineYs(
  * above it — the ONE
  * sequence the printed strip and the detail canvas both run.
  *
+ * On a From-S.E.T. strip ([UndercutStripRails.setRails]) the baseline tiers frame that sequence:
+ * their lines first, stepped by [setTierPitch] ([undercutSetRailLineYs]) — so the chain's and the
+ * nested rows' values, each on a halo, knock out the station witnesses rising through them — and
+ * their values last.
+ *
  * The order is fixed — total, then chain, then the nested rows. The total's witness lines stand on
  * the chain line and run up through the band where a lifted chain's fallback values sit
  * ([UndercutStripRails.withFallbacksLifted]); drawing the chain after the total lets its label pass
@@ -318,8 +357,25 @@ internal fun drawUndercutStripRails(
     haloColor: Int = Color.WHITE,
     /** The app-wide "Dimension arrows" head, points — the value [rails] was planned with. */
     arrowSizePt: Float = PDF_ARROW_SIZE_DEFAULT_PT,
+    /**
+     * The pitch between the From-S.E.T. baseline tiers — the value the strip's reserved band was
+     * sized with (`UndercutStripPlan.resolveRails`), never re-derived here. Unused on a chained strip.
+     */
+    setTierPitch: Float = undercutRailRowHeightPt(dimText, dualStacked, scale),
 ) {
     val plan = rails.rows
+    // From S.E.T.: every baseline rail's LINES first — its station witness rises from the shaft
+    // through the chain (and a nested cut's through the nested rows), so the chain and nested
+    // passes below paint their values' halos over those witnesses — and its VALUES last.
+    val setLineYs = if (rails.setRails.isEmpty()) emptyList()
+    else undercutSetRailLineYs(rails, chainRailY, undercutRailRowHeightPt(dimText, dualStacked, scale), setTierPitch)
+    val setCrossXs = if (rails.setRails.isEmpty()) emptyList() else rails.setStationXs + listOfNotNull(rails.setDatumX)
+    if (setLineYs.isNotEmpty()) {
+        drawUndercutSetRails(
+            c, dim, dimText, rails, setLineYs, witnessBottomY, drawLabels, dualStacked, scale, haloColor,
+            arrowSizePt, UndercutRailPhase.LINES, setCrossXs,
+        )
+    }
     // The total first: its witness lines stand on the chain line, and the chain's label pass below
     // must paint over them where a lifted value sits in their way.
     drawUndercutRail(
@@ -349,8 +405,11 @@ internal fun drawUndercutStripRails(
         scale = scale,
         haloColor = haloColor,
         arrowSizePt = arrowSizePt,
-        // Lifted values sit across the total's witness lines (chain line → total line).
-        haloClearXs = if (plan.aboveRows > 0) rails.total.flatMap { listOf(it.x0Pt, it.x1Pt) } else emptyList(),
+        // Lifted values sit across the total's witness lines (chain line → total line); on a
+        // From-S.E.T. strip every value may sit across a station witness.
+        haloClearXs = (if (plan.aboveRows > 0) rails.total.flatMap { listOf(it.x0Pt, it.x1Pt) } else emptyList()) +
+            setCrossXs,
+        haloSeated = setCrossXs.isNotEmpty(),
     )
     if (rails.nested.isNotEmpty()) {
         val rowStep = undercutRailRowHeightPt(dimText, dualStacked, scale)
@@ -369,7 +428,67 @@ internal fun drawUndercutStripRails(
                 scale = scale,
                 haloColor = haloColor,
                 arrowSizePt = arrowSizePt,
+                haloClearXs = setCrossXs,
+                haloSeated = setCrossXs.isNotEmpty(),
             )
         }
+    }
+    if (setLineYs.isNotEmpty()) {
+        drawUndercutSetRails(
+            c, dim, dimText, rails, setLineYs, witnessBottomY, drawLabels, dualStacked, scale, haloColor,
+            arrowSizePt, UndercutRailPhase.LABELS, setCrossXs,
+        )
+    }
+}
+
+/**
+ * One pass of a From-S.E.T. strip's baseline rails ([UndercutStripRails.setRails]), each on its
+ * own tier line at [lineYs]. LINES: the ONE datum witness at the S.E.T. when it lies on the strip
+ * (shaft → top tier), each rail's station witness from [witnessBottomY] up past its own tier, then
+ * its line, heads and any fallback leader — an open rail draws neither head nor witness at its
+ * S.E.T. end. LABELS: each value on a sheet-white halo, in its break or, where its span cannot hold
+ * it, above its line in the row reserved there ([undercutSetRailRows]); a fallback halo widens over
+ * any station witness it would cut ([crossXs]).
+ */
+private fun drawUndercutSetRails(
+    c: Canvas,
+    dim: Paint,
+    dimText: Paint,
+    rails: UndercutStripRails,
+    lineYs: List<Float>,
+    witnessBottomY: Float,
+    drawLabels: Boolean,
+    dualStacked: Boolean,
+    scale: Float,
+    haloColor: Int,
+    arrowSizePt: Float,
+    phase: UndercutRailPhase,
+    crossXs: List<Float>,
+) {
+    if (phase == UndercutRailPhase.LINES) {
+        rails.setDatumX?.let { x ->
+            c.drawLine(x, witnessBottomY, x, lineYs.min() - UNDERCUT_RAIL_WITNESS_EXT_PT * scale, dim)
+        }
+    }
+    rails.setRails.forEachIndexed { i, l ->
+        val aft = rails.setRailSpans[i].side == UndercutAnchorSide.AFT_SET
+        drawUndercutRail(
+            c, dim, dimText, listOf(l),
+            witnessBottomY = witnessBottomY,
+            railY = lineYs[i],
+            maxLabelRows = 1,
+            drawLabels = drawLabels,
+            fallbackLabelAbove = true,
+            dualStacked = dualStacked,
+            scale = scale,
+            haloColor = haloColor,
+            arrowSizePt = arrowSizePt,
+            haloClearXs = crossXs,
+            phase = phase,
+            haloSeated = true,
+            // The S.E.T. end's witness is the shared datum witness, drawn once above.
+            witnessStart = !aft,
+            witnessEnd = aft,
+        )
     }
 }

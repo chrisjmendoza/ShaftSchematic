@@ -12,6 +12,7 @@ import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Taper
 import com.android.shaftschematic.model.Undercut
 import com.android.shaftschematic.model.UndercutPageOrientation
+import com.android.shaftschematic.model.UndercutRailStyle
 import com.android.shaftschematic.model.UndercutRecord
 import com.android.shaftschematic.model.UndercutReference
 import com.android.shaftschematic.model.UndercutSetDatum
@@ -265,6 +266,25 @@ class UndercutPortraitRenderTest {
             "polar_bare_shaft_landscape.png", polar.spec, polarProject,
             polarWithBareShaft.copy(pageOrientation = UndercutPageOrientation.LANDSCAPE),
         )
+        // ── "Dimensions: From S.E.T." ──
+        val fromSet = UndercutRailStyle.FROM_SET
+        render("polar_portrait_from_set.png", polar.spec, polarProject, polarTwoSections.copy(railStyle = fromSet))
+        // The FWD strip reaches its S.E.T.: its rails start AT it, on one shared datum witness.
+        render(
+            "polar_portrait_from_set_draw_to_set.png", polar.spec, polarProject,
+            polarTwoSections.copy(railStyle = fromSet, drawToSet = true),
+        )
+        render(
+            "polar_from_set_aft.png", polar.spec, polarProject,
+            polar.undercutRecord.copy(railStyle = fromSet, setDatum = UndercutSetDatum.AFT),
+        )
+        // Four crowded sections: the tiers close up before the shafts give more.
+        render("four_strips_portrait_from_set.png", fourSpec, fourProject, fourRecord.copy(railStyle = fromSet))
+        render(
+            "four_strips_landscape_from_set.png", fourSpec, fourProject,
+            fourRecord.copy(railStyle = fromSet, pageOrientation = UndercutPageOrientation.LANDSCAPE),
+        )
+        render("polar_bare_shaft_from_set.png", polar.spec, polarProject, polarWithBareShaft.copy(railStyle = fromSet))
     }
 
     private companion object {

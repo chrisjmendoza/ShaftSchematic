@@ -21,6 +21,7 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.test.core.app.ApplicationProvider
 import com.android.shaftschematic.geom.undercutSetPositions
 import com.android.shaftschematic.model.UndercutPageOrientation
+import com.android.shaftschematic.model.UndercutRailStyle
 import com.android.shaftschematic.model.UndercutSetDatum
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.addBodyAt
@@ -219,6 +220,32 @@ class UndercutRouteTest {
         rule.waitForIdle()
         assertEquals(UndercutSetDatum.AFT, vm.undercutRecord.value.setDatum)
         rule.onNodeWithTag("undercut_set_datum_aft").assertIsSelected()
+    }
+
+    @Test
+    fun `the Dimensions row writes the rail style and From S E T greys the total switch`() {
+        val vm = vm().also { it.addUndercut(500f, 25.4f) }
+        host(vm)
+
+        rule.onNodeWithTag("undercut_drawing_settings_toggle").performScrollTo().performClick()
+        rule.waitForIdle()
+
+        rule.onNodeWithText("Dimensions").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithTag("undercut_rail_style_CHAIN").assertIsSelected()
+        rule.onNodeWithTag("undercut_rail_style_FROM_SET").assertIsNotSelected()
+        rule.onNodeWithText(undercutRailStyleCaption(UndercutRailStyle.CHAIN)).assertExists()
+        rule.onNodeWithTag("undercut_total_rail_switch").performScrollTo().assertIsEnabled()
+        val totalBefore = vm.undercutRecord.value.showTotalRail
+
+        rule.onNodeWithTag("undercut_rail_style_FROM_SET").performScrollTo().performClick()
+        rule.waitForIdle()
+        assertEquals(UndercutRailStyle.FROM_SET, vm.undercutRecord.value.railStyle)
+        rule.onNodeWithTag("undercut_rail_style_FROM_SET").assertIsSelected()
+        rule.onNodeWithText(undercutRailStyleCaption(UndercutRailStyle.FROM_SET)).assertExists()
+        assertTrue(undercutRailStyleCaption(UndercutRailStyle.FROM_SET).endsWith("Saved with this job."))
+        rule.onNodeWithTag("undercut_total_rail_switch").performScrollTo().assertIsNotEnabled()
+        rule.onNodeWithText(UNDERCUT_TOTAL_RAIL_FROM_SET_CAPTION).assertExists()
+        assertEquals("the stored total choice is untouched", totalBefore, vm.undercutRecord.value.showTotalRail)
     }
 
     @Test
