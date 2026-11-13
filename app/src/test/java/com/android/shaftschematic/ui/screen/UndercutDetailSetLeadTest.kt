@@ -104,6 +104,7 @@ class UndercutDetailSetLeadTest {
             labelWidth = widthOf,
             scale = inputs.scale,
             setLead = lead,
+            nestedRows = false,
         )
         // The canvas always takes the lifted plan: its rail band grows to what the plan reserves.
         assertEquals(direct.withFallbacksLifted(), rails)

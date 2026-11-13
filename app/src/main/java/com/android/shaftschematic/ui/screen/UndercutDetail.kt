@@ -3820,6 +3820,8 @@ internal data class UndercutDetailRailInputs(
     val fromSet: Boolean = false,
     /** "Liner ends from S.E.T." on a liner strip — the printed strip's `linerEnds`. */
     val linerEnds: UndercutLinerSpanMm? = null,
+    /** The printed strip's `nestedRows`: false on the canvas, as on every sheet. */
+    val nestedRows: Boolean = false,
 )
 
 /**
@@ -3952,6 +3954,7 @@ internal fun planUndercutDetailXMap(
         showTotal = inputs.showTotal,
         fromSet = inputs.fromSet,
         linerEnds = inputs.linerEnds,
+        nestedRows = inputs.nestedRows,
     )
 }
 
@@ -3973,6 +3976,7 @@ internal fun planUndercutDetailRails(
         showTotal = inputs.showTotal,
         fromSet = inputs.fromSet,
         linerEnds = inputs.linerEnds,
+        nestedRows = inputs.nestedRows,
     ).withFallbacksLifted()
 }
 

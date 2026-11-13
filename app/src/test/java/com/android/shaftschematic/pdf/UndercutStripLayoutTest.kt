@@ -722,7 +722,7 @@ class UndercutStripLayoutTest {
             planUndercutRailRows(listOf(span(0, true), span(1, false)), startedStrip = false, hasTotalRail = true),
         )
         assertEquals(
-            UndercutRailRowPlan(belowRows = WEAR_RAIL_MAX_LABEL_ROWS, aboveRows = 0, chainBelowRows = WEAR_RAIL_MAX_LABEL_ROWS),
+            UndercutRailRowPlan(belowRows = UNDERCUT_RAIL_MAX_FALLBACK_ROWS, aboveRows = 0, chainBelowRows = UNDERCUT_RAIL_MAX_FALLBACK_ROWS),
             planUndercutRailRows(listOf(span(5, false)), startedStrip = false, hasTotalRail = true),
         )
         // ...and with nested rows under them, a clear row below those (on-device report: the last
@@ -741,7 +741,7 @@ class UndercutStripLayoutTest {
             planUndercutRailRows(listOf(span(0, false)), startedStrip = false, hasTotalRail = false),
         )
         assertEquals(
-            UndercutRailRowPlan(belowRows = 1, aboveRows = WEAR_RAIL_MAX_LABEL_ROWS, chainBelowRows = 0),
+            UndercutRailRowPlan(belowRows = 1, aboveRows = UNDERCUT_RAIL_MAX_FALLBACK_ROWS, chainBelowRows = 0),
             planUndercutRailRows(listOf(span(5, false)), startedStrip = false, hasTotalRail = false),
         )
         // A started strip draws no chain; the full hand-drawing budget stays below.

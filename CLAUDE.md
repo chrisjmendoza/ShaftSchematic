@@ -746,8 +746,12 @@ a long liner stays to scale. See `docs/contracts/UndercutDrawing.md` (Crowded se
 through `planUndercutStripRails(fromSet = true)` and `drawUndercutStripRails` — the ONE planner and
 ONE draw routine both strip sites already share: it KEEPS the level-0 chain for the cut lengths, with every nested shoulder a chain NODE — a cut
 holding nested cuts reads as its floor pieces on that one line and there are NO nested rows
-(on-device report: a 1 1/8" over the two 9/16" it is made of, "we don't need that 1 1/8"; Chain
-dimensions keep the parent's length and the nested row) — DROPS the total and the S.E.T. lead ("Total length of cuts" greys out, its stored value
+(on-device report: a 1 1/8" over the two 9/16" it is made of, "we don't need that 1 1/8"). **The same
+holds under Chain** (second report: "still grouping the small numbers together"): the app's three
+callers pass `planUndercutStripRails(nestedRows = false)`, so NO sheet or canvas prints a parent's
+whole length over a nested row; that layout — and what this file says elsewhere about nested rail
+rows — is kept behind `nestedRows = true`, unreached, so it can return. Do not turn it back on
+without asking — DROPS the total and the S.E.T. lead ("Total length of cuts" greys out, its stored value
 untouched), and ADDS one baseline rail per station from the strip's `undercutStripSetSide` S.E.T.
 (`buildUndercutSetRailSpans`: AFT — every cut's start at every level plus the FWD-most cut's end;
 FWD — the mirror; coinciding stations one rail; nearest lowest), each its own line with its value in

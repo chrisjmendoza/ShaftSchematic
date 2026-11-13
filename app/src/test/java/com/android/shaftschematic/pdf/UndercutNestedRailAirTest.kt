@@ -183,6 +183,7 @@ class UndercutNestedRailAirTest {
                     startedStrip = false, dual = false, dualStacked = false, railSplitAtMm = emptyList(),
                     arrowSizePt = PDF_ARROW_SIZE_DEFAULT_PT,
                     leadSide = UndercutAnchorSide.FWD_SET, aftSetMm = sh.aftSetMm, fwdSetMm = sh.fwdSetMm,
+                    nestedRows = true,
                 ),
             )
             val (rails, inner) = plan.resolveRails(112f, 520f, dualStacked = false)
@@ -282,6 +283,7 @@ class UndercutNestedRailAirTest {
                     startedStrip = false, dual = stacked, dualStacked = stacked, railSplitAtMm = emptyList(),
                     arrowSizePt = PDF_ARROW_SIZE_DEFAULT_PT,
                     leadSide = UndercutAnchorSide.FWD_SET, aftSetMm = sh.aftSetMm, fwdSetMm = sh.fwdSetMm,
+                    nestedRows = true,
                 ),
             )
             val (top, bottom) = crowdedBand(plan, stacked)

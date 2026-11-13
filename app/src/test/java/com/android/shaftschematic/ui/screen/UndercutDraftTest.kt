@@ -617,6 +617,8 @@ class UndercutDraftTest {
         textSizePx = 26.25f,
         typeface = null,
         fractionStyle = null,
+        // These tests cover the kept nested-row layout; the app's canvas passes false.
+        nestedRows = true,
     )
 
     @Test

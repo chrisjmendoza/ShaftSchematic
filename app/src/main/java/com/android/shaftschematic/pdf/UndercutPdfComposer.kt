@@ -1273,6 +1273,11 @@ internal fun planUndercutDetailStrip(
     /** `UndercutRecord.longCompressFrac` — 0 draws the strip to scale. */
     longCompressFrac: Float = 0f,
     /**
+     * [planUndercutStripRails]' `nestedRows`. False — every printed sheet — puts a cut's nested
+     * pieces on the one chain; true keeps the whole length over a nested row (kept, unprinted).
+     */
+    nestedRows: Boolean = false,
+    /**
      * The liner's own span when the job prints "Liner ends from S.E.T." on this LINER strip;
      * null otherwise — [planUndercutStripRails]' `linerEnds`.
      */
@@ -1381,6 +1386,7 @@ internal fun planUndercutDetailStrip(
         showTotal = showTotal,
         fromSet = fromSet,
         linerEnds = linerEnds,
+        nestedRows = nestedRows,
     )
     return UndercutStripPlan(
         drawStartMm, drawEndMm, hLayout, titleText, dimText, spans, diaPlan, diaBandPt, rails,
