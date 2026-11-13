@@ -155,6 +155,7 @@ import com.android.shaftschematic.ui.viewmodel.setUndercutPageOrientation
 import com.android.shaftschematic.ui.viewmodel.setUndercutSectionPrinted
 import com.android.shaftschematic.ui.viewmodel.setUndercutSetDatum
 import com.android.shaftschematic.ui.viewmodel.setUndercutRailStyle
+import com.android.shaftschematic.ui.viewmodel.setUndercutLinerEndsFromSet
 import com.android.shaftschematic.ui.viewmodel.setUndercutExaggeration
 import com.android.shaftschematic.ui.viewmodel.updateUndercut
 import com.android.shaftschematic.ui.viewmodel.updateUndercutReference
@@ -1035,6 +1036,14 @@ fun UndercutRoute(
                         onChoose = { vm.setUndercutRailStyle(it) },
                         modifier = Modifier.padding(bottom = 8.dp),
                     )
+                    // Per-job, Chain dimensions only: both liner ends located from the S.E.T.
+                    UndercutLinerEndsFromSetRow(
+                        checked = undercutRecord.linerEndsFromSet,
+                        onCheckedChange = { vm.setUndercutLinerEndsFromSet(it) },
+                        testTag = "undercut_liner_ends_from_set",
+                        modifier = Modifier.padding(bottom = 8.dp),
+                        enabled = undercutRecord.railStyle == UndercutRailStyle.CHAIN,
+                    )
                     // Per-job: which S.E.T. the strip titles and the lead at each strip's edge
                     // measure to.
                     UndercutSetDatumRow(
@@ -1730,6 +1739,13 @@ internal fun UndercutOptionsSheet(
             UndercutRailStyleRow(
                 choice = undercutRecord.railStyle,
                 onChoose = { vm.setUndercutRailStyle(it) },
+            )
+            Spacer(Modifier.height(12.dp))
+            UndercutLinerEndsFromSetRow(
+                checked = undercutRecord.linerEndsFromSet,
+                onCheckedChange = { vm.setUndercutLinerEndsFromSet(it) },
+                testTag = "pdf_undercut_liner_ends_from_set",
+                enabled = undercutRecord.railStyle == UndercutRailStyle.CHAIN,
             )
             Spacer(Modifier.height(12.dp))
             UndercutSetDatumRow(

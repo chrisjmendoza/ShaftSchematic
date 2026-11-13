@@ -285,6 +285,20 @@ class UndercutPortraitRenderTest {
             fourRecord.copy(railStyle = fromSet, pageOrientation = UndercutPageOrientation.LANDSCAPE),
         )
         render("polar_bare_shaft_from_set.png", polar.spec, polarProject, polarWithBareShaft.copy(railStyle = fromSet))
+        // ── "Liner ends from S.E.T." ──
+        render("polar_portrait_liner_ends.png", polar.spec, polarProject, polarTwoSections.copy(linerEndsFromSet = true))
+        // The FWD strip reaches its S.E.T.: both liner-end rails start AT it, on the shared datum witness.
+        render(
+            "polar_portrait_liner_ends_draw_to_set.png", polar.spec, polarProject,
+            polarTwoSections.copy(linerEndsFromSet = true, drawToSet = true),
+        )
+        // A bare-shaft section prints no liner-end rails.
+        render("polar_bare_shaft_liner_ends.png", polar.spec, polarProject, polarWithBareShaft.copy(linerEndsFromSet = true))
+        render("four_strips_portrait_liner_ends.png", fourSpec, fourProject, fourRecord.copy(linerEndsFromSet = true))
+        render(
+            "four_strips_landscape_liner_ends.png", fourSpec, fourProject,
+            fourRecord.copy(linerEndsFromSet = true, pageOrientation = UndercutPageOrientation.LANDSCAPE),
+        )
     }
 
     private companion object {

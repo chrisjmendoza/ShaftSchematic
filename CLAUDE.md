@@ -739,6 +739,20 @@ keep the shaft at `UNDERCUT_CYL_MAX_FLOOR_PT`; no rail is ever dropped. CHAIN is
 the sheet before the choice existed. Do not write a canvas-only or sheet-only version of either
 style. See `docs/contracts/UndercutDrawing.md` (Dimensions from the S.E.T.).
 
+**"Liner ends from S.E.T." rides the same baseline-rail machinery, Chain only** (on-device request:
+welding over undercuts the shop must find the liner, and a cut over its edge hides it). Per-job
+`UndercutRecord.linerEndsFromSet` (ONE row `UndercutLinerEndsFromSetRow` under "Dimensions",
+greyed while Dimensions is From S.E.T., its value kept). `planUndercutStripRails(linerEnds)` — the
+liner's span on a LINER strip, null on bare shaft — fills `setRails` with the liner's two ends
+through the ONE station rule `buildUndercutSetRailSpansAt`, from `undercutStripSetSide`'s S.E.T., so
+the near-end value IS the strip title's figure; chain, nested rows and total unchanged; the lead
+dropped only when it equals a liner-end value. The tiers stack ABOVE everything — over the total's
+band (`computeUndercutStripInnerLayout(topBandPt)`, `undercutSetRailLineYs(totalRailY)`) or over the
+chain's above rows — at the ONE tier pitch; their witnesses rise from the shaft and every value they
+cross (total, chain, nested) is knocked out by its halo. `fromSet` wins over it (plan identical to
+From S.E.T. alone); off is byte-identical. No label is printed on the rails. Do not build a second
+rail type for it. See `docs/contracts/UndercutDrawing.md` (Liner ends from the S.E.T.).
+
 The undercut sheet is the one portrait-capable document: its page shape is per-job
 `UndercutRecord.pageOrientation` (AUTO = portrait at 2+ printed sections), resolved ONCE by
 `undercutSheetOrientation` over the same `undercutSheetStrips` the composer draws, and every

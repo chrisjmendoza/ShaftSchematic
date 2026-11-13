@@ -1,6 +1,7 @@
 # ShaftSchematic Data Model
 Version: v0.5.x
-Last updated: 2026-11-12 — `UndercutRecord.railStyle` ("Dimensions: Chain | From S.E.T.").
+Last updated: 2026-11-12 — `UndercutRecord.railStyle` ("Dimensions: Chain | From S.E.T.") and
+`UndercutRecord.linerEndsFromSet` ("Liner ends from S.E.T.").
 2026-10-27 — `AutoDiaOverride`: a section override no longer moves a
 neighbouring section's Ø, and a component add/remove that merges or covers its section drops it
 (`withAutoDiaOverridesSurviving`); `autoBodyDiaMm` is written again — the auto card's "All auto
@@ -541,7 +542,7 @@ can never affect geometry resolution:
   would change is frozen at its old value. A split or merge maps to nothing (orphaned at render
   as before). The id scheme itself is unchanged; nothing is re-keyed at decode.
 - `UndercutRecord(undercuts, exaggerationFrac, drawToSet, showTotalRail, pageOrientation,
-  setDatum, excludedLinerIds, excludedFreeCutIds, railStyle)` — its own envelope field
+  setDatum, excludedLinerIds, excludedFreeCutIds, railStyle, linerEndsFromSet)` — its own envelope field
   (`@SerialName("undercut_record")`), sibling of `wear_record`. Each `Undercut` is a
   machined-below-surface span stored in **shaft space** (`startFromAftMm` + `lengthMm`) — a
   cut may sit inside a liner or straddle a component edge, so undercuts are deliberately
@@ -565,6 +566,8 @@ can never affect geometry resolution:
   `railStyle` (`UndercutRailStyle` CHAIN | FROM_SET, default CHAIN — "Dimensions": the chained
   rail, or every cut's start measured from that S.E.T. over the chain of cut lengths); all three
   enums serialize by name through tolerant serializers (an unknown name decodes to the default).
+  `linerEndsFromSet` (`Boolean`, default `false` — "Liner ends from S.E.T.": each liner strip of a
+  chained sheet also dimensions both liner ends from that S.E.T.).
   `excludedLinerIds` / `excludedFreeCutIds` are the "Sections to print" EXCLUSION lists — a liner
   or cut added later prints by default; orphan ids are skipped at render, never pruned.
 

@@ -8,6 +8,27 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-12
 
+### feat(undercut): "Liner ends from S.E.T." — both liner ends located on the chained sheet
+
+On-device request: when the shop welds over undercuts it must know where the liner begins and ends
+relative to the S.E.T., and once cuts run over a liner edge the drawing no longer shows it. A new
+per-job switch, **Liner ends from S.E.T.** (`UndercutRecord.linerEndsFromSet`, default off),
+directly below "Dimensions" in the Undercut tab's Drawing settings and in the undercut preview's
+options, adds two dimensions to every LINER strip: from the strip's S.E.T. (the one its title and
+lead already use) to the liner's near end — the figure the title states — and to its far end,
+nearest lower, stacked above everything else on the strip (above the total when there is one).
+Values and lines only, no label. They are the From-S.E.T. baseline rails (`setRails`: the same
+planner, station rule, open half dimension off the strip edge, shared datum witness and draw
+routine); each liner-end witness rises from the shaft, so a liner edge buried under a cut is still
+marked, and the total's, chain's and nested rows' values knock it out where it crosses them. The
+chain, nested rows and total are unchanged; the S.E.T. lead drops out only when it would print the
+same figure as a liner-end rail (a chain starting at the liner's own edge). The strip's drawn
+stock on the S.E.T. side is sized for the wider of the lead's and the near-end value. Chain
+dimensions only: while Dimensions is From S.E.T. the switch greys out (its choice kept) and the
+sheet prints exactly as From S.E.T. alone. Bare-shaft strips print nothing new. The Royal Atlantic
+AFT liner reads 16 1/8 and 51 3/8 from the AFT S.E.T. With the switch off every sheet prints
+byte-identically.
+
 ### feat(undercut): "Dimensions: From S.E.T." — every cut located from the S.E.T.
 
 On-device request: the shop's hand-drawn undercut sheets locate each cut by baseline dimensioning —

@@ -83,8 +83,9 @@ internal const val UNDERCUT_SET_DATUM_CAPTION =
 /**
  * The undercut sheet's per-job "Dimensions" control — Chain | From S.E.T., writing
  * [UndercutRecord.railStyle]. ONE composable behind the tab's Drawing settings and the undercut
- * options panel, directly above "Distance to S.E.T." ([UndercutSetDatumRow]), whose S.E.T. the
- * From S.E.T. rails start at. The caption says what the chosen style prints.
+ * options panel, above "Liner ends from S.E.T." ([UndercutLinerEndsFromSetRow]) and "Distance to
+ * S.E.T." ([UndercutSetDatumRow]), whose S.E.T. the From S.E.T. rails start at. The caption says
+ * what the chosen style prints.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -111,6 +112,54 @@ internal fun UndercutRailStyleRow(
         )
     }
 }
+
+/**
+ * The per-job "Liner ends from S.E.T." switch ([UndercutRecord.linerEndsFromSet]): each liner strip
+ * prints a dimension from its S.E.T. to each end of the liner, over the chain. ONE row directly
+ * below "Dimensions" ([UndercutRailStyleRow]) on the Undercut tab's Drawing settings and the
+ * undercut options panel. It belongs to Chain dimensions: while [enabled] is false (Dimensions is
+ * From S.E.T.) the switch greys out and the caption says so; the stored choice is left as it is.
+ * [testTag] is the switch's tag — each host keeps its own, as the total row does.
+ */
+@Composable
+internal fun UndercutLinerEndsFromSetRow(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    testTag: String,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                "Liner ends from S.E.T.",
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (enabled) Color.Unspecified else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                if (enabled) UNDERCUT_LINER_ENDS_CAPTION else UNDERCUT_LINER_ENDS_FROM_SET_CAPTION,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            enabled = enabled,
+            modifier = Modifier.testTag(testTag),
+        )
+    }
+}
+
+/** The caption under "Liner ends from S.E.T." while it applies. */
+internal const val UNDERCUT_LINER_ENDS_CAPTION =
+    "Each liner section also dimensions both ends of the liner from the S.E.T., so the liner can be " +
+        "found where cuts have run over its edges. Saved with this job."
+
+/** The caption under "Liner ends from S.E.T." while the job's dimensions are From S.E.T. */
+internal const val UNDERCUT_LINER_ENDS_FROM_SET_CAPTION =
+    "Prints with Chain dimensions only. Saved with this job."
 
 /** The chip label for [style]. */
 internal fun undercutRailStyleLabel(style: UndercutRailStyle): String = when (style) {

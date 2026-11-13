@@ -78,6 +78,36 @@ class ShaftViewModelUndercutSheetElectionTest {
     }
 
     @Test
+    fun `the liner-ends setter updates the record, marks the document dirty, and no-ops when unchanged`() {
+        val vm = savedVm()
+        vm.setUndercutLinerEndsFromSet(true)
+        idle()
+        assertTrue(vm.undercutRecord.value.linerEndsFromSet)
+        assertTrue(vm.hasUnsavedChanges.value)
+        val after = vm.undercutRecord.value
+        vm.setUndercutLinerEndsFromSet(true)
+        assertSame(after, vm.undercutRecord.value)
+    }
+
+    @Test
+    fun `undo restores the previous liner-ends choice`() {
+        val vm = ShaftViewModel(ApplicationProvider.getApplicationContext<Application>())
+        idle()
+        vm.addUndercut(200f, 25.4f)
+        idle()
+        val before = vm.undercutRecord.value
+        Thread.sleep(SessionHistory.COALESCE_WINDOW_MS + 200L)
+
+        vm.setUndercutLinerEndsFromSet(true)
+        idle()
+        assertTrue(vm.canUndo.value)
+        vm.undoEdit()
+        idle()
+        assertEquals(before, vm.undercutRecord.value)
+        assertEquals(false, vm.undercutRecord.value.linerEndsFromSet)
+    }
+
+    @Test
     fun `undo restores the previous rail style`() {
         val vm = ShaftViewModel(ApplicationProvider.getApplicationContext<Application>())
         idle()

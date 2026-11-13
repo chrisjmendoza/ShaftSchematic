@@ -202,7 +202,7 @@ internal fun fitUndercutStripXMap(
  * ([undercutRailsCrowded]) keeps that map, so it draws exactly as it always has. A crowded strip
  * gets [fitUndercutStripXMap] with a floor under every chain and nested span: its value's width
  * plus the break's padding and two arrowheads — the width at which `layoutWearStripRail` seats it.
- * A From-S.E.T. strip's baseline rails need no floor: each is its own line, so they never crowd.
+ * Baseline rails (From S.E.T., liner ends) need no floor: each is its own line, so they never crowd.
  *
  * [startX] / [linearScale] are the caller's to-scale layout (page points or canvas pixels);
  * [labelWidth], [scale] and [arrowSizePt] are exactly what the rail plan is handed, since the
@@ -227,13 +227,15 @@ fun planUndercutStripXMap(
     showTotal: Boolean = true,
     /** The job's "Dimensions" are From S.E.T.: the rails planned here are the strip's own. */
     fromSet: Boolean = false,
+    /** "Liner ends from S.E.T." on a liner strip: the rails planned here are the strip's own. */
+    linerEnds: UndercutLinerSpanMm? = null,
 ): UndercutStripXMap {
     val linear = UndercutStripXMap.linear(drawStartMm, drawEndMm, startX, linearScale)
     if (startedStrip || spans.isEmpty()) return linear
     val rails = planUndercutStripRails(
         chainStartMm, chainEndMm, spans, unit, dual, splitAtMm, startedStrip,
         xAt = linear::xAt, labelWidth = labelWidth, scale = scale, arrowSizePt = arrowSizePt,
-        setLead = setLead, showTotal = showTotal, fromSet = fromSet,
+        setLead = setLead, showTotal = showTotal, fromSet = fromSet, linerEnds = linerEnds,
     )
     if (!undercutRailsCrowded(rails)) return linear
     val seatRoom = (2f * (DIM_BREAK_TEXT_PAD_PT + arrowSizePt) + UNDERCUT_X_FLOOR_SLACK_PT) * scale

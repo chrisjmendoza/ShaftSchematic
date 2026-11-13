@@ -249,6 +249,28 @@ class UndercutRouteTest {
     }
 
     @Test
+    fun `the liner-ends switch writes the record and greys while Dimensions is From S E T`() {
+        val vm = vm().also { it.addUndercut(500f, 25.4f) }
+        host(vm)
+
+        rule.onNodeWithTag("undercut_drawing_settings_toggle").performScrollTo().performClick()
+        rule.waitForIdle()
+
+        rule.onNodeWithText("Liner ends from S.E.T.").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText(UNDERCUT_LINER_ENDS_CAPTION).assertExists()
+        assertTrue(UNDERCUT_LINER_ENDS_CAPTION.endsWith("Saved with this job."))
+        rule.onNodeWithTag("undercut_liner_ends_from_set").performScrollTo().assertIsEnabled().performClick()
+        rule.waitForIdle()
+        assertTrue(vm.undercutRecord.value.linerEndsFromSet)
+
+        rule.onNodeWithTag("undercut_rail_style_FROM_SET").performScrollTo().performClick()
+        rule.waitForIdle()
+        rule.onNodeWithTag("undercut_liner_ends_from_set").performScrollTo().assertIsNotEnabled()
+        rule.onNodeWithText(UNDERCUT_LINER_ENDS_FROM_SET_CAPTION).assertExists()
+        assertTrue("the stored choice is untouched", vm.undercutRecord.value.linerEndsFromSet)
+    }
+
+    @Test
     fun `one section offers no sections list`() {
         val vm = vm().also { it.addUndercut(500f, 25.4f) }
         host(vm)

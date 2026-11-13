@@ -54,8 +54,9 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
 - **"Drawing settings" section** (shown once at least one cut is recorded, BELOW the "Recorded
   undercuts" list, collapsed by default behind a header row with a chevron, `testTag
   "undercut_drawing_settings_toggle"` — usability review: nothing between Add and the list may
-  read as a required step). It holds the rows below, in this order: Page, Dimensions, Distance to
-  S.E.T., Split cuts at liner edges, Total length of cuts, Drawn depth, Draw to the shaft end. Tab block order
+  read as a required step). It holds the rows below, in this order: Page, Dimensions, Liner ends
+  from S.E.T., Distance to S.E.T., Split cuts at liner edges, Total length of cuts, Drawn depth,
+  Draw to the shaft end. Tab block order
   (COMPACT/MEDIUM): intro, overview canvas, Preview | Options, Add undercut, Recorded undercuts,
   Drawing settings, then the print group — "Sections to print" (two or more sections; never
   collapsed), the blank-draft switch and Print / Preview / Export.
@@ -112,10 +113,16 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
   Greyed (`enabled = false`, caption "Not printed while Dimensions is From S.E.T. …") while the
   job's Dimensions are From S.E.T. — its stored value untouched.
   See "Total length of cuts" under PDF layout below.
-- **"Dimensions" row** (directly above "Distance to S.E.T."; the shared `UndercutRailStyleRow`,
+- **"Dimensions" row** (above "Liner ends from S.E.T." and "Distance to S.E.T."; the shared `UndercutRailStyleRow`,
   also in the undercut options panel): Chain | From S.E.T., driving `UndercutRecord.railStyle`
   through `ShaftViewModel.setUndercutRailStyle` (same record path, same undo history). See
   "Dimensions from the S.E.T." under PDF layout below.
+- **"Liner ends from S.E.T." switch** (directly below "Dimensions"; the shared
+  `UndercutLinerEndsFromSetRow`, testTag `undercut_liner_ends_from_set` on the tab and
+  `pdf_undercut_liner_ends_from_set` in the options panel): drives `UndercutRecord.linerEndsFromSet`
+  through `ShaftViewModel.setUndercutLinerEndsFromSet`. Greyed (caption "Prints with Chain
+  dimensions only. …") while Dimensions is From S.E.T.; the stored value untouched. See "Liner ends
+  from the S.E.T." under PDF layout below.
 - **"Recorded undercuts" list** below the canvas: a read-only summary + delete row per cut,
   grouped under each section's title and numbered from 1 within the section (`undercutSections`,
   AFT → FWD) — not an edit card (see "UI contract").
@@ -215,6 +222,9 @@ data class UndercutRecord(
 - **`railStyle`** ("Dimensions", `UndercutRailStyle` CHAIN | FROM_SET, default CHAIN, additive +
   defaulted, serialized by name — older files and unknown names decode CHAIN): whether each strip
   chains its cuts or locates every cut from the S.E.T. Dimensioning only: no stored cut moves.
+- **`linerEndsFromSet`** ("Liner ends from S.E.T.", default `false`, additive + defaulted — older
+  files decode off): each liner strip of a chained sheet also dimensions both liner ends from its
+  S.E.T. Dimensioning only: no stored cut moves.
 - **`pageOrientation`**, **`setDatum`**, **`excludedLinerIds`**, **`excludedFreeCutIds`** — the
   other per-job fits, all additive + defaulted (older files decode off), none of them geometry: the
   page shape ("Page orientation"), which S.E.T. the strips measure to ("S.E.T. lead"), and the
@@ -2169,6 +2179,50 @@ ALTERNATIVE to the chain, never a replacement, with the lengths kept.
   lines and drops the values, as the chain does. The canvas passes its scale, halo colour and row
   step, so the canvas rail IS the printed rail.
 - **CHAIN** — byte-identical to the sheet before the choice existed; no FROM_SET code path runs.
+
+### Liner ends from the S.E.T.
+
+On-device request: welding over undercuts, the shop must know where the liner begins and ends
+relative to the S.E.T.; once a cut runs over a liner edge the drawing no longer shows it.
+
+- **Per-job switch** — `UndercutRecord.linerEndsFromSet` (default `false`), the composer reading it
+  off the caller's record; the detail canvas carries it as `UndercutDetailRailInputs.linerEnds` and
+  in its lead-room range's remember key. CHAIN dimensions only.
+- **The same planner** — `planUndercutStripRails(linerEnds = UndercutLinerSpanMm(...))`: the
+  LINER's own span on a liner strip, null on a bare-shaft strip (which therefore prints nothing new)
+  or with the switch off. With a `setLead`, cuts to dimension, and NOT `fromSet` (From S.E.T. wins:
+  the plan is From S.E.T.'s alone), `setRails` holds `buildUndercutLinerEndRailSpans` — the liner's
+  two ends through the ONE station rule `buildUndercutSetRailSpansAt` the From-S.E.T. rails use:
+  nearest first, a station at or beyond the S.E.T. dropped, open off the drawn edge when the S.E.T.
+  is off the strip, a shared datum witness when it is on it, values `formatLenDimDualLabel`. The
+  side is `undercutStripSetSide`'s, so the near-end value is the strip title's figure.
+- **What stays** — the chain, the nested rows and the total, planned exactly as with the switch
+  off. The S.E.T. lead stays too, EXCEPT where its value equals a liner-end rail's within
+  `UNDERCUT_TOUCH_EPS_MM` (the chain starting at the liner's own edge): one figure is never printed
+  twice on a strip.
+- **Where the tiers go** — above everything else, one tier pitch each (`setRows`, a fallback value
+  costing a second pitch as in From S.E.T.): over the total's band when the strip prints a total —
+  `computeUndercutStripInnerLayout(topBandPt = setRows × pitch)`, tier 0 one pitch above the total
+  band's top (`undercutSetRailLineYs(totalRailY = …)`: the total line less
+  `UNDERCUT_TOTAL_RAIL_ABOVE_PT`) — else over the chain's above-line rows exactly as From S.E.T.
+  The pitch is the ONE `UndercutStripInnerLayout.setTierPitchPt` (the canvas's `setTierPitchPx`;
+  `undercutDetailRailBand` now stacks tiers over a total too); the pitch fit, the lift decision and
+  `verticalOverheadPt` (`tightSetTiers` included) apply unchanged.
+- **Witnesses and halos** — each liner end's witness rises from the chain's `witnessBottomY` to its
+  tier: a liner edge buried under a cut has no visible face, so the witness (and the dotted liner
+  outline, where on) is what marks it. Drawn in the tiers' LINES pass, before the total, the chain
+  and the nested rows, whose values — seated ones included, on the break-clipped halo — knock it
+  out (`haloClearXs`/`haloSeated` now reach the total's pass too); the tier values last.
+- **Lead room** — the lower tier's value lives in the same stock as the lead's, so the drawn range
+  is widened (`undercutSetLeadRoomPt` → `undercutWidenForSetLead`) for the WIDER of the lead's value
+  and the near-end value (`undercutLinerNearEndValueMm`), in `planUndercutDetailStrip` and
+  `undercutDetailLeadDrawRange(linerEnds)` alike; a value that still cannot seat falls back above
+  its line.
+- **Crowded axial map** — `planUndercutStripXMap(linerEnds)` plans the same rails; the liner-end
+  rails need no floors.
+- No word or label prints with them — values and lines only.
+- **Off** — byte-identical to the sheet before the switch existed; From S.E.T. with the switch on
+  prints byte-identically to From S.E.T. alone.
 
 ### Crowded sections: the axial map
 

@@ -195,6 +195,10 @@ fun composeUndercutPdf(
     val showTotalRail = effectiveUndercutTotalRail(undercutRecord.showTotalRail, pdfPrefs.undercutTotalRail)
     // "Dimensions": chained, or each cut's start from the S.E.T. — also the caller's record.
     val railsFromSet = undercutRecord.railStyle == UndercutRailStyle.FROM_SET
+    // "Liner ends from S.E.T.": each liner strip's own liner span; nothing on a bare-shaft strip.
+    fun linerEndsOf(strip: UndercutStrip): UndercutLinerSpanMm? =
+        (strip as? UndercutStrip.LinerStrip)?.takeIf { undercutRecord.linerEndsFromSet }
+            ?.let { UndercutLinerSpanMm(it.linerStartMm, it.linerEndMm) }
     // Shared liner display titles — custom label wins, else positional AFT/MID/FWD defaults
     // (util/LinerTitles.kt). Same names the carousel cards, the wear sheet, and the runout
     // sheet show, so a liner-anchored strip is identifiable at a glance.
@@ -386,6 +390,7 @@ fun composeUndercutPdf(
                     leadSide = stripSideOf(strip), aftSetMm = aftSetMm, fwdSetMm = fwdSetMm,
                     showTotal = showTotalRail,
                     fromSet = railsFromSet,
+                    linerEnds = linerEndsOf(strip),
                 )
             }
         } else {
@@ -528,6 +533,7 @@ fun composeUndercutPdf(
             arrowSizePt = pdfPrefs.arrowSizePt,
             showTotal = showTotalRail,
             fromSet = railsFromSet,
+            linerEnds = linerEndsOf(strip),
             // Portrait strips are sized to what they draw, so the title gets its own air under
             // the Ø callouts; landscape keeps today's banding exactly.
             titleAirPt = if (portrait) UC_PORTRAIT_TITLE_AIR_PT else 0f,
@@ -1022,7 +1028,7 @@ internal class UndercutStripPlan(
         // ONE row metric for the reserved band and the drawn rows (`drawUndercutStripRails` steps
         // by it): a stacked dual sheet's taller rows otherwise overrun the band into the shaft.
         val rowHeight = undercutRailRowHeightPt(dimText, dualStacked)
-        if (r.rows.setRows > 0) {
+        if (r.rows.setRows > 0 && r.totalSpan == null) {
             // The baseline tiers stand above the chain's own above-line rows, at ONE pitch the
             // returned layout carries to the draw.
             val pitch = setTierPitchPt ?: rowHeight
@@ -1035,6 +1041,32 @@ internal class UndercutStripPlan(
                 maxLabelRows = r.rows.belowRows,
                 chainAboveBandPt = r.rows.aboveRows * rowHeight + r.rows.setRows * pitch,
                 cylMaxFloorPt = cylMaxFloorPt,
+                belowClearPt = if (r.rows.chainBelowRows > 0 && r.rows.nestedRows == 0) {
+                    undercutRailBelowClearPt(dimText, dualStacked)
+                } else {
+                    0f
+                },
+            ).copy(setTierPitchPt = pitch)
+        }
+        if (r.rows.setRows > 0) {
+            // "Liner ends from S.E.T." over a strip with a total: the tiers stand above the total's
+            // band, in a band of their own at the top, at ONE pitch the layout carries to the draw.
+            val pitch = setTierPitchPt ?: rowHeight
+            return computeUndercutStripInnerLayout(
+                stripTop, stripBottom,
+                titleHeightPt = titleText.textSize,
+                hasTotalRail = true,
+                rowHeightPt = rowHeight,
+                diaBandPt = if (diaPlan != null) diaBandPt + titleAirPt else diaBandPt,
+                maxLabelRows = r.rows.belowRows,
+                chainAboveBandPt = r.rows.aboveRows * rowHeight,
+                cylMaxFloorPt = cylMaxFloorPt,
+                belowClearPt = if (r.rows.chainBelowRows > 0 && r.rows.nestedRows == 0) {
+                    undercutRailBelowClearPt(dimText, dualStacked)
+                } else {
+                    0f
+                },
+                topBandPt = r.rows.setRows * pitch,
             ).copy(setTierPitchPt = pitch)
         }
         return computeUndercutStripInnerLayout(
@@ -1165,6 +1197,11 @@ internal fun planUndercutDetailStrip(
     fitCrowded: Boolean = true,
     /** The job's "Dimensions" are From S.E.T. — [planUndercutStripRails]' `fromSet`. */
     fromSet: Boolean = false,
+    /**
+     * The liner's own span when the job prints "Liner ends from S.E.T." on this LINER strip;
+     * null otherwise — [planUndercutStripRails]' `linerEnds`.
+     */
+    linerEnds: UndercutLinerSpanMm? = null,
 ): UndercutStripPlan? {
     // The strip's own cuts only: another strip's cut in this window draws as plain stock here.
     val memberCutSpans = strip.undercutIds.mapNotNull { id ->
@@ -1183,14 +1220,17 @@ internal fun planUndercutDetailStrip(
         )
     }
     // From S.E.T. there is no lead: the nearest baseline rail stands in its place, open off the same
-    // drawn edge, so the room is made for THAT rail's value.
-    val roomValueMm = if (!fromSet || leadValueMm == null) leadValueMm
-    else leadSide?.let { side ->
-        undercutSetRailNearestValueMm(
-            memberCutSpans, side, if (side == UndercutAnchorSide.AFT_SET) aftSetMm else fwdSetMm,
-        )
-    } ?: leadValueMm
-    val leadRoomPt = roomValueMm?.let { v ->
+    // drawn edge, so the room is made for THAT rail's value. With "Liner ends from S.E.T." the
+    // lower liner-end rail's value lives in the same stock as the lead's, so the room is made for
+    // the wider of the two.
+    val leadSetMm = if (leadSide == UndercutAnchorSide.AFT_SET) aftSetMm else fwdSetMm
+    val roomValuesMm: List<Float> = when {
+        leadValueMm == null || leadSide == null -> emptyList()
+        fromSet -> listOf(undercutSetRailNearestValueMm(memberCutSpans, leadSide, leadSetMm) ?: leadValueMm)
+        linerEnds != null -> listOfNotNull(leadValueMm, undercutLinerNearEndValueMm(linerEnds, leadSide, leadSetMm))
+        else -> listOf(leadValueMm)
+    }
+    val leadRoomPt = roomValuesMm.maxOfOrNull { v ->
         undercutSetLeadRoomPt(
             dimText.measureDualLabel(formatLenDimDualLabel(v.toDouble(), unit, dual), dualStacked),
             arrowSizePt,
@@ -1235,7 +1275,7 @@ internal fun planUndercutDetailStrip(
             drawStartMm, drawEndMm, hLayout.linerLeftPt, hLayout.ptPerMm,
             strip.chainStartMm, strip.chainEndMm, spans, unit, dual, railSplitAtMm, startedStrip,
             labelWidth = labelWidth, arrowSizePt = arrowSizePt, setLead = setLead, showTotal = showTotal,
-            fromSet = fromSet,
+            fromSet = fromSet, linerEnds = linerEnds,
         )
     }
     fun xAtStrip(mm: Float): Float = xMap.xAt(mm)
@@ -1263,6 +1303,7 @@ internal fun planUndercutDetailStrip(
         setLead = setLead,
         showTotal = showTotal,
         fromSet = fromSet,
+        linerEnds = linerEnds,
     )
     return UndercutStripPlan(
         drawStartMm, drawEndMm, hLayout, titleText, dimText, spans, diaPlan, diaBandPt, rails,
@@ -1378,12 +1419,15 @@ private fun drawUndercutDetailStrip(
     showTotal: Boolean = true,
     /** The job's "Dimensions" are From S.E.T. — [planUndercutStripRails]' `fromSet`. */
     fromSet: Boolean = false,
+    /** "Liner ends from S.E.T." on this liner strip — [planUndercutStripRails]' `linerEnds`. */
+    linerEnds: UndercutLinerSpanMm? = null,
 ) {
     val plan = planUndercutDetailStrip(
         segs, strip, undercuts, clampedById, stripLeft, stripRight, unit, text, diaText,
         shaftExtentMm, startedStrip, dual, dualStacked, railSplitAtMm, arrowSizePt, titleAirPt,
         leadSide = leadSide, aftSetMm = aftSetMm, fwdSetMm = fwdSetMm, showTotal = showTotal,
         fromSet = fromSet,
+        linerEnds = linerEnds,
     ) ?: return
     val drawStartMm = plan.drawStartMm
     val drawEndMm = plan.drawEndMm

@@ -207,6 +207,17 @@ fun ShaftViewModel.setUndercutRailStyle(style: UndercutRailStyle) {
 }
 
 /**
+ * Set whether this sheet's liner strips dimension both liner ends from the S.E.T.
+ * ([UndercutRecord.linerEndsFromSet]). Dimensioning only — no stored cut moves — and a fit for this
+ * job, so per-document. A no-op when unchanged.
+ */
+fun ShaftViewModel.setUndercutLinerEndsFromSet(on: Boolean) {
+    _undercutRecord.update { rec ->
+        if (rec.linerEndsFromSet == on) rec else rec.copy(linerEndsFromSet = on)
+    }
+}
+
+/**
  * Put [strip] on the printed sheet or leave it off ("Sections to print"), per job. A liner strip
  * is keyed by its liner id ([UndercutRecord.excludedLinerIds]); a bare-shaft strip by its member
  * cuts ([UndercutRecord.excludedFreeCutIds]) — leaving it off lists every member, printing it

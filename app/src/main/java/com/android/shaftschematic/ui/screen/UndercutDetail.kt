@@ -186,12 +186,14 @@ import com.android.shaftschematic.pdf.undercutSetTierMinPitch
 import com.android.shaftschematic.pdf.planUndercutStripXMap
 import com.android.shaftschematic.pdf.UndercutStripXMap
 import com.android.shaftschematic.pdf.UndercutAnchorSide
+import com.android.shaftschematic.pdf.UndercutLinerSpanMm
 import com.android.shaftschematic.pdf.UndercutSetLead
 import com.android.shaftschematic.pdf.formatLenDimDualLabel
 import com.android.shaftschematic.pdf.undercutWidenForSetLead
 import com.android.shaftschematic.pdf.undercutSetLeadRoomPt
 import com.android.shaftschematic.pdf.undercutSetLeadValueMm
 import com.android.shaftschematic.pdf.undercutSetRailNearestValueMm
+import com.android.shaftschematic.pdf.undercutLinerNearEndValueMm
 import com.android.shaftschematic.pdf.UndercutStripDrawRangeMm
 import com.android.shaftschematic.model.UndercutSetDatum
 import com.android.shaftschematic.pdf.undercutStripSetSide
@@ -1356,10 +1358,15 @@ fun UndercutWindowDetailOverlay(
                     val profileRowPx = with(density) { profileRowDp.toPx() }
                     val edgePadPx = with(density) { UNDERCUT_EDGE_PAD_DP.dp.toPx() }
                     val railsFromSet = undercutRecord.railStyle == UndercutRailStyle.FROM_SET
+                    // "Liner ends from S.E.T.": the liner's own span on a liner strip — the printed
+                    // strip's `linerEnds`; nothing on a bare-shaft strip.
+                    val railLinerEnds = (railStrip as? UndercutStrip.LinerStrip)
+                        ?.takeIf { undercutRecord.linerEndsFromSet }
+                        ?.let { UndercutLinerSpanMm(it.linerStartMm, it.linerEndMm) }
                     val (drawStartMm, drawEndMm) = remember(
                         railStrip, spec, undercutRecord.setDatum, spans, previewDrawStartMm, previewDrawEndMm,
                         oalMm, segs, canvasWidthPx, profileRowPx, edgePadPx, railTextPaint, railScale,
-                        arrowSizePt, unit, railsFromSet,
+                        arrowSizePt, unit, railsFromSet, railLinerEnds,
                     ) {
                         undercutDetailLeadDrawRange(
                             railStrip, spec, undercutRecord.setDatum, spans,
@@ -1372,6 +1379,7 @@ fun UndercutWindowDetailOverlay(
                             arrowSizePt = arrowSizePt,
                             unit = unit,
                             fromSet = railsFromSet,
+                            linerEnds = railLinerEnds,
                         ) { railTextPaint.measureDualLabel(it, false) }
                     }
                     val winLenMm = (drawEndMm - drawStartMm).coerceAtLeast(0.001f)
@@ -1408,6 +1416,7 @@ fun UndercutWindowDetailOverlay(
                             setLead = setLead,
                             showTotal = effectiveUndercutTotalRail(undercutRecord.showTotalRail, totalRailDefault),
                             fromSet = railsFromSet,
+                            linerEnds = railLinerEnds,
                         )
                     }
                     val rails = remember(railInputs) {
@@ -3807,6 +3816,8 @@ internal data class UndercutDetailRailInputs(
     val showTotal: Boolean = true,
     /** The job's "Dimensions" are From S.E.T. — the printed strip's `fromSet`. */
     val fromSet: Boolean = false,
+    /** "Liner ends from S.E.T." on a liner strip — the printed strip's `linerEnds`. */
+    val linerEnds: UndercutLinerSpanMm? = null,
 )
 
 /**
@@ -3864,6 +3875,11 @@ internal fun undercutDetailLeadDrawRange(
      * which stands where the lead would ([undercutSetRailNearestValueMm]) — the printed strip's rule.
      */
     fromSet: Boolean = false,
+    /**
+     * "Liner ends from S.E.T." on a liner strip: the lower liner-end rail's value lives in the same
+     * stock as the lead's, so the room is made for the wider of the two — the printed strip's rule.
+     */
+    linerEnds: UndercutLinerSpanMm? = null,
     labelWidthPx: (DualLabel) -> Float,
 ): UndercutStripDrawRangeMm {
     val unchanged = UndercutStripDrawRangeMm(previewStartMm, previewEndMm)
@@ -3872,11 +3888,16 @@ internal fun undercutDetailLeadDrawRange(
     val lead = undercutDetailSetLead(strip, spec, datum, spans, previewStartMm, previewEndMm)
     val leadValue = undercutSetLeadValueMm(strip.chainStartMm, strip.chainEndMm, lead.side, lead.setMm)
         ?: return unchanged
-    val value = if (!fromSet) leadValue
-    else undercutSetRailNearestValueMm(spans, lead.side, lead.setMm) ?: leadValue
-    val room = undercutSetLeadRoomPt(
-        labelWidthPx(formatLenDimDualLabel(value.toDouble(), unit, false)), arrowSizePt, scale,
-    )
+    val values = when {
+        fromSet -> listOf(undercutSetRailNearestValueMm(spans, lead.side, lead.setMm) ?: leadValue)
+        linerEnds != null -> listOfNotNull(leadValue, undercutLinerNearEndValueMm(linerEnds, lead.side, lead.setMm))
+        else -> listOf(leadValue)
+    }
+    val room = values.maxOf { value ->
+        undercutSetLeadRoomPt(
+            labelWidthPx(formatLenDimDualLabel(value.toDouble(), unit, false)), arrowSizePt, scale,
+        )
+    }
     return undercutWidenForSetLead(
         previewStartMm, previewEndMm, strip.chainStartMm, strip.chainEndMm, lead.side, room,
         otherMinPadPt = room,
@@ -3928,6 +3949,7 @@ internal fun planUndercutDetailXMap(
         setLead = inputs.setLead,
         showTotal = inputs.showTotal,
         fromSet = inputs.fromSet,
+        linerEnds = inputs.linerEnds,
     )
 }
 
@@ -3948,6 +3970,7 @@ internal fun planUndercutDetailRails(
         setLead = inputs.setLead,
         showTotal = inputs.showTotal,
         fromSet = inputs.fromSet,
+        linerEnds = inputs.linerEnds,
     ).withFallbacksLifted()
 }
 
@@ -3980,7 +4003,8 @@ internal fun undercutDetailRailBand(
     val totalY: Float
     val chainY: Float
     if (rails.totalSpan != null) {
-        totalY = topPad + UNDERCUT_TOTAL_RAIL_ABOVE_PT * scale
+        // "Liner ends from S.E.T." tiers stand above the total's band, one tier pitch each.
+        totalY = topPad + rails.rows.setRows * setTierPitchPx + UNDERCUT_TOTAL_RAIL_ABOVE_PT * scale
         chainY = totalY + (UNDERCUT_TOTAL_RAIL_BAND_PT - UNDERCUT_TOTAL_RAIL_ABOVE_PT) * scale +
             rails.rows.aboveRows * rowStepPx
     } else {
