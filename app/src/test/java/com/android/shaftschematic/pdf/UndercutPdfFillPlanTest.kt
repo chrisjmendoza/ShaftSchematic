@@ -20,14 +20,16 @@ import org.junit.Test
 class UndercutPdfFillPlanTest {
 
     @Test
-    fun `shipped prefs shade the strip liner and the section core, kinds follow their prefs`() {
+    fun `shipped prefs shade only the cut sections, by depth`() {
         val shipped = PdfPrefs()
         val plan = undercutPdfFillPlan(shipped)
 
         assertEquals("bodies follow the shipped body default", shipped.shadedBodies, plan.body)
         assertEquals("tapers follow the shipped taper default", shipped.shadedTapers, plan.taper)
-        assertEquals("liners follow the shipped liner default", shipped.shadedLiners, plan.liner)
-        assertTrue("a detail strip always shades its liner", plan.stripLiner)
+        // Shipped with depth shading on: the liner stays white, only the cut sections shade.
+        assertFalse("depth shading leaves the liner white", plan.liner)
+        assertFalse("depth shading leaves the strip liner white", plan.stripLiner)
+        assertTrue("the cut sections shade by depth", plan.sectionCoreByDepth)
         assertTrue("the section core always takes its light fill", plan.sectionCore)
     }
 
@@ -60,7 +62,15 @@ class UndercutPdfFillPlanTest {
 
     @Test
     fun `the strip liner shades even with the liner preference off`() {
-        assertTrue(undercutPdfFillPlan(PdfPrefs(shadedLiners = false)).stripLiner)
+        assertTrue(undercutPdfFillPlan(PdfPrefs(shadedLiners = false, undercutDepthShade = false)).stripLiner)
+    }
+
+    @Test
+    fun `depth shading leaves every liner white whatever the liner preference says`() {
+        val plan = undercutPdfFillPlan(PdfPrefs(shadedLiners = true, undercutDepthShade = true))
+        assertFalse(plan.liner)
+        assertFalse(plan.stripLiner)
+        assertTrue(plan.sectionCore)
     }
 
     @Test

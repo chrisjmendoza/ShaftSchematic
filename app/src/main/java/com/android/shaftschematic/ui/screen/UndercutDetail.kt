@@ -1185,7 +1185,8 @@ fun UndercutWindowDetailOverlay(
     // the historical fixed grey at the PDF shade fill's weight (argb 40), keeping the
     // on-screen strip and the printed strip alike: grey liner, white cut sections (on-device
     // request). Line art empties the fill entirely.
-    val linerFillColor = style.linerFill()
+    // Under depth shading the liner stays white and only the cut sections shade (on-device request).
+    val linerFillColor = if (depthShade) Color.Transparent else style.linerFill()
     val selectColor = SheetInk.Selection
     val errorColor = MaterialTheme.colorScheme.error
     val textColorArgb = outlineColor.toArgb()

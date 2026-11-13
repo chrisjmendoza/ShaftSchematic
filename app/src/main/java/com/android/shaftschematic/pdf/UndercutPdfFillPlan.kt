@@ -14,7 +14,9 @@ import com.android.shaftschematic.settings.PdfPrefs
  * - [sectionCore] — the undercut section's core between the floor lines, refilled one step
  *   lighter than the liner after the void erases it.
  * - [sectionCoreByDepth] — whether that core's tone follows the cut's depth instead
- *   (PdfPrefs.undercutDepthShade: shallow light, deep dark — undercutDepthShadeAlpha).
+ *   (`PdfPrefs.undercutDepthShade`: shallow light, deep dark — `undercutDepthShadeAlpha`).
+ *   Under it the liner — strip and whole-shaft alike — stays white, so the only grey on the
+ *   liner is the cuts'.
  *
  * Nothing here is a paint or a colour: the composer owns the ink, this owns the decision.
  */
@@ -52,8 +54,10 @@ internal fun undercutPdfFillPlan(prefs: PdfPrefs): UndercutPdfFillPlan =
         UndercutPdfFillPlan(
             body = prefs.shadedBodies,
             taper = prefs.shadedTapers,
-            liner = prefs.shadedLiners,
-            stripLiner = true,
+            // Under depth shading the liner stays WHITE and only the cut sections shade
+            // (on-device request: "any uncut liner to be white, only undercuts shaded in").
+            liner = prefs.shadedLiners && !prefs.undercutDepthShade,
+            stripLiner = !prefs.undercutDepthShade,
             sectionCore = true,
             sectionCoreByDepth = prefs.undercutDepthShade,
         )

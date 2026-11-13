@@ -615,8 +615,11 @@ data class UndercutRecord(
   the ONE ramp `undercutDepthShadeAlpha` maps it linearly from `UNDERCUT_DEPTH_SHADE_MIN_ALPHA`
   (5%) to `UNDERCUT_DEPTH_SHADE_MAX_ALPHA` (22%) — linear in true depth, never the exaggerated
   drawn depth, so two cuts' shades compare as their real depths do. An unmeasured cut (Ø 0) takes
-  the lightest. The deep end runs DARKER than the strip liner (≈ 16%) by design: the "core one step
-  lighter than the liner" rule below is the flat tone's, and holds only with this pref off. The
+  the lightest. **Under it every uncut liner prints WHITE** — the strip liner and the whole-shaft
+  fallback's liner, PDF and both canvases (on-device request after the first render: "any uncut
+  liner to be white, only undercuts shaded in"), so the cut sections are the only grey on a liner;
+  the "always shades its liner" and "core one step lighter than the liner" rules below are the
+  flat tone's, and hold only with this pref off. Bodies and tapers keep their own shade prefs. The
   PDF decides it in `undercutPdfFillPlan` (`sectionCoreByDepth`, false under line art); the
   canvases pass `UndercutStyle.sectionDepthFill` (the same ramp × the intensity multiplier, in the
   chosen shade colour) as `drawUndercutNotches`' `sectionDepthFill`. Off is byte-identical to the

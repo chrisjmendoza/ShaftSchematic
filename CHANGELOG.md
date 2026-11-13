@@ -15,7 +15,9 @@ cuts light, deep cuts dark, "like the stainless is lighter and the closer you ge
 darker". Each undercut section's core now takes a grey from its cut's TRUE depth below the outer
 surface, as a share of the deepest measured cut on the sheet: 5% for the shallowest up to 22% for
 the deepest, linear, and a cut inside a cut counts its depth from the outer surface, so a
-staircase darkens step by step. An unmeasured cut takes the lightest. The printed undercut sheet,
+staircase darkens step by step. An unmeasured cut takes the lightest. With it on, every uncut
+liner prints white (on-device request after the first render), so the cuts are the only grey on
+a liner. The printed undercut sheet,
 the Undercut tab canvas and the detail canvas all shade from the one ramp. New app-wide look
 pref `PdfPrefs.undercutDepthShade` (default ON, captured by drawing profiles): "Undercut drawing:
 shade cuts by depth" in Settings → PDF Export, in the undercut preview's PDF options Shading

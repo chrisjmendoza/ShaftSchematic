@@ -741,7 +741,8 @@ fun UndercutRoute(
     // reads as the outer surface. Line art empties every fill.
     val outlineArgb    = Color.Black.toArgb()
     val bodyFillArgb   = undercutStyle.bodyFill().toArgb()
-    val linerFillArgb  = undercutStyle.linerFill().toArgb()
+    // Under depth shading the liner stays white and only the cut sections shade (on-device request).
+    val linerFillArgb  = (if (pdfUndercutDepthShade) Color.Transparent else undercutStyle.linerFill()).toArgb()
     val hatchArgb      = Color.Black.copy(alpha = 0.55f).toArgb()
     val outlineColor   = Color.Black
     // The liner outline's fixed ink: sheet black, dimmed — a retrace, never a component edge.
