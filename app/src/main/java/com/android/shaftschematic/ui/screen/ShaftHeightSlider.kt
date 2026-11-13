@@ -601,13 +601,42 @@ internal fun SheetTextSizeChips(
         )
         Text(
             "Footer: the job and spec block at the foot of the sheet. Dimension: lengths on " +
-                "the rails and Ø values. Schematic, consolidated and Final sheets. A sheet " +
-                "without room prints its footer at the largest size that fits.",
+                "the rails and Ø values. Schematic, consolidated and Final sheets; the " +
+                "undercut sheet follows Dimension text size too. A sheet without room prints " +
+                "at the largest size that fits.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
+
+/**
+ * "Dimension text size" alone — the undercut sheet's options, which print no shared footer. The
+ * SAME `PdfPrefs.dimTextScale` as [SheetTextSizeChips]' second row (one knob for every sheet's
+ * dimension values), so a tap here also sets the schematic's.
+ */
+@Composable
+internal fun DimTextSizeChips(dimTextScale: Float, onCommit: (Float) -> Unit) {
+    Column {
+        TextScaleChipRow(
+            title = "Dimension text size",
+            value = dimTextScale,
+            tagPrefix = "undercut_dim_text_scale",
+            onCommit = onCommit,
+        )
+        Text(
+            UNDERCUT_DIM_TEXT_SIZE_CAPTION,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** The caption under the undercut options' "Dimension text size". */
+internal const val UNDERCUT_DIM_TEXT_SIZE_CAPTION =
+    "The size of the lengths, Ø values and section titles on this sheet. The same setting as " +
+        "the schematic's Dimension text size. A crowded sheet prints at the largest size " +
+        "that still leaves each section a readable shaft."
 
 @Composable
 private fun TextScaleChipRow(
