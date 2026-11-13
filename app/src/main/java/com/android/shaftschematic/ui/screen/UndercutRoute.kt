@@ -62,6 +62,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -131,6 +132,7 @@ import com.android.shaftschematic.pdf.composeUndercutPdf
 import com.android.shaftschematic.pdf.resolveUndercutPageOrientation
 import com.android.shaftschematic.pdf.isUndercutStripPrinted
 import com.android.shaftschematic.pdf.undercutSheetOrientation
+import com.android.shaftschematic.pdf.undercutRecordForOnlySection
 import com.android.shaftschematic.pdf.undercutSheetStripCount
 import com.android.shaftschematic.pdf.formatDiaWithUnit
 import com.android.shaftschematic.pdf.formatLenWithUnit
@@ -291,6 +293,11 @@ fun UndercutRoute(
 
     val ctx = LocalContext.current
     var showPreview by rememberSaveable { mutableStateOf(false) }
+    // The open preview is one section's (opened from that section's page), not the job's sheet.
+    var previewSectionOnly by rememberSaveable { mutableStateOf(false) }
+    // The record an export picked from the preview writes: the previewed one, held across the
+    // file picker (the preview closes first). Null exports the job's sheet.
+    var pendingExportRecord by remember { mutableStateOf<UndercutRecord?>(null) }
     // The options panel over the tab body (the "Options" button under the overview canvas).
     var showTabOptions by rememberSaveable { mutableStateOf(false) }
     // Where the overview canvas ends, root px — the tab options panel's ceiling.
@@ -370,7 +377,7 @@ fun UndercutRoute(
      * cannot drift. Every value is snapshotted here on the UI thread — `onWrite` runs on a
      * binder thread.
      */
-    fun printUndercutDrawing() {
+    fun printUndercutDrawing(record: UndercutRecord = undercutRecord) {
         val jobName = buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.UNDERCUT, blankDraft, currentDocumentName)
             .removeSuffix(".pdf")
         val specSnapshot = spec
@@ -380,7 +387,7 @@ fun UndercutRoute(
         val prefsSnapshot = vm.currentPdfPrefs
         val resolvedSnapshot = resolvedComponents
         val thicknessSnapshot = lineThicknessScale
-        val recordSnapshot = undercutRecord
+        val recordSnapshot = record
         val blankSnapshot = blankDraft
         val displayUnitsSnapshot = vm.currentDisplayUnits()
         // The page the sheet's section count calls for — the same resolution the preview and
@@ -516,6 +523,16 @@ fun UndercutRoute(
         syntheticStrip != null -> syntheticStrip
         else -> null
     }
+    // The preview opened from a section's own page shows THAT section alone (on-device request);
+    // the tab's own Preview shows the job's sheet. Session state only: the record handed to the
+    // composer is a copy, the document's "Sections to print" is never written, and closing the
+    // preview returns to the job's sheet.
+    val sheetRecord = if (previewSectionOnly && activeStrip != null) {
+        undercutRecordForOnlySection(undercutRecord, activeStrip, linerSpans.map { it.id }, strips)
+    } else {
+        undercutRecord
+    }
+    val sheetRecordState = rememberUpdatedState(sheetRecord)
     // Once the real strip holds the confirmed cut, the synthetic window has done its job; from then
     // on the overlay follows the anchor like any free strip (deleting its last cut closes it).
     val syntheticSuperseded = bareShaftAddFromAft != null && anchoredStrip != null
@@ -602,7 +619,8 @@ fun UndercutRoute(
         if (uri != null) {
             // Hardened write: a composer throw yields a valid error page, never a
             // truncated file (util/PdfSafExport.kt — one implementation for every tab).
-            val orientation = undercutSheetOrientation(spec, resolvedComponents, undercutRecord, blankDraft)
+            val exportRecord = pendingExportRecord ?: undercutRecord
+            val orientation = undercutSheetOrientation(spec, resolvedComponents, exportRecord, blankDraft)
             val wrote = writeShaftPdfToUri(ctx, uri, orientation) { page ->
                 composeUndercutPdf(
                     page = page, spec = spec,
@@ -612,13 +630,14 @@ fun UndercutRoute(
                     displayUnits = vm.currentDisplayUnits(),
                     pdfPrefs = vm.currentPdfPrefs,
                     resolvedComponents = resolvedComponents,
-                    undercutRecord = undercutRecord,
+                    undercutRecord = exportRecord,
                     lineThicknessScale = lineThicknessScale,
                     blankValues = blankDraft,
                 )
             }
             if (wrote && openAfterExport) openUndercutPdf(ctx, uri)
         }
+        pendingExportRecord = null
     }
 
     // The render loop. One [UndercutRenderInputs] value carries EVERYTHING the composed sheet
@@ -646,8 +665,9 @@ fun UndercutRoute(
                 undercutTotalRail = pdfUndercutTotalRail,
                 // A live "Compress long sections" drag rides in on a copy; the stored record is
                 // written once, on release.
-                undercutRecord = tuning.undercutLongCompress
-                    ?.let { undercutRecord.copy(longCompressFrac = it) } ?: undercutRecord,
+                undercutRecord = sheetRecordState.value.let { rec ->
+                    tuning.undercutLongCompress?.let { rec.copy(longCompressFrac = it) } ?: rec
+                },
                 blankValues = blankDraft,
                 fractionStyle = pdfFractionStyle,
                 outputFont = pdfOutputFont,
@@ -1468,8 +1488,8 @@ fun UndercutRoute(
             onUndo = vm::undoEdit,
             onRedo = vm::redoEdit,
             arrowSizePt = pdfArrowSizePt,
-            // The tab's own preview, opened over this page once its cards are settled.
-            onPreview = { showPreview = true },
+            // The preview of THIS section alone, opened over this page once its cards are settled.
+            onPreview = { previewSectionOnly = true; showPreview = true },
             previewEnabled = gate.enabled,
             // The undercut preview's options, in the same panel, over this page. Blank draft is
             // the tab's own state either way, so the two can never disagree.
@@ -1489,24 +1509,26 @@ fun UndercutRoute(
     // Its Back handler is composed only while it is open, so it registers after the detail
     // overlay's and wins: Back closes the preview back to the detail page.
     if (showPreview) {
-        BackHandler { showPreview = false }
+        fun closePreview() { showPreview = false; previewSectionOnly = false }
+        BackHandler { closePreview() }
         PdfPreviewOverlay(
             bitmap = previewBitmap,
             loading = previewLoading,
             title = "Undercut Drawing Preview",
-            onClose = { showPreview = false },
+            onClose = { closePreview() },
             onExport = {
                 guardMissingDia(export = true) {
-                    showPreview = false
+                    pendingExportRecord = sheetRecord
+                    closePreview()
                     launcher.launchPicker(
                         buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.UNDERCUT, blankDraft, currentDocumentName),
                         what = "undercut export",
                     )
                 }
             },
-            // The tab body's Print action, unchanged — one function behind both, behind the same
-            // missing-Ø question.
-            onPrint = { guardMissingDia(export = false) { printUndercutDrawing() } },
+            // The tab body's Print action — one function behind both, behind the same missing-Ø
+            // question — printing the sheet this preview shows.
+            onPrint = { guardMissingDia(export = false) { printUndercutDrawing(sheetRecord) } },
             // Every section left off: the page previews its note, but there is nothing to print.
             actionsEnabled = !noSectionSelected,
             optionsSheet = {

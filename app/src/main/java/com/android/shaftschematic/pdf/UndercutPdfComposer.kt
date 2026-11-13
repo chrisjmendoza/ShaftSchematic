@@ -339,6 +339,8 @@ fun composeUndercutPdf(
         // A portrait page is 540 pt across, where an ordinary job line overflows: it sets smaller
         // before it loses the date and side. Landscape keeps its line as it always printed.
         minFitTextSizePt = if (portrait) UC_HEADER_MIN_FIT_TEXT_PT else 0f,
+        // The shaft's side stands on the title line in bold capitals (on-device request).
+        boldSideOnTitle = true,
     )
 
     // Every section left off ("Sections to print"): header, one centred note, the notes row. Never

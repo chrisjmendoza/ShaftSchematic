@@ -1815,6 +1815,31 @@ fun UndercutAnchorSide.toLinerAnchor(): LinerAnchor =
     if (this == UndercutAnchorSide.AFT_SET) LinerAnchor.AFT_SET else LinerAnchor.FWD_SET
 
 /**
+ * [record] as the sheet of ONE section: every other liner strip and every other bare-shaft
+ * section left off through the "Sections to print" exclusion lists, [only] itself put back on
+ * even where the job leaves it off. For the preview opened from a section's own page (on-device
+ * request: show just the section being worked on) — a copy handed to the composer, NEVER written
+ * to the document. [allLinerIds] are the drawable liners and [strips] the tab's strips, which
+ * name what there is to leave off. A section with no cuts has nothing to show alone, so the
+ * record comes back unchanged.
+ */
+fun undercutRecordForOnlySection(
+    record: UndercutRecord,
+    only: UndercutStrip,
+    allLinerIds: List<String>,
+    strips: List<UndercutStrip>,
+): UndercutRecord {
+    if (only.undercutIds.isEmpty()) return record
+    val keepLiner = (only as? UndercutStrip.LinerStrip)?.linerId
+    val keepCuts = if (only is UndercutStrip.FreeStrip) only.undercutIds.toSet() else emptySet()
+    val freeCuts = strips.filterIsInstance<UndercutStrip.FreeStrip>().flatMap { it.undercutIds }
+    return record.copy(
+        excludedLinerIds = (record.excludedLinerIds + allLinerIds).distinct().filter { it != keepLiner },
+        excludedFreeCutIds = (record.excludedFreeCutIds + freeCuts).distinct().filter { it !in keepCuts },
+    )
+}
+
+/**
  * Whether [strip] prints on this job's sheet ("Sections to print"): a liner strip unless its liner
  * id is in [UndercutRecord.excludedLinerIds] (its started strip on a blank draft included); a
  * bare-shaft strip unless EVERY one of its member cuts is in [UndercutRecord.excludedFreeCutIds] —

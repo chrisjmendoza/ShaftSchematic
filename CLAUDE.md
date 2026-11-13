@@ -785,7 +785,11 @@ side comes from ONE `undercutStripSetSide` (per-job `UndercutRecord.setDatum`) s
 strip title, because a title and a lead resolved separately could name different S.E.T.s. Which
 sections print is ONE filter, `isUndercutStripPrinted`, inside `undercutSheetStrips`, so page
 shape, layout and every caption count the same printed strips; every section off prints a note
-page and never falls back to the whole-shaft profile.
+page and never falls back to the whole-shaft profile. The preview opened from a section's OWN page
+shows that section alone (on-device request) by handing the composer a COPY of the record with every
+other section excluded (`undercutRecordForOnlySection`, session-only `previewSectionOnly`; Print and
+Export from that preview follow it) — never a write to the job's "Sections to print", and the tab's
+own Preview is always the job's sheet.
 
 ### The Final schematic is a second geometry, never a view of the original
 `final_spec` (`ShaftDocV1.finalSpec: ShaftSpec?`, sibling of `spec` in the envelope — `null` =

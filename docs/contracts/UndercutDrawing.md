@@ -2252,6 +2252,26 @@ relative to the S.E.T.; once a cut runs over a liner edge the drawing no longer 
 - **Off** — byte-identical to the sheet before the switch existed; From S.E.T. with the switch on
   prints byte-identically to From S.E.T. alone.
 
+### The section preview
+
+On-device request: the detail page's Preview button previews THAT section alone; the Undercut
+tab's Preview is the job's sheet. `UndercutRoute` holds session-only `previewSectionOnly` (set by
+the detail page's `onPreview`, cleared whenever the preview closes) and derives `sheetRecord` =
+`undercutRecordForOnlySection(record, activeStrip, liner ids, strips)` — a copy whose
+`excludedLinerIds` / `excludedFreeCutIds` leave every other section off and put the open one back
+on even where the job excludes it. The render loop reads it through `rememberUpdatedState` (a
+plain val captured by the `snapshotFlow` block would go stale), Print takes it as a parameter and
+Export holds it across the file picker (`pendingExportRecord`). The document's own exclusion
+lists are never written. A section with no cuts returns the record unchanged.
+
+### Header: the shaft side
+
+On-device request: `drawSheetHeader(boldSideOnTitle = true)` — the undercut sheet only. With a
+side in the project information (`ShaftPosition.printableLabelOrNull`), the title line is the
+title, an em dash and the side in BOLD capitals (`UNDERCUT RECORD — PORT`), centred as one line,
+and the job line above omits its plain side. No side, or a blank draft (write-in header): the
+header is unchanged.
+
 ### Crowded sections: the detail canvas's axial map
 
 On-device report: a section recorded as many short cuts (9/16" to 1 1/2" at each end of a

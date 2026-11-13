@@ -8,6 +8,24 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-12
 
+### feat(undercut): the preview opened from a section's page shows that section alone
+
+On-device request. The Preview button on a section's own page (where its cuts are entered) now
+previews just that liner or bare-shaft section; the Undercut tab's Preview shows the job's sheet
+as before, and closing the section preview returns to that default. Print and Export from the
+section preview produce the sheet it shows. Session state only (`previewSectionOnly`,
+`ui/screen/UndercutRoute.kt`): the composer is handed a copy of the record with every other
+section left off (`undercutRecordForOnlySection`, `pdf/UndercutStripLayout.kt`) — the job's
+"Sections to print" is never written. A section with no cuts yet previews the job's sheet.
+
+### feat(undercut): the sheet's title line carries the shaft side, bold
+
+On-device request. When the job's project information has a side (Port, Starboard or Center), the
+undercut sheet's title line reads `UNDERCUT RECORD — PORT`, the side in bold capitals, and the
+plain side at the end of the job line above it is dropped so it prints once
+(`drawSheetHeader(boldSideOnTitle = true)`, `pdf/SheetHeader.kt`). A job with no side, a blank
+draft and every other sheet print as before.
+
 ### fix(undercut): From S.E.T. puts every cut length on one chain
 
 On-device report: a 1 1/8" cut holding a 9/16" cut printed the 1 1/8" on the chain and, on a row
