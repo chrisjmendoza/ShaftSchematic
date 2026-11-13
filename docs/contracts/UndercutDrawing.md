@@ -608,13 +608,20 @@ data class UndercutRecord(
   restyles as it is flipped; on-device request: contrast
   between the cuts to show depth and separate the sections — "the stainless is lighter and the
   closer you get to steel is darker"). On, each section core takes its own tone instead of the
-  one flat half-liner shade: `UndercutNotch.depthFrac` is the cut's TRUE depth below the shaft's
-  OUTER surface (a nested cut counted from its top-level ancestor's surface, so a staircase darkens
-  step by step) over the deepest measured cut on the WHOLE sheet (`undercutDepthShadeFrac`, built
+  one flat half-liner shade: `UndercutNotch.depthFrac` is the cut's TRUE depth below its SECTION's
+  reference surface — a section is a run of cuts that touch or overlap (nested cuts included), and
+  its reference is the HIGHEST outer surface any of its cuts spans (`undercutSectionReferenceDia`,
+  a liner's OD wherever the run sits on a liner), so within a section a smaller floor Ø always
+  shades darker and a staircase darkens step by step (on-device report: measuring each cut from
+  the surface under it alone shaded a 5.996" cut that ran off the liner end onto the smaller body
+  LIGHTER than the 6.260" cut beside it) — placed between the SHALLOWEST (0) and DEEPEST (1)
+  measured depth on the WHOLE sheet (stretched end to end for contrast: depths from zero bunched a
+  run of 0.46"–0.75" cuts into one grey; a sheet with one depth sits mid-ramp,
+  `UNDERCUT_DEPTH_SHADE_SINGLE_FRAC`) (`undercutDepthShadeFrac`, built
   inside `buildUndercutNotches` so a strip's slice and both canvases read the sheet's numbers), and
   the ONE ramp `undercutDepthShadeAlpha` maps it linearly from `UNDERCUT_DEPTH_SHADE_MIN_ALPHA`
-  (5%) to `UNDERCUT_DEPTH_SHADE_MAX_ALPHA` (22%) — linear in true depth, never the exaggerated
-  drawn depth, so two cuts' shades compare as their real depths do. An unmeasured cut (Ø 0) takes
+  (5%) to `UNDERCUT_DEPTH_SHADE_MAX_ALPHA` (22%) — from true depth, never the exaggerated drawn
+  depth, so deeper always shades darker. An unmeasured cut (Ø 0) takes
   the lightest. **Under it every uncut liner prints WHITE** — the strip liner and the whole-shaft
   fallback's liner, PDF and both canvases (on-device request after the first render: "any uncut
   liner to be white, only undercuts shaded in"), so the cut sections are the only grey on a liner;

@@ -678,8 +678,9 @@ never closed by a lid — plus a full-height **section face** at each end and th
 so each cut is its own reduced-Ø rectangle **step in the silhouette**, cut against the
 **local outer-surface envelope**; the section's core fills one step **lighter** than the
 liner shade — `UNDERCUT_SECTION_FILL_ALPHA`, half the liner's alpha — UNLESS
-`PdfPrefs.undercutDepthShade` (default ON) shades each core by its cut's true depth over the sheet's
-deepest, outer-surface-relative, through the ONE ramp `undercutDepthShadeAlpha` 5%→22%, and every
+`PdfPrefs.undercutDepthShade` (default ON) shades each core by its cut's true depth, stretched from
+the sheet's shallowest to its deepest, each run of touching/nested cuts measured from the highest surface it spans so a smaller
+floor Ø always shades darker within it, through the ONE ramp `undercutDepthShadeAlpha` 5%→22%, and every
 uncut liner then prints WHITE so the cuts are the only grey on it — on-device request) must render
 **identically** in all draw sites — `UndercutRoute`/`UndercutWindowDetailOverlay` (canvas)
 and `UndercutPdfComposer` (PDF) — from the shared pure pipeline `geom/SurfaceProfileMath.kt`

@@ -24,11 +24,11 @@ class UndercutDepthShadeTest {
         Undercut(id = id, startFromAftMm = startMm, lengthMm = lengthMm, diaMm = diaMm)
 
     @Test
-    fun `depth fraction is true depth over the sheet's deepest cut`() {
+    fun `depth fraction runs from the sheet's shallowest cut to its deepest`() {
         val shallow = cut("s", 100f, 50f, diaMm = 196f) // 4 mm off Ø
         val deep = cut("d", 300f, 50f, diaMm = 190f)    // 10 mm off Ø
         val built = buildUndercutNotches(listOf(shallow, deep), segs, oalMm, 0.25f).associateBy { it.id }
-        assertEquals(0.4f, built.getValue("s").depthFrac, eps)
+        assertEquals("the shallowest cut is the light end", 0f, built.getValue("s").depthFrac, eps)
         assertEquals(1f, built.getValue("d").depthFrac, eps)
     }
 
@@ -37,12 +37,55 @@ class UndercutDepthShadeTest {
         val parent = cut("p", 200f, 200f, diaMm = 194f)
         val child = cut("c", 250f, 50f, diaMm = 188f)
         val built = buildUndercutNotches(listOf(parent, child), segs, oalMm, 0.25f).associateBy { it.id }
-        assertEquals(0.5f, built.getValue("p").depthFrac, eps)
+        assertEquals(0f, built.getValue("p").depthFrac, eps)
         assertEquals(1f, built.getValue("c").depthFrac, eps)
         assertTrue(
             undercutDepthShadeAlpha(built.getValue("c").depthFrac) >
                 undercutDepthShadeAlpha(built.getValue("p").depthFrac),
         )
+    }
+
+    @Test
+    fun `a run off a liner end onto the body shades by floor dia, measured from the liner OD`() {
+        // On-device report: a 6.260" cut on a liner shaded DARKER than the 6.045" and 5.996" cuts
+        // butted to it, because those two ran past the liner end and were measured from the smaller
+        // body. One butted run is one section: every cut is measured from the liner OD.
+        val inch = 25.4f
+        val bodyDia = 6.375f * inch
+        val linerDia = 6.75f * inch
+        val linerEnd = 912f
+        val segs = listOf(
+            SurfaceSeg(0f, oalMm, bodyDia, bodyDia),
+            SurfaceSeg(100f, linerEnd, linerDia, linerDia),
+        )
+        val cuts = listOf(
+            cut("long", 100f, 811f, 6.260f * inch),
+            cut("a", 911f, 14f, 6.045f * inch),  // straddles the liner end
+            cut("b", 925f, 14f, 5.996f * inch),  // on the body
+            cut("c", 939f, 38f, 6.187f * inch),
+            cut("d", 977f, 16f, 6.291f * inch),
+        )
+        val frac = buildUndercutNotches(cuts, segs, oalMm, 0.25f).associate { it.id to it.depthFrac }
+        val byFloor = cuts.sortedBy { it.diaMm }.map { it.id }
+        val byShade = frac.entries.sortedByDescending { it.value }.map { it.key }
+        assertEquals("deeper (smaller floor Ø) shades darker", byFloor, byShade)
+        assertEquals(1f, frac.getValue("b"), eps)
+    }
+
+    @Test
+    fun `cuts that do not touch are separate sections`() {
+        val inch = 25.4f
+        val segs = listOf(
+            SurfaceSeg(0f, oalMm, 6f * inch, 6f * inch),
+            SurfaceSeg(100f, 400f, 7f * inch, 7f * inch),
+        )
+        // One on the liner, one on bare shaft far away: each measured from its own surface.
+        val onLiner = cut("l", 200f, 50f, 6.9f * inch)
+        val onBody = cut("s", 1000f, 50f, 5.9f * inch)
+        val frac = buildUndercutNotches(listOf(onLiner, onBody), segs, oalMm, 0.25f).associate { it.id to it.depthFrac }
+        // Equal depths from their own surfaces: one depth on the sheet, the middle of the ramp.
+        assertEquals(UNDERCUT_DEPTH_SHADE_SINGLE_FRAC, frac.getValue("l"), eps)
+        assertEquals(UNDERCUT_DEPTH_SHADE_SINGLE_FRAC, frac.getValue("s"), eps)
     }
 
     @Test
@@ -52,7 +95,7 @@ class UndercutDepthShadeTest {
         val stripOnly = buildUndercutNotches(
             listOf(shallow), segs, oalMm, 0.25f, sheetUndercuts = listOf(shallow, deep),
         ).single()
-        assertEquals(0.4f, stripOnly.depthFrac, eps)
+        assertEquals("the sheet's shallowest, not the strip's only cut", 0f, stripOnly.depthFrac, eps)
     }
 
     @Test

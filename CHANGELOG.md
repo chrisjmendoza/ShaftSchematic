@@ -8,6 +8,16 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-13
 
+### fix(undercut): depth shading measures a run of cuts from one surface
+
+On-device report: a 6.260" cut on a liner shaded darker than the 6.045" and 5.996" cuts butted to
+it. Those two ran past the liner end onto the smaller body, and each cut's depth was measured from
+the surface under it alone, so they read shallower. A run of cuts that touch or overlap is now one
+section, measured from the highest surface it spans (the liner OD on a liner), so within a section
+a smaller floor Ø always shades darker. The shades now also stretch from the sheet's shallowest
+measured cut (lightest) to its deepest (darkest) rather than from zero depth, which had bunched a
+run of 0.46"–0.75" cuts into nearly one grey; a sheet with a single depth sits mid-ramp.
+
 ### feat(undercut): shade cuts by depth
 
 On-device request: contrast between the cuts to show depth and separate the sections — shallow
