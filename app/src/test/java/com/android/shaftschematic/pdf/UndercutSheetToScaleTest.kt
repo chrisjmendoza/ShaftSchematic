@@ -68,6 +68,28 @@ class UndercutSheetToScaleTest {
     }
 
     @Test
+    fun `a section's own preview record leaves every other section off, and writes nothing else`() {
+        // The job's liner cuts plus a cut on the bare shaft at mid-length: two sections.
+        val record = doc.undercutRecord.copy(
+            undercuts = doc.undercutRecord.undercuts + com.android.shaftschematic.model.Undercut(
+                id = "bare-cut", startFromAftMm = doc.spec.overallLengthMm / 2f, lengthMm = 50f, diaMm = 140f,
+            ),
+        )
+        val resolved = resolveComponents(doc.spec)
+        val all = undercutSheetStrips(doc.spec, resolved, record, blankValues = false).strips
+        assertTrue("two sections: ${all.size}", all.size >= 2)
+        val linerIds = all.filterIsInstance<com.android.shaftschematic.geom.UndercutStrip.LinerStrip>().map { it.linerId }
+        all.forEach { only ->
+            val one = undercutRecordForOnlySection(record, only, linerIds, all)
+            assertEquals(record.undercuts, one.undercuts)
+            assertEquals(listOf(only.undercutIds), all.filter { isUndercutStripPrinted(it, one) }.map { it.undercutIds })
+            // Even a section the job leaves off previews alone from its own page.
+            val off = record.copy(excludedLinerIds = linerIds)
+            assertEquals(1, all.count { isUndercutStripPrinted(it, undercutRecordForOnlySection(off, only, linerIds, all)) })
+        }
+    }
+
+    @Test
     fun `every strip of the crowded job prints to scale`() {
         val record = doc.undercutRecord
         val sh = undercutSheetStrips(doc.spec, resolveComponents(doc.spec), record, blankValues = false)

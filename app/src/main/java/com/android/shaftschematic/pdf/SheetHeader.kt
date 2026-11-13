@@ -48,6 +48,27 @@ internal fun jobInfoHeaderLine(project: ProjectInfo, date: String): String {
 }
 
 /**
+ * The printed header's job line and, when [boldSideOnTitle] is on and the job has a side, that
+ * side in capitals for the title line — the job line then leaves its own plain side out, so the
+ * side prints once. Otherwise the ordinary [jobInfoHeaderLine] and null.
+ */
+internal fun sheetHeaderJobLineAndBoldSide(
+    project: ProjectInfo,
+    date: String,
+    boldSideOnTitle: Boolean,
+): Pair<String, String?> {
+    val boldSide = if (boldSideOnTitle) project.side.printableLabelOrNull()?.uppercase() else null
+    val line = jobInfoHeaderLine(
+        if (boldSide != null) project.copy(side = com.android.shaftschematic.model.ShaftPosition.OTHER) else project,
+        date,
+    )
+    return line to boldSide
+}
+
+/** Between a sheet's title and its bold side label on the title line. */
+internal const val SHEET_HEADER_SIDE_SEPARATOR = "\u2014"
+
+/**
  * Job info on line 1, the document's [title] centred on line 2, and a hairline rule under
  * the block.
  *
@@ -77,6 +98,13 @@ internal fun drawSheetHeader(
     blankLineGapPt: Float,
     blankValues: Boolean,
     minFitTextSizePt: Float = 0f,
+    /**
+     * Print the shaft's side (PORT / STBD / CENTER, `ShaftPosition.printableLabelOrNull`) in BOLD
+     * capitals on the title line, after the title, instead of plain at the end of the job line
+     * (on-device request, the undercut sheet). Nothing changes when the job has no side, or on a
+     * blank draft, whose header is write-in. False (the default) prints the header as it always has.
+     */
+    boldSideOnTitle: Boolean = false,
 ) {
     val ts = text.textSize
 
@@ -97,7 +125,7 @@ internal fun drawSheetHeader(
         c.drawText(title, centeredX(title), line2Y, text)
     } else {
         val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-        val line1 = jobInfoHeaderLine(project, date)
+        val (line1, boldSide) = sheetHeaderJobLineAndBoldSide(project, date, boldSideOnTitle)
 
         val width = right - left
         val line1W = text.measureText(line1)
@@ -109,7 +137,17 @@ internal fun drawSheetHeader(
         val line1Fit = ellipsizeToWidth(line1, line1Paint, width)
         val line2Fit = ellipsizeToWidth(title, text, width)
         c.drawText(line1Fit, centeredX(line1Fit, line1Paint), top + ts, line1Paint)
-        c.drawText(line2Fit, centeredX(line2Fit), top + ts + ts * 1.4f, text)
+        val line2Y = top + ts + ts * 1.4f
+        if (boldSide == null) {
+            c.drawText(line2Fit, centeredX(line2Fit), line2Y, text)
+        } else {
+            // Title and side centred as one line: "UNDERCUT RECORD — PORT", the side in bold.
+            val bold = Paint(text).apply { isFakeBoldText = true }
+            val lead = "$line2Fit $SHEET_HEADER_SIDE_SEPARATOR "
+            val x = ((left + right - text.measureText(lead) - bold.measureText(boldSide)) * 0.5f).coerceAtLeast(left)
+            c.drawText(lead, x, line2Y, text)
+            c.drawText(boldSide, x + text.measureText(lead), line2Y, bold)
+        }
     }
 
     val ruleY = top + (if (blankValues) headerHeightBlankPt else headerHeightPt)
