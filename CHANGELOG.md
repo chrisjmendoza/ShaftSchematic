@@ -17,7 +17,10 @@ directly below "Dimensions" in the Undercut tab's Drawing settings and in the un
 options, adds two dimensions to every LINER strip: from the strip's S.E.T. (the one its title and
 lead already use) to the liner's near end — the figure the title states — and to its far end,
 nearest lower, stacked above everything else on the strip (above the total when there is one).
-Values and lines only, no label. They are the From-S.E.T. baseline rails (`setRails`: the same
+Each rail is captioned at its arrow end — **S.E.T. to liner start** and **S.E.T. to liner end**
+(on-device request: say what each one references) — just past the arrowhead on the rail's own
+height, or inboard above the line where that would run off the strip (`undercutRailCaptionSpot`,
+one rule for the sheet and the canvas). They are the From-S.E.T. baseline rails (`setRails`: the same
 planner, station rule, open half dimension off the strip edge, shared datum witness and draw
 routine); each liner-end witness rises from the shaft, so a liner edge buried under a cut is still
 marked, and the total's, chain's and nested rows' values knock it out where it crosses them. The

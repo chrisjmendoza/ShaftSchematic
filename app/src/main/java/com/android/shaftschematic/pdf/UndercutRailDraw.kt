@@ -363,6 +363,12 @@ internal fun drawUndercutStripRails(
      * sized with (`UndercutStripPlan.resolveRails`), never re-derived here. Unused on a chained strip.
      */
     setTierPitch: Float = undercutRailRowHeightPt(dimText, dualStacked, scale),
+    /**
+     * The x range a rail caption ([UndercutSetRailSpan.caption]) may occupy — the strip's cell on
+     * the page, the canvas's width on screen ([undercutRailCaptionSpot]).
+     */
+    captionMinX: Float = Float.NEGATIVE_INFINITY,
+    captionMaxX: Float = Float.POSITIVE_INFINITY,
 ) {
     val plan = rails.rows
     // From S.E.T.: every baseline rail's LINES first — its station witness rises from the shaft
@@ -445,6 +451,54 @@ internal fun drawUndercutStripRails(
             c, dim, dimText, rails, setLineYs, witnessBottomY, drawLabels, dualStacked, scale, haloColor,
             arrowSizePt, UndercutRailPhase.LABELS, setCrossXs,
         )
+        drawUndercutRailCaptions(c, dimText, rails, setLineYs, scale, haloColor, arrowSizePt, captionMinX, captionMaxX)
+    }
+}
+
+/**
+ * The captions of a strip's baseline rails ([UndercutSetRailSpan.caption] — the liner-end rails'
+ * "S.E.T. to liner start" / "S.E.T. to liner end"), each where [undercutRailCaptionSpot] puts it
+ * and on a sheet-white halo, so a witness line or a rail it stands across is knocked out behind
+ * it. Drawn last of the rail stack. A caption names the rail, it is not a measured value, so it
+ * prints on a blank draft too.
+ */
+private fun drawUndercutRailCaptions(
+    c: Canvas,
+    dimText: Paint,
+    rails: UndercutStripRails,
+    lineYs: List<Float>,
+    scale: Float,
+    haloColor: Int,
+    arrowSizePt: Float,
+    minX: Float,
+    maxX: Float,
+) {
+    val fm = dimText.fontMetrics
+    val halo = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL; color = haloColor }
+    val padX = UNDERCUT_RAIL_HALO_PAD_X_PT * scale
+    val padY = UNDERCUT_RAIL_HALO_PAD_Y_PT * scale
+    val text = Paint(dimText).apply { textAlign = Paint.Align.LEFT }
+    rails.setRails.forEachIndexed { i, l ->
+        val span = rails.setRailSpans.getOrNull(i) ?: return@forEachIndexed
+        val caption = span.caption ?: return@forEachIndexed
+        val setOnLeft = span.side == UndercutAnchorSide.AFT_SET
+        val spot = undercutRailCaptionSpot(
+            stationX = if (setOnLeft) l.x1Pt else l.x0Pt,
+            setOnLeft = setOnLeft,
+            lineY = lineYs[i],
+            textWidth = text.measureText(caption),
+            ascent = fm.ascent,
+            descent = fm.descent,
+            gap = UNDERCUT_RAIL_LABEL_GAP_PT * scale,
+            arrow = arrowSizePt * scale,
+            minX = minX,
+            maxX = maxX,
+        )
+        c.drawRect(
+            spot.leftX - padX, spot.baselineY + fm.ascent - padY,
+            spot.leftX + text.measureText(caption) + padX, spot.baselineY + fm.descent + padY, halo,
+        )
+        c.drawText(caption, spot.leftX, spot.baselineY, text)
     }
 }
 

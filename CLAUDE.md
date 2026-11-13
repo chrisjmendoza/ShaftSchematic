@@ -750,8 +750,11 @@ dropped only when it equals a liner-end value. The tiers stack ABOVE everything 
 band (`computeUndercutStripInnerLayout(topBandPt)`, `undercutSetRailLineYs(totalRailY)`) or over the
 chain's above rows — at the ONE tier pitch; their witnesses rise from the shaft and every value they
 cross (total, chain, nested) is knocked out by its halo. `fromSet` wins over it (plan identical to
-From S.E.T. alone); off is byte-identical. No label is printed on the rails. Do not build a second
-rail type for it. See `docs/contracts/UndercutDrawing.md` (Liner ends from the S.E.T.).
+From S.E.T. alone); off is byte-identical. Each rail carries a caption at its station end —
+"S.E.T. to liner start" (the liner end on the S.E.T.'s side) / "S.E.T. to liner end"
+(`UndercutSetRailSpan.caption`, on-device request) — placed by the ONE `undercutRailCaptionSpot`
+and drawn last on a halo by `drawUndercutStripRails`; the From-S.E.T. cut rails carry none. Do not
+build a second rail type for it. See `docs/contracts/UndercutDrawing.md` (Liner ends from the S.E.T.).
 
 The undercut sheet is the one portrait-capable document: its page shape is per-job
 `UndercutRecord.pageOrientation` (AUTO = portrait at 2+ printed sections), resolved ONCE by

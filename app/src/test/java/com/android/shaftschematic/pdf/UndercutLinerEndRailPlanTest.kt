@@ -92,6 +92,34 @@ class UndercutLinerEndRailPlanTest {
     }
 
     @Test
+    fun `each liner-end rail is captioned, the S-E-T-side end as the liner start`() {
+        assertEquals(
+            listOf(UNDERCUT_LINER_START_CAPTION, UNDERCUT_LINER_END_CAPTION),
+            plan(aftLead(), liner).setRailSpans.map { it.caption },
+        )
+        // From the FWD S.E.T. the liner's FWD end is the one it starts at.
+        val fwd = plan(fwdLead(), liner).setRailSpans
+        assertEquals(listOf(liner.endMm, liner.startMm), fwd.map { it.stationMm })
+        assertEquals(listOf(UNDERCUT_LINER_START_CAPTION, UNDERCUT_LINER_END_CAPTION), fwd.map { it.caption })
+        // The From-S.E.T. cut rails carry none.
+        plan(aftLead(), liner, fromSet = true).setRailSpans.forEach { assertEquals(null, it.caption) }
+    }
+
+    @Test
+    fun `a caption stands past the arrowhead, and inboard above the line where that runs off`() {
+        fun spot(stationX: Float, setOnLeft: Boolean) = undercutRailCaptionSpot(
+            stationX, setOnLeft, lineY = 100f, textWidth = 80f, ascent = -8f, descent = 2f,
+            gap = 5f, arrow = 3f, minX = 36f, maxX = 400f,
+        )
+        // Room past the station: on the rail's height, reading on from the head.
+        assertEquals(UndercutRailCaptionSpot(205f, 103f), spot(200f, setOnLeft = true))
+        assertEquals(UndercutRailCaptionSpot(115f, 103f), spot(200f, setOnLeft = false))
+        // No room: inboard of the head, above the line, inside the range.
+        assertEquals(UndercutRailCaptionSpot(272f, 93f), spot(360f, setOnLeft = true))
+        assertEquals(UndercutRailCaptionSpot(68f, 93f), spot(60f, setOnLeft = false))
+    }
+
+    @Test
     fun `the chain, nested rows and total are the toggle-off plan's and the overhanging lead stays`() {
         val off = plan(aftLead(), null)
         val on = plan(aftLead(), liner)

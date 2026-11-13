@@ -2196,6 +2196,15 @@ relative to the S.E.T.; once a cut runs over a liner edge the drawing no longer 
   nearest first, a station at or beyond the S.E.T. dropped, open off the drawn edge when the S.E.T.
   is off the strip, a shared datum witness when it is on it, values `formatLenDimDualLabel`. The
   side is `undercutStripSetSide`'s, so the near-end value is the strip title's figure.
+- **Captions** — on-device request: say what each rail references. `UndercutSetRailSpan.caption`
+  is `UNDERCUT_LINER_START_CAPTION` ("S.E.T. to liner start") on the rail to the liner end on
+  the S.E.T.'s side and `UNDERCUT_LINER_END_CAPTION` ("S.E.T. to liner end") on the other; a
+  From-S.E.T. cut rail has none. ONE placement, `undercutRailCaptionSpot`: just past the rail's
+  station end (`UNDERCUT_RAIL_LABEL_GAP_PT` off the witness), centred on the rail's own height;
+  where that would leave the strip's cell (the canvas's width) it goes inboard of the arrowhead,
+  above the line. `drawUndercutStripRails(captionMinX, captionMaxX)` draws captions last, each
+  on a sheet-white halo, in the rail's text paint. A caption is not a measured value: it prints
+  on a blank draft too.
 - **What stays** — the chain, the nested rows and the total, planned exactly as with the switch
   off. The S.E.T. lead stays too, EXCEPT where its value equals a liner-end rail's within
   `UNDERCUT_TOUCH_EPS_MM` (the chain starting at the liner's own edge): one figure is never printed

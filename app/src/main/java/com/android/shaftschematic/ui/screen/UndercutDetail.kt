@@ -1805,6 +1805,8 @@ fun UndercutWindowDetailOverlay(
                                     scale = railScale,
                                     arrowSizePt = arrowSizePt,
                                     setTierPitch = setTierPitchPx,
+                                    captionMinX = UNDERCUT_EDGE_PAD_DP.dp.toPx() / 2f,
+                                    captionMaxX = size.width - UNDERCUT_EDGE_PAD_DP.dp.toPx() / 2f,
                                 )
                             }
 
