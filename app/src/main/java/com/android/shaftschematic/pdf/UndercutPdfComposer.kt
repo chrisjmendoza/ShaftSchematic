@@ -391,6 +391,7 @@ fun composeUndercutPdf(
                     showTotal = showTotalRail,
                     fromSet = railsFromSet,
                     linerEnds = linerEndsOf(strip),
+                    longCompressFrac = undercutRecord.longCompressFrac,
                 )
             }
         } else {
@@ -481,6 +482,7 @@ fun composeUndercutPdf(
     }
 
     // ── Detail strips, one per liner / bare-shaft cluster ────────────────────
+    var notToScale = false
     onPage.forEachIndexed { i, strip ->
         val cell = stripCells[i]
         // A liner strip's title anchor is the LINER's own edge-to-SET datum — the same
@@ -534,6 +536,8 @@ fun composeUndercutPdf(
             showTotal = showTotalRail,
             fromSet = railsFromSet,
             linerEnds = linerEndsOf(strip),
+            longCompressFrac = undercutRecord.longCompressFrac,
+            onNotToScale = { notToScale = true },
             // Portrait strips are sized to what they draw, so the title gets its own air under
             // the Ø callouts; landscape keeps today's banding exactly.
             titleAirPt = if (portrait) UC_PORTRAIT_TITLE_AIR_PT else 0f,
@@ -547,6 +551,11 @@ fun composeUndercutPdf(
     // Notes only: the dye-pen PASS/FAIL checkboxes are a wear/inspection concern and have no
     // place on a machining record (`docs/archive/UndercutDrawing_PLAN.md` §11.4).
     drawUndercutNotesRow(c, text, contentLeft, contentRight, notesY)
+    // "Compress long sections" changed a strip's proportions: say so (on-device request).
+    if (notToScale) {
+        val note = Paint(text).apply { textAlign = Paint.Align.LEFT; textSize = (text.textSize - 1f).coerceAtLeast(7f) }
+        c.drawText(UNDERCUT_NOT_TO_SCALE_NOTE, contentLeft, contentBot - note.fontMetrics.descent, note)
+    }
 
     // Last, in the bottom margin strip: the opt-in "Units in …" note (landscape or portrait —
     // the helper reads the page's own size).
@@ -1001,8 +1010,8 @@ internal class UndercutStripPlan(
      */
     val titleAirPt: Float = 0f,
     /**
-     * The strip's axial map ([planUndercutStripXMap]): to scale, or piecewise when its values
-     * would crowd. Everything the strip draws along its length goes through [xAt].
+     * The strip's axial map — always to scale on a printed strip (the sheet keeps the work's true
+     * proportions). Everything the strip draws along its length goes through [xAt].
      */
     val xMap: UndercutStripXMap = UndercutStripXMap.linear(drawStartMm, drawEndMm, hLayout.linerLeftPt, hLayout.ptPerMm),
 ) {
@@ -1189,14 +1198,10 @@ internal fun planUndercutDetailStrip(
     fwdSetMm: Float = 0f,
     /** The job's resolved "Total length of cuts" choice — [planUndercutStripRails]' `showTotal`. */
     showTotal: Boolean = true,
-    /**
-     * Whether a strip whose values would stack is drawn through the fitted axial map
-     * ([planUndercutStripXMap]) — what every sheet does. False keeps the strip to scale whatever
-     * its values do: the layout the fallback rows are planned for when the floors cannot all fit.
-     */
-    fitCrowded: Boolean = true,
     /** The job's "Dimensions" are From S.E.T. — [planUndercutStripRails]' `fromSet`. */
     fromSet: Boolean = false,
+    /** `UndercutRecord.longCompressFrac` — 0 draws the strip to scale. */
+    longCompressFrac: Float = 0f,
     /**
      * The liner's own span when the job prints "Liner ends from S.E.T." on this LINER strip;
      * null otherwise — [planUndercutStripRails]' `linerEnds`.
@@ -1266,16 +1271,18 @@ internal fun planUndercutDetailStrip(
         )
     }
     val labelWidth = { s: DualLabel -> dimText.measureDualLabel(s, dualStacked) }
-    // The strip's axial map: to scale, unless its dimension values would stack on each other —
-    // then every short stretch draws wide enough to hold its own value (`planUndercutStripXMap`).
-    val xMap = if (!fitCrowded) {
+    // A printed strip is to scale unless the JOB asks otherwise: the sheet shows the work done at
+    // its true proportions (on-device ruling), so crowded values take fallback rows there. The
+    // job's "Compress long sections" shortens only the long stretches' excess, and the sheet then
+    // says "Not to scale". The detail canvas's own widening (`planUndercutDetailXMap`) never
+    // reaches the sheet.
+    val xMap = if (startedStrip || spans.isEmpty()) {
         UndercutStripXMap.linear(drawStartMm, drawEndMm, hLayout.linerLeftPt, hLayout.ptPerMm)
     } else {
-        planUndercutStripXMap(
+        compressLongUndercutStripXMap(
             drawStartMm, drawEndMm, hLayout.linerLeftPt, hLayout.ptPerMm,
-            strip.chainStartMm, strip.chainEndMm, spans, unit, dual, railSplitAtMm, startedStrip,
-            labelWidth = labelWidth, arrowSizePt = arrowSizePt, setLead = setLead, showTotal = showTotal,
-            fromSet = fromSet, linerEnds = linerEnds,
+            strip.chainStartMm, strip.chainEndMm,
+            spans.flatMap { listOf(it.startMm, it.endMm) }, longCompressFrac,
         )
     }
     fun xAtStrip(mm: Float): Float = xMap.xAt(mm)
@@ -1421,6 +1428,9 @@ private fun drawUndercutDetailStrip(
     fromSet: Boolean = false,
     /** "Liner ends from S.E.T." on this liner strip — [planUndercutStripRails]' `linerEnds`. */
     linerEnds: UndercutLinerSpanMm? = null,
+    /** `UndercutRecord.longCompressFrac`; [onNotToScale] fires when it changed this strip's map. */
+    longCompressFrac: Float = 0f,
+    onNotToScale: () -> Unit = {},
 ) {
     val plan = planUndercutDetailStrip(
         segs, strip, undercuts, clampedById, stripLeft, stripRight, unit, text, diaText,
@@ -1428,7 +1438,9 @@ private fun drawUndercutDetailStrip(
         leadSide = leadSide, aftSetMm = aftSetMm, fwdSetMm = fwdSetMm, showTotal = showTotal,
         fromSet = fromSet,
         linerEnds = linerEnds,
+        longCompressFrac = longCompressFrac,
     ) ?: return
+    if (!plan.xMap.isLinear) onNotToScale()
     val drawStartMm = plan.drawStartMm
     val drawEndMm = plan.drawEndMm
     fun xAtStrip(mm: Float): Float = plan.xAt(mm)
@@ -1822,6 +1834,9 @@ private fun drawUndercutOverflowNote(
     val y = (bandTop + bandBottom) * 0.5f + text.textSize * 0.35f
     c.drawText(ellipsizeToWidth(msg, text, right - left), left, y, text)
 }
+
+/** The footnote under the notes row of a sheet whose long sections were compressed. */
+internal const val UNDERCUT_NOT_TO_SCALE_NOTE = "Not to scale — long sections shortened; dimensions are true."
 
 /** Free-text notes rule at the page bottom. */
 private fun drawUndercutNotesRow(c: Canvas, text: Paint, left: Float, right: Float, y: Float) {

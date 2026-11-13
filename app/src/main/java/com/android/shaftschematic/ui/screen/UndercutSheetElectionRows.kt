@@ -13,8 +13,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -25,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.UndercutSpanMm
 import com.android.shaftschematic.geom.UndercutStrip
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.UNDERCUT_LONG_COMPRESS_MAX_FRAC
 import com.android.shaftschematic.model.UndercutRailStyle
 import com.android.shaftschematic.model.UndercutRecord
 import com.android.shaftschematic.model.UndercutSetDatum
@@ -151,6 +157,68 @@ internal fun UndercutLinerEndsFromSetRow(
         )
     }
 }
+
+/**
+ * The per-job "Compress long sections" slider ([UndercutRecord.longCompressFrac], on-device
+ * request): how far the printed strips shorten their long stretches so the short cuts draw
+ * larger. 0% is to scale. ONE row on the Undercut tab's Drawing settings and the undercut options
+ * panel. The value follows the finger from local state and commits once on release.
+ */
+@Composable
+internal fun UndercutLongCompressRow(
+    frac: Float,
+    onCommit: (Float) -> Unit,
+    testTag: String,
+    modifier: Modifier = Modifier,
+) {
+    var drag by remember { mutableStateOf<Float?>(null) }
+    val shown = drag ?: frac
+    Column(modifier.fillMaxWidth()) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Compress long sections", style = MaterialTheme.typography.bodyLarge)
+            Text(
+                undercutLongCompressLabel(shown),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Slider(
+            value = shown,
+            onValueChange = { drag = it },
+            onValueChangeFinished = {
+                drag?.let { onCommit(undercutLongCompressSnap(it)) }
+                drag = null
+            },
+            valueRange = 0f..UNDERCUT_LONG_COMPRESS_MAX_FRAC,
+            modifier = Modifier.fillMaxWidth().testTag(testTag),
+        )
+        Text(
+            UNDERCUT_LONG_COMPRESS_CAPTION,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** The slider's value on its 5% grid — what a release commits. */
+internal fun undercutLongCompressSnap(frac: Float): Float =
+    (Math.round(frac.coerceIn(0f, UNDERCUT_LONG_COMPRESS_MAX_FRAC) * 20f) / 20f)
+
+/** "To scale" at 0, else the percentage. */
+internal fun undercutLongCompressLabel(frac: Float): String {
+    val pct = Math.round(undercutLongCompressSnap(frac) * 100f)
+    return if (pct == 0) "To scale" else "$pct%"
+}
+
+/** The caption under "Compress long sections". */
+internal const val UNDERCUT_LONG_COMPRESS_CAPTION =
+    "Shortens the long stretches on the printed sheet so short cuts draw larger. Short cuts keep " +
+        "their proportions to each other, the dimensions never change, and the sheet is marked " +
+        "\"Not to scale\". Saved with this job."
 
 /** The caption under "Liner ends from S.E.T." while it applies. */
 internal const val UNDERCUT_LINER_ENDS_CAPTION =

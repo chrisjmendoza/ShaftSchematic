@@ -186,7 +186,6 @@ class UndercutRailLiftTest {
 
     private fun planOf(
         spec: ShaftSpec, record: UndercutRecord, left: Float, right: Float, pick: Int = 0,
-        fitCrowded: Boolean = true,
     ): UndercutStripPlan {
         val sh = undercutSheetStrips(spec, resolveComponents(spec), record, blankValues = false)
         val strip = sh.strips[pick]
@@ -197,7 +196,6 @@ class UndercutRailLiftTest {
                 startedStrip = false, dual = false, dualStacked = false, railSplitAtMm = emptyList(),
                 arrowSizePt = PDF_ARROW_SIZE_DEFAULT_PT,
                 leadSide = UndercutAnchorSide.FWD_SET, aftSetMm = sh.aftSetMm, fwdSetMm = sh.fwdSetMm,
-                fitCrowded = fitCrowded,
             ),
         )
     }
@@ -279,7 +277,7 @@ class UndercutRailLiftTest {
             id = id, startFromAftMm = at * inch, lengthMm = len * inch, diaMm = 5.625f * inch,
             authoredReference = UndercutReference.LINER_AFT, referenceLinerId = "L",
         )
-        val plan = planOf(spec, UndercutRecord(undercuts = listOf(cut("a", 51f, 1f), cut("b", 53f, 7f))), 36f, 256f, fitCrowded = false)
+        val plan = planOf(spec, UndercutRecord(undercuts = listOf(cut("a", 51f, 1f), cut("b", 53f, 7f))), 36f, 256f)
         assertTrue(plan.rails.canLiftFallbacks)
         assertEquals(0, plan.rails.rows.nestedRows)
         assertEquals(

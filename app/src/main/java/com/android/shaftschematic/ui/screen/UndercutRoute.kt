@@ -156,6 +156,7 @@ import com.android.shaftschematic.ui.viewmodel.setUndercutSectionPrinted
 import com.android.shaftschematic.ui.viewmodel.setUndercutSetDatum
 import com.android.shaftschematic.ui.viewmodel.setUndercutRailStyle
 import com.android.shaftschematic.ui.viewmodel.setUndercutLinerEndsFromSet
+import com.android.shaftschematic.ui.viewmodel.setUndercutLongCompress
 import com.android.shaftschematic.ui.viewmodel.setUndercutExaggeration
 import com.android.shaftschematic.ui.viewmodel.updateUndercut
 import com.android.shaftschematic.ui.viewmodel.updateUndercutReference
@@ -1044,6 +1045,13 @@ fun UndercutRoute(
                         modifier = Modifier.padding(bottom = 8.dp),
                         enabled = undercutRecord.railStyle == UndercutRailStyle.CHAIN,
                     )
+                    // Per-job: how far the printed strips shorten their long stretches.
+                    UndercutLongCompressRow(
+                        frac = undercutRecord.longCompressFrac,
+                        onCommit = { vm.setUndercutLongCompress(it) },
+                        testTag = "undercut_long_compress_slider",
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
                     // Per-job: which S.E.T. the strip titles and the lead at each strip's edge
                     // measure to.
                     UndercutSetDatumRow(
@@ -1746,6 +1754,12 @@ internal fun UndercutOptionsSheet(
                 onCheckedChange = { vm.setUndercutLinerEndsFromSet(it) },
                 testTag = "pdf_undercut_liner_ends_from_set",
                 enabled = undercutRecord.railStyle == UndercutRailStyle.CHAIN,
+            )
+            Spacer(Modifier.height(12.dp))
+            UndercutLongCompressRow(
+                frac = undercutRecord.longCompressFrac,
+                onCommit = { vm.setUndercutLongCompress(it) },
+                testTag = "pdf_undercut_long_compress_slider",
             )
             Spacer(Modifier.height(12.dp))
             UndercutSetDatumRow(

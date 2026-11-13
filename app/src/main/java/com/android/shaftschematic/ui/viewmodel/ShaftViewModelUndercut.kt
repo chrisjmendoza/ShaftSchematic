@@ -218,6 +218,16 @@ fun ShaftViewModel.setUndercutLinerEndsFromSet(on: Boolean) {
 }
 
 /**
+ * Set how far the printed strips may compress their long stretches
+ * ([UndercutRecord.longCompressFrac], clamped to 0..[UNDERCUT_LONG_COMPRESS_MAX_FRAC]). Drawing
+ * only — no stored cut moves — and a fit for this job, so per-document. A no-op when unchanged.
+ */
+fun ShaftViewModel.setUndercutLongCompress(frac: Float) {
+    val f = frac.coerceIn(0f, com.android.shaftschematic.model.UNDERCUT_LONG_COMPRESS_MAX_FRAC)
+    _undercutRecord.update { rec -> if (rec.longCompressFrac == f) rec else rec.copy(longCompressFrac = f) }
+}
+
+/**
  * Put [strip] on the printed sheet or leave it off ("Sections to print"), per job. A liner strip
  * is keyed by its liner id ([UndercutRecord.excludedLinerIds]); a bare-shaft strip by its member
  * cuts ([UndercutRecord.excludedFreeCutIds]) — leaving it off lists every member, printing it

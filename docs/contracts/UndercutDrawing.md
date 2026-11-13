@@ -123,6 +123,12 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
   through `ShaftViewModel.setUndercutLinerEndsFromSet`. Greyed (caption "Prints with Chain
   dimensions only. …") while Dimensions is From S.E.T.; the stored value untouched. See "Liner ends
   from the S.E.T." under PDF layout below.
+- **"Compress long sections" slider** (below "Liner ends from S.E.T."; the shared
+  `UndercutLongCompressRow`, testTag `undercut_long_compress_slider` on the tab and
+  `pdf_undercut_long_compress_slider` in the options panel): 0 ("To scale") to 90% in 5% steps,
+  following the finger from local state and committing once on release through
+  `ShaftViewModel.setUndercutLongCompress` → `UndercutRecord.longCompressFrac`. See "Crowded
+  sections" under PDF layout below.
 - **"Recorded undercuts" list** below the canvas: a read-only summary + delete row per cut,
   grouped under each section's title and numbered from 1 within the section (`undercutSections`,
   AFT → FWD) — not an edit card (see "UI contract").
@@ -225,6 +231,9 @@ data class UndercutRecord(
 - **`linerEndsFromSet`** ("Liner ends from S.E.T.", default `false`, additive + defaulted — older
   files decode off): each liner strip of a chained sheet also dimensions both liner ends from its
   S.E.T. Dimensioning only: no stored cut moves.
+- **`longCompressFrac`** ("Compress long sections", default `0f` = to scale, additive + defaulted
+  — older files decode 0; clamped to `UNDERCUT_LONG_COMPRESS_MAX_FRAC` 0.9): how far the printed
+  strips shorten their long stretches. Drawing only: no stored cut moves.
 - **`pageOrientation`**, **`setDatum`**, **`excludedLinerIds`**, **`excludedFreeCutIds`** — the
   other per-job fits, all additive + defaulted (older files decode off), none of them geometry: the
   page shape ("Page orientation"), which S.E.T. the strips measure to ("S.E.T. lead"), and the
@@ -2169,8 +2178,9 @@ ALTERNATIVE to the chain, never a replacement, with the lengths kept.
   banding reads (`overheadsPt`), so a crowded page gives every strip the same shaft instead of
   handing the tiers' slack to the busiest strips. The natural-height cells read the row-metric
   overheads (`liftedOverheadsPt`).
-- **Crowded axial map** — `planUndercutStripXMap(fromSet)` plans the same rails; the floors still
-  come from the chain and nested spans only (a baseline rail is its own line and never crowds).
+- **Crowded axial map** (detail canvas only) — `planUndercutStripXMap(fromSet)` plans the same
+  rails; the floors still come from the chain and nested spans only (a baseline rail is its own
+  line and never crowds).
 - **ONE draw routine** — `drawUndercutStripRails`: the baseline rails' LINES first (datum witness,
   each station's witness from the chain's `witnessBottomY` up past its own tier, the line, heads,
   leaders), then the chain and nested rows — whose values, seated ones included (`haloSeated`,
@@ -2227,44 +2237,64 @@ relative to the S.E.T.; once a cut runs over a liner edge the drawing no longer 
   and the near-end value (`undercutLinerNearEndValueMm`), in `planUndercutDetailStrip` and
   `undercutDetailLeadDrawRange(linerEnds)` alike; a value that still cannot seat falls back above
   its line.
-- **Crowded axial map** — `planUndercutStripXMap(linerEnds)` plans the same rails; the liner-end
-  rails need no floors.
+- **Crowded axial map** (detail canvas only) — `planUndercutStripXMap(linerEnds)` plans the same
+  rails; the liner-end rails need no floors.
 - No word or label prints with them — values and lines only.
 - **Off** — byte-identical to the sheet before the switch existed; From S.E.T. with the switch on
   prints byte-identically to From S.E.T. alone.
 
-### Crowded sections: the axial map
+### Crowded sections: the detail canvas's axial map
 
 On-device report: a section recorded as many short cuts (9/16" to 1 1/2" at each end of a
-31 15/16" one) printed its values stacked on each other. A strip drawn to scale gives a 9/16" cut
+31 15/16" one) drew its values stacked on each other. A strip drawn to scale gives a 9/16" cut
 a few points of width on a 38" section.
 
+- **The printed sheet is always to scale** — on-device ruling: the output documents show the
+  work done at its true proportions. `planUndercutDetailStrip` builds
+  `UndercutStripXMap.linear(...)` and nothing else (`UndercutSheetToScaleTest`); a crowded sheet
+  puts its short values on fallback rows with leaders.
+- **"Compress long sections" is the sheet's one exception, and the user's own** — per-job
+  `UndercutRecord.longCompressFrac` > 0 sends a strip with cuts through
+  `compressLongUndercutStripXMap`: the knots are the strip's cut shoulders (every level) inside
+  the chain; each stretch between two knots has an effective length of its own length up to
+  `UNDERCUT_LONG_SECTION_FRAC` (10%) of the chain plus `(1 − frac)` of the excess; the chain's
+  drawn width is shared in proportion to effective length. So stretches under the threshold keep
+  their true proportions to each other, order by length is preserved, the chain's ends and the
+  stock outside it stay to scale, and a map that moves no station by 0.25 pt is the linear map.
+  Started strips and blank drafts are always linear. A sheet with any non-linear strip prints
+  `UNDERCUT_NOT_TO_SCALE_NOTE` left-aligned under the notes line; otherwise nothing is added.
+  It is independent of the canvas's map below.
+- Everything below is the DETAIL CANVAS — an input surface, where reading each value matters
+  more than proportion.
 - **One map per strip** — `UndercutStripXMap` (`pdf/UndercutStripXMap.kt`), strip mm → drawing x
-  and back, built by the ONE planner `planUndercutStripXMap` for both draw sites: the printed
-  strip (`UndercutStripPlan.xMap`, behind `xAt`) and the detail canvas
-  (`planUndercutDetailXMap`, from the same `UndercutDetailRailInputs` record the rails are keyed
-  on). Profile, notches, liner outline, rails, Ø leaders, cut numbers and the canvas tap
+  and back. The printed strip's is linear (`UndercutStripPlan.xMap`, behind `xAt`); the detail
+  canvas's is built by `planUndercutStripXMap` through `planUndercutDetailXMap`, from the same
+  `UndercutDetailRailInputs` record the rails are keyed on. Profile, notches, liner outline, rails, Ø leaders, cut numbers and the canvas tap
   (`mmAt`) all go through it. Radii never do.
 - **To scale until crowded** — the planner first plans the rails on the to-scale map with the
   caller's own arguments. `undercutRailsCrowded` is true when, on the chain line (S.E.T. lead
   included) or a nested row, a value that does not seat in its line also sits on a label row
   above the first: its neighbour's value took the place beside it. Not crowded → the linear map,
   whose `xAt` is the historical `start + (mm − drawStart) × scale` expression, so the strip
-  prints exactly as before. One short cut on a long liner is not crowded.
+  draws exactly as before. One short cut on a long liner is not crowded.
 - **Crowded → floors** (`fitUndercutStripXMap`). Every chain span and nested-row span gets a
   floor: its value's width + 2 × (`DIM_BREAK_TEXT_PAD_PT` + arrowhead) + a little slack — the
   width at which `layoutWearStripRail` seats the value with inward heads. Spans that fall short
   to scale all take ONE width (the widest of their needs), so a longer short cut never draws
   narrower than a shorter one over a digit count. Floors are applied innermost first, so a parent
   is at least as wide as what it holds. The remaining stretches share the remaining width in
-  proportion to true length. Floors that cannot all fit are scaled down together, and values that
+  proportion to true length. **The long stretches stay long**: the stretches that are not short
+  keep at least `UNDERCUT_X_LONG_MIN_FRAC` (45%) of the chain's drawn width between them (or
+  their to-scale width when that is less) — the short ones' shared width is scaled down to leave
+  it (on-device report: on a phone a 31 15/16" cut drew the same width as the 9/16" cuts beside
+  it). Floors that cannot all fit are scaled down together, and values that
   then do not seat fall back above their line as on a to-scale strip.
 - **What never moves** — the strip's drawn width and both ends; the stock outside the chain
   datums, which stays to scale (`withUndercutBreakRoom`'s S-break room and the S.E.T. lead's room
   are sized for it; `linearScale` is also the rate the map continues at past its ends, which the
   fills' break reach uses); every stored value and every printed number.
 - **Tapers** — a sloped surface crossing a station where the map changes scale is drawn as a
-  polyline through those stations (`knotsInside`), on both sites, so it meets a cut's face at the
+  polyline through those stations (`knotsInside`), so it meets a cut's face at the
   face's own height.
 - **Cut numbers** — the detail canvas places them in DRAWN x: `undercutCutNumberPlacementsPx`
   maps each notch's span through the map, fits and spreads the numbers in px, and carries the

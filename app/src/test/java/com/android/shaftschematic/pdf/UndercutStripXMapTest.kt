@@ -128,6 +128,24 @@ class UndercutStripXMapTest {
     }
 
     @Test
+    fun `on a narrow strip the long stretch keeps its share and the short ones give way`() {
+        // A phone-width canvas: seven floors that would fill the chain between them.
+        val floors = listOf(
+            UndercutXFloor(0f, 14f, 80f), UndercutXFloor(14f, 84f, 80f), UndercutXFloor(84f, 895f, 80f),
+            UndercutXFloor(895f, 924f, 80f), UndercutXFloor(924f, 962f, 80f), UndercutXFloor(962f, 978f, 80f),
+        )
+        val m = fitUndercutStripXMap(0f, 978f, 0f, 0.5f, 0f, 978f, floors)
+        val chain = m.xAt(978f) - m.xAt(0f)
+        val long = m.xAt(895f) - m.xAt(84f)
+        assertEquals(489f, chain, 1e-2f)
+        assertTrue("the long cut keeps its share", long >= UNDERCUT_X_LONG_MIN_FRAC * chain - 1e-2f)
+        // The short ones still share one width, well under the long one's.
+        val short = m.xAt(14f) - m.xAt(0f)
+        assertEquals(short, m.xAt(978f) - m.xAt(962f), 1e-2f)
+        assertTrue(long > 3f * short)
+    }
+
+    @Test
     fun `floors that cannot fit are shared down, never overflowing the strip`() {
         val floors = (0 until 10).map { UndercutXFloor(100f + it * 10f, 110f + it * 10f, 80f) }
         val m = fitUndercutStripXMap(90f, 210f, 0f, 2f, 100f, 200f, floors)

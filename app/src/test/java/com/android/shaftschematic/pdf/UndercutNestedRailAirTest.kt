@@ -327,7 +327,6 @@ class UndercutNestedRailAirTest {
                     startedStrip = false, dual = stacked, dualStacked = stacked, railSplitAtMm = emptyList(),
                     arrowSizePt = PDF_ARROW_SIZE_DEFAULT_PT,
                     leadSide = UndercutAnchorSide.AFT_SET, aftSetMm = sh.aftSetMm, fwdSetMm = sh.fwdSetMm,
-                    fitCrowded = false,
                 ),
             )
             val what = if (stacked) "stacked dual" else "single unit"

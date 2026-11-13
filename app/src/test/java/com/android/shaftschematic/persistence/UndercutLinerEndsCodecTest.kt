@@ -47,11 +47,13 @@ class UndercutLinerEndsCodecTest {
                 undercutRecord = UndercutRecord(
                     undercuts = listOf(Undercut(id = "u1", startFromAftMm = 10f, lengthMm = 5f)),
                     linerEndsFromSet = on,
+                    longCompressFrac = if (on) 0.5f else 0f,
                 ),
             )
             val raw = ShaftDocCodec.encodeV1(doc)
             assertTrue("stored: $raw", raw.contains("\"linerEndsFromSet\": $on"))
             assertEquals(on, ShaftDocCodec.decode(raw).undercutRecord.linerEndsFromSet)
+            assertEquals(if (on) 0.5f else 0f, ShaftDocCodec.decode(raw).undercutRecord.longCompressFrac, 0f)
         }
     }
 
