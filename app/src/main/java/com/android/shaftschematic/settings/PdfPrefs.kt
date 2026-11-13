@@ -231,6 +231,15 @@ data class PdfPrefs(
      */
     val undercutLinerOutline: Boolean = true,
     /**
+     * Shade undercut sections by depth (on-device request: contrast between cuts to show depth
+     * and separate the sections): each cut's section core takes a grey from
+     * `geom/UndercutOverlayMath.kt`'s `undercutDepthShadeAlpha` — the shallowest light, the
+     * sheet's deepest dark, a nested cut darker than the cut it sits in — instead of the one flat
+     * section tone. Part of the drawing look, so profiles capture it; the undercut PDF and both
+     * undercut canvases read it. Line art still drops every fill. On by default.
+     */
+    val undercutDepthShade: Boolean = true,
+    /**
      * Whether the undercut detail strips' chain rail splits a cut machined past a liner edge into
      * two spans meeting at that edge (`geom/UndercutMath.kt`'s `buriedUndercutLinerEdgesMm`, fed
      * as `buildUndercutRailSpans`' `splitAtMm`). Off by default: the shop measures the length of

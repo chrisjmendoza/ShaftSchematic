@@ -601,6 +601,27 @@ data class UndercutRecord(
   voids stay pure white in every theme because the sheet itself is white in every theme — no
   dark-theme glare is introduced by the void that isn't already the sheet's.
 
+  **Depth shading — `PdfPrefs.undercutDepthShade`** (default `true`; Settings → PDF Export
+  "Undercut drawing: shade cuts by depth" and the undercut preview's PDF options Shading group,
+  testTag `pdf_undercut_depth_shade`, greyed while print line art is on; and the Undercut tab's
+  Drawing settings, `UndercutDepthShadeRow`, testTag `undercut_depth_shade_switch`, so the canvas
+  restyles as it is flipped; on-device request: contrast
+  between the cuts to show depth and separate the sections — "the stainless is lighter and the
+  closer you get to steel is darker"). On, each section core takes its own tone instead of the
+  one flat half-liner shade: `UndercutNotch.depthFrac` is the cut's TRUE depth below the shaft's
+  OUTER surface (a nested cut counted from its top-level ancestor's surface, so a staircase darkens
+  step by step) over the deepest measured cut on the WHOLE sheet (`undercutDepthShadeFrac`, built
+  inside `buildUndercutNotches` so a strip's slice and both canvases read the sheet's numbers), and
+  the ONE ramp `undercutDepthShadeAlpha` maps it linearly from `UNDERCUT_DEPTH_SHADE_MIN_ALPHA`
+  (5%) to `UNDERCUT_DEPTH_SHADE_MAX_ALPHA` (22%) — linear in true depth, never the exaggerated
+  drawn depth, so two cuts' shades compare as their real depths do. An unmeasured cut (Ø 0) takes
+  the lightest. The deep end runs DARKER than the strip liner (≈ 16%) by design: the "core one step
+  lighter than the liner" rule below is the flat tone's, and holds only with this pref off. The
+  PDF decides it in `undercutPdfFillPlan` (`sectionCoreByDepth`, false under line art); the
+  canvases pass `UndercutStyle.sectionDepthFill` (the same ramp × the intensity multiplier, in the
+  chosen shade colour) as `drawUndercutNotches`' `sectionDepthFill`. Off is byte-identical to the
+  flat tone.
+
   **On-screen shade styling — `util/UndercutStyle.kt`** (Settings → Preview Colors → Undercut
   Drawing): the two canvases take their fills from a persisted `UndercutStyle` —
   shade colour (Grey default / Bronze / Blue — fixed ink bases, never theme roles), shade

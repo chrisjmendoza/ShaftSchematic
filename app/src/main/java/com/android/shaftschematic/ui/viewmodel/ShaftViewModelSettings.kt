@@ -125,6 +125,16 @@ fun ShaftViewModel.setPdfUndercutLinerOutline(v: Boolean, persist: Boolean = tru
 }
 
 /**
+ * Wired to the "Shade cuts by depth" rows in Settings → PDF Export and on the undercut PDF
+ * options panel: each undercut section's core takes a grey that darkens with its depth.
+ */
+fun ShaftViewModel.setPdfUndercutDepthShade(v: Boolean, persist: Boolean = true) {
+    _pdfUndercutDepthShade.value = v
+    SettingsStore.updatePdfPrefs { it.copy(undercutDepthShade = v) }
+    if (persist) viewModelScope.launch { SettingsStore.setPdfUndercutDepthShade(getApplication(), v) }
+}
+
+/**
  * Wired to the "Split cuts at liner edges" row in Settings → PDF Export and on the undercut
  * preview's options sheet: a chain-rail node at each liner edge a cut runs past, on the printed
  * undercut document and the detail canvas. Off, every cut prints its full length.
@@ -502,6 +512,7 @@ fun ShaftViewModel.applyDrawingProfile(profile: DrawingProfile) {
     setPdfShadeExplicitBodiesOnly(prefs.shadeExplicitBodiesOnly)
     setPdfUndercutLineArt(prefs.undercutLineArt)
     setPdfUndercutLinerOutline(prefs.undercutLinerOutline)
+    setPdfUndercutDepthShade(prefs.undercutDepthShade)
     setPdfUndercutSplitAtLinerEdge(prefs.undercutSplitAtLinerEdge)
     setPdfUndercutTotalRail(prefs.undercutTotalRail)
     setPdfCurveLoHeightIn(prefs.curveLoHeightIn)

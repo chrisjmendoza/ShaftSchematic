@@ -165,6 +165,7 @@ fun SettingsRoute(
     val pdfShadedLiners by vm.pdfShadedLiners.collectAsState()
     val pdfUndercutLineArt by vm.pdfUndercutLineArt.collectAsState()
     val pdfUndercutLinerOutline by vm.pdfUndercutLinerOutline.collectAsState()
+    val pdfUndercutDepthShade by vm.pdfUndercutDepthShade.collectAsState()
     val pdfUndercutSplitAtLinerEdge by vm.pdfUndercutSplitAtLinerEdge.collectAsState()
     val pdfShadeExplicitBodiesOnly by vm.pdfShadeExplicitBodiesOnly.collectAsState()
     val pdfExportMode by vm.pdfExportMode.collectAsState()
@@ -1088,6 +1089,23 @@ fun SettingsRoute(
                             Text("Undercut drawing: liner outline")
                             Text(
                                 UNDERCUT_LINER_OUTLINE_CAPTION,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = pdfUndercutDepthShade,
+                            enabled = !pdfUndercutLineArt,
+                            onCheckedChange = { vm.setPdfUndercutDepthShade(it) },
+                            modifier = Modifier.testTag("pdf_undercut_depth_shade"),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Column {
+                            Text("Undercut drawing: shade cuts by depth")
+                            Text(
+                                UNDERCUT_DEPTH_SHADE_CAPTION,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )

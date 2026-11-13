@@ -32,7 +32,9 @@ class UndercutPdfFillPlanTest {
     }
 
     /** Every kind's shade switched off, so one kind at a time can be turned on below. */
-    private val noKindsShaded = PdfPrefs(shadedBodies = false, shadedTapers = false, shadedLiners = false)
+    private val noKindsShaded = PdfPrefs(
+        shadedBodies = false, shadedTapers = false, shadedLiners = false, undercutDepthShade = false,
+    )
 
     @Test
     fun `each component kind follows its own shade preference`() {

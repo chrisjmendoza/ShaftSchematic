@@ -176,7 +176,48 @@ internal data class UndercutNotch(
     val endMm: Float,
     val floorDiaMm: Float,
     val profiles: List<NotchProfile>,
+    /**
+     * How deep this cut reaches as a share of the sheet's deepest cut, `0..1` —
+     * [undercutDepthShadeFrac]. Read only by the depth-shaded section core
+     * (`PdfPrefs.undercutDepthShade`); 0 for a placed-but-unmeasured cut.
+     */
+    val depthFrac: Float = 0f,
 )
+
+/** Section-core alpha of the SHALLOWEST cut under depth shading (`PdfPrefs.undercutDepthShade`). */
+const val UNDERCUT_DEPTH_SHADE_MIN_ALPHA = 0.05f
+
+/** Section-core alpha of the sheet's DEEPEST cut under depth shading. */
+const val UNDERCUT_DEPTH_SHADE_MAX_ALPHA = 0.22f
+
+/**
+ * The section-core alpha for a cut at [depthFrac] of the sheet's deepest cut — linear from
+ * [UNDERCUT_DEPTH_SHADE_MIN_ALPHA] to [UNDERCUT_DEPTH_SHADE_MAX_ALPHA], so a shallow cut reads
+ * light and the cut that reaches nearest the steel reads dark (on-device request: contrast
+ * between cuts to show depth and separate the sections). The ONE ramp both draw sites read.
+ */
+fun undercutDepthShadeAlpha(depthFrac: Float): Float =
+    UNDERCUT_DEPTH_SHADE_MIN_ALPHA +
+        (UNDERCUT_DEPTH_SHADE_MAX_ALPHA - UNDERCUT_DEPTH_SHADE_MIN_ALPHA) * depthFrac.coerceIn(0f, 1f)
+
+/**
+ * Each cut's [UndercutNotch.depthFrac] over [floors]: its TRUE depth below the shaft's OUTER
+ * surface — a nested cut's depth runs from its top-level ancestor's surface, so a staircase
+ * darkens step by step — divided by the deepest such depth among [sheetFloors]' MEASURED cuts.
+ * Linear in true depth, never the drawn (exaggerated) depth, so two cuts' shades compare as
+ * their real depths do. An unmeasured cut (Ø 0) is 0, the lightest; a sheet with no measured
+ * depth gives every cut 0.
+ */
+internal fun undercutDepthShadeFrac(
+    floors: List<UndercutFloors>,
+    sheetFloors: List<UndercutFloors> = floors,
+): Map<String, Float> {
+    fun depth(f: UndercutFloors) = (f.outerSurfaceDiaMm - f.trueFloorDiaMm).coerceAtLeast(0f)
+    val deepest = sheetFloors.filter { it.measured }.maxOfOrNull(::depth) ?: 0f
+    return floors.associate { f ->
+        f.span.id to if (!f.measured || deepest <= 0f) 0f else (depth(f) / deepest).coerceIn(0f, 1f)
+    }
+}
 
 /**
  * One cut's resolved floors, the shared step behind [buildUndercutNotches] and the authoring
@@ -216,6 +257,14 @@ internal data class UndercutFloors(
      */
     val aftButted: Boolean = false,
     val fwdButted: Boolean = false,
+    /**
+     * The shaft's OUTER surface the cut's chain starts from — [surfaceDiaMm] on a top-level cut,
+     * the top-level ancestor's on a nested one — so [undercutDepthShadeFrac] measures a nested
+     * cut's TOTAL depth.
+     */
+    val outerSurfaceDiaMm: Float = surfaceDiaMm,
+    /** Whether the cut carries an entered Ø (a placeholder's floor is symbolic, not a depth). */
+    val measured: Boolean = true,
 )
 
 /**
@@ -276,6 +325,7 @@ internal fun resolveUndercutFloors(
                 ),
                 aftFaceTopDiaMm = minSurface,
                 fwdFaceTopDiaMm = minSurface,
+                measured = u.diaMm > 0f,
             )
         } else {
             // A face shared with the parent's own shoulder rises to whatever the parent's face
@@ -300,6 +350,8 @@ internal fun resolveUndercutFloors(
                 ),
                 aftFaceTopDiaMm = if (sharesAft) parent.aftFaceTopDiaMm else parent.drawnFloorDiaMm,
                 fwdFaceTopDiaMm = if (sharesFwd) parent.fwdFaceTopDiaMm else parent.drawnFloorDiaMm,
+                outerSurfaceDiaMm = parent.outerSurfaceDiaMm,
+                measured = u.diaMm > 0f,
             )
         }
     }
@@ -403,8 +455,15 @@ internal fun buildUndercutNotches(
     oalMm: Float,
     exaggerationFrac: Float,
     sheetUndercuts: List<Undercut> = undercuts,
-): List<UndercutNotch> =
-    resolveUndercutFloors(undercuts, segs, oalMm, exaggerationFrac, sheetUndercuts).map { f ->
+): List<UndercutNotch> {
+    val floors = resolveUndercutFloors(undercuts, segs, oalMm, exaggerationFrac, sheetUndercuts)
+    // Depth shading normalizes over the WHOLE sheet, like the drawn depth, so one cut shades
+    // the same in every strip and on every canvas that draws it.
+    val sheetFloors =
+        if (sheetUndercuts === undercuts) floors
+        else resolveUndercutFloors(sheetUndercuts, segs, oalMm, exaggerationFrac, sheetUndercuts)
+    val depthFracById = undercutDepthShadeFrac(floors, sheetFloors)
+    return floors.map { f ->
         val span = f.span
         val nested = f.nesting.parentId != null
         val localSegs =
@@ -427,8 +486,10 @@ internal fun buildUndercutNotches(
             endMm = span.endMm,
             floorDiaMm = f.drawnFloorDiaMm,
             profiles = profiles,
+            depthFrac = depthFracById[span.id] ?: 0f,
         )
     }
+}
 
 /**
  * A top-level notch region's surface polyline for DRAWING, with a **duplicated-x step point**

@@ -287,6 +287,44 @@ internal fun UndercutSplitAtLinerEdgeRow(
     }
 }
 
+/**
+ * The "Shade cuts by depth" switch — the app-wide `PdfPrefs.undercutDepthShade`, on the Undercut
+ * tab's Drawing settings (where the canvas above it restyles at once) beside the same pref's row
+ * in the PDF options' Shading group and Settings → PDF Export. Disabled while print line art is
+ * on, which drops every fill whatever this says.
+ */
+@Composable
+internal fun UndercutDepthShadeRow(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    testTag: String,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                "Shade cuts by depth",
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (enabled) MaterialTheme.colorScheme.onSurface
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                "$UNDERCUT_DEPTH_SHADE_CAPTION. App-wide.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            enabled = enabled,
+            modifier = Modifier.testTag(testTag),
+        )
+    }
+}
+
 /** The chip label for [d]. */
 internal fun undercutSetDatumLabel(d: UndercutSetDatum): String = when (d) {
     UndercutSetDatum.NEAREST -> "Nearest"

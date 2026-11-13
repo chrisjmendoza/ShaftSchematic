@@ -79,6 +79,9 @@ internal fun DrawScope.drawUndercutNotches(
     // Section-core refill — one step lighter than the caller's liner shade (see
     // UndercutStyle). Transparent in line-art mode, which leaves the core sheet-white.
     sectionFillColor: Color = Color.Black.copy(alpha = UNDERCUT_SECTION_FILL_ALPHA),
+    // Depth shading (`PdfPrefs.undercutDepthShade`): the core colour for a notch's
+    // [UndercutNotch.depthFrac], replacing [sectionFillColor]. Null draws the flat tone.
+    sectionDepthFill: ((Float) -> Color)? = null,
     // Dashed shoulders/floor mark a DRAFT notch (provisional, not yet in the record) —
     // the overlay passes a dash + a status color (primary while valid, error while its
     // confirm check fails); settled notches and the overview pass neither.
@@ -125,7 +128,7 @@ internal fun DrawScope.drawUndercutNotches(
             // reads distinct from the liner around it (on-device request).
             drawRect(voidColor, topLeft = Offset(x0, cy - rFloor), size = Size(x1 - x0, 2f * rFloor))
             drawRect(
-                sectionFillColor,
+                sectionDepthFill?.invoke(n.depthFrac) ?: sectionFillColor,
                 topLeft = Offset(x0, cy - rFloor),
                 size = Size(x1 - x0, 2f * rFloor),
             )

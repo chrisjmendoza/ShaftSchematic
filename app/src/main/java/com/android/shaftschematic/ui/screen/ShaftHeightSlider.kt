@@ -1332,6 +1332,8 @@ internal fun ShadeInPdfChecks(
     onSetUndercutLineArt: (Boolean) -> Unit = {},
     undercutLinerOutline: Boolean = true,
     onSetUndercutLinerOutline: (Boolean) -> Unit = {},
+    undercutDepthShade: Boolean = true,
+    onSetUndercutDepthShade: (Boolean) -> Unit = {},
 ) {
     OptionsSectionExpander(OptionsSection.SHADING) {
         ShadeInPdfCheckRows(
@@ -1350,6 +1352,8 @@ internal fun ShadeInPdfChecks(
             onSetUndercutLineArt = onSetUndercutLineArt,
             undercutLinerOutline = undercutLinerOutline,
             onSetUndercutLinerOutline = onSetUndercutLinerOutline,
+            undercutDepthShade = undercutDepthShade,
+            onSetUndercutDepthShade = onSetUndercutDepthShade,
         )
     }
 }
@@ -1398,6 +1402,9 @@ internal fun ShadeInPdfCheckRows(
     /** The app-wide `PdfPrefs.undercutLinerOutline`; read only when [showUndercutLineArt]. */
     undercutLinerOutline: Boolean = true,
     onSetUndercutLinerOutline: (Boolean) -> Unit = {},
+    /** The app-wide `PdfPrefs.undercutDepthShade`; read only when [showUndercutLineArt]. */
+    undercutDepthShade: Boolean = true,
+    onSetUndercutDepthShade: (Boolean) -> Unit = {},
 ) {
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1472,6 +1479,28 @@ internal fun ShadeInPdfCheckRows(
         }
         if (showUndercutLineArt) Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox(
+                checked = undercutDepthShade,
+                enabled = !undercutLineArt,
+                onCheckedChange = onSetUndercutDepthShade,
+                modifier = Modifier.testTag("pdf_undercut_depth_shade"),
+            )
+            Spacer(Modifier.width(8.dp))
+            Column {
+                Text(
+                    "Shade cuts by depth",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (!undercutLineArt) MaterialTheme.colorScheme.onSurface
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    UNDERCUT_DEPTH_SHADE_CAPTION,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        if (showUndercutLineArt) Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(
                 checked = undercutLinerOutline,
                 onCheckedChange = onSetUndercutLinerOutline,
                 modifier = Modifier.testTag("pdf_undercut_liner_outline"),
@@ -1492,6 +1521,10 @@ internal fun ShadeInPdfCheckRows(
 /** The liner-outline row's caption — the options sheet and Settings say the same thing. */
 internal const val UNDERCUT_LINER_OUTLINE_CAPTION =
     "Dotted outline of each liner's original edges and OD over the cuts"
+
+/** The depth-shade row's caption — the options sheet and Settings say the same thing. */
+internal const val UNDERCUT_DEPTH_SHADE_CAPTION =
+    "Shallow cuts shade light, the deepest cut dark; a cut inside a cut shades darker"
 
 /**
  * The split-at-liner-edge row's caption — the undercut tab, its options panel

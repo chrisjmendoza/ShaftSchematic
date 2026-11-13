@@ -203,6 +203,8 @@ object SettingsStore {
     private val KEY_PDF_UNDERCUT_LINE_ART = booleanPreferencesKey("pdf_undercut_line_art")
     // Dotted retrace of each liner's original edges over the cuts on the undercut drawing.
     private val KEY_PDF_UNDERCUT_LINER_OUTLINE = booleanPreferencesKey("pdf_undercut_liner_outline")
+    // Undercut section cores shaded by depth (PdfPrefs.undercutDepthShade).
+    private val KEY_PDF_UNDERCUT_DEPTH_SHADE = booleanPreferencesKey("pdf_undercut_depth_shade")
     // Chain-rail node at each liner edge a cut runs past, on the undercut drawing's strips.
     private val KEY_PDF_UNDERCUT_SPLIT_AT_LINER_EDGE = booleanPreferencesKey("pdf_undercut_split_at_liner_edge")
     // Default for the undercut strips' total rail; a job may pin its own (UndercutRecord.showTotalRail).
@@ -322,6 +324,13 @@ object SettingsStore {
         ctx.settingsPrefs.map { p -> p[KEY_PDF_UNDERCUT_LINER_OUTLINE] ?: PdfPrefs().undercutLinerOutline }
     suspend fun setPdfUndercutLinerOutline(ctx: Context, v: Boolean) {
         ctx.editSettings { it[KEY_PDF_UNDERCUT_LINER_OUTLINE] = v }
+    }
+
+    /** Undercut section cores shaded by depth — see the key's comment. */
+    fun pdfUndercutDepthShadeFlow(ctx: Context): Flow<Boolean> =
+        ctx.settingsPrefs.map { p -> p[KEY_PDF_UNDERCUT_DEPTH_SHADE] ?: PdfPrefs().undercutDepthShade }
+    suspend fun setPdfUndercutDepthShade(ctx: Context, v: Boolean) {
+        ctx.editSettings { it[KEY_PDF_UNDERCUT_DEPTH_SHADE] = v }
     }
 
     /** The undercut drawing's split-at-liner-edge chain nodes — see the key's comment. */

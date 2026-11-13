@@ -29,6 +29,7 @@ import com.android.shaftschematic.geom.undercutSetReachMm
 import com.android.shaftschematic.geom.effectiveUndercutTotalRail
 import com.android.shaftschematic.geom.NOTCH_FACE_MIN_STEP_PX
 import com.android.shaftschematic.geom.UNDERCUT_SECTION_FILL_ALPHA
+import com.android.shaftschematic.geom.undercutDepthShadeAlpha
 import com.android.shaftschematic.geom.UNDERCUT_BREAK_AMP_FRAC_OF_R
 import com.android.shaftschematic.geom.withUndercutBreakRoom
 import com.android.shaftschematic.geom.maxOuterDiaOver
@@ -523,6 +524,7 @@ private fun drawUndercutSheet(
         drawUndercutNotches(
             c, sheetNotches, shaftCy, ::xAt, ::rPx, outline, voidFill,
             sectionCoreFill = fills.sectionCore,
+            sectionCoreByDepth = fills.sectionCoreByDepth,
         )
         drawLinerOutlinesPdf(c, docSpec, sheetNotches, shaftCy, ::xAt, ::rPx, linerOutlinePaint)
         drawUndercutDirectionRow(
@@ -593,6 +595,7 @@ private fun drawUndercutSheet(
             // order — never rebuilt here, so a strip's staircase is the sheet's staircase.
             notches = sheetNotches.filter { it.id in strip.undercutIds },
             sectionCoreFill = fills.sectionCore,
+            sectionCoreByDepth = fills.sectionCoreByDepth,
             linerOutlinePaint = linerOutlinePaint,
             linerOdLabel = stripLiner
                 ?.let { "Ø" + formatDiaWithUnitDual(it.odMm.toDouble(), stripUnit, displayUnits.dual) },
@@ -992,6 +995,12 @@ private fun drawUndercutNotches(
      * component's surface stroke and shading across the cut, not a tone.
      */
     sectionCoreFill: Boolean,
+    /**
+     * Whether each core's tone follows its cut's depth ([UndercutNotch.depthFrac] through the ONE
+     * ramp [undercutDepthShadeAlpha]) instead of the one flat section tone. Read only while
+     * [sectionCoreFill] is on.
+     */
+    sectionCoreByDepth: Boolean = false,
 ) {
     if (notches.isEmpty()) return
     // One step LIGHTER than the liner shade (half its 40/255 alpha): the section's core is
@@ -1030,7 +1039,12 @@ private fun drawUndercutNotches(
             // than the liner shade so the section reads distinct (on-device request). Under
             // print line art the erase stands alone and the faces carry the section.
             c.drawRect(xStart, cy - rFloor, xEnd, cy + rFloor, voidFill)
-            sectionFill?.let { c.drawRect(xStart, cy - rFloor, xEnd, cy + rFloor, it) }
+            sectionFill?.let { paint ->
+                if (sectionCoreByDepth) {
+                    paint.color = Color.argb((undercutDepthShadeAlpha(notch.depthFrac) * 255f).roundToInt(), 0, 0, 0)
+                }
+                c.drawRect(xStart, cy - rFloor, xEnd, cy + rFloor, paint)
+            }
 
             // Outline — the step-section construction: a full-height section face at each
             // end (top surface to bottom surface, through the core, only where the surface
@@ -1469,6 +1483,8 @@ private fun drawUndercutDetailStrip(
     notches: List<UndercutNotch>,
     /** Whether the section cores take their light fill — [undercutPdfFillPlan]'s decision. */
     sectionCoreFill: Boolean,
+    /** Whether each core's tone follows its cut's depth — [undercutPdfFillPlan]'s decision. */
+    sectionCoreByDepth: Boolean = false,
     /** The liner outline's dotted paint; null when `PdfPrefs.undercutLinerOutline` is off. */
     linerOutlinePaint: Paint? = null,
     /**
@@ -1601,6 +1617,7 @@ private fun drawUndercutDetailStrip(
     drawUndercutNotches(
         c, notches, cy, ::xAtStrip, ::rStrip, outline, voidFill,
         sectionCoreFill = sectionCoreFill,
+        sectionCoreByDepth = sectionCoreByDepth,
     )
     drawLinerOutlinesPdf(c, docSpec, notches, cy, ::xAtStrip, ::rStrip, linerOutlinePaint)
 

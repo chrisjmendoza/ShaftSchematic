@@ -390,6 +390,11 @@ fun UndercutWindowDetailOverlay(
      * over the cuts, drawn here as on the printed sheet. Passed in so a change recomposes this canvas.
      */
     linerOutline: Boolean = true,
+    /**
+     * App-wide `PdfPrefs.undercutDepthShade`: each section core shaded by its cut's depth, here
+     * as on the printed sheet. Passed in so a change recomposes this canvas.
+     */
+    depthShade: Boolean = true,
     /** Per-component display units: the strip title prints its liner's OD in the liner's own unit. */
     displayUnits: DisplayUnits = DisplayUnits.single(unit),
     /**
@@ -1723,6 +1728,7 @@ fun UndercutWindowDetailOverlay(
                                 outlineColor = outlineColor,
                                 strokeWidthPx = outlineWidthPx,
                                 sectionFillColor = style.sectionFill(),
+                                sectionDepthFill = if (depthShade) style::sectionDepthFill else null,
                             )
                             if (draftId != null) {
                                 drawUndercutNotches(
@@ -1734,6 +1740,7 @@ fun UndercutWindowDetailOverlay(
                                     outlineColor = if (activeDraftIssue != null) errorColor else selectColor,
                                     strokeWidthPx = outlineWidthPx,
                                     sectionFillColor = style.sectionFill(),
+                                    sectionDepthFill = if (depthShade) style::sectionDepthFill else null,
                                     pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f)),
                                 )
                             }

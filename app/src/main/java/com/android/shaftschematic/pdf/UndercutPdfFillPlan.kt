@@ -13,6 +13,8 @@ import com.android.shaftschematic.settings.PdfPrefs
  *   cut sections their contrast (on-device request).
  * - [sectionCore] — the undercut section's core between the floor lines, refilled one step
  *   lighter than the liner after the void erases it.
+ * - [sectionCoreByDepth] — whether that core's tone follows the cut's depth instead
+ *   (PdfPrefs.undercutDepthShade: shallow light, deep dark — undercutDepthShadeAlpha).
  *
  * Nothing here is a paint or a colour: the composer owns the ink, this owns the decision.
  */
@@ -22,6 +24,7 @@ data class UndercutPdfFillPlan(
     val liner: Boolean,
     val stripLiner: Boolean,
     val sectionCore: Boolean,
+    val sectionCoreByDepth: Boolean = false,
 ) {
     /** True when the sheet draws at least one fill; false is the line-art posture. */
     val anyFill: Boolean get() = body || taper || liner || stripLiner || sectionCore
@@ -52,5 +55,6 @@ internal fun undercutPdfFillPlan(prefs: PdfPrefs): UndercutPdfFillPlan =
             liner = prefs.shadedLiners,
             stripLiner = true,
             sectionCore = true,
+            sectionCoreByDepth = prefs.undercutDepthShade,
         )
     }

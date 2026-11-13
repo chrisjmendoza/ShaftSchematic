@@ -6,6 +6,21 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-11-13
+
+### feat(undercut): shade cuts by depth
+
+On-device request: contrast between the cuts to show depth and separate the sections — shallow
+cuts light, deep cuts dark, "like the stainless is lighter and the closer you get to steel is
+darker". Each undercut section's core now takes a grey from its cut's TRUE depth below the outer
+surface, as a share of the deepest measured cut on the sheet: 5% for the shallowest up to 22% for
+the deepest, linear, and a cut inside a cut counts its depth from the outer surface, so a
+staircase darkens step by step. An unmeasured cut takes the lightest. The printed undercut sheet,
+the Undercut tab canvas and the detail canvas all shade from the one ramp. New app-wide look
+pref `PdfPrefs.undercutDepthShade` (default ON, captured by drawing profiles): "Undercut drawing:
+shade cuts by depth" in Settings → PDF Export, in the undercut preview's PDF options Shading
+group (greyed under line art), and as a switch in the Undercut tab's Drawing settings. Off draws the flat section tone exactly as before.
+
 ## 2026-11-12
 
 ### fix(undercut): Chain dimensions put a nested cut's pieces on the one chain too
