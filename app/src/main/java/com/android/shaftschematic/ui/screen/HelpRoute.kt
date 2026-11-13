@@ -740,9 +740,11 @@ internal val helpSections: List<HelpSection> = listOf(
                     "each section locates its cuts: chained from the liner's edges, or each " +
                     "cut's start measured from the S.E.T. on a stack of dimensions with the cut " +
                     "lengths on the line under them (the total length of cuts is then not " +
-                    "printed).\n\n" +
+                    "printed). \"Liner ends from S.E.T.\", under it, adds two dimensions to " +
+                    "each liner section with Chain dimensions: from the S.E.T. to each end of " +
+                    "the liner, so the liner can be found where cuts have run over its edges.\n\n" +
                     "\"Distance to S.E.T.\" (Nearest | " +
-                    "AFT S.E.T. | FWD S.E.T., right after \"Dimensions\") chooses the S.E.T. that each " +
+                    "AFT S.E.T. | FWD S.E.T., right after \"Liner ends from S.E.T.\") chooses the S.E.T. that each " +
                     "strip's title and the short dimension at its edge measure to; \"Split " +
                     "cuts at liner edges\" sits directly under it.\n\n" +
                     "\"Sections " +
@@ -1347,7 +1349,10 @@ internal val helpSections: List<HelpSection> = listOf(
                     "• \"Dimensions\" — on the Undercut Drawing, right after \"Page\" and in its " +
                     "PDF options. Chain, or From S.E.T.: each cut's start measured from the S.E.T., " +
                     "with the cut lengths still printed under them. Saved with this job.\n" +
-                    "• \"Distance to S.E.T.\" — on the Undercut Drawing, right after \"Dimensions\" and " +
+                    "• \"Liner ends from S.E.T.\" — on the Undercut Drawing, under \"Dimensions\", and " +
+                    "in its PDF options. Each liner section also dimensions both ends of the liner " +
+                    "from the S.E.T. Chain dimensions only. Saved with this job.\n" +
+                    "• \"Distance to S.E.T.\" — on the Undercut Drawing, right after \"Liner ends from S.E.T.\" and " +
                     "in its PDF options. Nearest, AFT S.E.T. or FWD S.E.T.: the S.E.T. each " +
                     "strip's title and the dimension at its edge measure to. Saved with this job.\n" +
                     "• \"Sections to print\" — on the Undercut Drawing above the Print buttons, " +

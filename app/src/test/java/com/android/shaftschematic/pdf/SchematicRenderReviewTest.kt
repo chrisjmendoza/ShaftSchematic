@@ -487,6 +487,10 @@ class SchematicRenderReviewTest {
             "${job}_undercuts_from_set.png" to doc.undercutRecord.copy(railStyle = UndercutRailStyle.FROM_SET),
             "${job}_undercuts_from_set_fwd.png" to
                 doc.undercutRecord.copy(railStyle = UndercutRailStyle.FROM_SET, setDatum = UndercutSetDatum.FWD),
+            // "Liner ends from S.E.T." on the chained sheet, from the job's S.E.T. and from the FWD one.
+            "${job}_undercuts_liner_ends.png" to doc.undercutRecord.copy(linerEndsFromSet = true),
+            "${job}_undercuts_liner_ends_fwd.png" to
+                doc.undercutRecord.copy(linerEndsFromSet = true, setDatum = UndercutSetDatum.FWD),
         ).forEach { (name, record) ->
             val o = undercutSheetOrientation(doc.spec, resolved, record, false)
             val bmp = Bitmap.createBitmap((o.widthPt * SCALE).toInt(), (o.heightPt * SCALE).toInt(), Bitmap.Config.ARGB_8888)

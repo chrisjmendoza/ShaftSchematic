@@ -317,10 +317,11 @@ internal fun undercutNestedRailLineYs(
  * above it — the ONE
  * sequence the printed strip and the detail canvas both run.
  *
- * On a From-S.E.T. strip ([UndercutStripRails.setRails]) the baseline tiers frame that sequence:
- * their lines first, stepped by [setTierPitch] ([undercutSetRailLineYs]) — so the chain's and the
- * nested rows' values, each on a halo, knock out the station witnesses rising through them — and
- * their values last.
+ * On a strip with baseline tiers ([UndercutStripRails.setRails] — From S.E.T., or "Liner ends from
+ * S.E.T." over the chain and total) the tiers frame that sequence: their lines first, stepped by
+ * [setTierPitch] ([undercutSetRailLineYs]) — so the total's, the chain's and the nested rows'
+ * values, each on a halo, knock out the station witnesses rising through them — and their values
+ * last.
  *
  * The order is fixed — total, then chain, then the nested rows. The total's witness lines stand on
  * the chain line and run up through the band where a lifted chain's fallback values sit
@@ -368,7 +369,10 @@ internal fun drawUndercutStripRails(
     // through the chain (and a nested cut's through the nested rows), so the chain and nested
     // passes below paint their values' halos over those witnesses — and its VALUES last.
     val setLineYs = if (rails.setRails.isEmpty()) emptyList()
-    else undercutSetRailLineYs(rails, chainRailY, undercutRailRowHeightPt(dimText, dualStacked, scale), setTierPitch)
+    else undercutSetRailLineYs(
+        rails, chainRailY, undercutRailRowHeightPt(dimText, dualStacked, scale), setTierPitch,
+        totalRailY = totalRailY, scale = scale,
+    )
     val setCrossXs = if (rails.setRails.isEmpty()) emptyList() else rails.setStationXs + listOfNotNull(rails.setDatumX)
     if (setLineYs.isNotEmpty()) {
         drawUndercutSetRails(
@@ -389,6 +393,9 @@ internal fun drawUndercutStripRails(
         scale = scale,
         haloColor = haloColor,
         arrowSizePt = arrowSizePt,
+        // A liner-end station's witness rises through the total's line and value.
+        haloClearXs = setCrossXs,
+        haloSeated = setCrossXs.isNotEmpty(),
     )
     // The level-0 line carries the S.E.T. lead at its outboard end, laid out with the chain.
     drawUndercutRail(

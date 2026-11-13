@@ -152,6 +152,12 @@ data class Undercut(
  *   them. A FIT for this job's drawing, so per-document. Dimensioning only — no stored value moves.
  *   Additive + defaulted, decoded tolerantly: older files and unknown names get
  *   [UndercutRailStyle.CHAIN], which prints exactly as every sheet did before the choice existed.
+ * @property linerEndsFromSet "Liner ends from S.E.T.": each LINER strip prints two dimensions from
+ *   its S.E.T., one to each end of the liner, over its chain (on-device request: a liner whose cuts
+ *   have buried an edge no longer shows where it begins and ends, and the welder needs to know).
+ *   Chain dimensions only — ignored while [railStyle] is [UndercutRailStyle.FROM_SET] — and nothing
+ *   on a bare-shaft strip. A FIT for this job, so per-document. Dimensioning only — no stored value
+ *   moves. Additive + defaulted; older files get `false`.
  * @property excludedLinerIds Liner strips left off the printed sheet, by liner id ("Sections to
  *   print"). An EXCLUSION list, so a liner added later prints by default and a selection is never
  *   silently rewritten. Also governs that liner's started strip on a blank draft. An id that no
@@ -172,6 +178,7 @@ data class UndercutRecord(
     val excludedLinerIds: List<String> = emptyList(),
     val excludedFreeCutIds: List<String> = emptyList(),
     val railStyle: UndercutRailStyle = UndercutRailStyle.CHAIN,
+    val linerEndsFromSet: Boolean = false,
 )
 
 /**
