@@ -100,6 +100,25 @@ class UndercutSetRailPlanTest {
     }
 
     @Test
+    fun `chain dimensions put a nested cut's pieces on the one chain too`() {
+        val kept = plan(aftLead(), fromSet = false)
+        val app = planUndercutStripRails(
+            chainStart, chainEnd, spans, unit, dual = false, splitAtMm = emptyList(), startedStrip = false,
+            xAt = ::xAt, labelWidth = labelWidth, setLead = aftLead(), nestedRows = false,
+        )
+        // The 1 1/8" that is only two 9/16" pieces is not printed; the pieces are.
+        assertTrue(kept.chain.any { it.label == label(1.125) })
+        assertFalse(app.chain.any { it.label == label(1.125) })
+        assertEquals(kept.chain.count { it.label == label(0.5625) } + 2, app.chain.count { it.label == label(0.5625) })
+        assertTrue(app.nested.isEmpty())
+        assertEquals(kept.chainSpans.sumOf { (it.endMm - it.startMm).toDouble() },
+            app.chainSpans.sumOf { (it.endMm - it.startMm).toDouble() }, 1e-2)
+        // Everything else on the chained strip is as it was.
+        assertEquals(kept.leadSpan, app.leadSpan)
+        assertEquals(kept.totalSpan, app.totalSpan)
+    }
+
+    @Test
     fun `a cut holding a nested cut is dimensioned as its floor pieces on the one chain`() {
         // The job's 1 1/8" cut holds a 9/16" cut at its FWD end.
         val chained = plan(aftLead(), fromSet = false)

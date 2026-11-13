@@ -57,6 +57,7 @@ class UndercutDetailCrowdedMapTest {
         textSizePx = 22f,
         typeface = null,
         fractionStyle = null,
+        nestedRows = true,
     )
 
     @Test

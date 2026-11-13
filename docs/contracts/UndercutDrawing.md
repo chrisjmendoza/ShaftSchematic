@@ -2195,8 +2195,20 @@ ALTERNATIVE to the chain, never a replacement, with the lengths kept.
   that 1 1/8". In From S.E.T. the level-0 chain is built with every nested cut's shoulders as
   extra nodes (`buildUndercutRailSpans(splitAtMm = …)`), so a cut holding nested cuts is
   dimensioned as its floor pieces on the one line, and `nestedSpans` / `nested` are empty. The
-  chain's spans still sum to the chain. Chain dimensions are untouched: parent length on the
-  chain, nested rows against the parent's edges.
+  chain's spans still sum to the chain.
+- **Chain dimensions do the same** — second on-device report ("still grouping the small numbers
+  together"). `planUndercutStripRails(nestedRows)` decides it: `false` makes the nested shoulders
+  chain nodes in Chain too (`flat = setMode || !nestedRows`), and the app's three callers —
+  `planUndercutDetailStrip`, `planUndercutDetailRails` (via `UndercutDetailRailInputs.nestedRows`)
+  and `planUndercutStripXMap` — all pass `false`. The parameter's own default is `true`, the kept
+  layout (parent length on the chain, nested rows against the parent's edges), which only tests
+  reach now. Wherever this document describes nested rail rows, that is the kept, unprinted
+  layout.
+- **Three fallback rows** — `undercutRailFallbackRows` caps at `UNDERCUT_RAIL_MAX_FALLBACK_ROWS`
+  (3; the wear strips' `WEAR_RAIL_MAX_LABEL_ROWS` stays 2). `layoutWearStripRail` hands a value
+  the first row it is clear on, and the draw clamps a row past the cap ONTO the cap's row, over
+  the value there; with nested pieces on the chain a run of three short neighbours needs the
+  third row (the reported job's 9/16", 9/16", 1 1/2").
 - **Crowded axial map** (detail canvas only) — `planUndercutStripXMap(fromSet)` plans the same
   rails; the floors still come from the chain and nested spans only (a baseline rail is its own
   line and never crowds).

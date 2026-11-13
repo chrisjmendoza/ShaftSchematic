@@ -196,6 +196,7 @@ class UndercutRailLiftTest {
                 startedStrip = false, dual = false, dualStacked = false, railSplitAtMm = emptyList(),
                 arrowSizePt = PDF_ARROW_SIZE_DEFAULT_PT,
                 leadSide = UndercutAnchorSide.FWD_SET, aftSetMm = sh.aftSetMm, fwdSetMm = sh.fwdSetMm,
+                nestedRows = true,
             ),
         )
     }

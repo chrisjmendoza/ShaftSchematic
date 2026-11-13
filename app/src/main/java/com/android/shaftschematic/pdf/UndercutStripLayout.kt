@@ -632,7 +632,7 @@ fun undercutSetTierMinPitch(textHeight: Float, scale: Float = 1f): Float = textH
  */
 fun undercutRailFallbackRows(layout: List<WearRailSpanLayout>): Int =
     (layout.filter { !it.seatsInBreak }.maxOfOrNull { it.labelRow + 1 } ?: 0)
-        .coerceAtMost(WEAR_RAIL_MAX_LABEL_ROWS)
+        .coerceAtMost(UNDERCUT_RAIL_MAX_FALLBACK_ROWS)
 
 /**
  * Plans the chained rail's fallback-label rows. Since [layoutWearStripRail] is pure horizontal
@@ -865,6 +865,16 @@ fun planUndercutStripRails(
      * same figure as one of them.
      */
     linerEnds: UndercutLinerSpanMm? = null,
+    /**
+     * Dimension a cut that holds nested cuts as its WHOLE length on the chain, with a row under it
+     * for the pieces its nested shoulders split it into. Off — what the APP prints (its three
+     * callers pass false: the printed strip, the detail canvas and the canvas's axial map), in both
+     * "Dimensions" styles — the nested shoulders are chain nodes: the pieces stand on the one
+     * chain and the whole length is not printed (on-device ruling: "we don't need that 1 1/8",
+     * first under From S.E.T., then under Chain — "it's still grouping the small numbers
+     * together"). The nested-row layout is kept behind this flag so it can return.
+     */
+    nestedRows: Boolean = true,
 ): UndercutStripRails {
     val sorted = spans.sortedBy { it.startMm }
     val nestingById = undercutNestingForest(sorted).associateBy { it.id }
@@ -880,17 +890,18 @@ fun planUndercutStripRails(
     // From S.E.T. replaces the total and the lead; liner ends stand over a chained strip.
     val setMode = fromSet && setRailSpans.isNotEmpty()
     val totalSpan = if (startedStrip || !showTotal || setMode) null else buildUndercutTotalSpan(topSpans, unit, dual)
-    // From S.E.T. puts every floor piece on ONE chain: a cut holding nested cuts is dimensioned as
+    // Every floor piece stands on ONE chain ([nestedRows] off): a cut holding nested cuts is dimensioned as
     // the pieces its nested shoulders split it into, never as its own whole length over a row of
     // those same pieces (on-device report: a 1 1/8" over the two 9/16" it is made of — "we don't
     // need that 1 1/8"). The nested shoulders become chain nodes, so there are no nested rows.
-    val chainSpans = if (!setMode) wholeChain else buildUndercutRailSpans(
+    val flat = setMode || !nestedRows
+    val chainSpans = if (!flat || startedStrip) wholeChain else buildUndercutRailSpans(
         chainStartMm, chainEndMm, topSpans, unit, dual,
         splitAtMm = splitAtMm + sorted
             .filter { (nestingById[it.id]?.level ?: 0) > 0 }
             .flatMap { listOf(it.startMm, it.endMm) },
     )
-    val nestedSpans = if (startedStrip || setMode) emptyList() else buildNestedUndercutRailRows(sorted, unit, dual)
+    val nestedSpans = if (startedStrip || flat) emptyList() else buildNestedUndercutRailRows(sorted, unit, dual)
 
     fun layout(rail: List<WearRailSpan>) = layoutWearStripRail(
         rail,
@@ -1309,6 +1320,16 @@ fun undercutWidenForSetLead(
  * ([PDF_ARROW_SIZE_LARGE_PT]) by the label gap less half a point.
  */
 const val UNDERCUT_RAIL_LABEL_CLEAR_ARROW_PT = 4f
+
+/**
+ * The most rows a rail line's fallback values stack on. `layoutWearStripRail` gives each value the
+ * first row it is clear on, and a row past this cap is drawn ON the cap's row — over the value
+ * already there. Three, where the wear strips keep two: with a cut's nested pieces on the one
+ * chain, three short neighbours in a run are ordinary (a 9/16", a 9/16" and a 1 1/2" printed the
+ * second 9/16" under the 1 1/2", manual-figure report), and a third row costs one row of height
+ * only on the strip that needs it.
+ */
+const val UNDERCUT_RAIL_MAX_FALLBACK_ROWS = 3
 
 /** Least horizontal gap between two fallback values on one row, points. */
 const val UNDERCUT_RAIL_MIN_LABEL_GAP_PT = 4f

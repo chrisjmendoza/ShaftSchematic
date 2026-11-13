@@ -8,6 +8,21 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-12
 
+### fix(undercut): Chain dimensions put a nested cut's pieces on the one chain too
+
+On-device report, after the From S.E.T. fix: under Chain the sheet "is still grouping the small
+numbers together" — the 1 1/8" over the two 9/16" it is made of. The printed strip, the detail
+canvas and the canvas's axial map now all plan with `nestedRows = false`: in BOTH "Dimensions"
+styles the nested shoulders are chain nodes, a cut holding nested cuts prints as its floor pieces
+on the one chain, its whole length is not printed and there is no row under the chain. The
+nested-row layout (`buildNestedUndercutRailRows`, the row reservations and their tests) is kept
+behind `planUndercutStripRails(nestedRows = true)`, unreached by the app, so it can return.
+
+With the pieces on one chain, three short neighbours in a run are ordinary, and the two-row cap
+on fallback values drew the third ON the second (a 9/16" under the 1 1/2" beside it, on the
+to-scale sheet). Undercut rails now stack up to three rows (`UNDERCUT_RAIL_MAX_FALLBACK_ROWS`);
+the wear strips keep two. The third row costs height only on the strip that needs it.
+
 ### feat(undercut): the total length of cuts is removed
 
 On-device ruling: no hand drawing carries a total across a section's cuts. The undercut sheet
