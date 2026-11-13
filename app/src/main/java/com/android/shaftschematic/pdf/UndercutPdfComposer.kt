@@ -1556,6 +1556,8 @@ private fun drawUndercutDetailStrip(
         dualStacked = dualStacked,
         arrowSizePt = arrowSizePt,
         setTierPitch = inner.setTierPitchPt,
+        captionMinX = stripLeft,
+        captionMaxX = stripRight,
     )
 
     // ── Title at the bottom: "<liner name> — <dist> FROM … S.E.T." ──

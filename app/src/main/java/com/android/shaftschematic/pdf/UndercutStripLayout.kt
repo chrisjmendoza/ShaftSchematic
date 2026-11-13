@@ -955,7 +955,56 @@ data class UndercutSetRailSpan(
     val valueMm: Float,
     val openAtSet: Boolean,
     val tier: Int,
+    /**
+     * What the rail measures to, printed beside its station end — "S.E.T. to liner start" /
+     * "S.E.T. to liner end" on a liner-end rail ([buildUndercutLinerEndRailSpans]). Null on a
+     * From-S.E.T. cut rail, whose station is the cut shoulder under it.
+     */
+    val caption: String? = null,
 )
+
+/** The caption of the liner-end rail to the liner end nearer the S.E.T. */
+const val UNDERCUT_LINER_START_CAPTION = "S.E.T. to liner start"
+
+/** The caption of the liner-end rail to the liner end farther from the S.E.T. */
+const val UNDERCUT_LINER_END_CAPTION = "S.E.T. to liner end"
+
+/** Where one rail's caption draws: its text's left edge and baseline, canvas units. */
+data class UndercutRailCaptionSpot(val leftX: Float, val baselineY: Float)
+
+/**
+ * Places a baseline rail's caption ([UndercutSetRailSpan.caption]) — the ONE rule behind the
+ * printed strip and the detail canvas. The caption stands just PAST the rail's station end, on the
+ * rail's own height, reading on from the arrowhead (on-device request: a label at the edge of the
+ * dimension line saying what it references). Where that would run past the drawable range
+ * `[minX, maxX]` it moves inboard of the arrowhead instead, above the line and clear of the rail's
+ * own value, kept inside the range.
+ *
+ * [stationX] is the rail's station end and [setOnLeft] whether its S.E.T. lies to the left (an
+ * AFT datum on an AFT-left drawing); [lineY] its tier line; [textWidth], [ascent] (negative) and
+ * [descent] the caption's measure in the rail's text paint; [gap] the air between the station
+ * witness and the text; [arrow] the drawn head length.
+ */
+fun undercutRailCaptionSpot(
+    stationX: Float,
+    setOnLeft: Boolean,
+    lineY: Float,
+    textWidth: Float,
+    ascent: Float,
+    descent: Float,
+    gap: Float,
+    arrow: Float,
+    minX: Float,
+    maxX: Float,
+): UndercutRailCaptionSpot {
+    val centredBaseline = lineY - (ascent + descent) / 2f
+    val outboardLeft = if (setOnLeft) stationX + gap else stationX - gap - textWidth
+    val fits = if (setOnLeft) outboardLeft + textWidth <= maxX else outboardLeft >= minX
+    if (fits) return UndercutRailCaptionSpot(outboardLeft, centredBaseline)
+    val inboardLeft = if (setOnLeft) stationX - arrow - gap - textWidth else stationX + arrow + gap
+    val hi = (maxX - textWidth).coerceAtLeast(minX)
+    return UndercutRailCaptionSpot(inboardLeft.coerceIn(minX, hi), lineY - gap - descent)
+}
 
 /**
  * The baseline rails a From-S.E.T. strip stacks over its chain — the shop's hand-sketch
@@ -1008,7 +1057,14 @@ fun buildUndercutLinerEndRailSpans(
     dual: Boolean = false,
 ): List<UndercutSetRailSpan> =
     if (liner.endMm - liner.startMm <= UNDERCUT_RAIL_SPAN_EPS_MM) emptyList()
-    else buildUndercutSetRailSpansAt(listOf(liner.startMm, liner.endMm), lead, unit, dual)
+    else {
+        // The liner end on the S.E.T.'s side is where the liner STARTS, read from that S.E.T.
+        val nearMm = if (lead.side == UndercutAnchorSide.AFT_SET) liner.startMm else liner.endMm
+        buildUndercutSetRailSpansAt(listOf(liner.startMm, liner.endMm), lead, unit, dual).map { r ->
+            val near = kotlin.math.abs(r.stationMm - nearMm) <= UNDERCUT_TOUCH_EPS_MM
+            r.copy(caption = if (near) UNDERCUT_LINER_START_CAPTION else UNDERCUT_LINER_END_CAPTION)
+        }
+    }
 
 /**
  * The value of a liner strip's nearer liner-end rail ([buildUndercutLinerEndRailSpans]) — S.E.T. →
