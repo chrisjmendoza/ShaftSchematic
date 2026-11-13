@@ -234,8 +234,6 @@ class UndercutRouteTest {
         rule.onNodeWithTag("undercut_rail_style_CHAIN").assertIsSelected()
         rule.onNodeWithTag("undercut_rail_style_FROM_SET").assertIsNotSelected()
         rule.onNodeWithText(undercutRailStyleCaption(UndercutRailStyle.CHAIN)).assertExists()
-        rule.onNodeWithTag("undercut_total_rail_switch").performScrollTo().assertIsEnabled()
-        val totalBefore = vm.undercutRecord.value.showTotalRail
 
         rule.onNodeWithTag("undercut_rail_style_FROM_SET").performScrollTo().performClick()
         rule.waitForIdle()
@@ -243,9 +241,8 @@ class UndercutRouteTest {
         rule.onNodeWithTag("undercut_rail_style_FROM_SET").assertIsSelected()
         rule.onNodeWithText(undercutRailStyleCaption(UndercutRailStyle.FROM_SET)).assertExists()
         assertTrue(undercutRailStyleCaption(UndercutRailStyle.FROM_SET).endsWith("Saved with this job."))
-        rule.onNodeWithTag("undercut_total_rail_switch").performScrollTo().assertIsNotEnabled()
-        rule.onNodeWithText(UNDERCUT_TOTAL_RAIL_FROM_SET_CAPTION).assertExists()
-        assertEquals("the stored total choice is untouched", totalBefore, vm.undercutRecord.value.showTotalRail)
+        // The total rail and its switch are gone from every surface.
+        rule.onAllNodesWithTag("undercut_total_rail_switch").assertCountEquals(0)
     }
 
     @Test

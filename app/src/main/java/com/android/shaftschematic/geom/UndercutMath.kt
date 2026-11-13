@@ -64,13 +64,15 @@ const val UNDERCUT_SET_REACH_MM = 609.6f
 fun undercutSetReachMm(drawToSet: Boolean): Float = if (drawToSet) UNDERCUT_SET_REACH_MM else 0f
 
 /**
- * Whether the undercut strips print their total rail: this job's own choice
- * (`UndercutRecord.showTotalRail`) when it made one, else the Settings → PDF Export default
- * (`PdfPrefs.undercutTotalRail`). The ONE resolution behind the printed sheet and the detail
- * canvas, so the two always agree.
+ * Whether the undercut strips print a total rail across their cuts: NEVER. The total was removed
+ * (on-device ruling: no hand drawing carries it), with its switches on the Undercut tab, the
+ * options panel and Settings → PDF Export. This stays the ONE resolution behind the printed sheet
+ * and the detail canvas; the stored `UndercutRecord.showTotalRail` and `PdfPrefs.undercutTotalRail`
+ * still decode, so older documents and profiles load, and are read by nothing else. Do not bring
+ * the total back without asking.
  */
-fun effectiveUndercutTotalRail(recordFlag: Boolean?, globalDefault: Boolean): Boolean =
-    recordFlag ?: globalDefault
+@Suppress("UNUSED_PARAMETER")
+fun effectiveUndercutTotalRail(recordFlag: Boolean?, globalDefault: Boolean): Boolean = false
 
 /**
  * Daylight a window-end break keeps between its glyph's inner reach and the next face or cut
