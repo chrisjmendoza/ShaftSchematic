@@ -741,8 +741,10 @@ a long liner stays to scale. See `docs/contracts/UndercutDrawing.md` (Crowded se
 `UndercutRecord.railStyle` (`UndercutRailStyle` CHAIN | FROM_SET, by name, unknown → CHAIN; ONE row
 `UndercutRailStyleRow` above "Distance to S.E.T." on the tab and the options panel). FROM_SET goes
 through `planUndercutStripRails(fromSet = true)` and `drawUndercutStripRails` — the ONE planner and
-ONE draw routine both strip sites already share: it KEEPS the level-0 chain and the nested rows (the
-cut lengths), DROPS the total and the S.E.T. lead ("Total length of cuts" greys out, its stored value
+ONE draw routine both strip sites already share: it KEEPS the level-0 chain for the cut lengths, with every nested shoulder a chain NODE — a cut
+holding nested cuts reads as its floor pieces on that one line and there are NO nested rows
+(on-device report: a 1 1/8" over the two 9/16" it is made of, "we don't need that 1 1/8"; Chain
+dimensions keep the parent's length and the nested row) — DROPS the total and the S.E.T. lead ("Total length of cuts" greys out, its stored value
 untouched), and ADDS one baseline rail per station from the strip's `undercutStripSetSide` S.E.T.
 (`buildUndercutSetRailSpans`: AFT — every cut's start at every level plus the FWD-most cut's end;
 FWD — the mirror; coinciding stations one rail; nearest lowest), each its own line with its value in

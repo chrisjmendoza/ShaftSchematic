@@ -849,8 +849,9 @@ fun planUndercutStripRails(
     /**
      * The job's "Dimensions" choice is From S.E.T. (`UndercutRailStyle.FROM_SET`): with a [setLead]
      * and cuts to dimension, the strip stacks one baseline rail per station from [setLead]'s S.E.T.
-     * ([buildUndercutSetRailSpans]) over the chain and its nested rows, which stay as they are for
-     * the cut lengths, and drops the total and the S.E.T. lead — the nearest baseline rail states
+     * ([buildUndercutSetRailSpans]) over the chain, which carries the cut lengths — every nested
+     * shoulder a chain node, so a cut holding nested cuts reads as its floor pieces on that one
+     * line and there are no nested rows — and drops the total and the S.E.T. lead — the nearest baseline rail states
      * the lead's value. False (the default) plans exactly the chained strip.
      */
     fromSet: Boolean = false,
@@ -868,10 +869,10 @@ fun planUndercutStripRails(
     val sorted = spans.sortedBy { it.startMm }
     val nestingById = undercutNestingForest(sorted).associateBy { it.id }
     val topSpans = sorted.filter { (nestingById[it.id]?.level ?: 0) == 0 }
-    val chainSpans = if (startedStrip) emptyList()
+    val wholeChain = if (startedStrip) emptyList()
     else buildUndercutRailSpans(chainStartMm, chainEndMm, topSpans, unit, dual, splitAtMm = splitAtMm)
     val setRailSpans = when {
-        startedStrip || chainSpans.isEmpty() || setLead == null -> emptyList()
+        startedStrip || wholeChain.isEmpty() || setLead == null -> emptyList()
         fromSet -> buildUndercutSetRailSpans(sorted, setLead, unit, dual)
         linerEnds != null -> buildUndercutLinerEndRailSpans(linerEnds, setLead, unit, dual)
         else -> emptyList()
@@ -879,7 +880,17 @@ fun planUndercutStripRails(
     // From S.E.T. replaces the total and the lead; liner ends stand over a chained strip.
     val setMode = fromSet && setRailSpans.isNotEmpty()
     val totalSpan = if (startedStrip || !showTotal || setMode) null else buildUndercutTotalSpan(topSpans, unit, dual)
-    val nestedSpans = if (startedStrip) emptyList() else buildNestedUndercutRailRows(sorted, unit, dual)
+    // From S.E.T. puts every floor piece on ONE chain: a cut holding nested cuts is dimensioned as
+    // the pieces its nested shoulders split it into, never as its own whole length over a row of
+    // those same pieces (on-device report: a 1 1/8" over the two 9/16" it is made of — "we don't
+    // need that 1 1/8"). The nested shoulders become chain nodes, so there are no nested rows.
+    val chainSpans = if (!setMode) wholeChain else buildUndercutRailSpans(
+        chainStartMm, chainEndMm, topSpans, unit, dual,
+        splitAtMm = splitAtMm + sorted
+            .filter { (nestingById[it.id]?.level ?: 0) > 0 }
+            .flatMap { listOf(it.startMm, it.endMm) },
+    )
+    val nestedSpans = if (startedStrip || setMode) emptyList() else buildNestedUndercutRailRows(sorted, unit, dual)
 
     fun layout(rail: List<WearRailSpan>) = layoutWearStripRail(
         rail,

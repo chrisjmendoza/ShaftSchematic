@@ -8,6 +8,16 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-12
 
+### fix(undercut): From S.E.T. puts every cut length on one chain
+
+On-device report: a 1 1/8" cut holding a 9/16" cut printed the 1 1/8" on the chain and, on a row
+under it, the two 9/16" pieces it is made of — "we don't need that 1 1/8". Under "Dimensions: From
+S.E.T." the nested shoulders are now chain nodes (`planUndercutStripRails(fromSet)` passes them
+as `buildUndercutRailSpans`' `splitAtMm`), so a cut holding nested cuts is dimensioned as its
+floor pieces on the one chain and no nested row is planned. The baseline rails are unchanged, the
+chain still sums to its length, and the strip is one row shorter. Chain dimensions keep the
+parent's length and the nested row, as before. Dimensioning only.
+
 ### fix(undercut): "Compress long sections" redraws the page while it is dragged
 
 On-device report: the new slider only redrew the undercut PDF preview on release, unlike the

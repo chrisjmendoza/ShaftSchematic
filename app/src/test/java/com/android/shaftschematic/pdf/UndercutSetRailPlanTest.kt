@@ -97,9 +97,27 @@ class UndercutSetRailPlanTest {
         assertNull(fromSet.leadSpan)
         assertNull(fromSet.lead)
         assertFalse(fromSet.canLiftFallbacks)
-        assertEquals(chained.chainSpans, fromSet.chainSpans)
-        assertEquals(chained.nestedSpans, fromSet.nestedSpans)
-        assertEquals(chained.nested, fromSet.nested)
+    }
+
+    @Test
+    fun `a cut holding a nested cut is dimensioned as its floor pieces on the one chain`() {
+        // The job's 1 1/8" cut holds a 9/16" cut at its FWD end.
+        val chained = plan(aftLead(), fromSet = false)
+        val fromSet = plan(aftLead(), fromSet = true)
+        assertTrue(chained.chain.any { it.label == label(1.125) })
+        assertEquals(1, chained.nested.size)
+        assertFalse(fromSet.chain.any { it.label == label(1.125) })
+        assertEquals(
+            chained.chain.count { it.label == label(0.5625) } + 2,
+            fromSet.chain.count { it.label == label(0.5625) },
+        )
+        assertTrue(fromSet.nested.isEmpty())
+        assertTrue(fromSet.nestedSpans.isEmpty())
+        // The chain still sums to its own length, and every station keeps its rail.
+        assertEquals(chained.chainSpans.sumOf { (it.endMm - it.startMm).toDouble() },
+            fromSet.chainSpans.sumOf { (it.endMm - it.startMm).toDouble() }, 1e-2)
+        assertEquals(chained.chainSpans.size + 1, fromSet.chainSpans.size)
+        assertEquals(8, fromSet.setRailSpans.size)
     }
 
     @Test
