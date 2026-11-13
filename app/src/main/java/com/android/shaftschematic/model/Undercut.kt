@@ -158,6 +158,10 @@ data class Undercut(
  *   Chain dimensions only — ignored while [railStyle] is [UndercutRailStyle.FROM_SET] — and nothing
  *   on a bare-shaft strip. A FIT for this job, so per-document. Dimensioning only — no stored value
  *   moves. Additive + defaulted; older files get `false`.
+ * @property longCompressFrac "Compress long sections": how much of a long stretch's length the
+ *   PRINTED strip may give up so the short cuts beside it draw larger (0 = to scale, the default
+ *   and every older file; up to [UNDERCUT_LONG_COMPRESS_MAX_FRAC]). A sheet it changes prints
+ *   "Not to scale". A FIT for this job, so per-document. Drawing only — no stored value moves.
  * @property excludedLinerIds Liner strips left off the printed sheet, by liner id ("Sections to
  *   print"). An EXCLUSION list, so a liner added later prints by default and a selection is never
  *   silently rewritten. Also governs that liner's started strip on a blank draft. An id that no
@@ -179,7 +183,11 @@ data class UndercutRecord(
     val excludedFreeCutIds: List<String> = emptyList(),
     val railStyle: UndercutRailStyle = UndercutRailStyle.CHAIN,
     val linerEndsFromSet: Boolean = false,
+    val longCompressFrac: Float = 0f,
 )
+
+/** The most of a long stretch's excess length "Compress long sections" may take. */
+const val UNDERCUT_LONG_COMPRESS_MAX_FRAC = 0.9f
 
 /**
  * How the undercut sheet's strips dimension their cuts, chosen per job ([UndercutRecord.railStyle]).

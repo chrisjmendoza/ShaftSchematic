@@ -18,9 +18,11 @@ import com.android.shaftschematic.util.UnitSystem
  * lengths either way; only the drawn proportions move, the way a hand sketch draws a 9/16" cut
  * wide enough to write in.
  *
- * ONE map per strip, built by the ONE planner [planUndercutStripXMap], behind both draw sites
- * (the printed strip and the detail canvas) and everything on them: profile, notches, liner
- * outline, rails, Ø leaders, cut numbers and the canvas tap. Radii never go through it.
+ * The piecewise map is the DETAIL CANVAS's only ([planUndercutStripXMap]) — an input surface,
+ * where reading every value matters more than proportion. A printed strip is always the linear
+ * map. Either way ONE map stands behind everything a strip draws along its length: profile,
+ * notches, liner outline, rails, Ø leaders, cut numbers and the canvas tap. Radii never go
+ * through it.
  */
 class UndercutStripXMap private constructor(
     private val knotsMm: FloatArray,
@@ -105,6 +107,9 @@ fun undercutRailsCrowded(rails: UndercutStripRails): Boolean =
  *   are floored first, innermost out, so a parent is at least as wide as what it holds.
  * - Everything else shares the remaining width in proportion to its true length, so the long
  *   sections keep their relative lengths.
+ * - The stretches that are NOT short keep at least [UNDERCUT_X_LONG_MIN_FRAC] of the chain's width
+ *   between them (on-device report: a 31 15/16" cut drew the same width as the 9/16" slivers
+ *   beside it — "it's tiny, that's wrong"); the short ones' shared width is cut down to leave it.
  * - Floors that cannot all fit are scaled down together; the values that then do not seat fall
  *   back above their line exactly as on a to-scale strip.
  *
@@ -161,8 +166,15 @@ internal fun fitUndercutStripXMap(
 
     val chain = (0 until n).filter { !isPad[it] }
     val chainWidth = chain.sumOf { lin[it].toDouble() }.toFloat()
-    val floorSum = chain.sumOf { floor[it].toDouble() }.toFloat()
     if (chainWidth <= 0f) return linear
+    // The long stretches stay visibly long: the short ones may take only what leaves the rest
+    // [UNDERCUT_X_LONG_MIN_FRAC] of the chain (or their to-scale width, when that is less).
+    val shortAtoms = short.flatMap { atomsOf(it) }.toSet()
+    val longLin = chain.filter { it !in shortAtoms }.sumOf { lin[it].toDouble() }.toFloat()
+    val shortBudget = chainWidth - minOf(longLin, UNDERCUT_X_LONG_MIN_FRAC * chainWidth)
+    val shortSum = shortAtoms.sumOf { floor[it].toDouble() }.toFloat()
+    if (shortSum > shortBudget && shortSum > 0f) shortAtoms.forEach { floor[it] *= shortBudget / shortSum }
+    val floorSum = chain.sumOf { floor[it].toDouble() }.toFloat()
     if (floorSum > chainWidth) chain.forEach { floor[it] *= chainWidth / floorSum }
 
     // Water-fill: pin every stretch its floor binds, share the rest by true length.
@@ -195,7 +207,9 @@ internal fun fitUndercutStripXMap(
 }
 
 /**
- * The ONE x map behind both undercut strip draw sites — the printed strip and the detail canvas.
+ * The detail canvas's x map. A PRINTED strip never takes it: the sheet shows the work done at its
+ * true proportions (on-device ruling), so `planUndercutDetailStrip` always maps to scale and a
+ * crowded sheet takes fallback rows instead.
  *
  * Plans the rails on the to-scale map first ([planUndercutStripRails], the same arguments the
  * caller then plans its real rails with); a strip whose values do not crowd
@@ -244,6 +258,74 @@ fun planUndercutStripXMap(
     }
     return fitUndercutStripXMap(drawStartMm, drawEndMm, startX, linearScale, chainStartMm, chainEndMm, floors)
 }
+
+/**
+ * The PRINTED strip's "Compress long sections" map (`UndercutRecord.longCompressFrac`, on-device
+ * request: let the user choose how far the long areas compress so the small cuts are easier to
+ * see). Every stretch between two shoulders ([edgesMm]) inside the chain keeps its length up to
+ * [UNDERCUT_LONG_SECTION_FRAC] of the chain; only the EXCESS past that is shortened, by [frac].
+ * The chain keeps its drawn width, so everything in it draws larger by one factor: cuts shorter
+ * than the threshold stay in true proportion to each other, a longer stretch always draws longer
+ * than a shorter one, and the stock outside the chain stays to scale (break room, S.E.T. lead).
+ *
+ * Returns the linear map when [frac] is 0 or nothing moves by [UNDERCUT_X_MOVED_EPS] — the sheet
+ * then is to scale and prints no "Not to scale" note.
+ */
+internal fun compressLongUndercutStripXMap(
+    drawStartMm: Float,
+    drawEndMm: Float,
+    startX: Float,
+    linearScale: Float,
+    chainStartMm: Float,
+    chainEndMm: Float,
+    edgesMm: List<Float>,
+    frac: Float,
+): UndercutStripXMap {
+    val linear = UndercutStripXMap.linear(drawStartMm, drawEndMm, startX, linearScale)
+    val eps = UndercutStripXMap.KNOT_EPS_MM
+    val chainLen = chainEndMm - chainStartMm
+    if (frac <= 0f || linearScale <= 0f || chainLen <= eps || drawEndMm - drawStartMm <= eps) return linear
+    val keep = 1f - frac.coerceAtMost(1f)
+    val knots = (edgesMm.filter { it > chainStartMm && it < chainEndMm } + listOf(drawStartMm, drawEndMm, chainStartMm, chainEndMm))
+        .map { it.coerceIn(drawStartMm, drawEndMm) }
+        .sorted()
+        .fold(mutableListOf<Float>()) { acc, k -> if (acc.isEmpty() || k - acc.last() > eps) acc += k; acc }
+    knots[knots.lastIndex] = drawEndMm
+    val n = knots.size - 1
+    if (n < 2) return linear
+    val threshold = UNDERCUT_LONG_SECTION_FRAC * chainLen
+    val len = FloatArray(n) { knots[it + 1] - knots[it] }
+    val isPad = BooleanArray(n) { i ->
+        val mid = (knots[i] + knots[i + 1]) * 0.5f
+        mid < chainStartMm || mid > chainEndMm
+    }
+    val eff = FloatArray(n) { i -> if (len[i] <= threshold) len[i] else threshold + (len[i] - threshold) * keep }
+    val chain = (0 until n).filter { !isPad[it] }
+    val chainWidth = chain.sumOf { (len[it] * linearScale).toDouble() }.toFloat()
+    val effSum = chain.sumOf { eff[it].toDouble() }.toFloat()
+    if (effSum <= 0f) return linear
+    val xs = FloatArray(n + 1)
+    xs[0] = startX
+    var moved = 0f
+    for (i in 0 until n) {
+        xs[i + 1] = xs[i] + if (isPad[i]) len[i] * linearScale else chainWidth * eff[i] / effSum
+        moved = maxOf(moved, kotlin.math.abs(xs[i + 1] - linear.xAt(knots[i + 1])))
+    }
+    if (moved < UNDERCUT_X_MOVED_EPS) return linear
+    return UndercutStripXMap.piecewise(knots.toFloatArray(), xs, linearScale)
+}
+
+/** A stretch longer than this share of its chain is a "long section": only its excess compresses. */
+const val UNDERCUT_LONG_SECTION_FRAC = 0.10f
+
+/** A compressed map that moves no station this far (drawing units) is the to-scale map. */
+private const val UNDERCUT_X_MOVED_EPS = 0.25f
+
+/**
+ * The least share of a crowded chain's drawn width its long (unfloored-short) stretches keep
+ * between them, so the big section still reads as the big one beside widened slivers.
+ */
+const val UNDERCUT_X_LONG_MIN_FRAC = 0.45f
 
 /** Slack over the exact seat width, so float rounding never leaves a floored value unseated. */
 private const val UNDERCUT_X_FLOOR_SLACK_PT = DimensionRailLayout.ARROW_CLEAR + 1f

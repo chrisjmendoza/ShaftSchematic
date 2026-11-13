@@ -90,6 +90,20 @@ class ShaftViewModelUndercutSheetElectionTest {
     }
 
     @Test
+    fun `the long-compress setter clamps, marks the document dirty, and no-ops when unchanged`() {
+        val vm = savedVm()
+        vm.setUndercutLongCompress(0.5f)
+        idle()
+        assertEquals(0.5f, vm.undercutRecord.value.longCompressFrac, 0f)
+        assertTrue(vm.hasUnsavedChanges.value)
+        val after = vm.undercutRecord.value
+        vm.setUndercutLongCompress(0.5f)
+        assertSame(after, vm.undercutRecord.value)
+        vm.setUndercutLongCompress(4f)
+        assertEquals(0.9f, vm.undercutRecord.value.longCompressFrac, 0f)
+    }
+
+    @Test
     fun `undo restores the previous liner-ends choice`() {
         val vm = ShaftViewModel(ApplicationProvider.getApplicationContext<Application>())
         idle()

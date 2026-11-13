@@ -707,19 +707,32 @@ data), and each level ≥ 1 gets ONE extra chain row anchored at its **parent's 
 (`buildNestedUndercutRailRows`), reserved through the same `undercutRailRowHeightPt` metric. See
 `docs/archive/UndercutDrawing_PLAN.md`.
 
-**A strip crowded with short cuts is not drawn to scale** (on-device report: seven cuts on one
-liner, 9/16" slivers at each end of a 31 15/16" one, printed their values stacked two rows deep).
-ONE axial map per strip, `UndercutStripXMap` (`pdf/UndercutStripXMap.kt`), built by the ONE planner
-`planUndercutStripXMap` behind BOTH draw sites — the printed strip (`UndercutStripPlan.xMap`) and
-the detail canvas (`planUndercutDetailXMap`): profile, notches, liner outline, rails, Ø leaders, cut
-numbers and the canvas tap all read it; radii never do. It is the to-scale map — byte-identical —
+**The PRINTED undercut strip is always to scale; only the detail canvas widens a crowded section**
+(on-device ruling: the output documents show the work done at its true proportions — a map that
+printed a 1 1/8", a 1 1/2" and a 5/8" cut the same width was "exactly what I didn't want"; the
+on-screen drawing is an input surface and may exaggerate to stay readable). `planUndercutDetailStrip`
+maps linearly, always (`UndercutStripPlan.xMap`, pinned by `UndercutSheetToScaleTest`), and a crowded
+sheet takes fallback rows; do not hand the sheet a non-linear map without asking. The ONE exception
+is the user's own per-job choice, **"Compress long sections"** (`UndercutRecord.longCompressFrac`,
+default 0 = to scale; `UndercutLongCompressRow` on the tab and the options panel): the printed strip
+then goes through `compressLongUndercutStripXMap` — only a stretch's EXCESS past
+`UNDERCUT_LONG_SECTION_FRAC` (10%) of its chain shortens, so short cuts keep their true proportions
+to each other and a longer stretch always draws longer — and a sheet it changed prints the
+`UNDERCUT_NOT_TO_SCALE_NOTE` footnote under the notes line (on-device request); 0 is byte-identical
+and prints no note. It never reads or feeds the canvas's crowded map. On the DETAIL
+CANVAS (seven cuts on one liner, 9/16" slivers at each end of a 31 15/16" one, drew their values
+stacked two rows deep) ONE axial map, `UndercutStripXMap` (`pdf/UndercutStripXMap.kt`), built by
+`planUndercutStripXMap` through `planUndercutDetailXMap`: profile, notches, liner outline, rails, Ø
+leaders, cut numbers and the canvas tap all read it; radii never do. It is the to-scale map
 until the rails planned on it are crowded (`undercutRailsCrowded`: a value that neither seats in its
 line nor takes the first row beside it); then every chain and nested span is floored at the width
 its value seats at, the short ones sharing ONE width, and the long stretches give the room up in
-proportion to length (`fitUndercutStripXMap`). The strip's width, its ends and the stock outside
+proportion to length (`fitUndercutStripXMap`) — but the stretches that are NOT short keep at least
+`UNDERCUT_X_LONG_MIN_FRAC` (45%) of the chain's width between them, the short ones' shared width cut
+down to leave it (on-device report: a 31 15/16" cut drew the width of the 9/16" slivers beside it). The strip's width, its ends and the stock outside
 the chain datums never move (break room and S.E.T. lead room are sized for it), and a taper
 crossing a scale change draws as a polyline through `knotsInside`. Do not map x anywhere on a strip
-with a private linear expression, and do not floor a strip that is not crowded — one short cut on
+with a private linear expression (both sites go through their `xMap`), and do not floor a strip that is not crowded — one short cut on
 a long liner stays to scale. See `docs/contracts/UndercutDrawing.md` (Crowded sections).
 
 **"Dimensions: From S.E.T." is the chain's alternative, planned and drawn by the SAME pair**

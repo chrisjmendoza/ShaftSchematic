@@ -8,6 +8,41 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-12
 
+### feat(undercut): "Compress long sections" slider, and a "Not to scale" footnote
+
+On-device request: let the user choose how much the larger areas compress so the smaller cuts are
+easier to see, and say so at the bottom of the page.
+
+Per-job `UndercutRecord.longCompressFrac` (0 = to scale, the default and every older file; up to
+90%, 5% steps), ONE row `UndercutLongCompressRow` on the Undercut tab's Drawing settings and the
+undercut PDF options panel, committed on release. On the PRINTED strip every stretch between two
+shoulders keeps its length up to 10% of the chain (`UNDERCUT_LONG_SECTION_FRAC`); only the excess
+past that is shortened, by the slider's value (`compressLongUndercutStripXMap`). The chain keeps
+its drawn width, so everything draws larger by one factor: short cuts stay in true proportion to
+each other, a longer stretch always draws longer than a shorter one, and the stock outside the
+chain stays to scale. Printed dimensions are the stored lengths, as always. A sheet with any strip
+the slider changed prints "Not to scale — long sections shortened; dimensions are true." under the
+notes line; at 0, or where nothing moves, the sheet is byte-identical and prints no note. The
+detail canvas is unchanged.
+
+### fix(undercut): the printed undercut sheet is to scale again
+
+On-device report: the crowded-section map (below) reached the printed sheet as well as the
+Undercut tab's detail canvas, and a 1 1/8", a 1 1/2" and a 5/8" cut printed the same width. The
+output documents show the work done at its true proportions; only the on-screen drawing is there
+to be read while typing.
+
+A printed undercut strip is always drawn to scale (`planUndercutDetailStrip` maps linearly, its
+`fitCrowded` switch removed), so a crowded sheet prints as it did before the map existed — short
+values on fallback rows with leaders. The detail canvas keeps the crowded map
+(`planUndercutDetailXMap`). `UndercutSheetToScaleTest` pins the sheet.
+
+On the canvas the long cut stays the long one (on-device report: on a phone the 31 15/16" cut
+drew the same width as the 9/16" slivers beside it). The stretches that are not short keep at
+least 45% of the chain's drawn width between them (`UNDERCUT_X_LONG_MIN_FRAC`); the short ones'
+shared width is cut down to leave it, and a value that no longer seats lifts above its line on a
+leader.
+
 ### feat(undercut): "Liner ends from S.E.T." — both liner ends located on the chained sheet
 
 On-device request: when the shop welds over undercuts it must know where the liner begins and ends
@@ -73,9 +108,8 @@ beside it either). A crowded strip is drawn through a piecewise axial map
 — cut, gap between cuts, nested cut — gets the width its own value needs to seat in its line, the
 short ones all taking one width, and the long stretches give that room up in proportion to their
 length. The strip keeps its width, its ends and the stock outside its chain; the rail values are
-the stored lengths as before; each Ø leader drops straight from its own cut. The printed strip and
-the Undercut tab's detail canvas read the same map (drawing, rails, cut numbers and the canvas
-tap), so they cannot differ. A strip whose values do not stack — one short cut on a long liner —
+the stored lengths as before; each Ø leader drops straight from its own cut. (As first shipped the
+printed strip read the same map; it is the detail canvas's alone — see the entry above.) A strip whose values do not stack — one short cut on a long liner —
 prints exactly as before. No setting, no stored field. The detail canvas's cut numbers are placed
 in drawn x (`undercutCutNumberPlacementsPx(mmAtPx)`), so a number sits inside a cut that is drawn
 wide enough for it and never hangs past its cut.
