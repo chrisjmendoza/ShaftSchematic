@@ -8,6 +8,15 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-12
 
+### feat(undercut): "Draw to the shaft end" is on the PDF options panel too
+
+On-device request for the taper beside a liner near the shaft end to be drawn in and dimensioned
+to the S.E.T., as on the wear sheet. The undercut sheet already does this under the per-job
+"Draw to the shaft end" switch, which was only in the tab's Drawing settings and was not found.
+The switch is now ONE shared row (`UndercutDrawToSetRow`) on the tab and on the undercut PDF
+options panel (`pdf_undercut_draw_to_set_switch`), and its caption says the taper is included. No
+change to what the switch draws, or to its default (off).
+
 ### feat(undercut): the undercut sheet follows "Dimension text size"
 
 On-device request: the From S.E.T. sheet prints well but its text is a little small. The
