@@ -162,7 +162,8 @@ internal fun UndercutLinerEndsFromSetRow(
  * The per-job "Compress long sections" slider ([UndercutRecord.longCompressFrac], on-device
  * request): how far the printed strips shorten their long stretches so the short cuts draw
  * larger. 0% is to scale. ONE row on the Undercut tab's Drawing settings and the undercut options
- * panel. The value follows the finger from local state and commits once on release.
+ * panel. The value follows the finger from local state and commits once on release; on the PDF
+ * preview the page redraws under the finger through [onDrag], like the other tuning sliders.
  */
 @Composable
 internal fun UndercutLongCompressRow(
@@ -170,6 +171,12 @@ internal fun UndercutLongCompressRow(
     onCommit: (Float) -> Unit,
     testTag: String,
     modifier: Modifier = Modifier,
+    /**
+     * Live-drag sink (`PreviewTuning.undercutLongCompress`), passed only where a rendered page
+     * redraws under the finger: the in-progress value while dragging, null when the drag ends.
+     * Never a write — the commit stays on release.
+     */
+    onDrag: ((Float?) -> Unit)? = null,
 ) {
     var drag by remember { mutableStateOf<Float?>(null) }
     val shown = drag ?: frac
@@ -188,10 +195,14 @@ internal fun UndercutLongCompressRow(
         }
         Slider(
             value = shown,
-            onValueChange = { drag = it },
+            onValueChange = {
+                drag = it
+                onDrag?.invoke(undercutLongCompressSnap(it))
+            },
             onValueChangeFinished = {
                 drag?.let { onCommit(undercutLongCompressSnap(it)) }
                 drag = null
+                onDrag?.invoke(null)
             },
             valueRange = 0f..UNDERCUT_LONG_COMPRESS_MAX_FRAC,
             modifier = Modifier.fillMaxWidth().testTag(testTag),

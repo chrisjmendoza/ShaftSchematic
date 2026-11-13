@@ -719,7 +719,8 @@ then goes through `compressLongUndercutStripXMap` — only a stretch's EXCESS pa
 `UNDERCUT_LONG_SECTION_FRAC` (10%) of its chain shortens, so short cuts keep their true proportions
 to each other and a longer stretch always draws longer — and a sheet it changed prints the
 `UNDERCUT_NOT_TO_SCALE_NOTE` footnote under the notes line (on-device request); 0 is byte-identical
-and prints no note. It never reads or feeds the canvas's crowded map. On the DETAIL
+and prints no note. It never reads or feeds the canvas's crowded map. On the PDF preview its drag is
+live like the shared tuning sliders (`PreviewTuning.undercutLongCompress`, no write on a drag frame). On the DETAIL
 CANVAS (seven cuts on one liner, 9/16" slivers at each end of a 31 15/16" one, drew their values
 stacked two rows deep) ONE axial map, `UndercutStripXMap` (`pdf/UndercutStripXMap.kt`), built by
 `planUndercutStripXMap` through `planUndercutDetailXMap`: profile, notches, liner outline, rails, Ø

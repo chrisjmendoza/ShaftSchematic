@@ -26,8 +26,8 @@ import kotlin.math.roundToInt
  * PreviewTuning — the live, visual-only overrides behind an open PDF preview while a
  * tuning slider is being dragged.
  *
- * The four tuning sliders (Line thickness, Body S-break, Shaft height, Liner compression)
- * report their in-progress value through their `onDrag` channel; the hosting preview
+ * The tuning sliders (Line thickness, Body S-break, Shaft height, Liner compression, and the
+ * undercut sheet's Compress long sections) report their in-progress value through their `onDrag` channel; the hosting preview
  * screen parks it here and renders the page from it, so the drawing reshapes under the
  * finger instead of only on release ("see the differences without choosing, closing menu,
  * opening menu, choosing" — on-device request).
@@ -62,9 +62,15 @@ class PreviewTuning {
     /** In-progress raw "Liner compression" value (not the derived width floor). */
     var linerCompression by mutableStateOf<Float?>(null)
 
+    /**
+     * In-progress undercut "Compress long sections" fraction, or null — the undercut preview
+     * draws its record with this in place of the stored `UndercutRecord.longCompressFrac`.
+     */
+    var undercutLongCompress by mutableStateOf<Float?>(null)
+
     private val activeState = derivedStateOf {
         lineThickness != null || sBreakFrac != null ||
-            heightScale != null || linerCompression != null
+            heightScale != null || linerCompression != null || undercutLongCompress != null
     }
 
     /** True while any tuning slider is being dragged. */
