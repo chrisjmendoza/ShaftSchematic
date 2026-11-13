@@ -856,7 +856,12 @@ canvas's selection — are fixed `SheetInk.Selection` ink as well, never `colorS
 (on-device report: High contrast's amber read weakly on the white paper). See
 `docs/contracts/Appearance.md`.
 
-The editor preview is NOT paper — it is theme-styled — and on a DARK ground its preset colours
+The editor preview is NOT paper — it is theme-styled — but **under a dark theme the Schematic and
+Final tabs' preview box is a white card drawn with the LIGHT scheme** (`ColorScheme.previewPaperScheme`
+wrapped round `ShaftPreviewPanel`'s content; on-device report: the Undercut screen's white canvas
+read well in dark, the grey-on-dark schematic preview did not — do not put the editor preview back
+on the dark ground without asking). The dark-ground rules below still stand for anything drawn
+straight on a dark ground — the template thumbnails. On a DARK ground the preset colours
 take ONE denser rule: `PreviewColorPreset` keys it on the scheme's own ground
 (`ColorScheme.isDarkPreviewGround()`, `surface` luminance < 0.5 — never a theme flag, so
 high-contrast dark takes it too), lerping Stainless/Steel nearer the foreground (0.68/0.90) and

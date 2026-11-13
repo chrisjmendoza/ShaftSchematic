@@ -38,6 +38,7 @@ import com.android.shaftschematic.ui.drawing.render.PreviewIssueMark
 import com.android.shaftschematic.ui.drawing.render.PreviewRailSettings
 import com.android.shaftschematic.ui.drawing.render.PreviewSheetSettings
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
+import com.android.shaftschematic.ui.theme.previewPaperScheme
 import com.android.shaftschematic.util.PreviewColorSetting
 import com.android.shaftschematic.util.UnitSystem
 
@@ -86,11 +87,15 @@ internal fun PreviewCard(
     // starts, so it stands down while the rails draw one (a 0 OAL draws no rails; the badge
     // still shows the drawn extent then).
     val railsShowOal = dimensionRails != null && spec.overallLengthMm > 0f
+    // Under a dark theme the preview stands on a light paper card and draws with the light
+    // scheme, like the Undercut tab's canvas (`previewPaperScheme`); a light theme is unchanged.
+    val paperScheme = MaterialTheme.colorScheme.previewPaperScheme()
     Card(
         modifier = modifier,
-        shape = RectangleShape,
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+        shape = if (paperScheme != null) RoundedCornerShape(PREVIEW_PAPER_CORNER_DP.dp) else RectangleShape,
+        colors = CardDefaults.cardColors(containerColor = paperScheme?.background ?: Color.Transparent)
     ) {
+        MaterialTheme(colorScheme = paperScheme ?: MaterialTheme.colorScheme) {
         Box(Modifier.fillMaxSize().background(Color.Transparent)) {
             // Direct render: pass grid + highlight to the renderer
             ShaftDrawing(
@@ -133,8 +138,12 @@ internal fun PreviewCard(
                 }
             }
         }
+        }
     }
 }
+
+/** Corner radius of the dark theme's light preview card. */
+private const val PREVIEW_PAPER_CORNER_DP = 12
 
 @Composable
 private fun PreviewOalBadge(

@@ -1,11 +1,13 @@
 package com.android.shaftschematic.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import com.android.shaftschematic.settings.AppThemeMode
 
 // `tertiaryContainer` is the app's CAUTION tier (see Color.kt) — assigned here in every scheme
@@ -141,6 +143,26 @@ internal val HighContrastDarkColorScheme = darkColorScheme(
  * be dark on a dark app bar or light on a light one. High contrast does not enter it: each
  * high-contrast scheme keeps its base scheme's light/dark ground.
  */
+/**
+ * The LIGHT scheme the editor preview is drawn with under a dark app theme, or null on a light
+ * one. On a dark theme the Schematic and Final tabs' preview stands on a light paper card, like
+ * the Undercut tab's canvas (on-device report: the undercut screen read well in dark, the
+ * schematic preview drawn on the dark ground did not): the card and everything in it take this
+ * scheme, so the shaft, its fills and its dimension lines are exactly the light theme's. High
+ * contrast keeps its own light counterpart.
+ */
+internal fun ColorScheme.previewPaperScheme(): ColorScheme? = when {
+    this === HighContrastDarkColorScheme -> HighContrastPreviewPaperScheme
+    surface.luminance() < 0.5f -> PreviewPaperScheme
+    else -> null
+}
+
+// The card is the Undercut canvas's white, and the rail values' knockout halos read the scheme's
+// `background`, so both grounds are white here rather than the light theme's tinted surface.
+private val PreviewPaperScheme = LightColorScheme.copy(background = Color.White, surface = Color.White)
+private val HighContrastPreviewPaperScheme =
+    HighContrastLightColorScheme.copy(background = Color.White, surface = Color.White)
+
 @Composable
 fun isAppDarkTheme(themeMode: AppThemeMode): Boolean = when (themeMode) {
     AppThemeMode.SYSTEM -> isSystemInDarkTheme()
