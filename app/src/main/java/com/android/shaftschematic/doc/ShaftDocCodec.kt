@@ -89,6 +89,14 @@ object ShaftDocCodec {
          */
         @SerialName("sheet_date_text")
         val sheetDateText: String = "",
+        /**
+         * The job's "Date on this sheet" choices — `SheetDateSheet` name → whether that sheet prints
+         * the date. Absent in older files → empty, which is the shipped defaults (`sheetPrintsDate`);
+         * a name this build does not know is carried and never read. Additive + defaulted: no
+         * version bump needed.
+         */
+        @SerialName("sheet_date_sheets")
+        val sheetDateSheets: Map<String, Boolean> = emptyMap(),
         @SerialName("shaft_position")
         val shaftPosition: ShaftPosition = ShaftPosition.OTHER,
         val notes: String = "",
@@ -182,6 +190,7 @@ object ShaftDocCodec {
         val item: String,
         val sheetDateMode: SheetDateMode,
         val sheetDateText: String,
+        val sheetDateSheets: Map<String, Boolean>,
         val shaftPosition: ShaftPosition,
         val notes: String,
         val spec: ShaftSpec,
@@ -297,6 +306,7 @@ object ShaftDocCodec {
             item = d.item,
             sheetDateMode = d.sheetDateMode,
             sheetDateText = d.sheetDateText,
+            sheetDateSheets = d.sheetDateSheets,
             shaftPosition = d.shaftPosition,
             notes = d.notes,
             spec = d.spec,
@@ -330,6 +340,7 @@ object ShaftDocCodec {
                     item = doc.item,
                     sheetDateMode = doc.sheetDateMode,
                     sheetDateText = doc.sheetDateText,
+                    sheetDateSheets = doc.sheetDateSheets,
                     shaftPosition = doc.shaftPosition,
                     notes = doc.notes,
                     spec = normalizedSpec,
@@ -382,6 +393,7 @@ object ShaftDocCodec {
             item = "",
             sheetDateMode = SheetDateMode.TODAY,
             sheetDateText = "",
+            sheetDateSheets = emptyMap(),
             shaftPosition = ShaftPosition.OTHER,
             notes = "",
             spec = legacy,

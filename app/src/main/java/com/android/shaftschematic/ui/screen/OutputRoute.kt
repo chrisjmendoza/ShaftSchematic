@@ -67,6 +67,8 @@ import com.android.shaftschematic.geom.effectiveWearTraceDepthFrac
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
 import com.android.shaftschematic.model.ProjectInfo
+import com.android.shaftschematic.model.forSheet
+import com.android.shaftschematic.model.SheetDateSheet
 import com.android.shaftschematic.model.RunoutReadings
 import com.android.shaftschematic.model.RunoutStationPlacements
 import com.android.shaftschematic.model.ShaftSpec
@@ -236,6 +238,7 @@ fun OutputRoute(
     val item               by vm.item.collectAsState()
     val sheetDateMode      by vm.sheetDateMode.collectAsState()
     val sheetDateText      by vm.sheetDateText.collectAsState()
+    val sheetDateSheets    by vm.sheetDateSheets.collectAsState()
     val shaftPosition      by vm.shaftPosition.collectAsState()
     val openAfterExport    by vm.openPdfAfterExport.collectAsState()
     val lineThicknessScale by vm.lineThicknessScale.collectAsState()
@@ -431,6 +434,7 @@ fun OutputRoute(
         val projectSnapshot = ProjectInfo(customer = customer, vessel = vessel,
             jobNumber = jobNumber, side = shaftPosition, item = item,
             dateMode = sheetDateMode, dateText = sheetDateText)
+            .forSheet(SheetDateSheet.CONSOLIDATED, sheetDateSheets)
         val unitSnapshot = unit
         val prefsSnapshot = vm.currentPdfPrefs
         val resolvedSnapshot = resolvedComponents
@@ -461,7 +465,8 @@ fun OutputRoute(
                     page, variant, spec, runoutConfig,
                     ProjectInfo(customer = customer, vessel = vessel,
                         jobNumber = jobNumber, side = shaftPosition, item = item,
-                        dateMode = sheetDateMode, dateText = sheetDateText),
+                        dateMode = sheetDateMode, dateText = sheetDateText)
+            .forSheet(SheetDateSheet.CONSOLIDATED, sheetDateSheets),
                     unit, vm.currentPdfPrefs, resolvedComponents,
                     lineThicknessScale, runoutReadings, stationPlacements, wearRecord, blankDraft,
                     vm.currentDisplayUnits(),
@@ -481,7 +486,7 @@ fun OutputRoute(
         ActivityResultContracts.OpenDocumentTree()
     ) { treeUri ->
         if (treeUri != null) {
-            val project = ProjectInfo(customer = customer, vessel = vessel,
+            val jobProject = ProjectInfo(customer = customer, vessel = vessel,
                 jobNumber = jobNumber, side = shaftPosition, item = item,
                 dateMode = sheetDateMode, dateText = sheetDateText)
             val prefs = vm.currentPdfPrefs
@@ -497,6 +502,8 @@ fun OutputRoute(
                 if (!batchChecked.getOrElse(i) { true }) return@forEachIndexed
                 if (doc == OutputDoc.UNDERCUT && undercutSkipped) return@forEachIndexed
                 attempted++
+                // Each document prints the date by its OWN "Date on this sheet" switch.
+                val project = jobProject.forSheet(doc.dateSheet, sheetDateSheets)
                 val name = buildOutputFilename(customer, vessel, jobNumber, shaftPosition, doc, blankDraft, currentDocumentName)
                 // A null uri means the provider refused to create the file — counted as a
                 // failure, but there is no document to carry an error page.
@@ -584,7 +591,8 @@ fun OutputRoute(
                 config = tunedRunoutConfig(runoutConfig, tuning.heightScale, tuning.linerCompression),
                 project = ProjectInfo(customer = customer, vessel = vessel,
                     jobNumber = jobNumber, side = shaftPosition, item = item,
-                    dateMode = sheetDateMode, dateText = sheetDateText),
+                    dateMode = sheetDateMode, dateText = sheetDateText)
+            .forSheet(SheetDateSheet.CONSOLIDATED, sheetDateSheets),
                 unit = unit,
                 resolved = resolvedComponents,
                 lineThicknessScale = tuning.lineThickness ?: lineThicknessScale,
@@ -1042,6 +1050,7 @@ fun OutputRoute(
             onPrint = { printConsolidated() },
             optionsSheet = {
                 RunoutWearOptionsSheet(
+                    dateSheet = SheetDateSheet.CONSOLIDATED,
                     lineThicknessScale = lineThicknessScale,
                     pdfShadedBodies = pdfShadedBodies,
                     pdfShadedTapers = pdfShadedTapers,

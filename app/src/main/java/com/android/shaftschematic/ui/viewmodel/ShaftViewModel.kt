@@ -118,6 +118,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             item = _item.value,
             sheetDateMode = _sheetDateMode.value,
             sheetDateText = _sheetDateText.value,
+            sheetDateSheets = _sheetDateSheets.value,
             notes = _notes.value,
             runoutConfig = _runoutConfig.value,
             unitLocked = _unitLocked.value,
@@ -693,6 +694,13 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     internal val _sheetDateText = MutableStateFlow("")
     val sheetDateText: StateFlow<String> = _sheetDateText.asStateFlow()
 
+    /**
+     * The job's "Date on this sheet" choices, keyed by [SheetDateSheet] name; a sheet with no entry
+     * follows the shipped default ([sheetPrintsDate]).
+     */
+    internal val _sheetDateSheets = MutableStateFlow<Map<String, Boolean>>(emptyMap())
+    val sheetDateSheets: StateFlow<Map<String, Boolean>> = _sheetDateSheets.asStateFlow()
+
     internal val _notes = MutableStateFlow("")
     val notes: StateFlow<String> = _notes.asStateFlow()
 
@@ -919,8 +927,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             runoutConfig, unitLocked, wearRecord, runoutReadings, undercutRecord,
             runoutStationPlacements, unitOverrides, dualUnits, item, finalSpec,
             sheetDateMode, sheetDateText,
+            sheetDateSheets,
         ) { values: Array<Any?> ->
-            check(values.size == 19) { "Autosave combine expected 19 values, got ${values.size}" }
+            check(values.size == 20) { "Autosave combine expected 20 values, got ${values.size}" }
 
             val s = values[0] as ShaftSpec
             val u = values[1] as UnitSystem
@@ -942,6 +951,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             val finalS = values[16] as ShaftSpec?
             val dateMode = values[17] as SheetDateMode
             val dateText = values[18] as String
+            @Suppress("UNCHECKED_CAST")
+            val dateSheets = values[19] as Map<String, Boolean>
 
             AutosaveManager.SessionSnapshot(
                 shaftSpec = s,
@@ -954,6 +965,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 item = itm,
                 sheetDateMode = dateMode,
                 sheetDateText = dateText,
+                sheetDateSheets = dateSheets,
                 notes = n,
                 runoutConfig = runout,
                 unitLocked = locked,
@@ -1579,6 +1591,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _item.value = snapshot.item
         _sheetDateMode.value = snapshot.sheetDateMode
         _sheetDateText.value = snapshot.sheetDateText
+        _sheetDateSheets.value = snapshot.sheetDateSheets
         _notes.value = snapshot.notes
         _runoutConfig.value = snapshot.runoutConfig
         _wearRecord.value = snapshot.wearRecord
@@ -1654,6 +1667,10 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     fun setSheetDateMode(value: SheetDateMode) { _sheetDateMode.value = value }
     /** Stored exactly as typed — the date prints verbatim (golden rule), so not even trimmed. */
     fun setSheetDateText(value: String) { _sheetDateText.value = value }
+    /** Whether [sheet] prints the job's date ("Date on this sheet"); stored per job. */
+    fun setSheetDateOnSheet(sheet: SheetDateSheet, on: Boolean) {
+        _sheetDateSheets.value = _sheetDateSheets.value + (sheet.name to on)
+    }
     fun setNotes(value: String)    { _notes.value = value }
     fun setShaftPosition(value: ShaftPosition) { _shaftPosition.value = value }
 

@@ -36,7 +36,8 @@ import com.android.shaftschematic.model.WearRecord
  *
  * **Back to Today** — the sheet date (`sheet_date_mode` / `sheet_date_text`). A typed date is
  * when THIS shaft's work was done; the mate's work is its own, so its sheets print the day they
- * are made until a date is typed for it.
+ * are made until a date is typed for it. Which sheets print the date (`sheet_date_sheets`) is
+ * CARRIED: that is how the shop prints its sheets, not a fact about one shaft's work.
  *
  * Identity ([jobNumber], [customer], [vessel], [position]) comes from the caller, which is
  * what lets the duplicate dialog change the side and job before the copy exists.

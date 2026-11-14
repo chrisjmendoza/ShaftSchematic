@@ -334,7 +334,7 @@ class UndercutSetLeadElectionTest {
         assertEquals(liners[2].id, (sh.strips.single() as UndercutStrip.LinerStrip).linerId)
         assertEquals(1, undercutSheetStripCount(spec, resolved, rec, blankValues = false))
         assertEquals(PdfPageOrientation.LANDSCAPE, undercutSheetOrientation(spec, resolved, rec, blankValues = false))
-        assertEquals(PdfPageOrientation.PORTRAIT, undercutSheetOrientation(spec, resolved, twoSections, blankValues = false))
+        assertEquals(PdfPageOrientation.LANDSCAPE, undercutSheetOrientation(spec, resolved, twoSections, blankValues = false))
     }
 
     @Test

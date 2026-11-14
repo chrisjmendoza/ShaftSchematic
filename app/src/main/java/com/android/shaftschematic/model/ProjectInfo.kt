@@ -91,3 +91,40 @@ fun ProjectInfo.printedDateOrNull(today: String): String? = when (dateMode) {
     SheetDateMode.CUSTOM -> dateText.takeIf { it.isNotBlank() } ?: today
     SheetDateMode.NONE -> null
 }
+
+/**
+ * The printed sheets a job's date can be switched on or off for, one switch each (on-device
+ * request: the schematic and the consolidated sheet carry the date; the runout, wear and undercut
+ * sheets are working papers and usually do not). [FINAL] covers every sheet the Final tab makes —
+ * the final schematic, the Original + Final sheet and the final blank runout sheet, with or
+ * without bubbles.
+ *
+ * [printsDateByDefault] is the ONE defaults table. A job stores only its own choices, keyed by
+ * enum NAME (`sheet_date_sheets` in the envelope); a sheet with no entry follows this table.
+ */
+enum class SheetDateSheet(val printsDateByDefault: Boolean) {
+    SCHEMATIC(true),
+    CONSOLIDATED(true),
+    RUNOUT(false),
+    WEAR(false),
+    UNDERCUT(false),
+    FINAL(true),
+}
+
+/**
+ * Whether [sheet] prints the job's date: the job's own choice in [overrides] (keyed by enum name)
+ * when it has one, else the shipped default. The ONE resolution — a name [overrides] carries that
+ * is no sheet of this build is simply never asked for.
+ */
+fun sheetPrintsDate(sheet: SheetDateSheet, overrides: Map<String, Boolean>): Boolean =
+    overrides[sheet.name] ?: sheet.printsDateByDefault
+
+/**
+ * The project information a composer of [sheet] is handed: this one while that sheet's "Date on
+ * this sheet" switch is on, and a copy with the date off ([SheetDateMode.NONE]) while it is off,
+ * so [printedDateOrNull] stays the single thing a print site reads. Every print, preview and
+ * export site builds its composer's `ProjectInfo` through this. A blank draft rules its "Date:"
+ * line either way.
+ */
+fun ProjectInfo.forSheet(sheet: SheetDateSheet, overrides: Map<String, Boolean>): ProjectInfo =
+    if (sheetPrintsDate(sheet, overrides)) this else copy(dateMode = SheetDateMode.NONE)

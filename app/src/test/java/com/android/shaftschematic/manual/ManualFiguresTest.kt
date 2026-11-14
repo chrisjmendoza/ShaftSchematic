@@ -23,6 +23,7 @@ import com.android.shaftschematic.model.SlotAuthoredReference
 import com.android.shaftschematic.model.Taper
 import com.android.shaftschematic.model.Threads
 import com.android.shaftschematic.model.Undercut
+import com.android.shaftschematic.model.UndercutPageOrientation
 import com.android.shaftschematic.model.UndercutRecord
 import com.android.shaftschematic.model.UndercutReference
 import com.android.shaftschematic.model.WearDiaReading
@@ -383,8 +384,9 @@ class ManualFiguresTest {
             "wear.png",
         )
 
-        // The undercut sheet resolves its own page: this two-liner fixture is the portrait sheet.
+        // The figure is the portrait sheet: two sections print landscape on Auto, so it is chosen.
         val undercutRecord = UndercutRecord(
+            pageOrientation = UndercutPageOrientation.PORTRAIT,
             undercuts = listOf(
                 Undercut(
                     id = "U1", startFromAftMm = inch(39f), lengthMm = inch(6f), diaMm = inch(5.625f),

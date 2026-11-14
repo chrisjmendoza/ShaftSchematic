@@ -70,6 +70,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.ProjectInfo
+import com.android.shaftschematic.model.forSheet
+import com.android.shaftschematic.model.SheetDateSheet
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.pdf.PdfExportMode
 import com.android.shaftschematic.pdf.PdfExportOptions
@@ -167,6 +169,7 @@ fun PdfPreviewScreen(
     val item by vm.item.collectAsState()
     val sheetDateMode by vm.sheetDateMode.collectAsState()
     val sheetDateText by vm.sheetDateText.collectAsState()
+    val sheetDateSheets by vm.sheetDateSheets.collectAsState()
     val shaftPosition by vm.shaftPosition.collectAsState()
     val originalResolved by vm.resolvedComponents.collectAsState()
     val finalResolved by vm.finalResolvedComponents.collectAsState()
@@ -218,12 +221,18 @@ fun PdfPreviewScreen(
     // A final sheet is marked so it can never be mistaken for the original — the label
     // prints in the footer job block and as a badge beside the Side badge.
     val drawingLabel = if (isFinal) FINAL_DRAWING_LABEL else ""
-    val project = remember(customer, vessel, shaftPosition, jobNumber, item, sheetDateMode, sheetDateText, drawingLabel) {
+    // Every sheet the Final tab makes follows the ONE Final date switch; the original's follows
+    // the schematic's.
+    val dateSheet = if (isFinal) SheetDateSheet.FINAL else SheetDateSheet.SCHEMATIC
+    val project = remember(
+        customer, vessel, shaftPosition, jobNumber, item, sheetDateMode, sheetDateText,
+        sheetDateSheets, drawingLabel,
+    ) {
         ProjectInfo(
             customer = customer, vessel = vessel, side = shaftPosition,
             jobNumber = jobNumber, item = item,
             dateMode = sheetDateMode, dateText = sheetDateText, drawingLabel = drawingLabel,
-        )
+        ).forSheet(dateSheet, sheetDateSheets)
     }
     val options = remember(pdfExportMode, pdfBlankDraft, pdfBlankDiaCallouts) {
         PdfExportOptions(
@@ -261,7 +270,7 @@ fun PdfPreviewScreen(
                     side = shaftPosition, jobNumber = jobNumber, item = item,
                     dateMode = sheetDateMode, dateText = sheetDateText,
                     drawingLabel = drawingLabel,
-                ),
+                ).forSheet(dateSheet, sheetDateSheets),
                 options = PdfExportOptions(
                     mode = pdfExportMode,
                     blankValues = pdfBlankDraft,
@@ -951,6 +960,14 @@ internal fun PdfOptionsSheet(
                 )
             }
         }
+
+        // Per job: whether this sheet prints the job's date. Every sheet the Final tab makes
+        // follows the one Final switch.
+        Spacer(Modifier.height(8.dp))
+        SheetDateOnSheetRow(
+            vm = vm,
+            sheet = if (showFinalRunoutBubbles) SheetDateSheet.FINAL else SheetDateSheet.SCHEMATIC,
+        )
 
         if (showFinalRunoutBubbles) {
             Spacer(Modifier.height(6.dp))

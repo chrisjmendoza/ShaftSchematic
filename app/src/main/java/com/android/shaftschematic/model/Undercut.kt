@@ -263,7 +263,7 @@ object UndercutSetDatumSerializer : KSerializer<UndercutSetDatum> {
 
 /**
  * The undercut sheet's page shape, chosen per job ([UndercutRecord.pageOrientation]).
- * - [AUTO]: one section prints landscape; two or more stack down a portrait page (on-device
+ * - [AUTO]: one or two sections print landscape; three or more stack down a portrait page (on-device
  *   request: the shop draws several sections stacked on a portrait page for spacing, a single
  *   section reads best landscape). A "section" is a printed detail strip, never a cut.
  * - [LANDSCAPE] / [PORTRAIT]: that shape whatever the section count.

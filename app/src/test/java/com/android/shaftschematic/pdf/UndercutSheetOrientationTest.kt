@@ -54,11 +54,11 @@ class UndercutSheetOrientationTest {
     }
 
     @Test
-    fun `two sections on AUTO print portrait`() {
+    fun `two sections on AUTO print landscape`() {
         assertEquals(UndercutPageOrientation.AUTO, twoSectionRecord.pageOrientation)
         assertEquals(2, undercutSheetStripCount(spec, resolved, twoSectionRecord, blankValues = false))
         assertEquals(
-            PdfPageOrientation.PORTRAIT,
+            PdfPageOrientation.LANDSCAPE,
             undercutSheetOrientation(spec, resolved, twoSectionRecord, blankValues = false),
         )
     }

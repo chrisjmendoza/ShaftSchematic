@@ -165,6 +165,7 @@ private fun ShaftViewModel.currentEnvelope(): ShaftDocCodec.ShaftDocV1 = ShaftDo
     item = _item.value,
     sheetDateMode = _sheetDateMode.value,
     sheetDateText = _sheetDateText.value,
+    sheetDateSheets = _sheetDateSheets.value,
     shaftPosition = _shaftPosition.value,
     notes = _notes.value,
     spec = _spec.value,
@@ -279,6 +280,7 @@ fun ShaftViewModel.applyTemplate(raw: String) {
     _item.value = ""
     _sheetDateMode.value = SheetDateMode.TODAY
     _sheetDateText.value = ""
+    _sheetDateSheets.value = emptyMap()
     _shaftPosition.value = ShaftPosition.OTHER
     _notes.value = ""
     _runoutConfig.value = RunoutConfig()
@@ -334,6 +336,7 @@ fun ShaftViewModel.importJson(raw: String) {
     _item.value = decoded.item
     _sheetDateMode.value = decoded.sheetDateMode
     _sheetDateText.value = decoded.sheetDateText
+    _sheetDateSheets.value = decoded.sheetDateSheets
     _shaftPosition.value = decoded.shaftPosition
     _notes.value = decoded.notes
     _runoutConfig.value = decoded.runoutConfig
@@ -390,6 +393,7 @@ fun ShaftViewModel.newDocument() {
     _item.value = ""
     _sheetDateMode.value = SheetDateMode.TODAY
     _sheetDateText.value = ""
+    _sheetDateSheets.value = emptyMap()
     _shaftPosition.value = ShaftPosition.OTHER
     _runoutConfig.value = RunoutConfig()
     _wearRecord.value = WearRecord()

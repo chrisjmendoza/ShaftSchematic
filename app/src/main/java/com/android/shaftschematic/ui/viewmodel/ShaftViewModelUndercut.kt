@@ -174,7 +174,7 @@ fun ShaftViewModel.setUndercutShowTotalRail(v: Boolean?) {
 
 /**
  * Set this sheet's page shape ([UndercutRecord.pageOrientation]): AUTO prints one section
- * landscape and two or more stacked on a portrait page; LANDSCAPE/PORTRAIT force that shape.
+ * landscape and three or more stacked on a portrait page; LANDSCAPE/PORTRAIT force that shape.
  * Layout only — no stored cut moves — and a fit for this job's section count, so it is
  * per-document and lives in the record rather than in app prefs. A no-op when unchanged.
  */

@@ -67,7 +67,7 @@ closing the dialog never drops the cursor and keyboard into another field. With
   font), with the note that a section of bare shaft takes its own Ø on its card
   (`start_card_dia_note`), then **Project information** — Job Number, Customer, Vessel, Item
   (optional), Shaft Position, **Date on sheets**, Notes
-  (`project_info_{job_number,customer,vessel,item,position,notes}`). "Date on sheets" is the
+  (`project_info_{job_number,customer,vessel,item,position,notes}`). "Date on sheets" (`SheetDateSection`, start card only) is the
   document's printed date (on-device request — the work is not always done the day the sheet is
   printed): chips **Today | Custom | None** (`start_date_mode_{today,custom,none}`, the shared
   labelled `ChipRow`), a "Prints the day the sheet is made." caption under them while Today is
@@ -76,7 +76,18 @@ closing the dialog never drops the cursor and keyboard into another field. With
   commits on tap. `ShaftViewModel.sheetDateMode` / `sheetDateText`, in the envelope as
   `sheet_date_mode` / `sheet_date_text` and in the autosave snapshot (builder AND combine); not
   in `EditState` (no project field is undoable). New and a template reset it to Today; a mate
-  duplicate does too. Printing: see `docs/PDF_EXPORT.md` §4 (Date).
+  duplicate does too. Printing: see `docs/PDF_EXPORT.md` §4 (Date). Under the chips, except
+  while None is chosen, one line (`start_date_sheets_note`) says each sheet's PDF options
+  choose whether it prints the date and that the runout, wear and undercut sheets start off.
+  That choice is the per-job **"Date on this sheet"** switch — the ONE `SheetDateOnSheetRow`
+  on every sheet's PDF options panel (`sheet_date_on_{schematic,consolidated,runout,wear,
+  undercut,final}`; the Final tab's previews show the Final switch) and on the Undercut tab's
+  Drawing settings (`undercut_date_on_sheet`). Its caption says what prints ("Prints today's
+  date. Saved with this job." / "Prints 11/6/2026. Saved with this job."); while the job's
+  date is None the switch is disabled, keeps its value, and the caption points at the Shaft &
+  job card. `ShaftViewModel.sheetDateSheets` / `setSheetDateOnSheet`, envelope
+  `sheet_date_sheets`, autosave snapshot (builder AND combine), not in `EditState`. New and a
+  template reset it to the shipped defaults; a mate duplicate carries it.
   It is NOT a component: no resolved id, no remove button, rename editor or unit chip; nothing
   deletes, reorders or pushes it out of first place. The pager's page 0 is the start card and
   component row `i` is page `i + 1`; `carouselSelectedPage` / `componentIdForPage`
