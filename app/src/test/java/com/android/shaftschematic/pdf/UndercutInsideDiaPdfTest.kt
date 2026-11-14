@@ -24,10 +24,10 @@ import org.robolectric.annotation.GraphicsMode
 import kotlin.math.abs
 
 /**
- * "Diameters inside the shaft" (`PdfPrefs.undercutDiaInside`) on the printed undercut sheet: under
- * line art a cut wide enough carries its Ø rotated inside the shaft and drops its below-shaft
- * leader, a thin cut keeps the leader, and with line art off — or the switch off — the sheet draws
- * exactly what it drew before.
+ * "Diameters inside the shaft" (`PdfPrefs.undercutDiaInside`) on the printed undercut sheet: a cut
+ * wide enough carries its Ø rotated inside the shaft and drops its below-shaft leader, a thin cut
+ * keeps the leader — under line art and on a shaded sheet alike — and with the switch off the sheet
+ * draws exactly what it drew before.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -113,11 +113,12 @@ class UndercutInsideDiaPdfTest {
     }
 
     @Test
-    fun `with the switch on but line art off the sheet is unchanged`() {
-        val before = compose(PdfPrefs(undercutLineArt = false))
-        val after = compose(PdfPrefs(undercutLineArt = false, undercutDiaInside = true))
-        assertFalse(after.texts.any { it.second })
-        assertEquals(before.ops, after.ops)
+    fun `a shaded sheet writes its values inside too`() {
+        val c = compose(PdfPrefs(undercutLineArt = false, undercutDiaInside = true))
+        assertTrue("the wide cut's value is not rotated inside the shaft", c.drew(wideValue, rotated = true))
+        assertFalse("the wide cut still prints a below-shaft callout", c.drew(wideValue, rotated = false))
+        assertTrue("the thin cut lost its below-shaft callout", c.drew(thinValue, rotated = false))
+        assertFalse("the thin cut's value was squeezed inside", c.drew(thinValue, rotated = true))
     }
 
     @Test

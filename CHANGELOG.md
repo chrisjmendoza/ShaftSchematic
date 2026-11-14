@@ -18,6 +18,23 @@ choice is saved with the job and applies to every sheet: schematic, runout, wear
 consolidated and final. Blank write-in drafts still carry a Date line to fill in by hand. A new
 drawing, a template and a mate duplicate start back at Today.
 
+### feat(undercut): diameters inside the shaft on shaded sheets too
+
+On-device verdict on the trial render: "Diameters inside the shaft" now works with shading as
+well as line art, and its three switches are no longer greyed while line art is off. On a shaded
+sheet the value prints straight on the cut's shade, and a depth-shaded sheet lightens its deepest
+cuts (the ramp's dark end drops from 35% to 20%) so the numbers stay readable. Sheets with the
+switch off are unchanged.
+
+### feat(undercut): a landscape sheet stacks two or three sections top and bottom
+
+On-device request: on a landscape page two sections sat side by side at half the page each, and
+the small cuts crowded. A landscape undercut sheet now stacks two sections top and bottom at the
+full page width, the way the portrait page does, and three sections too whenever every shaft can
+still draw at least about 2/3" tall; a sheet too busy for that (three sections with From S.E.T.
+rails, say) keeps the side-by-side layout. One section, four or more, and portrait pages are
+unchanged, and Auto still picks the page as before.
+
 ### feat(undercut): diameters written inside the shaft (line art)
 
 On-device request, from a shop hand sketch: with undercut line art on, the new "Diameters inside

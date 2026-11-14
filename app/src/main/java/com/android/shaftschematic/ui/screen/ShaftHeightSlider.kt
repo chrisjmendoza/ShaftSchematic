@@ -1414,8 +1414,8 @@ internal fun ShadeInPdfCheckRows(
     undercutDepthShade: Boolean = true,
     onSetUndercutDepthShade: (Boolean) -> Unit = {},
     /**
-     * The app-wide `PdfPrefs.undercutDiaInside`; read only when [showUndercutLineArt], and offered
-     * only while [undercutLineArt] is on — the composer reads it under line art alone.
+     * The app-wide `PdfPrefs.undercutDiaInside`; read only when [showUndercutLineArt]. Offered
+     * under line art and shading alike — the composer reads it either way.
      */
     undercutDiaInside: Boolean = false,
     onSetUndercutDiaInside: (Boolean) -> Unit = {},
@@ -1520,7 +1520,6 @@ internal fun ShadeInPdfCheckRows(
         ) {
             Checkbox(
                 checked = undercutDiaInside,
-                enabled = undercutLineArt,
                 onCheckedChange = onSetUndercutDiaInside,
                 modifier = Modifier.testTag("pdf_undercut_dia_inside"),
             )
@@ -1529,8 +1528,6 @@ internal fun ShadeInPdfCheckRows(
                 Text(
                     UNDERCUT_DIA_INSIDE_LABEL,
                     style = MaterialTheme.typography.bodyLarge,
-                    color = if (undercutLineArt) MaterialTheme.colorScheme.onSurface
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
                     UNDERCUT_DIA_INSIDE_CAPTION,
@@ -1592,7 +1589,7 @@ internal const val UNDERCUT_DIA_INSIDE_LABEL = "Diameters inside the shaft"
  * same thing.
  */
 internal const val UNDERCUT_DIA_INSIDE_CAPTION =
-    "Line art only. Each cut's diameter is written inside the shaft; cuts too thin keep the pointer."
+    "Each cut's diameter is written inside the shaft; cuts too thin keep the pointer."
 
 /** The depth-shade row's caption — the options sheet and Settings say the same thing. */
 internal const val UNDERCUT_DEPTH_SHADE_CAPTION =

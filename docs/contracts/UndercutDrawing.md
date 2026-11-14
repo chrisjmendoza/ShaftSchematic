@@ -648,9 +648,12 @@ data class UndercutRecord(
   flat tone.
 
   **Diameters inside the shaft — `PdfPrefs.undercutDiaInside`** (default `false`; on-device
-  request from a shop hand sketch, a toggle so sheets can be printed both ways). Read ONLY under
-  print line art (`undercutDiaInside && undercutLineArt`, never on a blank draft or a started
-  strip); off — or line art off — is byte-identical. On the printed detail strips each Ø callout
+  request from a shop hand sketch, a toggle so sheets can be printed both ways). Read under
+  line art and on a shaded sheet alike (never on a blank draft or a started strip); off is
+  byte-identical. On a shaded sheet the value prints straight on the cut's shade with no white
+  halo (`drawUndercutInsideDia(halo = null)`), and under depth shading the ramp's dark end drops
+  from 35% to `UNDERCUT_DEPTH_SHADE_MAX_ALPHA_WITH_TEXT` (20%) on that sheet so a value on the
+  deepest cut stays readable (on-device direction: "we'll have to lighten the deep cuts"). On the printed detail strips each Ø callout
   station whose value fits is written INSIDE the shaft as a vertical dimension
   (`drawUndercutInsideDia`): a `dim` line from the cut's top floor to its bottom floor at the
   middle of the floor piece the station sits in, the rails' slim 2:1 arrowhead on each floor line
@@ -665,7 +668,7 @@ data class UndercutRecord(
   holds on the shaft the strip then draws, and portrait sizing reads the set that fits a
   `UNDERCUT_CYL_MAX_FLOOR_PT` shaft. Rows: `pdf_undercut_dia_inside` (undercut PDF options,
   Shading group, and Settings → PDF Export) and `undercut_dia_inside_switch` (Undercut tab Drawing
-  settings), each greyed while line art is off. Printed sheet only — the canvases keep their
+  settings). Printed sheet only — the canvases keep their
   below-shaft callouts.
 
   **Keyways on the detail strips** (on-device request: a strip ending on a body did not read as
@@ -2057,8 +2060,20 @@ stays landscape.
   Output tab's Export all start the page `undercutSheetOrientation` resolves. The composer reads
   the page shape off `page.info`; a writer that started a fixed landscape page would draw a
   portrait layout off the page.
-- **Landscape** is byte-identical to the layout above: one strip full width, 2+ in the 2-column
-  grid, four per page.
+- **Landscape**: one strip full width; **two strips STACK top and bottom at full width, and three
+  stack when they fit** (on-device request: at half the page each the small cuts crowded); a
+  three-strip sheet that does not fit, and four per page, keep the 2-column grid. ONE pure
+  predicate, `undercutStripsStacked(portrait, stripCount, usablePt, overheadsPt)`
+  (`pdf/UndercutStripLayout.kt`): portrait always; landscape 2 always; landscape 3 only while
+  every shaft keeps `UNDERCUT_LANDSCAPE_STACK3_MIN_SHAFT_PT` (48 pt) — `undercutStackedShaftsPt`,
+  each stacked cell less that strip's measured needs (`verticalOverheadPt`, taken at the base text
+  size so the layout cannot flip between text-size steps); 1 and 4+ never. `drawUndercutSheet`
+  decides `stacked` ONCE and the strip cells (`undercutStripCells(stacked, …)`), the per-strip
+  sizing plans and the title air read it — a stacked landscape page uses the portrait page's
+  stacking machinery, strips sized to what they draw, each title under its own strip. Page-shape
+  reads (page size, margins, header fit, the per-page cap) stay on `portrait`; the strip count is
+  the PRINTED strips; `undercutSheetOrientation` / AUTO are unchanged; the blank draft's started
+  strips follow the same rule.
 - **Portrait cells** — ONE column, every strip the full content width, stacked top to bottom
   AFT → FWD, capped at `UNDERCUT_PORTRAIT_MAX_PER_PAGE` = 4 (equal to the grid's cap, so choosing
   portrait never pushes a section into the "+N more" note). Cell heights come from the pure

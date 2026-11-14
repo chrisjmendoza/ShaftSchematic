@@ -2,7 +2,7 @@ package com.android.shaftschematic.geom
 
 /**
  * Whether a cut's measured Ø can be written INSIDE the shaft on the printed undercut sheet
- * (`PdfPrefs.undercutDiaInside`, line art only — on-device request, from a shop hand sketch), and
+ * (`PdfPrefs.undercutDiaInside` — on-device request, from a shop hand sketch), and
  * where. The value is a vertical DIMENSION: a thin line from the cut's top floor to its bottom
  * floor at the middle of a free piece of that floor, an arrowhead on each floor line, and the
  * value rotated 90° in a break at the centreline. A cut it does not fit keeps its below-shaft

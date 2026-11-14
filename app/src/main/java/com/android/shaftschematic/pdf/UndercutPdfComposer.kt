@@ -29,6 +29,8 @@ import com.android.shaftschematic.geom.undercutSetReachMm
 import com.android.shaftschematic.geom.effectiveUndercutTotalRail
 import com.android.shaftschematic.geom.NOTCH_FACE_MIN_STEP_PX
 import com.android.shaftschematic.geom.UNDERCUT_SECTION_FILL_ALPHA
+import com.android.shaftschematic.geom.UNDERCUT_DEPTH_SHADE_MAX_ALPHA
+import com.android.shaftschematic.geom.UNDERCUT_DEPTH_SHADE_MAX_ALPHA_WITH_TEXT
 import com.android.shaftschematic.geom.undercutDepthShadeAlpha
 import com.android.shaftschematic.geom.withDepthShadeStretched
 import com.android.shaftschematic.geom.UNDERCUT_BREAK_AMP_FRAC_OF_R
@@ -113,10 +115,12 @@ const val UNDERCUT_DOC_TITLE = "UNDERCUT RECORD"
  * ```
  * The page shape is the caller's ([undercutSheetOrientation], the job's
  * [UndercutRecord.pageOrientation] against the strip count; this composer reads it off
- * `page.info`). Landscape lays one strip at full width and two or more in a 2-column grid;
+ * `page.info`). Landscape lays one strip at full width and four in a 2-column grid;
  * PORTRAIT stacks every strip in ONE column, each the full content width, top → bottom
- * AFT → FWD ([undercutStripCells]) — the shop's layout for several sections (on-device request).
- * A portrait page with room sizes each strip to what it draws — one shaft height down the page,
+ * AFT → FWD ([undercutStripCells]) — the shop's layout for several sections (on-device request) —
+ * and so does a landscape page printing two strips, or three whose shafts all keep
+ * [UNDERCUT_LANDSCAPE_STACK3_MIN_SHAFT_PT] ([undercutStripsStacked]; three that cannot keep the grid).
+ * A stacked page with room sizes each strip to what it draws — one shaft height down the page,
  * the title under its own figure with [UC_PORTRAIT_TITLE_AIR_PT] of air — and spreads the spare
  * height between sections; a crowded one gives every strip the same shaft height, a busy section
  * taking height from a plain one ([undercutStripCells]).
@@ -171,8 +175,8 @@ const val UNDERCUT_DOC_TITLE = "UNDERCUT RECORD"
  * @param unit    Display unit for every printed dimension.
  * @param undercutRecord Recorded undercut sections. Strips (`buildUndercutStrips`, or one
  *                started strip per drawable liner when nothing is recorded) decide the page
- *                mode: 1 → one full-width strip, 2+ → a 2-column grid (portrait: one
- *                full-width column) with a "+N more" note past the cap, 0 → the whole-shaft
+ *                mode: 1 → one full-width strip, 2+ → a 2-column grid (a stacked page —
+ *                [undercutStripsStacked] — one full-width column) with a "+N more" note past the cap, 0 → the whole-shaft
  *                profile form.
  * @param blankValues Blank-draft (write-in) mode: the record is dropped entirely
  *                (`UndercutRecord()`) — the wear sheet's decision that blank templates carry
@@ -322,9 +326,9 @@ private fun drawUndercutSheet(
     // metrics, so the layout follows. The header, the AFT/FWD row and the notes keep the base size.
     val stripText = Paint(text).apply { textSize = UC_TEXT_PT * textScale }
     val diaText = Paint(text).apply { textSize = UC_DIA_TEXT_PT * textScale }
-    // "Diameters inside the shaft" (`PdfPrefs.undercutDiaInside`): read under line art alone, and
-    // only on a sheet that prints values — a blank draft or a started strip prints none.
-    val diaInside = pdfPrefs.undercutDiaInside && pdfPrefs.undercutLineArt && !blankValues
+    // "Diameters inside the shaft" (`PdfPrefs.undercutDiaInside`): only on a sheet that prints
+    // values — a blank draft or a started strip prints none. Line art or shaded alike.
+    val diaInside = pdfPrefs.undercutDiaInside && !blankValues
 
     // ── Page geometry ─────────────────────────────────────────────────────
     val margin = UC_MARGIN_PT
@@ -442,54 +446,71 @@ private fun drawUndercutSheet(
     val stripsOwnPage = onPage.isNotEmpty()
     val stripCells: List<WearStripCell>
     val overflowBandTop: Float
+    val bandTop = midTopFull + UC_DIRECTION_ROW_PT
+
+    // One strip's plan across the full content width, measured for a stacked page: the title gets
+    // its own air under the Ø callouts, and the values written inside the shaft are those that fit
+    // the floor-height shaft the page sizes for.
+    fun stackedPlanOf(strip: UndercutStrip, titlePaint: Paint, diaPaint: Paint): UndercutStripPlan? =
+        planUndercutDetailStrip(
+            surfaceSegs, strip, strip.undercutIds.mapNotNull { id -> undercutById[id] },
+            clampedById, contentLeft, contentRight, stripUnitOf(strip), titlePaint, diaPaint,
+            shaftExtentMm, startedPage, displayUnits.dual, wantDualStacked,
+            railSplitOf(strip), pdfPrefs.arrowSizePt,
+            titleAirPt = UC_PORTRAIT_TITLE_AIR_PT,
+            leadSide = stripSideOf(strip), aftSetMm = aftSetMm, fwdSetMm = fwdSetMm,
+            showTotal = showTotalRail,
+            fromSet = railsFromSet,
+            linerEnds = linerEndsOf(strip),
+            longCompressFrac = undercutRecord.longCompressFrac,
+            insideDiaFloorsMm = if (diaInside && !startedPage) {
+                undercutInsideDiaFloorsMm(sheetNotches, strip)
+            } else {
+                null
+            },
+        )?.withInsideDiaAtCylinder(UNDERCUT_CYL_MAX_FLOOR_PT)
+
+    // The ONE stacked decision (`undercutStripsStacked`): every portrait page and a landscape page
+    // printing two strips stack them full-width, top → bottom; three on landscape stack only when
+    // every shaft keeps its floor height. Three are measured at the BASE text size whatever this
+    // pass's size is, so the layout is the sheet's, never a text-size step's — the text fit then
+    // fits the text to it.
+    val stacked = stripsOwnPage && undercutStripsStacked(
+        portrait, pageStrips.size,
+        usablePt = midBotFull - overflowNoteH - bandTop,
+        overheadsPt = if (!portrait && pageStrips.size == UNDERCUT_LANDSCAPE_STACK3_STRIPS) {
+            val baseTitle = Paint(text).apply { textSize = UC_TEXT_PT }
+            val baseDia = Paint(text).apply { textSize = UC_DIA_TEXT_PT }
+            onPage.map { stackedPlanOf(it, baseTitle, baseDia)?.verticalOverheadPt(wantDualStacked, tightSetTiers = true) ?: 0f }
+        } else {
+            null
+        },
+    )
 
     if (stripsOwnPage) {
         drawUndercutDirectionRow(c, text, contentLeft, contentRight, midTopFull + text.textSize)
-        val bandTop = midTopFull + UC_DIRECTION_ROW_PT
         // Zeroing the profile params hands the whole band to the strips; the banding functions
         // are otherwise the wear sheet's, unchanged (count-driven, content-agnostic). Per-strip
         // growth is deliberately UNCAPPED here — the reclaimed height is the point — with
         // `computeUndercutStripInnerLayout`'s cylinder cap keeping the drawn shaft in proportion.
-        // Landscape: one full-width strip or the 2-column grid; portrait: one column, every strip
-        // the full content width (`undercutStripCells`). Portrait first measures what each strip
-        // stacks around its shaft, from the very plan the strip then draws: a page with room
+        // Not stacked: one full-width strip or the 2-column grid; stacked: one column, every strip
+        // the full content width (`undercutStripCells`). A stacked page first measures what each
+        // strip stacks around its shaft, from the very plan the strip then draws: a page with room
         // sizes every strip to what it draws and spends the rest as air between them (a lone
         // forced-portrait strip centres), and on a crowded page a busy section takes height from
         // a plain one instead of drawing a sliver of a shaft.
         // The natural-height page (roomy by definition) is measured with every strip's chain
         // values LIFTED above the line — the layout `resolveRails` then draws on a cell that size;
         // the crowded paths keep the compressed overheads and each strip decides for itself.
-        val portraitPlans = if (portrait) {
-            onPage.map { strip ->
-                planUndercutDetailStrip(
-                    surfaceSegs, strip, strip.undercutIds.mapNotNull { id -> undercutById[id] },
-                    clampedById, contentLeft, contentRight, stripUnitOf(strip), stripText, diaText,
-                    shaftExtentMm, startedPage, displayUnits.dual, wantDualStacked,
-                    railSplitOf(strip), pdfPrefs.arrowSizePt,
-                    titleAirPt = UC_PORTRAIT_TITLE_AIR_PT,
-                    leadSide = stripSideOf(strip), aftSetMm = aftSetMm, fwdSetMm = fwdSetMm,
-                    showTotal = showTotalRail,
-                    fromSet = railsFromSet,
-                    linerEnds = linerEndsOf(strip),
-                    longCompressFrac = undercutRecord.longCompressFrac,
-                    insideDiaFloorsMm = if (diaInside && !startedPage) {
-                        undercutInsideDiaFloorsMm(sheetNotches, strip)
-                    } else {
-                        null
-                    },
-                )?.withInsideDiaAtCylinder(UNDERCUT_CYL_MAX_FLOOR_PT)
-            }
-        } else {
-            null
-        }
+        val stackedPlans = if (stacked) onPage.map { stackedPlanOf(it, stripText, diaText) } else null
         stripCells = undercutStripCells(
-            portrait, onPage.size, bandTop, midBotFull, contentLeft, contentRight,
+            stacked, onPage.size, bandTop, midBotFull, contentLeft, contentRight,
             reservedBottomPt = overflowNoteH,
             // The crowded paths read tiers closed up: a From-S.E.T. strip that has to give height
             // closes its baseline tiers before its shaft (`resolveRails`), so a page sized off the
             // row-metric tiers would hand the busiest strips a shaft the others do not get.
-            overheadsPt = portraitPlans?.map { it?.verticalOverheadPt(wantDualStacked, tightSetTiers = true) ?: 0f },
-            liftedOverheadsPt = portraitPlans?.map { it?.verticalOverheadPt(wantDualStacked, lifted = true) ?: 0f },
+            overheadsPt = stackedPlans?.map { it?.verticalOverheadPt(wantDualStacked, tightSetTiers = true) ?: 0f },
+            liftedOverheadsPt = stackedPlans?.map { it?.verticalOverheadPt(wantDualStacked, lifted = true) ?: 0f },
         )
         overflowBandTop = stripCells.lastOrNull()?.bottom ?: bandTop
     } else {
@@ -628,9 +649,9 @@ private fun drawUndercutSheet(
             longCompressFrac = undercutRecord.longCompressFrac,
             onNotToScale = { notToScale = true },
             onShaftHeight = { h -> minShaftPt = minOf(minShaftPt, h) },
-            // Portrait strips are sized to what they draw, so the title gets its own air under
-            // the Ø callouts; landscape keeps today's banding exactly.
-            titleAirPt = if (portrait) UC_PORTRAIT_TITLE_AIR_PT else 0f,
+            // Stacked strips are sized to what they draw, so the title gets its own air under
+            // the Ø callouts; the landscape single strip and grid keep their banding exactly.
+            titleAirPt = if (stacked) UC_PORTRAIT_TITLE_AIR_PT else 0f,
             keywaySpec = spec,
             diaInside = diaInside && !startedPage,
         )
@@ -1083,6 +1104,8 @@ private fun drawUndercutNotches(
      * [sectionCoreFill] is on.
      */
     sectionCoreByDepth: Boolean = false,
+    /** The dark end of the depth ramp — lowered while values are written inside the cuts. */
+    depthShadeMaxAlpha: Float = UNDERCUT_DEPTH_SHADE_MAX_ALPHA,
 ) {
     if (notches.isEmpty()) return
     // One step LIGHTER than the liner shade (half its 40/255 alpha): the section's core is
@@ -1123,7 +1146,7 @@ private fun drawUndercutNotches(
             c.drawRect(xStart, cy - rFloor, xEnd, cy + rFloor, voidFill)
             sectionFill?.let { paint ->
                 if (sectionCoreByDepth) {
-                    paint.color = Color.argb((undercutDepthShadeAlpha(notch.depthFrac) * 255f).roundToInt(), 0, 0, 0)
+                    paint.color = Color.argb((undercutDepthShadeAlpha(notch.depthFrac, depthShadeMaxAlpha) * 255f).roundToInt(), 0, 0, 0)
                 }
                 c.drawRect(xStart, cy - rFloor, xEnd, cy + rFloor, paint)
             }
@@ -1171,7 +1194,7 @@ internal class UndercutStripPlan(
     val rails: UndercutStripRails,
     /**
      * Air between the Ø callouts and the title, reserved under the callout band. Zero on a
-     * landscape sheet (byte-identical); a portrait page sizes each strip to what it draws, so with
+     * single landscape strip or grid (byte-identical); a stacked page sizes each strip to what it draws, so with
      * no spare height inside the strip the title would otherwise sit right on the last callout.
      */
     val titleAirPt: Float = 0f,
@@ -1461,7 +1484,7 @@ internal fun planUndercutDetailStrip(
     linerEnds: UndercutLinerSpanMm? = null,
     /**
      * Each cut's DRAWN floor Ø on this strip, keyed by cut id, when the sheet writes its Ø values
-     * inside the shaft (`PdfPrefs.undercutDiaInside` under line art); null — every other sheet —
+     * inside the shaft (`PdfPrefs.undercutDiaInside`); null — every other sheet —
      * plans the below-shaft callouts alone.
      */
     insideDiaFloorsMm: Map<String, Float>? = null,
@@ -1616,7 +1639,7 @@ private fun drawUndercutInsideDia(
     rFloor: Float,
     dim: Paint,
     diaText: Paint,
-    halo: Paint,
+    halo: Paint?,
     dualStacked: Boolean,
     arrowSizePt: Float,
 ) {
@@ -1625,7 +1648,7 @@ private fun drawUndercutInsideDia(
     val bottom = cy + rFloor
     val halfLen = m.textWidthPt * 0.5f
     val halfThick = m.textHeightPt * 0.5f
-    c.drawRect(
+    if (halo != null) c.drawRect(
         x - halfThick - UC_INSIDE_DIA_HALO_PAD_PT, cy - halfLen - UC_INSIDE_DIA_HALO_PAD_PT,
         x + halfThick + UC_INSIDE_DIA_HALO_PAD_PT, cy + halfLen + UC_INSIDE_DIA_HALO_PAD_PT,
         halo,
@@ -1804,7 +1827,7 @@ private fun drawUndercutDetailStrip(
     railSplitAtMm: List<Float> = emptyList(),
     /** `PdfPrefs.arrowSizePt`: the rail heads, and the seat-in-break / arrow-direction decisions. */
     arrowSizePt: Float = PDF_ARROW_SIZE_DEFAULT_PT,
-    /** [UndercutStripPlan.titleAirPt] — nonzero on a portrait page only. */
+    /** [UndercutStripPlan.titleAirPt] — nonzero on a stacked page only ([undercutStripsStacked]). */
     titleAirPt: Float = 0f,
     /**
      * The S.E.T. this strip measures to ([undercutStripSetSide]): the bare-shaft title's anchor and
@@ -1828,8 +1851,8 @@ private fun drawUndercutDetailStrip(
      */
     keywaySpec: ShaftSpec = docSpec,
     /**
-     * Write each cut's Ø inside the shaft where it fits (`PdfPrefs.undercutDiaInside` under line
-     * art, values printed); false keeps every value on its below-shaft leader.
+     * Write each cut's Ø inside the shaft where it fits (`PdfPrefs.undercutDiaInside`,
+     * values printed); false keeps every value on its below-shaft leader.
      */
     diaInside: Boolean = false,
 ) {
@@ -1936,12 +1959,16 @@ private fun drawUndercutDetailStrip(
         c, notches, cy, ::xAtStrip, ::rStrip, outline, voidFill,
         sectionCoreFill = sectionCoreFill,
         sectionCoreByDepth = sectionCoreByDepth,
+        // Values written inside the cuts need a lighter dark end to stay readable.
+        depthShadeMaxAlpha = if (diaInside) UNDERCUT_DEPTH_SHADE_MAX_ALPHA_WITH_TEXT else UNDERCUT_DEPTH_SHADE_MAX_ALPHA,
     )
     drawLinerOutlinesPdf(c, docSpec, notches, cy, ::xAtStrip, ::rStrip, linerOutlinePaint)
 
     // ── Measured-Ø values inside the shaft: a vertical dimension floor to floor ──
     plan.insideDia.forEach { m ->
-        drawUndercutInsideDia(c, m, cy, rStrip(m.floorDiaMm), dim, diaText, voidFill, dualStacked, arrowSizePt)
+        // On a shaded core the value sits straight on the grey: a white halo there reads as a pasted box,
+        // and nothing crosses the value (it sits in a free piece of its own floor, the line broken around it).
+        drawUndercutInsideDia(c, m, cy, rStrip(m.floorDiaMm), dim, diaText, voidFill.takeIf { !sectionCoreFill }, dualStacked, arrowSizePt)
     }
 
     // ── Measured-Ø callouts: leader from each notch floor down to the printed value ──
@@ -2286,7 +2313,7 @@ private const val UC_OAL_TOP_REGION_PT = 18f         // OAL label + air above th
 private const val UC_DIRECTION_ROW_PT = 22f          // orientation row band above the strips (strips-own-page)
 private const val UC_NOTES_BOTTOM_OFFSET_PT = 24f    // notes baseline above contentBot
 private const val UC_NOTES_GAP_PT = 28f              // drawing area bottom → notes
-private const val UC_PORTRAIT_TITLE_AIR_PT = 10f      // Ø callouts → strip title, portrait pages only
+private const val UC_PORTRAIT_TITLE_AIR_PT = 10f      // Ø callouts → strip title, stacked pages only
 private const val UC_OVERFLOW_NOTE_HEIGHT_PT = 16f   // reserved band for the "+N more" note
 private const val UC_PROFILE_RADIUS_MARGIN_PT = 8f   // headroom above/below the shaft's drawn radius
 

@@ -406,7 +406,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     internal val _pdfUndercutDepthShade = MutableStateFlow(PdfPrefs().undercutDepthShade)
     val pdfUndercutDepthShade: StateFlow<Boolean> = _pdfUndercutDepthShade.asStateFlow()
 
-    // Undercut Ø values written inside the shaft on the printed undercut drawing (line art only).
+    // Undercut Ø values written inside the shaft on the printed undercut drawing.
     // Also a preview re-render key on the Undercut tab.
     internal val _pdfUndercutDiaInside = MutableStateFlow(PdfPrefs().undercutDiaInside)
     val pdfUndercutDiaInside: StateFlow<Boolean> = _pdfUndercutDiaInside.asStateFlow()

@@ -804,11 +804,22 @@ two scales, clipped to the window; the strip's `docSpec` carries resolved bodies
 the composer hands it the stored spec as `keywaySpec`. Printed sheet only so far — the canvases owe
 the mirror.
 
-**`PdfPrefs.undercutDiaInside`** (default OFF, line art only — on-device request, a toggle so both
-ways can be printed) writes each cut's Ø INSIDE the shaft on the printed strips as a vertical
+**`PdfPrefs.undercutDiaInside`** (default OFF — on-device request, a toggle so both ways can be
+printed; line art and shaded sheets alike) writes each cut's Ø INSIDE the shaft on the printed strips as a vertical
 dimension (floor-to-floor line, arrowheads, rotated value in a break, no Ø sign) wherever the pure
 `geom/UndercutInsideDiaMath.kt` says it fits; a value that does not fit keeps its below-shaft leader,
-and the callout band is planned over those only. Off, or line art off, is byte-identical.
+and the callout band is planned over those only. On a SHADED sheet the value prints straight on
+the cut's shade with NO white halo, and the depth ramp's dark end drops to
+`UNDERCUT_DEPTH_SHADE_MAX_ALPHA_WITH_TEXT` (20%) on that sheet so the deepest cut stays readable
+(on-device direction: "we'll have to lighten the deep cuts"). Off is byte-identical.
+
+**A LANDSCAPE undercut page stacks two sections top and bottom, and three when they fit** (on-device
+request: side by side each strip had half the page and the small cuts crowded): ONE pure predicate,
+`undercutStripsStacked` (`pdf/UndercutStripLayout.kt`) — portrait always; landscape with 2 printed
+strips always; landscape with 3 only while every shaft keeps `UNDERCUT_LANDSCAPE_STACK3_MIN_SHAFT_PT`
+(48 pt) at its measured needs, else the side-by-side grid; 1 or 4+ never — decided once per sheet as
+`stacked` in `drawUndercutSheet` and read by the cells, the per-strip sizing and the title air. Page
+shape (size, margins, the per-page cap) stays on `portrait`; AUTO still resolves as before.
 
 The undercut sheet is the one portrait-capable document: its page shape is per-job
 `UndercutRecord.pageOrientation` (AUTO = portrait at 2+ printed sections), resolved ONCE by

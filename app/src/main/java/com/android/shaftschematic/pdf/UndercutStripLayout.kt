@@ -107,12 +107,70 @@ fun resolveUndercutPageOrientation(choice: UndercutPageOrientation, stripCount: 
     }
 
 /**
+ * The strip count at which a LANDSCAPE undercut sheet always stacks its strips in one full-width
+ * column instead of the 2-column grid ([undercutStripsStacked]).
+ */
+const val UNDERCUT_LANDSCAPE_STACKED_STRIPS = 2
+
+/**
+ * The strip count a LANDSCAPE undercut sheet stacks only when the stack leaves every shaft at least
+ * [UNDERCUT_LANDSCAPE_STACK3_MIN_SHAFT_PT] tall ([undercutStripsStacked]).
+ */
+const val UNDERCUT_LANDSCAPE_STACK3_STRIPS = 3
+
+/**
+ * The shortest shaft a stack of [UNDERCUT_LANDSCAPE_STACK3_STRIPS] strips on a landscape page may
+ * draw; a sheet whose stack would draw any shaft shorter keeps the 2-column grid.
+ */
+const val UNDERCUT_LANDSCAPE_STACK3_MIN_SHAFT_PT = 48f
+
+/**
+ * Whether an undercut sheet lays its detail strips out in ONE full-width column, top → bottom —
+ * the stacked layout [undercutStripCells] takes for `stacked = true` — rather than one landscape
+ * strip or the 2-column grid. Every portrait page stacks. A landscape page stacks when it prints
+ * exactly [UNDERCUT_LANDSCAPE_STACKED_STRIPS] strips (on-device request: two half-width cells
+ * cramped the small cuts, their values piling up above the rail and fanning out below the shaft),
+ * and when it prints [UNDERCUT_LANDSCAPE_STACK3_STRIPS] whose stack still leaves every shaft at
+ * least [UNDERCUT_LANDSCAPE_STACK3_MIN_SHAFT_PT] tall ([undercutStackedShaftsPt] over the strips'
+ * [overheadsPt] in a band [usablePt] tall); one strip already spans the page, and four keep the grid.
+ * Three without [overheadsPt] (or with the wrong number) keep the grid.
+ *
+ * [stripCount] is the sheet's PRINTED strips — `undercutSheetStrips` in `UndercutPdfComposer.kt`,
+ * "Sections to print" applied, started liner strips included. Decided ONCE per sheet; every site
+ * that is about the strips being stacked full-width (cells, per-strip sizing, title air) reads this
+ * one answer, while the page's own shape stays on the page size.
+ */
+fun undercutStripsStacked(
+    portrait: Boolean,
+    stripCount: Int,
+    usablePt: Float = 0f,
+    overheadsPt: List<Float>? = null,
+): Boolean = when {
+    portrait -> true
+    stripCount == UNDERCUT_LANDSCAPE_STACKED_STRIPS -> true
+    stripCount == UNDERCUT_LANDSCAPE_STACK3_STRIPS ->
+        overheadsPt?.takeIf { it.size == stripCount }
+            ?.let { o -> undercutStackedShaftsPt(usablePt, o).all { it >= UNDERCUT_LANDSCAPE_STACK3_MIN_SHAFT_PT - 0.01f } }
+            ?: false
+    else -> false
+}
+
+/**
+ * The cylinder each strip has room for when [overheadsPt] stack in a band [usablePt] tall — the
+ * stacked [undercutStripCells] at those overheads, each cell's height less its overhead.
+ */
+fun undercutStackedShaftsPt(usablePt: Float, overheadsPt: List<Float>): List<Float> =
+    undercutStripCells(true, overheadsPt.size, 0f, usablePt, 0f, 1f, overheadsPt = overheadsPt)
+        .zip(overheadsPt) { c, o -> (c.bottom - c.top) - o }
+
+/**
  * The on-page rectangle of each of the [stripCount] detail strips on an undercut sheet, inside the
  * strip band `[bandTop, bandBottom]` less [reservedBottomPt] (the overflow note's band).
  *
- * - **Landscape** — one strip spans the content width; two or more take the 2-column grid
+ * - **Not [stacked]** — one strip spans the content width; two or more take the 2-column grid
  *   ([computeWearStripGridLayout]).
- * - **[portrait]** — ONE column: every strip spans the full content width, stacked top → bottom in
+ * - **[stacked]** ([undercutStripsStacked] — every portrait page, and a landscape page with two
+ *   strips, or three with room) — ONE column: every strip spans the full content width, stacked top → bottom in
  *   the order given (AFT → FWD). With [overheadsPt] (rails, label rows, Ø callouts, title per
  *   strip), a page with room takes [undercutPortraitNaturalCells] — each strip at its natural
  *   height, spare height spread as air between them, so a title stays under its own figure. A
@@ -134,7 +192,7 @@ fun resolveUndercutPageOrientation(choice: UndercutPageOrientation, stripCount: 
  * so the whole band goes to them.
  */
 fun undercutStripCells(
-    portrait: Boolean,
+    stacked: Boolean,
     stripCount: Int,
     bandTop: Float,
     bandBottom: Float,
@@ -145,14 +203,14 @@ fun undercutStripCells(
     liftedOverheadsPt: List<Float>? = null,
 ): List<WearStripCell> {
     if (stripCount <= 0) return emptyList()
-    if (!portrait && determineUndercutPdfMode(stripCount) == WearPdfMode.GRID) {
+    if (!stacked && determineUndercutPdfMode(stripCount) == WearPdfMode.GRID) {
         return computeWearStripGridLayout(
             bandTop, bandBottom, contentLeft, contentRight, stripCount,
             reservedBottomPt = reservedBottomPt,
             minProfileHeightPt = 0f, preferredProfileHeightPt = 0f, profileToStripsGapPt = 0f,
         ).cells
     }
-    if (portrait && overheadsPt != null && overheadsPt.size == stripCount) {
+    if (stacked && overheadsPt != null && overheadsPt.size == stripCount) {
         val gap = WEAR_STRIP_GAP_PT
         val usable = bandBottom - reservedBottomPt - bandTop
         val natural = liftedOverheadsPt?.takeIf { it.size == stripCount }
