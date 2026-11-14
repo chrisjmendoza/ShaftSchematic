@@ -135,6 +135,17 @@ fun ShaftViewModel.setPdfUndercutDepthShade(v: Boolean, persist: Boolean = true)
 }
 
 /**
+ * Wired to the "Diameters inside the shaft" rows in Settings → PDF Export, on the undercut PDF
+ * options panel and in the Undercut tab's Drawing settings: under line art, each cut's Ø is
+ * written inside the shaft on the printed undercut drawing.
+ */
+fun ShaftViewModel.setPdfUndercutDiaInside(v: Boolean, persist: Boolean = true) {
+    _pdfUndercutDiaInside.value = v
+    SettingsStore.updatePdfPrefs { it.copy(undercutDiaInside = v) }
+    if (persist) viewModelScope.launch { SettingsStore.setPdfUndercutDiaInside(getApplication(), v) }
+}
+
+/**
  * Wired to the undercut drawing's own "Liners" shade rows (Settings → PDF Export, the undercut PDF
  * options Shading group, the Undercut tab's Drawing settings). Never touches `shadedLiners`.
  */
@@ -523,6 +534,7 @@ fun ShaftViewModel.applyDrawingProfile(profile: DrawingProfile) {
     setPdfUndercutLineArt(prefs.undercutLineArt)
     setPdfUndercutLinerOutline(prefs.undercutLinerOutline)
     setPdfUndercutDepthShade(prefs.undercutDepthShade)
+    setPdfUndercutDiaInside(prefs.undercutDiaInside)
     setPdfUndercutShadeLiners(prefs.undercutShadeLiners)
     setPdfUndercutSplitAtLinerEdge(prefs.undercutSplitAtLinerEdge)
     setPdfUndercutTotalRail(prefs.undercutTotalRail)

@@ -1025,9 +1025,10 @@ fun undercutCalloutAnchorsMm(
  * The pieces of [span]'s own floor still visible once every other span CONTAINED in it is
  * subtracted (direct children suffice — deeper descendants lie inside them), AFT → FWD as
  * `(startMm, endMm)` pairs. Zero-width leftovers are kept so a caller can apply its own width
- * rule; nothing is returned for a span its children cover edge to edge.
+ * rule; nothing is returned for a span its children cover edge to edge. The Ø callout anchors and
+ * the printed sheet's inside-the-shaft values (`geom/UndercutInsideDiaMath.kt`) both read these.
  */
-private fun undercutFloorPieces(
+internal fun undercutFloorPieces(
     span: UndercutSpanMm,
     others: List<UndercutSpanMm>,
     epsMm: Float,

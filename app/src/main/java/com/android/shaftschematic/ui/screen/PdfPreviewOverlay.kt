@@ -114,6 +114,7 @@ import com.android.shaftschematic.ui.viewmodel.setPdfShadedLiners
 import com.android.shaftschematic.ui.viewmodel.setPdfUndercutLineArt
 import com.android.shaftschematic.ui.viewmodel.setPdfUndercutLinerOutline
 import com.android.shaftschematic.ui.viewmodel.setPdfUndercutDepthShade
+import com.android.shaftschematic.ui.viewmodel.setPdfUndercutDiaInside
 import com.android.shaftschematic.ui.viewmodel.setPdfUndercutShadeLiners
 import com.android.shaftschematic.ui.viewmodel.setPdfWearAreaStyle
 import com.android.shaftschematic.ui.viewmodel.setPdfUndercutSplitAtLinerEdge
@@ -521,6 +522,8 @@ internal fun RunoutWearOptionsSheet(
     undercutLinerOutline: Boolean = true,
     /** The app-wide `PdfPrefs.undercutDepthShade`; read only when [showUndercutLineArt]. */
     undercutDepthShade: Boolean = true,
+    /** The app-wide `PdfPrefs.undercutDiaInside`; read only when [showUndercutLineArt]. */
+    undercutDiaInside: Boolean = false,
     /** The undercut drawing's own `PdfPrefs.undercutShadeLiners`; read only when [showUndercutLineArt]. */
     undercutShadeLiners: Boolean = false,
     /**
@@ -990,6 +993,8 @@ internal fun RunoutWearOptionsSheet(
                 onSetUndercutLinerOutline = { vm.setPdfUndercutLinerOutline(it) },
                 undercutDepthShade = undercutDepthShade,
                 onSetUndercutDepthShade = { vm.setPdfUndercutDepthShade(it) },
+                undercutDiaInside = undercutDiaInside,
+                onSetUndercutDiaInside = { vm.setPdfUndercutDiaInside(it) },
                 undercutShadeLiners = undercutShadeLiners,
                 onSetUndercutShadeLiners = { vm.setPdfUndercutShadeLiners(it) },
             )

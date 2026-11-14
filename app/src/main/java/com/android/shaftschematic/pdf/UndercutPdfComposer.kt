@@ -36,6 +36,13 @@ import com.android.shaftschematic.geom.withUndercutBreakRoom
 import com.android.shaftschematic.geom.maxOuterDiaOver
 import com.android.shaftschematic.geom.outerDiaAt
 import com.android.shaftschematic.geom.DiaCalloutPlan
+import com.android.shaftschematic.geom.DiaCalloutStation
+import com.android.shaftschematic.geom.UNDERCUT_INSIDE_DIA_TEXT_PAD_PT
+import com.android.shaftschematic.geom.UNDERCUT_TOUCH_EPS_MM
+import com.android.shaftschematic.geom.undercutFloorPieces
+import com.android.shaftschematic.geom.undercutInsideDiaCentreXPt
+import com.android.shaftschematic.geom.undercutInsideDiaFitsWidth
+import com.android.shaftschematic.geom.undercutInsideDiaFloorHeightPt
 import com.android.shaftschematic.geom.planDiaCallouts
 import com.android.shaftschematic.geom.hatchSpan
 import com.android.shaftschematic.geom.reliefSpan
@@ -315,6 +322,9 @@ private fun drawUndercutSheet(
     // metrics, so the layout follows. The header, the AFT/FWD row and the notes keep the base size.
     val stripText = Paint(text).apply { textSize = UC_TEXT_PT * textScale }
     val diaText = Paint(text).apply { textSize = UC_DIA_TEXT_PT * textScale }
+    // "Diameters inside the shaft" (`PdfPrefs.undercutDiaInside`): read under line art alone, and
+    // only on a sheet that prints values — a blank draft or a started strip prints none.
+    val diaInside = pdfPrefs.undercutDiaInside && pdfPrefs.undercutLineArt && !blankValues
 
     // ── Page geometry ─────────────────────────────────────────────────────
     val margin = UC_MARGIN_PT
@@ -462,7 +472,12 @@ private fun drawUndercutSheet(
                     fromSet = railsFromSet,
                     linerEnds = linerEndsOf(strip),
                     longCompressFrac = undercutRecord.longCompressFrac,
-                )
+                    insideDiaFloorsMm = if (diaInside && !startedPage) {
+                        undercutInsideDiaFloorsMm(sheetNotches, strip)
+                    } else {
+                        null
+                    },
+                )?.withInsideDiaAtCylinder(UNDERCUT_CYL_MAX_FLOOR_PT)
             }
         } else {
             null
@@ -617,6 +632,7 @@ private fun drawUndercutSheet(
             // the Ø callouts; landscape keeps today's banding exactly.
             titleAirPt = if (portrait) UC_PORTRAIT_TITLE_AIR_PT else 0f,
             keywaySpec = spec,
+            diaInside = diaInside && !startedPage,
         )
     }
     if (overflow.isNotEmpty()) {
@@ -1164,8 +1180,89 @@ internal class UndercutStripPlan(
      * proportions). Everything the strip draws along its length goes through [xAt].
      */
     val xMap: UndercutStripXMap = UndercutStripXMap.linear(drawStartMm, drawEndMm, hLayout.linerLeftPt, hLayout.ptPerMm),
+    /**
+     * The Ø values that MAY be written inside the shaft (`PdfPrefs.undercutDiaInside`) — every
+     * callout station whose value fits across its floor piece; null when the sheet does not write
+     * them. Whether each also fits UP its floor depends on the drawn shaft height, which is only
+     * known once the strip's height is ([resolveInsideDia]).
+     */
+    val insideDiaPlan: UndercutInsideDiaPlan? = null,
+    /** The values this plan writes inside the shaft; [diaPlan] holds every other station. */
+    val insideDia: List<UndercutInsideDiaMark> = emptyList(),
 ) {
     fun xAt(mm: Float): Float = xMap.xAt(mm)
+
+    /**
+     * This plan with [inside] written inside the shaft and the Ø callout band planned over the
+     * remaining stations only, so the strip reserves no row for a value it draws inside.
+     */
+    fun withInsideDia(inside: List<UndercutInsideDiaCandidate>): UndercutStripPlan {
+        val ip = insideDiaPlan ?: return this
+        val insideIdx = inside.mapTo(HashSet()) { it.stationIndex }
+        val (plan, band) = undercutDiaCalloutBand(
+            ip.stations.filterIndexed { i, _ -> i !in insideIdx },
+            ip.calloutLeftPt, ip.calloutRightPt, ip.diaTextSizePt,
+        )
+        val marks = inside.map { cand ->
+            val st = ip.stations[cand.stationIndex]
+            UndercutInsideDiaMark(
+                key = st.key,
+                xPt = cand.centreXPt,
+                floorDiaMm = cand.floorDiaMm,
+                label = st.label,
+                textWidthPt = cand.textWidthPt,
+                textHeightPt = cand.textHeightPt,
+            )
+        }
+        return UndercutStripPlan(
+            drawStartMm, drawEndMm, hLayout, titleText, dimText, spans, plan, band, rails,
+            titleAirPt, xMap, insideDiaPlan, marks,
+        )
+    }
+
+    /** The candidates whose value fits up its floor on a shaft drawn [cylHeightPt] tall. */
+    private fun insideDiaFitting(
+        candidates: List<UndercutInsideDiaCandidate>,
+        cylHeightPt: Float,
+    ): List<UndercutInsideDiaCandidate> {
+        val ip = insideDiaPlan ?: return emptyList()
+        return candidates.filter { cand ->
+            undercutInsideDiaCentreXPt(
+                listOf(cand.pieceStartPt to cand.pieceEndPt),
+                floorHeightPt = undercutInsideDiaFloorHeightPt(cylHeightPt, cand.floorDiaMm, ip.stripMaxDiaMm),
+                textWidthPt = cand.textWidthPt,
+                textHeightPt = cand.textHeightPt,
+                arrowSizePt = ip.arrowSizePt,
+            ) != null
+        }
+    }
+
+    /**
+     * The inside values for a shaft drawn [cylHeightPt] tall — the height a page sizes a strip
+     * for before it knows the strip's cell ([verticalOverheadPt] then reads the reduced band).
+     */
+    fun withInsideDiaAtCylinder(cylHeightPt: Float): UndercutStripPlan {
+        val ip = insideDiaPlan ?: return this
+        return withInsideDia(insideDiaFitting(ip.candidates, cylHeightPt))
+    }
+
+    /**
+     * The inside values for the strip drawn in `[stripTop, stripBottom]`: every value that fits
+     * up its floor on the shaft the strip then draws. A value that does not fit goes back to the
+     * callout band, which takes height from the shaft, so the set is narrowed until it holds —
+     * from the widest set down, so the result is the largest set the strip can carry.
+     */
+    fun resolveInsideDia(stripTop: Float, stripBottom: Float, dualStacked: Boolean): UndercutStripPlan {
+        val ip = insideDiaPlan ?: return this
+        var inside = ip.candidates
+        while (true) {
+            val p = withInsideDia(inside)
+            val (_, inner) = p.resolveRails(stripTop, stripBottom, dualStacked)
+            val keep = insideDiaFitting(inside, (inner.cylBottom - inner.cylTop).coerceAtLeast(0f))
+            if (keep.size == inside.size) return p
+            inside = keep
+        }
+    }
 
     /** [rails] with the chain's fallback values lifted above the line ([UndercutStripRails.withFallbacksLifted]). */
     private val liftedRails: UndercutStripRails by lazy { rails.withFallbacksLifted() }
@@ -1362,6 +1459,12 @@ internal fun planUndercutDetailStrip(
      * null otherwise — [planUndercutStripRails]' `linerEnds`.
      */
     linerEnds: UndercutLinerSpanMm? = null,
+    /**
+     * Each cut's DRAWN floor Ø on this strip, keyed by cut id, when the sheet writes its Ø values
+     * inside the shaft (`PdfPrefs.undercutDiaInside` under line art); null — every other sheet —
+     * plans the below-shaft callouts alone.
+     */
+    insideDiaFloorsMm: Map<String, Float>? = null,
 ): UndercutStripPlan? {
     // The strip's own cuts only: another strip's cut in this window draws as plain stock here.
     val memberCutSpans = strip.undercutIds.mapNotNull { id ->
@@ -1447,9 +1550,33 @@ internal fun planUndercutDetailStrip(
         undercuts, clampedById, ::xAtStrip, unit,
         { s -> diaText.measureDualLabel(s, dualStacked) }, dual,
     )
-    val diaPlan = if (diaStations.isEmpty()) null else
-        planDiaCallouts(diaStations, stripLeft + 2f, stripRight - 2f, UC_DIA_MIN_GAP_PT)
-    val diaBandPt = diaPlan?.let { it.labelsHeightPt(diaText.textSize, UC_DIA_ROW_GAP_PT) + 2f } ?: 0f
+    val (diaPlan, diaBandPt) = undercutDiaCalloutBand(diaStations, stripLeft + 2f, stripRight - 2f, diaText.textSize)
+    // Inside-the-shaft values: every station whose value fits across the free piece of its cut's
+    // floor it sits in. Whether it also fits up the floor waits for the strip's height.
+    val stripMaxDiaMm = maxOuterDiaOver(segs, drawStartMm, drawEndMm)
+    val insideDiaPlan = if (insideDiaFloorsMm == null || diaStations.isEmpty() || stripMaxDiaMm <= 0f) {
+        null
+    } else {
+        val fm = diaText.fontMetrics
+        val lineHeight = fm.descent - fm.ascent
+        val stackHeight = diaText.dualStackMetrics().height
+        val piecesPtById = spans.associate { span ->
+            span.id to undercutFloorPieces(span, spans, UNDERCUT_TOUCH_EPS_MM)
+                .map { (a, b) -> xAtStrip(a) to xAtStrip(b) }
+        }
+        val candidates = diaStations.mapIndexedNotNull { i, st ->
+            val floorDiaMm = insideDiaFloorsMm[st.key]?.takeIf { it > 0f } ?: return@mapIndexedNotNull null
+            val piece = piecesPtById[st.key]
+                ?.firstOrNull { (a, b) -> st.stationX >= a - 0.01f && st.stationX <= b + 0.01f }
+                ?: return@mapIndexedNotNull null
+            val textHeight = if (st.label.setsStacked(dualStacked)) stackHeight else lineHeight
+            if (!undercutInsideDiaFitsWidth(piece.second - piece.first, textHeight)) return@mapIndexedNotNull null
+            UndercutInsideDiaCandidate(i, piece.first, piece.second, floorDiaMm, st.labelWidth, textHeight)
+        }
+        if (candidates.isEmpty()) null else UndercutInsideDiaPlan(
+            diaStations, candidates, stripLeft + 2f, stripRight - 2f, diaText.textSize, stripMaxDiaMm, arrowSizePt,
+        )
+    }
 
     // The rails — level-0 chain over the top-level cuts, one row per nesting level located
     // against the parent's edges, the total across the top-level cuts — from the ONE plan the
@@ -1470,9 +1597,113 @@ internal fun planUndercutDetailStrip(
     )
     return UndercutStripPlan(
         drawStartMm, drawEndMm, hLayout, titleText, dimText, spans, diaPlan, diaBandPt, rails,
-        titleAirPt, xMap,
+        titleAirPt, xMap, insideDiaPlan,
     )
 }
+
+/**
+ * One Ø value written inside the shaft (on-device request, from a shop hand sketch): a vertical
+ * dimension at [UndercutInsideDiaMark.xPt] from the top floor line (`cy − rFloor`) to the bottom one
+ * (`cy + rFloor`), an arrowhead on each floor line — the rails' slim 2:1 V at the app-wide
+ * [arrowSizePt] — and the value rotated −90° (reading bottom to top) in a break at the centreline,
+ * over a sheet-white halo so no other line runs through it. Measured and drawn with the same
+ * rich-text pair (`measureDualLabel` / `drawDualLabelCentered`), so a fraction sits centred.
+ */
+private fun drawUndercutInsideDia(
+    c: Canvas,
+    m: UndercutInsideDiaMark,
+    cy: Float,
+    rFloor: Float,
+    dim: Paint,
+    diaText: Paint,
+    halo: Paint,
+    dualStacked: Boolean,
+    arrowSizePt: Float,
+) {
+    val x = m.xPt
+    val top = cy - rFloor
+    val bottom = cy + rFloor
+    val halfLen = m.textWidthPt * 0.5f
+    val halfThick = m.textHeightPt * 0.5f
+    c.drawRect(
+        x - halfThick - UC_INSIDE_DIA_HALO_PAD_PT, cy - halfLen - UC_INSIDE_DIA_HALO_PAD_PT,
+        x + halfThick + UC_INSIDE_DIA_HALO_PAD_PT, cy + halfLen + UC_INSIDE_DIA_HALO_PAD_PT,
+        halo,
+    )
+    val gapTop = cy - halfLen - UNDERCUT_INSIDE_DIA_TEXT_PAD_PT
+    val gapBottom = cy + halfLen + UNDERCUT_INSIDE_DIA_TEXT_PAD_PT
+    c.drawLine(x, top, x, gapTop, dim)
+    c.drawLine(x, gapBottom, x, bottom, dim)
+    val barb = arrowSizePt * 0.5f
+    c.drawLine(x, top, x - barb, top + arrowSizePt, dim)
+    c.drawLine(x, top, x + barb, top + arrowSizePt, dim)
+    c.drawLine(x, bottom, x - barb, bottom - arrowSizePt, dim)
+    c.drawLine(x, bottom, x + barb, bottom - arrowSizePt, dim)
+    // Rotated about the value's centre, the text's own block (one line, or a dual stack) is
+    // centred on the centreline: its top edge half its height above, its first baseline under that.
+    val baseline = cy - halfThick - diaText.fontMetrics.ascent
+    c.save()
+    c.rotate(-90f, x, cy)
+    c.drawDualLabelCentered(m.label, x, baseline, diaText, dualStacked)
+    c.restore()
+}
+
+/** The below-shaft Ø callout plan over [stations] and the band it reserves; no stations, no band. */
+private fun undercutDiaCalloutBand(
+    stations: List<DiaCalloutStation>,
+    leftPt: Float,
+    rightPt: Float,
+    diaTextSizePt: Float,
+): Pair<DiaCalloutPlan?, Float> {
+    val plan = if (stations.isEmpty()) null else planDiaCallouts(stations, leftPt, rightPt, UC_DIA_MIN_GAP_PT)
+    return plan to (plan?.let { it.labelsHeightPt(diaTextSizePt, UC_DIA_ROW_GAP_PT) + 2f } ?: 0f)
+}
+
+/** Each of [strip]'s cuts' DRAWN floor Ø, by id — the inside values' floor lines. */
+private fun undercutInsideDiaFloorsMm(notches: List<UndercutNotch>, strip: UndercutStrip): Map<String, Float> =
+    notches.filter { it.id in strip.undercutIds }.associate { it.id to it.floorDiaMm }
+
+/**
+ * Every Ø value a strip may write inside the shaft ([UndercutStripPlan.insideDiaPlan]): the strip's
+ * callout [stations] (indices into them), the [candidates] among them that fit across their floor
+ * piece, the callout band's bounds and text size to replan the rest, and what the floor-height test
+ * needs — the strip's largest surface Ø and the app-wide arrowhead.
+ */
+internal class UndercutInsideDiaPlan(
+    val stations: List<DiaCalloutStation>,
+    val candidates: List<UndercutInsideDiaCandidate>,
+    val calloutLeftPt: Float,
+    val calloutRightPt: Float,
+    val diaTextSizePt: Float,
+    val stripMaxDiaMm: Float,
+    val arrowSizePt: Float,
+)
+
+/**
+ * One callout station that may be written inside the shaft: its index into the strip's stations,
+ * the free floor piece it sits in (strip points), the cut's drawn floor Ø, and the value's measured
+ * size — [textWidthPt] along the text (vertical once rotated), [textHeightPt] across it.
+ */
+internal class UndercutInsideDiaCandidate(
+    val stationIndex: Int,
+    val pieceStartPt: Float,
+    val pieceEndPt: Float,
+    val floorDiaMm: Float,
+    val textWidthPt: Float,
+    val textHeightPt: Float,
+) {
+    val centreXPt: Float get() = (pieceStartPt + pieceEndPt) * 0.5f
+}
+
+/** One Ø value a strip writes inside the shaft, at [xPt] between the floor lines of [floorDiaMm]. */
+internal class UndercutInsideDiaMark(
+    val key: String,
+    val xPt: Float,
+    val floorDiaMm: Float,
+    val label: DualLabel,
+    val textWidthPt: Float,
+    val textHeightPt: Float,
+)
 
 /**
  * One broken-out detail strip: the resolved profile over the strip's draw range at
@@ -1596,6 +1827,11 @@ private fun drawUndercutDetailStrip(
      * keyway (they are drawable geometry), so a body's slot is only found on the stored body.
      */
     keywaySpec: ShaftSpec = docSpec,
+    /**
+     * Write each cut's Ø inside the shaft where it fits (`PdfPrefs.undercutDiaInside` under line
+     * art, values printed); false keeps every value on its below-shaft leader.
+     */
+    diaInside: Boolean = false,
 ) {
     val plan = planUndercutDetailStrip(
         segs, strip, undercuts, clampedById, stripLeft, stripRight, unit, text, diaText,
@@ -1604,7 +1840,8 @@ private fun drawUndercutDetailStrip(
         fromSet = fromSet,
         linerEnds = linerEnds,
         longCompressFrac = longCompressFrac,
-    ) ?: return
+        insideDiaFloorsMm = if (diaInside) notches.associate { it.id to it.floorDiaMm } else null,
+    )?.resolveInsideDia(stripTop, stripBottom, dualStacked) ?: return
     if (!plan.xMap.isLinear) onNotToScale()
     val drawStartMm = plan.drawStartMm
     val drawEndMm = plan.drawEndMm
@@ -1701,6 +1938,11 @@ private fun drawUndercutDetailStrip(
         sectionCoreByDepth = sectionCoreByDepth,
     )
     drawLinerOutlinesPdf(c, docSpec, notches, cy, ::xAtStrip, ::rStrip, linerOutlinePaint)
+
+    // ── Measured-Ø values inside the shaft: a vertical dimension floor to floor ──
+    plan.insideDia.forEach { m ->
+        drawUndercutInsideDia(c, m, cy, rStrip(m.floorDiaMm), dim, diaText, voidFill, dualStacked, arrowSizePt)
+    }
 
     // ── Measured-Ø callouts: leader from each notch floor down to the printed value ──
     if (diaPlan != null) {
@@ -2053,6 +2295,7 @@ private const val UC_PROFILE_RADIUS_MARGIN_PT = 8f   // headroom above/below the
 private const val UC_DIA_TEXT_PT = 8f                // measured-Ø value text size
 private const val UC_DIA_MIN_GAP_PT = 5f             // min clear gap between label edges / leader drops
 private const val UC_DIA_ROW_GAP_PT = 3f             // vertical gap between the two label rows
+private const val UC_INSIDE_DIA_HALO_PAD_PT = 1.5f    // halo past an inside Ø value; under the break pad
 
 /** Tolerance for "this edge coincides with a window end" tests, mm. */
 private const val UC_EDGE_EPS_MM = 1e-3f

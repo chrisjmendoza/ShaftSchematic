@@ -8,6 +8,20 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-13
 
+### feat(undercut): diameters written inside the shaft (line art)
+
+On-device request, from a shop hand sketch: with undercut line art on, the new "Diameters inside
+the shaft" switch writes each cut's diameter vertically inside the shaft as a dimension — a line
+from the cut's top floor to its bottom floor with an arrowhead at each end and the value in the
+middle, no Ø sign. A cut too thin for the text keeps its value below the shaft on a pointer, as
+before. Off by default so sheets can be printed both ways; in the Undercut tab's Drawing settings,
+the undercut PDF options and Settings → PDF Export. Printed sheet only.
+
+### fix(ui): the side menu's screen dim fades instead of sliding
+
+On-device report: opening the side menu slid the dark screen tint across with the panel. The dim
+now fades in and out in place over the whole screen; only the menu panel slides.
+
 ### feat(undercut): keyways on the undercut detail strips
 
 On-device request: a strip ending on a body did not read as the end of the shaft the way a taper
