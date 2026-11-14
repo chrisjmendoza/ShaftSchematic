@@ -19,6 +19,11 @@ import com.android.shaftschematic.geom.buildUndercutNotches
 import com.android.shaftschematic.geom.LinerOutlineEdge
 import com.android.shaftschematic.geom.UndercutLinerOd
 import com.android.shaftschematic.geom.linerOutlineSegments
+import com.android.shaftschematic.geom.erasedBlendTraces
+import com.android.shaftschematic.geom.clipSurfacePolyline
+import com.android.shaftschematic.geom.UndercutBlendCurve
+import com.android.shaftschematic.geom.BlendedBodyTop
+import com.android.shaftschematic.geom.blendedBodyTop
 import com.android.shaftschematic.geom.buildUndercutStrips
 import com.android.shaftschematic.geom.buriedUndercutLinerEdgesMm
 import com.android.shaftschematic.geom.clampUndercutSpan
@@ -60,6 +65,7 @@ import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.bodyBlends
 import com.android.shaftschematic.ui.resolved.linerSurfaceSegs
 import com.android.shaftschematic.ui.resolved.surfaceSegsFrom
+import com.android.shaftschematic.ui.resolved.undercutBlendCurves
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.DualLabel
 import com.android.shaftschematic.util.PdfPageOrientation
@@ -636,6 +642,7 @@ private fun drawUndercutSheet(
             sectionCoreFill = fills.sectionCore,
             sectionCoreByDepth = fills.sectionCoreByDepth,
             linerOutlinePaint = linerOutlinePaint,
+            blendCurves = sheet.blendCurves,
             linerOdLabel = stripLiner
                 ?.let { "Ø" + formatDiaWithUnitDual(it.odMm.toDouble(), stripUnit, displayUnits.dual) },
             dual = displayUnits.dual,
@@ -709,6 +716,8 @@ internal data class UndercutSheetStrips(
      * [isUndercutStripPrinted].
      */
     val allStrips: List<UndercutStrip> = strips,
+    /** Every blended body face's ramp ([undercutBlendCurves]); empty with no resolved list. */
+    val blendCurves: List<UndercutBlendCurve> = emptyList(),
 ) {
     val aftSetMm: Float get() = setPositions.aftSETxMm.toFloat()
     val fwdSetMm: Float get() = setPositions.fwdSETxMm.toFloat()
@@ -754,8 +763,10 @@ internal fun undercutSheetStrips(
     // With no resolved list the drawn spec is the only source available, so its components
     // stand in — auto-body spans are already folded into `docSpec.bodies` by
     // `withResolvedBodies` whenever a resolved list WAS supplied.
-    val surfaceSegs = resolvedComponents?.let { surfaceSegsFrom(it, bodyBlends(spec, it)) }
+    val blends = resolvedComponents?.let { bodyBlends(spec, it) }
+    val surfaceSegs = resolvedComponents?.let { surfaceSegsFrom(it, blends.orEmpty()) }
         ?: surfaceSegsFromSpec(docSpec)
+    val blendCurves = resolvedComponents?.let { undercutBlendCurves(it, blends.orEmpty()) }.orEmpty()
     val shaftExtentMm = max(spec.overallLengthMm, fwdSetMm)
     val clampedById: Map<String, ClampedUndercutSpanMm> = effectiveRecord.undercuts.associate { u ->
         u.id to clampUndercutSpan(u.startFromAftMm, u.lengthMm, shaftExtentMm)
@@ -801,6 +812,7 @@ internal fun undercutSheetStrips(
         shaftExtentMm = shaftExtentMm,
         clampedById = clampedById,
         liveSpans = liveSpans,
+        blendCurves = blendCurves,
     )
 }
 
@@ -1017,6 +1029,39 @@ private fun drawLinerOutlinesPdf(
                     c.drawLine(x, cy - r1, x, cy - r0, paint)
                     c.drawLine(x, cy + r0, x, cy + r1, paint)
                 }
+            }
+        }
+    }
+}
+
+/**
+ * The blended body faces a cut took away, retraced on the printed strip in the liner outline's
+ * dotted [paint] — from the cut's edge, where the solid ramp now stops, up to the face, where the
+ * liner outline's own retrace stands — mirrored about [cy], from the ONE pure builder the canvas
+ * also runs ([erasedBlendTraces]). Drawn with the liner outline, after the notch pass. A null
+ * [paint] (the pref off) draws nothing.
+ */
+private fun drawErasedBlendTracesPdf(
+    c: Canvas,
+    curves: List<UndercutBlendCurve>,
+    notches: List<UndercutNotch>,
+    w0Mm: Float,
+    w1Mm: Float,
+    cy: Float,
+    xAt: (Float) -> Float,
+    rAt: (Float) -> Float,
+    paint: Paint?,
+    knotsInside: (Float, Float) -> List<Float>,
+) {
+    if (paint == null || notches.isEmpty()) return
+    curves.forEach { curve ->
+        erasedBlendTraces(curve, notches).forEach { trace ->
+            val a = max(trace.first().xMm, w0Mm)
+            val b = min(trace.last().xMm, w1Mm)
+            clipSurfacePolyline(trace, a, b, knotsInside(a, b)).zipWithNext { p0, p1 ->
+                val r0 = rAt(p0.diaMm); val r1 = rAt(p1.diaMm)
+                c.drawLine(xAt(p0.xMm), cy - r0, xAt(p1.xMm), cy - r1, paint)
+                c.drawLine(xAt(p0.xMm), cy + r0, xAt(p1.xMm), cy + r1, paint)
             }
         }
     }
@@ -1807,6 +1852,8 @@ private fun drawUndercutDetailStrip(
     sectionCoreByDepth: Boolean = false,
     /** The liner outline's dotted paint; null when `PdfPrefs.undercutLinerOutline` is off. */
     linerOutlinePaint: Paint? = null,
+    /** The blended body faces' ramps ([undercutBlendCurves]) — drawn solid, retraced dotted where a cut took them. */
+    blendCurves: List<UndercutBlendCurve> = emptyList(),
     /**
      * The strip liner's OD as printed in its title (`Ø10.000"`, in the strip's own unit); null on a
      * bare-shaft strip. Ignored by the blank write-in title.
@@ -1915,13 +1962,13 @@ private fun drawUndercutDetailStrip(
             c, docSpec, drawStartMm, faceAftMm, cy, ::xAtStrip, ::rStrip,
             outline, bodyFill, taperFill, linerFill,
             fillW0Mm = fillStartMm, fillW1Mm = faceAftMm, fillClip = fillClip,
-            knotsInside = taperKnots,
+            knotsInside = taperKnots, blendCurves = blendCurves,
         )
         drawUndercutWindowProfile(
             c, docSpec, faceFwdMm, drawEndMm, cy, ::xAtStrip, ::rStrip,
             outline, bodyFill, taperFill, linerFill,
             fillW0Mm = faceFwdMm, fillW1Mm = fillEndMm, fillClip = fillClip,
-            knotsInside = taperKnots,
+            knotsInside = taperKnots, blendCurves = blendCurves,
         )
         // Full drawn height at the liner's own OD — the surface envelope over the liner's span
         // is the liner, so its maximum there IS that OD. Drawn at outline weight: with the
@@ -1935,7 +1982,7 @@ private fun drawUndercutDetailStrip(
             c, docSpec, drawStartMm, drawEndMm, cy, ::xAtStrip, ::rStrip,
             outline, bodyFill, taperFill, linerFill,
             fillW0Mm = fillStartMm, fillW1Mm = fillEndMm, fillClip = fillClip,
-            knotsInside = taperKnots,
+            knotsInside = taperKnots, blendCurves = blendCurves,
         )
     }
     // Cut ends: an S-break where the strip slices through material (void beyond it, so the
@@ -1963,6 +2010,9 @@ private fun drawUndercutDetailStrip(
         depthShadeMaxAlpha = if (diaInside) UNDERCUT_DEPTH_SHADE_MAX_ALPHA_WITH_TEXT else UNDERCUT_DEPTH_SHADE_MAX_ALPHA,
     )
     drawLinerOutlinesPdf(c, docSpec, notches, cy, ::xAtStrip, ::rStrip, linerOutlinePaint)
+    drawErasedBlendTracesPdf(
+        c, blendCurves, notches, drawStartMm, drawEndMm, cy, ::xAtStrip, ::rStrip, linerOutlinePaint, taperKnots,
+    )
 
     // ── Measured-Ø values inside the shaft: a vertical dimension floor to floor ──
     plan.insideDia.forEach { m ->
@@ -2114,6 +2164,12 @@ private fun drawUndercutWindowProfile(
      * surface meets a cut's face at the face's own height. Empty on a to-scale strip.
      */
     knotsInside: (Float, Float) -> List<Float> = { _, _ -> emptyList() },
+    /**
+     * The blended body faces' ramps ([undercutBlendCurves]): a body whose face carries one draws
+     * the ramp in place of the square corner, its face line at the height the ramp reaches. A cut
+     * across the ramp erases it like any surface stroke, so the solid line stops at the cut's edge.
+     */
+    blendCurves: List<UndercutBlendCurve> = emptyList(),
 ) {
     val dimPaint = Paint(outline).apply { strokeWidth = outline.strokeWidth * (UC_DIM_PT / UC_OUTLINE_PT) }
     fun inside(mm: Float) = mm > w0Mm + UC_EDGE_EPS_MM && mm < w1Mm - UC_EDGE_EPS_MM
@@ -2141,8 +2197,43 @@ private fun drawUndercutWindowProfile(
         if (inside(endMm)) c.drawLine(x1, cy - r, x1, cy + r, capPaint)
     }
 
+    // A body with a blended face: its top is one polyline — AFT ramp, flat run, FWD ramp — filled
+    // and stroked from the same points, so the shade ends on the ramp it is drawn under.
+    fun drawBlendedBody(startMm: Float, endMm: Float, top: BlendedBodyTop) {
+        fun through(lo: Float, hi: Float) =
+            clipSurfacePolyline(top.points, lo, hi, knotsInside(max(lo, startMm), min(hi, endMm)))
+        bodyFill?.let { f ->
+            val pts = through(fillW0Mm, fillW1Mm)
+            if (pts.size >= 2) clippedFill {
+                c.drawPath(
+                    Path().apply {
+                        pts.forEachIndexed { i, p ->
+                            val y = cy - rAt(p.diaMm)
+                            if (i == 0) moveTo(xAt(p.xMm), y) else lineTo(xAt(p.xMm), y)
+                        }
+                        pts.asReversed().forEach { p -> lineTo(xAt(p.xMm), cy + rAt(p.diaMm)) }
+                        close()
+                    },
+                    f,
+                )
+            }
+        }
+        through(w0Mm, w1Mm).zipWithNext { p0, p1 ->
+            val r0 = rAt(p0.diaMm); val r1 = rAt(p1.diaMm)
+            c.drawLine(xAt(p0.xMm), cy - r0, xAt(p1.xMm), cy - r1, outline)
+            c.drawLine(xAt(p0.xMm), cy + r0, xAt(p1.xMm), cy + r1, outline)
+        }
+        if (inside(startMm)) rAt(top.aftFaceDiaMm).let { r -> c.drawLine(xAt(startMm), cy - r, xAt(startMm), cy + r, outline) }
+        if (inside(endMm)) rAt(top.fwdFaceDiaMm).let { r -> c.drawLine(xAt(endMm), cy - r, xAt(endMm), cy + r, outline) }
+    }
+
     spec.bodies.forEach { b ->
-        if (b.lengthMm > 0f) drawConstant(b.startFromAftMm, b.startFromAftMm + b.lengthMm, b.diaMm, bodyFill, outline)
+        if (b.lengthMm <= 0f || b.diaMm <= 0f) return@forEach
+        val s = b.startFromAftMm
+        val e = s + b.lengthMm
+        // Matched by span: the drawn bodies are the resolved runs the ramps were sampled on.
+        val top = blendedBodyTop(blendCurves, s, e, b.diaMm)
+        if (top == null) drawConstant(s, e, b.diaMm, bodyFill, outline) else drawBlendedBody(s, e, top)
     }
     spec.tapers.forEach { t ->
         if (t.lengthMm <= 0f || (t.startDiaMm <= 0f && t.endDiaMm <= 0f)) return@forEach

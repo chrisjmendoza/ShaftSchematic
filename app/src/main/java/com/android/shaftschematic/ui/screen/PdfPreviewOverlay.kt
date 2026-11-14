@@ -523,7 +523,7 @@ internal fun RunoutWearOptionsSheet(
     undercutLinerOutline: Boolean = true,
     /** The app-wide `PdfPrefs.undercutDepthShade`; read only when [showUndercutLineArt]. */
     undercutDepthShade: Boolean = true,
-    /** The app-wide `PdfPrefs.undercutDiaInside`; read only when [showUndercutLineArt]. */
+    /** The app-wide `PdfPrefs.undercutDiaInside`, a "Lines & text" row; read only when [showUndercutLineArt]. */
     undercutDiaInside: Boolean = false,
     /** The undercut drawing's own `PdfPrefs.undercutShadeLiners`; read only when [showUndercutLineArt]. */
     undercutShadeLiners: Boolean = false,
@@ -959,6 +959,15 @@ internal fun RunoutWearOptionsSheet(
                     onCommitDim = { vm.setPdfDimTextScale(it) },
                 )
             }
+            // Where the cut diameters are written is a text choice, not a shading one: under the
+            // line-art row it read as part of line art (on-device report).
+            if (showUndercutLineArt) {
+                UndercutDiaInsideRow(
+                    checked = undercutDiaInside,
+                    onCheckedChange = { vm.setPdfUndercutDiaInside(it) },
+                    testTag = "pdf_undercut_dia_inside",
+                )
+            }
             OutputFontChips(
                 outputFont = outputFont,
                 onCommit = { vm.setPdfOutputFont(it) },
@@ -1007,8 +1016,6 @@ internal fun RunoutWearOptionsSheet(
                 onSetUndercutLinerOutline = { vm.setPdfUndercutLinerOutline(it) },
                 undercutDepthShade = undercutDepthShade,
                 onSetUndercutDepthShade = { vm.setPdfUndercutDepthShade(it) },
-                undercutDiaInside = undercutDiaInside,
-                onSetUndercutDiaInside = { vm.setPdfUndercutDiaInside(it) },
                 undercutShadeLiners = undercutShadeLiners,
                 onSetUndercutShadeLiners = { vm.setPdfUndercutShadeLiners(it) },
             )

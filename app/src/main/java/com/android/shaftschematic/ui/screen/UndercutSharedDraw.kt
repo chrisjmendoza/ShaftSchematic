@@ -11,7 +11,10 @@ import androidx.compose.ui.graphics.toArgb
 import com.android.shaftschematic.geom.LinerOutlineEdge
 import com.android.shaftschematic.geom.NOTCH_FACE_MIN_STEP_PX
 import com.android.shaftschematic.geom.UNDERCUT_SECTION_FILL_ALPHA
+import com.android.shaftschematic.geom.UndercutBlendCurve
 import com.android.shaftschematic.geom.UndercutLinerOd
+import com.android.shaftschematic.geom.clipSurfacePolyline
+import com.android.shaftschematic.geom.erasedBlendTraces
 import com.android.shaftschematic.geom.UndercutLinerSpan
 import com.android.shaftschematic.geom.UndercutCutNumberPlacement
 import com.android.shaftschematic.geom.UndercutNotch
@@ -208,6 +211,40 @@ internal fun DrawScope.drawLinerOutlines(
                     drawLine(color, Offset(x, cy - r1), Offset(x, cy - r0), strokeWidthPx, pathEffect = dots)
                     drawLine(color, Offset(x, cy + r0), Offset(x, cy + r1), strokeWidthPx, pathEffect = dots)
                 }
+            }
+        }
+    }
+}
+
+/**
+ * The blended body faces a cut took away, retraced in the liner outline's dotted ink — from the
+ * cut's edge, where the solid ramp now stops, up to the face, where the liner outline's own
+ * retrace stands — mirrored about [cy], from the ONE pure builder the PDF composer also runs
+ * ([erasedBlendTraces]). Called with [drawLinerOutlines], after the notch passes. [knotsInside]
+ * gives the stations where [xPx] changes scale, so the sloped line stays on the surface.
+ */
+internal fun DrawScope.drawErasedBlendTraces(
+    curves: List<UndercutBlendCurve>,
+    notches: List<UndercutNotch>,
+    w0Mm: Float,
+    w1Mm: Float,
+    xPx: (Float) -> Float,
+    rPx: (Float) -> Float,
+    cy: Float,
+    color: Color,
+    strokeWidthPx: Float,
+    knotsInside: (Float, Float) -> List<Float> = { _, _ -> emptyList() },
+) {
+    val dots = PathEffect.dashPathEffect(floatArrayOf(2f, 4f))
+    curves.forEach { curve ->
+        erasedBlendTraces(curve, notches).forEach { trace ->
+            val a = maxOf(trace.first().xMm, w0Mm)
+            val b = minOf(trace.last().xMm, w1Mm)
+            clipSurfacePolyline(trace, a, b, knotsInside(a, b)).zipWithNext { p0, p1 ->
+                val r0 = rPx(p0.diaMm)
+                val r1 = rPx(p1.diaMm)
+                drawLine(color, Offset(xPx(p0.xMm), cy - r0), Offset(xPx(p1.xMm), cy - r1), strokeWidthPx, pathEffect = dots)
+                drawLine(color, Offset(xPx(p0.xMm), cy + r0), Offset(xPx(p1.xMm), cy + r1), strokeWidthPx, pathEffect = dots)
             }
         }
     }

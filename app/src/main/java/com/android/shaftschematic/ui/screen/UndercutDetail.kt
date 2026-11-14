@@ -129,6 +129,8 @@ import com.android.shaftschematic.geom.nearestSetReference
 import com.android.shaftschematic.geom.UNDERCUT_TOUCH_EPS_MM
 import com.android.shaftschematic.geom.newLinerOverhangs
 import com.android.shaftschematic.geom.outerDiaAt
+import com.android.shaftschematic.geom.blendedBodyTop
+import com.android.shaftschematic.geom.clipSurfacePolyline
 import com.android.shaftschematic.geom.pickUndercutAt
 import com.android.shaftschematic.geom.planDiaCallouts
 import com.android.shaftschematic.geom.resolveUndercutFloors
@@ -213,6 +215,7 @@ import com.android.shaftschematic.ui.resolved.ResolvedTaper
 import com.android.shaftschematic.ui.resolved.ResolvedThread
 import com.android.shaftschematic.ui.resolved.bodyBlends
 import com.android.shaftschematic.ui.resolved.surfaceSegsFrom
+import com.android.shaftschematic.ui.resolved.undercutBlendCurves
 import com.android.shaftschematic.ui.theme.SheetInk
 import com.android.shaftschematic.ui.theme.acceptGreen
 import com.android.shaftschematic.util.AppLog
@@ -436,6 +439,9 @@ fun UndercutWindowDetailOverlay(
     // Every liner on the shaft, in strip space — the pool the cards' liner references draw from.
     val linerSpans = remember(resolvedComponents) { linerSpansOf(resolvedComponents) }
     val linerOds = remember(resolvedComponents) { linerOdsOf(resolvedComponents) }
+    val blendCurves = remember(resolvedComponents, spec) {
+        undercutBlendCurves(resolvedComponents, bodyBlends(spec, resolvedComponents))
+    }
     val stripLiner = (strip as? UndercutStrip.LinerStrip)
         ?.let { UndercutLinerSpan(it.linerId, it.linerStartMm, it.linerEndMm) }
 
@@ -1638,6 +1644,32 @@ fun UndercutWindowDetailOverlay(
                                         return@forEach
                                     }
                                 }
+                                // A body with a blended face draws its ramp in place of the
+                                // square corner (the sheet's rule): one polyline, the face line at
+                                // the height the ramp reaches. A cut across the ramp erases it, so
+                                // the solid line stops at the cut's edge.
+                                val blendedTop = (rc as? ResolvedBody)?.let {
+                                    blendedBodyTop(blendCurves, it.startMmPhysical, it.endMmPhysical, it.diaMm)
+                                }
+                                if (blendedTop != null) {
+                                    clipSurfacePolyline(
+                                        blendedTop.points, a, b, xMap?.knotsInside(a, b) ?: emptyList(),
+                                    ).zipWithNext { p0, p1 ->
+                                        val r0 = rPx(p0.diaMm)
+                                        val r1 = rPx(p1.diaMm)
+                                        drawLine(outlineColor, Offset(xPx(p0.xMm), cy - r0), Offset(xPx(p1.xMm), cy - r1), outlineWidthPx)
+                                        drawLine(outlineColor, Offset(xPx(p0.xMm), cy + r0), Offset(xPx(p1.xMm), cy + r1), outlineWidthPx)
+                                    }
+                                    if (rc.startMmPhysical > drawStartMm + eps) {
+                                        val r = rPx(blendedTop.aftFaceDiaMm)
+                                        drawLine(outlineColor, Offset(xPx(a), cy - r), Offset(xPx(a), cy + r), outlineWidthPx)
+                                    }
+                                    if (rc.endMmPhysical < drawEndMm - eps) {
+                                        val r = rPx(blendedTop.fwdFaceDiaMm)
+                                        drawLine(outlineColor, Offset(xPx(b), cy - r), Offset(xPx(b), cy + r), outlineWidthPx)
+                                    }
+                                    return@forEach
+                                }
                                 val rA = rPx(componentDiaAt(rc, a))
                                 val rB = rPx(componentDiaAt(rc, b))
                                 if (rA <= 0f && rB <= 0f) return@forEach
@@ -1758,6 +1790,19 @@ fun UndercutWindowDetailOverlay(
                                     cy = cy,
                                     color = SheetInk.Outline.copy(alpha = LINER_OUTLINE_CANVAS_ALPHA),
                                     strokeWidthPx = 1.dp.toPx(),
+                                )
+                                // The part of a blend a cut took away, dotted up to the face.
+                                drawErasedBlendTraces(
+                                    curves = blendCurves,
+                                    notches = notches,
+                                    w0Mm = drawStartMm,
+                                    w1Mm = drawEndMm,
+                                    xPx = xPx,
+                                    rPx = rPx,
+                                    cy = cy,
+                                    color = SheetInk.Outline.copy(alpha = LINER_OUTLINE_CANVAS_ALPHA),
+                                    strokeWidthPx = 1.dp.toPx(),
+                                    knotsInside = { x0, x1 -> xMap?.knotsInside(x0, x1) ?: emptyList() },
                                 )
                             }
                             // ── Overlap bands — where a blocked draft collides with a neighbour ──

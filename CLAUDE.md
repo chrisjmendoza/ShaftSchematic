@@ -797,6 +797,22 @@ size is fitted down ONCE per sheet by `fittedUndercutTextScale` (largest step le
 shaft ≥ `UC_TEXT_FIT_MIN_SHAFT_PT`, read off dry passes of the ONE `drawUndercutSheet`) — never
 per strip. 100% is byte-identical.
 
+**Body blends draw on the undercut detail strips** (on-device request: a body's 45° blend up to
+an undercut liner drew as a square corner): a blended body face draws its ramp at its TRUE mm
+span — the very points the surface envelope samples, ONE sampling `bodyBlendCurves`
+(`ui/resolved/SurfaceSegs.kt`) behind `surfaceSegsFrom` and `undercutBlendCurves`, so the drawn
+ramp is the surface the notches are cut against — as one top polyline (`blendedBodyTop`), its
+face line at the height the ramp reaches. A cut across the ramp erases it like any surface
+stroke, so the solid line stops at the cut's edge (where the machined blend now really ends),
+and the part the cut removed is retraced up to the face in the liner outline's dotted ink, where
+it meets the liner's dotted face (`erasedBlendTraces`, read off the notches' drawn REGIONS so a
+ramp the cut's floor stands above is never doubled; follows `PdfPrefs.undercutLinerOutline`).
+Pure geometry in `geom/UndercutBlendMath.kt`, drawn identically on the printed strip
+(`drawUndercutWindowProfile` + `drawErasedBlendTracesPdf`) and the detail canvas
+(`drawErasedBlendTraces`, `ui/screen/UndercutSharedDraw.kt`). No drawn-width floor here — the
+strips are zoomed. The whole-shaft overview canvas keeps `ShaftRenderer`'s own blend and draws
+no dotted retrace.
+
 **Keyways print on the undercut detail strips** (on-device request: a strip ending on a body must
 read as the shaft end, as a taper end does): any STORED body or taper keyway a strip window holds
 ≥ 90% of (`undercutStripShowsSpan`) draws through the schematic's own slot routine at the strip's
