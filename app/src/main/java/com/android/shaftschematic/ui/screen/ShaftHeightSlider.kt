@@ -1334,6 +1334,8 @@ internal fun ShadeInPdfChecks(
     onSetUndercutLinerOutline: (Boolean) -> Unit = {},
     undercutDepthShade: Boolean = true,
     onSetUndercutDepthShade: (Boolean) -> Unit = {},
+    undercutDiaInside: Boolean = false,
+    onSetUndercutDiaInside: (Boolean) -> Unit = {},
     undercutShadeLiners: Boolean = false,
     onSetUndercutShadeLiners: (Boolean) -> Unit = {},
 ) {
@@ -1356,6 +1358,8 @@ internal fun ShadeInPdfChecks(
             onSetUndercutLinerOutline = onSetUndercutLinerOutline,
             undercutDepthShade = undercutDepthShade,
             onSetUndercutDepthShade = onSetUndercutDepthShade,
+            undercutDiaInside = undercutDiaInside,
+            onSetUndercutDiaInside = onSetUndercutDiaInside,
             undercutShadeLiners = undercutShadeLiners,
             onSetUndercutShadeLiners = onSetUndercutShadeLiners,
         )
@@ -1409,6 +1413,12 @@ internal fun ShadeInPdfCheckRows(
     /** The app-wide `PdfPrefs.undercutDepthShade`; read only when [showUndercutLineArt]. */
     undercutDepthShade: Boolean = true,
     onSetUndercutDepthShade: (Boolean) -> Unit = {},
+    /**
+     * The app-wide `PdfPrefs.undercutDiaInside`; read only when [showUndercutLineArt], and offered
+     * only while [undercutLineArt] is on — the composer reads it under line art alone.
+     */
+    undercutDiaInside: Boolean = false,
+    onSetUndercutDiaInside: (Boolean) -> Unit = {},
     /**
      * The undercut drawing's OWN liner shading, `PdfPrefs.undercutShadeLiners`. On the undercut
      * sheet ([showUndercutLineArt]) the "Liners" row drives THIS, never [pdfShadedLiners], so
@@ -1504,6 +1514,31 @@ internal fun ShadeInPdfCheckRows(
                 )
             }
         }
+        if (showUndercutLineArt) Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = 24.dp),
+        ) {
+            Checkbox(
+                checked = undercutDiaInside,
+                enabled = undercutLineArt,
+                onCheckedChange = onSetUndercutDiaInside,
+                modifier = Modifier.testTag("pdf_undercut_dia_inside"),
+            )
+            Spacer(Modifier.width(8.dp))
+            Column {
+                Text(
+                    UNDERCUT_DIA_INSIDE_LABEL,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (undercutLineArt) MaterialTheme.colorScheme.onSurface
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    UNDERCUT_DIA_INSIDE_CAPTION,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
         if (showUndercutLineArt) Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox(
                 checked = undercutDepthShade,
@@ -1548,6 +1583,16 @@ internal fun ShadeInPdfCheckRows(
 /** The liner-outline row's caption — the options sheet and Settings say the same thing. */
 internal const val UNDERCUT_LINER_OUTLINE_CAPTION =
     "Dotted outline of each liner's original edges and OD over the cuts"
+
+/** The inside-diameters row's label — the options sheet and the Undercut tab say the same thing. */
+internal const val UNDERCUT_DIA_INSIDE_LABEL = "Diameters inside the shaft"
+
+/**
+ * The inside-diameters row's caption — the options sheet, Settings and the Undercut tab say the
+ * same thing.
+ */
+internal const val UNDERCUT_DIA_INSIDE_CAPTION =
+    "Line art only. Each cut's diameter is written inside the shaft; cuts too thin keep the pointer."
 
 /** The depth-shade row's caption — the options sheet and Settings say the same thing. */
 internal const val UNDERCUT_DEPTH_SHADE_CAPTION =

@@ -647,6 +647,27 @@ data class UndercutRecord(
   chosen shade colour) as `drawUndercutNotches`' `sectionDepthFill`. Off is byte-identical to the
   flat tone.
 
+  **Diameters inside the shaft — `PdfPrefs.undercutDiaInside`** (default `false`; on-device
+  request from a shop hand sketch, a toggle so sheets can be printed both ways). Read ONLY under
+  print line art (`undercutDiaInside && undercutLineArt`, never on a blank draft or a started
+  strip); off — or line art off — is byte-identical. On the printed detail strips each Ø callout
+  station whose value fits is written INSIDE the shaft as a vertical dimension
+  (`drawUndercutInsideDia`): a `dim` line from the cut's top floor to its bottom floor at the
+  middle of the floor piece the station sits in, the rails' slim 2:1 arrowhead on each floor line
+  at `PdfPrefs.arrowSizePt`, and the value — the callout's own label, no Ø character, never
+  shrunk — rotated −90° in a break at the centreline over a sheet-white halo. The fit rule is pure
+  (`geom/UndercutInsideDiaMath.kt`): across the piece, text height + 2 × 2 pt ≤ piece width; up the
+  floor, text width + 2 × 3 pt break pad + 2 × arrowhead + 2 × 2 pt stub ≤ the DRAWN floor height.
+  Decided per callout station (a split parent prints in every floor piece that fits, the
+  split-parent ruling). A station that does not fit keeps its below-shaft leader exactly, and the
+  callout band is planned over those stations only (`UndercutStripPlan.withInsideDia`), so a strip
+  reserves no row for a value it draws inside; `resolveInsideDia` narrows the inside set until it
+  holds on the shaft the strip then draws, and portrait sizing reads the set that fits a
+  `UNDERCUT_CYL_MAX_FLOOR_PT` shaft. Rows: `pdf_undercut_dia_inside` (undercut PDF options,
+  Shading group, and Settings → PDF Export) and `undercut_dia_inside_switch` (Undercut tab Drawing
+  settings), each greyed while line art is off. Printed sheet only — the canvases keep their
+  below-shaft callouts.
+
   **Keyways on the detail strips** (on-device request: a strip ending on a body did not read as
   the shaft end the way a taper end does). Every stored body or taper keyway whose slot (for a
   taper, the whole taper) a strip window holds at least `UC_KEYWAY_MIN_SHOWN_FRAC` (90%) of —

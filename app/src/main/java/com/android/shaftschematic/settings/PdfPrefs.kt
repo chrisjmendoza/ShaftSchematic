@@ -240,6 +240,17 @@ data class PdfPrefs(
      */
     val undercutDepthShade: Boolean = true,
     /**
+     * Diameters inside the shaft on the printed undercut drawing (on-device request, from a shop
+     * hand sketch): each cut's measured Ø is written vertically INSIDE the shaft as a vertical
+     * dimension — a line floor to floor at the cut's middle, an arrowhead on each floor line, the
+     * value rotated in a break — instead of hanging below the shaft on a leader. A cut too thin
+     * or too shallow for the value keeps its below-shaft leader callout
+     * (`geom/UndercutInsideDiaMath.kt` decides). Read only together with [undercutLineArt]: the
+     * value stands where a section fill would otherwise sit. The undercut PDF only — the undercut
+     * canvases keep their callouts. Off by default, so the sheet prints byte for byte as before.
+     */
+    val undercutDiaInside: Boolean = false,
+    /**
      * Shade the liners on the undercut drawing — its OWN switch, never [shadedLiners] (on-device
      * request: turning liner shading off for the undercut sheet must not change the schematic).
      * Off by default: the liner prints white and the cut sections carry the grey. The undercut PDF

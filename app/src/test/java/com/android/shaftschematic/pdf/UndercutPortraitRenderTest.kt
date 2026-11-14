@@ -348,12 +348,17 @@ class UndercutPortraitRenderTest {
             ),
         )
         render("depth_two_liners.png", twoSpec, fourProject, twoRecord)
+        // "Diameters inside the shaft" under line art: wide cuts carry their value inside, thin
+        // ones keep the leader.
+        val insideDia = PdfPrefs(undercutLineArt = true, undercutDiaInside = true)
+        render("inside_dia_four.png", fourSpec, fourProject, fourRecord, pdfPrefs = insideDia)
         // An on-device job file, when one is named.
         System.getenv("UNDERCUT_RENDER_DOC")?.let { path ->
             val doc = ShaftDocCodec.decode(File(path).readText())
             render("depth_doc.png", doc.spec, polarProject, doc.undercutRecord)
             render("depth_doc_off.png", doc.spec, polarProject, doc.undercutRecord, pdfPrefs = PdfPrefs(undercutDepthShade = false))
             render("depth_doc_to_end.png", doc.spec, polarProject, doc.undercutRecord.copy(drawToSet = true))
+            render("inside_dia_doc.png", doc.spec, polarProject, doc.undercutRecord.copy(drawToSet = true), pdfPrefs = insideDia)
         }
     }
 

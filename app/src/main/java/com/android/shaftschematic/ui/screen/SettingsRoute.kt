@@ -166,6 +166,7 @@ fun SettingsRoute(
     val pdfUndercutLineArt by vm.pdfUndercutLineArt.collectAsState()
     val pdfUndercutLinerOutline by vm.pdfUndercutLinerOutline.collectAsState()
     val pdfUndercutDepthShade by vm.pdfUndercutDepthShade.collectAsState()
+    val pdfUndercutDiaInside by vm.pdfUndercutDiaInside.collectAsState()
     val pdfUndercutShadeLiners by vm.pdfUndercutShadeLiners.collectAsState()
     val pdfUndercutSplitAtLinerEdge by vm.pdfUndercutSplitAtLinerEdge.collectAsState()
     val pdfShadeExplicitBodiesOnly by vm.pdfShadeExplicitBodiesOnly.collectAsState()
@@ -1074,6 +1075,28 @@ fun SettingsRoute(
                             Text(
                                 "The printed undercut sheet drops every fill; the cut sections " +
                                     "read from their faces and floor lines.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    // Read by the sheet under line art alone, so it is offered only then.
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = pdfUndercutDiaInside,
+                            enabled = pdfUndercutLineArt,
+                            onCheckedChange = { vm.setPdfUndercutDiaInside(it) },
+                            modifier = Modifier.testTag("pdf_undercut_dia_inside"),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                "Undercut drawing: diameters inside the shaft",
+                                color = if (pdfUndercutLineArt) MaterialTheme.colorScheme.onSurface
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Text(
+                                UNDERCUT_DIA_INSIDE_CAPTION,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )

@@ -2,6 +2,8 @@ package com.android.shaftschematic.ui.screen
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
@@ -124,21 +126,28 @@ fun EditorSidebarOverlay(
         // No persistent handle tab — the toolbar hamburger button opens the sidebar.
 
         // ── Modal overlay (scrim + sidebar panel) ──────────────────────────────
+        // The scrim FADES in place over the whole screen while only the panel slides: one sliding
+        // container carried the dark tint across the screen with the panel (on-device report).
+        AnimatedVisibility(
+            visible = open,
+            enter = fadeIn(animationSpec = tween(200)),
+            exit  = fadeOut(animationSpec = tween(180)),
+        ) {
+            // Scrim — tapping closes the sidebar
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.45f))
+                    .clickable(onClick = onClose)
+                    .semantics { contentDescription = "Close navigation" },
+            )
+        }
         AnimatedVisibility(
             visible = open,
             enter = slideInHorizontally(animationSpec = tween(200)) { -it },
             exit  = slideOutHorizontally(animationSpec = tween(180)) { -it },
         ) {
-            Box(Modifier.fillMaxSize()) {
-                // Scrim — tapping closes the sidebar
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.45f))
-                        .clickable(onClick = onClose)
-                        .semantics { contentDescription = "Close navigation" },
-                )
-
+            Box(Modifier.fillMaxHeight()) {
                 // Sidebar panel
                 Surface(
                     modifier = Modifier

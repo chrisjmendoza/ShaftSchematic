@@ -152,6 +152,7 @@ import com.android.shaftschematic.ui.viewmodel.removeUndercut
 import com.android.shaftschematic.ui.viewmodel.restoreUndercut
 import com.android.shaftschematic.ui.viewmodel.setPdfUndercutSplitAtLinerEdge
 import com.android.shaftschematic.ui.viewmodel.setPdfUndercutDepthShade
+import com.android.shaftschematic.ui.viewmodel.setPdfUndercutDiaInside
 import com.android.shaftschematic.ui.viewmodel.setPdfUndercutShadeLiners
 import com.android.shaftschematic.ui.viewmodel.setUndercutDrawToSet
 import com.android.shaftschematic.ui.viewmodel.setUndercutPageOrientation
@@ -267,6 +268,9 @@ fun UndercutRoute(
     // Section cores shaded by depth: a preview re-render key, an options-sheet control, and read by
     // the overview canvas and the detail overlay alike.
     val pdfUndercutDepthShade by vm.pdfUndercutDepthShade.collectAsState()
+    // Ø values inside the shaft on the printed sheet (line art only): a preview re-render key and an
+    // options-sheet control.
+    val pdfUndercutDiaInside by vm.pdfUndercutDiaInside.collectAsState()
     // The undercut drawing's own liner shading (never the schematic's): a preview re-render key, an
     // options-sheet control, and read by both canvases.
     val pdfUndercutShadeLiners by vm.pdfUndercutShadeLiners.collectAsState()
@@ -670,6 +674,7 @@ fun UndercutRoute(
                 undercutLineArt = pdfUndercutLineArt,
                 undercutLinerOutline = pdfUndercutLinerOutline,
                 undercutDepthShade = pdfUndercutDepthShade,
+                undercutDiaInside = pdfUndercutDiaInside,
                 undercutShadeLiners = pdfUndercutShadeLiners,
                 undercutSplitAtLinerEdge = pdfUndercutSplitAtLinerEdge,
                 undercutTotalRail = pdfUndercutTotalRail,
@@ -1111,6 +1116,15 @@ fun UndercutRoute(
                         checked = pdfUndercutDepthShade,
                         onCheckedChange = { vm.setPdfUndercutDepthShade(it) },
                         testTag = "undercut_depth_shade_switch",
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
+                    // App-wide look, printed sheet only: each cut's Ø written inside the shaft.
+                    // Offered while print line art is on, the only case the sheet reads it.
+                    UndercutDiaInsideRow(
+                        checked = pdfUndercutDiaInside,
+                        onCheckedChange = { vm.setPdfUndercutDiaInside(it) },
+                        testTag = "undercut_dia_inside_switch",
+                        enabled = pdfUndercutLineArt,
                         modifier = Modifier.padding(bottom = 8.dp),
                     )
                     // The undercut drawing's OWN liner shading — the schematic's stays untouched.
@@ -1672,6 +1686,8 @@ private data class UndercutRenderInputs(
     val undercutLineArt: Boolean,
     val undercutLinerOutline: Boolean,
     val undercutDepthShade: Boolean,
+    /** `PdfPrefs.undercutDiaInside` — a key only; the composer reads it off the `PdfPrefs` snapshot. */
+    val undercutDiaInside: Boolean,
     val undercutShadeLiners: Boolean,
     val undercutSplitAtLinerEdge: Boolean,
     val undercutTotalRail: Boolean,
@@ -1762,6 +1778,7 @@ internal fun UndercutOptionsSheet(
     val pdfUndercutLineArt by vm.pdfUndercutLineArt.collectAsState()
     val pdfUndercutLinerOutline by vm.pdfUndercutLinerOutline.collectAsState()
     val pdfUndercutDepthShade by vm.pdfUndercutDepthShade.collectAsState()
+    val pdfUndercutDiaInside by vm.pdfUndercutDiaInside.collectAsState()
     val pdfUndercutShadeLiners by vm.pdfUndercutShadeLiners.collectAsState()
     val pdfUndercutSplitAtLinerEdge by vm.pdfUndercutSplitAtLinerEdge.collectAsState()
     val pdfFractionStyle by vm.pdfFractionStyle.collectAsState()
@@ -1800,6 +1817,7 @@ internal fun UndercutOptionsSheet(
         undercutLineArt = pdfUndercutLineArt,
         undercutLinerOutline = pdfUndercutLinerOutline,
         undercutDepthShade = pdfUndercutDepthShade,
+        undercutDiaInside = pdfUndercutDiaInside,
         undercutShadeLiners = pdfUndercutShadeLiners,
         vm = vm,
         // The strip rails' heads follow `PdfPrefs.arrowSizePt` (`drawUndercutRail`), on the
