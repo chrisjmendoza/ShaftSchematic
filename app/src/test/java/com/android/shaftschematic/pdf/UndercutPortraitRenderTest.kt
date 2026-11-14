@@ -308,6 +308,55 @@ class UndercutPortraitRenderTest {
         )
     }
 
+    @Test
+    fun `render depth shading on and off`() {
+        val off = PdfPrefs(undercutDepthShade = false)
+        render("depth_four_strips_on.png", fourSpec, fourProject, fourRecord)
+        render("depth_four_strips_off.png", fourSpec, fourProject, fourRecord, pdfPrefs = off)
+        render("depth_polar_on.png", polar.spec, polarProject, polarTwoSections)
+        render("depth_polar_off.png", polar.spec, polarProject, polarTwoSections, pdfPrefs = off)
+        // A butted run that starts on a liner and steps off its end onto the smaller body.
+        val runSpec = ShaftSpec(
+            overallLengthMm = inch(100f),
+            autoBodyDiaMm = inch(6.375f),
+            liners = listOf(Liner(id = "L", startFromAftMm = inch(40f), lengthMm = inch(32f), odMm = inch(6.75f))),
+        )
+        fun c(id: String, start: Float, len: Float, dia: Float) =
+            Undercut(id = id, startFromAftMm = inch(start), lengthMm = inch(len), diaMm = inch(dia))
+        val runRecord = UndercutRecord(
+            undercuts = listOf(
+                c("long", 40f, 31.4375f, 6.260f),
+                c("a", 71.4375f, 0.5625f, 6.045f),
+                c("b", 72f, 0.5625f, 5.996f),
+                c("c", 72.5625f, 1.5f, 6.187f),
+                c("d", 74.0625f, 0.625f, 6.291f),
+            ),
+        )
+        render("depth_run_off_liner.png", runSpec, fourProject, runRecord)
+        // The on-device sheet: that run plus a second liner of shallow cuts on the same page.
+        val twoSpec = runSpec.copy(
+            overallLengthMm = inch(160f),
+            liners = runSpec.liners + Liner(id = "L2", startFromAftMm = inch(110f), lengthMm = inch(28f), odMm = inch(6.8f)),
+        )
+        val twoRecord = UndercutRecord(
+            undercuts = runRecord.undercuts + listOf(
+                c("s1", 112f, 2.625f, 6.760f),
+                c("s2", 114.625f, 1.25f, 6.563f),
+                c("s3", 115.875f, 9.25f, 6.723f),
+                c("s4", 125.125f, 1.4375f, 6.535f),
+                c("s5", 126.5625f, 6.5625f, 6.760f),
+            ),
+        )
+        render("depth_two_liners.png", twoSpec, fourProject, twoRecord)
+        // An on-device job file, when one is named.
+        System.getenv("UNDERCUT_RENDER_DOC")?.let { path ->
+            val doc = ShaftDocCodec.decode(File(path).readText())
+            render("depth_doc.png", doc.spec, polarProject, doc.undercutRecord)
+            render("depth_doc_off.png", doc.spec, polarProject, doc.undercutRecord, pdfPrefs = PdfPrefs(undercutDepthShade = false))
+            render("depth_doc_to_end.png", doc.spec, polarProject, doc.undercutRecord.copy(drawToSet = true))
+        }
+    }
+
     private companion object {
         const val SCALE = 2f
     }

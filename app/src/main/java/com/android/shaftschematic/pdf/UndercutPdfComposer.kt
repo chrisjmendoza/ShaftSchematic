@@ -616,6 +616,7 @@ private fun drawUndercutSheet(
             // Portrait strips are sized to what they draw, so the title gets its own air under
             // the Ø callouts; landscape keeps today's banding exactly.
             titleAirPt = if (portrait) UC_PORTRAIT_TITLE_AIR_PT else 0f,
+            keywaySpec = spec,
         )
     }
     if (overflow.isNotEmpty()) {
@@ -982,6 +983,68 @@ private fun drawLinerOutlinesPdf(
             }
         }
     }
+}
+
+/**
+ * The body and taper keyways a detail strip shows: every stored keyway whose slot lies wholly
+ * inside `[drawStartMm, drawEndMm]`, drawn plan-view through the schematic's own slot routine
+ * ([drawBodyKeywaysPdf] / [drawKeywayNotchPdf]) with the strip's axial map [xAt] and its diameter
+ * scale [diaPtPerMm] — so a slot keeps its true width against the drawn shaft. A keyway the window
+ * only partly holds is left out rather than drawn cut off at the break.
+ */
+private fun drawUndercutStripKeyways(
+    c: Canvas,
+    spec: ShaftSpec,
+    drawStartMm: Float,
+    drawEndMm: Float,
+    cy: Float,
+    xAt: (Float) -> Float,
+    rAt: (Float) -> Float,
+    diaPtPerMm: Float,
+    outline: Paint,
+) {
+    if (diaPtPerMm <= 0f) return
+    // Mostly inside: a strip that ends at the S.E.T. can stop a hair short of the face a keyway
+    // runs out through, so the slot is drawn when nearly all of it is in view and clipped at the
+    // window edge; one the window only clips a corner of is left out.
+    fun mostlyInside(lo: Float, hi: Float) = undercutStripShowsSpan(lo, hi, drawStartMm, drawEndMm)
+    val bodies = spec.bodies.filter { b ->
+        val span = b.keywayAbsSpanMm()
+        b.hasKeyway && span != null && mostlyInside(span.loMm, span.hiMm)
+    }
+    val tapers = spec.tapers.filter { t ->
+        t.keywayWidthMm > 0f && t.keywayLengthMm > 0f &&
+            mostlyInside(t.startFromAftMm, t.startFromAftMm + t.lengthMm)
+    }
+    if (bodies.isEmpty() && tapers.isEmpty()) return
+    c.save()
+    c.clipRect(xAt(drawStartMm), cy - 10_000f, xAt(drawEndMm), cy + 10_000f)
+    drawBodyKeywaysPdf(c, bodies, xAt, cy, diaPtPerMm, outline)
+    tapers.forEach { t ->
+        val x0 = xAt(t.startFromAftMm)
+        val x1 = xAt(t.startFromAftMm + t.lengthMm)
+        drawKeywayNotchPdf(
+            c, t, x0, x1, top0 = cy - rAt(t.startDiaMm), top1 = cy - rAt(t.endDiaMm),
+            cy = cy, diaPtPerMm = diaPtPerMm, outline = outline,
+        )
+    }
+    c.restore()
+}
+
+/** Share of a keyway (or its taper) a strip window must hold for the slot to draw there. */
+internal const val UC_KEYWAY_MIN_SHOWN_FRAC = 0.9f
+
+/**
+ * Whether a strip window `[drawStartMm, drawEndMm]` holds enough of `[loMm, hiMm]` — at least
+ * [UC_KEYWAY_MIN_SHOWN_FRAC] of it — for that keyway (or taper) to draw on the strip: a strip that
+ * reaches a taper or the shaft end shows the whole part and its keyway comes with it, while one
+ * that only clips a corner at a break leaves it off.
+ */
+internal fun undercutStripShowsSpan(loMm: Float, hiMm: Float, drawStartMm: Float, drawEndMm: Float): Boolean {
+    val len = hiMm - loMm
+    if (len <= 0f) return false
+    val shown = (minOf(hiMm, drawEndMm) - maxOf(loMm, drawStartMm)).coerceAtLeast(0f)
+    return shown >= len * UC_KEYWAY_MIN_SHOWN_FRAC
 }
 
 private fun drawUndercutNotches(
@@ -1528,6 +1591,11 @@ private fun drawUndercutDetailStrip(
     onNotToScale: () -> Unit = {},
     /** The height of the shaft this strip draws — the text-size fit reads the sheet's shortest. */
     onShaftHeight: (Float) -> Unit = {},
+    /**
+     * The STORED spec, for keyways only: [docSpec] carries the resolved bodies, which hold no
+     * keyway (they are drawable geometry), so a body's slot is only found on the stored body.
+     */
+    keywaySpec: ShaftSpec = docSpec,
 ) {
     val plan = planUndercutDetailStrip(
         segs, strip, undercuts, clampedById, stripLeft, stripRight, unit, text, diaText,
@@ -1616,6 +1684,16 @@ private fun drawUndercutDetailStrip(
     // the physical shaft end.
     drawUndercutWindowEnd(c, segs, drawStartMm, cy, ::xAtStrip, ::rStrip, outline, shaftExtentMm, eyeAtTop = true)
     drawUndercutWindowEnd(c, segs, drawEndMm, cy, ::xAtStrip, ::rStrip, outline, shaftExtentMm, eyeAtTop = false)
+
+    // Keyways that sit wholly inside this strip's window — the schematic's own slot draw, at the
+    // strip's two scales (on-device request: a strip ending on a body reads as the shaft end once
+    // its keyway shows, the way a taper end already does). A blank write-in liner span skips it.
+    if (blankLiner == null) {
+        drawUndercutStripKeyways(
+            c, keywaySpec, drawStartMm, drawEndMm, cy, ::xAtStrip, ::rStrip,
+            diaPtPerMm = 2f * rCap / stripMaxDiaMm, outline = outline,
+        )
+    }
 
     drawUndercutNotches(
         c, notches, cy, ::xAtStrip, ::rStrip, outline, voidFill,

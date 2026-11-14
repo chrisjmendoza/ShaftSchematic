@@ -797,6 +797,13 @@ size is fitted down ONCE per sheet by `fittedUndercutTextScale` (largest step le
 shaft ≥ `UC_TEXT_FIT_MIN_SHAFT_PT`, read off dry passes of the ONE `drawUndercutSheet`) — never
 per strip. 100% is byte-identical.
 
+**Keyways print on the undercut detail strips** (on-device request: a strip ending on a body must
+read as the shaft end, as a taper end does): any STORED body or taper keyway a strip window holds
+≥ 90% of (`undercutStripShowsSpan`) draws through the schematic's own slot routine at the strip's
+two scales, clipped to the window; the strip's `docSpec` carries resolved bodies (no keyways), so
+the composer hands it the stored spec as `keywaySpec`. Printed sheet only so far — the canvases owe
+the mirror.
+
 The undercut sheet is the one portrait-capable document: its page shape is per-job
 `UndercutRecord.pageOrientation` (AUTO = portrait at 2+ printed sections), resolved ONCE by
 `undercutSheetOrientation` over the same `undercutSheetStrips` the composer draws, and every

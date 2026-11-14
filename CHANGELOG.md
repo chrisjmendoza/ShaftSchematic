@@ -8,6 +8,14 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-13
 
+### feat(undercut): keyways on the undercut detail strips
+
+On-device request: a strip ending on a body did not read as the end of the shaft the way a taper
+does. A body or taper keyway now prints on the undercut sheet's detail strip whenever the strip
+shows that part — when a strip reaches a taper or the shaft end, the whole thing is there and its
+keyway comes with it, spoon included, drawn with the schematic's own slot at the strip's scale.
+A keyway the strip only clips at a break is left off. Printed sheet only for now.
+
 ### fix(undercut): depth shading contrasts the cuts in view; undercut liners get their own switch
 
 On-device report: a strip's cuts still looked one grey. The shades were stretched across the whole

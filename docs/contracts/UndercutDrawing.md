@@ -647,6 +647,18 @@ data class UndercutRecord(
   chosen shade colour) as `drawUndercutNotches`' `sectionDepthFill`. Off is byte-identical to the
   flat tone.
 
+  **Keyways on the detail strips** (on-device request: a strip ending on a body did not read as
+  the shaft end the way a taper end does). Every stored body or taper keyway whose slot (for a
+  taper, the whole taper) a strip window holds at least `UC_KEYWAY_MIN_SHOWN_FRAC` (90%) of —
+  `undercutStripShowsSpan` — draws on that strip through the schematic's own slot routine
+  (`drawBodyKeywaysPdf` / `drawKeywayNotchPdf`, plan view, spoon included), at the strip's axial map
+  and its diameter scale (`2·rCap / stripMaxDiaMm`), clipped to the window: when a strip reaches a
+  taper or the shaft end the whole part is there and its keyway comes with it, and a strip that
+  stops a hair short of the face a keyway runs out through (the S.E.T. sitting short of the body's
+  end face) still shows it. A keyway the window only clips at a break is left off. Keyways come
+  from the STORED spec (`keywaySpec`) — the strip's `docSpec` carries resolved bodies, which hold
+  no keyway. Printed sheet only for now; the undercut canvases do not draw them yet.
+
   **On-screen shade styling — `util/UndercutStyle.kt`** (Settings → Preview Colors → Undercut
   Drawing): the two canvases take their fills from a persisted `UndercutStyle` —
   shade colour (Grey default / Bronze / Blue — fixed ink bases, never theme roles), shade
