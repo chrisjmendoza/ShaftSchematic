@@ -166,6 +166,13 @@ data class NotchProfile(
     val endMm: Float,
     val floorDiaMm: Float,
     val surface: List<SurfacePoint>,
+    /**
+     * Draw the face at [startMm] / [endMm] even when the step there falls under
+     * [NOTCH_FACE_MIN_STEP_PX]: the end is butted against a cut of a different Ø, and the line
+     * between the two must print however close the exaggerated floors land (on-device report).
+     */
+    val startFaceAlways: Boolean = false,
+    val endFaceAlways: Boolean = false,
 )
 
 /**

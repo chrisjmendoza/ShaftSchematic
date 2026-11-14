@@ -2,6 +2,7 @@ package com.android.shaftschematic.util
 
 import androidx.compose.ui.graphics.Color
 import com.android.shaftschematic.geom.UNDERCUT_SECTION_FILL_ALPHA
+import com.android.shaftschematic.geom.undercutDepthShadeAlpha
 
 /**
  * User-selectable styling for the on-screen Undercut Drawing (overview canvas and the zoomed
@@ -93,4 +94,15 @@ data class UndercutStyle(
     /** Undercut section core fill — one step lighter than the liner, same weight as bodies. */
     fun sectionFill(): Color =
         if (lineArt) Color.Transparent else shadeColor.base.copy(alpha = linerAlpha / 2f)
+
+    /**
+     * Undercut section core fill under depth shading (`PdfPrefs.undercutDepthShade`): the ONE
+     * ramp [undercutDepthShadeAlpha] at [depthFrac] of the sheet's deepest cut, scaled by the
+     * intensity like every other shade, in the chosen shade colour. Transparent in line art.
+     */
+    fun sectionDepthFill(depthFrac: Float): Color =
+        if (lineArt) Color.Transparent
+        else shadeColor.base.copy(
+            alpha = (undercutDepthShadeAlpha(depthFrac) * intensity.multiplier).coerceAtMost(1f),
+        )
 }

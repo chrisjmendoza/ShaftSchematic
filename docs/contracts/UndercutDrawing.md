@@ -601,6 +601,64 @@ data class UndercutRecord(
   voids stay pure white in every theme because the sheet itself is white in every theme — no
   dark-theme glare is introduced by the void that isn't already the sheet's.
 
+  **Depth shading — `PdfPrefs.undercutDepthShade`** (default `true`; Settings → PDF Export
+  "Undercut drawing: shade cuts by depth" and the undercut preview's PDF options Shading group,
+  testTag `pdf_undercut_depth_shade`, greyed while print line art is on; and the Undercut tab's
+  Drawing settings, `UndercutDepthShadeRow`, testTag `undercut_depth_shade_switch`, so the canvas
+  restyles as it is flipped; on-device request: contrast
+  between the cuts to show depth and separate the sections — "the stainless is lighter and the
+  closer you get to steel is darker"). On, each section core takes its own tone instead of the
+  one flat half-liner shade: `UndercutNotch.depthFrac` is the cut's TRUE depth below its SECTION's
+  reference surface — a section is a run of cuts that touch or overlap (nested cuts included), and
+  its reference is the HIGHEST outer surface any of its cuts spans (`undercutSectionReferenceDia`,
+  a liner's OD wherever the run sits on a liner), so within a section a smaller floor Ø always
+  shades darker and a staircase darkens step by step. The DRAWN depth of a measured top-level cut
+  runs from the same reference (`resolveUndercutFloors`, `deepestUndercutDepthMm`), so it always
+  draws deeper too, and the face between two BUTTED cuts of different Ø ALWAYS draws — the deeper
+  cut owns it (`UndercutFloors.aftFaceAlways`/`fwdFaceAlways` → `NotchProfile.startFaceAlways`/
+  `endFaceAlways`, which override `NOTCH_FACE_MIN_STEP_PX` in both draw sites), however close the
+  exaggerated floors land; heights are untouched (on-device report: a 6.187" and a 6.291" cut drew
+  within a pixel and lost the line between them). Equal Ø keeps one continuous floor, and in a tie
+  on the drawn floor the truly deeper cut paints last (`inButtedPaintOrder`) (on-device report: measuring each cut from
+  the surface under it alone shaded a 5.996" cut that ran off the liner end onto the smaller body
+  LIGHTER than the 6.260" cut beside it) — `UndercutNotch.depthMm` (`undercutDepthMm`), placed
+  between the SHALLOWEST (0) and DEEPEST (1) measured depth of the VIEW by
+  `withDepthShadeStretched`: each printed strip's own cuts (the PDF re-stretches each strip's
+  slice of its sheet-wide list), the detail canvas's strip, and per liner on the tab's
+  whole-shaft canvas (`withDepthShadeStretchedPerLiner`) — stretching across the whole sheet let
+  one liner's shallow cuts squeeze another liner's cuts into one grey (on-device report); a view
+  with one depth sits mid-ramp, `UNDERCUT_DEPTH_SHADE_SINGLE_FRAC` (`undercutDepthShadeFrac`, built
+  inside `buildUndercutNotches` so a strip's slice and both canvases read the sheet's numbers), and
+  the ONE ramp `undercutDepthShadeAlpha` maps it linearly from `UNDERCUT_DEPTH_SHADE_MIN_ALPHA`
+  (4%) to `UNDERCUT_DEPTH_SHADE_MAX_ALPHA` (35%) — from true depth, never the exaggerated drawn
+  depth, so deeper always shades darker. An unmeasured cut (Ø 0) takes
+  the lightest. **The undercut drawing's liners follow their OWN switch,
+  `PdfPrefs.undercutShadeLiners`** (default OFF — the liner prints white, so the cut sections are
+  the only grey on it: "any uncut liner to be white, only undercuts shaded in"), never the
+  schematic's `shadedLiners` (on-device request: turning liner shading off for the undercut sheet
+  must not change the schematic). It drives the strip liner and the whole-shaft fallback's liner
+  on the PDF and both canvases; its rows are "Undercut drawing: shade liners" (Settings → PDF
+  Export), the "Liners" row of the undercut PDF options' Shading group (bound to THIS pref on the
+  undercut sheet, `ShadeInPdfCheckRows`), and "Shade liners" in the Undercut tab's Drawing
+  settings (`UndercutShadeLinersRow`). The "always shades its liner" rule below is superseded by
+  it. Bodies and tapers keep their own shade prefs. The
+  PDF decides it in `undercutPdfFillPlan` (`sectionCoreByDepth`, false under line art); the
+  canvases pass `UndercutStyle.sectionDepthFill` (the same ramp × the intensity multiplier, in the
+  chosen shade colour) as `drawUndercutNotches`' `sectionDepthFill`. Off is byte-identical to the
+  flat tone.
+
+  **Keyways on the detail strips** (on-device request: a strip ending on a body did not read as
+  the shaft end the way a taper end does). Every stored body or taper keyway whose slot (for a
+  taper, the whole taper) a strip window holds at least `UC_KEYWAY_MIN_SHOWN_FRAC` (90%) of —
+  `undercutStripShowsSpan` — draws on that strip through the schematic's own slot routine
+  (`drawBodyKeywaysPdf` / `drawKeywayNotchPdf`, plan view, spoon included), at the strip's axial map
+  and its diameter scale (`2·rCap / stripMaxDiaMm`), clipped to the window: when a strip reaches a
+  taper or the shaft end the whole part is there and its keyway comes with it, and a strip that
+  stops a hair short of the face a keyway runs out through (the S.E.T. sitting short of the body's
+  end face) still shows it. A keyway the window only clips at a break is left off. Keyways come
+  from the STORED spec (`keywaySpec`) — the strip's `docSpec` carries resolved bodies, which hold
+  no keyway. Printed sheet only for now; the undercut canvases do not draw them yet.
+
   **On-screen shade styling — `util/UndercutStyle.kt`** (Settings → Preview Colors → Undercut
   Drawing): the two canvases take their fills from a persisted `UndercutStyle` —
   shade colour (Grey default / Bronze / Blue — fixed ink bases, never theme roles), shade

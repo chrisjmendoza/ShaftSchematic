@@ -6,6 +6,63 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-11-13
+
+### feat(undercut): keyways on the undercut detail strips
+
+On-device request: a strip ending on a body did not read as the end of the shaft the way a taper
+does. A body or taper keyway now prints on the undercut sheet's detail strip whenever the strip
+shows that part — when a strip reaches a taper or the shaft end, the whole thing is there and its
+keyway comes with it, spoon included, drawn with the schematic's own slot at the strip's scale.
+A keyway the strip only clips at a break is left off. Printed sheet only for now.
+
+### fix(undercut): depth shading contrasts the cuts in view; undercut liners get their own switch
+
+On-device report: a strip's cuts still looked one grey. The shades were stretched across the whole
+sheet, so a second liner of shallow cuts squeezed the first liner's cuts into the dark end. Each
+printed strip (and the detail canvas, and each liner on the tab's whole-shaft canvas) now stretches
+its OWN cuts from lightest to darkest, and the ramp widens to 4%–35% grey.
+
+The undercut drawing's liner shading is now its own app-wide setting, `undercutShadeLiners`
+(default off — white liners), so switching it never changes the schematic's liner shading: the
+"Liners" row in the undercut PDF options drives it, with matching rows in Settings → PDF Export and
+the Undercut tab's Drawing settings.
+
+The drawn (exaggerated) notch depth takes the same per-run reference as the shading (on-device
+report: a 5.996" cut off a liner end, measured from the smaller body, drew taller than the 6.045"
+cut on the liner beside it), so within a run a smaller floor Ø never draws shallower.
+
+The line between two butted cuts of different Ø now always prints (on-device report: a 6.187" and
+a 6.291" cut drew within a pixel of each other once exaggerated, the face between them fell under
+the draw sites' minimum step, and the cut read as "not boxed in"). The deeper cut owns that face
+and always draws it; the drawn heights are unchanged, and cuts of one Ø keep one continuous floor. The editor's Preview options sheet gains the "Shade in
+Components" rows (Bodies / Explicit bodies only / Tapers / Liners) the PDF options panels carry.
+
+### fix(undercut): depth shading measures a run of cuts from one surface
+
+On-device report: a 6.260" cut on a liner shaded darker than the 6.045" and 5.996" cuts butted to
+it. Those two ran past the liner end onto the smaller body, and each cut's depth was measured from
+the surface under it alone, so they read shallower. A run of cuts that touch or overlap is now one
+section, measured from the highest surface it spans (the liner OD on a liner), so within a section
+a smaller floor Ø always shades darker. The shades now also stretch from the sheet's shallowest
+measured cut (lightest) to its deepest (darkest) rather than from zero depth, which had bunched a
+run of 0.46"–0.75" cuts into nearly one grey; a sheet with a single depth sits mid-ramp.
+
+### feat(undercut): shade cuts by depth
+
+On-device request: contrast between the cuts to show depth and separate the sections — shallow
+cuts light, deep cuts dark, "like the stainless is lighter and the closer you get to steel is
+darker". Each undercut section's core now takes a grey from its cut's TRUE depth below the outer
+surface, as a share of the deepest measured cut on the sheet: 5% for the shallowest up to 22% for
+the deepest, linear, and a cut inside a cut counts its depth from the outer surface, so a
+staircase darkens step by step. An unmeasured cut takes the lightest. With it on, every uncut
+liner prints white (on-device request after the first render), so the cuts are the only grey on
+a liner. The printed undercut sheet,
+the Undercut tab canvas and the detail canvas all shade from the one ramp. New app-wide look
+pref `PdfPrefs.undercutDepthShade` (default ON, captured by drawing profiles): "Undercut drawing:
+shade cuts by depth" in Settings → PDF Export, in the undercut preview's PDF options Shading
+group (greyed under line art), and as a switch in the Undercut tab's Drawing settings. Off draws the flat section tone exactly as before.
+
 ## 2026-11-12
 
 ### fix(undercut): Chain dimensions put a nested cut's pieces on the one chain too

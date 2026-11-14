@@ -28,6 +28,10 @@ import com.android.shaftschematic.ui.viewmodel.setPdfArrowSizePt
 import com.android.shaftschematic.ui.viewmodel.setPdfDualUnitLayout
 import com.android.shaftschematic.ui.viewmodel.setPdfFractionStyle
 import com.android.shaftschematic.ui.viewmodel.setPdfSBreakThresholdFrac
+import com.android.shaftschematic.ui.viewmodel.setPdfShadeExplicitBodiesOnly
+import com.android.shaftschematic.ui.viewmodel.setPdfShadedBodies
+import com.android.shaftschematic.ui.viewmodel.setPdfShadedLiners
+import com.android.shaftschematic.ui.viewmodel.setPdfShadedTapers
 import com.android.shaftschematic.ui.viewmodel.setPreviewDimTextSize
 import com.android.shaftschematic.ui.viewmodel.setPreviewSheetLayout
 import com.android.shaftschematic.ui.viewmodel.setLinerCompression
@@ -556,6 +560,10 @@ fun ShaftRoute(
                         spec, sliderBase, previewHeightDrag ?: runoutConfig.heightScale, frac,
                     )
                 },
+                shadedBodies = pdfShadedBodies,
+                shadedTapers = pdfShadedTapers,
+                shadedLiners = pdfShadedLiners,
+                shadeExplicitBodiesOnly = pdfShadeExplicitBodiesOnly,
             ),
             actions = EditorPreviewOptionsActions(
                 onShowDimensions = { vm.setShowPreviewDimensions(it) },
@@ -573,6 +581,10 @@ fun ShaftRoute(
                 onLinerCompression = { vm.setLinerCompression(it) },
                 onLinerCompressionDrag = { previewLinerCompressionDrag = it },
                 onDimTextSize = { vm.setPreviewDimTextSize(it) },
+                onShadedBodies = { vm.setPdfShadedBodies(it) },
+                onShadedTapers = { vm.setPdfShadedTapers(it) },
+                onShadedLiners = { vm.setPdfShadedLiners(it) },
+                onShadeExplicitBodiesOnly = { vm.setPdfShadeExplicitBodiesOnly(it) },
             ),
             onDismiss = {
                 previewSBreakDrag = null

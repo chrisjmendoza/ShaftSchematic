@@ -39,6 +39,7 @@ internal const val PREVIEW_OPT_GRID_TAG = "preview_opt_grid"
 internal const val PREVIEW_OPT_HIGHLIGHT_TAG = "preview_opt_highlight"
 internal const val PREVIEW_OPT_SHARED_TAG = "preview_opt_shared"
 internal const val PREVIEW_OPT_LINER_COMPRESSION_TAG = "preview_opt_liner_compression"
+internal const val PREVIEW_OPT_SHADING_TAG = "preview_opt_shading"
 
 /** Scrim behind the Preview options sheet — light, so the preview it restyles still reads. */
 private const val PREVIEW_OPTIONS_SCRIM_ALPHA = 0.12f
@@ -78,6 +79,14 @@ internal data class EditorPreviewOptionsState(
     val estimateLinerKeptFrac: (requestedFracOfTrue: Float) -> Float = { it },
     /** The preview rails' value size — a device preference (Settings → Editor Screen). */
     val dimTextSize: PreviewDimTextSize = PreviewDimTextSize.Default,
+    /**
+     * The "Shade in Components" prefs — the preview fills a component exactly when the sheet
+     * shades it (`RenderOptions.shadedComponentIds`), so these restyle the box as well as the PDF.
+     */
+    val shadedBodies: Boolean = false,
+    val shadedTapers: Boolean = true,
+    val shadedLiners: Boolean = true,
+    val shadeExplicitBodiesOnly: Boolean = false,
 )
 
 /** The sheet's setters — each the same ViewModel setter Settings and the PDF options panels call. */
@@ -98,6 +107,10 @@ internal class EditorPreviewOptionsActions(
     val onHeightDrag: (Float?) -> Unit = {},
     val onLinerCompressionDrag: (Float?) -> Unit = {},
     val onDimTextSize: (PreviewDimTextSize) -> Unit = {},
+    val onShadedBodies: (Boolean) -> Unit = {},
+    val onShadedTapers: (Boolean) -> Unit = {},
+    val onShadedLiners: (Boolean) -> Unit = {},
+    val onShadeExplicitBodiesOnly: (Boolean) -> Unit = {},
 )
 
 /**
@@ -232,6 +245,21 @@ internal fun EditorPreviewOptionsContent(
                 DualUnitLayoutChips(
                     layout = state.dualUnitLayout,
                     onCommit = actions.onDualUnitLayout,
+                )
+            }
+            // The same rows the PDF options panels carry (on-device request: shading could be
+            // switched from the PDF preview but not from here).
+            Column(Modifier.testTag(PREVIEW_OPT_SHADING_TAG)) {
+                Text("Shade in Components", style = MaterialTheme.typography.titleSmall)
+                ShadeInPdfCheckRows(
+                    pdfShadedBodies = state.shadedBodies,
+                    pdfShadedTapers = state.shadedTapers,
+                    pdfShadedLiners = state.shadedLiners,
+                    shadeExplicitBodiesOnly = state.shadeExplicitBodiesOnly,
+                    onSetShadedBodies = actions.onShadedBodies,
+                    onSetShadedTapers = actions.onShadedTapers,
+                    onSetShadedLiners = actions.onShadedLiners,
+                    onSetShadeExplicitBodiesOnly = actions.onShadeExplicitBodiesOnly,
                 )
             }
             if (!state.sheetLayout) {

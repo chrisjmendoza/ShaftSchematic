@@ -17,6 +17,7 @@ import com.android.shaftschematic.geom.UndercutCutNumberPlacement
 import com.android.shaftschematic.geom.UndercutNotch
 import com.android.shaftschematic.geom.linerOutlineSegments
 import com.android.shaftschematic.geom.undercutCutNumberPlacements
+import com.android.shaftschematic.geom.withDepthShadeStretched
 import com.android.shaftschematic.ui.theme.SheetInk
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.ResolvedLiner
@@ -57,6 +58,25 @@ internal fun linerOdsOf(resolvedComponents: List<ResolvedComponent>): List<Under
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
+ * The whole-shaft overview's depth shading, stretched per LINER the way each printed strip
+ * stretches its own cuts ([withDepthShadeStretched]): a cut belongs to the liner its midpoint
+ * sits on, and the bare-shaft cuts form one more group. Stretching the whole shaft at once let
+ * one liner's shallow cuts squeeze another's into one grey (on-device report). Order is kept.
+ */
+internal fun List<UndercutNotch>.withDepthShadeStretchedPerLiner(
+    liners: List<UndercutLinerSpan>,
+): List<UndercutNotch> {
+    fun groupOf(n: UndercutNotch): String {
+        val mid = (n.startMm + n.endMm) * 0.5f
+        return liners.firstOrNull { mid >= it.startMm && mid <= it.endMm }?.id ?: ""
+    }
+    val stretched = groupBy(::groupOf).values
+        .flatMap { it.withDepthShadeStretched() }
+        .associateBy { it.id }
+    return map { stretched.getValue(it.id) }
+}
+
+/**
  * Draw notches as **steps in the silhouette**: [voidColor] fill from the local surface down to
  * the floor (mirrored about the centreline), erasing the profile strokes inside the cut — the
  * mouth stays OPEN at the surface, never closed by a lid — then the outline: a full-height
@@ -79,6 +99,9 @@ internal fun DrawScope.drawUndercutNotches(
     // Section-core refill — one step lighter than the caller's liner shade (see
     // UndercutStyle). Transparent in line-art mode, which leaves the core sheet-white.
     sectionFillColor: Color = Color.Black.copy(alpha = UNDERCUT_SECTION_FILL_ALPHA),
+    // Depth shading (`PdfPrefs.undercutDepthShade`): the core colour for a notch's
+    // [UndercutNotch.depthFrac], replacing [sectionFillColor]. Null draws the flat tone.
+    sectionDepthFill: ((Float) -> Color)? = null,
     // Dashed shoulders/floor mark a DRAFT notch (provisional, not yet in the record) —
     // the overlay passes a dash + a status color (primary while valid, error while its
     // confirm check fails); settled notches and the overview pass neither.
@@ -125,17 +148,17 @@ internal fun DrawScope.drawUndercutNotches(
             // reads distinct from the liner around it (on-device request).
             drawRect(voidColor, topLeft = Offset(x0, cy - rFloor), size = Size(x1 - x0, 2f * rFloor))
             drawRect(
-                sectionFillColor,
+                sectionDepthFill?.invoke(n.depthFrac) ?: sectionFillColor,
                 topLeft = Offset(x0, cy - rFloor),
                 size = Size(x1 - x0, 2f * rFloor),
             )
 
             // Step-section outline: full-height faces where the surface stands above the
             // floor, then the floor lines. No lid — the mouth stays open.
-            if (rSurfStart > rFloor + NOTCH_FACE_MIN_STEP_PX) {
+            if (rSurfStart > rFloor + NOTCH_FACE_MIN_STEP_PX || p.startFaceAlways) {
                 drawLine(outlineColor, Offset(x0, cy - rSurfStart), Offset(x0, cy + rSurfStart), strokeWidthPx, pathEffect = pathEffect)
             }
-            if (rSurfEnd > rFloor + NOTCH_FACE_MIN_STEP_PX) {
+            if (rSurfEnd > rFloor + NOTCH_FACE_MIN_STEP_PX || p.endFaceAlways) {
                 drawLine(outlineColor, Offset(x1, cy - rSurfEnd), Offset(x1, cy + rSurfEnd), strokeWidthPx, pathEffect = pathEffect)
             }
             drawLine(outlineColor, Offset(x0, cy - rFloor), Offset(x1, cy - rFloor), strokeWidthPx, pathEffect = pathEffect)

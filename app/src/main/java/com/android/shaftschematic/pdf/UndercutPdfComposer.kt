@@ -29,6 +29,8 @@ import com.android.shaftschematic.geom.undercutSetReachMm
 import com.android.shaftschematic.geom.effectiveUndercutTotalRail
 import com.android.shaftschematic.geom.NOTCH_FACE_MIN_STEP_PX
 import com.android.shaftschematic.geom.UNDERCUT_SECTION_FILL_ALPHA
+import com.android.shaftschematic.geom.undercutDepthShadeAlpha
+import com.android.shaftschematic.geom.withDepthShadeStretched
 import com.android.shaftschematic.geom.UNDERCUT_BREAK_AMP_FRAC_OF_R
 import com.android.shaftschematic.geom.withUndercutBreakRoom
 import com.android.shaftschematic.geom.maxOuterDiaOver
@@ -523,6 +525,7 @@ private fun drawUndercutSheet(
         drawUndercutNotches(
             c, sheetNotches, shaftCy, ::xAt, ::rPx, outline, voidFill,
             sectionCoreFill = fills.sectionCore,
+            sectionCoreByDepth = fills.sectionCoreByDepth,
         )
         drawLinerOutlinesPdf(c, docSpec, sheetNotches, shaftCy, ::xAt, ::rPx, linerOutlinePaint)
         drawUndercutDirectionRow(
@@ -591,8 +594,11 @@ private fun drawUndercutSheet(
             linerSpanBlank = startedPage && blankValues,
             // This strip's slice of the sheet's notches, in the builder's parents-before-children
             // order — never rebuilt here, so a strip's staircase is the sheet's staircase.
-            notches = sheetNotches.filter { it.id in strip.undercutIds },
+            // Depth shading stretches across THIS strip's cuts, so neighbouring cuts contrast
+            // however deep another liner's cuts run.
+            notches = sheetNotches.filter { it.id in strip.undercutIds }.withDepthShadeStretched(),
             sectionCoreFill = fills.sectionCore,
+            sectionCoreByDepth = fills.sectionCoreByDepth,
             linerOutlinePaint = linerOutlinePaint,
             linerOdLabel = stripLiner
                 ?.let { "Ø" + formatDiaWithUnitDual(it.odMm.toDouble(), stripUnit, displayUnits.dual) },
@@ -610,6 +616,7 @@ private fun drawUndercutSheet(
             // Portrait strips are sized to what they draw, so the title gets its own air under
             // the Ø callouts; landscape keeps today's banding exactly.
             titleAirPt = if (portrait) UC_PORTRAIT_TITLE_AIR_PT else 0f,
+            keywaySpec = spec,
         )
     }
     if (overflow.isNotEmpty()) {
@@ -978,6 +985,68 @@ private fun drawLinerOutlinesPdf(
     }
 }
 
+/**
+ * The body and taper keyways a detail strip shows: every stored keyway whose slot lies wholly
+ * inside `[drawStartMm, drawEndMm]`, drawn plan-view through the schematic's own slot routine
+ * ([drawBodyKeywaysPdf] / [drawKeywayNotchPdf]) with the strip's axial map [xAt] and its diameter
+ * scale [diaPtPerMm] — so a slot keeps its true width against the drawn shaft. A keyway the window
+ * only partly holds is left out rather than drawn cut off at the break.
+ */
+private fun drawUndercutStripKeyways(
+    c: Canvas,
+    spec: ShaftSpec,
+    drawStartMm: Float,
+    drawEndMm: Float,
+    cy: Float,
+    xAt: (Float) -> Float,
+    rAt: (Float) -> Float,
+    diaPtPerMm: Float,
+    outline: Paint,
+) {
+    if (diaPtPerMm <= 0f) return
+    // Mostly inside: a strip that ends at the S.E.T. can stop a hair short of the face a keyway
+    // runs out through, so the slot is drawn when nearly all of it is in view and clipped at the
+    // window edge; one the window only clips a corner of is left out.
+    fun mostlyInside(lo: Float, hi: Float) = undercutStripShowsSpan(lo, hi, drawStartMm, drawEndMm)
+    val bodies = spec.bodies.filter { b ->
+        val span = b.keywayAbsSpanMm()
+        b.hasKeyway && span != null && mostlyInside(span.loMm, span.hiMm)
+    }
+    val tapers = spec.tapers.filter { t ->
+        t.keywayWidthMm > 0f && t.keywayLengthMm > 0f &&
+            mostlyInside(t.startFromAftMm, t.startFromAftMm + t.lengthMm)
+    }
+    if (bodies.isEmpty() && tapers.isEmpty()) return
+    c.save()
+    c.clipRect(xAt(drawStartMm), cy - 10_000f, xAt(drawEndMm), cy + 10_000f)
+    drawBodyKeywaysPdf(c, bodies, xAt, cy, diaPtPerMm, outline)
+    tapers.forEach { t ->
+        val x0 = xAt(t.startFromAftMm)
+        val x1 = xAt(t.startFromAftMm + t.lengthMm)
+        drawKeywayNotchPdf(
+            c, t, x0, x1, top0 = cy - rAt(t.startDiaMm), top1 = cy - rAt(t.endDiaMm),
+            cy = cy, diaPtPerMm = diaPtPerMm, outline = outline,
+        )
+    }
+    c.restore()
+}
+
+/** Share of a keyway (or its taper) a strip window must hold for the slot to draw there. */
+internal const val UC_KEYWAY_MIN_SHOWN_FRAC = 0.9f
+
+/**
+ * Whether a strip window `[drawStartMm, drawEndMm]` holds enough of `[loMm, hiMm]` — at least
+ * [UC_KEYWAY_MIN_SHOWN_FRAC] of it — for that keyway (or taper) to draw on the strip: a strip that
+ * reaches a taper or the shaft end shows the whole part and its keyway comes with it, while one
+ * that only clips a corner at a break leaves it off.
+ */
+internal fun undercutStripShowsSpan(loMm: Float, hiMm: Float, drawStartMm: Float, drawEndMm: Float): Boolean {
+    val len = hiMm - loMm
+    if (len <= 0f) return false
+    val shown = (minOf(hiMm, drawEndMm) - maxOf(loMm, drawStartMm)).coerceAtLeast(0f)
+    return shown >= len * UC_KEYWAY_MIN_SHOWN_FRAC
+}
+
 private fun drawUndercutNotches(
     c: Canvas,
     notches: List<UndercutNotch>,
@@ -992,6 +1061,12 @@ private fun drawUndercutNotches(
      * component's surface stroke and shading across the cut, not a tone.
      */
     sectionCoreFill: Boolean,
+    /**
+     * Whether each core's tone follows its cut's depth ([UndercutNotch.depthFrac] through the ONE
+     * ramp [undercutDepthShadeAlpha]) instead of the one flat section tone. Read only while
+     * [sectionCoreFill] is on.
+     */
+    sectionCoreByDepth: Boolean = false,
 ) {
     if (notches.isEmpty()) return
     // One step LIGHTER than the liner shade (half its 40/255 alpha): the section's core is
@@ -1030,7 +1105,12 @@ private fun drawUndercutNotches(
             // than the liner shade so the section reads distinct (on-device request). Under
             // print line art the erase stands alone and the faces carry the section.
             c.drawRect(xStart, cy - rFloor, xEnd, cy + rFloor, voidFill)
-            sectionFill?.let { c.drawRect(xStart, cy - rFloor, xEnd, cy + rFloor, it) }
+            sectionFill?.let { paint ->
+                if (sectionCoreByDepth) {
+                    paint.color = Color.argb((undercutDepthShadeAlpha(notch.depthFrac) * 255f).roundToInt(), 0, 0, 0)
+                }
+                c.drawRect(xStart, cy - rFloor, xEnd, cy + rFloor, paint)
+            }
 
             // Outline — the step-section construction: a full-height section face at each
             // end (top surface to bottom surface, through the core, only where the surface
@@ -1039,10 +1119,10 @@ private fun drawUndercutNotches(
             // rectangle between two faces (the hand-sketch convention).
             val rSurf0 = rAt(np.surface.first().diaMm)
             val rSurf1 = rAt(np.surface.last().diaMm)
-            if (rSurf0 > rFloor + NOTCH_FACE_MIN_STEP_PX) {
+            if (rSurf0 > rFloor + NOTCH_FACE_MIN_STEP_PX || np.startFaceAlways) {
                 c.drawLine(xStart, cy - rSurf0, xStart, cy + rSurf0, outline)
             }
-            if (rSurf1 > rFloor + NOTCH_FACE_MIN_STEP_PX) {
+            if (rSurf1 > rFloor + NOTCH_FACE_MIN_STEP_PX || np.endFaceAlways) {
                 c.drawLine(xEnd, cy - rSurf1, xEnd, cy + rSurf1, outline)
             }
             listOf(-1f, 1f).forEach { sign ->
@@ -1469,6 +1549,8 @@ private fun drawUndercutDetailStrip(
     notches: List<UndercutNotch>,
     /** Whether the section cores take their light fill — [undercutPdfFillPlan]'s decision. */
     sectionCoreFill: Boolean,
+    /** Whether each core's tone follows its cut's depth — [undercutPdfFillPlan]'s decision. */
+    sectionCoreByDepth: Boolean = false,
     /** The liner outline's dotted paint; null when `PdfPrefs.undercutLinerOutline` is off. */
     linerOutlinePaint: Paint? = null,
     /**
@@ -1509,6 +1591,11 @@ private fun drawUndercutDetailStrip(
     onNotToScale: () -> Unit = {},
     /** The height of the shaft this strip draws — the text-size fit reads the sheet's shortest. */
     onShaftHeight: (Float) -> Unit = {},
+    /**
+     * The STORED spec, for keyways only: [docSpec] carries the resolved bodies, which hold no
+     * keyway (they are drawable geometry), so a body's slot is only found on the stored body.
+     */
+    keywaySpec: ShaftSpec = docSpec,
 ) {
     val plan = planUndercutDetailStrip(
         segs, strip, undercuts, clampedById, stripLeft, stripRight, unit, text, diaText,
@@ -1598,9 +1685,20 @@ private fun drawUndercutDetailStrip(
     drawUndercutWindowEnd(c, segs, drawStartMm, cy, ::xAtStrip, ::rStrip, outline, shaftExtentMm, eyeAtTop = true)
     drawUndercutWindowEnd(c, segs, drawEndMm, cy, ::xAtStrip, ::rStrip, outline, shaftExtentMm, eyeAtTop = false)
 
+    // Keyways that sit wholly inside this strip's window — the schematic's own slot draw, at the
+    // strip's two scales (on-device request: a strip ending on a body reads as the shaft end once
+    // its keyway shows, the way a taper end already does). A blank write-in liner span skips it.
+    if (blankLiner == null) {
+        drawUndercutStripKeyways(
+            c, keywaySpec, drawStartMm, drawEndMm, cy, ::xAtStrip, ::rStrip,
+            diaPtPerMm = 2f * rCap / stripMaxDiaMm, outline = outline,
+        )
+    }
+
     drawUndercutNotches(
         c, notches, cy, ::xAtStrip, ::rStrip, outline, voidFill,
         sectionCoreFill = sectionCoreFill,
+        sectionCoreByDepth = sectionCoreByDepth,
     )
     drawLinerOutlinesPdf(c, docSpec, notches, cy, ::xAtStrip, ::rStrip, linerOutlinePaint)
 

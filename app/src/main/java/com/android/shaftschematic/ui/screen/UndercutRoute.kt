@@ -151,6 +151,8 @@ import com.android.shaftschematic.ui.viewmodel.addUndercut
 import com.android.shaftschematic.ui.viewmodel.removeUndercut
 import com.android.shaftschematic.ui.viewmodel.restoreUndercut
 import com.android.shaftschematic.ui.viewmodel.setPdfUndercutSplitAtLinerEdge
+import com.android.shaftschematic.ui.viewmodel.setPdfUndercutDepthShade
+import com.android.shaftschematic.ui.viewmodel.setPdfUndercutShadeLiners
 import com.android.shaftschematic.ui.viewmodel.setUndercutDrawToSet
 import com.android.shaftschematic.ui.viewmodel.setUndercutPageOrientation
 import com.android.shaftschematic.ui.viewmodel.setUndercutSectionPrinted
@@ -262,6 +264,12 @@ fun UndercutRoute(
     // The dotted liner outline over the cuts: a preview re-render key, an options-sheet control,
     // and read by the overview canvas and the detail overlay alike.
     val pdfUndercutLinerOutline by vm.pdfUndercutLinerOutline.collectAsState()
+    // Section cores shaded by depth: a preview re-render key, an options-sheet control, and read by
+    // the overview canvas and the detail overlay alike.
+    val pdfUndercutDepthShade by vm.pdfUndercutDepthShade.collectAsState()
+    // The undercut drawing's own liner shading (never the schematic's): a preview re-render key, an
+    // options-sheet control, and read by both canvases.
+    val pdfUndercutShadeLiners by vm.pdfUndercutShadeLiners.collectAsState()
     // Chain-rail nodes at buried liner edges: a preview re-render key, an options-sheet control,
     // and read by the detail overlay's rail.
     val pdfUndercutSplitAtLinerEdge by vm.pdfUndercutSplitAtLinerEdge.collectAsState()
@@ -414,13 +422,13 @@ fun UndercutRoute(
     // release — a drag frame must never touch the record or the per-job dirty mark.
     var dragExaggeration by remember { mutableStateOf<Float?>(null) }
     val shownExaggeration = dragExaggeration ?: undercutRecord.exaggerationFrac
-    val notches = remember(undercutRecord, segs, oalMm, shownExaggeration) {
+    val linerSpans = remember(resolvedComponents) { linerSpansOf(resolvedComponents) }
+    val notches = remember(undercutRecord, segs, oalMm, shownExaggeration, linerSpans) {
         buildUndercutNotches(
             undercutRecord.undercuts, segs, oalMm,
             exaggerationFrac = shownExaggeration,
-        )
+        ).withDepthShadeStretchedPerLiner(linerSpans)
     }
-    val linerSpans = remember(resolvedComponents) { linerSpansOf(resolvedComponents) }
     val linerOds = remember(resolvedComponents) { linerOdsOf(resolvedComponents) }
     val spans = remember(undercutRecord, oalMm) {
         undercutRecord.undercuts.map { u ->
@@ -661,6 +669,8 @@ fun UndercutRoute(
                 shadedLiners = pdfShadedLiners,
                 undercutLineArt = pdfUndercutLineArt,
                 undercutLinerOutline = pdfUndercutLinerOutline,
+                undercutDepthShade = pdfUndercutDepthShade,
+                undercutShadeLiners = pdfUndercutShadeLiners,
                 undercutSplitAtLinerEdge = pdfUndercutSplitAtLinerEdge,
                 undercutTotalRail = pdfUndercutTotalRail,
                 // A live "Compress long sections" drag rides in on a copy; the stored record is
@@ -736,7 +746,9 @@ fun UndercutRoute(
     // reads as the outer surface. Line art empties every fill.
     val outlineArgb    = Color.Black.toArgb()
     val bodyFillArgb   = undercutStyle.bodyFill().toArgb()
-    val linerFillArgb  = undercutStyle.linerFill().toArgb()
+    // The undercut drawing's OWN liner switch (`PdfPrefs.undercutShadeLiners`), never the
+    // schematic's — off leaves the liner white so the cut sections carry the grey.
+    val linerFillArgb  = (if (pdfUndercutShadeLiners) undercutStyle.linerFill() else Color.Transparent).toArgb()
     val hatchArgb      = Color.Black.copy(alpha = 0.55f).toArgb()
     val outlineColor   = Color.Black
     // The liner outline's fixed ink: sheet black, dimmed — a retrace, never a component edge.
@@ -849,6 +861,7 @@ fun UndercutRoute(
                         outlineColor = outlineColor,
                         strokeWidthPx = 1.5f,
                         sectionFillColor = undercutStyle.sectionFill(),
+                        sectionDepthFill = if (pdfUndercutDepthShade) undercutStyle::sectionDepthFill else null,
                     )
                     if (pdfUndercutLinerOutline) {
                         drawLinerOutlines(
@@ -1090,6 +1103,21 @@ fun UndercutRoute(
                         checked = pdfUndercutSplitAtLinerEdge,
                         onCheckedChange = { vm.setPdfUndercutSplitAtLinerEdge(it) },
                         testTag = "undercut_split_at_liner_edge_switch",
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
+                    // App-wide look: each section core shaded by its cut's depth. Here so the
+                    // canvas above restyles as it is flipped.
+                    UndercutDepthShadeRow(
+                        checked = pdfUndercutDepthShade,
+                        onCheckedChange = { vm.setPdfUndercutDepthShade(it) },
+                        testTag = "undercut_depth_shade_switch",
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
+                    // The undercut drawing's OWN liner shading — the schematic's stays untouched.
+                    UndercutShadeLinersRow(
+                        checked = pdfUndercutShadeLiners,
+                        onCheckedChange = { vm.setPdfUndercutShadeLiners(it) },
+                        testTag = "undercut_shade_liners_switch",
                         modifier = Modifier.padding(bottom = 8.dp),
                     )
                     Row(
@@ -1456,6 +1484,8 @@ fun UndercutRoute(
             onClose = { openOverlay(linerId = null, undercutId = null, selectId = null) },
             onRestoreUndercut = vm::restoreUndercut,
             linerOutline = pdfUndercutLinerOutline,
+            depthShade = pdfUndercutDepthShade,
+            shadeLiners = pdfUndercutShadeLiners,
             displayUnits = DisplayUnits(unit, unitOverrides, dualUnits),
             splitAtLinerEdge = pdfUndercutSplitAtLinerEdge,
             totalRailDefault = pdfUndercutTotalRail,
@@ -1641,6 +1671,8 @@ private data class UndercutRenderInputs(
     val shadedLiners: Boolean,
     val undercutLineArt: Boolean,
     val undercutLinerOutline: Boolean,
+    val undercutDepthShade: Boolean,
+    val undercutShadeLiners: Boolean,
     val undercutSplitAtLinerEdge: Boolean,
     val undercutTotalRail: Boolean,
     val undercutRecord: UndercutRecord,
@@ -1729,6 +1761,8 @@ internal fun UndercutOptionsSheet(
     val pdfShadedLiners by vm.pdfShadedLiners.collectAsState()
     val pdfUndercutLineArt by vm.pdfUndercutLineArt.collectAsState()
     val pdfUndercutLinerOutline by vm.pdfUndercutLinerOutline.collectAsState()
+    val pdfUndercutDepthShade by vm.pdfUndercutDepthShade.collectAsState()
+    val pdfUndercutShadeLiners by vm.pdfUndercutShadeLiners.collectAsState()
     val pdfUndercutSplitAtLinerEdge by vm.pdfUndercutSplitAtLinerEdge.collectAsState()
     val pdfFractionStyle by vm.pdfFractionStyle.collectAsState()
     val pdfThreadSlant by vm.pdfThreadSlant.collectAsState()
@@ -1765,6 +1799,8 @@ internal fun UndercutOptionsSheet(
         showUndercutLineArt = true,
         undercutLineArt = pdfUndercutLineArt,
         undercutLinerOutline = pdfUndercutLinerOutline,
+        undercutDepthShade = pdfUndercutDepthShade,
+        undercutShadeLiners = pdfUndercutShadeLiners,
         vm = vm,
         // The strip rails' heads follow `PdfPrefs.arrowSizePt` (`drawUndercutRail`), on the
         // printed strips and the detail canvas alike.

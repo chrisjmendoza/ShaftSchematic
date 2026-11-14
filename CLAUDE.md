@@ -590,7 +590,12 @@ symbolic shallow floor in the overlay, never printed. Notch **depth is display-e
 (`normalizedNotchFloorDiaMm` — drawn depth normalized to the sheet's deepest cut
 (`deepestUndercutDepthMm`) at the per-sheet "Drawn depth" slider value
 (`UndercutRecord.exaggerationFrac`, cap `UNDERCUT_EXAGGERATION_MAX_FRAC` = 25%), never
-shallower than true, region topology from the TRUE floor) because real cuts are hairline-thin
+shallower than true, region topology from the TRUE floor; a measured top-level cut's drawn depth
+runs from its run's section reference — the highest surface its touching cuts span,
+`undercutSectionReferenceDia` — so a smaller floor Ø never draws shallower than its neighbour, and the
+face between two BUTTED cuts of different Ø always draws, however close their drawn floors land
+(`NotchProfile.startFaceAlways`/`endFaceAlways` override `NOTCH_FACE_MIN_STEP_PX` in both draw sites;
+heights untouched) — on-device reports) because real cuts are hairline-thin
 at scale; printed Ø values stay the stored numbers. No carousel card and no Add dialog —
 undercuts are authored only on their tab, keeping them outside the add-dialog-parity
 invariant. Both undercut surfaces carry Undo/Redo bound to the ONE document history; the
@@ -677,7 +682,13 @@ flagged on its row, counted above the list, and the tab's Print/Export confirm f
 never closed by a lid — plus a full-height **section face** at each end and the floor lines,
 so each cut is its own reduced-Ø rectangle **step in the silhouette**, cut against the
 **local outer-surface envelope**; the section's core fills one step **lighter** than the
-liner shade — `UNDERCUT_SECTION_FILL_ALPHA`, half the liner's alpha) must render
+liner shade — `UNDERCUT_SECTION_FILL_ALPHA`, half the liner's alpha — UNLESS
+`PdfPrefs.undercutDepthShade` (default ON) shades each core by its cut's true depth, each run of
+touching/nested cuts measured from the highest surface it spans so a smaller floor Ø always shades
+darker within it, stretched light→dark across each VIEW — one strip, or one liner on the tab's
+whole-shaft canvas, never the whole sheet — through the ONE ramp `undercutDepthShadeAlpha` 4%→35%;
+the undercut drawing's liners follow their OWN `PdfPrefs.undercutShadeLiners` (default off = white),
+never the schematic's `shadedLiners` — on-device requests) must render
 **identically** in all draw sites — `UndercutRoute`/`UndercutWindowDetailOverlay` (canvas)
 and `UndercutPdfComposer` (PDF) — from the shared pure pipeline `geom/SurfaceProfileMath.kt`
 + `geom/UndercutMath.kt` (cluster windows, clamps, hit-tests; no `pdf → ui` dep)
@@ -785,6 +796,13 @@ values, captions, Ø values and strip titles scale, the header / AFT-FWD row / n
 size is fitted down ONCE per sheet by `fittedUndercutTextScale` (largest step leaving the shortest
 shaft ≥ `UC_TEXT_FIT_MIN_SHAFT_PT`, read off dry passes of the ONE `drawUndercutSheet`) — never
 per strip. 100% is byte-identical.
+
+**Keyways print on the undercut detail strips** (on-device request: a strip ending on a body must
+read as the shaft end, as a taper end does): any STORED body or taper keyway a strip window holds
+≥ 90% of (`undercutStripShowsSpan`) draws through the schematic's own slot routine at the strip's
+two scales, clipped to the window; the strip's `docSpec` carries resolved bodies (no keyways), so
+the composer hands it the stored spec as `keywaySpec`. Printed sheet only so far — the canvases owe
+the mirror.
 
 The undercut sheet is the one portrait-capable document: its page shape is per-job
 `UndercutRecord.pageOrientation` (AUTO = portrait at 2+ printed sections), resolved ONCE by

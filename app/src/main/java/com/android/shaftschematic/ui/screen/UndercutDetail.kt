@@ -390,6 +390,13 @@ fun UndercutWindowDetailOverlay(
      * over the cuts, drawn here as on the printed sheet. Passed in so a change recomposes this canvas.
      */
     linerOutline: Boolean = true,
+    /**
+     * App-wide `PdfPrefs.undercutDepthShade`: each section core shaded by its cut's depth, here
+     * as on the printed sheet. Passed in so a change recomposes this canvas.
+     */
+    depthShade: Boolean = true,
+    /** App-wide `PdfPrefs.undercutShadeLiners`: the liner span shaded, here as on the printed sheet. */
+    shadeLiners: Boolean = false,
     /** Per-component display units: the strip title prints its liner's OD in the liner's own unit. */
     displayUnits: DisplayUnits = DisplayUnits.single(unit),
     /**
@@ -1180,7 +1187,9 @@ fun UndercutWindowDetailOverlay(
     // the historical fixed grey at the PDF shade fill's weight (argb 40), keeping the
     // on-screen strip and the printed strip alike: grey liner, white cut sections (on-device
     // request). Line art empties the fill entirely.
-    val linerFillColor = style.linerFill()
+    // The undercut drawing's OWN liner switch (`PdfPrefs.undercutShadeLiners`), never the
+    // schematic's — off leaves the liner white so the cut sections carry the grey.
+    val linerFillColor = if (shadeLiners) style.linerFill() else Color.Transparent
     val selectColor = SheetInk.Selection
     val errorColor = MaterialTheme.colorScheme.error
     val textColorArgb = outlineColor.toArgb()
@@ -1723,6 +1732,7 @@ fun UndercutWindowDetailOverlay(
                                 outlineColor = outlineColor,
                                 strokeWidthPx = outlineWidthPx,
                                 sectionFillColor = style.sectionFill(),
+                                sectionDepthFill = if (depthShade) style::sectionDepthFill else null,
                             )
                             if (draftId != null) {
                                 drawUndercutNotches(
@@ -1734,6 +1744,7 @@ fun UndercutWindowDetailOverlay(
                                     outlineColor = if (activeDraftIssue != null) errorColor else selectColor,
                                     strokeWidthPx = outlineWidthPx,
                                     sectionFillColor = style.sectionFill(),
+                                    sectionDepthFill = if (depthShade) style::sectionDepthFill else null,
                                     pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f)),
                                 )
                             }
