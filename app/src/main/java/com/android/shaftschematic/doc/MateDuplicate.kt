@@ -3,6 +3,7 @@ package com.android.shaftschematic.doc
 import com.android.shaftschematic.model.RunoutReadings
 import com.android.shaftschematic.model.RunoutStationPlacements
 import com.android.shaftschematic.model.ShaftPosition
+import com.android.shaftschematic.model.SheetDateMode
 import com.android.shaftschematic.model.UndercutRecord
 import com.android.shaftschematic.model.WearRecord
 
@@ -33,6 +34,10 @@ import com.android.shaftschematic.model.WearRecord
  * **Dropped** — the final drawing. It records what was decided about THIS shaft after its wear
  * was mapped; the mate is its own job and its final is drawn from its own inspection.
  *
+ * **Back to Today** — the sheet date (`sheet_date_mode` / `sheet_date_text`). A typed date is
+ * when THIS shaft's work was done; the mate's work is its own, so its sheets print the day they
+ * are made until a date is typed for it.
+ *
  * Identity ([jobNumber], [customer], [vessel], [position]) comes from the caller, which is
  * what lets the duplicate dialog change the side and job before the copy exists.
  */
@@ -48,6 +53,8 @@ fun mateDuplicate(
     vessel = vessel,
     shaftPosition = position,
     finalSpec = null,
+    sheetDateMode = SheetDateMode.TODAY,
+    sheetDateText = "",
     wearRecord = WearRecord(),
     runoutReadings = RunoutReadings(),
     runoutStationPlacements = RunoutStationPlacements(),

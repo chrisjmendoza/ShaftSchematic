@@ -482,6 +482,8 @@ data class ShaftDocV1(
     val shaftPosition: ShaftPosition = ShaftPosition.OTHER,
     val notes: String = "",
     val item: String = "",   // optional shaft designation ("Tail shaft"); blank prints nothing, scrubbed from templates
+    val sheetDateMode: SheetDateMode = SheetDateMode.TODAY, // @SerialName("sheet_date_mode") — TODAY | CUSTOM | NONE, by name, unknown → TODAY
+    val sheetDateText: String = "", // @SerialName("sheet_date_text") — the Custom date, printed verbatim; template → TODAY/blank, mate → TODAY/blank
     val spec: ShaftSpec,
     val finalSpec: ShaftSpec? = null,                    // @SerialName("final_spec") — the Final schematic; null = none yet
     val runoutConfig: RunoutConfig = RunoutConfig(),     // @SerialName("runout_config")

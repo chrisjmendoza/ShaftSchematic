@@ -116,6 +116,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             vessel = _vessel.value,
             jobNumber = _jobNumber.value,
             item = _item.value,
+            sheetDateMode = _sheetDateMode.value,
+            sheetDateText = _sheetDateText.value,
             notes = _notes.value,
             runoutConfig = _runoutConfig.value,
             unitLocked = _unitLocked.value,
@@ -683,6 +685,14 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     internal val _item = MutableStateFlow("")
     val item: StateFlow<String> = _item.asStateFlow()
 
+    /** Which date the printed sheets carry (start card "Date on sheets"); see [SheetDateMode]. */
+    internal val _sheetDateMode = MutableStateFlow(SheetDateMode.TODAY)
+    val sheetDateMode: StateFlow<SheetDateMode> = _sheetDateMode.asStateFlow()
+
+    /** The typed date printed under [SheetDateMode.CUSTOM], stored verbatim. */
+    internal val _sheetDateText = MutableStateFlow("")
+    val sheetDateText: StateFlow<String> = _sheetDateText.asStateFlow()
+
     internal val _notes = MutableStateFlow("")
     val notes: StateFlow<String> = _notes.asStateFlow()
 
@@ -907,9 +917,10 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         val sessionSnapshotFlow = combine(
             spec, unit, shaftPosition, customer, vessel, jobNumber, notes,
             runoutConfig, unitLocked, wearRecord, runoutReadings, undercutRecord,
-            runoutStationPlacements, unitOverrides, dualUnits, item, finalSpec
+            runoutStationPlacements, unitOverrides, dualUnits, item, finalSpec,
+            sheetDateMode, sheetDateText,
         ) { values: Array<Any?> ->
-            check(values.size == 17) { "Autosave combine expected 17 values, got ${values.size}" }
+            check(values.size == 19) { "Autosave combine expected 19 values, got ${values.size}" }
 
             val s = values[0] as ShaftSpec
             val u = values[1] as UnitSystem
@@ -929,6 +940,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             val dual = values[14] as Boolean
             val itm = values[15] as String
             val finalS = values[16] as ShaftSpec?
+            val dateMode = values[17] as SheetDateMode
+            val dateText = values[18] as String
 
             AutosaveManager.SessionSnapshot(
                 shaftSpec = s,
@@ -939,6 +952,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 vessel = ves,
                 jobNumber = job,
                 item = itm,
+                sheetDateMode = dateMode,
+                sheetDateText = dateText,
                 notes = n,
                 runoutConfig = runout,
                 unitLocked = locked,
@@ -1562,6 +1577,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _vessel.value = snapshot.vessel
         _jobNumber.value = snapshot.jobNumber
         _item.value = snapshot.item
+        _sheetDateMode.value = snapshot.sheetDateMode
+        _sheetDateText.value = snapshot.sheetDateText
         _notes.value = snapshot.notes
         _runoutConfig.value = snapshot.runoutConfig
         _wearRecord.value = snapshot.wearRecord
@@ -1634,6 +1651,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     fun setVessel(value: String)   { _vessel.value = value.trim() }
     fun setJobNumber(value: String){ _jobNumber.value = value.trim() }
     fun setItem(value: String)     { _item.value = value.trim() }
+    fun setSheetDateMode(value: SheetDateMode) { _sheetDateMode.value = value }
+    /** Stored exactly as typed — the date prints verbatim (golden rule), so not even trimmed. */
+    fun setSheetDateText(value: String) { _sheetDateText.value = value }
     fun setNotes(value: String)    { _notes.value = value }
     fun setShaftPosition(value: ShaftPosition) { _shaftPosition.value = value }
 

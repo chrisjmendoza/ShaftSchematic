@@ -14,6 +14,7 @@ import com.android.shaftschematic.model.RunoutReadings
 import com.android.shaftschematic.model.RunoutStationPlacements
 import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.SheetDateMode
 import com.android.shaftschematic.model.UndercutRecord
 import com.android.shaftschematic.model.WearRecord
 import com.android.shaftschematic.settings.RunoutConfig
@@ -162,6 +163,8 @@ private fun ShaftViewModel.currentEnvelope(): ShaftDocCodec.ShaftDocV1 = ShaftDo
     customer = _customer.value,
     vessel = _vessel.value,
     item = _item.value,
+    sheetDateMode = _sheetDateMode.value,
+    sheetDateText = _sheetDateText.value,
     shaftPosition = _shaftPosition.value,
     notes = _notes.value,
     spec = _spec.value,
@@ -269,11 +272,13 @@ fun ShaftViewModel.applyTemplate(raw: String) {
     _unitLocked.value = decoded.unitLocked
     decoded.preferredUnit?.let { setUnit(it, persist = false) }
 
-    // A template is geometry, not a job.
+    // A template is geometry, not a job — and the date a job's sheets carry is the job's.
     _jobNumber.value = ""
     _customer.value = ""
     _vessel.value = ""
     _item.value = ""
+    _sheetDateMode.value = SheetDateMode.TODAY
+    _sheetDateText.value = ""
     _shaftPosition.value = ShaftPosition.OTHER
     _notes.value = ""
     _runoutConfig.value = RunoutConfig()
@@ -327,6 +332,8 @@ fun ShaftViewModel.importJson(raw: String) {
     _customer.value = decoded.customer
     _vessel.value = decoded.vessel
     _item.value = decoded.item
+    _sheetDateMode.value = decoded.sheetDateMode
+    _sheetDateText.value = decoded.sheetDateText
     _shaftPosition.value = decoded.shaftPosition
     _notes.value = decoded.notes
     _runoutConfig.value = decoded.runoutConfig
@@ -381,6 +388,8 @@ fun ShaftViewModel.newDocument() {
     _customer.value = ""
     _vessel.value = ""
     _item.value = ""
+    _sheetDateMode.value = SheetDateMode.TODAY
+    _sheetDateText.value = ""
     _shaftPosition.value = ShaftPosition.OTHER
     _runoutConfig.value = RunoutConfig()
     _wearRecord.value = WearRecord()

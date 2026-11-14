@@ -12,6 +12,7 @@ import com.android.shaftschematic.model.KeywayClocking
 import com.android.shaftschematic.model.SlotAuthoredReference
 import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.ProjectInfo
+import com.android.shaftschematic.model.printedDateOrNull
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Taper
 import com.android.shaftschematic.model.Threads
@@ -33,8 +34,6 @@ import com.android.shaftschematic.util.buildLinerTitleById
 import com.android.shaftschematic.util.drawRichText
 import com.android.shaftschematic.util.measureRichText
 import com.android.shaftschematic.util.wrapRichLines
-import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.max
@@ -180,12 +179,15 @@ internal fun footerTaperHeader(spec: ShaftSpec, t: Taper, aftSide: Boolean): Str
  * document field: blank prints nothing on either branch (an original-drawing sheet stays
  * byte-identical), a blank draft rules a line for it only when the label is set (a blank draft
  * of the original drawing must not grow a line it will never carry a value for).
+ *
+ * **Date is optional on a printed sheet only**: a null [date] (the document's "None") omits the
+ * line — no bare "Date:" — while a blank draft always rules one, to be filled in by hand.
  */
 internal fun buildFooterMidColumn(
     spec: ShaftSpec,
     project: ProjectInfo,
     cfg: FooterConfig,
-    date: String,
+    date: String?,
     blankValues: Boolean = false,
 ): List<String> = if (blankValues) {
     buildList {
@@ -202,7 +204,7 @@ internal fun buildFooterMidColumn(
         add("Job #: ${project.jobNumber}")
         if (project.item.isNotBlank()) add("Item: ${project.item}")
         if (project.drawingLabel.isNotBlank()) add("Drawing: ${project.drawingLabel}")
-        add("Date: $date")
+        if (date != null) add("Date: $date")
         keywayClockingFooterNote(spec)?.let { add(it) }
     }
 }
@@ -231,8 +233,11 @@ internal class FooterPlan(
     val neededHeightPt: Float,
 )
 
-/** Today's footer date, the one string both the plan and the draw must agree on. */
-private fun footerDate(): String = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+/**
+ * The footer's printed date — the document's choice through the ONE [printedDateOrNull], null
+ * when the sheet prints none — the one string both the plan and the draw must agree on.
+ */
+private fun footerDate(project: ProjectInfo): String? = project.printedDateOrNull(sheetTodayDate())
 
 internal fun planFooter(
     rectLeft: Float,
@@ -244,7 +249,7 @@ internal fun planFooter(
     cfg: FooterConfig,
     blankValues: Boolean = false,
     displayUnits: DisplayUnits = DisplayUnits.single(unit),
-    date: String = footerDate(),
+    date: String? = footerDate(project),
 ): FooterPlan {
     val cols = buildFooterEndColumns(spec, unit, cfg, blankValues, displayUnits)
 

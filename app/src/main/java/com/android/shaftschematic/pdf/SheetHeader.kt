@@ -3,6 +3,7 @@ package com.android.shaftschematic.pdf
 import android.graphics.Canvas
 import android.graphics.Paint
 import com.android.shaftschematic.model.ProjectInfo
+import com.android.shaftschematic.model.printedDateOrNull
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -28,23 +29,32 @@ internal val JOB_INFO_BLANK_LABELS =
     listOf("Customer:", "Vessel:", "Job #:", "Item:", "Date:", "Side:")
 
 /**
+ * Today's date as a printed sheet writes it — the string handed to [printedDateOrNull] for
+ * [com.android.shaftschematic.model.SheetDateMode.TODAY]. ONE format for every print site.
+ */
+internal fun sheetTodayDate(): String = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+
+/**
  * The printed job-info line: whichever identity fields the document actually carries, then the
- * date and (when the shaft has one) its side.
+ * date (null when the document prints none) and (when the shaft has one) its side.
  *
  * ONE construction for every sheet header, the counterpart to [JOB_INFO_BLANK_LABELS]. A blank
  * field prints no label at all — a label with nothing after it is an orphan on a finished
- * drawing — which is exactly why Item can be optional without an "Item:" ever printing bare.
+ * drawing — which is exactly why Item can be optional without an "Item:" ever printing bare, and
+ * why a null [date] drops the "Date:" piece together with its separator: a stray run of spaces
+ * would shift the centred line.
  */
-internal fun jobInfoHeaderLine(project: ProjectInfo, date: String): String {
+internal fun jobInfoHeaderLine(project: ProjectInfo, date: String?): String {
     val side = project.side.printableLabelOrNull()?.let { "  $it" } ?: ""
     val drawing = project.drawingLabel.takeIf { it.isNotBlank() }?.let { "  Drawing: $it" } ?: ""
-    return buildString {
-        if (project.customer.isNotBlank())  append("Customer: ${project.customer}   ")
-        if (project.vessel.isNotBlank())    append("Vessel: ${project.vessel}   ")
-        if (project.jobNumber.isNotBlank()) append("Job #: ${project.jobNumber}   ")
-        if (project.item.isNotBlank())      append("Item: ${project.item}   ")
-        append("Date: $date$side$drawing")
+    val fields = buildList {
+        if (project.customer.isNotBlank())  add("Customer: ${project.customer}")
+        if (project.vessel.isNotBlank())    add("Vessel: ${project.vessel}")
+        if (project.jobNumber.isNotBlank()) add("Job #: ${project.jobNumber}")
+        if (project.item.isNotBlank())      add("Item: ${project.item}")
+        if (date != null)                   add("Date: $date")
     }
+    return (fields.joinToString("   ") + side + drawing).trimStart()
 }
 
 /**
@@ -54,7 +64,7 @@ internal fun jobInfoHeaderLine(project: ProjectInfo, date: String): String {
  */
 internal fun sheetHeaderJobLineAndBoldSide(
     project: ProjectInfo,
-    date: String,
+    date: String?,
     boldSideOnTitle: Boolean,
 ): Pair<String, String?> {
     val boldSide = if (boldSideOnTitle) project.side.printableLabelOrNull()?.uppercase() else null
@@ -124,7 +134,7 @@ internal fun drawSheetHeader(
 
         c.drawText(title, centeredX(title), line2Y, text)
     } else {
-        val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        val date = project.printedDateOrNull(sheetTodayDate())
         val (line1, boldSide) = sheetHeaderJobLineAndBoldSide(project, date, boldSideOnTitle)
 
         val width = right - left

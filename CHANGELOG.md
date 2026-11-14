@@ -8,6 +8,16 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-13
 
+### feat(sheets): type the date the sheets print, or leave it off
+
+On-device request: every sheet printed today's date, even when the undercut work was done a week
+earlier. The start card's project information now has "Date on sheets": Today (the default, and
+every existing drawing — the day the sheet is made, as before), Custom — type the date and it
+prints exactly as you typed it — or None, which leaves the date off the sheet entirely. The
+choice is saved with the job and applies to every sheet: schematic, runout, wear, undercut,
+consolidated and final. Blank write-in drafts still carry a Date line to fill in by hand. A new
+drawing, a template and a mate duplicate start back at Today.
+
 ### feat(undercut): diameters inside the shaft on shaded sheets too
 
 On-device verdict on the trial render: "Diameters inside the shaft" now works with shading as

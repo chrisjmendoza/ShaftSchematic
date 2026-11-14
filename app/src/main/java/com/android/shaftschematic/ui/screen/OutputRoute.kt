@@ -234,6 +234,8 @@ fun OutputRoute(
     val vessel             by vm.vessel.collectAsState()
     val jobNumber          by vm.jobNumber.collectAsState()
     val item               by vm.item.collectAsState()
+    val sheetDateMode      by vm.sheetDateMode.collectAsState()
+    val sheetDateText      by vm.sheetDateText.collectAsState()
     val shaftPosition      by vm.shaftPosition.collectAsState()
     val openAfterExport    by vm.openPdfAfterExport.collectAsState()
     val lineThicknessScale by vm.lineThicknessScale.collectAsState()
@@ -427,7 +429,8 @@ fun OutputRoute(
         val specSnapshot = spec
         val configSnapshot = runoutConfig
         val projectSnapshot = ProjectInfo(customer = customer, vessel = vessel,
-            jobNumber = jobNumber, side = shaftPosition, item = item)
+            jobNumber = jobNumber, side = shaftPosition, item = item,
+            dateMode = sheetDateMode, dateText = sheetDateText)
         val unitSnapshot = unit
         val prefsSnapshot = vm.currentPdfPrefs
         val resolvedSnapshot = resolvedComponents
@@ -457,7 +460,8 @@ fun OutputRoute(
                 composeConsolidated(
                     page, variant, spec, runoutConfig,
                     ProjectInfo(customer = customer, vessel = vessel,
-                        jobNumber = jobNumber, side = shaftPosition, item = item),
+                        jobNumber = jobNumber, side = shaftPosition, item = item,
+                        dateMode = sheetDateMode, dateText = sheetDateText),
                     unit, vm.currentPdfPrefs, resolvedComponents,
                     lineThicknessScale, runoutReadings, stationPlacements, wearRecord, blankDraft,
                     vm.currentDisplayUnits(),
@@ -478,7 +482,8 @@ fun OutputRoute(
     ) { treeUri ->
         if (treeUri != null) {
             val project = ProjectInfo(customer = customer, vessel = vessel,
-                jobNumber = jobNumber, side = shaftPosition, item = item)
+                jobNumber = jobNumber, side = shaftPosition, item = item,
+                dateMode = sheetDateMode, dateText = sheetDateText)
             val prefs = vm.currentPdfPrefs
             val displayUnits = vm.currentDisplayUnits()
             var attempted = 0
@@ -578,7 +583,8 @@ fun OutputRoute(
                 spec = spec,
                 config = tunedRunoutConfig(runoutConfig, tuning.heightScale, tuning.linerCompression),
                 project = ProjectInfo(customer = customer, vessel = vessel,
-                    jobNumber = jobNumber, side = shaftPosition, item = item),
+                    jobNumber = jobNumber, side = shaftPosition, item = item,
+                    dateMode = sheetDateMode, dateText = sheetDateText),
                 unit = unit,
                 resolved = resolvedComponents,
                 lineThicknessScale = tuning.lineThickness ?: lineThicknessScale,

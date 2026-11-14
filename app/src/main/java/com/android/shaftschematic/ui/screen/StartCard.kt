@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.SheetDateMode
 import com.android.shaftschematic.ui.input.shouldCommitOnBlur
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.isLengthText
@@ -61,6 +62,11 @@ import com.android.shaftschematic.util.toMmOrNull
  * or IME and registers with the card Save bar like the numeric fields, so a value typed and left
  * on screen is never lost to a swipe (the card-change prompt asks first).
  *
+ * **Date on sheets** picks the date every printed sheet carries ([SheetDateMode], on-device
+ * request: the work is not always done the day the sheet is printed): Today (the caption says what
+ * that prints), Custom — a plain-text "Date" field, committed like the fields above and printed
+ * exactly as typed — or None, which leaves the date off. The chips commit on tap.
+ *
  * The geometry is whichever drawing the hosting editor names; the caller binds [spec] and the two
  * geometry callbacks to that target, never to a "current target" flag.
  */
@@ -72,6 +78,8 @@ internal fun ShaftStartCard(
     vessel: String,
     jobNumber: String,
     item: String,
+    sheetDateMode: SheetDateMode,
+    sheetDateText: String,
     shaftPosition: ShaftPosition,
     notes: String,
     onSetOverallLengthMm: (Float) -> Unit,
@@ -80,6 +88,8 @@ internal fun ShaftStartCard(
     onSetVessel: (String) -> Unit,
     onSetJobNumber: (String) -> Unit,
     onSetItem: (String) -> Unit,
+    onSetSheetDateMode: (SheetDateMode) -> Unit,
+    onSetSheetDateText: (String) -> Unit,
     onSetShaftPosition: (ShaftPosition) -> Unit,
     onSetNotes: (String) -> Unit,
     showOalDebugLabel: Boolean = false,
@@ -183,6 +193,29 @@ internal fun ShaftStartCard(
                 onSelected = { if (it != shaftPosition) onSetShaftPosition(it) },
                 modifier = Modifier.fillMaxWidth().testTag(PROJECT_INFO_POSITION_TAG),
             )
+            ChipRow(
+                label = SHEET_DATE_LABEL,
+                options = SheetDateMode.values().toList(),
+                selected = sheetDateMode,
+                labelOf = ::sheetDateModeLabel,
+                tagOf = ::sheetDateModeTag,
+                onSelect = { if (it != sheetDateMode) onSetSheetDateMode(it) },
+            )
+            when (sheetDateMode) {
+                SheetDateMode.TODAY -> Text(
+                    SHEET_DATE_TODAY_CAPTION,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                // Plain text, verbatim: "11/6/2026" prints as typed (golden rule).
+                SheetDateMode.CUSTOM -> CommitTextField(
+                    label = "Date",
+                    initialText = sheetDateText,
+                    onCommit = onSetSheetDateText,
+                    modifier = Modifier.testTag(START_DATE_TEXT_TAG),
+                )
+                SheetDateMode.NONE -> Unit
+            }
             CommitTextField(
                 label = "Notes",
                 initialText = notes,
@@ -287,6 +320,24 @@ internal fun startCardFieldsShareRow(cardFieldsTwoUp: Boolean, fontScale: Float)
 internal fun shaftDiaFieldLabel(unit: UnitSystem, short: Boolean): String =
     if (short) "Shaft Ø (${abbr(unit)})" else "Shaft diameter (${abbr(unit)})"
 
+/** The "Date on sheets" chips' label — the date every printed sheet carries. */
+internal const val SHEET_DATE_LABEL = "Date on sheets"
+
+/** The caption under the chips while Today is chosen. */
+internal const val SHEET_DATE_TODAY_CAPTION = "Prints the day the sheet is made."
+
+internal fun sheetDateModeLabel(mode: SheetDateMode): String = when (mode) {
+    SheetDateMode.TODAY -> "Today"
+    SheetDateMode.CUSTOM -> "Custom"
+    SheetDateMode.NONE -> "None"
+}
+
+internal fun sheetDateModeTag(mode: SheetDateMode): String = when (mode) {
+    SheetDateMode.TODAY -> START_DATE_MODE_TODAY_TAG
+    SheetDateMode.CUSTOM -> START_DATE_MODE_CUSTOM_TAG
+    SheetDateMode.NONE -> START_DATE_MODE_NONE_TAG
+}
+
 /** The start card's title — the card is the job's start: the shaft's size and whose job it is. */
 internal const val START_CARD_TITLE = "Shaft & job"
 
@@ -307,5 +358,9 @@ internal const val PROJECT_INFO_VESSEL_TAG = "project_info_vessel"
 internal const val PROJECT_INFO_ITEM_TAG = "project_info_item"
 internal const val PROJECT_INFO_POSITION_TAG = "project_info_position"
 internal const val PROJECT_INFO_NOTES_TAG = "project_info_notes"
+internal const val START_DATE_MODE_TODAY_TAG = "start_date_mode_today"
+internal const val START_DATE_MODE_CUSTOM_TAG = "start_date_mode_custom"
+internal const val START_DATE_MODE_NONE_TAG = "start_date_mode_none"
+internal const val START_DATE_TEXT_TAG = "start_date_text"
 
 private const val OAL_EPS_MM: Double = 1e-3
