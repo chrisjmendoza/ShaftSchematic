@@ -268,7 +268,7 @@ fun UndercutRoute(
     // Section cores shaded by depth: a preview re-render key, an options-sheet control, and read by
     // the overview canvas and the detail overlay alike.
     val pdfUndercutDepthShade by vm.pdfUndercutDepthShade.collectAsState()
-    // Ø values inside the shaft on the printed sheet (line art only): a preview re-render key and an
+    // Ø values inside the shaft on the printed sheet: a preview re-render key and an
     // options-sheet control.
     val pdfUndercutDiaInside by vm.pdfUndercutDiaInside.collectAsState()
     // The undercut drawing's own liner shading (never the schematic's): a preview re-render key, an
@@ -1119,12 +1119,10 @@ fun UndercutRoute(
                         modifier = Modifier.padding(bottom = 8.dp),
                     )
                     // App-wide look, printed sheet only: each cut's Ø written inside the shaft.
-                    // Offered while print line art is on, the only case the sheet reads it.
                     UndercutDiaInsideRow(
                         checked = pdfUndercutDiaInside,
                         onCheckedChange = { vm.setPdfUndercutDiaInside(it) },
                         testTag = "undercut_dia_inside_switch",
-                        enabled = pdfUndercutLineArt,
                         modifier = Modifier.padding(bottom = 8.dp),
                     )
                     // The undercut drawing's OWN liner shading — the schematic's stays untouched.

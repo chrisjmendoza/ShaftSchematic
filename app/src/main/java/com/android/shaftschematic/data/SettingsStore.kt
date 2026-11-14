@@ -205,7 +205,7 @@ object SettingsStore {
     private val KEY_PDF_UNDERCUT_LINER_OUTLINE = booleanPreferencesKey("pdf_undercut_liner_outline")
     // Undercut section cores shaded by depth (PdfPrefs.undercutDepthShade).
     private val KEY_PDF_UNDERCUT_DEPTH_SHADE = booleanPreferencesKey("pdf_undercut_depth_shade")
-    // Undercut Ø values written inside the shaft under line art (PdfPrefs.undercutDiaInside).
+    // Undercut Ø values written inside the shaft (PdfPrefs.undercutDiaInside).
     private val KEY_PDF_UNDERCUT_DIA_INSIDE = booleanPreferencesKey("pdf_undercut_dia_inside")
     // Liner shading on the undercut drawing only (PdfPrefs.undercutShadeLiners) — never shadedLiners.
     private val KEY_PDF_UNDERCUT_SHADE_LINERS = booleanPreferencesKey("pdf_undercut_shade_liners")

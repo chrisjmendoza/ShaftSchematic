@@ -359,6 +359,10 @@ class UndercutPortraitRenderTest {
             render("depth_doc_off.png", doc.spec, polarProject, doc.undercutRecord, pdfPrefs = PdfPrefs(undercutDepthShade = false))
             render("depth_doc_to_end.png", doc.spec, polarProject, doc.undercutRecord.copy(drawToSet = true))
             render("inside_dia_doc.png", doc.spec, polarProject, doc.undercutRecord.copy(drawToSet = true), pdfPrefs = insideDia)
+            render(
+                "inside_dia_doc_shaded.png", doc.spec, polarProject, doc.undercutRecord.copy(drawToSet = true),
+                pdfPrefs = PdfPrefs(undercutDiaInside = true),
+            )
         }
     }
 

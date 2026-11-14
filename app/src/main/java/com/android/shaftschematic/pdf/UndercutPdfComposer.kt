@@ -29,6 +29,8 @@ import com.android.shaftschematic.geom.undercutSetReachMm
 import com.android.shaftschematic.geom.effectiveUndercutTotalRail
 import com.android.shaftschematic.geom.NOTCH_FACE_MIN_STEP_PX
 import com.android.shaftschematic.geom.UNDERCUT_SECTION_FILL_ALPHA
+import com.android.shaftschematic.geom.UNDERCUT_DEPTH_SHADE_MAX_ALPHA
+import com.android.shaftschematic.geom.UNDERCUT_DEPTH_SHADE_MAX_ALPHA_WITH_TEXT
 import com.android.shaftschematic.geom.undercutDepthShadeAlpha
 import com.android.shaftschematic.geom.withDepthShadeStretched
 import com.android.shaftschematic.geom.UNDERCUT_BREAK_AMP_FRAC_OF_R
@@ -322,9 +324,9 @@ private fun drawUndercutSheet(
     // metrics, so the layout follows. The header, the AFT/FWD row and the notes keep the base size.
     val stripText = Paint(text).apply { textSize = UC_TEXT_PT * textScale }
     val diaText = Paint(text).apply { textSize = UC_DIA_TEXT_PT * textScale }
-    // "Diameters inside the shaft" (`PdfPrefs.undercutDiaInside`): read under line art alone, and
-    // only on a sheet that prints values — a blank draft or a started strip prints none.
-    val diaInside = pdfPrefs.undercutDiaInside && pdfPrefs.undercutLineArt && !blankValues
+    // "Diameters inside the shaft" (`PdfPrefs.undercutDiaInside`): only on a sheet that prints
+    // values — a blank draft or a started strip prints none. Line art or shaded alike.
+    val diaInside = pdfPrefs.undercutDiaInside && !blankValues
 
     // ── Page geometry ─────────────────────────────────────────────────────
     val margin = UC_MARGIN_PT
@@ -1083,6 +1085,8 @@ private fun drawUndercutNotches(
      * [sectionCoreFill] is on.
      */
     sectionCoreByDepth: Boolean = false,
+    /** The dark end of the depth ramp — lowered while values are written inside the cuts. */
+    depthShadeMaxAlpha: Float = UNDERCUT_DEPTH_SHADE_MAX_ALPHA,
 ) {
     if (notches.isEmpty()) return
     // One step LIGHTER than the liner shade (half its 40/255 alpha): the section's core is
@@ -1123,7 +1127,7 @@ private fun drawUndercutNotches(
             c.drawRect(xStart, cy - rFloor, xEnd, cy + rFloor, voidFill)
             sectionFill?.let { paint ->
                 if (sectionCoreByDepth) {
-                    paint.color = Color.argb((undercutDepthShadeAlpha(notch.depthFrac) * 255f).roundToInt(), 0, 0, 0)
+                    paint.color = Color.argb((undercutDepthShadeAlpha(notch.depthFrac, depthShadeMaxAlpha) * 255f).roundToInt(), 0, 0, 0)
                 }
                 c.drawRect(xStart, cy - rFloor, xEnd, cy + rFloor, paint)
             }
@@ -1461,7 +1465,7 @@ internal fun planUndercutDetailStrip(
     linerEnds: UndercutLinerSpanMm? = null,
     /**
      * Each cut's DRAWN floor Ø on this strip, keyed by cut id, when the sheet writes its Ø values
-     * inside the shaft (`PdfPrefs.undercutDiaInside` under line art); null — every other sheet —
+     * inside the shaft (`PdfPrefs.undercutDiaInside`); null — every other sheet —
      * plans the below-shaft callouts alone.
      */
     insideDiaFloorsMm: Map<String, Float>? = null,
@@ -1616,7 +1620,7 @@ private fun drawUndercutInsideDia(
     rFloor: Float,
     dim: Paint,
     diaText: Paint,
-    halo: Paint,
+    halo: Paint?,
     dualStacked: Boolean,
     arrowSizePt: Float,
 ) {
@@ -1625,7 +1629,7 @@ private fun drawUndercutInsideDia(
     val bottom = cy + rFloor
     val halfLen = m.textWidthPt * 0.5f
     val halfThick = m.textHeightPt * 0.5f
-    c.drawRect(
+    if (halo != null) c.drawRect(
         x - halfThick - UC_INSIDE_DIA_HALO_PAD_PT, cy - halfLen - UC_INSIDE_DIA_HALO_PAD_PT,
         x + halfThick + UC_INSIDE_DIA_HALO_PAD_PT, cy + halfLen + UC_INSIDE_DIA_HALO_PAD_PT,
         halo,
@@ -1828,8 +1832,8 @@ private fun drawUndercutDetailStrip(
      */
     keywaySpec: ShaftSpec = docSpec,
     /**
-     * Write each cut's Ø inside the shaft where it fits (`PdfPrefs.undercutDiaInside` under line
-     * art, values printed); false keeps every value on its below-shaft leader.
+     * Write each cut's Ø inside the shaft where it fits (`PdfPrefs.undercutDiaInside`,
+     * values printed); false keeps every value on its below-shaft leader.
      */
     diaInside: Boolean = false,
 ) {
@@ -1936,12 +1940,16 @@ private fun drawUndercutDetailStrip(
         c, notches, cy, ::xAtStrip, ::rStrip, outline, voidFill,
         sectionCoreFill = sectionCoreFill,
         sectionCoreByDepth = sectionCoreByDepth,
+        // Values written inside the cuts need a lighter dark end to stay readable.
+        depthShadeMaxAlpha = if (diaInside) UNDERCUT_DEPTH_SHADE_MAX_ALPHA_WITH_TEXT else UNDERCUT_DEPTH_SHADE_MAX_ALPHA,
     )
     drawLinerOutlinesPdf(c, docSpec, notches, cy, ::xAtStrip, ::rStrip, linerOutlinePaint)
 
     // ── Measured-Ø values inside the shaft: a vertical dimension floor to floor ──
     plan.insideDia.forEach { m ->
-        drawUndercutInsideDia(c, m, cy, rStrip(m.floorDiaMm), dim, diaText, voidFill, dualStacked, arrowSizePt)
+        // On a shaded core the value sits straight on the grey: a white halo there reads as a pasted box,
+        // and nothing crosses the value (it sits in a free piece of its own floor, the line broken around it).
+        drawUndercutInsideDia(c, m, cy, rStrip(m.floorDiaMm), dim, diaText, voidFill.takeIf { !sectionCoreFill }, dualStacked, arrowSizePt)
     }
 
     // ── Measured-Ø callouts: leader from each notch floor down to the printed value ──
