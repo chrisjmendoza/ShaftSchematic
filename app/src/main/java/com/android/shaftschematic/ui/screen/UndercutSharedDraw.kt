@@ -17,6 +17,7 @@ import com.android.shaftschematic.geom.UndercutCutNumberPlacement
 import com.android.shaftschematic.geom.UndercutNotch
 import com.android.shaftschematic.geom.linerOutlineSegments
 import com.android.shaftschematic.geom.undercutCutNumberPlacements
+import com.android.shaftschematic.geom.withDepthShadeStretched
 import com.android.shaftschematic.ui.theme.SheetInk
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.ResolvedLiner
@@ -55,6 +56,25 @@ internal fun linerOdsOf(resolvedComponents: List<ResolvedComponent>): List<Under
 // ─────────────────────────────────────────────────────────────────────────────
 // Notch pipeline — shared by the overview canvas and the detail overlay
 // ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The whole-shaft overview's depth shading, stretched per LINER the way each printed strip
+ * stretches its own cuts ([withDepthShadeStretched]): a cut belongs to the liner its midpoint
+ * sits on, and the bare-shaft cuts form one more group. Stretching the whole shaft at once let
+ * one liner's shallow cuts squeeze another's into one grey (on-device report). Order is kept.
+ */
+internal fun List<UndercutNotch>.withDepthShadeStretchedPerLiner(
+    liners: List<UndercutLinerSpan>,
+): List<UndercutNotch> {
+    fun groupOf(n: UndercutNotch): String {
+        val mid = (n.startMm + n.endMm) * 0.5f
+        return liners.firstOrNull { mid >= it.startMm && mid <= it.endMm }?.id ?: ""
+    }
+    val stretched = groupBy(::groupOf).values
+        .flatMap { it.withDepthShadeStretched() }
+        .associateBy { it.id }
+    return map { stretched.getValue(it.id) }
+}
 
 /**
  * Draw notches as **steps in the silhouette**: [voidColor] fill from the local surface down to

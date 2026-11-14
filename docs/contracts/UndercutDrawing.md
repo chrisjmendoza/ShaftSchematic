@@ -614,19 +614,27 @@ data class UndercutRecord(
   a liner's OD wherever the run sits on a liner), so within a section a smaller floor Ø always
   shades darker and a staircase darkens step by step (on-device report: measuring each cut from
   the surface under it alone shaded a 5.996" cut that ran off the liner end onto the smaller body
-  LIGHTER than the 6.260" cut beside it) — placed between the SHALLOWEST (0) and DEEPEST (1)
-  measured depth on the WHOLE sheet (stretched end to end for contrast: depths from zero bunched a
-  run of 0.46"–0.75" cuts into one grey; a sheet with one depth sits mid-ramp,
-  `UNDERCUT_DEPTH_SHADE_SINGLE_FRAC`) (`undercutDepthShadeFrac`, built
+  LIGHTER than the 6.260" cut beside it) — `UndercutNotch.depthMm` (`undercutDepthMm`), placed
+  between the SHALLOWEST (0) and DEEPEST (1) measured depth of the VIEW by
+  `withDepthShadeStretched`: each printed strip's own cuts (the PDF re-stretches each strip's
+  slice of its sheet-wide list), the detail canvas's strip, and per liner on the tab's
+  whole-shaft canvas (`withDepthShadeStretchedPerLiner`) — stretching across the whole sheet let
+  one liner's shallow cuts squeeze another liner's cuts into one grey (on-device report); a view
+  with one depth sits mid-ramp, `UNDERCUT_DEPTH_SHADE_SINGLE_FRAC` (`undercutDepthShadeFrac`, built
   inside `buildUndercutNotches` so a strip's slice and both canvases read the sheet's numbers), and
   the ONE ramp `undercutDepthShadeAlpha` maps it linearly from `UNDERCUT_DEPTH_SHADE_MIN_ALPHA`
-  (5%) to `UNDERCUT_DEPTH_SHADE_MAX_ALPHA` (22%) — from true depth, never the exaggerated drawn
+  (4%) to `UNDERCUT_DEPTH_SHADE_MAX_ALPHA` (35%) — from true depth, never the exaggerated drawn
   depth, so deeper always shades darker. An unmeasured cut (Ø 0) takes
-  the lightest. **Under it every uncut liner prints WHITE** — the strip liner and the whole-shaft
-  fallback's liner, PDF and both canvases (on-device request after the first render: "any uncut
-  liner to be white, only undercuts shaded in"), so the cut sections are the only grey on a liner;
-  the "always shades its liner" and "core one step lighter than the liner" rules below are the
-  flat tone's, and hold only with this pref off. Bodies and tapers keep their own shade prefs. The
+  the lightest. **The undercut drawing's liners follow their OWN switch,
+  `PdfPrefs.undercutShadeLiners`** (default OFF — the liner prints white, so the cut sections are
+  the only grey on it: "any uncut liner to be white, only undercuts shaded in"), never the
+  schematic's `shadedLiners` (on-device request: turning liner shading off for the undercut sheet
+  must not change the schematic). It drives the strip liner and the whole-shaft fallback's liner
+  on the PDF and both canvases; its rows are "Undercut drawing: shade liners" (Settings → PDF
+  Export), the "Liners" row of the undercut PDF options' Shading group (bound to THIS pref on the
+  undercut sheet, `ShadeInPdfCheckRows`), and "Shade liners" in the Undercut tab's Drawing
+  settings (`UndercutShadeLinersRow`). The "always shades its liner" rule below is superseded by
+  it. Bodies and tapers keep their own shade prefs. The
   PDF decides it in `undercutPdfFillPlan` (`sectionCoreByDepth`, false under line art); the
   canvases pass `UndercutStyle.sectionDepthFill` (the same ramp × the intensity multiplier, in the
   chosen shade colour) as `drawUndercutNotches`' `sectionDepthFill`. Off is byte-identical to the

@@ -325,6 +325,36 @@ internal fun UndercutDepthShadeRow(
     }
 }
 
+/**
+ * The undercut drawing's own "Shade liners" switch — `PdfPrefs.undercutShadeLiners`, which only the
+ * undercut sheet and its canvases read, so switching it never changes the schematic's liner
+ * shading (on-device request).
+ */
+@Composable
+internal fun UndercutShadeLinersRow(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    testTag: String,
+    modifier: Modifier = Modifier,
+) {
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text("Shade liners", style = MaterialTheme.typography.bodyLarge)
+            Text(
+                "$UNDERCUT_SHADE_LINERS_CAPTION App-wide.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Switch(checked = checked, onCheckedChange = onCheckedChange, modifier = Modifier.testTag(testTag))
+    }
+}
+
+/** The undercut liner-shade rows' caption — every host says the same thing. */
+internal const val UNDERCUT_SHADE_LINERS_CAPTION =
+    "Undercut drawing only; the schematic's liner shading is separate."
+
 /** The chip label for [d]. */
 internal fun undercutSetDatumLabel(d: UndercutSetDatum): String = when (d) {
     UndercutSetDatum.NEAREST -> "Nearest"

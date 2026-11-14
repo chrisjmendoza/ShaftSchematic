@@ -8,6 +8,23 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-13
 
+### fix(undercut): depth shading contrasts the cuts in view; undercut liners get their own switch
+
+On-device report: a strip's cuts still looked one grey. The shades were stretched across the whole
+sheet, so a second liner of shallow cuts squeezed the first liner's cuts into the dark end. Each
+printed strip (and the detail canvas, and each liner on the tab's whole-shaft canvas) now stretches
+its OWN cuts from lightest to darkest, and the ramp widens to 4%–35% grey.
+
+The undercut drawing's liner shading is now its own app-wide setting, `undercutShadeLiners`
+(default off — white liners), so switching it never changes the schematic's liner shading: the
+"Liners" row in the undercut PDF options drives it, with matching rows in Settings → PDF Export and
+the Undercut tab's Drawing settings.
+
+The drawn (exaggerated) notch depth takes the same per-run reference as the shading (on-device
+report: a 5.996" cut off a liner end, measured from the smaller body, drew taller than the 6.045"
+cut on the liner beside it), so within a run a smaller floor Ø never draws shallower. The editor's Preview options sheet gains the "Shade in
+Components" rows (Bodies / Explicit bodies only / Tapers / Liners) the PDF options panels carry.
+
 ### fix(undercut): depth shading measures a run of cuts from one surface
 
 On-device report: a 6.260" cut on a liner shaded darker than the 6.045" and 5.996" cuts butted to

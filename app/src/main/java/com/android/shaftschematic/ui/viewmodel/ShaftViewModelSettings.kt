@@ -135,6 +135,16 @@ fun ShaftViewModel.setPdfUndercutDepthShade(v: Boolean, persist: Boolean = true)
 }
 
 /**
+ * Wired to the undercut drawing's own "Liners" shade rows (Settings → PDF Export, the undercut PDF
+ * options Shading group, the Undercut tab's Drawing settings). Never touches `shadedLiners`.
+ */
+fun ShaftViewModel.setPdfUndercutShadeLiners(v: Boolean, persist: Boolean = true) {
+    _pdfUndercutShadeLiners.value = v
+    SettingsStore.updatePdfPrefs { it.copy(undercutShadeLiners = v) }
+    if (persist) viewModelScope.launch { SettingsStore.setPdfUndercutShadeLiners(getApplication(), v) }
+}
+
+/**
  * Wired to the "Split cuts at liner edges" row in Settings → PDF Export and on the undercut
  * preview's options sheet: a chain-rail node at each liner edge a cut runs past, on the printed
  * undercut document and the detail canvas. Off, every cut prints its full length.
@@ -513,6 +523,7 @@ fun ShaftViewModel.applyDrawingProfile(profile: DrawingProfile) {
     setPdfUndercutLineArt(prefs.undercutLineArt)
     setPdfUndercutLinerOutline(prefs.undercutLinerOutline)
     setPdfUndercutDepthShade(prefs.undercutDepthShade)
+    setPdfUndercutShadeLiners(prefs.undercutShadeLiners)
     setPdfUndercutSplitAtLinerEdge(prefs.undercutSplitAtLinerEdge)
     setPdfUndercutTotalRail(prefs.undercutTotalRail)
     setPdfCurveLoHeightIn(prefs.curveLoHeightIn)

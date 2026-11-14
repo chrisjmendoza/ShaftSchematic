@@ -178,74 +178,90 @@ internal data class UndercutNotch(
     val floorDiaMm: Float,
     val profiles: List<NotchProfile>,
     /**
-     * How deep this cut reaches as a share of the sheet's deepest cut, `0..1` —
-     * [undercutDepthShadeFrac]. Read only by the depth-shaded section core
+     * Where this cut sits between the shallowest (0) and deepest (1) cut of the list it was
+     * stretched over ([withDepthShadeStretched]) — read only by the depth-shaded section core
      * (`PdfPrefs.undercutDepthShade`); 0 for a placed-but-unmeasured cut.
      */
     val depthFrac: Float = 0f,
+    /** The cut's true depth below its section's reference surface ([undercutDepthMm]); 0 unmeasured. */
+    val depthMm: Float = 0f,
 )
 
 /** Section-core alpha of the SHALLOWEST cut under depth shading (`PdfPrefs.undercutDepthShade`). */
-const val UNDERCUT_DEPTH_SHADE_MIN_ALPHA = 0.05f
-
-/** Section-core alpha of the sheet's DEEPEST cut under depth shading. */
-const val UNDERCUT_DEPTH_SHADE_MAX_ALPHA = 0.22f
+const val UNDERCUT_DEPTH_SHADE_MIN_ALPHA = 0.04f
 
 /**
- * The section-core alpha for a cut at [depthFrac] of the sheet's deepest cut — linear from
- * [UNDERCUT_DEPTH_SHADE_MIN_ALPHA] to [UNDERCUT_DEPTH_SHADE_MAX_ALPHA], so a shallow cut reads
- * light and the cut that reaches nearest the steel reads dark (on-device request: contrast
- * between cuts to show depth and separate the sections). The ONE ramp both draw sites read.
+ * Section-core alpha of the DEEPEST cut under depth shading. Wide on purpose: the liner prints
+ * white under it, and neighbouring cuts must read apart at a glance (on-device report: 5%–22%
+ * left a strip's cuts looking the same grey).
+ */
+const val UNDERCUT_DEPTH_SHADE_MAX_ALPHA = 0.35f
+
+/**
+ * The section-core alpha for a cut at [depthFrac] — linear from [UNDERCUT_DEPTH_SHADE_MIN_ALPHA]
+ * to [UNDERCUT_DEPTH_SHADE_MAX_ALPHA], so a shallow cut reads light and the cut that reaches
+ * nearest the steel reads dark (on-device request: contrast between cuts to show depth and
+ * separate the sections). The ONE ramp both draw sites read.
  */
 fun undercutDepthShadeAlpha(depthFrac: Float): Float =
     UNDERCUT_DEPTH_SHADE_MIN_ALPHA +
         (UNDERCUT_DEPTH_SHADE_MAX_ALPHA - UNDERCUT_DEPTH_SHADE_MIN_ALPHA) * depthFrac.coerceIn(0f, 1f)
 
 /**
- * Each cut's [UndercutNotch.depthFrac] over [floors]: its TRUE depth below its SECTION's
- * reference surface, placed between the SHALLOWEST (0) and the DEEPEST (1) such depth among
- * [sheetFloors]' MEASURED cuts — stretched end to end so the cuts contrast as much as the ramp
- * allows (on-device: depths measured from zero bunched a run of 0.46"–0.75" cuts into one grey).
+ * Each cut's [UndercutNotch.depthMm]: its TRUE depth below its SECTION's reference surface, 0 for
+ * an unmeasured cut (Ø 0).
  *
  * A section is a run of cuts that touch or overlap (nested cuts included — they lie inside their
  * parent), and its reference is the HIGHEST outer surface any of its cuts spans
  * ([maxOuterDiaOver] over [segs]) — a liner's OD wherever the run sits on a liner. Every cut in
- * a run is measured from that one surface, so within a section a smaller floor Ø always shades
- * darker. Measuring each cut from the surface under it alone shaded a cut running off a liner
+ * a run is measured from that one surface, so within a section a smaller floor Ø is always
+ * deeper. Measuring each cut from the surface under it alone shaded a cut running off a liner
  * end onto the smaller body beside it LIGHTER than a shallower cut on the liner (on-device
- * report: a 5.996" cut read lighter than the 6.260" one beside it).
- *
- * Linear in true depth, never the drawn (exaggerated) depth. An unmeasured cut (Ø 0) is 0, the
- * lightest; a sheet with no measured depth gives every cut 0.
+ * report: a 5.996" cut read lighter than the 6.260" one beside it). [neighbours] are the other
+ * cuts on the sheet, so a strip's slice groups its runs exactly as the whole sheet does.
  */
-internal fun undercutDepthShadeFrac(
+internal fun undercutDepthMm(
     floors: List<UndercutFloors>,
     segs: List<SurfaceSeg>,
-    sheetFloors: List<UndercutFloors> = floors,
+    neighbours: List<UndercutSpanMm> = emptyList(),
 ): Map<String, Float> {
-    val all = (sheetFloors + floors).distinctBy { it.span.id }
-    val refById = undercutSectionReferenceDia(all.map { it.span }, segs)
-    fun depth(f: UndercutFloors) = ((refById[f.span.id] ?: 0f) - f.trueFloorDiaMm).coerceAtLeast(0f)
-    val sheetIds = sheetFloors.mapTo(HashSet()) { it.span.id }
-    val sheetDepths = all.filter { it.measured && it.span.id in sheetIds }.map(::depth).filter { it > 0f }
-    val deepest = sheetDepths.maxOrNull() ?: 0f
-    val shallowest = sheetDepths.minOrNull() ?: 0f
-    val spread = deepest - shallowest
+    val refById = undercutSectionReferenceDia(
+        (floors.map { it.span } + neighbours).distinctBy { it.id },
+        segs,
+    )
     return floors.associate { f ->
-        val d = depth(f)
-        f.span.id to when {
-            !f.measured || d <= 0f || deepest <= 0f -> 0f
-            // One depth on the whole sheet: nothing to contrast, so the middle of the ramp.
-            spread <= UNDERCUT_DEPTH_SHADE_EQUAL_EPS_MM -> UNDERCUT_DEPTH_SHADE_SINGLE_FRAC
-            else -> ((d - shallowest) / spread).coerceIn(0f, 1f)
-        }
+        f.span.id to if (!f.measured) 0f
+        else ((refById[f.span.id] ?: 0f) - f.trueFloorDiaMm).coerceAtLeast(0f)
+    }
+}
+
+/**
+ * [notches] with [UndercutNotch.depthFrac] stretched across THIS list: its shallowest measured
+ * cut at 0, its deepest at 1 — so the cuts a view shows contrast as much as the ramp allows. A
+ * view is one strip (one liner, or one bare-shaft area): normalizing across the whole sheet let a
+ * liner of shallow cuts squeeze another liner's cuts into one grey (on-device report). Unmeasured
+ * cuts stay 0; a list with one depth sits mid-ramp ([UNDERCUT_DEPTH_SHADE_SINGLE_FRAC]).
+ */
+internal fun List<UndercutNotch>.withDepthShadeStretched(): List<UndercutNotch> {
+    val depths = mapNotNull { n -> n.depthMm.takeIf { it > 0f } }
+    val deepest = depths.maxOrNull() ?: return map { it.copy(depthFrac = 0f) }
+    val shallowest = depths.min()
+    val spread = deepest - shallowest
+    return map { n ->
+        n.copy(
+            depthFrac = when {
+                n.depthMm <= 0f -> 0f
+                spread <= UNDERCUT_DEPTH_SHADE_EQUAL_EPS_MM -> UNDERCUT_DEPTH_SHADE_SINGLE_FRAC
+                else -> ((n.depthMm - shallowest) / spread).coerceIn(0f, 1f)
+            },
+        )
     }
 }
 
 /** Depths closer than this read as one depth (no contrast to stretch). */
 private const val UNDERCUT_DEPTH_SHADE_EQUAL_EPS_MM = 0.01f
 
-/** Where a sheet with only one cut depth sits on the ramp. */
+/** Where a view with only one cut depth sits on the ramp. */
 internal const val UNDERCUT_DEPTH_SHADE_SINGLE_FRAC = 0.5f
 
 /**
@@ -353,6 +369,18 @@ internal fun resolveUndercutFloors(
         val c = clampUndercutSpan(u.startFromAftMm, u.lengthMm, oalMm)
         if (c.isEmpty) null else UndercutSpanMm(u.id, c.startMm, c.endMm)
     }
+    // A MEASURED top-level cut's drawn depth runs from its SECTION's reference surface — the
+    // highest surface its run of touching cuts spans — so within a run a smaller floor Ø always
+    // draws deeper (on-device report: a 5.996" cut off a liner end, measured from the smaller body,
+    // drew TALLER than the 6.045" cut on the liner beside it). The sheet's other cuts ride along
+    // so a strip's slice groups its runs exactly as the whole sheet does.
+    val sectionRefById = undercutSectionReferenceDia(
+        (spans + sheetUndercuts.mapNotNull { u ->
+            val c = clampUndercutSpan(u.startFromAftMm, u.lengthMm, oalMm)
+            if (c.isEmpty) null else UndercutSpanMm(u.id, c.startMm, c.endMm)
+        }).distinctBy { it.id },
+        segs,
+    )
     val nestingById = undercutNestingForest(spans).associateBy { it.id }
     val ordered = spans.sortedWith(
         compareBy({ nestingById[it.id]?.level ?: 0 }, { it.startMm }),
@@ -365,6 +393,10 @@ internal fun resolveUndercutFloors(
         val parent = nesting.parentId?.let { resolvedById[it] }
         return if (parent == null) {
             val minSurface = minOuterDiaOver(segs, span.startMm, span.endMm)
+            // An unmeasured cut keeps its local surface: its placeholder depth is a share of the
+            // surface Ø, and off the larger reference it could land above the stock under it.
+            val drawBase =
+                if (u.diaMm > 0f) max(sectionRefById[span.id] ?: minSurface, minSurface) else minSurface
             UndercutFloors(
                 nesting = nesting,
                 span = span,
@@ -372,7 +404,7 @@ internal fun resolveUndercutFloors(
                 drawnSurfaceDiaMm = minSurface,
                 trueFloorDiaMm = effectiveNotchDiaMm(u.diaMm, minSurface),
                 drawnFloorDiaMm = normalizedNotchFloorDiaMm(
-                    u.diaMm, minSurface, deepest, exaggerationFrac,
+                    u.diaMm, drawBase, deepest, exaggerationFrac,
                 ),
                 aftFaceTopDiaMm = minSurface,
                 fwdFaceTopDiaMm = minSurface,
@@ -507,12 +539,14 @@ internal fun buildUndercutNotches(
     sheetUndercuts: List<Undercut> = undercuts,
 ): List<UndercutNotch> {
     val floors = resolveUndercutFloors(undercuts, segs, oalMm, exaggerationFrac, sheetUndercuts)
-    // Depth shading normalizes over the WHOLE sheet, like the drawn depth, so one cut shades
-    // the same in every strip and on every canvas that draws it.
-    val sheetFloors =
-        if (sheetUndercuts === undercuts) floors
-        else resolveUndercutFloors(sheetUndercuts, segs, oalMm, exaggerationFrac, sheetUndercuts)
-    val depthFracById = undercutDepthShadeFrac(floors, segs, sheetFloors)
+    // Depth shading: each cut's depth below its section's surface, grouped into sections with
+    // the whole sheet's cuts, then stretched across THIS list — one strip's cuts when a caller
+    // builds a strip, and the PDF re-stretches each strip's slice of its sheet-wide list.
+    val neighbours = sheetUndercuts.mapNotNull { u ->
+        val c = clampUndercutSpan(u.startFromAftMm, u.lengthMm, oalMm)
+        if (c.isEmpty) null else UndercutSpanMm(u.id, c.startMm, c.endMm)
+    }
+    val depthMmById = undercutDepthMm(floors, segs, neighbours)
     return floors.map { f ->
         val span = f.span
         val nested = f.nesting.parentId != null
@@ -536,9 +570,9 @@ internal fun buildUndercutNotches(
             endMm = span.endMm,
             floorDiaMm = f.drawnFloorDiaMm,
             profiles = profiles,
-            depthFrac = depthFracById[span.id] ?: 0f,
+            depthMm = depthMmById[span.id] ?: 0f,
         )
-    }
+    }.withDepthShadeStretched()
 }
 
 /**

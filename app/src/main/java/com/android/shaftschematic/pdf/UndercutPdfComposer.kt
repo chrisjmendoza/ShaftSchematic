@@ -30,6 +30,7 @@ import com.android.shaftschematic.geom.effectiveUndercutTotalRail
 import com.android.shaftschematic.geom.NOTCH_FACE_MIN_STEP_PX
 import com.android.shaftschematic.geom.UNDERCUT_SECTION_FILL_ALPHA
 import com.android.shaftschematic.geom.undercutDepthShadeAlpha
+import com.android.shaftschematic.geom.withDepthShadeStretched
 import com.android.shaftschematic.geom.UNDERCUT_BREAK_AMP_FRAC_OF_R
 import com.android.shaftschematic.geom.withUndercutBreakRoom
 import com.android.shaftschematic.geom.maxOuterDiaOver
@@ -593,7 +594,9 @@ private fun drawUndercutSheet(
             linerSpanBlank = startedPage && blankValues,
             // This strip's slice of the sheet's notches, in the builder's parents-before-children
             // order — never rebuilt here, so a strip's staircase is the sheet's staircase.
-            notches = sheetNotches.filter { it.id in strip.undercutIds },
+            // Depth shading stretches across THIS strip's cuts, so neighbouring cuts contrast
+            // however deep another liner's cuts run.
+            notches = sheetNotches.filter { it.id in strip.undercutIds }.withDepthShadeStretched(),
             sectionCoreFill = fills.sectionCore,
             sectionCoreByDepth = fills.sectionCoreByDepth,
             linerOutlinePaint = linerOutlinePaint,

@@ -1334,6 +1334,8 @@ internal fun ShadeInPdfChecks(
     onSetUndercutLinerOutline: (Boolean) -> Unit = {},
     undercutDepthShade: Boolean = true,
     onSetUndercutDepthShade: (Boolean) -> Unit = {},
+    undercutShadeLiners: Boolean = false,
+    onSetUndercutShadeLiners: (Boolean) -> Unit = {},
 ) {
     OptionsSectionExpander(OptionsSection.SHADING) {
         ShadeInPdfCheckRows(
@@ -1354,6 +1356,8 @@ internal fun ShadeInPdfChecks(
             onSetUndercutLinerOutline = onSetUndercutLinerOutline,
             undercutDepthShade = undercutDepthShade,
             onSetUndercutDepthShade = onSetUndercutDepthShade,
+            undercutShadeLiners = undercutShadeLiners,
+            onSetUndercutShadeLiners = onSetUndercutShadeLiners,
         )
     }
 }
@@ -1405,6 +1409,13 @@ internal fun ShadeInPdfCheckRows(
     /** The app-wide `PdfPrefs.undercutDepthShade`; read only when [showUndercutLineArt]. */
     undercutDepthShade: Boolean = true,
     onSetUndercutDepthShade: (Boolean) -> Unit = {},
+    /**
+     * The undercut drawing's OWN liner shading, `PdfPrefs.undercutShadeLiners`. On the undercut
+     * sheet ([showUndercutLineArt]) the "Liners" row drives THIS, never [pdfShadedLiners], so
+     * switching it there leaves the schematic's liner shading alone (on-device request).
+     */
+    undercutShadeLiners: Boolean = false,
+    onSetUndercutShadeLiners: (Boolean) -> Unit = {},
 ) {
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1442,7 +1453,23 @@ internal fun ShadeInPdfCheckRows(
             Spacer(Modifier.width(8.dp))
             Text("Tapers", style = MaterialTheme.typography.bodyLarge)
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        if (showUndercutLineArt) Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(
+                checked = undercutShadeLiners,
+                onCheckedChange = onSetUndercutShadeLiners,
+                enabled = !undercutLineArt,
+                modifier = Modifier.testTag("pdf_undercut_shade_liners"),
+            )
+            Spacer(Modifier.width(8.dp))
+            Column {
+                Text("Liners", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    UNDERCUT_SHADE_LINERS_CAPTION,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        } else Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox(
                 checked = pdfShadedLiners && !linerShadeLocked,
                 onCheckedChange = onSetShadedLiners,

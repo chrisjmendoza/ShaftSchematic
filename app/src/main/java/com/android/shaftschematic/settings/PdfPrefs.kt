@@ -240,6 +240,14 @@ data class PdfPrefs(
      */
     val undercutDepthShade: Boolean = true,
     /**
+     * Shade the liners on the undercut drawing — its OWN switch, never [shadedLiners] (on-device
+     * request: turning liner shading off for the undercut sheet must not change the schematic).
+     * Off by default: the liner prints white and the cut sections carry the grey. The undercut PDF
+     * (detail strips and the whole-shaft fallback) and both undercut canvases read it; line art
+     * still drops every fill.
+     */
+    val undercutShadeLiners: Boolean = false,
+    /**
      * Whether the undercut detail strips' chain rail splits a cut machined past a liner edge into
      * two spans meeting at that edge (`geom/UndercutMath.kt`'s `buriedUndercutLinerEdgesMm`, fed
      * as `buildUndercutRailSpans`' `splitAtMm`). Off by default: the shop measures the length of

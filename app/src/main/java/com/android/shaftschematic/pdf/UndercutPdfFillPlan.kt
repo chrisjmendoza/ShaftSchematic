@@ -3,20 +3,21 @@ package com.android.shaftschematic.pdf
 import com.android.shaftschematic.settings.PdfPrefs
 
 /**
- * Which shade fills the printed undercut drawing draws. Five independent decisions, one per
- * fill the composer builds:
+ * Which shade fills the printed undercut drawing draws. Independent decisions, one per fill the
+ * composer builds:
  *
- * - [body] / [taper] / [liner] — the whole-shaft fallback form's component fills, each
- *   following its own "Shade in Components" preference.
- * - [stripLiner] — the detail strips' liner span, which is otherwise shaded whatever the liner
- *   preference says: the notch voids are pure white, and the grey liner is what gives the boxed
- *   cut sections their contrast (on-device request).
- * - [sectionCore] — the undercut section's core between the floor lines, refilled one step
- *   lighter than the liner after the void erases it.
- * - [sectionCoreByDepth] — whether that core's tone follows the cut's depth instead
- *   (`PdfPrefs.undercutDepthShade`: shallow light, deep dark — `undercutDepthShadeAlpha`).
- *   Under it the liner — strip and whole-shaft alike — stays white, so the only grey on the
- *   liner is the cuts'.
+ * - [body] / [taper] — the whole-shaft fallback form's body and taper fills, each following its
+ *   own "Shade in Components" preference.
+ * - [liner] / [stripLiner] — the fallback form's liners and the detail strips' liner span. Both
+ *   follow the undercut drawing's OWN liner switch, `PdfPrefs.undercutShadeLiners`, never the
+ *   schematic's `shadedLiners` (on-device request: switching liner shading off for the undercut
+ *   sheet must not change the schematic). Off by default — the liner prints white and the cut
+ *   sections carry the grey.
+ * - [sectionCore] — the undercut section's core between the floor lines, refilled after the void
+ *   erases it.
+ * - [sectionCoreByDepth] — whether that core's tone follows the cut's depth
+ *   (`PdfPrefs.undercutDepthShade`: shallow light, deep dark — `undercutDepthShadeAlpha`) instead
+ *   of the one flat section tone.
  *
  * Nothing here is a paint or a colour: the composer owns the ink, this owns the decision.
  */
@@ -35,11 +36,9 @@ data class UndercutPdfFillPlan(
 /**
  * The undercut sheet's fills for [prefs].
  *
- * `PdfPrefs.undercutLineArt` is absolute: it drops EVERY fill, the strips' always-shaded liner
- * and the section core included, so the sheet reads from the notch construction alone — the void
- * erasing the surface stroke, the full-height section faces, the floor lines. With it off each
- * component kind follows its own shade preference and the two undercut-specific fills stay on,
- * which is the shipped sheet.
+ * `PdfPrefs.undercutLineArt` is absolute: it drops EVERY fill, the liners and the section core
+ * included, so the sheet reads from the notch construction alone — the void erasing the surface
+ * stroke, the full-height section faces, the floor lines.
  *
  * Print-side only, and deliberately independent of the screen's `util/UndercutStyle.kt` line-art
  * mode — that style never reaches a composer, so the two flags mean the same thing on two
@@ -54,10 +53,8 @@ internal fun undercutPdfFillPlan(prefs: PdfPrefs): UndercutPdfFillPlan =
         UndercutPdfFillPlan(
             body = prefs.shadedBodies,
             taper = prefs.shadedTapers,
-            // Under depth shading the liner stays WHITE and only the cut sections shade
-            // (on-device request: "any uncut liner to be white, only undercuts shaded in").
-            liner = prefs.shadedLiners && !prefs.undercutDepthShade,
-            stripLiner = !prefs.undercutDepthShade,
+            liner = prefs.undercutShadeLiners,
+            stripLiner = prefs.undercutShadeLiners,
             sectionCore = true,
             sectionCoreByDepth = prefs.undercutDepthShade,
         )

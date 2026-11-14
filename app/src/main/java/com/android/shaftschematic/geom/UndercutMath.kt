@@ -1527,10 +1527,18 @@ fun deepestUndercutDepthMm(
     val topLevelIds = undercutNestingForest(spans)
         .filter { it.level == 0 }
         .mapTo(HashSet()) { it.id }
+    // Depth from each cut's SECTION reference (the highest surface its run of touching cuts
+    // spans) — the base `resolveUndercutFloors` draws a measured cut from — never below the
+    // surface under the cut itself.
+    val sectionRefById = undercutSectionReferenceDia(spans, segs)
     return undercuts.maxOfOrNull { u ->
         val c = clampedById[u.id]
         if (u.diaMm <= 0f || c == null || c.isEmpty || u.id !in topLevelIds) 0f
-        else (minOuterDiaOver(segs, c.startMm, c.endMm) - u.diaMm).coerceAtLeast(0f)
+        else {
+            val local = minOuterDiaOver(segs, c.startMm, c.endMm)
+            if (u.diaMm >= local) 0f
+            else (max(sectionRefById[u.id] ?: local, local) - u.diaMm).coerceAtLeast(0f)
+        }
     } ?: 0f
 }
 
