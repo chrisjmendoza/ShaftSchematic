@@ -22,7 +22,12 @@ the Undercut tab's Drawing settings.
 
 The drawn (exaggerated) notch depth takes the same per-run reference as the shading (on-device
 report: a 5.996" cut off a liner end, measured from the smaller body, drew taller than the 6.045"
-cut on the liner beside it), so within a run a smaller floor Ø never draws shallower. The editor's Preview options sheet gains the "Shade in
+cut on the liner beside it), so within a run a smaller floor Ø never draws shallower.
+
+The line between two butted cuts of different Ø now always prints (on-device report: a 6.187" and
+a 6.291" cut drew within a pixel of each other once exaggerated, the face between them fell under
+the draw sites' minimum step, and the cut read as "not boxed in"). The deeper cut owns that face
+and always draws it; the drawn heights are unchanged, and cuts of one Ø keep one continuous floor. The editor's Preview options sheet gains the "Shade in
 Components" rows (Bodies / Explicit bodies only / Tapers / Liners) the PDF options panels carry.
 
 ### fix(undercut): depth shading measures a run of cuts from one surface

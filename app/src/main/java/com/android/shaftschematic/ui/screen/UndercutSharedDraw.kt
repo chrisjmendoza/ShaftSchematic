@@ -155,10 +155,10 @@ internal fun DrawScope.drawUndercutNotches(
 
             // Step-section outline: full-height faces where the surface stands above the
             // floor, then the floor lines. No lid — the mouth stays open.
-            if (rSurfStart > rFloor + NOTCH_FACE_MIN_STEP_PX) {
+            if (rSurfStart > rFloor + NOTCH_FACE_MIN_STEP_PX || p.startFaceAlways) {
                 drawLine(outlineColor, Offset(x0, cy - rSurfStart), Offset(x0, cy + rSurfStart), strokeWidthPx, pathEffect = pathEffect)
             }
-            if (rSurfEnd > rFloor + NOTCH_FACE_MIN_STEP_PX) {
+            if (rSurfEnd > rFloor + NOTCH_FACE_MIN_STEP_PX || p.endFaceAlways) {
                 drawLine(outlineColor, Offset(x1, cy - rSurfEnd), Offset(x1, cy + rSurfEnd), strokeWidthPx, pathEffect = pathEffect)
             }
             drawLine(outlineColor, Offset(x0, cy - rFloor), Offset(x1, cy - rFloor), strokeWidthPx, pathEffect = pathEffect)

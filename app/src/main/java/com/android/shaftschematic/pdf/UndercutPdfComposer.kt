@@ -1056,10 +1056,10 @@ private fun drawUndercutNotches(
             // rectangle between two faces (the hand-sketch convention).
             val rSurf0 = rAt(np.surface.first().diaMm)
             val rSurf1 = rAt(np.surface.last().diaMm)
-            if (rSurf0 > rFloor + NOTCH_FACE_MIN_STEP_PX) {
+            if (rSurf0 > rFloor + NOTCH_FACE_MIN_STEP_PX || np.startFaceAlways) {
                 c.drawLine(xStart, cy - rSurf0, xStart, cy + rSurf0, outline)
             }
-            if (rSurf1 > rFloor + NOTCH_FACE_MIN_STEP_PX) {
+            if (rSurf1 > rFloor + NOTCH_FACE_MIN_STEP_PX || np.endFaceAlways) {
                 c.drawLine(xEnd, cy - rSurf1, xEnd, cy + rSurf1, outline)
             }
             listOf(-1f, 1f).forEach { sign ->

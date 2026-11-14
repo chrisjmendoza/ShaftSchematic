@@ -612,7 +612,14 @@ data class UndercutRecord(
   reference surface — a section is a run of cuts that touch or overlap (nested cuts included), and
   its reference is the HIGHEST outer surface any of its cuts spans (`undercutSectionReferenceDia`,
   a liner's OD wherever the run sits on a liner), so within a section a smaller floor Ø always
-  shades darker and a staircase darkens step by step (on-device report: measuring each cut from
+  shades darker and a staircase darkens step by step. The DRAWN depth of a measured top-level cut
+  runs from the same reference (`resolveUndercutFloors`, `deepestUndercutDepthMm`), so it always
+  draws deeper too, and the face between two BUTTED cuts of different Ø ALWAYS draws — the deeper
+  cut owns it (`UndercutFloors.aftFaceAlways`/`fwdFaceAlways` → `NotchProfile.startFaceAlways`/
+  `endFaceAlways`, which override `NOTCH_FACE_MIN_STEP_PX` in both draw sites), however close the
+  exaggerated floors land; heights are untouched (on-device report: a 6.187" and a 6.291" cut drew
+  within a pixel and lost the line between them). Equal Ø keeps one continuous floor, and in a tie
+  on the drawn floor the truly deeper cut paints last (`inButtedPaintOrder`) (on-device report: measuring each cut from
   the surface under it alone shaded a 5.996" cut that ran off the liner end onto the smaller body
   LIGHTER than the 6.260" cut beside it) — `UndercutNotch.depthMm` (`undercutDepthMm`), placed
   between the SHALLOWEST (0) and DEEPEST (1) measured depth of the VIEW by

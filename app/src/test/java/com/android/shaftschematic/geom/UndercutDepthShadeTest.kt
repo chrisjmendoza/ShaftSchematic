@@ -82,6 +82,32 @@ class UndercutDepthShadeTest {
     }
 
     @Test
+    fun `butted cuts of different dia always draw the line between them`() {
+        // On-device report: a 6.187" and a 6.291" cut butted together drew within a pixel of each
+        // other once exaggerated, the face fell under the minimum step, and the line vanished. The
+        // deeper cut owns the face and always draws it; the heights are left as they are.
+        val a = cut("a", 100f, 50f, diaMm = 190f)
+        val b = cut("b", 150f, 50f, diaMm = 189.5f)
+        val c = cut("c", 200f, 50f, diaMm = 190f)
+        val built = buildUndercutNotches(listOf(a, b, c), segs, oalMm, 0.25f).associateBy { it.id }
+        val deeper = built.getValue("b").profiles.single()
+        assertTrue("the deeper cut's AFT face always draws", deeper.startFaceAlways)
+        assertTrue("the deeper cut's FWD face always draws", deeper.endFaceAlways)
+        assertFalse(built.getValue("a").profiles.single().endFaceAlways)
+        assertFalse(built.getValue("c").profiles.single().startFaceAlways)
+    }
+
+    @Test
+    fun `butted cuts of one dia keep one continuous floor`() {
+        val a = cut("a", 100f, 50f, diaMm = 190f)
+        val b = cut("b", 150f, 50f, diaMm = 190f)
+        val built = buildUndercutNotches(listOf(a, b), segs, oalMm, 0.25f).associateBy { it.id }
+        assertEquals(built.getValue("a").floorDiaMm, built.getValue("b").floorDiaMm, eps)
+        assertFalse(built.getValue("a").profiles.single().endFaceAlways)
+        assertFalse(built.getValue("b").profiles.single().startFaceAlways)
+    }
+
+    @Test
     fun `each strip stretches its own cuts, so a shallow liner does not flatten a deep one`() {
         // On-device report: a second liner of shallow cuts squeezed the first liner's cuts into one
         // grey when the stretch spanned the whole sheet.

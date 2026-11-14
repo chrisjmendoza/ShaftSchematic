@@ -330,6 +330,14 @@ internal data class UndercutFloors(
      */
     val aftButted: Boolean = false,
     val fwdButted: Boolean = false,
+    /**
+     * Whether this cut's AFT / FWD end is butted against a top-level cut of a SHALLOWER true Ø —
+     * this cut owns the face between them and it is ALWAYS drawn, however close the two drawn
+     * floors land (on-device report: a 6.187" and a 6.291" cut drew within a pixel once
+     * exaggerated, the face fell under the minimum step and the line between them vanished).
+     */
+    val aftFaceAlways: Boolean = false,
+    val fwdFaceAlways: Boolean = false,
     /** Whether the cut carries an entered Ø (a placeholder's floor is symbolic, not a depth). */
     val measured: Boolean = true,
 )
@@ -452,6 +460,9 @@ internal fun resolveUndercutFloors(
 private fun undercutEndsTouch(endMm: Float, startMm: Float): Boolean =
     abs(endMm - startMm) <= UNDERCUT_TOUCH_EPS_MM
 
+/** Butted cuts whose TRUE floors differ by less than this (Ø mm) are one floor: no face between. */
+private const val UNDERCUT_BUTTED_SAME_FLOOR_EPS_MM = 0.01f
+
 /**
  * Re-top every butted end of the top-level cuts [top]: an end that another top-level cut's
  * opposite end touches rises to the lowest such neighbour's drawn floor. Drawn floors, because
@@ -460,18 +471,22 @@ private fun undercutEndsTouch(endMm: Float, startMm: Float): Boolean =
  * keeps its surface face top.
  */
 private fun withButtedSiblingFaces(top: List<UndercutFloors>): List<UndercutFloors> = top.map { f ->
-    val aftNeighbourFloor = top
-        .filter { it !== f && undercutEndsTouch(it.span.endMm, f.span.startMm) }
-        .minOfOrNull { it.drawnFloorDiaMm }
-    val fwdNeighbourFloor = top
-        .filter { it !== f && undercutEndsTouch(f.span.endMm, it.span.startMm) }
-        .minOfOrNull { it.drawnFloorDiaMm }
+    val aftNeighbours = top.filter { it !== f && undercutEndsTouch(it.span.endMm, f.span.startMm) }
+    val fwdNeighbours = top.filter { it !== f && undercutEndsTouch(f.span.endMm, it.span.startMm) }
+    val aftNeighbourFloor = aftNeighbours.minOfOrNull { it.drawnFloorDiaMm }
+    val fwdNeighbourFloor = fwdNeighbours.minOfOrNull { it.drawnFloorDiaMm }
+    // This cut owns the face when a butted neighbour is truly SHALLOWER; the face then always
+    // draws (see [UndercutFloors.aftFaceAlways]).
+    fun shallowerThanMe(n: UndercutFloors) =
+        f.measured && n.measured && n.trueFloorDiaMm > f.trueFloorDiaMm + UNDERCUT_BUTTED_SAME_FLOOR_EPS_MM
     if (aftNeighbourFloor == null && fwdNeighbourFloor == null) f
     else f.copy(
         aftFaceTopDiaMm = aftNeighbourFloor ?: f.aftFaceTopDiaMm,
         fwdFaceTopDiaMm = fwdNeighbourFloor ?: f.fwdFaceTopDiaMm,
         aftButted = aftNeighbourFloor != null,
         fwdButted = fwdNeighbourFloor != null,
+        aftFaceAlways = aftNeighbours.isNotEmpty() && aftNeighbours.all(::shallowerThanMe),
+        fwdFaceAlways = fwdNeighbours.isNotEmpty() && fwdNeighbours.all(::shallowerThanMe),
     )
 }
 
@@ -487,7 +502,11 @@ private fun inButtedPaintOrder(top: List<UndercutFloors>): List<UndercutFloors> 
         val run = runs.firstOrNull { r -> r.any { undercutEndsTouch(it.span.endMm, f.span.startMm) } }
         if (run != null) run += f else runs += mutableListOf(f)
     }
-    return runs.flatMap { r -> r.sortedByDescending { it.drawnFloorDiaMm } }
+    // Ties on the drawn floor fall back to the TRUE floor, so the truly deeper cut — the one whose
+    // face is always drawn — paints last even when the exaggeration lands both on one floor.
+    return runs.flatMap { r ->
+        r.sortedWith(compareByDescending<UndercutFloors> { it.drawnFloorDiaMm }.thenByDescending { it.trueFloorDiaMm })
+    }
 }
 
 /**
@@ -558,6 +577,10 @@ internal fun buildUndercutNotches(
                 if (!nested) p.copy(
                     floorDiaMm = f.drawnFloorDiaMm,
                     surface = buttedSurfacePoints(p, f),
+                    // A butted end against a shallower cut always prints its face — only on the
+                    // region that actually reaches that end of the cut.
+                    startFaceAlways = f.aftFaceAlways && abs(p.startMm - span.startMm) <= UNDERCUT_SPAN_EPS_MM,
+                    endFaceAlways = f.fwdFaceAlways && abs(p.endMm - span.endMm) <= UNDERCUT_SPAN_EPS_MM,
                 )
                 else p.copy(
                     floorDiaMm = f.drawnFloorDiaMm,

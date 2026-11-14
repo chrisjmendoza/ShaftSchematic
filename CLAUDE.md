@@ -592,8 +592,10 @@ symbolic shallow floor in the overlay, never printed. Notch **depth is display-e
 (`UndercutRecord.exaggerationFrac`, cap `UNDERCUT_EXAGGERATION_MAX_FRAC` = 25%), never
 shallower than true, region topology from the TRUE floor; a measured top-level cut's drawn depth
 runs from its run's section reference — the highest surface its touching cuts span,
-`undercutSectionReferenceDia` — so a smaller floor Ø never draws shallower than its neighbour, on-device
-report) because real cuts are hairline-thin
+`undercutSectionReferenceDia` — so a smaller floor Ø never draws shallower than its neighbour, and the
+face between two BUTTED cuts of different Ø always draws, however close their drawn floors land
+(`NotchProfile.startFaceAlways`/`endFaceAlways` override `NOTCH_FACE_MIN_STEP_PX` in both draw sites;
+heights untouched) — on-device reports) because real cuts are hairline-thin
 at scale; printed Ø values stay the stored numbers. No carousel card and no Add dialog —
 undercuts are authored only on their tab, keeping them outside the add-dialog-parity
 invariant. Both undercut surfaces carry Undo/Redo bound to the ONE document history; the
