@@ -8,6 +8,14 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-13
 
+### feat(undercut): a body's blend draws on the undercut sections
+
+On-device request: a body blended up to a liner (a 45° blend to the liner's edge) drew as a
+square corner on the undercut sections. The blend now draws there, on the printed sheet and on
+the section's drawing in the app. Where a cut runs over the blend, the solid line stops at the
+cut's edge — where the blend now really ends — and the part the cut removed is shown dotted up
+to the liner's dotted outline. The dotted part follows the "Liner outline" switch.
+
 ### fix(undercut): "Diameters inside the shaft" is its own row under Lines & text
 
 On-device report: in the undercut PDF options the switch sat indented under the line-art row in

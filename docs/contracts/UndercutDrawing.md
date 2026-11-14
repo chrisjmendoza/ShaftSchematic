@@ -717,6 +717,23 @@ data class UndercutRecord(
   the same meaning on two surfaces, neither reading the other, because a style meant for the
   canvases must not leak into a composer. Turning one on does not turn the other on.
 
+  **Body blends** (on-device request: a body's 45° blend up to an undercut liner drew as a
+  square corner on the strips). A blended body face draws its ramp on the detail strips at its
+  TRUE mm span — the points the surface envelope samples (`bodyBlendCurves`,
+  `ui/resolved/SurfaceSegs.kt`, the ONE sampling behind `surfaceSegsFrom` and
+  `undercutBlendCurves`), so the drawn ramp is the surface the notches are cut against. The body's
+  top is one polyline — AFT ramp, flat run, FWD ramp (`blendedBodyTop`) — and its face line stands
+  to the height the ramp reaches. A cut across the ramp erases it like any surface stroke, so the
+  solid ramp stops at the cut's edge; the part the cut removed is retraced, in the liner outline's
+  dotted ink, from that edge up to the face, where it meets the liner's dotted face
+  (`erasedBlendTraces` — read off the notches' drawn regions, so a stretch of ramp the cut's floor
+  stands above keeps its solid line and is not doubled). The retrace follows
+  `PdfPrefs.undercutLinerOutline`. Pure geometry in `geom/UndercutBlendMath.kt`
+  (`UndercutBlendMathTest`); drawn identically by the printed strip (`drawUndercutWindowProfile`,
+  `drawErasedBlendTracesPdf` — `UndercutBlendPdfTest`) and the detail canvas
+  (`drawErasedBlendTraces`). No drawn-width floor: the strips are zoomed, so the true span shows.
+  The whole-shaft overview canvas keeps `ShaftRenderer`'s own blend and draws no retrace.
+
   **Liner outline — `PdfPrefs.undercutLinerOutline`** (default `true`; Settings → PDF Export
   beside the line-art row, and the undercut preview's PDF options sheet under it, testTag
   `pdf_undercut_liner_outline`, caption "Dotted outline of each liner's original edges and OD

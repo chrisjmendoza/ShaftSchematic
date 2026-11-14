@@ -2,6 +2,7 @@
 package com.android.shaftschematic.ui.resolved
 
 import com.android.shaftschematic.geom.SurfaceSeg
+import com.android.shaftschematic.geom.UndercutBlendCurve
 import com.android.shaftschematic.geom.blendPolyline
 import com.android.shaftschematic.geom.threadSurfaceSegs
 import com.android.shaftschematic.model.LinerAuthoredReference
@@ -97,30 +98,54 @@ fun linerSurfaceSegs(
  * (`lengthMm = 0`): the seal grooves are a drawn cue, not a diameter change.
  */
 private fun blendedBodySegs(b: ResolvedBody, blends: List<BodyBlend>): List<SurfaceSeg> {
-    val mine = blends.filter { it.bodyId == b.id }
-    if (mine.isEmpty()) return listOf(SurfaceSeg(b.startMmPhysical, b.endMmPhysical, b.diaMm, b.diaMm))
-
-    val aft = mine.firstOrNull { it.end == LinerAuthoredReference.AFT }
-    val fwd = mine.firstOrNull { it.end == LinerAuthoredReference.FWD }
-    var flat0 = b.startMmPhysical
-    var flat1 = b.endMmPhysical
+    val curves = bodyBlendCurves(b, blends)
+    val flat0 = curves.firstOrNull { it.atAftFace }?.endMm ?: b.startMmPhysical
+    val flat1 = curves.firstOrNull { !it.atAftFace }?.startMm ?: b.endMmPhysical
     val out = mutableListOf<SurfaceSeg>()
-
-    fun addCurve(x0: Float, x1: Float, dia0: Float, dia1: Float, blend: BodyBlend) {
-        val pts = blendPolyline(x0, x1, dia0 / 2f, dia1 / 2f, blend.profile, chamfer = blend.chamfer())
-        for (i in 1 until pts.size) {
-            out += SurfaceSeg(pts[i - 1].xMm, pts[i].xMm, pts[i - 1].diaMm, pts[i].diaMm)
+    curves.forEach { c ->
+        for (i in 1 until c.points.size) {
+            out += SurfaceSeg(c.points[i - 1].xMm, c.points[i].xMm, c.points[i - 1].diaMm, c.points[i].diaMm)
         }
-    }
-
-    if (aft != null) {
-        val end = (b.startMmPhysical + aft.lengthMm).coerceAtMost(b.endMmPhysical)
-        if (end > b.startMmPhysical) { addCurve(b.startMmPhysical, end, aft.neighbourDiaMm, b.diaMm, aft); flat0 = end }
-    }
-    if (fwd != null) {
-        val start = (b.endMmPhysical - fwd.lengthMm).coerceAtLeast(flat0)
-        if (b.endMmPhysical > start) { addCurve(start, b.endMmPhysical, b.diaMm, fwd.neighbourDiaMm, fwd); flat1 = start }
     }
     if (flat1 > flat0) out += SurfaceSeg(flat0, flat1, b.diaMm, b.diaMm)
     return out
 }
+
+/**
+ * The ramps on [b]'s blended faces at their TRUE mm span, AFT face first — the ONE sampling
+ * behind the surface envelope ([surfaceSegsFrom]) and the ramps the undercut drawings draw
+ * ([undercutBlendCurves]). Empty for an unblended body and for a seal-only face.
+ */
+private fun bodyBlendCurves(b: ResolvedBody, blends: List<BodyBlend>): List<UndercutBlendCurve> {
+    val mine = blends.filter { it.bodyId == b.id }
+    if (mine.isEmpty()) return emptyList()
+    val aft = mine.firstOrNull { it.end == LinerAuthoredReference.AFT }
+    val fwd = mine.firstOrNull { it.end == LinerAuthoredReference.FWD }
+    var flat0 = b.startMmPhysical
+    val out = mutableListOf<UndercutBlendCurve>()
+
+    fun curve(x0: Float, x1: Float, dia0: Float, dia1: Float, blend: BodyBlend, atAft: Boolean) {
+        out += UndercutBlendCurve(
+            atAft, blendPolyline(x0, x1, dia0 / 2f, dia1 / 2f, blend.profile, chamfer = blend.chamfer()),
+        )
+    }
+
+    if (aft != null) {
+        val end = (b.startMmPhysical + aft.lengthMm).coerceAtMost(b.endMmPhysical)
+        if (end > b.startMmPhysical) { curve(b.startMmPhysical, end, aft.neighbourDiaMm, b.diaMm, aft, true); flat0 = end }
+    }
+    if (fwd != null) {
+        val start = (b.endMmPhysical - fwd.lengthMm).coerceAtLeast(flat0)
+        if (b.endMmPhysical > start) curve(start, b.endMmPhysical, b.diaMm, fwd.neighbourDiaMm, fwd, false)
+    }
+    return out
+}
+
+/** Every blended body face's ramp, aft → fwd — the undercut drawings' blend input. */
+fun undercutBlendCurves(
+    components: List<ResolvedComponent>,
+    blends: List<BodyBlend>,
+): List<UndercutBlendCurve> =
+    components.filterIsInstance<ResolvedBody>()
+        .sortedBy { it.startMmPhysical }
+        .flatMap { bodyBlendCurves(it, blends) }
