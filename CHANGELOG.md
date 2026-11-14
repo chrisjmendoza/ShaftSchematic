@@ -8,6 +8,12 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-13
 
+### fix(undercut): "Diameters inside the shaft" is its own row under Lines & text
+
+On-device report: in the undercut PDF options the switch sat indented under the line-art row in
+the Shading group, so it read as part of line art. It is now its own row in "Lines & text", with
+the other text choices. Nothing about what it prints changed.
+
 ### feat(undercut, sheets): Auto keeps two sections landscape; each sheet chooses whether it prints the date
 
 On-device ruling: now that a landscape page stacks two sections top and bottom, the undercut

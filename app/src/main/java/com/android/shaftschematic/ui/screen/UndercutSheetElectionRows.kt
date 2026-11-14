@@ -327,7 +327,7 @@ internal fun UndercutDepthShadeRow(
 
 /**
  * The "Diameters inside the shaft" switch — the app-wide `PdfPrefs.undercutDiaInside`, on the
- * Undercut tab's Drawing settings beside the same pref's row in the PDF options' Shading group and
+ * Undercut tab's Drawing settings beside the same pref's row in the PDF options' "Lines & text" group and
  * Settings → PDF Export. The printed sheet reads it under line art and shading alike (a shaded
  * sheet lightens its deepest cuts so the values stay readable). The canvas above keeps its own
  * callouts.

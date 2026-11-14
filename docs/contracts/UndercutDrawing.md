@@ -667,7 +667,7 @@ data class UndercutRecord(
   reserves no row for a value it draws inside; `resolveInsideDia` narrows the inside set until it
   holds on the shaft the strip then draws, and portrait sizing reads the set that fits a
   `UNDERCUT_CYL_MAX_FLOOR_PT` shaft. Rows: `pdf_undercut_dia_inside` (undercut PDF options,
-  Shading group, and Settings → PDF Export) and `undercut_dia_inside_switch` (Undercut tab Drawing
+  "Lines & text" group — its own row, never nested under line art, on-device report — and Settings → PDF Export) and `undercut_dia_inside_switch` (Undercut tab Drawing
   settings). Printed sheet only — the canvases keep their
   below-shaft callouts.
 
