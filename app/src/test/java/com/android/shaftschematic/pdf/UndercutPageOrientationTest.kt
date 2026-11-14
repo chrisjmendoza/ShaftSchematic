@@ -8,8 +8,9 @@ import org.junit.Test
 
 /**
  * The undercut sheet's page shape: the AUTO rule (one section landscape, two or more portrait),
- * the forced shapes, the portrait per-page cap, and the strip cells each shape lays out — portrait
- * one full-width column, landscape exactly the grid / single-strip banding it always printed.
+ * the forced shapes, the portrait per-page cap, the stacked decision, and the strip cells each
+ * layout gives — a stacked page (portrait, or landscape at two strips or three with room) one
+ * full-width column, the rest exactly the grid / single-strip banding landscape always printed.
  */
 class UndercutPageOrientationTest {
 
@@ -68,7 +69,7 @@ class UndercutPageOrientationTest {
     fun `portrait stacks every strip full width, top to bottom, inside the band`() {
         for (n in 1..4) {
             val cells = undercutStripCells(
-                portrait = true, stripCount = n,
+                stacked = true, stripCount = n,
                 bandTop = portraitBandTop, bandBottom = portraitBandBottom,
                 contentLeft = portraitLeft, contentRight = portraitRight,
             )
@@ -93,13 +94,58 @@ class UndercutPageOrientationTest {
         assertEquals(1, n - perPage)
         val reserved = 16f
         val cells = undercutStripCells(
-            portrait = true, stripCount = perPage,
+            stacked = true, stripCount = perPage,
             bandTop = portraitBandTop, bandBottom = portraitBandBottom,
             contentLeft = portraitLeft, contentRight = portraitRight,
             reservedBottomPt = reserved,
         )
         assertEquals(4, cells.size)
         assertTrue("the note's band stays free", cells.last().bottom <= portraitBandBottom - reserved + 1e-3f)
+    }
+
+    @Test
+    fun `the stacked decision - portrait always, landscape at two, at three with room, never at four`() {
+        val usable = landscapeBandBottom - landscapeBandTop
+        for (n in 0..5) assertTrue("portrait stacks (n=$n)", undercutStripsStacked(true, n, usable, List(n) { 400f }))
+        assertEquals(false, undercutStripsStacked(false, 1, usable, listOf(10f)))
+        // Two always stack, however much each strip stacks around its shaft.
+        assertTrue(undercutStripsStacked(false, 2))
+        assertTrue(undercutStripsStacked(false, 2, usable, listOf(300f, 300f)))
+        // Three light sections leave every shaft over the floor: stacked.
+        val light = listOf(60f, 70f, 60f)
+        assertTrue(undercutStackedShaftsPt(usable, light).all { it >= UNDERCUT_LANDSCAPE_STACK3_MIN_SHAFT_PT })
+        assertTrue(undercutStripsStacked(false, 3, usable, light))
+        // Three heavy ones would draw shafts under it: the grid.
+        val heavy = listOf(130f, 120f, 130f)
+        assertTrue(undercutStackedShaftsPt(usable, heavy).any { it < UNDERCUT_LANDSCAPE_STACK3_MIN_SHAFT_PT })
+        assertEquals(false, undercutStripsStacked(false, 3, usable, heavy))
+        // Right at the floor still stacks; unmeasured three keep the grid.
+        val gaps = 2 * WEAR_STRIP_GAP_PT
+        val atFloor = (usable - gaps - 3 * UNDERCUT_LANDSCAPE_STACK3_MIN_SHAFT_PT) / 3f
+        assertTrue(undercutStripsStacked(false, 3, usable, List(3) { atFloor }))
+        assertEquals(false, undercutStripsStacked(false, 3, usable, List(3) { atFloor + 1f }))
+        assertEquals(false, undercutStripsStacked(false, 3))
+        assertEquals(false, undercutStripsStacked(false, 3, usable, light.take(2)))
+        // Four never stack on landscape.
+        assertEquals(false, undercutStripsStacked(false, 4, usable, List(4) { 1f }))
+    }
+
+    @Test
+    fun `a stacked landscape page stacks two strips full width, top to bottom`() {
+        val overheads = listOf(140f, 110f)
+        val cells = undercutStripCells(
+            undercutStripsStacked(false, 2), 2, landscapeBandTop, landscapeBandBottom, landscapeLeft, landscapeRight,
+            overheadsPt = overheads,
+        )
+        assertEquals(2, cells.size)
+        cells.forEach { assertEquals(landscapeLeft, it.left, 0f); assertEquals(landscapeRight, it.right, 0f) }
+        assertTrue(cells[1].top >= cells[0].bottom + WEAR_STRIP_GAP_PT - 1e-3f)
+        assertTrue(cells.first().top >= landscapeBandTop - 1e-3f && cells.last().bottom <= landscapeBandBottom + 1e-3f)
+        // The same cells a portrait page's stacking gives in that band.
+        assertEquals(
+            undercutStripCells(true, 2, landscapeBandTop, landscapeBandBottom, landscapeLeft, landscapeRight, overheadsPt = overheads),
+            cells,
+        )
     }
 
     @Test
@@ -114,7 +160,8 @@ class UndercutPageOrientationTest {
             listOf(WearStripCell(v.stripTops[0], v.stripBottoms[0], landscapeLeft, landscapeRight)),
             undercutStripCells(false, 1, landscapeBandTop, landscapeBandBottom, landscapeLeft, landscapeRight),
         )
-        // Two or more: the 2-column grid, with and without an overflow reservation.
+        // Not stacked, two or more: the 2-column grid, with and without an overflow reservation
+        // (the sheet takes it at three without room and at four; `undercutStripsStacked`).
         for (n in 2..4) {
             for (reserved in listOf(0f, 16f)) {
                 val grid = computeWearStripGridLayout(
