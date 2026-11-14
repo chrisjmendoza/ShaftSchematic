@@ -352,6 +352,34 @@ class UndercutPortraitRenderTest {
         // ones keep the leader.
         val insideDia = PdfPrefs(undercutLineArt = true, undercutDiaInside = true)
         render("inside_dia_four.png", fourSpec, fourProject, fourRecord, pdfPrefs = insideDia)
+        // Three sections on a forced landscape page: stacked when every shaft keeps its floor
+        // height, the 2-column grid otherwise. L3's cuts dropped (one busy section left), then L4's
+        // (both busy sections kept).
+        val landscape = UndercutPageOrientation.LANDSCAPE
+        render(
+            "stack_three_landscape.png", fourSpec, fourProject,
+            fourRecord.copy(undercuts = fourRecord.undercuts.filterNot { it.referenceLinerId == "L3" }, pageOrientation = landscape),
+        )
+        val busyThree = fourRecord.copy(undercuts = fourRecord.undercuts.filterNot { it.referenceLinerId == "L4" }, pageOrientation = landscape)
+        render("stack_three_landscape_busy.png", fourSpec, fourProject, busyThree)
+        // Heavier strips on the same three: baseline tiers, then larger text.
+        render(
+            "stack_three_landscape_busy_from_set.png", fourSpec, fourProject,
+            busyThree.copy(railStyle = UndercutRailStyle.FROM_SET),
+        )
+        render(
+            "stack_three_landscape_busy_text150.png", fourSpec, fourProject, busyThree,
+            pdfPrefs = PdfPrefs(dimTextScale = 1.5f),
+        )
+        // The blank write-in template on a landscape page: its started liner strips follow the same rule.
+        render(
+            "stack_blank_landscape.png", polar.spec, polarProject,
+            polar.undercutRecord.copy(pageOrientation = landscape), blank = true,
+        )
+        render(
+            "stack_blank_landscape_two.png", polar.spec, polarProject,
+            polar.undercutRecord.copy(pageOrientation = landscape, excludedLinerIds = listOf(polarLiners[1].id)), blank = true,
+        )
         // An on-device job file, when one is named.
         System.getenv("UNDERCUT_RENDER_DOC")?.let { path ->
             val doc = ShaftDocCodec.decode(File(path).readText())
@@ -363,6 +391,10 @@ class UndercutPortraitRenderTest {
                 "inside_dia_doc_shaded.png", doc.spec, polarProject, doc.undercutRecord.copy(drawToSet = true),
                 pdfPrefs = PdfPrefs(undercutDiaInside = true),
             )
+            // Two sections on a landscape page: stacked top and bottom, each the full width.
+            val stackRecord = doc.undercutRecord.copy(drawToSet = true, pageOrientation = UndercutPageOrientation.LANDSCAPE)
+            render("stack_doc_landscape.png", doc.spec, polarProject, stackRecord)
+            render("stack_doc_landscape_inside.png", doc.spec, polarProject, stackRecord, pdfPrefs = insideDia)
         }
     }
 

@@ -16,6 +16,15 @@ sheet the value prints straight on the cut's shade, and a depth-shaded sheet lig
 cuts (the ramp's dark end drops from 35% to 20%) so the numbers stay readable. Sheets with the
 switch off are unchanged.
 
+### feat(undercut): a landscape sheet stacks two or three sections top and bottom
+
+On-device request: on a landscape page two sections sat side by side at half the page each, and
+the small cuts crowded. A landscape undercut sheet now stacks two sections top and bottom at the
+full page width, the way the portrait page does, and three sections too whenever every shaft can
+still draw at least about 2/3" tall; a sheet too busy for that (three sections with From S.E.T.
+rails, say) keeps the side-by-side layout. One section, four or more, and portrait pages are
+unchanged, and Auto still picks the page as before.
+
 ### feat(undercut): diameters written inside the shaft (line art)
 
 On-device request, from a shop hand sketch: with undercut line art on, the new "Diameters inside
