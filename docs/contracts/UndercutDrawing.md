@@ -2057,8 +2057,20 @@ stays landscape.
   Output tab's Export all start the page `undercutSheetOrientation` resolves. The composer reads
   the page shape off `page.info`; a writer that started a fixed landscape page would draw a
   portrait layout off the page.
-- **Landscape** is byte-identical to the layout above: one strip full width, 2+ in the 2-column
-  grid, four per page.
+- **Landscape**: one strip full width; **two strips STACK top and bottom at full width, and three
+  stack when they fit** (on-device request: at half the page each the small cuts crowded); a
+  three-strip sheet that does not fit, and four per page, keep the 2-column grid. ONE pure
+  predicate, `undercutStripsStacked(portrait, stripCount, usablePt, overheadsPt)`
+  (`pdf/UndercutStripLayout.kt`): portrait always; landscape 2 always; landscape 3 only while
+  every shaft keeps `UNDERCUT_LANDSCAPE_STACK3_MIN_SHAFT_PT` (48 pt) — `undercutStackedShaftsPt`,
+  each stacked cell less that strip's measured needs (`verticalOverheadPt`, taken at the base text
+  size so the layout cannot flip between text-size steps); 1 and 4+ never. `drawUndercutSheet`
+  decides `stacked` ONCE and the strip cells (`undercutStripCells(stacked, …)`), the per-strip
+  sizing plans and the title air read it — a stacked landscape page uses the portrait page's
+  stacking machinery, strips sized to what they draw, each title under its own strip. Page-shape
+  reads (page size, margins, header fit, the per-page cap) stay on `portrait`; the strip count is
+  the PRINTED strips; `undercutSheetOrientation` / AUTO are unchanged; the blank draft's started
+  strips follow the same rule.
 - **Portrait cells** — ONE column, every strip the full content width, stacked top to bottom
   AFT → FWD, capped at `UNDERCUT_PORTRAIT_MAX_PER_PAGE` = 4 (equal to the grid's cap, so choosing
   portrait never pushes a section into the "+N more" note). Cell heights come from the pure
