@@ -203,9 +203,16 @@ const val UNDERCUT_DEPTH_SHADE_MAX_ALPHA = 0.35f
  * nearest the steel reads dark (on-device request: contrast between cuts to show depth and
  * separate the sections). The ONE ramp both draw sites read.
  */
-fun undercutDepthShadeAlpha(depthFrac: Float): Float =
+fun undercutDepthShadeAlpha(depthFrac: Float, maxAlpha: Float = UNDERCUT_DEPTH_SHADE_MAX_ALPHA): Float =
     UNDERCUT_DEPTH_SHADE_MIN_ALPHA +
-        (UNDERCUT_DEPTH_SHADE_MAX_ALPHA - UNDERCUT_DEPTH_SHADE_MIN_ALPHA) * depthFrac.coerceIn(0f, 1f)
+        (maxAlpha - UNDERCUT_DEPTH_SHADE_MIN_ALPHA) * depthFrac.coerceIn(0f, 1f)
+
+/**
+ * The dark end of the ramp on a sheet that writes the diameters INSIDE the cuts
+ * (`PdfPrefs.undercutDiaInside`): lighter, so a value printed on the deepest cut stays easy to
+ * read (on-device direction: "we'll have to lighten the deep cuts").
+ */
+const val UNDERCUT_DEPTH_SHADE_MAX_ALPHA_WITH_TEXT = 0.20f
 
 /**
  * Each cut's [UndercutNotch.depthMm]: its TRUE depth below its SECTION's reference surface, 0 for

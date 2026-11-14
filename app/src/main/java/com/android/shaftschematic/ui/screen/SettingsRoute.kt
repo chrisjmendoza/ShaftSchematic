@@ -1080,11 +1080,9 @@ fun SettingsRoute(
                             )
                         }
                     }
-                    // Read by the sheet under line art alone, so it is offered only then.
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(
                             checked = pdfUndercutDiaInside,
-                            enabled = pdfUndercutLineArt,
                             onCheckedChange = { vm.setPdfUndercutDiaInside(it) },
                             modifier = Modifier.testTag("pdf_undercut_dia_inside"),
                         )
@@ -1092,8 +1090,6 @@ fun SettingsRoute(
                         Column {
                             Text(
                                 "Undercut drawing: diameters inside the shaft",
-                                color = if (pdfUndercutLineArt) MaterialTheme.colorScheme.onSurface
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                             Text(
                                 UNDERCUT_DIA_INSIDE_CAPTION,

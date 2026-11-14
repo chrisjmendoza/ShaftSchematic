@@ -648,9 +648,12 @@ data class UndercutRecord(
   flat tone.
 
   **Diameters inside the shaft — `PdfPrefs.undercutDiaInside`** (default `false`; on-device
-  request from a shop hand sketch, a toggle so sheets can be printed both ways). Read ONLY under
-  print line art (`undercutDiaInside && undercutLineArt`, never on a blank draft or a started
-  strip); off — or line art off — is byte-identical. On the printed detail strips each Ø callout
+  request from a shop hand sketch, a toggle so sheets can be printed both ways). Read under
+  line art and on a shaded sheet alike (never on a blank draft or a started strip); off is
+  byte-identical. On a shaded sheet the value prints straight on the cut's shade with no white
+  halo (`drawUndercutInsideDia(halo = null)`), and under depth shading the ramp's dark end drops
+  from 35% to `UNDERCUT_DEPTH_SHADE_MAX_ALPHA_WITH_TEXT` (20%) on that sheet so a value on the
+  deepest cut stays readable (on-device direction: "we'll have to lighten the deep cuts"). On the printed detail strips each Ø callout
   station whose value fits is written INSIDE the shaft as a vertical dimension
   (`drawUndercutInsideDia`): a `dim` line from the cut's top floor to its bottom floor at the
   middle of the floor piece the station sits in, the rails' slim 2:1 arrowhead on each floor line
@@ -665,7 +668,7 @@ data class UndercutRecord(
   holds on the shaft the strip then draws, and portrait sizing reads the set that fits a
   `UNDERCUT_CYL_MAX_FLOOR_PT` shaft. Rows: `pdf_undercut_dia_inside` (undercut PDF options,
   Shading group, and Settings → PDF Export) and `undercut_dia_inside_switch` (Undercut tab Drawing
-  settings), each greyed while line art is off. Printed sheet only — the canvases keep their
+  settings). Printed sheet only — the canvases keep their
   below-shaft callouts.
 
   **Keyways on the detail strips** (on-device request: a strip ending on a body did not read as

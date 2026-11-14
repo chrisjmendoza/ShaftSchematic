@@ -8,6 +8,14 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-13
 
+### feat(undercut): diameters inside the shaft on shaded sheets too
+
+On-device verdict on the trial render: "Diameters inside the shaft" now works with shading as
+well as line art, and its three switches are no longer greyed while line art is off. On a shaded
+sheet the value prints straight on the cut's shade, and a depth-shaded sheet lightens its deepest
+cuts (the ramp's dark end drops from 35% to 20%) so the numbers stay readable. Sheets with the
+switch off are unchanged.
+
 ### feat(undercut): a landscape sheet stacks two or three sections top and bottom
 
 On-device request: on a landscape page two sections sat side by side at half the page each, and

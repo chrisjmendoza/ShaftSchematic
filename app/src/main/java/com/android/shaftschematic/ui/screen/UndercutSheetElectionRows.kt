@@ -328,15 +328,15 @@ internal fun UndercutDepthShadeRow(
 /**
  * The "Diameters inside the shaft" switch — the app-wide `PdfPrefs.undercutDiaInside`, on the
  * Undercut tab's Drawing settings beside the same pref's row in the PDF options' Shading group and
- * Settings → PDF Export. Enabled only while print line art is on: the printed sheet writes its
- * values inside the shaft under line art alone. The canvas above keeps its own callouts.
+ * Settings → PDF Export. The printed sheet reads it under line art and shading alike (a shaded
+ * sheet lightens its deepest cuts so the values stay readable). The canvas above keeps its own
+ * callouts.
  */
 @Composable
 internal fun UndercutDiaInsideRow(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     testTag: String,
-    enabled: Boolean,
     modifier: Modifier = Modifier,
 ) {
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -344,8 +344,6 @@ internal fun UndercutDiaInsideRow(
             Text(
                 UNDERCUT_DIA_INSIDE_LABEL,
                 style = MaterialTheme.typography.bodyLarge,
-                color = if (enabled) MaterialTheme.colorScheme.onSurface
-                else MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
                 "$UNDERCUT_DIA_INSIDE_CAPTION App-wide.",
@@ -357,7 +355,6 @@ internal fun UndercutDiaInsideRow(
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange,
-            enabled = enabled,
             modifier = Modifier.testTag(testTag),
         )
     }
