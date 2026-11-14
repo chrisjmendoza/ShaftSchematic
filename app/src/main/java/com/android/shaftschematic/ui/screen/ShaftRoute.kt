@@ -239,6 +239,8 @@ fun ShaftRoute(
     val vessel          by vm.vessel.collectAsState()
     val jobNumber       by vm.jobNumber.collectAsState()
     val item            by vm.item.collectAsState()
+    val sheetDateMode   by vm.sheetDateMode.collectAsState()
+    val sheetDateText   by vm.sheetDateText.collectAsState()
     val shaftPosition   by vm.shaftPosition.collectAsState()
     val notes           by vm.notes.collectAsState()
     val originalResolved by vm.resolvedComponents.collectAsState()
@@ -371,6 +373,8 @@ fun ShaftRoute(
         vessel = vessel,
         jobNumber = jobNumber,
         item = item,
+        sheetDateMode = sheetDateMode,
+        sheetDateText = sheetDateText,
         shaftPosition = shaftPosition,
         notes = notes,
         showGrid = showGrid,
@@ -410,6 +414,8 @@ fun ShaftRoute(
         onSetVessel = vm::setVessel,
         onSetJobNumber = vm::setJobNumber,
         onSetItem = vm::setItem,
+        onSetSheetDateMode = vm::setSheetDateMode,
+        onSetSheetDateText = vm::setSheetDateText,
         onSetShaftPosition = vm::setShaftPosition,
         onSetNotes = vm::setNotes,
         // Every mutation below names its [target] explicitly. A callable reference

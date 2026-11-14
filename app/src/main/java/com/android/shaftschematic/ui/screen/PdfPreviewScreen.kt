@@ -165,6 +165,8 @@ fun PdfPreviewScreen(
     val vessel by vm.vessel.collectAsState()
     val jobNumber by vm.jobNumber.collectAsState()
     val item by vm.item.collectAsState()
+    val sheetDateMode by vm.sheetDateMode.collectAsState()
+    val sheetDateText by vm.sheetDateText.collectAsState()
     val shaftPosition by vm.shaftPosition.collectAsState()
     val originalResolved by vm.resolvedComponents.collectAsState()
     val finalResolved by vm.finalResolvedComponents.collectAsState()
@@ -216,10 +218,11 @@ fun PdfPreviewScreen(
     // A final sheet is marked so it can never be mistaken for the original — the label
     // prints in the footer job block and as a badge beside the Side badge.
     val drawingLabel = if (isFinal) FINAL_DRAWING_LABEL else ""
-    val project = remember(customer, vessel, shaftPosition, jobNumber, item, drawingLabel) {
+    val project = remember(customer, vessel, shaftPosition, jobNumber, item, sheetDateMode, sheetDateText, drawingLabel) {
         ProjectInfo(
             customer = customer, vessel = vessel, side = shaftPosition,
-            jobNumber = jobNumber, item = item, drawingLabel = drawingLabel,
+            jobNumber = jobNumber, item = item,
+            dateMode = sheetDateMode, dateText = sheetDateText, drawingLabel = drawingLabel,
         )
     }
     val options = remember(pdfExportMode, pdfBlankDraft, pdfBlankDiaCallouts) {
@@ -256,6 +259,7 @@ fun PdfPreviewScreen(
                 project = ProjectInfo(
                     customer = customer, vessel = vessel,
                     side = shaftPosition, jobNumber = jobNumber, item = item,
+                    dateMode = sheetDateMode, dateText = sheetDateText,
                     drawingLabel = drawingLabel,
                 ),
                 options = PdfExportOptions(

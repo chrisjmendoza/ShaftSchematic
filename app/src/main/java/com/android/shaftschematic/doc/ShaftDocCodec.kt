@@ -4,6 +4,7 @@ import com.android.shaftschematic.model.RunoutReadings
 import com.android.shaftschematic.model.RunoutStationPlacements
 import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.SheetDateMode
 import com.android.shaftschematic.model.UndercutRecord
 import com.android.shaftschematic.model.WearRecord
 import com.android.shaftschematic.model.normalized
@@ -75,6 +76,19 @@ object ShaftDocCodec {
          */
         @SerialName("item")
         val item: String = "",
+        /**
+         * Which date the printed sheets carry (`SheetDateMode`: TODAY | CUSTOM | NONE, by name,
+         * an unknown name → TODAY). Absent in older files → TODAY, which prints the composing
+         * day exactly as before. Additive + defaulted: no version bump needed.
+         */
+        @SerialName("sheet_date_mode")
+        val sheetDateMode: SheetDateMode = SheetDateMode.TODAY,
+        /**
+         * The typed date printed under CUSTOM — verbatim, never parsed (golden rule). Absent in
+         * older files → blank. Kept when the mode changes, so Custom brings it back.
+         */
+        @SerialName("sheet_date_text")
+        val sheetDateText: String = "",
         @SerialName("shaft_position")
         val shaftPosition: ShaftPosition = ShaftPosition.OTHER,
         val notes: String = "",
@@ -166,6 +180,8 @@ object ShaftDocCodec {
         val customer: String,
         val vessel: String,
         val item: String,
+        val sheetDateMode: SheetDateMode,
+        val sheetDateText: String,
         val shaftPosition: ShaftPosition,
         val notes: String,
         val spec: ShaftSpec,
@@ -279,6 +295,8 @@ object ShaftDocCodec {
             customer = d.customer,
             vessel = d.vessel,
             item = d.item,
+            sheetDateMode = d.sheetDateMode,
+            sheetDateText = d.sheetDateText,
             shaftPosition = d.shaftPosition,
             notes = d.notes,
             spec = d.spec,
@@ -310,6 +328,8 @@ object ShaftDocCodec {
                     customer = doc.customer,
                     vessel = doc.vessel,
                     item = doc.item,
+                    sheetDateMode = doc.sheetDateMode,
+                    sheetDateText = doc.sheetDateText,
                     shaftPosition = doc.shaftPosition,
                     notes = doc.notes,
                     spec = normalizedSpec,
@@ -360,6 +380,8 @@ object ShaftDocCodec {
             customer = "",
             vessel = "",
             item = "",
+            sheetDateMode = SheetDateMode.TODAY,
+            sheetDateText = "",
             shaftPosition = ShaftPosition.OTHER,
             notes = "",
             spec = legacy,

@@ -109,6 +109,7 @@ import com.android.shaftschematic.model.SlotAuthoredReference
 import com.android.shaftschematic.model.MM_PER_IN
 import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.SheetDateMode
 import com.android.shaftschematic.model.collidingIds
 import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.ui.adaptive.LocalSidebarPermanent
@@ -187,6 +188,8 @@ fun ShaftScreen(
     vessel: String,
     jobNumber: String,
     item: String,
+    sheetDateMode: SheetDateMode,
+    sheetDateText: String,
     shaftPosition: ShaftPosition,
     notes: String,
     showGrid: Boolean,
@@ -243,6 +246,8 @@ fun ShaftScreen(
     onSetVessel: (String) -> Unit,
     onSetJobNumber: (String) -> Unit,
     onSetItem: (String) -> Unit,
+    onSetSheetDateMode: (SheetDateMode) -> Unit,
+    onSetSheetDateText: (String) -> Unit,
     onSetShaftPosition: (ShaftPosition) -> Unit,
     onSetNotes: (String) -> Unit,
     onSetOverallLengthMm: (Float) -> Unit,
@@ -655,6 +660,8 @@ fun ShaftScreen(
                 vessel = vessel,
                 jobNumber = jobNumber,
                 item = item,
+                sheetDateMode = sheetDateMode,
+                sheetDateText = sheetDateText,
                 shaftPosition = shaftPosition,
                 notes = notes,
                 onSetOverallLengthMm = onSetOverallLengthMm,
@@ -663,6 +670,8 @@ fun ShaftScreen(
                 onSetVessel = onSetVessel,
                 onSetJobNumber = onSetJobNumber,
                 onSetItem = onSetItem,
+                onSetSheetDateMode = onSetSheetDateMode,
+                onSetSheetDateText = onSetSheetDateText,
                 onSetShaftPosition = onSetShaftPosition,
                 onSetNotes = onSetNotes,
                 showOalDebugLabel = showOalDebugLabel,

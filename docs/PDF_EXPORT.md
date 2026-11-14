@@ -189,7 +189,14 @@ Top of page, full width.
 ### Fields:
 - Project / Drawing Title
 - Description (optional)
-- Date
+- Date — the document's **"Date on sheets"** choice (start card; `ProjectInfo.dateMode` /
+  `dateText`, envelope `sheet_date_mode` / `sheet_date_text`): **Today** (default, every older
+  document — the composing day, `yyyy-MM-dd`), **Custom** (the typed text printed VERBATIM, never
+  parsed; blank prints today), or **None** (the `Date:` piece is left off — the header line drops
+  it with its separator, the footer job block drops the line). ONE resolver,
+  `ProjectInfo.printedDateOrNull(today)` (`model/ProjectInfo.kt`), behind all three print sites:
+  `drawSheetHeader` (wear + undercut), `drawRunoutHeader` (classic runout) and `planFooter`
+  (schematic + consolidated footer job block). Blank drafts always rule a `Date:` line.
 - Units — printed values follow the document's **active unit** (inches or mm), not always
   mm. Every printed length/diameter goes through `formatLenWithUnit` / `formatDiaWithUnit`
   with the document's `UnitSystem`; only the model layer is unconditionally mm.

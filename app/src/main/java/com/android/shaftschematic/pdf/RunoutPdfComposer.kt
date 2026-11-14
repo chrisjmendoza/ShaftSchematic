@@ -81,9 +81,6 @@ import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.drawRichText
 import com.android.shaftschematic.util.formatRunoutValue
 import com.android.shaftschematic.util.measureRichText
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.asin
 import kotlin.math.cos
@@ -1703,8 +1700,7 @@ private fun drawRunoutHeader(
             x = drawLabelWithRule(c, label, x, y, text, maxRight = right)
         }
     } else {
-        val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-        val headerText = jobInfoHeaderLine(project, date)
+        val headerText = jobInfoHeaderLine(project, project.printedDateOrNull(sheetTodayDate()))
         c.drawText(ellipsizeToWidth(headerText, text, right - left), left, y, text)
     }
 

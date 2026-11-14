@@ -386,6 +386,8 @@ private fun rememberFinalRunoutSheet(
     val vessel by vm.vessel.collectAsState()
     val jobNumber by vm.jobNumber.collectAsState()
     val item by vm.item.collectAsState()
+    val sheetDateMode by vm.sheetDateMode.collectAsState()
+    val sheetDateText by vm.sheetDateText.collectAsState()
     val shaftPosition by vm.shaftPosition.collectAsState()
     val runoutConfig by vm.runoutConfig.collectAsState()
     val lineThicknessScale by vm.lineThicknessScale.collectAsState()
@@ -419,6 +421,7 @@ private fun rememberFinalRunoutSheet(
                         project = ProjectInfo(
                             customer = customer, vessel = vessel, side = shaftPosition,
                             jobNumber = jobNumber, item = item,
+                            dateMode = sheetDateMode, dateText = sheetDateText,
                             drawingLabel = FINAL_DRAWING_LABEL,
                         ),
                         unit = unit,
@@ -448,6 +451,7 @@ private fun rememberFinalRunoutSheet(
                     val projectSnapshot = ProjectInfo(
                         customer = customer, vessel = vessel, side = shaftPosition,
                         jobNumber = jobNumber, item = item,
+                        dateMode = sheetDateMode, dateText = sheetDateText,
                         drawingLabel = FINAL_DRAWING_LABEL,
                     )
                     val unitSnapshot = unit

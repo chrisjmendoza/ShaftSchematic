@@ -113,6 +113,8 @@ fun PdfExportRoute(
     val vessel by vm.vessel.collectAsState()
     val jobNumber by vm.jobNumber.collectAsState()
     val item by vm.item.collectAsState()
+    val sheetDateMode by vm.sheetDateMode.collectAsState()
+    val sheetDateText by vm.sheetDateText.collectAsState()
     val shaftPosition by vm.shaftPosition.collectAsState()
     val currentDocumentName by vm.currentDocumentName.collectAsState()
 
@@ -138,6 +140,8 @@ fun PdfExportRoute(
                 side = shaftPosition,
                 jobNumber = jobNumber,
                 item = item,
+                dateMode = sheetDateMode,
+                dateText = sheetDateText,
                 drawingLabel = drawingLabel,
             )
 

@@ -162,7 +162,7 @@
     <dt>History</dt>
     <dd  class="keep">A menu holding <span class="ui">Undo</span> and <span class="ui">Redo</span>. History covers both drawings and every reading and mark on the job, for as long as the job is open; see <a href="#editor-history">Undo and redo</a>.</dd>
     <dt>Project information</dt>
-    <dd  class="keep">Goes to the <span class="ui">Shaft &amp; job</span> card, where <span class="ui">Job Number</span>, <span class="ui">Customer</span>, <span class="ui">Vessel</span>, <span class="ui">Item (optional)</span>, <span class="ui">Shaft Position</span> and <span class="ui">Notes</span> are typed; they print in the sheet footers (see <a href="#editor-project-info">Project information</a>).</dd>
+    <dd  class="keep">Goes to the <span class="ui">Shaft &amp; job</span> card, where <span class="ui">Job Number</span>, <span class="ui">Customer</span>, <span class="ui">Vessel</span>, <span class="ui">Item (optional)</span>, <span class="ui">Shaft Position</span>, <span class="ui">Date on sheets</span> and <span class="ui">Notes</span> are set; they print in the sheet footers (see <a href="#editor-project-info">Project information</a>).</dd>
     <dt>New, Open, Save</dt>
     <dd  class="keep">Start a blank shaft, open a saved one, or save this one. New and Open ask about unsaved changes first.</dd>
     <dt>PDF preview</dt>
@@ -244,10 +244,11 @@
       <tr><td><span class="ui">Vessel</span></td><td>As “Vessel:”.</td></tr>
       <tr><td><span class="ui">Item (optional)</span></td><td>As “Item:”, a designation such as “Tail shaft”. Left blank, the line is left off the sheet entirely.</td></tr>
       <tr><td><span class="ui">Shaft Position</span></td><td><span class="ui">PORT</span>, <span class="ui">STBD</span>, <span class="ui">Center</span> or <span class="ui">Other</span>. Prints as the Side; <span class="ui">Other</span> prints no side.</td></tr>
+      <tr><td><span class="ui">Date on sheets</span></td><td>As “Date:”. <span class="ui">Today</span> (the default) prints the day the sheet is made. <span class="ui">Custom</span> opens a <span class="ui">Date</span> field: type the date the work was done and it prints exactly as you typed it, such as “11/6/2026”. <span class="ui">None</span> leaves the date off the sheet entirely.</td></tr>
       <tr><td><span class="ui">Notes</span></td><td>Not printed. Notes stay with the job file for the office.</td></tr>
     </tbody>
   </table>
-  <p  class="keep">The sheet date is not typed: every sheet prints the date it was made. A field is saved when you move on from it (the keyboard's Next key does that) or tap the green ✓ on the Save bar; the red ✗ puts back what it held. Swiping away with a field unsaved asks <span class="ui">Save changes?</span> first, so nothing you typed is lost. <span class="ui">Shaft Position</span> is saved the moment you pick it.</p>
+  <p  class="keep">The date choice applies to every sheet the job prints, and a blank draft still carries a “Date:” line to fill in by hand. A field is saved when you move on from it (the keyboard's Next key does that) or tap the green ✓ on the Save bar; the red ✗ puts back what it held. Swiping away with a field unsaved asks <span class="ui">Save changes?</span> first, so nothing you typed is lost. <span class="ui">Shaft Position</span> and the <span class="ui">Date on sheets</span> choice are saved the moment you pick them.</p>
   <aside class="tip"><p  class="keep">Fill in the project information before the first save. The suggested file name is built from it, and the mate duplicate copies it across.</p></aside>
 
   <h3 id="editor-naming">Naming the job</h3>
@@ -503,6 +504,7 @@
       <tr><td>Component names, the unit, per-component units, dual-unit display</td><td>Wear marks, pits and diameter readings</td></tr>
       <tr><td>The job's sheet settings, such as shaft height</td><td>Undercuts and worn sections</td></tr>
       <tr><td>Item and Notes</td><td>The Final schematic</td></tr>
+      <tr><td></td><td>A typed sheet date: the mate prints today's until you set its own</td></tr>
     </tbody>
   </table>
   <aside class="warn"><p  class="keep">Measurements belong to the shaft they were taken on. The mate starts with none so that one shaft's readings can never appear on the other's sheets as if they had been measured there. Take the mate's own readings.</p></aside>
@@ -1625,7 +1627,7 @@
       <tr><td>“Length:”</td><td>Taper length.</td></tr>
       <tr><td>“KW:”</td><td>Taper keyway, width × depth × length.</td></tr>
       <tr><td>“Thread:”</td><td>Major Ø × threads per inch × length (a metric thread prints its designation × length).</td></tr>
-      <tr><td>“Customer:” “Vessel:” “Job #:” “Item:” “Date:”</td><td>The job. Item prints only when the office filled it in. The date is the day the sheet was printed.</td></tr>
+      <tr><td>“Customer:” “Vessel:” “Job #:” “Item:” “Date:”</td><td>The job. Item prints only when the office filled it in. The date is the day the sheet was printed, or the date typed under <span class="ui">Date on sheets</span>; with that set to <span class="ui">None</span> there is no date line.</td></tr>
       <tr><td>Side badge</td><td>“PORT”, “STBD” (starboard) or “CENTER”, in bold under the job block.</td></tr>
     </tbody>
   </table>

@@ -1764,5 +1764,17 @@ first-OAL "Shaft diameter" prompt: the diameter field sits under the OAL on the 
 what the prompt existed to provide.
 See `docs/contracts/OverallLength.md`.
 
+**"Date on sheets"** (project information on the start card; on-device request — the work is not
+always done the day the sheet prints) is per document: `ProjectInfo.dateMode` (`SheetDateMode`
+TODAY | CUSTOM | NONE, by name, unknown → TODAY) + `dateText`, envelope `sheet_date_mode` /
+`sheet_date_text`, both in the autosave snapshot's builder AND combine (not in `EditState` — no
+project field undoes). Today (default, every older document) prints the composing day; Custom
+prints the typed text VERBATIM (golden rule — never parsed, not even trimmed; blank prints today);
+None leaves the `Date:` piece off the header line and the footer job block. ONE resolver,
+`ProjectInfo.printedDateOrNull(today)`, behind all three print sites — `drawSheetHeader`
+(wear/undercut), `drawRunoutHeader` and `planFooter` (schematic/consolidated); no site decides on
+its own. Blank drafts always rule `Date:`. Every route that builds a `ProjectInfo` passes both
+values; New, a template and a mate duplicate reset to Today. See `docs/PDF_EXPORT.md` §4.
+
 ## Commit policy
 Do **not** auto-commit. The user reviews changes before every commit.

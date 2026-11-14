@@ -10,6 +10,7 @@ import com.android.shaftschematic.model.RunoutReadings
 import com.android.shaftschematic.model.RunoutStationPlacements
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.ShaftPosition
+import com.android.shaftschematic.model.SheetDateMode
 import com.android.shaftschematic.model.UndercutRecord
 import com.android.shaftschematic.model.WearRecord
 import com.android.shaftschematic.settings.RunoutConfig
@@ -95,6 +96,10 @@ object AutosaveManager {
         // previous behaviour exactly. A whole spec, not a reference mark: a session that has
         // one and loses it on restore has lost drawing work.
         val finalSpec: ShaftSpec? = null,
+        // Added (sheet date): which date the printed sheets carry and the typed Custom date.
+        // Absent in older drafts; TODAY + blank print the composing day as before.
+        val sheetDateMode: SheetDateMode = SheetDateMode.TODAY,
+        val sheetDateText: String = "",
     )
 
     /**

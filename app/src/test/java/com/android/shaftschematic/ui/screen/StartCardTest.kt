@@ -23,6 +23,7 @@ import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.requestFocus
 import androidx.test.core.app.ApplicationProvider
 import com.android.shaftschematic.model.ShaftPosition
+import com.android.shaftschematic.model.SheetDateMode
 import com.android.shaftschematic.ui.util.buildLinerTitleById
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.addLinerAt
@@ -338,6 +339,33 @@ class StartCardTest {
         // And they read back from the document.
         assertEquals("Acme Marine", fieldText(PROJECT_INFO_CUSTOMER_TAG))
         assertEquals("24-1138", fieldText(PROJECT_INFO_JOB_NUMBER_TAG))
+    }
+
+    @Test
+    fun `the date chips pick the sheet date and Custom types it verbatim`() {
+        val vm = freshVm()
+        host(vm)
+
+        // Today: the caption explains it, and no date field is offered.
+        rule.onNodeWithText(SHEET_DATE_TODAY_CAPTION).performScrollTo().assertIsDisplayed()
+        rule.onAllNodesWithTag(START_DATE_TEXT_TAG).assertCountEquals(0)
+
+        rule.onNodeWithTag(START_DATE_MODE_CUSTOM_TAG).performScrollTo().performClick()
+        rule.waitForIdle()
+        assertEquals("a chip commits on tap", SheetDateMode.CUSTOM, vm.sheetDateMode.value)
+        rule.onAllNodesWithText(SHEET_DATE_TODAY_CAPTION).assertCountEquals(0)
+
+        type(START_DATE_TEXT_TAG, "11/6/2026")
+        assertEquals("typing alone commits nothing", "", vm.sheetDateText.value)
+        save()
+        assertEquals("11/6/2026", vm.sheetDateText.value)
+
+        rule.onNodeWithTag(START_DATE_MODE_NONE_TAG).performScrollTo()
+        rule.onNodeWithTag(START_DATE_MODE_NONE_TAG).performClick()
+        rule.waitForIdle()
+        assertEquals(SheetDateMode.NONE, vm.sheetDateMode.value)
+        rule.onAllNodesWithTag(START_DATE_TEXT_TAG).assertCountEquals(0)
+        assertEquals("the typed date is kept for Custom", "11/6/2026", vm.sheetDateText.value)
     }
 
     @Test

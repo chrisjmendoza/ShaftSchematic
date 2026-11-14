@@ -84,5 +84,7 @@ fun AutosaveManager.SessionSnapshot.isDefaultSession(): Boolean {
         vessel.isBlank() &&
         jobNumber.isBlank() &&
         item.isBlank() &&
+        sheetDateMode == com.android.shaftschematic.model.SheetDateMode.TODAY &&
+        sheetDateText.isBlank() &&
         notes.isBlank()
 }

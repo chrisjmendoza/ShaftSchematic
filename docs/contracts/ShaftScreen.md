@@ -66,7 +66,17 @@ closing the dialog never drops the cursor and keyboard into another field. With
   (`start_card_shaft_dia`) side by side on one row (stacked only on a phone at a large system
   font), with the note that a section of bare shaft takes its own Ø on its card
   (`start_card_dia_note`), then **Project information** — Job Number, Customer, Vessel, Item
-  (optional), Shaft Position, Notes (`project_info_{job_number,customer,vessel,item,position,notes}`).
+  (optional), Shaft Position, **Date on sheets**, Notes
+  (`project_info_{job_number,customer,vessel,item,position,notes}`). "Date on sheets" is the
+  document's printed date (on-device request — the work is not always done the day the sheet is
+  printed): chips **Today | Custom | None** (`start_date_mode_{today,custom,none}`, the shared
+  labelled `ChipRow`), a "Prints the day the sheet is made." caption under them while Today is
+  chosen, and while Custom is chosen a plain-text **Date** field (`start_date_text`,
+  `CommitTextField` — commits like the other project fields, stored and printed VERBATIM). A chip
+  commits on tap. `ShaftViewModel.sheetDateMode` / `sheetDateText`, in the envelope as
+  `sheet_date_mode` / `sheet_date_text` and in the autosave snapshot (builder AND combine); not
+  in `EditState` (no project field is undoable). New and a template reset it to Today; a mate
+  duplicate does too. Printing: see `docs/PDF_EXPORT.md` §4 (Date).
   It is NOT a component: no resolved id, no remove button, rename editor or unit chip; nothing
   deletes, reorders or pushes it out of first place. The pager's page 0 is the start card and
   component row `i` is page `i + 1`; `carouselSelectedPage` / `componentIdForPage`
