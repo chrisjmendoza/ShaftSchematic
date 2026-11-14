@@ -127,6 +127,7 @@ import com.android.shaftschematic.ui.viewmodel.setShowCouplingFace
 import com.android.shaftschematic.ui.viewmodel.setShowDyePenTest
 import com.android.shaftschematic.ui.viewmodel.setDyePenResult
 import com.android.shaftschematic.model.DyePenResult
+import com.android.shaftschematic.model.SheetDateSheet
 import com.android.shaftschematic.ui.viewmodel.setUndercutPageOrientation
 import com.android.shaftschematic.ui.viewmodel.setWearCompactStrips
 import com.android.shaftschematic.ui.viewmodel.setWearShowShaftProfile
@@ -706,6 +707,11 @@ internal fun RunoutWearOptionsSheet(
      * "Sections to print" — composed under the "Page" row; read only with [undercutPageOrientation].
      */
     undercutContentRows: (@Composable () -> Unit)? = null,
+    /**
+     * Which sheet this panel tunes. Non-null shows the per-job "Date on this sheet" switch
+     * ([SheetDateOnSheetRow]) under the Content chips; every host passes its own.
+     */
+    dateSheet: SheetDateSheet? = null,
 ) {
     // App-wide prefs every document's sheet carries (on-device request: every choice that changes
     // the printed sheet belongs in this menu). Collected here rather than added to each of the
@@ -732,7 +738,8 @@ internal fun RunoutWearOptionsSheet(
         // alone rather than a pointer to captions it does not show.
         OptionsScopeNote(
             hasJobControls = showHeightSlider || showLinerCompression ||
-                showCouplingFaceRow || showDyePenRow || showWearControls || undercutPageOrientation != null,
+                showCouplingFaceRow || showDyePenRow || showWearControls ||
+                undercutPageOrientation != null || dateSheet != null,
         )
         Spacer(Modifier.height(12.dp))
 
@@ -741,7 +748,9 @@ internal fun RunoutWearOptionsSheet(
         // that can draw the end view — the coupling face. Both are per-sheet elections, so
         // they lead; the coupling face is per-JOB (it rides the envelope's RunoutConfig, not
         // PdfPrefs — one job may measure the coupling and the next not).
-        if (onSetBlankDraft != null || showCouplingFaceRow || undercutPageOrientation != null) {
+        if (onSetBlankDraft != null || showCouplingFaceRow || undercutPageOrientation != null ||
+            dateSheet != null
+        ) {
             ContentChipRow {
                 if (onSetBlankDraft != null) {
                     ContentChip(
@@ -784,8 +793,13 @@ internal fun RunoutWearOptionsSheet(
                     resolved = undercutResolvedOrientation,
                     onChoose = { vm.setUndercutPageOrientation(it) },
                 )
-                undercutContentRows?.invoke()
             }
+            // Per job: whether THIS sheet prints the job's date.
+            if (dateSheet != null) {
+                Spacer(Modifier.height(8.dp))
+                SheetDateOnSheetRow(vm = vm, sheet = dateSheet)
+            }
+            if (undercutPageOrientation != null) undercutContentRows?.invoke()
 
             Spacer(Modifier.height(12.dp))
             HorizontalDivider()

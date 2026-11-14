@@ -8,6 +8,8 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -177,7 +179,7 @@ class UndercutRouteTest {
     }
 
     @Test
-    fun `drawing settings lead with the Page row, AUTO naming portrait for two sections`() {
+    fun `drawing settings lead with the Page row, AUTO naming landscape for two sections`() {
         // One cut in each liner: two printed sections.
         val vm = vm().also {
             it.addUndercut(500f, 25.4f)
@@ -192,7 +194,7 @@ class UndercutRouteTest {
         rule.onNodeWithTag("undercut_page_landscape").assertIsNotSelected()
         rule.onNodeWithTag("undercut_page_portrait").assertIsNotSelected()
         rule.onNodeWithTag("undercut_page_caption")
-            .assertTextContains("this sheet prints portrait (2 sections)", substring = true)
+            .assertTextContains("this sheet prints landscape (2 sections)", substring = true)
             .assertTextContains("Saved with this job.", substring = true)
 
         rule.onNodeWithTag("undercut_page_landscape").performClick()
@@ -202,6 +204,24 @@ class UndercutRouteTest {
         rule.onNodeWithTag("undercut_page_landscape").assertIsSelected()
         rule.onNodeWithTag("undercut_page_caption").assertTextContains("Saved with this job.")
     }
+    @Test
+    fun `drawing settings carry the Date on this sheet switch, off until switched on`() {
+        val vm = vm().also { it.addUndercut(500f, 25.4f) }
+        host(vm)
+
+        rule.onNodeWithTag("undercut_drawing_settings_toggle").performScrollTo().performClick()
+        rule.waitForIdle()
+
+        rule.onNodeWithTag(UNDERCUT_DATE_ON_SHEET_TAG).performScrollTo().assertIsOff()
+        rule.onNodeWithText("Prints today's date. Saved with this job.").assertExists()
+
+        rule.onNodeWithTag(UNDERCUT_DATE_ON_SHEET_TAG).performClick()
+        rule.waitForIdle()
+
+        rule.onNodeWithTag(UNDERCUT_DATE_ON_SHEET_TAG).assertIsOn()
+        assertEquals(mapOf("UNDERCUT" to true), vm.sheetDateSheets.value)
+    }
+
     @Test
     fun `drawing settings carry the Distance to S E T row after the Page row`() {
         val vm = vm().also { it.addUndercut(500f, 25.4f) }

@@ -65,7 +65,8 @@ import com.android.shaftschematic.util.toMmOrNull
  * **Date on sheets** picks the date every printed sheet carries ([SheetDateMode], on-device
  * request: the work is not always done the day the sheet is printed): Today (the caption says what
  * that prints), Custom — a plain-text "Date" field, committed like the fields above and printed
- * exactly as typed — or None, which leaves the date off. The chips commit on tap.
+ * exactly as typed — or None, which leaves the date off. The chips commit on tap. Whether a given
+ * sheet prints that date is its own per-job switch on its PDF options ([SheetDateOnSheetRow]).
  *
  * The geometry is whichever drawing the hosting editor names; the caller binds [spec] and the two
  * geometry callbacks to that target, never to a "current target" flag.
@@ -193,29 +194,12 @@ internal fun ShaftStartCard(
                 onSelected = { if (it != shaftPosition) onSetShaftPosition(it) },
                 modifier = Modifier.fillMaxWidth().testTag(PROJECT_INFO_POSITION_TAG),
             )
-            ChipRow(
-                label = SHEET_DATE_LABEL,
-                options = SheetDateMode.values().toList(),
-                selected = sheetDateMode,
-                labelOf = ::sheetDateModeLabel,
-                tagOf = ::sheetDateModeTag,
-                onSelect = { if (it != sheetDateMode) onSetSheetDateMode(it) },
+            SheetDateSection(
+                mode = sheetDateMode,
+                text = sheetDateText,
+                onSetMode = onSetSheetDateMode,
+                onSetText = onSetSheetDateText,
             )
-            when (sheetDateMode) {
-                SheetDateMode.TODAY -> Text(
-                    SHEET_DATE_TODAY_CAPTION,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                // Plain text, verbatim: "11/6/2026" prints as typed (golden rule).
-                SheetDateMode.CUSTOM -> CommitTextField(
-                    label = "Date",
-                    initialText = sheetDateText,
-                    onCommit = onSetSheetDateText,
-                    modifier = Modifier.testTag(START_DATE_TEXT_TAG),
-                )
-                SheetDateMode.NONE -> Unit
-            }
             CommitTextField(
                 label = "Notes",
                 initialText = notes,
@@ -226,6 +210,47 @@ internal fun ShaftStartCard(
             )
         }
     }
+}
+
+/**
+ * The start card's "Date on sheets" choice — the job's ONE date (`ProjectInfo.dateMode` /
+ * `dateText`): Today | Custom | None with the typed date under Custom, then the line saying each
+ * sheet's PDF options decide whether that sheet prints it ([SheetDateOnSheetRow]).
+ */
+@Composable
+internal fun SheetDateSection(
+    mode: SheetDateMode,
+    text: String,
+    onSetMode: (SheetDateMode) -> Unit,
+    onSetText: (String) -> Unit,
+) {
+    ChipRow(
+        label = SHEET_DATE_LABEL,
+        options = SheetDateMode.values().toList(),
+        selected = mode,
+        labelOf = ::sheetDateModeLabel,
+        tagOf = ::sheetDateModeTag,
+        onSelect = { if (it != mode) onSetMode(it) },
+    )
+    // Plain text, verbatim: "11/6/2026" prints as typed (golden rule).
+    if (mode == SheetDateMode.CUSTOM) CommitTextField(
+        label = "Date",
+        initialText = text,
+        onCommit = onSetText,
+        modifier = Modifier.testTag(START_DATE_TEXT_TAG),
+    )
+    if (mode == SheetDateMode.TODAY) Text(
+        SHEET_DATE_TODAY_CAPTION,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    // Under None no sheet prints a date, so there is nothing for the sheets to choose.
+    if (mode != SheetDateMode.NONE) Text(
+        SHEET_DATE_SHEETS_NOTE,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.testTag(START_DATE_SHEETS_NOTE_TAG),
+    )
 }
 
 /**
@@ -362,5 +387,6 @@ internal const val START_DATE_MODE_TODAY_TAG = "start_date_mode_today"
 internal const val START_DATE_MODE_CUSTOM_TAG = "start_date_mode_custom"
 internal const val START_DATE_MODE_NONE_TAG = "start_date_mode_none"
 internal const val START_DATE_TEXT_TAG = "start_date_text"
+internal const val START_DATE_SHEETS_NOTE_TAG = "start_date_sheets_note"
 
 private const val OAL_EPS_MM: Double = 1e-3

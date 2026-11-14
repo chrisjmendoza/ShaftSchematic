@@ -16,6 +16,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavController
 import com.android.shaftschematic.model.ProjectInfo
+import com.android.shaftschematic.model.forSheet
+import com.android.shaftschematic.model.SheetDateSheet
 import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.collidingIds
@@ -86,6 +88,7 @@ fun PdfExportRoute(
         }
     }
     val drawingLabel = if (target == SpecTarget.FINAL) FINAL_DRAWING_LABEL else ""
+    val dateSheet = if (target == SpecTarget.FINAL) SheetDateSheet.FINAL else SheetDateSheet.SCHEMATIC
     // The final drawing's optional runout stations — session-only, off by default, and read
     // only here so the exported file matches the sheet the preview showed.
     val finalRunoutBubbles by vm.finalRunoutBubbles.collectAsState()
@@ -115,6 +118,7 @@ fun PdfExportRoute(
     val item by vm.item.collectAsState()
     val sheetDateMode by vm.sheetDateMode.collectAsState()
     val sheetDateText by vm.sheetDateText.collectAsState()
+    val sheetDateSheets by vm.sheetDateSheets.collectAsState()
     val shaftPosition by vm.shaftPosition.collectAsState()
     val currentDocumentName by vm.currentDocumentName.collectAsState()
 
@@ -143,7 +147,7 @@ fun PdfExportRoute(
                 dateMode = sheetDateMode,
                 dateText = sheetDateText,
                 drawingLabel = drawingLabel,
-            )
+            ).forSheet(dateSheet, sheetDateSheets)
 
             VerboseLog.d(VerboseLog.Category.PDF, "PdfExport") {
                 "writing: page=${PDF_PAGE_WIDTH_PT}x${PDF_PAGE_HEIGHT_PT}pt filename=$filename"

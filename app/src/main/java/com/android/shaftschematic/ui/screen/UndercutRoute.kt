@@ -121,6 +121,8 @@ import com.android.shaftschematic.geom.undercutSections
 import com.android.shaftschematic.geom.undercutMissingDiaMessage
 import com.android.shaftschematic.geom.undercutsMissingDia
 import com.android.shaftschematic.model.ProjectInfo
+import com.android.shaftschematic.model.forSheet
+import com.android.shaftschematic.model.SheetDateSheet
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.UndercutRailStyle
 import com.android.shaftschematic.model.UndercutRecord
@@ -255,6 +257,7 @@ fun UndercutRoute(
     val item               by vm.item.collectAsState()
     val sheetDateMode      by vm.sheetDateMode.collectAsState()
     val sheetDateText      by vm.sheetDateText.collectAsState()
+    val sheetDateSheets    by vm.sheetDateSheets.collectAsState()
     val shaftPosition      by vm.shaftPosition.collectAsState()
     val openAfterExport    by vm.openPdfAfterExport.collectAsState()
     val lineThicknessScale by vm.lineThicknessScale.collectAsState()
@@ -398,6 +401,7 @@ fun UndercutRoute(
         val projectSnapshot = ProjectInfo(customer = customer, vessel = vessel,
             jobNumber = jobNumber, side = shaftPosition, item = item,
             dateMode = sheetDateMode, dateText = sheetDateText)
+            .forSheet(SheetDateSheet.UNDERCUT, sheetDateSheets)
         val unitSnapshot = unit
         val prefsSnapshot = vm.currentPdfPrefs
         val resolvedSnapshot = resolvedComponents
@@ -641,7 +645,8 @@ fun UndercutRoute(
                     page = page, spec = spec,
                     project = ProjectInfo(customer = customer, vessel = vessel,
                         jobNumber = jobNumber, side = shaftPosition, item = item,
-                        dateMode = sheetDateMode, dateText = sheetDateText),
+                        dateMode = sheetDateMode, dateText = sheetDateText)
+            .forSheet(SheetDateSheet.UNDERCUT, sheetDateSheets),
                     unit = unit,
                     displayUnits = vm.currentDisplayUnits(),
                     pdfPrefs = vm.currentPdfPrefs,
@@ -669,7 +674,8 @@ fun UndercutRoute(
                 spec = spec,
                 project = ProjectInfo(customer = customer, vessel = vessel,
                     jobNumber = jobNumber, side = shaftPosition, item = item,
-                    dateMode = sheetDateMode, dateText = sheetDateText),
+                    dateMode = sheetDateMode, dateText = sheetDateText)
+            .forSheet(SheetDateSheet.UNDERCUT, sheetDateSheets),
                 unit = unit,
                 resolved = resolvedComponents,
                 lineThicknessScale = tuning.lineThickness ?: lineThicknessScale,
@@ -1077,6 +1083,13 @@ fun UndercutRoute(
                         resolved = sheetOrientation,
                         onChoose = { vm.setUndercutPageOrientation(it) },
                         modifier = Modifier.padding(bottom = 8.dp),
+                    )
+                    // Per-job: whether this sheet prints the job's date (off unless switched on).
+                    SheetDateOnSheetRow(
+                        vm = vm,
+                        sheet = SheetDateSheet.UNDERCUT,
+                        modifier = Modifier.padding(bottom = 8.dp),
+                        testTag = UNDERCUT_DATE_ON_SHEET_TAG,
                     )
                     // Per-job: chained dimensions, or each cut's start from the S.E.T. chosen below.
                     UndercutRailStyleRow(
@@ -1823,6 +1836,7 @@ internal fun UndercutOptionsSheet(
         undercutDiaInside = pdfUndercutDiaInside,
         undercutShadeLiners = pdfUndercutShadeLiners,
         vm = vm,
+        dateSheet = SheetDateSheet.UNDERCUT,
         // The strip rails' heads follow `PdfPrefs.arrowSizePt` (`drawUndercutRail`), on the
         // printed strips and the detail canvas alike.
         showDimensionArrows = true,

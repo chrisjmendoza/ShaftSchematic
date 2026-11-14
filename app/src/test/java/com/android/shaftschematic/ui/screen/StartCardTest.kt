@@ -348,6 +348,8 @@ class StartCardTest {
 
         // Today: the caption explains it, and no date field is offered.
         rule.onNodeWithText(SHEET_DATE_TODAY_CAPTION).performScrollTo().assertIsDisplayed()
+        // …and the line under it says each sheet chooses whether it prints the date.
+        rule.onNodeWithText(SHEET_DATE_SHEETS_NOTE).performScrollTo().assertIsDisplayed()
         rule.onAllNodesWithTag(START_DATE_TEXT_TAG).assertCountEquals(0)
 
         rule.onNodeWithTag(START_DATE_MODE_CUSTOM_TAG).performScrollTo().performClick()
@@ -365,6 +367,8 @@ class StartCardTest {
         rule.waitForIdle()
         assertEquals(SheetDateMode.NONE, vm.sheetDateMode.value)
         rule.onAllNodesWithTag(START_DATE_TEXT_TAG).assertCountEquals(0)
+        // No sheet prints a date under None, so there is nothing for the sheets to choose.
+        rule.onAllNodesWithTag(START_DATE_SHEETS_NOTE_TAG).assertCountEquals(0)
         assertEquals("the typed date is kept for Custom", "11/6/2026", vm.sheetDateText.value)
     }
 

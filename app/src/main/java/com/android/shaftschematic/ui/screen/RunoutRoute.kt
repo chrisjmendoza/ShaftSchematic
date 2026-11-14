@@ -108,6 +108,8 @@ import com.android.shaftschematic.model.COUPLING_PILOT_COMPONENT_ID
 import com.android.shaftschematic.model.RunoutReading
 import com.android.shaftschematic.geom.clockTickLabel
 import com.android.shaftschematic.model.ProjectInfo
+import com.android.shaftschematic.model.forSheet
+import com.android.shaftschematic.model.SheetDateSheet
 import com.android.shaftschematic.model.RunoutReadings
 import com.android.shaftschematic.model.RunoutStationPlacements
 import com.android.shaftschematic.model.ShaftSpec
@@ -177,6 +179,7 @@ fun RunoutRoute(
     val item               by vm.item.collectAsState()
     val sheetDateMode      by vm.sheetDateMode.collectAsState()
     val sheetDateText      by vm.sheetDateText.collectAsState()
+    val sheetDateSheets    by vm.sheetDateSheets.collectAsState()
     val shaftPosition      by vm.shaftPosition.collectAsState()
     val openAfterExport    by vm.openPdfAfterExport.collectAsState()
     val lineThicknessScale by vm.lineThicknessScale.collectAsState()
@@ -331,6 +334,7 @@ fun RunoutRoute(
         val projectSnapshot = ProjectInfo(customer = customer, vessel = vessel,
             jobNumber = jobNumber, side = shaftPosition, item = item,
             dateMode = sheetDateMode, dateText = sheetDateText)
+            .forSheet(SheetDateSheet.RUNOUT, sheetDateSheets)
         val unitSnapshot = unit
         val prefsSnapshot = vm.currentPdfPrefs
         val resolvedSnapshot = resolvedComponents
@@ -360,7 +364,8 @@ fun RunoutRoute(
                     page, spec, runoutConfig,
                     ProjectInfo(customer = customer, vessel = vessel,
                         jobNumber = jobNumber, side = shaftPosition, item = item,
-                        dateMode = sheetDateMode, dateText = sheetDateText),
+                        dateMode = sheetDateMode, dateText = sheetDateText)
+            .forSheet(SheetDateSheet.RUNOUT, sheetDateSheets),
                     unit, vm.currentPdfPrefs, resolvedComponents,
                     lineThicknessScale, runoutReadings, stationPlacements, blankDraft,
                     vm.currentDisplayUnits(),
@@ -384,7 +389,8 @@ fun RunoutRoute(
                 config = tunedRunoutConfig(runoutConfig, tuning.heightScale, tuning.linerCompression),
                 project = ProjectInfo(customer = customer, vessel = vessel,
                     jobNumber = jobNumber, side = shaftPosition, item = item,
-                    dateMode = sheetDateMode, dateText = sheetDateText),
+                    dateMode = sheetDateMode, dateText = sheetDateText)
+            .forSheet(SheetDateSheet.RUNOUT, sheetDateSheets),
                 unit = unit,
                 resolved = resolvedComponents,
                 lineThicknessScale = tuning.lineThickness ?: lineThicknessScale,
@@ -1202,6 +1208,7 @@ fun RunoutRoute(
             onPrint = { printClassicRunout() },
             optionsSheet = {
                 RunoutWearOptionsSheet(
+                    dateSheet = SheetDateSheet.RUNOUT,
                     lineThicknessScale = lineThicknessScale,
                     pdfShadedBodies = pdfShadedBodies,
                     pdfShadedTapers = pdfShadedTapers,

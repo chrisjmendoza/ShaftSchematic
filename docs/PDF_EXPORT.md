@@ -88,7 +88,7 @@ Preview rendering (`ShaftLayout` + `ShaftRenderer`) and the PDF composers (`Shaf
 - **Landscape** orientation (`PdfDocument.PageInfo.Builder(792, 612, 1)` —
   `PdfExportRoute.kt`, `PdfPreviewScreen.kt`) for every document **except the undercut drawing**,
   which resolves its own page: `UndercutRecord.pageOrientation` (Auto | Landscape | Portrait;
-  Auto = portrait at two or more printed sections) through `undercutSheetOrientation`, giving
+  Auto = portrait at three or more printed sections) through `undercutSheetOrientation`, giving
   612 × 792 pt when portrait. The writers (`writeShaftPdfToUri`, `renderPdfPageBitmap`,
   `printShaftPdfPage`) take a `PdfPageOrientation` that defaults to landscape, so no other
   document changes. See `docs/contracts/UndercutDrawing.md` (Page orientation).
@@ -197,6 +197,14 @@ Top of page, full width.
   `ProjectInfo.printedDateOrNull(today)` (`model/ProjectInfo.kt`), behind all three print sites:
   `drawSheetHeader` (wear + undercut), `drawRunoutHeader` (classic runout) and `planFooter`
   (schematic + consolidated footer job block). Blank drafts always rule a `Date:` line.
+  Whether a given sheet prints the date at all is its own per-job switch, **"Date on this
+  sheet"** (`SheetDateSheet`: SCHEMATIC, CONSOLIDATED and FINAL default on; RUNOUT, WEAR and
+  UNDERCUT default off; FINAL covers every sheet the Final tab makes; envelope
+  `sheet_date_sheets`, name → on/off, only the sheets the job has set). ONE resolver,
+  `sheetPrintsDate`, and ONE helper, `ProjectInfo.forSheet(sheet, overrides)`, which every
+  print, preview and export site hands its composer's project through — a sheet whose switch
+  is off receives `dateMode = NONE`, so the composers themselves are unchanged. Export all
+  applies each document's own switch. The switch never reaches a blank draft's ruled line.
 - Units — printed values follow the document's **active unit** (inches or mm), not always
   mm. Every printed length/diameter goes through `formatLenWithUnit` / `formatDiaWithUnit`
   with the document's `UnitSystem`; only the model layer is unconditionally mm.

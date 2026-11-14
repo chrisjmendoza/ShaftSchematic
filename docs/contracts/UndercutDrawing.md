@@ -2040,11 +2040,18 @@ stays landscape.
   (unknown or missing → `AUTO`); additive, no `CURRENT_VERSION` bump. A per-job FIT like
   `drawToSet`, not an app-wide look: not in `PdfPrefs`, not captured by drawing profiles.
 - **The resolver** — `resolveUndercutPageOrientation(choice, stripCount)`
-  (`pdf/UndercutStripLayout.kt`): a forced value wins; `AUTO` is portrait when the sheet prints two
-  or more PRINTED SECTIONS, landscape otherwise (0 strips = the whole-shaft profile fallback =
-  landscape). A section is a printed detail strip — one liner, or one bare-shaft cluster window —
+  (`pdf/UndercutStripLayout.kt`): a forced value wins; `AUTO` is portrait when the sheet prints THREE
+  or more PRINTED SECTIONS (`UNDERCUT_PORTRAIT_AUTO_MIN_STRIPS`), landscape otherwise — one
+  section, or two stacked top and bottom at full width (on-device ruling, once the landscape page
+  stacked; 0 strips = the whole-shaft profile fallback = landscape). A count alone decides: whether
+  three would also fit stacked on a landscape page is measured, so that stays the Landscape choice.
+  The undercut sheet's per-job "Date on this sheet" switch (`SheetDateOnSheetRow`, tag
+  `undercut_date_on_sheet` on the tab and `sheet_date_on_undercut` in the PDF options) sits under
+  the Page row on both surfaces: whether THIS sheet prints the job's date, OFF by default
+  (on-device request — the undercut sheet is a working paper). The date itself is the start
+  card's. A section is a printed detail strip — one liner, or one bare-shaft cluster window —
   never a cut, and a section the job leaves off ("Sections to print") is not counted: with one
-  section printed, Auto is landscape. Blank drafts count their started liner strips (a 3-liner
+  or two sections printed, Auto is landscape. Blank drafts count their started liner strips (a 3-liner
   shaft's blank draft is portrait). A sheet with EVERY section left off is always landscape
   (see "Sections to print").
 - **One strip source** — `undercutSheetStrips(...)` (extracted from `composeUndercutPdf`) builds the

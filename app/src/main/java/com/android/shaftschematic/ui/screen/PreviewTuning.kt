@@ -164,7 +164,7 @@ internal val LANDSCAPE_PAGE_ASPECT: Float =
 /**
  * Height ÷ width of a rendered page of [widthPx] × [heightPx], or [LANDSCAPE_PAGE_ASPECT] when
  * there is no usable page yet. Read off the raster, never assumed: the undercut sheet is
- * portrait at two or more printed sections, and a strip sized for a landscape page would fit a
+ * portrait at three or more printed sections, and a strip sized for a landscape page would fit a
  * portrait one into ~60% of the screen width.
  */
 internal fun pageAspectOf(widthPx: Int, heightPx: Int): Float =
@@ -174,7 +174,7 @@ internal fun pageAspectOf(widthPx: Int, heightPx: Int): Float =
  * Height of the exported page drawn at fit-width, in dp. Most sheets are LANDSCAPE
  * (`PDF_PAGE_WIDTH_PT` × `PDF_PAGE_HEIGHT_PT`, the default [pageAspect]), so a page fitted to a
  * portrait screen's width needs only this much height — the whole drawing lives in a strip near
- * the top. A portrait page (the undercut sheet at two or more sections) passes its own aspect.
+ * the top. A portrait page (the undercut sheet at three or more sections) passes its own aspect.
  */
 internal fun fitWidthPageHeightDp(
     screenWidthDp: Float,

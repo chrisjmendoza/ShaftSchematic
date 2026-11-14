@@ -8,6 +8,24 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-13
 
+### feat(undercut, sheets): Auto keeps two sections landscape; each sheet chooses whether it prints the date
+
+On-device ruling: now that a landscape page stacks two sections top and bottom, the undercut
+sheet's "Page: Auto" prints one or two sections landscape and turns portrait from three. A job
+set to Landscape or Portrait is unchanged.
+
+On-device request: the date belongs on the schematic and the consolidated sheet; the runout,
+wear and undercut sheets are working papers and rarely need it. Each sheet now has its own
+"Date on this sheet" switch, saved with the job, in that sheet's PDF options (and under "Page"
+in the Undercut tab's Drawing settings). The date itself is still one per job, chosen under
+"Date on sheets" on the Shaft & job card; with that set to None no sheet prints a date and the
+switches grey out. The switch starts ON for the schematic, the consolidated sheet and the Final
+tab's sheets (one switch covers all of them), and OFF for the runout, wear and undercut sheets
+— so an existing job's runout, wear and undercut sheets no longer print the date until their
+switch is turned on. Export all follows each document's own switch. Blank drafts still rule a
+"Date:" line to fill in by hand. A mate duplicate keeps the switches; a template carries none.
+Stored as `sheet_date_sheets` in the document (only the sheets the job has set).
+
 ### feat(sheets): type the date the sheets print, or leave it off
 
 On-device request: every sheet printed today's date, even when the undercut work was done a week

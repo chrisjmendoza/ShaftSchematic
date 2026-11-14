@@ -88,14 +88,17 @@ fun undercutStripsPerPage(mode: WearPdfMode, portrait: Boolean = false): Int = w
 const val UNDERCUT_PORTRAIT_MAX_PER_PAGE = WEAR_STRIP_GRID_MAX_PER_PAGE
 
 /** The section count from which an AUTO undercut sheet prints portrait. */
-const val UNDERCUT_PORTRAIT_AUTO_MIN_STRIPS = 2
+const val UNDERCUT_PORTRAIT_AUTO_MIN_STRIPS = 3
 
 /**
  * The page the undercut sheet prints on, from the job's [choice] and the number of detail strips
  * the sheet draws ([stripCount] — cut strips, or the started liner strips when nothing is
- * recorded; `undercutSheetStrips` in `UndercutPdfComposer.kt`). AUTO stacks two or more sections
- * on a portrait page and prints one section — or none, the whole-shaft profile fallback, which
- * wants the long page edge — landscape (on-device request). LANDSCAPE and PORTRAIT win outright.
+ * recorded; `undercutSheetStrips` in `UndercutPdfComposer.kt`). AUTO prints one or two sections
+ * landscape — two stack top and bottom at the full page width there ([undercutStripsStacked]), as
+ * does none, the whole-shaft profile fallback, which wants the long page edge — and three or more
+ * down a portrait page (on-device ruling, once the landscape page stacked). A count alone decides:
+ * whether three would also fit stacked on a landscape page is a measured question, so that stays a
+ * Landscape choice. LANDSCAPE and PORTRAIT win outright.
  */
 fun resolveUndercutPageOrientation(choice: UndercutPageOrientation, stripCount: Int): PdfPageOrientation =
     when (choice) {

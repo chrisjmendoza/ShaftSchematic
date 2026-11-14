@@ -31,7 +31,7 @@ const val PDF_PAGE_HEIGHT_PT = 612
 
 /**
  * The US Letter page a document is composed on, in PDF points. [LANDSCAPE] is the default for
- * every document; the undercut drawing chooses [PORTRAIT] when it stacks two or more sections
+ * every document; the undercut drawing chooses [PORTRAIT] when it stacks three or more sections
  * (`resolveUndercutPageOrientation`). The composers read the size off `page.info`, so the shape
  * is decided once, by whoever starts the page.
  */

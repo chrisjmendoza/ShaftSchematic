@@ -734,7 +734,7 @@ internal val helpSections: List<HelpSection> = listOf(
                     "drawing, never the data.\n\n" +
                     "\"Page\" (Auto | Landscape | Portrait, the " +
                     "first row of \"Drawing settings\" and in the sheet's PDF options) sets " +
-                    "the printed page: Auto stacks two or more sections down a portrait page " +
+                    "the printed page: Auto stacks three or more sections down a portrait page " +
                     "and prints a single section landscape.\n\n" +
                     "\"Dimensions\" (Chain | From S.E.T., right after \"Page\") chooses how " +
                     "each section locates its cuts: chained from the liner's edges, or each " +

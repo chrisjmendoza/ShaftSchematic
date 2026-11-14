@@ -73,6 +73,6 @@ internal fun undercutPageOrientationCaption(
     if (choice != UndercutPageOrientation.AUTO) return "Saved with this job."
     val page = if (resolved == PdfPageOrientation.PORTRAIT) "portrait" else "landscape"
     val sections = if (stripCount == 1) "1 section" else "$stripCount sections"
-    return "Auto: one section prints landscape; two or more stack on a portrait page — " +
+    return "Auto: one or two sections print landscape; three or more stack on a portrait page — " +
         "this sheet prints $page ($sections). Saved with this job."
 }

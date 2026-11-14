@@ -44,6 +44,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.ProjectInfo
+import com.android.shaftschematic.model.forSheet
+import com.android.shaftschematic.model.SheetDateSheet
 import com.android.shaftschematic.ui.adaptive.LocalSidebarPermanent
 import com.android.shaftschematic.pdf.composeRunoutPdf
 import com.android.shaftschematic.ui.nav.FINAL_DRAWING_LABEL
@@ -388,6 +390,7 @@ private fun rememberFinalRunoutSheet(
     val item by vm.item.collectAsState()
     val sheetDateMode by vm.sheetDateMode.collectAsState()
     val sheetDateText by vm.sheetDateText.collectAsState()
+    val sheetDateSheets by vm.sheetDateSheets.collectAsState()
     val shaftPosition by vm.shaftPosition.collectAsState()
     val runoutConfig by vm.runoutConfig.collectAsState()
     val lineThicknessScale by vm.lineThicknessScale.collectAsState()
@@ -423,7 +426,7 @@ private fun rememberFinalRunoutSheet(
                             jobNumber = jobNumber, item = item,
                             dateMode = sheetDateMode, dateText = sheetDateText,
                             drawingLabel = FINAL_DRAWING_LABEL,
-                        ),
+                        ).forSheet(SheetDateSheet.FINAL, sheetDateSheets),
                         unit = unit,
                         displayUnits = vm.currentDisplayUnits(),
                         pdfPrefs = vm.currentPdfPrefs,
@@ -453,7 +456,7 @@ private fun rememberFinalRunoutSheet(
                         jobNumber = jobNumber, item = item,
                         dateMode = sheetDateMode, dateText = sheetDateText,
                         drawingLabel = FINAL_DRAWING_LABEL,
-                    )
+                    ).forSheet(SheetDateSheet.FINAL, sheetDateSheets)
                     val unitSnapshot = unit
                     val prefsSnapshot = vm.currentPdfPrefs
                     val resolvedSnapshot = finalResolved

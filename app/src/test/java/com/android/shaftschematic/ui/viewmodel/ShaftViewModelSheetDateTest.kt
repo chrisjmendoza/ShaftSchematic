@@ -5,6 +5,8 @@ import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
 import com.android.shaftschematic.doc.ShaftDocCodec
 import com.android.shaftschematic.model.SheetDateMode
+import com.android.shaftschematic.model.SheetDateSheet
+import com.android.shaftschematic.model.sheetPrintsDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -109,5 +111,70 @@ class ShaftViewModelSheetDateTest {
 
         assertEquals(SheetDateMode.TODAY, vm.sheetDateMode.value)
         assertEquals("", vm.sheetDateText.value)
+    }
+
+    // ── "Date on this sheet" ──────────────────────────────────────────────────
+
+    @Test
+    fun `a new document follows the shipped per-sheet defaults`() {
+        val vm = savedVm()
+
+        assertEquals(emptyMap<String, Boolean>(), vm.sheetDateSheets.value)
+        assertTrue(sheetPrintsDate(SheetDateSheet.SCHEMATIC, vm.sheetDateSheets.value))
+        assertFalse(sheetPrintsDate(SheetDateSheet.UNDERCUT, vm.sheetDateSheets.value))
+    }
+
+    @Test
+    fun `switching one sheet marks the document dirty and leaves the others alone`() {
+        val vm = savedVm()
+
+        vm.setSheetDateOnSheet(SheetDateSheet.UNDERCUT, true)
+        idle()
+
+        assertTrue(sheetPrintsDate(SheetDateSheet.UNDERCUT, vm.sheetDateSheets.value))
+        assertFalse(sheetPrintsDate(SheetDateSheet.WEAR, vm.sheetDateSheets.value))
+        assertTrue("the choice rides the autosave combine", vm.hasUnsavedChanges.value)
+    }
+
+    @Test
+    fun `the per-sheet choices survive save and reopen`() {
+        val vm = savedVm()
+        vm.setSheetDateOnSheet(SheetDateSheet.UNDERCUT, true)
+        vm.setSheetDateOnSheet(SheetDateSheet.SCHEMATIC, false)
+        idle()
+
+        val raw = vm.exportJson()
+        assertEquals(
+            mapOf("UNDERCUT" to true, "SCHEMATIC" to false),
+            ShaftDocCodec.decode(raw).sheetDateSheets,
+        )
+
+        val reopened = ShaftViewModel(ApplicationProvider.getApplicationContext<Application>())
+        reopened.importJson(raw)
+        idle()
+
+        assertTrue(sheetPrintsDate(SheetDateSheet.UNDERCUT, reopened.sheetDateSheets.value))
+        assertFalse(sheetPrintsDate(SheetDateSheet.SCHEMATIC, reopened.sheetDateSheets.value))
+        assertFalse("a freshly opened document is clean", reopened.hasUnsavedChanges.value)
+    }
+
+    @Test
+    fun `newDocument and a template put the per-sheet choices back to the defaults`() {
+        val vm = savedVm()
+        vm.setSheetDateOnSheet(SheetDateSheet.UNDERCUT, true)
+        idle()
+
+        vm.newDocument()
+        idle()
+        assertEquals(emptyMap<String, Boolean>(), vm.sheetDateSheets.value)
+
+        vm.setSheetDateOnSheet(SheetDateSheet.WEAR, true)
+        vm.applyTemplate(
+            ShaftDocCodec.encodeV1(
+                ShaftDocCodec.ShaftDocV1(spec = vm.spec.value, sheetDateSheets = mapOf("RUNOUT" to true))
+            )
+        )
+        idle()
+        assertEquals(emptyMap<String, Boolean>(), vm.sheetDateSheets.value)
     }
 }

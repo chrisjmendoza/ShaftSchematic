@@ -30,7 +30,8 @@ class UndercutPageOrientationTest {
     fun `AUTO resolves by section count`() {
         assertEquals(PdfPageOrientation.LANDSCAPE, resolveUndercutPageOrientation(UndercutPageOrientation.AUTO, 0))
         assertEquals(PdfPageOrientation.LANDSCAPE, resolveUndercutPageOrientation(UndercutPageOrientation.AUTO, 1))
-        assertEquals(PdfPageOrientation.PORTRAIT, resolveUndercutPageOrientation(UndercutPageOrientation.AUTO, 2))
+        assertEquals(PdfPageOrientation.LANDSCAPE, resolveUndercutPageOrientation(UndercutPageOrientation.AUTO, 2))
+        assertEquals(PdfPageOrientation.PORTRAIT, resolveUndercutPageOrientation(UndercutPageOrientation.AUTO, 3))
         assertEquals(PdfPageOrientation.PORTRAIT, resolveUndercutPageOrientation(UndercutPageOrientation.AUTO, 5))
     }
 

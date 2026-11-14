@@ -69,6 +69,8 @@ import com.android.shaftschematic.geom.effectiveWearTraceDepthFrac
 import com.android.shaftschematic.geom.wearLinerTraces
 import com.android.shaftschematic.model.DyePenResult
 import com.android.shaftschematic.model.ProjectInfo
+import com.android.shaftschematic.model.forSheet
+import com.android.shaftschematic.model.SheetDateSheet
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.WearRecord
 import com.android.shaftschematic.model.collidingIds
@@ -174,6 +176,7 @@ fun WearRoute(
     val item               by vm.item.collectAsState()
     val sheetDateMode      by vm.sheetDateMode.collectAsState()
     val sheetDateText      by vm.sheetDateText.collectAsState()
+    val sheetDateSheets    by vm.sheetDateSheets.collectAsState()
     val shaftPosition      by vm.shaftPosition.collectAsState()
     val openAfterExport    by vm.openPdfAfterExport.collectAsState()
     val lineThicknessScale by vm.lineThicknessScale.collectAsState()
@@ -257,6 +260,7 @@ fun WearRoute(
         val projectSnapshot = ProjectInfo(customer = customer, vessel = vessel,
             jobNumber = jobNumber, side = shaftPosition, item = item,
             dateMode = sheetDateMode, dateText = sheetDateText)
+            .forSheet(SheetDateSheet.WEAR, sheetDateSheets)
         val unitSnapshot = unit
         val prefsSnapshot = vm.currentPdfPrefs
         val resolvedSnapshot = resolvedComponents
@@ -293,7 +297,8 @@ fun WearRoute(
                     page = page, spec = spec,
                     project = ProjectInfo(customer = customer, vessel = vessel,
                         jobNumber = jobNumber, side = shaftPosition, item = item,
-                        dateMode = sheetDateMode, dateText = sheetDateText),
+                        dateMode = sheetDateMode, dateText = sheetDateText)
+            .forSheet(SheetDateSheet.WEAR, sheetDateSheets),
                     unit = unit,
                     displayUnits = vm.currentDisplayUnits(),
                     pdfPrefs = vm.currentPdfPrefs,
@@ -323,7 +328,8 @@ fun WearRoute(
                 spec = spec,
                 project = ProjectInfo(customer = customer, vessel = vessel,
                     jobNumber = jobNumber, side = shaftPosition, item = item,
-                    dateMode = sheetDateMode, dateText = sheetDateText),
+                    dateMode = sheetDateMode, dateText = sheetDateText)
+            .forSheet(SheetDateSheet.WEAR, sheetDateSheets),
                 unit = unit,
                 resolved = resolvedComponents,
                 lineThicknessScale = tuning.lineThickness ?: lineThicknessScale,
@@ -715,6 +721,7 @@ fun WearRoute(
                 // the wear block — contents, strip size, trace depth, wear-area shade,
                 // taper–liner join.
                 RunoutWearOptionsSheet(
+                    dateSheet = SheetDateSheet.WEAR,
                     dualUnits = dualUnits,
                     onDualUnitsChange = { vm.setDualUnits(it) },
                     dualUnitLayout = pdfDualUnitLayout,

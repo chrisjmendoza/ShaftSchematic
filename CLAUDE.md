@@ -822,7 +822,7 @@ strips always; landscape with 3 only while every shaft keeps `UNDERCUT_LANDSCAPE
 shape (size, margins, the per-page cap) stays on `portrait`; AUTO still resolves as before.
 
 The undercut sheet is the one portrait-capable document: its page shape is per-job
-`UndercutRecord.pageOrientation` (AUTO = portrait at 2+ printed sections), resolved ONCE by
+`UndercutRecord.pageOrientation` (AUTO = portrait at 3+ printed sections — one or two print landscape, two stacked), resolved ONCE by
 `undercutSheetOrientation` over the same `undercutSheetStrips` the composer draws, and every
 undercut writer (print, preview, export, Export all) starts that page — a writer that starts a
 fixed landscape page would draw a portrait layout off the page.
@@ -1786,6 +1786,27 @@ None leaves the `Date:` piece off the header line and the footer job block. ONE 
 (wear/undercut), `drawRunoutHeader` and `planFooter` (schematic/consolidated); no site decides on
 its own. Blank drafts always rule `Date:`. Every route that builds a `ProjectInfo` passes both
 values; New, a template and a mate duplicate reset to Today. See `docs/PDF_EXPORT.md` §4.
+
+**Whether a sheet prints that date is its own per-job switch, "Date on this sheet"** (on-device
+request: the schematic and the consolidated sheet carry the date; the working sheets rarely
+do). The date VALUE stays one per job, edited on the start card only. `SheetDateSheet`
+(`model/ProjectInfo.kt`) names the six switches and carries the ONE defaults table
+(`printsDateByDefault`): SCHEMATIC, CONSOLIDATED, FINAL on; RUNOUT, WEAR, UNDERCUT off. FINAL
+covers every sheet the Final tab makes — final schematic, Original + Final, the blank final
+runout sheet, with or without bubbles. The job stores only its own choices —
+`Map<String, Boolean>` keyed by enum NAME, envelope `sheet_date_sheets`, empty = the defaults,
+an unknown name carried and never read — in `ShaftViewModel.sheetDateSheets`
+(`setSheetDateOnSheet`), in the autosave snapshot's builder AND combine, not in `EditState`.
+ONE resolver, `sheetPrintsDate(sheet, overrides)`, and ONE helper every print, preview and
+export site builds its composer's `ProjectInfo` through, `ProjectInfo.forSheet(sheet, overrides)`
+(off → a copy with `dateMode = NONE`), so `printedDateOrNull` stays the only thing a composer
+reads and no composer knows the switch exists. A new site that builds a `ProjectInfo` for a
+composer must go through `forSheet`; Export all gives each document its own
+(`OutputDoc.dateSheet`). Blank drafts are unchanged. ONE row, `SheetDateOnSheetRow`
+(`ui/screen/SheetDateOnSheetRow.kt`), on every sheet's PDF options (`sheet_date_on_<sheet>`)
+and the Undercut tab's Drawing settings (`undercut_date_on_sheet`); it greys out, value kept,
+while the job's date is None. New and a template reset the choices to the defaults; a mate
+duplicate CARRIES them (they are how the shop prints) while its date still goes back to Today.
 
 ## Commit policy
 Do **not** auto-commit. The user reviews changes before every commit.

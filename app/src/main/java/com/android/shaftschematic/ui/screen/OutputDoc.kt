@@ -2,6 +2,7 @@ package com.android.shaftschematic.ui.screen
 
 import com.android.shaftschematic.doc.stripShaftDocExtension
 import com.android.shaftschematic.model.ShaftPosition
+import com.android.shaftschematic.model.SheetDateSheet
 import com.android.shaftschematic.util.DocumentNaming
 import com.android.shaftschematic.util.exportPdfFilename
 
@@ -32,6 +33,16 @@ enum class OutputDoc(
     WEAR("Wear", "Wear Document", "wear"),
     UNDERCUT("Undercut", "Undercut Drawing", "undercuts"),
 }
+
+/** The "Date on this sheet" switch each document follows, from its own tab and from Export all. */
+internal val OutputDoc.dateSheet: SheetDateSheet
+    get() = when (this) {
+        OutputDoc.CONSOLIDATED -> SheetDateSheet.CONSOLIDATED
+        OutputDoc.RUNOUT -> SheetDateSheet.RUNOUT
+        OutputDoc.SCHEMATIC -> SheetDateSheet.SCHEMATIC
+        OutputDoc.WEAR -> SheetDateSheet.WEAR
+        OutputDoc.UNDERCUT -> SheetDateSheet.UNDERCUT
+    }
 
 /**
  * The "Export all" checkboxes' starting state, one per [OutputDoc] in enum order: every document,
