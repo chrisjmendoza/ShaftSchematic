@@ -3,6 +3,11 @@ plugins {
     alias(libs.plugins.android.application) apply false
     alias(libs.plugins.kotlin.android) apply false
     alias(libs.plugins.kotlin.compose) apply false
+    // `:shared` (Kotlin Multiplatform). Declared here so every Kotlin plugin loads from the one
+    // root classloader instead of once per subproject.
+    alias(libs.plugins.kotlin.multiplatform) apply false
+    alias(libs.plugins.android.kotlin.multiplatform.library) apply false
+    alias(libs.plugins.kotlin.serialization) apply false
     // On the buildscript classpath but never applied here: `:app` applies them itself, and only
     // when a google-services.json is present. Declaring them `apply false` is what makes that
     // conditional `apply(plugin = …)` resolvable.

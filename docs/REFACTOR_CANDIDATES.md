@@ -26,7 +26,7 @@ already uses — now serves all five preview call sites (schematic, runout, wear
 consolidated output); the four local helpers are deleted. The copies differed only in
 their temp-file prefix and in the schematic one taking compose arguments instead of a
 lambda; bitmap config (`ARGB_8888`), white `eraseColor`, 2× scale (now the named
-`PDF_PREVIEW_RENDER_SCALE`), 792 × 612 page (now `PDF_PAGE_WIDTH_PT`/`PDF_PAGE_HEIGHT_PT`),
+`PDF_PREVIEW_RENDER_SCALE`), 792 × 612 page (now `PDF_PAGE_WIDTH_PT`/`PDF_PAGE_HEIGHT_PT`, shared `util/PdfPage.kt`),
 `runCatching{}.getOrNull()` failure posture, and close/delete order were identical.
 
 **Left open:** the helper still leaks its temp file if `composePage` throws — the delete
@@ -135,7 +135,7 @@ user bumps this up as needed") but **never read** — the default-count logic us
 **Decision:** default bubble counts stay **uniform**; the user raises the count per
 component (`RunoutConfig.componentOverrides`) when a run wants extra readings. Both
 constants are deleted and `BODY_DEFAULT_COUNT`'s KDoc now says so, instead of promising a
-length-based bump the app never had. Zero readers existed in `app/src/main` or
+length-based bump the app never had. Zero readers existed in the app or shared main sources or
 `app/src/test`, so nothing else moved.
 
 ## 5b. OAL-spacing pref — RESOLVED (removed)

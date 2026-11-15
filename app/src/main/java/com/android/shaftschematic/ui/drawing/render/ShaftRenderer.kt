@@ -92,14 +92,6 @@ import kotlin.math.min
  * • Highlight outline: when enabled & an ID matches, we paint a glow under-stroke,
  *   then the normal stroke on top. When highlight is off, visuals are unaffected.
  */
-/**
- * Hidden-line dash for far-side (180°-apart) keyways, in px. Mirrored exactly in the PDF
- * (`DashPathEffect(floatArrayOf(HIDDEN_DASH_ON, HIDDEN_DASH_OFF), 0f)`) so preview and
- * export match. Kept module-level so both the renderer and the same-math preview agree.
- */
-internal const val HIDDEN_DASH_ON = 6f
-internal const val HIDDEN_DASH_OFF = 4f
-
 object ShaftRenderer {
 
     // ─────────────────────────────────────────────────────────────────────────────

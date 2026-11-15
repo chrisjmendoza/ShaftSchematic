@@ -1,6 +1,7 @@
 # ShaftSchematic Architecture
 Version: v0.5.x
-Last updated: 2026-09-15 — the **Final Schematic** tab: six editor tabs, and this document is
+Last updated: 2026-11-14 — the two-module layout (`:shared` + `:app`) and the iOS-port status
+("Modules" below). 2026-09-15 — the **Final Schematic** tab: six editor tabs, and this document is
 the ONE owner of the tab list and the composer/document inventory (`BRIEFING.md` and
 `CONTRIBUTING.md` point here rather than restating either).
 2026-08-05 — five editor tabs (Schematic / Runout / Wear / Undercut /
@@ -28,6 +29,37 @@ ShaftSchematic is an MVVM-based Android application designed to create accurate,
 - **UI Layer:** Compose-based screens, dialogs, and input controls. Contains *no* geometry or layout logic.
 
 All geometry is stored in **millimeters**. Rendering is performed at arbitrary resolutions without loss of accuracy.
+
+---
+
+## Modules
+
+Two Gradle modules; package names are identical across them, so a path like `pdf/ShaftPdfComposer.kt`
+in any doc names a file in whichever module holds it.
+
+- **`:shared`** — Kotlin Multiplatform (Android via `com.android.kotlin.multiplatform.library`, plus
+  `iosArm64` and `iosSimulatorArm64`; `shared/src/commonMain`, `androidMain`, `iosMain`). Everything
+  that never touches Android: `model/`, `geom/`, `doc/`, `template/`, `settings/` (`PdfPrefs`,
+  drawing profiles), `ui/resolved`, `ui/order`, `ui/config`, `ui/util`, `ui/drawing/RenderSpanSpec.kt`,
+  most of `util/`, and all of `pdf/` — the composers, `pdf/dim`, `pdf/notes`, `pdf/render`. The
+  composers draw through the `gfx` package (`Canvas`, `Paint`, `Path`, `RectF`, dash effects,
+  `Typeface`): on Android each name is an `actual typealias` of the `android.graphics` class, on iOS
+  a plain class forwarding to a `CanvasBackend`/`TextMeasurer` the iOS host will supply. Platform-only
+  calls (UUID, fixed-point formatting, rounding, the clock) are expect/actual functions in
+  `util/Platform.kt`. `commonMain` may not import `android.*`, `androidx.*` or `java.*`.
+- **`:app`** — all Compose UI, `ShaftRenderer`/`ShaftLayout`, the view models, `data/` (DataStore
+  `SettingsStore`, autosave), `io/`, and the Android-only `util/` files (`AppLog`, `CrashReporter`,
+  `BundledFonts`, `PdfSafExport`, `PdfRaster`, `PdfPrint`, `PdfInkBounds`, `PdfOpenIntent`,
+  `SafPickerLaunch`, `FeedbackIntentFactory`, `InchFieldFormat`, `PreviewColor*`, `UndercutStyle`).
+  The five `PdfDocument.Page` entry points (`composeShaftPdf`, `composeRunoutPdf`, `composeWearPdf`,
+  `composeUndercutPdf`, `composeBeforeAfterPdf`) are thin adapters in `pdf/PdfPageComposers.kt` over
+  the shared `…OnCanvas` functions. All tests live in `app/src/test`.
+
+**iOS port.** Done: the shared module (step 1) and the platform-neutral drawing layer (step 2); the
+iOS side currently only compiles to klibs (`.\gradlew.bat :shared:compileKotlinIosArm64`), nothing
+runs on iOS. Remaining: the shared UI via Compose Multiplatform, an iOS host app, a `CanvasBackend`
+over CoreGraphics and a `TextMeasurer` over CoreText, and the platform services (file export,
+print, PDF raster, fonts, crash reporting). That work needs a Mac.
 
 ---
 
@@ -228,7 +260,7 @@ shared engine — never re-implemented per renderer):
 - `DimensionRailLayout.kt` — the rail label planner, shared by the schematic and consolidated sheets' rails AND
   the editor preview's dimension lines.
 
-Rule: this layer never imports Android/Compose classes and never depends on `pdf/` or `ui/`.
+Rule: this layer never imports Android/Compose classes and never depends on `pdf/` or `ui/`. It lives in `:shared`.
 
 ---
 

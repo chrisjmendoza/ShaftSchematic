@@ -1,0 +1,258 @@
+package com.android.shaftschematic.model
+
+import kotlinx.serialization.Serializable
+import com.android.shaftschematic.util.randomUuidString
+
+/**
+ * Cylindrical body section (constant diameter).
+ *
+ * Units: **mm** (millimeters).
+ *
+ * @property startFromAftMm Distance from AFT face toward FWD where this body starts.
+ * @property lengthMm Axial length of the body.
+ * @property diaMm Outer diameter of the body.
+ * @property keywayWidthMm Optional keyway width (0 = none).
+ * @property keywayDepthMm Optional keyway depth (0 = none).
+ * @property keywayLengthMm Optional keyway length (0 = none).
+ * @property keywayOffsetFromEndMm Axial distance from the referenced body end face
+ *   ([keywayEnd]) to the near edge of the keyway slot.
+ *   0 = open keyway (starts at the end face, open-ended there).
+ *   > 0 = captured keyway (inset from the face, mill arcs at both ends). "Captured" is the
+ *   shop term; it is derived from this value alone, never stored as a separate flag.
+ * @property keywayEnd Which body end face the keyway is referenced from (AFT or FWD).
+ *   Intermediate shafts with fitted couplings carry keyways at a shaft end that is a
+ *   plain cylindrical body — this picks the face the offset is measured from.
+ * @property keywaySpooned Whether the open keyway's closed (LET) end is spooned — an enlarged
+ *   circle drawn around the mill end (which stays as an inner reference line).
+ *   Ignored when [keywayOffsetFromEndMm] > 0 (captured keyways have no open end to reference).
+ * @property showDiaOnDrawing Whether this body's Ø prints as a below-shaft callout on the
+ *   schematic. Draw-only flag: it changes nothing in the model, resolve, OAL, collision, or
+ *   footer geometry, and never rewrites [diaMm]. Defaults OFF (on-device preference): body Ø
+ *   callouts are opt-in per card, so the schematic stays clean unless a Ø is deliberately
+ *   shown (the footer carries no body Ø line). When several shown
+ *   bodies share a Ø, the callout anchors at the longest of them.
+ * @property showNameOnDrawing Whether this body's name prints as a component label under the
+ *   schematic. Tri-state, draw-only (never rewrites [label]): `null` — the default — follows
+ *   the Settings switch ("Component names on drawing", Settings → Drawing), so a document saved before the flag
+ *   existed prints exactly as its setting says; an explicit `true` prints THIS name even with
+ *   that switch off (on-device report: a freshly checked card toggle did nothing under a
+ *   global switch turned off long before); an explicit `false` hides this name even with it
+ *   on. The per-sheet export option (template mode) still gates the whole pass. The field
+ *   name is deliberately fresh (`showNameOnDrawing`; the retired `showLabelOnDrawing` key is
+ *   ignored at decode): the flag's first build blanket-serialized `true` under the old key on
+ *   every component of every saved document, and honoring those stamps as authored overrides
+ *   made one checked toggle appear to turn every label on (on-device report). A stored value
+ *   under THIS key is always an authored choice.
+ * @property shadeOnDrawing Whether this body draws with the grey shade fill. Tri-state,
+ *   draw-only (no geometry, no value rewrite): `null` — the default — follows the kind's
+ *   Settings checkbox (`PdfPrefs.shadedBodies`, narrowed by `shadeExplicitBodiesOnly`, which
+ *   only ever bares AUTO runs); an explicit `true` shades THIS body even with the kind's
+ *   checkbox off (on-device request: shade one named section without shading the whole
+ *   drawing); an explicit `false` leaves it bare even with the kind on. Nullable from the
+ *   start on purpose — a non-null default would serialize an authored-looking stamp onto
+ *   every component of every saved document, which is what forced the name-label flag's key
+ *   rename. The wear and undercut documents deliberately do not read it: their
+ *   `SimpleShaftProfile` takes one fill per kind, the same boundary `shadeExplicitBodiesOnly`
+ *   already has.
+ * @property compressOnDrawing Whether this body may foreshorten on a sheet. Draw-only: it
+ *   changes nothing in the model, resolve, OAL, collision, or footer geometry, and never
+ *   rewrites a stored span. `false` pins the body's stored span at true scale in the
+ *   compression solve — the keyway-window posture, so the drawn HEIGHT yields around it —
+ *   and suppresses its S-break, the long-span trigger included. The **serialization**
+ *   default is `true`: a document saved before this flag existed keeps compressing exactly
+ *   as it does today, since re-pinning a saved long shaft could leave it unrenderable.
+ *   Authoring surfaces create explicit bodies with `false` — an authored section reads at
+ *   true proportion unless its author re-enables compression (on-device request), and the
+ *   card's "Compress on drawing" checkbox is that escape hatch for a body big enough that
+ *   pinning it would starve the rest of the shaft.
+ * @property showDimensionRail Whether this body's own LENGTH prints as a dimension span on the
+ *   schematic and the consolidated sheet. Tri-state, draw-only (no geometry, no value rewrite):
+ *   `null` — the default — follows the body's POSITION: on when its stored span touches a shaft
+ *   end face (the body a coupling goes on, whose length the shop needs), off mid-shaft
+ *   (`effectiveBodyDimensionRail`, `ui/resolved/BodyDimensionRail.kt`); an explicit `true` or
+ *   `false` is an authored choice and wins wherever the body sits. Nullable from the start for
+ *   the reason [shadeOnDrawing] is: a non-null default would stamp an authored-looking value onto
+ *   every body of every saved document.
+ * @property blendAftMm Axial length of a machined **blend** cut into this body's AFT face
+ *   (0 = a square face). The blend runs INWARD from the face, easing from the neighbouring
+ *   component's diameter at the face to [diaMm] this far in, so it is machined entirely out
+ *   of this body and never moves or trims any other component. Silhouette only: it carries
+ *   no dimension rail and no footer row, and rails keep dimensioning the stored span — you
+ *   dimension to the theoretical sharp corner and let the drawn curve show the blend.
+ * @property blendFwdMm The same for this body's FWD face.
+ * @property blendAftSeal Whether the AFT end of this body carries a **seal area** — the radius
+ *   cuts the fiberglass seats into, drawn as [com.android.shaftschematic.geom.SEAL_GROOVE_COUNT]
+ *   grooves. A seal area is a property of the body SECTION, independent of the blend
+ *   ([blendAftMm]): it is measured from the face and sits in the same place whether the face is
+ *   square or blended (on-device report: a blend pushed the grooves inward). A schematic cue,
+ *   not a machining count.
+ * @property blendFwdSeal The same for the FWD face.
+ * @property blendAftSealLenMm Axial length of the AFT seal area — the grooved span, measured
+ *   from the face — canonical mm, stored verbatim.
+ *   Drawing-only like the blend length: no rail, no footer row, clamped only where it is
+ *   DRAWN. `0` (every document saved before the field existed) lets the seal area take the
+ *   blend's own length, so a seal authored before the ramp and the grooves were separated
+ *   keeps its grooves; on a square face a `0` resolves to no seal area drawn.
+ * @property blendFwdSealLenMm The same for the FWD seal area.
+ * @property blendAftToLinerOd Where the AFT blend leaves from when a LINER butts that face:
+ *   `false` — the default, and every document saved before the field — the derived half-way
+ *   seat between the liner OD and [diaMm]; `true` — the liner's full OD, a cone straight up to
+ *   the sleeve with no seat (on-device request: a polished body ramping to the liner beside it).
+ *   Drawing-only like the blend length, and read only where a liner supplies the neighbour Ø;
+ *   a body or taper across the face is followed as it always is.
+ * @property blendFwdToLinerOd The same for the FWD face.
+ * @property blendAftAngleDeg The AFT face's blend ENTRY: `null` — the default, and every document
+ *   saved before the field — is Length mode, where [blendAftMm] is the curve's axial length; a
+ *   value is Angle mode (on-device request: "some blends have expressions in degrees"), a
+ *   straight cone at this many degrees from the shaft AXIS (0 < θ < 90, 45° climbs one for one).
+ *   In Angle mode the axial length is DERIVED from the diameter step across the face —
+ *   `(|neighbour Ø − [diaMm]| / 2) / tan θ`, the neighbour Ø the blend already derives (a
+ *   butting liner's seat or OD under [blendAftToLinerOd]) — so it follows a later step change,
+ *   and [blendAftMm] is kept untouched for a switch back to Length. Stored verbatim. The face is
+ *   blended only while [blendAftMm] > 0 (the Square | Blend choice); the angle and radius PRINT
+ *   as below-shaft callouts on the schematic — the stored values, never measured off the drawing.
+ * @property blendFwdAngleDeg The same for the FWD face.
+ * @property blendAftRadiusMm Angle mode's optional corner radius on the AFT face, canonical mm,
+ *   stored verbatim (0 = a sharp corner): the round at the cone's small-diameter end, tangent to
+ *   the cone and to the smaller surface. A radius too large for the cone is clamped only where it
+ *   is DRAWN. Ignored in Length mode, and kept through a mode switch.
+ * @property blendFwdRadiusMm The same for the FWD face.
+ * @property blendProfile How both faces ease. Drawing-only, like the blend lengths.
+ * @property authoredReference Which shaft end this body's Start is measured from — the
+ *   "Measure From: AFT | FWD" chips, the liner/taper field. It is a display/entry choice and an
+ *   OAL anchor: under FWD the card shows and accepts the distance from the FWD end, and
+ *   `ShaftSpec.withNewOal` keeps that distance when the overall length changes (on-device
+ *   request: an explicit body exists to sit at an exact point, often off the coupling end).
+ *   Canonical [startFromAftMm] never moves on a reference SWITCH. Default AFT, so every
+ *   document saved before the field decodes unchanged.
+ */
+@Serializable
+data class Body(
+    override val id: String = randomUuidString(),
+    override val startFromAftMm: Float = 0f,
+    override val lengthMm: Float = 0f,
+    val diaMm: Float = 0f,
+    val keywayWidthMm: Float = 0f,
+    val keywayDepthMm: Float = 0f,
+    val keywayLengthMm: Float = 0f,
+    val keywayOffsetFromEndMm: Float = 0f,
+    val keywayEnd: LinerAuthoredReference = LinerAuthoredReference.AFT,
+    val keywaySpooned: Boolean = false,
+    val showDiaOnDrawing: Boolean = false,
+    val showNameOnDrawing: Boolean? = null,
+    val shadeOnDrawing: Boolean? = null,
+    val compressOnDrawing: Boolean = true,
+    val showDimensionRail: Boolean? = null,
+    val blendAftMm: Float = 0f,
+    val blendFwdMm: Float = 0f,
+    val blendAftSeal: Boolean = false,
+    val blendFwdSeal: Boolean = false,
+    val blendAftSealLenMm: Float = 0f,
+    val blendFwdSealLenMm: Float = 0f,
+    val blendAftToLinerOd: Boolean = false,
+    val blendFwdToLinerOd: Boolean = false,
+    val blendAftAngleDeg: Float? = null,
+    val blendFwdAngleDeg: Float? = null,
+    val blendAftRadiusMm: Float = 0f,
+    val blendFwdRadiusMm: Float = 0f,
+    val blendProfile: BlendProfile = BlendProfile.OGEE,
+    val authoredReference: LinerAuthoredReference = LinerAuthoredReference.AFT,
+    /** Optional user-defined label for display (not used for geometry). */
+    val label: String? = null,
+) : Segment
+
+/** Basic invariants for a Body. */
+fun Body.isValid(overallLengthMm: Float): Boolean =
+    isWithin(overallLengthMm) &&
+        diaMm >= 0f &&
+        keywayWidthMm >= 0f &&
+        keywayDepthMm >= 0f &&
+        keywayLengthMm >= 0f &&
+        keywayOffsetFromEndMm >= 0f &&
+        blendAftMm >= 0f &&
+        blendFwdMm >= 0f &&
+        (keywayOffsetFromEndMm + keywayLengthMm) <= lengthMm
+
+/** True if this body has a keyway defined (all three dimensions non-zero). */
+val Body.hasKeyway: Boolean get() = keywayWidthMm > 0f && keywayDepthMm > 0f && keywayLengthMm > 0f
+
+/**
+ * True if ANY keyway dimension (W, D or L) is entered. A half-typed keyway — one or two
+ * of the three — is not yet a keyway ([hasKeyway] needs all three) but it IS authored
+ * work, so a card keeps its keyway section open for it: collapsing the section would hide
+ * typed values (golden rule).
+ */
+val Body.hasAnyKeywayValue: Boolean get() = keywayWidthMm > 0f || keywayDepthMm > 0f || keywayLengthMm > 0f
+
+/**
+ * Absolute AFT-origin axial span of this body's keyway, or null when the body has no
+ * keyway. Resolves the AFT/FWD end-face reference to physical space.
+ */
+fun Body.keywayAbsSpanMm(): KeywaySpan? {
+    if (!hasKeyway) return null
+    return when (keywayEnd) {
+        LinerAuthoredReference.AFT -> {
+            val near = startFromAftMm + keywayOffsetFromEndMm
+            KeywaySpan(near, near + keywayLengthMm)
+        }
+        LinerAuthoredReference.FWD -> {
+            val near = startFromAftMm + lengthMm - keywayOffsetFromEndMm
+            KeywaySpan(near - keywayLengthMm, near)
+        }
+    }
+}
+
+/** Strips all keyway fields (used when a geometry change makes the keyway unplaceable). */
+fun Body.withoutKeyway(): Body = copy(
+    keywayWidthMm = 0f,
+    keywayDepthMm = 0f,
+    keywayLengthMm = 0f,
+    keywayOffsetFromEndMm = 0f,
+    keywaySpooned = false,
+)
+
+/**
+ * True if this body asks for a blend on the given face. A stored length longer than the body
+ * still reads as "blended" — the draw sites clamp it, because clamping a drawn curve is not
+ * the same as rewriting what the user typed.
+ */
+fun Body.hasBlendOn(end: LinerAuthoredReference): Boolean = when (end) {
+    LinerAuthoredReference.AFT -> blendAftMm > 0f
+    LinerAuthoredReference.FWD -> blendFwdMm > 0f
+}
+
+/** Stored blend length on the given face (mm); 0 = a square face. */
+fun Body.blendMmOn(end: LinerAuthoredReference): Float = when (end) {
+    LinerAuthoredReference.AFT -> blendAftMm
+    LinerAuthoredReference.FWD -> blendFwdMm
+}
+
+/** Whether the given end carries a seal area — independent of whether that face is blended. */
+fun Body.blendSealOn(end: LinerAuthoredReference): Boolean = when (end) {
+    LinerAuthoredReference.AFT -> blendAftSeal
+    LinerAuthoredReference.FWD -> blendFwdSeal
+}
+
+/** Whether the given face's blend runs to a butting liner's full OD instead of the derived seat. */
+fun Body.blendToLinerOdOn(end: LinerAuthoredReference): Boolean = when (end) {
+    LinerAuthoredReference.AFT -> blendAftToLinerOd
+    LinerAuthoredReference.FWD -> blendFwdToLinerOd
+}
+
+/** Stored Angle-mode angle on the given face (degrees from the axis); null = Length mode. */
+fun Body.blendAngleDegOn(end: LinerAuthoredReference): Float? = when (end) {
+    LinerAuthoredReference.AFT -> blendAftAngleDeg
+    LinerAuthoredReference.FWD -> blendFwdAngleDeg
+}
+
+/** Stored Angle-mode corner radius on the given face (mm); 0 = a sharp corner. */
+fun Body.blendRadiusMmOn(end: LinerAuthoredReference): Float = when (end) {
+    LinerAuthoredReference.AFT -> blendAftRadiusMm
+    LinerAuthoredReference.FWD -> blendFwdRadiusMm
+}
+
+/** Stored seal-area length on the given face (mm); 0 = follow the blend length. */
+fun Body.blendSealLenMmOn(end: LinerAuthoredReference): Float = when (end) {
+    LinerAuthoredReference.AFT -> blendAftSealLenMm
+    LinerAuthoredReference.FWD -> blendFwdSealLenMm
+}

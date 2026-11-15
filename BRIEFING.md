@@ -190,11 +190,14 @@ Target SDK:    36
 Build system:  Gradle version catalogs (gradle/libs.versions.toml)
 ```
 
+**Modules:** `:shared` (Kotlin Multiplatform — model, geometry, codec, PDF composers; Android + iOS targets) and `:app` (Compose UI, view models, Android services); package names are the same in both. See `docs/ARCHITECTURE.md` §Modules.
+
 **Run tests:**
 ```powershell
 $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
 $env:PATH = "$env:JAVA_HOME\bin;$env:PATH"
 ./gradlew --no-configuration-cache test
+./gradlew :shared:compileKotlinIosArm64   # iOS klib compile check
 ```
 
 ---

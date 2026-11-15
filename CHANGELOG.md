@@ -6,6 +6,40 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-11-14
+
+### ci: refactor branches get a test build
+
+The Build & Distribute workflow also triggers on `refactor/**` branches, alongside `main`,
+`feat/**`, `fix/**` and `chore/**`. A push to `refactor/kmp-shared-core` built nothing until the
+workflow was started by hand.
+
+### refactor(shared): the platform-free code and the sheet drawing code move to a Kotlin Multiplatform module
+
+First two steps toward an iPhone build; nothing changes on Android. A new `:shared` module
+(Android plus `iosArm64`/`iosSimulatorArm64`) now holds the model, geometry, document codec,
+templates, component resolution, settings types, the pure `util/` helpers and every PDF composer
+with its rails, footers and strips — moved with their packages unchanged, so no import anywhere
+changed. The Compose UI, `ShaftRenderer`, the view models, DataStore, file I/O and the Android-only
+helpers (`AppLog`, `CrashReporter`, `BundledFonts`, the PDF save/print/raster helpers) stay in `:app`.
+
+The shared code no longer imports `android.graphics`: it draws through a small `gfx` package
+(`Canvas`, `Paint`, `Path`, `RectF`, dash effects, `Typeface`). On Android each name is an
+`actual typealias` of the Android class, so the app makes the same drawing calls as before and the
+preview canvases and tests still pass real Android canvases and paints; on iOS they are plain
+classes forwarding to a backend the iOS host will supply. The few JVM-only calls (UUIDs, decimal
+formatting, rounding, angle conversion, the clock) are expect/actual functions whose Android side is
+the original call. The five entry points that take a `PdfDocument.Page` are thin adapters in the
+app over `…OnCanvas` functions in shared; bundled fonts keep their resource ids in the app and
+register the loaded faces with the shared output-font holder at startup. Declarations the app and
+its tests reach across the module boundary changed from `internal` to public.
+
+Verified: 4239 unit tests green, all 250 review renders byte-identical to main, `lintVitalRelease`
+green, and both iOS klibs compile on Windows (`:shared:compileKotlinIosArm64`). One test changed:
+`SheetTextPaintSourceTest` scans the drawing code where it now lives and matches the new spelling.
+
+---
+
 ## 2026-11-13
 
 ### feat(undercut): a body's blend draws on the undercut sections

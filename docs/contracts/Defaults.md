@@ -6,7 +6,7 @@ Central reference for default values used when creating new components.
 
 ## Source of Truth
 
-**Code:** `app/src/main/java/com/android/shaftschematic/ui/config/AddDefaultsConfig.kt`
+**Code:** `shared/src/commonMain/kotlin/com/android/shaftschematic/ui/config/AddDefaultsConfig.kt`
 
 `AddDefaultsConfig` holds the **inch presets** (`*_IN` constants — authoritative for user
 intent) plus `BODY_DIA_MM` (the auto-body bare-shaft Ø fallback used by

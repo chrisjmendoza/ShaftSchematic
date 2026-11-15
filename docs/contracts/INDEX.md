@@ -7,7 +7,7 @@ Project-wide invariants live in `CLAUDE.md`; repo-level references (architecture
 data model, validation, glossary, roadmap) sit one level up in `docs/`.
 
 **v1.2 relocation:** the pack moved out of the source tree
-(`app/src/main/java/com/android/shaftschematic/docs/`) to `docs/contracts/`, so the repo
+(the former `docs/` package inside the app source tree) to `docs/contracts/`, so the repo
 has ONE documentation root. Code comments cited it as `docs/X.md`, which read as the
 repo-root folder and made the files hard to find; every reference now spells
 `docs/contracts/X.md` and resolves from anywhere.

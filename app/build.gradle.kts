@@ -128,6 +128,9 @@ kotlin {
 }
 
 dependencies {
+    // --- Platform-free core (model, geometry, document codec, formatting) — Kotlin Multiplatform.
+    implementation(project(":shared"))
+
     // --- Core / AppCompat (if you still use any View-based screens)
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.core.ktx)

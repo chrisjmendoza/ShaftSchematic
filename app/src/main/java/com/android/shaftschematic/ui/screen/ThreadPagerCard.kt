@@ -176,10 +176,11 @@ internal fun ThreadPagerCard(
         // designation, see `ThreadDesignation`) so a thread stored with one shows its
         // designation field here instead of the imperial Major Ø/TPI pair — same
         // parity rule as the Add dialog's Imperial/Metric toggle.
-        if (th.metricDesignation != null) {
+        val designation = th.metricDesignation
+        if (designation != null) {
             CommitDesignationField(
                 "Thread designation",
-                th.metricDesignation,
+                designation,
             ) { text ->
                 ThreadDesignation.parse(text)?.let { d ->
                     onUpdateThread(idx, th.startFromAftMm, th.lengthMm, d.majorDiaMm, d.pitchMm ?: 0f, d.format())

@@ -5,6 +5,14 @@ Android app (Kotlin / Jetpack Compose) for designing marine propulsion shafts.
 All model values are **canonical millimeters (mm)**. Unit conversion (mm ↔ in) happens
 only at the UI edge for display and input — never in the model, ViewModel, or renderer.
 
+Two Gradle modules. `:shared` (Kotlin Multiplatform: Android + `iosArm64`/`iosSimulatorArm64`,
+`shared/src/commonMain|androidMain|iosMain`) holds everything that never touches Android — model,
+`geom/`, `doc/`, `template/`, `ui/resolved`, `settings/`, the pure `util/` helpers and every PDF
+composer (`pdf/`). `:app` holds all Compose UI, `ShaftRenderer`, the view models, `data/`, `io/`
+and the Android-only `util/` files (`AppLog`, `CrashReporter`, `BundledFonts`, `Pdf*` I/O). Package
+names are identical across the two, so a package path in this file (`pdf/ShaftPdfComposer.kt`)
+names a file in whichever module holds it; all tests live in `app/src/test`.
+
 ## Docs
 Detailed contracts live in `docs/contracts/` (index: `docs/contracts/INDEX.md`). This file is
 the ONE copy of the project rules — `AGENTS.md` and `.github/copilot-instructions.md` are
@@ -945,6 +953,28 @@ dark background; a keyway cut shows the ground (`RenderOptions.voidColor`, white
 canvas). Chrome inks a light ground draws fixed (the cards' black selected chips, the ✓ green)
 go through `ui/theme/ChromeInk.kt`, which returns the historical colour on a light ground.
 
+### Shared code draws through gfx, never android.graphics
+Code under `shared/src/commonMain` may not import `android.*`, `androidx.*` or `java.*` — the
+common-metadata compile fails on it. Sheet drawing code uses the `com.android.shaftschematic.gfx`
+types (`Canvas`, `Paint`, `Path`, `RectF`, `Rect`, `PathEffect`/`DashPathEffect`, `Typeface`,
+`FontMetrics`, the `Paint*` enums, `Color`, `ANTI_ALIAS_FLAG`). On Android every one is an
+`actual typealias` of the same-named `android.graphics` class: that is what keeps output
+byte-identical and lets the preview canvases and the test recorders hand real Android canvases and
+paints to the composers, so do not replace a typealias with a wrapper class. On iOS they are plain
+classes forwarding to a `CanvasBackend`/`TextMeasurer` the iOS host supplies. A member of an
+Android graphics class that drawing code newly needs goes into the `gfx` expect declarations and
+the iOS actual: a Java getter/setter pair as expect accessor functions plus a common inline
+extension property, a Java public field as a top-level `expect val` extension, a nested
+enum/class as a top-level expect type. A platform-only call (UUID, fixed-point formatting,
+rounding, angle conversion, the clock, verbose log, today's date) gets an expect/actual function
+(`util/Platform.kt`) whose Android actual is the original call verbatim — never a hand-written
+common re-implementation of formatting or rounding, since printed dimensions would change. The five
+`PdfDocument.Page` entry points (`composeShaftPdf`, `composeRunoutPdf`, `composeWearPdf`,
+`composeUndercutPdf`, `composeBeforeAfterPdf`) stay in `:app` (`pdf/PdfPageComposers.kt`) as thin
+adapters over the shared `…OnCanvas` functions. The iOS actuals are compile-checked only until a
+backend exists. A change to shared code is verified by the full `:app:testDebugUnitTest` suite plus
+`:shared:compileKotlinIosArm64`.
+
 ### Layout adapts on ONE axis, the window width class
 Phones and tablets run the same screens; what changes is decided by `WindowWidthClass`
 (`ui/adaptive/WindowSize.kt` — COMPACT < 600 dp, MEDIUM < 840 dp, EXPANDED) and nothing else.
@@ -1495,7 +1525,7 @@ default ON): never in a document, never captured by a Drawing profile, read by n
 **The same preview draws the shaft like the sheet — ONE fit pipeline, ONE body pass** (on-device
 request: "add the S breaks … so the shaft renders more closely to the output"). Its map and
 diameter scale come from the schematic's own `schematicProfileFit` (`pdf/ShaftPdfComposer.kt`,
-`internal`) solved in sheet points over the SHEET's content width
+public — the preview in `:app` calls it across the module boundary) solved in sheet points over the SHEET's content width
 (`SCHEMATIC_SHEET_CONTENT_WIDTH_PT`) and drawn into the box under ONE uniform scale
 (`PreviewSheetProfile.pxPerPt` = density × box width / sheet width; a box at least as wide as the
 page solves over its own width, unscaled) — the preview is a MINIATURE of the sheet's shaft,

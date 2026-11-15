@@ -131,6 +131,13 @@ Run on a device or emulator
 
 `./gradlew testDebugUnitTest` runs the suite — CI gates on it, so a red suite distributes nothing
 
+The project has two modules: `:shared` (Kotlin Multiplatform — model, geometry, document codec, PDF
+composers; Android + iOS targets) and `:app` (Compose UI, view models, Android services). All tests
+live in `app/src/test`. `./gradlew :shared:compileKotlinIosArm64` checks that the shared code still
+compiles for iOS (works on Windows; nothing runs on iOS yet). iPhone port: the shared module and
+the platform-neutral drawing layer are done; the shared UI (Compose Multiplatform), the iOS host
+app, CoreGraphics/CoreText drawing backends and iOS platform services remain, and need a Mac.
+
 📘 Usage Guide
 
 1. Start screen: create a New Drawing, start from a Template, Open a saved shaft, or Continue Draft

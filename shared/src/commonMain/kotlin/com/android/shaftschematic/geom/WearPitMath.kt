@@ -1,0 +1,173 @@
+// file: shared/src/commonMain/kotlin/com/android/shaftschematic/geom/WearPitMath.kt
+package com.android.shaftschematic.geom
+
+import com.android.shaftschematic.model.PitSize
+import com.android.shaftschematic.model.WearPit
+import com.android.shaftschematic.util.formatFixedUs
+import com.android.shaftschematic.util.mathRound
+
+/**
+ * Wear-pit ("X" marker) pure math — shared by the two draw sites and the tap handler.
+ *
+ * Kept as small, dependency-free top-level functions (no Compose/Android imports, `geom`
+ * package) so the sizing, hit-testing, and clamping rules are directly unit-testable in a
+ * plain JVM test — the same posture as `geom/RunoutReadingMath.kt` and
+ * `ui/screen/LinerWearMath.kt`.
+ *
+ * A pit "X" is drawn **identically** in both draw sites (the two must stay in lockstep, same
+ * rule as the runout marker):
+ * - canvas: `ComponentWearDetailOverlay`'s `drawPitX` (Compose `DrawScope`),
+ * - PDF: `WearPdfComposer`'s `drawWearPits*` (`android.graphics.Canvas`/`Paint`).
+ *
+ * Both compute the four X endpoints from a centre + [pitHalfArm]; only the drawing API differs.
+ */
+
+/**
+ * The [PitSize.LARGE] X is this multiple of the [PitSize.SMALL] X's arm length — a bigger "X"
+ * marks a bigger hole, matching the hand convention. Symbol-space only; a pit's true diameter is
+ * not modelled.
+ */
+const val PIT_LARGE_TO_SMALL_RATIO = 2.0f
+
+/** Comfortable interior band for [com.android.shaftschematic.model.WearPit.acrossFrac] so the X stays on the metal. */
+const val PIT_ACROSS_MIN = 0.08f
+const val PIT_ACROSS_MAX = 0.92f
+
+/**
+ * The X-size slider's range on the wear inspection page, as a multiple of the [PitSize.SMALL]
+ * arm: half a Small X up to three times one, in [PIT_SIZE_FACTOR_STEP] steps. 1× is Small and
+ * 2× ([PIT_LARGE_TO_SMALL_RATIO]) is Large, so the two original sizes sit on the track.
+ */
+const val PIT_SIZE_FACTOR_MIN = 0.5f
+const val PIT_SIZE_FACTOR_MAX = 3f
+const val PIT_SIZE_FACTOR_STEP = 0.25f
+const val PIT_SIZE_FACTOR_DEFAULT = 1f
+
+/**
+ * The size a pit DRAWS at, as a multiple of the [PitSize.SMALL] arm: its own
+ * [WearPit.sizeFactor] when it has one (chosen on the slider when it was placed), else its
+ * [WearPit.size] — 1× Small, [PIT_LARGE_TO_SMALL_RATIO] Large — for a pit placed before the
+ * slider existed. The stored factor is never rewritten; an out-of-range one is clamped here, where
+ * it is drawn.
+ */
+fun pitSizeFactor(pit: WearPit): Float =
+    pit.sizeFactor?.takeIf { it > 0f }?.coerceIn(PIT_SIZE_FACTOR_MIN, PIT_SIZE_FACTOR_MAX)
+        ?: if (pit.size == PitSize.LARGE) PIT_LARGE_TO_SMALL_RATIO else 1f
+
+/**
+ * Half-arm length (centre to a tip) of [pit]'s X, given the [PitSize.SMALL] half-arm [smallHalf]
+ * in the destination's own units (px on canvas, pt in the PDF). The caller picks [smallHalf] per
+ * surface; the pit's own [pitSizeFactor] is shared — ONE sizing rule for every draw site and the
+ * hit test, so a pit keeps the same proportion to its surface's Small X everywhere it draws.
+ */
+fun pitHalfArm(pit: WearPit, smallHalf: Float): Float = smallHalf * pitSizeFactor(pit)
+
+/**
+ * The [PitSize] a pit placed at [factor] also records — the nearer of Small and Large — so a build
+ * from before the slider, which reads only [WearPit.size], still draws it at a sensible size.
+ */
+fun pitSizeForFactor(factor: Float): PitSize =
+    if (factor >= (1f + PIT_LARGE_TO_SMALL_RATIO) / 2f) PitSize.LARGE else PitSize.SMALL
+
+/** A dragged slider value snapped to [PIT_SIZE_FACTOR_STEP] inside the range. */
+fun snappedPitSizeFactor(factor: Float): Float =
+    (mathRound(factor / PIT_SIZE_FACTOR_STEP) * PIT_SIZE_FACTOR_STEP)
+        .coerceIn(PIT_SIZE_FACTOR_MIN, PIT_SIZE_FACTOR_MAX)
+
+/** A size factor as the slider reads it: `1×`, `1.25×`, `0.5×`. */
+fun pitSizeFactorLabel(factor: Float): String {
+    val text = formatFixedUs(factor, 2).trimEnd('0').trimEnd('.')
+    return "$text×"
+}
+
+/**
+ * Largest SMALL half-arm, as a fraction of the drawn local radius, on a surface whose X is a fixed
+ * screen size. At this fraction a LARGE X spans 36% of the drawn diameter and a SMALL one 18%.
+ * A long component draws as a thin band, and a fixed-size X there nearly covered the shaft
+ * (on-device report: a 7.5" body).
+ */
+const val PIT_SMALL_HALF_MAX_FRAC_OF_RADIUS = 0.18f
+
+/**
+ * The SMALL half-arm for a pit on a segment drawn with local radius [localRadius]: [maxSmallHalf]
+ * where the segment draws tall, scaled down to [PIT_SMALL_HALF_MAX_FRAC_OF_RADIUS] of the radius
+ * where it draws thin, never below [minSmallHalf] so the mark stays visible. All in the caller's
+ * units. [pitHalfArm] applies the shared small:large ratio on top.
+ */
+fun pitSmallHalfOnSegment(localRadius: Float, maxSmallHalf: Float, minSmallHalf: Float): Float =
+    (localRadius * PIT_SMALL_HALF_MAX_FRAC_OF_RADIUS)
+        .coerceAtMost(maxSmallHalf)
+        .coerceAtLeast(minSmallHalf)
+
+/**
+ * Clamp an across-fraction into `[PIT_ACROSS_MIN, PIT_ACROSS_MAX]` so a placed X's centre keeps
+ * the symbol inside the drawn segment rather than half-hanging into empty space above/below it.
+ */
+fun clampPitAcrossFrac(frac: Float): Float = frac.coerceIn(PIT_ACROSS_MIN, PIT_ACROSS_MAX)
+
+/**
+ * Convert a physical shaft-space axial position [physicalMm] into a component-local axial value
+ * (from the component's AFT edge [componentStartMm]) — the canonical
+ * [com.android.shaftschematic.model.WearPit.axialMm] storage. Never negative.
+ */
+fun pitAxialLocalMm(physicalMm: Float, componentStartMm: Float): Float =
+    (physicalMm - componentStartMm).coerceAtLeast(0f)
+
+/**
+ * A pit's drawn centre + half-arm in destination units, for hit-testing a tap against the pits
+ * already on screen. [id] is the [com.android.shaftschematic.model.WearPit.id].
+ */
+data class PitHitTarget(val id: String, val cx: Float, val cy: Float, val halfArm: Float)
+
+/**
+ * Pick the id of the pit nearest to `(px, py)` whose X symbol (inflated by [padPx] for an easy
+ * touch target) is hit, or `null` when the tap lands on none. Used by the detail overlay to
+ * decide "tap on an existing X → remove it" vs "tap on bare metal → add a new pit".
+ */
+fun pickPitAt(px: Float, py: Float, targets: List<PitHitTarget>, padPx: Float): String? {
+    var bestId: String? = null
+    var bestDistSq = Float.MAX_VALUE
+    for (t in targets) {
+        val reach = t.halfArm + padPx
+        val dx = px - t.cx
+        val dy = py - t.cy
+        val distSq = dx * dx + dy * dy
+        if (distSq <= reach * reach && distSq < bestDistSq) {
+            bestDistSq = distSq
+            bestId = t.id
+        }
+    }
+    return bestId
+}
+
+/**
+ * Vertical pixel/point position of a pit centre inside a segment whose top edge is at [topY] and
+ * bottom edge at [botY], for across-fraction [acrossFrac] (`0` = top, `1` = bottom). The fraction
+ * is clamped ([clampPitAcrossFrac]) so the returned centre keeps the symbol on the metal.
+ */
+fun pitCenterY(topY: Float, botY: Float, acrossFrac: Float): Float =
+    topY + clampPitAcrossFrac(acrossFrac) * (botY - topY)
+
+/**
+ * Inverse of [pitCenterY]: the across-fraction implied by a tap at [tapY] within a segment spanning
+ * [topY]..[botY]. Returns `0.5` for a degenerate zero-height segment. Not clamped — callers clamp on
+ * store ([clampPitAcrossFrac]) so a tap slightly outside the outline still records a sensible pit.
+ */
+fun acrossFracFromTapY(tapY: Float, topY: Float, botY: Float): Float {
+    val h = botY - topY
+    if (h <= 0f) return 0.5f
+    return (tapY - topY) / h
+}
+
+/**
+ * Does a pit "X" centred on `(cx, cy)` with half-arm [halfArm] touch the knockout [halo] of an
+ * in-profile value? The X's bounds are its square `cx ± halfArm, cy ± halfArm`, grown by
+ * [strokePad] (half the stroke width — a round cap reaches that far past the tip); touching
+ * counts. The consolidated sheet hides such a pit (on-device ruling: the value stands above the
+ * pits), because the halo knocks out only the text box and the rest of the X pokes out past it.
+ */
+fun pitXTouchesHalo(cx: Float, cy: Float, halfArm: Float, strokePad: Float, halo: WornValueColumn): Boolean {
+    val reach = halfArm + strokePad.coerceAtLeast(0f)
+    return cx - reach <= halo.haloRight && cx + reach >= halo.haloLeft &&
+        cy - reach <= halo.haloBottom && cy + reach >= halo.haloTop
+}

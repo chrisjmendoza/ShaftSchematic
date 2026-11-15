@@ -222,8 +222,8 @@ uses): light status/navigation icons over a dark app, dark icons over a light on
 icons over the Dark and High-contrast Dark app bars (on-device report). High contrast does not
 enter the decision — each high-contrast scheme keeps its base scheme's ground.
 
-PDF output is unconditionally theme-independent (composers use fixed `android.graphics`
-colors) — nothing in this contract touches it.
+PDF output is unconditionally theme-independent (composers draw through the shared `gfx`
+types — on Android the `android.graphics` classes themselves — with fixed colors) — nothing in this contract touches it.
 
 ## Accessibility
 
