@@ -17,14 +17,14 @@ class SheetTextPaintSourceTest {
 
     private val pdfDir: File = run {
         var dir: File? = File(System.getProperty("user.dir") ?: error("Missing system property: user.dir"))
-        val rel = "app/src/main/java/com/android/shaftschematic/pdf"
+        val rel = "shared/src/commonMain/kotlin/com/android/shaftschematic/pdf"
         while (dir != null && !File(dir, rel).isDirectory) dir = dir.parentFile
         File(dir ?: error("$rel not found above ${System.getProperty("user.dir")}"), rel)
     }
 
     /** A fresh paint: `Paint()` or `Paint(Paint.ANTI_ALIAS_FLAG)`, optionally fully qualified. */
     private val freshPaint = Regex(
-        """(?:android\.graphics\.)?Paint\(\s*(?:(?:android\.graphics\.)?Paint\.ANTI_ALIAS_FLAG)?\s*\)\s*\.apply\s*\{""",
+        """(?:android\.graphics\.)?Paint\(\s*(?:(?:(?:android\.graphics\.)?Paint\.)?ANTI_ALIAS_FLAG)?\s*\)\s*\.apply\s*\{""",
     )
     private val textProps = Regex("""\b(textSize|textAlign|typeface)\b""")
 

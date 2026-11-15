@@ -98,6 +98,7 @@ import com.android.shaftschematic.util.LengthFormat
 import com.android.shaftschematic.util.OutputFont
 import com.android.shaftschematic.util.PDF_PAGE_WIDTH_PT
 import com.android.shaftschematic.util.UnitSystem
+import com.android.shaftschematic.util.fontRes
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import java.util.Locale

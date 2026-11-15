@@ -36,3 +36,16 @@ expect fun mathToDegrees(angrad: Double): Double
 
 /** Wall-clock milliseconds since the epoch — `System.currentTimeMillis()` on Android. */
 expect fun currentTimeMillis(): Long
+
+/**
+ * [value] fixed-point with [decimals] places in the device's default locale —
+ * `"%.<decimals>f".format(value)` on Android. For diagnostic text only; a printed value takes
+ * [formatFixedUs].
+ */
+expect fun formatFixedDefaultLocale(value: Double, decimals: Int): String
+
+/** The [Float] overload of [formatFixedDefaultLocale], keeping the argument's boxed type. */
+expect fun formatFixedDefaultLocale(value: Float, decimals: Int): String
+
+/** A sorted, de-duplicated mutable set holding [a] and [b] — `sortedSetOf(a, b)` on Android. */
+expect fun sortedFloatSetOf(a: Float, b: Float): MutableSet<Float>

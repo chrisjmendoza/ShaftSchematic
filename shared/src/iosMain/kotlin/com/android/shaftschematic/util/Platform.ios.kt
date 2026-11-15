@@ -32,3 +32,37 @@ actual fun mathToRadians(angdeg: Double): Double = angdeg * 0.017453292519943295
 actual fun mathToDegrees(angrad: Double): Double = angrad * 57.29577951308232
 
 actual fun currentTimeMillis(): Long = (NSDate().timeIntervalSince1970 * 1000.0).toLong()
+
+/** C `printf` fixed-point through Foundation — the POSIX locale, whatever the device's. */
+actual fun formatFixedDefaultLocale(value: Double, decimals: Int): String =
+    NSString.stringWithFormat("%.${decimals}f", value)
+
+actual fun formatFixedDefaultLocale(value: Float, decimals: Int): String =
+    NSString.stringWithFormat("%.${decimals}f", value.toDouble())
+
+actual fun sortedFloatSetOf(a: Float, b: Float): MutableSet<Float> = SortedFloatSet().apply { add(a); add(b) }
+
+/**
+ * A mutable set of floats iterated in ascending [Float.compareTo] order, de-duplicated by the same
+ * comparison — the ordering and identity a JVM `TreeSet<Float>` gives.
+ */
+private class SortedFloatSet : AbstractMutableSet<Float>() {
+    private val items = mutableListOf<Float>()
+
+    override val size: Int get() = items.size
+
+    override fun add(element: Float): Boolean {
+        var lo = 0
+        var hi = items.size
+        while (lo < hi) {
+            val mid = (lo + hi) ushr 1
+            val c = items[mid].compareTo(element)
+            if (c == 0) return false
+            if (c < 0) lo = mid + 1 else hi = mid
+        }
+        items.add(lo, element)
+        return true
+    }
+
+    override fun iterator(): MutableIterator<Float> = items.iterator()
+}

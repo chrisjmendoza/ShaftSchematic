@@ -20,3 +20,9 @@ actual fun mathToRadians(angdeg: Double): Double = Math.toRadians(angdeg)
 actual fun mathToDegrees(angrad: Double): Double = Math.toDegrees(angrad)
 
 actual fun currentTimeMillis(): Long = System.currentTimeMillis()
+
+actual fun formatFixedDefaultLocale(value: Double, decimals: Int): String = "%.${decimals}f".format(value)
+
+actual fun formatFixedDefaultLocale(value: Float, decimals: Int): String = "%.${decimals}f".format(value)
+
+actual fun sortedFloatSetOf(a: Float, b: Float): MutableSet<Float> = sortedSetOf(a, b)

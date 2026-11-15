@@ -1,0 +1,72 @@
+package com.android.shaftschematic.pdf
+
+import com.android.shaftschematic.gfx.Canvas
+import com.android.shaftschematic.gfx.Paint
+import com.android.shaftschematic.gfx.PaintStyle
+import com.android.shaftschematic.gfx.strokeWidth
+import com.android.shaftschematic.gfx.style
+
+/**
+ * Blank-draft (write-in) helpers shared by the schematic, runout, and wear composers.
+ *
+ * A blank draft keeps the full drawing and every field LABEL, but replaces each printed
+ * VALUE with a thin writing rule so the sheet can be filled in by hand. All three
+ * composers must use the same rule style so the documents read as one family.
+ */
+
+/** Default writable rule length after a label (pt). */
+internal const val BLANK_RULE_PT = 70f
+
+/**
+ * Writable gap reserved inside a dimension-line break when the value is blanked (pt).
+ * Sized for handwriting a dimension like `60 1/4"` on a clipboard — a print-width gap is
+ * too tight to write in (on-device report). A span too short to host it with inward arrows
+ * cuts a narrower gap instead ([BLANK_DIM_GAP_MIN_PT]), so widening this never costs a rail
+ * its write-in spot.
+ */
+const val BLANK_DIM_GAP_PT = 60f
+
+/**
+ * Smallest write-in gap still worth cutting (pt) — roughly a cramped `19 1/2`. A span that
+ * cannot host even this keeps the continuous-line fallback: a gap too small to write a
+ * dimension into is worse than an unbroken line, since it reads as a printed break.
+ */
+internal const val BLANK_DIM_GAP_MIN_PT = 28f
+
+/**
+ * Air between a printed dimension value and each line stub when it seats in its break
+ * (pt) — the wear/runout OAL lines and the wear strips' chained rails mimic the
+ * schematic's value-in-a-break convention so all drawing outputs read the same.
+ * `layoutWearStripRail`'s `textPadPt` default must stay equal to this: its inward-arrow
+ * fit test is what guarantees a break cut at this pad leaves stub room for the arrows.
+ */
+const val DIM_BREAK_TEXT_PAD_PT = 4f
+
+/** Rule sits slightly below the text baseline, like an underscore. */
+private const val RULE_DROP_PT = 2f
+
+private fun rulePaint(text: Paint): Paint = Paint(text).apply {
+    style = PaintStyle.STROKE
+    strokeWidth = 0.7f
+}
+
+/**
+ * Draws `label` at ([x], [y]) followed by a writable rule of [ruleWidth] pt (clamped to
+ * [maxRight]). Returns the x just past the rule (plus a small gap), so header segments
+ * can be chained on one line.
+ */
+internal fun drawLabelWithRule(
+    c: Canvas,
+    label: String,
+    x: Float,
+    y: Float,
+    text: Paint,
+    ruleWidth: Float = BLANK_RULE_PT,
+    maxRight: Float = Float.MAX_VALUE,
+): Float {
+    c.drawText(label, x, y, text)
+    val ruleStart = x + text.measureText(label) + 4f
+    val ruleEnd = (ruleStart + ruleWidth).coerceAtMost(maxRight)
+    if (ruleEnd > ruleStart) c.drawLine(ruleStart, y + RULE_DROP_PT, ruleEnd, y + RULE_DROP_PT, rulePaint(text))
+    return ruleEnd + 14f
+}
