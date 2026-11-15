@@ -2,7 +2,7 @@ name: Build & Distribute APK
 
 # Triggers:
 #   - Every push to main (post-merge)
-#   - Every push to any feat/*, fix/* or chore/* branch (active development) — skipped when the
+#   - Every push to any feat/*, fix/*, chore/* or refactor/* branch (active development) — skipped when the
 #     pushed commit is already on main, so a merged branch never uploads after main's own build
 #   - Manual trigger from GitHub Actions tab (Actions → Build & Distribute APK → Run workflow)
 on:
@@ -12,6 +12,7 @@ on:
       - 'feat/**'
       - 'chore/**'
       - 'fix/**'
+      - 'refactor/**'
   workflow_dispatch:
 
 jobs:

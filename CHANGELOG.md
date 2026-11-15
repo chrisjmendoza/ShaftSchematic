@@ -8,6 +8,12 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-14
 
+### ci: refactor branches get a test build
+
+The Build & Distribute workflow also triggers on `refactor/**` branches, alongside `main`,
+`feat/**`, `fix/**` and `chore/**`. A push to `refactor/kmp-shared-core` built nothing until the
+workflow was started by hand.
+
 ### refactor(shared): the platform-free code and the sheet drawing code move to a Kotlin Multiplatform module
 
 First two steps toward an iPhone build; nothing changes on Android. A new `:shared` module
