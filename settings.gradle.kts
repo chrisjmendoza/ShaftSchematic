@@ -24,3 +24,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "ShaftSchematic"
 include(":app")
+include(":shared")
