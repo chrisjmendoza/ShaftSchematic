@@ -2076,7 +2076,7 @@ stays landscape.
   resolvedComponents, undercutRecord, blankValues)` counts it, so the page size a caller starts and
   the layout the composer draws cannot disagree. The list is the PRINTED strips (the "Sections to
   print" filter runs inside it).
-- **Page plumbing** — `util/PdfSafExport.kt` defines `PdfPageOrientation(widthPt, heightPt)`
+- **Page plumbing** — `util/PdfPage.kt` (shared module) defines `PdfPageOrientation(widthPt, heightPt)`
   (`LANDSCAPE` 792 × 612, `PORTRAIT` 612 × 792). `writeShaftPdfToUri`, `renderPdfPageBitmap`
   (`util/PdfRaster.kt`) and `printShaftPdfPage` (`util/PdfPrint.kt`; print media
   `NA_LETTER.asPortrait()` for portrait) take an `orientation` defaulting to `LANDSCAPE`, so every

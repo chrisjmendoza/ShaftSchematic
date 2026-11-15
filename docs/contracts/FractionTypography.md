@@ -206,7 +206,7 @@ ONE factory `sheetTextPaint(size, align)` (`pdf/SheetTextPaint.kt`), which sets
 `typeface = OutputTypography.active`; every other text paint is a copy-constructor of one of those
 and inherits the face. A text paint built by hand once printed the schematic's rail values and Ø
 callouts in the platform sans beside a sheet set in another face (on-device report), so
-`SheetTextPaintSourceTest` scans `pdf/` and fails on a fresh `Paint(...)` whose `apply` block sets a
+`SheetTextPaintSourceTest` scans the shared module's `pdf/` sources (`shared/src/commonMain/.../pdf`) and fails on a fresh `Paint(...)` whose `apply` block sets a
 text property. The factory's call sites:
 
 | Composer | Fresh text paints |
@@ -234,7 +234,7 @@ simply seats more values in a break. What it *can* disturb is the §3 size contr
 descent and cap height are the face's own: `FractionTextRendererTest` therefore runs its stacked
 and diagonal ink-bounds checks in **every** `OutputFont`.
 
-**Every face is BUNDLED, never a system family** (`OutputFont.fontRes`, one `res/font` file each).
+**Every face is BUNDLED, never a system family** (`OutputFont.fontRes` in the app's `util/BundledFonts.kt`, one `res/font` file each).
 The first build offered system families — Condensed, Serif, Monospace, and Standard/Medium as the
 platform sans — and a Samsung phone printed four of them identically while the bundled Hyperlegible
 came through (on-device report, 2026-11-07): a device may substitute its own font for the platform
@@ -248,7 +248,7 @@ SIL OFL 1.1 except Roboto. Licence texts ship in `assets/licenses/`, noted in `L
 README.
 
 `OutputFont.typeface` has no Context and the composers draw off the main thread, so the faces are
-loaded ONCE in `ShaftSchematicApp.onCreate` by `BundledFonts.init` and cached; `OutputTypography`
+loaded ONCE in `ShaftSchematicApp.onCreate` by `BundledFonts.init` (app module — it keeps the `R.font` ids) and registered with the shared `OutputFontFaces`; `OutputTypography`
 holds the CHOICE and resolves the face on every read, so a read before the load cannot pin a
 fallback for the life of the process. `BundledFontsTest` proves every face packages, loads, and
 measures unlike every other; the instrumented `OutputFontPdfProbeTest` proves they PRINT distinctly

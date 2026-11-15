@@ -9,6 +9,13 @@ conventions and critical invariants are in `CLAUDE.md` at the repo root.
 
 ## Architecture overview
 
+**Modules:** `:shared` (Kotlin Multiplatform, Android + iOS: model, `geom/`, `doc/`, `settings/`,
+every PDF composer) and `:app` (Compose UI, view models, Android services). Package names are the
+same in both, so look a file up by package path. Code in `shared/src/commonMain` may not import
+`android.*`/`androidx.*`/`java.*` and draws through the `gfx` types; see `CLAUDE.md` ("Shared code
+draws through gfx") and `docs/ARCHITECTURE.md` §Modules. Tests stay in `app/src/test`; verify with
+`./gradlew testDebugUnitTest` plus `./gradlew :shared:compileKotlinIosArm64`.
+
 **Model (mm only):** `ShaftSpec` + components (`Body`, `Taper`, `Threads`, `Liner`,
 `CouplerBoltSlot`). All geometry is stored in millimeters. Unit conversion (mm ↔ in)
 happens only at the UI edge for display and input — never in the model, ViewModel,

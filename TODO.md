@@ -235,6 +235,18 @@ Found on the 2026-10-27 AVD pass and not fixed on its branch:
   `FeedbackIntentFactoryTest` with stand-in URIs; the real `FileProvider` URIs for both files have
   not been seen on a device whose log has rotated.
 
+### iPhone port (a Mac or cloud macOS build is required from here)
+
+The shared module and the platform-neutral drawing layer are in; the iOS side only compiles to
+klibs (`:shared:compileKotlinIosArm64`), nothing runs on iOS.
+
+- [ ] Move the shared UI to Compose Multiplatform (screens, dialogs, input fields, theme).
+- [ ] iOS host app, with a CoreGraphics `CanvasBackend` and a CoreText `TextMeasurer` behind the
+  `gfx` types.
+- [ ] iOS actuals for the platform services: file export / open, print, PDF raster, bundled
+  fonts, crash reporting.
+- [ ] Move the `:app` unit tests of shared code into `:shared` host tests.
+
 ### Tech debt
 
 - [ ] Controller owns all VM-side intents (composables stateless) — design work, not a pure move.
