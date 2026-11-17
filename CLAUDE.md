@@ -223,7 +223,11 @@ to the shaft end, not to a component, so they are entered on the start card's "S
 (no carousel card, no Add dialog — outside the add-dialog-parity invariant) and written through
 `setEndHoles(end, holes, target)`. They **never** affect OAL, resolve, collision or the drawing;
 they print ONLY as lines in that end's footer column through ONE builder, `endHoleFooterLines`,
-built from the parts given (thread sizes verbatim, lengths in the document unit). Nothing draws
+built from the parts given (lengths in the document unit). The thread size is stored verbatim and
+PRINTED through ONE `drawPlateThreadText`: an inch mark after a bare number on an inch drawing and
+the `ShaftEndHoles.drawPlateSeries` (NC | NF, default NC — the toggle at the end of the box,
+on-device request: typed `1 1/4`, printed `1 1/4" NC`) after it, unless the text already names a
+series or is metric (`M30`). Nothing draws
 them on the shaft — do not add a drawn hole or end view without asking.
 
 ### Wear pits are reference features

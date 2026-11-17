@@ -149,7 +149,11 @@ a column whose widest line would wrap takes room its neighbour is not using (`fo
 tapped holes (`ShaftEndHoles`, entered on the start card's "Shaft ends"), through ONE builder,
 `endHoleFooterLines`: `Draw plate: 4 holes 1 1/4" NC on 4 1/2" B.C.` (no depth — the shop never
 measures it; no puller holes — those are in the propeller), built only from the parts that are
-given and printed only when one is. The thread size prints verbatim; the bolt circle prints in the document unit, dual
+given and printed only when one is. The thread size prints through `drawPlateThreadText`: the
+typed text plus an inch mark after a bare number on an inch drawing and its NC | NF series
+(`ShaftEndHoles.drawPlateSeries`, the toggle at the end of the box, default NC) — typed `1 1/4`
+prints `1 1/4" NC`; a size naming its own series (`1 1/4-7 UNC`) or a metric one (`M30`) prints as
+typed; the bolt circle prints in the document unit, dual
 when the document is. A blank draft keeps the label and rules the value. A reference
 feature: nothing draws on the shaft and nothing reaches OAL, resolve or collision.
 

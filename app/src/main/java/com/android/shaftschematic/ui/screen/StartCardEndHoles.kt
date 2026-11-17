@@ -9,6 +9,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -18,10 +19,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.ShaftEnd
 import com.android.shaftschematic.model.ShaftEndHoles
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.ThreadSeries
 import com.android.shaftschematic.model.endHoles
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.isLengthText
@@ -37,7 +41,8 @@ import com.android.shaftschematic.util.toMmOrNull
  * record holding values keeps its box ticked, and unticking clears them (one undo step).
  *
  * Every value commits on its own like the start card's other fields and is stored verbatim:
- * the thread size as typed text, the bolt circle in the document unit. No depth — the shop records
+ * the thread size as typed text with its NC | NF series on the toggle at the end of its box (default
+ * NC), the bolt circle in the document unit. No depth — the shop records
  * a hole's size, count and bolt circle only. A blank field clears its value ("not given"). They
  * print only as lines in that end's footer column.
  */
@@ -98,12 +103,34 @@ private fun EndHolesBlock(
                     initialText = holes.drawPlateSize,
                     onCommit = { onChange(holes.copy(drawPlateSize = it)) },
                     modifier = Modifier.testTag("end_${tag}_draw_plate_size"),
+                    trailing = {
+                        ThreadSeriesToggle(holes.drawPlateSeries, "end_${tag}_draw_plate_series") {
+                            onChange(holes.copy(drawPlateSeries = it))
+                        }
+                    },
                 )
             },
         )
         LengthField("Bolt circle Ø (${abbr(unit)})", holes.drawPlateBoltCircleMm, unit, "end_${tag}_draw_plate_bc") {
             onChange(holes.copy(drawPlateBoltCircleMm = it))
         }
+    }
+}
+
+/**
+ * The NC | NF toggle at the end of the thread-size box: shows the current series and flips it on a
+ * tap, committing at once (one undo step). The sheet prints the size with this series after it.
+ */
+@Composable
+private fun ThreadSeriesToggle(series: ThreadSeries, tag: String, onChange: (ThreadSeries) -> Unit) {
+    val next = if (series == ThreadSeries.NC) ThreadSeries.NF else ThreadSeries.NC
+    TextButton(
+        onClick = { onChange(next) },
+        modifier = Modifier.testTag(tag).semantics {
+            contentDescription = "Thread series ${series.name}. Tap for ${next.name}."
+        },
+    ) {
+        Text(series.name, style = MaterialTheme.typography.labelLarge)
     }
 }
 

@@ -4,6 +4,7 @@ import com.android.shaftschematic.model.Body
 import com.android.shaftschematic.model.ShaftEndHoles
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Taper
+import com.android.shaftschematic.model.ThreadSeries
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.UnitSystem
 import org.junit.Assert.assertEquals
@@ -91,5 +92,33 @@ class EndHoleFooterTest {
             displayUnits = DisplayUnits(UnitSystem.INCHES, dual = true),
         ).aftLines
         assertEquals(listOf("Draw plate: on ${formatLenWithUnitDual(120.0, UnitSystem.INCHES, true)} B.C."), dual)
+    }
+
+    @Test
+    fun `a bare inch size gains its inch mark and series`() {
+        assertEquals("1 1/4\" NC", drawPlateThreadText("1 1/4", ThreadSeries.NC, UnitSystem.INCHES))
+        assertEquals("1.25\" NF", drawPlateThreadText(" 1.25 ", ThreadSeries.NF, UnitSystem.INCHES))
+        val cols = buildFooterEndColumns(
+            spec(fwd = ShaftEndHoles(drawPlateCount = 4, drawPlateSize = "1 1/4", drawPlateBoltCircleMm = 4.5f * inch)),
+            UnitSystem.INCHES, cfg,
+        )
+        assertTrue(cols.fwdLines.toString(), "Draw plate: 4 holes 1 1/4\" NC on 4 1/2\" B.C." in cols.fwdLines)
+    }
+
+    @Test
+    fun `a typed inch mark or series is not doubled`() {
+        assertEquals("1 1/4\" NC", drawPlateThreadText("1 1/4\"", ThreadSeries.NC, UnitSystem.INCHES))
+        assertEquals("1 1/4\" NC", drawPlateThreadText("1 1/4\" NC", ThreadSeries.NF, UnitSystem.INCHES))
+        assertEquals("1 1/4-7 UNC", drawPlateThreadText("1 1/4-7 UNC", ThreadSeries.NC, UnitSystem.INCHES))
+        assertEquals("1 1/4\" unf", drawPlateThreadText("1 1/4 unf", ThreadSeries.NC, UnitSystem.INCHES))
+        assertEquals("3/4\" NF", drawPlateThreadText("3/4", ThreadSeries.NF, UnitSystem.INCHES))
+    }
+
+    @Test
+    fun `no inch mark on a metric drawing or a lettered size, and blank prints nothing`() {
+        assertEquals("30 NC", drawPlateThreadText("30", ThreadSeries.NC, UnitSystem.MILLIMETERS))
+        assertEquals("M30", drawPlateThreadText("M30", ThreadSeries.NC, UnitSystem.INCHES))
+        assertEquals("M20x2.5", drawPlateThreadText("M20x2.5", ThreadSeries.NF, UnitSystem.MILLIMETERS))
+        assertEquals(null, drawPlateThreadText("  ", ThreadSeries.NF, UnitSystem.INCHES))
     }
 }

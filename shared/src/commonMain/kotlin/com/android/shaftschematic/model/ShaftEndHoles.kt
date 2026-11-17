@@ -1,6 +1,12 @@
 package com.android.shaftschematic.model
 
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
 
 /**
  * The tapped holes in ONE end face of the shaft — the draw-plate bolt pattern (on-device request: the foreman hand-wrote "4 holes 1 1/4 NC on 4 1/2 B.C." beside
@@ -29,6 +35,12 @@ data class ShaftEndHoles(
     val drawPlateSize: String = "",
     /** Draw-plate bolt circle Ø (mm); 0 = not given. */
     val drawPlateBoltCircleMm: Float = 0f,
+    /**
+     * The draw-plate holes' thread series, chosen on the toggle at the end of the thread-size field
+     * (on-device request: the size is typed bare, `1 1/4`, and the sheet reads `1 1/4" NC`).
+     * Default [ThreadSeries.NC]. See [com.android.shaftschematic.pdf.drawPlateThreadText].
+     */
+    val drawPlateSeries: ThreadSeries = ThreadSeries.NC,
 ) {
     /** True when any draw-plate value is given — the line prints, and the start card section opens. */
     val hasDrawPlate: Boolean
@@ -37,6 +49,31 @@ data class ShaftEndHoles(
     /** The draw-plate values cleared. */
     fun withoutDrawPlate(): ShaftEndHoles =
         copy(drawPlateCount = 0, drawPlateSize = "", drawPlateBoltCircleMm = 0f)
+}
+
+/**
+ * Unified inch thread series of a tapped hole: coarse (NC) or fine (NF). Serialized by NAME through
+ * [ThreadSeriesSerializer], which decodes an unknown name to [NC].
+ */
+@Serializable(with = ThreadSeriesSerializer::class)
+enum class ThreadSeries {
+    NC, NF;
+
+    companion object {
+        /** Tolerant decode for a persisted name; an unknown or blank value is [NC]. */
+        fun fromName(raw: String?): ThreadSeries =
+            if (raw.isNullOrBlank()) NC else runCatching { valueOf(raw) }.getOrDefault(NC)
+    }
+}
+
+/** Name-string serializer for [ThreadSeries] with [ThreadSeries.fromName]'s fallback. */
+object ThreadSeriesSerializer : KSerializer<ThreadSeries> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("com.android.shaftschematic.model.ThreadSeries", PrimitiveKind.STRING)
+
+    override fun serialize(encoder: Encoder, value: ThreadSeries) = encoder.encodeString(value.name)
+
+    override fun deserialize(decoder: Decoder): ThreadSeries = ThreadSeries.fromName(decoder.decodeString())
 }
 
 /** Which end face of the shaft an [ShaftEndHoles] record belongs to. */

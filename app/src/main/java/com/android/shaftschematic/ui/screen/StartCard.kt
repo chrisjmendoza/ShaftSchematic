@@ -280,6 +280,8 @@ internal fun CommitTextField(
     modifier: Modifier = Modifier,
     singleLine: Boolean = true,
     minHeight: Dp = Dp.Unspecified,
+    /** Content at the end of the box (the draw-plate thread-series toggle); none by default. */
+    trailing: (@Composable () -> Unit)? = null,
 ) {
     var text by remember(initialText) { mutableStateOf(initialText) }
     var textWhenFocused by remember(initialText) { mutableStateOf<String?>(null) }
@@ -319,6 +321,7 @@ internal fun CommitTextField(
         value = text,
         onValueChange = { text = it },
         label = { Text(label) },
+        trailingIcon = trailing,
         singleLine = singleLine,
         maxLines = if (singleLine) 1 else 5,
         keyboardOptions = KeyboardOptions(

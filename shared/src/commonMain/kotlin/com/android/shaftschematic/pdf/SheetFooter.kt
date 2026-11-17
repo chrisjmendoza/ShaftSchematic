@@ -24,6 +24,7 @@ import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.model.printedDateOrNull
 import com.android.shaftschematic.model.ShaftEndHoles
+import com.android.shaftschematic.model.ThreadSeries
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Taper
 import com.android.shaftschematic.model.Threads
@@ -607,6 +608,43 @@ data class FooterColumns(
     val fwdLeadsWithHeading: Boolean = false,
 )
 
+/**
+ * The draw-plate thread as it prints — the typed size plus its series (on-device request: the size
+ * is typed bare and the sheet reads `1 1/4" NC`). The stored text is never rewritten (golden rule);
+ * only the printed form gains:
+ * - an inch mark right after the number, when the document is in inches and the size is a bare
+ *   number — `1`, `3/4`, `1 1/4`, `1.25`, alone or before a series word (`1 1/4` → `1 1/4"`,
+ *   `1 1/4 unf` → `1 1/4" unf`). Anything else (`1 1/4-7 UNC`, `M30`, a typed `"`) is left as typed;
+ * - the [series] (` NC` / ` NF`), unless the typed text already names one (`UNC`, `UNF`, `NC`,
+ *   `NF` as a word — `1 1/4-7 UNC` prints as typed) or is a metric designation (`M30`,
+ *   `M20x2.5` — an inch series means nothing there).
+ * Blank prints nothing (null): a series alone says nothing without a size.
+ */
+fun drawPlateThreadText(size: String, series: ThreadSeries, unit: UnitSystem): String? {
+    val typed = size.trim()
+    if (typed.isEmpty()) return null
+    val named = TRAILING_THREAD_SERIES.find(typed)
+    val core = named?.groupValues?.get(1) ?: typed
+    val tail = typed.substring(core.length)
+    val markedCore = if (unit == UnitSystem.INCHES && BARE_INCH_NUMBER.matches(core)) "$core\"" else core
+    val printed = markedCore + tail
+    val keepAsTyped = named != null || NAMED_THREAD_SERIES.containsMatchIn(typed) ||
+        METRIC_THREAD_DESIGNATION.containsMatchIn(typed)
+    return if (keepAsTyped) printed else "$printed ${series.name}"
+}
+
+/** A thread series already written into a typed size: `NC`, `NF`, `UNC`, `UNF` as a whole word. */
+private val NAMED_THREAD_SERIES = Regex("""(?i)(?<![A-Za-z])U?N[CF](?![A-Za-z])""")
+
+/** A metric thread designation: `M` then a digit (`M30`, `M20x2.5`). */
+private val METRIC_THREAD_DESIGNATION = Regex("""(?i)^M\d""")
+
+/** A size ending in a series word: group 1 is everything before the space and the word. */
+private val TRAILING_THREAD_SERIES = Regex("""(?i)^(.*?)\s+U?N[CF]$""")
+
+/** A bare number: whole, fraction, mixed number or decimal (`1`, `3/4`, `1 1/4`, `1.25`). */
+private val BARE_INCH_NUMBER = Regex("""^\d+(\.\d+)?$|^(\d+\s+)?\d+/\d+$""")
+
 /** Label of an end face's draw-plate holes line. */
 const val FOOTER_DRAW_PLATE_LABEL = "Draw plate:"
 
@@ -629,7 +667,7 @@ internal fun endHoleFooterLines(
     if (holes.hasDrawPlate) add(line(FOOTER_DRAW_PLATE_LABEL) {
         listOfNotNull(
             holes.drawPlateCount.takeIf { it > 0 }?.let { if (it == 1) "1 hole" else "$it holes" },
-            holes.drawPlateSize.takeIf { it.isNotBlank() },
+            drawPlateThreadText(holes.drawPlateSize, holes.drawPlateSeries, unit),
             holes.drawPlateBoltCircleMm.takeIf { it > 0f }?.let {
                 "on ${formatLenWithUnitDual(it.toDouble(), unit, dual)} B.C."
             },

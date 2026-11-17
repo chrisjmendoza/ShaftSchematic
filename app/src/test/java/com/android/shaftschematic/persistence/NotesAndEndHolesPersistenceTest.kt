@@ -9,6 +9,7 @@ import com.android.shaftschematic.model.ShaftEnd
 import com.android.shaftschematic.model.ShaftEndHoles
 import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.model.ShaftSpec
+import com.android.shaftschematic.model.ThreadSeries
 import com.android.shaftschematic.model.endHoles
 import com.android.shaftschematic.model.withEndHoles
 import com.android.shaftschematic.util.UnitSystem
@@ -28,7 +29,8 @@ class NotesAndEndHolesPersistenceTest {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val choices = mapOf("SCHEMATIC" to true)
     private val holes = ShaftEndHoles(
-        drawPlateCount = 4, drawPlateSize = "1 1/4\" NC", drawPlateBoltCircleMm = 114.3f,
+        drawPlateCount = 4, drawPlateSize = "1 1/4", drawPlateBoltCircleMm = 114.3f,
+        drawPlateSeries = ThreadSeries.NF,
     )
     private val spec = ShaftSpec(overallLengthMm = 2000f).withEndHoles(ShaftEnd.FWD, holes)
 
@@ -80,5 +82,15 @@ class NotesAndEndHolesPersistenceTest {
         val mate = mateDuplicate(source, jobNumber = "J-2", customer = "C", vessel = "V", position = ShaftPosition.PORT)
         assertEquals(choices, mate.sheetNotesSheets)
         assertEquals(holes, mate.spec.fwdEndHoles)
+    }
+
+    @Test
+    fun `holes saved before the series decode to NC, an unknown series too`() {
+        val raw = """{ "version": 1, "spec": { "overallLengthMm": 1000.0,
+            "fwdEndHoles": { "drawPlateCount": 4, "drawPlateSize": "1 1/4" },
+            "aftEndHoles": { "drawPlateSize": "1", "drawPlateSeries": "UNEF" } } }"""
+        val decoded = ShaftDocCodec.decode(raw)
+        assertEquals(ThreadSeries.NC, decoded.spec.fwdEndHoles.drawPlateSeries)
+        assertEquals(ThreadSeries.NC, decoded.spec.aftEndHoles.drawPlateSeries)
     }
 }
