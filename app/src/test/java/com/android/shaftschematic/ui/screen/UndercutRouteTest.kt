@@ -291,6 +291,26 @@ class UndercutRouteTest {
     }
 
     @Test
+    fun `the overall dimension ends at the liner by default and can be set to the end of the cuts`() {
+        val vm = vm().also { it.addUndercut(500f, 25.4f) }
+        host(vm)
+        rule.onNodeWithTag("undercut_drawing_settings_toggle").performScrollTo().performClick()
+        rule.waitForIdle()
+
+        rule.onNodeWithTag("undercut_overall_to_LINER_END").performScrollTo().assertIsSelected()
+        rule.onNodeWithTag("undercut_overall_to_CUTS_END").performScrollTo().performClick()
+        rule.waitForIdle()
+        assertEquals(com.android.shaftschematic.model.UndercutOverallTo.CUTS_END, vm.undercutRecord.value.overallTo)
+        rule.onNodeWithTag("undercut_overall_to_CUTS_END").assertIsSelected()
+
+        // Switching the overall dimension off greys the choice and keeps it.
+        rule.onNodeWithTag("undercut_total_rail_switch").performScrollTo().performClick()
+        rule.waitForIdle()
+        rule.onNodeWithTag("undercut_overall_to_LINER_END").performScrollTo().assertIsNotEnabled()
+        assertEquals(com.android.shaftschematic.model.UndercutOverallTo.CUTS_END, vm.undercutRecord.value.overallTo)
+    }
+
+    @Test
     fun `one section offers no sections list`() {
         val vm = vm().also { it.addUndercut(500f, 25.4f) }
         host(vm)

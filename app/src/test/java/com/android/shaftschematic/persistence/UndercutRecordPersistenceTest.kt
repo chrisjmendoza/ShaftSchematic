@@ -236,6 +236,21 @@ class UndercutRecordPersistenceTest {
     }
 
     @Test
+    fun `overallTo round trips, defaults to the liner end, and an unknown name falls back to it`() {
+        fun roundTrip(v: com.android.shaftschematic.model.UndercutOverallTo) = ShaftDocCodec.decode(
+            ShaftDocCodec.encodeV1(
+                ShaftDocCodec.ShaftDocV1(spec = spec(), undercutRecord = UndercutRecord(overallTo = v)),
+            ),
+        ).undercutRecord.overallTo
+        com.android.shaftschematic.model.UndercutOverallTo.entries.forEach { assertEquals(it, roundTrip(it)) }
+        assertEquals(com.android.shaftschematic.model.UndercutOverallTo.LINER_END, UndercutRecord().overallTo)
+        assertEquals(
+            com.android.shaftschematic.model.UndercutOverallTo.LINER_END,
+            com.android.shaftschematic.model.UndercutOverallTo.fromName("SOMEWHERE_ELSE"),
+        )
+    }
+
+    @Test
     fun `drawToSet round trips through the envelope`() {
         // A per-job fit for this shaft's geometry, so it rides the record rather than app prefs.
         val doc = ShaftDocCodec.ShaftDocV1(

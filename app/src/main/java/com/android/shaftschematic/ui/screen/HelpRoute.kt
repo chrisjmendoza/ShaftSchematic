@@ -1255,8 +1255,8 @@ internal val helpSections: List<HelpSection> = listOf(
                     "directly under \"Distance to S.E.T.\", with the other dimensioning " +
                     "choice — the same app-wide value as this Settings row.\n" +
                     "• \"Undercut drawing: overall dimension\" — default on. Each section " +
-                    "prints one dimension from the S.E.T. to the end of its cuts, above the " +
-                    "cut lengths. This is the DEFAULT each job follows until its own \"Overall " +
+                    "prints one dimension from the S.E.T., above the cut lengths, to the end of " +
+                    "the liner or of the cuts as the job chooses. This is the DEFAULT each job follows until its own \"Overall " +
                     "dimension\" switch on the Undercut tab is used; turn it off here and every " +
                     "job you have not set yourself prints without it.",
                 manualAnchor = "settings-pdf-export",
@@ -1368,8 +1368,10 @@ internal val helpSections: List<HelpSection> = listOf(
                     "out to the shaft end, and its dimension chain finishes with the run from the " +
                     "last cut to the S.E.T. Saved with this job.\n" +
                     "• \"Overall dimension\" — on the Undercut Drawing, under \"Drawing " +
-                    "settings\", and in its PDF options. Whether each section prints the " +
-                    "run from the S.E.T. to the end of its cuts above the cut lengths. Saved with this " +
+                    "settings\", and in its PDF options. Whether each section prints one " +
+                    "dimension from the S.E.T. above the cut lengths; \"Overall dimension to\" " +
+                    "under it ends it at the far end of the liner (the default, so the welder " +
+                    "knows where the liner stops) or at the end of the cuts. Saved with this " +
                     "job; until you change it, the job follows the Settings → PDF Export default.\n" +
                     "• Worn sections — on the Consolidated Output tab. (That tab's \"Sheet " +
                     "content\" choice is not saved: it starts at All three each session.)\n\n" +

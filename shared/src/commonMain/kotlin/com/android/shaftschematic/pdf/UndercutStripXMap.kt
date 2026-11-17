@@ -243,6 +243,8 @@ fun planUndercutStripXMap(
     fromSet: Boolean = false,
     /** "Liner ends from S.E.T." on a liner strip: the rails planned here are the strip's own. */
     linerEnds: UndercutLinerSpanMm? = null,
+    /** [planUndercutStripRails]' `overallLiner`. */
+    overallLiner: UndercutLinerSpanMm? = null,
     /** [planUndercutStripRails]' `nestedRows` — the rails planned here are the strip's own. */
     nestedRows: Boolean = false,
     /** [planUndercutStripRails]' `overallFromSet`. */
@@ -254,7 +256,7 @@ fun planUndercutStripXMap(
         chainStartMm, chainEndMm, spans, unit, dual, splitAtMm, startedStrip,
         xAt = linear::xAt, labelWidth = labelWidth, scale = scale, arrowSizePt = arrowSizePt,
         setLead = setLead, showTotal = showTotal, fromSet = fromSet, linerEnds = linerEnds,
-        nestedRows = nestedRows, overallFromSet = overallFromSet,
+        nestedRows = nestedRows, overallFromSet = overallFromSet, overallLiner = overallLiner,
     )
     if (!undercutRailsCrowded(rails)) return linear
     val seatRoom = (2f * (DIM_BREAK_TEXT_PAD_PT + arrowSizePt) + UNDERCUT_X_FLOOR_SLACK_PT) * scale

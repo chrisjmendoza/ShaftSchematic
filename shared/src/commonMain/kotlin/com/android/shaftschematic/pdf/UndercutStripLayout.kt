@@ -949,6 +949,13 @@ fun planUndercutStripRails(
      * cuts. Off (the default), the total-across-the-cuts layout, kept so it can return.
      */
     overallFromSet: Boolean = false,
+    /**
+     * The LINER's own span on a liner strip whose job ends the overall dimension at the liner
+     * (`UndercutOverallTo.LINER_END`); null on a bare-shaft strip or with the job measuring to the
+     * end of its cuts. With [overallFromSet], the overall rail then runs to the liner's end
+     * farthest from the S.E.T., captioned [UNDERCUT_LINER_END_CAPTION], instead of to the cuts' end.
+     */
+    overallLiner: UndercutLinerSpanMm? = null,
 ): UndercutStripRails {
     val sorted = spans.sortedBy { it.startMm }
     val nestingById = undercutNestingForest(sorted).associateBy { it.id }
@@ -956,14 +963,16 @@ fun planUndercutStripRails(
     val wholeChain = if (startedStrip) emptyList()
     else buildUndercutRailSpans(chainStartMm, chainEndMm, topSpans, unit, dual, splitAtMm = splitAtMm)
     // The overall dimension: S.E.T. → the end of the cuts, one more baseline rail on the stack.
-    val overallMm = if (overallFromSet && showTotal && !fromSet && setLead != null) undercutOverallStationMm(topSpans, setLead)
-    else null
+    val overallMm = if (!(overallFromSet && showTotal && !fromSet && setLead != null)) null
+    else overallLiner?.let { if (setLead.side == UndercutAnchorSide.AFT_SET) it.endMm else it.startMm }
+        ?: undercutOverallStationMm(topSpans, setLead)
     val setRailSpans = when {
         startedStrip || wholeChain.isEmpty() || setLead == null -> emptyList()
         fromSet -> buildUndercutSetRailSpans(sorted, setLead, unit, dual)
         linerEnds != null ->
             buildUndercutLinerEndRailSpans(linerEnds, setLead, unit, dual, extraStationsMm = listOfNotNull(overallMm))
         overallMm != null -> buildUndercutSetRailSpansAt(listOf(overallMm), setLead, unit, dual)
+            .map { if (overallLiner != null) it.copy(caption = UNDERCUT_LINER_END_CAPTION) else it }
         else -> emptyList()
     }
     // From S.E.T. replaces the total and the lead; liner ends stand over a chained strip.

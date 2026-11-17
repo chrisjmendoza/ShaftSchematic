@@ -8,6 +8,15 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-16
 
+### feat(undercut): the overall dimension ends at the liner or at the cuts
+
+On-device request: welding over the cuts, the shop needs to know where the liner ends so the seal
+area is not built up with wasted material. Under the "Overall dimension" switch, "Overall
+dimension to: End of liner | End of cuts" chooses where that dimension ends — the far end of the
+liner (the default, marked "S.E.T. to liner end") or the end of the last cut. A bare-shaft section
+has no liner and measures to the end of its cuts either way. On the Undercut tab's Drawing
+settings and the undercut PDF options; saved with the job.
+
 ### feat(undercut): an overall dimension from the S.E.T. to the end of the cuts
 
 On-device ruling: the foreman's hand sketches carry one dimension over the cut lengths (54 1/2

@@ -213,6 +213,29 @@ class UndercutLinerEndRailPlanTest {
     }
 
     @Test
+    fun `the overall dimension ends at the liner's far end when the job measures to the liner`() {
+        fun toLiner(lead: UndercutSetLead?, ends: UndercutLinerSpanMm? = null) = planUndercutStripRails(
+            chainStart, chainEnd, spans, unit, dual = false, splitAtMm = emptyList(), startedStrip = false,
+            xAt = ::xAt, labelWidth = labelWidth, setLead = lead, linerEnds = ends,
+            overallFromSet = true, overallLiner = liner,
+        )
+        val aft = sets.aftSETxMm.toFloat()
+        val rails = toLiner(aftLead())
+        assertEquals(listOf(liner.endMm), rails.setRailSpans.map { it.stationMm })
+        assertEquals(listOf<String?>(UNDERCUT_LINER_END_CAPTION), rails.setRailSpans.map { it.caption })
+        assertEquals(
+            listOf(formatLenDimDualLabel((liner.endMm - aft).toDouble(), unit, false)),
+            rails.setRails.map { it.label },
+        )
+        assertNull(rails.totalSpan)
+        // The FWD S.E.T. measures to the liner's AFT end.
+        assertEquals(listOf(liner.startMm), toLiner(fwdLead()).setRailSpans.map { it.stationMm })
+        // With "Liner ends from S.E.T." on it is that stack's own far-end rail: nothing added.
+        assertEquals(plan(aftLead(), liner).setRailSpans, toLiner(aftLead(), liner).setRailSpans)
+        assertNull(toLiner(aftLead(), liner).totalSpan)
+    }
+
+    @Test
     fun `liner ends with From S-E-T is From S-E-T alone`() {
         assertEquals(plan(aftLead(), null, fromSet = true), plan(aftLead(), liner, fromSet = true))
     }

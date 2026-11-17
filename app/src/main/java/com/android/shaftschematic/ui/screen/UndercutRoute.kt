@@ -161,6 +161,7 @@ import com.android.shaftschematic.ui.viewmodel.setUndercutShowTotalRail
 import com.android.shaftschematic.ui.viewmodel.setUndercutPageOrientation
 import com.android.shaftschematic.ui.viewmodel.setUndercutSectionPrinted
 import com.android.shaftschematic.ui.viewmodel.setUndercutSetDatum
+import com.android.shaftschematic.ui.viewmodel.setUndercutOverallTo
 import com.android.shaftschematic.ui.viewmodel.setUndercutRailStyle
 import com.android.shaftschematic.ui.viewmodel.setUndercutLinerEndsFromSet
 import com.android.shaftschematic.ui.viewmodel.setUndercutLongCompress
@@ -1139,6 +1140,13 @@ fun UndercutRoute(
                         modifier = Modifier.padding(bottom = 8.dp),
                         enabled = undercutRecord.railStyle == UndercutRailStyle.CHAIN,
                     )
+                    UndercutOverallToRow(
+                        choice = undercutRecord.overallTo,
+                        onChoose = { vm.setUndercutOverallTo(it) },
+                        enabled = undercutRecord.railStyle == UndercutRailStyle.CHAIN &&
+                            effectiveUndercutTotalRail(undercutRecord.showTotalRail, pdfUndercutTotalRail),
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
                     // App-wide look: each section core shaded by its cut's depth. Here so the
                     // canvas above restyles as it is flipped.
                     UndercutDepthShadeRow(
@@ -1914,6 +1922,13 @@ internal fun UndercutOptionsSheet(
                 onCheckedChange = { vm.setUndercutShowTotalRail(it) },
                 testTag = "pdf_undercut_total_rail",
                 enabled = undercutRecord.railStyle == UndercutRailStyle.CHAIN,
+            )
+            Spacer(Modifier.height(12.dp))
+            UndercutOverallToRow(
+                choice = undercutRecord.overallTo,
+                onChoose = { vm.setUndercutOverallTo(it) },
+                enabled = undercutRecord.railStyle == UndercutRailStyle.CHAIN &&
+                    effectiveUndercutTotalRail(undercutRecord.showTotalRail, pdfUndercutTotalRail),
             )
             if (printSections.size >= 2) {
                 Spacer(Modifier.height(12.dp))

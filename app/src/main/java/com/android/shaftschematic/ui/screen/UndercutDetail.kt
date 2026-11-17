@@ -169,6 +169,7 @@ import com.android.shaftschematic.geom.threadHatchSpan
 import com.android.shaftschematic.geom.threadReliefSpan
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Undercut
+import com.android.shaftschematic.model.UndercutOverallTo
 import com.android.shaftschematic.model.UndercutRailStyle
 import com.android.shaftschematic.model.UndercutRecord
 import com.android.shaftschematic.model.UndercutReference
@@ -1431,6 +1432,9 @@ fun UndercutWindowDetailOverlay(
                             setLead = setLead,
                             showTotal = effectiveUndercutTotalRail(undercutRecord.showTotalRail, totalRailDefault),
                             overallFromSet = true,
+                            overallLiner = (railStrip as? UndercutStrip.LinerStrip)
+                                ?.takeIf { undercutRecord.overallTo == UndercutOverallTo.LINER_END }
+                                ?.let { UndercutLinerSpanMm(it.linerStartMm, it.linerEndMm) },
                             fromSet = railsFromSet,
                             linerEnds = railLinerEnds,
                         )
@@ -3881,6 +3885,8 @@ internal data class UndercutDetailRailInputs(
     val nestedRows: Boolean = false,
     /** The printed strip's `overallFromSet`: the canvas passes true, as the sheet does. */
     val overallFromSet: Boolean = false,
+    /** The printed strip's `overallLiner`: the liner span while the overall dimension ends at the liner. */
+    val overallLiner: UndercutLinerSpanMm? = null,
 )
 
 /**
@@ -4015,6 +4021,7 @@ internal fun planUndercutDetailXMap(
         linerEnds = inputs.linerEnds,
         nestedRows = inputs.nestedRows,
         overallFromSet = inputs.overallFromSet,
+        overallLiner = inputs.overallLiner,
     )
 }
 
@@ -4038,6 +4045,7 @@ internal fun planUndercutDetailRails(
         linerEnds = inputs.linerEnds,
         nestedRows = inputs.nestedRows,
         overallFromSet = inputs.overallFromSet,
+        overallLiner = inputs.overallLiner,
     ).withFallbacksLifted()
 }
 

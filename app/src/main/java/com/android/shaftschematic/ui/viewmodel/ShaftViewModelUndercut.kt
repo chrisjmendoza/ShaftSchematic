@@ -4,6 +4,7 @@ import com.android.shaftschematic.geom.UNDERCUT_EXAGGERATION_MAX_FRAC
 import com.android.shaftschematic.geom.UndercutStrip
 import com.android.shaftschematic.model.Undercut
 import com.android.shaftschematic.model.UndercutPageOrientation
+import com.android.shaftschematic.model.UndercutOverallTo
 import com.android.shaftschematic.model.UndercutRailStyle
 import com.android.shaftschematic.model.UndercutRecord
 import com.android.shaftschematic.model.UndercutReference
@@ -192,6 +193,17 @@ fun ShaftViewModel.setUndercutPageOrientation(o: UndercutPageOrientation) {
 fun ShaftViewModel.setUndercutSetDatum(d: UndercutSetDatum) {
     _undercutRecord.update { rec ->
         if (rec.setDatum == d) rec else rec.copy(setDatum = d)
+    }
+}
+
+/**
+ * Set where this sheet's overall dimension ends ([UndercutRecord.overallTo]): the liner's far end
+ * or the end of the cuts. Dimensioning only — no stored cut moves — per-document. A no-op when
+ * unchanged.
+ */
+fun ShaftViewModel.setUndercutOverallTo(to: UndercutOverallTo) {
+    _undercutRecord.update { rec ->
+        if (rec.overallTo == to) rec else rec.copy(overallTo = to)
     }
 }
 

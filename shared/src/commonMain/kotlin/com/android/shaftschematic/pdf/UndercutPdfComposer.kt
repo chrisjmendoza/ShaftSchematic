@@ -300,6 +300,10 @@ private fun drawUndercutSheet(
     fun linerEndsOf(strip: UndercutStrip): UndercutLinerSpanMm? =
         (strip as? UndercutStrip.LinerStrip)?.takeIf { undercutRecord.linerEndsFromSet }
             ?.let { UndercutLinerSpanMm(it.linerStartMm, it.linerEndMm) }
+    // The overall dimension's end: the liner's own span while the job measures to the liner end.
+    fun overallLinerOf(strip: UndercutStrip): UndercutLinerSpanMm? =
+        (strip as? UndercutStrip.LinerStrip)?.takeIf { undercutRecord.overallTo == UndercutOverallTo.LINER_END }
+            ?.let { UndercutLinerSpanMm(it.linerStartMm, it.linerEndMm) }
     // Shared liner display titles — custom label wins, else positional AFT/MID/FWD defaults
     // (util/LinerTitles.kt). Same names the carousel cards, the wear sheet, and the runout
     // sheet show, so a liner-anchored strip is identifiable at a glance.
@@ -486,6 +490,7 @@ private fun drawUndercutSheet(
             showTotal = showTotalRail, overallFromSet = true,
             fromSet = railsFromSet,
             linerEnds = linerEndsOf(strip),
+            overallLiner = overallLinerOf(strip),
             longCompressFrac = undercutRecord.longCompressFrac,
             insideDiaFloorsMm = if (diaInside && !startedPage) {
                 undercutInsideDiaFloorsMm(sheetNotches, strip)
@@ -671,6 +676,7 @@ private fun drawUndercutSheet(
             showTotal = showTotalRail, overallFromSet = true,
             fromSet = railsFromSet,
             linerEnds = linerEndsOf(strip),
+            overallLiner = overallLinerOf(strip),
             longCompressFrac = undercutRecord.longCompressFrac,
             onNotToScale = { notToScale = true },
             onShaftHeight = { h -> minShaftPt = minOf(minShaftPt, h) },
@@ -1547,6 +1553,8 @@ fun planUndercutDetailStrip(
      * null otherwise — [planUndercutStripRails]' `linerEnds`.
      */
     linerEnds: UndercutLinerSpanMm? = null,
+    /** [planUndercutStripRails]' `overallLiner`. */
+    overallLiner: UndercutLinerSpanMm? = null,
     /**
      * Each cut's DRAWN floor Ø on this strip, keyed by cut id, when the sheet writes its Ø values
      * inside the shaft (`PdfPrefs.undercutDiaInside`); null — every other sheet —
@@ -1681,6 +1689,7 @@ fun planUndercutDetailStrip(
         showTotal = showTotal,
         fromSet = fromSet,
         linerEnds = linerEnds,
+        overallLiner = overallLiner,
         nestedRows = nestedRows,
         overallFromSet = overallFromSet,
     )
@@ -1910,6 +1919,8 @@ private fun drawUndercutDetailStrip(
     fromSet: Boolean = false,
     /** "Liner ends from S.E.T." on this liner strip — [planUndercutStripRails]' `linerEnds`. */
     linerEnds: UndercutLinerSpanMm? = null,
+    /** [planUndercutStripRails]' `overallLiner`. */
+    overallLiner: UndercutLinerSpanMm? = null,
     /** `UndercutRecord.longCompressFrac`; [onNotToScale] fires when it changed this strip's map. */
     longCompressFrac: Float = 0f,
     onNotToScale: () -> Unit = {},
@@ -1933,6 +1944,7 @@ private fun drawUndercutDetailStrip(
         overallFromSet = overallFromSet,
         fromSet = fromSet,
         linerEnds = linerEnds,
+        overallLiner = overallLiner,
         longCompressFrac = longCompressFrac,
         insideDiaFloorsMm = if (diaInside) notches.associate { it.id to it.floorDiaMm } else null,
     )?.resolveInsideDia(stripTop, stripBottom, dualStacked) ?: return

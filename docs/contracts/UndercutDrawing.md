@@ -2231,6 +2231,15 @@ across the cuts. It clarifies some jobs and confuses others, hence the switch.
   rule `buildUndercutSetRailSpansAt`, on liner and bare-shaft strips alike. With "Liner ends from
   S.E.T." on it joins that stack (a cut end on a liner end is one rail, keeping the liner caption).
   The strip then plans no total across its cuts.
+- **Where it ends** — per-job `UndercutRecord.overallTo` (`UndercutOverallTo`, by name, unknown →
+  `LINER_END`; `setUndercutOverallTo`; ONE row `UndercutOverallToRow`, chips
+  `undercut_overall_to_LINER_END` / `undercut_overall_to_CUTS_END`, under the switch on the tab and
+  the options panel, greyed with its value kept while the switch is off or Dimensions is From
+  S.E.T.). `LINER_END` (default — on-device request: the welder must know where the liner stops so
+  the seal area is not built up with wasted material) hands the planner the liner's span as
+  `overallLiner`: the rail runs to the liner's end farthest from the S.E.T., captioned "S.E.T. to
+  liner end" — with "Liner ends from S.E.T." on it IS that stack's far-end rail. `CUTS_END` is the
+  uncaptioned rail above. A bare-shaft strip has no liner and measures to its cuts' end either way.
 - **Opt-in on the planner** — `planUndercutStripRails(overallFromSet = true)`, passed by the app's
   three callers (printed strip, detail canvas, the canvas's axial map), the `nestedRows`
   posture. Off — the planner's default — is the total across the cuts (`buildUndercutTotalSpan`)

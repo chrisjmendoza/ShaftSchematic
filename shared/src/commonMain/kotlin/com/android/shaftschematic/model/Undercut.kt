@@ -152,6 +152,9 @@ data class Undercut(
  *   them. A FIT for this job's drawing, so per-document. Dimensioning only — no stored value moves.
  *   Additive + defaulted, decoded tolerantly: older files and unknown names get
  *   [UndercutRailStyle.CHAIN], which prints exactly as every sheet did before the choice existed.
+ * @property overallTo Where the overall dimension ends (see [UndercutOverallTo]): the liner's far
+ *   end (default) or the end of the cuts. A FIT for this job, so per-document. Dimensioning only —
+ *   no stored value moves. Additive + defaulted, decoded tolerantly.
  * @property linerEndsFromSet "Liner ends from S.E.T.": each LINER strip prints two dimensions from
  *   its S.E.T., one to each end of the liner, over its chain (on-device request: a liner whose cuts
  *   have buried an edge no longer shows where it begins and ends, and the welder needs to know).
@@ -184,7 +187,43 @@ data class UndercutRecord(
     val railStyle: UndercutRailStyle = UndercutRailStyle.CHAIN,
     val linerEndsFromSet: Boolean = false,
     val longCompressFrac: Float = 0f,
+    val overallTo: UndercutOverallTo = UndercutOverallTo.LINER_END,
 )
+
+/**
+ * Where a strip's overall dimension — the one rail from its S.E.T. over the cut lengths — ends,
+ * chosen per job ([UndercutRecord.overallTo]).
+ * - [LINER_END] (default): the liner's far end, so the welder knows where the liner stops and does
+ *   not build up the seal area past it (on-device request). A bare-shaft strip has no liner and
+ *   measures to the end of its cuts.
+ * - [CUTS_END]: the far end of the last cut.
+ *
+ * Serialized by NAME through [UndercutOverallToSerializer]; an unknown name decodes to [LINER_END].
+ */
+@Serializable(with = UndercutOverallToSerializer::class)
+enum class UndercutOverallTo {
+    LINER_END, CUTS_END;
+
+    companion object {
+        /** Tolerant decode for a persisted name; an unknown or blank value is [LINER_END]. */
+        fun fromName(raw: String?): UndercutOverallTo =
+            if (raw.isNullOrBlank()) LINER_END
+            else runCatching { valueOf(raw) }.getOrDefault(LINER_END)
+    }
+}
+
+/** Name-string serializer for [UndercutOverallTo] with [UndercutOverallTo.fromName]'s fallback. */
+object UndercutOverallToSerializer : KSerializer<UndercutOverallTo> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("com.android.shaftschematic.model.UndercutOverallTo", PrimitiveKind.STRING)
+
+    override fun serialize(encoder: Encoder, value: UndercutOverallTo) {
+        encoder.encodeString(value.name)
+    }
+
+    override fun deserialize(decoder: Decoder): UndercutOverallTo =
+        UndercutOverallTo.fromName(decoder.decodeString())
+}
 
 /** The most of a long stretch's excess length "Compress long sections" may take. */
 const val UNDERCUT_LONG_COMPRESS_MAX_FRAC = 0.9f
